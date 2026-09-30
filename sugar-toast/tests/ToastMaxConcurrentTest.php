@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Toast\Tests;
 
-use SugarCraft\Toast\{Overflow, Toast, ToastType};
+use SugarCraft\Toast\{Alert, Overflow, Toast, ToastType};
 use PHPUnit\Framework\TestCase;
 
 final class ToastMaxConcurrentTest extends TestCase
@@ -124,6 +124,42 @@ final class ToastMaxConcurrentTest extends TestCase
         $queue = $this->getQueue($t);
         $this->assertCount(2, $queue);
         $this->assertSame('second', $queue[0]->message);
+    }
+
+    public function testDropOldestAtZeroCapDiscardsIncomingInsteadOfExceedingCap(): void
+    {
+        // A zero cap has no oldest alert to evict; the queue must stay empty
+        // rather than letting one alert slip past the cap every push.
+        $t = Toast::new(50)
+            ->withMaxConcurrent(0)
+            ->withOverflow(Overflow::DropOldest)
+            ->alert(ToastType::Info, 'first')
+            ->alert(ToastType::Warning, 'second');
+
+        $this->assertCount(0, $this->getQueue($t));
+    }
+
+    public function testDropNewestAtZeroCapDiscardsIncoming(): void
+    {
+        $t = Toast::new(50)
+            ->withMaxConcurrent(0)
+            ->withOverflow(Overflow::DropNewest)
+            ->alert(ToastType::Info, 'first');
+
+        $this->assertCount(0, $this->getQueue($t));
+    }
+
+    public function testZeroCapAppliesToProgressToastAndPushToo(): void
+    {
+        $toast = Toast::new(50)
+            ->withMaxConcurrent(0)
+            ->withOverflow(Overflow::DropOldest);
+
+        $viaProgress = $toast->progressToast(ToastType::Info, 'loading', 0.5);
+        $this->assertCount(0, $this->getQueue($viaProgress));
+
+        $viaPush = $toast->push(new Alert(ToastType::Info, 'prebuilt'));
+        $this->assertCount(0, $this->getQueue($viaPush));
     }
 
     // Helper to access private queue

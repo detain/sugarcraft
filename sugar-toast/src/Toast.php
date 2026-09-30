@@ -185,19 +185,8 @@ final class Toast
             $alert = $alert->withExpiry($clone->duration);
         }
 
-        // Apply overflow strategy when maxConcurrent is set
         // Finding 9: Stacked/queued toasts — verified via maxConcurrent + Overflow enum
-        if ($clone->maxConcurrent !== null && \count($clone->queue) >= $clone->maxConcurrent) {
-            if ($clone->overflow === Overflow::DropNewest) {
-                return $clone;  // discard the new alert
-            }
-            if ($clone->overflow === Overflow::DropOldest) {
-                \array_shift($clone->queue);
-            }
-            // Enqueue: do nothing, allow exceeding max
-        }
-
-        $clone->queue[] = $alert;
+        $clone->queue = $this->appendBounded($clone->queue, $alert);
         return $clone;
     }
 
@@ -220,16 +209,7 @@ final class Toast
             $alert = $alert->withExpiry($clone->duration);
         }
 
-        if ($clone->maxConcurrent !== null && \count($clone->queue) >= $clone->maxConcurrent) {
-            if ($clone->overflow === Overflow::DropNewest) {
-                return $clone;
-            }
-            if ($clone->overflow === Overflow::DropOldest) {
-                \array_shift($clone->queue);
-            }
-        }
-
-        $clone->queue[] = $alert;
+        $clone->queue = $this->appendBounded($clone->queue, $alert);
         return $clone;
     }
 
@@ -251,17 +231,39 @@ final class Toast
             $alert = $alert->withExpiry($clone->duration);
         }
 
-        if ($clone->maxConcurrent !== null && \count($clone->queue) >= $clone->maxConcurrent) {
-            if ($clone->overflow === Overflow::DropNewest) {
-                return $clone;
-            }
-            if ($clone->overflow === Overflow::DropOldest) {
-                \array_shift($clone->queue);
-            }
-        }
-
-        $clone->queue[] = $alert;
+        $clone->queue = $this->appendBounded($clone->queue, $alert);
         return $clone;
+    }
+
+    /**
+     * Append an alert to a queue copy honouring the maxConcurrent/overflow
+     * policy — the shared engine behind {@see alert()}, {@see progressToast()}
+     * and {@see push()}.
+     *
+     * DropNewest discards the incoming alert; DropOldest evicts the oldest
+     * queued alert — at a zero cap there is nothing to evict, so the incoming
+     * alert is discarded too rather than letting the queue exceed the cap.
+     * Enqueue (the default) deliberately lets the queue grow past the cap.
+     *
+     * @param list<Alert> $queue
+     * @return list<Alert>
+     */
+    private function appendBounded(array $queue, Alert $alert): array
+    {
+        if ($this->maxConcurrent !== null && \count($queue) >= $this->maxConcurrent) {
+            if ($this->overflow === Overflow::DropNewest) {
+                return $queue;
+            }
+            if ($this->overflow === Overflow::DropOldest) {
+                if ($queue === []) {
+                    return $queue;
+                }
+                \array_shift($queue);
+            }
+            // Enqueue: fall through, allow exceeding max
+        }
+        $queue[] = $alert;
+        return $queue;
     }
 
     /**
@@ -345,19 +347,28 @@ final class Toast
         if ($index < 0 || $index >= \count($this->queue)) {
             return $this;
         }
-        return $this->mutate(fn($t) => $t->queue[$index] = $this->queue[$index]->withoutExpiry());
+        $queue = $this->queue;
+        $queue[$index] = $queue[$index]->withoutExpiry();
+        return $this->mutate(['queue' => $queue]);
     }
 
     /**
      * Extend the auto-dismiss timer on the alert at $index by $additionalSeconds from now.
-     * Has no effect if $index is out of bounds.
+     * Has no effect if $index is out of bounds or the alert never expires — a
+     * persistent alert has no timer to extend (mirrors {@see extendAll()}).
      */
     public function extendAlert(int $index, float $additionalSeconds): self
     {
         if ($index < 0 || $index >= \count($this->queue)) {
             return $this;
         }
-        return $this->mutate(fn($t) => $t->queue[$index] = $this->queue[$index]->withExtendedExpiry($additionalSeconds));
+        $alert = $this->queue[$index];
+        if ($alert->expiresAt === null) {
+            return $this;
+        }
+        $queue = $this->queue;
+        $queue[$index] = $alert->withExtendedExpiry($additionalSeconds);
+        return $this->mutate(['queue' => $queue]);
     }
 
     /**
@@ -366,10 +377,11 @@ final class Toast
      */
     public function extendAll(float $additionalSeconds): self
     {
-        return $this->mutate(fn($t) => $t->queue = \array_map(
-            fn(Alert $a) => $a->expiresAt !== null ? $a->withExtendedExpiry($additionalSeconds) : $a,
-            $t->queue,
-        ));
+        $queue = \array_map(
+            fn(Alert $a): Alert => $a->expiresAt !== null ? $a->withExtendedExpiry($additionalSeconds) : $a,
+            $this->queue,
+        );
+        return $this->mutate(['queue' => $queue]);
     }
 
     /**
@@ -529,7 +541,10 @@ final class Toast
 
     private function renderAlert(Alert $alert): string
     {
-        $width = $this->resolveWidth(Width::string($alert->message));
+        // Finding 10 / Item 3.1: null message renders as empty string — the
+        // width probe must coalesce too, or Width::string(null) fatals on a
+        // strict_types path before the `?? ''` guard further down ever runs.
+        $width = $this->resolveWidth(Width::string($alert->message ?? ''));
         $icon  = $alert->type->icon($this->symbols);
         $color = $alert->type->color();
 

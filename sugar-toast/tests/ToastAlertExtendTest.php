@@ -10,10 +10,15 @@ use PHPUnit\Framework\TestCase;
 /**
  * Tests for alert expiry management: cancelAlert, extendAlert, extendAll.
  *
- * NOTE: cancelAlert, extendAlert, and extendAll have a known issue where they
- * pass a Closure to mutate() which only accepts arrays. The valid-index code
- * paths are therefore not currently testable. These tests cover the early-return
- * paths (out-of-bounds indices) which work around the bug.
+ * These three methods previously passed a Closure to the array-based
+ * mutate() helper, so every valid-index path raised a TypeError and the
+ * suite could only exercise the out-of-bounds early returns. The fix rewrote
+ * them to copy the queue array and mutate the clone via mutate(['queue'=>…]),
+ * so the valid paths are now first-class behaviour covered below.
+ *
+ * Semantic note: a persistent alert (expiresAt === null) has no timer to
+ * extend, so extendAlert() is a no-op on it — matching extendAll()'s existing
+ * "only affects alerts that have an expiry" contract.
  */
 final class ToastAlertExtendTest extends TestCase
 {
@@ -103,21 +108,130 @@ final class ToastAlertExtendTest extends TestCase
         $this->assertEqualsWithDelta($originalExpiry, $resultQueue[0]->expiresAt, 0.001);
     }
 
-    // ─── extendAll - all paths pass closure to mutate(), so we can't test valid cases ──
+    // ─── cancelAlert valid paths (bug fixed: mutate() receives an array) ─────
 
-    /**
-     * @group known-issue
-     * extendAll() passes a Closure to mutate() which only accepts arrays.
-     * This is a source code bug that prevents testing the valid code path.
-     */
-    public function testExtendAllIsNotTestable(): void
+    public function testCancelAlertClearsExpiryOnTargetIndex(): void
     {
-        // This test documents the known issue - extendAll cannot be called
-        // with any queue state without triggering the bug.
-        // When the bug is fixed, this test should be replaced with proper tests.
+        $t = Toast::new(50)
+            ->withDuration(10.0)
+            ->alert(ToastType::Info, 'first')
+            ->alert(ToastType::Warning, 'second');
+
+        $result = $t->cancelAlert(0);
+
+        $queue = $this->getQueue($result);
+        $this->assertNull($queue[0]->expiresAt, 'cancelled alert must never expire');
+        $this->assertNotNull($queue[1]->expiresAt, 'sibling alert keeps its timer');
+        $this->assertCount(2, $queue);
+    }
+
+    public function testCancelAlertReturnsNewInstanceLeavingOriginalUntouched(): void
+    {
+        $t = Toast::new(50)->withDuration(10.0)->info('test');
+
+        $result = $t->cancelAlert(0);
+
+        $this->assertNotSame($t, $result);
+        $this->assertNotNull($this->getQueue($t)[0]->expiresAt, 'the original instance is immutable');
+    }
+
+    public function testCancelAlertOnPersistentAlertKeepsItPersistent(): void
+    {
+        $t = Toast::new(50)->info('no timer configured');
+
+        $queue = $this->getQueue($t->cancelAlert(0));
+
+        $this->assertNull($queue[0]->expiresAt);
+    }
+
+    // ─── extendAlert valid paths ─────────────────────────────────────────────
+
+    public function testExtendAlertMovesExpiryToSecondsFromNow(): void
+    {
+        $t = Toast::new(50)
+            ->withDuration(10.0)
+            ->alert(ToastType::Info, 'test');
+
+        $before = \microtime(true);
+        $result = $t->extendAlert(0, 30.0);
+        $expiry = $this->getQueue($result)[0]->expiresAt;
+
+        $this->assertNotNull($expiry);
+        // withExtendedExpiry() re-anchors the deadline at "now + $additionalSeconds",
+        // so it must land inside [before+30, now+30] — not merely after the old 10s expiry.
+        $this->assertGreaterThanOrEqual($before + 30.0, $expiry);
+        $this->assertLessThanOrEqual(\microtime(true) + 30.0, $expiry);
+    }
+
+    public function testExtendAlertOnPersistentAlertIsANoOp(): void
+    {
+        $t = Toast::new(50)->info('persistent');
+
+        $result = $t->extendAlert(0, 5.0);
+
+        // A persistent alert has no timer to extend (mirrors extendAll()) —
+        // it must NOT silently gain one.
+        $this->assertSame($t, $result);
+        $this->assertNull($this->getQueue($result)[0]->expiresAt);
+    }
+
+    public function testExtendAlertOnlyAffectsTargetIndex(): void
+    {
+        $t = Toast::new(50)
+            ->withDuration(10.0)
+            ->alert(ToastType::Info, 'first')
+            ->alert(ToastType::Warning, 'second');
+
+        $oldSecondExpiry = $this->getQueue($t)[1]->expiresAt;
+        $result = $t->extendAlert(0, 60.0);
+
+        $queue = $this->getQueue($result);
+        $this->assertGreaterThan(60.0 - 1.0, $queue[0]->expiresAt - \microtime(true));
+        $this->assertEqualsWithDelta($oldSecondExpiry, $queue[1]->expiresAt, 0.001);
+    }
+
+    // ─── extendAll valid paths ───────────────────────────────────────────────
+
+    public function testExtendAllExtendsExpiringAndLeavesPersistentUnchanged(): void
+    {
+        $t = Toast::new(50)
+            ->withDuration(10.0)
+            ->alert(ToastType::Info, 'expiring')
+            ->cancelAlert(0)
+            ->alert(ToastType::Success, 'second-keeps-timer');
+
+        $result = $t->extendAll(45.0);
+
+        $queue = $this->getQueue($result);
+        $this->assertNull($queue[0]->expiresAt, 'persistent alert is never given a timer');
+        $this->assertNotNull($queue[1]->expiresAt);
+        $this->assertGreaterThan(44.0, $queue[1]->expiresAt - \microtime(true));
+    }
+
+    public function testExtendAllOnEmptyQueueSucceeds(): void
+    {
         $t = Toast::new(50);
-        $this->expectException(\TypeError::class);
-        $t->extendAll(5.0);
+
+        $result = $t->extendAll(5.0);
+
+        $this->assertNotSame($t, $result);
+        $this->assertCount(0, $this->getQueue($result));
+    }
+
+    public function testExtendAllKeepsQueueOrderAndLength(): void
+    {
+        $t = Toast::new(50)
+            ->withDuration(10.0)
+            ->info('a')
+            ->warning('b')
+            ->success('c');
+
+        $queue = $this->getQueue($t->extendAll(20.0));
+
+        $this->assertCount(3, $queue);
+        $this->assertSame('a', $queue[0]->message);
+        $this->assertSame('b', $queue[1]->message);
+        $this->assertSame('c', $queue[2]->message);
     }
 
     // ─── cancelAlert with duration configured (out-of-bounds) ────────────────

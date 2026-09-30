@@ -219,6 +219,22 @@ final class ToastRenderingTest extends TestCase
         $this->assertStringContainsString('Hello world', $result);
     }
 
+    public function testNullMessageRendersEmptyHeaderInsteadOfTypeError(): void
+    {
+        // Finding 10 / Item 3.1: renderAlert()'s width probe fed the nullable
+        // message straight into Width::string(), so ANY null-message alert
+        // fatalled under strict_types before the `?? ''` header fallback ran.
+        $t = $this->toast
+            ->withPosition(Position::TopLeft)
+            ->push(new Alert(ToastType::Info, null));
+
+        $bg = \str_repeat("background line\n", 10);
+        $result = $t->View($bg, 80, 10);
+
+        $this->assertStringContainsString('╭', $result, 'the empty box must still render');
+        $this->assertStringContainsString('background line', $result);
+    }
+
     private function invokeFillViewportFromString(Buffer $buf, array $lines): Buffer
     {
         $ref = new \ReflectionClass($this->toast);
