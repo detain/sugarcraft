@@ -417,8 +417,8 @@ final class ReadPathCensusTest extends TestCase
         'Tools/BuiltIn/Read.php|file_get_contents' => [
             'PATH_JAIL — the whole-file arm',
         ],
-        'Tools/BuiltIn/WebFetch.php|file_get_contents' => [
-            'NOT_A_FILESYSTEM_PATH — an HTTP(S) URL through a stream context',
+        'Tools/BuiltIn/WebFetch.php|fopen' => [
+            'NOT_A_FILESYSTEM_PATH — a pinned HTTP(S) URL through a stream context',
         ],
         'Tools/BuiltIn/WebSearch.php|file_get_contents' => [
             'NOT_A_FILESYSTEM_PATH — the search endpoint, same shape',
