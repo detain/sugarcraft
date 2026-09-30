@@ -357,7 +357,9 @@ final class DockLayout
      *    side; finally center-only across the whole frame.
      *  - Stack rows = frame height minus one gap row between consecutive slots;
      *    heights are the floor of each rational weight share, residual to the
-     *    LAST slot; absurd frames may yield zero-height slots — allowed.
+     *    LAST slot; absurd frames may yield zero-height slots — allowed. When
+     *    the frame cannot even pay the gap total, the gaps are dropped too, so
+     *    no slot region ever starts below the frame bottom.
      */
     public function resolve(Region $frame): DockGeometry
     {
@@ -488,12 +490,22 @@ final class DockLayout
         $slots = $this->slots($side);
         $heights = $this->stackHeights($slots, $frame->height);
 
+        // Gap-affordance law: stackHeights() budgets gap rows only while the
+        // frame can pay for the full gap total; once it collapses the slots to
+        // zero height (height < STACK_GAP_ROWS * (count-1)), charging gap rows
+        // in the walk too would push the trailing zero-height regions past the
+        // frame bottom. Gaps are then excluded entirely — every region's
+        // bottom stays within the frame.
+        $gapRows = $frame->height >= self::STACK_GAP_ROWS * (count($slots) - 1)
+            ? self::STACK_GAP_ROWS
+            : 0;
+
         $y = $frame->y;
         $last = count($slots) - 1;
         foreach ($slots as $index => $slot) {
             $regions[$slot->paneId] = new Region($x, $y, $cols, $heights[$index]);
             if ($index !== $last) {
-                $y += $heights[$index] + self::STACK_GAP_ROWS;
+                $y += $heights[$index] + $gapRows;
             }
         }
     }

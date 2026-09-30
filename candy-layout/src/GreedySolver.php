@@ -25,7 +25,7 @@ use SugarCraft\Layout\Region;
  *  4. Remaining slack distributed across Fill() and Max() constraints
  *     proportionally (Max is greedy here; clamp pass reduces it).
  *  5. If no Fill/Max, slack goes to Min constraints proportionally.
- *  6. Apply Max clamp pass; reclaimed space redistributed to Fill > Min > others.
+ *  6. Apply Max clamp pass; reclaimed space redistributed to Min > Fill > others.
  *  7. If total reserved > area, truncate proportionally and warn.
  *
  * ── boxer-compat mode ──────────────────────────────────────────────────────

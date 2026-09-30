@@ -651,6 +651,36 @@ final class DockLayoutTest extends TestCase
         $this->assertSame(2, $geometry->regionFor('c')?->y);
     }
 
+    public function testUnaffordableGapBudgetDropsGapsInsteadOfEscapingTheFrame(): void
+    {
+        // Audit finding 3: a 1-row frame with 3 slots needs 2 gap rows it can
+        // never pay — stackHeights() collapses every height to 0, yet the walk
+        // still charged gaps, parking slots at y=1 and y=2 BELOW the frame
+        // bottom (row 0). Gaps are now excluded as a whole once unaffordable.
+        $layout = DockLayout::new()
+            ->withSlotAdded(Side::Left, 'a')
+            ->withSlotAdded(Side::Left, 'b')
+            ->withSlotAdded(Side::Left, 'c');
+        $geometry = $layout->resolve(Region::fromSize(60, 1));
+
+        foreach (['a', 'b', 'c'] as $id) {
+            $region = $geometry->regionFor($id);
+            $this->assertNotNull($region);
+            $this->assertSame(0, $region->y);
+            $this->assertSame(0, $region->height);
+            // Exact-inclusion invariant: no region bottoms out past the frame.
+            $this->assertLessThanOrEqual(1, $region->y + $region->height);
+        }
+
+        // The affordable boundary (height == gap total) still charges gaps,
+        // exactly tiling with zero-height regions — see the absurd-short test.
+        $boundary = $layout->resolve(Region::fromSize(60, 2));
+        $this->assertSame(
+            [0, 1, 2],
+            array_map(static fn(string $id): int => $boundary->regionFor($id)->y, ['a', 'b', 'c']),
+        );
+    }
+
     public function testStackOfOneSlotTakesTheFullHeight(): void
     {
         $layout = DockLayout::new()->withSlotAdded(Side::Left, 'solo');

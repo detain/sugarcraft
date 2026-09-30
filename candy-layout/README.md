@@ -39,7 +39,7 @@ $rects = $solver->solve($region, Direction::Horizontal, [
     Constraint::min(10),         // at least 10, takes more if available
     Constraint::fill(1),         // fills remaining space (weight 1)
     Constraint::percentage(30),  // 30% of total
-    Constraint::ratio(1, 3),     // 1/3 of remaining after fixed
+    Constraint::ratio(1, 3),     // 1/3 of the TOTAL span (reserved like a fixed)
     Constraint::max(50),        // ceiling — greedy but clamped
 ]);
 ```
@@ -58,7 +58,7 @@ $rects = $solver->solve($region, Direction::Horizontal, [
 - `Constraint::max(int)` — ceiling, greedy, clamped
 - `Constraint::fill(int $weight = 1)` — proportional remainder
 - `Constraint::percentage(int 0-100)` — % of total
-- `Constraint::ratio(int $num, int $denom)` — fractional proportion
+- `Constraint::ratio(int $num, int $denom)` — num/denom of the total span, reserved like a fixed
 
 ## Shared foundations
 
