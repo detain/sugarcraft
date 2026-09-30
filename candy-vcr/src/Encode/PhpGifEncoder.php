@@ -10,7 +10,8 @@ namespace SugarCraft\Vcr\Encode;
  * Assembles animated GIFs using GD's imagegif() with a custom animation
  * extension. Slow (~5-10x slower than ffmpeg) but requires no external binaries.
  *
- * Mirrors charmbracelet/x/vhs PhpGifEncoder.
+ * No upstream counterpart: charmbracelet/vhs delegates GIF assembly wholly
+ * to ffmpeg; a pure-PHP encoder fallback is original to SugarCraft.
  */
 final class PhpGifEncoder implements GifEncoder
 {
@@ -22,6 +23,16 @@ final class PhpGifEncoder implements GifEncoder
     ): bool {
         if ($pngPaths === []) {
             throw new \RuntimeException('No frames provided to encode');
+        }
+        // F2 (round 90): the int-casting door. buildDelayArray divides by
+        // $fps twice (1000/$fps and the durations fallback); fps <= 0 there
+        // is an ArithmeticError (modulo by zero) or a silent infinite-loop
+        // risk on the fps=0 float path, surfaced as a hang rather than a
+        // message. Reject at entry, where the argument is named.
+        if ($fps <= 0) {
+            throw new \InvalidArgumentException(
+                "candy-vcr: PhpGifEncoder fps must be a positive number of frames per second, got {$fps}."
+            );
         }
 
         $frameCount = count($pngPaths);

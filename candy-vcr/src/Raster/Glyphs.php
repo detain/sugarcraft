@@ -16,7 +16,9 @@ use SugarCraft\Vt\Theme;
  * Colors are resolved through the configured {@see Theme} so user-selected
  * themes reach the rendered GIF.
  *
- * Mirrors charmbracelet/x/vhs Glyphs cache.
+ * No upstream counterpart: charmbracelet/vhs screenshots a live ttyd with
+ * Chromium + ffmpeg and ships no tile cache of this shape — this
+ * .tape→GIF raster pipeline is original to SugarCraft.
  */
 final class Glyphs
 {

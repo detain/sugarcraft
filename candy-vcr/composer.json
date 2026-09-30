@@ -28,6 +28,7 @@
     },
     "require": {
         "php": "^8.3",
+        "ext-mbstring": "*",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-ansi": "dev-master",
         "sugarcraft/candy-pty": "dev-master",

@@ -13,6 +13,15 @@ use SugarCraft\Vcr\Hook\HookRegistry;
  * Streaming JSONL cassette writer. Each event is encoded and flushed
  * immediately so a crash mid-recording doesn't lose the cassette.
  *
+ * Output-fidelity contract (F1, round 90): recording never throws because a
+ * PTY chunk sliced a multibyte sequence — {@see recordOutput()} defers the
+ * incomplete tail to the next tap so split glyphs stay byte-exact, and any
+ * remaining invalid bytes degrade to U+FFFD via
+ * `JSON_INVALID_UTF8_SUBSTITUTE` at encode time. A non-UTF-8 child program
+ * therefore records as replacement text rather than aborting the session;
+ * this is deliberately lossy there (see the base64 decision note in
+ * {@see \SugarCraft\Vcr\Format\JsonlFormat}).
+ *
  * Implements {@see \SugarCraft\Core\Recorder} so it can be attached via
  * {@see \SugarCraft\Core\Program::withRecorder()}.
  *
@@ -74,6 +83,23 @@ final class Recorder implements RecorderInterface
      * Tracked separately from $cumulativeTrim so deltas reflect effective time.
      */
     private float $cumulativeEffectiveT = 0.0;
+
+    /**
+     * Bytes of an incomplete UTF-8 sequence whose start arrived but whose
+     * continuation bytes did not (F1, round 90). A PTY read loop slices the
+     * output stream at arbitrary byte boundaries, so a 3-byte glyph can
+     * arrive across two {@see recordOutput()} taps. Writing the torn half
+     * straight into `json_encode` would either abort the session (pre-fix
+     * behaviour) or rewrite it to U+FFFD (substitute-only behaviour) —
+     * deferring the maximal valid UTF-8 prefix tail to the next tap keeps
+     * the recorded byte stream byte-exact for the split case. The tail is
+     * structurally bounded at 3 bytes (UTF-8's max continuation count), so
+     * the deferral can never grow unboundedly, and a tail that the next tap
+     * never completes is flushed by {@see close()} — substitution then
+     * degrades only genuinely invalid bytes (a non-UTF-8 child program),
+     * which no escaping could have made meaningful anyway.
+     */
+    private string $pendingUtf8Tail = '';
 
     /**
      * @param resource $fh  Open writable stream — typically a file opened
@@ -214,10 +240,68 @@ final class Recorder implements RecorderInterface
 
     public function recordOutput(string $bytes): void
     {
-        if ($this->closed || $bytes === '') {
+        if ($this->closed) {
             return;
         }
-        $this->writeEvent('output', ['b' => $bytes]);
+        // F1 (round 90): re-join the previous tap's torn UTF-8 tail before
+        // deciding what to write. An empty merged buffer means there is
+        // nothing new and no completed prefix to flush — stay silent, the
+        // old per-tap empty skip generalises to "skip empty writes".
+        $bytes = $this->pendingUtf8Tail . $bytes;
+        $this->pendingUtf8Tail = '';
+        if ($bytes === '') {
+            return;
+        }
+        [$complete, $tail] = self::splitAtUtf8Boundary($bytes);
+        $this->pendingUtf8Tail = $tail;
+        if ($complete !== '') {
+            $this->writeEvent('output', ['b' => $complete]);
+        }
+    }
+
+    /**
+     * Split a byte string into the largest prefix that is safe to encode now
+     * and the suffix that is the start of a not-yet-complete UTF-8 sequence.
+     *
+     * Only a real UTF-8 prefix (lead byte followed by fewer continuation
+     * bytes than the lead demands) is deferred — anything else (lone
+     * continuation runs, invalid leads, complete sequences) is reported as
+     * final and reaches `JSON_INVALID_UTF8_SUBSTITUTE` in
+     * {@see writeLine()} unchanged. The returned tail is therefore at most
+     * 3 bytes long.
+     *
+     * @return array{0: string, 1: string} [complete-prefix, pending-tail]
+     */
+    private static function splitAtUtf8Boundary(string $bytes): array
+    {
+        $n = strlen($bytes);
+        // A trailing ASCII byte ends the stream on a codepoint boundary.
+        if ($n === 0 || ord($bytes[$n - 1]) < 0x80) {
+            return [$bytes, ''];
+        }
+        // Walk back over continuation bytes (10xxxxxx) to the lead, at most
+        // 3 of them — a valid sequence never carries more.
+        for ($i = 1; $i <= 4 && $i <= $n; $i++) {
+            $b = ord($bytes[$n - $i]);
+            if (($b & 0xC0) === 0x80) {
+                continue;
+            }
+            $expected = match (true) {
+                ($b & 0xE0) === 0xC0 => 2,
+                ($b & 0xF0) === 0xE0 => 3,
+                ($b & 0xF8) === 0xF0 => 4,
+                default => 1, // non-ASCII byte that cannot lead a valid
+                              // sequence — invalid, not pending; substitute
+            };
+            if ($i < $expected) {
+                return [substr($bytes, 0, $n - $i), substr($bytes, $n - $i)];
+            }
+            return [$bytes, '']; // the final sequence is complete
+        }
+        // Ran out of window without finding a lead: the trailing bytes are a
+        // continuation run that no lead can complete — invalid input, not a
+        // split glyph. Record it as-is and let substitution degrade it.
+        return [$bytes, ''];
     }
 
     public function recordQuit(): void
@@ -232,6 +316,15 @@ final class Recorder implements RecorderInterface
     {
         if ($this->closed) {
             return;
+        }
+        // F1 (round 90): a session that ends mid-glyph must not silently drop
+        // the deferred bytes — flush the pending tail as a final output event
+        // while the stream is still open (substitution degrades it if it is
+        // genuinely invalid, which by then nothing can complete anyway).
+        if ($this->pendingUtf8Tail !== '') {
+            $tail = $this->pendingUtf8Tail;
+            $this->pendingUtf8Tail = '';
+            $this->writeEvent('output', ['b' => $tail]);
         }
         $this->closed = true;
         if (is_resource($this->fh)) {
@@ -299,7 +392,7 @@ final class Recorder implements RecorderInterface
      */
     private function writeLine(array $data): void
     {
-        $json = json_encode($data, JSON_UNESCAPED_SLASHES);
+        $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
         if ($json === false) {
             throw new \RuntimeException('candy-vcr: json_encode failed: ' . json_last_error_msg());
         }

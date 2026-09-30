@@ -16,9 +16,26 @@ use SugarCraft\Vcr\Support\Scalars;
  * the header (`{"v":1,"created":...,"cols":...,"rows":...,"runtime":...}`);
  * subsequent lines are events whose shape depends on `k`.
  *
- * Output bytes are passed through JSON's string encoder, which escapes
- * non-printable bytes as `\u00xx`. Reading reverses this faithfully so
- * arbitrary 8-bit output payloads round-trip.
+ * Output bytes ride JSON's string encoder with
+ * `JSON_INVALID_UTF8_SUBSTITUTE`. THE HONEST CONTRACT: payloads that are
+ * valid UTF-8 round-trip byte-exactly (`\u00xx` escaping covers the
+ * printable-in-JSON-but-not case, and reading reverses it faithfully).
+ * Bytes that are NOT valid UTF-8 — a non-UTF-8 child program, or the torn
+ * tail of a sequence {@see \SugarCraft\Vcr\Recorder} could not re-join —
+ * are recorded as U+FFFD replacement characters, so 8-bit payloads are
+ * LOSSY, not round-tripped. The Recorder defers split multibyte glyphs to
+ * the next tap, which keeps the dominant corruption source (PTY chunk
+ * boundaries slicing a CJK/emoji stream) byte-exact; substitution is the
+ * last-resort floor that guarantees recording never aborts mid-session.
+ *
+ * A lossless representation IS possible — base64 every output frame — and
+ * was evaluated and DECLINED: it is a cassette-format break (header
+ * version bump + V2→V3 migration, plus the asciinema/yaml/relative format
+ * family diverges), costs ~33% size inflation on payloads that are almost
+ * always text, and destroys cassette grep-ability — to preserve the rare
+ * genuinely-8-bit stream a terminal could not interpret as text anyway.
+ * Should that case ever matter, it belongs in a versioned format, not in a
+ * silent encoder change.
  *
  * Supports two timestamp modes:
  * - `absolute` (default): timestamps are seconds since cassette start.
@@ -245,10 +262,16 @@ final class JsonlFormat implements Format
         return new Event(t: $t, kind: $kind, payload: ObjectMap::of($data, "event on line {$lineNo} payload"));
     }
 
-    /** @param array<array-key, mixed> $data */
+    /**
+     * Encode one JSONL line. The substitute flag is load-bearing (F1): a
+     * cassette payload can carry bytes a strict encoder would reject, and a
+     * throw here would abort a rewrite of an already-recorded session.
+     *
+     * @param array<array-key, mixed> $data
+     */
     private function jsonEncode(array $data): string
     {
-        $json = json_encode($data, JSON_UNESCAPED_SLASHES);
+        $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
         if ($json === false) {
             throw new \RuntimeException('candy-vcr: json_encode failed: ' . json_last_error_msg());
         }

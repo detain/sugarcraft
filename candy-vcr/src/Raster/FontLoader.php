@@ -11,7 +11,9 @@ namespace SugarCraft\Vcr\Raster;
  * TTF files are loaded as file paths for use with imagettftext().
  * Also supports old-format BMP font files via imageloadfont().
  *
- * Mirrors charmbracelet/x/vhs FontLoader.
+ * No upstream counterpart: charmbracelet/vhs screenshots a live ttyd with
+ * Chromium + ffmpeg and ships no font-loading class of this shape — this
+ * .tape→GIF raster pipeline is original to SugarCraft.
  */
 final class FontLoader
 {

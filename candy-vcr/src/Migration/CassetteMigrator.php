@@ -31,16 +31,16 @@ interface CassetteMigrator
     public function migrate(Cassette $cassette, bool $dryRun = false): Cassette;
 
     /**
-     * Get the source format version number this migrator reads.
-     * Returns e.g. 1 for V1ToV2Migrator.
+     * Source format version number this migrator reads (bare accessor,
+     * house no-`get` law). Returns e.g. 1 for V1ToV2Migrator.
      */
-    public function getSourceVersion(): int;
+    public function sourceVersion(): int;
 
     /**
-     * Get the target format version number this migrator writes.
+     * Target format version number this migrator writes.
      * Returns e.g. 2 for V1ToV2Migrator.
      */
-    public function getTargetVersion(): int;
+    public function targetVersion(): int;
 
     /**
      * Get a human-readable description of what this migrator does.

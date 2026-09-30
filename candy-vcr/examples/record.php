@@ -17,11 +17,11 @@ declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use React\EventLoop\StreamSelectLoop;
-use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Subscriptions;
 use SugarCraft\Vcr\Recorder;
 
 $path = $argv[1] ?? __DIR__ . '/cassettes/recorded.cas';
@@ -45,6 +45,14 @@ final class CounterModel implements Model
     public function view(): string
     {
         return "counter: {$this->count}\n  press any key, q to quit\n";
+    }
+
+    // F3 (round 90): candy-core's Model contract mandates subscriptions();
+    // this counter needs none. Before this method existed the example
+    // fataled at class-definition time.
+    public function subscriptions(): ?Subscriptions
+    {
+        return null;
     }
 }
 

@@ -38,8 +38,14 @@ final class RenderBatchCommand extends Command
         $outputDir = is_string($outputDir) ? $outputDir : null;
         $recursive = (bool) $input->getOption('recursive');
 
-        $fpsOpt = $input->getOption('fps');
-        $fps = is_numeric($fpsOpt) ? (float) $fpsOpt : 30.0;
+        // F2 (round 90): same door as render-tape — a bad --fps aborts the
+        // whole batch before the first render starts, never mid-flight.
+        try {
+            $fps = FpsOption::parse($input->getOption('fps')) ?? 30.0;
+        } catch (\InvalidArgumentException $e) {
+            $output->writeln("<error>Failed: {$e->getMessage()}</error>");
+            return 1;
+        }
 
         $backendOpt = $input->getOption('backend');
         $backend = ($backendOpt === 'gd' || $backendOpt === 'imagick') ? $backendOpt : 'gd';

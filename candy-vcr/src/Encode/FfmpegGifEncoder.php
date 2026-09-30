@@ -17,7 +17,9 @@ use Symfony\Component\Process\Process;
  * this is what makes `Sleep 2s` in a tape produce a real 2-second
  * pause in the GIF instead of being flattened by frame dedup.
  *
- * Mirrors charmbracelet/x/vhs FfmpegGifEncoder.
+ * No upstream counterpart: charmbracelet/vhs shells out to ffmpeg as a
+ * single opaque GIF step; this encoder-plus-concat pipeline (and its
+ * pure-PHP fallback) is original to SugarCraft.
  */
 final class FfmpegGifEncoder implements GifEncoder
 {

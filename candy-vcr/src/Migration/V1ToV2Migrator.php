@@ -58,12 +58,12 @@ final class V1ToV2Migrator implements CassetteMigrator
         return new Cassette($migratedHeader, $migratedEvents);
     }
 
-    public function getSourceVersion(): int
+    public function sourceVersion(): int
     {
         return 1;
     }
 
-    public function getTargetVersion(): int
+    public function targetVersion(): int
     {
         return self::TARGET_VERSION;
     }

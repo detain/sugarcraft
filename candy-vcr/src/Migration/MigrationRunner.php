@@ -49,7 +49,7 @@ final class MigrationRunner
             $found = false;
             foreach ($this->migrators as $migrator) {
                 if ($migrator->canMigrate($current)) {
-                    if ($maxVersion !== null && $migrator->getTargetVersion() > $maxVersion) {
+                    if ($maxVersion !== null && $migrator->targetVersion() > $maxVersion) {
                         continue;
                     }
                     $current = $migrator->migrate($current, $dryRun);
@@ -88,8 +88,8 @@ final class MigrationRunner
     {
         return array_map(
             fn (CassetteMigrator $m) => [
-                'source' => $m->getSourceVersion(),
-                'target' => $m->getTargetVersion(),
+                'source' => $m->sourceVersion(),
+                'target' => $m->targetVersion(),
                 'description' => $m->describe(),
             ],
             $this->migrators,
@@ -102,6 +102,6 @@ final class MigrationRunner
     public function register(CassetteMigrator $migrator): void
     {
         $this->migrators[] = $migrator;
-        usort($this->migrators, fn ($a, $b) => $a->getSourceVersion() <=> $b->getSourceVersion());
+        usort($this->migrators, fn ($a, $b) => $a->sourceVersion() <=> $b->sourceVersion());
     }
 }

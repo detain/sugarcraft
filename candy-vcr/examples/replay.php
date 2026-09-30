@@ -12,12 +12,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use React\EventLoop\StreamSelectLoop;
-use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Subscriptions;
 use SugarCraft\Vcr\Assert\ScreenAssertion;
 use SugarCraft\Vcr\Player;
 
@@ -44,6 +43,12 @@ final class CounterModel implements Model
     public function view(): string
     {
         return "counter: {$this->count}\n  press any key, q to quit\n";
+    }
+    // F3 (round 90): required by candy-core's Model contract; see
+    // examples/record.php for the same fix.
+    public function subscriptions(): ?Subscriptions
+    {
+        return null;
     }
 }
 

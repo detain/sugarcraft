@@ -202,120 +202,135 @@ final class Player
         }
         [$inputRead, $inputWrite] = $sockets;
 
-        $output = fopen('php://memory', 'w+b');
-        if ($output === false) {
-            throw new \RuntimeException('candy-vcr Player: fopen(php://memory) failed');
-        }
-
-        $loop = new \React\EventLoop\StreamSelectLoop();
-        $program = ($programFactory)($inputRead, $output, $loop);
-
-        $tally = ['input' => 0, 'resize' => 0, 'output' => 0, 'quit' => 0];
-        $expectedOutput = '';
-        $programQuitCleanly = false;
-        // Track whether the first resize has been seen (and possibly
-        // skipped). The replay program emits its own startup
-        // WindowSizeMsg from its tty.size() lookup, so the cassette's
-        // first resize would be a duplicate that throws the model's
-        // msg count off by one.
-        $firstResizeSkipped = !$skipFirstResize;
-
-        $events = $this->cassette->events;
-        $eventCount = count($events);
-        $i = 0;
-        $step = function () use (
-            &$step,
-            &$i,
-            $events,
-            $eventCount,
-            $program,
-            $registry,
-            $loop,
-            $speed,
-            $idleThreshold,
-            $useRawTimestamps,
-            &$tally,
-            &$expectedOutput,
-            &$programQuitCleanly,
-            &$firstResizeSkipped,
-        ): void {
-            if ($i >= $eventCount) {
-                return;
+        // F5 (round 90): the descriptors built below live inside a try/finally.
+        // $output is declared before the try so finally sees it even when
+        // fopen() itself is the throwing call.
+        $output = null;
+        try {
+            $output = fopen('php://memory', 'w+b');
+            if ($output === false) {
+                throw new \RuntimeException('candy-vcr Player: fopen(php://memory) failed');
             }
-            $event = $events[$i];
-            $i++;
-            ($this->dispatchEvent(
-                $event,
+
+            $loop = new \React\EventLoop\StreamSelectLoop();
+            $program = ($programFactory)($inputRead, $output, $loop);
+
+            $tally = ['input' => 0, 'resize' => 0, 'output' => 0, 'quit' => 0];
+            $expectedOutput = '';
+            $programQuitCleanly = false;
+            // Track whether the first resize has been seen (and possibly
+            // skipped). The replay program emits its own startup
+            // WindowSizeMsg from its tty.size() lookup, so the cassette's
+            // first resize would be a duplicate that throws the model's
+            // msg count off by one.
+            $firstResizeSkipped = !$skipFirstResize;
+
+            $events = $this->cassette->events;
+            $eventCount = count($events);
+            $i = 0;
+            $step = function () use (
+                &$step,
+                &$i,
+                $events,
+                $eventCount,
                 $program,
                 $registry,
-                $tally,
-                $expectedOutput,
-                $programQuitCleanly,
-                $firstResizeSkipped,
-            ))();
-
-            if ($i >= $eventCount) {
-                return;
-            }
-            // Schedule the next step. INSTANT mode uses a tiny yield to
-            // let the program's render tick fire between events;
-            // REALTIME mode uses the recorded delta between consecutive
-            // event timestamps, clamped to >= 0. If idleThreshold
-            // is set, long pauses are clamped to that value for faster CI.
-            if ($speed === self::SPEED_REALTIME) {
-                $thisT = self::eventTimestamp($events[$i], $useRawTimestamps);
-                $prevT = self::eventTimestamp($event, $useRawTimestamps);
-                $delta = max(0.0, $thisT - $prevT);
-                if ($idleThreshold !== null && $delta > $idleThreshold) {
-                    $delta = $idleThreshold;
+                $loop,
+                $speed,
+                $idleThreshold,
+                $useRawTimestamps,
+                &$tally,
+                &$expectedOutput,
+                &$programQuitCleanly,
+                &$firstResizeSkipped,
+            ): void {
+                if ($i >= $eventCount) {
+                    return;
                 }
-            } else {
-                $delta = self::INSTANT_YIELD_SECONDS;
+                $event = $events[$i];
+                $i++;
+                ($this->dispatchEvent(
+                    $event,
+                    $program,
+                    $registry,
+                    $tally,
+                    $expectedOutput,
+                    $programQuitCleanly,
+                    $firstResizeSkipped,
+                ))();
+
+                if ($i >= $eventCount) {
+                    return;
+                }
+                // Schedule the next step. INSTANT mode uses a tiny yield to
+                // let the program's render tick fire between events;
+                // REALTIME mode uses the recorded delta between consecutive
+                // event timestamps, clamped to >= 0. If idleThreshold
+                // is set, long pauses are clamped to that value for faster CI.
+                if ($speed === self::SPEED_REALTIME) {
+                    $thisT = self::eventTimestamp($events[$i], $useRawTimestamps);
+                    $prevT = self::eventTimestamp($event, $useRawTimestamps);
+                    $delta = max(0.0, $thisT - $prevT);
+                    if ($idleThreshold !== null && $delta > $idleThreshold) {
+                        $delta = $idleThreshold;
+                    }
+                } else {
+                    $delta = self::INSTANT_YIELD_SECONDS;
+                }
+                $loop->addTimer($delta, $step);
+            };
+
+            // Kick off the first event. For REALTIME mode honour its
+            // recorded `t`; for INSTANT mode start immediately.
+            $firstDelay = ($speed === self::SPEED_REALTIME && $eventCount > 0)
+                ? max(0.0, self::eventTimestamp($events[0], $useRawTimestamps))
+                : 0.0;
+            if ($eventCount > 0) {
+                $loop->addTimer($firstDelay, $step);
             }
-            $loop->addTimer($delta, $step);
-        };
 
-        // Kick off the first event. For REALTIME mode honour its
-        // recorded `t`; for INSTANT mode start immediately.
-        $firstDelay = ($speed === self::SPEED_REALTIME && $eventCount > 0)
-            ? max(0.0, self::eventTimestamp($events[0], $useRawTimestamps))
-            : 0.0;
-        if ($eventCount > 0) {
-            $loop->addTimer($firstDelay, $step);
+            // Safety net: stop the loop if the program never quits.
+            $cap = $timeoutSeconds ?? max(5.0, $this->cassette->duration() + 5.0);
+            $loop->addTimer($cap, static fn () => $loop->stop());
+
+            $program->run();
+
+            // Snapshot what the program actually wrote.
+            $actualEnd = ftell($output);
+            rewind($output);
+            $actualOutput = $actualEnd > 0 ? (string) stream_get_contents($output) : '';
+
+            $verdict = $assertion->compare($expectedOutput, $actualOutput);
+
+            return new ReplayResult(
+                ok: $verdict['ok'] && $programQuitCleanly,
+                diff: $verdict['ok']
+                    ? ($programQuitCleanly ? '' : 'program did not exit on cassette quit event')
+                    : $verdict['diff'],
+                eventCount: $tally['input'] + $tally['resize'] + $tally['output'] + $tally['quit'],
+                inputCount: $tally['input'],
+                resizeCount: $tally['resize'],
+                outputCount: $tally['output'],
+                quitCount: $tally['quit'],
+                programQuitCleanly: $programQuitCleanly,
+            );
+        } finally {
+            // E712 keep: ephemeral pipe teardown after their contents were
+            // fully drained into $actualOutput — a close failure here cannot
+            // change the verdict, and a warning would corrupt CLI stderr.
+            // F5 (round 90): teardown moved out of the straight-line tail into
+            // finally — a throw at the factory door, inside run(), or in any
+            // dispatched timer now still releases the socket pair and the
+            // memory buffer; pre-fix each failed replay leaked two fds plus a
+            // stream, unbounded across a batch.
+            // finally also runs on the throw paths, where $output may still
+            // be false (fopen door) — guard on the resource shape itself.
+            if (is_resource($output)) {
+                @fclose($output);
+            }
+            @fclose($inputRead);
+            @fclose($inputWrite);
         }
-
-        // Safety net: stop the loop if the program never quits.
-        $cap = $timeoutSeconds ?? max(5.0, $this->cassette->duration() + 5.0);
-        $loop->addTimer($cap, static fn () => $loop->stop());
-
-        $program->run();
-
-        // Snapshot what the program actually wrote.
-        $actualEnd = ftell($output);
-        rewind($output);
-        $actualOutput = $actualEnd > 0 ? (string) stream_get_contents($output) : '';
-
-        $verdict = $assertion->compare($expectedOutput, $actualOutput);
-
-        // E712 keep: ephemeral pipe teardown after their contents were
-        // fully drained into $actualOutput — a close failure here cannot
-        // change the verdict, and a warning would corrupt CLI stderr.
-        @fclose($inputRead);
-        @fclose($inputWrite);
-        @fclose($output);
-
-        return new ReplayResult(
-            ok: $verdict['ok'] && $programQuitCleanly,
-            diff: $verdict['ok']
-                ? ($programQuitCleanly ? '' : 'program did not exit on cassette quit event')
-                : $verdict['diff'],
-            eventCount: $tally['input'] + $tally['resize'] + $tally['output'] + $tally['quit'],
-            inputCount: $tally['input'],
-            resizeCount: $tally['resize'],
-            outputCount: $tally['output'],
-            quitCount: $tally['quit'],
-            programQuitCleanly: $programQuitCleanly,
-        );
     }
 
     /**

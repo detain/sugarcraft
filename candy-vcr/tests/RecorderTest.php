@@ -191,6 +191,116 @@ final class RecorderTest extends TestCase
         $this->assertNotEmpty($h->createdAt);
     }
 
+    // ---- F1 (round 90): torn-UTF-8 chunk pins ----------------------------
+    // A PTY read loop slices output at arbitrary byte boundaries; before the
+    // re-join contract, recordOutput("\xe4\xb8") threw and aborted BOTH the
+    // recording and the render. These pins hold the three-way contract:
+    // split glyphs re-join byte-exact, invalid bytes degrade to U+FFFD,
+    // and close() flushes a tail the session never completed.
+
+    public function testByteByByteFeedOfMultibyteStreamReassemblesByteExact(): void
+    {
+        $full = "ok \xe4\xb8\xad \xf0\x9f\x98\x80 end"; // ASCII + 3-byte 中 + 4-byte emoji
+        $path = tempnam(sys_get_temp_dir(), 'candy-vcr-f1-');
+        $this->assertNotFalse($path);
+        try {
+            $r = Recorder::open($path, $this->stubHeader());
+            foreach (str_split($full) as $byte) {
+                $r->recordOutput($byte); // worst-case fragmentation: one byte per tap
+            }
+            $r->close(); // close() releases the sink — read the finished file, not a live handle
+
+            $reassembled = '';
+            $cassette = (new JsonlFormat())->read($path);
+            foreach ($cassette->events as $event) {
+                $this->assertSame(EventKind::Output, $event->kind);
+                $this->assertIsString($event->payload['b']);
+                $reassembled .= $event->payload['b'];
+            }
+            $this->assertSame($full, $reassembled, 'deferred tails must re-join, never corrupt or drop');
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testTornTailIsDeferredNotEncodedIntoItsOwnEvent(): void
+    {
+        $fh = $this->memory();
+        $r = new Recorder($fh, $this->stubHeader());
+        $r->recordOutput("split \xe4\xb8"); // valid prefix + lead+1 of 中 (E4 B8 AD)
+
+        $events = $this->readEvents($fh);
+        $this->assertCount(1, $events, 'only the complete prefix may be written while a tail is pending');
+        $this->assertSame('split ', $events[0]['b']);
+
+        $r->recordOutput("\xad tail"); // completes the glyph
+        $events = $this->readEvents($fh);
+        $this->assertCount(2, $events);
+        $this->assertSame("\xe4\xb8\xad tail", $events[1]['b']);
+    }
+
+    public function testInvalidLeadBytesDegradeToSubstitutionWithoutThrowing(): void
+    {
+        $fh = $this->memory();
+        $r = new Recorder($fh, $this->stubHeader());
+        $r->recordOutput("\xff\xfe raw 8-bit"); // leads no valid sequence can form
+
+        $events = $this->readEvents($fh);
+        $this->assertCount(1, $events, 'invalid bytes are final, not deferred');
+        $this->assertSame("\u{fffd}\u{fffd} raw 8-bit", $events[0]['b']);
+    }
+
+    public function testCloseFlushesPendingTailSoEndOfSessionMidGlyphLosesNoBytes(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'candy-vcr-f1-');
+        $this->assertNotFalse($path);
+        try {
+            $r = Recorder::open($path, $this->stubHeader());
+            $r->recordOutput("x\xe4\xb8"); // session ends mid-glyph
+            $r->close();
+
+            $events = [];
+            foreach ((new JsonlFormat())->read($path)->events as $event) {
+                if ($event->kind === EventKind::Output) {
+                    $events[] = $event->payload['b'];
+                }
+            }
+            $this->assertCount(2, $events);
+            $this->assertSame('x', $events[0]);
+            $this->assertSame("\u{fffd}", $events[1], 'the uncompleted tail reaches substitution, not the bit bucket');
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testSplitGlyphCassetteRoundTripsThroughTheJsonlReader(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'candy-vcr-f1-');
+        $this->assertNotFalse($path);
+        try {
+            $r = Recorder::open($path);
+            $r->recordResize(80, 24);
+            // 字 = E5 AD 97, 五 = E4 BA 94 — tear 五 between its lead and
+            // its second continuation byte.
+            $r->recordOutput("\u{5b57}\xe4\xba");
+            $r->recordOutput("\x94");
+            $r->recordQuit();
+            $r->close();
+
+            $cassette = (new JsonlFormat())->read($path);
+            $output = '';
+            foreach ($cassette->events as $event) {
+                if ($event->kind === EventKind::Output) {
+                    $this->assertIsString($event->payload['b']);
+                    $output .= $event->payload['b'];
+                }
+            }
+            $this->assertSame("\u{5b57}\u{4e94}", $output, 'reader must hand the replay path the re-joined glyph stream');
+        } finally {
+            @unlink($path);
+        }
+    }
+
     /** @return resource */
     private function memory()
     {

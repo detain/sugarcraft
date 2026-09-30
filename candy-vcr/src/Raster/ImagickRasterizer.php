@@ -26,7 +26,10 @@ use SugarCraft\Vt\Theme;
  * GD rasterizer: (cellW, cellH, theme spl_object_id, fontFamily,
  * fontSize). `__destruct` releases the cached `Imagick` resources.
  *
- * Mirrors charmbracelet/x/vhs ImagickRasterizer.
+ * No upstream counterpart: charmbracelet/vhs screenshots a live ttyd with
+ * Chromium and ffmpeg — it ships no cell-grid rasterizer. This .tape→GIF
+ * pipeline is original to SugarCraft; its parity contract is the
+ * charmbracelet/x/vt Cell grid it consumes.
  */
 final class ImagickRasterizer implements Rasterizer
 {
@@ -133,12 +136,18 @@ final class ImagickRasterizer implements Rasterizer
             while ($col < $cols) {
                 $cell = $grid->cell($row, $col);
 
-                $isWide = $this->isWideChar($cell->char);
-
-                if ($col + ($isWide ? 1 : 0) >= $cols) {
+                // F4 (round 90): same cell-grid contract as GdRasterizer —
+                // wide iff the neighbour is a Cell::continuation() tail of
+                // this head, tails paint nothing. The old mb_strwidth oracle
+                // was an independent width table and drifted from the vt
+                // grid in both directions (regional-indicator pairs, Unicode
+                // reclassifications); the grid is the ground truth for which
+                // column a glyph occupies.
+                if ($cell->continuation) {
                     $col++;
                     continue;
                 }
+                $isWide = $col + 1 < $cols && $grid->cell($row, $col + 1)->continuation;
 
                 $tile = $this->getTile($cell, $cellW, $cellH, $fonts, $isWide ? $cellW * 2 : $cellW, $isWide);
                 $imagick->compositeImage($tile, \Imagick::COMPOSITE_OVER, $col * $cellW, $row * $cellH);
@@ -353,11 +362,6 @@ final class ImagickRasterizer implements Rasterizer
     {
         $bw = max(2, (int) floor($w * 0.15));
         $draw->rectangle($x, $y, $x + $bw - 1, $y + $h - 1);
-    }
-
-    private function isWideChar(string $char): bool
-    {
-        return mb_strwidth($char) > 1;
     }
 
     private function indexToHex(int $index): string

@@ -45,8 +45,16 @@ final class RenderTapeCommand extends Command
         $outputOpt = $input->getOption('output');
         $explicitOutput = is_string($outputOpt) ? $outputOpt : null;
 
-        $fpsOpt = $input->getOption('fps');
-        $fps = is_numeric($fpsOpt) ? (float) $fpsOpt : 30.0;
+        // F2 (round 90): parse --fps at the door. Previously any is_numeric
+        // string passed — "--fps 0" reached FrameStream's 1.0/$fps (float
+        // DivisionByZeroError mid-render) and integer 0 the encoder's 1000/$fps
+        // (ArithmeticError/hang). Fail loud here instead.
+        try {
+            $fps = FpsOption::parse($input->getOption('fps')) ?? 30.0;
+        } catch (\InvalidArgumentException $e) {
+            $output->writeln("<error>Failed: {$e->getMessage()}</error>");
+            return 1;
+        }
 
         $backendOpt = $input->getOption('backend');
         $backend = ($backendOpt === 'gd' || $backendOpt === 'imagick') ? $backendOpt : 'gd';
@@ -156,7 +164,10 @@ final class RenderTapeCommand extends Command
                 'duration' => $cassette->duration(),
             ],
         ];
-        $output->writeln((string) json_encode($headerLine, JSON_UNESCAPED_SLASHES));
+        // SUBSTITUTE on the dry-run lines mirrors the recorder's contract: a
+        // cast payload with undisplayable bytes must degrade to U+FFFD, not
+        // silently vanish (json_encode returns false, the cast gives '').
+        $output->writeln((string) json_encode($headerLine, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
 
         foreach ($cassette->events as $event) {
             $line = [
@@ -164,7 +175,7 @@ final class RenderTapeCommand extends Command
                 'kind' => $event->kind->value,
                 'payload' => $event->payload,
             ];
-            $output->writeln((string) json_encode($line, JSON_UNESCAPED_SLASHES));
+            $output->writeln((string) json_encode($line, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
         }
 
         return 0;

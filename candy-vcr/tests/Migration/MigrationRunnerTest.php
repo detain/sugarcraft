@@ -107,11 +107,11 @@ final class MigrationRunnerTest extends TestCase
             {
                 return $cassette;
             }
-            public function getSourceVersion(): int
+            public function sourceVersion(): int
             {
                 return 1;
             }
-            public function getTargetVersion(): int
+            public function targetVersion(): int
             {
                 return 99;
             }

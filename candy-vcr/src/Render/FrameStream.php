@@ -77,6 +77,16 @@ final class FrameStream implements \IteratorAggregate
         private float $fps = 30.0,
         private ?string $shell = null,
     ) {
+        // F2 (round 90): parse-don't-validate at the boundary — getIterator
+        // divides 1.0/$fps on the shared clock, and TapeToGif casts the
+        // option to float before constructing this. A non-positive or
+        // non-finite fps must halt here, with every other render path
+        // (echo and exec alike) behind the same door.
+        if (!is_finite($fps) || $fps <= 0.0) {
+            throw new \InvalidArgumentException(
+                "candy-vcr: FrameStream fps must be a positive finite number of frames per second, got {$fps}."
+            );
+        }
     }
 
     /** @return \Traversable<int, Snapshot> */

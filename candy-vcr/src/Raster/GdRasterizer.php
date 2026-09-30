@@ -28,7 +28,10 @@ use SugarCraft\Vt\Theme;
  * (cellW, cellH, theme spl_object_id, fontFamily, fontSize); the
  * fingerprint changes invalidate and rebuild the cache.
  *
- * Mirrors charmbracelet/x/vhs GdRasterizer.
+ * No upstream counterpart: charmbracelet/vhs screenshots a live ttyd with
+ * Chromium and ffmpeg — it ships no cell-grid rasterizer. This .tape→GIF
+ * pipeline is original to SugarCraft; its parity contract is the
+ * charmbracelet/x/vt Cell grid it consumes.
  */
 final class GdRasterizer implements Rasterizer
 {
@@ -125,12 +128,24 @@ final class GdRasterizer implements Rasterizer
             while ($col < $cols) {
                 $cell = $grid->cell($row, $col);
 
-                $isWide = $this->isWideChar($cell->char);
-
-                if ($col + ($isWide ? 1 : 0) >= $cols) {
+                // F4 (round 90): advance by the cell-grid contract, not by
+                // font metrics. The vt emulator (9a8c8879c) models a wide
+                // glyph as a head cell carrying the rune plus a right-hand
+                // Cell::continuation() tail — a head is wide exactly when
+                // its neighbour is marked as its continuation, and a
+                // continuation cell paints nothing because the head's
+                // 2-cell tile already covers it. The pre-fix mb_strwidth
+                // oracle was an INDEPENDENT width table and drifted from the
+                // grid in both directions — regional-indicator pairs are two
+                // narrow cells under vt yet wide per mbstring, while Unicode
+                // reclassifications (U+2630 N→W, the r86/L5 case) flip which
+                // table claims a glyph is wide. Trust the grid: the terminal
+                // itself is the ground truth for what occupies which column.
+                if ($cell->continuation) {
                     $col++;
                     continue;
                 }
+                $isWide = $col + 1 < $cols && $grid->cell($row, $col + 1)->continuation;
 
                 $style = $this->styleFromAttrs($cell->attrs);
                 $inverse = ($cell->attrs & Cell::ATTR_INVERSE) !== 0;
@@ -290,11 +305,6 @@ final class GdRasterizer implements Rasterizer
 
         return CellColor::pack($cell->fgRgb())
             ?? $this->theme->color($cell->fg === 0 ? $this->theme->defaultFg : $cell->fg);
-    }
-
-    private function isWideChar(string $char): bool
-    {
-        return mb_strwidth($char) > 1;
     }
 
     private function allocateColor(\GdImage $image, int $paletteIndex): int

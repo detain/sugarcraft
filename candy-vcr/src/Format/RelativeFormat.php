@@ -209,10 +209,16 @@ final class RelativeFormat implements Format
         return new Event(t: $absoluteT, kind: $kind, payload: ObjectMap::of($data, "event on line {$lineNo} payload"));
     }
 
-    /** @param array<array-key, mixed> $data */
+    /**
+     * Encode one JSONL line. The substitute flag is load-bearing (F1): a
+     * cassette payload can carry bytes a strict encoder would reject, and a
+     * throw here would abort a rewrite of an already-recorded session.
+     *
+     * @param array<array-key, mixed> $data
+     */
     private function jsonEncode(array $data): string
     {
-        $json = json_encode($data, JSON_UNESCAPED_SLASHES);
+        $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
         if ($json === false) {
             throw new \RuntimeException('candy-vcr: json_encode failed: ' . json_last_error_msg());
         }

@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Tape\Ast;
 
-use InvalidArgumentException;
-
 /**
  * Represents a parse error at a specific line.
+ *
+ * Accessors follow the house bare-name law (F7, round 90); the public
+ * readonly props are the primary read surface — Compiler formats nodes
+ * via `$node->line`/`$node->message` directly.
  */
 final readonly class ParseError
 {
@@ -17,12 +19,12 @@ final readonly class ParseError
     ) {
     }
 
-    public function getLine(): int
+    public function line(): int
     {
         return $this->line;
     }
 
-    public function getMessage(): string
+    public function message(): string
     {
         return $this->message;
     }

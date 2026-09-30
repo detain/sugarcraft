@@ -22,12 +22,12 @@ final class V1ToV2MigratorTest extends TestCase
 
     public function testGetSourceVersion(): void
     {
-        $this->assertSame(1, $this->migrator->getSourceVersion());
+        $this->assertSame(1, $this->migrator->sourceVersion());
     }
 
     public function testGetTargetVersion(): void
     {
-        $this->assertSame(2, $this->migrator->getTargetVersion());
+        $this->assertSame(2, $this->migrator->targetVersion());
     }
 
     public function testDescribeReturnsNonEmptyString(): void
