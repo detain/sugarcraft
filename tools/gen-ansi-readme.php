@@ -403,7 +403,9 @@ if ($remeasure) {
         [$category, $name] = explode('/', $key, 2);
         $index[$key] = [
             'name' => $name, 'category' => $category, 'resolution' => '', 'width' => 0,
-            'height' => 0, 'depth' => '', 'colors' => 0, 'description' => '', 'rating' => 0, 'tags' => [],
+            // rating starts UNSET (null), not 0: on the 0-9 scale ansi-view offers,
+            // 0 is a real score, and freshly adopted art has never been reviewed.
+            'height' => 0, 'depth' => '', 'colors' => 0, 'description' => '', 'rating' => null, 'tags' => [],
         ];
     }
     foreach ($orphanedRows as $key) {
