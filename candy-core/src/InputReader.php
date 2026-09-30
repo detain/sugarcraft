@@ -209,36 +209,68 @@ final class InputReader
             // Mirrors charmbracelet/bubbletea rune assembly.
             // Detect UTF-8 lead bytes and assemble the full codepoint
             // before emitting — C0-0x7f bytes are single-byte ASCII.
+            //
+            // Cited fix (candy-tetris audit finding #2, 2026-09-30): this
+            // block used to reuse the name `$len` for the sequence length,
+            // clobbering the buffer-length that drives the `while ($i < $len)`
+            // walk. Every multi-byte rune truncated the parse at its own
+            // boundary and deferred the rest of the read to the NEXT read —
+            // so the last bytes of a glyph burst (typically the `q` typed
+            // right after) sat parked until further input arrived, soft-locking
+            // the app. It also parked a lead byte unconditionally whenever the
+            // buffer was shorter than the promised sequence, even when the few
+            // bytes actually present already proved the sequence malformed
+            // (e.g. `\xe2` followed by `q`) — a split read then poisoned the
+            // buffer head forever: every later parse() broke at $i = 0 before
+            // reaching any key. Fail-open law: only a *plausible* partial
+            // (all bytes present so far are real continuations) may park;
+            // anything undecodable is dropped one byte at a time and the
+            // stream keeps draining.
             if ($code >= 0x80) {
-                // Compute expected sequence length from the lead byte.
-                $len = match (true) {
+                // Expected sequence length from the lead byte. A 1 here means
+                // the byte cannot start a rune at all: a stray continuation
+                // byte (0x80-0xBF) or an invalid lead (0xF8-0xFF).
+                $seqLen = match (true) {
                     $code >= 0xf0 => 4,  // 0xF0-0xF7: 4-byte sequences
                     $code >= 0xe0 => 3,  // 0xE0-0xEF: 3-byte sequences (CJK)
                     $code >= 0xc0 => 2,  // 0xC0-0xDF: 2-byte sequences (Latin extend)
                     default       => 1,
                 };
-                $remaining = $len - 1;
-                // If we don't have all continuation bytes yet, break and
-                // wait for the next read — same as the ESC/OSC branches.
-                if (($i + $len) > strlen($this->buf)) {
-                    break;
-                }
-                // Validate all continuation bytes are 0x80-0xBF.
-                $valid = true;
-                for ($j = 1; $j < $len; $j++) {
+                $available = min($seqLen, $len - $i);
+
+                // Any present byte after the lead that is not a continuation
+                // (0x80-0xBF) disproves the sequence right now — never wait
+                // for bytes that would contradict what is already in hand.
+                $provenBroken = false;
+                for ($j = 1; $j < $available; $j++) {
                     $cb = ord($this->buf[$i + $j]);
                     if ($cb < 0x80 || $cb > 0xbf) {
-                        $valid = false;
+                        $provenBroken = true;
                         break;
                     }
                 }
-                if ($valid) {
-                    $msgs[] = new KeyMsg(KeyType::Char, rune: substr($this->buf, $i, $len));
-                    $i += $len;
+                if ($provenBroken) {
+                    $i += 1;
                     continue;
                 }
-                // Invalid sequence — fall through to emit the lone lead byte
-                // as a Char key and advance by 1 so a malformed stream cannot stall.
+                // Genuine split mid-rune: every byte so far is a plausible
+                // continuation and more are owed. Park until the next read —
+                // same contract as the ESC/OSC branches.
+                if ($available < $seqLen) {
+                    break;
+                }
+                $rune = substr($this->buf, $i, $seqLen);
+                // Strict decode catches what the range scan cannot: stray
+                // single bytes ($seqLen 1), overlong forms (0xC0/0xC1 leads)
+                // and out-of-range lead/continuation combinations. Dropping a
+                // byte and re-walking is bounded — each pass advances $i.
+                if ($seqLen === 1 || !mb_check_encoding($rune, 'UTF-8')) {
+                    $i += 1;
+                    continue;
+                }
+                $msgs[] = new KeyMsg(KeyType::Char, rune: $rune);
+                $i += $seqLen;
+                continue;
             }
 
             $msgs[] = $this->decodeChar($code);

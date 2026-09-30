@@ -1102,4 +1102,94 @@ final class InputReaderTest extends TestCase
         $this->assertCount(count(array_unique($map, SORT_REGULAR)), $map);
         $this->assertGreaterThanOrEqual(80, count($map));
     }
+
+    // ------------------------------------------------------------------
+    // UTF-8 rune assembly — candy-tetris audit finding #2 soft-lock pins.
+    // Raw glyph bytes (paste / IME path) must never wedge the parser:
+    // undecodable input is dropped, a read drains fully, and only a
+    // plausible split mid-rune may park.
+    // ------------------------------------------------------------------
+
+    public function testGlyphBurstReadDrainsCompletelyAndQuitFollowsImmediately(): void
+    {
+        // The exact t1 bisect burst: literal "→→↓" pasted in one read,
+        // then "q" in the next. Pre-fix, the sequence-length variable
+        // clobbered the buffer-length driving the walk, so each read
+        // parsed exactly one rune and deferred everything behind it —
+        // the trailing q never surfaced without further input.
+        $reader = new InputReader();
+        $msgs   = $reader->parse("\xe2\x86\x92\xe2\x86\x92\xe2\x86\x93");
+        $this->assertCount(3, $msgs);
+        $this->assertSame(['→', '→', '↓'], array_map(fn (KeyMsg $m): string => $m->rune, $msgs));
+
+        $after = $reader->parse('q');
+        $this->assertCount(1, $after);
+        $this->assertSame('q', $after[0]->rune);
+    }
+
+    public function testGlyphBurstAndQuitInASingleReadAreAllEmitted(): void
+    {
+        $msgs = (new InputReader())->parse("\xe2\x86\x92q");
+        $this->assertCount(2, $msgs);
+        $this->assertSame('→', $msgs[0]->rune);
+        $this->assertSame('q', $msgs[1]->rune);
+    }
+
+    public function testParkedLeadByteSelfHealsWhenNextByteIsNotAContinuation(): void
+    {
+        // Fatal-wedge shape: a read that ends mid-rune parks the lead
+        // byte; when the next read opens with an ASCII byte, the parked
+        // sequence is already disproven. Pre-fix the length-only check
+        // broke at $i = 0 on every later read, poisoning the buffer head
+        // forever — no key, including q, ever parsed again.
+        $reader = new InputReader();
+        $this->assertCount(0, $reader->parse("\xe2"));
+
+        $msgs = $reader->parse("q");
+        $this->assertCount(1, $msgs);
+        $this->assertSame('q', $msgs[0]->rune);
+    }
+
+    public function testPlausibleSplitRuneAcrossReadsStillAssembles(): void
+    {
+        // The park contract that MUST survive: every byte so far is a
+        // real continuation, so the remainder is genuinely owed.
+        $reader = new InputReader();
+        $this->assertCount(0, $reader->parse("\xe2\x86"));
+
+        $msgs = $reader->parse("\x92");
+        $this->assertCount(1, $msgs);
+        $this->assertSame('→', $msgs[0]->rune);
+    }
+
+    public function testUndecodableBytesAreDroppedNeverEmittedAndStreamKeepsDraining(): void
+    {
+        // Stray continuation, overlong form, disproven 2-byte lead, and
+        // invalid lead — each drops one byte at a time and lets the real
+        // key through. No malformed-UTF-8 rune ever reaches the model.
+        $cases = [
+            'stray-continuation' => "\x80q",
+            'overlong'           => "\xc0\x80q",
+            'disproven-lead'     => "\xc3q",
+            'invalid-lead'       => "\xf8q",
+            'truncated-emoji'    => "\xf0\x9fqa",
+        ];
+        foreach ($cases as $label => $bytes) {
+            $msgs = (new InputReader())->parse($bytes);
+            $runes = array_map(fn (KeyMsg $m): string => $m->rune, $msgs);
+            $this->assertContains('q', $runes, $label);
+            foreach ($runes as $rune) {
+                $this->assertTrue(mb_check_encoding($rune, 'UTF-8'), $label . ' emitted malformed rune');
+            }
+        }
+    }
+
+    public function testMultibyteRuneBetweenKeysDoesNotDeferTheTail(): void
+    {
+        // Interleaved flow — key, CJK rune, key — in one read must emit
+        // all three in order (the walk continues past a rune boundary).
+        $msgs = (new InputReader())->parse("a\xe4\xbd\xa0b");
+        $this->assertCount(3, $msgs);
+        $this->assertSame(['a', '你', 'b'], array_map(fn (KeyMsg $m): string => $m->rune, $msgs));
+    }
 }
