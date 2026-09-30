@@ -1,0 +1,47 @@
+{
+    "name": "sugarcraft/sugar-mcp",
+    "description": "MCP client core — JSON-RPC 2.0 codec, newline-delimited stdio transport and initialize/tools protocol layer. Extracted from sugar-crush.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "sugarcraft",
+        "mcp",
+        "model-context-protocol",
+        "json-rpc",
+        "jsonrpc",
+        "stdio",
+        "transport"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-mcp",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-mcp/issues",
+        "source": "https://github.com/sugarcraft/sugar-mcp",
+        "docs": "https://github.com/sugarcraft/sugar-mcp/blob/master/README.md"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Mcp\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Mcp\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

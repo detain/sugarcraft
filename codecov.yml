@@ -189,6 +189,9 @@ flag_management:
     - name: sugar-diff
       paths: ["sugar-diff/src/**"]
       carryforward: true
+    - name: sugar-mcp
+      paths: ["sugar-mcp/src/**"]
+      carryforward: true
     - name: sugar-toast
       paths: ["sugar-toast/src/**"]
       carryforward: true
@@ -524,6 +527,12 @@ component_management:
         - "sugar-diff/src/**"
       flag_regexes:
         - "^sugar-diff$"
+    - component_id: sugar-mcp
+      name: sugar-mcp
+      paths:
+        - "sugar-mcp/src/**"
+      flag_regexes:
+        - "^sugar-mcp$"
     - component_id: sugar-toast
       name: sugar-toast
       paths:

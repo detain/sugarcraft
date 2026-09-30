@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — SugarMcp</title>
+<meta name="description" content="SugarMcp: MCP client core — JSON-RPC 2.0 codec, stdio transport with bounded child lifecycle, initialize/tools handshake, deny-before-allow tool narrowing. Extracted from sugar-crush; first-party.">
+<meta property="og:title" content="SugarCraft — SugarMcp">
+<meta property="og:description" content="One faithful Model Context Protocol client core for the whole ecosystem: a JSON-RPC 2.0 envelope codec, a newline-framed stdio transport with a bounded, orphan-proof child lifecycle, the initialize/tools handshake, and deny-before-allow tool narrowing.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-mcp.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-mcp.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-mcp.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/sugar-mcp.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All 41 libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/sugar-mcp.png" alt="SugarMcp">
+      <div>
+        <h2>SugarMcp</h2>
+        <p class="detail-sub">MCP client core — JSON-RPC codec, stdio transport, tool narrowing</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">component-package</span>
+          <span class="tag-chip">mcp</span>
+          <span class="tag-chip">json-rpc</span>
+        </div>
+      </div>
+    </div>
+    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-mcp"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-mcp" alt="SugarMcp code coverage" loading="lazy"></a></p>
+
+    <p class="lede" style="margin-top: 28px;">A Model Context Protocol client core the whole ecosystem can share: <strong>JSON-RPC 2.0 envelopes, a newline-framed stdio transport with a bounded, orphan-proof child lifecycle, the initialize/tools handshake, and deny-before-allow tool narrowing</strong>. Extracted from sugar-crush's <code>src/MCP</code> stack and <code>McpMessage</code> codec, so every surface that talks to an MCP server rides the same framing, the same timeouts, and the same error shapes. First-party — MCP is a spec, not a Go port.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/sugar-mcp:@dev</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Mcp\StdioMcpServer;
+
+$server = new StdioMcpServer(
+    name: 'docs',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-fetch'],
+);
+
+$server->start();              // initialize → initialized → tools/list, one 60s clock
+foreach ($server->listTools() as $tool) {
+    echo $tool->name, ' — ', $tool->description, PHP_EOL;
+}
+
+$result = $server->callTool('fetch', ['url' => 'https://example.com']);
+// ['content' => [['type' => 'text', 'text' => '…']]]  (scalars wrapped at the boundary)
+
+$server->stop();               // close pipes first, then TERM→KILL→reap. Never an orphan.
+// __destruct calls stop() for you if you forget.</code></pre>
+
+    <h3 style="margin-top: 32px;">The model</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>McpMessage</strong><span>JSON-RPC 2.0 envelope: parse() / request() / notification() / success() / error(); a resultSet sentinel keeps explicit "result": null representable; toJson() is the wire, toArray() is inspection.</span></div>
+      <div class="feature"><strong>McpTool / McpServer</strong><span>One tool definition value object with a well-typedness gate that refuses malformed server output, plus the start/stop/listTools/callTool interface.</span></div>
+      <div class="feature"><strong>StdioMcpServer</strong><span>argv-array proc_open child, newline-delimited framing, 64 KiB rolling stderr tail absorbed on every wait set, one wall clock across the whole handshake.</span></div>
+      <div class="feature"><strong>McpRouter</strong><span>Deny-patterns-then-allowlist narrowing over any set of McpServer instances; fnmatch globs; empty allowlist means allow-all; malformed entries fail loud.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Speaking MCP from any PHP process</strong> — spawn a stdio server child, handshake, list and call tools, with the framing and timeout discipline already fought for.</li>
+      <li><strong>Agent tool surfaces</strong> — narrow each agent's visible tools with globs and deny-before-allow, the same semantics sugar-crush uses.</li>
+      <li><strong>Bounded subprocess I/O</strong> — the transport doubles as a reference for newline-framed JSON-RPC over pipes with no deadlock, no silent wedge, and no orphaned grandchildren.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-mcp">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-mcp/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-mcp/tree/master/tests">Test suite</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>McpMessage</td><td>parse(string $json): ?self</td><td>Decode a wire frame; null for anything that is not a valid JSON-RPC 2.0 message</td></tr>
+<tr><td>McpMessage</td><td>request(string $id, string $method, ?array $params) / notification(string $method, ?array $params): self</td><td>Outbound request and notification envelopes</td></tr>
+<tr><td>McpMessage</td><td>success(string $id, mixed $result) / error(string $id, int $code, string $message, mixed $data = null): self</td><td>Outbound response envelopes; result is mixed by law</td></tr>
+<tr><td>McpMessage</td><td>toJson(): string / isRequest() / isResponse() / isNotification() / isError(): bool</td><td>Wire serialization + role predicates</td></tr>
+<tr><td>StdioMcpServer</td><td>start(): void / stop(): void / isUp(): bool</td><td>Handshake under one deadline; close-pipes-first teardown with TERM→KILL→reap via candy-core BoundedShutdown</td></tr>
+<tr><td>StdioMcpServer</td><td>listTools(): list&lt;McpTool&gt; / callTool(string $name, array $arguments): array</td><td>tools/list result; tools/call with scalar-result wrapping at the boundary</td></tr>
+<tr><td>StdioMcpServer</td><td>request(string $method, ?array $params): ?McpMessage / notify(string $method, ?array $params): bool</td><td>Escapeway to any other protocol method (resources, prompts) without subclasses</td></tr>
+<tr><td>McpTool</td><td>fromArray(array $def, string $serverName): self / tryFromArray(?array $def, string $serverName): ?self</td><td>Parse a tool definition; tryFromArray gates well-typedness before construction</td></tr>
+<tr><td>McpRouter</td><td>resolveAllowedTools(array $allowList): array / resolveAllowedServers(array $allowList): list&lt;string&gt;</td><td>Deny-first narrowing; empty allowlist = allow-all</td></tr>
+<tr><td>McpRouter</td><td>static serverAllowed(string $name, array $allowList): bool</td><td>Exact or fnmatch-glob membership; malformed entries throw</td></tr>
+</table>
+  </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/sugar-mcp">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/sugar-mcp/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>

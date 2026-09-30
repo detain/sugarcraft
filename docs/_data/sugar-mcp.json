@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — SugarMcp",
+    "description": "SugarMcp: MCP client core — JSON-RPC 2.0 codec, stdio transport with bounded child lifecycle, initialize/tools handshake, deny-before-allow tool narrowing. Extracted from sugar-crush; first-party.",
+    "ogTitle": "SugarCraft — SugarMcp",
+    "ogDescription": "One faithful Model Context Protocol client core for the whole ecosystem: a JSON-RPC 2.0 envelope codec, a newline-framed stdio transport with a bounded, orphan-proof child lifecycle, the initialize/tools handshake, and deny-before-allow tool narrowing.",
+    "emoji": "",
+    "displayName": "SugarMcp",
+    "tagline": "MCP client core — JSON-RPC codec, stdio transport, tool narrowing",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">component-package</span>\n          <span class=\"tag-chip\">mcp</span>\n          <span class=\"tag-chip\">json-rpc</span>"
+}

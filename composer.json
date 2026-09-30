@@ -84,6 +84,7 @@
         "sugarcraft/sugar-diff": "dev-master",
         "sugarcraft/sugar-gallery": "dev-master",
         "sugarcraft/sugar-glow": "dev-master",
+        "sugarcraft/sugar-mcp": "dev-master",
         "sugarcraft/sugar-post": "dev-master",
         "sugarcraft/sugar-prompt": "dev-master",
         "sugarcraft/sugar-readline": "dev-master",
@@ -411,6 +412,13 @@
         {
             "type": "path",
             "url": "sugar-glow",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-mcp",
             "options": {
                 "symlink": true
             }

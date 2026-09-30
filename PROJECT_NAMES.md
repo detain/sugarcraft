@@ -124,6 +124,7 @@ single-purpose lib.
 | **CandyQuery** | candy + query = terminal SQL browser. multi-driver: SQLite, MySQL, PostgreSQL — schema browser, query editor, EXPLAIN plan viewer, server status page, alerting, and query history. |
 | **SugarReel** | sugar + reel = film reel = terminal video player. reel is the literal video metaphor; sits beside CandyFlip (GIF) and CandyMosaic (images) as the video member of the family. |
 | **SugarDiff** | sugar + diff = unified-diff engine. component/data per prefix law; extracted from sugar-crush (BuildsUnifiedDiff + DiffGutter numbering model); first-party — no 1:1 upstream. |
+| **SugarMcp** | sugar + mcp = Model Context Protocol client core. component/data per prefix law; extracted from sugar-crush (src/MCP stdio stack + McpMessage codec); first-party — no 1:1 upstream (MCP is a spec, not a Go port). |
 | **CandyCrush** | candy + crush = candy crush = TUI AI coding assistant. Multi-provider (OpenAI, SGLANG, Claude Code, etc.), multi-agent, skill-aware. Pioneering — no direct upstream. |
 
 ## ⚠️ Functional half is weak / vague

@@ -66,6 +66,7 @@ Fifty libraries grouped by layer:
 | <img src="media/icons/sugar-readline.png" width="48" alt=""> | **[SugarReadline](sugar-readline/)** | Interactive prompts — Text, Confirm, Selection, MultiSelect, Textarea. State-machine model, no external readline dependency. Port of [promptkit](https://github.com/erikgeiser/promptkit) |
 | <img src="media/icons/sugar-table.png" width="48" alt=""> | **[SugarTable](sugar-table/)** | Full-featured interactive data table — column definitions, StyledCell ANSI formatting, pagination, frozen rows/cols. Port of [bubble-table](https://github.com/Evertras/bubble-table) |
 | <img src="media/icons/sugar-diff.png" width="48" alt=""> | **[SugarDiff](sugar-diff/)** | Unified-diff engine — LCS line diff, `diff -u` hunks, writer + line-number scanner. Extracted from sugar-crush; first-party — no upstream port. |
+| <img src="media/icons/sugar-mcp.png" width="48" alt=""> | **[SugarMcp](sugar-mcp/)** | MCP client core — JSON-RPC 2.0 codec, stdio transport with bounded child lifecycle, initialize/tools handshake, tool narrowing. Extracted from sugar-crush; first-party — no upstream port. |
 
 ## Apps built on the stack
 

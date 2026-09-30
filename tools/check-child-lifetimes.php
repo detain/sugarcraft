@@ -147,6 +147,15 @@ final class CheckChildLifetimes
                 . 'before proc_close() and __destruct() calls close() (E366); the fd≥3 exposure '
                 . 'stands for sugar-reel to own.',
         ],
+        'sugar-mcp/src/StdioMcpServer.php::start' => [
+            'count' => 1,
+            'reason' => 'persistent MCP server child, pipes on 0,1,2 — the handle lives between '
+                . 'start() and stop() by protocol design (a tool call is long work). stop() '
+                . 'closes pipes first (graceful EOF exit) then walks candy-core '
+                . 'BoundedShutdown::terminateBounded (TERM→KILL→reap), and __destruct calls '
+                . 'stop(), so no child outlives the object; the fd≥3 inheritance exposure '
+                . 'stands for sugar-mcp to own.',
+        ],
     ];
 
     /**
