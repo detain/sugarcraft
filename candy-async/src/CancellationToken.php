@@ -23,8 +23,19 @@ final class CancellationToken
     /** @var bool */
     private bool $callbacksFired;
 
+    /**
+     * @param CancellationSource $source  Minting authority; deliberately NOT retained.
+     *
+     *     Probed before dropping the former promoted property: no src or test
+     *     site ever read it, and the "GC keepalive" reading is dead weight —
+     *     cancellation requires a live CancellationSource handle, and any
+     *     holder of that handle already keeps the source alive. Retaining it
+     *     from the token side only pinned an unreachable source and turned a
+     *     refcount teardown into a cycle-GC candidate. The parameter stays as
+     *     the construction contract: a token is only ever minted for a source.
+     */
     public function __construct(
-        private CancellationSource $source,
+        CancellationSource $source,
     ) {
         $this->cancelled = false;
         $this->callbacksFired = false;
@@ -53,7 +64,12 @@ final class CancellationToken
     }
 
     /**
-     * @internal
+     * Register a callback to fire when cancellation is requested.
+     * Public contract (mirrors Cancellable::onCancel; the README quickstart
+     * relies on it). Fires immediately if the token is already cancelled,
+     * otherwise runs at most once, when cancel() happens.
+     *
+     * @param callable(): void $callback
      */
     public function onCancel(callable $callback): void
     {

@@ -16,4 +16,12 @@
 
 - **Suspended is a value-object** — it carries a `resume` callable and optional `state`. The runtime stores it and calls `resume()` later when the subscription fires or the model continues.
 
-- **TimeoutException extends RuntimeException** — not a dedicated subclass of any standard exception hierarchy. Catch via `AsyncOps\TimeoutException` or simply `catch (\RuntimeException $e)`.
+- **TimeoutException extends RuntimeException** — not a dedicated subclass of any standard exception hierarchy. Catch via `SugarCraft\Async\TimeoutException` or simply `catch (\RuntimeException $e)`.
+
+- **withTimeout must arm the timer BEFORE attaching settle handlers** — react/promise v3 settles an already-resolved inner synchronously inside `then()`; a handler attached first sees an unassigned timer, skips the cancel, and leaks the full-duration timer onto the shared loop (probe: 0.5s timeout ⇒ 0.500s idle-drain pre-fix, ~0s post-fix).
+
+- **retry() must wire token cancellation into the pending backoff** — a cancel landing mid-backoff has no natural checkpoint: without an `onCancel` abort that cancels the pending timer and rejects the stage deferred, the promise stays pending and holds the loop for the remaining (doubling) delay. The abort is guarded by a per-stage `settled` flag because the token offers no unregister — a stale registration from an already-run stage must never fire on a later cancel().
+
+- **Idle-drain is the timer-lifetime assertion idiom** — `$loop->run()` returns only at zero armed timers/streams, so `microtime` around it bounds any leaked timer directly; keep leaked-timer fixtures short (0.5s) so a regression costs 0.5s, not 30s.
+
+- **CancellationToken does not retain its CancellationSource** — the former promoted `$source` was never read; cancellation needs a live source handle anyway, so a token-side keepalive only pinned unreachable memory and forced cycle-GC (probed before removal, suite green).

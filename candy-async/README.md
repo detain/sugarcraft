@@ -8,6 +8,7 @@ Shared async utilities for SugarCraft — cancellation tokens, subscriptions, an
 
 - **Cancellation tokens** — `CancellationSource` / `CancellationToken` / `Cancellable` for coordinated cancellation across async operations
 - **Subscriptions** — `Subscription` interface and `Subscriptions::compose()` for managing TEA-style subscription lifecycles
+- **Suspension** — `Suspended` value-object for TEA commands paused across update cycles
 - **AsyncOps** — static helpers for `withTimeout`, `retry`, `debounce`, and `throttle` operations
 
 ## Quickstart
@@ -72,14 +73,34 @@ $composite = Subscriptions::compose($sub1, $sub2, $sub3);
 $composite->unsubscribe(); // disposes all three
 ```
 
+### Suspension
+
+`Suspended` represents a paused TEA command as data: it carries a `resume`
+callable and an optional opaque `state`. The runtime stores the `Suspended` and
+calls `resume()` later — when the subscription fires or the model decides to
+continue — so effects that span multiple update cycles (animations, debounced
+input, async handlers) never execute eagerly:
+
+```php
+use SugarCraft\Async\Suspended;
+
+$paused = new Suspended(fn() => $laterCmd, $carryMe);
+$cmd = $paused->resume(); // dispatched when the pause ends
+```
+
 ### AsyncOps
 
 withTimeout and retry are stateless helpers. debounce and throttle return stateful closures that retain mutable timer/cooldown state. All helpers work via Promise plumbing and `LoopInterface` timers:
 
-- `withTimeout` — wraps a promise; rejects with `TimeoutException` after N seconds. The inner operation is NOT cancelled and keeps running to completion.
-- `retry` — retries a failed operation up to N times with exponential backoff (no per-attempt timeout; wrap with withTimeout for a deadline)
+- `withTimeout` — wraps a promise; rejects with `TimeoutException` after N seconds. The inner operation is NOT cancelled and keeps running to completion. The timeout timer is armed before the inner's settle handlers attach, so an already-settled inner cancels it in the same synchronous pass — no timer is left holding the loop.
+- `retry` — retries a failed operation up to N times with exponential backoff (the delay doubles per failure; no per-attempt timeout — wrap with `withTimeout` for one). Optional knobs:
+  - `token:` — a `CancellationToken`. Cancellation is checked before each attempt and honored mid-backoff: the pending backoff timer is cancelled and the promise rejects immediately with `OperationCancelledException`.
+  - `maxTotalSeconds:` — wall-clock budget across all attempts; once exceeded, retry aborts with the last failure even if attempts remain.
+  - `jitter:` — each backoff delay is randomized within `[backoff, backoff * (1 + jitter)]`, spreading fleets of clients so retries don't form a thundering herd. `0.0` (default) keeps the exact exponential schedule.
 - `debounce` — only the last call within the window fires, after silence
 - `throttle` — fires at most once per interval, ignoring excess calls
+
+Both failure modes surface as `RuntimeException` subclasses — `TimeoutException` for deadlines, `OperationCancelledException` for cancellation — so existing `catch (\RuntimeException $e)` sites keep working unchanged.
 
 ## License
 

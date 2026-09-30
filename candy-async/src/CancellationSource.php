@@ -58,7 +58,10 @@ final class CancellationSource implements Cancellable
     }
 
     /**
-     * @internal
+     * Register a cancellation callback on this source's token.
+     * Part of the Cancellable contract — public, as the README shows.
+     *
+     * @param callable(): void $callback
      */
     public function onCancel(callable $callback): void
     {
