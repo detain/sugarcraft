@@ -195,6 +195,98 @@ final class ModeHandlerTest extends TestCase
         $this->assertTrue($h->mode->equals($before));
     }
 
+    /**
+     * DECSTBM is per-screen state: entering the alt screen homes the region
+     * to the new screen's full height (the main region must not be inherited
+     * — htop/vim-style programs issue their own margins on entry and a
+     * carried-over [2,4] silently clips their whole-screen scrolls), and
+     * margins set inside alt are discarded on exit instead of leaking back
+     * into main.
+     */
+    public function testAltScreenSwapIsolatesDecstbmRegionBothDirections(): void
+    {
+        $h = $this->newHandler(cols: 5, rows: 5);
+        $h->csiDispatch(ord('r'), [2, 4], 0, 0); // main region rows 2-4
+        $this->assertSame(1, $h->scrollRegionTop);
+        $this->assertSame(3, $h->scrollRegionBottom);
+
+        $mh = new ModeHandler();
+        $mh->apply([1049], true, $h);
+        $this->assertSame(0, $h->scrollRegionTop, 'alt screen starts with a full-height region');
+        $this->assertSame(4, $h->scrollRegionBottom);
+
+        $h->csiDispatch(ord('r'), [1, 2], 0, 0); // DECSTBM inside alt
+        $mh->apply([1049], false, $h);
+        $this->assertSame(1, $h->scrollRegionTop, "alt-side margins must not leak back to main");
+        $this->assertSame(3, $h->scrollRegionBottom);
+    }
+
+    /**
+     * `?1049h` arriving while 1048 already holds the alt screen is NOT a
+     * no-op: 1049 = save cursor + clear + switch to alt, so the upgrade
+     * takes the full-swap semantics (fresh blank, homed cursor, SGR reset),
+     * and `?1049l` unwinds to the state at upgrade time. The pre-fix guard
+     * dropped the sequence entirely, leaving apps that open with 1048h then
+     * re-issue 1049h stranded without their clean screen.
+     */
+    public function testMode1049WhileAlt1048EngagesFullAltAndClear(): void
+    {
+        $h = $this->newHandler(cols: 5, rows: 3);
+        $h->buffer->put(0, 0, new Cell(grapheme: 'A'));
+        $h->cursor = new Cursor(row: 1, col: 2);
+
+        $mh = new ModeHandler();
+        $mh->apply([1048], true, $h);              // cursor-only alt
+        $h->buffer->put(0, 0, new Cell(grapheme: 'Z'));
+        $h->cursor = new Cursor(row: 2, col: 4);
+        $h->sgr = Sgr::empty()->withBold(true);
+
+        $mh->apply([1049], true, $h);              // upgrade to full alt
+        $this->assertSame(Mode::ALT_FULL, $h->mode->altScreenVariant);
+        $this->assertSame(' ', $h->buffer->cell(0, 0)->grapheme, 'the upgrade must clear to a fresh screen');
+        $this->assertSame(0, $h->cursor->row);
+        $this->assertSame(0, $h->cursor->col);
+        $this->assertFalse($h->sgr->bold, '1049 enter resets SGR');
+
+        $mh->apply([1049], false, $h);             // unwind to upgrade-time state
+        $this->assertFalse($h->mode->isAltScreen());
+        $this->assertSame('Z', $h->buffer->cell(0, 0)->grapheme);
+        $this->assertSame(2, $h->cursor->row);
+        $this->assertSame(4, $h->cursor->col);
+    }
+
+    /**
+     * The upgrade must not double-park the general slot's rendition
+     * companions: 1048 parked them once, and a second blind park at the
+     * 1049 entry would overwrite that park with the (already nulled) slot
+     * and `CSI u` would come back without the saved SGR. (The DECSC
+     * POSITION half rides the Cursor value object in this port and the
+     * single saved-cursor slot is necessarily replaced by the upgrade —
+     * position fidelity across a 1048→1049 nest is NOT promised here,
+     * only the companions.)
+     */
+    public function testUpgradeFrom1048PreservesGeneralCompanions(): void
+    {
+        $h = $this->newHandler(cols: 5, rows: 3);
+        $h->sgr = Sgr::empty()->withBold(true);
+        $h->cursor = new Cursor(row: 1, col: 2);
+        $h->csiDispatch(ord('s'), [], 0, 0);       // general slot ← bold pen
+        $h->cursor = $h->cursor->withRow(0);       // move preserving the saved pair
+        $h->sgr = Sgr::empty();
+
+        $mh = new ModeHandler();
+        $mh->apply([1048], true, $h);              // parks {bold} once
+        $h->sgr = Sgr::empty()->withUnderline(true);
+        $h->cursor = $h->cursor->withRow(2)->withCol(4);
+        $mh->apply([1049], true, $h);              // upgrade — must NOT re-park
+        $this->assertFalse($h->sgr->underline, '1049 enter resets SGR');
+        $mh->apply([1049], false, $h);             // unpark must hand {bold} back
+
+        $h->csiDispatch(ord('u'), [], 0, 0);       // DECRC restores the companions
+        $this->assertTrue($h->sgr->bold, 'parked SGR companion must survive the upgrade');
+        $this->assertFalse($h->sgr->underline);
+    }
+
     // ─── Alt screen modes 47 and 1047 (no save) ─────────────────────────────
 
     public function testAltScreenMode47NoSaveEnterSavesBufferOnly(): void

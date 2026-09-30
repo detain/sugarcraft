@@ -103,4 +103,73 @@ final class WidthIntegrationTest extends TestCase
         $this->assertNotNull($s->cell(0, 1)->hyperlink);
         $this->assertSame('https://example.com', $s->cell(0, 1)->hyperlink->uri);
     }
+
+    // ─── Wide-pair partner erasure on overwrite (xterm eraseDoubleCell) ──────
+
+    /**
+     * Narrow over the BASE of a wide glyph: xterm erases the exposed
+     * continuation half, so the old pair is fully gone — the cell under the
+     * new glyph plus a blank partner, never a styled ghost.
+     */
+    public function testNarrowOverWideBaseErasesGhostTail(): void
+    {
+        $term = Terminal::create(cols: 10, rows: 1);
+        $term->feed("漢\x1b[1;1HA");
+        $s = $term->screen();
+        $this->assertSame('A', $s->cell(0, 0)->grapheme);
+        $this->assertFalse($s->cell(0, 1)->continuation, 'ghost tail must not survive the overwrite');
+        $this->assertTrue($s->cell(0, 1)->equals(\SugarCraft\Vt\Cell::empty()));
+    }
+
+    /**
+     * Narrow over the CONTINUATION of a wide glyph: the orphaned base is
+     * erased on the other side (cont→head direction of the same law).
+     */
+    public function testNarrowOverWideTailErasesOrphanHead(): void
+    {
+        $term = Terminal::create(cols: 10, rows: 1);
+        $term->feed("漢\x1b[1;2HB");
+        $s = $term->screen();
+        $this->assertTrue($s->cell(0, 0)->equals(\SugarCraft\Vt\Cell::empty()), 'orphaned base must be erased');
+        $this->assertSame('B', $s->cell(0, 1)->grapheme);
+    }
+
+    /**
+     * Wide over wide, one column apart: exactly ONE glyph survives — base +
+     * its own continuation — plus one erase clearing the doubled orphan tail.
+     */
+    public function testWideOverWideOffsetLeavesSingleGlyphAndOneErase(): void
+    {
+        $term = Terminal::create(cols: 10, rows: 1);
+        $term->feed("\x1b[1;2H漢\x1b[1;1H字");
+        $s = $term->screen();
+        $this->assertSame('字', $s->cell(0, 0)->grapheme);
+        $this->assertTrue($s->cell(0, 1)->continuation);
+        $this->assertFalse($s->cell(0, 2)->continuation, 'doubled orphan tail must be erased');
+        $this->assertTrue($s->cell(0, 2)->equals(\SugarCraft\Vt\Cell::empty()));
+        // Exactly one continuation pair exists in the row.
+        $tails = 0;
+        for ($c = 0; $c < 10; $c++) {
+            if ($s->cell(0, $c)->continuation) {
+                $tails++;
+            }
+        }
+        $this->assertSame(1, $tails);
+    }
+
+    /**
+     * The erased partner takes the BCE blank, not a bare default cell:
+     * overwriting with a red-background pen leaves the partner blank RED,
+     * with foreground/attributes reset — the same erase colour law every
+     * ED/EL blank follows.
+     */
+    public function testErasedWidePartnerCarriesBceBackground(): void
+    {
+        $term = Terminal::create(cols: 10, rows: 1);
+        $term->feed("漢\x1b[1;1H\x1b[41mA");
+        $bg = $term->screen()->cell(0, 1)->background();
+        $this->assertNotNull($bg, 'partner erase must carry the pen background (BCE)');
+        // SGR 41 stores the logical palette index, not the xterm register.
+        $this->assertTrue($bg->equals(\SugarCraft\Vt\Color\Color::indexed16(1)));
+    }
 }

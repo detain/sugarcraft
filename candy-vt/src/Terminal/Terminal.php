@@ -496,7 +496,15 @@ final class Terminal
 
     /**
      * Return a new Terminal with a different scrollback buffer size.
-     * The new size applies to future scrolling; existing scrollback is kept.
+     *
+     * The size applies to future scrolling; the ring itself is swapped for a
+     * FRESH {@see Scrollback} of the requested capacity, so history
+     * accumulated before the call is DROPPED (identity is not stable across
+     * the swap either). Carrying the old rows over into the new-capacity
+     * ring is unimplemented — see the pinned swap in
+     * {@see \SugarCraft\Vt\Tests\Screen\ScrollbackTest::testWithScrollbackSizeReplacesRing()} —
+     * and callers wanting retained history must read it off the old screen
+     * before swapping.
      */
     public function withScrollbackSize(int $size): self
     {

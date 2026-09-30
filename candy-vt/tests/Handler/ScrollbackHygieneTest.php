@@ -59,6 +59,32 @@ final class ScrollbackHygieneTest extends TestCase
         $this->assertSame('aaaa', $this->rowText($h->scrollback->at(0)));
     }
 
+    /**
+     * Multi-count SD (`CSI 2 T`) must push its two evicted rows in
+     * top-before-bottom reading order — the same ascending law scrollUp
+     * follows — so the ring never records the pair inverted. Pushing the
+     * bottom row first made `aaaa` history read `[aaaa, '', dddd]` where
+     * visual order is `[aaaa, dddd, '']`.
+     */
+    public function testMultiCountScrollDownFeedsRingInAscendingOrder(): void
+    {
+        // 4-row screen: the trailing LF after "dddd" scrolls "aaaa" out (ring=[aaaa]).
+        $h = $this->feed("aaaa\r\nbbbb\r\ncccc\r\ndddd\r\n", cols: 4, rows: 4);
+        $this->assertSame(1, $h->scrollback->count());
+
+        // SD 2 full-screen evicts rows 2 and 3 ("dddd", "") bottom-side first.
+        (new Parser($h))->feed("\x1b[2T");
+
+        $this->assertSame(3, $h->scrollback->count());
+        $this->assertSame('aaaa', $this->rowText($h->scrollback->at(0)));
+        $this->assertSame('dddd', $this->rowText($h->scrollback->at(1)), 'evicted row above must enter before the bottom row');
+        // The evicted bottom row is the post-LF blank — empty cells spell spaces.
+        $this->assertSame('', trim($this->rowText($h->scrollback->at(2))));
+        // And the visible screen shifted down accordingly.
+        $this->assertSame('', trim($this->rowGraphemes($h, 0)));
+        $this->assertSame('bbbb', $this->rowGraphemes($h, 2));
+    }
+
     public function testFullScreenSuFeedsScrollback(): void
     {
         $h = $this->feed(self::FILL . "\x1b[2S");

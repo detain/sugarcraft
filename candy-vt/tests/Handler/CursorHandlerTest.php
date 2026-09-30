@@ -275,4 +275,63 @@ final class CursorHandlerTest extends TestCase
         $this->assertSame(7, $restored->row);
         $this->assertSame(22, $restored->col);
     }
+
+    /**
+     * VT500 DECOM: with origin mode active, CUP rows are relative to the
+     * scroll region and clamp INTO it — never into the bare buffer. Before
+     * the fix CUP clamped to the buffer, so `CSI 100;1 H` inside region
+     * rows 2-4 landed on buffer row 5 (index 4) instead of the region
+     * bottom (index 3) where VPA (`CSI 100 d`) already landed correctly.
+     */
+    public function testCupUnderOriginModeClampsToScrollRegion(): void
+    {
+        $cursor = new Cursor(row: 10, col: 0);
+
+        $moved = $this->handler->apply(ord('H'), [100, 1], $cursor, $this->buffer, scrollTop: 1, scrollBottom: 3, originMode: true);
+
+        $this->assertSame(3, $moved->row, 'CUP must clamp to the region bottom, not the buffer');
+        $this->assertSame(0, $moved->col);
+    }
+
+    public function testCupUnderOriginModeOffsetsFromRegionTop(): void
+    {
+        $moved = $this->handler->apply(ord('H'), [2, 4], new Cursor(), $this->buffer, scrollTop: 1, scrollBottom: 3, originMode: true);
+
+        // Region row 2 → scrollTop + 1 = buffer row index 2.
+        $this->assertSame(2, $moved->row);
+        $this->assertSame(3, $moved->col);
+    }
+
+    public function testCupWithoutOriginModeStillClampsToBuffer(): void
+    {
+        $moved = $this->handler->apply(ord('H'), [100, 1], new Cursor(), $this->buffer, scrollTop: 1, scrollBottom: 3, originMode: false);
+
+        $this->assertSame(23, $moved->row);
+    }
+
+    /**
+     * CSI Ps f (hvp) is the second spelling of CUP and must share the
+     * region clamp — including its interaction with DECOM (xterm treats
+     * both finals identically).
+     */
+    public function testHvpUnderOriginModeClampsToScrollRegion(): void
+    {
+        $moved = $this->handler->apply(ord('f'), [100, 1], new Cursor(), $this->buffer, scrollTop: 1, scrollBottom: 3, originMode: true);
+
+        $this->assertSame(3, $moved->row);
+    }
+
+    /**
+     * CUP and VPA are sibling position-absolute bindings: under DECOM both
+     * must answer with the same row for the same region. This pins them
+     * equal so a future divergence in either clamp trips here.
+     */
+    public function testCupAndVpaAgreeUnderOriginMode(): void
+    {
+        foreach ([1, 2, 50, 100] as $row) {
+            $cup = $this->handler->apply(ord('H'), [$row, 1], new Cursor(), $this->buffer, scrollTop: 1, scrollBottom: 3, originMode: true);
+            $vpa = $this->handler->apply(ord('d'), [$row], new Cursor(), $this->buffer, scrollTop: 1, scrollBottom: 3, originMode: true);
+            $this->assertSame($vpa->row, $cup->row, "CUP/VPA disagree for row $row");
+        }
+    }
 }

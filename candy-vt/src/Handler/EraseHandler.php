@@ -130,10 +130,12 @@ final class EraseHandler
     /**
      * The BCE blank: a space carrying ONLY the pen's background colour,
      * foreground/attributes default; no background set → plain empty cell.
-     * Shared by ED/EL/ECH (fillRow) and the DCH/ICH shift gaps, matching
-     * xterm's application of the erase colour to those operations too.
+     * Shared by ED/EL/ECH (fillRow), the DCH/ICH shift gaps, and the
+     * wide-partner orphan erase in {@see ScreenHandler::eraseWidePartners()},
+     * matching xterm's application of the erase colour to those operations
+     * too.
      */
-    private function blankCell(?Sgr $sgr): Cell
+    public function blankCell(?Sgr $sgr): Cell
     {
         return $sgr?->background !== null
             ? new Cell(grapheme: ' ', sgr: Sgr::empty()->withBackground($sgr->background))

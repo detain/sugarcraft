@@ -44,7 +44,7 @@ final class CursorHandler
             'F' => $cursor->withRow(max($minRow, $cursor->row - $count))->withCol(0),
             'G' => $cursor->withCol($this->clampCol($count - 1, $buffer)),
             'd' => $cursor->withRow($this->clampRowOrigin($count - 1, $scrollTop, $scrollBottom, $originMode, $buffer)),
-            'H', 'f' => $this->cup($params, $cursor, $buffer, $scrollTop, $originMode),
+            'H', 'f' => $this->cup($params, $cursor, $buffer, $scrollTop, $scrollBottom, $originMode),
             // Legacy position-only arms: ScreenHandler::csiDispatch routes
             // CSI s / CSI u to its own saveCursor()/restoreCursor() (the full
             // VT500 DECSC general slot, w4-vt) and never reaches these lines
@@ -56,22 +56,26 @@ final class CursorHandler
         };
     }
 
-    /** @param list<int> $params */
-    private function cup(array $params, Cursor $cursor, Buffer $buffer, int $scrollTop, bool $originMode): Cursor
+    /**
+     * CUP/HVP — under DECOM the row is region-relative AND confined to the
+     * scroll region: VT500 §DECOM "the cursor is restricted to the scrolling
+     * area", so `CSI 100;1 H` with region [2,4] parks on the region bottom,
+     * not deeper in the buffer. The clamp is the very one VPA ('d') uses —
+     * {@see self::clampRowOrigin()} — so the two position-absolute bindings
+     * can never drift apart; without origin mode it degrades to the plain
+     * buffer clamp.
+     *
+     * @param list<int> $params
+     */
+    private function cup(array $params, Cursor $cursor, Buffer $buffer, int $scrollTop, int $scrollBottom, bool $originMode): Cursor
     {
         $row = $params[0] ?? -1;
         $col = $params[1] ?? -1;
         $row = $row === -1 ? 1 : max(1, $row);
         $col = $col === -1 ? 1 : max(1, $col);
 
-        if ($originMode) {
-            $absRow = $scrollTop + ($row - 1);
-        } else {
-            $absRow = $row - 1;
-        }
-
         return $cursor
-            ->withRow($this->clampRow($absRow, $buffer))
+            ->withRow($this->clampRowOrigin($row - 1, $scrollTop, $scrollBottom, $originMode, $buffer))
             ->withCol($this->clampCol($col - 1, $buffer));
     }
 

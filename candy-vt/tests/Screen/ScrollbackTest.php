@@ -171,6 +171,28 @@ final class ScrollbackTest extends TestCase
         $this->assertSame(500, $sb->maxSize());
     }
 
+    /**
+     * Truth pin for the {@see Terminal::withScrollbackSize()} docblock: the
+     * swap installs a FRESH ring, so history already scrolled out is DROPPED
+     * (carry-over across the swap is an unshipped feature, not a silent
+     * omission). The original terminal keeps its own ring untouched.
+     */
+    public function testWithScrollbackSizeReplacesRing(): void
+    {
+        $term = Terminal::create(cols: 10, rows: 4);
+        for ($n = 1; $n <= 6; $n++) {
+            $term->feed(sprintf('L%02d', $n) . "\r\n");
+        }
+        // Rows L01-L03 scrolled off the 4-row screen into the default ring.
+        $this->assertSame(3, $term->screen()->scrollback()->count());
+
+        $grown = $term->withScrollbackSize(500);
+
+        $this->assertSame(500, $grown->screen()->scrollback()->maxSize());
+        $this->assertSame(0, $grown->screen()->scrollback()->count(), 'the swapped ring starts empty — history is not carried over');
+        $this->assertSame(3, $term->screen()->scrollback()->count(), 'the original terminal keeps its ring');
+    }
+
     public function testTerminalWithScrollbackSizeThrowsOnZero(): void
     {
         $term = Terminal::create();

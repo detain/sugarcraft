@@ -179,6 +179,15 @@ final class ScreenHandler implements SubparamsAwareHandler
     private ?bool $savedOriginMode = null;
 
     /**
+     * Per-screen DECSTBM region parked across the DEC 1049 swap, beside the
+     * {@see $savedOriginMode} it belongs with: the alt screen starts on the
+     * full margins and a DECSTBM issued inside alt does not leak back to the
+     * main screen on exit.
+     */
+    private ?int $savedScrollRegionTop = null;
+    private ?int $savedScrollRegionBottom = null;
+
+    /**
      * GENERAL save slot (VT500 §DECSC/§DECRC): the ESC 7/ESC 8 and CSI s/CSI u
      * pair — ONE slot, deliberately shared, exactly as xterm merges DECSC and
      * the SCO extended-cursor save. The position half lives on the Cursor
@@ -343,6 +352,18 @@ final class ScreenHandler implements SubparamsAwareHandler
         // Mirror of the renderer's {@see \SugarCraft\Vt\Parser\CsiHandlerImpl::printable()}.
         $rendition = $this->buffer->cell($r, $c)->rendition;
 
+        // DECDWL (`ESC # 6`) draws this line double-width: while the rendition
+        // is DoubleWidth a single-cell glyph claims one extra column (a base +
+        // continuation), and only when the pair still fits — at the right
+        // margin the glyph stays single-cell so the phantom-wrap geometry is
+        // untouched. Identical rule to the renderer path.
+        $extra = $rendition === Rendition::DoubleWidth && $c + $width + 1 <= $this->buffer->cols ? 1 : 0;
+
+        // The new glyph claims columns [c, c+width+extra-1]; any OLD wide pair
+        // only half-covered by that span loses its exposed partner half-cell
+        // first, while the old grid is still readable.
+        $this->eraseWidePartners($r, $c, $c + $width + $extra - 1);
+
         $cell = new Cell(
             grapheme: $rune,
             sgr: $this->sgr,
@@ -353,13 +374,6 @@ final class ScreenHandler implements SubparamsAwareHandler
         for ($i = 1; $i < $width; $i++) {
             $this->putCell($r, $c + $i, Cell::continuation($cell));
         }
-
-        // DECDWL (`ESC # 6`) draws this line double-width: while the rendition
-        // is DoubleWidth a single-cell glyph claims one extra column (a base +
-        // continuation), and only when the pair still fits — at the right
-        // margin the glyph stays single-cell so the phantom-wrap geometry is
-        // untouched. Identical rule to the renderer path.
-        $extra = $rendition === Rendition::DoubleWidth && $c + $width + 1 <= $this->buffer->cols ? 1 : 0;
         for ($i = 0; $i < $extra; $i++) {
             $this->putCell($r, $c + $width + $i, Cell::continuation($cell));
         }
@@ -1225,6 +1239,8 @@ final class ScreenHandler implements SubparamsAwareHandler
         $this->savedCharsets = null;
         $this->savedGl = null;
         $this->savedOriginMode = null;
+        $this->savedScrollRegionTop = null;
+        $this->savedScrollRegionBottom = null;
         $this->generalSavedSgr = null;
         $this->generalSavedCharsets = null;
         $this->generalSavedGl = null;
@@ -1577,9 +1593,13 @@ final class ScreenHandler implements SubparamsAwareHandler
         // Full-screen gate — see scrollUp(). RI at a sub-region top
         // reverse-scrolls inside the region without touching the screen
         // edge, so nothing enters (and nothing should) the ring.
+        // Multi-count SD pushes its rows in ascending order — the same
+        // top-before-bottom reading order scrollUp uses — so the ring reads
+        // oldest→newest as visual order for both directions (pushing
+        // bottom-first inverted a `CSI 2 T` entry pair).
         if ($this->regionIsFullScreen()) {
             for ($i = 0; $i < $count; $i++) {
-                $this->scrollback->push($this->rowAt($this->scrollRegionBottom - $i));
+                $this->scrollback->push($this->rowAt($this->scrollRegionBottom - $count + 1 + $i));
             }
         }
 
@@ -1660,6 +1680,20 @@ final class ScreenHandler implements SubparamsAwareHandler
         } elseif ($wasFullScreenRegion) {
             $this->scrollRegionBottom = $rows - 1;
         }
+        // The parked DECSTBM (1049 swap) follows the same law as the active
+        // one: clamp an outgrown saved region, and keep a saved full-screen
+        // region full-screen across a resize, or the post-restore scrollback
+        // gate would see a stale sub-region.
+        if ($this->savedScrollRegionBottom !== null && $this->savedScrollRegionTop !== null) {
+            $savedWasFullScreen = $this->savedScrollRegionTop === 0
+                && $this->savedScrollRegionBottom === $oldRows - 1;
+            if ($this->savedScrollRegionBottom > $rows - 1) {
+                $this->savedScrollRegionBottom = $rows - 1;
+                $this->savedScrollRegionTop = min($this->savedScrollRegionTop, $rows - 1);
+            } elseif ($savedWasFullScreen) {
+                $this->savedScrollRegionBottom = $rows - 1;
+            }
+        }
     }
 
     /**
@@ -1687,8 +1721,18 @@ final class ScreenHandler implements SubparamsAwareHandler
      * independent; `less` saving with ESC 7 before entering alt must still
      * find its rendition on the way back). The companions only PARK for the
      * duration so the alt screen starts with its own empty slot, matching
-     * xterm's per-screen saved cursor.
-     * Idempotent — re-entering while already in alt mode is a no-op.
+     * xterm's per-screen saved cursor. The DECSTBM scroll region rides the
+     * same save: the alt screen starts on full margins and a DECSTBM issued
+     * inside alt never leaks back to the main screen.
+     *
+     * Re-entering while already ALT_FULL is a no-op, and so is `?1049h`
+     * arriving inside the DECSET 47/1047 no-save alt (upgrading would
+     * overwrite the single saved-buffer slot with the alt buffer itself and
+     * lose the main screen). A `?1049h` arriving while the DEC 1048
+     * cursor-only swap is live UPGRADES to the full swap — xterm-411 runs
+     * save+swap+clear on the 1049 set whatever the cursor-save state was,
+     * and dropping it here would also strand the caller, because the
+     * matching `?1049l` would no-op against a cursor-only variant.
      *
      * The fresh cursor homes and keeps DECTCEM visibility, but CARRIES the
      * DECSCUSR shape across the swap — see the body for the xterm-411 lines
@@ -1696,10 +1740,18 @@ final class ScreenHandler implements SubparamsAwareHandler
      */
     public function enterAltScreen(): void
     {
-        if ($this->mode->isAltScreen()) {
+        if (
+            $this->mode->altScreenVariant === Mode::ALT_FULL
+            || $this->mode->altScreenVariant === Mode::ALT_NO_SAVE
+        ) {
             return;
         }
-        $this->parkGeneralCompanions();
+        // Arriving from the 1048 cursor-only variant means the companions are
+        // already parked; parking again would overwrite that park with
+        // empties.
+        if (!$this->mode->isAltScreen()) {
+            $this->parkGeneralCompanions();
+        }
         $this->savedBuffer = $this->buffer;
         $this->savedCursor = $this->cursor;
         $this->savedSgr = $this->sgr;
@@ -1707,7 +1759,14 @@ final class ScreenHandler implements SubparamsAwareHandler
         $this->savedCharsets = $this->charsets;
         $this->savedGl = $this->gl;
         $this->savedOriginMode = $this->mode->originMode;
+        $this->savedScrollRegionTop = $this->scrollRegionTop;
+        $this->savedScrollRegionBottom = $this->scrollRegionBottom;
         $this->buffer = new Buffer($this->buffer->cols, $this->buffer->rows);
+        // The alt screen's own margins: DECSTBM is per-screen state here, so
+        // a main-screen region must not shrink the fresh screen's scroll area
+        // (mirrors the savedOriginMode save right above).
+        $this->scrollRegionTop = 0;
+        $this->scrollRegionBottom = $this->buffer->rows - 1;
         // CARRY the DECSCUSR shape through the swap: xterm's alt-screen entry
         // is `CursorSave(xw); ToAlternate(xw, True); ClearScreen(xw);`
         // (`charproc.c:7732-7745`, case `srm_OPT_ALTBUF_CURSOR`) and none of
@@ -1725,7 +1784,8 @@ final class ScreenHandler implements SubparamsAwareHandler
 
     /**
      * Leave the alt screen (DEC 1049 reset). Restores the saved Buffer
-     * + Cursor + Sgr + SCS + origin mode. No-op if not currently in alt mode.
+     * + Cursor + Sgr + SCS + origin mode + DECSTBM region. No-op if not
+     * currently in the full-swap (or upgraded-to-full) alt mode.
      */
     public function leaveAltScreen(): void
     {
@@ -1740,6 +1800,8 @@ final class ScreenHandler implements SubparamsAwareHandler
         $this->charsets = $this->savedCharsets ?? $this->charsets;
         $this->gl = $this->savedGl ?? $this->gl;
         $this->mode = $this->mode->withOriginMode($this->savedOriginMode ?? $this->mode->originMode);
+        $this->scrollRegionTop = $this->savedScrollRegionTop ?? $this->scrollRegionTop;
+        $this->scrollRegionBottom = $this->savedScrollRegionBottom ?? $this->scrollRegionBottom;
         $this->savedBuffer = null;
         $this->savedCursor = null;
         $this->savedSgr = null;
@@ -1747,6 +1809,8 @@ final class ScreenHandler implements SubparamsAwareHandler
         $this->savedCharsets = null;
         $this->savedGl = null;
         $this->savedOriginMode = null;
+        $this->savedScrollRegionTop = null;
+        $this->savedScrollRegionBottom = null;
         // The restored cursor is the visibility truth for the main screen —
         // re-point the Mode mirror at it so a DEC 25 toggled inside the alt
         // screen does not survive the restore (E725 invariant).
@@ -1871,6 +1935,48 @@ final class ScreenHandler implements SubparamsAwareHandler
             return;
         }
         $this->buffer->put($r, $c, $updated);
+    }
+
+    /**
+     * Erase the partner half-cells of double-width pairs orphaned when the
+     * column span [fromCol, toCol] of a row is overwritten — head→tail and
+     * tail→head both directions.
+     *
+     * xterm clears the other half of a double-width character whenever either
+     * half is painted over (`eraseDoubleCell()` fed from the print path in
+     * xterm-411 `charproc.c`); without this, a narrow glyph written over a
+     * wide base leaves the old continuation as a styled ghost, a glyph
+     * written over a continuation orphans the old base, and a wide glyph
+     * written one column off an old wide pair doubles the orphan tail.
+     * The exposed partner takes the BCE blank, exactly like every other
+     * erase in this emulator ({@see EraseHandler::blankCell()}).
+     *
+     * Must run BEFORE the new glyph is painted, while the old pairs are still
+     * in the grid. A pair whose two halves lie both inside the span is
+     * covered by the write itself and needs no partner action; only the
+     * outside half is orphaned.
+     */
+    private function eraseWidePartners(int $row, int $fromCol, int $toCol): void
+    {
+        for ($col = max(0, $fromCol); $col <= min($this->buffer->cols - 1, $toCol); $col++) {
+            if ($this->buffer->cell($row, $col)->continuation) {
+                // This half is a pair's tail: its base sits one column left.
+                $head = $col - 1;
+                if ($head >= 0 && $head < $fromCol) {
+                    $this->putCell($row, $head, $this->eraseHandler->blankCell($this->sgr));
+                }
+                continue;
+            }
+            // This half is a base: its tail sits one column right, if any.
+            $tail = $col + 1;
+            if (
+                $tail > $toCol
+                && $tail < $this->buffer->cols
+                && $this->buffer->cell($row, $tail)->continuation
+            ) {
+                $this->putCell($row, $tail, $this->eraseHandler->blankCell($this->sgr));
+            }
+        }
     }
 
     /**
