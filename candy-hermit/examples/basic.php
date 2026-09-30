@@ -35,14 +35,14 @@ $h = Hermit::new($items)
     ->show();
 
 echo "=== Hermit overlay (filtering nothing — all shown) ===\n";
-echo $h->View($bg) . "\n\n";
+echo $h->view($bg) . "\n\n";
 
 // Type to filter
 $h2 = $h->type('ba');
 echo "=== After typing 'ba' ===\n";
-echo $h2->View($bg) . "\n\n";
+echo $h2->view($bg) . "\n\n";
 
 // Navigate
 $h3 = $h2->cursorDown();
 echo "=== Cursor down one ===\n";
-echo $h3->View($bg) . "\n";
+echo $h3->view($bg) . "\n";

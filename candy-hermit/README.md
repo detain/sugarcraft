@@ -37,14 +37,14 @@ $h = Hermit::new($items)
 $h = $h->show();
 $h = $h->type('ba');  // filter by 'ba'
 
-echo $h->View("background content\nmore background");
+echo $h->view("background content\nmore background");
 
 // Navigate
 $h = $h->cursorDown();
 $h = $h->cursorUp();
 
 // Select
-$selected = $h->selected();  // currently selected item (string in this mode)
+$selected = $h->selected();  // always an Item — string inputs are coerced to FilteredItem
 
 // Hide
 $h = $h->hide();
@@ -106,7 +106,7 @@ A custom `setFilterFn()` predicate still applies on top of the ranker.
 | **Overlay compositing** | Background view renders underneath; overlay chars replace background at specified positions |
 | **Background continues updating** | The Hermit doesn't block the underlying view |
 | **Fully styleable** | Custom filter prompt, item format, matching highlight, window dimensions |
-| **Pure renderer** | No terminal I/O; output is strings you manage |
+| **String renderer** | `view()` returns strings you manage; the only terminal I/O is the opt-in `attachSigwinch()` resize attach (an `ioctl` + `pcntl` handler), which you never have to call |
 | **Item interface** | Work with structured `Item` objects instead of raw strings |
 | **Persistent history** | `FileHistory` stores items as JSONL for session persistence |
 | **Custom filter predicates** | `setFilterFn()` lets you filter items by arbitrary criteria |
@@ -235,6 +235,18 @@ public function statusBar(): ?StatusBar
 public function onResize(): ?\Closure  // Registered resize callback (cols, rows)
 ```
 
+## API — Hermit rendering
+
+```php
+// Composite the overlay over a background view and return the result.
+public function view(string $backgroundView): string
+```
+
+The method was originally declared `View()`. It is now lowercase `view()`,
+matching PSR-1 and the TEA render contract of {@see Model::view()}. Nothing to
+migrate: PHP resolves method names case-insensitively, so an existing
+`$hermit->View($bg)` call still binds here.
+
 ## API — Item interface
 
 ```php
@@ -331,9 +343,19 @@ use SugarCraft\Hermit\Hermit;
 $h = Hermit::new($items)
     ->withOnResize(function (int $cols, int $rows): void {
         echo "Terminal resized to {$cols}x{$rows}\n";
-    })
-    ->attachSigwinch();  // installs SIGWINCH handler; returns bool
+    });
+
+// attachSigwinch() returns bool — whether the handler installed — not the
+// Hermit, so call it on its own line rather than continuing the chain.
+if ($h->attachSigwinch() === false) {
+    // No ext-pcntl, no SIGWINCH, or no callback registered: fall back to
+    // polling the size yourself, or simply carry on without resize events.
+}
 ```
+
+Signals are process-global. In a long-lived host (PHP-FPM worker, ReactPHP
+daemon, test suite) detach them at session teardown with
+`SugarCraft\Pty\SignalForwarder::reset()`.
 
 ## Model Interface
 

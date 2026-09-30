@@ -31,6 +31,27 @@ final class Hermit
     /** Maximum length of filter text before input is rejected. */
     public const MAX_FILTER_LENGTH = 256;
 
+    /**
+     * The genuine file descriptor behind PHP's `STDIN` constant.
+     *
+     * `attachSigwinch()` has to hand `ioctl(TIOCSWINSZ)` a DESCRIPTOR number,
+     * and an `(int)` cast of a PHP stream yields something else entirely: its
+     * RESOURCE ID. MEASURED on PHP 8.3.6 in a fresh CLI process — `(int) STDIN`
+     * is 1, `(int) STDOUT` is 2, `(int) STDERR` is 3, over descriptors 0, 1
+     * and 2. So the former `(int) \STDIN` argument addressed descriptor 1, which
+     * is STDOUT: the ioctl reached the terminal only while stdout happened to BE
+     * that terminal, and silently no-op'd (rc != 0, so `$onResize` never fired)
+     * as soon as stdout was redirected to a pipe or file. Same defect class
+     * candy-core addresses in `Tty\PosixBackend::descriptorForStream()` — which
+     * is documented as internal to candy-core, so it is not callable from here.
+     *
+     * The READ side was never wrong: `ttySize()` passes the `STDIN` *resource*
+     * to `Tty`, which resolves the descriptor itself. This constant exists so
+     * both sides name one stream — the write targets the descriptor whose
+     * geometry the read queries.
+     */
+    private const STDIN_DESCRIPTOR = 0;
+
     /** Padding added to prompt+filter length when computing auto width. */
     private const WIDTH_PAD_HEADER = 5;
 
@@ -279,13 +300,23 @@ final class Hermit
      * Attach a SIGWINCH handler via SignalForwarder that queries the live
      * TTY dimensions and forwards (cols, rows) to the stored $onResize callback.
      *
-     * Requires ext-pcntl. Queries SugarCraft\Core\Util\Tty::size() on \STDIN
-     * to get the current terminal geometry, then invokes the $onResize closure
-     * with the fresh dimensions. Falls back to 80x24 if the query fails (e.g.
-     * non-interactive context). Returns true if the handler was installed;
-     * false if pcntl/SIGWINCH is unavailable.
+     * Requires ext-pcntl. Returns true if the handler was installed; false if
+     * pcntl/SIGWINCH is unavailable or no $onResize callback is registered.
      *
-     * Mirrors SignalForwarder::attachSigwinchToFd pattern.
+     * ## What fires the callback, precisely
+     *
+     * On each SIGWINCH the installed handler reads the geometry through
+     * {@see ttySize()} — `Tty::size()` on the `STDIN` resource, falling back to
+     * 80x24 when the query fails (non-interactive context) — then pushes it to
+     * the terminal with `ioctl(STDIN_DESCRIPTOR, TIOCSWINSZ)`. `SignalForwarder`
+     * invokes `$onResize` only when that ioctl returns 0, so a failed resize is
+     * silent by design. That coupling is why the descriptor must be genuine:
+     * pointing it at a non-terminal makes every resize a no-op and the callback
+     * unreachable, with no error surfaced anywhere.
+     *
+     * Delegates to {@see SignalForwarder::attachSigwinchToFd()}; signal
+     * dispositions are process-global, so detach them with
+     * `SignalForwarder::reset()` at session teardown.
      */
     public function attachSigwinch(): bool
     {
@@ -298,7 +329,9 @@ final class Hermit
         // (the closure outlives the attachSigwinch() call frame).
         $hermit = $this;
         return SignalForwarder::attachSigwinchToFd(
-            (int) \STDIN, // int fd, not resource (PHP 8+ casts resource to its fd number)
+            // A DESCRIPTOR, not `(int) \STDIN` — see self::STDIN_DESCRIPTOR for
+            // why the cast silently targeted STDOUT instead.
+            self::STDIN_DESCRIPTOR,
             static fn(): array => $hermit->ttySize(),
             static function (int $cols, int $rows) use ($hermit): void {
                 $cb = $hermit->onResize;
@@ -352,7 +385,11 @@ final class Hermit
 
     public function type(string $char): self
     {
-        if (\strlen($this->filterText) >= self::MAX_FILTER_LENGTH) {
+        // Counted in codepoints, not bytes: MAX_FILTER_LENGTH is a limit on the
+        // text a user sees and that the matcher indexes, so charging a 4-byte
+        // emoji the same 1 as 'a' would silently shrink the budget for non-Latin
+        // input to a quarter.
+        if (\mb_strlen($this->filterText, 'UTF-8') >= self::MAX_FILTER_LENGTH) {
             return $this; // reject input when cap reached
         }
         $clone = clone $this;
@@ -363,6 +400,22 @@ final class Hermit
         return $clone;
     }
 
+    /**
+     * Drop the last codepoint from the filter text.
+     *
+     * The unit is a CODEPOINT, deliberately matching how the rest of the class
+     * reads the filter: `highlightMatches()` splits it with
+     * `mb_str_split(..., 1, 'UTF-8')` and `applyFilter()` matches it against
+     * item values, so both sides of the comparison advance one codepoint at a
+     * time. A byte cut here instead (`substr($s, 0, -1)`) left a dangling UTF-8
+     * lead byte behind — typing 'é' then backspacing produced the invalid
+     * string `"\xc3"`, which corrupted the filter, the downstream match, and
+     * the highlighting, and desynchronised the list from what was displayed.
+     *
+     * Trade-off stated honestly: a multi-codepoint grapheme such as '👍🏽'
+     * (thumbs-up + skin-tone modifier) takes two backspaces to clear, because
+     * the modifier is its own codepoint and the matcher indexes it as one.
+     */
     public function backspace(): self
     {
         $clone = clone $this;
@@ -370,7 +423,7 @@ final class Hermit
             return $clone;
         }
         $clone->cachedComputedWidth = null;
-        $clone->filterText = \substr($clone->filterText, 0, -1);
+        $clone->filterText = \mb_substr($clone->filterText, 0, -1, 'UTF-8');
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
         $clone->cursor = \max(0, \min($clone->cursor, \count($clone->filteredItems) - 1));
         return $clone;
@@ -496,10 +549,18 @@ final class Hermit
     /**
      * Render the Hermit overlay and composite it over $backgroundView.
      *
+     * Named `view()` (lowercase) to honour the TEA/Bubble-Tea render contract
+     * this library ports, the sibling {@see Model::view()} it is handed to, and
+     * PSR-1's lowerCamelCase method rule. The rename is NOT a break for callers:
+     * PHP resolves method names case-insensitively, so existing `$hermit->View()`
+     * call sites and docs keep working and resolve here. A capitalised `View()`
+     * shim à la candy-core's `Program::getModel()` is therefore both unnecessary
+     * and impossible — declaring it would be a redeclare fatal.
+     *
      * @param string $backgroundView  The underlying view (e.g. current app output)
      * @return string  The composited output with Hermit overlay chars replacing background
      */
-    public function View(string $backgroundView): string
+    public function view(string $backgroundView): string
     {
         if ($this->isShown === false) {
             return $backgroundView;
@@ -718,7 +779,7 @@ final class Hermit
     private function computeWidth(): int
     {
         // Measure in visible cells (ANSI-stripped, wide-rune aware) so the auto
-        // width matches what View() actually renders.
+        // width matches what view() actually renders.
         $promptLen = Width::of($this->prompt);
         $filterLen = Width::of($this->filterText);
         $itemMax   = 0;

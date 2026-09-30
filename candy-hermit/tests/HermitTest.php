@@ -144,18 +144,39 @@ final class HermitTest extends TestCase
     {
         $bg = "background\ncontent";
         $h = $this->makeHermit();
-        $this->assertSame($bg, $h->View($bg));
+        $this->assertSame($bg, $h->view($bg));
     }
 
     public function testViewWhenShown(): void
     {
         $bg = "background\ncontent";
         $h = $this->makeHermit()->show();
-        $result = $h->View($bg);
+        $result = $h->view($bg);
 
         $this->assertIsString($result);
         // When shown, the prompt appears
         $this->assertStringContainsString('> ', $result);
+    }
+
+    public function testTheRenderMethodIsDeclaredLowercasePerTheTeaContract(): void
+    {
+        // PSR-1 lowerCamelCase + the TEA render contract + Hermit's own
+        // Model::view(). The declaration must read `view`, not `View`.
+        $name = (new \ReflectionMethod(Hermit::class, 'view'))->getName();
+        $this->assertSame('view', $name, 'the TEA contract method must be declared lowercase');
+    }
+
+    public function testTheLegacyCapitalisedCallStillBindsToView(): void
+    {
+        // The rename shipped WITHOUT a delegating shim, and that is not an
+        // oversight: PHP resolves method names case-insensitively, so every
+        // pre-existing `$hermit->View($bg)` call site — in downstream code and
+        // in docs this change does not own — still resolves. Declaring a
+        // capitalised View() as well would be a redeclare fatal.
+        $bg = "background\ncontent";
+        $h  = $this->makeHermit()->show();
+
+        $this->assertSame($h->view($bg), $h->View($bg), 'both spellings must render identically');
     }
 
     public function testFluentSetters(): void
@@ -195,9 +216,9 @@ final class HermitTest extends TestCase
         ])->show()
             ->setItemFormatter(fn($item, $sel) => "[$sel] $item");
 
-        // Hidden view result — but custom formatter is applied in View()
+        // Hidden view result — but custom formatter is applied in view()
         $bg = str_repeat("....................\n", 5);
-        $result = $h->View($bg);
+        $result = $h->view($bg);
 
         $this->assertIsString($result);
     }
@@ -284,7 +305,7 @@ final class HermitTest extends TestCase
         $h = $h->type('本');
 
         $bg = str_repeat("....................\n", 5);
-        $view = $h->View($bg);
+        $view = $h->view($bg);
 
         // Verify the ANSI highlight is present (yellow), confirming CJK matching works.
         $this->assertStringContainsString("\x1b[33m", $view);
@@ -303,7 +324,7 @@ final class HermitTest extends TestCase
         $h = $h->type('👍');
 
         $bg = str_repeat("....................\n", 5);
-        $view = $h->View($bg);
+        $view = $h->view($bg);
 
         $this->assertStringContainsString("\x1b[31m", $view);
     }
@@ -321,14 +342,14 @@ final class HermitTest extends TestCase
             ->type('an');
 
         $bg = str_repeat(str_repeat(' ', 40) . "\n", 5);
-        $view = $h->View($bg);
+        $view = $h->view($bg);
 
         // Assert the exact SGR placement: opening code, matched run, reset.
         // strpos is used directly because PHPUnit's assertStringContainsString
         // may represent non-printable bytes differently in failure output.
         $this->assertNotFalse(
             \strpos($view, "\x1b[33man\x1b[0m"),
-            'highlighted substring with SGR wrap should appear in View output',
+            'highlighted substring with SGR wrap should appear in view output',
         );
     }
 
@@ -393,7 +414,7 @@ final class HermitTest extends TestCase
 
         // The viewport should have scrolled so item[19] is visible.
         $bg = implode("\n", array_fill(0, 5, str_repeat(' ', 40)));
-        $result = $h->View($bg);
+        $result = $h->view($bg);
 
         // The last item's text appears in output; first item does not (viewport scrolled).
         $this->assertStringContainsString('item19', $result, 'last item should be visible in scrolled viewport');
@@ -414,7 +435,7 @@ final class HermitTest extends TestCase
             ->show();
 
         $bg = implode("\n", array_fill(0, 5, str_repeat(' ', 40)));
-        $result = $h->View($bg);
+        $result = $h->view($bg);
 
         // First item should be visible at the top when items fit in window.
         $this->assertStringContainsString('apple', $result, 'first item should be visible at top when fits in window');
@@ -440,7 +461,7 @@ final class HermitTest extends TestCase
 
         // Background must be tall enough for the bars (5 window + 2 bars = 7 min)
         $bg = implode("\n", array_fill(0, 10, str_repeat(' ', 40)));
-        $result = $h->View($bg);
+        $result = $h->view($bg);
 
         // Both HelpBar and StatusBar content should appear in the output.
         $this->assertStringContainsString('Esc: close', $result, 'HelpBar content should appear');
@@ -457,7 +478,7 @@ final class HermitTest extends TestCase
             ->show();
 
         $bg = implode("\n", array_fill(0, 3, str_repeat(' ', 40)));
-        $result = $h->View($bg);
+        $result = $h->view($bg);
         $resultLines = explode("\n", rtrim($result, "\n"));
 
         // The overlay should not inject extra rows - still 3 lines like the background.
@@ -503,7 +524,7 @@ final class HermitTest extends TestCase
             ->show();
 
         $bg = "line1\nline2"; // only 2 lines
-        $result = $h->View($bg);
+        $result = $h->view($bg);
 
         // The result should have enough lines to render the overlay without
         // silently dropping content (the padding code ensures this).
@@ -579,7 +600,7 @@ final class HermitTest extends TestCase
 
         // Only 1 line in background, overlay needs 5+.
         $bg = "short";
-        $result = $h->View($bg);
+        $result = $h->view($bg);
 
         $this->assertIsString($result);
         // Prompt should still appear in output.
@@ -589,14 +610,14 @@ final class HermitTest extends TestCase
     public function testCachedComputedWidthInvalidatedOnType(): void
     {
         // With windowWidth=0 (auto), calling type() must invalidate the cached
-        // width so the next View() recomputes rather than reusing a stale value.
+        // width so the next view() recomputes rather than reusing a stale value.
         $h = $this->makeHermit()
             ->setWindowWidth(0) // auto
             ->show();
 
         // First render — populates the cache.
         $bg1 = str_repeat(str_repeat(' ', 30) . "\n", 5);
-        $h->View($bg1);
+        $h->view($bg1);
 
         $reflection = new \ReflectionClass($h);
         $cached = $reflection->getProperty('cachedComputedWidth');
@@ -750,10 +771,10 @@ final class HermitTest extends TestCase
     public function testViewBuildsOverlayLinesOnce(): void
     {
         // With an explicit windowWidth, computeWidth() is skipped, so the item
-        // formatter runs ONLY inside buildOverlayLines(). A single View() that
+        // formatter runs ONLY inside buildOverlayLines(). A single view() that
         // built the overlay twice (the old code path) invoked the formatter twice
         // per visible row; building it once invokes it exactly once per row.
-        // Revert View() to the double buildOverlayLines() call and $calls doubles.
+        // Revert view() to the double buildOverlayLines() call and $calls doubles.
         $calls = 0;
         $items = [
             new FilteredItem(1, 'apple'),
@@ -770,15 +791,15 @@ final class HermitTest extends TestCase
             ->show();
 
         $bg = implode("\n", array_fill(0, 12, str_repeat(' ', 40)));
-        $h->View($bg);
+        $h->view($bg);
 
         // 3 visible rows, formatter called exactly once each — not 6 (double build).
-        $this->assertSame(3, $calls, 'buildOverlayLines must run once per View(), not twice');
+        $this->assertSame(3, $calls, 'buildOverlayLines must run once per view(), not twice');
     }
 
     public function testViewOutputIsByteIdenticalAcrossRepresentativeFrames(): void
     {
-        // Byte-for-byte goldens captured from the pre-refactor View(). The
+        // Byte-for-byte goldens captured from the pre-refactor view(). The
         // build-once, dropped dead $background param, and mb_str_split highlight
         // changes must all be output-preserving; any drift flips these asserts.
 
@@ -808,7 +829,7 @@ final class HermitTest extends TestCase
             ->type('a')
             ->cursorDown();
         $bg1 = implode("\n", array_fill(0, 3, str_repeat('.', 40)));
-        $this->assertSame($frame1, $h1->View($bg1), 'frame 1 View() output must be byte-identical');
+        $this->assertSame($frame1, $h1->view($bg1), 'frame 1 view() output must be byte-identical');
 
         // Frame 2: multibyte (accented + CJK) content, multiple substring matches.
         $frame2 = \base64_decode(
@@ -824,7 +845,7 @@ final class HermitTest extends TestCase
             ->show()
             ->type('a');
         $bg2 = implode("\n", array_fill(0, 5, str_repeat(' ', 24)));
-        $this->assertSame($frame2, $h2->View($bg2), 'frame 2 View() output must be byte-identical');
+        $this->assertSame($frame2, $h2->view($bg2), 'frame 2 view() output must be byte-identical');
     }
 
     public function testTtySizeReturnsFallbackOnException(): void

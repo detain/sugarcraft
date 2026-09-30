@@ -29,7 +29,7 @@ final class ModelTest extends TestCase
 
             public function view(Hermit $h): string
             {
-                return $h->View('');
+                return $h->view('');
             }
         };
 
@@ -61,7 +61,7 @@ final class ModelTest extends TestCase
 
             public function view(Hermit $h): string
             {
-                return $h->View('');
+                return $h->view('');
             }
 
             public function hermit(): Hermit
@@ -99,7 +99,7 @@ final class ModelTest extends TestCase
 
             public function view(Hermit $h): string
             {
-                return $h->View('');
+                return $h->view('');
             }
 
             public function hermit(): Hermit
@@ -133,7 +133,7 @@ final class ModelTest extends TestCase
 
         // Render over a proper background (matching HermitRankerTest pattern)
         $bg = implode("\n", array_fill(0, 5, str_repeat(' ', 40)));
-        $view = $hermit->View($bg);
+        $view = $hermit->view($bg);
 
         self::assertIsString($view);
         // A shown Hermit should render the overlay onto the background
@@ -159,7 +159,7 @@ final class ModelTest extends TestCase
 
             public function view(Hermit $h): string
             {
-                return $h->View('');
+                return $h->view('');
             }
 
             public function hermit(): Hermit

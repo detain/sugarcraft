@@ -192,7 +192,7 @@ final class HermitRankerTest extends TestCase
             ->type('te');
 
         $bg = implode("\n", array_fill(0, 5, str_repeat(' ', 40)));
-        $out = $h->View($bg);
+        $out = $h->view($bg);
 
         self::assertStringContainsString("\e[1mte" . Ansi::reset() . 'rminal', $out);
     }
@@ -212,7 +212,7 @@ final class HermitRankerTest extends TestCase
 
         // Mirror the real consumer: render over a blank canvas exactly $width cells wide.
         $bg = implode("\n", array_fill(0, 5, str_repeat(' ', $width)));
-        $lines = explode("\n", $h->View($bg));
+        $lines = explode("\n", $h->view($bg));
 
         // header(0), separator(1), then the first item row.
         $itemLine = $lines[2];
@@ -241,7 +241,7 @@ final class HermitRankerTest extends TestCase
         $expected = max(Width::of('> ') + Width::of('本') + 5, Width::of('日本語') + 2); // = 9
         // Canvas exactly the auto width so no trailing background cells inflate it.
         $bg = implode("\n", array_fill(0, 4, str_repeat(' ', $expected)));
-        $lines = explode("\n", $h->View($bg));
+        $lines = explode("\n", $h->view($bg));
 
         // The separator row is exactly the auto width — in cells, not bytes (the
         // old strlen path would have sized it to 11 from the 9-byte/6-cell value).
@@ -283,7 +283,7 @@ final class HermitRankerTest extends TestCase
             ->show()
             ->type('a');
 
-        $out = $h->View($bg = implode("\n", array_fill(0, 5, str_repeat(' ', 40))));
+        $out = $h->view($bg = implode("\n", array_fill(0, 5, str_repeat(' ', 40))));
 
         self::assertStringNotContainsString("\e[1m", $out, 'no highlight when the formatted string does not match');
         self::assertStringContainsString('apple', $out, 'the item is still listed');

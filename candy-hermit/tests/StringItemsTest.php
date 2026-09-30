@@ -34,7 +34,7 @@ final class StringItemsTest extends TestCase
 
         // Use a tall-enough background so items render at y-offset 0.
         $bg = str_repeat(str_repeat(' ', 80) . "\n", 20);
-        $result = $h->View($bg);
+        $result = $h->view($bg);
 
         $this->assertStringContainsString('> ', $result);
         $this->assertStringContainsString('ba', $result);
@@ -82,9 +82,9 @@ final class StringItemsTest extends TestCase
             ->type('a'); // matches apple and banana
 
         $bg = str_repeat(str_repeat(' ', 80) . "\n", 20);
-        $result = $h->View($bg);
+        $result = $h->view($bg);
 
-        // The formatter output appears in the View, proving it received string values.
+        // The formatter output appears in the view, proving it received string values.
         $this->assertStringContainsString('ITEM:apple:SEL', $result);  // apple at cursor 0
         $this->assertStringContainsString('ITEM:banana:NOSEL', $result); // banana not selected
     }
@@ -125,7 +125,7 @@ final class StringItemsTest extends TestCase
             ->type('ba'); // selects 'banana'
 
         $bg = str_repeat(str_repeat(' ', 80) . "\n", 20);
-        $result = $h->View($bg);
+        $result = $h->view($bg);
 
         // banana is the selected item; apple and cherry are filtered out.
         // Only banana is visible in filtered items.
@@ -139,7 +139,7 @@ final class StringItemsTest extends TestCase
 
         $bg = str_repeat(str_repeat(' ', 80) . "
 ", 20);
-        $result = $h->View($bg);
+        $result = $h->view($bg);
 
         // The default formatter shows "  3. cherry" (2-space indent + ordinal + dot + space + value).
         $this->assertStringContainsString('3. cherry', $result);
