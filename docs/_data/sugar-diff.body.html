@@ -1,0 +1,71 @@
+<p class="lede" style="margin-top: 28px;">A unified-diff engine the whole ecosystem can share: <strong>LCS line diffing, numbered context hunks, a GNU <code>diff -u</code> writer, and a scanner that numbers the rows of any patch</strong>. Extracted from sugar-crush's <code>BuildsUnifiedDiff</code> trait and the <code>DiffGutter</code> region model, so every surface that produces or displays patches reads the same line numbers out of the same engine. First-party — there is no 1:1 upstream Go library.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/sugar-diff:@dev</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Diff\Diff;
+use SugarCraft\Diff\DiffOptions;
+use SugarCraft\Diff\Reader\UnifiedScan;
+
+$diff = Diff::compute("Hello World\n", "Hello PHP\n");
+
+echo $diff->unified('file.txt');
+// --- a/file.txt
+// +++ b/file.txt
+// @@ -1,1 +1,1 @@
+// -Hello World
+// +Hello PHP
+
+// Immutable, fluent options — defaults reproduce sugar-crush byte-for-byte.
+$wide = Diff::compute($before, $after, DiffOptions::new()
+    ->withContextLines(10)
+    ->withIgnoreWhitespace()
+    ->withNoNewlineMarker()
+    ->withDevNullOnEmptySide());
+
+// Number the rows of an existing patch (gutter/viewer support):
+foreach (UnifiedScan::lines($patchText) as $row) {
+    // $row->old, $row->new, $row->fileHeader
+}</code></pre>
+
+    <h3 style="margin-top: 32px;">The model</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Diff</strong><span>compute() entry point; lines, hunks, per-side counts and final-newline facts; isEmpty/addedLines/removedLines/unified/hunkText.</span></div>
+      <div class="feature"><strong>Hunk / Line / LineKind</strong><span>One @@ block; one numbered row; eq/del/ins. All immutable value objects.</span></div>
+      <div class="feature"><strong>Writer\UnifiedFormat</strong><span>Renders the GNU diff -u shape: headers, @@ ranges, opt-in "\ No newline" markers and /dev/null labels.</span></div>
+      <div class="feature"><strong>Reader\UnifiedScan</strong><span>Walks any rendered unified diff and returns which old/new line each row points at — the gutter model without the gutter.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Patch display in TUIs</strong> — numbered hunks feed gutters, diff panes, and review overlays without re-deriving line numbers.</li>
+      <li><strong>Editing tools</strong> — the same engine sugar-crush's Edit/Write tools use to report changes to the model and the user.</li>
+      <li><strong>Patch consumers</strong> — UnifiedScan answers "which file line is this row?" for arbitrary incoming diffs, including multi-file git output.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-diff">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-diff/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-diff/tree/main/tests">Test suite</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Diff</td><td>compute(string|list&lt;string&gt; $before, string|list&lt;string&gt; $after, ?DiffOptions $options = null): self</td><td>Line-mode LCS diff (byte-for-byte faithful to sugar-crush defaults)</td></tr>
+<tr><td>Diff</td><td>unified(string $path, ?string $newPath = null): string</td><td>Full diff -u text with --- / +++ headers</td></tr>
+<tr><td>Diff</td><td>hunkText(): string</td><td>Hunks only, no file headers</td></tr>
+<tr><td>Diff</td><td>isEmpty() / addedLines() / removedLines(): int|bool</td><td>Summary counts</td></tr>
+<tr><td>DiffOptions</td><td>withContextLines(int) / withMaxLcsCells(int)</td><td>Context window (default 3) and LCS cell budget (default 250 000)</td></tr>
+<tr><td>DiffOptions</td><td>withIgnoreWhitespace() / withIgnoreCase()</td><td>Fold comparisons; emitted rows keep original bytes</td></tr>
+<tr><td>DiffOptions</td><td>withNoNewlineMarker() / withDevNullOnEmptySide()</td><td>GNU annotations, opt-in</td></tr>
+<tr><td>UnifiedFormat</td><td>write(Diff, string, ?string) / hunksOnly(Diff): string</td><td>The writer behind Diff::unified()/hunkText()</td></tr>
+<tr><td>UnifiedScan</td><td>lines(string|list&lt;string&gt;): list&lt;ScannedLine&gt;</td><td>Per-row old/new line numbers + fileHeader flag</td></tr>
+<tr><td>UnifiedScan</td><td>fileHeaders(string|list&lt;string&gt;): list&lt;bool&gt;</td><td>Which rows start a new file</td></tr>
+</table>
+  </div>
+</section>

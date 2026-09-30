@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — SugarDiff",
+    "description": "SugarDiff: Unified-diff engine — LCS line diff, context hunks, GNU diff -u writer and line-number scanner. Extracted from sugar-crush; first-party.",
+    "ogTitle": "SugarCraft — SugarDiff",
+    "ogDescription": "One faithful diff -u engine for the whole ecosystem: LCS line diffing with budgeted fallback, numbered hunks, a GNU-shaped writer, and a patch scanner that tells any gutter which line each row points at.",
+    "emoji": "",
+    "displayName": "SugarDiff",
+    "tagline": "Unified-diff engine — hunks, writer, and patch scanner",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">component-package</span>\n          <span class=\"tag-chip\">diff</span>\n          <span class=\"tag-chip\">patch</span>"
+}

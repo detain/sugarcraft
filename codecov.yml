@@ -186,6 +186,9 @@ flag_management:
     - name: sugar-table
       paths: ["sugar-table/src/**"]
       carryforward: true
+    - name: sugar-diff
+      paths: ["sugar-diff/src/**"]
+      carryforward: true
     - name: sugar-toast
       paths: ["sugar-toast/src/**"]
       carryforward: true
@@ -515,6 +518,12 @@ component_management:
         - "sugar-table/src/**"
       flag_regexes:
         - "^sugar-table$"
+    - component_id: sugar-diff
+      name: sugar-diff
+      paths:
+        - "sugar-diff/src/**"
+      flag_regexes:
+        - "^sugar-diff$"
     - component_id: sugar-toast
       name: sugar-toast
       paths:

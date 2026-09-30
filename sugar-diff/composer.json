@@ -1,0 +1,46 @@
+{
+    "name": "sugarcraft/sugar-diff",
+    "description": "Unified-diff engine — LCS line diff, context hunks, GNU diff -u writer and scanner. Extracted from sugar-crush.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "sugarcraft",
+        "diff",
+        "unified-diff",
+        "lcs",
+        "patch",
+        "text"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-diff",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-diff/issues",
+        "source": "https://github.com/sugarcraft/sugar-diff",
+        "docs": "https://github.com/sugarcraft/sugar-diff/blob/master/README.md"
+    },
+    "require": {
+        "php": "^8.3",
+        "ext-mbstring": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Diff\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Diff\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
