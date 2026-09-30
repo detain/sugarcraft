@@ -21,7 +21,8 @@
     ],
     "support": {
         "issues": "https://github.com/sugarcraft/sugar-toast/issues",
-        "source": "https://github.com/sugarcraft/sugar-toast"
+        "source": "https://github.com/sugarcraft/sugar-toast",
+        "docs": "https://sugarcraft.github.io/lib/sugar-toast.html"
     },
     "require": {
         "php": "^8.3",

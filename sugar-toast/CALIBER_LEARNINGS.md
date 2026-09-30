@@ -69,10 +69,13 @@ sugar-calendar, and sugar-table:
 
 
 
-Middle positions use the same `totalAlertLines` accumulation logic as bottom
-positions. Each alert is offset by the cumulative height of all previously
-rendered alerts at the same position, so stacks grow downward from the
-vertical center rather than upward from the top.
+Middle positions use the same `Position::yOffset($h, $viewportHeight,
+$stackedHeightBefore)` accumulation logic as bottom positions. Each alert is
+offset by the cumulative height of all previously rendered alerts at the same
+position — and the accumulator is SUBTRACTED, so stacks grow upward from
+vertical center, exactly like bottom stacks grow upward from the floor.
+(Prose said "downward" until the 2026-09-30 render audit re-derived it from
+the math: `y = max(0, floor((vh - h) / 2) - stacked)`.)
 
 ---
 
@@ -198,29 +201,29 @@ occurred on that instance's lineage.
 
 
 
-`Toast::View()` composites a toast box over a background by slicing each row
-at the toast's column position. The original `compositeLines()` /
-`renderAlert()` used `strlen()`/`substr()`/`str_pad()`/`STR_PAD_BOTH`, which
-count BYTES, not display cells. A box border is `'╭' . str_repeat('─', 48) .
-'╮'` — 50 display cells but **150 UTF-8 bytes** (each box-drawing glyph is a
-3-byte grapheme). `substr($fgLine, 0, 50)` cut the 16th `─` mid-grapheme,
-emitting a dangling continuation byte (`╭───…─<broken>`). Inline SGR escapes
-(`\x1b[31m…\x1b[0m`) also threw the byte math off.
+`Toast::view()` (formerly `View()`) composites alert boxes over a background.
+Until 2026-09-30 the string pipeline `compositeLines()` sliced each rendered
+row with `strlen()`/`substr()`/`str_pad()`/`STR_PAD_BOTH` — byte counts, not
+display cells. A box border is `'╭' . str_repeat('─', 48) . '╮'` — 50 display
+cells but **150 UTF-8 bytes** (each box-drawing glyph is a 3-byte grapheme).
+`substr($fgLine, 0, 50)` cut the 16th `─` mid-grapheme, emitting a dangling
+continuation byte (`╭───…─<broken>`). Inline SGR escapes (`\x1b[31m…\x1b[0m`)
+also threw the byte math off.
 
-**Fix:** route every measure/slice through candy-core `SugarCraft\Core\Util\Width`:
+The string pipeline is gone: every row is now painted INTO a candy-buffer
+`Buffer` cell grid (`renderAlertToBuffer()` → `placeAnsiStringAt()`, one
+grapheme = one `Cell` with its measured width), the background fills a
+viewport-wide buffer, and boxes are blitted with `Buffer::withRegion()`. Byte
+slicing can no longer split a grapheme because rows are never sliced — but
+the pre-buffer lesson still governs the painter:
 
-- `Width::string($s)` — cell width (ANSI-stripped, grapheme-aware).
+- `Width::string($s)` — cell width (ANSI-stripped, grapheme-aware);
+  `graphemeWidth()` delegates to it since the render audit killed the forked
+  private table (emoji measured 1, header rows overflowed their own border).
 - `Width::truncate()` / `Width::truncateAnsi()` — cut to N cells without
-
-
-
   splitting a grapheme; the `*Ansi` variant preserves inline escapes.
-
-- `Width::dropAnsi($s, $n)` — drop the first N cells (the tail/`$post` slice).
-- `Width::padRight()` — pad to N cells (replaces `str_pad`).
-
-
-
+- `applyAlertColors()` bounds styled columns by `Width::string()`, never
+  `strlen()`.
 
 Rule of thumb: any string that may contain multibyte glyphs or ANSI must be
 measured/sliced with `Width::*`, never `strlen`/`substr`/`str_pad`.

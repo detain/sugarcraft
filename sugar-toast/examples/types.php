@@ -30,7 +30,7 @@ foreach (ToastType::cases() as $type) {
         ToastType::Error   => 'Build failed: composer install returned non-zero.',
     };
     $t = Toast::new(50)->withPosition(Position::TopLeft)->alert($type, $msg);
-    echo "[{$type->value}] " . $t->View($bg, 80, 20) . "\n\n";
+    echo "[{$type->value}] " . $t->view($bg, 80, 20) . "\n\n";
 }
 
 echo "=== Position variants ===\n\n";
@@ -38,7 +38,7 @@ echo "=== Position variants ===\n\n";
 $msg = 'Item saved!';
 foreach (Position::cases() as $pos) {
     $t = Toast::new(50)->withPosition($pos)->success($msg);
-    echo "[{$pos->name}] " . $t->View($bg, 80, 20) . "\n\n";
+    echo "[{$pos->name}] " . $t->view($bg, 80, 20) . "\n\n";
 }
 
 echo "=== Duration variants ===\n\n";
@@ -47,12 +47,12 @@ echo "=== Duration variants ===\n\n";
 foreach ([1.0, 3.0, 10.0, null] as $secs) {
     $label = $secs === null ? 'persistent' : "{$secs}s";
     $t = Toast::new(50)->withDuration($secs)->info("Duration: {$label}");
-    echo "[{$label}] " . $t->View($bg, 80, 20) . "\n";
+    echo "[{$label}] " . $t->view($bg, 80, 20) . "\n";
 }
 echo "\n";
 
 echo "=== Symbol sets ===\n\n";
 
-echo "NerdFont: " . Toast::new(50)->withSymbolSet(SymbolSet::NerdFont)->success('Success')->View($bg, 80, 20) . "\n";
-echo "Unicode : " . Toast::new(50)->withSymbolSet(SymbolSet::Unicode)->success('Success')->View($bg, 80, 20) . "\n";
-echo "Ascii   : " . Toast::new(50)->withSymbolSet(SymbolSet::Ascii)->success('Success')->View($bg, 80, 20) . "\n";
+echo "NerdFont: " . Toast::new(50)->withSymbolSet(SymbolSet::NerdFont)->success('Success')->view($bg, 80, 20) . "\n";
+echo "Unicode : " . Toast::new(50)->withSymbolSet(SymbolSet::Unicode)->success('Success')->view($bg, 80, 20) . "\n";
+echo "Ascii   : " . Toast::new(50)->withSymbolSet(SymbolSet::Ascii)->success('Success')->view($bg, 80, 20) . "\n";

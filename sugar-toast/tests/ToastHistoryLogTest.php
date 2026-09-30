@@ -17,7 +17,7 @@ final class ToastHistoryLogTest extends TestCase
             ->error('Second');
 
         $dismissed = $t->dismiss();
-        $history = $dismissed->getHistory();
+        $history = $dismissed->history();
 
         $this->assertCount(2, $history);
         $this->assertSame('First', $history[0]->message);
@@ -30,8 +30,8 @@ final class ToastHistoryLogTest extends TestCase
         $d = $t->dismiss();
 
         $this->assertNotSame($t, $d);
-        $this->assertSame([], $t->getHistory());  // original unchanged
-        $this->assertCount(1, $d->getHistory());
+        $this->assertSame([], $t->history());  // original unchanged
+        $this->assertCount(1, $d->history());
     }
 
     public function testHistoryLogImmutability(): void
@@ -39,8 +39,8 @@ final class ToastHistoryLogTest extends TestCase
         $t1 = Toast::new(50)->success('a')->error('b');
         $t2 = $t1->dismiss();
 
-        $this->assertSame([], $t1->getHistory());
-        $this->assertCount(2, $t2->getHistory());
+        $this->assertSame([], $t1->history());
+        $this->assertCount(2, $t2->history());
     }
 
     public function testExpiredAlertsNotRecorded(): void
@@ -52,7 +52,7 @@ final class ToastHistoryLogTest extends TestCase
             ->alert(ToastType::Error, 'expired', \microtime(true) - 1);
 
         $dismissed = $t->dismiss();
-        $history = $dismissed->getHistory();
+        $history = $dismissed->history();
 
         // Only the non-expired alert should be recorded
         $this->assertCount(1, $history);

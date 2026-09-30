@@ -3,9 +3,9 @@
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-toast)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-toast)
-[![Packagist Version](https://img.shields.io/packagist/v/sugarcore/sugar-toast?label=packagist)](https://packagist.org/packages/sugarcore/sugar-toast)
+[![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-toast?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-toast)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 # SugarToast
@@ -26,7 +26,6 @@ PHP port of [DaltonSW/bubbleup](https://github.com/daltonsw/bubbleup) — floati
 - **Progress toasts**: inline progress bar (0–100%) beneath the message body
 - **Action buttons**: `[Label]` buttons attached to an alert with closure callbacks
 - **History log**: immutable record of every dismissed alert
-- **Fade animation stub**: `withAnimationDuration()` (CubicBezier deferred to future phase)
 - **Pure renderer**: outputs ANSI strings; works with any TUI framework
 
 ## Install
@@ -56,7 +55,7 @@ $toast = $toast->alert(ToastType::Error, 'Connection failed');
 
 // Render into a viewport
 $bg = str_repeat("background content\n", 20);
-echo $toast->View($bg);
+echo $toast->view($bg);
 ```
 
 ## Alert Types
@@ -188,7 +187,7 @@ All translatable strings live in `lang/en.php` under the `'toast'` namespace.
 
 > **Note:** The `dismiss` and `count` keys are provided as convenience strings
 > for host-rendered dismiss-hint and counter UI. They are **not** emitted or
-> rendered by `View()` itself — the library outputs only the alert overlay.
+> rendered by `view()` itself — the library outputs only the alert overlay.
 
 To add a locale, copy `lang/en.php` to `lang/<code>.php` and translate the
 values. The lookup chain follows `SugarCraft\Core\I18n\T`:
@@ -272,7 +271,7 @@ $toast = $toast->alert(ToastType::Error, 'Connection lost')
 $toast = $toast->dismiss();
 
 // Retrieve the log
-$history = $toast->getHistory();  // list<Alert>
+$history = $toast->history();  // list<Alert>
 
 foreach ($history as $alert) {
     echo $alert->type->label() . ': ' . $alert->message . "\n";
@@ -281,20 +280,6 @@ foreach ($history as $alert) {
 
 `HistoryLog` is immutable — `dismiss()` returns a new `Toast` with an
 updated log; prior instances are unchanged.
-
-## Animations
-
-
-
-
-```php
-$toast = $toast->withAnimationDuration(0.25);
-```
-
-Set a fade animation duration in seconds. When > 0, toasts render a
-character-reveal hint. Full CubicBezier spring easing (honey-bounce) is
-wired but deferred — the `animationDuration` field is a functional stub
-for now.
 
 ## API Summary
 
@@ -312,7 +297,6 @@ for now.
 | `->withAllowEscToClose(bool)` | Preference flag the host reads to decide if Escape dismisses (the renderer does not handle input) |
 | `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited) |
 | `->withOverflow(Overflow)` | Strategy when cap exceeded: DropOldest, DropNewest, Enqueue |
-| `->withAnimationDuration(float $seconds)` | Fade animation duration (stub; CubicBezier deferred) |
 | `->alert(ToastType\|string, string, ?float $expiresAt)` | Add alert (string type = case-insensitive) |
 | `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt)` | Add alert with progress bar (0.0–1.0) |
 | `->error/warning/info/success(string)` | Convenience alert helpers |
@@ -320,8 +304,8 @@ for now.
 | `->nextExpiry(): ?float` | Soonest expiry instant (epoch seconds) of an auto-dismissing alert, or `null` |
 | `->secondsUntilNextExpiry(): ?float` | Delay until the next expiry, clamped `>= 0.0`, or `null` — schedule one prune tick |
 | `->dismiss() / clear() / pruneExpired()` | Manage alert lifecycle; `dismiss()` records to history |
-| `->getHistory(): list<Alert>` | Return all dismissed alerts |
-| `->view(string $background, int $w, int $h): string` | Render toast layer over background |
+| `->history(): list<Alert>` | Return all dismissed alerts |
+| `->view(string $background, int $w, int $h): string` | Render toast layer over background (the legacy `View()` spelling is a deprecated alias) |
 
 | Class | Method | Description |
 |-------|--------|-------------|

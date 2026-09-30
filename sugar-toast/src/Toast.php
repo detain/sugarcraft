@@ -440,9 +440,11 @@ final class Toast
     /**
      * Return the history of dismissed alerts.
      *
+     * Bare accessor per project convention (no `get` prefix).
+     *
      * @return list<Alert>
      */
-    public function getHistory(): array
+    public function history(): array
     {
         return $this->historyLog->all();
     }
@@ -455,12 +457,16 @@ final class Toast
      * Render the toast layer composited over a background view using
      * Buffer-based composition.
      *
+     * Lowercase `view()` per the project renderer convention; PHP method
+     * dispatch is case-insensitive, so the legacy `View()` call sites in
+     * sugar-dash/candy-query keep resolving here without an alias.
+     *
      * @param string $background  The underlying viewport content
      * @param int $viewportWidth  Viewport width in cells
      * @param int $viewportHeight Viewport height in lines
      * @return string  The composited output
      */
-    public function View(string $background, int $viewportWidth = 80, int $viewportHeight = 24): string
+    public function view(string $background, int $viewportWidth = 80, int $viewportHeight = 24): string
     {
         if ($this->dismissed || $this->queue === []) {
             return $background;

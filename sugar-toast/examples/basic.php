@@ -29,7 +29,7 @@ $t = Toast::new(50)
     ->error('Failed to load plugin: missing dependency');
 
 echo "=== Toast at TopLeft ===\n";
-echo $t->View($bg, 80, 20) . "\n\n";
+echo $t->view($bg, 80, 20) . "\n\n";
 
 // Different position
 $t2 = Toast::new(50)
@@ -39,7 +39,7 @@ $t2 = Toast::new(50)
     ->error('Connection lost!');
 
 echo "=== Toast at TopRight (ASCII symbols) ===\n";
-echo $t2->View($bg, 80, 20) . "\n";
+echo $t2->view($bg, 80, 20) . "\n";
 
 // Bottom-center
 $t3 = Toast::new(40)
@@ -47,4 +47,4 @@ $t3 = Toast::new(40)
     ->info('System ready');
 
 echo "\n=== Toast at BottomCenter ===\n";
-echo $t3->View($bg, 80, 20) . "\n";
+echo $t3->view($bg, 80, 20) . "\n";
