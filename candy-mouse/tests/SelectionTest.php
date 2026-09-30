@@ -186,6 +186,27 @@ final class SelectionTest extends TestCase
         self::assertSame(1, $range->startCol);
     }
 
+    public function testTheFloorNeverConjuresACellOutOfAnEmptyRegion(): void
+    {
+        // rows 1..0 is an inverted (=empty) region whose upper bound sits at
+        // the floor; lifting it to 1 must not mint a selectable row-1 cell.
+        // Downstream TextSelection::at() declines exactly this shape.
+        $rows = Selection::new(1, 0, 1, 13);
+        self::assertFalse($rows->begin(1, 1), 'press on a floored-empty row region declines');
+        self::assertFalse($rows->dragTo(1, 1), 'plain drag on a floored-empty row region declines');
+        self::assertNull($rows->range(), 'no gesture, no range');
+
+        $cols = Selection::new(1, 5, 1, 0);
+        self::assertFalse($cols->begin(3, 1), 'zero-width text column stays empty');
+        self::assertFalse($cols->dragTo(3, 1));
+
+        // The fix must not swallow the legal floor: a non-inverted pair
+        // reaching down to 0 still clamps up and selects.
+        self::assertTrue(Selection::new(1, 5, 0, 13)->begin(2, 1), 'colFrom 0 floors to 1');
+        // And an inversion above the floor keeps declining as before.
+        self::assertFalse(Selection::new(3, 2, 1, 13)->begin(2, 4));
+    }
+
     /**
      * @return array{0:int,1:int} the range's start [row, col]
      */

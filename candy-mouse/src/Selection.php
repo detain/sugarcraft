@@ -59,8 +59,32 @@ final class Selection
     {
         // Floor into terminal space the way Scan::parse()'s viewport clamp
         // does; below-row-1 cells cannot exist, and clamping the region
-        // rather than the query keeps every later comparison trusted.
-        return new self(max(1, $rowFrom), max(1, $rowTo), max(1, $colFrom), max(1, $colTo));
+        // rather than the query keeps every later comparison trusted. The
+        // floor must never UN-invert a pair, though: rows 1..0 mean "no
+        // rows" and lifting the bound to 1 would hand a press a selectable
+        // cell the viewport never had (downstream at() declines it).
+        [$rowFrom, $rowTo] = self::flooredPair($rowFrom, $rowTo);
+        [$colFrom, $colTo] = self::flooredPair($colFrom, $colTo);
+
+        return new self($rowFrom, $rowTo, $colFrom, $colTo);
+    }
+
+    /**
+     * Floor one region bound-pair to the 1-based terminal grid, preserving
+     * emptiness: when the input was inverted and the floor would have made
+     * it non-inverted, the pair is re-inverted just above the floor, so
+     * {@see self::coversRegion()} still says "no cells" and every gesture
+     * attempt declines — empty stays empty, never an error.
+     *
+     * @return array{0:int,1:int} [from, to]
+     */
+    private static function flooredPair(int $from, int $to): array
+    {
+        $empty = $to < $from;
+        $from = max(1, $from);
+        $to = max(1, $to);
+
+        return $empty && $to >= $from ? [$from, $from - 1] : [$from, $to];
     }
 
     private function __construct(
