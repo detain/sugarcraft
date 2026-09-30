@@ -13,9 +13,9 @@ use function React\Promise\reject;
 /**
  * Static helpers for async operations on top of ReactPHP.
  *
- * withTimeout() and retry() are stateless helpers. debounce() and
- * throttle() return stateful closures that retain mutable timer/cooldown
- * state across calls.
+ * withTimeout(), withDeadline(), cancellable() and retry() are stateless
+ * helpers. debounce(), throttle() and singleFlight() return stateful closures
+ * that retain mutable timer/cooldown/in-flight state across calls.
  *
  * All timers are bounded \u2014 no real waits >100ms in test fixtures.
  */
@@ -25,6 +25,9 @@ final class AsyncOps
      * Wrap a promise with a timeout. If the timeout fires before the
      * promise settles, the returned promise rejects with TimeoutException.
      * The inner promise is NOT cancelled and keeps running to completion.
+     * When the abandoned work itself must stop — a hung I/O holding its
+     * consumer's in-flight gate open forever — use the cancelling sibling
+     * {@see withDeadline()} instead.
      *
      * @param LoopInterface $loop
      * @param PromiseInterface $promise
@@ -68,6 +71,249 @@ final class AsyncOps
         );
 
         return $deferred->promise();
+    }
+
+    /**
+     * Wrap a promise with a deadline that CANCELS the inner promise when it
+     * fires — the cancelling sibling of {@see withTimeout()}, which lets the
+     * inner run on.
+     *
+     * WHY both exist: withTimeout answers "how long will the CALLER wait" and
+     * stays out of the operation's way; withDeadline answers "how long may the
+     * WORK take" — a hung I/O whose socket never errors (a silently dropped
+     * route produces no socket error in react/mysql/PgAsync terms) would
+     * otherwise keep a pending promise and its consumer's in-flight gate alive
+     * forever. When the deadline fires, the inner is cancel()ed and the
+     * optional $onTimeout hook gets one shot at the server-side abort the
+     * driver's own cancellation cannot perform; a late driver result is
+     * dropped, never resurrected.
+     *
+     * E646 semantics: a deadline is a bounded I/O ceiling computed on the
+     * REMAINING budget — the caller decides how much of its allowance is left,
+     * mirroring how retry() converts maxTotalSeconds into one absolute cutoff
+     * — not a blanket per-request wall-clock killer applied blindly to every
+     * hop.
+     *
+     * The timer is armed before the inner's settle handlers attach (the
+     * withTimeout arming law): react/promise v3 settles an already-settled
+     * inner synchronously inside then(), so the handlers must find the timer
+     * in hand to cancel it.
+     *
+     * @param LoopInterface $loop
+     * @param PromiseInterface $promise
+     * @param float $seconds  Deadline in seconds (must be > 0)
+     * @param callable(): void|null $onTimeout  Abort hook, fired once when the
+     *        deadline hits; errors are swallowed so a failed kill cannot mask
+     *        the timeout rejection.
+     * @return PromiseInterface
+     */
+    public static function withDeadline(
+        LoopInterface $loop,
+        PromiseInterface $promise,
+        float $seconds,
+        ?callable $onTimeout = null,
+    ): PromiseInterface {
+        if ($seconds <= 0) {
+            throw new \InvalidArgumentException('Deadline seconds must be positive');
+        }
+
+        $deferred = new Deferred();
+        $settled = false;
+
+        $timer = $loop->addTimer($seconds, function () use (&$settled, $deferred, $promise, $seconds, $onTimeout): void {
+            if ($settled === true) {
+                return;
+            }
+            $settled = true;
+
+            if ($onTimeout !== null) {
+                try {
+                    $onTimeout();
+                } catch (\Throwable) {
+                    // The timeout rejection below is the caller-facing truth;
+                    // a failed abort hook must not replace it.
+                }
+            }
+
+            $deferred->reject(new TimeoutException(
+                'Operation exceeded deadline of ' . $seconds . ' second(s)',
+            ));
+
+            // Cancel AFTER settling the caller-facing promise: the caller's
+            // truth is the timeout, and a driver whose cancel() re-settles the
+            // inner must not reach them through the guards below.
+            $promise->cancel();
+        });
+
+        $promise->then(
+            function ($value) use (&$settled, $deferred, $timer, $loop): void {
+                if ($settled === true) {
+                    return; // deadline already won — late results are dropped
+                }
+                $settled = true;
+                $loop->cancelTimer($timer);
+                $deferred->resolve($value);
+            },
+            function (\Throwable $reason) use (&$settled, $deferred, $timer, $loop): void {
+                if ($settled === true) {
+                    return;
+                }
+                $settled = true;
+                $loop->cancelTimer($timer);
+                $deferred->reject($reason);
+            },
+        );
+
+        return $deferred->promise();
+    }
+
+    /**
+     * Bind a promise to a {@see CancellationToken}: cooperative, two-sided,
+     * immediate cancellation.
+     *
+     * Client side (always): the returned promise rejects synchronously with
+     * {@see OperationCancelledException} the moment the token fires — no event
+     * loop turn is needed — and a late-arriving inner result is dropped, never
+     * resurrected. Server side (optional): the $onCancel hook fires exactly
+     * once so the producer can abort the underlying work (MySQL KILL QUERY,
+     * closing a socket); hook errors are swallowed because cancellation must
+     * never fail the caller a second time. The inner promise is also
+     * cancel()ed, so producers that support promise cancellation clean up
+     * themselves, and cancelling the RETURNED promise behaves exactly like
+     * cancelling through the token.
+     *
+     * Extracted from the candy-query CancellableQuery pattern.
+     *
+     * Note: {@see CancellationToken} has no callback unregistration, so a
+     * token reused across many operations accumulates one (settled-guarded,
+     * cheap) closure per operation until it fires. Prefer one token per
+     * logical operation.
+     *
+     * @template T
+     * @param PromiseInterface<T> $promise  The in-flight operation
+     * @param CancellationToken|null $token  Cancel handle; null returns the promise untouched
+     * @param callable(): void|null $onCancel  Underlying-work abort hook (fired once, errors swallowed)
+     * @return PromiseInterface<T>
+     */
+    public static function cancellable(
+        PromiseInterface $promise,
+        ?CancellationToken $token,
+        ?callable $onCancel = null,
+    ): PromiseInterface {
+        if ($token === null) {
+            return $promise;
+        }
+
+        $settled = false;
+
+        $abort = static function () use (&$settled, $promise, $onCancel): void {
+            if ($settled === true) {
+                return;
+            }
+            $settled = true;
+            if ($onCancel !== null) {
+                try {
+                    $onCancel();
+                } catch (\Throwable) {
+                    // A failed abort must not mask the cancellation.
+                }
+            }
+            $promise->cancel();
+        };
+
+        $deferred = new Deferred(static function () use ($abort): never {
+            $abort();
+            throw new OperationCancelledException('Async operation cancelled');
+        });
+
+        // onCancel fires synchronously when the token is already cancelled,
+        // so a pre-cancelled token rejects before the result can land.
+        $token->onCancel(static function () use (&$settled, $abort, $deferred): void {
+            if ($settled === true) {
+                return;
+            }
+            $abort();
+            $deferred->reject(new OperationCancelledException('Async operation cancelled'));
+        });
+
+        $promise->then(
+            static function (mixed $value) use (&$settled, $deferred): void {
+                if ($settled !== true) {
+                    $settled = true;
+                    $deferred->resolve($value);
+                }
+            },
+            static function (\Throwable $e) use (&$settled, $deferred): void {
+                if ($settled !== true) {
+                    $settled = true;
+                    $deferred->reject($e);
+                }
+            },
+        );
+
+        return $deferred->promise();
+    }
+
+    /**
+     * Coalesce concurrent invocations of an async worker by key.
+     *
+     * The returned callable runs $worker only when no flight is in progress
+     * for the key derived from its arguments; every caller that arrives while
+     * a flight is open receives the SAME promise. The slot is freed the moment
+     * the flight settles, so the next wave starts fresh — this is request
+     * coalescing, NOT result caching (for that, see {@see AsyncCache}).
+     *
+     * Extracted from the phlix ApiClient refreshInFlight pattern; rides the
+     * same InFlightMap mechanism that backs AsyncCache's loader dedupe.
+     *
+     * @param callable(...mixed): string $keyFn  Derives the flight key from the call arguments (must not return '')
+     * @param callable(...mixed): PromiseInterface $worker  Starts the backing operation
+     * @return callable(...mixed): PromiseInterface  The coalescing wrapper
+     */
+    public static function singleFlight(callable $keyFn, callable $worker): callable
+    {
+        $flights = new InFlightMap();
+
+        return static function (mixed ...$args) use ($keyFn, $worker, $flights): PromiseInterface {
+            $key = $keyFn(...$args);
+            if ($key === '') {
+                throw new \InvalidArgumentException('Flight key must not be empty');
+            }
+
+            $existing = $flights->find($key);
+            if ($existing !== null) {
+                return $existing;
+            }
+
+            // Drive a Deferred so the in-flight gate is occupied BEFORE the
+            // worker can settle (react/promise v3 settles an already-resolved
+            // promise synchronously inside then()) and freed exactly once
+            // when it does — the phlix ordering law.
+            $deferred = new Deferred();
+            $flight = $deferred->promise();
+            $flights->begin($key, $flight);
+
+            try {
+                $worker(...$args)->then(
+                    static function (mixed $value) use ($key, $flight, $flights, $deferred): void {
+                        $flights->end($key, $flight);
+                        $deferred->resolve($value);
+                    },
+                    static function (\Throwable $error) use ($key, $flight, $flights, $deferred): void {
+                        $flights->end($key, $flight);
+                        $deferred->reject($error);
+                    },
+                );
+            } catch (\Throwable $error) {
+                // A worker that throws synchronously (or returns a non-promise)
+                // fails this flight loudly and frees the slot, so the next wave
+                // can retry rather than inheriting a stuck flight.
+                $flights->end($key, $flight);
+                $deferred->reject($error);
+            }
+
+            return $flight;
+        };
     }
 
     /**
