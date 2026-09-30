@@ -87,9 +87,13 @@ trait HasReadonly
      * that only pattern-matches KeyMsg leaves the paste/editor writes wide
      * open on a supposedly-frozen buffer, which is exactly the round-90 audit
      * finding on {@see \SugarCraft\Forms\Field\Text}. Everything that merely
-     * animates (BlinkMsg), reports the environment, or delivers async
-     * results (SuggestionsReadyMsg, handled before any read-only gate) is
-     * inert and keeps flowing.
+     * animates (BlinkMsg) or reports the environment is inert and keeps
+     * flowing. Async results ({@see SuggestionsReadyMsg}) are delivered on an
+     * arm that runs BEFORE this door — harmless for a text editor (it only
+     * fills the suggestion popup, never the value buffer), but a picker whose
+     * value IS the highlighted entry re-points it, so {@see
+     * \SugarCraft\Forms\Field\Select} refuses that arm while read-only itself
+     * (round-90 review follow-up) rather than through this classifier.
      *
      * MouseMsg is intentionally NOT classified here: within this lib the only
      * consumer is ItemList, and there it places the picker cursor — the

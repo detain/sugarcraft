@@ -290,8 +290,16 @@ final class Select implements \SugarCraft\Forms\Field
 
     public function update(Msg $msg): array
     {
-        // Handle async suggestions result
+        // Handle async suggestions result. Guarded for read-only: a picker's
+        // value IS its highlighted entry, so replacing the candidate list here
+        // re-points selectedItem() and drifts the reported value — exactly the
+        // buffer freeze the 5.10 ruling enforces. A fetch armed while editable
+        // (or a misrouted fieldKey) must not move a frozen picker's value when
+        // it lands after the field went read-only (round-90 review follow-up).
         if ($msg instanceof SuggestionsReadyMsg && $msg->fieldKey === $this->key) {
+            if ($this->isReadonly()) {
+                return [$this, null];
+            }
             $items = array_map(
                 static fn(string $o) => new StringItem($o),
                 $msg->suggestions,

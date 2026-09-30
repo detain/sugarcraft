@@ -11,6 +11,7 @@ use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\Msg\MouseWheelMsg;
+use SugarCraft\Core\Msg\SuggestionsReadyMsg;
 use SugarCraft\Forms\TextArea\TextAreaEditedMsg;
 use SugarCraft\Forms\Field\Color;
 use SugarCraft\Forms\Field\Confirm;
@@ -297,5 +298,31 @@ final class ReadonlyModeTest extends TestCase
         self::assertNotSame($select, $moved, 'wheel must still move a read-only picker cursor (sanctioned navigation)');
         self::assertSame('b', $moved->value());
         self::assertTrue($moved->isReadonly(), 'navigation must not clear the read-only flag');
+    }
+
+    /**
+     * Round-90 review follow-up: the async-results arm runs BEFORE the
+     * read-only door, and for a picker whose value IS the highlighted entry a
+     * {@see SuggestionsReadyMsg} that swaps the candidate list drifts that
+     * value. Select therefore refuses the arm itself while read-only. The
+     * non-readonly polarity leg proves the guard is load-bearing (without it
+     * the read-only leg would pass vacuously — the arm genuinely re-points the
+     * value when the field is editable).
+     */
+    public function testReadonlySelectRefusesAsyncSuggestionValueDrift(): void
+    {
+        // Polarity: editable Select accepts the async result and its value moves.
+        [$open, ] = Select::new('k')->withOptions('a', 'b', 'c')->focus();
+        [$filled, ] = $open->update(new SuggestionsReadyMsg('k', ['Z']));
+        self::assertNotSame($open, $filled, 'fixture: async result must re-point an editable picker (else vacuous)');
+        self::assertSame('Z', $filled->value(), 'fixture: editable picker follows the delivered candidate');
+
+        // The guard: read-only Select refuses the same message, value frozen.
+        [$ro, ] = Select::new('k')->withOptions('a', 'b', 'c')->withReadonly(true)->focus();
+        [$still, $cmd] = $ro->update(new SuggestionsReadyMsg('k', ['Z']));
+        self::assertSame($ro, $still, 'read-only Select must identity-refuse an async suggestion');
+        self::assertNull($cmd);
+        self::assertSame('a', $still->value(), 'frozen picker value must not drift via the async arm');
+        self::assertTrue($still->isReadonly());
     }
 }
