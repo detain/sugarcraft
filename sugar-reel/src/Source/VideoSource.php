@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Reel\Source;
 
-use SugarCraft\Reel\Support\BoundedReaper;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 
 /**
  * Immutable value object describing a video source probed from ffprobe JSON output.
@@ -164,7 +164,7 @@ final class VideoSource
         if ($stdout === null) {
             // Timed out: escalate-kill the wedged ffprobe before the shared
             // reap below, so no orphan survives the failed probe.
-            BoundedReaper::terminateNow($process);
+            BoundedShutdown::terminateAndAwaitExit($process);
         } else {
             // EOF on stdout is not proof the child is gone: an ffprobe that
             // printed its JSON then wedged before exiting would block the
@@ -180,7 +180,7 @@ final class VideoSource
                 usleep(10_000);
             }
             if (proc_get_status($process)['running'] ?? false) {
-                BoundedReaper::terminateNow($process);
+                BoundedShutdown::terminateAndAwaitExit($process);
             }
         }
 

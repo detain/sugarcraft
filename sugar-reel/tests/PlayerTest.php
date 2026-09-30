@@ -1570,7 +1570,7 @@ final class PlayerTest extends TestCase
      * videoPath is a real .gif, rebuildDecoderAt() takes the real branch and
      * closes the injected spy, then builds a GifDecoder via DecoderFactory.
      *
-     * On master the backward branch called DecoderFactory::create() but NEVER
+     * On master the backward branch called DecoderFactory::new() but NEVER
      * closed the old decoder → closeCount stays 0.
      *
      * @testdox backward seek closes the old decoder before rebuilding (F21)

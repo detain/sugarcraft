@@ -28,7 +28,7 @@ final class RendererFactoryTest extends TestCase
      */
     public function testCreateReturnsAsciiRendererForAsciiMode(): void
     {
-        $renderer = RendererFactory::create(Mode::Ascii);
+        $renderer = RendererFactory::new(Mode::Ascii);
 
         $this->assertInstanceOf(AsciiRenderer::class, $renderer);
         $this->assertInstanceOf(FrameRenderer::class, $renderer);
@@ -39,7 +39,7 @@ final class RendererFactoryTest extends TestCase
      */
     public function testCreateReturnsAnsi256RendererForAnsi256Mode(): void
     {
-        $renderer = RendererFactory::create(Mode::Ansi256);
+        $renderer = RendererFactory::new(Mode::Ansi256);
 
         $this->assertInstanceOf(AsciiRenderer::class, $renderer);
         $this->assertInstanceOf(FrameRenderer::class, $renderer);
@@ -50,7 +50,7 @@ final class RendererFactoryTest extends TestCase
      */
     public function testCreateReturnsAsciiRendererForTrueColorMode(): void
     {
-        $renderer = RendererFactory::create(Mode::TrueColor);
+        $renderer = RendererFactory::new(Mode::TrueColor);
 
         $this->assertInstanceOf(AsciiRenderer::class, $renderer);
         $this->assertInstanceOf(FrameRenderer::class, $renderer);
@@ -61,7 +61,7 @@ final class RendererFactoryTest extends TestCase
      */
     public function testCreateReturnsHalfBlockRendererForHalfBlockMode(): void
     {
-        $renderer = RendererFactory::create(Mode::HalfBlock);
+        $renderer = RendererFactory::new(Mode::HalfBlock);
 
         $this->assertInstanceOf(HalfBlockRenderer::class, $renderer);
         $this->assertInstanceOf(FrameRenderer::class, $renderer);
@@ -76,7 +76,7 @@ final class RendererFactoryTest extends TestCase
      */
     public function testCreateReturnsGraphicsRendererForSixelMode(): void
     {
-        $renderer = RendererFactory::create(Mode::Sixel);
+        $renderer = RendererFactory::new(Mode::Sixel);
 
         $this->assertInstanceOf(GraphicsRenderer::class, $renderer);
         $this->assertInstanceOf(FrameRenderer::class, $renderer);
@@ -87,7 +87,7 @@ final class RendererFactoryTest extends TestCase
      */
     public function testCreateReturnsGraphicsRendererForKittyMode(): void
     {
-        $renderer = RendererFactory::create(Mode::Kitty);
+        $renderer = RendererFactory::new(Mode::Kitty);
 
         $this->assertInstanceOf(GraphicsRenderer::class, $renderer);
         $this->assertInstanceOf(FrameRenderer::class, $renderer);
@@ -98,7 +98,7 @@ final class RendererFactoryTest extends TestCase
      */
     public function testCreateReturnsGraphicsRendererForIterm2Mode(): void
     {
-        $renderer = RendererFactory::create(Mode::Iterm2);
+        $renderer = RendererFactory::new(Mode::Iterm2);
 
         $this->assertInstanceOf(GraphicsRenderer::class, $renderer);
         $this->assertInstanceOf(FrameRenderer::class, $renderer);
@@ -114,7 +114,7 @@ final class RendererFactoryTest extends TestCase
      */
     public function testCreateWithExplicitCellPxReturnsGraphicsRenderer(Mode $mode): void
     {
-        $renderer = RendererFactory::create($mode, 'standard', 12, 24);
+        $renderer = RendererFactory::new($mode, 'standard', 12, 24);
 
         $this->assertInstanceOf(GraphicsRenderer::class, $renderer);
         $this->assertInstanceOf(FrameRenderer::class, $renderer);
@@ -135,8 +135,8 @@ final class RendererFactoryTest extends TestCase
      */
     public function testCreateWithExplicitCellPxTextModesUnchanged(): void
     {
-        $this->assertInstanceOf(AsciiRenderer::class, RendererFactory::create(Mode::Ascii, 'standard', 12, 24));
-        $this->assertInstanceOf(HalfBlockRenderer::class, RendererFactory::create(Mode::HalfBlock, 'standard', 12, 24));
+        $this->assertInstanceOf(AsciiRenderer::class, RendererFactory::new(Mode::Ascii, 'standard', 12, 24));
+        $this->assertInstanceOf(HalfBlockRenderer::class, RendererFactory::new(Mode::HalfBlock, 'standard', 12, 24));
     }
 
     // -------------------------------------------------------------------------
@@ -171,7 +171,7 @@ final class RendererFactoryTest extends TestCase
     {
         // When a preferred mode is given, it should be used directly.
         $preferred = RendererFactory::auto(Mode::Ascii);
-        $direct    = RendererFactory::create(Mode::Ascii);
+        $direct    = RendererFactory::new(Mode::Ascii);
 
         $this->assertInstanceOf(AsciiRenderer::class, $preferred);
         $this->assertInstanceOf(AsciiRenderer::class, $direct);
@@ -244,7 +244,7 @@ final class RendererFactoryTest extends TestCase
         ];
 
         foreach ($implementedModes as $mode) {
-            $renderer = RendererFactory::create($mode);
+            $renderer = RendererFactory::new($mode);
 
             $this->assertTrue(
                 method_exists($renderer, 'render'),

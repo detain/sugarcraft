@@ -93,14 +93,14 @@ final class FrameRendererTest extends TestCase
     }
 
     /**
-     * @testdox all renderers from RendererFactory::create() implement FrameRenderer
+     * @testdox all renderers from RendererFactory::new() implement FrameRenderer
      */
     public function testFactoryCreateReturnsFrameRendererImplementations(): void
     {
         $modes = [Mode::Ascii, Mode::Ansi256, Mode::TrueColor, Mode::HalfBlock];
 
         foreach ($modes as $mode) {
-            $renderer = RendererFactory::create($mode);
+            $renderer = RendererFactory::new($mode);
             $this->assertInstanceOf(
                 FrameRenderer::class,
                 $renderer,

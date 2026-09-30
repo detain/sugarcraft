@@ -181,7 +181,7 @@ final class Player implements Model
         // Decoder resolution is keyed to the render mode (HalfBlock decodes at
         // 2× cell height; graphics modes at cells·cellPx). Seek recreates the
         // decoder with the current mode and the same cell geometry.
-        $decoder = DecoderFactory::create($videoPath, $cellsW, $cellsH, $fps, $mode, 0.0, $cellPxW, $cellPxH, $headers);
+        $decoder = DecoderFactory::new($videoPath, $cellsW, $cellsH, $fps, $mode, 0.0, $cellPxW, $cellPxH, $headers);
 
         // Audio companion factory: creates AudioPlayer on demand. The factory
         // is threaded through the Player so tests can inject a spy subclass.
@@ -198,7 +198,7 @@ final class Player implements Model
 
         // Build and cache the renderer for direct-render modes (Sixel/Kitty/iTerm2/Ansi256).
         // The renderer is rebuilt on mode change or resize via mutate(['renderer' => ...]).
-        $renderer = RendererFactory::create($mode, $ramp, $cellPxW, $cellPxH);
+        $renderer = RendererFactory::new($mode, $ramp, $cellPxW, $cellPxH);
 
         // Player starts paused; the first tick is scheduled when playback begins.
         return new self(
@@ -295,7 +295,7 @@ final class Player implements Model
         // The renderer follows the mode — including the direct-render image
         // protocols — so a host mounting a graphics stream gets the matching
         // FrameRenderer instead of a HalfBlock one that would ignore the mode.
-        $renderer = RendererFactory::create($mode, $ramp, $cellPxW, $cellPxH);
+        $renderer = RendererFactory::new($mode, $ramp, $cellPxW, $cellPxH);
 
         return new self(
             decoder: $decoder,
@@ -627,7 +627,7 @@ final class Player implements Model
             'decoder' => $decoder,
             'currentFrame' => $frame ?? $this->currentFrame,
             'lastTickTime' => microtime(true),
-            'renderer' => RendererFactory::create($this->mode, $this->ramp, $this->cellPxW, $this->cellPxH),
+            'renderer' => RendererFactory::new($this->mode, $this->ramp, $this->cellPxW, $this->cellPxH),
         ]);
 
         $cmd = $nextPlayer->paused
@@ -812,7 +812,7 @@ final class Player implements Model
             if (self::decodeGeometry($nextMode) === self::decodeGeometry($this->mode)) {
                 return [$this->mutate([
                     'mode' => $nextMode,
-                    'renderer' => RendererFactory::create($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH),
+                    'renderer' => RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH),
                 ]), null];
             }
 
@@ -822,7 +822,7 @@ final class Player implements Model
                 'mode' => $nextMode,
                 'decoder' => $decoder,
                 'currentFrame' => $frame ?? $this->currentFrame,
-                'renderer' => RendererFactory::create($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH),
+                'renderer' => RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH),
             ]);
             return [$nextPlayer, null];
         }
@@ -1224,7 +1224,7 @@ final class Player implements Model
             $decoder = $this->decoder;
         } else {
             $this->decoder->close();                 // F21: never leak the old ffmpeg process
-            $decoder = DecoderFactory::create($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, 0.0, $this->cellPxW, $this->cellPxH, $this->headers);
+            $decoder = DecoderFactory::new($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, 0.0, $this->cellPxW, $this->cellPxH, $this->headers);
         }
         $frame = null;
         for ($i = 0; $i <= $frameIndex; $i++) {
@@ -1404,7 +1404,7 @@ final class Player implements Model
             );
         }
 
-        $decoder = DecoderFactory::create($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode, max(0.0, $sec), $this->cellPxW, $this->cellPxH, $this->headers);
+        $decoder = DecoderFactory::new($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode, max(0.0, $sec), $this->cellPxW, $this->cellPxH, $this->headers);
         try {
             $frame = $decoder->next(); // with -ss, the first frame is at/near $sec
         } finally {
@@ -1507,7 +1507,7 @@ final class Player implements Model
         }
 
         $this->decoder->close(); // never leak the old ffmpeg process
-        $decoder = DecoderFactory::create($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, max(0.0, $startSec), $this->cellPxW, $this->cellPxH, $this->headers);
+        $decoder = DecoderFactory::new($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, max(0.0, $startSec), $this->cellPxW, $this->cellPxH, $this->headers);
         $frame = $decoder->next(); // with -ss, the first frame IS the seek target
 
         return [$decoder, $frame];

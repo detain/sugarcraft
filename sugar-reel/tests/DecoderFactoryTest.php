@@ -47,7 +47,7 @@ final class DecoderFactoryTest extends TestCase
             imagedestroy($img);
 
             // Now test the factory
-            $decoder = DecoderFactory::create($tempFile, 1, 1, 10.0);
+            $decoder = DecoderFactory::new($tempFile, 1, 1, 10.0);
 
             $this->assertInstanceOf(GifDecoder::class, $decoder);
             $decoder->close();
@@ -95,7 +95,7 @@ final class DecoderFactoryTest extends TestCase
         // selected correctly by the factory.
 
         try {
-            $decoder = DecoderFactory::create('/dev/null', 80, 24, 30.0);
+            $decoder = DecoderFactory::new('/dev/null', 80, 24, 30.0);
         } catch (\Throwable) {
             // open() may throw on /dev/null but factory succeeded in creating FfmpegDecoder
         }
@@ -111,7 +111,7 @@ final class DecoderFactoryTest extends TestCase
             $thrown = null;
             $decoder = null;
             try {
-                $decoder = DecoderFactory::create($tempMp4, 80, 24, 30.0);
+                $decoder = DecoderFactory::new($tempMp4, 80, 24, 30.0);
             } catch (\Throwable $e) {
                 $thrown = $e;
             }
@@ -160,7 +160,7 @@ final class DecoderFactoryTest extends TestCase
         try {
             // With ffmpeg hidden from PATH, factory should fall back to GifDecoder
             $decoder = $this->withoutPathBinaries(
-                static fn (): Decoder => DecoderFactory::create($tempFile, 1, 1, 10.0),
+                static fn (): Decoder => DecoderFactory::new($tempFile, 1, 1, 10.0),
             );
 
             $this->assertInstanceOf(GifDecoder::class, $decoder);
@@ -189,7 +189,7 @@ final class DecoderFactoryTest extends TestCase
             // With ffmpeg hidden from PATH, the factory must fall back to
             // GifDecoder even for a .mp4 extension.
             $decoder = $this->withoutPathBinaries(
-                static fn (): Decoder => DecoderFactory::create($tempFile, 1, 1, 10.0),
+                static fn (): Decoder => DecoderFactory::new($tempFile, 1, 1, 10.0),
             );
 
             $this->assertInstanceOf(GifDecoder::class, $decoder);
@@ -225,7 +225,7 @@ final class DecoderFactoryTest extends TestCase
         imagedestroy($img);
 
         try {
-            $decoder = DecoderFactory::create($tempFile, 4, 3, 10.0, \SugarCraft\Reel\Render\Mode::Sixel, 0.0, 12, 24);
+            $decoder = DecoderFactory::new($tempFile, 4, 3, 10.0, \SugarCraft\Reel\Render\Mode::Sixel, 0.0, 12, 24);
 
             $this->assertInstanceOf(GifDecoder::class, $decoder);
 

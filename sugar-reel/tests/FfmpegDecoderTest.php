@@ -365,11 +365,77 @@ final class FfmpegDecoderTest extends TestCase
             // If the file doesn't exist ffmpeg may still start then fail.
             // We only care about the post-close behavior.
         }
-        $decoder->close();
+        // close() may log the real ffmpeg failure to error_log (decoding a
+        // missing file exits non-zero and that code drifts by race); capture
+        // it so the suite stays silent and pin that only the known failure
+        // note — never unrelated noise — can appear.
+        $log = $this->captureErrorLog(fn() => $decoder->close());
+        $this->assertTrue(
+            $log === '' || str_contains($log, 'FfmpegDecoder: ffmpeg exited with code'),
+            'close() logged unexpected error output: ' . $log
+        );
 
         // After close(), next() must return null (not throw)
         $result = $decoder->next();
         $this->assertNull($result);
+    }
+
+    /**
+     * @testdox close() grants the pre-TERM grace window — a child that exits on its
+     *          own once stdout is dropped is reaped unsignalled (BoundedReaper fold pin)
+     *
+     * The deleted per-lib BoundedReaper gave ffmpeg a natural-exit window after the
+     * parent closed the read end before ever signalling; the fold onto candy-core's
+     * BoundedShutdown keeps that rung as hasExited(CLOSE_GRACE_SECONDS) ahead of
+     * terminateAndAwaitExit(). A writer child mimicking ffmpeg's EPIPE exit (self-
+     * exit 0 on the first failed fwrite) must therefore leave with code 0 — a
+     * regression to immediate escalation SIGTERMs it, proc_close() collapses the
+     * signal to -1, and the assertion goes red.
+     */
+    public function testCloseObservesPreTermGraceForASelfExitingChild(): void
+    {
+        $code = <<<'PHP'
+$deadline = microtime(true) + 3.0;
+while (microtime(true) < $deadline) {
+    if (@fwrite(STDOUT, 'f') === false) {
+        exit(0);
+    }
+    usleep(20000);
+}
+exit(7);
+PHP;
+        $child = proc_open(
+            [\PHP_BINARY, '-r', $code],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($child);
+
+        try {
+            $decoder = new FfmpegDecoder();
+            $r = new \ReflectionClass($decoder);
+            foreach (['process' => $child, 'stdout' => $pipes[1]] as $prop => $value) {
+                $p = $r->getProperty($prop);
+                $p->setAccessible(true);
+                $p->setValue($decoder, $value);
+            }
+
+            $started = microtime(true);
+            $log = $this->captureErrorLog(fn() => $decoder->close());
+            $elapsed = microtime(true) - $started;
+
+            $this->assertSame(0, $decoder->exitCode(), 'the grace window must reap the self-exiting child without a signal');
+            $this->assertSame('', $log, 'an unsignalled clean exit must log nothing');
+            $this->assertLessThan(1.4, $elapsed, 'close() must not wait out the full grace ceiling on a prompt exit');
+        } finally {
+            // close() reaped the child and closed the stdout read end it was
+            // handed; only the pipes this test opened remain.
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -861,20 +927,20 @@ final class FfmpegDecoderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // getExitCode() — returns the ffmpeg exit code after close()
+    // exitCode() — returns the ffmpeg exit code after close()
     // -------------------------------------------------------------------------
 
     /**
-     * @testdox getExitCode() returns null before any process was opened
+     * @testdox exitCode() returns null before any process was opened
      */
     public function testGetExitCodeReturnsNullBeforeOpen(): void
     {
         $decoder = new FfmpegDecoder();
-        $this->assertNull($decoder->getExitCode());
+        $this->assertNull($decoder->exitCode());
     }
 
     /**
-     * @testdox getExitCode() returns null while process is still running
+     * @testdox exitCode() returns null while process is still running
      */
     public function testGetExitCodeReturnsNullWhileRunning(): void
     {
@@ -907,11 +973,11 @@ final class FfmpegDecoderTest extends TestCase
             $decoder = new FfmpegDecoder();
             $decoder->open($clip, 16, 12, 10.0, Mode::HalfBlock);
 
-            $this->assertNull($decoder->getExitCode(), 'exit code should be null while process is running');
+            $this->assertNull($decoder->exitCode(), 'exit code should be null while process is running');
 
             $decoder->close();
             // After close, exit code is set (0 if successful)
-            $this->assertNotNull($decoder->getExitCode());
+            $this->assertNotNull($decoder->exitCode());
         } finally {
             if (isset($wd) && is_resource($wd)) {
                 proc_terminate($wd);
@@ -924,7 +990,7 @@ final class FfmpegDecoderTest extends TestCase
     }
 
     /**
-     * @testdox getExitCode() returns 0 for successful decode after close()
+     * @testdox exitCode() returns 0 for successful decode after close()
      */
     public function testGetExitCodeReturnsZeroOnSuccess(): void
     {
@@ -957,7 +1023,7 @@ final class FfmpegDecoderTest extends TestCase
             }
 
             $decoder->close();
-            $this->assertSame(0, $decoder->getExitCode(), 'ffmpeg should exit with code 0 on success');
+            $this->assertSame(0, $decoder->exitCode(), 'ffmpeg should exit with code 0 on success');
         } finally {
             if (is_file($clip)) {
                 @unlink($clip);

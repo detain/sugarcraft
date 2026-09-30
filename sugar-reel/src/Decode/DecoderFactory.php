@@ -36,7 +36,7 @@ final class DecoderFactory
      *        source, forwarded verbatim to the decoder's open(). Empty for a local file.
      * @return Decoder
      */
-    public static function create(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, int $cellPxW = 10, int $cellPxH = 20, array $headers = []): Decoder
+    public static function new(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, int $cellPxW = 10, int $cellPxH = 20, array $headers = []): Decoder
     {
         $isGif = preg_match('/\.gif$/i', $source) === 1;
         $isNetwork = FfmpegDecoder::isNetworkSource($source);

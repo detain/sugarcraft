@@ -138,12 +138,14 @@ final class CheckChildLifetimes
             'count' => 1,
             'reason' => 'ffplay/mpv companion with all-/dev/null FILE sinks (no parent-side pipe '
                 . 'at all — closing a reader-less stderr pipe SIGPIPEs the child). E366 shipped '
-                . '__destruct + BoundedReaper, closing the orphan half; the fd≥3 exposure stands '
+                . '__destruct + a bounded reap ladder (round-90 folded it onto candy-core '
+                . 'BoundedShutdown), closing the orphan half; the fd≥3 exposure stands '
                 . 'for sugar-reel to own.',
         ],
         'sugar-reel/src/Decode/FfmpegDecoder.php::open' => [
             'count' => 1,
-            'reason' => 'ffmpeg decode child. close() now walks the BoundedReaper grace ladder '
+            'reason' => 'ffmpeg decode child. close() now walks a bounded grace-then-escalate ladder '
+                . '(candy-core BoundedShutdown, folded from the per-lib BoundedReaper copy) '
                 . 'before proc_close() and __destruct() calls close() (E366); the fd≥3 exposure '
                 . 'stands for sugar-reel to own.',
         ],

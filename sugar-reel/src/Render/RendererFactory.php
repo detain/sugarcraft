@@ -80,10 +80,10 @@ final class RendererFactory
     public static function auto(?Mode $preferred = null): FrameRenderer
     {
         if ($preferred !== null) {
-            return self::create($preferred);
+            return self::new($preferred);
         }
 
-        return self::create(self::autoMode());
+        return self::new(self::autoMode());
     }
 
     /**
@@ -94,7 +94,7 @@ final class RendererFactory
      *                        recover the cell footprint and size the sixel canvas)
      * @param int    $cellPxH Pixel height of a terminal cell
      */
-    public static function create(Mode $mode, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20): FrameRenderer
+    public static function new(Mode $mode, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20): FrameRenderer
     {
         return match ($mode) {
             Mode::Ascii     => new AsciiRenderer($ramp),

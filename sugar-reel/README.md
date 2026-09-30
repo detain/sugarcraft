@@ -21,7 +21,7 @@ composer require sugarcraft/sugar-reel
 use SugarCraft\Reel\Player;
 
 // Play a video with auto-detected terminal capability.
-$player = Player::open('clip.mp4', cols: 80, rows: 24);
+$player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);
 
 // Run it (Space=play, q=quit).
 (new \SugarCraft\Core\Program($player))->run();
@@ -48,7 +48,7 @@ Requires:
 
 ```sh
 # Built-in synthetic test pattern (no video file needed)
-php examples/play.php
+php examples/play.php synthetic
 
 # Play a real video file
 php examples/play.php video.mp4
@@ -61,7 +61,7 @@ php examples/play.php video.mp4 ascii
 php examples/play.php video.mp4 auto
 
 # Set terminal dimensions
-SUGAR_REEL_COLS=120 SUGAR_REEL_ROWS=40 php examples/play.php
+SUGAR_REEL_COLS=120 SUGAR_REEL_ROWS=40 php examples/play.php synthetic
 ```
 
 ### Rendering modes
@@ -72,6 +72,7 @@ SUGAR_REEL_COLS=120 SUGAR_REEL_ROWS=40 php examples/play.php
 | `ansi256` | 256-color cube + grey ramp | 256-color |
 | `truecolor` | 24-bit RGB truecolor | 24-bit color |
 | `halfblock` | 24-bit `▀` half-blocks, 2× vertical resolution | 24-bit color |
+| `quarterblock` | 24-bit quarter-block characters, 2×2 sub-cell resolution | 24-bit color |
 | `sixel` | Sixel graphics protocol (DEC) | Sixel-capable |
 | `kitty` | Kitty graphics protocol (APC `\x1b_G`) | Kitty-compatible |
 | `iterm2` | iTerm2 inline image (OSC 1337) | iTerm2 / WezTerm |

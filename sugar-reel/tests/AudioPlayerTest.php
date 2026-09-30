@@ -562,31 +562,31 @@ final class AudioPlayerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // getExitCode() — retrieve the last process exit code
+    // exitCode() — retrieve the last process exit code
     // -------------------------------------------------------------------------
 
     /**
-     * @testdox getExitCode() returns null before any process was started
+     * @testdox exitCode() returns null before any process was started
      */
     public function testGetExitCodeReturnsNullBeforeStart(): void
     {
         $player = new FakeAudioPlayer('/tmp/video.mp4');
-        $this->assertNull($player->getExitCode());
+        $this->assertNull($player->exitCode());
     }
 
     /**
-     * @testdox getExitCode() returns null when start() had no binary available (silent no-op)
+     * @testdox exitCode() returns null when start() had no binary available (silent no-op)
      */
     public function testGetExitCodeReturnsNullWhenNoBinary(): void
     {
         $player = new FakeAudioPlayer('/tmp/video.mp4');
         $player->setFakeCommand(null);
         $player->start();
-        $this->assertNull($player->getExitCode());
+        $this->assertNull($player->exitCode());
     }
 
     /**
-     * @testdox getExitCode() returns null while process is still running
+     * @testdox exitCode() returns null while process is still running
      */
     public function testGetExitCodeReturnsNullWhileRunning(): void
     {
@@ -623,7 +623,7 @@ final class AudioPlayerTest extends TestCase
             $player->start();
             usleep(100_000); // Give process time to start
 
-            $this->assertNull($player->getExitCode());
+            $this->assertNull($player->exitCode());
             $player->stop();
 
             @unlink($clip);
@@ -725,7 +725,7 @@ final class AudioPlayerTest extends TestCase
     }
 
     /**
-     * @testdox getExitCode() retrieves the last process exit code
+     * @testdox exitCode() retrieves the last process exit code
      */
     public function testGetExitCodeReturnsCodeAfterExit(): void
     {
@@ -734,7 +734,7 @@ final class AudioPlayerTest extends TestCase
         $player->setFakeCommand(null);
         $player->start();
         // With no binary, processHandle is null and exitCode is never set
-        $this->assertNull($player->getExitCode());
+        $this->assertNull($player->exitCode());
     }
 
     /**

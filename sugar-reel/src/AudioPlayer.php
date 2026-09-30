@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Reel;
 
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Reel\Source\HttpHeaders;
 use SugarCraft\Reel\Source\Probe;
-use SugarCraft\Reel\Support\BoundedReaper;
 use SugarCraft\Reel\Support\FfmpegCommandBuilder;
 
 /**
@@ -154,8 +154,8 @@ class AudioPlayer
      * WHAT THIS USED TO BE: `proc_terminate()` then `proc_close()` with no
      * escalation between them. E366 measured that pair: it blocks —
      * `proc_close()` waits — so a player that ignores SIGTERM pinned the
-     * caller's shutdown indefinitely. The ladder in
-     * {@see BoundedReaper} escalates TERM→9 and confirms the exit, so the
+     * caller's shutdown indefinitely. The canonical ladder in
+     * {@see BoundedShutdown} escalates TERM→9 and confirms the exit, so the
      * reap below cannot inherit a deadline it cannot keep.
      */
     public function stop(): void
@@ -165,7 +165,7 @@ class AudioPlayer
         }
 
         $this->bankElapsed();
-        BoundedReaper::terminateNow($this->processHandle);
+        BoundedShutdown::terminateAndAwaitExit($this->processHandle);
         proc_close($this->processHandle);
         $this->processHandle = null;
     }
@@ -201,7 +201,7 @@ class AudioPlayer
         // Bank the elapsed play time into the tracked seek position BEFORE killing,
         // so resume() picks up where the viewer paused, not where playback started.
         $this->bankElapsed();
-        BoundedReaper::terminateNow($this->processHandle);
+        BoundedShutdown::terminateAndAwaitExit($this->processHandle);
         $exitCode = proc_close($this->processHandle);
         $this->processHandle = null;
         $this->exitCode = $exitCode;
@@ -256,7 +256,7 @@ class AudioPlayer
             // SIGCONT has PTY issues like SIGSTOP; terminate and restart —
             // banking first so this segment's play time is not lost.
             $this->bankElapsed();
-            BoundedReaper::terminateNow($this->processHandle);
+            BoundedShutdown::terminateAndAwaitExit($this->processHandle);
             proc_close($this->processHandle);
             $this->processHandle = null;
         }
@@ -377,7 +377,7 @@ class AudioPlayer
      * - The process is still running.
      * - The process was stopped via stop() (which discards the exit code).
      */
-    public function getExitCode(): ?int
+    public function exitCode(): ?int
     {
         return $this->exitCode;
     }

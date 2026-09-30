@@ -7,7 +7,6 @@ namespace SugarCraft\Reel\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Reel\Decode\FfmpegDecoder;
 use SugarCraft\Reel\Source\Probe;
-use SugarCraft\Reel\Support\BoundedReaper;
 
 /**
  * E722 (round 82) boundedness pins for the FfmpegDecoder pipe posture.
@@ -19,7 +18,7 @@ use SugarCraft\Reel\Support\BoundedReaper;
  * not prose:
  *
  *  - a child that ENDS releases every read promptly (EOF polarity);
- *  - a child that is alive-and-wedged still dies within the BoundedReaper
+ *  - a child that is alive-and-wedged still dies within the BoundedShutdown
  *    ceiling once close() is reached (teardown polarity) — driven through a
  *    leashed harness so a regression that removes the ladder fails FAST
  *    instead of hanging the suite (r69 law).
@@ -77,11 +76,11 @@ final class FfmpegDecoderReadinessTest extends TestCase
             $this->assertNull($decoder->next(), 'EOF is stable');
 
             $decoder->close();
-            $this->assertNotSame(0, $decoder->getExitCode(), 'ffmpeg must have failed on the empty file');
+            $this->assertNotSame(0, $decoder->exitCode(), 'ffmpeg must have failed on the empty file');
 
             $logged = is_file($log) ? (string) file_get_contents($log) : '';
             $this->assertStringContainsString(
-                "FfmpegDecoder: ffmpeg exited with code {$decoder->getExitCode()}",
+                "FfmpegDecoder: ffmpeg exited with code {$decoder->exitCode()}",
                 $logged,
                 'close() must record the ffmpeg failure on the error log',
             );
@@ -100,7 +99,7 @@ final class FfmpegDecoderReadinessTest extends TestCase
      * never answers, so the child is alive, silent, and blocked in its input
      * read. A zero-timeout stream_select on the very fd next() parks shows
      * NOT-ready (the hazard is real and observable without parking on it),
-     * and close() still ends the child within the BoundedReaper ladder's
+     * and close() still ends the child within the canonical ladder's
      * ceiling. Run through a `timeout -s KILL`-leashed child (df/lane-cd
      * precedent): strip the ladder and the harness never prints DONE — the
      * mutation reads RED in bounded time, never as a suite hang.
@@ -158,7 +157,7 @@ final class FfmpegDecoderReadinessTest extends TestCase
             $this->assertSame(1, preg_match('/CLOSE_SECONDS=([\d.]+)/', $stdout, $m), 'close() timing must be reported');
             // Ceiling: GRACE+TERM+KILL = 3.5s of ladder, +1s slack for the
             // poll tick and process teardown.
-            $this->assertLessThanOrEqual(4.5, (float) $m[1], 'close() must stay inside the BoundedReaper ceiling');
+            $this->assertLessThanOrEqual(4.5, (float) $m[1], 'close() must stay inside the canonical ladder ceiling');
 
             // Honest exit-status polarity: a TERM-interrupted ffmpeg exits
             // CLEANLY (its own interrupt callback aborts the read — code 0),
@@ -171,7 +170,7 @@ final class FfmpegDecoderReadinessTest extends TestCase
         } finally {
             // Hermetic under every outcome, including a KILLed harness that
             // never got to close its ffmpeg itself. Signal 9 literal —
-            // sugar-reel does not require ext-pcntl (BoundedReaper precedent).
+            // sugar-reel does not require ext-pcntl (the deleted BoundedReaper's precedent, now candy-core BoundedShutdown's doctrine).
             $wedgedPid = (int) @file_get_contents($pidFile);
             if ($wedgedPid > 0 && \function_exists('posix_kill')) {
                 @posix_kill($wedgedPid, 9);

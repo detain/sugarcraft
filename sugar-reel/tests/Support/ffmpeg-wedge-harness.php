@@ -13,7 +13,7 @@ declare(strict_types=1);
  *   1. the child is ALIVE (and stays alive) while emitting nothing;
  *   2. the stdout pipe reports NOT ready under a zero-timeout stream_select
  *      (the hazard is real and, crucially, OBSERVABLE without parking);
- *   3. close() returns within the BoundedReaper ceiling and the child ends
+ *   3. close() returns within the BoundedShutdown ladder ceiling and the child ends
  *      dead — the escalation reaches even a wedged ffmpeg.
  *
  * It is run under `timeout -s KILL` by the parent so a mutation that strips
@@ -75,6 +75,6 @@ $elapsed = microtime(true) - $start;
 // ground truth that close() took the child all the way DOWN, not just
 // past its own bookkeeping.
 echo 'CLOSE_SECONDS=' . number_format($elapsed, 3, '.', '') . "\n";
-echo 'EXIT_CODE=' . var_export($decoder->getExitCode(), true) . "\n";
+echo 'EXIT_CODE=' . var_export($decoder->exitCode(), true) . "\n";
 echo 'CHILD_ALIVE_AFTER_CLOSE=' . (int) is_dir('/proc/' . (int) file_get_contents($pidFile)) . "\n";
 echo "DONE\n";

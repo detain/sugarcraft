@@ -18,7 +18,7 @@ use SugarCraft\Reel\Decode\RgbFrame;
  * than half-block.
  *
  * Like {@see HalfBlockRenderer} this is the "Mosaic" path used by direct
- * {@see RendererFactory::create()} callers; the Player runtime renders
+ * {@see RendererFactory::new()} callers; the Player runtime renders
  * quarter-block inline via its Buffer path (Player::frameToBuffer).
  */
 final class QuarterBlockRenderer implements FrameRenderer

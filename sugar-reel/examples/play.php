@@ -36,7 +36,7 @@ Play a video file or a built-in synthetic test pattern in the terminal.
 
 Arguments:
   path          Path to a video file (mp4, avi, gif, webm, etc.)
-               Use "synthetic" or omit to generate a built-in gradient test pattern.
+               Use "synthetic" to generate a built-in gradient test pattern.
   mode          Rendering mode (optional, default: auto-detect terminal capability)
                ascii      — grayscale luminance ramp (no color)
                ansi256    — 256-color cube + grey ramp
@@ -82,7 +82,7 @@ if ($arg1 === '--help' || $arg1 === '-h' || $arg1 === '') {
     exit(1);
 }
 
-$pathArg = $arg1 === '' ? 'synthetic' : $arg1;
+$pathArg = $arg1;
 $modeArg = $arg2 === '' ? 'auto' : $arg2;
 
 if (!in_array($modeArg, ['auto', 'ascii', 'ansi256', 'truecolor', 'halfblock', 'quarterblock', 'sixel', 'kitty', 'iterm2'], true)) {

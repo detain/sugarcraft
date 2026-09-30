@@ -40,7 +40,7 @@ final class HalfBlockRenderer implements FrameRenderer
         // Delegate to candy-mosaic's HalfBlockRenderer (HalfBlockRenderer.php:33).
         // NOTE: This renderer is the "Mosaic" path — it is NEVER used by Player::view()
         // at runtime (Player uses the inline Buffer path in frameToBuffer instead).
-        // This class exists for direct RendererFactory::create(Mode::HalfBlock) callers.
+        // This class exists for direct RendererFactory::new(Mode::HalfBlock) callers.
         //
         // Parity with the runtime path is guarded per CELL — glyph, foreground and
         // background compared as decoded semantics, not bytes — by

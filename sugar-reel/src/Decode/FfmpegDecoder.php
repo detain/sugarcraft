@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Reel\Decode;
 
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Reel\Lang;
 use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Source\HttpHeaders;
 use SugarCraft\Reel\Source\Probe;
-use SugarCraft\Reel\Support\BoundedReaper;
 use SugarCraft\Reel\Support\FfmpegCommandBuilder;
 
 /**
@@ -50,7 +50,7 @@ use SugarCraft\Reel\Support\FfmpegCommandBuilder;
  * guarantees is that the child cannot pin a read forever once the caller
  * reaches close():
  * stderr goes to a file sink (a wedged writer cannot stall ffmpeg on a
- * full stderr pipe) and close() walks the bounded {@see BoundedReaper}
+ * full stderr pipe) and close() walks the bounded {@see BoundedShutdown}
  * ladder — at most GRACE+TERM+KILL = 3.5s from entry to a dead child —
  * after which every outstanding read sees EOF. A live-but-silent ffmpeg
  * (network stream stalled mid-reconnect, input wedged on an unopened
@@ -131,6 +131,16 @@ final class FfmpegDecoder implements Decoder
      * (-32) truncated to a byte. See {@see isTeardownExit()}.
      */
     private const EXIT_EPIPE = 224;
+
+    /**
+     * Seconds the child gets to exit on its own — on the EPIPE its write
+     * error delivers once close() has dropped the stdout read end — before
+     * the canonical ladder escalates to SIGTERM. The budget is a decoder
+     * fact (how fast ffmpeg answers a closed pipe), so it lives with the
+     * caller, per candy-core `BoundedShutdown`'s "budgets stay with the
+     * callers" doctrine; the rungs themselves do not.
+     */
+    private const CLOSE_GRACE_SECONDS = 1.5;
 
     /** Captured exit code from the ffmpeg process, populated on close(). */
     private ?int $exitCode = null;
@@ -374,7 +384,7 @@ final class FfmpegDecoder implements Decoder
      * Whether the source is an http(s) URL (vs a local file path). ffmpeg's
      * reconnect options apply only to the network protocols.
      *
-     * Public because {@see DecoderFactory::create()} routes on exactly this
+     * Public because {@see DecoderFactory::new()} routes on exactly this
      * test — one predicate means the factory's routing and the decoder's
      * header-gating decision cannot drift apart. The predicate itself now lives
      * in {@see FfmpegCommandBuilder::isNetworkSource()} so the audio command
@@ -557,12 +567,14 @@ final class FfmpegDecoder implements Decoder
      * an ffmpeg that never exits (wedged network read, stuck encoder) took
      * the caller down with it. The parent-side pipes are closed first,
      * because that is the polite exit for a stream decoder: ffmpeg dies on
-     * its write error within microseconds of losing stdout. {@see
-     * BoundedReaper::terminateAfterGrace()} then gives a short bounded
-     * window for exactly that, and escalates SIGTERM→SIGKILL if it does not
-     * come, so `proc_close()` below reaps instead of waiting. The recorded
-     * exit code keeps its meaning: a process that took the escalation ends
-     * signalled, and {@see getExitCode()} still reports it.
+     * its write error within microseconds of losing stdout. A bounded
+     * {@see CLOSE_GRACE_SECONDS} window is given for exactly that —
+     * {@see BoundedShutdown::hasExited()} polls without signalling — and
+     * only when the grace buys nothing does
+     * {@see BoundedShutdown::terminateAndAwaitExit()} run the SIGTERM→SIGKILL
+     * escalation, so `proc_close()` below reaps instead of waiting. The
+     * recorded exit code keeps its meaning: a process that took the
+     * escalation ends signalled, and {@see exitCode()} still reports it.
      *
      * What is NOT reported is an exit this method itself caused — see
      * {@see isTeardownExit()}. Closing the pipe to make ffmpeg leave and then
@@ -578,7 +590,13 @@ final class FfmpegDecoder implements Decoder
         }
 
         if ($this->process !== null && is_resource($this->process)) {
-            BoundedReaper::terminateAfterGrace($this->process);
+            // Grace first, escalation second — the fold of the deleted
+            // per-lib BoundedReaper onto candy-core's canonical ladder,
+            // which deliberately has no pre-TERM natural-exit rung: that
+            // budget is exactly what "stays with the caller".
+            if (!BoundedShutdown::hasExited($this->process, self::CLOSE_GRACE_SECONDS)) {
+                BoundedShutdown::terminateAndAwaitExit($this->process);
+            }
             // Read the disposition BEFORE proc_close(): once the child is
             // reaped, proc_close() collapses "killed by signal N" to a flat
             // -1, and the reaper's own SIGTERM becomes indistinguishable from
@@ -604,7 +622,7 @@ final class FfmpegDecoder implements Decoder
      * ffmpeg reports that write error by exiting with the libav errno
      * truncated to a byte: `AVERROR(EPIPE)` is -32, and -32 & 0xFF is
      * {@see EXIT_EPIPE} (224). A child that ignored the closed pipe and had to
-     * be TERMed or KILLed by {@see BoundedReaper} comes back `signaled`
+     * be TERMed or KILLed by {@see BoundedShutdown} comes back `signaled`
      * instead, and for a signalled child `proc_close()` returns -1.
      *
      * Both outcomes are this object's own teardown reported back to it, and
@@ -623,7 +641,7 @@ final class FfmpegDecoder implements Decoder
     /**
      * Returns the exit code from the last ffmpeg process, or null if still running.
      */
-    public function getExitCode(): ?int
+    public function exitCode(): ?int
     {
         return $this->exitCode;
     }
