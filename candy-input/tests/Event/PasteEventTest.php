@@ -81,4 +81,27 @@ final class PasteEventTest extends TestCase
 
         $this->assertSame(PasteEvent::MAX_SIZE, strlen($truncated->content));
     }
+
+    public function testTruncateFlagsClippedContentAndRendersNotice(): void
+    {
+        // The lang key 'paste.truncated' is wired into the event: a clipped
+        // paste is now LOUD — flag set and the translated notice renders the
+        // byte cap that was applied.
+        $event = PasteEvent::truncate(str_repeat('a', PasteEvent::MAX_SIZE + 100));
+
+        $this->assertTrue($event->truncated);
+        $this->assertSame('Paste truncated at 1048576 bytes.', $event->truncationNotice());
+    }
+
+    public function testIntactPasteCarriesNoTruncationSignal(): void
+    {
+        $direct = new PasteEvent('x');
+        $this->assertFalse($direct->truncated);
+        $this->assertNull($direct->truncationNotice());
+
+        // Exactly at the cap is intact, not clipped.
+        $boundary = PasteEvent::truncate(str_repeat('a', PasteEvent::MAX_SIZE));
+        $this->assertFalse($boundary->truncated);
+        $this->assertNull($boundary->truncationNotice());
+    }
 }

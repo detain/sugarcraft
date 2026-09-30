@@ -978,6 +978,69 @@ final class EscapeDecoderTest extends TestCase
         $this->assertSame("\x1ba", $events[0]->raw);
     }
 
+    // ─── Alt + multibyte UTF-8 (bubbletea decodes the full rune after ESC) ──
+
+    public function testAltModifiedTwoByteRune(): void
+    {
+        // ESC + 'é' (0xc3 0xa9): ONE Alt+é event — the codepoint must never be
+        // split into Alt+0xc3 plus a stray 0xa9 lone-byte key.
+        $events = $this->decoder->decode("\x1b\xc3\xa9");
+        $this->assertCount(1, $events);
+        $this->assertSame('é', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+        $this->assertSame("\x1b\xc3\xa9", $events[0]->raw);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testAltModifiedThreeByteRuneFollowedByKeys(): void
+    {
+        $euro = "\xe2\x82\xac";
+        $events = $this->decoder->decode("\x1b" . $euro . 'x');
+        $this->assertCount(2, $events);
+        $this->assertSame($euro, $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+        $this->assertSame("\x1b" . $euro, $events[0]->raw);
+        $this->assertSame('x', $events[1]->key);
+        $this->assertFalse($events[1]->modifiers->includes(KeyModifier::ALT));
+    }
+
+    public function testAltModifiedFourByteRune(): void
+    {
+        $party = "\xf0\x9f\x8e\x89";
+        $events = $this->decoder->decode("\x1b" . $party);
+        $this->assertCount(1, $events);
+        $this->assertSame($party, $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+        $this->assertSame("\x1b" . $party, $events[0]->raw);
+    }
+
+    public function testAltRuneSplitAcrossChunksCompletesWhole(): void
+    {
+        // Incomplete-tail boundary: ESC + lead byte at the chunk end must be
+        // HELD (not shredded into Alt+half-rune), then completed by the next
+        // read — the same stitching the plain UTF-8 path already does.
+        $this->assertSame([], $this->decoder->decode("\x1b\xc3"));
+        $this->assertSame("\x1b\xc3", $this->decoder->remainder());
+
+        $events = $this->decoder->decode("\xa9");
+        $this->assertCount(1, $events);
+        $this->assertSame('é', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+        $this->assertSame("\x1b\xc3\xa9", $events[0]->raw);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testAltRuneWithInvalidContinuationResyncs(): void
+    {
+        // ESC + lead + NON-continuation byte: malformed — Alt+lead alone, then
+        // the offending byte decodes normally (mirrors the plain resync path).
+        $events = $this->decoder->decode("\x1b\xc3x");
+        $this->assertCount(2, $events);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+        $this->assertSame("\x1b\xc3", $events[0]->raw);
+        $this->assertSame('x', $events[1]->key);
+    }
+
     // ─── Step 12: SS3 and modified-arrow tests ──────────────────────────────
 
     public function testSS3Arrows(): void

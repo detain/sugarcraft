@@ -50,8 +50,19 @@ final class SignalResizeDriver implements InputDriver
      */
     private const CAPABILITY_PATTERN = '/^[a-z][a-z0-9]{0,4}$/';
 
-    /** Flag set by SIGWINCH signal handler */
-    private static bool $sigwinchReceived = false;
+    /**
+     * Live drivers the single process-wide SIGWINCH handler fans out to.
+     *
+     * A process can only carry one SIGWINCH disposition, and a WeakMap keeps
+     * the registry from extending driver lifetimes (detached drivers fall out
+     * on GC — no explicit unregister needed).
+     *
+     * @var \WeakMap<self>|null
+     */
+    private static ?\WeakMap $sigwinchListeners = null;
+
+    /** Flag set by the SIGWINCH handler for THIS instance only */
+    private bool $sigwinchReceived = false;
 
     /** Last known terminal columns */
     private int $cols = 80;
@@ -78,14 +89,42 @@ final class SignalResizeDriver implements InputDriver
             return;
         }
 
-        pcntl_async_signals(true);
-        pcntl_signal(SIGWINCH, function (int $sig): void {
-            self::$sigwinchReceived = true;
-            // Update stored dimensions on signal receipt
-            $this->updateDimensions();
-        });
+        // The process can hold only ONE SIGWINCH disposition, so registration
+        // is global: every live instance joins a WeakMap registry and a single
+        // shared handler fans the flag out per-instance. A WeakMap is used so
+        // an instance drops out of the registry on GC — no explicit unregister,
+        // and a dead driver is never revived by a later signal.
+        self::$sigwinchListeners ??= new \WeakMap();
+        self::$sigwinchListeners[$this] = true;
+        self::installSigwinchHandler();
 
         // Capture initial dimensions
+        $this->updateDimensions();
+    }
+
+    /**
+     * Install the single process-wide SIGWINCH handler that marks every live
+     * registered driver. Safe to call from each constructor: re-installing the
+     * same fan-out handler is idempotent.
+     */
+    private static function installSigwinchHandler(): void
+    {
+        pcntl_async_signals(true);
+        pcntl_signal(SIGWINCH, static function (int $sig): void {
+            // WeakMap single-variable foreach yields VALUES — iterate keys.
+            foreach (self::$sigwinchListeners ?? new \WeakMap() as $driver => $ignored) {
+                $driver->markSigwinch();
+            }
+        });
+    }
+
+    /**
+     * Record a SIGWINCH for THIS instance only, refreshing its dimensions.
+     */
+    private function markSigwinch(): void
+    {
+        $this->sigwinchReceived = true;
+        // Update stored dimensions on signal receipt
         $this->updateDimensions();
     }
 
@@ -103,11 +142,11 @@ final class SignalResizeDriver implements InputDriver
             return null;
         }
 
-        if (!self::$sigwinchReceived) {
+        if (!$this->sigwinchReceived) {
             return null;
         }
 
-        self::$sigwinchReceived = false;
+        $this->sigwinchReceived = false;
 
         return new ResizeEvent($this->cols, $this->rows);
     }

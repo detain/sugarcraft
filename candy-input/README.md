@@ -179,9 +179,9 @@ resolving an Escape-only keystroke.
 
 `Shift`, `Ctrl`, `Alt`, `Super`, `Hyper`, `Meta`, `CapsLock`, `NumLock` — combine with bitwise OR.
 
-## No upstream parallel
+## Upstream parity
 
-This is a pioneering implementation for PHP TUI — there is no direct upstream to port. It decodes the same sequences that the kernel and terminal emulators produce.
+The decoding semantics mirror [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea)'s input handling — the class docblocks cite it as the reference (as do the tests, e.g. the deferred-trailing-ESC strategy). It decodes the same sequences that the kernel and terminal emulators produce, ported to PHP.
 
 ## License
 

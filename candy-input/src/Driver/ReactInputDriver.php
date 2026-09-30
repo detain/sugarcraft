@@ -95,19 +95,30 @@ final class ReactInputDriver implements ReadableStreamInterface
 
     /**
      * Resumes receiving data events.
+     *
+     * A listener that paused mid-chunk left already-decoded events parked in
+     * the event buffer (see emitEvent); resume flushes them before new input
+     * is consumed, so buffered events never strand until stream end.
      */
     public function resume(): void
     {
         $this->paused = false;
         $this->stream->resume();
+        $this->flushBuffer();
     }
 
     /**
-     * Pipes all data from this readable stream into the given writable destination.
+     * Pipes the underlying byte stream into the given writable destination.
+     *
+     * This driver decodes terminal bytes into Event objects, which no React
+     * writable destination can accept (write() takes strings) — so piping the
+     * driver itself would be a type hazard. The destination instead receives
+     * the RAW bytes from the wrapped stream (log/echo use-cases); consumers
+     * who want decoded events subscribe via on('data').
      */
     public function pipe(\React\Stream\WritableStreamInterface $dest, array $options = []): \React\Stream\WritableStreamInterface
     {
-        return \React\Stream\ReadableStreamInterface::pipe($this, $dest, $options);
+        return $this->stream->pipe($dest, $options);
     }
 
     /**
@@ -217,6 +228,19 @@ final class ReactInputDriver implements ReadableStreamInterface
     }
 
     /**
+     * Emit buffered events in arrival order, stopping the moment the stream
+     * is closed or a listener re-pauses mid-flush (the rest stays buffered for
+     * the next resume()/handleEnd()).
+     */
+    private function flushBuffer(): void
+    {
+        while (!$this->closed && !$this->paused && $this->eventBuffer !== []) {
+            $event = array_shift($this->eventBuffer);
+            $this->emit('data', [$event]);
+        }
+    }
+
+    /**
      * Handle the 'end' event from the underlying stream.
      */
     private function handleEnd(): void
@@ -226,10 +250,7 @@ final class ReactInputDriver implements ReadableStreamInterface
         }
 
         // Flush any remaining events
-        while (!$this->closed && !$this->paused && $this->eventBuffer !== []) {
-            $event = array_shift($this->eventBuffer);
-            $this->emit('data', [$event]);
-        }
+        $this->flushBuffer();
 
         $this->emit('end');
         $this->close();

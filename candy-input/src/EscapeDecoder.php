@@ -378,7 +378,44 @@ final class EscapeDecoder
             return $this->handleStringStart($stream);
         }
 
-        // ESC <non-[> — Alt+key
+        // ESC <non-[> — Alt+key. When the byte after ESC is a UTF-8 lead,
+        // consume the COMPLETE codepoint: bubbletea decodes the full rune
+        // following ESC as one Alt+rune event. Slicing here (ESC + lead byte
+        // only) would strand the continuation bytes, which the resync path in
+        // decodeClean then reports as stray lone-byte keys (Alt+é arriving as
+        // Alt+0xc3 + "\xa9").
+        if ($nextOrd >= 0x80) {
+            $seqLen = match (true) {
+                $nextOrd >= 0xc2 && $nextOrd <= 0xdf => 2,
+                $nextOrd >= 0xe0 && $nextOrd <= 0xef => 3,
+                $nextOrd >= 0xf0 && $nextOrd <= 0xf4 => 4,
+                // 0x80-0xBF lone continuation, 0xC0-0xC1/0xF5-0xFF invalid
+                // lead: not a codepoint start — keep the single-byte Alt+byte.
+                default => 0,
+            };
+
+            if ($seqLen !== 0) {
+                if (strlen($stream) - 1 >= $seqLen) {
+                    if ($this->allContinuationBytes($stream, 2, 1 + $seqLen)) {
+                        $seq = substr($stream, 1, $seqLen);
+                        return [
+                            'events' => [new KeyEvent($seq, KeyModifier::alt(), "\x1b" . $seq)],
+                            'remaining' => substr($stream, 1 + $seqLen),
+                        ];
+                    }
+                    // A continuation slot is already invalid — emit Alt+lead
+                    // alone and resync on the next byte, mirroring decodeClean's
+                    // malformed-codepoint handling.
+                } elseif ($this->allContinuationBytes($stream, 2, strlen($stream))) {
+                    // Codepoint split across reads (ESC + lead [+ valid tail]
+                    // at chunk end): report no progress so decodeClean buffers
+                    // the whole tail; the next decode() completes the rune.
+                    return ['events' => [], 'remaining' => $stream];
+                }
+                // Fall through: malformed — Alt+lead byte alone below.
+            }
+        }
+
         return [
             'events' => [new KeyEvent($this->mapChar($next), KeyModifier::alt(), "\x1b" . $next)],
             'remaining' => substr($stream, 2),
@@ -1397,6 +1434,10 @@ final class EscapeDecoder
 
     /**
      * Decode a control character.
+     *
+     * Receives only bytes in 0x00-0x1f EXCEPT 0x1b: decodeClean() dispatches
+     * every ESC byte through handleEscape() first (lone-ESC vs sequence
+     * disambiguation lives there), so this method never sees one.
      */
     private function decodeControlChar(string $byte): KeyEvent
     {
@@ -1404,7 +1445,6 @@ final class EscapeDecoder
 
         if ($ord === 0x09) return new KeyEvent('Tab', KeyModifier::none(), "\t");
         if ($ord === 0x0a || $ord === 0x0d) return new KeyEvent('Enter', KeyModifier::none(), $byte);
-        if ($ord === 0x1b) return new KeyEvent('Escape', KeyModifier::none(), "\x1b");
 
         // Ctrl + letter (0x01-0x1a)
         if ($ord >= 0x01 && $ord <= 0x1a) {

@@ -435,4 +435,101 @@ final class ReactInputDriverTest extends TestCase
 
         $this->assertCount(2, $events);
     }
+
+    // ─── pipe(): forwards the WRAPPED stream's raw bytes to a destination ──
+
+    /**
+     * Regression: pipe() used to statically invoke the non-static
+     * ReadableStreamInterface::pipe(), a hard fatal on every call. The fixed
+     * shape delegates to the wrapped stream (React\Stream\Util::pipe under the
+     * hood), so the destination receives the RAW byte chunks — decoded Event
+     * objects would break any string-typed writable — and pipe() returns $dest
+     * per React's contract.
+     */
+    public function testPipeForwardsRawBytesOfTheWrappedStream(): void
+    {
+        $upstream = new ThroughStream();
+        $driver = new ReactInputDriver($upstream);
+        $dest = new ThroughStream();
+
+        $received = [];
+        $dest->on('data', static function ($chunk) use (&$received): void {
+            $received[] = $chunk;
+        });
+
+        $returned = $driver->pipe($dest);
+
+        $this->assertSame($dest, $returned);
+
+        $upstream->write('abc');
+
+        $this->assertSame(['abc'], $received);
+    }
+
+    // ─── resume(): flushes events buffered while a listener paused mid-chunk
+
+    /**
+     * A listener that pauses while handling the FIRST event of a chunk used
+     * to strand the chunk's remaining decoded events until stream end.
+     * resume() must now flush them.
+     */
+    public function testResumeFlushesEventsBufferedMidChunk(): void
+    {
+        $upstream = new ThroughStream();
+        $driver = new ReactInputDriver($upstream);
+
+        $received = [];
+        $driver->on('data', function (Event $event) use ($driver, &$received): void {
+            $received[] = $event;
+            if (count($received) === 1) {
+                $driver->pause();
+            }
+        });
+
+        // ONE chunk carrying TWO keys: the pause lands between them.
+        $upstream->write('ab');
+
+        $this->assertCount(1, $received);
+        $this->assertSame('a', $received[0]->key);
+
+        $driver->resume();
+
+        $this->assertCount(2, $received, 'resume() must flush events stranded by a mid-chunk pause');
+        $this->assertSame('b', $received[1]->key);
+    }
+
+    /**
+     * The flush must honour a RE-pause: a listener that pauses again while a
+     * buffered event is delivered keeps the REST buffered until the next
+     * resume(), so pause semantics are never violated mid-flush.
+     */
+    public function testResumeFlushStopsOnImmediateRePause(): void
+    {
+        $upstream = new ThroughStream();
+        $driver = new ReactInputDriver($upstream);
+
+        $received = [];
+        $stage = 'collect';
+        $driver->on('data', function (Event $event) use ($driver, &$received, &$stage): void {
+            $received[] = $event;
+            if ($stage === 'collect' && $event->key === 'a') {
+                $stage = 'flushing';
+                $driver->pause(); // 'b' and 'c' land in the buffer
+            } elseif ($stage === 'flushing' && $event->key === 'b') {
+                $stage = 'done';
+                $driver->pause(); // re-pause mid-flush: 'c' stays buffered
+            }
+        });
+
+        $upstream->write('abc');
+        $this->assertCount(1, $received);
+
+        $driver->resume(); // flushes 'b', stops at the re-pause
+        $this->assertCount(2, $received);
+        $this->assertSame('b', $received[1]->key);
+
+        $driver->resume(); // completes the flush
+        $this->assertCount(3, $received);
+        $this->assertSame('c', $received[2]->key);
+    }
 }

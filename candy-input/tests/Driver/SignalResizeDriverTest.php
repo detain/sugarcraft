@@ -66,4 +66,60 @@ final class SignalResizeDriverTest extends TestCase
 
         $this->assertNull($result);
     }
+
+    /**
+     * The SIGWINCH flag is per-instance: ONE signal must arm EVERY live driver,
+     * and one driver's read() must not consume another's event.
+     * (Regression: the flag was a private static, so the first read() stole the
+     * resize from every other instance and dimensions refreshed only on the
+     * last-registered driver.)
+     */
+    public function testSigwinchFansOutToEveryLiveDriver(): void
+    {
+        if (!function_exists('pcntl_signal') || !function_exists('posix_kill')) {
+            $this->markTestSkipped('SIGWINCH fan-out test needs pcntl and posix');
+        }
+
+        $callsA = 0;
+        $driverA = new SignalResizeDriver(static function (string $command) use (&$callsA): string {
+            $callsA++;
+            return str_contains($command, 'lines') ? "30\n" : "100\n";
+        });
+        $callsB = 0;
+        $driverB = new SignalResizeDriver(static function (string $command) use (&$callsB): string {
+            $callsB++;
+            return str_contains($command, 'lines') ? "50\n" : "200\n";
+        });
+
+        // Each constructor probes cols + lines exactly once.
+        $this->assertSame(2, $callsA);
+        $this->assertSame(2, $callsB);
+
+        // Deliver a real SIGWINCH to this process (constructors armed
+        // pcntl_async_signals; the dispatch call flushes any pending signal).
+        $this->assertTrue(posix_kill(posix_getpid(), SIGWINCH));
+        pcntl_signal_dispatch();
+
+        $eventA = $driverA->read();
+        $this->assertInstanceOf(ResizeEvent::class, $eventA);
+        $this->assertSame(100, $eventA->cols);
+        $this->assertSame(30, $eventA->rows);
+
+        $eventB = $driverB->read();
+        $this->assertInstanceOf(
+            ResizeEvent::class,
+            $eventB,
+            'consuming driver A\'s flag must not starve driver B',
+        );
+        $this->assertSame(200, $eventB->cols);
+        $this->assertSame(50, $eventB->rows);
+
+        // Each flag is consumed exactly once, per instance.
+        $this->assertNull($driverA->read());
+        $this->assertNull($driverB->read());
+
+        // Each instance refreshed its OWN dimensions when the fan-out fired.
+        $this->assertSame(4, $callsA);
+        $this->assertSame(4, $callsB);
+    }
 }
