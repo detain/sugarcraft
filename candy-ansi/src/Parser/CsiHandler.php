@@ -17,7 +17,13 @@ namespace SugarCraft\Ansi\Parser;
 interface CsiHandler
 {
     /**
-     * Print a printable ASCII character (0x20-0x7E) to the current cell.
+     * Print one character to the current cell.
+     *
+     * Despite the parameter name, this is not restricted to printable ASCII:
+     * {@see HandlerAdapter::printChar()} forwards whole multi-byte UTF-8 runes
+     * collected by the parser's Utf8 state (any lead byte >= 0xC2) alongside
+     * the 0x20-0x7E range, so implementations must accept a full codepoint
+     * cluster, not a single byte.
      */
     public function printable(string $byte): void;
 

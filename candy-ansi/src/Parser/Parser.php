@@ -53,6 +53,15 @@ final class Parser
     /** Default string-buffer cap (64 KiB) — prevents memory exhaustion from malicious sequences. */
     private const MAX_STRING_BUFFER = 65536;
 
+    /** States accumulating a string payload; an abort out of one drops it (see advance()). */
+    private const STRING_STATES = [
+        State::DcsString,
+        State::OscString,
+        State::SosString,
+        State::PmString,
+        State::ApcString,
+    ];
+
     /** Bytes of the current UTF-8 rune in flight. */
     private string $utf8Buffer = '';
 
@@ -317,6 +326,33 @@ final class Parser
 
         $from = $this->state;
         $this->perform($action, $byte, $from);
+        // An ESC that aborts an in-flight string sequence lands in Escape with
+        // only the table's own action (Dispatch for OSC/SOS/PM/APC/DCS — the
+        // anywhere-loop Clear covers every other origin). Force the clear the
+        // table omits, mirroring charmbracelet/x/ansi Advance(), so a
+        // cancelled-but-dispatched sequence's params and intermediates cannot
+        // bleed into the escape sequence that interrupted it: without this,
+        // `ESC P 1 SP / q X ESC \` dispatches the final ESC \ with the stale
+        // intermediate '/' (47) where upstream reports 0.
+        if ($next === State::Escape && $action !== Action::Clear) {
+            $this->clear();
+        }
+        // A string sequence ABORTED to Ground — CAN/SUB or an Execute-class C1
+        // — exits on a table edge carrying neither Dispatch nor Clear, so its
+        // payload would otherwise sit in the buffer and bleed into whatever
+        // sequence starts next (`ESC ] a CAN` then `0x9D b 0x9C` must dispatch
+        // "b", matching charmbracelet/x/ansi; the start()-clears-buffer shape
+        // of this fix was rejected because a mid-string C1 re-introducer MUST
+        // keep the bytes collected before it — pinned downstream by candy-vt,
+        // CALIBER 2026-05-30 step-20, and here by
+        // ParserTest::testC1ReintroducerPreservesStringPayload).
+        if ($next === State::Ground
+            && \in_array($from, self::STRING_STATES, true)
+            && $action !== Action::Dispatch
+            && $action !== Action::Clear
+        ) {
+            $this->stringBuffer = '';
+        }
         $this->state = $next;
     }
 

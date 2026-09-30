@@ -666,4 +666,56 @@ final class ParserTest extends TestCase
         $this->assertCount(1, $oscs, 'Unterminated OSC should be dispatched on parseComplete');
         $this->assertSame('2;Title', $oscs[0]['detail']);
     }
+
+    public function testCancelledOscDoesNotBleedIntoNextSequence(): void
+    {
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler);
+
+        // CAN cancels the in-flight OSC (execute-only edge, no Clear in the
+        // table); the following C1 OSC must dispatch with ONLY its own payload.
+        // Before the start() buffer reset landed this dispatched "ab" —
+        // charmbracelet/x/ansi dispatches "b".
+        $parser->feed("\x1b]a\x18");
+        $parser->feed("\x9db\x9c");
+
+        $oscs = $handler->filter('osc');
+        $this->assertCount(1, $oscs, 'Only the re-entered OSC should dispatch');
+        $this->assertSame('b', $oscs[0]['detail'], 'Cancelled payload must not bleed');
+    }
+
+    public function testC1ReintroducerPreservesStringPayload(): void
+    {
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler);
+
+        // The counterpart of the cancel-bleed pin above, guarding the fix
+        // shape: a mid-string C1 re-introducer is NOT a cancellation — the
+        // bytes collected before it ride through into the dispatch. A naive
+        // start()-clears-buffer fix for the bleed regressed exactly this
+        // (candy-vt pins it as CALIBER 2026-05-30 step-20).
+        $parser->feed("\x1bXAB\x98CD\x9c");
+
+        $sos = $handler->filter('sos');
+        $this->assertCount(1, $sos, 'exactly one SOS dispatch expected');
+        $this->assertSame('ABCD', $sos[0]['detail'], 'payload before the re-introducer must survive');
+    }
+
+    public function testEscAbortFromDcsStringClearsCollectedIntermediates(): void
+    {
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler);
+
+        // ESC in DcsString dispatches the DCS and escapes to Escape, but the
+        // table edge carries no Clear; the forced clear mirrors
+        // charmbracelet/x/ansi Advance() so the aborting ESC \ reports a clean
+        // intermediate. Before the fix ESC \ dispatched intermediate 47 ('/').
+        $parser->feed("\x1bP1\x20/qXY\x1b\\");
+
+        $escs = $handler->filter('esc');
+        $this->assertNotEmpty($escs, 'ESC \\ (ST) should dispatch');
+        $st = $escs[count($escs) - 1]['detail'];
+        $this->assertSame(ord('\\'), $st['final']);
+        $this->assertSame(0, $st['intermediate'], 'Aborted DCS intermediates must not bleed into the ESC dispatch');
+    }
 }

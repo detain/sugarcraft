@@ -13,7 +13,7 @@ Upstream: [charmbracelet/x/ansi](https://github.com/charmbracelet/x/tree/main/an
 ## Quickstart
 
 ```php
-use SugarCraft\Ansi\Parser;
+use SugarCraft\Ansi\Parser\Parser;
 use SugarCraft\Ansi\Parser\DebugHandler;
 
 $handler = new DebugHandler();
