@@ -22,11 +22,14 @@ use SugarCraft\Mosaic\Tests\Support\LoopbackHttpServer;
  * itself.
  *
  * DECLARED BOUNDARY — connect-time TOCTOU residual (round-90 audit MEDIUM-1,
- * decision: disclose, not pin). Every green here asserts CHECK-TIME record-set
- * semantics through overrideHostResolver(): the guard resolves and judges the
- * name, then the fetch re-resolves it. A TTL-0 zone answering public at check
- * time and private at connect time is NOT defended — IP-pinning the connect
- * was judged invasive for a pre-1.0 port (see the KNOWN RESIDUAL block on
+ * decision: disclose, not pin). Every green here asserts CHECK-TIME guard
+ * semantics: the guard judges each hop's host BEFORE the fetch, and the fetch
+ * then re-resolves it. These four tests drive literal-IP redirects over a real
+ * loopback server; the multi-record name-resolution case is pinned through
+ * overrideHostResolver() in the sibling ImageSourceSsrfIpTest and
+ * ImageSourceAsyncSsrfTest. A TTL-0 zone answering public at check time and
+ * private at connect time is NOT defended — IP-pinning the connect was judged
+ * invasive for a pre-1.0 port (see the KNOWN RESIDUAL block on
  * guardHostNotPrivate() in src/ImageSource.php). Do not read these passes as
  * a connect-time guarantee.
  *
