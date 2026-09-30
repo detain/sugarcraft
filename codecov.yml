@@ -198,6 +198,9 @@ flag_management:
     - name: sugar-veil
       paths: ["sugar-veil/src/**"]
       carryforward: true
+    - name: candy-mosaic
+      paths: ["candy-mosaic/src/**"]
+      carryforward: true
 
 # ── Components ────────────────────────────────────────────────────────────────
 # Each component links to its flag via flag_regexes.  Because both
@@ -545,3 +548,9 @@ component_management:
         - "sugar-veil/src/**"
       flag_regexes:
         - "^sugar-veil$"
+    - component_id: candy-mosaic
+      name: candy-mosaic
+      paths:
+        - "candy-mosaic/src/**"
+      flag_regexes:
+        - "^candy-mosaic$"

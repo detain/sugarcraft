@@ -96,14 +96,22 @@ ImageSource::fromUrlAsync('https://example.com/poster.png')
 
 `fromUrlAsync()` needs the suggested `react/http` package
 (`composer require react/http`); without it the returned promise rejects with
-an install hint rather than fataling. Pass your own pre-configured
-`React\Http\Browser` as the third argument to share a connector/timeout.
+an install hint rather than fataling. The default Browser it builds carries the
+same 30-second per-request timeout as the sync path; pass your own
+pre-configured `React\Http\Browser` as the third argument to control the
+connector and timeout yourself.
 
-> **Security:** as with `fromFile()`, the source-trust decision is yours. Both
-> methods honour every PHP/redirect scheme, so a user-influenced URL can reach
-> local files (`file://`) or internal hosts (SSRF). Only pass URLs you control
-> or have validated against an allow-list. Header values containing CR/LF are
-> rejected to prevent request splitting.
+> **Security:** as with `fromFile()`, the source-trust decision is yours. By
+> default both methods allow only `http`/`https`, re-validate the scheme on
+> every redirect hop, and reject any host whose DNS records include a private,
+> loopback, link-local or reserved address (including the `169.254.169.254`
+> cloud-metadata IP) — a user-influenced URL cannot reach `file://` or an
+> internal host unless you explicitly opt out (`allowedSchemes: null` to
+> honour any scheme, `allowedHosts` to name a trusted internal host). The host
+> check runs at guard time, not connect time: a zone answering publicly when
+> checked and privately moments later (TTL-0 rebinding TOCTOU) is a disclosed
+> residual — proxy the fetch if you need a connect-time guarantee. Header
+> values containing CR/LF are rejected to prevent request splitting.
 
 ## Persistent render cache
 

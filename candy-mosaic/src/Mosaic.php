@@ -482,8 +482,6 @@ final class Mosaic
     /**
      * Pick the best available renderer for the given capability snapshot.
      * Precedence: Kitty > iTerm2 > Sixel > Chafa > HalfBlock.
-     *
-     * PR4 swaps Sixel renderer in.
      */
     private static function bestBackend(Capability $cap): Renderer
     {

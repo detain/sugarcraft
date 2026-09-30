@@ -1038,10 +1038,14 @@ final class ImageSource
      * rejected BEFORE the fetch if ANY resolved IP is private, loopback,
      * link-local, or reserved (RFC-1918, `127.0.0.0/8`, `169.254.0.0/16` incl.
      * the `169.254.169.254` cloud-metadata IP, `::1`, `fc00::/7`, `fe80::/10`,
-     * CGNAT `100.64.0.0/10`, …). Resolving ALL addresses defeats DNS-rebinding
-     * where a public name points at a metadata/internal IP. Deployments that
-     * legitimately need a specific internal host pass it in $allowedHosts to
-     * bypass the deny-list for that host only.
+     * CGNAT `100.64.0.0/10`, …). Checking ALL resolved addresses defeats the
+     * static multi-record DNS-rebinding case; it does NOT pin the connection —
+     * the fetch re-resolves the name afterwards, so a TTL-0 round-robin zone
+     * answering public at check time and private at connect time is a
+     * disclosed TOCTOU residual (see the KNOWN RESIDUAL block on
+     * {@see self::guardHostNotPrivate()}). Deployments that legitimately need
+     * a specific internal host pass it in $allowedHosts to bypass the
+     * deny-list for that host only.
      *
      * @param string $url     Absolute URL (http/https/file/data).
      * @param array<string,string>|list<string> $headers  Optional request
@@ -1136,10 +1140,24 @@ final class ImageSource
      * Only http(s) URLs carry a remote host worth guarding; other schemes
      * (file://, data://) are governed by the scheme allow-list. The host is
      * resolved to ALL of its A/AAAA addresses and rejected if ANY is
-     * non-public — this defeats DNS-rebinding where a public name resolves to
-     * `169.254.169.254` or an RFC-1918 address. A host named in $allowedHosts
-     * bypasses the check: the opt-in seam for deployments that must reach a
-     * specific internal host.
+     * non-public — this defeats the static multi-record DNS-rebinding case
+     * where a public name resolves to `169.254.169.254` or an RFC-1918
+     * address. A host named in $allowedHosts bypasses the check: the opt-in
+     * seam for deployments that must reach a specific internal host.
+     *
+     * KNOWN RESIDUAL — check-time guard, connect-time TOCTOU (round-90 audit
+     * MEDIUM-1; decision: DISCLOSE, do not pin). This resolves and judges the
+     * name, then the caller fetches the NAME again, so a TTL-0 round-robin
+     * zone can answer public here and private at connect time. Closing it
+     * means pinning the connection to a validated IP: for the sync path a
+     * URL→IP rewrite plus Host header and `ssl.peer_name` per scheme/port/
+     * IPv6 edge case, for the async path surgery on a possibly caller-
+     * injected Browser. Both were judged invasive for a pre-1.0 port and
+     * declined; deployments needing a connect-time guarantee must front the
+     * fetch with a proxy or name a trusted gateway in $allowedHosts. The
+     * fail-closed below (unresolvable host) shows the rebinding CATEGORY is
+     * understood — only this re-resolution window stays open. Declared
+     * boundary pinned in tests/ImageSourceSsrfTest.php's class docblock.
      *
      * @param array<string>|null $allowedHosts  Hosts permitted to bypass the
      *              private-IP deny-list; matched case-insensitively against the
@@ -1334,7 +1352,8 @@ final class ImageSource
      * the sync-only guard. The Browser's built-in follower is therefore
      * disabled here and redirects are followed by hand, running
      * {@see self::guardHostNotPrivate()} on the initial URL AND every redirect
-     * hop (each host resolved to ALL of its addresses, defeating DNS-rebinding)
+     * hop (each host's full record set judged at guard time; the connect-time
+     * TOCTOU residual documented on that method applies to this path too)
      * before the request goes out. A host in $allowedHosts bypasses the
      * deny-list, matching the sync path's opt-in seam.
      *
@@ -1344,9 +1363,12 @@ final class ImageSource
      *               synchronous {@see ImageSource::fromUrl()}, the async path
      *               forwards them straight to Browser::get().
      * @param Browser|null $browser  Optional pre-configured ReactPHP Browser
-     *               (e.g. with a shared connector/timeout); one is created on
-     *               the default loop when omitted. Its redirect handling is
-     *               overridden regardless, so per-hop host-guarding holds.
+     *               (e.g. with a shared connector/timeout); when omitted one is
+     *               created on the default loop carrying the same
+     *               {@see self::FETCH_TIMEOUT_SECONDS} per-request timeout as
+     *               the sync path. An injected Browser keeps its own timeout —
+     *               it is not rewritten. Its redirect handling is overridden
+     *               regardless, so per-hop host-guarding holds.
      * @param array<string>|null $allowedHosts  Hosts permitted to bypass the
      *               private/reserved-IP deny-list, matched case-insensitively
      *               on the initial URL AND every redirect hop. null (default)
@@ -1369,7 +1391,11 @@ final class ImageSource
             if (!class_exists(Browser::class)) {
                 return reject(new \RuntimeException(Lang::t('image_source.url_http_missing')));
             }
-            $browser = new Browser();
+            // Timeout parity with the sync fetch (round-90 audit INFO): the
+            // default Browser is armed with FETCH_TIMEOUT_SECONDS. An injected
+            // Browser is used exactly as the caller configured it — their
+            // connector/timeout choice is theirs, only redirects are overridden.
+            $browser = (new Browser())->withTimeout(self::FETCH_TIMEOUT_SECONDS);
         }
 
         // Disable the Browser's built-in redirect follower: it would chase a
@@ -1474,6 +1500,14 @@ final class ImageSource
     private const MAX_REDIRECTS = 5;
 
     /**
+     * Default per-request fetch timeout in seconds, shared by the sync stream
+     * context and the default-constructed async Browser (round-90 audit INFO:
+     * the async path previously fell back to react's 60s default_socket_timeout
+     * unless the caller injected a configured Browser).
+     */
+    private const FETCH_TIMEOUT_SECONDS = 30.0;
+
+    /**
      * Fetch raw bytes from a URL synchronously via PHP stream wrappers.
      *
      * SSRF hardening: redirects are followed MANUALLY (`max_redirects: 0`) so
@@ -1515,7 +1549,7 @@ final class ImageSource
 
             $http = [
                 'method'          => 'GET',
-                'timeout'         => 30,
+                'timeout'         => self::FETCH_TIMEOUT_SECONDS,
                 'follow_location' => 0,
                 'max_redirects'   => 0,
                 // Read 3xx/4xx bodies+headers instead of returning false, so we

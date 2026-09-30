@@ -232,6 +232,30 @@ final class ImageSourceUrlTest extends TestCase
         ));
     }
 
+    // ---- default fetch-timeout parity (round-90 audit INFO) -------------
+
+    public function testAsyncAndSyncShareOneDefaultFetchTimeout(): void
+    {
+        // Both fetch paths must honour ONE shared ceiling, not hand-typed
+        // numerals: sync carries it in the stream context, the async default
+        // Browser in withTimeout(). An injected Browser stays caller-owned.
+        $ref       = new \ReflectionClass(ImageSource::class);
+        $constants = $ref->getConstants(\ReflectionClassConstant::IS_PRIVATE);
+        $this->assertSame(30.0, $constants['FETCH_TIMEOUT_SECONDS'] ?? null);
+
+        $source = (string) file_get_contents(__DIR__ . '/../src/ImageSource.php');
+        $this->assertStringContainsString(
+            "'timeout'         => self::FETCH_TIMEOUT_SECONDS,",
+            $source,
+            'sync stream context must draw the shared timeout constant',
+        );
+        $this->assertStringContainsString(
+            '(new Browser())->withTimeout(self::FETCH_TIMEOUT_SECONDS)',
+            $source,
+            'default-constructed async Browser must draw the same constant',
+        );
+    }
+
     // ---- helpers --------------------------------------------------------
 
     /**
