@@ -124,7 +124,7 @@ B                  # SetCellOp first 'B'
 \x1b[2b            # REP → repeat 'B' 2×   (from RepeatRunOp)
 ```
 
-Total: 41 bytes vs 51 bytes for the same 5×2 frame repainted via `toAnsi()` (which
+Total: 42 bytes vs 51 bytes for the same 5×2 frame repainted via `toAnsi()` (which
 also emits one trailing SGR reset the delta stream does not need). Cell styles in
 the example are equal-by-value instances; the stream is instance-independent —
 sharing one `Style` object across the three `B` cells yields the identical bytes.
