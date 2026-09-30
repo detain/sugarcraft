@@ -18,11 +18,24 @@ namespace SugarCraft\Core\Util;
  * Optional base-dir confinement guards callers that build the path from
  * untrusted components: the resolved target must stay inside $baseDir, and a
  * symlink at the final component pointing outside is rejected.
+ *
+ * {@see withPermissions()} is the second, independent axis: who may READ the
+ * published state. Without it the file lands on whatever the process umask
+ * happens to allow, so a caller storing tokens has to re-roll the
+ * umask/chmod dance per library (phlix's TokenStore, sugar-crush's Session) or,
+ * more often, forget it.
  */
 final class AtomicJsonFile
 {
+    /**
+     * Ceiling of plain permission bits. Setuid/setgid/sticky are out of this
+     * class's vocabulary: a durable JSON file has no business carrying them.
+     */
+    private const MODE_CEILING = 0777;
+
     private function __construct(
         private readonly string $path,
+        private readonly ?int $fileMode = null,
     ) {
     }
 
@@ -42,6 +55,45 @@ final class AtomicJsonFile
         }
 
         return new self($path);
+    }
+
+    /**
+     * Derive a store that publishes with $mode permission bits, leaving this one
+     * alone.
+     *
+     * The mode lands on the temp inode BEFORE the payload is written and
+     * therefore before the rename that publishes it (see {@see write()}), which
+     * is the security-critical ordering: rename carries the temp's mode onto the
+     * target, so the published path never exists with looser bits than $mode and
+     * a replace of an already-loose file tightens it in the same syscall.
+     *
+     * Unset — the default every existing consumer keeps — means "the umask
+     * decides", exactly as before this method existed.
+     *
+     * Mirrors the 0600 secret-store discipline phlix hand-rolls in
+     * `phlix-console-client/src/Config/TokenStore.php::persist()`.
+     *
+     * @throws \InvalidArgumentException When $mode is not plain permission bits.
+     */
+    public function withPermissions(int $mode): self
+    {
+        if ($mode < 0 || $mode > self::MODE_CEILING) {
+            throw new \InvalidArgumentException(
+                'AtomicJsonFile mode must be plain permission bits (0000..0777), got '
+                . \sprintf('%o', $mode) . ' for ' . $this->path,
+            );
+        }
+
+        return new self($this->path, $mode);
+    }
+
+    /**
+     * The permission bits this store publishes with, or null when the umask
+     * decides.
+     */
+    public function permissions(): ?int
+    {
+        return $this->fileMode;
     }
 
     /**
@@ -98,6 +150,12 @@ final class AtomicJsonFile
      * tokens/history and should not be world-readable. On any failure the temp
      * file is removed before the exception propagates.
      *
+     * When {@see withPermissions()} set a mode, the temp inode is chmod'ed to it
+     * immediately after creation — before a single payload byte is written — so
+     * neither the temp nor the published target ever carries looser bits than
+     * asked. Nothing is chmod'ed after the rename: the published file IS the
+     * temp, mode and all.
+     *
      * JSON is encoded pretty-printed with unescaped slashes so the on-disk
      * state stays human-diffable (these files are read in PRs / by operators).
      *
@@ -109,12 +167,7 @@ final class AtomicJsonFile
     public function write(array $data): void
     {
         $dir = \dirname($this->path);
-        if (!is_dir($dir)) {
-            // Race-safe: mkdir may fail because a concurrent writer just made it.
-            if (!@mkdir($dir, 0700, true) && !is_dir($dir)) {
-                throw new \RuntimeException("Cannot create state directory: {$dir}");
-            }
-        }
+        $this->ensureDirectory($dir);
 
         $payload = json_encode(
             $data,
@@ -129,6 +182,8 @@ final class AtomicJsonFile
         }
 
         try {
+            $this->applyPermissions($tmp);
+
             if (!flock($handle, \LOCK_EX)) {
                 throw new \RuntimeException("Failed to lock temp file: {$tmp}");
             }
@@ -155,6 +210,92 @@ final class AtomicJsonFile
 
             throw $e;
         }
+    }
+
+    /**
+     * Create the parent directory when missing; never touch one that exists.
+     *
+     * The default mode is 0700 — durable state may hold tokens or history and
+     * should not be world-readable. A caller who asked for a wider FILE mode
+     * gets a directory that can actually be traversed by the same audience
+     * ({@see directoryMode()}), re-asserted with chmod because mkdir's mode is
+     * filtered by the process umask. That re-assertion runs only on a directory
+     * THIS call created: re-permissioning a directory someone else made is not
+     * this class's business, and a caller wanting a pre-existing shared dir
+     * group-readable sets it up themselves.
+     */
+    private function ensureDirectory(string $dir): void
+    {
+        if (is_dir($dir)) {
+            return;
+        }
+
+        // Race-safe: mkdir may fail because a concurrent writer just made it.
+        $created = @mkdir($dir, $this->directoryMode(), true);
+        if (!$created && !is_dir($dir)) {
+            throw new \RuntimeException("Cannot create state directory: {$dir}");
+        }
+
+        if (!$created || $this->fileMode === null) {
+            return;
+        }
+
+        $mode = $this->directoryMode();
+        if (!@chmod($dir, $mode)) {
+            throw new \RuntimeException(
+                'Cannot set mode ' . \sprintf('%04o', $mode) . " on state directory: {$dir}"
+            );
+        }
+    }
+
+    /**
+     * Settle the requested permission bits on the temp inode.
+     *
+     * Runs before the payload is written and long before the publish rename, so
+     * the secret bytes never sit in an inode the caller did not authorize. This
+     * is a no-op when no mode was requested, which keeps every pre-existing
+     * consumer's on-disk bits umask-derived, byte for byte.
+     *
+     * @throws \RuntimeException When the mode cannot be applied — a caller who
+     *                           asked for 0600 and did not get it must learn
+     *                           now, not after the file ships world-open.
+     */
+    private function applyPermissions(string $tmp): void
+    {
+        if ($this->fileMode === null) {
+            return;
+        }
+
+        if (!@chmod($tmp, $this->fileMode)) {
+            throw new \RuntimeException(
+                'Cannot set mode ' . \sprintf('%04o', $this->fileMode) . " on temp state file: {$tmp}"
+            );
+        }
+    }
+
+    /**
+     * Directory bits matching the current file mode: every read class also gets
+     * its execute bit, because a directory nobody can traverse is no directory
+     * at all (0600 → 0700, 0640 → 0750, 0644 → 0755).
+     */
+    private function directoryMode(): int
+    {
+        if ($this->fileMode === null) {
+            return 0700;
+        }
+
+        $mode = $this->fileMode;
+        if (($mode & 0400) !== 0) {
+            $mode |= 0100;
+        }
+        if (($mode & 0040) !== 0) {
+            $mode |= 0010;
+        }
+        if (($mode & 0004) !== 0) {
+            $mode |= 0001;
+        }
+
+        return $mode;
     }
 
     /**

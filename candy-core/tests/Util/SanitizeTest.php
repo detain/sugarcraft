@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Core\Tests\Util;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\ImageOverlay;
 use SugarCraft\Core\Util\Sanitize;
 
 /**
@@ -23,6 +24,17 @@ final class SanitizeTest extends TestCase
     private const GLYPH = "\xE2\x86\xB5";
     /** � U+FFFD REPLACEMENT CHARACTER — cellValue's invalid-UTF-8 marker. */
     private const FFFD = "\xEF\xBF\xBD";
+
+    /** U+E000 — candy-mouse's zone-OPEN sentinel (also ImageOverlay marker id 0). */
+    private const SENTINEL_OPEN = "\xEE\x80\x80";
+    /** U+E001 — candy-mouse's zone-CLOSE sentinel (also ImageOverlay marker id 1). */
+    private const SENTINEL_CLOSE = "\xEE\x80\x81";
+    /** U+E002 — a private-use codepoint that is NOT a sentinel (marker id 2). */
+    private const IMAGE_MARKER = "\xEE\x80\x82";
+    /** U+F8FF — top of the BMP Private Use Area. */
+    private const PUA_LAST = "\xEF\xA3\xBF";
+    /** U+F0000 — supplementary-plane private use, where Nerd Fonts live. */
+    private const ASTRAL_PUA = "\xF3\xB0\x80\x80";
 
     // ---- controlChars -----------------------------------------------------
 
@@ -356,5 +368,130 @@ final class SanitizeTest extends TestCase
         // removes the entire escape sequence.
         $this->assertSame('a[31mb', Sanitize::controlChars("a\x1b[31mb"));
         $this->assertSame('ab', Sanitize::untrusted("a\x1b[31mb"));
+    }
+
+    // ---- Private Use Area / zone sentinels --------------------------------
+
+    public function testUntrustedLeavesZoneSentinelsAlone(): void
+    {
+        // Not an oversight, a declared boundary: a sentinel is well-formed text
+        // with no control meaning, so widening untrusted() would also eat image
+        // markers and icon-font glyphs for every consumer. Zone-bound text uses
+        // untrustedForMarkedFrames() instead — this pin reddens if the default is
+        // ever quietly widened and the sibling story becomes a lie.
+        $forged = 'a' . self::SENTINEL_OPEN . 'pane:tools' . self::SENTINEL_CLOSE . 'b';
+
+        $this->assertSame($forged, Sanitize::untrusted($forged));
+    }
+
+    public function testStripZoneSentinelsRemovesOnlyTheSentinelPair(): void
+    {
+        $input = 'a' . self::SENTINEL_OPEN . 'x' . self::SENTINEL_CLOSE . 'b'
+            . self::IMAGE_MARKER . self::PUA_LAST . self::ASTRAL_PUA;
+
+        // The id text between them survives as inert characters; everything above
+        // U+E001 (image markers, patched-font glyphs) must keep flowing.
+        $this->assertSame(
+            'axb' . self::IMAGE_MARKER . self::PUA_LAST . self::ASTRAL_PUA,
+            Sanitize::stripZoneSentinels($input),
+        );
+    }
+
+    public function testStripZoneSentinelsNeutralisesAForgedZone(): void
+    {
+        $hostile = "here is a screenshot\x0A"
+            . self::SENTINEL_OPEN . 'pane:tools' . self::SENTINEL_CLOSE
+            . 'click here'
+            . self::SENTINEL_OPEN . '/' . 'pane:tools' . self::SENTINEL_CLOSE;
+
+        $clean = Sanitize::stripZoneSentinels($hostile);
+
+        // A zone needs a sentinel at BOTH ends; with neither able to survive, the
+        // input can neither register a click target nor break the zone parse.
+        $this->assertStringNotContainsString(self::SENTINEL_OPEN, $clean);
+        $this->assertStringNotContainsString(self::SENTINEL_CLOSE, $clean);
+        $this->assertStringContainsString('pane:tools', $clean);
+        $this->assertStringContainsString('click here', $clean);
+    }
+
+    public function testStripZoneSentinelsIsFailClosedOnBrokenUtf8(): void
+    {
+        // str_replace on literal bytes: a malformed sequence elsewhere in the
+        // string cannot turn the sweep into a no-op the way a /u regex would.
+        $input = "\xF4\xFF\xFF\xFF" . self::SENTINEL_OPEN . 'tail';
+
+        $this->assertSame("\xF4\xFF\xFF\xFF" . 'tail', Sanitize::stripZoneSentinels($input));
+    }
+
+    public function testStripPrivateUseEmptiesTheBasicMultilingualBlock(): void
+    {
+        $input = 'a' . self::SENTINEL_OPEN . self::SENTINEL_CLOSE . self::IMAGE_MARKER
+            . self::PUA_LAST . '€' . self::ASTRAL_PUA . 'z';
+
+        // Sentinels, image markers and the block's top go; a normal BMP glyph and
+        // the supplementary-plane private use area (most Nerd Font territory) do
+        // not — they cannot form zone markup, so stripping them costs glyphs for
+        // nothing.
+        $this->assertSame('a€' . self::ASTRAL_PUA . 'z', Sanitize::stripPrivateUse($input));
+    }
+
+    public function testStripPrivateUseKeepsTheBlockNeighbours(): void
+    {
+        // U+D7FF (last codepoint before the block) and U+F900 (first after it)
+        // bound the pattern; either one being swallowed is a real regression.
+        $below = "\xED\x9F\xBF";
+        $above = "\xEF\xA4\x80";
+
+        $this->assertSame(
+            $below . $above,
+            Sanitize::stripPrivateUse($below . self::SENTINEL_OPEN . $above),
+        );
+    }
+
+    public function testStripPrivateUseIsFailClosedOnBrokenUtf8(): void
+    {
+        // A /u pattern would return null here and the `?? ''` fallback would
+        // hand back the hostile bytes; the byte scan only strips.
+        $input = "\xC3\x28" . self::SENTINEL_OPEN . self::IMAGE_MARKER;
+
+        $this->assertSame("\xC3\x28", Sanitize::stripPrivateUse($input));
+    }
+
+    public function testUntrustedForMarkedFramesComposesBothPolicies(): void
+    {
+        $input = "model says:\x1b[31mred\x07"
+            . self::SENTINEL_OPEN . 'pane:tools' . self::SENTINEL_CLOSE
+            . "\ttab\nline";
+
+        // Whole escape sequences (not just the introducer) and BEL are gone, the
+        // forged zone loses both sentinels while its id text stays inert, and the
+        // whitespace untrusted() promises to preserve still survives.
+        $this->assertSame(
+            "model says:redpane:tools" . "\ttab\nline",
+            Sanitize::untrustedForMarkedFrames($input),
+        );
+    }
+
+    public function testSentinelConstantsAgreeWithTheReservedArena(): void
+    {
+        $this->assertSame(Sanitize::PUA_BMP_FIRST, mb_ord(Sanitize::ZONE_SENTINEL_OPEN));
+        $this->assertSame(Sanitize::PUA_BMP_FIRST + 1, mb_ord(Sanitize::ZONE_SENTINEL_CLOSE));
+        $this->assertSame(0xF8FF, Sanitize::PUA_BMP_LAST);
+        // The arena's own byte spellings are what the strips match on.
+        $this->assertSame("\xEE\x80\x80", Sanitize::ZONE_SENTINEL_OPEN);
+        $this->assertSame("\xEE\x80\x81", Sanitize::ZONE_SENTINEL_CLOSE);
+    }
+
+    public function testImageOverlayMarkersLandInsideTheReservedArenaToday(): void
+    {
+        // The collision sugar-crush masks with a private maskImageMarkers():
+        // image id 0 IS the zone-open sentinel and id 1 IS the close sentinel, so
+        // a rendered screenshot silently feeds the zone parser markup. Pinned
+        // deliberately — when the allocator finally moves to a disjoint range,
+        // this test is the tripwire that forces the reservation docblock (and the
+        // downstream workaround) to be retired in the same commit.
+        $this->assertSame(Sanitize::ZONE_SENTINEL_OPEN, ImageOverlay::marker(0));
+        $this->assertSame(Sanitize::ZONE_SENTINEL_CLOSE, ImageOverlay::marker(1));
+        $this->assertSame(self::IMAGE_MARKER, ImageOverlay::marker(2));
     }
 }

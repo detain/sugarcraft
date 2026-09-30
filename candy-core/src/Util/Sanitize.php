@@ -18,6 +18,20 @@ namespace SugarCraft\Core\Util;
  *     \n \r \t to spaces; the printable SGR parameter text is left behind.
  *   - {@see cellValue()}    — glyph-replacement + UTF-8 repair for data grids.
  *   - {@see untrusted()}    — full ANSI strip for plain-text module sinks.
+ *   - {@see untrustedForMarkedFrames()} — {@see untrusted()} plus the zone
+ *     sentinel strip, for text destined for a frame that carries candy-mouse
+ *     zone markup. The Private-Use codepoints it removes are the reason a
+ *     separate policy is needed: see the reservation note below.
+ *
+ * **The Private-Use reservation.** A TUI frame is not only text: candy-mouse's
+ * `Mark`/`Scan` delimit clickable zones with the sentinel pair U+E000 (open) and
+ * U+E001 (close), and {@see \SugarCraft\Core\ImageOverlay} allocates its image
+ * marker cells from the same block head (U+E000 + id). Those codepoints are
+ * ordinary, well-formed 3-byte UTF-8, so {@see untrusted()} — whose vocabulary
+ * is escapes, C0/C1 and DEL — passes hostile input carrying them straight
+ * through. Text that reaches a zone-scanned frame therefore needs the sentinel
+ * sweep of {@see stripZoneSentinels()} on top, or a model reply can forge zone
+ * markup (attacker-chosen click targets) or break the zone parse outright.
  *
  * No single upstream counterpart is cited here because this class is a
  * SugarCraft-original assembled from three separate internal predecessors, not a
@@ -33,6 +47,36 @@ namespace SugarCraft\Core\Util;
  */
 final class Sanitize
 {
+    /**
+     * First codepoint of the Basic Multilingual Plane Private Use Area — the
+     * block SugarCraft reserves for in-frame markup (zone sentinels, image
+     * markers). Pinned against {@see \SugarCraft\Core\ImageOverlay}'s marker
+     * window so the two allocations stay auditable from one place.
+     */
+    public const PUA_BMP_FIRST = 0xE000;
+
+    /** Last codepoint of the reserved BMP Private Use Area (U+F8FF). */
+    public const PUA_BMP_LAST = 0xF8FF;
+
+    /** U+E000 — the zone-OPEN sentinel candy-mouse's Mark emits / Scan parses. */
+    public const ZONE_SENTINEL_OPEN = "\xEE\x80\x80";
+
+    /** U+E001 — the zone-CLOSE sentinel candy-mouse's Mark emits / Scan parses. */
+    public const ZONE_SENTINEL_CLOSE = "\xEE\x80\x81";
+
+    /**
+     * UTF-8 spellings of the whole U+E000–U+F8FF block, matched byte-wise.
+     *
+     * No `/u` flag on purpose, for the same reason {@see untrusted()}'s C0 sweep
+     * has none: a Unicode-mode match FAILS (returns null) on input carrying a
+     * single malformed sequence, and any fallback then hands the hostile bytes
+     * back. These three-byte shapes cannot occur inside another character, so
+     * the byte scan is both exact for well-formed input and fail-closed for
+     * broken input — it can only ever over-match a stray 0xEE/0xEF lead byte,
+     * which is the safe direction for a strip.
+     */
+    private const PUA_BMP_PATTERN = '/\xEE[\x80-\xBF][\x80-\xBF]|\xEF[\x80-\xA3][\x80-\xBF]/';
+
     // Visible stand-in for a neutralized control byte: · (U+00B7 MIDDLE DOT).
     private const CELL_REPLACEMENT = "\xC2\xB7";
 
@@ -160,6 +204,12 @@ final class Sanitize
      * Neither preserves ESC-introduced SGR, and plain-text sinks render no
      * colour either way, so the full strip costs nothing.
      *
+     * Declared scope boundary: Private-Use codepoints are well-formed text, not
+     * control bytes, so U+E000–U+F8FF survives this method. That is fine for a
+     * plain-text sink and unsafe for a frame carrying candy-mouse zone markup —
+     * for the latter use {@see untrustedForMarkedFrames()}, or add
+     * {@see stripZoneSentinels()} to a path that must keep other PUA glyphs.
+     *
      * @param string $s Untrusted input string
      * @return string Sanitized string safe for terminal output
      */
@@ -183,5 +233,74 @@ final class Sanitize
         // and the old `?? $stripped` fallback then let every C0 control
         // (BEL included) through. Fail-closed beats fallback-to-hostile.
         return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', '', $stripped) ?? '';
+    }
+
+    /**
+     * Remove the zone sentinel pair (U+E000 / U+E001) from text, leaving every
+     * other codepoint — including the rest of the Private Use Area — alone.
+     *
+     * This is the security half of "untrusted text may not speak the zone
+     * language". Zone markup needs a sentinel at both ends, so with neither able
+     * to survive this sweep, injected input can neither register an
+     * attacker-chosen click target in the hit-test registry nor forge the
+     * duplicate/unclosed ids that make the zone parse throw. What is left of a
+     * forged `U+E000 id U+E001` triple is its inert id text.
+     *
+     * Deliberately surgical rather than block-wide: image marker cells
+     * ({@see \SugarCraft\Core\ImageOverlay}, U+E000 + id) and Nerd Font glyphs
+     * share the block and must keep flowing through a display path. Callers that
+     * want a guaranteed PUA-free string use {@see stripPrivateUse()}.
+     *
+     * `str_replace` on the literal byte spellings, never a `/u` regex: the same
+     * fail-closed law as {@see untrusted()} — malformed UTF-8 must not be able to
+     * turn the strip into a no-op.
+     *
+     * @param string $s Text about to be painted into a zone-marked frame.
+     * @return string The same text with every zone sentinel removed.
+     */
+    public static function stripZoneSentinels(string $s): string
+    {
+        return str_replace([self::ZONE_SENTINEL_OPEN, self::ZONE_SENTINEL_CLOSE], '', $s);
+    }
+
+    /**
+     * Remove every Basic Multilingual Plane Private Use codepoint
+     * (U+E000–U+F8FF) — the whole arena SugarCraft allocates markup from.
+     *
+     * The blunt instrument: for a surface that renders no images and no patched-
+     * font glyphs, this is the strongest guarantee that no foreign markup reaches
+     * a zone scanner. Softer callers that must keep U+E002-and-up image markers or
+     * icon fonts alive use {@see stripZoneSentinels()}. Supplementary-plane PUA
+     * (U+F0000…U+10FFFD, where Nerd Fonts put most of their glyphs) is NOT touched
+     * — it cannot form zone markup, so stripping it would cost glyphs for nothing.
+     *
+     * @param string $s Text to render PUA-free.
+     * @return string The same text with the BMP Private Use block removed.
+     */
+    public static function stripPrivateUse(string $s): string
+    {
+        return preg_replace(self::PUA_BMP_PATTERN, '', $s) ?? '';
+    }
+
+    /**
+     * The policy for text that originated outside this process AND lands in a
+     * frame carrying candy-mouse zone markup: {@see untrusted()} plus
+     * {@see stripZoneSentinels()}.
+     *
+     * {@see untrusted()} alone is not enough there, because a Private-Use
+     * sentinel is well-formed text with no control meaning to the ANSI sweep —
+     * hostile model or tool output carrying it would reach the zone parser
+     * verbatim. Composing the two here keeps the predicate in one audited place
+     * instead of re-rolled per application.
+     *
+     * Order matters only for readability: the ANSI/C0 sweep cannot create
+     * sentinels, and the sentinel sweep cannot create escapes.
+     *
+     * @param string $s Untrusted text destined for a zone-marked frame.
+     * @return string Terminal-safe text with no zone sentinels left.
+     */
+    public static function untrustedForMarkedFrames(string $s): string
+    {
+        return self::stripZoneSentinels(self::untrusted($s));
     }
 }
