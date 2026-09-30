@@ -136,9 +136,10 @@ final class RendererTest extends TestCase
         // Byte-exact pin: renderMini() is now Buffer-backed (no hand-rolled
         // SGR via the removed block() helper). The O tetromino fills the
         // middle two columns of both rows. The candy-buffer SGR emitter
-        // prefixes a reset ("0;") and only emits one trailing reset per run,
-        // so this differs from the old block()-per-cell bytes — that byte
-        // change is exactly what this test guards against regressing.
+        // prefixes a reset ("0;") and Buffer::toAnsi() is canonical: equal
+        // adjacent styles share ONE SGR open and one trailing reset per
+        // style run — so the two 2-space blocks merge into a single 4-space
+        // styled run. That byte shape is exactly what this test guards.
         $reflector = new \ReflectionClass(Renderer::class);
         $method = $reflector->getMethod('renderMini');
         $method->setAccessible(true);
@@ -148,7 +149,7 @@ final class RendererTest extends TestCase
         // O color 226 → 0xffd400 → 255;212;0
         $block = "\x1b[0;48;2;255;212;0m";
         $reset = "\x1b[0m";
-        $row = '  ' . $block . '  ' . $block . '  ' . $reset . '  ';
+        $row = '  ' . $block . '    ' . $reset . '  ';
         $expected = $row . "\n" . $row;
 
         $this->assertSame($expected, $mini, 'renderMini(O) must match the Buffer-rendered snapshot');

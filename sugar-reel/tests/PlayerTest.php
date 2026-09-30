@@ -1336,6 +1336,11 @@ final class PlayerTest extends TestCase
      * A future divergence in the grid ordering or wrapping would change view()
      * and fail this test.
      *
+     * Re-captured after the candy-buffer value-equality fix made Buffer::toAnsi()
+     * canonical: equal styles now emit ONE SGR per run instead of one per cell
+     * (the HalfBlock pin below lost its per-glyph repeats). Parity semantics —
+     * grid ordering, glyph choice, wrapping — are unchanged.
+     *
      * @dataProvider frameToBufferParityCases
      */
     public function testFrameToBufferParityWithPerCellPath(string $bytes, int $w, int $h, Mode $mode, string $expectedB64): void
@@ -1375,7 +1380,7 @@ final class PlayerTest extends TestCase
                 4,
                 2,
                 Mode::HalfBlock,
-                'G1swOzM4OzI7MjU1OzA7MDs0ODsyOzA7MTI4OzBt4paAG1swOzM4OzI7MjU1OzA7MDs0ODsyOzA7MTI4OzBt4paAG1swOzM4OzI7MjU1OzA7MDs0ODsyOzA7MTI4OzBt4paAG1swOzM4OzI7MjU1OzA7MDs0ODsyOzA7MTI4OzBt4paAG1swbQ==',
+                'G1swOzM4OzI7MjU1OzA7MDs0ODsyOzA7MTI4OzBt4paA4paA4paA4paAG1swbQ==',
             ],
             'Ascii' => [
                 "\x00\x00\x00" . "\x7f\x7f\x7f" . "\x7f\x7f\x7f" . "\xff\xff\xff",
