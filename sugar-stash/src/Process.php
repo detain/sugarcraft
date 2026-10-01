@@ -13,12 +13,19 @@ namespace SugarCraft\Stash;
  * indefinitely. Draining stdout/stderr through `stream_select` with a deadline
  * lets us `proc_terminate` the child once the budget is spent instead of
  * blocking on `stream_get_contents` forever.
+ *
+ * stdin is pumped through the SAME select loop rather than one blocking
+ * `fwrite`: a child that never reads (an early `git apply` refusal, say) fills
+ * the 64KiB pipe and a blocking write would wedge the UI thread OUTSIDE the
+ * timeout budget entirely — the loop keeps the deadline authoritative over the
+ * write phase too.
  */
 final class Process
 {
     /**
      * @param list<string> $argv    Command + args passed straight to proc_open (no shell).
-     * @param string|null  $stdin   Written to the child's stdin, which is then closed. Null opens no stdin pipe.
+     * @param string|null  $stdin   Pumped incrementally into the child's non-blocking stdin, closed when fully
+     *                              written (or on EPIPE). Null opens no stdin pipe.
      * @param float        $timeout Seconds before the child is killed; <= 0 disables the timeout.
      *
      * @return array{stdout: string, stderr: string, exit: int, timedOut: bool}
@@ -34,9 +41,18 @@ final class Process
             throw new \RuntimeException(Lang::t('git.spawn_failed'));
         }
 
+        // EPIPE is expected when the child exits without draining us — @fwrite
+        // surfaces it as a silent write failure and the child's own exit code
+        // speaks for the outcome.
+        $stdinHandle = null;
+        $stdinOffset = 0;
         if ($stdin !== null) {
-            fwrite($pipes[0], $stdin);
-            fclose($pipes[0]);
+            stream_set_blocking($pipes[0], false);
+            if ($stdin === '') {
+                fclose($pipes[0]);
+            } else {
+                $stdinHandle = $pipes[0];
+            }
         }
 
         $open = [];
@@ -50,7 +66,7 @@ final class Process
         $timedOut = false;
         $deadline = $timeout > 0 ? microtime(true) + $timeout : null;
 
-        while ($open !== []) {
+        while ($open !== [] || $stdinHandle !== null) {
             $wait = null;
             if ($deadline !== null) {
                 $wait = $deadline - microtime(true);
@@ -61,7 +77,7 @@ final class Process
             }
 
             $read   = array_values($open);
-            $write  = null;
+            $write  = $stdinHandle !== null ? [$stdinHandle] : [];
             $except = null;
             if ($wait === null) {
                 $ready = @stream_select($read, $write, $except, null);
@@ -96,10 +112,28 @@ final class Process
                     $stderr .= $chunk;
                 }
             }
+
+            if ($stdinHandle !== null && in_array($stdinHandle, $write, true)) {
+                $n = @fwrite($stdinHandle, substr($stdin, $stdinOffset, 65536));
+                if ($n === false || $n === 0) {
+                    fclose($stdinHandle);
+                    $stdinHandle = null;
+                } else {
+                    $stdinOffset += $n;
+                    if ($stdinOffset >= strlen($stdin)) {
+                        fclose($stdinHandle);
+                        $stdinHandle = null;
+                    }
+                }
+            }
         }
 
         if ($timedOut) {
             proc_terminate($proc, 9);
+        }
+
+        if ($stdinHandle !== null) {
+            fclose($stdinHandle);
         }
 
         foreach ($open as $stream) {

@@ -84,7 +84,7 @@ final readonly class InteractiveRebase
     {
         $n = (int) $this->countInput;
         if ($n <= 0) {
-            return new self(commits: [], cursor: 0, selectingN: true, countInput: '', done: false, error: 'count must be > 0');
+            return new self(commits: [], cursor: 0, selectingN: true, countInput: '', done: false, error: Lang::t('rebase_i.count_positive'));
         }
         $commits = array_slice($logCommits, 0, $n);
         return new self(

@@ -1,14 +1,13 @@
 {
     "name": "sugarcraft/sugar-stash",
     "description": "Terminal Git client \u2014 port of jesseduffield/lazygit on the SugarCraft stack.",
-    "type": "project",
+    "type": "library",
     "license": "MIT",
     "keywords": [
         "tui",
         "cli",
         "git",
         "lazygit",
-        "sugarcraft",
         "sugarcraft"
     ],
     "homepage": "https://sugarcraft.github.io/lib/sugar-stash.html",
@@ -28,7 +27,7 @@
         "bin/sugar-stash"
     ],
     "require": {
-        "php": ">=8.3",
+        "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
         "sugarcraft/candy-fuzzy": "dev-master"

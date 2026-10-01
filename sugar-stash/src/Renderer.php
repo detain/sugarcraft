@@ -6,6 +6,7 @@ namespace SugarCraft\Stash;
 
 use SugarCraft\Core\Syntax\TokenKind;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
@@ -18,16 +19,15 @@ use SugarCraft\Sprinkles\Style;
 final class Renderer
 {
     /**
-     * Strip C0/C1 control bytes and bare ESC from untrusted git output.
-     * Applied before concatenation to prevent terminal escape injection.
+     * Strip C0/C1 control bytes and every escape sequence from untrusted git
+     * output. Applied before concatenation to prevent terminal escape
+     * injection. Rides candy-core's fail-closed sanitizer: the previous `/u`
+     * preg pattern returned FALSE on malformed UTF-8 (git subjects can carry
+     * arbitrary bytes), which silently skipped ALL stripping — ESC included.
      */
     private static function sanitize(string $s): string
     {
-        // phpcs:ignore Generic.Metrics.CyclomaticComplexity.High
-        if (preg_match('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x9f\x1b]/u', $s)) {
-            return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x9f\x1b]/u', '', $s);
-        }
-        return $s;
+        return Sanitize::untrusted($s);
     }
 
     public static function render(App $a): string

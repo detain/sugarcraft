@@ -42,7 +42,7 @@ sugar-stash    # run inside any git working tree
 | `S`                      | Open stash manager (list / apply / drop)                |
 | `V`                      | Cherry-pick — type a commit ref and press Enter       |
 | `w` (branches pane)     | Open worktrees manager (list / add / remove)            |
-| `i`                      | Interactive rebase — select N commits, set actions      |
+| `i`                      | Interactive rebase todo list — preview only; the todo is not yet executed |
 | `R`                      | Refresh from disk                                       |
 | `?`                      | Context-sensitive help                                  |
 | `q` / `Esc`              | Quit                                                    |
