@@ -1061,7 +1061,6 @@ final class ModelTest extends TestCase
     {
         // When cursor is within cursorOffset of bottom AND more lines remain below,
         // the viewport-follow logic shifts the window down.
-        // This exercises lines 600-624.
         $m = Model::new()
             ->setViewport(40, 5)
             ->setCursorOffset(2)
@@ -1080,5 +1079,84 @@ final class ModelTest extends TestCase
         $this->assertNotEmpty($lines);
         // The viewport should have shifted to keep cursor 2 lines from bottom
         $this->assertLessThanOrEqual(5, \count($lines));
+        // Exact window (audit M1 fix wave — the vacuous count-only assertion let
+        // the "D,E,F,F" tail duplication ship): the shift drops the two lines
+        // above the pre-cursor region and, with the list exhausted below, must
+        // NOT re-emit already-rendered items.
+        $this->assertCount(3, $lines, 'shifted window must hold exactly items 3-5 once');
+        $joined = \implode("\n", $lines);
+        foreach ([3, 4, 5] as $i) {
+            $this->assertSame(1, \substr_count($joined, "item $i"),
+                "item $i must appear exactly once in the shifted window");
+        }
+        $this->assertStringNotContainsString('item 2', $joined);
+        $this->assertLessThan(\strpos($joined, 'item 5'), \strpos($joined, 'item 4'),
+            'items keep ascending order in the shifted window');
+        $this->assertLessThan(\strpos($joined, 'item 4'), \strpos($joined, 'item 3'));
+    }
+
+    /**
+     * Audit M1 regression pin — exact repro from the audit report:
+     * 6 single-line items, viewport 40×10, cursorOffset 3, cursor at index 4
+     * produced ["D","E","F","F"] (F duplicated at every end-of-list scroll).
+     * No prefixer/suffixer so lines are the bare item values.
+     */
+    public function testViewportFollowEndOfListDoesNotDuplicateTail(): void
+    {
+        $m = Model::new()
+            ->setViewport(40, 10)
+            ->setCursorOffset(3)
+            ->addItemsFromArray(['A', 'B', 'C', 'D', 'E', 'F'])
+            ->setCursor(4);
+
+        $this->assertSame(['D', 'E', 'F'], $m->lines());
+    }
+
+    /**
+     * Audit M2 regression pin: re-applying a filter (filter-as-you-type) must
+     * not clobber the pristine originalItems — withoutFilter() restores ALL 5.
+     */
+    public function testFilterReapplicationKeepsPristineOriginals(): void
+    {
+        $m = Model::new()->addItemsFromArray(['apple', 'banana', 'apricot', 'cherry', 'avocado']);
+        $first = $m->withFilterFn(fn(\Stringable $v) => \str_starts_with((string) $v, 'a'));
+        $second = $first->withFilterFn(fn(\Stringable $v) => \str_starts_with((string) $v, 'ap'));
+
+        $this->assertSame(3, $first->length());
+        $this->assertSame(2, $second->length());
+
+        $restored = $second->withoutFilter();
+        $this->assertSame(5, $restored->length(), 'two-stage filter must still restore all originals');
+        $this->assertSame([0, 1, 2, 3, 4], $restored->getItemIds());
+        $this->assertSame(FilterState::unfiltered, $restored->filterState);
+    }
+
+    /**
+     * Audit M8 hardening pin: individually valid axes must not multiply into a
+     * memory-exhaustion viewport.
+     */
+    public function testViewportAreaGuard(): void
+    {
+        // Both axes ≤ MAX_DIMENSION but the product is astronomic → rejected.
+        $this->expectException(\InvalidArgumentException::class);
+        Model::new()->setViewport(Model::MAX_DIMENSION, Model::MAX_DIMENSION);
+    }
+
+    public function testViewportAreaBoundaryAcceptsFourMillionCells(): void
+    {
+        // Exactly at the cap: accepted. Individually-large-but-realistic
+        // default-height viewport (100000×24 = 2.4M) also stays legal, keeping
+        // the existing MAX_DIMENSION upper-bound pin green.
+        $m = Model::new()->setViewport(2000, 2000);
+        $this->assertSame(2000, $m->width);
+        $this->assertSame(2000, $m->height);
+        $this->assertSame(Model::MAX_DIMENSION, Model::new()->setWidth(Model::MAX_DIMENSION)->width);
+    }
+
+    public function testSetHeightRejectsAreaOverflowAgainstCurrentWidth(): void
+    {
+        $m = Model::new()->setViewport(1900, 10);
+        $this->expectException(\InvalidArgumentException::class);
+        $m->setHeight(3000); // 1900×3000 = 5.7M > 4M
     }
 }

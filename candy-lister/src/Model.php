@@ -60,6 +60,16 @@ final class Model
      */
     public const MAX_DIMENSION = 100000;
 
+    /**
+     * Upper bound for the viewport AREA (width × height) accepted by the fluent
+     * setters. {@see MAX_DIMENSION} alone guards each axis independently, so
+     * 100000×100000 would pass while {@see bufferFromOutput()} still tries to
+     * allocate 10 billion cells — the per-axis cap does not achieve its stated
+     * DoS purpose without a product cap (audit M8 fix wave). 4M cells ≈ 2000×2000,
+     * far beyond any real terminal while keeping a full repaint comfortably cheap.
+     */
+    public const MAX_TOTAL_CELLS = 4_000_000;
+
     public int $width  = 80;  // viewport width in cells
     public int $height = 24;  // viewport height in lines
     public int $cursorOffset = 5;  // gap between cursor and viewport edge
@@ -151,12 +161,14 @@ final class Model
     public function setWidth(int $width): self
     {
         self::assertDimension($width, 'width');
+        self::assertArea($width, $this->height);
         return $this->mutate(fn($m) => $m->width = $width);
     }
 
     public function setHeight(int $height): self
     {
         self::assertDimension($height, 'height');
+        self::assertArea($this->width, $height);
         return $this->mutate(fn($m) => $m->height = $height);
     }
 
@@ -164,6 +176,7 @@ final class Model
     {
         self::assertDimension($width, 'width');
         self::assertDimension($height, 'height');
+        self::assertArea($width, $height);
         return $this->mutate(fn($m) => [$m->width, $m->height] = [$width, $height]);
     }
 
@@ -185,6 +198,29 @@ final class Model
                 $name,
                 self::MAX_DIMENSION,
                 $n,
+            ));
+        }
+    }
+
+    /**
+     * Reject a viewport whose AREA exceeds {@see MAX_TOTAL_CELLS}.
+     *
+     * Complements the per-axis assertDimension(): two individually-valid axes
+     * can still multiply into a memory-exhaustion allocation in
+     * bufferFromOutput(). Zero on either axis passes (no allocation; lines()
+     * rejects a zero viewport at render time).
+     *
+     * @throws \InvalidArgumentException when width×height exceeds MAX_TOTAL_CELLS.
+     */
+    private static function assertArea(int $width, int $height): void
+    {
+        if ($width > 0 && $height > 0 && $width * $height > self::MAX_TOTAL_CELLS) {
+            throw new \InvalidArgumentException(\sprintf(
+                'Viewport area %dx%d (%d cells) exceeds MAX_TOTAL_CELLS (%d).',
+                $width,
+                $height,
+                $width * $height,
+                self::MAX_TOTAL_CELLS,
             ));
         }
     }
@@ -240,7 +276,13 @@ final class Model
         $clone = clone $this;
         $clone->filterFn = $fn;
         $clone->filterState = FilterState::filtering;
-        $clone->originalItems = $clone->items;
+        // Capture the pristine list ONLY when transitioning unfiltered → filtering.
+        // Re-applying a filter (filter-as-you-type) must keep the originals saved by
+        // the first withFilterFn(); overwriting them with the already-filtered list
+        // would make withoutFilter() restore a shrunken subset (audit M2 fix wave).
+        if ($this->filterFn === null) {
+            $clone->originalItems = $clone->items;
+        }
         $clone->items = array_values(array_filter(
             $clone->items,
             fn(Item $item) => $fn($item->value),
@@ -587,13 +629,18 @@ final class Model
         }
 
         // Lines from the cursor downward, capped by viewport height.
+        // $lastRenderedIndex tracks the highest item index with at least one line
+        // emitted, so the viewport-follow refill below can continue where this
+        // loop stopped instead of re-walking already-rendered items.
         $cursorLineIndex = \count($allLines); // 0-based line index of cursor item's first line
+        $lastRenderedIndex = $this->cursorIndex - 1;
         for ($index = $this->cursorIndex; $index < $count && \count($allLines) < $this->height; $index++) {
             foreach ($this->renderItem($index) as $line) {
                 if (\count($allLines) >= $this->height) {
                     break 2;
                 }
                 $allLines[] = $line;
+                $lastRenderedIndex = $index;
             }
         }
 
@@ -609,15 +656,19 @@ final class Model
             $shift = $this->cursorOffset - $bottomGap;
             if ($shift > 0 && \count($allLines) > $shift) {
                 $allLines = \array_slice($allLines, $shift);
-                // Try to fill back up to height with lines from items AFTER the last rendered one.
+                // Fill back up to height starting AFTER the last item already emitted —
+                // restarting at cursorIndex + 1 re-appended lines that survived the
+                // top-slice and duplicated the list's tail (audit M1 fix wave).
                 $linesAdded = \count($allLines);
-                for ($index = $this->cursorIndex + 1; $index < $count && $linesAdded < $this->height; $index++) {
+                $fillFrom = \max($this->cursorIndex + 1, $lastRenderedIndex + 1);
+                for ($index = $fillFrom; $index < $count && $linesAdded < $this->height; $index++) {
                     foreach ($this->renderItem($index) as $line) {
                         if ($linesAdded >= $this->height) {
                             break 2;
                         }
                         $allLines[] = $line;
                         $linesAdded++;
+                        $lastRenderedIndex = $index;
                     }
                 }
             }
@@ -883,24 +934,37 @@ final class Model
      */
     private function bufferFromOutput(string $output, int $width, int $height): Buffer
     {
-        $buffer = Buffer::new($width, $height);
+        // Bulk construction (audit M3 fix wave): the previous implementation
+        // called Buffer::withCellAt() once per cell, and every such call copies
+        // the ENTIRE grid — O((width×height)²). A 500×200 frame exceeded 120 s.
+        // Building the flat cell list once and handing it to Buffer::fromGrid()
+        // (the candy-buffer bulk API) makes this O(width×height).
+        //
+        // Cell model is UNCHANGED from the prior implementation, byte for byte:
+        // one code point per cell, width 1, SGR escapes ride the grid as plain
+        // runes so style-only frame changes still register in diff(). (Wide
+        // glyphs therefore occupy a single cell here — a known, documented
+        // simplification of this projection; splitOverWidth() handles their
+        // layout at the text level.)
         $lines = \explode("\n", $output);
+        $blank = Cell::new(' ', null, null, 1);
+        $grid = [];
 
         for ($row = 0; $row < $height; $row++) {
             $line = $lines[$row] ?? '';
-            for ($col = 0; $col < $width; $col++) {
-                // Use mb_substr consistently for character-level access with explicit
-                // UTF-8 encoding and bounds check via empty-string fallback to ' '.
-                $char = \mb_substr($line, $col, 1, 'UTF-8');
-                if ($char === '') {
-                    $char = ' ';
-                }
-                $cell = Cell::new($char, null, null, 1);
-                $buffer = $buffer->withCellAt($col, $row, $cell);
+            $chars = \mb_str_split($line, 1, 'UTF-8');
+            $visible = \array_slice($chars, 0, $width); // truncate overflow columns, as before
+            foreach ($visible as $char) {
+                $grid[] = Cell::new($char, null, null, 1);
+            }
+            // Pad the rest of the row with the shared blank cell (Cell is a
+            // readonly value object, so one instance per frame is safe).
+            for ($col = \count($visible); $col < $width; $col++) {
+                $grid[] = $blank;
             }
         }
 
-        return $buffer;
+        return Buffer::fromGrid($width, $height, $grid);
     }
 
     /**
