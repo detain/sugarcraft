@@ -8,40 +8,45 @@ namespace SugarCraft\Mines;
  * Difficulty levels for minesweeper.
  *
  * Mirrors common minesweeper presets:
- *   - EASY   (9×9, 10 mines)
- *   - MEDIUM (16×16, 40 mines)
- *   - EXPERT (30×16, 99 mines)
+ *   - EASY     (9×9, 10 mines)
+ *   - STANDARD (10×10, 12 mines) — the shape `Game::start()` ships with
+ *   - MEDIUM   (16×16, 40 mines)
+ *   - EXPERT   (30×16, 99 mines)
  */
 enum Difficulty
 {
     case EASY;
+    case STANDARD;
     case MEDIUM;
     case EXPERT;
 
     public function width(): int
     {
         return match ($this) {
-            self::EASY   => 9,
-            self::MEDIUM => 16,
-            self::EXPERT => 30,
+            self::EASY     => 9,
+            self::STANDARD => 10,
+            self::MEDIUM   => 16,
+            self::EXPERT   => 30,
         };
     }
 
     public function height(): int
     {
         return match ($this) {
-            self::EASY   => 9,
-            self::MEDIUM => 16,
-            self::EXPERT => 16,
+            self::EASY     => 9,
+            self::STANDARD => 10,
+            self::MEDIUM   => 16,
+            self::EXPERT   => 16,
         };
     }
 
     public function mines(): int
     {
         return match ($this) {
-            self::EASY   => 10,
-            self::MEDIUM => 40,
-            self::EXPERT => 99,
+            self::EASY     => 10,
+            self::STANDARD => 12,
+            self::MEDIUM   => 40,
+            self::EXPERT   => 99,
         };
     }
 

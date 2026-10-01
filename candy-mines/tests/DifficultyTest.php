@@ -16,6 +16,13 @@ final class DifficultyTest extends TestCase
         $this->assertSame(10, Difficulty::EASY->mines());
     }
 
+    public function testStandardDimensions(): void
+    {
+        $this->assertSame(10, Difficulty::STANDARD->width());
+        $this->assertSame(10, Difficulty::STANDARD->height());
+        $this->assertSame(12, Difficulty::STANDARD->mines());
+    }
+
     public function testMediumDimensions(): void
     {
         $this->assertSame(16, Difficulty::MEDIUM->width());
@@ -33,13 +40,14 @@ final class DifficultyTest extends TestCase
     public function testFromDimensionsMatchesPresets(): void
     {
         $this->assertSame(Difficulty::EASY, Difficulty::fromDimensions(9, 9, 10));
+        $this->assertSame(Difficulty::STANDARD, Difficulty::fromDimensions(10, 10, 12));
         $this->assertSame(Difficulty::MEDIUM, Difficulty::fromDimensions(16, 16, 40));
         $this->assertSame(Difficulty::EXPERT, Difficulty::fromDimensions(30, 16, 99));
     }
 
     public function testFromDimensionsReturnsNullForUnknown(): void
     {
-        $this->assertNull(Difficulty::fromDimensions(10, 10, 12));
+        $this->assertNull(Difficulty::fromDimensions(10, 10, 13));
         $this->assertNull(Difficulty::fromDimensions(9, 9, 11));
         $this->assertNull(Difficulty::fromDimensions(8, 8, 10));
     }
@@ -47,8 +55,9 @@ final class DifficultyTest extends TestCase
     public function testCasesContainsAllDifficulties(): void
     {
         $cases = Difficulty::cases();
-        $this->assertCount(3, $cases);
+        $this->assertCount(4, $cases);
         $this->assertContains(Difficulty::EASY, $cases);
+        $this->assertContains(Difficulty::STANDARD, $cases);
         $this->assertContains(Difficulty::MEDIUM, $cases);
         $this->assertContains(Difficulty::EXPERT, $cases);
     }

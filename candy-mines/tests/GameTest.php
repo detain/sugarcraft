@@ -621,4 +621,114 @@ final class GameTest extends TestCase
         $this->assertSame($g->board->exploded, $next->board->exploded);
         $this->assertSame($g->board->revealedCount, $next->board->revealedCount);
     }
+
+    // ─── M3: the shipped default shape records (STANDARD preset) ────────────
+
+    /**
+     * Near-win fixture on the DEFAULT 10×10/12 shape — one unrevealed safe
+     * cell (9,9) with adj=1 (mine at (8,8)), so the final reveal lands the
+     * win in one step. 12 mines: all of row 0 plus (8,8) and (7,7).
+     */
+    private static function nearWinStandardGame(?string $statsPath = null): Game
+    {
+        $mineSet = ['0,0', '1,0', '2,0', '3,0', '4,0', '5,0', '6,0', '7,0', '8,0', '9,0', '8,8', '7,7'];
+        $rows = [];
+        $revealedCount = 0;
+        for ($y = 0; $y < 10; $y++) {
+            $row = [];
+            for ($x = 0; $x < 10; $x++) {
+                $isMine   = in_array("$x,$y", $mineSet, true);
+                $isTarget = ($x === 9 && $y === 9);
+                $revealed = !$isMine && !$isTarget;
+                if ($revealed) {
+                    $revealedCount++;
+                }
+                $row[] = new Cell($isMine, $revealed, false, $isTarget ? 1 : 0);
+            }
+            $rows[] = $row;
+        }
+        // 100 cells − 12 mines − 1 unrevealed target = 87 revealed safe cells.
+        $board = new Board(10, 10, 12, $rows, true, false, $revealedCount, 0);
+
+        return new Game(
+            board: $board,
+            cursorX: 9,
+            cursorY: 9,
+            rand: static fn(int $_max): int => 0,
+            startedAt: microtime(true),
+            statsPath: $statsPath,
+        );
+    }
+
+    public function testDefaultGameShapeIsTheStandardPreset(): void
+    {
+        $this->assertSame(Difficulty::STANDARD, Game::start()->difficulty());
+    }
+
+    public function testWinOnDefaultShapeRecordsStandardStats(): void
+    {
+        $g = self::nearWinStandardGame();
+        $this->assertFalse($g->board->isWon(), 'sanity: one cell short of the win');
+
+        [$g, ] = $g->update(self::key(KeyType::Space));   // reveal the last safe cell
+
+        $this->assertTrue($g->board->isWon(), 'sanity: board won');
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::STANDARD));
+        $this->assertSame(1, $g->stats()->wins(Difficulty::STANDARD));
+    }
+
+    public function testDefaultShapeLossRecordsStandardGame(): void
+    {
+        // An unrevealed MINE as the target cell: revealing it explodes and
+        // must still tally one STANDARD game, zero wins. One other safe cell
+        // stays hidden so the board is NOT already won before the reveal —
+        // a finished board would short-circuit update() to r/q only.
+        $mineSet = ['0,0', '1,0', '2,0', '3,0', '4,0', '5,0', '6,0', '7,0', '8,0', '9,0', '8,8', '9,9'];
+        $rows = [];
+        $revealedCount = 0;
+        for ($y = 0; $y < 10; $y++) {
+            $row = [];
+            for ($x = 0; $x < 10; $x++) {
+                $isMine = in_array("$x,$y", $mineSet, true);
+                $revealed = !$isMine && !($x === 0 && $y === 9);
+                if ($revealed) {
+                    $revealedCount++;
+                }
+                $row[] = new Cell($isMine, $revealed, false, 0);
+            }
+            $rows[] = $row;
+        }
+        $board = new Board(10, 10, 12, $rows, true, false, $revealedCount, 0);
+        $g = new Game(
+            board: $board,
+            cursorX: 9,
+            cursorY: 9,
+            rand: static fn(int $_max): int => 0,
+            startedAt: microtime(true),
+        );
+
+        [$g, ] = $g->update(self::key(KeyType::Space));
+
+        $this->assertTrue($g->board->exploded, 'sanity: reveal should explode the board');
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::STANDARD));
+        $this->assertSame(0, $g->stats()->wins(Difficulty::STANDARD));
+    }
+
+    public function testDefaultShapeWinPersistsStandardBucketToDisk(): void
+    {
+        $path = sys_get_temp_dir() . '/candy-mines-m3-' . bin2hex(random_bytes(4)) . '.json';
+        try {
+            $g = self::nearWinStandardGame($path);
+            [$g, ] = $g->update(self::key(KeyType::Space));   // win → persisted
+
+            $loaded = DifficultyStats::load($path)?->getStats();
+            $this->assertNotNull($loaded);
+            $this->assertSame(1, $loaded->gamesPlayed(Difficulty::STANDARD));
+            $this->assertSame(1, $loaded->wins(Difficulty::STANDARD));
+        } finally {
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
+    }
 }

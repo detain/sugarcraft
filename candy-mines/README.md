@@ -15,7 +15,7 @@
 
 Minesweeper on the SugarCraft stack — port of [`maxpaulus43/go-sweep`](https://github.com/maxpaulus43/go-sweep). Customisable board, recursive flood-fill, win / lose detection, vim-style movement.
 
-Difficulty presets are available via `Game::withDifficulty()`, passing a `Difficulty` case — `Difficulty::EASY` (9×9, 10 mines), `Difficulty::MEDIUM` (16×16, 40 mines), `Difficulty::EXPERT` (30×16, 99 mines).
+Difficulty presets are available via `Game::withDifficulty()`, passing a `Difficulty` case — `Difficulty::EASY` (9×9, 10 mines), `Difficulty::STANDARD` (10×10, 12 mines — the shape the CLI defaults to), `Difficulty::MEDIUM` (16×16, 40 mines), `Difficulty::EXPERT` (30×16, 99 mines).
 
 ## Run it
 
@@ -23,12 +23,12 @@ Difficulty presets are available via `Game::withDifficulty()`, passing a `Diffic
 composer install
 ./bin/candy-mines                            # default 10×10, 12 mines
 ./bin/candy-mines [width] [height] [mines]   # custom board (validated: 2–50 per side, 1..w×h−9 mines)
-./bin/candy-mines --easy | --medium | --expert
+./bin/candy-mines --easy | --standard | --medium | --expert
 ```
 
 Custom board arguments are validated through `CustomDifficulty::fromInput()`: each side must be 2–50 and the mine count must leave a safe 3×3 first-click area (`1 ≤ mines ≤ width × height − 9`). Out-of-range values exit with an error rather than starting a broken game.
 
-**Stats persistence** is opt-in. Set `CANDY_MINES_STATS=/path/to/stats.json` and each completed game's outcome (games, wins, best time per preset) is recorded there via `DifficultyStats`, surviving across sessions. Without the env var the game stays entirely in-memory.
+**Stats persistence** is opt-in. Set `CANDY_MINES_STATS=/path/to/stats.json` and each completed game's outcome (games, wins, best time per preset) is recorded there via `DifficultyStats`, surviving across sessions. The default 10×10/12 board is the `STANDARD` preset, so default games tally too. Boards whose shape matches no preset (explicit custom dimensions) are played without recording — best-times are per-preset, and a mixed-size bucket would make them meaningless. Without the env var the game stays entirely in-memory.
 
 ## Keys
 

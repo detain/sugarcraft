@@ -15,6 +15,9 @@ final class Stats
         public readonly int $easyGames = 0,
         public readonly int $easyWins = 0,
         public readonly ?int $easyBest = null,
+        public readonly int $standardGames = 0,
+        public readonly int $standardWins = 0,
+        public readonly ?int $standardBest = null,
         public readonly int $mediumGames = 0,
         public readonly int $mediumWins = 0,
         public readonly ?int $mediumBest = null,
@@ -30,6 +33,23 @@ final class Stats
                 easyGames: $this->easyGames + 1,
                 easyWins: $this->easyWins + ($won ? 1 : 0),
                 easyBest: $this->minTime($this->easyBest, $won ? $time : null),
+                standardGames: $this->standardGames,
+                standardWins: $this->standardWins,
+                standardBest: $this->standardBest,
+                mediumGames: $this->mediumGames,
+                mediumWins: $this->mediumWins,
+                mediumBest: $this->mediumBest,
+                expertGames: $this->expertGames,
+                expertWins: $this->expertWins,
+                expertBest: $this->expertBest,
+            ),
+            Difficulty::STANDARD => new self(
+                easyGames: $this->easyGames,
+                easyWins: $this->easyWins,
+                easyBest: $this->easyBest,
+                standardGames: $this->standardGames + 1,
+                standardWins: $this->standardWins + ($won ? 1 : 0),
+                standardBest: $this->minTime($this->standardBest, $won ? $time : null),
                 mediumGames: $this->mediumGames,
                 mediumWins: $this->mediumWins,
                 mediumBest: $this->mediumBest,
@@ -41,6 +61,9 @@ final class Stats
                 easyGames: $this->easyGames,
                 easyWins: $this->easyWins,
                 easyBest: $this->easyBest,
+                standardGames: $this->standardGames,
+                standardWins: $this->standardWins,
+                standardBest: $this->standardBest,
                 mediumGames: $this->mediumGames + 1,
                 mediumWins: $this->mediumWins + ($won ? 1 : 0),
                 mediumBest: $this->minTime($this->mediumBest, $won ? $time : null),
@@ -52,6 +75,9 @@ final class Stats
                 easyGames: $this->easyGames,
                 easyWins: $this->easyWins,
                 easyBest: $this->easyBest,
+                standardGames: $this->standardGames,
+                standardWins: $this->standardWins,
+                standardBest: $this->standardBest,
                 mediumGames: $this->mediumGames,
                 mediumWins: $this->mediumWins,
                 mediumBest: $this->mediumBest,
@@ -76,18 +102,20 @@ final class Stats
     public function gamesPlayed(Difficulty $d): int
     {
         return match ($d) {
-            Difficulty::EASY   => $this->easyGames,
-            Difficulty::MEDIUM => $this->mediumGames,
-            Difficulty::EXPERT => $this->expertGames,
+            Difficulty::EASY     => $this->easyGames,
+            Difficulty::STANDARD => $this->standardGames,
+            Difficulty::MEDIUM   => $this->mediumGames,
+            Difficulty::EXPERT   => $this->expertGames,
         };
     }
 
     public function wins(Difficulty $d): int
     {
         return match ($d) {
-            Difficulty::EASY   => $this->easyWins,
-            Difficulty::MEDIUM => $this->mediumWins,
-            Difficulty::EXPERT => $this->expertWins,
+            Difficulty::EASY     => $this->easyWins,
+            Difficulty::STANDARD => $this->standardWins,
+            Difficulty::MEDIUM   => $this->mediumWins,
+            Difficulty::EXPERT   => $this->expertWins,
         };
     }
 
@@ -103,9 +131,10 @@ final class Stats
     public function bestTime(Difficulty $d): ?int
     {
         return match ($d) {
-            Difficulty::EASY   => $this->easyBest,
-            Difficulty::MEDIUM => $this->mediumBest,
-            Difficulty::EXPERT => $this->expertBest,
+            Difficulty::EASY     => $this->easyBest,
+            Difficulty::STANDARD => $this->standardBest,
+            Difficulty::MEDIUM   => $this->mediumBest,
+            Difficulty::EXPERT   => $this->expertBest,
         };
     }
 }
