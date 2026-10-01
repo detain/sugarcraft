@@ -283,4 +283,99 @@ final class DecoderTest extends TestCase
             @unlink($path);
         }
     }
+
+    /**
+     * A file carrying the GIF signature but no complete Logical Screen
+     * Descriptor is not a GIF at all — the old gate only asked for 6 bytes,
+     * after which parseHeader read bytes 6..10 off the end of the string
+     * (PHP warnings under failOnWarning).
+     */
+    public function testDecodeThrowsNotGifForHeaderShorterThanLogicalScreenDescriptor(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $path = sys_get_temp_dir() . '/short-lsd-' . uniqid() . '.gif';
+        file_put_contents($path, 'GIF89a' . "\x04\x00\x04"); // 9 bytes, LSD needs 7
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('candy-flip: not a GIF');
+            Decoder::decode($path, 2, 2);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * A GCT whose declared byte span reaches past EOF cannot resolve any
+     * frame's palette — typed failure instead of a silent walk starting
+     * beyond the data.
+     */
+    public function testDecodeThrowsTruncatedForGlobalColorTableBeyondEof(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        // packed 0x87: GCT flag set, size exp 7 → 256 entries = 768 bytes.
+        $buf = "GIF89a" . pack('v', 4) . pack('v', 4) . "\x87\x00\x00";
+        $path = sys_get_temp_dir() . '/gct-eof-' . uniqid() . '.gif';
+        file_put_contents($path, $buf);
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('candy-flip: truncated GIF');
+            Decoder::decode($path, 2, 2);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * An Image Descriptor cut short by EOF: the nine dimension bytes were
+     * read unguarded (ord($bytes[$i + 1]) … ), raising "Uninitialized string
+     * offset" warnings. Now a typed `decoder.truncated` failure BEFORE any
+     * read — run without @ suppression so a reintroduced unguarded read
+     * fails the suite under failOnWarning, not just the message assert.
+     */
+    public function testDecodeThrowsTruncatedForImageDescriptorCutShortByEof(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $buf = "GIF89a" . pack('v', 4) . pack('v', 4) . "\x00\x00\x00"
+             . "\x2C\x00\x00\x00\x00\x00"; // descriptor introducer + 5 of 10 bytes
+        $path = sys_get_temp_dir() . '/short-id-' . uniqid() . '.gif';
+        file_put_contents($path, $buf);
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('candy-flip: truncated GIF');
+            Decoder::decode($path, 2, 2);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * A zero/negative grid is too SMALL, not too large — it must name its
+     * own key so the message tells the truth about what was refused.
+     */
+    public function testZeroSizedGridNamesTheTooSmallKey(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('candy-flip: cell grid dimensions must be positive');
+        Decoder::decode($this->gifPath, 0, 10);
+    }
+
+    /** The size-cap key keeps its ({max}) contract, pinned at the message level. */
+    public function testOversizedGridKeepsTheTooLargeKey(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('candy-flip: cell grid product exceeds maximum (100000)');
+        Decoder::decode($this->gifPath, 500, 500);
+    }
 }

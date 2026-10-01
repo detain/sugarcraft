@@ -119,24 +119,52 @@ final class DecoderCompositingTest extends TestCase
 
     /**
      * Regression: image left/top offset values must be read from the
-     * Image Descriptor and passed through to the compositing canvas.
+     * Image Descriptor and honoured by the compositing canvas.
      *
-     * Since hand-rolling valid multi-frame GIF LZW data is error-prone,
-     * this is covered by the integration via the existing multi-frame
-     * decoder tests and visual verification of compositing behaviour.
+     * The old skip claimed hand-rolled multi-frame LZW was unreliable; the
+     * shared-palette machinery below (each frame's LZW is GD's own bytes,
+     * the tables shared so indices stay consistent) makes the fixture
+     * deterministic. Frame 1 is a 2x2 green image declared at (2,2) inside
+     * a 4x4 screen: if left/top were ignored and pasted at (0,0), the two
+     * corner assertions below swap and this test fails — a polarity pair,
+     * not a smoke test.
      */
     public function testNonZeroLeftTopIsStoredInFrameInfos(): void
     {
-        // Covered by testTwoFrameGifWithOffsetCompositesCorrectly which
-        // assembles a 2-frame GIF with non-zero offsets for frame 2.
-        // GIF LZW encoding is too complex to hand-roll reliably;
-        // the compositing logic (Step 7) is validated by the full
-        // multi-frame test pipeline in CI with real animated GIF fixtures.
-        $this->markTestSkipped(
-            'GIF LZW encoding is too complex to hand-roll correctly; '
-            . 'compositing at non-zero offsets is exercised by the '
-            . 'multi-frame decoder integration tests with real GIF fixtures.'
-        );
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+
+        // Frame 0: solid red 4x4.
+        $f0 = $this->newSharedPaletteImage();
+        imagefilledrectangle($f0, 0, 0, 3, 3, imagecolorexact($f0, 255, 0, 0));
+        $g0 = $this->gdGifBytes($f0);
+
+        // Frame 1: solid green, but only 2x2, declared at (2,2).
+        $f1 = $this->newSharedPaletteImage(2);
+        imagefilledrectangle($f1, 0, 0, 1, 1, imagecolorexact($f1, 0, 255, 0));
+        $g1 = $this->gdGifBytes($f1);
+
+        $gif = $this->sharedPaletteHeader()
+            . $this->composeFrameBlock($g0, Frame::DISPOSAL_NONE, false, 0)
+            . $this->composeFrameBlockAt($g1, Frame::DISPOSAL_NONE, false, 0, 2, 2, 2, 2)
+            . "\x3B";
+
+        $this->tmpPath = sys_get_temp_dir() . '/offset-' . uniqid() . '.gif';
+        file_put_contents($this->tmpPath, $gif);
+
+        $frames = Decoder::decode($this->tmpPath, cellsW: 4, cellsH: 4);
+        $this->assertCount(2, $frames, 'offset fixture must decode to 2 frames');
+
+        // Frame 0 paints the whole screen red.
+        $this->assertColorApprox([255, 0, 0], $frames[0]->cells[0][0], 'frame 0 top-left = red');
+        $this->assertColorApprox([255, 0, 0], $frames[0]->cells[3][3], 'frame 0 bottom-right = red');
+
+        // Frame 1: DISPOSAL_NONE keeps frame 0 under it, so the untouched
+        // top-left stays red while the (2,2)-anchored green block lands on
+        // the bottom-right cell.
+        $this->assertColorApprox([255, 0, 0], $frames[1]->cells[0][0], 'frame 1 top-left = carried red');
+        $this->assertColorApprox([0, 255, 0], $frames[1]->cells[3][3], 'frame 1 bottom-right = offset green');
     }
 
     /**
@@ -149,11 +177,10 @@ final class DecoderCompositingTest extends TestCase
      * by saving a snapshot before painting each frame and restoring from it
      * when the NEXT frame's GCE specifies DISPOSAL_PREVIOUS.
      *
-     * This test verifies that the disposal value is correctly stored and that
-     * the decoder accepts DISPOSAL_PREVIOUS without throwing (the actual
-     * snapshot-restoration behavior requires a complex multi-frame hand-rolled
-     * GIF; the compositing logic is validated by integration tests with real
-     * animated GIF fixtures in CI).
+     * Step 1 stores the value on a single frame; step 2 runs the restore
+     * branch on a genuinely decodable 2-frame stream built with the shared
+     * palette machinery below — each frame's LZW stays GD's own bytes, so
+     * the old "hand-rolling is unreliable" excuse no longer applies.
      */
     public function testDisposalPreviousRestoresFromSnapshot(): void
     {
@@ -175,48 +202,37 @@ final class DecoderCompositingTest extends TestCase
             @unlink($path3);
         }
 
-        // Step 2: Attempt multi-frame test. Build 2-frame GIF with frame 0 = DISPOSAL_PREVIOUS.
-        // Due to LZW complexity, this may only decode 1 frame. We handle that gracefully.
-        $im1 = imagecreatetruecolor(8, 8);
-        imagefill($im1, 0, 0, imagecolorallocate($im1, 255, 0, 0)); // red
-        $path1 = sys_get_temp_dir() . '/prev1-' . uniqid() . '.gif';
-        imagegif($im1, $path1);
-        imagedestroy($im1);
+        // Step 2: the restore branch on a decodable 2-frame stream. Frame 0
+        // is solid red and declares DISPOSAL_PREVIOUS, so the canvas must
+        // revert to its pre-frame-0 state (the empty transparent screen)
+        // before frame 1 paints. Frame 1 is solid blue: any red surviving
+        // into it means the restore mis-painted, and a stream that only
+        // yielded one frame fails the count below instead of skipping.
+        $f0 = $this->newSharedPaletteImage();
+        imagefilledrectangle($f0, 0, 0, 3, 3, imagecolorexact($f0, 255, 0, 0));
+        $g0 = $this->gdGifBytes($f0);
 
-        $im2 = imagecreatetruecolor(8, 8);
-        imagefill($im2, 0, 0, imagecolorallocate($im2, 0, 0, 255)); // blue
-        $path2 = sys_get_temp_dir() . '/prev2-' . uniqid() . '.gif';
-        imagegif($im2, $path2);
-        imagedestroy($im2);
+        $f1 = $this->newSharedPaletteImage();
+        imagefilledrectangle($f1, 0, 0, 3, 3, imagecolorexact($f1, 0, 0, 255));
+        $g1 = $this->gdGifBytes($f1);
 
-        try {
-            $bytes1 = file_get_contents($path1);
-            $bytes2 = file_get_contents($path2);
-            $multiGif = $this->assembleMultiFrameGifWithDisposal($bytes1, $bytes2, 3, 1);
+        $multiGif = $this->sharedPaletteHeader()
+            . $this->composeFrameBlock($g0, Frame::DISPOSAL_PREVIOUS, false, 0)
+            . $this->composeFrameBlock($g1, 1, false, 0) // DISPOSAL_KEEP
+            . "\x3B";
 
-            $this->tmpPath = sys_get_temp_dir() . '/prev-' . uniqid() . '.gif';
-            file_put_contents($this->tmpPath, $multiGif);
+        $this->tmpPath = sys_get_temp_dir() . '/prev-' . uniqid() . '.gif';
+        file_put_contents($this->tmpPath, $multiGif);
 
-            $frames = @Decoder::decode($this->tmpPath, cellsW: 8, cellsH: 8);
-
-            if (count($frames) >= 2) {
-                // Full multi-frame test possible — verify disposal values
-                $this->assertSame(Frame::DISPOSAL_PREVIOUS, $frames[0]->disposal,
-                    'Frame 0 must store DISPOSAL_PREVIOUS (3) from GCE');
-                $this->assertSame(1, $frames[1]->disposal,
-                    'Frame 1 must store its own GCE disposal value');
-            } else {
-                // LZW continuity issue — single-frame disposal storage already verified above
-                $this->markTestSkipped(
-                    'Multi-frame GIF LZW assembly does not produce decodable 2-frame stream; '
-                    . 'DISPOSAL_PREVIOUS storage is verified via the single-frame test above; '
-                    . 'compositing behavior requires a real animated GIF fixture in CI.'
-                );
-            }
-        } finally {
-            @unlink($path1);
-            @unlink($path2);
-        }
+        $frames = Decoder::decode($this->tmpPath, cellsW: 4, cellsH: 4);
+        $this->assertCount(2, $frames, 'DISPOSAL_PREVIOUS fixture must decode to 2 frames');
+        $this->assertSame(Frame::DISPOSAL_PREVIOUS, $frames[0]->disposal,
+            'Frame 0 must store DISPOSAL_PREVIOUS (3) from GCE');
+        $this->assertSame(1, $frames[1]->disposal,
+            'Frame 1 must store its own GCE disposal value');
+        $this->assertColorApprox([255, 0, 0], $frames[0]->cells[0][0], 'frame 0 = red');
+        $this->assertColorApprox([0, 0, 255], $frames[1]->cells[0][0],
+            'frame 1 paints the snapshot-restored canvas — blue with no red leakage');
     }
 
     /**
@@ -296,27 +312,60 @@ final class DecoderCompositingTest extends TestCase
         imagefilledrectangle($f2, 2, 2, 3, 3, imagecolorexact($f2, 0, 0, 255));
         $g2 = $this->gdGifBytes($f2);
 
-        // Shared global colour table + logical screen descriptor (GCT flag set,
-        // size exp = 1 → 4 entries).
-        $gct = "\x00\x00\x00" . "\xFF\x00\x00" . "\x00\xFF\x00" . "\x00\x00\xFF";
-        $header = "GIF89a" . "\x04\x00" . "\x04\x00" . "\x81" . "\x00" . "\x00" . $gct;
-
-        return $header
+        return $this->sharedPaletteHeader()
             . $this->composeFrameBlock($g0, Frame::DISPOSAL_NONE, false, 0)
             . $this->composeFrameBlock($g1, Frame::DISPOSAL_PREVIOUS, true, 0)
             . $this->composeFrameBlock($g2, Frame::DISPOSAL_NONE, true, 0)
             . "\x3B";
     }
 
-    /** A 4x4 palette image with the canonical black/red/green/blue table. */
-    private function newSharedPaletteImage(): \GdImage
+    /** A palette image with the canonical black/red/green/blue table. */
+    private function newSharedPaletteImage(int $size = 4): \GdImage
     {
-        $im = imagecreate(4, 4);
+        $im = imagecreate($size, $size);
         imagecolorallocate($im, 0, 0, 0);     // idx0
         imagecolorallocate($im, 255, 0, 0);   // idx1
         imagecolorallocate($im, 0, 255, 0);   // idx2
         imagecolorallocate($im, 0, 0, 255);   // idx3
         return $im;
+    }
+
+    /**
+     * Like {@see composeFrameBlock()}, but the Image Descriptor is spelled
+     * out fresh at an arbitrary (left, top) rectangle instead of reused from
+     * GD's (0,0) placement — the offsets GD cannot produce on its own.
+     * Sizes stay below 256, so the high bytes are always zero.
+     */
+    private function composeFrameBlockAt(
+        string $gd,
+        int $disposal,
+        bool $transparent,
+        int $transparentIndex,
+        int $left,
+        int $top,
+        int $width,
+        int $height,
+    ): string {
+        [, $lzw] = $this->extractDescriptorAndLzw($gd);
+        $id = "\x2C"
+            . chr($left) . "\x00"
+            . chr($top) . "\x00"
+            . chr($width) . "\x00"
+            . chr($height) . "\x00"
+            . "\x00"; // packed: no local colour table, no interlace
+        $gce = "\x21\xF9\x04"
+            . chr((($disposal & 0x07) << 2) | ($transparent ? 0x01 : 0x00))
+            . "\x01\x00" // delay = 1 centisecond
+            . chr($transparent ? $transparentIndex : 0)
+            . "\x00";    // GCE block terminator
+        return $gce . $id . $lzw;
+    }
+
+    /** Shared 4-entry global colour table + 4x4 logical screen descriptor. */
+    private function sharedPaletteHeader(): string
+    {
+        $gct = "\x00\x00\x00" . "\xFF\x00\x00" . "\x00\xFF\x00" . "\x00\x00\xFF";
+        return "GIF89a" . "\x04\x00" . "\x04\x00" . "\x81" . "\x00" . "\x00" . $gct;
     }
 
     private function gdGifBytes(\GdImage $im): string
@@ -459,40 +508,6 @@ final class DecoderCompositingTest extends TestCase
         $gce2 = "\x21\xF9\x04" . chr(1 << 2) . "\x01\x00\x00\x00";
 
         // Extract Image Descriptor + everything after from frame 2
-        $rest2 = substr($bytes2, $id2);
-
-        return $header1 . $gce1 . $rest1 . $gce2 . $rest2;
-    }
-
-    /**
-     * Assemble two single-frame GIF byte sequences into a single
-     * multi-frame GIF89a with specified disposal methods per frame.
-     */
-    private function assembleMultiFrameGifWithDisposal(string $bytes1, string $bytes2, int $disposal1, int $disposal2): string
-    {
-        $id1 = strpos($bytes1, "\x2C");
-        $id2 = strpos($bytes2, "\x2C");
-        if ($id1 === false || $id2 === false) {
-            return $bytes1;
-        }
-
-        $header1 = substr($bytes1, 0, $id1);
-
-        // GCE: 0x21 0xF9 0x04 <packed disposal+flags> <delay lo> <delay hi> <transparent> 0x00
-        $gce1 = "\x21\xF9\x04"
-            . chr(($disposal1 & 0x07) << 2)
-            . "\x01\x00" // delay = 1
-            . "\x00"     // no transparent index
-            . "\x00";    // GCE block terminator
-
-        $rest1 = substr($bytes1, $id1);
-
-        $gce2 = "\x21\xF9\x04"
-            . chr(($disposal2 & 0x07) << 2)
-            . "\x01\x00"
-            . "\x00"
-            . "\x00";
-
         $rest2 = substr($bytes2, $id2);
 
         return $header1 . $gce1 . $rest1 . $gce2 . $rest2;
