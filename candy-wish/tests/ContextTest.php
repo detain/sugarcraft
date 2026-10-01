@@ -134,6 +134,41 @@ final class ContextTest extends TestCase
         $this->assertFalse($base->done());
     }
 
+    public function testParentCancellationCascadesToDerivedContexts(): void
+    {
+        // MEDIUM-1 fix pin: Go parent→child semantics — cancelling a
+        // cancelable context marks every context derived from it (also
+        // through withValue/withCancel hops) done, and the ancestor's
+        // cancellation reason rides through the chain.
+        $base = Context::background()->withCancelable();
+        $mid = $base->withValue('auth.methods', ['password']);
+        $leaf = $mid->withCancelable()->withValue('auth.ki.responses', ['hunter2']);
+
+        $this->assertFalse($leaf->done());
+
+        $reason = new \RuntimeException('client hung up');
+        $base->cancel($reason);
+
+        $this->assertTrue($base->done());
+        $this->assertTrue($mid->done());
+        $this->assertTrue($leaf->done(), 'a withValue-derived hop must see the parent cancel');
+        $this->assertSame($reason, $leaf->err());
+    }
+
+    public function testContextDerivedFromAnAlreadyCancelledParentStartsDone(): void
+    {
+        // Attaching a hop after the cancel (the middleware-order case:
+        // AuthMethods/KeyboardInteractive derive withValue downstream)
+        // must still land done — the walk is dynamic, not snapshot-based.
+        $base = Context::background()->withCancelable();
+        $base->cancel();
+
+        $late = $base->withValue('late', true)->withCancelable();
+
+        $this->assertTrue($late->done());
+        $this->assertInstanceOf(CancellationException::class, $late->err());
+    }
+
     public function testImmutabilityOfWithMethods(): void
     {
         $original = Context::background();

@@ -71,6 +71,23 @@ final class PromiseAwaitTest extends TestCase
         PromiseAwait::settle(new Promise\Promise(static function (): void {}), 0.2, $ctx);
     }
 
+    public function testACancelledAncestorRefusesTheAwaitThroughAValueHop(): void
+    {
+        // MEDIUM-1 unlock pin: the settle entry guard must see an
+        // ancestor cancellation through the derived hop — otherwise a
+        // context-DERIVING middleware makes the guard invisible
+        // downstream and the await blocks on work whose caller is gone.
+        $base = Context::background()->withCancelable();
+        $hop = $base->withValue('auth.ki.responses', ['redacted']);
+        $base->cancel();
+
+        $never = new Promise\Promise(static function (): void {
+        });
+
+        $this->expectException(CancellationException::class);
+        PromiseAwait::settle($never, 0.2, $hop);
+    }
+
     public function testALiveContextStillAwaitsToCompletion(): void
     {
         $loop = \React\EventLoop\Loop::get();

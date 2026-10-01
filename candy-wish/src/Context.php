@@ -106,35 +106,58 @@ final class Context
     }
 
     /**
-     * Returns true when this Context has been cancelled or its
-     * deadline has expired.
+     * Returns true when this Context — or any ancestor it was derived
+     * from — has been cancelled, or when a deadline in the chain has
+     * expired.
+     *
+     * Mirrors Go's `ctx.Done()` channel semantics: cancelling a parent
+     * marks every derived context done, while cancelling a derived
+     * context leaves its ancestors live. The walk stops at the first
+     * dead node, so `done()` on a long value chain stays O(depth).
      */
     public function done(): bool
     {
-        if ($this->cancelled) {
-            return true;
-        }
-        if ($this->deadline !== null && $this->deadline < new \DateTimeImmutable()) {
-            return true;
-        }
-        return false;
+        return $this->deadNode() !== null;
     }
 
     /**
      * Returns the cancellation or deadline error, or null if not done.
+     *
+     * The error belongs to the first dead node found walking from this
+     * context upward — so a context cancelled via an ancestor reports
+     * the ancestor's reason (exactly the error handed to `cancel()`).
      */
     public function err(): ?\Throwable
     {
-        if (!$this->done()) {
+        $dead = $this->deadNode();
+        if ($dead === null) {
             return null;
         }
-        if ($this->cancelErr !== null) {
-            return $this->cancelErr;
+        if ($dead->cancelErr !== null) {
+            return $dead->cancelErr;
         }
-        if ($this->deadline !== null && $this->deadline < new \DateTimeImmutable()) {
-            return new DeadlineExceededException();
+        if ($dead->cancelled) {
+            return new CancellationException();
         }
-        return new CancellationException();
+        return new DeadlineExceededException();
+    }
+
+    /**
+     * First node in this context's parent chain that is cancelled or
+     * past its deadline, or null when the whole chain is live.
+     */
+    private function deadNode(): ?self
+    {
+        $now = new \DateTimeImmutable();
+        for ($node = $this; $node !== null; $node = $node->parent) {
+            if ($node->cancelled) {
+                return $node;
+            }
+            if ($node->deadline !== null && $node->deadline < $now) {
+                return $node;
+            }
+        }
+        return null;
     }
 
     /**

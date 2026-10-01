@@ -168,6 +168,44 @@ final class PromiseDispatchTest extends TestCase
         $this->assertNotContains('recording', $log);
     }
 
+    public function testRootCancellationSeenThroughAValueHopStopsTheNextDispatchHop(): void
+    {
+        // MEDIUM-1 unlock pin: the per-hop done() guard in the stack walk
+        // only becomes load-bearing once cancellation propagates parent→
+        // derived. Middleware 1 derives a withValue hop (the exact shape
+        // AuthMethods/KeyboardInteractive use), the root is cancelled
+        // while that hop is in flight, and dispatch must refuse to START
+        // middleware 2 on the now-dead derived context.
+        $log = [];
+        $deriving = new class($log) implements Middleware {
+            /** @var array<string> */
+            private array $log;
+            public function __construct(array &$ref) { $this->log = &$ref; }
+            public function handle(Context $ctx, Session $s, callable $next): void
+            {
+                $this->log[] = 'deriving';
+                $derived = $ctx->withValue('auth.methods', ['password']);
+                // Simulate the outside cancel landing between hops.
+                $ctx->cancel();
+                $next($derived, $s);
+            }
+        };
+        $never = new class($log) implements Middleware {
+            /** @var array<string> */
+            private array $log;
+            public function __construct(array &$ref) { $this->log = &$ref; }
+            public function handle(Context $ctx, Session $s, callable $next): void
+            {
+                $this->log[] = 'never-reached';
+            }
+        };
+
+        $root = Context::background()->withCancelable();
+        (new HostSshdTransport())->run($root, $this->fakeSession(), [$deriving, $never]);
+
+        $this->assertSame(['deriving'], $log, 'the cancelled root must cascade through the withValue hop');
+    }
+
     public function testTheSourceCarriesExactlyOneSettleCallSite(): void
     {
         // E730 single-settle-point census: PromiseAwait::settle() must be
