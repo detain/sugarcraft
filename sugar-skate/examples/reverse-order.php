@@ -38,10 +38,11 @@ foreach ($store->list(null, null, reverse: true) as $e) {
 }
 
 echo "\n=== Count ===\n";
-echo "Total entries: " . $store->entry('apple')->key; // just to show entry access
-$count = 0;
-foreach ($store->list() as $_) { $count++; }
-echo "Count (via iteration): {$count}\n";
+$total = 0;
+foreach ($store->list() as $_) { $total++; }
+echo "Total entries: {$total}\n";
+$apple = $store->entry('apple');
+echo "Entry access example — apple => {$apple->value}\n";
 
 // Count via Database directly
 use SugarCraft\Skate\Database;

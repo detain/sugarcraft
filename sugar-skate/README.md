@@ -3,9 +3,9 @@
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-skate)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-skate)
-[![Packagist Version](https://img.shields.io/packagist/v/sugarcore/sugar-skate?label=packagist)](https://packagist.org/packages/sugarcore/sugar-skate)
+[![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-skate?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-skate)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 # SugarSkate
@@ -20,7 +20,7 @@ PHP port of [charmbracelet/skate](https://github.com/charmbracelet/skate) — a 
 - **Ordered listing** — forward or reverse lexicographic order
 - **Flexible listing** — keys only, values only, or key-value pairs
 - **SQLite-backed** — one SQLite DB per database, stored in `$XDG_CONFIG_HOME/skate/` or `~/.config/skate/`
-- **PHP 8.1+** — pure PHP, no extension required beyond SQLite (php-sqlite3)
+- **PHP 8.3+** — pure PHP, no extension required beyond SQLite (php-sqlite3)
 - **Iterable streams** — list() yields results without loading everything into memory
 - **TTL / expiry** — set keys that automatically expire after a given number of seconds
 - **Levenshtein suggestions** — typo suggestions on key miss (get command prints to stderr)
@@ -44,9 +44,11 @@ $skate = new Store();
 $skate->set('greeting', 'Hello, World!');
 echo $skate->get('greeting'); // Hello, World!
 
-// With a database
-$skate->set('token', 'ghp_xxxx', 'passwords');
-echo $skate->get('token', 'passwords');
+// With a database — target it with the `key@db` suffix.
+// (set()'s 3rd parameter is `bool $binary`, get()'s is a fallback string —
+// a db name NEVER goes there; the suffix is the only routing mechanism.)
+$skate->set('token@passwords', 'ghp_xxxx');
+echo $skate->get('token@passwords');
 
 // List all keys
 foreach ($skate->list() as $entry) {
@@ -88,6 +90,11 @@ When no value is given as an argument, `set` reads from stdin. For import, use `
 echo "my-secret-token" | skate set api-token
 skate import json - < backup.json
 ```
+
+> **Note:** piped values are stored verbatim — the full stdin is read with no
+> trimming, matching upstream `cat file | skate set key` byte-faithfulness.
+> `echo` therefore stores its trailing newline; use `printf '%s' token |` (or
+> pass the value as an argument) when you need the exact bytes without it.
 
 ### Import / Export
 

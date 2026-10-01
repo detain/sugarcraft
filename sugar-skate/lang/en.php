@@ -20,6 +20,4 @@ return [
     'cli.usage_export'          => 'Usage: {bin} export <json|yaml> [db] [pattern]',
     'cli.deleted_n'             => 'Deleted {count} entries.',
     'cli.unknown_command'       => 'Unknown command: {cmd}',
-    'cli.import_success'        => 'Imported {count} entries.',
-    'cli.export_success'        => 'Export complete.',
 ];

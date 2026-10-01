@@ -14,6 +14,8 @@ return [
     'cli.usage_set'             => '用法：{bin} set <キー> [値]',
     'cli.usage_get'             => '用法：{bin} get <キー>',
     'cli.usage_delete'          => '用法：{bin} delete <キー>',
+    'cli.usage_import'           => '用法：{bin} import <json|yaml> <パス>',
+    'cli.usage_export'            => '用法：{bin} export <json|yaml> [データベース] [パターン]',
     'cli.deleted_n'             => '{count} 件のエントリを削除しました。',
     'cli.unknown_command'       => '不明なコマンド：{cmd}',
 ];

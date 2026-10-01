@@ -16,6 +16,8 @@ return [
     'cli.usage_set'             => 'Usage : {bin} set <clé> [valeur]',
     'cli.usage_get'             => 'Usage : {bin} get <clé>',
     'cli.usage_delete'          => 'Usage : {bin} delete <clé>',
+    'cli.usage_import'           => 'Usage : {bin} import <json|yaml> <chemin>',
+    'cli.usage_export'            => 'Usage : {bin} export <json|yaml> [bdd] [motif]',
     'cli.deleted_n'             => '{count} entrées supprimées.',
     'cli.unknown_command'       => 'Commande inconnue : {cmd}',
 ];

@@ -14,6 +14,8 @@ return [
     'cli.usage_set'             => 'Uso: {bin} set <chiave> [valore]',
     'cli.usage_get'             => 'Uso: {bin} get <chiave>',
     'cli.usage_delete'          => 'Uso: {bin} delete <chiave>',
+    'cli.usage_import'           => 'Uso: {bin} import <json|yaml> <percorso>',
+    'cli.usage_export'            => 'Uso: {bin} export <json|yaml> [db] [pattern]',
     'cli.deleted_n'             => '{count} voci eliminate.',
     'cli.unknown_command'       => 'Comando sconosciuto: {cmd}',
 ];

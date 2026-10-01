@@ -16,6 +16,8 @@ return [
     'cli.usage_set'             => 'Uso: {bin} set <clave> [valor]',
     'cli.usage_get'             => 'Uso: {bin} get <clave>',
     'cli.usage_delete'          => 'Uso: {bin} delete <clave>',
+    'cli.usage_import'           => 'Uso: {bin} import <json|yaml> <ruta>',
+    'cli.usage_export'            => 'Uso: {bin} export <json|yaml> [bd] [patrón]',
     'cli.deleted_n'             => '{count} entradas eliminadas.',
     'cli.unknown_command'       => 'Comando desconocido: {cmd}',
 ];

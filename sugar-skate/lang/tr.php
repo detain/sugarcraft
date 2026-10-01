@@ -14,6 +14,8 @@ return [
     'cli.usage_set'             => 'Kullanım: {bin} set <anahtar> [değer]',
     'cli.usage_get'             => 'Kullanım: {bin} get <anahtar>',
     'cli.usage_delete'          => 'Kullanım: {bin} delete <anahtar>',
+    'cli.usage_import'           => 'Kullanım: {bin} import <json|yaml> <yol>',
+    'cli.usage_export'            => 'Kullanım: {bin} export <json|yaml> [veritabanı] [desen]',
     'cli.deleted_n'             => '{count} giriş silindi.',
     'cli.unknown_command'       => 'Bilinmeyen komut: {cmd}',
 ];

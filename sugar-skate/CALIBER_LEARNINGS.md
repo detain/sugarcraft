@@ -24,9 +24,14 @@ Accumulated patterns and gotchas discovered during porting and auditing.
 
 ## STDIN handling
 
-- `bin/skate set`: when no positional value argument is given, reads one line from STDIN and `trim()`s it.
-- `bin/skate import`: path `-` or `/dev/stdin` reads all of `php://stdin` content.
+- `bin/skate set`: when no positional value argument is given, reads ALL of STDIN (`stream_get_contents`) with **no trim** — declared product decision: byte-faithful like upstream, which does `io.ReadAll(cmd.InOrStdin())` (`cat file | skate set key` round-trips exactly). Consequence: `echo token | skate set key` stores the trailing `\n`; documented in README's STDIN section (`printf '%s'` hint). The old learning ("reads one line and trim()s") was FALSE to the code.
+- `bin/skate import`: path `-` or `/dev/stdin` reads all of `php://stdin` content. NOTE: reading stdin IN-PROCESS from a test hangs forever when the suite runs on a TTY — all stdin coverage lives in `CliSmokeTest` as child processes with stdin closed/piped (see audit #2).
 - Import always wraps in atomic transaction by default; pass `--no-atomic` to disable.
+
+## i18n scope
+
+- Localised surface: the `bin/skate` usage/diagnostic lines routed through `Lang::t('cli.usage_*')` / `cli.deleted_n` / `cli.unknown_command`, plus `store.cannot_read` / `database.entry_unreadable`.
+- Intentionally UNTRANSLATED (English by design, ruled in the 2026-10-01 audit fix wave): the runtime stdout/stderr feedback inside `ImportCommand`/`ExportCommand` ("Imported N entries.", "File not found: …", …) and RuntimeException texts in the importers/`Database` (programmer-facing exception details). If a future wave localises them, `cli.import_success`/`cli.export_success` were deleted as dead keys in this pass — re-add them to en.php AND all 16 locales in one commit (locale parity is checked by key-set census).
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
 

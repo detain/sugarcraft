@@ -16,6 +16,8 @@ return [
     'cli.usage_set'             => 'Aufruf: {bin} set <schlüssel> [wert]',
     'cli.usage_get'             => 'Aufruf: {bin} get <schlüssel>',
     'cli.usage_delete'          => 'Aufruf: {bin} delete <schlüssel>',
+    'cli.usage_import'           => 'Aufruf: {bin} import <json|yaml> <pfad>',
+    'cli.usage_export'            => 'Aufruf: {bin} export <json|yaml> [db] [muster]',
     'cli.deleted_n'             => '{count} Einträge gelöscht.',
     'cli.unknown_command'       => 'Unbekannter Befehl: {cmd}',
 ];

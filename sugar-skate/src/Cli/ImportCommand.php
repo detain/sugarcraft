@@ -10,6 +10,14 @@ use SugarCraft\Skate\Store;
 
 /**
  * CLI command handler for `skate import`.
+ *
+ * i18n scope (intentional): the runtime stdout/stderr diagnostics in this
+ * class and {@see ExportCommand} are plain English by design — they are
+ * operator-facing command feedback, not catalogued messages. The localised
+ * CLI surface is the usage lines, which `bin/skate` routes through
+ * `Lang::t('cli.usage_*')`. Importer failure texts (RuntimeException
+ * messages) are programmer-facing exception details and stay English too.
+ * See CALIBER_LEARNINGS.md "i18n scope".
  */
 final class ImportCommand
 {

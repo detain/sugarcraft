@@ -8,6 +8,9 @@ use SugarCraft\Skate\Store;
 
 /**
  * CLI command handler for `skate export`.
+ *
+ * i18n scope: runtime diagnostics here are plain-English by design — see
+ * the {@see ImportCommand} class docblock and CALIBER_LEARNINGS.md.
  */
 final class ExportCommand
 {
