@@ -617,6 +617,29 @@ final class InputReaderTest extends TestCase
         $this->assertSame("a\tb\nc", $paste->content);
     }
 
+    public function testBracketedPasteStripsZoneSentinelsKeepsImageMarkers(): void
+    {
+        // A pasted candy-mouse zone sentinel (U+E000 open / U+E001 close) is
+        // well-formed UTF-8 text, so the plain ANSI sweep lets it through —
+        // yet once echoed into a zone-marked frame it forges click/frame
+        // markup. untrustedForMarkedFrames() surgically drops exactly those
+        // two codepoints; the rest of the reserved arena (an image marker at
+        // U+E002 here) must survive untouched.
+        $open   = "\xEE\x80\x80"; // U+E000 zone sentinel
+        $close  = "\xEE\x80\x81"; // U+E001 zone sentinel
+        $marker = "\xEE\x80\x82"; // U+E002 image marker (Sanitize::IMAGE_MARKER shape)
+        $msgs   = (new InputReader())->parse("\x1b[200~a{$open}b{$close}c{$marker}\x1b[201~");
+        $paste  = $msgs[2];
+        $this->assertInstanceOf(PasteMsg::class, $paste);
+        $this->assertSame("abc{$marker}", $paste->content);
+        // Raw opt-out keeps the smuggled sentinels verbatim for callers that
+        // sanitize themselves.
+        $rawMsgs = (new InputReader(sanitizePaste: false))->parse("\x1b[200~a{$open}b{$close}c{$marker}\x1b[201~");
+        $raw     = $rawMsgs[2];
+        $this->assertInstanceOf(PasteMsg::class, $raw);
+        $this->assertSame("a{$open}b{$close}c{$marker}", $raw->content);
+    }
+
     public function testBracketedPasteRawUnderOptOut(): void
     {
         // The opt-out flag preserves the raw bytes verbatim for callers that

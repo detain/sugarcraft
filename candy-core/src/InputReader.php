@@ -49,10 +49,16 @@ final class InputReader
 
     /**
      * @param bool $sanitizePaste When true (default), bracketed-paste payloads
-     *                            are run through {@see Sanitize::untrusted()}
+     *                            are run through
+     *                            {@see Sanitize::untrustedForMarkedFrames()}
      *                            before being surfaced as a {@see PasteMsg}, so
      *                            an embedded OSC-52 / control sequence can't
-     *                            reach the model or the terminal raw. Wired
+     *                            reach the model or the terminal raw — and
+     *                            neither can a pasted candy-mouse zone sentinel
+     *                            (U+E000/U+E001), which survives a plain ANSI
+     *                            sweep as well-formed text and would otherwise
+     *                            forge click/frame markup once the paste is
+     *                            echoed into a zone-marked frame. Wired
      *                            from {@see ProgramOptions::$sanitizePaste}.
      */
     public function __construct(private readonly bool $sanitizePaste = true)
@@ -81,10 +87,12 @@ final class InputReader
                 }
                 $this->pasteBuf .= substr($this->buf, $i, $end - $i);
                 // Paste content is attacker-influenced (whatever was on the
-                // clipboard); neutralize embedded escapes/control bytes by
-                // default so an OSC-52 clipboard write etc. can't reach the
-                // model raw. Opt out via ProgramOptions::$sanitizePaste.
-                $payload        = $this->sanitizePaste ? Sanitize::untrusted($this->pasteBuf) : $this->pasteBuf;
+                // clipboard); neutralize embedded escapes/control bytes AND
+                // the candy-mouse zone sentinels (U+E000/U+E001) by default —
+                // sentinels survive a plain ANSI sweep as well-formed text and
+                // would forge click/frame markup once echoed into a marked
+                // frame. Opt out via ProgramOptions::$sanitizePaste.
+                $payload        = $this->sanitizePaste ? Sanitize::untrustedForMarkedFrames($this->pasteBuf) : $this->pasteBuf;
                 $msgs[]         = new PasteEndMsg();
                 $msgs[]         = new PasteMsg($payload);
                 $this->pasteBuf = '';

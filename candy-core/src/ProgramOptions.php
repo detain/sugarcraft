@@ -150,8 +150,10 @@ final class ProgramOptions
          * otherwise flow verbatim into the model and, once echoed back to the
          * screen, could hijack the real terminal (rewrite the clipboard, move
          * the cursor, desync the frame-diff renderer). When true, paste text is
-         * routed through {@see Util\Sanitize::untrusted()}: every ANSI escape
-         * and C0/C1 control byte is stripped while printable text, tabs, and
+         * routed through {@see Util\Sanitize::untrustedForMarkedFrames()}:
+         * every ANSI escape and C0/C1 control byte is stripped, plus the
+         * candy-mouse zone sentinels (U+E000/U+E001) which a plain ANSI sweep
+         * would miss as well-formed text, while printable text, tabs, and
          * newlines survive. Set false only when the caller genuinely needs the
          * raw bytes and sanitizes them itself.
          */
