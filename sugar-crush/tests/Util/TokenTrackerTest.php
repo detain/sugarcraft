@@ -108,6 +108,34 @@ final class TokenTrackerTest extends TestCase
     }
 
     // =========================================================================
+    // Unpriced-usage flag tests (billing wave, r90 review pin — the flag
+    // behind /budget's LOWER BOUND clause shipped with zero tests)
+    // =========================================================================
+
+    public function testUnpricedFlagStartsClean(): void
+    {
+        $this->assertFalse((new TokenTracker())->hasUnpricedUsage(), 'a fresh session claims no pricing blindness');
+    }
+
+    public function testNoteUnpricedUsageIsSticky(): void
+    {
+        $tracker = new TokenTracker();
+        $tracker->noteUnpricedUsage();
+        $tracker->noteUnpricedUsage();
+
+        $this->assertTrue($tracker->hasUnpricedUsage(), 'one unpriceable turn makes every later dollar figure a lower bound, and repeat notes stay idempotent');
+    }
+
+    public function testResetClearsTheUnpricedFlag(): void
+    {
+        $tracker = new TokenTracker();
+        $tracker->noteUnpricedUsage();
+        $tracker->reset();
+
+        $this->assertFalse($tracker->hasUnpricedUsage(), 'reset clears the blindness with the totals — a new session is honest again');
+    }
+
+    // =========================================================================
     // reset Tests
     // =========================================================================
 

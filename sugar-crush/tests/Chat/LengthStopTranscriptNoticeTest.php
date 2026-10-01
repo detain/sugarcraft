@@ -10,6 +10,7 @@ use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
+use SugarCraft\Crush\Usage;
 
 /**
  * E707 (round 81), the notice half: the acceptance line is that a reply the
@@ -35,6 +36,12 @@ final class LengthStopTranscriptNoticeTest extends TestCase
     private const STEPS_NOTICE = 'This turn stopped at the step ceiling with tool results still pending, so the answer above is '
         . 'incomplete — not a finished thought. Say "continue" to resume it, or raise "maxToolSteps" in '
         . '~/.sugar-crush/config.json for longer agentic turns.';
+
+    /** The billing wave's third sibling, spelled with the offending model name. */
+    private const UNPRICED_NOTICE = 'This app has no price on file for model "%s", so this turn billed $0.00 '
+        . 'as a lower bound, not as a free call — spend totals and the spend cap are under-counted '
+        . 'until a rate exists. Declare one under "modelPrices" in ~/.sugar-crush/config.json '
+        . '(USD per 1M tokens, keys "input" and "output") to price it.';
 
     public function testASettledStepTruncatedTurnIsFollowedByOneSystemNotice(): void
     {
@@ -103,6 +110,59 @@ final class LengthStopTranscriptNoticeTest extends TestCase
 
         $this->assertSame([Role::User, Role::Assistant, Role::System], $roles);
         $this->assertCount(1, $noticeRows, 'exactly one notice per stopped turn — the settle arm must not stamp it twice');
+    }
+
+    public function testASettledUnpricedTurnIsFollowedByOneSystemNotice(): void
+    {
+        // Billing wave (r90 review pin): the notice hop the builder proved by
+        // probe but left unpinned — an unpriceable model gets ONE loud
+        // transcript line, at most once per settled turn, never per token.
+        [$chat] = $this->settle(Message::assistant('cut short')->withUsage(
+            Usage::new(totalTokens: 100, costUsd: 0.0, inputTokens: 40, outputTokens: 60, unpricedModel: 'gpt-6-nova'),
+        ));
+
+        $roles = array_map(static fn (Message $m): Role => $m->role, $chat->history);
+        $noticeRows = array_values(array_filter(
+            $chat->history,
+            static fn (Message $m): bool => $m->role === Role::System
+                && $m->content === sprintf(self::UNPRICED_NOTICE, 'gpt-6-nova'),
+        ));
+
+        $this->assertSame([Role::User, Role::Assistant, Role::System], $roles);
+        $this->assertCount(1, $noticeRows, 'the unpriced notice lands exactly once per settled turn — it is a settle-arm line, not a per-token stream artifact');
+        $this->assertStringContainsString('gpt-6-nova', $chat->history[array_key_last($chat->history)]->content, 'the notice names the model the operator has to price');
+    }
+
+    public function testAPricedSettledTurnAddsNoUnpricedNotice(): void
+    {
+        // The carrier polarity: a real free-or-priced 0.0 with NO name must
+        // not raise the signal — that is the whole difference between
+        // "measured as free" and "cannot be measured" (Usage docblock).
+        [$chat] = $this->settle(Message::assistant('done')->withUsage(
+            Usage::new(totalTokens: 10, costUsd: 0.0),
+        ));
+
+        $contents = array_map(static fn (Message $m): string => $m->content, $chat->history);
+
+        $this->assertSame(['tell me a long story', 'done'], $contents);
+        $this->assertCount(2, $chat->history, 'a priced (or honestly free) settle stays byte-identical to the pre-notice shape');
+    }
+
+    public function testTheBudgetReadoutDisclosesTheLowerBoundAfterAnUnpricedTurn(): void
+    {
+        // The disclosure half of the same seam: once a turn arrives unpriced,
+        // /budget's dollar figure is a bound, not a bill, and says so —
+        // naming the ONE remedy (the user-tier modelPrices map) in the line.
+        [$chat] = $this->settle(Message::assistant('x')->withUsage(
+            Usage::new(totalTokens: 100, costUsd: 0.0, unpricedModel: 'gpt-6-nova'),
+        ));
+
+        $budget = new \ReflectionMethod(Chat::class, 'budgetStatusLine');
+        $budget->setAccessible(true);
+        $line = (string) $budget->invoke($chat);
+
+        $this->assertStringContainsString('LOWER BOUND', $line);
+        $this->assertStringContainsString('modelPrices', $line, 'the disclosure names the knob, the same pointer discipline as every ceiling notice');
     }
 
     /** @return array{0: Chat, 1: mixed} */

@@ -165,6 +165,31 @@ final class BudgetCommandTest extends TestCase
     }
 
     /**
+     * Billing wave (r90 review pin): once any turn arrives from a model with no
+     * rate on file, the dollar figure is a LOWER BOUND and the readout says so
+     * — a spend line that presents a bound as a bill is the same class of
+     * dishonesty the fabricated fallback was.
+     */
+    public function testAnUnpricedTurnMakesTheBudgetLineSayLowerBound(): void
+    {
+        [$billed] = $this->chat()->update(new AssistantMsg(
+            Message::assistant('done')->withUsage(
+                \SugarCraft\Crush\Usage::new(totalTokens: 100, costUsd: 0.0, unpricedModel: 'gpt-6-nova'),
+            ),
+        ));
+
+        $line = $this->lastLine($this->submitDraft($billed, '/budget'));
+
+        $this->assertStringContainsString('LOWER BOUND', $line);
+        $this->assertStringContainsString('modelPrices', $line, 'the disclosure names the operator remedy, like the transcript notice');
+
+        // And the priced sibling stays byte-identical — the clause is carried
+        // by the flag, not by costUsd being zero.
+        $clean = $this->lastLine($this->submitDraft($this->bill($this->chat(), 100, 0.0), '/budget'));
+        $this->assertStringNotContainsString('LOWER BOUND', $clean, 'a genuinely free (priced-at-zero) session is NOT a blind one');
+    }
+
+    /**
      * With nothing reported it says so in words rather than printing `$0.0000`.
      * The two claims are different and the offline/streamed case is the common
      * one, so conflating them would be the default experience.

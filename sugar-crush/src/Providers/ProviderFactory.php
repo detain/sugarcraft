@@ -632,10 +632,15 @@ final readonly class ProviderFactory
     /**
      * The `modelPrices` map from {@see \SugarCraft\Crush\Cli\Bootstrap::readUserConfig()}
      * — USD per 1M tokens per model. A malformed shape degrades to "no
-     * overrides" exactly like every other tolerant read of that funnel; an
-     * unparseable per-direction value is caught downstream by
-     * {@see OpenAIProvider::costPer1kTokens()}'s `is_numeric` gate, which
-     * fails LOUD through the unpriced-model signal rather than pricing at zero.
+     * overrides" exactly like every other tolerant read of that funnel;
+     * anything else rides downstream, where naming a model makes the
+     * declaration AUTHORITATIVE for it
+     * ({@see OpenAIProvider::costPer1kTokens()}): a model the operator named
+     * whose per-direction rate fails validation is answered UNPRICED — the
+     * loud $0 lower bound with its transcript notice and /budget disclosure —
+     * never silently re-priced at the built-in row the override replaced, and
+     * never at a negative figure that {@see \SugarCraft\Crush\Usage} would
+     * floor into a fake-free 0.0.
      *
      * @return array<string, array<string, mixed>>
      */

@@ -121,10 +121,24 @@ final readonly class OpenAIProvider implements ProviderInterface
     {
         // Operator declaration wins over the built-in row: the point of the
         // config seam is repricing what this file gets wrong or does not know,
-        // including a stale shipped row.
-        $declared = $this->modelPrices[$model][$direction] ?? null;
-        if (is_numeric($declared)) {
-            return ((float) $declared) / 1000; // config speaks USD-per-1M
+        // including a stale shipped row. And once the operator NAMES a model
+        // the declaration is authoritative for it — a rate that fails to
+        // validate answers unpriced WITHOUT falling back to the shipped row
+        // the operator just overrode (review r90: a typo'd override used to
+        // silently reprice at the stale number, or worse, at a NEGATIVE one,
+        // which Usage::new() floors to a fake-free 0.0 with no unpriced
+        // signal at all).
+        if (array_key_exists($model, $this->modelPrices)) {
+            $entry = $this->modelPrices[$model];
+            $declared = is_array($entry) ? ($entry[$direction] ?? null) : null;
+            if (!is_numeric($declared)) {
+                return null;
+            }
+            $rate = ((float) $declared) / 1000; // config speaks USD-per-1M
+
+            // Zero is legal (a genuinely free model); sign-flipped or
+            // non-finite rates are not, and go the loud unpriced road.
+            return $rate >= 0.0 && is_finite($rate) ? $rate : null;
         }
 
         $row = self::PRICE_TABLE[$model] ?? null;

@@ -1019,6 +1019,56 @@ final class OpenAIProviderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // Declared-rate validation (billing wave, r90 review pin)
+    // -------------------------------------------------------------------------
+
+    public function testDeclaredRatesAreAuthoritativeAndMustValidate(): void
+    {
+        /** @var ClientContract $client */
+        $client = $this->createMock(ClientContract::class);
+
+        // Naming a model makes the operator's map authoritative for it: a
+        // rate that fails validation answers UNPRICED (null) and never falls
+        // back to the built-in row the override replaced — a silent re-price
+        // at a number the operator did not choose is exactly the defect this
+        // seam exists to prevent (review r90 / D1).
+        $bad = new OpenAIProvider($client, 'gpt-4o', [
+            'gpt-4o' => ['input' => -5, 'output' => 10],
+            'gpt-4.1' => ['input' => 'banana', 'output' => 8],
+            'gpt-4-turbo' => 'not-an-entry',
+        ]);
+        $this->assertNull($bad->costPer1kTokens('gpt-4o', 'input'), 'a negative declared rate must not bill in the red');
+        $this->assertSame(0.01, $bad->costPer1kTokens('gpt-4o', 'output'), 'validation is per direction; the turn still bills null because calculateCost refuses when EITHER side is unpriced');
+        $this->assertNull($bad->costPer1kTokens('gpt-4.1', 'input'), 'a non-numeric declared rate falls to unpriced, NOT to the stale built-in row');
+        $this->assertNull($bad->costPer1kTokens('gpt-4-turbo', 'input'), 'a malformed entry shape (not an array) reads as declared-but-broken');
+
+        // Non-finite floats cannot arrive through JSON, but the gate refuses
+        // them for every caller all the same.
+        $nan = new OpenAIProvider($client, 'gpt-4o', ['x' => ['input' => NAN, 'output' => INF]]);
+        $this->assertNull($nan->costPer1kTokens('x', 'input'));
+        $this->assertNull($nan->costPer1kTokens('x', 'output'));
+
+        // A valid declaration still wins, per direction, zero included.
+        $good = new OpenAIProvider($client, 'gpt-4o', [
+            'gpt-4o' => ['input' => 1, 'output' => 0],
+            'brand-new-model' => ['input' => 2500, 'output' => 10000],
+        ]);
+        $this->assertSame(0.001, $good->costPer1kTokens('gpt-4o', 'input'), 'USD-per-1M divided once to per-1K');
+        $this->assertSame(0.0, $good->costPer1kTokens('gpt-4o', 'output'), 'a declared zero is a legitimate free price');
+        $this->assertSame(2.5, $good->costPer1kTokens('brand-new-model', 'input'));
+
+        // Models the operator did NOT name keep the built-in row untouched.
+        $this->assertSame(0.002, $good->costPer1kTokens('gpt-4.1', 'input'));
+
+        // The loud-path end-to-end: an unpriceable named model puts its NAME
+        // on the Usage (the unpriced signal), with 0.0 as bound — never a
+        // fake-free silent zero.
+        $usage = $bad->parseUsage(['prompt_tokens' => 10, 'completion_tokens' => 5, 'total_tokens' => 15], 'gpt-4o');
+        $this->assertSame(0.0, $usage->costUsd);
+        $this->assertSame('gpt-4o', $usage->unpricedModel);
+    }
+
+    // -------------------------------------------------------------------------
     // Helper: Invoke private method using reflection
     // -------------------------------------------------------------------------
 
