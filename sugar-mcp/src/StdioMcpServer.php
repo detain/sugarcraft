@@ -36,7 +36,9 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * server. Both poll sets therefore include fd 2, and anything ready there is
  * drained (tail-kept, capped at MAX_STDERR_BYTES) before stdout is consulted.
  *
- * WHY the start deadline is ONE wall clock across the whole handshake:
+ * WHY the start deadline is ONE monotonic clock across the whole handshake:
+ * (hrtime, not wall clock — an NTP step mid-handshake must neither void the
+ * bound nor fire it early), and ONE rather than per-read:
  * a server that streams notifications forever starves a per-read timeout —
  * every individual read arrives in time, so the budget never expires, and the
  * process hangs (product-measured, rc=124). One deadline checked at the top of
@@ -54,7 +56,7 @@ final class StdioMcpServer implements McpServer
     public const PROTOCOL_VERSION = '2024-11-05';
 
     /**
-     * Wall-clock ceiling for the whole handshake (initialize → initialized →
+     * Monotonic ceiling for the whole handshake (initialize → initialized →
      * tools/list). Sized for cold package fetches: an `npx`-style launcher
      * downloading its server takes 30–60s on first run, and failing that boot
      * faster is not failing better. Bounds the handshake ONLY — never a tool
@@ -149,6 +151,13 @@ final class StdioMcpServer implements McpServer
 
     public function start(): void
     {
+        // Fail fast on re-entry: overwriting $this->process would drop the
+        // handle to the live child, orphaning it until this object dies —
+        // and __destruct only covers objects that actually die.
+        if ($this->process !== null) {
+            throw new \RuntimeException("MCP server double start(): {$this->name} is already running — call stop() first");
+        }
+
         $this->process = @proc_open(
             [$this->command, ...array_map(static fn (mixed $arg): string => (string) $arg, array_values($this->args))],
             [
@@ -174,30 +183,42 @@ final class StdioMcpServer implements McpServer
         $this->stderrOpen = true;
         $this->stderrTail = '';
 
-        $deadline = microtime(true) + $this->startTimeoutSeconds;
+        $deadline = self::nowSeconds() + $this->startTimeoutSeconds;
 
-        $response = $this->request('initialize', [
-            'protocolVersion' => self::PROTOCOL_VERSION,
-            'capabilities' => [],
-            'clientInfo' => ['name' => 'sugar-mcp', 'version' => '0.1.0'],
-        ], $deadline);
+        try {
+            $response = $this->request('initialize', [
+                'protocolVersion' => self::PROTOCOL_VERSION,
+                'capabilities' => [],
+                'clientInfo' => ['name' => 'sugar-mcp', 'version' => '0.1.0'],
+            ], $deadline);
 
-        // A successful initialize answers with a result object; an error reply
-        // is at least a server that speaks our protocol badly. Anything else —
-        // silence, garbage, a null-shaped non-response — means we cannot trust
-        // a single byte from this process. Diagnostics are read BEFORE stop()
-        // because stop() clears the stderr capture.
-        if ($response === null || (!$response->resultSet && $response->error === null)) {
-            $diagnostics = $this->stderrTailForDiagnostics();
+            // A successful initialize answers with a result object; an error reply
+            // is at least a server that speaks our protocol badly. Anything else —
+            // silence, garbage, a null-shaped non-response — means we cannot trust
+            // a single byte from this process. Diagnostics are read BEFORE stop()
+            // because stop() clears the stderr capture.
+            if ($response === null || (!$response->resultSet && $response->error === null)) {
+                $diagnostics = $this->stderrTailForDiagnostics();
+                $this->stop();
+
+                throw new \RuntimeException("Failed to start MCP server: {$this->name}" . $diagnostics);
+            }
+
+            $this->notify('initialized', null, $deadline);
+
+            $listResponse = $this->request('tools/list', [], $deadline);
+            $this->tools = $listResponse === null ? [] : $this->parseTools($listResponse->toArray());
+        } catch (\Throwable $failure) {
+            // A throw from any handshake leg — the oversized-frame refusal
+            // rides this path — must not leave the spawned child alive on the
+            // pipes: reap now instead of waiting for this object's destructor
+            // (an embedder that keeps the failed instance alive keeps the
+            // orphan alive too). stop() is idempotent, so the initialize-
+            // failure leg above may already have run it.
             $this->stop();
 
-            throw new \RuntimeException("Failed to start MCP server: {$this->name}" . $diagnostics);
+            throw $failure;
         }
-
-        $this->notify('initialized', null, $deadline);
-
-        $listResponse = $this->request('tools/list', [], $deadline);
-        $this->tools = $listResponse === null ? [] : $this->parseTools($listResponse->toArray());
     }
 
     public function stop(): void
@@ -340,6 +361,16 @@ final class StdioMcpServer implements McpServer
         }
     }
 
+    /**
+     * Monotonic seconds for deadline arithmetic. Wall clock (microtime) steps
+     * with NTP/manual date changes; a handshake bound must ride a clock that
+     * only moves forward, matching candy-core BoundedShutdown's own hrtime basis.
+     */
+    private static function nowSeconds(): float
+    {
+        return hrtime(true) / 1_000_000_000.0;
+    }
+
     /** @param resource|\ProcOpen|null $process */
     private static function childIsRunning($process): bool
     {
@@ -369,7 +400,7 @@ final class StdioMcpServer implements McpServer
         $consecutiveSelectFailures = 0;
 
         while ($payload !== '') {
-            $remaining = $deadline === null ? null : $deadline - microtime(true);
+            $remaining = $deadline === null ? null : $deadline - self::nowSeconds();
             if ($remaining !== null && $remaining <= 0.0) {
                 return false;
             }
@@ -449,7 +480,7 @@ final class StdioMcpServer implements McpServer
     private function readResponse(string $id, ?float $deadline = null): ?McpMessage
     {
         while (true) {
-            if ($deadline !== null && microtime(true) >= $deadline) {
+            if ($deadline !== null && self::nowSeconds() >= $deadline) {
                 return null;
             }
 
@@ -463,7 +494,13 @@ final class StdioMcpServer implements McpServer
                 return null;
             }
 
-            if ($message->isNotification() || ($message->id !== null && $message->id !== $id)) {
+            // Strict match: only a genuine response (no method) whose id is
+            // byte-equal to ours answers the request. An id-less broadcast —
+            // a server spontaneously pushing `result`/`error` with no id, or
+            // one whose id was un-coercible (float/nested) so parse() stored
+            // null — must never be mistaken for OUR response (probe P7: the
+            // old `id !== null &&` guard let exactly that shape through).
+            if (!$message->isResponse() || $message->id !== $id) {
                 continue;
             }
 
@@ -476,15 +513,24 @@ final class StdioMcpServer implements McpServer
      * empty buffer. A partial buffer at EOF/deadline is delivered whole
      * (drainBuffer) — unterminated tail bytes are the sender's framing bug and
      * deserve the same parse-failure path, not silent discarding.
+     *
+     * The scan carries a floor offset ($scannedFrom): bytes already inspected
+     * for "\n" are never re-scanned, so accumulating one huge unterminated
+     * frame costs O(n) CPU, not O(n²) — otherwise an adversarial server
+     * streaming garbage burns this side's CPU long before the frame cap
+     * refuses it. The floor is per-call; a leftover buffer from a previous
+     * call rescans at most its own length once.
      */
     private function readLine(?float $deadline = null): ?string
     {
-        while (($newline = strpos($this->readBuffer, "\n")) === false) {
+        $scannedFrom = 0;
+
+        while (($newline = strpos($this->readBuffer, "\n", $scannedFrom)) === false) {
             if ($this->pipes === null) {
                 return $this->readBuffer === '' ? null : $this->drainBuffer();
             }
 
-            $remaining = $deadline === null ? null : $deadline - microtime(true);
+            $remaining = $deadline === null ? null : $deadline - self::nowSeconds();
             if ($remaining !== null && $remaining <= 0.0) {
                 return $this->readBuffer === '' ? null : $this->drainBuffer();
             }
@@ -540,6 +586,7 @@ final class StdioMcpServer implements McpServer
 
                 continue;
             }
+            $scannedFrom = strlen($this->readBuffer);
             $this->readBuffer .= $chunk;
             $this->refuseAnOversizedFrame();
         }

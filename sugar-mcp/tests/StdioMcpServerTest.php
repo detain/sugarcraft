@@ -169,6 +169,16 @@ final class StdioMcpServerTest extends TestCase
             'wrong-typed name skipped' => ['probe', [
                 'result' => ['tools' => [['name' => 5], ['name' => 'ok', 'description' => '', 'inputSchema' => []]]],
             ], ['ok']],
+            // Review probe P8: definitions with no usable name must be skipped,
+            // not minted as phantom tools the router cannot address.
+            'nameless and empty-named definitions skipped' => ['probe', [
+                'result' => ['tools' => [
+                    ['description' => 'no name at all'],
+                    ['name' => '', 'description' => 'empty name'],
+                    ['name' => null, 'description' => 'null name'],
+                    ['name' => 'keeper', 'description' => '', 'inputSchema' => []],
+                ]],
+            ], ['keeper']],
         ];
     }
 

@@ -46,7 +46,7 @@ $server->stop();                     // also runs automatically on destruct
 
 ## Timeout discipline (E646)
 
-- The handshake runs under **one** wall-clock deadline
+- The handshake runs under **one** monotonic (`hrtime`) deadline
   (`DEFAULT_START_TIMEOUT_SECONDS`, 60s, sized for cold `npx` fetches) shared
   across `initialize`, `initialized` and `tools/list`.
 - `callTool()` carries **no** deadline: a tool call is somebody's real work and

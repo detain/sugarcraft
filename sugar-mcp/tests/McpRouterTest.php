@@ -229,7 +229,10 @@ final class McpRouterTest extends TestCase
         // not filter as if absent at resolution time.
         $servers = ['x' => self::server('x', ['t'])];
 
-        foreach ([42, null, ['action' => 42], new \stdClass()] as $bad) {
+        // Review probe P5: an array spec with NO usable string action is the
+        // same silent-widening failure as garbage — it reads as an inert rule.
+        // The constructor docblock always promised "Any other shape throws".
+        foreach ([42, null, ['action' => 42], new \stdClass(), [], ['action' => null]] as $bad) {
             $caught = null;
             try {
                 new McpRouter($servers, ['x' => $bad]);

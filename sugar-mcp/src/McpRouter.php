@@ -29,10 +29,11 @@ final class McpRouter
 
     /**
      * @param array<string,McpServer> $servers keyed by server name
-     * @param array<string,string|array{action?:string}> $denyPatterns pattern =>
+     * @param array<string,string|array{action:string}> $denyPatterns pattern =>
      *        action string (the sugar-crush config spelling, e.g. 'fs-*' => 'deny')
-     *        or a spec array carrying "action"; only "deny" applies, other
-     *        actions are ignored. Any other shape throws at construction: a
+     *        or a spec array carrying a string "action"; only "deny" applies,
+     *        other actions are ignored. Any other shape — including an array
+     *        with no usable string action — throws at construction: a
      *        deny rule that silently reads as no rule widens the boundary,
      *        and the allow-list side of this class already refuses to guess.
      */
@@ -47,9 +48,9 @@ final class McpRouter
                 continue;
             }
 
-            if (is_array($spec) && (!isset($spec['action']) || is_string($spec['action']))) {
-                /** @var array{action?:string} $spec */
-                $actions[(string) $pattern] = $spec['action'] ?? '';
+            if (is_array($spec) && isset($spec['action']) && is_string($spec['action'])) {
+                /** @var array{action:string} $spec */
+                $actions[(string) $pattern] = $spec['action'];
                 continue;
             }
 

@@ -81,6 +81,12 @@ final class McpToolTest extends TestCase
         return [
             'name is a number (the measured kill-chain)' => [['name' => 5], 'name'],
             'name is a bool' => [['name' => true], 'name'],
+            // Review probe P8: name is REQUIRED, not skip-if-absent. A bare
+            // `{}` used to mint a phantom tool named '' through the isset()
+            // leniency that legitimately serves description/inputSchema.
+            'name absent entirely' => [[], 'name'],
+            'name is the empty string' => [['name' => ''], 'name'],
+            'name is null' => [['name' => null], 'name'],
             'description is a number' => [['name' => 'ok', 'description' => 7], 'description'],
             'inputSchema is a string' => [['name' => 'ok', 'inputSchema' => 'nope'], 'inputSchema'],
             'inputSchema is a number' => [['name' => 'ok', 'inputSchema' => 42], 'inputSchema'],

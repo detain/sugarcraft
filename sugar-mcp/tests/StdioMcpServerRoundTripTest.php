@@ -124,6 +124,89 @@ final class StdioMcpServerRoundTripTest extends TestCase
         self::assertFalse($server->isUp());
     }
 
+    public function testSpontaneousIdLessBroadcastsAreSkippedAndNeverAnswerARequest(): void
+    {
+        // Review probe P7: the strict-match fix. The rogue fixture pushes a
+        // `result` frame with NO id before every genuine answer; only the
+        // exact-id response may answer a request. Under the old leniency the
+        // broadcast was accepted as initialize's reply and the real answers
+        // drifted one exchange behind — tools/list then matched a broadcast.
+        $server = $this->spawn('rogue', 'rogue_server.php');
+        $server->start();
+
+        $tools = $server->listTools();
+        self::assertSame(['real'], array_map(static fn ($tool): string => $tool->name, $tools));
+        self::assertSame(
+            'echoed',
+            $server->callTool('real', [])['content'][0]['text'],
+            'later exchanges must still match their own id through the broadcast noise',
+        );
+
+        $server->stop();
+    }
+
+    public function testADoubleStartIsRefusedInsteadOfOrphaningTheLiveChild(): void
+    {
+        // Review probe P6: a second start() used to overwrite the proc handle,
+        // leaving the first child running with no owner. Fail-fast now.
+        $server = $this->spawn('twice', 'prompt_server.php');
+        $server->start();
+        $pid = self::childPid($server);
+        self::assertNotNull($pid);
+
+        $caught = null;
+        try {
+            $server->start();
+        } catch (\RuntimeException $thrown) {
+            $caught = $thrown;
+        }
+
+        self::assertNotNull($caught, 'a live server must refuse a second start()');
+        self::assertStringContainsString('double start()', $caught->getMessage());
+        self::assertSame($pid, self::childPid($server), 'the refusal must not swap the handle');
+
+        $server->stop();
+        self::assertSame(
+            [],
+            self::liveChildrenRunning('prompt_server.php'),
+            'exactly one child was ever owned, and stop() reaped it',
+        );
+    }
+
+    public function testAFrameCapThrowMidHandshakeReapsTheChildItSpawned(): void
+    {
+        // Review fix F6 pin: the oversized-frame refusal throws from INSIDE
+        // the request leg, previously escaping start() with the child alive
+        // on the pipes until __destruct. The catch leg must reap it now.
+        // (This fixture also discriminates the readLine offset-scan fix: an
+        // O(n²) rescan of 64MiB would blow the 5s budget into the deadline
+        // path and the message assertion below would go red.)
+        $hog = $this->spawn('hog', 'oversized_frame_server.php', 5.0);
+
+        $caught = null;
+        $startedAt = microtime(true);
+        try {
+            $hog->start();
+        } catch (\RuntimeException $thrown) {
+            $caught = $thrown;
+        }
+        $elapsed = microtime(true) - $startedAt;
+
+        self::assertNotNull($caught, 'an oversized frame must refuse the handshake');
+        self::assertStringContainsString('no newline', $caught->getMessage());
+        self::assertFalse($hog->isUp());
+        self::assertSame(
+            [],
+            self::liveChildrenRunning('oversized_frame_server.php'),
+            'the mid-handshake throw must have stopped the child it spawned',
+        );
+        self::assertLessThan(
+            self::BOUND_SECONDS,
+            $elapsed,
+            'accumulating to the cap must stay linear — a re-scan-per-chunk server is a CPU DoS',
+        );
+    }
+
     public function testThePublicRequestApiReachesErrorReplies(): void
     {
         $server = $this->spawn('probe', 'prompt_server.php');

@@ -91,6 +91,16 @@ final class McpTool
      */
     private static function toolDefinitionIsWellTyped(array $definition): bool
     {
+        // name is the ONE field the wire contract requires: the loop below
+        // treats an absent field as well-typed (isset() semantics fit
+        // description/inputSchema, which fromArray() legitimately defaults),
+        // but an absent or empty name would mint a phantom tool the router
+        // cannot address (probe P8: a bare `{}` definition landed as a tool
+        // named ''). Require it present, a string, and non-empty.
+        if (!isset($definition['name']) || !is_string($definition['name']) || $definition['name'] === '') {
+            return false;
+        }
+
         foreach (self::TOOL_DEFINITION_TYPES as $field => $predicate) {
             if (!isset($definition[$field])) {
                 continue;
