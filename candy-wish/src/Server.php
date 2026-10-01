@@ -105,13 +105,18 @@ final class Server
     }
 
     /**
-     * Add SSH keepalive middleware to detect dead connections.
+     * Add keepalive middleware to the stack.
      *
-     * Sends periodic SSH_MSG_IGNORE packets at the specified interval
-     * to keep connections alive through NAT gateways and firewalls.
-     * Also helps detect if the remote client has disconnected.
+     * Under {@see \SugarCraft\Wish\Transport\InProcessTransport} the
+     * middleware writes a `\0` byte through the PTY master whenever the
+     * pump loop idles past the interval — the byte travels the wire
+     * only where the tty echoes it (raw-mode TUIs suppress echo, so
+     * those sessions stay silent). It is NOT an SSH_MSG_IGNORE packet:
+     * the ForceCommand process never touches the SSH binary protocol.
+     * Under HostSshdTransport it is a deliberate no-op — configure
+     * sshd's ClientAliveInterval/ServerAliveInterval instead.
      *
-     * @param int $intervalSeconds Interval between keepalive messages (default 60)
+     * @param int $intervalSeconds Interval between keepalive writes (default 60)
      */
     public function withKeepalive(int $intervalSeconds = 60): self
     {

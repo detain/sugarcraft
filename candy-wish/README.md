@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-wish)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-wish)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/candy-wish?label=packagist)](https://packagist.org/packages/sugarcraft/candy-wish)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
@@ -46,11 +46,13 @@ simply not covered).
 
 ## Shared foundations
 
-CandyWish uses **candy-palette** for terminal capability probing. Call
-`\SugarCraft\Palette\Probe\TerminalProbe::run()` to detect color support,
-Sixel, HalfBlock, and other terminal capabilities — do not call `getenv()`
-or read terminfo directly. The probe is used by UI components that need to
-adapt rendering to the client's feature set.
+CandyWish builds on **candy-pty** (the PTY supervisor `InProcessTransport`
+spawns children through) and **candy-core** (`Lang` i18n wrapper,
+`AtomicJsonFile` persistence). It performs no terminal-capability probing of
+its own — `Session::fromEnvironment()` reads SSH environment variables
+(`TERM`, `SSH_CONNECTION`, …) purely as session *metadata*, never as a
+feature sniff. Should capability probing ever be added, route it through a
+terminal probe rather than raw `getenv()`/terminfo reads.
 
 ## Architecture
 
@@ -175,7 +177,7 @@ ssh wishuser@your-host
 | `AuthMethods`        | both            | Declares accepted auth methods; writes `SSH_AUTH_METHODS` banner to STDOUT; stores list in Context. |
 | `KeyboardInteractive`| both            | Challenge-response — writes prompts to STDOUT, reads responses from STDIN (RFC 4256).                |
 | `RateLimit`          | both            | Per-IP token-bucket persisted to a JSON state file with `flock(LOCK_EX)`.                            |
-| `Keepalive`          | both            | Sends SSH-level keepalive messages at a configurable interval.                                      |
+| `Keepalive`          | InProcess only  | Writes an idle `\0` byte to the PTY master at a configurable interval (reaches the wire only where the tty echoes); under HostSshd it is a no-op — rely on sshd `ClientAliveInterval`. |
 | `Spawn`              | InProcess only  | Terminal — spawns a child cmd in a candy-pty controlled by the supervisor.                          |
 | `BubbleTea`          | HostSshd only   | Terminal — mounts a SugarCraft Program inline reading STDIN, writing STDOUT.                         |
 | `Subsystem`          | both            | Terminal — parses `subsystem <name>` from `Session::command`, dispatches to a registered `SubsystemHandler`. Non-subsystem requests pass through to `$next`. |
@@ -223,7 +225,7 @@ final class LdapAuth extends AsyncMiddleware
     {
         return $this->ldap->verify($session->user)->then(
             fn () => $next($ctx, $session),
-            fn (\Throwable $e) => throw new AuthFailedException($e->getMessage()),
+            fn (\Throwable $e) => throw new \RuntimeException('auth failed: ' . $e->getMessage(), 0, $e),
         );
     }
 }
@@ -259,7 +261,7 @@ to populate protocol-level fields:
 ```php
 $s->sessionId;        // SSH session ID (hex string)
 $s->authMethod;       // 'publickey' | 'password' | 'keyboard-interactive' | ...
-$s->keyFingerprint;   // SHA256 host-key fingerprint of the connected client
+$s->keyFingerprint;   // reserved: always null today — no transport populates it (verification is opt-in via Auth.php's fingerprint validator)
 $s->clientVersion;    // SSH client version string (e.g. 'SSH-2.0-OpenSSH_9.0')
 $s->serverVersion;    // SSH server version string (e.g. 'SSH-2.0-OpenSSH_9.0')
 
@@ -360,8 +362,23 @@ use SugarCraft\Wish\Session;
 
 final class DebugChannelHandler implements ChannelHandler
 {
+    private int $cols = 80;
+    private int $rows = 24;
+
+    public function cols(): int
+    {
+        return $this->cols;
+    }
+
+    public function rows(): int
+    {
+        return $this->rows;
+    }
+
     public function handlePtyReq(PtyReqMsg $msg, Session $session): void
     {
+        $this->cols = $msg->cols;
+        $this->rows = $msg->rows;
         fwrite(STDERR, "pty-req: wantPty={$msg->wantPty} cols={$msg->cols} rows={$msg->rows}\n");
     }
 
@@ -396,8 +413,10 @@ final class DebugChannelHandler implements ChannelHandler
     }
 }
 
-// Pass to InProcessTransport
-new InProcessTransport($ptySystem, new DebugChannelHandler());
+// Hand the handler to InProcessTransport (handler seam is a setter —
+// the constructor takes only the optional PtySystem).
+$transport = new InProcessTransport($ptySystem);
+$transport->setChannelHandler(new DebugChannelHandler());
 ```
 
 ## Subsystem middleware (InProcessTransport)
@@ -434,6 +453,10 @@ extracts the name and dispatches.
 
 ## Status
 
-Phase 9+ — with Context propagation + ChannelHandler dispatch. Seven middleware classes, ChannelHandler/ChannelMsg + 7 message classes, 25+ tests / 80+ assertions, ready for v0 deployment.
+Phase 9+ — with Context propagation + ChannelHandler dispatch. Seven middleware classes, ChannelHandler/ChannelMsg + 7 message classes, 217 tests / 536 assertions, ready for v0 deployment.
 
-See [`examples/hello-server.php`](examples/hello-server.php) for a runnable banner-only stack you can ForceCommand against.
+Runnable examples:
+- [`examples/hello-server.php`](examples/hello-server.php) — banner-only stack you can ForceCommand against.
+- [`examples/showcase.php`](examples/showcase.php) — middleware-stack tour.
+- [`examples/spawn-bash.php`](examples/spawn-bash.php) — interactive bash through `Spawn`.
+- [`examples/spawn-program.php`](examples/spawn-program.php) — arbitrary child program through `Spawn`.

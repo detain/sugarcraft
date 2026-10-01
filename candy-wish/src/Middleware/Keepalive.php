@@ -13,13 +13,17 @@ use SugarCraft\Wish\Transport\InProcessTransport;
 use SugarCraft\Wish\TransportAware;
 
 /**
- * Middleware that periodically sends SSH-level keepalive messages
- * to detect dead connections.
+ * Middleware that writes an idle keepalive byte through the PTY
+ * master at a configurable interval.
  *
- * When used with InProcessTransport, this middleware registers a
- * callback that writes a null byte through the PTY master at the
- * configured interval. This keeps NAT gateways and firewalls from
- * timing out idle SSH connections.
+ * Under InProcessTransport the callback fires on pump-loop idle and
+ * writes a `\0` byte into the child's input side. The byte reaches
+ * the remote wire only where the tty echoes input — line-oriented
+ * shells echo it back, while raw-mode TUIs suppress echo and those
+ * sessions see nothing. It is NOT an SSH_MSG_IGNORE packet: the
+ * ForceCommand process never touches the SSH binary protocol. Where
+ * the echo path exists, the periodic traffic keeps NAT gateways and
+ * firewalls from timing out idle SSH connections.
  *
  * Note: For HostSshdTransport, the keepalive relies on sshd
  * configuration (ClientAliveInterval/ServerAliveInterval).
@@ -27,7 +31,7 @@ use SugarCraft\Wish\TransportAware;
  * Example:
  * ```php
  * Server::new()
- *     ->use(new Keepalive(30))  // Send keepalive every 30 seconds
+ *     ->use(new Keepalive(30))  // Idle byte every 30 seconds
  *     ->use(new Spawn(...))
  *     ->serve();
  * ```
@@ -69,8 +73,9 @@ final class Keepalive implements Middleware, TransportAware
             if ($now - $lastSent >= $this->intervalSeconds) {
                 // Writing a null byte through the PTY master is safe
                 // for shells and most line-oriented programs — it is
-                // ignored at the application layer but travels over
-                // the wire, keeping the connection alive.
+                // ignored at the application layer, and wherever the
+                // tty echoes it back the periodic traffic keeps NAT
+                // warm. Raw-mode TUIs never echo: silent by design.
                 $transport->pty()->write("\0");
                 $lastSent = $now;
             }

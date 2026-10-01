@@ -36,7 +36,7 @@ use SugarCraft\Wish\Session;
  *     {
  *         return $this->ldap->verify($session->user)->then(
  *             fn () => $next($ctx, $session),
- *             fn (\Throwable $e) => throw new AuthFailedException($e->getMessage())
+ *             fn (\Throwable $e) => throw new \RuntimeException('auth failed: ' . $e->getMessage(), 0, $e)
  *         );
  *     }
  * }
