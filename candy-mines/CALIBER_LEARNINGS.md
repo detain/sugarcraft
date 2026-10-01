@@ -10,7 +10,7 @@ Accumulated patterns and gotchas from building and shipping this lib.
 
 [pattern:o1-win-revealedCount] — `Board::isWon()` is O(1) because `revealedCount` is incremented on every cell reveal during flood-fill and chord. The alternative — scanning all cells on every `isWon()` call — would be O(width×height) per move. The counter is stored as a constructor parameter so every `with*()` call preserves it.
 
-[pattern:board-atomic-serialization] — `Board::serialize()` emits a versioned JSON payload (`{v:1,...}`) covering every cell field. `Board::unserialize()` validates all required keys and array shapes before constructing a `Board`, throwing `InvalidArgumentException` with a generic message on any malformation. The version tag allows forward-compatible additions without breaking existing saved games.
+[pattern:board-atomic-serialization] — `Board::serialize()` emits a versioned JSON payload (`{v:1,...}`) covering every cell field. `Board::unserialize()` validates all required keys and array shapes before constructing a `Board`, throwing `InvalidArgumentException` with a generic message on any malformation. The `v` version tag is enforced on read: payloads tagged with a different version are rejected with a clear "Unsupported board serialization version" error rather than half-parsed — a future format bump mints `v:2` and widens the accepted set deliberately instead of silently misreading old/new files.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
 

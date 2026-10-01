@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mines;
 
-use SugarCraft\Mines\Lang;
-
 /**
  * The minesweeper board — pure value object. Immutable; every reveal
  * or flag returns a fresh Board with the changed cells swapped in.
@@ -38,6 +36,23 @@ final class Board
         }
         if ($mineCount < 1 || $mineCount > $width * $height - 1) {
             throw new \InvalidArgumentException(Lang::t('board.minecount_out_of_range'));
+        }
+        // Fail fast on a misshapen grid: a 5×5-claim over 2×2 data would
+        // silently produce an un-winnable board (win threshold unreachable,
+        // reveals outside the real data no-op). unserialize() already checks
+        // the wire shape — the direct-ctor path gets the same guarantee.
+        if (count($rows) !== $height) {
+            throw new \InvalidArgumentException(Lang::t('board.rows_shape_mismatch'));
+        }
+        foreach ($rows as $row) {
+            if (!is_array($row) || count($row) !== $width) {
+                throw new \InvalidArgumentException(Lang::t('board.rows_shape_mismatch'));
+            }
+            foreach ($row as $cell) {
+                if (!$cell instanceof Cell) {
+                    throw new \InvalidArgumentException(Lang::t('board.rows_shape_mismatch'));
+                }
+            }
         }
         $this->rows = $rows;
     }
@@ -238,8 +253,10 @@ final class Board
     /**
      * Serialize the board to a string for save/load mid-game.
      *
-     * Format: JSON with version tag for forward compatibility.
-     * Each cell is stored as [mine, revealed, flagged, adjacent].
+     * Format: JSON with a version tag (`v`) that {@see unserialize()}
+     * enforces — payloads tagged with any other version are rejected with a
+     * clear error rather than half-parsed. Each cell is stored as
+     * [mine, revealed, flagged, adjacent].
      */
     public function serialize(): string
     {
@@ -279,6 +296,14 @@ final class Board
         }
         if (!is_array($p)) {
             throw new \InvalidArgumentException('Invalid board serialization');
+        }
+        $v = $p['v'] ?? null;
+        if ($v !== 1) {
+            throw new \InvalidArgumentException(
+                $v === null
+                    ? 'Invalid board serialization'
+                    : "Unsupported board serialization version: " . json_encode($v)
+            );
         }
         $w = $p['w'] ?? null;
         $h = $p['h'] ?? null;

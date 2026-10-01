@@ -464,4 +464,80 @@ final class BoardTest extends TestCase
         // isWon() must reflect reality, not the tampered counter.
         $this->assertSame($original->isWon(), $restored->isWon());
     }
+
+    // ─── M1: constructor shape guard (fail-fast vs silent un-winnable board) ──
+
+    /** @return list<list<\SugarCraft\Mines\Cell>> */
+    private static function grid(int $width, int $height): array
+    {
+        $rows = [];
+        for ($y = 0; $y < $height; $y++) {
+            $row = [];
+            for ($x = 0; $x < $width; $x++) {
+                $row[] = new \SugarCraft\Mines\Cell(false);
+            }
+            $rows[] = $row;
+        }
+        return $rows;
+    }
+
+    public function testConstructorRejectsFewerRowsThanHeight(): void
+    {
+        // Audit probe: a 5×5-claim over 2×2 data used to be accepted, making
+        // the win threshold unreachable (silently un-winnable) and revealing
+        // outside the real data a no-op.
+        $this->expectException(\InvalidArgumentException::class);
+        new Board(5, 5, 3, self::grid(2, 2));
+    }
+
+    public function testConstructorRejectsShortRow(): void
+    {
+        $rows = self::grid(5, 5);
+        $rows[3] = [new \SugarCraft\Mines\Cell(false)];
+        $this->expectException(\InvalidArgumentException::class);
+        new Board(5, 5, 3, $rows);
+    }
+
+    public function testConstructorRejectsNonCellEntry(): void
+    {
+        $rows = self::grid(4, 4);
+        $rows[2][1] = 'not a cell';
+        $this->expectException(\InvalidArgumentException::class);
+        new Board(4, 4, 3, $rows); // intentional wrong-type probe
+    }
+
+    public function testConstructorAcceptsExactShape(): void
+    {
+        $b = new Board(4, 3, 2, self::grid(4, 3), true, false, 0, 0);
+        $this->assertSame(4, $b->width);
+        $this->assertSame(3, $b->height);
+    }
+
+    // ─── LOW: serialize version tag enforced on read ────────────────────────
+
+    public function testUnserializeRejectsForeignVersionTag(): void
+    {
+        $payload = json_decode(Board::blank(5, 5, 3)->serialize(), true);
+        $payload['v'] = 2;
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unsupported board serialization version');
+        Board::unserialize(json_encode($payload));
+    }
+
+    public function testUnserializeRejectsMissingVersionTag(): void
+    {
+        $payload = json_decode(Board::blank(5, 5, 3)->serialize(), true);
+        unset($payload['v']);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid board serialization');
+        Board::unserialize(json_encode($payload));
+    }
+
+    public function testUnserializeStillAcceptsCurrentVersion(): void
+    {
+        $b = Board::blank(5, 5, 3);
+        $r = Board::unserialize($b->serialize());
+        $this->assertSame(5, $r->width);
+        $this->assertSame(5, $r->height);
+    }
 }
