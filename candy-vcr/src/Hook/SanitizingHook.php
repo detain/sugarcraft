@@ -33,7 +33,9 @@ final class SanitizingHook implements Hook
 
     /**
      * @param list<string> $removeKeys Payload keys to remove entirely
-     * @param array<string, string> $replacePatterns Regex patterns => replacements for targeted sanitization
+     * @param array<array-key, string> $replacePatterns Regex patterns => replacements for targeted sanitization.
+     *        Declared array-key, not string: PHP's engine casts a numeric-string pattern ("0") to an int key
+     *        before this method ever sees it, so the door — not the caller's literal — owns the cast-back.
      *
      * @throws \InvalidArgumentException when a replace pattern is not a valid PCRE (E724)
      */
@@ -50,16 +52,19 @@ final class SanitizingHook implements Hook
         // per payload value. The probe runs the REAL pattern/replacement
         // pair against an empty subject: a pattern that compiles cannot hit
         // a runtime limit on '', so NULL here means exactly "bad pair".
+        $normalized = [];
         foreach ($replacePatterns as $pattern => $replacement) {
-            if (@preg_replace((string) $pattern, (string) $replacement, '') === null) {
+            $pattern = (string) $pattern;
+            if (@preg_replace($pattern, (string) $replacement, '') === null) {
                 throw new \InvalidArgumentException(
                     "candy-vcr: sanitize pattern is not a valid PCRE pattern: {$pattern}",
                 );
             }
+            $normalized[$pattern] = $replacement;
         }
 
         $this->removeKeys = $removeKeys;
-        $this->replacePatterns = $replacePatterns;
+        $this->replacePatterns = $normalized;
     }
 
     public function beforeSave(Event $event): Event
