@@ -27,7 +27,7 @@ use SugarCraft\Mines\Ui\CustomDifficulty;
  * CLI:
  *   candy-mines                        # default 10×10, 12 mines
  *   candy-mines [width] [height] [mines]
- *   candy-mines --easy|--medium|--expert
+ *   candy-mines --easy|--standard|--medium|--expert
  *
  * Stats persistence is opt-in: set CANDY_MINES_STATS=/path/to/stats.json and a
  * completed game's outcome is recorded there across sessions.
@@ -37,13 +37,14 @@ $preset = null;
 $positional = [];
 foreach ($args as $arg) {
     switch ($arg) {
-        case '--easy':   $preset = Difficulty::EASY;   break;
+        case '--easy':     $preset = Difficulty::EASY;     break;
+        case '--standard': $preset = Difficulty::STANDARD; break;
         case '--medium': $preset = Difficulty::MEDIUM; break;
         case '--expert': $preset = Difficulty::EXPERT; break;
         default:
             if (str_starts_with($arg, '-')) {
                 fwrite(STDERR, "candy-mines: unknown option {$arg}\n");
-                fwrite(STDERR, "usage: candy-mines [width] [height] [mines] | --easy | --medium | --expert\n");
+                fwrite(STDERR, "usage: candy-mines [width] [height] [mines] | --easy | --standard | --medium | --expert\n");
                 exit(1);
             }
             $positional[] = $arg;

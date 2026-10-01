@@ -351,6 +351,12 @@ final class Game implements Model
     /**
      * Record the result of this game and return a new Game with updated stats.
      * The returned Game has the same board state but updated stats.
+     *
+     * Recording is per-preset ({@see Difficulty}): the shipped default shape
+     * (10×10, 12 mines) is the STANDARD preset, so default games DO tally.
+     * Truly custom boards match no preset and record nothing — a mixed-size
+     * "custom" bucket would make best-time meaningless, so the gap is
+     * deliberate and documented rather than silently dishonest.
      */
     public function recordResult(?float $elapsed): self
     {
