@@ -159,6 +159,11 @@ final class UsageTest extends TestCase
             // missing from EITHER half of the wire pair is the silent
             // async-only loss this exact-shape assert exists to catch.
             'reasoningTokens' => null,
+            // Billing fix (audit-crush-core finding 1): the unpriced-model
+            // signal joined the pair for the SAME reason — a fork turn whose
+            // model had no rate must not arrive parent-side as an ordinary
+            // zero-dollar call.
+            'unpricedModel' => null,
         ], $wire);
 
         $back = Usage::fromArray($wire);

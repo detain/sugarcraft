@@ -174,7 +174,7 @@ final class OpenAIProviderTest extends TestCase
         $client = $this->createMock(ClientContract::class);
         $provider = new OpenAIProvider($client, 'gpt-4o');
 
-        $this->assertSame(0.005, $provider->costPer1kTokens('gpt-4o', 'input'));
+        $this->assertSame(0.0025, $provider->costPer1kTokens('gpt-4o', 'input'));
     }
 
     public function testCostPer1kTokensForGpt4oOutput(): void
@@ -182,7 +182,7 @@ final class OpenAIProviderTest extends TestCase
         $client = $this->createMock(ClientContract::class);
         $provider = new OpenAIProvider($client, 'gpt-4o');
 
-        $this->assertSame(0.015, $provider->costPer1kTokens('gpt-4o', 'output'));
+        $this->assertSame(0.01, $provider->costPer1kTokens('gpt-4o', 'output'));
     }
 
     public function testCostPer1kTokensForGpt4TurboInput(): void
@@ -234,16 +234,112 @@ final class OpenAIProviderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // 9. costPer1kTokens() returns default value for unknown models
+    // 9. costPer1kTokens() returns NULL for unknown models (billing fix:
+    //    no fabricated default — an unknown rate is a loud unknown)
     // -------------------------------------------------------------------------
 
-    public function testCostPer1kTokensForUnknownModelReturnsDefault(): void
+    public function testCostPer1kTokensForUnknownModelReturnsNull(): void
     {
         $client = $this->createMock(ClientContract::class);
         $provider = new OpenAIProvider($client, 'unknown-model');
 
-        $this->assertSame(0.01, $provider->costPer1kTokens('unknown-model', 'input'));
-        $this->assertSame(0.01, $provider->costPer1kTokens('unknown-model', 'output'));
+        $this->assertNull($provider->costPer1kTokens('unknown-model', 'input'));
+        $this->assertNull($provider->costPer1kTokens('unknown-model', 'output'));
+    }
+
+    // 9b. The config seam: modelPrices overrides/extends the built-in table
+    //     (operator-declared rates are USD-per-1M; the provider divides).
+    public function testModelPricesOverridesBuiltInRate(): void
+    {
+        $client = $this->createMock(ClientContract::class);
+        // 7.5/30 USD per 1M → 0.0075/0.03 per 1K, replacing gpt-4o's table row.
+        $provider = new OpenAIProvider($client, 'gpt-4o', [
+            'gpt-4o' => ['input' => 7.5, 'output' => 30.0],
+        ]);
+
+        $this->assertSame(0.0075, $provider->costPer1kTokens('gpt-4o', 'input'));
+        $this->assertSame(0.03, $provider->costPer1kTokens('gpt-4o', 'output'));
+    }
+
+    public function testModelPricesPricesAnUnknownModel(): void
+    {
+        $client = $this->createMock(ClientContract::class);
+        $provider = new OpenAIProvider($client, 'gpt-4o', [
+            'my-router-model' => ['input' => 1.0, 'output' => 2.0],
+        ]);
+
+        $this->assertSame(0.001, $provider->costPer1kTokens('my-router-model', 'input'));
+        $this->assertSame(0.002, $provider->costPer1kTokens('my-router-model', 'output'));
+    }
+
+    // 9c. Per-model pricing: the SAME usage document priced at two different
+    //     models yields different dollars, priced at the REQUEST model rather
+    //     than the provider default (audit finding 1's core defect).
+    public function testCompletePricesAtRequestedModelNotDefault(): void
+    {
+        $client = $this->createMock(ClientContract::class);
+        $chatMock = $this->createMock(ChatContract::class);
+        $client->method('chat')->willReturn($chatMock);
+
+        $chatMock->method('create')->willReturn(ChatCreateResponse::from([
+            'id' => 'chatcmpl-1',
+            'object' => 'chat.completion',
+            'created' => 1,
+            'model' => 'gpt-4',
+            'choices' => [[
+                'index' => 0,
+                'message' => ['role' => 'assistant', 'content' => 'ok'],
+                'finish_reason' => 'stop',
+            ]],
+            'usage' => ['prompt_tokens' => 1000, 'completion_tokens' => 1000, 'total_tokens' => 2000],
+        ], MetaInformation::from([])));
+
+        // Default is the cheap gpt-4o-mini; the request asks for gpt-4. Pricing
+        // gpt-4's usage at gpt-4o-mini's rate would be the bug: 1000/1000 at
+        // gpt-4 (0.03/0.06) is $0.09, at gpt-4o-mini (0.00015/0.0006) it is
+        // $0.00075. The response must carry the gpt-4 figure.
+        $provider = new OpenAIProvider($client, 'gpt-4o-mini');
+        $response = $provider->complete(new CompleteRequest(
+            model: 'gpt-4',
+            messages: [new UserMessage('Hello')],
+        ));
+
+        $this->assertSame(0.09, $response->costUsd);
+        $this->assertNotNull($response->usage);
+        $this->assertNull($response->usage->unpricedModel);
+    }
+
+    // 9d. An unknown requested model: cost is the 0.0 lower bound AND the
+    //     name rides out on the carrier so accounting can tell it from free.
+    public function testCompleteUnknownRequestedModelSignalsUnpriced(): void
+    {
+        $client = $this->createMock(ClientContract::class);
+        $chatMock = $this->createMock(ChatContract::class);
+        $client->method('chat')->willReturn($chatMock);
+
+        $chatMock->method('create')->willReturn(ChatCreateResponse::from([
+            'id' => 'chatcmpl-1',
+            'object' => 'chat.completion',
+            'created' => 1,
+            'model' => 'never-seen-model',
+            'choices' => [[
+                'index' => 0,
+                'message' => ['role' => 'assistant', 'content' => 'ok'],
+                'finish_reason' => 'stop',
+            ]],
+            'usage' => ['prompt_tokens' => 500, 'completion_tokens' => 250, 'total_tokens' => 750],
+        ], MetaInformation::from([])));
+
+        $provider = new OpenAIProvider($client, 'gpt-4o');
+        $response = $provider->complete(new CompleteRequest(
+            model: 'never-seen-model',
+            messages: [new UserMessage('Hello')],
+        ));
+
+        $this->assertSame(0.0, $response->costUsd);
+        $this->assertNotNull($response->usage);
+        $this->assertSame(750, $response->usage->totalTokens);
+        $this->assertSame('never-seen-model', $response->usage->unpricedModel);
     }
 
     // -------------------------------------------------------------------------
@@ -709,6 +805,149 @@ final class OpenAIProviderTest extends TestCase
         $this->assertSame([
             ['role' => 'user', 'content' => 'Hello'],
         ], $captured['messages']);
+    }
+
+    // -------------------------------------------------------------------------
+    // 12b. include_usage streamed billing (audit finding 1's stream half):
+    //      the request must set stream_options.include_usage, and the terminal
+    //      zero-choice usage frame must fold into a cost-bearing CompleteResponse.
+    // -------------------------------------------------------------------------
+
+    public function testCompleteStreamRequestsIncludeUsageAndBillsTerminalFrame(): void
+    {
+        $client = $this->createMock(ClientContract::class);
+        $chatMock = $this->createMock(ChatContract::class);
+        $client->method('chat')->willReturn($chatMock);
+
+        $captured = null;
+        $chatMock->method('createStreamed')->willReturnCallback(function (array $params) use (&$captured) {
+            $captured = $params;
+
+            // A real OpenAI stream with the flag on: content chunks, a closing
+            // finish chunk, THEN a standalone usage frame with empty choices,
+            // then [DONE] (mirrors tests/fixtures/qwen-usage-stream.txt shape).
+            $frames = [
+                ['id' => 'c1', 'object' => 'chat.completion.chunk', 'created' => 1, 'model' => 'gpt-4o',
+                    'choices' => [['index' => 0, 'delta' => ['content' => 'Hel']]]],
+                ['id' => 'c1', 'object' => 'chat.completion.chunk', 'created' => 1, 'model' => 'gpt-4o',
+                    'choices' => [['index' => 0, 'delta' => ['content' => 'lo'], 'finish_reason' => 'stop']]],
+                ['id' => 'c1', 'object' => 'chat.completion.chunk', 'created' => 1, 'model' => 'gpt-4o',
+                    'choices' => [],
+                    'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 10, 'total_tokens' => 30]],
+            ];
+            $body = '';
+            foreach ($frames as $f) {
+                $body .= 'data: ' . json_encode($f) . "\n\n";
+            }
+            $body .= "data: [DONE]\n\n";
+
+            return new StreamResponse(
+                CreateStreamedResponse::class,
+                new Response(200, [], Utils::streamFor($body)),
+            );
+        });
+
+        $provider = new OpenAIProvider($client, 'gpt-4o');
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'gpt-4o',
+            messages: [new UserMessage('Hello')],
+        )));
+
+        // (1) the flag rode the request,
+        $this->assertSame(['include_usage' => true], $captured['stream_options']);
+
+        // (2) content deltas are the first two frames;
+        $this->assertSame('Hel', $chunks[0]->content);
+        $this->assertSame('lo', $chunks[1]->content);
+
+        // (3) the empty-choices usage frame is NOT yielded as an empty chunk.
+        //     It becomes exactly one terminal carrier: two content chunks + one
+        //     usage carrier, never a third content-less delta.
+        $this->assertCount(3, $chunks);
+        $terminal = $chunks[2];
+        $this->assertSame('', $terminal->content);
+
+        // (4) the terminal carrier billed the whole stream: 20/10 at gpt-4o
+        //     (0.0025/0.01 per 1K) = 0.00005 + 0.0001. Asserted via the same
+        //     arithmetic the provider runs, not a rounded literal, so float
+        //     representation is not the thing under test.
+        $this->assertSame(30, $terminal->tokensUsed);
+        $this->assertSame((20 * 0.0025 + 10 * 0.01) / 1000, $terminal->costUsd);
+        $this->assertNotNull($terminal->usage);
+        $this->assertSame(20, $terminal->usage->inputTokens);
+        $this->assertSame(10, $terminal->usage->outputTokens);
+    }
+
+    public function testCompleteStreamTerminalUnpricedFrameSignalsBlindness(): void
+    {
+        $client = $this->createMock(ClientContract::class);
+        $chatMock = $this->createMock(ChatContract::class);
+        $client->method('chat')->willReturn($chatMock);
+
+        $chatMock->method('createStreamed')->willReturnCallback(function (array $params) {
+            $frames = [
+                ['id' => 'c1', 'object' => 'chat.completion.chunk', 'created' => 1, 'model' => 'zzz',
+                    'choices' => [['index' => 0, 'delta' => ['content' => 'x'], 'finish_reason' => 'stop']]],
+                ['id' => 'c1', 'object' => 'chat.completion.chunk', 'created' => 1, 'model' => 'zzz',
+                    'choices' => [],
+                    'usage' => ['prompt_tokens' => 4, 'completion_tokens' => 6, 'total_tokens' => 10]],
+            ];
+            $body = '';
+            foreach ($frames as $f) {
+                $body .= 'data: ' . json_encode($f) . "\n\n";
+            }
+            $body .= "data: [DONE]\n\n";
+
+            return new StreamResponse(
+                CreateStreamedResponse::class,
+                new Response(200, [], Utils::streamFor($body)),
+            );
+        });
+
+        // 'mystery-model' is unknown AND is what the request billed, so the
+        // terminal frame's Usage must carry the name with a 0.0 bound.
+        $provider = new OpenAIProvider($client, 'gpt-4o');
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'mystery-model',
+            messages: [new UserMessage('Hello')],
+        )));
+
+        $terminal = $chunks[count($chunks) - 1];
+        $this->assertSame(0.0, $terminal->costUsd);
+        $this->assertSame(10, $terminal->tokensUsed);
+        $this->assertSame('mystery-model', $terminal->usage?->unpricedModel);
+    }
+
+    public function testCompleteStreamWithoutUsageFrameStaysUnreported(): void
+    {
+        $client = $this->createMock(ClientContract::class);
+        $chatMock = $this->createMock(ChatContract::class);
+        $client->method('chat')->willReturn($chatMock);
+
+        // A server that ignores stream_options and sends no usage frame: the
+        // honest answer is "nothing reported", so NO terminal carrier is
+        // invented and the content chunks sum to a null Usage upstream.
+        $chatMock->method('createStreamed')->willReturnCallback(function (array $params) {
+            $body = 'data: ' . json_encode([
+                'id' => 'c1', 'object' => 'chat.completion.chunk', 'created' => 1, 'model' => 'gpt-4o',
+                'choices' => [['index' => 0, 'delta' => ['content' => 'Hi'], 'finish_reason' => 'stop']],
+            ]) . "\n\ndata: [DONE]\n\n";
+
+            return new StreamResponse(
+                CreateStreamedResponse::class,
+                new Response(200, [], Utils::streamFor($body)),
+            );
+        });
+
+        $provider = new OpenAIProvider($client, 'gpt-4o');
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'gpt-4o',
+            messages: [new UserMessage('Hello')],
+        )));
+
+        $this->assertCount(1, $chunks);
+        $this->assertSame('Hi', $chunks[0]->content);
+        $this->assertSame(0, $chunks[0]->tokensUsed);
     }
 
     // -------------------------------------------------------------------------

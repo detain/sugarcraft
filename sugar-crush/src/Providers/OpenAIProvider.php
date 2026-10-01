@@ -36,9 +36,43 @@ final readonly class OpenAIProvider implements ProviderInterface
      */
     private const TRUNCATED_FINISH_REASONS = ['length'];
 
+    /**
+     * Built-in USD-per-1K rates, keyed model => [input, output].
+     *
+     * A model missing here is UNPRICED — {@see costPer1kTokens()} answers
+     * null and the turn bills 0.0 with an {@see Usage::$unpricedModel}
+     * signal — never guessed. There is deliberately no `default` row: the
+     * table used to fabricate $0.01/1k for every unknown model, which
+     * invented dollars the provider never billed and quietly blinded E20
+     * spend caps against a made-up rate. Figures current as of the October
+     * 2026 audit that minted this constant; the OLD gpt-4o row (5/15) was
+     * four years stale — the launched 2024 repricing to 2.5/10 per 1M is
+     * what the row now carries. Operators price anything else through the
+     * user-tier `modelPrices` config map ({@see \SugarCraft\Crush\Config\LayeredSettings}).
+     *
+     * @var array<string, array{0: float, 1: float}>
+     */
+    private const PRICE_TABLE = [
+        'gpt-4o' => [0.0025, 0.01],
+        'gpt-4o-mini' => [0.00015, 0.0006],
+        'gpt-4.1' => [0.002, 0.008],
+        'gpt-4.1-mini' => [0.0004, 0.0016],
+        'gpt-4-turbo' => [0.01, 0.03],
+        'gpt-4' => [0.03, 0.06],
+        'gpt-3.5-turbo' => [0.0005, 0.0015],
+    ];
+
+    /**
+     * @param array<string, array{input?: float|int, output?: float|int}> $modelPrices
+     *        Operator-declared USD-per-1M rates from the user-tier
+     *        `modelPrices` config key, overriding/extending {@see PRICE_TABLE}
+     *        (per-1M because that is the unit every price sheet publishes in;
+     *        the divide to per-1K happens once in {@see costPer1kTokens()}).
+     */
     public function __construct(
         private ClientContract $client,
         private string $defaultModel = 'gpt-4o',
+        private array $modelPrices = [],
     ) {}
 
     public function name(): string
@@ -77,16 +111,28 @@ final readonly class OpenAIProvider implements ProviderInterface
         };
     }
 
-    public function costPer1kTokens(string $model, string $direction): float
+    /**
+     * @return null|float USD per 1K tokens, or null when NEITHER the operator
+     *         `modelPrices` map nor {@see PRICE_TABLE} names a rate for the
+     *         model — the loud-unknown answer required by the billing audit
+     *         (no fabricated default, ever).
+     */
+    public function costPer1kTokens(string $model, string $direction): ?float
     {
-        // Approximate pricing (should verify current prices)
-        return match ($model) {
-            'gpt-4o' => $direction === 'input' ? 0.005 : 0.015,
-            'gpt-4-turbo' => $direction === 'input' ? 0.01 : 0.03,
-            'gpt-4' => $direction === 'input' ? 0.03 : 0.06,
-            'gpt-3.5-turbo' => $direction === 'input' ? 0.0005 : 0.0015,
-            default => 0.01,
-        };
+        // Operator declaration wins over the built-in row: the point of the
+        // config seam is repricing what this file gets wrong or does not know,
+        // including a stale shipped row.
+        $declared = $this->modelPrices[$model][$direction] ?? null;
+        if (is_numeric($declared)) {
+            return ((float) $declared) / 1000; // config speaks USD-per-1M
+        }
+
+        $row = self::PRICE_TABLE[$model] ?? null;
+        if ($row === null) {
+            return null;
+        }
+
+        return $direction === 'input' ? $row[0] : $row[1];
     }
 
     public function complete(CompleteRequest $request): CompleteResponse
@@ -111,7 +157,10 @@ final readonly class OpenAIProvider implements ProviderInterface
 
         $response = $this->client->chat()->create($params);
 
-        return $this->parseResponse($response);
+        // Billing fix: the request's model is what the wire billed, so it is
+        // what must be priced — `$defaultModel` is this object's fallback
+        // NAME, not this call's subject.
+        return $this->parseResponse($response, $request->model);
     }
 
     /**
@@ -120,8 +169,18 @@ final readonly class OpenAIProvider implements ProviderInterface
      * Each yielded CompleteResponse contains only the delta/content from that chunk.
      * The caller is responsible for accumulating content across chunks.
      *
-     * Note: tokensUsed and costUsd will be 0 for all chunks - usage data is only
-     * available when the stream completes, not per-chunk.
+     * BILLING FIX (audit-crush-core finding 1): the request now sets
+     * `stream_options.include_usage` — the same spelling
+     * {@see SglangProvider::completeStream()} ships — so the wire sends a
+     * final, zero-choice usage frame, and that frame is parsed through the
+     * IDENTICAL batch path ({@see parseUsage()}, priced at `$request->model`)
+     * and yielded as the terminal {@see CompleteResponse} carrying
+     * `tokensUsed`/`costUsd`/`usage`. Before this, EVERY streamed paid turn
+     * billed $0 and reported 0 tokens: the E17 calibration had no streamed
+     * observation to pair, and E20 spend caps were structurally neutered.
+     * Content chunks still carry zeros — compliant per
+     * {@see ProviderInterface::completeStream()}'s per-delta law, they sum to
+     * nothing and the total rides exactly once on the terminal frame.
      *
      * @return \Generator<int, CompleteResponse>
      */
@@ -133,6 +192,10 @@ final readonly class OpenAIProvider implements ProviderInterface
             'temperature' => $request->temperature ?? 0.7,
             'max_tokens' => $request->maxTokens ?? 4096,
             'stream' => true,
+            // Set next to `stream`, never in a shared builder: the batch
+            // request body must stay byte-identical (Sglang's law, and the
+            // openai-php createStreamed() path forwards this array verbatim).
+            'stream_options' => ['include_usage' => true],
         ];
 
         if ($request->tools !== null) {
@@ -145,8 +208,31 @@ final readonly class OpenAIProvider implements ProviderInterface
 
         $stream = $this->client->chat()->createStreamed($params);
 
+        $streamUsage = null;
+
         foreach ($stream as $chunk) {
-            yield $this->parseChunk($chunk);
+            $data = $chunk->toArray();
+
+            // The include_usage terminal frame: usage present, choices empty.
+            // Captured, NOT yielded as a delta — the Sglang gate
+            // ({@see SglangProvider::completeStream()}) verbatim in shape, so
+            // a content-less usage document never masquerades as an empty
+            // token chunk.
+            if (!isset($data['choices'][0]) && is_array($data['usage'] ?? null)) {
+                $streamUsage = $this->parseUsage($data['usage'], $request->model);
+                continue;
+            }
+
+            yield $this->parseChunk($data);
+        }
+
+        if ($streamUsage !== null) {
+            yield new CompleteResponse(
+                content: '',
+                tokensUsed: $streamUsage->totalTokens,
+                costUsd: $streamUsage->costUsd,
+                usage: $streamUsage,
+            );
         }
     }
 
@@ -208,7 +294,7 @@ final readonly class OpenAIProvider implements ProviderInterface
         }, $tools);
     }
 
-    private function parseResponse(mixed $response): CompleteResponse
+    private function parseResponse(mixed $response, ?string $pricingModel = null): CompleteResponse
     {
         $data = $response->toArray();
         $choices = $data['choices'][0] ?? [];
@@ -254,7 +340,7 @@ final readonly class OpenAIProvider implements ProviderInterface
         // E17: the parsed object rides out on `usage:` with the projections, so
         // prompt/completion/cached buckets reach Runtime instead of stopping
         // at this method.
-        $usage = $this->parseUsage(is_array($data['usage'] ?? null) ? $data['usage'] : []);
+        $usage = $this->parseUsage(is_array($data['usage'] ?? null) ? $data['usage'] : [], $pricingModel);
 
         // E707 (round 81): `finish_reason: length` is the wire saying the reply
         // ran into max_tokens mid-sentence. The flag rides out on the carrier;
@@ -303,23 +389,32 @@ final readonly class OpenAIProvider implements ProviderInterface
      * not a measured zero - the distinction {@see Usage} exists to keep.
      *
      * Cost: `costUsd` on the returned Usage is exactly
-     * {@see calculateCost()}'s figure — the pricing table is deliberately NOT
-     * cache-aware yet (a cache read bills ~0.1x and a 5m write 1.25x the base
-     * input price per the §4.16 economics; repricing on the new buckets would
-     * silently change every paid turn's figure and is outside this step's
-     * Goal) — reported as the follow-up it is.
+     * {@see calculateCost()}'s figure for `$pricingModel` (falling back to
+     * this provider's default NAME only when the caller passes no request
+     * model) — the pricing table is deliberately NOT cache-aware yet (a cache
+     * read bills ~0.1x and a 5m write 1.25x the base input price per the
+     * §4.16 economics; repricing on the new buckets would silently change
+     * every paid turn's figure and is outside this step's Goal) — reported as
+     * the follow-up it is. When no rate is on file for the model, `costUsd`
+     * stays its honest lower bound 0.0 and {@see Usage::$unpricedModel}
+     * carries the name so the transcript notice and the spend-cap disclosure
+     * can say WHICH zero it is — the fabricated $0.01/1k fallback this
+     * replaces invented a bill the provider never sent.
      *
-     * Stream arm: `completeStream()` never receives a usage object as coded —
-     * no `stream_options.include_usage` is ever sent, and this provider's
-     * `parseChunk()` yields hardcoded zeros. The vendored
-     * `CreateStreamedResponse` CAN carry `?CreateResponseUsage` on a final
-     * chunk when the flag IS set, so the carrier exists; the request and the
-     * read do not. Wiring it is reported, out of this seam.
+     * Stream arm: `completeStream()` sends `stream_options.include_usage` and
+     * pipes the terminal zero-choice frame's usage document through THIS
+     * method, priced at the request model — the batch and stream price paths
+     * are one path by construction.
      *
      * @param array<string, mixed> $usage the decoded usage object, straight
      *                                    from `CreateResponse::toArray()`
+     * @param ?string              $pricingModel the model THIS call billed —
+     *                                           pass the request's model; the
+     *                                           null fallback prices at the
+     *                                           default NAME and exists only
+     *                                           to keep the 1-arg public API
      */
-    public function parseUsage(array $usage): Usage
+    public function parseUsage(array $usage, ?string $pricingModel = null): Usage
     {
         $prompt = self::usageInt($usage['prompt_tokens'] ?? null);
         $cached = null;
@@ -329,14 +424,20 @@ final readonly class OpenAIProvider implements ProviderInterface
             $cached = self::usageInt($details['cached_tokens'] ?? null);
         }
 
+        $cost = $this->calculateCost($usage, $pricingModel);
+
         return Usage::new(
             // The exact expression this replaces: absent-or-null total is 0.
             self::usageInt($usage['total_tokens'] ?? null) ?? 0,
-            $this->calculateCost($usage),
+            // Unpriced accounts as 0.0 — the LOWER BOUND — with the name
+            // carried beside it so accounting can tell it from a real free
+            // call; never as a fabricated rate.
+            $cost ?? 0.0,
             $prompt !== null && $cached !== null ? max(0, $prompt - $cached) : $prompt,
             self::usageInt($usage['completion_tokens'] ?? null),
             $cached,
             null, // OpenAI has no cache-creation field - never invented
+            unpricedModel: $cost === null ? ($pricingModel ?? $this->defaultModel) : null,
         );
     }
 
@@ -360,16 +461,19 @@ final readonly class OpenAIProvider implements ProviderInterface
      * This returns only the delta content from this chunk - it does NOT contain
      * accumulated content. The caller must accumulate content across chunks.
      *
-     * Note: tokensUsed and costUsd are always 0 for streaming responses because
-     * usage data is only available from the final chunk, not per-chunk.
+     * Delta chunks carry zero usage by design; the turn's one usage figure
+     * arrives on the terminal frame — see {@see completeStream()}'s BILLING
+     * FIX paragraph.
      *
      * Same `reasoning_content`-dropping caveat as {@see parseResponse()}
      * applies here via `CreateStreamedResponseDelta` - see that method's
      * docblock.
+     *
+     * @param array<string, mixed> $data the chunk's decoded array form
      */
-    private function parseChunk(mixed $chunk): CompleteResponse
+    private function parseChunk(array $data): CompleteResponse
     {
-        $choice = $chunk->toArray()['choices'][0] ?? [];
+        $choice = $data['choices'][0] ?? [];
         $delta = $choice['delta'] ?? [];
 
         [$reasoning, $content] = $this->extractReasoning($delta);
@@ -390,14 +494,29 @@ final readonly class OpenAIProvider implements ProviderInterface
     }
 
     /**
+     * The dollar figure for one usage document at one model's rates, or null
+     * when either side is unpriced — a half-known bill is not a bill: the
+     * completion side arriving free while the input side is unknown would
+     * understate every real call.
+     *
      * @param array<string, mixed> $usage
+     * @param ?string              $model the model to price; null means the
+     *                                    legacy one-arg spelling and prices
+     *                                    at this object's default model
      */
-    private function calculateCost(array $usage): float
+    private function calculateCost(array $usage, ?string $model = null): ?float
     {
+        $model ??= $this->defaultModel;
+        $input = $this->costPer1kTokens($model, 'input');
+        $output = $this->costPer1kTokens($model, 'output');
+
+        if ($input === null || $output === null) {
+            return null;
+        }
+
         $promptTokens = $usage['prompt_tokens'] ?? 0;
         $completionTokens = $usage['completion_tokens'] ?? 0;
 
-        return ($promptTokens * $this->costPer1kTokens($this->defaultModel, 'input')
-            + $completionTokens * $this->costPer1kTokens($this->defaultModel, 'output')) / 1000;
+        return ($promptTokens * $input + $completionTokens * $output) / 1000;
     }
 }

@@ -299,7 +299,10 @@ final class ReasoningExtractionTest extends TestCase
             ]],
         ]);
 
-        $result = $method->invoke($provider, $chunk);
+        // billing fix: parseChunk takes the decoded array now (the producer
+        // loop decodes once at the wire boundary); the SDK object's toArray()
+        // keeps this byte-exact with what completeStream() hands it.
+        $result = $method->invoke($provider, $chunk->toArray());
 
         $this->assertSame('reasoning here', $result->reasoning);
         $this->assertSame('final answer', $result->content);

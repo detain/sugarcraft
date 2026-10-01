@@ -641,7 +641,10 @@ final class ProviderRequestResponseTest extends TestCase
 
         $sum = 0;
         foreach ($chunks as $chunk) {
-            $sum += $method->invoke($provider, $chunk)->tokensUsed;
+            // billing fix: parseChunk now takes the decoded array (the loop in
+            // completeStream() decodes once at the wire boundary); the test
+            // still builds real SDK objects so toArray() stays byte-exact.
+            $sum += $method->invoke($provider, $chunk->toArray())->tokensUsed;
         }
 
         // parseChunk hardcodes tokensUsed: 0 (`OpenAIProvider::parseChunk()`), so the sum

@@ -161,6 +161,28 @@ final readonly class Usage
          * (qwen.md Q1-Q4) is measured against.
          */
         public ?int $reasoningTokens = null,
+        /**
+         * The model name whose price this app does not know - set by a paid
+         * provider's parse seam when the tokens arrived but NO rate did, and
+         * null on every priced or genuinely-free call.
+         *
+         * WHY IT EXISTS: a missing rate used to be papered over with a
+         * fabricated $0.01/1k fallback, which invented a bill the provider
+         * never sent. Dropping the fallback without a carrier would have made
+         * the same hole merely silent - `0.0` is BOTH "free" and "unpriced"
+         * (see the "Zero is not the same as unknown" section above), so a
+         * spend-cap readout built on summed dollars cannot tell an honest free
+         * call from an unpriceable one. This field is the difference: the
+         * accounting stays 0.0 (nothing was measured, and 0 is the lower
+         * bound), while {@see Chat}'s notice and {@see Util\TokenTracker}'s
+         * disclosure say WHICH 0 it was. It is a SIGNAL, not a measurement:
+         * it never enters {@see promptTokens()}, never makes a frame
+         * {@see reported()} on its own (an empty usage document naming a model
+         * is still an empty usage document), and a merge keeps the first name
+         * it saw because the blindness - not the name - is what downstream
+         * readers act on.
+         */
+        public ?string $unpricedModel = null,
     ) {}
 
     public static function new(
@@ -171,6 +193,7 @@ final readonly class Usage
         ?int $cacheReadTokens = null,
         ?int $cacheCreationTokens = null,
         ?int $reasoningTokens = null,
+        ?string $unpricedModel = null,
     ): self {
         return new self(
             max(0, $totalTokens),
@@ -180,6 +203,7 @@ final readonly class Usage
             self::clampBucket($cacheReadTokens),
             self::clampBucket($cacheCreationTokens),
             self::clampBucket($reasoningTokens),
+            $unpricedModel,
         );
     }
 
@@ -208,6 +232,7 @@ final readonly class Usage
         ?int $cacheReadTokens = null,
         ?int $cacheCreationTokens = null,
         ?int $reasoningTokens = null,
+        ?string $unpricedModel = null,
     ): ?self {
         if (
             $totalTokens <= 0
@@ -218,6 +243,13 @@ final readonly class Usage
             && $cacheCreationTokens === null
             && $reasoningTokens === null
         ) {
+            // The unpriced signal deliberately does NOT appear in this test:
+            // "reported" asks whether the provider MEASURED anything, and a
+            // model name is not a measurement. A frame with no counts and no
+            // cost stays null here even when a name rides it - the name only
+            // earns its carry on frames that DID count tokens, which is every
+            // real unpriced turn (the usage document arrived; only the rate
+            // did not).
             return null;
         }
 
@@ -229,6 +261,7 @@ final readonly class Usage
             $cacheReadTokens,
             $cacheCreationTokens,
             $reasoningTokens,
+            $unpricedModel,
         );
     }
 
@@ -252,6 +285,12 @@ final readonly class Usage
             self::plusBucket($this->cacheReadTokens, $other->cacheReadTokens),
             self::plusBucket($this->cacheCreationTokens, $other->cacheCreationTokens),
             self::plusBucket($this->reasoningTokens, $other->reasoningTokens),
+            // Carry-first, not concat: the question every downstream reader
+            // asks of a merged turn is "was ANY step blind?", and one
+            // surviving name answers it. Two different unpriced models in one
+            // turn keep the first — the notice is per-turn and the blindness
+            // is the finding, not the spelling.
+            $this->unpricedModel ?? $other->unpricedModel,
         );
     }
 
@@ -379,6 +418,11 @@ final readonly class Usage
             $cacheReadTokensSet ? self::clampBucket($cacheReadTokens) : $this->cacheReadTokens,
             $cacheCreationTokensSet ? self::clampBucket($cacheCreationTokens) : $this->cacheCreationTokens,
             $reasoningTokensSet ? self::clampBucket($reasoningTokens) : $this->reasoningTokens,
+            // No withUnpricedModel(): the signal is set once at the parse
+            // seam by the provider that priced (or failed to price) the call,
+            // and a wither would let a reader clear a blindness it did not
+            // measure away. It ride-alongs every bucket mutate, always.
+            $this->unpricedModel,
         );
     }
 
@@ -419,7 +463,7 @@ final readonly class Usage
      * UNREPORTED, not as zero, or the fork path silently rewrites the one
      * distinction this class exists to keep.
      *
-     * @return array{totalTokens:int,costUsd:float,inputTokens:?int,outputTokens:?int,cacheReadTokens:?int,cacheCreationTokens:?int,reasoningTokens:?int}
+     * @return array{totalTokens:int,costUsd:float,inputTokens:?int,outputTokens:?int,cacheReadTokens:?int,cacheCreationTokens:?int,reasoningTokens:?int,unpricedModel:?string}
      */
     public function toArray(): array
     {
@@ -431,6 +475,10 @@ final readonly class Usage
             'cacheReadTokens' => $this->cacheReadTokens,
             'cacheCreationTokens' => $this->cacheCreationTokens,
             'reasoningTokens' => $this->reasoningTokens,
+            // The pair law above applies verbatim: dropped here, a forked
+            // turn's blindness never reaches the parent's notice; coerced
+            // there, an old frame would invent one.
+            'unpricedModel' => $this->unpricedModel,
         ];
     }
 
@@ -476,6 +524,15 @@ final readonly class Usage
             $buckets[$key] = $value;
         }
 
+        // Same doctrine for the unpriced signal: absent or null decodes to
+        // "priced, or genuinely free" — never to an invented model name — and
+        // anything that is neither null nor a string is a frame this method
+        // did not write.
+        $unpriced = $raw['unpricedModel'] ?? null;
+        if ($unpriced !== null && !is_string($unpriced)) {
+            return null;
+        }
+
         return self::reported(
             $tokens,
             (float) $cost,
@@ -484,6 +541,7 @@ final readonly class Usage
             $buckets['cacheReadTokens'],
             $buckets['cacheCreationTokens'],
             $buckets['reasoningTokens'],
+            is_string($unpriced) && $unpriced !== '' ? $unpriced : null,
         );
     }
 }

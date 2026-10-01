@@ -1731,6 +1731,13 @@ final class Chat implements Model
                     ...$this->history,
                     $message,
                     ...($message->lengthStopped ? [$this->outputLengthStoppedNotice()] : []),
+                    // Billing fix, same append shape as the E707 line above:
+                    // a turn the app could NOT price gets exactly one
+                    // transcript-visible notice naming the model, so a $0.00
+                    // in the budget readout is never silently read as "free".
+                    ...($message->usage?->unpricedModel !== null
+                        ? [$this->unpricedModelNotice($message->usage->unpricedModel)]
+                        : []),
                 ],
                 'inFlight' => false,
                 'inFlightCancellation' => null,
@@ -10314,7 +10321,16 @@ final class Chat implements Model
                 . 'and an unreported session is never refused by the cap.';
         }
 
-        return sprintf('Spend so far: $%.4f (%s). %s', $this->spentUsd(), $capText, $this->usageSummary());
+        return sprintf('Spend so far: $%.4f (%s). %s', $this->spentUsd(), $capText, $this->usageSummary())
+            // Billing fix: the figure above is what the app COULD price. Once
+            // any turn arrived from a model with no rate on file, it is a
+            // lower bound, and a spend readout that presents a bound as a
+            // bill is the same class of dishonesty as the fabricated fallback
+            // it replaced — so the line says so whenever the blind bit is set.
+            . ($this->tokenTracker->hasUnpricedUsage()
+                ? ' At least one model this session used has no price on file, so this is a LOWER BOUND: '
+                    . 'declare rates under "modelPrices" in ~/.sugar-crush/config.json to bill them.'
+                : '');
     }
 
     /**
@@ -14865,6 +14881,14 @@ final class Chat implements Model
         }
 
         $this->tokenTracker->addTotalUsage($usage->totalTokens, $usage->costUsd);
+
+        // Billing fix: a 0-cost call arrives here either genuinely free or
+        // UNPRICED, and the two are different claims. The carrier says which;
+        // the tracker remembers that this session's dollar figure is a lower
+        // bound from here on ({@see Util\TokenTracker::hasUnpricedUsage()}).
+        if ($usage->unpricedModel !== null) {
+            $this->tokenTracker->noteUnpricedUsage();
+        }
     }
 
     /**
@@ -14936,11 +14960,18 @@ final class Chat implements Model
      * Whether any settled turn this session actually reported usage.
      *
      * False on every offline run and on a streamed session whose provider
-     * never sent a usage block - {@see Runtime}'s streaming path documents
-     * that chunks carry `tokensUsed=0`, and
-     * {@see Providers\OpenAIProvider::completeStream()} states it outright. The
-     * spend readout needs this because `$0.0000` would otherwise be printed for
-     * "we have no idea" as confidently as for "you have spent nothing".
+     * never sent a usage block. {@see Runtime}'s streaming path documents that
+     * content chunks carry `tokensUsed=0`; since the billing fix the paid
+     * providers append one terminal usage frame (
+     * {@see Providers\OpenAIProvider::completeStream()}), so a session of
+     * streamed OpenAI turns now DOES report, and only a server that omits the
+     * usage document — or the offline/echo paths — still reaches here empty.
+     * The spend readout needs this because `$0.0000` would otherwise be
+     * printed for "we have no idea" as confidently as for "you have spent
+     * nothing". A priced-0-but-blind turn is a THIRD answer, kept distinct by
+     * {@see Util\TokenTracker::hasUnpricedUsage()} rather than by this flag:
+     * an unpriced model DID report tokens (so this reads true), it just has no
+     * rate to multiply them by.
      *
      * A READOUT concern only. The cap DECISION does not consult it — see
      * {@see spendCapReached()}, where the same fail-open falls out of the
@@ -15874,6 +15905,34 @@ final class Chat implements Model
             'The provider stopped this reply at its output limit, so the text above may end mid-thought. '
             . 'Raise "maxOutputTokens" in ~/.sugar-crush/config.json for a longer single reply, '
             . 'or ask for the remainder in your next message.'
+        );
+    }
+
+    /**
+     * The notice the settle arm writes when a turn arrived from a model this
+     * app has NO price on file for — the billing fix's loud-unknown, the
+     * sibling of {@see outputLengthStoppedNotice()} one seam further out:
+     * that one reports a reply cut short, this one reports a bill it could
+     * not compute.
+     *
+     * WHY IT EXISTS: the fabricated $0.01/1k fallback this replaced invented
+     * dollars for ANY unknown model; simply dropping it would have made the
+     * same hole silent, because `0.0` in the budget readout is BOTH "free"
+     * and "unpriced" ({@see Usage}). The notice names the model, says which
+     * of the two it is NOT, and points at the ONE remedy an operator holds —
+     * the user-tier `modelPrices` map (see `modelPrices` in
+     * docs/SETTINGS.md) — while being honest that the cap arithmetic kept
+     * running on a LOWER BOUND meanwhile. Emitted at most once per settled
+     * turn, inside the settle, so it persists exactly like every notice on
+     * this route.
+     */
+    private function unpricedModelNotice(string $model): Message
+    {
+        return Message::system(
+            'This app has no price on file for model "' . $model . '", so this turn billed $0.00 '
+            . 'as a lower bound, not as a free call — spend totals and the spend cap are under-counted '
+            . 'until a rate exists. Declare one under "modelPrices" in ~/.sugar-crush/config.json '
+            . '(USD per 1M tokens, keys "input" and "output") to price it.'
         );
     }
 

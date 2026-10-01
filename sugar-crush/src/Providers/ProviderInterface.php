@@ -32,9 +32,21 @@ interface ProviderInterface
     public function contextWindow(): int;
 
     /**
+     * USD per 1,000 tokens for one model, or null when this provider has NO
+     * price on file for it.
+     *
+     * null IS THE ANSWER, not an error to average away: the pre-billing-fix
+     * OpenAI table fabricated $0.01/1k for EVERY unknown model, inventing a
+     * bill the provider never sent and silently arming spend caps against a
+     * made-up rate. A null says "I do not know", the caller keeps the dollar
+     * figure at its honest lower bound of 0.0, and {@see \SugarCraft\Crush\Usage::$unpricedModel}
+     * carries the blindness to the transcript notice and the spend-cap
+     * disclosure. Providers whose service IS free (self-hosted Sglang, Custom)
+     * keep returning a real 0.0 — that is a measurement, not a shrug.
+     *
      * @param 'input'|'output' $direction
      */
-    public function costPer1kTokens(string $model, string $direction): float;
+    public function costPer1kTokens(string $model, string $direction): ?float;
 
     public function complete(CompleteRequest $request): CompleteResponse;
 

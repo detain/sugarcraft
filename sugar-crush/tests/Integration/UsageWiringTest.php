@@ -677,31 +677,28 @@ JSON;
         $this->assertNull($usage->cacheCreationTokens, 'no cache-creation field exists on this family - Custom must not invent one');
     }
 
-    public function testP4S2CustomStreamDropsTheZeroChoiceUsageChunkTheDeltaGateExistsFor(): void
+    public function testP4S2CustomStreamTurnsTheZeroChoiceUsageChunkIntoATerminalUsageBearingChunk(): void
     {
-        // review-7 finding 1 (MAJOR): the branch's own parseUsage() docblock
-        // (`CustomProvider::parseUsage()`) claims - verbatim in kind
-        // to the sglang claim fix-6 falsified - that "the `choices[0].delta`
-        // gate in {@see completeStream()} drops the zero-choice terminal chunk
-        // such a request would produce". Until this test that claim was
-        // unfalsifiable: mutating the gate at :252 to `if (true)` left all 90
-        // tests of UsageWiringTest + CustomProviderTest +
-        // CustomProviderStreamingTest green. This is the Custom twin of
+        // BILLING FIX (audit-crush-core finding 1) rewrote this test in place.
+        // It was minted by review-7 finding 1 as the CUSTOM twin of
         // testP4S2SglangStreamTurnsTheZeroChoiceUsageChunkIntoATerminalUsageBearingChunk
-        // (§Q6 renamed that one when it amended the Sglang arm; the DROP claim
-        // pinned HERE stands - CustomProvider still sends no stream_options and
-        // still drops, which is what these assertions keep pinning),
-        // fed the identical 2026-09-02 skynet2 LIVE-PROBE lines (the docblock
-        // imports that evidence by family - Custom fronts exactly this class of
-        // server). It pins the whole sentence by test, not prose:
-        //   REQUEST half - `stream` is on the wire and `stream_options` never
-        //     is, so this provider never asks for streamed usage at all; the
-        //     zero-choice line below is a forward-shape pin;
-        //   DROP half - the `choices: []` usage line yields NOTHING; with the
-        //     gate removed, parseChunk's `?? []` tolerance emits a phantom
-        //     empty chunk in wire order (kill measured RED at size 3);
-        //   CONSEQUENCE half - no usage object reaches any parse on the stream
-        //     path: both surviving chunks bill zero.
+        // — and back then it pinned the DIVERGENCE: Custom sent no
+        // stream_options, returned at finish_reason, and the zero-choice usage
+        // line yielded NOTHING (all three halves were falsifiable exactly
+        // because this test existed). The fix closes that divergence, so this
+        // is now the pairing the original name implied: SAME wire family
+        // (identical 2026-09-02 skynet2 LIVE-PROBE lines), SAME terminal
+        // carrier. It pins by test, not prose:
+        //   REQUEST half - `stream` and `stream_options.include_usage` both
+        //     ride the streamed body, and ONLY the streamed body: the batch
+        //     complete() request shape stays byte-identical (Sglang's law,
+        //     pinned by the batch tests elsewhere);
+        //   CAPTURE half - the `choices: []` usage line yields no delta chunk
+        //     (the empty-choices frame must never masquerade as content), but
+        //     its usage document becomes ONE terminal carrier after the deltas;
+        //   CONSEQUENCE half - the carrier bills the counted tokens with this
+        //     provider's honest free 0.0 and null unpriced signal, so the E17
+        //     calibration finally sees a streamed Custom turn.
         $delta = '{"id":"c7a59cdb72e24ebd99d9821ebc0e4b8a","object":"chat.completion.chunk","created":1788360234,"model":"deepseek-ai/DeepSeek-V4-Flash-0731","choices":[{"index":0,"delta":{"content":"%s"},"logprobs":null,"finish_reason":null,"matched_stop":null}]}';
         $usageChunk = '{"id":"c7a59cdb72e24ebd99d9821ebc0e4b8a","object":"chat.completion.chunk","created":1788360234,"model":"deepseek-ai/DeepSeek-V4-Flash-0731","choices":[],"usage":{"prompt_tokens":60,"total_tokens":72,"completion_tokens":12,"prompt_tokens_details":null,"reasoning_tokens":13}}';
         $sse = sprintf('data: ' . $delta . "\n", 'Hel')
@@ -729,10 +726,21 @@ JSON;
 
         $this->assertSame('chat/completions', $captured['uri'], 'the stream arm posts to the chat endpoint the request is built for');
         $this->assertTrue($captured['options']['json']['stream'], 'the request IS a streaming request');
-        $this->assertArrayNotHasKey('stream_options', $captured['options']['json'], 'no stream_options is ever sent - this provider never REQUESTS streamed usage, exactly as the docblock records; the zero-choice chunk below is a forward-shape pin');
-        $this->assertCount(2, $chunks, 'the zero-choice usage chunk and [DONE] yield NOTHING - gate removed, parseChunk emits a third, empty chunk');
-        $this->assertSame(['Hel', 'lo'], array_map(static fn (CompleteResponse $c): string => $c->content, $chunks), 'wire order and content of the surviving deltas, intact');
-        $this->assertSame([0, 0], array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks), 'per-chunk deltas bill zero - the usage document on the dropped line never reaches a chunk');
+        $this->assertSame(
+            ['include_usage' => true],
+            $captured['options']['json']['stream_options'] ?? null,
+            'the billing fix REQUESTS streamed usage - the flag rides the streamed body next to stream'
+        );
+        $this->assertCount(3, $chunks, 'two content deltas, then exactly ONE terminal usage carrier - the zero-choice line yields no delta of its own');
+        $this->assertSame(['Hel', 'lo', ''], array_map(static fn (CompleteResponse $c): string => $c->content, $chunks), 'wire order and content of the deltas, intact; the carrier is content-less');
+        $this->assertSame([0, 0, 72], array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks), 'per-chunk deltas bill zero; the WHOLE stream total rides the terminal carrier exactly once');
+
+        $terminal = $chunks[2];
+        $this->assertSame(0.0, $terminal->costUsd, 'self-hosted: a REAL zero, not the blind kind');
+        $this->assertNotNull($terminal->usage, 'the usage document reaches the fold - this is what E17 calibration was missing on every streamed Custom turn');
+        $this->assertNull($terminal->usage->unpricedModel, 'a genuinely-free provider never raises the unpriced signal');
+        $this->assertSame(60, $terminal->usage->inputTokens, 'prompt 60 with details null: the fresh-prompt bucket, same parse the batch arm uses');
+        $this->assertNull($terminal->usage->cacheReadTokens, 'the probe line sends prompt_tokens_details null - unreported, per the batch-arm doctrine');
     }
 
     public function testP4S2OpenAiSplitsPromptTokensDetailsAcrossBuckets(): void
@@ -752,7 +760,7 @@ JSON;
         [$provider, $response] = $this->p4s2OpenAiCompleteWith($usageArray);
 
         $this->assertSame(2100, $response->tokensUsed, 'the wire total, exactly as before P4.S2');
-        $this->assertEqualsWithDelta(0.0115, $response->costUsd, 0.0000001, 'pricing is (2000*0.005 + 100*0.015)/1000, unchanged - cache-aware pricing is a REPORTED follow-up, not this step');
+        $this->assertEqualsWithDelta(0.006, $response->costUsd, 0.0000001, 'pricing is (2000*0.0025 + 100*0.01)/1000 at the corrected gpt-4o table - cache-aware pricing is a REPORTED follow-up, not this step');
 
         $usage = $provider->parseUsage($usageArray);
         $this->assertSame(2100, $usage->totalTokens);
@@ -760,7 +768,7 @@ JSON;
         $this->assertSame(100, $usage->outputTokens);
         $this->assertSame(1536, $usage->cacheReadTokens);
         $this->assertNull($usage->cacheCreationTokens, 'OpenAI prompt caching has no separately-counted write - the field does not exist and must not be invented');
-        $this->assertEqualsWithDelta(0.0115, $usage->costUsd, 0.0000001, 'the parsed Usage carries the SAME cost the response does - one source, no drift');
+        $this->assertEqualsWithDelta(0.006, $usage->costUsd, 0.0000001, 'the parsed Usage carries the SAME cost the response does - one source, no drift');
     }
 
     public function testP4S2OpenAiWithoutPromptTokenDetailsReportsNoCache(): void
@@ -818,9 +826,9 @@ JSON;
         $this->assertNull($usage->outputTokens);
         $this->assertSame(2000, $usage->inputTokens);
         $this->assertSame(2000, $usage->totalTokens);
-        // Cost keeps calculateCost()'s exact prior expression: `?? 0` treats
-        // the null as 0 for PRICING while the bucket stays unreported.
-        $this->assertEqualsWithDelta(0.010, $usage->costUsd, 0.0000001);
+        // Cost keeps calculateCost()'s expression: `?? 0` treats the null as 0
+        // for PRICING while the bucket stays unreported (2000*0.0025/1000).
+        $this->assertEqualsWithDelta(0.005, $usage->costUsd, 0.0000001);
     }
 
     public function testP4S2BedrockMapsBothCacheSidesFromTheVendoredShape(): void

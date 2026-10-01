@@ -55,6 +55,37 @@ final class TokenTracker
     private float $totalCost = 0.0;
 
     /**
+     * Whether any call this session accounted was priced at NOTHING because
+     * no rate is on file for its model (billing fix: an unpriced model
+     * accounts as a 0.0 lower bound plus this flag, never a fabricated
+     * $0.01/1k). Dollar sums therefore bound the truth from BELOW whenever
+     * this reads true, and every surface that presents {@see totalCost()} as
+     * a figure — the spend-cap readout above all — must disclose the bound.
+     */
+    private bool $hasUnpricedUsage = false;
+
+    /**
+     * Mark that at least one accounted call could not be priced. Called from
+     * {@see \SugarCraft\Crush\Chat::accountUsage()} when the usage crossing
+     * the seam carries {@see \SugarCraft\Crush\Usage::$unpricedModel}; the
+     * tracker is shared by object identity across Chat clones, exactly like
+     * the counters, so the blindness survives the same seams they do.
+     */
+    public function noteUnpricedUsage(): void
+    {
+        $this->hasUnpricedUsage = true;
+    }
+
+    /**
+     * True once any call this session saw arrived from a model with no rate
+     * on file — meaning {@see totalCost()} is a LOWER BOUND, not a bill.
+     */
+    public function hasUnpricedUsage(): bool
+    {
+        return $this->hasUnpricedUsage;
+    }
+
+    /**
      * Add usage from a single API call.
      */
     public function addUsage(int $input, int $output, float $cost): void
@@ -134,6 +165,10 @@ final class TokenTracker
         $this->outputTokens = 0;
         $this->unsplitTokens = 0;
         $this->totalCost = 0.0;
+        // The disclosure resets with the session it describes: a new session
+        // re-parses every model from its own config, so yesterday's blind
+        // turn must not shadow today's honest $0.00.
+        $this->hasUnpricedUsage = false;
     }
 
     /**
