@@ -785,6 +785,72 @@ final class CustomProviderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // 13b. include_usage streamed token accounting (billing fix): the finish
+    //      frame no longer ENDS the read — the usage document that
+    //      OpenAI-compatible servers send after it must reach the fold, or
+    //      every streamed turn calibrates against nothing (E17) even though
+    //      the dollars here are honestly 0.0 (self-hosted).
+    // -------------------------------------------------------------------------
+
+    public function testCompleteStreamCapturesPostFinishUsageFrame(): void
+    {
+        $capturedBody = null;
+        $mock = new MockHandler([
+            function (Request $request) use (&$capturedBody) {
+                $capturedBody = json_decode((string) $request->getBody(), true);
+
+                return new Response(200, [], implode('', [
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}\n\n",
+                    "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+                    // The frame the PRE-FIX `return` discarded: choices empty,
+                    // usage present, arriving AFTER the stop.
+                    "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":40,\"completion_tokens\":12,\"total_tokens\":52}}\n\n",
+                    "data: [DONE]\n\n",
+                ]));
+            },
+        ]);
+
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+        $provider = new CustomProvider(
+            'custom',
+            'https://api.example.com',
+            'local-model',
+            null,
+            $client,
+            true,
+            true,
+        );
+
+        $responses = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'local-model',
+            messages: [new UserMessage('Hello')],
+        )));
+
+        // (1) the flag rides the streamed body...
+        $this->assertSame(['include_usage' => true], $capturedBody['stream_options']);
+        // (2) ...and ONLY the streamed body: the batch request shape is
+        //     byte-identical (Sglang's law) — asserted by the batch pins
+        //     elsewhere; here: this call went to createStreamed's route.
+        // (3) content, then exactly one terminal usage carrier.
+        $this->assertSame('Hi', $responses[0]->content);
+        $terminal = $responses[count($responses) - 1];
+        $this->assertSame('', $terminal->content);
+        $this->assertSame(52, $terminal->tokensUsed);
+        $this->assertSame(0.0, $terminal->costUsd); // self-hosted: a REAL zero
+        $this->assertNotNull($terminal->usage);
+        $this->assertSame(40, $terminal->usage->inputTokens);
+        $this->assertSame(12, $terminal->usage->outputTokens);
+        // Not unpriced — this provider KNOWS it is free.
+        $this->assertNull($terminal->usage->unpricedModel);
+
+        // The pre-fix shape discarded this frame; a truncated flag-frame's
+        // ORDERING is pinned by the E707 tests — the usage carrier lands last.
+        foreach (array_slice($responses, 0, -1) as $earlier) {
+            $this->assertSame(0, $earlier->tokensUsed);
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // 14. completeStream() falls back to complete() when streaming disabled
     // -------------------------------------------------------------------------
 

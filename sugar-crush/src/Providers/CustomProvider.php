@@ -229,6 +229,14 @@ final readonly class CustomProvider implements ProviderInterface
             'temperature' => $request->temperature ?? 0.7,
             'max_tokens' => $request->maxTokens ?? 4096,
             'stream' => true,
+            // Billing fix (audit-crush-core finding 1), set next to `stream`
+            // and NOT in the shared batch body — Sglang's law: the batch
+            // request must stay byte-identical. OpenAI-compatible servers
+            // that know the flag answer a final zero-choice usage frame;
+            // servers that ignore unknown params simply never trigger the
+            // capture below, which leaves the turn unreported — the same
+            // honest null the batch path gives, never a fabricated count.
+            'stream_options' => ['include_usage' => true],
             'extra_body' => ['separate_reasoning' => true],
         ];
 
@@ -265,6 +273,11 @@ final readonly class CustomProvider implements ProviderInterface
             // call only, exactly matching one completeStream() invocation.
             $toolCallBuffer = [];
 
+            // Terminal usage of this stream, captured from the include_usage
+            // frame the server sends AFTER the finish_reason frame — the
+            // reason the loop below no longer returns at `finish_reason`.
+            $streamUsage = null;
+
             while (!$stream->eof()) {
                 $chunk = $stream->read(8192);
                 $buffer .= $chunk;
@@ -278,7 +291,11 @@ final readonly class CustomProvider implements ProviderInterface
                     if (str_starts_with($line, 'data: ')) {
                         $data = json_decode(substr($line, 6), true);
                         if ($data === null) {
-                            // JSON parse failed, skip
+                            // JSON parse failed, skip — this is also the path
+                            // the `data: [DONE]` sentinel takes, and reading
+                            // past it to EOF is what lets the usage frame that
+                            // OpenAI-compatible servers place before (or
+                            // around) it reach the fold.
                             continue;
                         }
                         // E707 (round 81): read the stop value BEFORE the
@@ -291,17 +308,40 @@ final readonly class CustomProvider implements ProviderInterface
                         $hasDelta = isset($data['choices'][0]['delta']);
                         if ($hasDelta) {
                             yield $this->parseChunk($data, $toolCallBuffer);
+                        } elseif (!isset($data['choices'][0]) && is_array($data['usage'] ?? null)) {
+                            // The include_usage terminal frame: usage present,
+                            // choices empty. Captured, not yielded — the Sglang
+                            // gate in shape, so a content-less usage document
+                            // never masquerades as an empty token chunk.
+                            $streamUsage = $this->parseUsage($data['usage']);
                         }
                         if ($finishReason !== null) {
-                            // Stream ended
+                            // Stop seen. NOT a return: on this wire the usage
+                            // document arrives on the frame(s) AFTER the one
+                            // that carries finish_reason, and the pre-fix
+                            // return here discarded it — every streamed Custom
+                            // turn calibrated against nothing.
                             if (!$hasDelta && in_array($finishReason, self::TRUNCATED_FINISH_REASONS, true)) {
                                 yield new CompleteResponse(content: '', truncated: true);
                             }
-
-                            return;
                         }
                     }
                 }
+            }
+
+            if ($streamUsage !== null) {
+                // One terminal carrier with the whole stream's counted usage —
+                // per ProviderInterface::completeStream()'s "emit each total
+                // exactly once, on the terminal chunk" law, and byte-for-byte
+                // the shape SglangProvider's fold consumes. Cost is this
+                // provider's real 0.0 (self-hosted); the TOKENS are what the
+                // E17 calibration was missing on every streamed turn.
+                yield new CompleteResponse(
+                    content: '',
+                    tokensUsed: $streamUsage->totalTokens,
+                    costUsd: $streamUsage->costUsd,
+                    usage: $streamUsage,
+                );
             }
         } catch (GuzzleException $e) {
             yield new CompleteResponse(
