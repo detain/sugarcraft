@@ -109,6 +109,7 @@ single-purpose lib.
 | **CandyMosaic** | candy + mosaic = image-to-cell renderer. mosaic is the technical term; candy is the brand. clear and literal. |
 | **CandyVt**     | candy + vt = virtual terminal emulator. mirrors charmbracelet/x/vt exactly; vt is the established upstream name. |
 | **CandyVcr**    | candy + vcr = record + replay terminal sessions. mirrors charmbracelet/x/vcr; "vcr" carries the cassette / playback metaphor for free. |
+| **CandyFlip**   | candy + flip = flip-book frames — the GIF member of the visual family beside CandyMosaic (still images) and SugarReel (video). mirrors namzug16/gifterm; "flip" carries the frame-by-frame animation metaphor for free. |
 | **CandyPty**    | candy + pty = pseudo-terminal primitive. mirrors charmbracelet/x/xpty (we drop the `x` prefix — it's a Charm package-namespace artefact, not part of the role name). foundation lib for spawning child processes wired to a controlled PTY. |
 | **CandyForms** | candy + forms = form primitives foundation. extraction target for TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form from sugar-bits and sugar-prompt. |
 | **CandyFocus** | candy + focus = focus management. dependency-free focus ring: an ordered set of focusable regions with one focused member + wrap-around Tab/Shift-Tab traversal for full-window TUI layouts. original — no 1:1 upstream; inspired by focus-traversal in charmbracelet/bubbles and sugar-dash's FocusManager. |

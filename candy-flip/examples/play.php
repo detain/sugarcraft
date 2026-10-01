@@ -38,6 +38,6 @@ imagegif($im, $path);
 imagedestroy($im);
 
 $frames = Decoder::decode($path, cellsW: 60, cellsH: 18);
-$player = new Player($frames, interval: 0.08);
+$player = new Player($frames);
 
 (new Program($player, new ProgramOptions(useAltScreen: true)))->run();

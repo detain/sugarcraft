@@ -14,9 +14,10 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
 
 /**
  * GIF player as a SugarCraft Model. Loads every frame up-front (the
- * decoder caps at 256), then advances one frame per `TickMsg` —
- * scheduled via `Cmd::tick($interval, …)` so we don't need a render
- * loop in the bin/.
+ * decoder caps at 256), then advances one frame per `TickMsg` — each
+ * tick re-armed with the CURRENT frame's `delay` (centiseconds over
+ * 100), so the play rate follows the GIF's own timing and no render
+ * loop is needed in the bin/.
  *
  * Keys: space — pause/resume.  ←/→ — manual step.  q/esc — quit.
  */
@@ -31,10 +32,19 @@ final class Player implements Model
         public readonly array $frames,
         public readonly int $index = 0,
         public readonly bool $paused = false,
-        public readonly float $interval = 0.1,
         public readonly string $preset = Renderer::PRESET_SOLID,
         public readonly ?Renderer $renderer = null,
-    ) {}
+    ) {
+        // Fail fast: a Player that cannot display its start frame is a wiring
+        // bug at construction time, not a state to carry into update()/view().
+        // Empty frames with index 0 stay legal — init()/view() handle them.
+        $inRange = $frames === [] ? $index === 0 : ($index >= 0 && $index < count($frames));
+        if ($inRange === false) {
+            throw new \InvalidArgumentException(
+                'candy-flip: Player start index ' . $index . ' out of range for ' . count($frames) . ' frame(s)',
+            );
+        }
+    }
 
     public function init(): ?\Closure
     {
@@ -77,8 +87,11 @@ final class Player implements Model
             return [$next, $this->scheduleTick()];
         }
         if ($msg instanceof WindowSizeMsg) {
-            // Re-clamp renderer to new window size, reserving one row for the status line.
-            $renderer = Renderer::withConstraints($msg->rows - 1, $msg->cols);
+            // Re-clamp renderer to new window size, reserving one row for the
+            // status line. Floor at 0: a 0-row WindowSizeMsg during a terminal
+            // tear-down would otherwise feed withConstraints a negative row
+            // limit, which it now rejects outright.
+            $renderer = Renderer::withConstraints(max(0, $msg->rows - 1), $msg->cols);
             return [$this->mutate(['renderer' => $renderer]), null];
         }
         return [$this, null];

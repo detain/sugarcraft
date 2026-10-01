@@ -8,11 +8,12 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Pty\SizeIoctl;
 
 /**
- * Render a {@see Frame} as ANSI-coloured Unicode block-glyphs.
+ * Render a {@see Frame} as ANSI-coloured cells.
  *
  * Two presets:
- *   - `solid`    — every cell is `█` painted in the cell's RGB.
- *                  Looks like a real image; takes a wide terminal.
+ *   - `solid`    — every cell is a plain space painted with the cell's RGB
+ *                  as its 24-bit background (48;2;m). Looks like a real
+ *                  image; takes a wide terminal.
  *   - `density`  — pick a glyph from a luminance ramp (` .:-=+*#%@`).
  *                  Reads as ASCII art, easier on narrow windows.
  */
@@ -105,6 +106,14 @@ final class Renderer
      */
     public static function withConstraints(int $rows, int $cols): self
     {
+        // Mirror the doc'd int<0, max> contract in code, not just in types:
+        // PHP does not enforce @param, and a negative limit reaches the
+        // renderer as a silently degenerate canvas instead of a loud error.
+        if ($rows < 0 || $cols < 0) {
+            throw new \InvalidArgumentException(
+                'candy-flip: renderer constraints must not be negative (got rows=' . $rows . ', cols=' . $cols . ')',
+            );
+        }
         return new self($rows, $cols);
     }
 

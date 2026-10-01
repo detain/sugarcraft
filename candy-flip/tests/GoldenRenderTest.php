@@ -15,7 +15,7 @@ use SugarCraft\Testing\Snapshot\Assertions;
  * Captures the byte-exact output of Renderer::renderFrame() to detect
  * regressions in terminal color/glyph rendering.
  *
- * @see Mirrors charmbracelet/gifterm frame rendering
+ * @see Mirrors namzug16/gifterm frame rendering
  */
 final class GoldenRenderTest extends TestCase
 {
