@@ -151,6 +151,54 @@ final class DefaultChannelHandlerTest extends TestCase
         $this->assertSame(24, $handler->rows());
     }
 
+    public function testHandleSignalForwardsEveryMappedNameAsItsPosixNumber(): void
+    {
+        // MEDIUM-17 pin: the map must resolve through \defined() —
+        // reading an undefined \SIG* constant throws before `??` can
+        // fall back, fataling on pcntl-less hosts. Expected values are
+        // derived (constant when defined, documented POSIX fallback
+        // otherwise) so the pin holds with and without ext-pcntl.
+        $forwarded = [];
+        $spy = new class($forwarded) implements ChildSpawner {
+            /** @var array<int> */
+            private array $sink;
+
+            public function __construct(array &$sink)
+            {
+                $this->sink = &$sink;
+            }
+
+            public function runChild(Session $session, array $cmd, ?array $env = null): int
+            {
+                return 0;
+            }
+
+            public function signalChild(int $signal): void
+            {
+                $this->sink[] = $signal;
+            }
+        };
+        $handler = new DefaultChannelHandler($spy);
+
+        $expected = [
+            'INT'   => \defined('SIGINT') ? \SIGINT : 2,
+            'TERM'  => \defined('SIGTERM') ? \SIGTERM : 15,
+            'HUP'   => \defined('SIGHUP') ? \SIGHUP : 1,
+            'QUIT'  => \defined('SIGQUIT') ? \SIGQUIT : 3,
+            'KILL'  => \defined('SIGKILL') ? \SIGKILL : 9,
+            'USR1'  => \defined('SIGUSR1') ? \SIGUSR1 : 10,
+            'USR2'  => \defined('SIGUSR2') ? \SIGUSR2 : 12,
+            'WINCH' => \defined('SIGWINCH') ? \SIGWINCH : 28,
+        ];
+        foreach ($expected as $name => $number) {
+            $handler->handleSignal(new SignalMsg($name), $this->fakeSession());
+        }
+        $handler->handleSignal(new SignalMsg('STOP'), $this->fakeSession());
+        $handler->handleSignal(new SignalMsg('SIGINT'), $this->fakeSession());
+
+        $this->assertSame(\array_values($expected), $forwarded, 'mapped names forward in order; unmapped names forward nothing');
+    }
+
     public function testHandleEnvCollectsEnvVars(): void
     {
         $handler = new DefaultChannelHandler();

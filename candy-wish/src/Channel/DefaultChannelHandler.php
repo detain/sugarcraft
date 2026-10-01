@@ -129,16 +129,22 @@ final class DefaultChannelHandler implements ChannelHandler
 
     public function handleSignal(SignalMsg $msg, Session $session): void
     {
-        // Map RFC-4254 signal names to PHP SIG* constants.
+        // Map RFC-4254 signal names to PHP SIG* constants. The
+        // constants come from ext-pcntl (or ext-posix), so each is
+        // resolved through \defined() FIRST — reading an undefined
+        // constant throws Error before `??` can fall back, which
+        // would fatal exactly on the pcntl-less hosts this map must
+        // degrade on. The literal numbers are the POSIX values used
+        // as the transport-side fallback where the extension is absent.
         $map = [
-            'INT'  => \SIGINT  ?? (\defined('SIGINT')  ? \SIGINT  : 2),
-            'TERM' => \SIGTERM ?? (\defined('SIGTERM') ? \SIGTERM : 15),
-            'HUP'  => \SIGHUP  ?? (\defined('SIGHUP')  ? \SIGHUP  : 1),
-            'QUIT' => \SIGQUIT ?? (\defined('SIGQUIT') ? \SIGQUIT : 3),
-            'KILL' => \SIGKILL ?? (\defined('SIGKILL') ? \SIGKILL : 9),
-            'USR1' => \SIGUSR1 ?? (\defined('SIGUSR1') ? \SIGUSR1 : 10),
-            'USR2' => \SIGUSR2 ?? (\defined('SIGUSR2') ? \SIGUSR2 : 12),
-            'WINCH'=> \SIGWINCH?? (\defined('SIGWINCH')? \SIGWINCH: 28),
+            'INT'   => \defined('SIGINT') ? \SIGINT : 2,
+            'TERM'  => \defined('SIGTERM') ? \SIGTERM : 15,
+            'HUP'   => \defined('SIGHUP') ? \SIGHUP : 1,
+            'QUIT'  => \defined('SIGQUIT') ? \SIGQUIT : 3,
+            'KILL'  => \defined('SIGKILL') ? \SIGKILL : 9,
+            'USR1'  => \defined('SIGUSR1') ? \SIGUSR1 : 10,
+            'USR2'  => \defined('SIGUSR2') ? \SIGUSR2 : 12,
+            'WINCH' => \defined('SIGWINCH') ? \SIGWINCH : 28,
         ];
 
         $sig = $map[$msg->signalName] ?? null;
