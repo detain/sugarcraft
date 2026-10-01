@@ -33,7 +33,7 @@ use SugarCraft\Wish\Middleware\Spawn;
 use SugarCraft\Wish\Server;
 use SugarCraft\Wish\Session;
 
-Server::new()
+exit(Server::new()
     // InProcessTransport is the default in PR1+ — explicit
     // ->withTransport() is unnecessary but documents the choice.
     ->use(new Logger())
@@ -48,4 +48,4 @@ Server::new()
             'LANG'    => $s->lang,
         ],
     ]))
-    ->serve();
+    ->serve());

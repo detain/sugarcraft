@@ -56,6 +56,9 @@ use SugarCraft\Wish\Transport\InProcessTransport;
  *     ->serve();
  * ```
  *
+ * (Prefix the final call with `exit(...)` — see {@see self::serve()} —
+ * so the SSH client receives the child's exit status.)
+ *
  * **Same example, host-sshd legacy:**
  *
  * ```php
@@ -139,12 +142,14 @@ final class Server
      *
      * **Note on async middleware.** Promise-returning middleware is
      * supported: if a middleware's `handle()` returns a
-     * `\React\Promise\PromiseInterface`, the transport's dispatcher
-     * (`InProcessTransport::dispatch()` / `HostSshdTransport::dispatch()`)
-     * calls `->wait()` before continuing the chain. This is
-     * functionally equivalent to awaiting in Server::serve() but
-     * delegates to the transport so each transport can control the
-     * event loop integration point.
+     * `\React\Promise\PromiseInterface`, the shared dispatcher
+     * ({@see \SugarCraft\Wish\Transport\DispatchesMiddlewareStack::dispatch()},
+     * used by both transports) settles it through the single canonical
+     * await point {@see \SugarCraft\Wish\Transport\PromiseAwait::settle()}
+     * — the timeout-wrapped loop drive pinned by the one-settle-call-site
+     * census — before continuing the chain. Since the E730 restructure
+     * there is no per-transport integration point and no `->wait()` on
+     * the chain path.
      *
      * **Exit status (MEDIUM-2).** Returns the session's exit status —
      * the spawned child's exit code under a spawner transport, `0`

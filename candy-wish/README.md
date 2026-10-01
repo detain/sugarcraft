@@ -124,7 +124,7 @@ use SugarCraft\Wish\Middleware\RateLimit;
 use SugarCraft\Wish\Middleware\Spawn;
 use SugarCraft\Wish\Session;
 
-Server::new()
+exit(Server::new()
     ->use(new Logger('/var/log/wish.jsonl'))
     ->use(new RateLimit('/var/lib/wish/buckets.json', burst: 5, ratePerSec: 0.5))
     ->use(new Auth(users: ['alice', 'bob']))
@@ -135,7 +135,7 @@ Server::new()
             'PATH' => '/usr/local/bin:/usr/bin:/bin',
         ],
     ]))
-    ->serve();
+    ->serve());
 ```
 
 **HostSshdTransport (legacy) — mount a SugarCraft Program inline:**
@@ -151,13 +151,13 @@ use SugarCraft\Wish\Middleware\RateLimit;
 use SugarCraft\Wish\Middleware\BubbleTea;
 use SugarCraft\Wish\Transport\HostSshdTransport;
 
-Server::new()
+exit(Server::new()
     ->withTransport(new HostSshdTransport())
     ->use(new Logger('/var/log/wish.jsonl'))
     ->use(new RateLimit('/var/lib/wish/buckets.json', burst: 5, ratePerSec: 0.5))
     ->use(new Auth(users: ['alice', 'bob']))
     ->use(new BubbleTea(fn ($session) => new MyApp($session)))
-    ->serve();
+    ->serve());
 ```
 
 ### 3. Connect
@@ -439,12 +439,12 @@ use SugarCraft\Wish\Middleware\Subsystem\SftpStub;
 $subsystem = new Subsystem();
 $subsystem->register('sftp', new SftpStub());
 
-Server::new()
+exit(Server::new()
     ->use(new Logger('/var/log/wish.jsonl'))
     ->use(new Auth(['alice', 'bob']))
     ->use($subsystem)  // handles subsystem sftp; others pass through to Spawn
     ->use(new Spawn(fn (Session $s) => ['cmd' => ['/bin/bash', '-l']]))
-    ->serve();
+    ->serve());
 ```
 
 A production SFTP implementation would implement `SubsystemHandler` to speak

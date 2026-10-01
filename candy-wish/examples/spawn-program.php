@@ -35,7 +35,7 @@ use SugarCraft\Wish\Session;
 
 $wrapper = __DIR__ . '/run-program.php';
 
-Server::new()
+exit(Server::new()
     ->use(new Logger())
     ->use(new Spawn(fn (Session $s) => [
         'cmd' => [PHP_BINARY, $wrapper, $s->user, (string) $s->cols, (string) $s->rows],
@@ -45,7 +45,7 @@ Server::new()
             'PATH' => '/usr/bin:/bin',
         ],
     ]))
-    ->serve();
+    ->serve());
 
 /*
  * Example wrapper (`run-program.php`):

@@ -50,8 +50,8 @@ final class Banner implements Middleware
 // being pumped into a candy-pty master), so an inline read would
 // race with the pump. HostSshd keeps STDIN/STDOUT attached to
 // sshd's PTY, the way pre-PTY-upgrade candy-wish always was.
-Server::new()
+exit(Server::new()
     ->withTransport(new HostSshdTransport())
     ->use(new Logger())
     ->use(new Banner())
-    ->serve();
+    ->serve());

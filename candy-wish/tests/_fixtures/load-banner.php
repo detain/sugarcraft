@@ -43,6 +43,14 @@ $src = (string) \file_get_contents($examplePath);
 
 $start = \strpos($src, 'use SugarCraft');
 $end = \strpos($src, 'Server::new(');
+// Cut the slice at the line boundary before the invocation: the M2
+// exit-code contract makes server scripts wrap the chain as
+// `exit(Server::new() ... ->serve());`, and an inline `exit(` left at
+// the tail of the eval slice would be an unclosed paren.
+$lineStart = $end === false ? false : \strrpos(\substr($src, 0, $end), "\n");
+if ($lineStart !== false) {
+    $end = $lineStart;
+}
 if ($start === false || $end === false || $end <= $start) {
     \fwrite(\STDERR, "could not find extraction markers in {$examplePath}\n");
     exit(4);
