@@ -1436,7 +1436,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * `ACCEPTED_DIVERGENCE` row for `maxStderrBytes` stood here and read, in
      * part: *"the differing token is the CLASS the constant is read off: one
      * copy reflects on `LspConnection::MAX_STDERR_BYTES`, the other on
-     * `StdioMcpServer::MAX_STDERR_BYTES`, and each is the class its own file is
+     * `\SugarCraft\Mcp\StdioMcpServer::MAX_STDERR_BYTES`, and each is the class its own file is
      * about. Making the two agree would be the bug."* WHAT IS TRUE NOW: that
      * sentence was correct about the code and wrong about where the fix
      * belonged. A row is a licence keyed by NAME, so it excuses that helper
@@ -2579,14 +2579,12 @@ final class DuplicatedTestHelperDriftTest extends TestCase
     private const ACCEPTED_CONST_DUPLICATION = [
         'BOUND_SECONDS' => 'The shutdown family pins one bound value across several suites; the single-copy bounds other suites wait are the drift polity.',
         'DSML' => 'The suites that parse the DSML delimiter feed the same string to their fixtures.',
-        'EOF_EXIT_BOUND_SECONDS' => 'THE PAIR E481 NAMED: both stdio EOF suites wait the same half-second, and re-valuing one of them now leaves this polity.',
-        'FIXTURE_LIFETIME_SECONDS' => 'The frame-cap pair and the pump/drain pair each pin one lifetime; the odd values are the drift polity.',
+        'FIXTURE_LIFETIME_SECONDS' => 'The frame-cap pair and the shutdown pair each pin one lifetime; the odd values are the drift polity.',
         'FLOODING_STDERR_BYTES' => 'The two shutdown suites flood the same byte count.',
         'HANDSHAKE_BOUND_SECONDS' => 'The two LSP handshake-waiting suites pin the same bound.',
         'INTO_SHELL' => 'Both permission-gate suites feed the same command string to the classifier.',
         'LIB_SCOPE' => 'The census suites scope their walks to the same vendor path.',
         'MARKER' => 'The two image suites use the same private-use-area sentinel; the unrelated MARKER strings are the drift polity.',
-        'MEASURED_PIPE_CAPACITY_BYTES' => 'One property of the host pipe, measured once and shared by the wedging families.',
         'OVERSIZED_BYTES' => 'The oversized-write bound several stdio families test is shared verbatim.',
         'QUIET_STDERR_BYTES' => 'The quiet-side byte count the two shutdown suites assert.',
         'README' => 'The documentation-census suites point at the same repository file path.',
@@ -2594,7 +2592,6 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'SETTINGS_DOC' => 'The suites point at the same settings documentation path.',
         'SHAPE_UNCLASSIFIED' => 'The two child-lifetime scanners emit the same token for an unclassified shape; it is a wire string, so the copies must move together.',
         'SMALL_BYTES' => 'The small-write byte count the stdin-wedge pair shares.',
-        'STORM_BOUND_SECONDS' => 'The storm bound the write-bounds and stdin-wedge suites wait alike.',
         'VARS' => 'The environment roster the wiring suites pin is one list duplicated per suite; it belongs in a provider, and until it moves this row says so out loud.',
         'WEDGE_BYTES' => 'The stdin-wedge pair wedges the same volume; the drain suite wedges less.',
         'STUBBORN_SERVER' =>
@@ -2629,7 +2626,6 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'MARKER' => 'Unrelated sentinels sharing a word; the one identical pair lives on the duplication map.',
         'ROWS' => 'Per-fixture terminal geometry from unrelated suites that named one constant the same.',
         'SSE_BODY' => 'Each provider suite feeds its own SSE payload under a shared name.',
-        'WEDGE_BYTES' => 'The drain suite wedges less than the stdin-wedge suites — different pipes, different bounds.',
         'SENTINEL' => 'Unrelated suites plant their own sentinel payload under one word; the values differ because the claims under test do.',
         'SECRET' =>
             'Two containment suites plant their own smuggled-secret sentinel under one word; the payloads differ because the suites test different imports.',

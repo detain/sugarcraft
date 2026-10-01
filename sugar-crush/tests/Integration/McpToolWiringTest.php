@@ -1347,9 +1347,12 @@ final class McpToolWiringTest extends TestCase
             $servers->setAccessible(true);
             $server = $servers->getValue($client)['fake'] ?? null;
             if ($server === null) { return 0; }
-            $process = new ReflectionProperty($server, 'process');
+            $transport = new ReflectionProperty($server, 'transport');
+            $transport->setAccessible(true);
+            $inner = $transport->getValue($server);
+            $process = new ReflectionProperty($inner, 'process');
             $process->setAccessible(true);
-            return (int) proc_get_status($process->getValue($server))['pid'];
+            return (int) proc_get_status($process->getValue($inner))['pid'];
         }
 
         function sc_alive(int $pid): bool {
@@ -1801,10 +1804,25 @@ final class McpToolWiringTest extends TestCase
         $server = $servers->getValue($client)[$name] ?? null;
         $this->assertNotNull($server, "server '{$name}' is not in the client's map");
 
-        $process = new \ReflectionProperty($server, 'process');
+        // phase-2a: the live handle lives on the library transport the product
+        // adapter wraps; chain through it to read the same pid.
+        $inner = self::stdioTransportOf($server);
+        $process = new \ReflectionProperty($inner, 'process');
         $process->setAccessible(true);
 
-        return (int) proc_get_status($process->getValue($server))['pid'];
+        return (int) proc_get_status($process->getValue($inner))['pid'];
+    }
+
+    /** The wrapped library transport behind the phase-2a product adapter. */
+    private static function stdioTransportOf(object $server): object
+    {
+        $transport = new \ReflectionProperty($server, 'transport');
+        $transport->setAccessible(true);
+
+        /** @var object $inner */
+        $inner = $transport->getValue($server);
+
+        return $inner;
     }
 
     /**

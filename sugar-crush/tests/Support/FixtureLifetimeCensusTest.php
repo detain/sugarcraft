@@ -105,40 +105,6 @@ final class FixtureLifetimeCensusTest extends TestCase
                 . 'Same file, so the two numbers are one argument: the ceiling is 45 + margin '
                 . 'for the slowest box, not a fixture that must be reaped.',
         ],
-        'MCP/StdioMcpServerHandshakeTest.php::SILENT_SERVER' => [
-            'value' => 3600.0,
-            'reason' =>
-                'The silent server must still be alive at the end of the handshake window to '
-                . 'prove the timeout is what ended it; it is killed by the test\'s '
-                . 'startTimeoutSeconds teardown long before the hour. An hour-long sleep here is '
-                . 'the idiom for "sleep until killed", and its row exists to keep the idiom '
-                . 'from spreading unargued.',
-        ],
-        'MCP/StdioMcpServerWriteBoundsTest.php::STORM_PROBE_TEMPLATE' => [
-            'value' => 120.0,
-            'reason' =>
-                'The write-bounds file\'s own copy of the probe-hammer ceiling (`while (... < '
-                . '120.0)`), the same construction as its LSP sibling above - the census caught '
-                . 'this one precisely by refusing to trust the measurement that missed it. '
-                . 'Bounded in the file that runs it: runBounded(..., STORM_BOUND_SECONDS), 45 s.',
-        ],
-        'MCP/StdioMcpServerWriteBoundsTest.php::REACHABILITY_PROBE' => [
-            'value' => 60.0,
-            'reason' =>
-                'A GRANDCHILD sleeping a minute while the test measures the child\'s write '
-                . 'bounds; the recorded E539 disposition - this tree stops the child via '
-                . 'proc_terminate, and the grandchild rides the same process group. One of the '
-                . 'three fixtures E539 kept rather than tightened.',
-        ],
-        'MCP/StdioMcpServerWriteBoundsTest.php::DEAF_SERVER_LIFETIME_SECONDS' => [
-            'value' => 90.0,
-            'reason' =>
-                'The named-constant sibling of the probe above - deliberately twice '
-                . 'STORM_BOUND_SECONDS again so a server can only die deaf if deafness is what '
-                . 'killed it. E539 recorded the mutation that proves the shorter value '
-                . 'red-falsifies the test, which is why the row pins 90 rather than waiving '
-                . 'the constant.',
-        ],
     ];
 
     /**

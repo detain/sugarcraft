@@ -136,11 +136,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * and
      * {@see \SugarCraft\Crush\Tests\LSP\LspConnectionFrameCapTest::testTheCapIsTheOneTheClassDeclares()},
      * which is what makes moving this number a deliberate-change signal rather
-     * than a silent one. Three other classes frame a peer's output against the same bound
-     * for the same reason -- {@see \SugarCraft\Crush\LSP\LspConnection},
-     * {@see \SugarCraft\Crush\MCP\StdioMcpServer} and
-     * {@see \SugarCraft\Crush\ClaudeCodeMcpClient} -- and each now spells
+     * than a silent one. Two other product classes frame a peer's output against the same
+     * bound for the same reason -- {@see \SugarCraft\Crush\LSP\LspConnection}
+     * and {@see \SugarCraft\Crush\ClaudeCodeMcpClient} -- and each now spells
      * `= EngineBackend::MAX_FRAME_BYTES` rather than repeating the arithmetic.
+     * The stdio transport's cap left the product with it at phase-2a:
+     * `sugarcraft/sugar-mcp` restates the same 64 MiB as a library-local
+     * literal (a library cannot name a product constant), and
+     * {@see \SugarCraft\Crush\Tests\MCP\McpFrameCapTest::testBothClassesDeclareTheSameCapAndItIsTheFrameCapNotTheStderrCap()}
+     * pins that the restatement has not drifted from this one.
      *
      * WHAT WAS TRUE BEFORE: this constant was `private`, so PHP could not name
      * it from those files and all three carried their own `64 * 1024 * 1024`
@@ -171,10 +175,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * first gated tool call of every run including the `-p` path that exists to
      * avoid building one -- so the same question is owed an answer here.
      * MEASURED on PHP 8.3.6 in a fresh process: `class_exists()` on
-     * {@see \SugarCraft\Crush\MCP\StdioMcpServer} declares two class-likes
-     * and does NOT touch this file; READING its cap then pulls in four more --
+     * {@see \SugarCraft\Crush\MCP\StdioMcpServer} (pre-phase-2a, when it
+     * still declared its own derived cap) declared two class-likes
+     * and did NOT touch this file; READING its cap then pulled in four more --
      * this class, {@see \SugarCraft\Crush\Backend} and its two optional
-     * interfaces. Before the derivation it pulled in none.
+     * interfaces. Before the derivation it pulled in none. The same edge holds
+     * today for the two framers that still derive here.
      *
      * WHY THAT IS ACCEPTABLE HERE AND WAS NOT THERE: the read happens inside a
      * framing path, which is reached only once a child process is already
@@ -184,8 +190,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * WITHOUT a child, this paragraph is the one to re-measure.
      *
      * ⚠️ PUBLIC HERE MEANS "READABLE BY THE FAMILY", NOT "TUNABLE". Moving this
-     * number moves all four framers at once, which is the intent; the two
-     * suites named above will red, and that is the deliberate-change signal,
+     * number moves every framer that derives here at once, which is the
+     * intent; the two suites named above will red — and the library's restated
+     * cap goes red through McpFrameCapTest's equality row — that is the
+     * deliberate-change signal,
      * not an obstacle. RE-MEASURED at this commit: raising this to 128 MiB
      * produces two failures, one in each of those files.
      *

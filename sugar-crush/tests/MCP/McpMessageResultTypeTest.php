@@ -250,7 +250,7 @@ final class McpMessageResultTypeTest extends TestCase
 
     /**
      * `toArray()` carries the widened value out too — the shape
-     * {@see StdioMcpServer::parseTools()} reads.
+     * {@see \SugarCraft\Mcp\StdioMcpServer::parseTools()} reads (phase-2a: the parser moved to `sugarcraft/sugar-mcp`).
      */
     public function testToArrayCarriesANonArrayResultThrough(): void
     {
@@ -339,7 +339,7 @@ final class McpMessageResultTypeTest extends TestCase
      * ⚠️ AND A THIRD PART, WHICH IS THE ROSTER'S OWN KNOWN-POSITIVE. Those two
      * polarities are both about `start()`; NEITHER of them says anything about
      * `listTools()`. `assertSame([], $server->listTools())` is exactly what a
-     * {@see StdioMcpServer::parseTools()} that had stopped working AT ALL would
+     * {@see \SugarCraft\Mcp\StdioMcpServer::parseTools()} that had stopped working AT ALL would
      * return, so on its own the empty roster is not evidence — it is the reading
      * a dead instrument gives. The well-behaved fixture is therefore driven
      * through the SAME `start()` -> `parseTools()` -> `listTools()` path first

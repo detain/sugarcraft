@@ -520,7 +520,7 @@ final class ClaudeCodeMcpClient
      * or say so.
      *
      * THIS WAS A SINGLE `fwrite()` CHECKED WITH `!==  strlen()`, and that is the
-     * third member of the family {@see \SugarCraft\Crush\MCP\StdioMcpServer::writeLine()}
+     * third member of the family {@see \SugarCraft\Mcp\StdioMcpServer::writeLine()}
      * and {@see \SugarCraft\Crush\LSP\LspConnection::writeMessage()} closed
      * before it. The symptom here is different from both, because {@see connect()}
      * puts fd 0 in NON-BLOCKING mode: there was no hang. There was a SHORT WRITE

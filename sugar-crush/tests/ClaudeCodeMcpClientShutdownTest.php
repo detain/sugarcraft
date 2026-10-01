@@ -12,8 +12,9 @@ use SugarCraft\Crush\ClaudeCodeMcpClient;
  * server must be DEAD when it does.
  *
  * THE UNFIXED TWIN. {@see \SugarCraft\Crush\MCP\StdioMcpServer::stop()} already
- * escalates SIGTERM -> poll -> signal 9 and is pinned by
- * {@see \SugarCraft\Crush\Tests\MCP\StdioMcpServerShutdownTest}; this class owns
+ * escalates SIGTERM -> poll -> signal 9 and was pinned by
+ * the transport-side rows of the library's own suite after phase-2a
+ * moved them into `sugarcraft/sugar-mcp`; this class owns
  * the same kind of child over the same transport and shipped
  * `fclose()`-then-bare-`proc_close()` instead. `proc_close()` WAITS, so that
  * spelling hands the caller's deadline to a third party's process.

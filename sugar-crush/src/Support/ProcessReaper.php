@@ -29,9 +29,12 @@ namespace SugarCraft\Crush\Support;
  * {@see \SugarCraft\Crush\Backend\StreamingCommandBackend::terminateAndReap()}
  * onto the ladder here (their private `waitForExit()`s and grace constants are
  * gone; the budgets they documented are THIS class's constants now), alongside
- * E366's newer consumers. StdioMcpServer takes {@see terminateAndClose()};
- * StreamingCommandBackend takes {@see terminateAndAwaitExit()}, because its
- * caller reaps the handle itself to read the child's exit status.
+ * E366's newer consumers. The stdio transport took {@see terminateAndClose()}
+ * until phase-2a moved it into `sugarcraft/sugar-mcp`, where the teardown now
+ * goes through candy-core's BoundedShutdown — the {@see \SugarCraft\Crush\MCP\StdioMcpServer}
+ * adapter contributes no ladder of its own. StreamingCommandBackend takes
+ * {@see terminateAndAwaitExit()}, because its caller reaps the handle itself
+ * to read the child's exit status.
  *
  * E676 FOLDED THE LAST THREE PRIVATE LADDERS. ScriptHook,
      * StatusLineCommand and BackgroundSessionRunner now escalate through

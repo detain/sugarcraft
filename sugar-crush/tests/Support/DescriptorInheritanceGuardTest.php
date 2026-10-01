@@ -109,7 +109,8 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * by `isset()`. WHAT IS TRUE NOW - measured, not anticipated: one row
      * absorbed unboundedly many spawns in the same function. Injecting a
      * SECOND long-lived `proc_open()` with nothing said about fd 3+ into
-     * `MCP/StdioMcpServer::start()`, which has a row, left this guard green -
+     * `MCP/StdioMcpServer::start()`, which had a row then (phase-2a moved the
+     * spawn into `sugarcraft/sugar-mcp`), left this guard green -
      * 5 tests, 13 assertions, rc 0. The identical spawn in a method with no
      * row reddened it. So the guard was live everywhere except behind its own
      * exemptions, which is where a new offender is most likely to be added:
@@ -150,15 +151,6 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'recorded',
         ],
 
-        // Reaping here is already the reference implementation - SIGTERM, poll,
-        // SIGKILL - which is why E366 called this one the fixed twin. The
-        // REAPING being right is not the fd half being right: the child is
-        // still long-lived and still inherits fd 3+.
-        'MCP/StdioMcpServer.php::start' => [
-            'count' => 1,
-            'reason' => 'long-lived stdio server; reaping is correct, descriptor inheritance is '
-                . 'not addressed',
-        ],
 
         // E366 HIGH. Deliberately double-forks into a session daemon, and the
         // only `proc_close()` is on the handshake-timeout branch - the happy
@@ -457,6 +449,17 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'or the real STDOUT/STDERR, which shows the author thinking about descriptors '
                 . 'and still saying nothing about 3+. NOT FIXABLE FROM THIS PACKAGE.',
         ],
+        'sugar-mcp/StdioMcpServer.php::start' => [
+            'count' => 1,
+            'reason' => 'the stdio MCP server child, reached from this package because phase-2a '
+                . 'made `sugarcraft/sugar-mcp` a requirement — the product adapter '
+                . '(src/MCP/StdioMcpServer.php) delegates its spawn to it. The handle is kept '
+                . 'for the life of the server; the lifecycle half is accounted in '
+                . 'tools/check-child-lifetimes.php (teardown via candy-core BoundedShutdown in '
+                . 'the lib, containment wrap via the embedder\'s spawnPlanner). This row is the '
+                . 'DESCRIPTOR half: spec names 0,1,2 only and says nothing about 3+, the same '
+                . 'shape as the candy-pty rows above. NOT FIXABLE FROM THIS PACKAGE.',
+        ],
     ];
 
     /**
@@ -739,7 +742,8 @@ final class DescriptorInheritanceGuardTest extends TestCase
         // THE ALLOWANCE IS SPENT ONE SITE AT A TIME, pushed through the SAME
         // helper the tree goes through, in this test. Measured before the row
         // carried a count: injecting a second exposed spawn into
-        // `MCP/StdioMcpServer::start()`, which has a row, left this guard
+        // `MCP/StdioMcpServer::start()`, which had a row then (phase-2a moved
+        // the spawn into `sugarcraft/sugar-mcp`), left this guard
         // green - 5 tests, 13 assertions, rc 0.
         self::assertSame(
             ['fixture.php::secondSpawn', 'fixture.php::secondSpawn'],

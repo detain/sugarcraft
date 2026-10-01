@@ -598,8 +598,6 @@ final class TreeWideGuardRosterTest extends TestCase
         'MCP/McpClientTest.php' => ['glob($this->tempDir.\'/*\')'],
         'MCP/OAuthAuthorizationCodeExchangeTest.php' => ['glob($this->tempDir.\'/*\')'],
         'MCP/OAuthClientRegistrationTest.php' => ['glob($this->tempDir.\'/*\')'],
-        'MCP/StdioMcpServerStderrDrainTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
-        'MCP/StdioMcpServerWriteBoundsTest.php' => ['scandir($dir)'],
         'Sessions/BackgroundSupervisorReapTest.php' => ['glob($this->tempDir.\'/*\')'],
         'SuiteChildStdinIsolationTest.php' => ['scandir($dir)'],
         'SuiteChildStdinPrependResidualTest.php' => ['scandir($dir)'],

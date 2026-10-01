@@ -28,9 +28,9 @@ use SugarCraft\Crush\LSP\LspConnection;
  * ⚠️ THE THRESHOLD IS ONE DRAIN PASS, NOT ONE PIPE BUFFER, AND GETTING THAT
  * WRONG MADE THIS FILE VACUOUS ONCE ALREADY. The obvious figure is the 65536-byte
  * pipe capacity, and it is the one the NDJSON sibling
- * ({@see \SugarCraft\Crush\Tests\MCP\StdioMcpServerStderrDrainTest}) uses. It
+ * in {@see \SugarCraft\Mcp\StdioMcpServer}'s drain rows after phase-2a) uses. It
  * is the WRONG figure here, because the two write loops drain differently:
- * `StdioMcpServer::writeLine()` SELECTS on fd 2, whereas
+ * the stdio transport's `writeLine()` (phase-2a: `sugarcraft/sugar-mcp`) SELECTS on fd 2, whereas
  * {@see LspConnection::writeMessage()} calls {@see LspConnection::drainStderr()}
  * unconditionally BEFORE each write attempt — and that one call absorbs up to
  * 16 × 8192 = 131072 bytes. A flood that fits inside a single pass is emptied

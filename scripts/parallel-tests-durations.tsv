@@ -10,7 +10,6 @@ sugar-crush/tests/RendererTest.php	19.515	114
 sugar-crush/tests/Backend/StreamingCommandBackendTest.php	19.267	31
 sugar-crush/tests/Support/DuplicatedTestHelperDriftTest.php	18.937	14
 sugar-crush/tests/LSP/LspConnectionFrameCapTest.php	18.732	7
-sugar-crush/tests/MCP/StdioMcpServerWriteBoundsTest.php	16.277	10
 sugar-crush/tests/LSP/LspConnectionShutdownTest.php	16.135	11
 sugar-crush/tests/LSP/LspConnectionStdinWedgeTest.php	14.318	14
 sugar-crush/tests/Commands/CustomCommandShellAndFileFormsTest.php	12.053	42
@@ -42,7 +41,6 @@ sugar-crush/tests/Session/CheckpointTest.php	6.084	14
 sugar-crush/tests/Support/ChildStderrCaptureTest.php	5.796	6
 sugar-crush/tests/Agents/TaskListTest.php	5.500	46
 sugar-crush/tests/MCP/GitCommandHandlersTest.php	5.473	88
-sugar-crush/tests/MCP/StdioMcpServerStderrDrainTest.php	5.306	9
 sugar-crush/tests/Renderer/StatusBarSpendTest.php	5.157	15
 sugar-crush/tests/Support/ReflectionLineSliceReaderCensusTest.php	4.846	10
 sugar-crush/tests/Support/ForkedChildReaperAdoptionTest.php	4.660	6
@@ -66,7 +64,6 @@ sugar-crush/tests/Cli/BootstrapToolAndPermissionSettingsTest.php	3.543	57
 sugar-crush/tests/TtyStreamArgumentCensusTest.php	3.458	46
 sugar-crush/tests/Support/AssertionSwallowingCatchTest.php	3.387	6
 sugar-crush/tests/Workflows/WorkflowLivePaneTest.php	3.358	11
-sugar-crush/tests/MCP/StdioMcpServerHandshakeTest.php	3.243	7
 sugar-crush/tests/Cli/BootstrapTest.php	3.210	25
 sugar-crush/tests/Hooks/HookRegistryTest.php	3.194	71
 sugar-crush/tests/Sessions/BackgroundSessionRunnerTest.php	3.139	25
@@ -82,7 +79,6 @@ sugar-crush/tests/Context/EnvironmentBlockTest.php	2.424	49
 sugar-crush/tests/Agents/WorkerExitCodeAttributionTest.php	2.323	2
 sugar-crush/tests/RendererImageTest.php	2.283	11
 sugar-crush/tests/LSP/LspCacheTest.php	2.207	18
-sugar-crush/tests/MCP/StdioMcpServerShutdownTest.php	2.186	5
 sugar-crush/tests/Cli/BootstrapHookFileTest.php	2.073	41
 sugar-crush/tests/Cli/SessionRetentionWiringTest.php	2.058	16
 sugar-crush/tests/Context/GlobDialectDifferentialTest.php	2.009	13
@@ -133,7 +129,6 @@ sugar-crush/tests/Agents/AgentManagerTest.php	0.961	139
 sugar-crush/tests/SuiteChildStdinPrependResidualTest.php	0.961	1
 sugar-crush/tests/Sessions/BackgroundSupervisorTest.php	0.939	19
 sugar-crush/tests/SuiteSkipRosterTest.php	0.915	25
-sugar-crush/tests/MCP/StdioMcpServerPumpStderrTest.php	0.898	5
 sugar-crush/tests/Config/ConfigWriteProducerDocumentationDriftTest.php	0.875	15
 sugar-crush/tests/Backend/ScaledClockHelperSeamTest.php	0.869	6
 sugar-crush/tests/Chat/CompactModelSummaryTest.php	0.853	38

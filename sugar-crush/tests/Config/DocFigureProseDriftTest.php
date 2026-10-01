@@ -469,20 +469,22 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
-     * E686 tranche-2 (D) + tranche-3 extension: four independent children all
+     * E686 tranche-2 (D) + tranche-3 extension: the crush-side children all
      * justify a 65536-byte stderr tail as "one pipe buffer on this host" (the
-     * fourth, ClaudeCodeMcpClient, joined at lane cb — the family grows with the
-     * tree, it does not fork). The figure is only true as a family if all four
-     * constants move together, and each 64 stays 64*1024 of its own constant;
-     * the host labels (PHP/Linux versions, "this host") are held as
-     * measured-domain sentences by the preserved substrings.
+     * family grew with the tree, it does not fork; at phase-2a the stdio
+     * transport left for `sugarcraft/sugar-mcp`, taking its own tail constant
+     * with it, so the family derives here from the three classes that remain).
+     * The figure is only true as a family if the constants move together, and
+     * each 64 stays 64*1024 of its own constant; the host labels (PHP/Linux
+     * versions, "this host") are held as measured-domain sentences by the
+     * preserved substrings.
      */
     public function testStderrTailSixtyFourKibibyteFamilyAgrees(): void
     {
         $values = [];
         foreach ([LspConnection::class, ClaudeCodeProvider::class, ClaudeCodeMcpClient::class] as $class) {
             $value = (int) (new \ReflectionClass($class))->getConstant('MAX_STDERR_BYTES');
-            self::assertSame(65536, $value, "{$class}::MAX_STDERR_BYTES moved — the four-site family sentence must move with it");
+            self::assertSame(65536, $value, "{$class}::MAX_STDERR_BYTES moved — the family sentence must move with it");
             $doc = self::docBlockOf($class, 'MAX_STDERR_BYTES');
             self::assertSame(
                 1,
@@ -493,36 +495,21 @@ final class DocFigureProseDriftTest extends TestCase
             $values[$class] = $value;
         }
 
-        $stdio = self::sourceOf('MCP/StdioMcpServer.php');
         self::assertSame(
-            1,
-            preg_match('/— (\d+) KiB on this host \(PHP 8\.3\.6, Linux 6\.8\)/', $stdio, $m),
-            'the StdioMcpServer deadlock narrative no longer names its host-labeled buffer size',
+            $values[LspConnection::class],
+            $values[ClaudeCodeMcpClient::class],
+            'the stderr-tail family forked — one constant moved without the others',
         );
-        $stdioValue = (int) (new \ReflectionClass(StdioMcpServer::class))->getConstant('MAX_STDERR_BYTES');
-        self::assertSame(intdiv($stdioValue, 1024), (int) $m[1], 'StdioMcpServer prose KiB drifted from its MAX_STDERR_BYTES');
-        self::assertSame($stdioValue, $values[LspConnection::class], 'the stderr-tail family forked — one constant moved without the others');
     }
 
     /**
-     * E686 tranche-2 (E): the stdio pump bound is a product of two literals in
-     * sibling methods, and the start timeout is spelled in words in src and in
-     * decimals in docs/MCP.md — all four must agree with the constant.
+     * E686 tranche-2 (E): the start timeout is spelled in words in src and in
+     * decimals in docs/MCP.md — both must agree with the constant. (The arm's
+     * other half, the stdio pump bound's passes × chunk arithmetic, left with
+     * the transport at phase-2a and is pinned inside `sugarcraft/sugar-mcp`.)
      */
     public function testStdioPumpBoundAndStartTimeoutProseSurviveTheirLiterals(): void
     {
-        $stdio = self::sourceOf('MCP/StdioMcpServer.php');
-
-        self::assertSame(
-            1,
-            preg_match('/- up to (\d+) passes x (\d+) bytes per call/', $stdio, $m),
-            'the pumpStderr bound sentence no longer spells its passes and chunk',
-        );
-        self::assertSame(1, preg_match('/\$pass < (\d+)/', self::bodyExcerpt($stdio, 'pumpStderr'), $loop), 'pumpStderr lost its loop bound');
-        self::assertSame(1, preg_match('/fread\(\$this->pipes\[2\], (\d+)\)/', self::bodyExcerpt($stdio, 'absorbStderr'), $chunk), 'absorbStderr no longer reads a fixed chunk');
-        self::assertSame((int) $loop[1], (int) $m[1], 'prose pass count drifted from pumpStderr\'s loop');
-        self::assertSame((int) $chunk[1], (int) $m[2], 'prose chunk size drifted from absorbStderr\'s fread');
-
         $startValue = (float) (new \ReflectionClass(StdioMcpServer::class))->getConstant('DEFAULT_START_TIMEOUT_SECONDS');
         $startDoc = self::docBlockOf(StdioMcpServer::class, 'DEFAULT_START_TIMEOUT_SECONDS');
         self::assertStringContainsString('SIXTY SECONDS', $startDoc, 'the start-timeout sentence is spelled in words — keep both halves in step');
@@ -2946,8 +2933,8 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame((int) $frame[1] * 1024 * 1024, $frameCap, 'the page still caps a frame at this many MiB — live MAX_FRAME_BYTES moved');
         self::assertSame(
             $frameCap,
-            (int) (new \ReflectionClassConstant('SugarCraft\Crush\MCP\StdioMcpServer', 'MAX_FRAME_BYTES'))->getValue(),
-            'StdioMcpServer no longer derives the same ceiling EngineBackend owns — the family the docblock promises split',
+            (int) (new \ReflectionClassConstant('SugarCraft\Mcp\StdioMcpServer', 'MAX_FRAME_BYTES'))->getValue(),
+            'the library transport no longer restates the ceiling EngineBackend owns — the family the docblock promises split',
         );
 
         self::assertSame(1, preg_match('/bounded (\d+) ms `WNOHANG` poll/', $arch, $reap), 'the reap bullet no longer states its millisecond budget');

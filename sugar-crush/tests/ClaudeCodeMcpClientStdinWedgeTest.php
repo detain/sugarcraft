@@ -13,7 +13,7 @@ use SugarCraft\Crush\McpMessage;
  * not be half-sent, and a reply that does not arrive in one read must not be
  * thrown away.
  *
- * {@see \SugarCraft\Crush\MCP\StdioMcpServer::writeLine()} and
+ * {@see \SugarCraft\Mcp\StdioMcpServer::writeLine()} and
  * {@see \SugarCraft\Crush\LSP\LspConnection::writeMessage()} were fixed in
  * earlier rounds. {@see ClaudeCodeMcpClient::sendMessage()} was the site nobody
  * owned, and its symptom is different from both because

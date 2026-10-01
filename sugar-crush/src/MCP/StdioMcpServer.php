@@ -4,1288 +4,161 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\MCP;
 
-use SugarCraft\Crush\Backend\EngineBackend;
-use SugarCraft\Crush\McpMessage;
 use SugarCraft\Crush\Support\ProcessContainment;
-use SugarCraft\Crush\Support\ProcessReaper;
 
+/**
+ * The product-side adapter over the sugar-mcp stdio transport
+ * (`sugarcraft/sugar-mcp`, {@see \SugarCraft\Mcp\StdioMcpServer}).
+ *
+ * PHASE-2a REWIRE: framing, the NDJSON read buffer, the 64 MiB frame cap, the
+ * handshake exchange, the stderr drain, the closed-pipe guards and the bounded
+ * teardown all moved INTO the library, where their suites now live (the
+ * library's StdioMcpServerTest, StderrDrainTest-shape rows and frame-cap rows).
+ * What deliberately STAYS here is product policy the library refuses to own:
+ *
+ *  - E672/E674 containment, injected through the library's `$spawnPlanner`
+ *    seam: the PATH pre-check that refuses a bogus binary BEFORE any child
+ *    exists, the setsid-wrapped spawn spec, and the curated environment —
+ *    see {@see spawnPlan()}.
+ *  - the product identity the handshake advertises — `sugar-crush` `1.0.0`,
+ *    injected through the library's `$clientInfo` seam, because a third-party
+ *    server's logs should name the tool the user configured, not a library.
+ *  - the crush-side value shapes: this class keeps implementing
+ *    {@see McpServer}, converts the library's McpTool rows into the product's
+ *    {@see McpTool}, and keeps the FQCN every existing consumer
+ *    ({@see McpClient}'s instanceof narrowing and construction) already names.
+ *
+ * The historical doc-blocks that made the argv-vs-shell spawn measurement, the
+ * stderr-drain deadlock, and the close-pipes-before-signal ordering load-bearing
+ * ride on in the library class; this file does not restate them.
+ */
 final class StdioMcpServer implements McpServer
 {
-    /** @var array<McpTool> */
-    private array $tools = [];
-
-    /** @var resource|null */
-    private $process = null;
-
-    /** @var array{0: resource, 1: resource, 2: resource}|null */
-    private $pipes = null;
-
-    /** Monotonic JSON-RPC request id — avoids collisions that `time()` causes. */
-    private int $nextId = 0;
-
     /**
-     * Persistent read buffer so a partial NDJSON line survives across reads:
-     * one read may return less than a full line, and a server may emit
-     * several messages in one burst.
+     * Handshake ceiling default, DERIVED from the library constant so the two
+     * cannot drift — the library doc-block explains why the number is
+     * SIXTY SECONDS (cold `npx` package trees) and why it is overridable per
+     * server from `.mcp.json` (`startTimeout`, in seconds) — see
+     * {@see \SugarCraft\Crush\MCP\McpClient::startServer()}.
      */
-    private string $readBuffer = '';
+    public const DEFAULT_START_TIMEOUT_SECONDS = \SugarCraft\Mcp\StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS;
+
+    private readonly \SugarCraft\Mcp\StdioMcpServer $transport;
 
     /**
-     * THE CHILD'S STDERR IS DRAINED, AND THAT IS A DEADLOCK FIX, NOT A FEATURE.
-     *
-     * `start()` opens fd 2 as a pipe and nothing in this class ever read it,
-     * closed it, or even took it out of blocking mode. A pipe has a fixed kernel
-     * buffer — 64 KiB on this host (PHP 8.3.6, Linux 6.8) — and a child whose
-     * stderr fills it BLOCKS IN ITS OWN `write()`. A blocked server does not
-     * answer on stdout, so {@see readLine()} waited for a line that could never
-     * arrive while holding the only thing that could have unblocked it.
-     *
-     * This is {@see \SugarCraft\Crush\Providers\ClaudeCodeProvider::completeStream()}'s
-     * bug in a second place, and the shape is NOT identical — see
-     * {@see absorbStderr()} for the three differences that make a copied fix
-     * wrong here.
-     *
-     * The bytes are kept rather than discarded because {@see start()} had no
-     * diagnostic at all: a server that dies printing a stack trace reported only
-     * "Failed to start MCP server: <name>".
-     */
-    private string $stderrTail = '';
-
-    /**
-     * Whether fd 2 is still worth selecting on. A pipe AT EOF is permanently
-     * "readable", so leaving a closed stderr in the `stream_select()` set turns
-     * the deadline-less {@see callTool()} wait into a 100% CPU spin — the
-     * failure a naive drain trades the hang for.
-     */
-    private bool $stderrOpen = false;
-
-    /**
-     * Cap on {@see $stderrTail}, matching
-     * {@see \SugarCraft\Crush\Providers\ClaudeCodeProvider}'s. A cap because
-     * the buffer grows across the WHOLE SESSION here, not across one completion,
-     * so a server in a warning loop is otherwise an unbounded allocation in a
-     * long-lived process. THE TAIL rather than the head because this text exists
-     * to answer "why did it fail", and the reason a process gives is the last
-     * thing it says.
-     */
-    private const MAX_STDERR_BYTES = 65536;
-
-    /**
-     * Upper bound on ONE NDJSON line, and on the persistent read buffer that
-     * accumulates towards it.
-     *
-     * ⚠️ IT IS THE BUFFER THAT WAS UNBOUNDED, NOT THE PEER. {@see $readBuffer}
-     * is instance state and survives every call, so a peer that emits an endless
-     * stream WITH NO FRAME TERMINATOR grew it without limit for the life of the
-     * process. This class already caps its stderr tail at
-     * {@see MAX_STDERR_BYTES} for exactly this reason, so the asymmetry sat
-     * inside one file.
-     *
-     * SIXTY-FOUR MEBIBYTES, AND THE INHERITANCE IS NOW A LANGUAGE FACT: this
-     * line NAMES {@see \SugarCraft\Crush\Backend\EngineBackend::MAX_FRAME_BYTES}
-     * rather than repeating its arithmetic. The engine puts the same bound on
-     * the same question — "a frame legitimately carries raw image bytes, so it
-     * has to be generous, but a corrupt header must never make the parent try
-     * to buffer an arbitrary length before it notices the stream is garbage".
-     * An MCP `tools/call` result carrying a file or an image is the same shape
-     * of payload.
-     *
-     * WHAT THIS SAID, TWICE OVER. First: "inherited rather than invented",
-     * which was prose — the value was copied, not derived. Then, after round
-     * 58: "it is inherited, but nothing DERIVED it — the engine's constant is
-     * `private`, so PHP cannot name it here and this line spells
-     * `64 * 1024 * 1024` as its own literal", with a reflection test standing
-     * in for the derivation.
-     *
-     * WHAT IS TRUE NOW: the engine's constant is `public`, this class's
-     * initialiser references it, and a constant expression naming another
-     * class's constant is resolved by PHP itself. The family cannot disagree.
-     *
-     * WHY THE REFLECTION TEST STILL EARNS ITS PLACE — and it does, because its
-     * job CHANGED rather than ended.
-     * {@see \SugarCraft\Crush\Tests\FrameCapFamilyTest} no longer exists to
-     * compare four literals that happen to match; it exists to pin that every
-     * member DERIVES. Its roster is read off the `MAX_FRAME_BYTES` declarations
-     * in `src/`, so a FOURTH framer that copies this doc-block and spells the
-     * arithmetic joins the family and is reported. There is no hand list to
-     * edit.
-     *
-     * WHAT THIS SAID FOR ONE ROUND: that such a framer was "the only way the
-     * family can still come apart". WHAT IS TRUE: that clause was written into
-     * three framing files at once and was wrong in all three, because the
-     * roster's own scanner could not read four of PHP 8.3's five `const`
-     * spellings — `private const int …` among them, which is a spelling this
-     * tree already uses. A framer written that way left the family SILENTLY,
-     * with the whole suite rc 0. WHY THE POINT SURVIVES THE CORRECTION: a
-     * copied literal remains the way the family comes apart that anyone would
-     * write on purpose, and it is caught. The scanner's own blind spots are now
-     * held separately, by a second instrument that decides membership without
-     * parsing anything, in
-     * {@see \SugarCraft\Crush\Tests\FrameCapFamilyTest::testEveryFileDeclaringTheCapReachesTheRoster()}.
-     *
-     * ⚠️ EXCEEDING IT IS A NAMED FAILURE, NOT A TRUNCATION, AND THE DISTINCTION
-     * IS THE WHOLE DESIGN. Silently cutting the buffer at the cap would hand
-     * `\SugarCraft\Crush\McpMessage::parse()` half a frame, which parses as malformed — so the diagnostic
-     * would blame the peer for sending garbage when what actually happened is
-     * that THIS side refused to hold any more. The buffer is dropped and a
-     * `\RuntimeException` naming the cap is raised instead.
-     */
-    private const MAX_FRAME_BYTES = EngineBackend::MAX_FRAME_BYTES;
-
-    /**
-     * How long THE HANDSHAKE — `initialize` plus `tools/list`, one shared
-     * wall clock across both — may take before {@see start()} gives this server
-     * up. It is not, and must not become, a bound on {@see callTool()}: an MCP
-     * tool call is the third-party equivalent of an LLM completion and may
-     * legitimately run for minutes, while a handshake is a fixed two-message
-     * exchange with a process that has just been spawned.
-     *
-     * SIXTY SECONDS, and the number is about `npx`-style servers specifically:
-     * the canonical `.mcp.json` entry is `npx -y @modelcontextprotocol/server-…`,
-     * whose FIRST run on a machine downloads and unpacks a package tree before
-     * the server's own code executes at all. Measured reports of that cold path
-     * sit in the 30–60s range, so a bound below it would turn "first launch after
-     * a fresh checkout" into "this server is broken", which is the failure mode a
-     * timeout must not manufacture. Every subsequent launch answers in
-     * milliseconds, so the budget is paid only by a server that is genuinely
-     * stuck.
-     *
-     * Per-server overridable from `.mcp.json` (`startTimeout`, in seconds) —
-     * see {@see \SugarCraft\Crush\MCP\McpClient::startServer()} — because "how
-     * long may this particular server take to come up" is a property of the
-     * server, not of this class.
-     */
-    public const DEFAULT_START_TIMEOUT_SECONDS = 60.0;
-
-    /**
-     * Poll slice used while waiting for a line with NO deadline — the
-     * {@see callTool()} path, which is deliberately unbounded. A slice rather
-     * than an infinite `stream_select()` wait so the loop can still notice a
-     * closed pipe; the length only affects how coarsely that is noticed.
-     */
-    private const READ_POLL_SECONDS = 1;
-
-    /**
-     * How many CONSECUTIVE `stream_select()` failures {@see writeLine()}
-     * tolerates before giving up on the write.
-     *
-     * `stream_select()` answers `false` for EINTR — a signal arrived — which is a
-     * retry and not an error, and that branch had no exit of ANY kind: a
-     * persistently failing select spun at 1 ms forever on a path that
-     * {@see callTool()} deliberately leaves unbounded. THIS COUNT IS THE EXIT
-     * THAT FIRES.
-     *
-     * ⚠️ THE LIVENESS HALF OF THE CONDITION IN THAT BRANCH IS DORMANT BY
-     * CONSTRUCTION, AND IT WAS WRITTEN AS THAT BRANCH'S PRIMARY EXIT. It is not. A write-set `stream_select()`
-     * can only be INTERRUPTED if it BLOCKS, and it only blocks when the pipe is
-     * full AND the child is alive — every other state makes the fd instantly
-     * ready. MEASURED on this host (PHP 8.3.6, Linux 6.8), 1s of a 300 µs SIGUSR1
-     * storm per state, three consecutive takes, identical every time:
-     *
-     *     pipe   child   select false   select ok
-     *     empty  live            0        ~695000
-     *     FULL   LIVE        ~2815              0     <- the only interruptible state
-     *     empty  dead            0        ~660000
-     *     full   dead            0        ~692000
-     *
-     * So a dead child can never reach this branch: its fd never blocks, the loop
-     * reaches `fwrite()`, and `$written === false` is what catches it — every
-     * time, on both pipe states. The check is KEPT rather than deleted because it
-     * costs one status call per EINTR, it is correct, and it becomes live the
-     * moment the loop's shape changes (an `except` set, a poll on an empty pipe,
-     * a child that dies between the select and the check). Its dormancy is pinned
-     * by `StdioMcpServerWriteBoundsTest::testOnlyAFullPipeWithALiveChildCanInterruptTheWriteSelect()`,
-     * which reds if the `full/dead` figure ever moves.
-     *
-     * ⚠️ `feof()` WOULD BE THE WRONG CHECK HERE, and {@see readLine()}'s EINTR
-     * branch using it is not a precedent to copy — see the measurement in the
-     * `$written === 0` branch below: a WRITE pipe does not report the reader's
-     * exit through `feof()` at all.
-     *
-     * DELIBERATELY GENEROUS. MEASURED on this host (PHP 8.3.6, Linux 6.8), the
-     * densest signal storm this box can produce — a forked child sending SIGUSR1
-     * every 300 µs — makes `stream_select()` fail about 2800 times a second with
-     * ZERO successes interleaved; three consecutive takes gave 1407, 1406 and
-     * 1407 failures in 0.5 s, and the `full/live` row of the table above is the
-     * same figure re-measured through a WRITE-set select rather than a read one.
-     * With this loop's 1 ms yield on the failure path
-     * that is roughly 500–900 a second, so 10000 is on the order of ten seconds
-     * of unbroken interruption.
-     */
-    private const MAX_CONSECUTIVE_SELECT_FAILURES = 10000;
-
-    private float $startTimeoutSeconds;
-
-    /**
-     * @param array<int, string> $args argv AFTER the program name — see
-     *        {@see start()} for why this is an argv and not a shell string
+     * @param array<int, string> $args argv AFTER the program name — the argv
+     *        form, never a shell string; see the library's start() doc-block
+     *        for the measured process-tree reason
      * @param array<string, string> $env
      * @param float|null $startTimeoutSeconds handshake budget in seconds; null
      *        takes {@see DEFAULT_START_TIMEOUT_SECONDS}
      */
     public function __construct(
         public readonly string $name,
-        private string $command,
-        private array $args,
-        private array $env,
+        string $command,
+        array $args,
+        array $env,
         ?float $startTimeoutSeconds = null,
     ) {
-        $this->startTimeoutSeconds = $startTimeoutSeconds !== null && $startTimeoutSeconds > 0
-            ? $startTimeoutSeconds
-            : self::DEFAULT_START_TIMEOUT_SECONDS;
+        $this->transport = new \SugarCraft\Mcp\StdioMcpServer(
+            name: $name,
+            command: $command,
+            args: $args,
+            env: $env,
+            startTimeoutSeconds: $startTimeoutSeconds,
+            spawnPlanner: fn (string $name, array $argv, array $env): array => $this->spawnPlan($name, $argv, $env),
+            clientInfo: ['name' => 'sugar-crush', 'version' => '1.0.0'],
+        );
     }
 
     /**
-     * Spawn the server and complete the MCP handshake, or throw.
+     * Containment seam handed to the library: refuse, wrap, scrub — in that
+     * order, all BEFORE proc_open sees a byte of it.
      *
-     * THE ARGV FORM OF `proc_open()`, NOT A SHELL STRING, and the difference is
-     * what makes {@see stop()} able to reach the server at all. `command` +
-     * `args[]` in `.mcp.json` IS an argv — the MCP config schema this package
-     * parses ({@see \SugarCraft\Crush\MCP\McpClient::startServer()}) has a
-     * separate string `command` and a separate list `args`, exactly like Claude
-     * Code's, and nothing in it is a shell fragment. Handing that argv to
-     * `sh -c` after `escapeshellarg()`ing it — which is what this method used to
-     * do — bought nothing and cost the process tree: MEASURED on this host
-     * (`/bin/sh` -> dash, which does NOT apply the `-c` exec optimisation) the
-     * direct child was the wrapper and the server was a GRANDCHILD, so
-     * `proc_terminate()` killed dash and left the server running, reparented to
-     * pid 1, still answering `tools/call` over the inherited pipes:
+     * E672: the wrapper-fronts-spawn pre-check, symmetric with
+     * LspConnection::connect() and ProcessExecutor's worker spawn — a bogus
+     * binary under `setsid` starts the WRAPPER fine and the exec failure would
+     * otherwise surface only as a missing handshake after the full timeout.
      *
-     *     1146812 1146811 sh -c '/usr/bin/php8.3' '…/stubborn.php'
-     *     1146813 1146812 /usr/bin/php8.3 …/stubborn.php      <- the server
-     *     after stop(): 1146812 gone, 1146813 ALIVE with PPID 1
+     * E672/E674: the choke-point spec + env pair — a third-party MCP server
+     * from `.mcp.json` is exactly the untrusted command class containment is
+     * for; the entry's own env rides as overrides so configured keys still win.
      *
-     * With the argv form the direct child IS the server, so the SIGTERM-then-9
-     * escalation in {@see stop()} lands on it. WHAT THIS CHANGES FOR A CONFIG
-     * THAT RELIED ON A SHELL: a `command` containing shell syntax — a pipeline,
-     * `&&`, a glob, `$VAR`, a redirect — is no longer interpreted, because there
-     * is no shell to interpret it. Such an entry was already outside the config
-     * schema (its `command` is documented as a program, not a command line), and
-     * a config that genuinely needs a shell can still say so explicitly:
-     * `"command": "/bin/sh", "args": ["-c", "…"]`. That spelling keeps the shell
-     * as the DIRECT child, which is the process this class then signals.
-     *
-     * `@proc_open()`: with the argv form an unresolvable program fails in
-     * `posix_spawn()` and PHP raises `proc_open(): posix_spawn() failed: No such
-     * file or directory` on top of returning false. The `false` IS the handling —
-     * it becomes the exception below — and leaking a warning for a `.mcp.json`
-     * entry naming a program the user has not installed would put PHP's noise
-     * over the TUI (and red any `failOnWarning` suite) on a path that already
-     * reports itself properly. Note this is a REAL detection improvement over the
-     * shell form, where a bogus binary made `proc_open()` succeed (the shell
-     * launched) and the failure surfaced only as a missing handshake response.
-     *
-     * @throws \RuntimeException when the program cannot be spawned, or the
-     *         handshake does not complete within the budget — see
-     *         {@see DEFAULT_START_TIMEOUT_SECONDS}
+     * @param list<string> $argv
+     * @param array<string, string> $env
+     * @return array{0: string|array<int,string>, 1: ?array<string,string>}
+     */
+    private function spawnPlan(string $name, array $argv, array $env): array
+    {
+        if (ProcessContainment::detachedSpawnBinary() !== ''
+            && !(str_contains($argv[0], '/')
+                ? is_executable($argv[0])
+                : ProcessContainment::locateOnPath($argv[0]) !== '')
+        ) {
+            throw new \RuntimeException("Failed to start MCP server: {$name}");
+        }
+
+        return [ProcessContainment::spawnSpec($argv), ProcessContainment::env($env)];
+    }
+
+    /**
+     * @throws \RuntimeException when the program is refused by the pre-check,
+     *         cannot be spawned, or the handshake does not complete in budget
      */
     public function start(): void
     {
-        // E672: the wrapper-fronts-spawn pre-check, symmetric with
-        // LspConnection::connect() and ProcessExecutor's worker spawn — a
-        // bogus binary under `setsid` starts the WRAPPER fine and the exec
-        // failure would otherwise surface only as a missing handshake after
-        // the full timeout, instead of failing fast here.
-        if (ProcessContainment::detachedSpawnBinary() !== ''
-            && !(str_contains($this->command, '/')
-                ? is_executable($this->command)
-                : ProcessContainment::locateOnPath($this->command) !== '')
-        ) {
-            throw new \RuntimeException("Failed to start MCP server: {$this->name}");
-        }
-
-        // E672/E674: choke-point spec + env — a third-party MCP server from
-        // .mcp.json is exactly the untrusted command class containment is for;
-        // the entry's own env rides as overrides so configured keys still win.
-        $this->process = @proc_open(
-            ProcessContainment::spawnSpec([$this->command, ...array_map(static fn (mixed $arg): string => (string) $arg, array_values($this->args))]),
-            [
-                0 => ['pipe', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ],
-            $this->pipes,
-            null,
-            ProcessContainment::env($this->env)
-        );
-
-        if (!is_resource($this->process)) {
-            throw new \RuntimeException("Failed to start MCP server: {$this->name}");
-        }
-
-        // NON-BLOCKING STDOUT, which is what lets {@see readLine()} honour a
-        // deadline. `stream_set_timeout()` is the obvious instrument and it does
-        // NOT work here — MEASURED on this host, it returns `false` for a
-        // `proc_open()` pipe (an STDIO stream, not a socket) and a subsequent
-        // `fgets()` still blocked for the full 5s a `sleep 5` child was alive.
-        // So the bound is `stream_select()` plus a non-blocking `fread()`, and
-        // the stream has to be non-blocking or a `fread()` of a half-written line
-        // could still block after `select()` reported the pipe readable.
-        stream_set_blocking($this->pipes[1], false);
-
-        // FD 2 TOO, and it is not symmetry for its own sake: {@see absorbStderr()}
-        // reads this pipe from inside the same `stream_select()` loop that waits
-        // for stdout, and a blocking `fread()` there would re-create the wedge it
-        // exists to close (a `select()` may report a pipe readable and still have
-        // fewer bytes available than the read asks for).
-        stream_set_blocking($this->pipes[2], false);
-
-        // AND FD 0, because {@see writeLine()} drives the write from a
-        // `stream_select()` loop for the same reason {@see readLine()} drives the
-        // read from one — see that method for the measurement.
-        stream_set_blocking($this->pipes[0], false);
-        $this->stderrOpen = true;
-        $this->stderrTail = '';
-
-        // ONE WALL CLOCK FOR THE WHOLE HANDSHAKE, not one per read. There are TWO
-        // blocking exchanges below (`initialize` and `tools/list`), and a
-        // per-read budget would let a server that answers each read promptly —
-        // with a notification, forever — starve {@see readResponse()} without
-        // ever tripping a per-read timeout. That is a real third shape beside
-        // "dead" and "slow": live, chatty, and never answering. MEASURED before
-        // this deadline existed: a server printing valid
-        // `notifications/progress` in a loop made `start()` never return
-        // (`timeout 15 php probe.php` -> rc=124), and so did one that simply
-        // read its stdin and answered nothing.
-        $deadline = microtime(true) + $this->startTimeoutSeconds;
-
-        // Handshake: `initialize` is a REQUEST expecting a response, followed by
-        // the `initialized` NOTIFICATION per the MCP spec.
-        $response = $this->request('initialize', [
-            'protocolVersion' => '2024-11-05',
-            'capabilities' => [],
-            'clientInfo' => ['name' => 'sugar-crush', 'version' => '1.0.0'],
-        ], $deadline);
-
-        // `!$response->resultSet`, NOT `result === null`: a server answering
-        // `initialize` with a legal `"result": null` used to be rejected here as
-        // "answered nothing at all", because the two were indistinguishable. It is
-        // still a MISBEHAVING answer — the MCP spec says the result is an object
-        // with a `protocolVersion` — but the gate this branch guards is "did the
-        // server answer", and it did. `parseTools()` reads the tools out with `??
-        // []`, so a server that answers null all the way through comes up with no
-        // tools rather than being reported as a failed launch.
-        if ($response === null || (!$response->resultSet && $response->error === null)) {
-            // READ THE TAIL BEFORE `stop()`, which clears it. Without this the
-            // only thing a user ever saw for a server that died printing a stack
-            // trace was the bare name — the child's own explanation was written
-            // into a pipe nobody read.
-            $diagnostics = $this->stderrTailForDiagnostics();
-            $this->stop();
-
-            throw new \RuntimeException("Failed to start MCP server: {$this->name}" . $diagnostics);
-        }
-
-        $this->notify('initialized', null, $deadline);
-
-        $listResponse = $this->request('tools/list', [], $deadline);
-        $this->tools = $listResponse === null ? [] : $this->parseTools($listResponse->toArray());
+        $this->transport->start();
     }
 
-    /**
-     * Shut the server child down in BOUNDED time.
-     *
-     * `proc_close()` WAITS for the child, so `proc_terminate()` immediately
-     * followed by `proc_close()` — which is what this method used to be — hands
-     * the caller's deadline to a third-party process that is free to ignore
-     * SIGTERM. MEASURED on this host against the old two-liner, with a direct
-     * child running `trap '' TERM; cat > /dev/null; sleep 8`: `proc_close()`
-     * returned after 8.30s. An MCP server is by definition somebody else's code,
-     * and this method is on the session's exit path.
-     *
-     * Same escalation as {@see \SugarCraft\Crush\Backend\StreamingCommandBackend::terminateAndReap()},
-     * deliberately: SIGTERM, a bounded poll of `proc_get_status()`, then signal 9.
-     * Not consolidated with it in this bundle — see that method's docblock for the
-     * one behavioural difference (it also has to drain pipes first) and this
-     * bundle's report for the shared-code question.
-     *
-     * WHAT IT SIGNALS is the DIRECT CHILD, which since {@see start()} switched
-     * to the argv form of `proc_open()` IS the server process — measured, with
-     * the process tree, in that method's doc-block. The remaining gap is a server
-     * that spawns children OF ITS OWN: those are not in this process's control
-     * group and are not signalled here, which is a property of the server's own
-     * process handling rather than something this method can close.
-     */
     public function stop(): void
     {
-        if ($this->process !== null && is_resource($this->process)) {
-            // CLOSE THE PIPES FIRST, AND THE ORDER IS THE WHOLE POINT — this is
-            // not hygiene about resource lifetimes. A server whose stdin is still
-            // open has been given no reason to leave, so it sits through the
-            // SIGTERM grace below and is killed with signal 9; closing fd 0
-            // delivers the EOF that a well-written server treats as "shut down
-            // now", and it exits on its own before the grace is paid.
-            //
-            // MEASURED on this host (PHP 8.3.6, Linux 6.8), three consecutive
-            // takes, identical, against a child that traps SIGTERM to a no-op and
-            // exits on stdin EOF, driven through this exact ladder:
-            //
-            //     pipes left open    -> 1.05s, escalated to signal 9, status 9
-            //     pipes closed first -> 0.010s, exited on its own, status 0
-            //
-            // A hundredfold, and the difference between a clean exit and a
-            // SIGKILL for any server that traps SIGTERM to flush state. This
-            // method used to set `$this->pipes = null` below and leave the
-            // resources to the destructor, which arrives long after
-            // `proc_close()` has finished waiting.
-            //
-            // NO FINAL DRAIN BEFORE CLOSING FD 2, unlike
-            // {@see \SugarCraft\Crush\LSP\LspConnection::stopProcess()}: the one
-            // caller that wants the tail — {@see start()}'s failure branch —
-            // already read it into a local before calling this, and every path
-            // through here clears {@see $stderrTail} at the end regardless, so a
-            // drain here would collect bytes nothing can ever read.
-            $this->closePipes();
-
-            // THE LADDER IS SHARED, NOT RE-INLINED — E407. The escalate-and-reap
-            // this method used to hand-roll (proc_terminate, a private
-            // waitForExit, signal 9, proc_close, plus private copies of the
-            // grace budgets) now lives once in ProcessReaper, whose class
-            // docblock carries the MEASURED proc_close-waits hazard that made
-            // the escalation necessary. The closePipes()-first guarantee above
-            // stays local: it is this server's reason-to-exit, not a property
-            // of the ladder.
-            // E673: the group id is read WHILE the server is alive — a
-            // wrapped server's whole tree then dies with stop(), which a
-            // bare pid signal could not promise once the child forks.
-            ProcessReaper::terminateAndClose($this->process, ProcessContainment::groupId($this->process));
-        }
-        // Unconditional, because {@see stop()} above only reaches its own call
-        // when the process handle is live: a connection torn down some other way
-        // still has pipes to release here.
-        $this->closePipes();
-
-        $this->process = null;
-        $this->pipes = null;
-        $this->readBuffer = '';
-        $this->stderrTail = '';
-        $this->stderrOpen = false;
+        $this->transport->stop();
     }
 
     /**
-     * Absorb whatever the server has already written to stderr, from a process
-     * that is IDLE — no request in flight — and return promptly.
-     *
-     * WHAT WAS SAID (E440): a server that talks on stderr between exchanges
-     * parks those bytes in the pipe until the next exchange's select loop gets
-     * around to {@see absorbStderr()} — so a failure diagnostic could be
-     * seconds-and-a-turn late or truncated by the cap before anyone looked.
-     * WHAT IS TRUE NOW: the class offers this bounded pump; the in-exchange
-     * drains are unchanged. WHY IT EARNS ITS PLACE: the bytes are worthless
-     * wherever they sit, and the only remedy that does not touch another
-     * layer's file is an on-demand seam this side can ship alone.
-     *
-     * WHY A CALLER-PUMPED SEAM AND NOT A LOOP MOUNT (E537, VERBATIM ruling —
-     * do not reopen against this class): an fd-2 reader mounted on the shared
-     * event loop means TWO processes destructively reading one pipe whenever a
-     * tool call forks, and the residual idle stall this leaves (bytes sit at
-     * most until the next exchange, ~one turn) is a staleness bound, not a
-     * deadlock. The judgement of WHEN to pump — e.g. the parent between turns,
-     * when no forked call is in flight — belongs to the dispatch layer, which
-     * is the only code that knows it; that wiring is the remaining seam.
-     *
-     * THE CONTRACT:
-     *  - call it only from the process that ran {@see start()} and only while
-     *    no exchange is in flight on this server;
-     *  - up to 16 passes x 8192 bytes per call — bounded, so a server writing
-     *    faster than we read cannot hold the caller; the tail cap
-     *    ({@see MAX_STDERR_BYTES}, tail kept, head dropped) applies as always;
-     *  - NO-OP before {@see start()} and after {@see stop()}: the guards inside
-     *    {@see absorbStderr()} (flag, null pipes, closed resource) answer for
-     *    teardown races, so this cannot throw.
+     * Caller-pumped stderr drain (E537: never loop-mounted). Forwards to the
+     * library; dormant-safe before start() and after stop().
      */
     public function pumpStderr(): void
     {
-        if ($this->pipes === null) {
-            return;
-        }
-
-        // Re-asserted here, NOT trusted from start(), for the reason spelled
-        // out on the identical line in LspConnection::drainStderr(): a
-        // "blocking" pipe turns this pump into a wait on a child that has
-        // nothing more to say, converting a lost line elsewhere into a hung
-        // caller.
-        stream_set_blocking($this->pipes[2], false);
-
-        for ($pass = 0; $pass < 16 && $this->stderrOpen; $pass++) {
-            $this->absorbStderr();
-        }
+        $this->transport->pumpStderr();
     }
 
     /**
-     * Release the three pipe resources, if they are still open.
-     *
-     * Idempotent, because {@see stop()} calls it twice on the ordinary path —
-     * once before the escalation ladder for the EOF, and once after, for a
-     * teardown that never reached the ladder at all.
-     */
-    private function closePipes(): void
-    {
-        if ($this->pipes === null) {
-            return;
-        }
-
-        foreach ($this->pipes as $pipe) {
-            if (is_resource($pipe)) {
-                fclose($pipe);
-            }
-        }
-    }
-
-    /**
-     * Is the server child still there? A LIVENESS check, deliberately not a
-     * timeout: {@see writeLine()}'s EINTR branch needs to tell "a signal
-     * interrupted the select" from "there is nobody left to write to", and
-     * elapsed time answers neither. It is also the only bound
-     * {@see callTool()}'s deadline-less path can accept without capping a tool
-     * call that is legitimately slow.
-     *
-     * @param resource|null $process
-     */
-    private static function childIsRunning($process): bool
-    {
-        if (!is_resource($process)) {
-            return false;
-        }
-
-        return (bool) proc_get_status($process)['running'];
-    }
-
-    /**
-     * E698: is the spawned child STILL THERE? The same question
-     * {@see childIsRunning()} answers for {@see writeLine()}'s EINTR branch,
-     * exposed once for the `/mcp` panel's liveness readout — a server whose
-     * process exited after a successful handshake is exactly the state an
-     * operator can otherwise not see: it is registered, it advertises its
-     * cached tools, and it answers nothing.
+     * E698 liveness readout for the `/mcp` panel — the library answers the
+     * same proc_get_status question the product did.
      */
     public function isUp(): bool
     {
-        return self::childIsRunning($this->process);
+        return $this->transport->isUp();
     }
 
     /**
+     * Library tools converted into the product's {@see McpTool} rows.
+     *
      * @return array<McpTool>
      */
     public function listTools(): array
     {
-        return $this->tools;
+        return array_map(
+            static fn (\SugarCraft\Mcp\McpTool $tool): McpTool => new McpTool(
+                $tool->name,
+                $tool->description,
+                $tool->inputSchema,
+                $tool->serverName,
+            ),
+            $this->transport->listTools(),
+        );
     }
 
     /**
-     * DELIBERATELY UNBOUNDED, unlike {@see start()}'s handshake: a `tools/call`
-     * is somebody else's tool doing real work — a build, a search over a large
-     * index, a remote API round trip — and a wall-clock cap here would abandon
-     * results the model asked for. The handshake budget exists because a
-     * two-message exchange with a just-spawned process has a knowable shape;
-     * a tool call does not.
+     * DELIBERATELY UNBOUNDED, unlike {@see start()}'s handshake — see the
+     * library's callTool().
      *
      * @return array<mixed>
      */
     public function callTool(string $toolName, array $args): array
     {
-        $response = $this->request('tools/call', [
-            'name' => $toolName,
-            'arguments' => $args,
-        ]);
-
-        // `!$response->resultSet` rather than `result === null`, so a legal
-        // `"result": null` is a RESULT and falls through to the wrapping branch
-        // below — where it is rendered as the text `null`, exactly as `false` and
-        // `0` are. An error response still lands here, because an error carries no
-        // `result` key at all.
-        if ($response === null || !$response->resultSet) {
-            return ['error' => 'Tool call failed'];
-        }
-
-        // A NON-ARRAY `result` IS WRAPPED, NOT RETURNED, and this branch exists
-        // because {@see \SugarCraft\Crush\McpMessage}'s `$result` is `mixed`.
-        // It was `?array`, which made a reply of `"result": true` a `TypeError`
-        // inside `parse()`; widening it moved the same crash here, onto this
-        // method's own `: array` return type, where it would have been a fresh
-        // uncaught throw rather than a fix.
-        //
-        // The MCP spec does say a `tools/call` result is an object with
-        // `content`, so a scalar here IS a misbehaving server — but the answer
-        // to a misbehaving server is a tool result the model can read, not an
-        // exception. The `{type: text}` shape is the one
-        // {@see \SugarCraft\Crush\Tools\McpToolBridge::renderContent()} already
-        // renders verbatim, so the scalar reaches the model as its own text.
-        if (!is_array($response->result)) {
-            // `?:` HERE WOULD DESTROY A ZERO, which is the very coercion this
-            // branch exists to prevent, one layer down. `json_encode(0)` is the
-            // STRING `"0"` — falsy in PHP — so `json_encode($r) ?: ''` turned a
-            // legal `"result": 0` into an EMPTY tool result while every other
-            // scalar came through intact. MEASURED against a real server child
-            // before the fix: `0` and `0.0` both arrived at the model as `''`,
-            // `5` and `false` as `'5'` and `'false'`.
-            //
-            // The `=== false` arm is a RETURN-TYPE FORMALITY, not a live path.
-            //
-            // WHAT THIS SAID: "`null` is answered above ... so all this call can
-            // ever see is a bool, an int or a float from `json_decode()`."
-            // WHAT IS TRUE NOW: the gate above tests `!$response->resultSet`, not
-            // `result === null`, so a legal `"result": null` is a RESULT and
-            // reaches here — see that gate's own comment. The reachable set is
-            // `null`, a bool, an int or a float; arrays and strings still take the
-            // other branches.
-            // WHY THIS STILL EARNS ITS PLACE: the conclusion did not move with the
-            // premise. `json_encode()` cannot fail on any of those four either, so
-            // the arm is still dead in fact — `json_encode(null)` is the STRING
-            // `"null"`, which is precisely how a null result reaches the model as
-            // the text `null` instead of as the empty string the `?:` above would
-            // have made of it. The arm is spelled out anyway because `text` is
-            // declared `string` and `json_encode()` is declared `string|false`;
-            // nothing but the type system asks for it.
-            $encoded = json_encode($response->result);
-
-            return ['content' => [[
-                'type' => 'text',
-                'text' => is_string($response->result)
-                    ? $response->result
-                    : ($encoded === false ? '' : $encoded),
-            ]]];
-        }
-
-        return $response->result;
-    }
-
-    /**
-     * Send a JSON-RPC request and read the matching response (by id).
-     *
-     * @param array<string, mixed> $params
-     * @param float|null $deadline `microtime(true)` value past which the read
-     *        gives up; null waits indefinitely — see {@see callTool()} for why
-     *        that is the right default and {@see start()} for the one caller
-     *        that supplies one
-     */
-    private function request(string $method, array $params, ?float $deadline = null): ?McpMessage
-    {
-        $id = (string) $this->nextId++;
-        if (!$this->writeLine(McpMessage::request($id, $method, $params)->toJson(), $deadline)) {
-            return null;
-        }
-
-        return $this->readResponse($id, $deadline);
-    }
-
-    /**
-     * Send a JSON-RPC notification (no id, no response expected).
-     *
-     * @param array<string, mixed>|null $params
-     * @param float|null $deadline the caller's wall clock, where it has one — a
-     *        notification expects no reply, which is not the same as expecting no
-     *        bound: {@see start()}'s `initialized` sits BETWEEN its two bounded
-     *        exchanges and would otherwise be the one unbounded step in a
-     *        handshake that is bounded end to end
-     */
-    private function notify(string $method, ?array $params = null, ?float $deadline = null): void
-    {
-        $this->writeLine(McpMessage::notification($method, $params)->toJson(), $deadline);
-    }
-
-    /**
-     * Low-level write-then-read for a single raw JSON-RPC message. Retained as a
-     * private primitive (exercised directly via reflection): returns the decoded
-     * response array, or [] when the process is down / no response arrives.
-     *
-     * E483 THREADS THE BUDGET THROUGH IT. WHAT WAS SAID: nothing — the method
-     * simply called `writeLine($json)` and `readLine(null)`, so any caller got
-     * the UNBOUNDED end of both loops, the one shape every other exchange in
-     * this class has been measured to need a guard against. WHAT IS TRUE NOW:
-     * the optional `$deadline` is forwarded to both legs, and the derived
-     * roster in {@see \SugarCraft\Crush\Tests\MCP\StdioMcpServerWriteBoundsTest}
-     * can no longer be satisfied by leaving this conduit dark. WHY IT EARNS
-     * ITS PLACE: a default-null keeps both reflection exercises byte-identical
-     * in behaviour while a future caller inherits the handshake budget instead
-     * of the deadlock.
-     *
-     * @param array<mixed> $message
-     * @return array<mixed>
-     */
-    private function send(array $message, ?float $deadline = null): array
-    {
-        $json = json_encode($message);
-        if ($json === false || !$this->writeLine($json, $deadline)) {
-            return [];
-        }
-
-        $line = $this->readLine($deadline);
-        if ($line === null) {
-            return [];
-        }
-
-        $response = json_decode($line, true);
-
-        return is_array($response) ? $response : [];
-    }
-
-    /**
-     * Write one newline-framed message to the child's stdin, DRAINING STDERR AS
-     * IT GOES.
-     *
-     * STDIN IS THE THIRD PIPE IN THE STDERR DEADLOCK, and this loop is here
-     * because a single drain before a blocking `fwrite()` — which is what this
-     * method briefly was — DOES NOT CLOSE IT. Generator: a child running
-     * `fwrite(STDERR, str_repeat("e", N))` and only then reading stdin; a parent
-     * that performs D non-blocking 8192-byte reads of stderr and then writes M
-     * bytes; 4s bound. PHP 8.3.6, Linux 6.8, three consecutive takes, identical
-     * every time:
-     *
-     *     N=100000  D=0   M=200000  ->  WEDGED (bound hit)
-     *     N=100000  D=1   M=200000  ->  WEDGED (bound hit)   <- the one-shot drain
-     *     N=100000  D=20  M=200000  ->  wrote 200001, 0.35s  <- flood fully drained
-     *     N=1000    D=0   M=200000  ->  wrote 200001, 0.35s  <- stderr under capacity
-     *     N=100000  D=0   M=1000    ->  wrote 1001,    0.35s  <- write under capacity
-     *
-     * The last two rows are the controls: BOTH sides have to be over their pipe
-     * capacity for the deadlock to exist. It is reachable in normal use — a
-     * server that logs progress to stderr while nothing is reading it (the model
-     * is thinking between tool calls) plus a `tools/call` whose arguments carry a
-     * file's contents is exactly the pair.
-     *
-     * One 8192-byte read frees 8192 bytes and the child immediately writes 8192
-     * more, so a fixed number of reads is the wrong instrument at any count: the
-     * bound has to be "until the write completes", which is what the loop below
-     * is.
-     *
-     * ON THE DEADLINE, AND WHY THIS PARAGRAPH CHANGED TWICE.
-     *
-     * WHAT IT SAID FIRST: that being unbounded matched "this class's existing
-     * contract". Half true, and wrong in the half that matters —
-     * {@see readLine()} takes a `?float $deadline` and {@see readResponse()}
-     * threads it from {@see request()}, so on {@see start()}'s path the handshake
-     * budget already bounded the READ half of every exchange and never reached
-     * this loop.
-     *
-     * WHAT IT SAID NEXT: that leaving the write unbounded still earned its place,
-     * because liveness was no worse than the blocking `fwrite()` the loop
-     * replaced. Also true, and also not good enough: a server that spawns, holds
-     * its pipes open, never reads stdin and never writes stderr held `start()`
-     * here indefinitely once the message exceeded the stdin pipe buffer, on a
-     * path whose caller was already holding a 60s budget it simply was not being
-     * given.
-     *
-     * WHAT IS TRUE NOW: the deadline is threaded. {@see request()} passes
-     * {@see start()}'s handshake budget through, and so does {@see notify()}, so
-     * BOTH halves of every handshake exchange are bounded by the one wall clock.
-     *
-     * WHY THE NULL DEFAULT STILL EARNS ITS PLACE: {@see callTool()} passes no
-     * deadline, deliberately — an MCP tool call is somebody else's real work and
-     * may legitimately run for minutes, so a wall clock there would abandon
-     * correct servers. That path is bounded by the CHILD'S LIVENESS instead (see
-     * {@see MAX_CONSECUTIVE_SELECT_FAILURES} and the `$written === false` branch
-     * below), which is the right question for it: "is there anybody to write to",
-     * not "has this taken too long".
-     *
-     * @param float|null $deadline `microtime(true)` value past which the write
-     *        gives up; null bounds on the child's liveness alone
-     */
-    private function writeLine(string $json, ?float $deadline = null): bool
-    {
-        if (!is_resource($this->process) || $this->pipes === null) {
-            return false;
-        }
-
-        // THE GUARD IS ON FD 0 ONLY, AND THE SHAPE IS THE POINT.
-        //
-        // WHAT THIS SAID: `!is_resource($this->pipes[0]) || ($this->stderrOpen &&
-        // !is_resource($this->pipes[2]))`, i.e. refuse the whole write when EITHER
-        // is closed, citing {@see readLine()} for "the same three call shapes".
-        //
-        // WHAT IS TRUE NOW: the second clause was unreachable AND wrongly shaped.
-        // Unreachable, because this class `fclose()`s a pipe in exactly one place
-        // — {@see closePipes()}, which closes all three — so fd 2 closed implies
-        // fd 0 closed and the first clause short-circuits before the second is
-        // ever evaluated. Wrongly shaped, because if it HAD been reachable it
-        // would have refused a write to a perfectly writable stdin on the
-        // strength of a closed DIAGNOSTIC stream. Stderr is what this loop drains
-        // while it waits; stdin is the job.
-        //
-        // WHY THE FD-2 CHECK STILL EARNS ITS PLACE, moved rather than deleted:
-        // fd 2 is exposed in this method too, inside the loop, where a closed
-        // resource in the read set is the TypeError {@see readLine()} measures.
-        // It is now the same degrade that `readLine()` performs — drop fd 2 from
-        // the select set and carry on writing — instead of a refusal. Pinned in
-        // both polarities by `StdioMcpServerClosedPipeGuardTest`: fd 0 closed
-        // still returns false, fd 2 closed ALONE now completes the write.
-        if (!is_resource($this->pipes[0])) {
-            return false;
-        }
-
-        $payload = $json . "\n";
-        $consecutiveSelectFailures = 0;
-
-        while ($payload !== '') {
-            // Same shape as {@see readLine()}'s: the remaining budget is both the
-            // give-up test and the `select()` slice, so a loop with a deadline
-            // never waits past it and a loop without one falls back to the poll.
-            $remaining = $deadline === null ? null : $deadline - microtime(true);
-            if ($remaining !== null && $remaining <= 0.0) {
-                return false;
-            }
-
-            $write = [$this->pipes[0]];
-            // `is_resource()` as well as the flag, exactly as {@see readLine()}
-            // builds its read set: the flag tracks stderr's EOF, not the
-            // resource's liveness, and they are not the same question.
-            $read = $this->stderrOpen && is_resource($this->pipes[2]) ? [$this->pipes[2]] : [];
-            $except = [];
-            $seconds = $remaining === null ? self::READ_POLL_SECONDS : (int) $remaining;
-            $micros = $remaining === null ? 0 : (int) (($remaining - $seconds) * 1_000_000);
-
-            // `@` for EINTR, same as {@see readLine()}: a signal arriving
-            // mid-select is a retry, and under `failOnWarning="true"` the warning
-            // alone would red a passing run.
-            $ready = @stream_select($read, $write, $except, $seconds, $micros);
-
-            if ($ready === false) {
-                $consecutiveSelectFailures++;
-
-                // AN EINTR IS A RETRY; AN ENDLESS ONE IS NOT. This branch had no
-                // exit of any kind, so a persistently failing select spun here at
-                // 1 ms forever — on {@see callTool()}'s path, which has no
-                // deadline to stop it. See {@see MAX_CONSECUTIVE_SELECT_FAILURES}
-                // for why `feof()` is not the instrument, and for the dormancy of
-                // the liveness half of this condition.
-                if (!self::childIsRunning($this->process)
-                    || $consecutiveSelectFailures >= self::MAX_CONSECUTIVE_SELECT_FAILURES) {
-                    return false;
-                }
-
-                usleep(1000);
-
-                continue;
-            }
-
-            $consecutiveSelectFailures = 0;
-
-            if ($read !== []) {
-                $this->absorbStderr();
-            }
-
-            if ($ready === 0 || $write === []) {
-                continue;
-            }
-
-            // A dead child (e.g. a bogus command that already exited) closes the
-            // pipe; writing then raises a "broken pipe" notice. Suppress it — the
-            // missing response is what signals start() that the server failed,
-            // not the write.
-            $written = @fwrite($this->pipes[0], $payload);
-
-            if ($written === false) {
-                return false;
-            }
-
-            if ($written === 0) {
-                // Reported writable and took nothing: a spurious wakeup. Yield
-                // rather than spinning.
-                //
-                // ⚠️ THE `feof()` BELOW IS NOT THE DEAD-CHILD DETECTOR, AND AN
-                // EARLIER DRAFT OF THIS COMMENT SAID IT WAS. MEASURED on this
-                // host (PHP 8.3.6, Linux 6.8), three consecutive takes, writing
-                // to the stdin pipe of a child that has already exited:
-                // `stream_select()` reports the pipe WRITABLE, `fwrite()`
-                // returns `false`, and `feof()` returns **false** — a write pipe
-                // does not report the reader's exit through `feof()` at all. So
-                // the branch that actually catches a dead child is the
-                // `$written === false` above it, every time.
-                //
-                // WHY THIS STILL EARNS ITS PLACE: it is the only exit this
-                // branch has. If some stream ever does answer `feof()` true here
-                // while still accepting a zero-length write, the alternative is
-                // an unbounded loop; and the cost when it never fires is one
-                // `feof()` per spurious wakeup.
-                if (feof($this->pipes[0])) {
-                    return false;
-                }
-                usleep(1000);
-
-                continue;
-            }
-
-            $payload = substr($payload, $written);
-        }
-
-        fflush($this->pipes[0]);
-
-        return true;
-    }
-
-    /**
-     * Read NDJSON lines until one parses into the response for $id, skipping
-     * server-initiated notifications and stale responses. Returns null on EOF,
-     * on non-JSON-RPC output, or on $deadline before a match.
-     *
-     * THE DEADLINE IS CHECKED HERE TOO, not only inside {@see readLine()}, and
-     * the loop below is why: a server that has already flushed a burst of
-     * notifications into {@see $readBuffer} is served entirely from that buffer,
-     * so `readLine()` never reaches the `stream_select()` where its own check
-     * lives. Skipping a notification is not progress towards a response.
-     *
-     * @param float|null $deadline see {@see request()}
-     */
-    private function readResponse(string $id, ?float $deadline = null): ?McpMessage
-    {
-        while (true) {
-            if ($deadline !== null && microtime(true) >= $deadline) {
-                return null;
-            }
-
-            $line = $this->readLine($deadline);
-            if ($line === null) {
-                return null;
-            }
-
-            $message = McpMessage::parse($line);
-            if ($message === null) {
-                // Not JSON-RPC at all (e.g. `echo`/`cat` plumbing echoing our own
-                // text): treat as a failed exchange rather than looping forever.
-                return null;
-            }
-
-            // Skip server-initiated notifications and stale responses for other ids.
-            if ($message->isNotification() || ($message->id !== null && $message->id !== $id)) {
-                continue;
-            }
-
-            return $message;
-        }
-    }
-
-    /**
-     * Pull one newline-terminated line from the persistent buffer, refilling
-     * from the stdout pipe as needed.
-     *
-     * `stream_select()` + non-blocking `fread()` rather than `fgets()`, because
-     * `fgets()` on a blocking pipe cannot be bounded at all and
-     * `stream_set_timeout()` does not apply to a `proc_open()` pipe on this host
-     * (measured — see {@see start()}). A caller with no deadline gets the same
-     * wait-forever contract this method always had, in
-     * {@see READ_POLL_SECONDS} slices.
-     *
-     * A DEADLINE EXPIRY IS REPORTED AS `null`, i.e. indistinguishably from EOF,
-     * and that is enough for both callers: {@see start()} treats either as "this
-     * server did not come up" and {@see callTool()} passes no deadline at all.
-     * Anything finer would be a distinction with no reader.
-     *
-     * ⚠️ THIS METHOD OWNS THE FRAME CAP'S ONLY CALL SITE, AND THAT CALL IS A
-     * DECLARED SURVIVOR OF THE SUITE. The refill loop below calls
-     * {@see refuseAnOversizedFrame()} on every pass, which is what stops a peer
-     * that streams without ever sending a newline growing `$readBuffer` for the
-     * life of the process — the same unbounded-state defect
-     * {@see MAX_STDERR_BYTES} exists to close one field over.
-     * {@see \SugarCraft\Crush\Tests\MCP\McpFrameCapTest} pins the CHECK by
-     * reflection, in both polarities, but deliberately does NOT cover this line:
-     * deleting the call is a mutation those rows do not kill. Reaching it needs
-     * a child that writes 64 MiB into a pipe with no newline, minutes of
-     * throughput for a property {@see \SugarCraft\Crush\ClaudeCodeMcpClient}
-     * already pins end to end against a real child. If that trade stops looking
-     * right the row to add is a fixture child, not another reflection call.
-     *
-     * @param float|null $deadline see {@see request()}
-     */
-    private function readLine(?float $deadline = null): ?string
-    {
-        while (($newline = strpos($this->readBuffer, "\n")) === false) {
-            // No pipe to refill from (process down) — flush any trailing bytes.
-            if ($this->pipes === null) {
-                return $this->readBuffer === '' ? null : $this->drainBuffer();
-            }
-
-            $remaining = $deadline === null ? null : $deadline - microtime(true);
-            if ($remaining !== null && $remaining <= 0.0) {
-                return $this->readBuffer === '' ? null : $this->drainBuffer();
-            }
-
-            // `is_resource()`, NOT `@`, AND NOT `$this->pipes !== null` ALONE.
-            // MEASURED on this host (PHP 8.3.6, Linux 6.8), three consecutive
-            // takes, identical every time — every one of these is an EXCEPTION
-            // and `@` suppresses none of them, because `@` silences diagnostics
-            // and not throws:
-            //
-            //     stream_select() with a closed fd as the ONLY entry across all
-            //         three arrays  ->  ValueError: No stream arrays were passed
-            //     stream_select() with a closed fd beside an open one
-            //         ->  TypeError: supplied resource is not a valid stream resource
-            //     fread() / feof() / fwrite() on a closed pipe  ->  TypeError
-            //
-            // WHICH of the two `stream_select()` raises depends on whether
-            // {@see $stderrOpen} put fd 2 in the read set, so a guard written to
-            // catch one class BY NAME would miss the other. Both are exceptions;
-            // that is the load-bearing half.
-            //
-            // THE WINDOW IS THIS CLASS'S OWN, and it is why `pipes !== null` is
-            // not the same question. {@see stop()} calls {@see closePipes()}
-            // FIRST — the EOF that lets a well-behaved server leave without
-            // paying the escalation — and only nulls the field after
-            // `proc_close()` has returned, so the field holds three CLOSED
-            // resources for the whole SIGTERM grace, the signal-9 grace and the
-            // wait. Nothing in this synchronous class re-enters that window
-            // today, which is exactly what {@see \SugarCraft\Crush\LSP\LspConnection}
-            // could have said and chose not to.
-            if (!is_resource($this->pipes[1])) {
-                return $this->readBuffer === '' ? null : $this->drainBuffer();
-            }
-
-            $read = [$this->pipes[1]];
-            if ($this->stderrOpen && is_resource($this->pipes[2])) {
-                $read[] = $this->pipes[2];
-            }
-            $write = [];
-            $except = [];
-            $seconds = $remaining === null ? self::READ_POLL_SECONDS : (int) $remaining;
-            $micros = $remaining === null ? 0 : (int) (($remaining - $seconds) * 1_000_000);
-
-            // `@`, because a signal arriving mid-select (the suite's own
-            // `pcntl_alarm()` time limit, a SIGCHLD) makes `stream_select()`
-            // return false with an `Interrupted system call` warning, and an
-            // EINTR is not an error this method should report — it should retry.
-            // A genuinely broken stream is caught by the `feof()` below.
-            $ready = @stream_select($read, $write, $except, $seconds, $micros);
-            if ($ready === false) {
-                if (feof($this->pipes[1])) {
-                    return $this->readBuffer === '' ? null : $this->drainBuffer();
-                }
-
-                // Yield before retrying. An EINTR is not slowed by a millisecond,
-                // and it is what stops a persistently failing `select()` on the
-                // deadline-less path turning a block into a spin.
-                usleep(1000);
-
-                continue;
-            }
-
-            if ($ready === 0) {
-                // Nothing to read within the slice. With a deadline the loop
-                // re-checks it at the top and gives up; without one it waits on.
-                continue;
-            }
-
-            // STDERR FIRST, AND UNCONDITIONALLY WHENEVER IT IS READY. Freeing
-            // the child's stderr buffer is what lets it get back to writing the
-            // stdout line this loop is waiting for, so it is progress even
-            // though it produces no line.
-            if ($this->stderrOpen && in_array($this->pipes[2], $read, true)) {
-                $this->absorbStderr();
-            }
-
-            if (!in_array($this->pipes[1], $read, true)) {
-                // Only stderr woke us. Nothing to parse; go round again — the
-                // deadline is re-checked at the top of the loop, so a server
-                // that emits stderr forever and never answers still gives up on
-                // schedule rather than being kept alive by its own noise.
-                continue;
-            }
-
-            $chunk = fread($this->pipes[1], 8192);
-            if ($chunk === false || $chunk === '') {
-                if (feof($this->pipes[1])) {
-                    // EOF with leftover buffered bytes: emit them as the final line.
-                    return $this->readBuffer === '' ? null : $this->drainBuffer();
-                }
-
-                // Readable but nothing there and not EOF: a spurious wakeup.
-                // Yield rather than spinning the CPU while the deadline (or the
-                // caller's patience) runs down.
-                usleep(1000);
-
-                continue;
-            }
-            $this->readBuffer .= $chunk;
-            $this->refuseAnOversizedFrame();
-        }
-
-        $line = substr($this->readBuffer, 0, $newline);
-        $this->readBuffer = substr($this->readBuffer, $newline + 1);
-
-        return trim($line);
-    }
-
-    /**
-     * Take whatever is waiting on fd 2 and keep the tail of it.
-     *
-     * HOW THIS DIFFERS FROM {@see \SugarCraft\Crush\Providers\ClaudeCodeProvider::completeStream()},
-     * which is the same defect fixed in a different shape. A copied fix would
-     * have been wrong in three ways:
-     *
-     *  1. LIFETIME. That method drains both pipes in ONE loop that runs until
-     *     both reach EOF, inside a single generator. This class is a long-lived
-     *     session: many `request()`/`readResponse()` round trips, and
-     *     {@see readLine()} returns on a NEWLINE with the child still alive and
-     *     both pipes still open. There is no "read to EOF" to hang the drain on,
-     *     so stderr's own EOF has to be tracked as separate state
-     *     ({@see $stderrOpen}) instead of falling out of a loop condition.
-     *  2. THE FAILURE A NAIVE DRAIN SUBSTITUTES. A pipe at EOF is permanently
-     *     readable. Leaving fd 2 in the `select()` set after the child closes it
-     *     turns the unbounded {@see callTool()} wait into a busy spin, so the
-     *     EOF branch below MUST clear the flag. The provider's loop cannot hit
-     *     this because reaching EOF is how it terminates.
-     *  3. HOW BAD THE ORIGINAL WAS. The provider's wedge sat on a one-shot
-     *     failure path. Here {@see callTool()} passes NO deadline at all — by
-     *     design, a tool call may legitimately run for minutes — so the wedge
-     *     was permanent rather than bounded, and {@see start()}'s was bounded
-     *     only by the 60s handshake budget.
-     *
-     * A fourth difference is about the bytes rather than the loop: the provider
-     * already needed stderr for its `RuntimeException` message, whereas nothing
-     * here consumed fd 2 at all. {@see stderrTailForDiagnostics()} is therefore a
-     * NEW diagnostic, not a preserved one.
-     */
-    private function absorbStderr(): void
-    {
-        // `is_resource()` as well as the flag — see {@see readLine()} for the
-        // measurement. This site is the one E476's own list did not name.
-        //
-        // ON THE E367 CITE, WHICH THIS GOT BACKWARDS IN BOTH HALVES.
-        // WHAT IT SAID: that this `fread()` "is the exact call
-        // {@see \SugarCraft\Crush\LSP\LspConnection::drainStderr()}'s doc-block
-        // cites E367 about".
-        // WHAT IS TRUE NOW: `drainStderr()`'s DOC-BLOCK does not mention E367 at
-        // all — the reference is a BODY comment on its own `is_resource()` guard;
-        // and that comment does not cite E367 as being about either call. E367
-        // was an `@stream_get_contents()` on an fclose'd pipe ONE FILE OVER,
-        // where the suppression meant the RuntimeException being built was never
-        // constructed. It is cited there as THE SAME MISTAKE, not as that call.
-        // WHY THE CITE STILL EARNS ITS PLACE: E367 is why the guard is
-        // `is_resource()` and not `@` — `@` silences diagnostics and not throws,
-        // so on a closed pipe the TypeError escapes either way. That is the
-        // reason this line exists, and deleting the pointer would leave the next
-        // reader free to "simplify" it back to an `@`.
-        if (!$this->stderrOpen || $this->pipes === null || !is_resource($this->pipes[2])) {
-            return;
-        }
-
-        $chunk = fread($this->pipes[2], 8192);
-
-        if ($chunk === false || ($chunk === '' && feof($this->pipes[2]))) {
-            // The child closed stderr (or the stream broke). Stop selecting on
-            // it — see difference 2 above.
-            $this->stderrOpen = false;
-
-            return;
-        }
-
-        if ($chunk === '') {
-            // Readable, nothing there, not EOF: a spurious wakeup, same as the
-            // stdout path handles.
-            return;
-        }
-
-        $this->stderrTail .= $chunk;
-
-        if (strlen($this->stderrTail) > self::MAX_STDERR_BYTES) {
-            $this->stderrTail = substr($this->stderrTail, -self::MAX_STDERR_BYTES);
-        }
-    }
-
-    /**
-     * The child's stderr tail, as a suffix for a failure message — empty string
-     * when it said nothing, so a caller can concatenate unconditionally.
-     */
-    private function stderrTailForDiagnostics(): string
-    {
-        $tail = trim($this->stderrTail);
-
-        if ($tail === '') {
-            return '';
-        }
-
-        return strlen($this->stderrTail) >= self::MAX_STDERR_BYTES
-            ? ' [stderr truncated] ' . $tail
-            : ' stderr: ' . $tail;
-    }
-
-    /**
-     * Refuse a frame that has passed {@see MAX_FRAME_BYTES} with no terminator.
-     *
-     * The buffer is CLEARED before the throw, so a caller that survives the
-     * exception — {@see \SugarCraft\Crush\MCP\McpClient::startServer()} drops
-     * the server, {@see \SugarCraft\Crush\Tools\McpToolBridge::execute()}
-     * turns it into a tool result — is not left with a live object still holding
-     * 64 MiB it can never parse.
-     *
-     * @throws \RuntimeException when the cap is passed
-     */
-    private function refuseAnOversizedFrame(): void
-    {
-        if (strlen($this->readBuffer) <= self::MAX_FRAME_BYTES) {
-            return;
-        }
-
-        $held = strlen($this->readBuffer);
-        $this->readBuffer = '';
-
-        throw new \RuntimeException(sprintf(
-            'MCP server %s sent %d bytes with no newline, past this client\'s %d-byte frame '
-            . 'cap; the buffer was dropped rather than truncated, because half a frame parses '
-            . 'as a malformed message and would blame the server for this side\'s refusal',
-            $this->name,
-            $held,
-            self::MAX_FRAME_BYTES,
-        ));
-    }
-
-    /** Consume and return the entire pending buffer as one trimmed line. */
-    private function drainBuffer(): string
-    {
-        $line = $this->readBuffer;
-        $this->readBuffer = '';
-
-        return trim($line);
-    }
-
-    /**
-     * Turn a `tools/list` reply into {@see McpTool}s, SKIPPING the entries a
-     * third party got wrong instead of failing the server over them.
-     *
-     * ⚠️ THE TYPE FILTER MOVED, AND THE MOVE IS THE POINT.
-     * WHAT THIS SAID: a `TOOL_DEFINITION_TYPES` const and a
-     * `toolDefinitionIsWellTyped()` lived HERE, with a doc-block calling itself
-     * "a hand mirror of another class" and naming that as the hazard.
-     * WHAT IS TRUE NOW: both live on {@see McpTool} itself, reached through
-     * {@see McpTool::tryFromArray()}, because {@see HttpMcpServer::parseTools()}
-     * needed the identical filter and a copy would have made one mirror into
-     * two. The measurement, the `isset()`-not-`array_key_exists()` reasoning and
-     * the reason the table is a const are all carried over verbatim there.
-     * WHY THIS STILL EARNS A NOTE HERE: the `is_array($def)` below is NOT
-     * redundant with the filter. `tryFromArray()` takes `array $data`, so a
-     * scalar entry in the list — `{"tools":["write"]}`, which a peer is equally
-     * free to send — is a `TypeError` at the call rather than a skip. And the
-     * `is_array($toolDefs)` above it is a THIRD question again, about the
-     * CONTAINER: `?? []` covers `tools` being absent, not `tools` being a
-     * string. All three answer different questions and all three are
-     * load-bearing; the note used to say "two" and enumerate two.
-     *
-     * @param array<mixed> $response
-     * @return array<McpTool>
-     */
-    private function parseTools(array $response): array
-    {
-        $tools = [];
-        $toolDefs = $response['result']['tools'] ?? [];
-
-        // THE CONTAINER, not the entries. `?? []` only covers `tools` being
-        // ABSENT or null; a peer that sends `{"result":{"tools":"nope"}}` gets
-        // past it with a string, and `foreach` over a string is a PHP warning
-        // (measured, PHP 8.3.6) plus zero iterations. Same family as the
-        // `is_array($def)` skip below, one level up.
-        if (!is_array($toolDefs)) {
-            $toolDefs = [];
-        }
-
-        foreach ($toolDefs as $def) {
-            if (!is_array($def)) {
-                continue;
-            }
-
-            $tool = McpTool::tryFromArray($def, $this->name);
-            if ($tool !== null) {
-                $tools[] = $tool;
-            }
-        }
-
-        return $tools;
+        return $this->transport->callTool($toolName, $args);
     }
 }

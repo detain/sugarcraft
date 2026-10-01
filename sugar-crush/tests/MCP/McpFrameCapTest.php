@@ -5,38 +5,34 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\MCP;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\ClaudeCodeMcpClient;
-use SugarCraft\Crush\MCP\StdioMcpServer;
 
 /**
- * THE TWO NDJSON FRAMERS KEPT A PERSISTENT READ BUFFER AND CAPPED NEITHER OF
- * THEM, WHILE CAPPING THEIR STDERR TAILS IN THE SAME FILE FOR THE SAME REASON.
+ * THE FRAME CAP FAMILY, PRODUCT SIDE, AFTER PHASE-2a.
  *
- * `MAX_STDERR_BYTES = 65536` exists in both classes because a long-lived process
- * must not grow a buffer without limit. `$readBuffer` is the same kind of state
- * with the same lifetime — {@see StdioMcpServer} holds it across every
- * `request()`/`readResponse()` round trip, and {@see ClaudeCodeMcpClient} polls
+ * `MAX_STDERR_BYTES = 65536` exists in both remaining product framers because a
+ * long-lived process must not grow a buffer without limit. `$readBuffer` is the
+ * same kind of state with the same lifetime — {@see ClaudeCodeMcpClient} polls
  * `readMessages()` a hundred times per `callTool()` — and a peer that emits an
- * endless stream WITH NO NEWLINE grew both without bound for the life of the
- * process. The asymmetry was inside one file in each case.
+ * endless stream WITH NO NEWLINE grew it without bound for the life of the
+ * process. The third member of that family, the stdio transport, moved into
+ * `sugarcraft/sugar-mcp` at phase-2a: its cap rows — the oversized-frame
+ * refusal, the drop, and the exactly-at-cap positive half, all driven through
+ * the real reader — now live in the library suite
+ * in the library's own suite), pinned STRONGER than the
+ * reflection rows this file used to carry.
  *
- * ⚠️ EVERY ROW HERE COMES IN A PAIR, AND THE SECOND HALF IS THE LOAD-BEARING
+ * What remains here is the {@see ClaudeCodeMcpClient} pair (its rows drive the
+ * REAL `readMessages()` against a REAL child, so they cover the call site as
+ * well as the check) plus the cross-class equality row, which now derives the
+ * stdio arm from the library constant instead of a crush declaration.
+ *
+ * ⚠️ EVERY CAP ROW COMES IN A PAIR, AND THE SECOND HALF IS THE LOAD-BEARING
  * ONE. "The buffer did not grow" is satisfied perfectly by a reader that has
  * stopped reading, and "an oversized frame is refused" is satisfied by a class
  * that refuses everything. So each cap is checked at `cap + 1` AND at exactly
  * `cap`, where the answer must be silence.
- *
- * ⚠️ SCOPE, SAID PLAINLY. The {@see ClaudeCodeMcpClient} rows drive the REAL
- * `readMessages()` against a REAL child, so they cover the call site as well as
- * the check. The {@see StdioMcpServer} rows invoke its private
- * `refuseAnOversizedFrame()` directly, so they cover the CHECK and not the one
- * line in `readLine()` that calls it: deleting that call is a mutation these
- * rows do not kill. It survives on purpose rather than by oversight — reaching
- * it needs a child that writes 64 MiB into a pipe with no newline, which is
- * minutes of throughput for a property the sibling class already pins end to
- * end. The call site is instead held by the `readLine()` doc-block, which names
- * this file and this trade explicitly; if that trade stops looking right, the
- * row to add is a fixture child, not another reflection call.
  *
  * ⚠️ AND THE CATCHES HERE ARE NARROW ON PURPOSE — the `fail()` sits OUTSIDE the
  * `try`, not inside it. `$this->fail()` raises `AssertionFailedError`, which
@@ -83,59 +79,6 @@ final class McpFrameCapTest extends TestCase
         @rmdir($this->workDir);
 
         parent::tearDown();
-    }
-
-    public function testStdioServerRefusesAFramePastTheCapAndDropsTheBuffer(): void
-    {
-        $server = new StdioMcpServer('capped', PHP_BINARY, [], []);
-        $cap = self::capOf(StdioMcpServer::class);
-
-        $this->setBuffer($server, str_repeat('x', $cap + 1));
-
-        $caught = null;
-
-        try {
-            $this->refuse($server);
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
-
-        $this->assertNotNull($caught, 'a frame past the cap was accepted');
-        $this->assertStringContainsString(
-            (string) $cap,
-            $caught->getMessage(),
-            'the refusal must name the cap, or the reader cannot tell "this side refused" '
-            . 'from "the server sent garbage"',
-        );
-        $this->assertStringContainsString('capped', $caught->getMessage(), 'and it must name the server');
-
-        $this->assertSame(
-            '',
-            $this->buffer($server),
-            'the buffer was kept. A live object still holding 64 MiB it can never parse is '
-            . 'the leak this cap exists to close, not merely a diagnostic nicety.',
-        );
-    }
-
-    /**
-     * THE POSITIVE HALF. Exactly at the cap is silence — otherwise the row above
-     * is satisfied by a guard that refuses every frame, and by a `>=` where a
-     * `>` belongs.
-     */
-    public function testStdioServerAcceptsAFrameExactlyAtTheCap(): void
-    {
-        $server = new StdioMcpServer('capped', PHP_BINARY, [], []);
-        $cap = self::capOf(StdioMcpServer::class);
-
-        $this->setBuffer($server, str_repeat('x', $cap));
-        $this->refuse($server);
-
-        $this->assertSame(
-            $cap,
-            strlen($this->buffer($server)),
-            'a frame of exactly the cap must be kept whole — an off-by-one here truncates '
-            . 'the largest legitimate payload the transport allows',
-        );
     }
 
     public function testClaudeCodeClientRefusesAFramePastTheCapAndDropsTheBuffer(): void
@@ -207,14 +150,19 @@ final class McpFrameCapTest extends TestCase
 
     public function testBothClassesDeclareTheSameCapAndItIsTheFrameCapNotTheStderrCap(): void
     {
-        $stdio = self::capOf(StdioMcpServer::class);
+        $stdio = self::capOf(\SugarCraft\Mcp\StdioMcpServer::class);
         $claude = self::capOf(ClaudeCodeMcpClient::class);
 
-        $this->assertSame(64 * 1024 * 1024, $stdio, 'StdioMcpServer::MAX_FRAME_BYTES moved');
-        $this->assertSame($stdio, $claude, 'the two NDJSON framers disagree about the frame cap');
-        $this->assertNotSame(
+        $this->assertSame(64 * 1024 * 1024, $stdio, 'the library transport\'s MAX_FRAME_BYTES moved');
+        $this->assertSame($stdio, $claude, 'the product framer and the library transport disagree about the frame cap');
+        $this->assertSame(
             $stdio,
-            (new \ReflectionClass(StdioMcpServer::class))->getConstant('MAX_STDERR_BYTES'),
+            EngineBackend::MAX_FRAME_BYTES,
+            'the family cap this transport inherits from the engine has drifted apart from it',
+        );
+        $this->assertNotSame(
+            $claude,
+            (new \ReflectionClass(ClaudeCodeMcpClient::class))->getConstant('MAX_STDERR_BYTES'),
             'the frame cap and the stderr cap have collapsed into one number. They answer '
             . 'different questions: 65536 is one pipe buffer, which is where an undrained '
             . 'stderr stops the child dead; the frame cap is how large a legitimate payload '
@@ -246,12 +194,6 @@ final class McpFrameCapTest extends TestCase
         $value = (new \ReflectionProperty($target, 'readBuffer'))->getValue($target);
 
         return $value;
-    }
-
-    /** Invoke StdioMcpServer's private cap check against its current buffer. */
-    private function refuse(StdioMcpServer $server): void
-    {
-        (new \ReflectionMethod($server, 'refuseAnOversizedFrame'))->invoke($server);
     }
 
     /**

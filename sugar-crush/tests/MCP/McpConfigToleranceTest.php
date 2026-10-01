@@ -466,16 +466,36 @@ final class McpConfigToleranceTest extends TestCase
         return ['class' => $server::class];
     }
 
+    /**
+     * phase-2a: the stdio adapter stores no spawn config of its own — the raw
+     * command/args/env ride on the library transport it wraps, so the stdio leg
+     * reads them there. The other classes keep their own properties.
+     */
+    private function tolStdioInner(McpServer $server): object
+    {
+        if (!$server instanceof StdioMcpServer) {
+            return $server;
+        }
+
+        $transport = new \ReflectionProperty($server, 'transport');
+        $transport->setAccessible(true);
+
+        /** @var object $inner */
+        $inner = $transport->getValue($server);
+
+        return $inner;
+    }
+
     private function tolCommand(McpServer $server): string
     {
-        return (string) (new \ReflectionProperty($server, 'command'))->getValue($server);
+        return (string) (new \ReflectionProperty($this->tolStdioInner($server), 'command'))->getValue($this->tolStdioInner($server));
     }
 
     /** @return list<string> */
     private function tolArgs(McpServer $server): array
     {
         /** @var list<string> $args */
-        $args = (new \ReflectionProperty($server, 'args'))->getValue($server);
+        $args = (new \ReflectionProperty($this->tolStdioInner($server), 'args'))->getValue($this->tolStdioInner($server));
 
         return $args;
     }
@@ -484,7 +504,7 @@ final class McpConfigToleranceTest extends TestCase
     private function tolEnv(McpServer $server): array
     {
         /** @var array<string, string> $env */
-        $env = (new \ReflectionProperty($server, 'env'))->getValue($server);
+        $env = (new \ReflectionProperty($this->tolStdioInner($server), 'env'))->getValue($this->tolStdioInner($server));
 
         return $env;
     }

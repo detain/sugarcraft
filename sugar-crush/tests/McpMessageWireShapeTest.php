@@ -301,7 +301,7 @@ final class McpMessageWireShapeTest extends TestCase
      * ABOUT IN PROSE.
      *
      * `McpMessage::parse()` has TWO callers, not one:
-     * {@see \SugarCraft\Crush\MCP\StdioMcpServer::readResponse()} and
+     * {@see \SugarCraft\Mcp\StdioMcpServer::readResponse()} (phase-2a home: `sugarcraft/sugar-mcp`) and
      * {@see ClaudeCodeMcpClient::readMessages()}. Every artefact of round 55
      * discussed `resultSet` as though the first were the only one, so this
      * method's output grew a shape nobody had looked at: a line such as

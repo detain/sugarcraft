@@ -409,7 +409,7 @@ final class SwallowingCatchCensusTest extends TestCase
             1,
             $oneHop,
             'an assertion reached through a same-file helper is invisible again — that is exactly '
-            . 'the blind spot E572 named, and the StdioMcpServerHandshakeTest::timeStartOf() class '
+            . 'the blind spot E572 named, and the (pre-phase-2a) stdio HandshakeTest::timeStartOf() class '
             . 'of silent pass this census exists to stop',
         );
         self::assertSame('offender', $oneHop[0]['verdict']);

@@ -657,7 +657,7 @@ final class LspConnection implements LspConnectionInterface
      * WHAT THIS USED TO BE: one `@fwrite()` to a BLOCKING `pipes[0]`, with only
      * `=== false` checked. Two defects in four lines, and they are the third and
      * fourth instances of one family — {@see \SugarCraft\Crush\Providers\ClaudeCodeProvider::completeStream()}
-     * and {@see \SugarCraft\Crush\MCP\StdioMcpServer::writeLine()} are the two
+     * and {@see \SugarCraft\Mcp\StdioMcpServer::writeLine()} (phase-2a: `sugarcraft/sugar-mcp`) are the two
      * already fixed.
      *
      *  1. THE DEADLOCK. {@see connect()} took fds 1 and 2 out of blocking mode
@@ -679,7 +679,7 @@ final class LspConnection implements LspConnectionInterface
      *     asymmetry is why {@see $framingBroken} exists and neither of them
      *     needed it.
      *
-     * HOW THE LOOP DIFFERS FROM {@see \SugarCraft\Crush\MCP\StdioMcpServer::writeLine()},
+     * HOW THE LOOP DIFFERS FROM {@see \SugarCraft\Mcp\StdioMcpServer::writeLine()},
      * which is the nearest fixed site (E442 records that a third copy must read
      * the differences before copying either):
      *
@@ -702,7 +702,7 @@ final class LspConnection implements LspConnectionInterface
      *     {@see abandonWrite()} decides.
      *
      *  d. THE NULL DEADLINE HAS NO DEFAULT HERE, AND THAT IS NOT COSMETIC.
-     *     `StdioMcpServer::writeLine()` keeps `= null` because
+     *     `\SugarCraft\Mcp\StdioMcpServer::writeLine()` keeps `= null` because
      *     {@see \SugarCraft\Crush\MCP\StdioMcpServer::callTool()} genuinely
      *     wants it. No caller here does — both send paths pass
      *     `microtime(true) + $this->requestTimeout` — and the null path is far
@@ -766,7 +766,7 @@ final class LspConnection implements LspConnectionInterface
         // the loop's doc-block is that fd 2 is drained rather than selected on —
         // so PHP drops the invalid resource and then finds every array empty:
         // `ValueError: No stream arrays were passed`.
-        // {@see \SugarCraft\Crush\MCP\StdioMcpServer::writeLine()} keeps an open
+        // {@see \SugarCraft\Mcp\StdioMcpServer::writeLine()} keeps an open
         // fd 2 in its read set, so the same closed fd 0 there raises
         // `TypeError: stream_select(): supplied resource is not a valid stream
         // resource` instead. Same guard, same reason; different class name.

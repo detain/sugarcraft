@@ -180,7 +180,7 @@ final class HttpMcpServer implements McpServer
      * remote got wrong instead of failing the server over them.
      *
      * ⚠️ `is_array($def)` ALONE WAS NOT ENOUGH HERE EITHER, AND THIS HALF STAYED
-     * OPEN A ROUND LONGER THAN ITS TWIN. {@see StdioMcpServer::parseTools()} was
+     * OPEN A ROUND LONGER THAN ITS TWIN. {@see \SugarCraft\Mcp\StdioMcpServer::parseTools()} was
      * given a type filter for the measured `{"tools":[{"name":5}]}` kill; this
      * method was character-identical to the version that had the gap, and the
      * gap is WORSE over HTTP than over stdio in one specific way: {@see start()}
