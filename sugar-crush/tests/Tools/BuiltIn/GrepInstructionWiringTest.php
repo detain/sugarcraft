@@ -31,6 +31,9 @@ use SugarCraft\Crush\Tools\ParallelSafe;
  */
 final class GrepInstructionWiringTest extends TestCase
 {
+    /** Filler bytes padding the clipped-but-announced probe's target line. */
+    private const CLIP_PROBE_PAD = 2000;
+
     private string $dir = '';
 
     protected function setUp(): void
@@ -406,6 +409,19 @@ final class GrepInstructionWiringTest extends TestCase
      * three regimes: without competing hits the target is visible at every cap
      * and the dead band is reachable; with 200 of them the clip drops it and
      * the clipped-but-announced regime is reachable.
+     *
+     * WHAT THIS SWEEP ASSUMED, AND WHERE IT WAS FALSE: the clipped-but-
+     * announced leg used to be accumulated from the sweep on the belief that
+     * the target "sorts last among the hits". GNU grep -r walks its directory
+     * in readdir order, and ext4's dir_index hashes the name — measured
+     * 2026-10-01, a fresh 201-file tree on this box's ext4 placed
+     * target.zzz.php at position 25/201, and the hash seed varies per
+     * filesystem, so a runner that hashes it near the front puts the target's
+     * bytes under any cap the affordability floor still allows, and the sweep
+     * never sees that regime there. That is the intermittent :468 red. The
+     * sweep keeps its two laws for EVERY position; the regime it could not
+     * guarantee is now PROBED once at a cap derived from where the walk
+     * actually put the target, for any position it lands in.
      */
     public function testTheAnnounceOnceMarkIsSpentOnlyOnAHitTheModelWasToldAbout(): void
     {
@@ -413,7 +429,6 @@ final class GrepInstructionWiringTest extends TestCase
 
         $seenVisibleAnnounced = false;
         $seenVisibleDeferred = false;
-        $seenClippedAnnounced = false;
 
         foreach ([0, 200] as $competing) {
             $root = $this->fixture($competing);
@@ -456,16 +471,16 @@ final class GrepInstructionWiringTest extends TestCase
 
                 $seenVisibleAnnounced = $seenVisibleAnnounced || ($visible && $announced);
                 $seenVisibleDeferred = $seenVisibleDeferred || ($visible && !$announced);
-                $seenClippedAnnounced = $seenClippedAnnounced || (!$visible && $announced);
             }
         }
 
-        // The sweep has to REACH all three regimes or the laws above are being
-        // asserted over a fixture that cannot test them — which is exactly the
-        // defect this test was rewritten for.
+        // The sweep has to REACH the two regimes the laws speak about, or the
+        // laws above are being asserted over a fixture that cannot test them
+        // — which is exactly the defect this test was rewritten for. (The
+        // third regime, clipped-but-announced, is probed deterministically
+        // below rather than swept — see the doc-block.)
         self::assertTrue($seenVisibleAnnounced, 'the sweep must include caps where the hit survives and is announced');
         self::assertTrue($seenVisibleDeferred, 'the sweep must include the dead band: the hit is visible and the entry does not fit');
-        self::assertTrue($seenClippedAnnounced, 'the sweep must include caps where the clip dropped the hit and the skill was announced anyway');
 
         // THE DIVISOR ITSELF, bracketed at the byte. The sweep above steps in
         // 250s while the window where an eighth and a ninth disagree is
@@ -486,6 +501,45 @@ final class GrepInstructionWiringTest extends TestCase
             $this->grepIn($oneHit, new Grep($oneHit, $threshold - 1, skillNudge: $this->zzzNudge())),
             'one byte lower an eighth is one byte short of the floor, so nothing may be emitted — without this '
             . 'half of the bracket every divisor larger than 8 passes too',
+        );
+
+        // THE CLIPPED-BUT-ANNOUNCED REGIME, order-independently. The padded
+        // fixture makes the target's own line long enough to park the cut
+        // inside it, so the cap that drops the target is derived from where
+        // the walk actually placed the target instead of hoping readdir
+        // hashes it last. Body cap = cap - floor - 1 (the nudge's emitted
+        // bytes plus the reserved separator); at + floor + 1 + pad/2 puts
+        // that cut pad/2 bytes into the padding for ANY position `at`, and
+        // the max() keeps the eighth affordable so the announce side of the
+        // regime is demanded, not excused. Visibility is read as ":2:" —
+        // the short second hit line — because a clip whose window holds no
+        // newline legitimately keeps a partial ":1:" (clipToLine), while
+        // ":2:" can only survive if the whole padded line did.
+        $padRoot = $this->fixture(200, self::CLIP_PROBE_PAD);
+        $stream = $this->grepIn($padRoot, new Grep($padRoot, 0)); // uncapped: raw hit list, offsets align with the clipped body
+        $at = strpos($stream, $padRoot . '/sub/target.zzz.php:1:');
+        self::assertNotFalse($at, 'the padded fixture must produce a target hit line');
+
+        $cap = max(8 * $floor, $at + $floor + 1 + intdiv(self::CLIP_PROBE_PAD, 2));
+        $probeNudge = $this->zzzNudge();
+        $clipped = $this->grepIn($padRoot, new Grep($padRoot, $cap, skillNudge: $probeNudge));
+
+        self::assertStringNotContainsString(
+            '/sub/target.zzz.php:2:',
+            $clipped,
+            "cap $cap with the target at byte $at: the body cut falls inside the padded line, so the target's "
+            . 'second hit line must not survive — this is the regime the sweep could not guarantee on every readdir hash',
+        );
+        self::assertStringContainsString(
+            'zzz-audit',
+            $clipped,
+            "cap $cap with the target at byte $at: the hit line-start is inside the captured output and an eighth "
+            . 'covers the entry, so the skill is announced even though the clip dropped the hit',
+        );
+        self::assertSame(
+            ['zzz-audit'],
+            $probeNudge->announced(),
+            'the clipped-but-announced probe spent its mark on a hit it told about — Law 1 at the regime the sweep no longer covers',
         );
     }
 
@@ -576,10 +630,16 @@ final class GrepInstructionWiringTest extends TestCase
      *
      * Separate roots per regime, and not one shared tree, because the number
      * of competing hits is what decides which regime a cap lands in.
+     *
+     * With $pad the target's hit line carries that many filler bytes after
+     * `needle-`, so the clip cut can be parked INSIDE the target's own line
+     * at a distance the caller controls — the walk still lands the target
+     * wherever readdir hashes it, and the pad makes "where the bytes run out"
+     * a function of the cap rather than of the hash.
      */
-    private function fixture(int $competing): string
+    private function fixture(int $competing, int $pad = 0): string
     {
-        $root = $this->dir . '/r' . $competing;
+        $root = $this->dir . '/r' . $competing . ($pad > 0 ? '-pad' . $pad : '');
         if (is_dir($root)) {
             return $root;
         }
@@ -588,8 +648,21 @@ final class GrepInstructionWiringTest extends TestCase
         for ($i = 0; $i < $competing; $i++) {
             file_put_contents(sprintf('%s/sub/f%03d.php', $root, $i), "<?php // needle\n");
         }
-        // Sorts last among the hits, so it is the one most likely to land
-        // between the probe's cut and the result's.
+        if ($pad > 0) {
+            // Line 1 matches and is padded; line 2 matches short. Dropping
+            // ":2:" from the result is then unambiguous proof the cut fell
+            // inside line 1 — a partial ":1:" can legally survive a clip
+            // whose window holds no newline (TruncatesOutput::clipToLine).
+            file_put_contents(
+                $root . '/sub/target.zzz.php',
+                "<?php // needle-" . str_repeat('p', $pad) . "\n// needle-second-line\n",
+            );
+
+            return $root;
+        }
+        // Where the walk places this file among the hits is readdir's hash,
+        // not its name (see the clipped-but-announced probe for why the
+        // ordering claim that used to live here was false).
         file_put_contents($root . '/sub/target.zzz.php', "<?php // needle\n");
 
         return $root;
