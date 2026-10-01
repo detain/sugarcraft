@@ -6864,8 +6864,10 @@
         "depth": "16",
         "colors": 15,
         "description": "Five-row candy-colored block banner over a vast 23x14 minefield with numbers, flags and timer footer",
-        "rating": null,
-        "tags": []
+        "rating": 4,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mines/candy-mines-1-16-m-1.ansi": {
         "name": "candy-mines-1-16-m-1.ansi",
@@ -6876,8 +6878,10 @@
         "depth": "16",
         "colors": 16,
         "description": "Game-over frame — 16x6 board with exploded red cell, BOOM status, debris and retry legend",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mines/candy-mines-1-16-m-2.ansi": {
         "name": "candy-mines-1-16-m-2.ansi",
@@ -6888,8 +6892,10 @@
         "depth": "16",
         "colors": 13,
         "description": "Twilight sky bands with block-letter CANDY MINES title over a gridded perspective minefield with flags",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mines/candy-mines-1-16-s-1.ansi": {
         "name": "candy-mines-1-16-s-1.ansi",
@@ -6900,7 +6906,7 @@
         "depth": "16",
         "colors": 13,
         "description": "Mini minesweeper grid with glowing 3x3 safe ring around cursor cell, flag and timer HUD line",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mines/candy-mines-1-16-s-2.ansi": {
@@ -6912,7 +6918,7 @@
         "depth": "16",
         "colors": 14,
         "description": "Dusk ridge scene — half-block candy hills planted with flags, mine-glint field, blockletter wordmark",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mines/candy-mines-1-256-l-1.ansi": {
@@ -7068,7 +7074,7 @@
         "depth": "16",
         "colors": 10,
         "description": "expert board with difficulty sidebar and mine/time HUD status strip",
-        "rating": null,
+        "rating": 5,
         "tags": []
     },
     "candy-mines/candy-mines-2-16-l-2.ansi": {
@@ -7080,7 +7086,7 @@
         "depth": "16",
         "colors": 10,
         "description": "starry night minefield landscape with chain-reaction field note",
-        "rating": null,
+        "rating": 6,
         "tags": []
     },
     "candy-mines/candy-mines-2-16-m-1.ansi": {
@@ -7092,7 +7098,7 @@
         "depth": "16",
         "colors": 7,
         "description": "chord-reveal before/after comparison panels with [c] key callout",
-        "rating": null,
+        "rating": 5,
         "tags": []
     },
     "candy-mines/candy-mines-2-16-m-2.ansi": {
@@ -7104,7 +7110,7 @@
         "depth": "16",
         "colors": 10,
         "description": "partially cleared foggy field, centered wordmark over hidden mines",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mines/candy-mines-2-16-s-1.ansi": {
@@ -7116,7 +7122,7 @@
         "depth": "16",
         "colors": 7,
         "description": "block letter CANDY MINES wordmark over flag and number legend row",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mines/candy-mines-2-16-s-2.ansi": {
@@ -7128,7 +7134,7 @@
         "depth": "16",
         "colors": 9,
         "description": "rounded cell-legend box mapping hidden, flag, mine and counts 1-8",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mines/candy-mines-2-256-l-1.ansi": {
@@ -7284,7 +7290,7 @@
         "depth": "16",
         "colors": 6,
         "description": "field archaeology: board as dig cross-section with find ledger",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mines/candy-mines-3-16-l-2.ansi": {
@@ -7296,7 +7302,7 @@
         "depth": "16",
         "colors": 7,
         "description": "speedrun HUD: world-record-pace board with splits and meters",
-        "rating": null,
+        "rating": 5,
         "tags": []
     },
     "candy-mines/candy-mines-3-16-m-1.ansi": {
@@ -7308,7 +7314,7 @@
         "depth": "16",
         "colors": 6,
         "description": "chord mechanics three-panel diagram: survey, match, stroke",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mines/candy-mines-3-16-m-2.ansi": {
@@ -7320,8 +7326,10 @@
         "depth": "16",
         "colors": 7,
         "description": "hall of fame best-times table from stats.json",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mines/candy-mines-3-16-s-1.ansi": {
         "name": "candy-mines-3-16-s-1.ansi",
@@ -7332,7 +7340,7 @@
         "depth": "16",
         "colors": 6,
         "description": "endgame deduction puzzle №7: the 1-2-1 mirror proof",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mines/candy-mines-3-16-s-2.ansi": {
@@ -7344,7 +7352,7 @@
         "depth": "16",
         "colors": 6,
         "description": "50/50 tragedy: two veils, one mine, coin-flip death card",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mines/candy-mines-3-256-l-1.ansi": {
@@ -7524,8 +7532,10 @@
         "depth": "16",
         "colors": 8,
         "description": "orchestral first-click symphony: conductor score of numbered mine motifs",
-        "rating": null,
-        "tags": []
+        "rating": 4,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mines/candy-mines-4-16-l-2.ansi": {
         "name": "candy-mines-4-16-l-2.ansi",
@@ -7536,7 +7546,7 @@
         "depth": "16",
         "colors": 6,
         "description": "botanic garden cadastral survey: flower beds report buried treasure chests",
-        "rating": null,
+        "rating": 5,
         "tags": []
     },
     "candy-mines/candy-mines-4-16-m-1.ansi": {
@@ -7548,7 +7558,7 @@
         "depth": "16",
         "colors": 6,
         "description": "detective noir interrogation log: Det. Licorice grills suspect cell 7",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mines/candy-mines-4-16-m-2.ansi": {
@@ -7560,8 +7570,10 @@
         "depth": "16",
         "colors": 9,
         "description": "lighthouse keeper vs storm: beam rows sweep mined sea of number buoys",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mines/candy-mines-4-16-s-1.ansi": {
         "name": "candy-mines-4-16-s-1.ansi",
@@ -7572,8 +7584,10 @@
         "depth": "16",
         "colors": 8,
         "description": "candy-mine ore cart No.12 hauling number cubes 3-1-7-5-2 along candy rails",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mines/candy-mines-4-16-s-2.ansi": {
         "name": "candy-mines-4-16-s-2.ansi",
@@ -7584,8 +7598,10 @@
         "depth": "16",
         "colors": 5,
         "description": "weather bulletin: 990mb mine low hovering over cell D7 with detonation risk field",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mines/candy-mines-4-256-l-1.ansi": {
         "name": "candy-mines-4-256-l-1.ansi",
@@ -7740,8 +7756,10 @@
         "depth": "16",
         "colors": 10,
         "description": "grand hall chess endgame with chandeliers, scoreboard, arbiter and spectators",
-        "rating": null,
-        "tags": []
+        "rating": 4,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mines/candy-mines-5-16-l-2.ansi": {
         "name": "candy-mines-5-16-l-2.ansi",
@@ -7752,8 +7770,10 @@
         "depth": "16",
         "colors": 8,
         "description": "submarine bridge plot table: sonar scope with rings and contacts, gauge panel",
-        "rating": null,
-        "tags": []
+        "rating": 4,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mines/candy-mines-5-16-m-1.ansi": {
         "name": "candy-mines-5-16-m-1.ansi",
@@ -7764,7 +7784,7 @@
         "depth": "16",
         "colors": 10,
         "description": "chess endgame parlour board: king and mine-pawns versus the night side",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mines/candy-mines-5-16-m-2.ansi": {
@@ -7776,7 +7796,7 @@
         "depth": "16",
         "colors": 5,
         "description": "spider-web telegraph with numbered dew-drop nodes around a zero hub",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mines/candy-mines-5-16-s-1.ansi": {
@@ -7788,8 +7808,10 @@
         "depth": "16",
         "colors": 7,
         "description": "bees sweeping a hexagonal comb-minefield of numbered cells and patrol lanes",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mines/candy-mines-5-16-s-2.ansi": {
         "name": "candy-mines-5-16-s-2.ansi",
@@ -7800,8 +7822,10 @@
         "depth": "16",
         "colors": 7,
         "description": "pocket sonar dial ringing arcs over dark water with numbered contacts",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mines/candy-mines-5-256-l-1.ansi": {
         "name": "candy-mines-5-256-l-1.ansi",
@@ -7956,7 +7980,7 @@
         "depth": "16",
         "colors": 11,
         "description": "celestial atlas of numbered star-clusters, guide stars and a comet tail",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mines/candy-mines-6-16-l-2.ansi": {
@@ -7968,7 +7992,7 @@
         "depth": "16",
         "colors": 11,
         "description": "library stack shelves where call-slip numbers count hidden volumes",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mines/candy-mines-6-16-m-1.ansi": {
@@ -7980,7 +8004,7 @@
         "depth": "16",
         "colors": 11,
         "description": "seismic survey line of numbered geophone stakes over hidden reflectors",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mines/candy-mines-6-16-m-2.ansi": {
@@ -7992,7 +8016,7 @@
         "depth": "16",
         "colors": 11,
         "description": "circuit board fab panel of solder pads with numbered via adjacency",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mines/candy-mines-6-16-s-1.ansi": {
@@ -8004,7 +8028,7 @@
         "depth": "16",
         "colors": 11,
         "description": "archaeology dig grid where brushes reveal numbered relics in turf squares",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mines/candy-mines-6-16-s-2.ansi": {
@@ -8016,7 +8040,7 @@
         "depth": "16",
         "colors": 11,
         "description": "cheese factory wheels with numbered hole-counts and rind cracks",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mines/candy-mines-6-256-l-1.ansi": {
@@ -8172,8 +8196,10 @@
         "depth": "16",
         "colors": 7,
         "description": "archaeologist trench grid brushing numbered pot-sherd adjacency",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mines/candy-mines-7-16-l-2.ansi": {
         "name": "candy-mines-7-16-l-2.ansi",
@@ -8184,8 +8210,10 @@
         "depth": "16",
         "colors": 6,
         "description": "lifeguard tower beach grid counting shark fins by each float",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mines/candy-mines-7-16-m-1.ansi": {
         "name": "candy-mines-7-16-m-1.ansi",
@@ -8196,7 +8224,7 @@
         "depth": "16",
         "colors": 7,
         "description": "avalanche forecast slope of numbered snow patches under flagged cornices",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mines/candy-mines-7-16-m-2.ansi": {
@@ -8208,8 +8236,10 @@
         "depth": "16",
         "colors": 6,
         "description": "shepherds rolling hill ledger counting wolf dens in adjacent hollows",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mines/candy-mines-7-16-s-1.ansi": {
         "name": "candy-mines-7-16-s-1.ansi",
@@ -8220,7 +8250,7 @@
         "depth": "16",
         "colors": 6,
         "description": "garden gnome patrol lawn grid counting gopher-hole adjacency",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mines/candy-mines-7-16-s-2.ansi": {
@@ -8232,7 +8262,7 @@
         "depth": "16",
         "colors": 8,
         "description": "sushi conveyor census where plate digits count wasabi bombs",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-mines/candy-mines-7-256-l-1.ansi": {
@@ -8388,7 +8418,7 @@
         "depth": "16",
         "colors": 8,
         "description": "glassblower's gob-blank yield ledger, seed digits counting bubbles caught mid-blow",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mines/candy-mines-8-16-l-2.ansi": {
@@ -8400,7 +8430,7 @@
         "depth": "16",
         "colors": 7,
         "description": "weaver's loom draft grid, each tie marking the count of broken warp ends nearby",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mines/candy-mines-8-16-m-1.ansi": {
@@ -8412,7 +8442,7 @@
         "depth": "16",
         "colors": 8,
         "description": "chocolatier's gilded praline matrix, squares counting hazelnuts hidden in adjacent cups",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mines/candy-mines-8-16-m-2.ansi": {
@@ -8424,7 +8454,7 @@
         "depth": "16",
         "colors": 8,
         "description": "reef-quadrat transect tallying anemone heads around each cleared sand square",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mines/candy-mines-8-16-s-1.ansi": {
@@ -8436,7 +8466,7 @@
         "depth": "16",
         "colors": 8,
         "description": "pyrotechnician safety-inspection grid, tray digits count live shells touching each cell",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mines/candy-mines-8-16-s-2.ansi": {
@@ -8448,7 +8478,7 @@
         "depth": "16",
         "colors": 8,
         "description": "bosun's knot pegboard where each pin tallies the cord crossings in its ring",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mines/candy-mines-8-256-l-1.ansi": {
@@ -8604,7 +8634,7 @@
         "depth": "16",
         "colors": 7,
         "description": "ATC approach-control sector board, radar cells counting concealed contacts nearby",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mines/candy-mines-9-16-l-6.ansi": {
@@ -8616,7 +8646,7 @@
         "depth": "16",
         "colors": 5,
         "description": "30-min astrophoto exposure grid, tile cells counting satellite streaks they cross",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mines/candy-mines-9-16-m-3.ansi": {
@@ -8628,7 +8658,7 @@
         "depth": "16",
         "colors": 5,
         "description": "orchard frost-warning plot, blossom cells counting chilled blooms on the fringe",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mines/candy-mines-9-16-m-4.ansi": {
@@ -8640,7 +8670,7 @@
         "depth": "16",
         "colors": 5,
         "description": "site-safety near-miss ledger, hard-hat zones each numbering the hazards beside them",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mines/candy-mines-9-16-s-1.ansi": {
@@ -8652,7 +8682,7 @@
         "depth": "16",
         "colors": 5,
         "description": "telecom route CS-9 maintenance sheet, segment cells counting repeater faults in adjoining spans",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-mines/candy-mines-9-16-s-2.ansi": {
@@ -8664,7 +8694,7 @@
         "depth": "16",
         "colors": 5,
         "description": "links golf front-nine scorecard, each hole cell tallying sand bunkers it touches",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mines/candy-mines-9-256-l-11.ansi": {
@@ -8820,7 +8850,7 @@
         "depth": "16",
         "colors": 8,
         "description": "metropolitan interchange survey - five-line network map with joint digits, departure board and ledger",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mines/candy-mines-10-16-l-2.ansi": {
@@ -8832,7 +8862,7 @@
         "depth": "16",
         "colors": 16,
         "description": "solved box-lid jigsaw sheet - 8x4 tabbed pieces, digits count rattling nut pockets in touching pieces",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mines/candy-mines-10-16-m-1.ansi": {
@@ -8844,7 +8874,7 @@
         "depth": "16",
         "colors": 14,
         "description": "quilt patch census - 4x3 block with charcoal squares, open patches number their sooty neighbours",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mines/candy-mines-10-16-m-2.ansi": {
@@ -8856,7 +8886,7 @@
         "depth": "16",
         "colors": 8,
         "description": "celtic-cross tarot spread of five - digits count reversed cards lying beside each one",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mines/candy-mines-10-16-s-1.ansi": {
@@ -8868,7 +8898,7 @@
         "depth": "16",
         "colors": 8,
         "description": "film-strip continuity reel No.7 - sprocketed frames tally continuity errors in touching frames",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mines/candy-mines-10-16-s-2.ansi": {
@@ -8880,7 +8910,7 @@
         "depth": "16",
         "colors": 8,
         "description": "own-goal adjacency league table - NEIGHBOURS column tallies OG in the rows touching each team",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mines/candy-mines-10-256-l-1.ansi": {
@@ -9048,7 +9078,7 @@
         "depth": "16",
         "colors": 11,
         "description": "lamp-lit indigo tessera wall with gold block-letter CANDY MOSAIC wordmark and cracks",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-1-16-m-1.ansi": {
@@ -9060,7 +9090,7 @@
         "depth": "16",
         "colors": 26,
         "description": "brick kiln hall with arched fire mouth, tessera shelves and block-letter title band",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-1-16-m-2.ansi": {
@@ -9072,7 +9102,7 @@
         "depth": "16",
         "colors": 8,
         "description": "CGA-blue decode screen: status list, striped progress bar and braille spinner",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-1-16-s-1.ansi": {
@@ -9084,7 +9114,7 @@
         "depth": "16",
         "colors": 16,
         "description": "quarter-block density ladder ░▒▓█ scrolling through ANSI hues with legend strip",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-1-16-s-2.ansi": {
@@ -9096,7 +9126,7 @@
         "depth": "16",
         "colors": 20,
         "description": "kiln mouth arch blazing white-to-red fire gradient with flying tessera sparks",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-1-256-l-1.ansi": {
@@ -9264,7 +9294,7 @@
         "depth": "16",
         "colors": 14,
         "description": "giant block-letter CANDY MOSAIC banner: 2x pixel font rainbow rows over mosaic rule bands",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-2-16-l-2.ansi": {
@@ -9276,8 +9306,10 @@
         "depth": "16",
         "colors": 10,
         "description": "Mosaic::probe() selector dialog: radio backend list, live half-block preview pane, status bar",
-        "rating": null,
-        "tags": []
+        "rating": 5,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mosaic/candy-mosaic-2-16-m-1.ansi": {
         "name": "candy-mosaic-2-16-m-1.ansi",
@@ -9288,8 +9320,10 @@
         "depth": "16",
         "colors": 6,
         "description": "error-diffusion study: Floyd–Steinberg candy sphere in ░▒▓ density with error-kernel annotations",
-        "rating": null,
-        "tags": []
+        "rating": 4,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mosaic/candy-mosaic-2-16-m-2.ansi": {
         "name": "candy-mosaic-2-16-m-2.ansi",
@@ -9300,8 +9334,10 @@
         "depth": "16",
         "colors": 7,
         "description": "ordered dither bench: eight Bayer 4x4 luminance tiles in framed groups with step labels",
-        "rating": null,
-        "tags": []
+        "rating": 4,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mosaic/candy-mosaic-2-16-s-1.ansi": {
         "name": "candy-mosaic-2-16-s-1.ansi",
@@ -9312,7 +9348,7 @@
         "depth": "16",
         "colors": 14,
         "description": "16-colour half-block palette strip: candy fg/bg pair rows with bold-bright echo and italic legend",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-2-16-s-2.ansi": {
@@ -9324,8 +9360,10 @@
         "depth": "16",
         "colors": 9,
         "description": "tessera mini-wall: jittered ANSI-hue block tiles in a double-rule frame with reverse caption",
-        "rating": null,
-        "tags": []
+        "rating": 4,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mosaic/candy-mosaic-2-256-l-1.ansi": {
         "name": "candy-mosaic-2-256-l-1.ansi",
@@ -9480,8 +9518,10 @@
         "depth": "16",
         "colors": 5,
         "description": "Backend duel bill poster: double frame, giant BACKEND DUEL title, four framed emblems, CANDY MOSAIC gold band",
-        "rating": null,
-        "tags": []
+        "rating": 4,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mosaic/candy-mosaic-3-16-l-2.ansi": {
         "name": "candy-mosaic-3-16-l-2.ansi",
@@ -9492,7 +9532,7 @@
         "depth": "16",
         "colors": 12,
         "description": "Pixel archaeology dig: strata bands with column letters, tripod derrick, buried tesserae, half-brushed landscape fragment",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-3-16-m-1.ansi": {
@@ -9504,7 +9544,7 @@
         "depth": "16",
         "colors": 10,
         "description": "Byzantine apse icon: gold-ground dome, white-faced saint in red mantle with halo cross, CANDY MOSAIC wordmark band",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-3-16-m-2.ansi": {
@@ -9516,7 +9556,7 @@
         "depth": "16",
         "colors": 6,
         "description": "Tessera Coliseum seating plan: oval ANSI crowd ring, sand floor DUEL NIGHT, four backend sigils at corners",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-3-16-s-1.ansi": {
@@ -9528,7 +9568,7 @@
         "depth": "16",
         "colors": 6,
         "description": "SIXEL vs KITTY duel card: dual cyan/magenta wave bars under white title bar, italic 'probe decides' verdict",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-3-16-s-2.ansi": {
@@ -9708,8 +9748,10 @@
         "depth": "16",
         "colors": 16,
         "description": "Broadcast control room: monitor wall of six test patterns, ident with block font, fader desk",
-        "rating": null,
-        "tags": []
+        "rating": 5,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mosaic/candy-mosaic-4-16-l-2.ansi": {
         "name": "candy-mosaic-4-16-l-2.ansi",
@@ -9720,7 +9762,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Mosaic of a mosaic: giant tesserae wall, medium tesserae inner frame, micro tesserae core, self-rendering caption",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-4-16-m-1.ansi": {
@@ -9732,7 +9774,7 @@
         "depth": "16",
         "colors": 6,
         "description": "Weather-sat receiver: shaded disc in block glyphs, AOS telemetry column, blue frame",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-4-16-m-2.ansi": {
@@ -9744,7 +9786,7 @@
         "depth": "16",
         "colors": 12,
         "description": "Gallery room: gold-framed half-block landscape on striped wallpaper, brass plate, plant, lamp",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-4-16-s-1.ansi": {
@@ -9756,7 +9798,7 @@
         "depth": "16",
         "colors": 16,
         "description": "16-color test-card slate: rainbow station ident, solid-bar wall, shade wedge greys",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-4-16-s-2.ansi": {
@@ -9768,8 +9810,10 @@
         "depth": "16",
         "colors": 6,
         "description": "Sixel telegram slip: framed wire picture with semicolon payload and perforated tear edge",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mosaic/candy-mosaic-4-256-l-1.ansi": {
         "name": "candy-mosaic-4-256-l-1.ansi",
@@ -9924,8 +9968,10 @@
         "depth": "16",
         "colors": 9,
         "description": "brick kiln hall: glowing arch, tile shelves, wordmarked furnace door",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mosaic/candy-mosaic-5-16-l-2.ansi": {
         "name": "candy-mosaic-5-16-l-2.ansi",
@@ -9936,8 +9982,10 @@
         "depth": "16",
         "colors": 9,
         "description": "two-page spread: twenty hinged mounts, ruled index, brass magnifier",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mosaic/candy-mosaic-5-16-m-1.ansi": {
         "name": "candy-mosaic-5-16-m-1.ansi",
@@ -9948,7 +9996,7 @@
         "depth": "16",
         "colors": 10,
         "description": "stick rail: slug lines, huge wood wordmark, letter case, a spilled sort",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-5-16-m-2.ansi": {
@@ -9960,7 +10008,7 @@
         "depth": "16",
         "colors": 15,
         "description": "perforated pane of six stamps, shaded checker vignettes, denominations",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-5-16-s-1.ansi": {
@@ -9972,7 +10020,7 @@
         "depth": "16",
         "colors": 13,
         "description": "wood-type bed: wordmark composed as inked tiles in a brass chase",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-5-16-s-2.ansi": {
@@ -9984,7 +10032,7 @@
         "depth": "16",
         "colors": 9,
         "description": "lone perforated stamp with checker tesserae vignette, 5c denomination",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-5-256-l-1.ansi": {
@@ -10140,7 +10188,7 @@
         "depth": "16",
         "colors": 12,
         "description": "canyon section: nine strata bands carved by a meandering river into a lake",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-6-16-l-2.ansi": {
@@ -10152,7 +10200,7 @@
         "depth": "16",
         "colors": 16,
         "description": "descending square tunnel: nested color rings twisted wall by wall",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-6-16-m-1.ansi": {
@@ -10164,7 +10212,7 @@
         "depth": "16",
         "colors": 16,
         "description": "kaleido mini: eight-fold angular cells, dark radial spokes",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-6-16-m-2.ansi": {
@@ -10176,7 +10224,7 @@
         "depth": "16",
         "colors": 9,
         "description": "spectrum lighthouse: gilded beam fan over a banded tower and surf",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-6-16-s-1.ansi": {
@@ -10188,7 +10236,7 @@
         "depth": "16",
         "colors": 6,
         "description": "pixelfall mini: three block meteors on indigo paper, white-hot heads, wordmark ink-strip",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-6-16-s-2.ansi": {
@@ -10200,7 +10248,7 @@
         "depth": "16",
         "colors": 15,
         "description": "harlequin tessera band: alternating diamond rows with rainbow half-block seam",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-6-16-s-3.ansi": {
@@ -10212,7 +10260,7 @@
         "depth": "16",
         "colors": 6,
         "description": "zipper track: chroma teeth meshing around a dim spine, slider crown",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-6-16-s-4.ansi": {
@@ -10224,7 +10272,7 @@
         "depth": "16",
         "colors": 12,
         "description": "checker relay: two dye stacks trading tiles through gold chevrons",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-6-256-l-1.ansi": {
@@ -10404,7 +10452,7 @@
         "depth": "16",
         "colors": 10,
         "description": "great-hall floor: meander-bordered tesserae, cream grout drying along a diagonal past the inlay",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-7-16-l-2.ansi": {
@@ -10416,7 +10464,7 @@
         "depth": "16",
         "colors": 9,
         "description": "cutter line: candy slab rides the belt under a nine-blade gantry into the snap bin",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-7-16-m-1.ansi": {
@@ -10428,7 +10476,7 @@
         "depth": "16",
         "colors": 10,
         "description": "grout day: tessera floor mid-journey, cream grout ridge and float sealing column by column",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-7-16-m-2.ansi": {
@@ -10440,7 +10488,7 @@
         "depth": "16",
         "colors": 6,
         "description": "specimen card: block-built morpho on pinned plate, shade-lattice wings, brass label",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-7-16-s-1.ansi": {
@@ -10452,7 +10500,7 @@
         "depth": "16",
         "colors": 7,
         "description": "bayer 4x4 seed: threshold tiles tone up black→blue→cyan→white, pass 1/4",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-7-16-s-2.ansi": {
@@ -10464,7 +10512,7 @@
         "depth": "16",
         "colors": 9,
         "description": "slab snap: nine scored candy tiles, tenth lifted off the groove, crumb scatter",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-7-256-l-1.ansi": {
@@ -10644,7 +10692,7 @@
         "depth": "16",
         "colors": 8,
         "description": "great rose window: 16-colour twelve-light rose, concentric rings, stone tracery and mullions",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-8-16-l-2.ansi": {
@@ -10656,7 +10704,7 @@
         "depth": "16",
         "colors": 9,
         "description": "tapestry reweave wall: 16-colour woven grid, scattered loss holes, full pinned selvedge",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-8-16-m-1.ansi": {
@@ -10668,7 +10716,7 @@
         "depth": "16",
         "colors": 8,
         "description": "stained-glass rose: 12 leaded lights in four rings, stone tracery rim, jewel quarries",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-8-16-m-2.ansi": {
@@ -10680,7 +10728,7 @@
         "depth": "16",
         "colors": 9,
         "description": "tapestry conservation table: 16-colour warp/weft grid, loss holes, pinned edge",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-8-16-s-1.ansi": {
@@ -10692,7 +10740,7 @@
         "depth": "16",
         "colors": 9,
         "description": "bubble-wrap decoder: 16-colour pop/flat bubble field on a deck, cal swatches",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-8-16-s-2.ansi": {
@@ -10704,7 +10752,7 @@
         "depth": "16",
         "colors": 10,
         "description": "praline box by hue, 16-colour: nine bonbons on a dark tray, gloss strip",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-8-256-l-1.ansi": {
@@ -10860,7 +10908,7 @@
         "depth": "16",
         "colors": 11,
         "description": "organ of palette: 28 hue-cycled pipes with mouths over windchest, two manuals and bench",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-9-16-l-2.ansi": {
@@ -10872,7 +10920,7 @@
         "depth": "16",
         "colors": 10,
         "description": "departures split-flap board: protocol gates, half-turned tiles, ticker and signal mast",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-9-16-m-1.ansi": {
@@ -10884,7 +10932,7 @@
         "depth": "16",
         "colors": 13,
         "description": "Venetian slat raster: 75°/45°/15° panels sampling a landscape at three densities",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-9-16-m-2.ansi": {
@@ -10896,7 +10944,7 @@
         "depth": "16",
         "colors": 10,
         "description": "basket loom twill: six weft bands interlaced over a fixed warp, stamped maker's label",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-9-16-s-1.ansi": {
@@ -10908,7 +10956,7 @@
         "depth": "16",
         "colors": 9,
         "description": "Fresnel lens: 16-colour parallel pixel beams refracted through stepped glass to one focal spark",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-9-16-s-2.ansi": {
@@ -10920,7 +10968,7 @@
         "depth": "16",
         "colors": 9,
         "description": "pin-tumbler cutaway: five chambers as palette slots, shear line broken where the lift starves",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-9-256-l-1.ansi": {
@@ -11076,7 +11124,7 @@
         "depth": "16",
         "colors": 6,
         "description": "surface weather map: warm/cold/occluded/stationary fronts drawn as 16-glyph symbol rails across a chart grid",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-10-16-l-2.ansi": {
@@ -11088,7 +11136,7 @@
         "depth": "16",
         "colors": 5,
         "description": "isobar analysis sheet: nested pressure contours, high/low centers and wind barbs in the ANSI eight hues",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-10-16-m-1.ansi": {
@@ -11100,7 +11148,7 @@
         "depth": "16",
         "colors": 6,
         "description": "chroma subsampling: luma field with chroma sampled at 4:4:4 solid, 4:2:2 column pairs, 4:2:0 checker grid",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-10-16-m-2.ansi": {
@@ -11112,7 +11160,7 @@
         "depth": "16",
         "colors": 7,
         "description": "scaling filters: one diagonal edge resampled nearest (block staircase), bilinear (ramped), bicubic (smooth)",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-10-16-s-1.ansi": {
@@ -11124,8 +11172,10 @@
         "depth": "16",
         "colors": 6,
         "description": "synoptic station model: barbs, wind pennant and 16-glyph pressure/temperature plot on a chart cell",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-mosaic/candy-mosaic-10-16-s-2.ansi": {
         "name": "candy-mosaic-10-16-s-2.ansi",
@@ -11136,7 +11186,7 @@
         "depth": "16",
         "colors": 6,
         "description": "bit-plane stack: one grey image sliced into b7..b0 monochrome planes, dense top bits to dither-noise low bits",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-10-16-s-3.ansi": {
@@ -11148,7 +11198,7 @@
         "depth": "16",
         "colors": 6,
         "description": "Adam7 progressive reveal: seven interlaced PNG passes tiling a field from sparse to full, rows P1..P7",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-10-256-l-1.ansi": {
@@ -11316,7 +11366,7 @@
         "depth": "16",
         "colors": 32,
         "description": "Gallery wall of sixteen framed ANSI colour niches over a perspective floor",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-palette/candy-palette-1-16-m-1.ansi": {
@@ -11328,7 +11378,7 @@
         "depth": "16",
         "colors": 32,
         "description": "Block-letter CANDY / PALETTE over labelled rows of the basic sixteen",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-palette/candy-palette-1-16-m-2.ansi": {
@@ -11340,7 +11390,7 @@
         "depth": "16",
         "colors": 28,
         "description": "Loading screen: colour-degradation runway bar from yellow down to red",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-palette/candy-palette-1-16-s-1.ansi": {
@@ -11353,7 +11403,9 @@
         "colors": 24,
         "description": "TERM=dumb card: eight bright chips passing a gate and dropping to plain grey",
         "rating": null,
-        "tags": []
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-palette/candy-palette-1-16-s-2.ansi": {
         "name": "candy-palette-1-16-s-2.ansi",
@@ -11364,7 +11416,7 @@
         "depth": "16",
         "colors": 9,
         "description": "Dither-shaded red heart showing the ░▒▓█ density ladder in sixteen colours",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-palette/candy-palette-1-256-l-1.ansi": {
@@ -11520,7 +11572,7 @@
         "depth": "16",
         "colors": 14,
         "description": "Sweet shop storefront: striped awning, jar shelves, door with 1B[0m mat",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-palette/candy-palette-2-16-l-2.ansi": {
@@ -11532,7 +11584,7 @@
         "depth": "16",
         "colors": 11,
         "description": "Mix desk console: 16 fader channels, blend demo, degradation rows",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-palette/candy-palette-2-16-m-1.ansi": {
@@ -11544,7 +11596,7 @@
         "depth": "16",
         "colors": 16,
         "description": "Flavour menu board: all 16 ANSI scoops labelled, red-white stripes below",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-palette/candy-palette-2-16-m-2.ansi": {
@@ -11556,7 +11608,7 @@
         "depth": "16",
         "colors": 15,
         "description": "Candy rack: beaded wind-chimes of raw ANSI hues over a 16-swatch shelf",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-palette/candy-palette-2-16-s-1.ansi": {
@@ -11568,7 +11620,7 @@
         "depth": "16",
         "colors": 16,
         "description": "Sweet counter ticket: eight basic-sugar chips on candy-stripe rail",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-palette/candy-palette-2-16-s-2.ansi": {
@@ -11580,7 +11632,7 @@
         "depth": "16",
         "colors": 11,
         "description": "Contrast duel: black/white fields, checkerboard and rainbow rule",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-palette/candy-palette-2-256-l-1.ansi": {
@@ -11736,7 +11788,7 @@
         "depth": "16",
         "colors": 9,
         "description": "Candy shop storefront with jars, then palette extracted to 16 colours",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-palette/candy-palette-3-16-l-2.ansi": {
@@ -11748,7 +11800,7 @@
         "depth": "16",
         "colors": 14,
         "description": "Full WCAG contrast matrix + ratio meters across the ANSI-16 gamut",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-palette/candy-palette-3-16-m-1.ansi": {
@@ -11760,7 +11812,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Harmony wheel: complementary+triadic+analogous spokes over 16 hues",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-palette/candy-palette-3-16-m-2.ansi": {
@@ -11772,8 +11824,10 @@
         "depth": "16",
         "colors": 7,
         "description": "Degradation elevator as a building: TrueColor down to NoTTY floors",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-palette/candy-palette-3-16-s-1.ansi": {
         "name": "candy-palette-3-16-s-1.ansi",
@@ -11784,7 +11838,7 @@
         "depth": "16",
         "colors": 9,
         "description": "WCAG pass/fail gauntlet: five 16-colour pairs scored AA/AAA/FAIL",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-palette/candy-palette-3-16-s-2.ansi": {
@@ -11796,7 +11850,7 @@
         "depth": "16",
         "colors": 8,
         "description": "Colour-blindness mode selector: protan/deutan/tritan chips in ANSI-16",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-palette/candy-palette-3-256-l-1.ansi": {
@@ -11952,7 +12006,7 @@
         "depth": "16",
         "colors": 14,
         "description": "Six-vat dye line with overhead pipes, gauges and a common collection trough",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-palette/candy-palette-4-16-l-2.ansi": {
@@ -11964,7 +12018,7 @@
         "depth": "16",
         "colors": 16,
         "description": "Open drawer labelling all sixteen ANSI bins with snap and dither check bars",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-palette/candy-palette-4-16-m-1.ansi": {
@@ -11976,7 +12030,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Sunset filmstrip: five frames degrading TrueColor golden hour to NoTTY static",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-palette/candy-palette-4-16-m-2.ansi": {
@@ -11988,7 +12042,7 @@
         "depth": "16",
         "colors": 8,
         "description": "Neon workshop bench: hand-bent CANDY tubing glowing over a dark wall",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-palette/candy-palette-4-16-s-1.ansi": {
@@ -12000,7 +12054,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Dye vat 04 boiling strawberry syrup, steam wisps and a side drip in ANSI-16",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-palette/candy-palette-4-16-s-2.ansi": {
@@ -12012,7 +12066,7 @@
         "depth": "16",
         "colors": 13,
         "description": "Chameleon perched over an eight-chip ANSI swatch tray changing its skin",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-palette/candy-palette-4-256-l-1.ansi": {
@@ -12312,7 +12366,7 @@
         "depth": "16",
         "colors": 8,
         "description": "Sort-bot floor plan: hopper, belts, gantry arms and eight ANSI bins — 262k colours given sixteen seats",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-palette/candy-palette-6-16-l-2.ansi": {
@@ -12324,7 +12378,7 @@
         "depth": "16",
         "colors": 8,
         "description": "Beacon Point: one lamp sweeping fog into six named ANSI bands over striped tower, waves and a ship",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-palette/candy-palette-6-16-m-1.ansi": {
@@ -12336,7 +12390,7 @@
         "depth": "16",
         "colors": 14,
         "description": "Textile mill spool-dye line: six spools hung from an overhead rail dipping bath-by-bath red→magenta",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-palette/candy-palette-6-16-m-2.ansi": {
@@ -12348,7 +12402,7 @@
         "depth": "16",
         "colors": 8,
         "description": "Bird hide at dawn: seven hue-coded birds on a telegraph wire above the slit hut and ledger",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-palette/candy-palette-6-16-s-1.ansi": {
@@ -12360,7 +12414,7 @@
         "depth": "16",
         "colors": 8,
         "description": "Sort-bot mini: an overhead arm lifts ▓ candies by hue into eight ANSI bins on a conveyor",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-palette/candy-palette-6-16-s-2.ansi": {
@@ -12372,7 +12426,7 @@
         "depth": "16",
         "colors": 6,
         "description": "Cellar niche: three hue-aged bottles on an oak shelf with colour-keyed vintages",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-palette/candy-palette-6-256-l-1.ansi": {
@@ -12528,7 +12582,7 @@
         "depth": "16",
         "colors": 16,
         "description": "ANSI-16 seat catalog: 8 fg + 8 bg + bright attr row, per-channel fallback",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-palette/candy-palette-7-16-l-2.ansi": {
@@ -12540,7 +12594,7 @@
         "depth": "16",
         "colors": 16,
         "description": "Dye-vat dip ladder: 16 quantised hue baths widening step by step",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-palette/candy-palette-7-16-m-1.ansi": {
@@ -13188,7 +13242,7 @@
         "depth": "16",
         "colors": 14,
         "description": "candle maker's tint rack: dipped tapers graded across the spectrum, wax drips",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-palette/candy-palette-10-16-l-2.ansi": {
@@ -13200,7 +13254,7 @@
         "depth": "16",
         "colors": 9,
         "description": "pigment cave gallery wall: ochre bison and deer figures over limestone strata",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-palette/candy-palette-10-16-m-1.ansi": {
@@ -13212,7 +13266,7 @@
         "depth": "16",
         "colors": 7,
         "description": "spectral post office: wavelength mail diverted by prism into eight P.O. boxes",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-palette/candy-palette-10-16-m-2.ansi": {
@@ -13224,7 +13278,7 @@
         "depth": "16",
         "colors": 7,
         "description": "colour-audition stage: swatch contestants under a spot facing a 16-seat jury",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-palette/candy-palette-10-16-s-1.ansi": {
@@ -13236,7 +13290,7 @@
         "depth": "16",
         "colors": 11,
         "description": "lichen-zoned granite boulder: radial thallus rings with a 5-zone sample key",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-palette/candy-palette-10-16-s-2.ansi": {
@@ -13248,7 +13302,7 @@
         "depth": "16",
         "colors": 7,
         "description": "sea-glass tray sorted by depth: frosted chips surf-green to deep-indigo",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-palette/candy-palette-10-16-s-3.ansi": {
@@ -13260,7 +13314,7 @@
         "depth": "16",
         "colors": 9,
         "description": "cave chamber of hands: three ochre negative prints on rock strata",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-palette/candy-palette-10-256-l-1.ansi": {
@@ -13452,7 +13506,7 @@
         "depth": "16",
         "colors": 15,
         "description": "chart-skyline city at dusk: bar buildings with lit windows, qps constellation, neon CANDY QUERY",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-query/candy-query-1-16-l-9.ansi": {
@@ -13464,7 +13518,7 @@
         "depth": "16",
         "colors": 17,
         "description": "schema constellation sky above descending B+tree leaves and CANDY QUERY carved in the ground",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-query/candy-query-1-16-m-4.ansi": {
@@ -13476,7 +13530,7 @@
         "depth": "16",
         "colors": 14,
         "description": "SQL prompt over cyan result grid with NULLs, sugar bars, block CANDY wordmark",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-query/candy-query-1-16-m-5.ansi": {
@@ -13488,7 +13542,7 @@
         "depth": "16",
         "colors": 14,
         "description": "performance dashboard: sparklines, meters, hot-tables grid, alert toast, buffer-pool dome",
-        "rating": null,
+        "rating": 5,
         "tags": []
     },
     "candy-query/candy-query-1-16-m-6.ansi": {
@@ -13500,7 +13554,7 @@
         "depth": "16",
         "colors": 8,
         "description": "EXPLAIN plan tree with colored ops above a candy-lit B+tree of index pages",
-        "rating": null,
+        "rating": 5,
         "tags": []
     },
     "candy-query/candy-query-1-16-s-1.ansi": {
@@ -13512,7 +13566,7 @@
         "depth": "16",
         "colors": 11,
         "description": "candy-shop marquee: bulb border, block CANDY/QUERY, SELECT * FROM sweets ticker",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-query/candy-query-1-16-s-2.ansi": {
@@ -13524,7 +13578,7 @@
         "depth": "16",
         "colors": 9,
         "description": "magnifier scanning a mini sweets grid with loading bar and qps sparkline",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-query/candy-query-1-16-s-3.ansi": {
@@ -13536,7 +13590,7 @@
         "depth": "16",
         "colors": 11,
         "description": "gradient candy wrapper foil with crimped ends, CANDY QUERY embossed, barcode",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-query/candy-query-1-256-l-7.ansi": {
@@ -13764,8 +13818,10 @@
         "depth": "16",
         "colors": 6,
         "description": "sweet-shop ledger: 18 confections, sparkline sales column, totals, inverse cursor row",
-        "rating": null,
-        "tags": []
+        "rating": 4,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-query/candy-query-2-16-l-2.ansi": {
         "name": "candy-query-2-16-l-2.ansi",
@@ -13776,7 +13832,7 @@
         "depth": "16",
         "colors": 6,
         "description": "admin process list beside server-vitals meters, alerts and page tabs",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-query/candy-query-2-16-m-1.ansi": {
@@ -13788,7 +13844,7 @@
         "depth": "16",
         "colors": 6,
         "description": "three-pane TUI: tables list, rows grid, syntax-highlighted editor, status bar",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-query/candy-query-2-16-m-2.ansi": {
@@ -13800,7 +13856,7 @@
         "depth": "16",
         "colors": 7,
         "description": "EXPLAIN ANALYZE operator tree with color-coded ops and time-share bars",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-query/candy-query-2-16-s-1.ansi": {
@@ -13812,7 +13868,7 @@
         "depth": "16",
         "colors": 6,
         "description": "boot splash: block CANDY QUERY wordmark, version stamp and SQL prompt",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-query/candy-query-2-16-s-2.ansi": {
@@ -13824,7 +13880,7 @@
         "depth": "16",
         "colors": 5,
         "description": "mini result grid with muted-italic NULLs and timing footer",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-query/candy-query-2-256-l-1.ansi": {
@@ -13980,7 +14036,7 @@
         "depth": "16",
         "colors": 7,
         "description": "great JOIN bridge panorama: three table-towers, hanged index cables, orphan cart, EXPLAIN span panel",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-query/candy-query-3-16-l-2.ansi": {
@@ -13992,7 +14048,7 @@
         "depth": "16",
         "colors": 7,
         "description": "migration railyard: ALTER Express loco hauling numbered schema wagons between v1/v2 platforms and ledger",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-query/candy-query-3-16-m-1.ansi": {
@@ -14004,7 +14060,7 @@
         "depth": "16",
         "colors": 7,
         "description": "INNER JOIN suspension bridge: tower table-blocks, index cables, matched-pair carts on deck",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-query/candy-query-3-16-m-2.ansi": {
@@ -14016,7 +14072,7 @@
         "depth": "16",
         "colors": 7,
         "description": "transaction departures board: flip-clock, isolation platforms, commit/abort states, lock-wait alert",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-query/candy-query-3-16-s-1.ansi": {
@@ -14028,7 +14084,7 @@
         "depth": "16",
         "colors": 7,
         "description": "WAL write-ahead journal strip with LSN entries, checkpoint gauge and rollback ticks",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-query/candy-query-3-16-s-2.ansi": {
@@ -14040,7 +14096,7 @@
         "depth": "16",
         "colors": 6,
         "description": "deadlock watch badge: two txn cards wired through a cross-bar padlock with wait-for cycle line",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-query/candy-query-3-256-l-1.ansi": {
@@ -14196,7 +14252,7 @@
         "depth": "16",
         "colors": 12,
         "description": "optimizer grand hall: chessboard, chosen plan tree and cost bars",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-query/candy-query-4-16-l-2.ansi": {
@@ -14208,7 +14264,7 @@
         "depth": "16",
         "colors": 8,
         "description": "great cache pantry: multi-tier shelves of TTL jars with hit-ratio bar",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-query/candy-query-4-16-m-1.ansi": {
@@ -14220,7 +14276,7 @@
         "depth": "16",
         "colors": 11,
         "description": "query optimizer chessboard with piece glyphs and cost histogram",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-query/candy-query-4-16-m-2.ansi": {
@@ -14232,7 +14288,7 @@
         "depth": "16",
         "colors": 5,
         "description": "three-pane TUI browser: tables list, rows grid, syntax SQL editor",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-query/candy-query-4-16-s-1.ansi": {
@@ -14244,7 +14300,7 @@
         "depth": "16",
         "colors": 10,
         "description": "aquarium: cyan fish schools swim through a magenta WHERE net over coral",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-query/candy-query-4-16-s-2.ansi": {
@@ -14256,7 +14312,7 @@
         "depth": "16",
         "colors": 9,
         "description": "cache pantry: shelf jars keyed by TTL gauges under block CANDY",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-query/candy-query-4-256-l-1.ansi": {
@@ -14412,7 +14468,7 @@
         "depth": "16",
         "colors": 7,
         "description": "plan anatomy poster: skeleton plan tree beside self-time organ chart",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-query/candy-query-5-16-l-2.ansi": {
@@ -15528,8 +15584,10 @@
         "depth": "16",
         "colors": 8,
         "description": "post-commit reception floor plan: txns seated at table-rounds, wait-for dance, 3-tier commit cake",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-query/candy-query-10-16-l-5.ansi": {
         "name": "candy-query-10-16-l-5.ansi",
@@ -15540,7 +15598,7 @@
         "depth": "16",
         "colors": 8,
         "description": "atlas workshop: five framed projections, big plate with rays, measurement bench",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-query/candy-query-10-16-m-3.ansi": {
@@ -15552,7 +15610,7 @@
         "depth": "16",
         "colors": 8,
         "description": "fraud-lab bench: money order vs EXPLAIN exhibit, six-test panel, anomaly report",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-query/candy-query-10-16-m-6.ansi": {
@@ -15564,7 +15622,7 @@
         "depth": "16",
         "colors": 8,
         "description": "locksmith bench: pegboard of eight framed key tags, cutting lathe, FK key ring",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-query/candy-query-10-16-s-1.ansi": {
@@ -15576,7 +15634,7 @@
         "depth": "16",
         "colors": 8,
         "description": "query kitchen: pass window, ticket rail, heat lamp, ORDER BY fired",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-query/candy-query-10-16-s-4.ansi": {
@@ -15588,7 +15646,7 @@
         "depth": "16",
         "colors": 8,
         "description": "conservatory practice room door: users_pkey scale, tempo, tuner card",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-query/candy-query-10-256-l-3.ansi": {
@@ -15756,7 +15814,7 @@
         "depth": "16",
         "colors": 12,
         "description": "Sunset service: ANSI block-density dusk sky with half-block sun, layout-guide grid, styled Table card and roman ItemList card",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-sprinkles/candy-sprinkles-1-16-m-1.ansi": {
@@ -30192,7 +30250,7 @@
         "depth": "16",
         "colors": 14,
         "description": "giant candy-striped wordmark over a chat box, rollers and crystal spill",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "sugar-crush/sugar-crush-1-16-l-2.ansi": {
@@ -30204,7 +30262,7 @@
         "depth": "16",
         "colors": 8,
         "description": "engineering blueprint of the sugar-crusher on graph blue, dimensioned",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "sugar-crush/sugar-crush-1-16-m-1.ansi": {
@@ -30216,7 +30274,7 @@
         "depth": "16",
         "colors": 13,
         "description": "full 80-wide TUI: transcript, tool calls, diff pane, input box, status bar",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "sugar-crush/sugar-crush-1-16-m-2.ansi": {
@@ -30228,8 +30286,10 @@
         "depth": "16",
         "colors": 14,
         "description": "industrial sugar-crusher cross-section: hopper, meshing gears, readout, output pile",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "sugar-crush/sugar-crush-1-16-s-1.ansi": {
         "name": "sugar-crush-1-16-s-1.ansi",
@@ -30240,8 +30300,10 @@
         "depth": "16",
         "colors": 12,
         "description": "candy press: wordmark over grinding rollers spilling crushed-sugar crystals",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "sugar-crush/sugar-crush-1-16-s-2.ansi": {
         "name": "sugar-crush-1-16-s-2.ansi",
@@ -30252,7 +30314,7 @@
         "depth": "16",
         "colors": 13,
         "description": "mini chat-shell frame: prompt, tool calls, hook deny, streaming cursor",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "sugar-crush/sugar-crush-1-256-l-1.ansi": {
@@ -30408,8 +30470,10 @@
         "depth": "16",
         "colors": 7,
         "description": "wide three-pane workspace: sessions, transcript with diff, tool inspector",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "sugar-crush/sugar-crush-2-16-l-2.ansi": {
         "name": "sugar-crush-2-16-l-2.ansi",
@@ -30420,7 +30484,7 @@
         "depth": "16",
         "colors": 6,
         "description": "giant candy block SUGAR/CRUSH poster beside 16-key cheat sheet",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "sugar-crush/sugar-crush-2-16-m-1.ansi": {
@@ -30432,7 +30496,7 @@
         "depth": "16",
         "colors": 6,
         "description": "boot splash, big pixel SUGAR CRUSH wordmark over doctor-style checks",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "sugar-crush/sugar-crush-2-16-m-2.ansi": {
@@ -30444,8 +30508,10 @@
         "depth": "16",
         "colors": 7,
         "description": "split panes: 9-step plan checklist vs fnmatch permission rules, mode strip",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "sugar-crush/sugar-crush-2-16-s-1.ansi": {
         "name": "sugar-crush-2-16-s-1.ansi",
@@ -30456,8 +30522,10 @@
         "depth": "16",
         "colors": 7,
         "description": "permission-gate modal: hook query, allow/deny/explain options",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "sugar-crush/sugar-crush-2-16-s-2.ansi": {
         "name": "sugar-crush-2-16-s-2.ansi",
@@ -30468,7 +30536,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Ctrl+P command palette mini with filter field and seven commands",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "sugar-crush/sugar-crush-2-256-l-1.ansi": {
@@ -30624,7 +30692,7 @@
         "depth": "16",
         "colors": 10,
         "description": "session tab wall: 5-tab sidebar with ctx percentages plus live transcript pane",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "sugar-crush/sugar-crush-3-16-l-2.ansi": {
@@ -30636,7 +30704,7 @@
         "depth": "16",
         "colors": 5,
         "description": "compaction press blueprint: transcript into rollers into summary card with token ratios",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "sugar-crush/sugar-crush-3-16-m-1.ansi": {
@@ -30648,7 +30716,7 @@
         "depth": "16",
         "colors": 10,
         "description": "plan-mode approval pane: 7-step checklist, rationale lines, approve/edit/reject footer",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "sugar-crush/sugar-crush-3-16-m-2.ansi": {
@@ -30660,7 +30728,7 @@
         "depth": "16",
         "colors": 7,
         "description": "model router crossbar patch panel: 8 request rows throwing to 6 provider sockets",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "sugar-crush/sugar-crush-3-16-s-1.ansi": {
@@ -30672,7 +30740,7 @@
         "depth": "16",
         "colors": 6,
         "description": "session tab strip: glowing active tab, plan-mode state, context meter in a window frame",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "sugar-crush/sugar-crush-3-16-s-2.ansi": {
@@ -30684,7 +30752,7 @@
         "depth": "16",
         "colors": 9,
         "description": "compaction trigger dialog: 91% context bar, keep/drop policy, Y/N/M options",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "sugar-crush/sugar-crush-3-256-l-1.ansi": {
@@ -30840,8 +30908,10 @@
         "depth": "16",
         "colors": 7,
         "description": "block-letter SUGAR CRUSH masthead over live session: tools, diff, hook DENIED, slash cmds",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "sugar-crush/sugar-crush-4-16-l-2.ansi": {
         "name": "sugar-crush-4-16-l-2.ansi",
@@ -30852,7 +30922,7 @@
         "depth": "16",
         "colors": 7,
         "description": "grand memory library: four shelf towers of colored spines, aisle signs, catalog, reading desk",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "sugar-crush/sugar-crush-4-16-m-1.ansi": {
@@ -30864,7 +30934,7 @@
         "depth": "16",
         "colors": 7,
         "description": "live transcript frame: tools, sub-agent task, colored diff, hook DENIED, key hints",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "sugar-crush/sugar-crush-4-16-m-2.ansi": {
@@ -30876,7 +30946,7 @@
         "depth": "16",
         "colors": 7,
         "description": "plan-mode checklist: 7 steps, read-only policy, approve/edit/reject keys, progress bar",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "sugar-crush/sugar-crush-4-16-s-1.ansi": {
@@ -30888,8 +30958,10 @@
         "depth": "16",
         "colors": 7,
         "description": "token mint ledger: coin vault, rates per 1K, budget bar, spend/reserve ticker",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "sugar-crush/sugar-crush-4-16-s-2.ansi": {
         "name": "sugar-crush-4-16-s-2.ansi",
@@ -30900,7 +30972,7 @@
         "depth": "16",
         "colors": 6,
         "description": "deny-gate customs booth: barrier down, scan beam, 403 hook stamp on rm -rf",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "sugar-crush/sugar-crush-4-256-l-1.ansi": {
@@ -31056,7 +31128,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Three-cabinet replay arcade hall with marquees, plinths and floor crawl",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "sugar-crush/sugar-crush-5-16-l-2.ansi": {
@@ -31068,7 +31140,7 @@
         "depth": "16",
         "colors": 8,
         "description": "Full prompt quarry panorama: seven strata, legend, crew notes, fence",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "sugar-crush/sugar-crush-5-16-m-1.ansi": {
@@ -31080,7 +31152,7 @@
         "depth": "16",
         "colors": 8,
         "description": "Full replay cabinet with scrubbed session timeline and control deck",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "sugar-crush/sugar-crush-5-16-m-2.ansi": {
@@ -31092,7 +31164,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Prompt-archaeology trench cutting through dated strata of old asks",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "sugar-crush/sugar-crush-5-16-s-1.ansi": {
@@ -31104,7 +31176,7 @@
         "depth": "16",
         "colors": 6,
         "description": "VHS session-replay arcade cabinet with REC tape, scrub bar, coin slot",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "sugar-crush/sugar-crush-5-16-s-2.ansi": {
@@ -31116,7 +31188,7 @@
         "depth": "16",
         "colors": 6,
         "description": "Kitchen order ticket clipped on a rail listing tool-call items to fire",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "sugar-crush/sugar-crush-5-256-l-1.ansi": {
@@ -31272,8 +31344,10 @@
         "depth": "16",
         "colors": 6,
         "description": "Apiary meadow of subagent hives with marked comb, pollen flight paths and foraging field notes",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "sugar-crush/sugar-crush-6-16-l-12.ansi": {
         "name": "sugar-crush-6-16-l-12.ansi",
@@ -31284,7 +31358,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Four-channel seismograph station recording tool quakes, hook tremors and one large diff event",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "sugar-crush/sugar-crush-6-16-m-5.ansi": {
@@ -31296,8 +31370,10 @@
         "depth": "16",
         "colors": 7,
         "description": "Simultaneous chess exhibition: one grandmaster agent versus open session-boards with scores and clocks",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "sugar-crush/sugar-crush-6-16-m-6.ansi": {
         "name": "sugar-crush-6-16-m-6.ansi",
@@ -31308,8 +31384,10 @@
         "depth": "16",
         "colors": 7,
         "description": "Submarine periscope watch: hook tripwires and flag-signalling diff ship seen through the scope",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "sugar-crush/sugar-crush-6-16-s-1.ansi": {
         "name": "sugar-crush-6-16-s-1.ansi",
@@ -31320,7 +31398,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Weather station forecast board: sun, cumulo-ctx, drizzle and a p99 squall line over SugarCrush",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-6-16-s-18.ansi": {
@@ -31332,7 +31410,7 @@
         "depth": "16",
         "colors": 5,
         "description": "Subagent circus ring: striped big top, act bill builder/reviewer/fixer and the CI ring of fire",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-6-256-l-13.ansi": {
@@ -31488,7 +31566,7 @@
         "depth": "16",
         "colors": 9,
         "description": "Wide evidence wall of bisect cards, diffs and failing tests stitched by red string",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-7-16-l-14.ansi": {
@@ -31500,7 +31578,7 @@
         "depth": "16",
         "colors": 10,
         "description": "SugarCrush funhouse panorama: mode big-tops and a rollercoaster of streaming tokens",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-7-16-m-7.ansi": {
@@ -31512,7 +31590,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Orchestral score: colour-staffed notes as plan/build/review/tool parts in one symphony",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-7-16-m-8.ansi": {
@@ -31524,7 +31602,7 @@
         "depth": "16",
         "colors": 8,
         "description": "Barometer dial reading context pressure beside a five-day SugarCrush forecast strip",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-7-16-s-1.ansi": {
@@ -31536,7 +31614,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Deep-sea trawler hauling a glowing context-net of tokens up a dusk swell",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-7-16-s-2.ansi": {
@@ -31548,7 +31626,7 @@
         "depth": "16",
         "colors": 9,
         "description": "Detective corkboard: scattered log cards pinned and red-stringed to a regression",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-7-256-l-15.ansi": {
@@ -31704,7 +31782,7 @@
         "depth": "16",
         "colors": 9,
         "description": "Wide signal-box full board: block instruments, 36-lever frame, track diagram and train register",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-8-16-l-14.ansi": {
@@ -31716,7 +31794,7 @@
         "depth": "16",
         "colors": 9,
         "description": "Grand manual switchroom panorama, four jack-banks corded across to a row of operator desks",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-8-16-m-7.ansi": {
@@ -31728,7 +31806,7 @@
         "depth": "16",
         "colors": 9,
         "description": "Signal-box interlocking lever frame: 18 colour-coded levers, route-locking table and token cabinet",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-8-16-m-8.ansi": {
@@ -31740,7 +31818,7 @@
         "depth": "16",
         "colors": 9,
         "description": "Manual telephone exchange patch panel, A/B jackfields laced with cords, live calls lit amber",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-8-16-s-1.ansi": {
@@ -31752,7 +31830,7 @@
         "depth": "16",
         "colors": 9,
         "description": "Railway block-post token-block staff instrument: paired annex dials sealing one train per section",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-8-16-s-2.ansi": {
@@ -31764,7 +31842,7 @@
         "depth": "16",
         "colors": 9,
         "description": "Projection-booth changeover log, reel 01 to reel 02 handoff with cue marks and running frame counts",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-8-256-l-15.ansi": {
@@ -31920,7 +31998,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Band sawmill: toothed circular blade bucks prompt.log into a stack of cut file planks",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-9-16-l-14.ansi": {
@@ -31932,7 +32010,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Cloud-seeding aircraft sows a cumulus reservoir that rains working code onto a crop field",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-9-16-m-7.ansi": {
@@ -31944,7 +32022,7 @@
         "depth": "16",
         "colors": 5,
         "description": "Falconry of tasks: a teal falcon stoops from the gauntlet onto a tool-call reticle",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-9-16-m-8.ansi": {
@@ -31956,7 +32034,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Hedge-labyrinth maze: hue-banded walls, breadcrumb solution from start to resolved-plan star",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-9-16-s-1.ansi": {
@@ -31968,7 +32046,7 @@
         "depth": "16",
         "colors": 5,
         "description": "Commit-fossil dig: stratified git-log wall, tool-brush sweeping, an ammonite HEAD emerging",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-9-16-s-2.ansi": {
@@ -31980,7 +32058,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Task-cascade domino run, six coloured tiles toppling Read to Grep to Plan to Edit to Test to Ship",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-9-256-l-15.ansi": {
@@ -32136,7 +32214,7 @@
         "depth": "16",
         "colors": 6,
         "description": "Wide pressure-lab cross-section: support vessel + tethers, telemetry readout, porthole with candy being crushed, chamber gauge, depth ladder to 850m",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "sugar-crush/sugar-crush-10-16-l-2.ansi": {
@@ -32148,7 +32226,7 @@
         "depth": "16",
         "colors": 6,
         "description": "Wide paper mill interior: feed rolls, seven-line printed diff on the press, take-up spool, floor bundles, roof trusses and steam",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "sugar-crush/sugar-crush-10-16-m-1.ansi": {
@@ -32160,7 +32238,7 @@
         "depth": "16",
         "colors": 6,
         "description": "Chess endgame study on hex board: candy pieces (kings/rook/lollipop queen/pawns) plus solution box — mate in 2 = commit the winning move",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "sugar-crush/sugar-crush-10-16-m-2.ansi": {
@@ -32172,7 +32250,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Desert caravan at dusk: purple-to-orange sky, sun disc, dune ridges, token-camel silhouettes with crate packs and long shadows",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "sugar-crush/sugar-crush-10-16-s-1.ansi": {
@@ -32184,7 +32262,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Film-noir desk at 3am: venetian-blind window striped light/dark slats, cyan frame, red streaming-token asides, monochrome mood",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "sugar-crush/sugar-crush-10-16-s-2.ansi": {
@@ -32196,7 +32274,7 @@
         "depth": "16",
         "colors": 10,
         "description": "Telegraph office in a blizzard: yellow header, amber tape with red morse ink, black pole silhouettes, white snow, green/red line lamps",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "sugar-crush/sugar-crush-10-256-l-1.ansi": {
