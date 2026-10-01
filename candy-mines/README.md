@@ -49,7 +49,7 @@ Five pure-state classes plus the runtime Model, renderer, UI helper, and persist
 |-------------------------|----------------------------------------------------------------------------------------------------|
 | `Cell`                  | Value object — mine / revealed / flagged / adjacent count                                          |
 | `Board`                 | The grid + every transition (reveal, flag, flood-fill, chord). Win detection is O(1) via `revealedCount` counter. Serialises to versioned JSON for mid-game save/load. |
-| `Game` (Model)          | Cursor + key routing + restart + win/lose gate + sub-second timer (`microtime(true)`). Records the result into `Stats` on the win/lose transition; persists via `DifficultyStats` when an opt-in stats path is configured. |
+| `Game` (Model)          | Cursor + key routing + restart + win/lose gate + sub-second timer (`microtime(true)`), advanced on screen by a 1 Hz `TickMsg` subscription armed from the first reveal until the board is over — the status clock runs without keypresses. Records the result into `Stats` on the win/lose transition; persists via `DifficultyStats` when an opt-in stats path is configured. |
 | `Stats`                 | Immutable difficulty stats — games, wins, best time per preset                                    |
 | `DifficultyStats`       | Atomic JSON persistence wrapper (tmp+rename, Homestead pattern)                                   |
 | `Ui/CustomDifficulty`   | Validated custom board dimensions — rows (2–50), cols (2–50), mines (1 to rows×cols−9). Throws i18n-aware `InvalidArgumentException` on constraint violation. |

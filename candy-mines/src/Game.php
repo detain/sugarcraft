@@ -104,6 +104,13 @@ final class Game implements Model
         if ($msg instanceof MouseMsg) {
             return [$this->afterAction($this->onMouse($msg), $wasOver), null];
         }
+        if ($msg instanceof TickMsg) {
+            // Clock pulse — repaint only. The model is returned untouched:
+            // view() recomputes elapsed() from the wall clock, and the runtime
+            // marks the frame dirty after every dispatched message, so the
+            // status line advances without a single keypress.
+            return [$this, null];
+        }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
@@ -377,8 +384,22 @@ final class Game implements Model
         );
     }
 
+    /**
+     * Arm the 1 Hz 'clock' tick while — and only while — the timer is live:
+     * from the first reveal (startedAt set) to the win/lose transition (board
+     * over, elapsed frozen into elapsedSeconds). The runtime reconciles
+     * subscriptions after every update cycle, so the tick starts on the first
+     * reveal and is cancelled when this method stops listing the id.
+     */
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {
-        return null;
+        if ($this->startedAt === null || $this->board->exploded || $this->board->isWon()) {
+            return null;
+        }
+        return (new \SugarCraft\Core\Subscriptions())->withTick(
+            'clock',
+            1.0,
+            static fn (): Msg => new TickMsg(),
+        );
     }
 }
