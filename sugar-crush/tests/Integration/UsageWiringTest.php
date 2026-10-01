@@ -358,6 +358,9 @@ final class UsageWiringTest extends TestCase
             // E707 (round 81): the seventh self-returning copy — the ceiling
             // verdict and the bill travel together or both vanish.
             'withLengthStopped' => $base->withLengthStopped(true),
+            // F2: the census rule is every self-returning method carries
+            // usage — a new flag-wither must appear here too.
+            'withStepsTruncated' => $base->withStepsTruncated(true),
         ];
 
         $reflected = [];

@@ -693,6 +693,100 @@ final class BootstrapLayeredSettingsTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // F2 (spawn-latency plan): maxToolSteps — the step-ceiling resolver
+    // -------------------------------------------------------------------------
+
+    public function testTheStepCeilingResolverAnswersNullWhenNothingIsConfigured(): void
+    {
+        self::assertNull($this->resolveStepsFrom([]));
+        self::assertNull($this->resolveStepsFrom(null), 'the ambient read of a fresh sandbox HOME — the byte-identity baseline of the default 8');
+    }
+
+    /**
+     * Nonsense answers null, never a clamped number — same doctrine
+     * `EngineBackend::maxOutputTokens()` records: an impossible ceiling is
+     * "operator said nothing", not "operator said big".
+     *
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('unusableStepCeilings')]
+    public function testNonsenseStepCeilingsResolveToNull(mixed $value): void
+    {
+        self::assertNull($this->resolveStepsFrom(['maxToolSteps' => $value]), var_export($value, true) . ' must answer "operator said nothing"');
+    }
+
+    /** @return iterable<string, array{mixed}> */
+    public static function unusableStepCeilings(): iterable
+    {
+        yield 'zero' => [0];
+        yield 'negative' => [-5];
+        yield 'the empty string' => [''];
+        yield 'a word' => ['many'];
+        yield 'a bool' => [true];
+        yield 'an array' => [[3]];
+        yield 'a fraction under one' => [0.5];
+        yield 'infinite' => [INF];
+        yield 'not-a-number' => [NAN];
+    }
+
+    public function testUsableStepCeilingsResolveToIntegers(): void
+    {
+        self::assertSame(13, $this->resolveStepsFrom(['maxToolSteps' => 13]));
+        self::assertSame(13, $this->resolveStepsFrom(['maxToolSteps' => '13']), 'a numeric string from a hand-edited file still counts');
+        self::assertSame(12, $this->resolveStepsFrom(['maxToolSteps' => 12.9]), 'truncation toward zero, same rule as the token ceiling');
+        self::assertSame(1, $this->resolveStepsFrom(['maxToolSteps' => 1]), 'the smallest honoured ceiling is one step');
+    }
+
+    public function testThePersistedKeyRaisesTheEngineCeilingAndUnsetHandsTheEngineBackUntouched(): void
+    {
+        $this->writeUserSettings(['maxToolSteps' => 13]);
+
+        $engine = new \SugarCraft\Crush\Backend\EngineBackend(new \SugarCraft\Crush\Providers\EchoProvider(), 'f2');
+        $raised = (new \ReflectionMethod(Bootstrap::class, 'withResolvedMaxToolSteps'))->invoke(null, $engine);
+
+        self::assertNotSame($engine, $raised, 'the wrap must not mutate — EngineBackend is immutable by contract');
+        self::assertSame(13, self::readMaxSteps($raised), 'the merged user read must land on the engine the chat actually runs');
+    }
+
+    public function testWithNoKeyAtAllTheEngineIsHandedBackByteIdentically(): void
+    {
+        // Its own test because the sandbox is per-test: THIS one must never
+        // have written the key — unset is not zero, and the proof is that the
+        // wrap returns the very same instance the shipped default built.
+        $plain = new \SugarCraft\Crush\Backend\EngineBackend(new \SugarCraft\Crush\Providers\EchoProvider(), 'f2');
+
+        self::assertSame($plain, (new \ReflectionMethod(Bootstrap::class, 'withResolvedMaxToolSteps'))->invoke(null, $plain), 'no key, no new instance, the shipped default speaks');
+        self::assertSame(8, self::readMaxSteps($plain), 'the shipped ceiling stays 8 (F2 made it configurable, not different)');
+    }
+
+    public function testBothProductionBackendFactoriesThreadTheCeiling(): void
+    {
+        // The two composition sites of a tool-bearing EngineBackend must both
+        // wrap — a drift here would make `backend()` honour the ceiling and
+        // `backendFor()` silently ignore it on every real-provider session.
+        $src = (string) file_get_contents((new \ReflectionClass(Bootstrap::class))->getFileName());
+
+        self::assertSame(
+            2,
+            substr_count($src, 'self::withResolvedMaxToolSteps($engine)'),
+            'F2 expects exactly the backend() and backendFor() wraps; a third call site needs its own argument, and a lost one is a silent settings regression',
+        );
+    }
+
+    /** @param ?array<string, mixed> $config */
+    private function resolveStepsFrom(?array $config): ?int
+    {
+        return (new \ReflectionMethod(Bootstrap::class, 'resolvedMaxToolSteps'))->invoke(null, $config);
+    }
+
+    private static function readMaxSteps(object $engine): int
+    {
+        $property = new \ReflectionProperty($engine, 'maxSteps');
+        $property->setAccessible(true);
+
+        return (int) $property->getValue($engine);
+    }
+
+    // -------------------------------------------------------------------------
     // Fixtures
     // -------------------------------------------------------------------------
 

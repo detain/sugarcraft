@@ -234,6 +234,21 @@ final class EngineBackendLengthStopTest extends TestCase
         $this->assertFalse($garbage->lengthStopped, 'a truthy string is not the child having SAID it');
     }
 
+    public function testTheStepTruncationFlagRidesTheSameResultFrame(): void
+    {
+        // F2, the async half: the child's runTurn sets the flag, the frame
+        // carries it, and the strict `=== true` law keeps pre-F2 and garbage
+        // frames answering "the child did not say the ceiling bit".
+        $truncated = $this->settleFrame(['ok' => true, 'content' => 'x', 'stepsTruncated' => true]);
+        $this->assertTrue($truncated->stepsTruncated);
+
+        $legacy = $this->settleFrame(['ok' => true, 'content' => 'x']);
+        $this->assertFalse($legacy->stepsTruncated, 'a frame written by a pre-F2 child has no key and must settle clean');
+
+        $garbage = $this->settleFrame(['ok' => true, 'content' => 'x', 'stepsTruncated' => 'yes']);
+        $this->assertFalse($garbage->stepsTruncated, 'same strictness as its E707 sibling — a truthy string is not the child having SAID it');
+    }
+
     // =========================================================================
     // harness
     // =========================================================================

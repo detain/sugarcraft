@@ -1023,6 +1023,34 @@ final class EngineBackendTest extends TestCase
 
         $this->assertSame(3, $provider->calls, 'loop must stop at maxSteps');
         $this->assertStringContainsString('step 3', $reply->content);
+        $this->assertTrue($reply->stepsTruncated, 'F2: the very exit this test already proves — exhaustion with tool results pending — must be the loud one, not the silent one');
+    }
+
+    public function testACleanAnswerNeverCarriesTheStepTruncationFlag(): void
+    {
+        // The polarity pair to the exhaustion pin: a model that answers
+        // without tools breaks the loop deliberately, and `stepsTruncated`
+        // must stay false or every ordinary turn would gain a wrong notice.
+        $provider = new class implements ProviderInterface {
+            public function name(): string { return 'clean'; }
+            public function supportsStreaming(): bool { return false; }
+            public function supportsFunctionCalling(): bool { return false; }
+            public function supportsVision(): bool { return false; }
+            public function supportsJsonSchema(): bool { return false; }
+            public function contextWindow(): int { return 1000; }
+            public function costPer1kTokens(string $m, string $d): float { return 0.0; }
+            public function complete(CompleteRequest $r): CompleteResponse
+            {
+                return new CompleteResponse(content: 'finished thought');
+            }
+            public function completeStream(CompleteRequest $r): \Generator { yield new CompleteResponse(content: 'finished thought'); }
+            public function embeddings(EmbeddingsRequest $r): EmbeddingsResponse { return new EmbeddingsResponse([]); }
+        };
+
+        $reply = EngineBackend::new($provider, 'clean')->complete([Message::user('go')]);
+
+        $this->assertSame('finished thought', $reply->content);
+        $this->assertFalse($reply->stepsTruncated, 'a break-by-answer is a completion, not a truncation');
     }
 
     public function testWithersReturnNewInstances(): void

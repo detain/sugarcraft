@@ -813,6 +813,16 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // turn's answer, not its last step's.
         $lengthStopped = false;
 
+        // F2 (spawn-latency plan): WHICH break ended the loop decides whether
+        // the turn was TRUNCATED. Before F2 the exhaustion exit — every step
+        // spent while tool results were still pending — returned the last
+        // assistant text SILENTLY, indistinguishable from a finished answer.
+        // Both deliberate exits (model answered without tools; spend cap,
+        // which writes its own notice) set a flag; no flag means the loop ran
+        // out, and the message carries `stepsTruncated` so Chat can say so.
+        $answeredWithoutTools = false;
+        $stoppedBySpendCap = false;
+
         // Whether the runtime managed to emit anything incrementally, so the
         // end-of-turn fallback below stays a FALLBACK rather than a duplicate:
         // firing it after a stream that already delivered the same bytes would
@@ -876,6 +886,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             }
 
             if ($toolResults === []) {
+                $answeredWithoutTools = true;
                 break; // model answered without calling tools — done
             }
 
@@ -916,6 +927,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                         $onEvent(new SpendCapBreached($step + 1, $sessionSpendAtBoundary, $this->spendCapUsd));
                     }
 
+                    $stoppedBySpendCap = true;
                     break;
                 }
             }
@@ -990,10 +1002,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // access to $lastAssistant before only the plain-string Message DTO
         // survives back to Chat/Renderer. withImage() does the same for an
         // image-bearing tool result (W1.G2 reachability fix).
+        // F2: neither deliberate break fired, so the LAST step still ended
+        // with tool results pending and the ceiling, not the model, ended the
+        // turn. One flag on the DTO; the transcript notice is Chat's settle
+        // arm's job (sibling of the E707 length-stopped notice).
+        $stepsTruncated = !$answeredWithoutTools && !$stoppedBySpendCap;
+
         return Message::assistant($content, reasoning: $lastAssistant?->reasoning())
             ->withImage($lastImageBytes, $lastImageProtocol)
             ->withUsage(Usage::sum($stepUsages))
-            ->withLengthStopped($lengthStopped);
+            ->withLengthStopped($lengthStopped)
+            ->withStepsTruncated($stepsTruncated);
     }
 
     /**
@@ -1686,6 +1705,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 // object, and a frame without the key settles false, the
                 // same "old child, new parent" tolerance $usage's ?? shows.
                 'lengthStopped' => $message->lengthStopped,
+                // F2: plain bool on the same rule — a pre-F2 frame settles
+                // false, "the child did not say the ceiling bit".
+                'stepsTruncated' => $message->stepsTruncated,
             ];
         } catch (\Throwable $e) {
             $payload = ['kind' => 'result', 'ok' => false, 'error' => $e->getMessage()];
@@ -1821,6 +1843,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 // the key, or carries garbage in it, settles "the child did
                 // not say the ceiling bit", which is the flag's honest false.
                 ->withLengthStopped(($data['lengthStopped'] ?? false) === true)
+                // F2: strict `=== true`, same pre-key tolerance as above.
+                ->withStepsTruncated(($data['stepsTruncated'] ?? false) === true)
         );
     }
 

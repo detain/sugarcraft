@@ -1731,6 +1731,11 @@ final class Chat implements Model
                     ...$this->history,
                     $message,
                     ...($message->lengthStopped ? [$this->outputLengthStoppedNotice()] : []),
+                    // F2, same append shape as the two lines around it: a turn
+                    // the STEP ceiling ended mid-exchange gets one transcript
+                    // notice pointing at `maxToolSteps`, so an unfinished
+                    // agentic loop never reads as a completed answer.
+                    ...($message->stepsTruncated ? [$this->stepsTruncatedNotice()] : []),
                     // Billing fix, same append shape as the E707 line above:
                     // a turn the app could NOT price gets exactly one
                     // transcript-visible notice naming the model, so a $0.00
@@ -15823,6 +15828,8 @@ final class Chat implements Model
             imageProtocol: $message->imageProtocol,
             usage: $message->usage,
             lengthStopped: $message->lengthStopped,
+            // F2: the harness's own ceiling verdict rides the same seam.
+            stepsTruncated: $message->stepsTruncated,
         );
     }
 
@@ -15905,6 +15912,28 @@ final class Chat implements Model
             'The provider stopped this reply at its output limit, so the text above may end mid-thought. '
             . 'Raise "maxOutputTokens" in ~/.sugar-crush/config.json for a longer single reply, '
             . 'or ask for the remainder in your next message.'
+        );
+    }
+
+    /**
+     * The notice the settle arm writes when the app's OWN step ceiling ended
+     * the turn with tool results still pending - F2 (spawn-latency plan), the
+     * sibling of {@see outputLengthStoppedNotice()} on the harness side of the
+     * same silent-truncation family: that one reports a reply the PROVIDER cut
+     * short, this one reports a loop THIS app stopped. Before F2 this exit was
+     * silent, which is the defect the notice closes.
+     *
+     * Like its siblings it names the knob an operator holds (`maxToolSteps`,
+     * see docs/SETTINGS.md) and the one action that costs nothing - asking
+     * again resumes where the ceiling stopped, because the transcript keeps
+     * every settled step.
+     */
+    private function stepsTruncatedNotice(): Message
+    {
+        return Message::system(
+            'This turn stopped at the step ceiling with tool results still pending, so the answer above is '
+            . 'incomplete — not a finished thought. Say "continue" to resume it, or raise "maxToolSteps" in '
+            . '~/.sugar-crush/config.json for longer agentic turns.'
         );
     }
 

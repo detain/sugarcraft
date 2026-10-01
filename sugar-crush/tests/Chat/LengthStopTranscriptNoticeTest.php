@@ -31,6 +31,37 @@ final class LengthStopTranscriptNoticeTest extends TestCase
         . 'Raise "maxOutputTokens" in ~/.sugar-crush/config.json for a longer single reply, '
         . 'or ask for the remainder in your next message.';
 
+    /** F2's sibling sentence, pinned whole for the same reason. */
+    private const STEPS_NOTICE = 'This turn stopped at the step ceiling with tool results still pending, so the answer above is '
+        . 'incomplete — not a finished thought. Say "continue" to resume it, or raise "maxToolSteps" in '
+        . '~/.sugar-crush/config.json for longer agentic turns.';
+
+    public function testASettledStepTruncatedTurnIsFollowedByOneSystemNotice(): void
+    {
+        [$chat] = $this->settle(Message::assistant('half a loop')->withStepsTruncated(true));
+
+        $history = $chat->history;
+        $last = $history[array_key_last($history)];
+
+        $this->assertSame(Role::System, $last->role);
+        $this->assertSame(self::STEPS_NOTICE, $last->content, 'F2: the silently-exhausted loop becomes one loud transcript line naming its own knob');
+        $this->assertStringNotContainsString("\x1b", $last->content);
+    }
+
+    public function testBothCeilingsFireTheirOwnNoticesInOrder(): void
+    {
+        // Provider-side verdict first (it explains the LAST reply's shape),
+        // harness-side second — two different loops stopped, two sentences.
+        [$chat] = $this->settle(Message::assistant('cut twice')->withLengthStopped(true)->withStepsTruncated(true));
+
+        $roles = array_map(static fn (Message $m): Role => $m->role, $chat->history);
+        $contents = array_map(static fn (Message $m): string => $m->content, $chat->history);
+
+        $this->assertSame([Role::User, Role::Assistant, Role::System, Role::System], $roles);
+        $this->assertSame(self::NOTICE, $contents[2], 'the E707 sentence keeps its position ahead of the F2 sibling');
+        $this->assertSame(self::STEPS_NOTICE, $contents[3]);
+    }
+
     public function testASettledCeilingStoppedReplyIsFollowedByOneSystemNotice(): void
     {
         [$chat] = $this->settle(Message::assistant('the text stops')->withLengthStopped(true));

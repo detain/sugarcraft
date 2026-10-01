@@ -180,6 +180,10 @@ final class EngineBackendSpendCapTest extends TestCase
             $reply->content,
             'the turn returns the work that DID run, not an error — this is an abort, not a failure',
         );
+        $this->assertFalse(
+            $reply->stepsTruncated,
+            'F2 polarity: a spend-cap abort owns its own notice — the step-truncation flag must stay false so one aborted turn never prints two competing diagnoses',
+        );
 
         $breach = array_filter($captured, static fn (object $e): bool => $e instanceof SpendCapBreached);
         $this->assertCount(1, $breach, 'exactly one breach per aborted turn');

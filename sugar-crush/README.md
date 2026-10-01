@@ -173,11 +173,11 @@ cannot tell whether the sentence is about them.)
 > was wrong. `config.json` keeps working indefinitely, and there is nothing to
 > migrate *to*: `settings.json` is never written.
 
-Only these fifteen keys are layered — `provider`, `theme`, `titleModel`,
+Only these sixteen keys are layered — `provider`, `theme`, `titleModel`,
 `summaryModel`, `instructions`, `disabledSkills`, `disabledRules`,
 `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxOutputTokens`,
 `modelPrices`, `allowedTools`,
-`disabledTools`, `statusLine`, `layout`. The
+`disabledTools`, `statusLine`, `layout`, `maxToolSteps`. The
 `trustedProject*` lists are read from `~/.sugar-crush/config.json` **alone**, so
 no lower layer can grant itself trust.
 
@@ -210,7 +210,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, eight keys are **never** taken from a project file:
+Even for a trusted project, nine keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path;
@@ -231,7 +231,11 @@ project-supplied map could zero a rate and silently blind the spend cap and the
 loud; `layout`, because it records where the operator chose to put
 their own windows — frame geometry is a personal habit, not a property of the
 checked-out code, and a project that moves your panes behind your back is
-answering to the wrong owner; and `allowedTools`, for a reason worth spelling
+answering to the wrong owner; `maxToolSteps`, because it multiplies how many
+billed provider round-trips one turn may fan out — the `maxOutputTokens` money
+axis counted in calls instead of tokens, and a ceiling a checkout can raise is
+still a bill a clone can run up on the operator's credential; and
+`allowedTools`, for a reason worth spelling
 out because on capability alone it looks harmless. A whitelist is an intersection — it
 cannot add a tool that `Bootstrap::tools()` did not build — but its effect is
 defined by what it *omits*, so `allowedTools: ["Bash"]` deletes all ten of the

@@ -239,6 +239,20 @@ final class LayeredSettings
      *                 back by the App's `onLayoutChange` hook through
      *                 `Bootstrap::writeUserConfig()` — the shell's pane
      *                 docking geometry, which sidebars exist within.
+     *  - `maxToolSteps`
+     *                 {@see \SugarCraft\Crush\Cli\Bootstrap}'s per-turn provider
+     *                 call ceiling, resolved once at backend construction
+     *                 (`resolvedMaxToolSteps()`) and threaded onto
+     *                 {@see \SugarCraft\Crush\Backend\EngineBackend::$maxSteps}
+     *                 (F2); unset keeps the shipped default of 8, and a turn
+     *                 that exhausts the ceiling now says so in the transcript
+     *                 instead of stopping silently. USER-TIER ONLY on the same
+     *                 money axis as `maxOutputTokens`: this key multiplies how
+     *                 many billed calls ONE turn may fan out, so a checked-out
+     *                 repository raising it would spend the operator's
+     *                 credential on the project's behalf — the argument
+     *                 `maxOutputTokens`'s bullet above already makes, with the
+     *                 multiplier pointed the other way.
      *
      * `statusLine` IS THE ONLY KEY HERE WHOSE VALUE IS A COMMAND, and that is
      * why it is user-tier only ({@see PROJECT_TIER_KEYS} does not list it).
@@ -364,6 +378,7 @@ final class LayeredSettings
         'disabledTools',
         'statusLine',
         'layout',
+        'maxToolSteps',
     ];
 
     /**
@@ -583,7 +598,8 @@ final class LayeredSettings
      * DERIVED, not written out, so the two lists above cannot drift apart into a
      * third list that agrees with neither. Today it is `provider`,
      * `instructions`, `disabledRules`, `maxOutputTokens`, `modelPrices`,
-     * `allowedTools`, `statusLine` and `layout`, in {@see LAYERED_KEYS} order — named rather than numbered
+     * `allowedTools`, `statusLine`, `layout` and `maxToolSteps`, in
+     * {@see LAYERED_KEYS} order — named rather than numbered
      * here, because the
      * ordinals this sentence used to carry went stale the moment a fifth key
      * joined the list. `allowedTools`'s argument is on {@see PROJECT_TIER_KEYS},

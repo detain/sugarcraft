@@ -97,6 +97,22 @@ final class Message implements \JsonSerializable
          */
         public readonly bool $lengthStopped = false,
         /**
+         * Whether the app's OWN step ceiling ended this turn while tool
+         * results were still pending - F2 (spawn-latency plan). The sibling
+         * of $lengthStopped one seam further in: that one is the provider's
+         * wire verdict about its output budget, this one is this harness's
+         * verdict about `maxSteps` — the EngineBackend loop ran out before
+         * the model produced a tool-free reply, which until F2 exited the
+         * turn SILENTLY. Carried on the DTO for the same reason: the settle
+         * arm in {@see \SugarCraft\Crush\Chat} turns it into one loud
+         * transcript notice instead of a half-finished turn reading as done.
+         *
+         * False on every clean end and on both explicit breaks (a reply with
+         * no tool calls; the spend cap, which writes its own notice) — it
+         * names loop exhaustion alone.
+         */
+        public readonly bool $stepsTruncated = false,
+        /**
          * The model's raw arguments for the call a "running" placeholder
          * stands in for - set only alongside {@see $pendingToolCallId}.
          * {@see $content} carries just {@see describeToolCall()}'s bounded
@@ -237,6 +253,7 @@ final class Message implements \JsonSerializable
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
             lengthStopped: $this->lengthStopped,
+            stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
         );
     }
@@ -256,6 +273,7 @@ final class Message implements \JsonSerializable
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
             lengthStopped: $this->lengthStopped,
+            stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
         );
     }
@@ -280,6 +298,7 @@ final class Message implements \JsonSerializable
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
             lengthStopped: $this->lengthStopped,
+            stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
         );
     }
@@ -307,6 +326,7 @@ final class Message implements \JsonSerializable
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
             lengthStopped: $this->lengthStopped,
+            stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: [],
         );
     }
@@ -334,6 +354,7 @@ final class Message implements \JsonSerializable
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
             lengthStopped: $this->lengthStopped,
+            stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
         );
     }
@@ -360,6 +381,7 @@ final class Message implements \JsonSerializable
             imageProtocol: $imageProtocol,
             usage: $this->usage,
             lengthStopped: $this->lengthStopped,
+            stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
         );
     }
@@ -387,6 +409,7 @@ final class Message implements \JsonSerializable
             imageProtocol: $this->imageProtocol,
             usage: $usage,
             lengthStopped: $this->lengthStopped,
+            stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
         );
     }
@@ -413,6 +436,33 @@ final class Message implements \JsonSerializable
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
             lengthStopped: $lengthStopped,
+            stepsTruncated: $this->stepsTruncated,
+            pendingToolArguments: $this->pendingToolArguments,
+        );
+    }
+
+    /**
+     * Attach (or clear, via false) the harness's own "step ceiling exhausted
+     * mid-turn" verdict - see $stepsTruncated's docblock. Written at
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::runTurn()}'s loop-exit
+     * seam and carried across the fork result frame like the flag it shadows.
+     */
+    public function withStepsTruncated(bool $stepsTruncated): self
+    {
+        return new self(
+            role: $this->role,
+            content: $this->content,
+            createdAt: $this->createdAt,
+            attachments: $this->attachments,
+            toolCalls: $this->toolCalls,
+            toolResults: $this->toolResults,
+            pendingToolCallId: $this->pendingToolCallId,
+            reasoning: $this->reasoning,
+            imageBytes: $this->imageBytes,
+            imageProtocol: $this->imageProtocol,
+            usage: $this->usage,
+            lengthStopped: $this->lengthStopped,
+            stepsTruncated: $stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
         );
     }
@@ -510,6 +560,7 @@ final class Message implements \JsonSerializable
             'imageProtocol' => $this->imageProtocol,
             'usage' => $this->usage,
             'lengthStopped' => $this->lengthStopped,
+            'stepsTruncated' => $this->stepsTruncated,
             'pendingToolArguments' => $this->pendingToolArguments,
         ];
     }
@@ -599,6 +650,7 @@ final class Message implements \JsonSerializable
             imageProtocol: $string($row['imageProtocol'] ?? null),
             usage: Usage::fromArray($row['usage'] ?? null),
             lengthStopped: ($row['lengthStopped'] ?? false) === true,
+            stepsTruncated: ($row['stepsTruncated'] ?? false) === true,
             pendingToolArguments: \is_array($row['pendingToolArguments'] ?? null) ? $row['pendingToolArguments'] : [],
         );
     }

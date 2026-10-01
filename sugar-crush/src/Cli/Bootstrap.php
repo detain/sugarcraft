@@ -2809,6 +2809,12 @@ final class Bootstrap
             // and nothing the user recorded would ever reach the model.
             ->withMemoryStore(self::memoryStoreOrNull());
 
+        // F2: the settings ceiling lands before the approver, after every
+        // with*() that ships in this chain — and `toollessBackend()`s engines
+        // are deliberately NOT wrapped: title/summary turns never loop on
+        // tools, so the orchestration ceiling is not their axis.
+        $engine = self::withResolvedMaxToolSteps($engine);
+
         return self::withConsolePermissionPrompt($engine, $gate, $consolePermissionPrompt);
     }
 
@@ -2899,7 +2905,68 @@ final class Bootstrap
             // and nothing the user recorded would ever reach the model.
             ->withMemoryStore(self::memoryStoreOrNull());
 
+        // F2: the settings ceiling lands before the approver, after every
+        // with*() that ships in this chain — and `toollessBackend()`s engines
+        // are deliberately NOT wrapped: title/summary turns never loop on
+        // tools, so the orchestration ceiling is not their axis.
+        $engine = self::withResolvedMaxToolSteps($engine);
+
         return self::withConsolePermissionPrompt($engine, $gate, $consolePermissionPrompt);
+    }
+
+    /**
+     * The `settings.json` key F2 made configurable; named rather than
+     * inlined so the drift guards and the docs row cite one spelling.
+     */
+    private const MAX_TOOL_STEPS_CONFIG_KEY = 'maxToolSteps';
+
+    /**
+     * The operator's per-turn provider-call ceiling, or null when no usable
+     * one was configured - F2 (spawn-latency plan).
+     *
+     * NULL IS THE DEFAULT'S VOICE: with no resolved value the engine keeps
+     * the shipped `maxSteps = 8` byte-identically, exactly the contract
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::maxOutputTokens()}
+     * records for the token ceiling - nonsense answers null rather than
+     * clamping, and no env hatch is worth a second authority over a money
+     * axis. Accepted: any finite positive numeric (JSON int or numeric
+     * string), truncated toward zero; no upper bound - the spend cap and
+     * the operator own that question.
+     *
+     * Read at BACKEND CONSTRUCTION, not per turn, and deliberately so:
+     * TaskTool raises the ceiling for its OWN sub-agent turns via
+     * `withMaxSteps()` AFTER this value lands, and that explicit per-run
+     * override must keep winning - a per-turn re-read would silently
+     * re-apply the user ceiling under the sub-agent's raised one.
+     *
+     * @param ?array<string, mixed> $config the already-read merged config;
+     *                                      null reads it
+     */
+    private static function resolvedMaxToolSteps(?array $config = null): ?int
+    {
+        $raw = ($config ?? self::readUserConfig())[self::MAX_TOOL_STEPS_CONFIG_KEY] ?? null;
+
+        if (is_string($raw)) {
+            $raw = is_numeric($raw) ? $raw + 0 : null;
+        }
+
+        if (!is_int($raw) && !(is_float($raw) && is_finite($raw))) {
+            return null;
+        }
+
+        return $raw >= 1 ? (int) $raw : null;
+    }
+
+    /**
+     * Raise or keep the step ceiling on a freshly built engine - one place
+     * so {@see backend()}'s echo path and {@see backendFor()}'s real path
+     * cannot drift on it.
+     */
+    private static function withResolvedMaxToolSteps(EngineBackend $engine): EngineBackend
+    {
+        $steps = self::resolvedMaxToolSteps();
+
+        return $steps === null ? $engine : $engine->withMaxSteps($steps);
     }
 
     /**
