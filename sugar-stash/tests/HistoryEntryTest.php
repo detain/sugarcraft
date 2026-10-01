@@ -35,8 +35,10 @@ final class HistoryEntryTest extends TestCase
 
         $this->assertSame('discard', $entry->op);
         $this->assertSame(['path' => 'src/App.php'], $entry->args);
-        $this->assertSame('stage', $entry->inverseOp);
-        $this->assertSame(['path' => 'src/App.php'], $entry->inverseArgs);
+        // Undoing a discard would recreate destroyed uncommitted bytes — the
+        // entry must be marked unrecoverable, not given a fake 'stage' inverse.
+        $this->assertSame(HistoryEntry::UNRECOVERABLE_INVERSE, $entry->inverseOp);
+        $this->assertSame([], $entry->inverseArgs);
     }
 
     public function testCheckoutFactoryCreatesCorrectEntry(): void
@@ -65,7 +67,8 @@ final class HistoryEntryTest extends TestCase
 
         $this->assertSame('amend', $entry->op);
         $this->assertSame([], $entry->args);
-        $this->assertSame('reset', $entry->inverseOp);
+        // 'reset' as inverse destroyed the ORIGINAL commit; refusing is honest.
+        $this->assertSame(HistoryEntry::UNRECOVERABLE_INVERSE, $entry->inverseOp);
         $this->assertSame([], $entry->inverseArgs);
     }
 
@@ -105,7 +108,8 @@ final class HistoryEntryTest extends TestCase
 
         $this->assertSame('merge', $entry->op);
         $this->assertSame(['branch' => 'feature-branch'], $entry->args);
-        $this->assertSame('abort', $entry->inverseOp);
+        // 'abort' misrouted to rebase --abort — now an explicit refusal.
+        $this->assertSame(HistoryEntry::UNRECOVERABLE_INVERSE, $entry->inverseOp);
         $this->assertSame([], $entry->inverseArgs);
     }
 

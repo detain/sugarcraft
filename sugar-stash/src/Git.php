@@ -39,18 +39,20 @@ final class Git implements GitDriver
             $row = [
                 'index_status' => $index,
                 'work_status'  => $work,
-                'path'         => $field,
+                'path'         => self::unquotePath($field),
             ];
             // Porcelain v1 renders renamed/copied entries (R/C in either
-            // status column) as "ORIG_PATH -> PATH". Splitting on the literal
-            // " -> " keeps PATH as the working path — a bare substr($line, 3)
-            // leaves the whole "old -> new" string as the path and corrupts
-            // every downstream stage/discard/diff on the file.
+            // status column) as "ORIG_PATH -> PATH". Splitting on the arrow
+            // keeps PATH as the working path — a bare substr($line, 3) leaves
+            // the whole "old -> new" string as the path and corrupts every
+            // downstream stage/discard/diff on the file. The split is
+            // quote-aware and both halves are C-unescaped so unicode and
+            // quote-bearing names survive the round-trip (audit #3).
             if ($index === 'R' || $index === 'C' || $work === 'R' || $work === 'C') {
-                $parts = explode(' -> ', $field, 2);
-                if (count($parts) === 2) {
-                    $row['orig_path'] = $parts[0];
-                    $row['path']      = $parts[1];
+                $parts = self::splitRename($field);
+                if ($parts !== null) {
+                    $row['orig_path'] = self::unquotePath($parts[0]);
+                    $row['path']      = self::unquotePath($parts[1]);
                 }
             }
             $rows[] = $row;
@@ -315,10 +317,91 @@ final class Git implements GitDriver
         return $base . '/' . $path;
     }
 
+    /**
+     * Assemble the full argv for every `git` shell-out.
+     *
+     * `-c core.quotepath=off` is repo-wide on purpose: without it git
+     * C-style-quotes every path containing non-ASCII bytes
+     * (`"caf\303\251.txt"`), the app feeds that escaped literal back into
+     * stage/discard/diff as an argument, and every operation on a unicode
+     * filename fails (audit sugar-stash #3). Paths containing `"` or `\`
+     * stay quoted regardless — see {@see self::unquotePath()}.
+     *
+     * @param list<string> $args
+     * @return list<string>
+     */
+    private function argv(array $args): array
+    {
+        return array_merge(['git', '-c', 'core.quotepath=off', '-C', $this->cwd], $args);
+    }
+
+    /**
+     * Decode a C-style quoted porcelain path (`"we\"ird.txt"`) to raw bytes.
+     *
+     * Git quotes any path containing `"`, `\`, or control characters even
+     * with core.quotepath=off, so the parser must undo the quoting before
+     * the path is shown, and before it is handed back as an argument.
+     */
+    private static function unquotePath(string $path): string
+    {
+        if (strlen($path) < 2 || !str_starts_with($path, '"') || !str_ends_with($path, '"')) {
+            return $path;
+        }
+        $inner = substr($path, 1, -1);
+        $decoded = preg_replace_callback(
+            '/\\\\([0-7]{1,3}|.)/s',
+            static fn(array $m): string => match (true) {
+                ctype_digit($m[1]) => chr((int) octdec($m[1])),
+                $m[1] === 'n' => "\n",
+                $m[1] === 't' => "\t",
+                $m[1] === 'r' => "\r",
+                $m[1] === 'a' => "\a",
+                $m[1] === 'b' => "\b",
+                $m[1] === 'f' => "\f",
+                $m[1] === 'v' => "\v",
+                default => $m[1], // \" \\ \any-other -> the literal char
+            },
+            $inner,
+        );
+        // preg only fails on a malformed pattern (impossible here); the
+        // fail-closed fallback still sheds the wrapper quotes.
+        return $decoded ?? $inner;
+    }
+
+    /**
+     * Split a porcelain rename field `ORIG -> NEW` at the first ` -> `
+     * sitting OUTSIDE a quoted section (a quoted name may itself contain
+     * the arrow, e.g. `"we\"ird -> old" -> new.txt`).
+     *
+     * @return array{0: string, 1: string}|null null when no unquoted arrow exists
+     */
+    private static function splitRename(string $field): ?array
+    {
+        $inQuote = false;
+        $length = strlen($field);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $field[$i];
+            if ($inQuote) {
+                if ($char === '\\') {
+                    $i++; // escaped char rides inside the quote
+                } elseif ($char === '"') {
+                    $inQuote = false;
+                }
+                continue;
+            }
+            if ($char === '"') {
+                $inQuote = true;
+            } elseif (substr($field, $i, 4) === ' -> ') {
+                return [substr($field, 0, $i), substr($field, $i + 4)];
+            }
+        }
+        return null;
+    }
+
     /** @return list<string> */
     private function run(array $args): array
     {
-        $r = Process::run(array_merge(['git', '-C', $this->cwd], $args), null, $this->timeout);
+        $r = Process::run($this->argv($args), null, $this->timeout);
         $this->assertNotTimedOut($r);
         if ($r['exit'] !== 0) {
             throw new \RuntimeException(Lang::t('git.error', ['stderr' => trim($r['stderr'])]));
@@ -329,7 +412,7 @@ final class Git implements GitDriver
     /** Like run() but passes $input via stdin and does not capture stdout. */
     private function runPatch(string $path, string $hunk, array $args): void
     {
-        $r = Process::run(array_merge(['git', '-C', $this->cwd], $args), $hunk, $this->timeout);
+        $r = Process::run($this->argv($args), $hunk, $this->timeout);
         $this->assertNotTimedOut($r);
         if ($r['exit'] !== 0) {
             throw new \RuntimeException(Lang::t('git.error', ['stderr' => trim($r['stderr'])]));

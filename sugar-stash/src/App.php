@@ -511,6 +511,7 @@ final class App implements Model
         bool $collectingCommit = null,
         string $commitMessage = null,
         ?DiffViewer $diffViewer = null,
+        bool $diffViewerSet = false,
         bool $collectingBranchName = null,
         string $branchName = null,
         ?string $successMessage = null,
@@ -519,9 +520,13 @@ final class App implements Model
         string $mergeTarget = null,
         bool $showRebaseMenu = null,
         ?StashManager $stashManager = null,
+        bool $stashManagerSet = false,
         ?CherryPick $cherryPick = null,
+        bool $cherryPickSet = false,
         ?Worktrees $worktrees = null,
+        bool $worktreesSet = false,
         ?InteractiveRebase $interactiveRebase = null,
+        bool $interactiveRebaseSet = false,
         ?int $width = null,
         ?int $height = null,
     ): self {
@@ -539,7 +544,7 @@ final class App implements Model
             showHelp: $showHelp ?? $this->showHelp,
             collectingCommit: $collectingCommit ?? $this->collectingCommit,
             commitMessage: $commitMessage ?? $this->commitMessage,
-            diffViewer: $diffViewer ?? $this->diffViewer,
+            diffViewer: $diffViewerSet ? $diffViewer : ($diffViewer ?? $this->diffViewer),
             collectingBranchName: $collectingBranchName ?? $this->collectingBranchName,
             branchName: $branchName ?? $this->branchName,
             successMessage: $successMessage,
@@ -547,10 +552,10 @@ final class App implements Model
             collectingMergeTarget: $collectingMergeTarget ?? $this->collectingMergeTarget,
             mergeTarget: $mergeTarget ?? $this->mergeTarget,
             showRebaseMenu: $showRebaseMenu ?? $this->showRebaseMenu,
-            stashManager: $stashManager ?? $this->stashManager,
-            cherryPick: $cherryPick ?? $this->cherryPick,
-            worktrees: $worktrees ?? $this->worktrees,
-            interactiveRebase: $interactiveRebase ?? $this->interactiveRebase,
+            stashManager: $stashManagerSet ? $stashManager : ($stashManager ?? $this->stashManager),
+            cherryPick: $cherryPickSet ? $cherryPick : ($cherryPick ?? $this->cherryPick),
+            worktrees: $worktreesSet ? $worktrees : ($worktrees ?? $this->worktrees),
+            interactiveRebase: $interactiveRebaseSet ? $interactiveRebase : ($interactiveRebase ?? $this->interactiveRebase),
             width: $width ?? $this->width,
             height: $height ?? $this->height,
         );
@@ -583,7 +588,7 @@ final class App implements Model
         }
         try {
             $this->git->discard($row['path']);
-            return $this->withAll(history: $this->history->push(HistoryEntry::discard($row['path'])))->refresh();
+            return $this->withAll(history: $this->requireHistory()->push(HistoryEntry::discard($row['path'])))->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
@@ -603,10 +608,10 @@ final class App implements Model
             $newHistory = null;
             if ($isStaged) {
                 $this->git->unstage($row['path']);
-                $newHistory = $this->history->push(HistoryEntry::unstage($row['path']));
+                $newHistory = $this->requireHistory()->push(HistoryEntry::unstage($row['path']));
             } else {
                 $this->git->stage($row['path']);
-                $newHistory = $this->history->push(HistoryEntry::stage($row['path']));
+                $newHistory = $this->requireHistory()->push(HistoryEntry::stage($row['path']));
             }
             return $this->withAll(history: $newHistory)->refresh();
         } catch (\RuntimeException $e) {
@@ -619,7 +624,7 @@ final class App implements Model
     {
         try {
             $this->git->stageAll();
-            return $this->withAll(history: $this->history->push(HistoryEntry::stageAll()))->refresh();
+            return $this->withAll(history: $this->requireHistory()->push(HistoryEntry::stageAll()))->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
@@ -634,7 +639,7 @@ final class App implements Model
         }
         try {
             $this->git->checkout($branch['name']);
-            return $this->withAll(history: $this->history->push(HistoryEntry::checkout($branch['name'])))->refresh();
+            return $this->withAll(history: $this->requireHistory()->push(HistoryEntry::checkout($branch['name'])))->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
@@ -655,7 +660,7 @@ final class App implements Model
         try {
             $this->git->commit($this->commitMessage);
             return $this
-                ->withAll(history: $this->history->push(HistoryEntry::commit($this->commitMessage)))
+                ->withAll(history: $this->requireHistory()->push(HistoryEntry::commit($this->commitMessage)))
                 ->withCommitCollection(false, '')
                 ->refresh();
         } catch (\RuntimeException $e) {
@@ -682,38 +687,18 @@ final class App implements Model
         }
     }
 
-    /** Dismiss the diff viewer. */
+    /** Explicit-set diffViewer swap — the null argument MEANS "close the overlay",
+     * which withAll's `?? $this->diffViewer` keep-existing fallthrough cannot express
+     * unaided, hence the diffViewerSet sentinel (audit #12: single construction site).
+     * error/successMessage ride through unchanged, matching the old full-arg bypass.
+     */
     private function withDiffViewer(?DiffViewer $dv): self
     {
-        // Bypass withAll to avoid ?? operator treating explicit null as "keep existing"
-        return new self(
-            git: $this->git,
-            status: $this->status,
-            branches: $this->branches,
-            log: $this->log,
-            branchSummary: $this->branchSummary,
-            pane: $this->pane,
-            statusCursor: $this->statusCursor,
-            branchesCursor: $this->branchesCursor,
-            logCursor: $this->logCursor,
+        return $this->withAll(
             error: $this->error,
-            showHelp: $this->showHelp,
-            collectingCommit: $this->collectingCommit,
-            commitMessage: $this->commitMessage,
-            diffViewer: $dv,
-            collectingBranchName: $this->collectingBranchName,
-            branchName: $this->branchName,
             successMessage: $this->successMessage,
-            history: $this->history,
-            collectingMergeTarget: $this->collectingMergeTarget,
-            mergeTarget: $this->mergeTarget,
-            showRebaseMenu: $this->showRebaseMenu,
-            stashManager: $this->stashManager,
-            cherryPick: $this->cherryPick,
-            worktrees: $this->worktrees,
-            interactiveRebase: $this->interactiveRebase,
-            width: $this->width,
-            height: $this->height,
+            diffViewer: $dv,
+            diffViewerSet: true,
         );
     }
 
@@ -747,7 +732,7 @@ final class App implements Model
         try {
             $patch = $dv->currentHunkPatch();
             $this->git->stagePatch($dv->path, $patch);
-            $newHistory = $this->history->push(HistoryEntry::stagePatch($dv->path, $patch));
+            $newHistory = $this->requireHistory()->push(HistoryEntry::stagePatch($dv->path, $patch));
             return $this
                 ->withAll(history: $newHistory)
                 ->withDiffViewer(null)
@@ -763,7 +748,7 @@ final class App implements Model
     {
         try {
             $this->git->amend();
-            return $this->withAll(history: $this->history->push(HistoryEntry::amend()))->refresh();
+            return $this->withAll(history: $this->requireHistory()->push(HistoryEntry::amend()))->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
@@ -794,7 +779,7 @@ final class App implements Model
         try {
             $this->git->createBranch($this->branchName);
             return $this
-                ->withAll(history: $this->history->push(HistoryEntry::createBranch($this->branchName)))
+                ->withAll(history: $this->requireHistory()->push(HistoryEntry::createBranch($this->branchName)))
                 ->withBranchCollection(false, '')
                 ->refresh();
         } catch (\RuntimeException $e) {
@@ -802,11 +787,36 @@ final class App implements Model
         }
     }
 
+    /**
+     * The history manager is an optional ctor collaborator (App::start() always
+     * supplies one; hand-constructed Apps may not). Dereferencing null on 'a'
+     * or 'u' fataled, so every mutation path routes through here for an honest
+     * error line instead. RuntimeException rides the surrounding catches.
+     */
+    private function requireHistory(): HistoryManager
+    {
+        if ($this->history === null) {
+            throw new \RuntimeException(Lang::t('history.unavailable'));
+        }
+        return $this->history;
+    }
+
     /** Undo the last operation. */
     private function executeUndo(): self
     {
+        if ($this->history === null) {
+            return $this->withError(Lang::t('history.unavailable'));
+        }
         if (!$this->history->canUndo()) {
             return $this->withError(Lang::t('history.nothing_to_undo'));
+        }
+        // Peek BEFORE popping: an unrecoverable inverse must leave the history
+        // stacks untouched (undo() would move the entry onto the redo stack
+        // even when the refusal keeps the repo unchanged).
+        $undoStack = $this->history->undoStack;
+        $top       = $undoStack[array_key_last($undoStack)];
+        if ($top->inverseOp === HistoryEntry::UNRECOVERABLE_INVERSE) {
+            return $this->withError(Lang::t('history.cannot_undo', ['op' => $top->op]));
         }
         $result = $this->history->undo();
         $entry = $result['entry'];
@@ -817,9 +827,13 @@ final class App implements Model
         return $this->applyHistoryEntry($entry, false, $newHistory);
     }
 
-    /** Redo the last undone operation. */
+    /** Redo the last undone operation (re-applies the FORWARD op, which is
+     * always real work — unrecoverability is a property of inverses only). */
     private function executeRedo(): self
     {
+        if ($this->history === null) {
+            return $this->withError(Lang::t('history.unavailable'));
+        }
         if ($this->history->canRedo() === FALSE) {
             return $this->withError(Lang::t('history.nothing_to_redo'));
         }
@@ -859,7 +873,14 @@ final class App implements Model
                 'unstagePatch' => $this->git->unstagePatch($args['path'], $args['hunk']),
                 'merge' => $this->git->merge($args['branch']),
                 'abort' => $this->git->rebaseAbort(),
-                default => null,
+                // Belt to executeUndo's peek: if a refuse-shaped inverse ever
+                // reaches here (via a future caller), fail loud, never silent.
+                HistoryEntry::UNRECOVERABLE_INVERSE => throw new \RuntimeException(
+                    Lang::t('history.cannot_undo', ['op' => $entry->op]),
+                ),
+                // An op nobody implements must NOT be reported as "undone" —
+                // the old `default => null` claimed success on garbage.
+                default => throw new \RuntimeException(Lang::t('history.unknown_op', ['op' => $op])),
             };
             $msg = Lang::t('history.undone', ['op' => $entry->op]);
             $refreshed = $this->refresh();
@@ -885,7 +906,7 @@ final class App implements Model
         try {
             $this->git->deleteBranch($branch['name']);
             return $this
-                ->withAll(history: $this->history->push(HistoryEntry::deleteBranch($branch['name'])))
+                ->withAll(history: $this->requireHistory()->push(HistoryEntry::deleteBranch($branch['name'])))
                 ->refresh()
                 ->withAll(successMessage: Lang::t('branch.deleted', ['name' => $branch['name']]));
         } catch (\RuntimeException $e) {
@@ -918,7 +939,7 @@ final class App implements Model
         try {
             $this->git->merge($this->mergeTarget);
             return $this
-                ->withAll(history: $this->history->push(HistoryEntry::merge($this->mergeTarget)))
+                ->withAll(history: $this->requireHistory()->push(HistoryEntry::merge($this->mergeTarget)))
                 ->withMergeCollection(false, '')
                 ->refresh()
                 ->withAll(successMessage: Lang::t('merge.success', ['branch' => $this->mergeTarget]));
@@ -995,37 +1016,18 @@ final class App implements Model
         }
     }
 
+    /** Explicit-set stashManager swap — the null argument MEANS "close the overlay",
+     * which withAll's `?? $this->stashManager` keep-existing fallthrough cannot express
+     * unaided, hence the stashManagerSet sentinel (audit #12: single construction site).
+     * error/successMessage ride through unchanged, matching the old full-arg bypass.
+     */
     private function withStashManager(?StashManager $sm): self
     {
-        // Bypass withAll to avoid ?? operator treating explicit null as "keep existing"
-        return new self(
-            git: $this->git,
-            status: $this->status,
-            branches: $this->branches,
-            log: $this->log,
-            branchSummary: $this->branchSummary,
-            pane: $this->pane,
-            statusCursor: $this->statusCursor,
-            branchesCursor: $this->branchesCursor,
-            logCursor: $this->logCursor,
+        return $this->withAll(
             error: $this->error,
-            showHelp: $this->showHelp,
-            collectingCommit: $this->collectingCommit,
-            commitMessage: $this->commitMessage,
-            diffViewer: $this->diffViewer,
-            collectingBranchName: $this->collectingBranchName,
-            branchName: $this->branchName,
             successMessage: $this->successMessage,
-            history: $this->history,
-            collectingMergeTarget: $this->collectingMergeTarget,
-            mergeTarget: $this->mergeTarget,
-            showRebaseMenu: $this->showRebaseMenu,
             stashManager: $sm,
-            cherryPick: $this->cherryPick,
-            worktrees: $this->worktrees,
-            interactiveRebase: $this->interactiveRebase,
-            width: $this->width,
-            height: $this->height,
+            stashManagerSet: true,
         );
     }
 
@@ -1076,37 +1078,18 @@ final class App implements Model
         return $this->withCherryPick(CherryPick::collecting());
     }
 
+    /** Explicit-set cherryPick swap — the null argument MEANS "close the overlay",
+     * which withAll's `?? $this->cherryPick` keep-existing fallthrough cannot express
+     * unaided, hence the cherryPickSet sentinel (audit #12: single construction site).
+     * error/successMessage ride through unchanged, matching the old full-arg bypass.
+     */
     private function withCherryPick(?CherryPick $cp): self
     {
-        // Bypass withAll to avoid ?? operator treating explicit null as "keep existing"
-        return new self(
-            git: $this->git,
-            status: $this->status,
-            branches: $this->branches,
-            log: $this->log,
-            branchSummary: $this->branchSummary,
-            pane: $this->pane,
-            statusCursor: $this->statusCursor,
-            branchesCursor: $this->branchesCursor,
-            logCursor: $this->logCursor,
+        return $this->withAll(
             error: $this->error,
-            showHelp: $this->showHelp,
-            collectingCommit: $this->collectingCommit,
-            commitMessage: $this->commitMessage,
-            diffViewer: $this->diffViewer,
-            collectingBranchName: $this->collectingBranchName,
-            branchName: $this->branchName,
             successMessage: $this->successMessage,
-            history: $this->history,
-            collectingMergeTarget: $this->collectingMergeTarget,
-            mergeTarget: $this->mergeTarget,
-            showRebaseMenu: $this->showRebaseMenu,
-            stashManager: $this->stashManager,
             cherryPick: $cp,
-            worktrees: $this->worktrees,
-            interactiveRebase: $this->interactiveRebase,
-            width: $this->width,
-            height: $this->height,
+            cherryPickSet: true,
         );
     }
 
@@ -1138,37 +1121,18 @@ final class App implements Model
         }
     }
 
+    /** Explicit-set worktrees swap — the null argument MEANS "close the overlay",
+     * which withAll's `?? $this->worktrees` keep-existing fallthrough cannot express
+     * unaided, hence the worktreesSet sentinel (audit #12: single construction site).
+     * error/successMessage ride through unchanged, matching the old full-arg bypass.
+     */
     private function withWorktrees(?Worktrees $wt): self
     {
-        // Bypass withAll to avoid ?? operator treating explicit null as "keep existing"
-        return new self(
-            git: $this->git,
-            status: $this->status,
-            branches: $this->branches,
-            log: $this->log,
-            branchSummary: $this->branchSummary,
-            pane: $this->pane,
-            statusCursor: $this->statusCursor,
-            branchesCursor: $this->branchesCursor,
-            logCursor: $this->logCursor,
+        return $this->withAll(
             error: $this->error,
-            showHelp: $this->showHelp,
-            collectingCommit: $this->collectingCommit,
-            commitMessage: $this->commitMessage,
-            diffViewer: $this->diffViewer,
-            collectingBranchName: $this->collectingBranchName,
-            branchName: $this->branchName,
             successMessage: $this->successMessage,
-            history: $this->history,
-            collectingMergeTarget: $this->collectingMergeTarget,
-            mergeTarget: $this->mergeTarget,
-            showRebaseMenu: $this->showRebaseMenu,
-            stashManager: $this->stashManager,
-            cherryPick: $this->cherryPick,
             worktrees: $wt,
-            interactiveRebase: $this->interactiveRebase,
-            width: $this->width,
-            height: $this->height,
+            worktreesSet: true,
         );
     }
 
@@ -1219,37 +1183,18 @@ final class App implements Model
         return $this->withInteractiveRebase(InteractiveRebase::selectingN());
     }
 
+    /** Explicit-set interactiveRebase swap — the null argument MEANS "close the overlay",
+     * which withAll's `?? $this->interactiveRebase` keep-existing fallthrough cannot express
+     * unaided, hence the interactiveRebaseSet sentinel (audit #12: single construction site).
+     * error/successMessage ride through unchanged, matching the old full-arg bypass.
+     */
     private function withInteractiveRebase(?InteractiveRebase $ir): self
     {
-        // Bypass withAll to avoid ?? operator treating explicit null as "keep existing"
-        return new self(
-            git: $this->git,
-            status: $this->status,
-            branches: $this->branches,
-            log: $this->log,
-            branchSummary: $this->branchSummary,
-            pane: $this->pane,
-            statusCursor: $this->statusCursor,
-            branchesCursor: $this->branchesCursor,
-            logCursor: $this->logCursor,
+        return $this->withAll(
             error: $this->error,
-            showHelp: $this->showHelp,
-            collectingCommit: $this->collectingCommit,
-            commitMessage: $this->commitMessage,
-            diffViewer: $this->diffViewer,
-            collectingBranchName: $this->collectingBranchName,
-            branchName: $this->branchName,
             successMessage: $this->successMessage,
-            history: $this->history,
-            collectingMergeTarget: $this->collectingMergeTarget,
-            mergeTarget: $this->mergeTarget,
-            showRebaseMenu: $this->showRebaseMenu,
-            stashManager: $this->stashManager,
-            cherryPick: $this->cherryPick,
-            worktrees: $this->worktrees,
             interactiveRebase: $ir,
-            width: $this->width,
-            height: $this->height,
+            interactiveRebaseSet: true,
         );
     }
 

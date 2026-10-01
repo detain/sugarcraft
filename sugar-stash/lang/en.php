@@ -16,7 +16,7 @@ return [
     'git.unsafe_path'  => 'git: unsafe worktree path: {path}',
 
     // CLI errors
-    'cli.not_a_repo'   => 'sugar-stash: not a git repository (no .git in {cwd})',
+    'cli.not_a_repo'   => 'sugar-stash: not a git repository: {cwd}',
 
     // UI labels
     'ui.error_prefix'  => 'error: ',
@@ -67,6 +67,9 @@ return [
     'history.nothing_to_undo' => 'nothing to undo',
     'history.nothing_to_redo' => 'nothing to redo',
     'history.undone'          => 'undone: {op}',
+    'history.unavailable'     => 'history: unavailable (app constructed without a HistoryManager)',
+    'history.cannot_undo'     => 'history: cannot undo {op} — the data it would restore is gone',
+    'history.unknown_op'      => 'history: unknown operation {op}',
 
     // Branch delete
     'branch.delete_current'  => 'cannot delete current branch',
@@ -127,4 +130,5 @@ return [
     'rebase_i.cycle_action'  => 'cycle action',
     'rebase_i.drop'          => 'drop commit',
     'rebase_i.preview_only'  => 'preview only — not yet executed',
+    'rebase_i.count_positive' => 'count must be > 0',
 ];

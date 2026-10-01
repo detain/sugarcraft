@@ -50,6 +50,8 @@ $fixture = new class implements GitDriver {
     public function discard(string $path): void {}
     public function amend(): void {}
     public function stagePatch(string $path, string $hunk): void {}
+    public function unstageAll(): void {}
+    public function unstagePatch(string $path, string $hunk): void {}
     public function createBranch(string $name): void {}
     public function deleteBranch(string $name): void {}
     public function merge(string $branch): void {}
@@ -66,6 +68,7 @@ $fixture = new class implements GitDriver {
     public function worktreeList(): array { return []; }
     public function worktreeAdd(string $path, string $branch): void {}
     public function worktreeRemove(string $path): void {}
+    public function rebaseInProgress(): bool { return false; }
 };
 
 (new Program(App::start($fixture), new ProgramOptions(useAltScreen: true)))->run();

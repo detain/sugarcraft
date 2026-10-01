@@ -14,6 +14,13 @@ namespace SugarCraft\Stash;
  */
 final readonly class HistoryEntry
 {
+    /**
+     * Sentinel inverse op meaning "this operation cannot be honestly undone".
+     * executeUndo refuses these BEFORE popping, so history stays consistent;
+     * a matching arm in App::applyHistoryEntry fails loud as defense in depth.
+     */
+    public const UNRECOVERABLE_INVERSE = 'refuse';
+
     public function __construct(
         public string $op,
         public array $args,
@@ -39,10 +46,14 @@ final readonly class HistoryEntry
 
     /**
      * Convenience factory for discard operations.
+     *
+     * UNRECOVERABLE by design: `git restore --worktree` destroys uncommitted
+     * bytes that no later command can recreate — the old 'stage' inverse only
+     * re-staged a now-empty diff and the UI claimed "undone: discard".
      */
     public static function discard(string $path): self
     {
-        return new self('discard', ['path' => $path], 'stage', ['path' => $path]);
+        return new self('discard', ['path' => $path], self::UNRECOVERABLE_INVERSE, []);
     }
 
     /**
@@ -63,10 +74,15 @@ final readonly class HistoryEntry
 
     /**
      * Convenience factory for amend operations.
+     *
+     * UNRECOVERABLE by design: the old 'reset' inverse ran `reset --soft HEAD~1`
+     * which deletes the ORIGINAL commit boundary and message together — "undoing"
+     * an amend destroyed more than it restored. Restoring the pre-amend commit
+     * would need the reflog sha, which this model never records.
      */
     public static function amend(): self
     {
-        return new self('amend', [], 'reset', []);
+        return new self('amend', [], self::UNRECOVERABLE_INVERSE, []);
     }
 
     /**
@@ -95,10 +111,16 @@ final readonly class HistoryEntry
 
     /**
      * Convenience factory for merge.
+     *
+     * UNRECOVERABLE by design: the old 'abort' inverse was routed to
+     * `git rebase --abort`, which either errors ("no rebase in progress") or —
+     * worse — aborts an UNRELATED rebase the user happens to be mid-way through.
+     * A merge undo needs `reset --hard ORIG_HEAD` semantics this model does not
+     * carry, so refusing beats guessing.
      */
     public static function merge(string $branch): self
     {
-        return new self('merge', ['branch' => $branch], 'abort', []);
+        return new self('merge', ['branch' => $branch], self::UNRECOVERABLE_INVERSE, []);
     }
 
     /**

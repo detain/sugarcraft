@@ -64,46 +64,54 @@ final class FixtureGit implements GitDriver
         $this->logRows    = $logRows;
     }
 
+    /** Audit #8: every driver method consults throwOn, not just the three reads. */
+    private function maybeThrow(string $method): void
+    {
+        if (isset($this->throwOn[$method])) {
+            throw $this->throwOn[$method];
+        }
+    }
+
     public function status(): array   { return $this->statusRows; }
     public function branches(): array { return $this->branchRows; }
     public function log(int $limit = 25): array {
-        if (isset($this->throwOn['log'])) { throw $this->throwOn['log']; }
+        $this->maybeThrow('log');
         return $this->logRows;
     }
-    public function stage(string $path): void   { $this->stages[]   = $path; }
-    public function unstage(string $path): void { $this->unstages[] = $path; }
-    public function checkout(string $branch): void { $this->checkouts[] = $branch; }
-    public function commit(string $message): void  { $this->commits[] = $message; }
-    public function stageAll(): void             { $this->stageAllCalled = true; }
-    public function diff(string $path): array    { return $this->diffs; }
-    public function discard(string $path): void   { $this->discards[] = $path; }
-    public function amend(): void                 { $this->amendCalled = true; }
-    public function stagePatch(string $path, string $hunk): void { $this->stagePatches[$path] = $hunk; }
-    public function unstageAll(): void { $this->unstageAllCalled = true; }
-    public function unstagePatch(string $path, string $hunk): void { $this->unstagePatches[$path] = $hunk; }
-    public function createBranch(string $name): void { $this->branchCreations[] = $name; }
-    public function deleteBranch(string $name): void { $this->branchDeletions[] = $name; }
-    public function merge(string $branch): void { $this->merges[] = $branch; }
-    public function rebaseContinue(): void { $this->rebaseContinueCalled = true; }
-    public function rebaseAbort(): void { $this->rebaseAbortCalled = true; }
-    public function rebaseSkip(): void { $this->rebaseSkipCalled = true; }
-    public function reset(): void { $this->resetCalled = true; }
+    public function stage(string $path): void   { $this->maybeThrow('stage'); $this->stages[]   = $path; }
+    public function unstage(string $path): void { $this->maybeThrow('unstage'); $this->unstages[] = $path; }
+    public function checkout(string $branch): void { $this->maybeThrow('checkout'); $this->checkouts[] = $branch; }
+    public function commit(string $message): void  { $this->maybeThrow('commit'); $this->commits[] = $message; }
+    public function stageAll(): void             { $this->maybeThrow('stageAll'); $this->stageAllCalled = true; }
+    public function diff(string $path): array    { $this->maybeThrow('diff'); return $this->diffs; }
+    public function discard(string $path): void   { $this->maybeThrow('discard'); $this->discards[] = $path; }
+    public function amend(): void                 { $this->maybeThrow('amend'); $this->amendCalled = true; }
+    public function stagePatch(string $path, string $hunk): void { $this->maybeThrow('stagePatch'); $this->stagePatches[$path] = $hunk; }
+    public function unstageAll(): void { $this->maybeThrow('unstageAll'); $this->unstageAllCalled = true; }
+    public function unstagePatch(string $path, string $hunk): void { $this->maybeThrow('unstagePatch'); $this->unstagePatches[$path] = $hunk; }
+    public function createBranch(string $name): void { $this->maybeThrow('createBranch'); $this->branchCreations[] = $name; }
+    public function deleteBranch(string $name): void { $this->maybeThrow('deleteBranch'); $this->branchDeletions[] = $name; }
+    public function merge(string $branch): void { $this->maybeThrow('merge'); $this->merges[] = $branch; }
+    public function rebaseContinue(): void { $this->maybeThrow('rebaseContinue'); $this->rebaseContinueCalled = true; }
+    public function rebaseAbort(): void { $this->maybeThrow('rebaseAbort'); $this->rebaseAbortCalled = true; }
+    public function rebaseSkip(): void { $this->maybeThrow('rebaseSkip'); $this->rebaseSkipCalled = true; }
+    public function reset(): void { $this->maybeThrow('reset'); $this->resetCalled = true; }
 
     public function stashList(): array {
-        if (isset($this->throwOn['stashList'])) { throw $this->throwOn['stashList']; }
+        $this->maybeThrow('stashList');
         return $this->stashListResult;
     }
-    public function stashApply(string $stashRef): void { $this->stashApplies[] = $stashRef; }
-    public function stashDrop(string $stashRef): void { $this->stashDrops[] = $stashRef; }
-    public function cherryPick(string $commit): void { $this->cherryPicks[] = $commit; }
-    public function cherryPickContinue(): void { $this->cherryPickContinueCalled = true; }
-    public function cherryPickAbort(): void { $this->cherryPickAbortCalled = true; }
+    public function stashApply(string $stashRef): void { $this->maybeThrow('stashApply'); $this->stashApplies[] = $stashRef; }
+    public function stashDrop(string $stashRef): void { $this->maybeThrow('stashDrop'); $this->stashDrops[] = $stashRef; }
+    public function cherryPick(string $commit): void { $this->maybeThrow('cherryPick'); $this->cherryPicks[] = $commit; }
+    public function cherryPickContinue(): void { $this->maybeThrow('cherryPickContinue'); $this->cherryPickContinueCalled = true; }
+    public function cherryPickAbort(): void { $this->maybeThrow('cherryPickAbort'); $this->cherryPickAbortCalled = true; }
     public function worktreeList(): array {
-        if (isset($this->throwOn['worktreeList'])) { throw $this->throwOn['worktreeList']; }
+        $this->maybeThrow('worktreeList');
         return $this->worktreeListResult;
     }
-    public function worktreeAdd(string $path, string $branch): void { $this->worktreeAdds[] = ['path' => $path, 'branch' => $branch]; }
-    public function worktreeRemove(string $path): void { $this->worktreeRemoves[] = $path; }
+    public function worktreeAdd(string $path, string $branch): void { $this->maybeThrow('worktreeAdd'); $this->worktreeAdds[] = ['path' => $path, 'branch' => $branch]; }
+    public function worktreeRemove(string $path): void { $this->maybeThrow('worktreeRemove'); $this->worktreeRemoves[] = $path; }
     public function rebaseInProgress(): bool { return $this->rebaseInProgressResult; }
 }
 
@@ -484,6 +492,75 @@ final class AppTest extends TestCase
         $this->assertSame(['src/A.php'], $g->stages);
     }
 
+    /**
+     * Audit #5: discard is unrecoverable — 'u' must refuse WITHOUT popping, so
+     * a later recoverable entry is still reachable and the stack is intact.
+     */
+    public function testUndoOfDiscardRefusesAndKeepsHistoryIntact(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));   // discard src/A.php
+        $this->assertSame(['src/A.php'], $g->discards);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertNotNull($a->error);
+        $this->assertStringContainsString('cannot undo', $a->error);
+        // Refusal must not consume history: a second 'u' reports the same wall.
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertStringContainsString('cannot undo', $a->error);
+        $this->assertCount(1, $a->history->undoStack);
+    }
+
+    public function testUndoOfAmendRefuses(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'A'));   // amend
+        $this->assertTrue($g->amendCalled);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertNotNull($a->error);
+        $this->assertStringContainsString('cannot undo', $a->error);
+        $this->assertCount(1, $a->history->undoStack);
+    }
+
+    public function testUndoOfMergeRefusesInsteadOfMisroutingToRebaseAbort(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'M'));   // start merge collection
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'f'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));   // merge 'f'
+        $this->assertSame(['f'], $g->merges);
+        $this->assertFalse($g->rebaseAbortCalled);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertNotNull($a->error);
+        $this->assertStringContainsString('cannot undo', $a->error);
+        $this->assertFalse($g->rebaseAbortCalled, 'merge undo must never reach rebase --abort');
+    }
+
+    /**
+     * Audit #4: `new App($git)` leaves history null; the 'u'/'Ctrl+R' paths must
+     * answer with an honest error line instead of fataling on null deref.
+     */
+    public function testUndoAndRedoOnAppWithoutHistoryShowErrorNotFatal(): void
+    {
+        $g = $this->git();
+        $a = new App($g, history: null);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertNotNull($a->error);
+        $this->assertStringContainsString('history', $a->error);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        $this->assertNotNull($a->error);
+        $this->assertStringContainsString('history', $a->error);
+        // A mutation path guarded by requireHistory() inside its try block: the
+        // git op itself already ran — only the history RECORDING refuses, and
+        // the user is told. (History-less Apps are hand-wired debug shapes;
+        // App::start() always supplies a manager.)
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertStringContainsString('history', (string) $a->error);
+        $this->assertTrue($g->stageAllCalled);
+    }
+
     public function testCtrlRRedoShowsErrorWhenNothingToRedo(): void
     {
         $g = $this->git();
@@ -584,10 +661,12 @@ final class AppTest extends TestCase
     public function testRKeyWithEscClosesRebaseMenu(): void
     {
         $g = $this->git();
+        $g->rebaseInProgressResult = true;   // the fixture's own probe knob
         $a = App::start($g);
-        // This test would require a real git rebase in progress to be meaningful
-        // For the fixture, pressing r shows an error, not the menu
-        $this->markTestSkipped('Rebase menu requires real git repo with rebase in progress');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r'));
+        $this->assertTrue($a->showRebaseMenu, 'r with rebase in progress must open the menu');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertFalse($a->showRebaseMenu, 'Escape must close the rebase menu, not quit');
     }
 
     public function testSKeyOpensStashManager(): void
@@ -804,20 +883,25 @@ final class AppTest extends TestCase
 
     public function testDiscardSetsErrorWhenGitThrows(): void
     {
-        // We cannot easily trigger a git exception in FixtureGit for discard
-        // since discard() doesn't have throwOn. This test is a placeholder for
-        // when FixtureGit is enhanced to support throwOn on all methods.
-        $this->markTestSkipped('FixtureGit discard() does not check throwOn');
+        $g = $this->git();
+        $g->throwOn['discard'] = new \RuntimeException('boom');
+        $a = App::start($g);
+        // Cursor 0 on the status pane is src/A.php; 'd' discards it.
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertNotNull($a->error);
+        $this->assertStringContainsString('boom', $a->error);
+        $this->assertSame([], $g->discards, 'throwing discard must not record a completed call');
     }
 
     public function testStageAllSetsErrorWhenGitThrows(): void
     {
         $g = $this->git();
-        $g->stageAllCalled = false;
-        // Make stageAll throw by mocking git to throw on stageAll
-        // We can't easily mock this in FixtureGit since stageAll() doesn't have throwOn
-        // Instead, test the error path via refresh() which catches RuntimeException
-        $this->markTestSkipped('stageAll error path requires FixtureGit enhancement');
+        $g->throwOn['stageAll'] = new \RuntimeException('kaboom');
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertNotNull($a->error);
+        $this->assertStringContainsString('kaboom', $a->error);
+        $this->assertFalse($g->stageAllCalled);
     }
 
     public function testShowStashManagerSetsErrorWhenGitThrows(): void
@@ -893,13 +977,12 @@ final class AppTest extends TestCase
     public function testShowDiffSetsErrorWhenGitThrows(): void
     {
         $g = $this->git();
-        $g->diffs = [];  // empty diff causes issue
+        $g->throwOn['diff'] = new \RuntimeException('diff boom');
         $a = App::start($g);
-        // Press P to show diff - but actually this uses git->diff which returns []
-        // We need a diff that when parsed causes issues... actually DiffViewer::fromRawDiff handles empty
-        // The actual error would come from git->diff throwing
-        // This test requires FixtureGit to throw on diff(), which isn't implemented yet
-        $this->markTestSkipped('diff error path requires FixtureGit enhancement');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
+        $this->assertNotNull($a->error);
+        $this->assertStringContainsString('diff boom', $a->error);
+        $this->assertNull($a->diffViewer, 'a failed diff must not open the overlay');
     }
 
     public function testStageCurrentHunkSetsErrorWhenGitThrows(): void
@@ -911,7 +994,13 @@ final class AppTest extends TestCase
             '-line 1',
             '+line 1 modified',
         ];
-        // Can't easily make stagePatch throw in FixtureGit without enhancement
-        $this->markTestSkipped('stagePatch error path requires FixtureGit enhancement');
+        $g->throwOn['stagePatch'] = new \RuntimeException('patch boom');
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
+        $this->assertNotNull($a->diffViewer);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertNotNull($a->error);
+        $this->assertStringContainsString('patch boom', $a->error);
+        $this->assertSame([], $g->stagePatches);
     }
 }
