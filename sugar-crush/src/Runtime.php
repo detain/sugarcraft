@@ -40,8 +40,10 @@ use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Skills\SkillMatcher;
+use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookContext;
+use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookResult;
 use SugarCraft\Crush\Usage;
 
@@ -2151,7 +2153,27 @@ final class Runtime
             // to its wording, and the wording is the half most likely to be
             // reworded.
             $kind = $onPermissionRequest === null ? DenialKind::Unanswered : DenialKind::Refused;
-            $hookResult = $this->settleAsk($toolCall, $hookResult, $onPermissionRequest);
+            $memoKey = $this->taskGrantMemoKey($toolCall);
+            if ($memoKey !== null && isset($this->taskGrants[$memoKey])) {
+                // F5 batch-spawn memo. A grant for THIS agent under THIS mode
+                // was already given inside this turn, so the approver would be
+                // re-asked an identical question for every spawn the model
+                // (correctly, per the batch doctrine) emitted as one message.
+                // The answer is routed through the very call an approval makes
+                // — resolveAsk(…, true) — never through settleAsk(), so the
+                // settled verdict carries the chain's additionalContext and the
+                // question's rewrite exactly as a fresh approval would; the
+                // only difference is that the human is not prompted twice for
+                // one decision. Refusals are never memoised, and a Deny never
+                // reaches this branch (it is not an ASK), so explicit-Deny
+                // precedence is structurally untouched.
+                $hookResult = $this->hookManager->resolveAsk($hookResult, true);
+            } else {
+                $hookResult = $this->settleAsk($toolCall, $hookResult, $onPermissionRequest);
+                if ($memoKey !== null && ($hookResult->isAllowed() || $hookResult->isModified())) {
+                    $this->taskGrants[$memoKey] = true;
+                }
+            }
         }
 
         if (!$hookResult->isAllowed() && !$hookResult->isModified()) {
@@ -2173,6 +2195,56 @@ final class Runtime
         }
 
         return [$args, null, $context, $hookResult->additionalContext];
+    }
+
+    /**
+     * Grants already given to Task spawns inside THIS turn, keyed
+     * `agent|permission-mode` (F5).
+     *
+     * Not instance state worth promoting to a parameter: a Runtime is built
+     * fresh per {@see \SugarCraft\Crush\Backend\EngineBackend::runTurn()}, so
+     * this map lives exactly one turn — the same lifetime as the batch whose
+     * repeated prompts it silences. It deliberately does NOT cross turns: a
+     * grant is consent to a plan the operator saw, and the next turn is a new
+     * plan. Concurrency is no hole either: a parallel group gates every member
+     * sequentially in the PARENT during phase 1, before any child exists, so
+     * one approval covers the whole batch and no child ever consults this map.
+     *
+     * @var array<string, true>
+     */
+    private array $taskGrants = [];
+
+    /**
+     * The memo identity for a Task ask: `agent|mode`, or null when this call
+     * must not be memoised at all.
+     *
+     * Scoped to Task on purpose — the batch doctrine gives Task a shape (N
+     * identical questions in one message) no other tool has, and widening the
+     * memo to every ask-permission tool would silently turn one approval into
+     * standing permission across unrelated calls. Null cases all fall back to
+     * today's byte-identical prompt path: non-Task calls, a call with no
+     * resolvable `agent` argument (an alias-only or malformed spawn gets the
+     * normal question, and the tool layer's own refusal stays untouched), and
+     * any embedder whose hook chain does not carry the permission gate — with
+     * no gate there is no mode identity to key on.
+     */
+    private function taskGrantMemoKey(ToolCall $toolCall): ?string
+    {
+        if ($toolCall->name() !== 'Task') {
+            return null;
+        }
+
+        $agent = trim((string) ($toolCall->arguments()['agent'] ?? ''));
+        if ($agent === '') {
+            return null;
+        }
+
+        $hook = $this->hookManager->hook(HookEvent::PreToolUse->value, PermissionGateHook::NAME);
+        if (!$hook instanceof PermissionGateHook) {
+            return null;
+        }
+
+        return $agent . '|' . $hook->gate()->mode()->value;
     }
 
     /**

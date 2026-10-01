@@ -240,6 +240,270 @@ final class EngineBackendPermissionGateTest extends TestCase
         );
     }
 
+    // ---- F5 batch-spawn grant memo (Task only, turn-scoped) ----------------
+
+    /**
+     * The defect F5 cures: N Task spawns batched across a turn asked the human
+     * N identical questions. One grant for `agent|mode` now answers the whole
+     * batch — and every later spawn of that same agent under the same mode
+     * inside the same turn.
+     */
+    public function testSecondTaskSpawnForTheSameAgentDoesNotReaskTheApprover(): void
+    {
+        $tool = $this->recordingTool('Task');
+        $asked = [];
+
+        (new EngineBackend($this->scriptedProvider([
+            [new ToolCall('call_1', 'Task', ['agent' => 'coder', 'prompt' => 'a'])],
+            [new ToolCall('call_2', 'Task', ['agent' => 'coder', 'prompt' => 'b'])],
+        ]), 'test'))
+            ->withTools([$tool])
+            ->withPermissionGate(new PermissionGate(PermissionMode::Default))
+            ->withPermissionApprover(static function (ToolCall $call, HookResult $ask) use (&$asked): bool {
+                $asked[] = [$call->name(), (string) ($call->arguments()['agent'] ?? '')];
+
+                return true;
+            })
+            ->complete([Message::user('go')]);
+
+        $this->assertSame(2, $tool->calls, 'both spawns ran');
+        $this->assertCount(1, $asked, 'the approver was asked exactly once for the pair');
+        $this->assertSame(['Task', 'coder'], $asked[0]);
+    }
+
+    /**
+     * The memo key carries the agent name: consent to run `coder` is not
+     * consent to run anyone else.
+     */
+    public function testADifferentAgentStillGetsItsOwnQuestion(): void
+    {
+        $tool = $this->recordingTool('Task');
+        $asked = [];
+
+        (new EngineBackend($this->scriptedProvider([
+            [new ToolCall('call_1', 'Task', ['agent' => 'coder', 'prompt' => 'a'])],
+            [new ToolCall('call_2', 'Task', ['agent' => 'reviewer', 'prompt' => 'b'])],
+        ]), 'test'))
+            ->withTools([$tool])
+            ->withPermissionGate(new PermissionGate(PermissionMode::Default))
+            ->withPermissionApprover(static function (ToolCall $call) use (&$asked): bool {
+                $asked[] = (string) ($call->arguments()['agent'] ?? '');
+
+                return true;
+            })
+            ->complete([Message::user('go')]);
+
+        $this->assertSame(2, $tool->calls);
+        $this->assertSame(['coder', 'reviewer'], $asked, 'each agent keeps its own question');
+    }
+
+    /**
+     * Grants memoise, refusals never do — a rejected spawn must not quietly
+     * authorise the retries the model will attempt after seeing the refusal.
+     */
+    public function testARefusalIsNotMemoised(): void
+    {
+        $tool = $this->recordingTool('Task');
+        $answers = [false, true];
+        $asked = 0;
+
+        (new EngineBackend($this->scriptedProvider([
+            [new ToolCall('call_1', 'Task', ['agent' => 'coder', 'prompt' => 'a'])],
+            [new ToolCall('call_2', 'Task', ['agent' => 'coder', 'prompt' => 'b'])],
+        ]), 'test'))
+            ->withTools([$tool])
+            ->withPermissionGate(new PermissionGate(PermissionMode::Default))
+            ->withPermissionApprover(static function (ToolCall $call) use (&$asked, &$answers): bool {
+                $asked++;
+
+                return array_shift($answers) === true;
+            })
+            ->complete([Message::user('go')]);
+
+        $this->assertSame(2, $asked, 'the second spawn re-asked after a refusal');
+        $this->assertSame(1, $tool->calls, 'only the approved spawn executed');
+    }
+
+    /**
+     * Explicit-Deny precedence survives the memo untouched: a Deny is not an
+     * ASK, so it never reaches the branch that consults the map — one deny rule
+     * keeps silencing every spawn in the batch with zero prompts.
+     */
+    public function testAnExplicitDenyRuleBlocksEverySpawnWithZeroPrompts(): void
+    {
+        $tool = $this->recordingTool('Task');
+
+        (new EngineBackend($this->scriptedProvider([
+            [new ToolCall('call_1', 'Task', ['agent' => 'coder', 'prompt' => 'a'])],
+            [new ToolCall('call_2', 'Task', ['agent' => 'coder', 'prompt' => 'b'])],
+        ]), 'test'))
+            ->withTools([$tool])
+            ->withPermissionGate(new PermissionGate(
+                PermissionMode::Default,
+                [new PermissionRule('Task', PermissionAction::Deny)],
+            ))
+            ->withPermissionApprover(static function (): bool {
+                self::fail('a denied spawn must never reach the approver');
+            })
+            ->complete([Message::user('go')]);
+
+        $this->assertSame(0, $tool->calls);
+    }
+
+    /**
+     * Task is the whole scope: two identical Edit asks still prompt twice,
+     * because no batch doctrine tells Edit callers to fan out and a memo there
+     * would turn one approval into standing permission for unrelated calls.
+     */
+    public function testNonTaskToolsAreNeverMemoised(): void
+    {
+        $tool = $this->recordingTool('Edit');
+        $asked = 0;
+
+        (new EngineBackend($this->scriptedProvider([
+            [new ToolCall('call_1', 'Edit', ['file_path' => 'a.txt'])],
+            [new ToolCall('call_2', 'Edit', ['file_path' => 'a.txt'])],
+        ]), 'test'))
+            ->withTools([$tool])
+            ->withPermissionGate(new PermissionGate(PermissionMode::Default))
+            ->withPermissionApprover(static function () use (&$asked): bool {
+                $asked++;
+
+                return true;
+            })
+            ->complete([Message::user('go')]);
+
+        $this->assertSame(2, $asked);
+        $this->assertSame(2, $tool->calls);
+    }
+
+    /**
+     * A spawn whose agent cannot be read (missing or blank — the alias-only
+     * shape resolves inside TaskTool, not in the gate) never enters the memo:
+     * the null-key path keeps today's byte-identical prompt, whatever the tool
+     * layer then does with the call.
+     */
+    public function testATaskCallWithoutAReadableAgentNeverMemoises(): void
+    {
+        $tool = $this->recordingTool('Task');
+        $asked = 0;
+
+        (new EngineBackend($this->scriptedProvider([
+            [new ToolCall('call_1', 'Task', ['prompt' => 'a'])],
+            [new ToolCall('call_2', 'Task', ['agent' => '  ', 'prompt' => 'b'])],
+        ]), 'test'))
+            ->withTools([$tool])
+            ->withPermissionGate(new PermissionGate(PermissionMode::Default))
+            ->withPermissionApprover(static function () use (&$asked): bool {
+                $asked++;
+
+                return true;
+            })
+            ->complete([Message::user('go')]);
+
+        $this->assertSame(2, $asked, 'neither call was eligible for the memo');
+    }
+
+    /**
+     * One question per BATCH, not just per turn: a provider that fans out
+     * several Task calls in a single message has every member gated
+     * sequentially in the parent during phase 1, so the first approval covers
+     * the rest of the group.
+     */
+    public function testOneApprovalCoversAFannedOutBatchOfTaskCalls(): void
+    {
+        $tool = $this->recordingTool('Task');
+        $asked = 0;
+
+        (new EngineBackend($this->scriptedProvider([
+            [
+                new ToolCall('call_1', 'Task', ['agent' => 'coder', 'prompt' => 'a']),
+                new ToolCall('call_2', 'Task', ['agent' => 'coder', 'prompt' => 'b']),
+                new ToolCall('call_3', 'Task', ['agent' => 'coder', 'prompt' => 'c']),
+            ],
+        ]), 'test'))
+            ->withTools([$tool])
+            ->withPermissionGate(new PermissionGate(PermissionMode::Default))
+            ->withPermissionApprover(static function () use (&$asked): bool {
+                $asked++;
+
+                return true;
+            })
+            ->complete([Message::user('go')]);
+
+        $this->assertSame(1, $asked, 'the batch cost one prompt');
+        $this->assertSame(3, $tool->calls, 'and all three spawns ran');
+    }
+
+    /**
+     * Steps beyond this turn's memo boundary are a new turn, hence a new
+     * Runtime, hence no inherited consent — the same fresh question as today.
+     * (Pinned via the map's instance scope rather than a two-turn driver: the
+     * second complete() call builds a new Runtime internally.)
+     */
+    public function testTheMemoDoesNotCrossTurns(): void
+    {
+        $tool = $this->recordingTool('Task');
+        $asked = 0;
+        $approver = static function () use (&$asked): bool {
+            $asked++;
+
+            return true;
+        };
+
+        // One batch + one clean answer per turn: the scripted provider keeps
+        // handing out [asks, answers] so the second complete() re-plays the
+        // very same spawn the first turn approved.
+        $engine = (new EngineBackend($this->scriptedProvider([
+            [new ToolCall('call_1', 'Task', ['agent' => 'coder', 'prompt' => 'a'])],
+            [],
+            [new ToolCall('call_2', 'Task', ['agent' => 'coder', 'prompt' => 'a'])],
+            [],
+        ]), 'test'))
+            ->withTools([$tool])
+            ->withPermissionGate(new PermissionGate(PermissionMode::Default))
+            ->withPermissionApprover($approver);
+
+        $engine->complete([Message::user('go')]);
+        $engine->complete([Message::user('again')]);
+
+        $this->assertSame(2, $asked, 'each turn re-asks; consent was given to a plan, not forever');
+        $this->assertSame(2, $tool->calls);
+    }
+
+    /**
+     * @param array<int, array<int, ToolCall>> $steps one tool-call batch per provider round-trip
+     */
+    private function scriptedProvider(array $steps): ProviderInterface
+    {
+        return new class ($steps) implements ProviderInterface {
+            private int $index = 0;
+
+            /** @param array<int, array<int, ToolCall>> $steps */
+            public function __construct(private array $steps) {}
+
+            public function name(): string { return 'test'; }
+            public function supportsStreaming(): bool { return false; }
+            public function supportsFunctionCalling(): bool { return true; }
+            public function supportsVision(): bool { return false; }
+            public function supportsJsonSchema(): bool { return false; }
+            public function contextWindow(): int { return 1000; }
+            public function costPer1kTokens(string $m, string $d): float { return 0.0; }
+
+            public function complete(CompleteRequest $r): CompleteResponse
+            {
+                $step = $this->steps[$this->index++] ?? [];
+
+                return $step === []
+                    ? new CompleteResponse(content: 'done')
+                    : new CompleteResponse(content: 'working', toolCalls: $step);
+            }
+
+            public function completeStream(CompleteRequest $r): \Generator { yield new CompleteResponse(content: ''); }
+            public function embeddings(EmbeddingsRequest $r): EmbeddingsResponse { return new EmbeddingsResponse([]); }
+        };
+    }
+
     /**
      * @param array<string, mixed> $args
      */
