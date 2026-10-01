@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Wish\Middleware\Auth;
 
 use SugarCraft\Wish\Context;
+use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
 use SugarCraft\Wish\StreamHelper;
@@ -52,7 +53,7 @@ final class CertificateAuth implements Middleware
 
         if ($pem === null || $pem === '') {
             if ($this->required) {
-                fwrite($this->stderr, "Certificate required but none presented.\n");
+                fwrite($this->stderr, Lang::t('certificateauth.required') . "\n");
                 return;
             }
             $next($ctx, $session);
@@ -60,7 +61,7 @@ final class CertificateAuth implements Middleware
         }
 
         if (!($this->validate)($pem, $session)) {
-            fwrite($this->stderr, "Certificate rejected.\n");
+            fwrite($this->stderr, Lang::t('certificateauth.rejected') . "\n");
             return;
         }
 

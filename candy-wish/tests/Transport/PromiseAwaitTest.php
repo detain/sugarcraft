@@ -118,4 +118,24 @@ final class PromiseAwaitTest extends TestCase
         $this->assertNotNull($failure);
         $this->assertSame('plain rejection', $failure->getMessage());
     }
+
+    public function testTheTimeoutCeilingRaisesTheLocalisedMessageWrappingTheTimerError(): void
+    {
+        // LOW-16b adoption pin: the react/promise-timer breach surfaces as
+        // the project's transport.async_timeout text with the original
+        // TimeoutException preserved as previous.
+        $never = new Promise\Promise(static function (): void {
+        });
+
+        $failure = null;
+        try {
+            PromiseAwait::settle($never, 0.05);
+        } catch (\Throwable $e) {
+            $failure = $e;
+        }
+
+        $this->assertInstanceOf(\RuntimeException::class, $failure);
+        $this->assertStringContainsString('timed out after 0.05', $failure->getMessage());
+        $this->assertInstanceOf(\React\Promise\Timer\TimeoutException::class, $failure->getPrevious());
+    }
 }

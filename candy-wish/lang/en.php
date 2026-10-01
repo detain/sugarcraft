@@ -10,7 +10,6 @@ declare(strict_types=1);
 
 return [
     'middleware.cannot_open_stderr' => 'cannot open php://stderr',
-    'middleware.stderr_not_resource' => 'stderr must be a resource',
     'middleware.cannot_open_stream' => 'cannot open {target}',
     'middleware.stream_not_resource' => '{target} must be a resource',
     'logger.cannot_open_target'      => 'cannot open log target: {target}',
@@ -24,4 +23,10 @@ return [
     'spawn.bad_cmd'                  => 'Spawn factory cmd must be a non-empty list of argv strings',
     'transport.async_timeout'       => 'Async operation timed out after {timeout} seconds',
     'keepalive.invalid_interval'     => 'Keepalive interval must be at least 1 second',
+    'ratelimit.exceeded'              => 'Rate limit exceeded. Try again later.',
+    'auth.unauthorized'               => 'Unauthorized. ({reason})',
+    'passwordauth.permission_denied'  => 'Permission denied.',
+    'certificateauth.required'        => 'Certificate required but none presented.',
+    'certificateauth.rejected'        => 'Certificate rejected.',
+    'keyboardinteractive.auth_failed' => 'Authentication failed.',
 ];

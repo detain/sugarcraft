@@ -7,6 +7,7 @@ namespace SugarCraft\Wish\Transport;
 use React\EventLoop\Loop;
 use React\Promise\PromiseInterface;
 use SugarCraft\Wish\Context;
+use SugarCraft\Wish\Lang;
 
 /**
  * Shared synchronous-promise await helper.
@@ -46,7 +47,10 @@ final class PromiseAwait
      *                                   producer's own responsibility.
      *
      * @throws \Throwable if the promise rejects or the context is done
-     * @throws \RuntimeException if the timeout is reached
+     * @throws \RuntimeException if the timeout is reached (wraps the
+     *                           react/promise-timer TimeoutException with
+     *                           the i18n'd transport.async_timeout message,
+     *                           keeping the timer error as the previous)
      */
     public static function settle(PromiseInterface $promise, float $timeout = 30.0, ?Context $ctx = null): void
     {
@@ -97,6 +101,11 @@ final class PromiseAwait
         Loop::run();
 
         if ($ex !== null) {
+            // Give the timer's breach a project-local, i18n'd message;
+            // genuine promise rejections pass through untouched.
+            if ($ex instanceof \React\Promise\Timer\TimeoutException) {
+                throw new \RuntimeException(Lang::t('transport.async_timeout', ['timeout' => $timeout]), 0, $ex);
+            }
             throw $ex;
         }
     }

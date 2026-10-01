@@ -7,6 +7,7 @@ namespace SugarCraft\Wish\Middleware\Auth;
 use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
+use SugarCraft\Wish\StreamHelper;
 
 /**
  * Records an informational list of accepted authentication methods in
@@ -56,18 +57,7 @@ final class AuthMethods implements Middleware
     public function __construct(array $methods, $stdout = null)
     {
         $this->methods = $methods;
-        if ($stdout === null) {
-            $stream = fopen('php://stdout', 'w');
-            if ($stream === false) {
-                throw new \RuntimeException('cannot open php://stdout');
-            }
-            $this->stdout = $stream;
-            return;
-        }
-        if (!is_resource($stdout)) {
-            throw new \InvalidArgumentException('stdout must be a resource');
-        }
-        $this->stdout = $stdout;
+        $this->stdout = StreamHelper::openOrValidate($stdout, 'php://stdout');
     }
 
     public function handle(Context $ctx, Session $session, callable $next)

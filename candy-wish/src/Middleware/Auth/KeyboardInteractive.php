@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Wish\Middleware\Auth;
 
 use SugarCraft\Wish\Context;
+use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
 use SugarCraft\Wish\StreamHelper;
@@ -115,12 +116,12 @@ final class KeyboardInteractive implements Middleware
             // prompt. An incomplete exchange is a failed authentication,
             // never a passed one (E727, round 82) — reject without ever
             // consulting a validator, which would face a short list.
-            fwrite($this->stderr, "Authentication failed.\n");
+            fwrite($this->stderr, Lang::t('keyboardinteractive.auth_failed') . "\n");
             return;
         }
 
         if ($this->validate !== null && !($this->validate)($responses)) {
-            fwrite($this->stderr, "Authentication failed.\n");
+            fwrite($this->stderr, Lang::t('keyboardinteractive.auth_failed') . "\n");
             return;
         }
 

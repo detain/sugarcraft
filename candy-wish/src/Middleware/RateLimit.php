@@ -6,6 +6,7 @@ namespace SugarCraft\Wish\Middleware;
 
 use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Wish\Context;
+use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
 use SugarCraft\Wish\StreamHelper;
@@ -85,7 +86,7 @@ final class RateLimit implements Middleware
     public function handle(Context $ctx, Session $session, callable $next)
     {
         if (!$this->take($session)) {
-            fwrite($this->stderr, "Rate limit exceeded. Try again later.\n");
+            fwrite($this->stderr, Lang::t('ratelimit.exceeded') . "\n");
             return;
         }
         $next($ctx, $session);

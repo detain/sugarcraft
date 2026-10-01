@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Wish\Middleware;
 
 use SugarCraft\Wish\Context;
+use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
 use SugarCraft\Wish\StreamHelper;
@@ -152,6 +153,6 @@ final class Auth implements Middleware
 
     private function reject(string $reason): void
     {
-        fwrite($this->stderr, "Unauthorized. ({$reason})\n");
+        fwrite($this->stderr, Lang::t('auth.unauthorized', ['reason' => $reason]) . "\n");
     }
 }

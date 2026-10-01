@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Wish\Middleware\Auth;
 
 use SugarCraft\Wish\Context;
+use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
 use SugarCraft\Wish\StreamHelper;
@@ -59,7 +60,7 @@ final class PasswordAuth implements Middleware
         putenv('SSH_PASSWORD');
 
         if (!($this->validate)($session->user, $password)) {
-            fwrite($this->stderr, "Permission denied.\n");
+            fwrite($this->stderr, Lang::t('passwordauth.permission_denied') . "\n");
             return;
         }
 
