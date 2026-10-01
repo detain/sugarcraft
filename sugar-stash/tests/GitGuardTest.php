@@ -84,11 +84,25 @@ final class GitGuardTest extends TestCase
         $git->worktreeRemove('-fake');
     }
 
+    /**
+     * Real e2e (audit #1): createBranch leaves HEAD on `testbranch` (it runs
+     * `checkout -b`), so a working `checkout('main')` is observable as the HEAD
+     * branch name flipping back. The pre-fix `checkout -- main` parsed `main`
+     * as a pathspec and threw — this pin goes red on any reintroduction.
+     */
     public function testCheckoutAcceptsNormalBranch(): void
     {
+        $repo = escapeshellarg($this->cwd);
+        exec("git -C {$repo} -c user.email=test@example.com -c user.name=Test commit --allow-empty -m 'first' 2>/dev/null");
         $git = new Git($this->cwd);
         $git->createBranch('testbranch');
-        $this->assertTrue(true);
+        $this->assertSame('testbranch', trim((string) shell_exec("git -C {$repo} rev-parse --abbrev-ref HEAD")));
+
+        $git->checkout('main');
+        $this->assertSame('main', trim((string) shell_exec("git -C {$repo} rev-parse --abbrev-ref HEAD")));
+
+        $git->checkout('testbranch');
+        $this->assertSame('testbranch', trim((string) shell_exec("git -C {$repo} rev-parse --abbrev-ref HEAD")));
     }
 
     public function testMergeAcceptsNormalBranch(): void

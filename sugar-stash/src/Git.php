@@ -118,7 +118,11 @@ final class Git implements GitDriver
     public function checkout(string $branch): void
     {
         $this->guardRef($branch);
-        $this->run(['checkout', '--', $branch]);
+        // NO `--` separator: everything after it is parsed as a PATHSPEC, and a
+        // branch name is never a path — `checkout -- main` fails "pathspec
+        // 'main' did not match" so branch switching (Space on the branches
+        // pane) could never succeed. guardRef already refuses leading-dash refs.
+        $this->run(['checkout', $branch]);
     }
 
     public function commit(string $message): void
