@@ -121,14 +121,21 @@ final class AtomicFileWriterTest extends TestCase
         // because the directory carries no write bit.
         chmod($this->dir, 0500);
 
+        // Capture-then-assert (SwallowingCatchCensus law): no assertion may
+        // sit inside a try whose catch is wide enough to receive it — and
+        // PHPUnit's AssertionFailedError extends RuntimeException, so a
+        // fail() standing in this very try would be swallowed by it.
+        $caught = null;
         try {
             AtomicFileWriter::write($target, 'payload', 0600);
-            $this->fail('expected RuntimeException');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString($target, $e->getMessage());
+            $caught = $e;
         } finally {
             chmod($this->dir, 0700);
         }
+
+        $this->assertNotNull($caught, 'an unwritable directory must raise, never silently skip');
+        $this->assertStringContainsString($target, $caught->getMessage());
 
         $this->assertFileDoesNotExist($target);
         $leftovers = array_values(array_filter(

@@ -604,6 +604,10 @@ final class TreeWideGuardRosterTest extends TestCase
         'SuiteChildStdinIsolationTest.php' => ['scandir($dir)'],
         'SuiteChildStdinPrependResidualTest.php' => ['scandir($dir)'],
         'SuiteSkipRosterTest.php' => ['scandir($cache)', 'scandir($dir)', 'scandir($path)'],
+        // AtomicFileWriterTest names the package root (its mode-before-payload
+        // pin reads the class source via __DIR__) and scans only its own
+        // sys_get_temp_dir fixture dir — bounded, test-made.
+        'Support/AtomicFileWriterTest.php' => ['scandir($this->dir)'],
         'Support/FixtureLifetimeCensusTest.php' => ['RecursiveDirectoryIterator($root)', "glob(\$dir.'/*.php')"],
         'Tools/PtyShimAutoloadResolutionTest.php' => ['RecursiveDirectoryIterator($path,\FilesystemIterator::SKIP_DOTS)'],
         'Workflows/WorkflowRegistryTest.php' => ['scandir($dir)'],
