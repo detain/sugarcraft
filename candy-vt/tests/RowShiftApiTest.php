@@ -306,8 +306,13 @@ final class RowShiftApiTest extends TestCase
     {
         // The N×scrollXOne() loop form was THE duplication E736/vt-6.4 removed;
         // reintroducing it (or the Buffer walk beside it) must fail loud.
-        $this->assertFalse(method_exists(CsiHandlerImpl::class, 'scrollUpOne'));
-        $this->assertFalse(method_exists(CsiHandlerImpl::class, 'scrollDownOne'));
+        // Spelled via reflection rather than method_exists(): PHPStan proves the
+        // literals absent and folds the call to a constant false, which its
+        // impossibleType rule then rejects — reflection keeps this pin live and
+        // statically clean without weakening it.
+        $impl = new \ReflectionClass(CsiHandlerImpl::class);
+        $this->assertFalse($impl->hasMethod('scrollUpOne'));
+        $this->assertFalse($impl->hasMethod('scrollDownOne'));
         foreach (['il', 'dl', 'su', 'sd'] as $public) {
             $this->assertTrue(method_exists(CsiHandlerImpl::class, $public));
         }
@@ -317,7 +322,7 @@ final class RowShiftApiTest extends TestCase
     }
 
     /**
-     * @return list<array{path:string, text:string>} every PHP file under src/
+     * @return list<array{path:string, text:string}> every PHP file under src/,
      *         paths relative to src/.
      */
     private function sourceFiles(): array
