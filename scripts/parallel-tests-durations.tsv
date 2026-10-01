@@ -312,6 +312,7 @@ sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.032	39
 sugar-crush/tests/Tools/IgnoreRulesTest.php	0.031	36
 sugar-crush/tests/Skills/ProjectSkillsDirContainmentTest.php	0.031	10
 sugar-crush/tests/PaneClickTest.php	0.031	13
+sugar-crush/tests/Support/AtomicFileWriterTest.php	0.030	7
 sugar-crush/tests/Cli/BootstrapLayeredSettingsTest.php	0.029	22
 sugar-crush/tests/Config/LayeredSettingsTest.php	0.029	25
 sugar-crush/tests/Hooks/HookDispatcherTest.php	0.028	55
