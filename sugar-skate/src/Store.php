@@ -35,6 +35,11 @@ use SugarCraft\Skate\Lang;
  * echo $skate->get('key');
  * foreach ($skate->list() as $entry) { ... }
  * ```
+ *
+ * Factories: Store/Database deliberately have no `::new()` convenience
+ * constructor (unlike the value-object libs) — both are constructor-arg
+ * service classes where the constructor IS the only sensible entry point,
+ * mirroring upstream's `skate.New()` usage shape.
  */
 final class Store
 {
@@ -278,7 +283,7 @@ final class Store
      */
     public function list(
         ?string $pattern = null,
-        string $dbName = null,
+        ?string $dbName = null,
         bool $reverse = false,
         string $mode = 'all',
         string $delimiter = "\t",

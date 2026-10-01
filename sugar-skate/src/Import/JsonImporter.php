@@ -120,14 +120,11 @@ final class JsonImporter
                 );
             }
 
-            // Single-database: run all sets inside a transaction on that db.
+            // Single-database: run all sets inside a transaction on that db,
+            // via the public Store API (it routes to the same cached Database
+            // the sets below use, so they all join the transaction).
             $targetDb = $uniqueDbs[0] ?? $this->store->defaultDatabase();
-            $reflection = new \ReflectionClass($this->store);
-            $method = $reflection->getMethod('database');
-            $method->setAccessible(true);
-            /** @var \SugarCraft\Skate\Database $db */
-            $db = $method->invoke($this->store, $targetDb);
-            return $db->transaction($import);
+            return $this->store->transaction($targetDb, $import);
         }
 
         return $import();

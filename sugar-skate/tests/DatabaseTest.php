@@ -150,6 +150,58 @@ final class DatabaseTest extends TestCase
         $this->assertSame(1, $this->db->count('a*'));
     }
 
+    public function testCountExcludesExpiredRows(): void
+    {
+        // Regression pin (audit #3): count(null) used to run a bare
+        // SELECT COUNT(*) while get()/list()/allKeys() all drop expired
+        // rows — TTL-dead entries inflated the total.
+        $this->db->set('live', '1');
+        $this->db->set('doomed', '2', false, 3600);
+        $this->db->set('also-live', '3');
+        $this->assertSame(3, $this->db->count());
+
+        // Force 'doomed' into the past: no public API can stamp a past
+        // expiry (negative TTLs clamp to never-expire), so rewrite the row
+        // through the live SQLite handle.
+        $expired = (new \DateTimeImmutable())->modify('-1 hour')->format(\DATE_ATOM);
+        $prop = new \ReflectionProperty(\SugarCraft\Skate\Database::class, 'db');
+        $prop->setAccessible(true);
+        /** @var \SQLite3 $sqlite */
+        $sqlite = $prop->getValue($this->db);
+        $stmt = $sqlite->prepare('UPDATE entries SET expires_at = :t WHERE key = :k');
+        $stmt->bindValue(':t', $expired, \SQLITE3_TEXT);
+        $stmt->bindValue(':k', 'doomed', \SQLITE3_TEXT);
+        $stmt->execute();
+        $stmt->close();
+
+        $this->assertNull($this->db->get('doomed'), 'expired row must be invisible to get()');
+        $this->assertSame(2, $this->db->count(), 'count(null) must exclude expired rows');
+        $this->assertSame(2, $this->db->count('*'), 'count(pattern) already excluded them — totals must agree');
+    }
+
+    public function testGlobBackslashIsEscapedNotInterpreted(): void
+    {
+        // Regression pin (audit #13): globToLike escaped % and _ but not a
+        // literal backslash, so the pattern "a\b" produced LIKE 'a\b' with
+        // ESCAPE '\' — the dangling introducer consumed the 'b' and made the
+        // pattern match plain "ab" while MISSING the real "a\b" key. Counting
+        // alone cannot see this (both sides yield 1), so pin the identity.
+        $this->db->set('ab', '1');
+        $this->db->set('a\\b', '2');
+
+        $matched = \iterator_to_array($this->db->list('a\\b', mode: 'keys'));
+        $this->assertSame(['a\\b'], $matched, 'literal backslash must match exactly the backslash key');
+
+        // Second polarity: with only the escape-shadowed key present, the
+        // buggy translation matches 'ab' (absent) and not 'a\b' → count 0.
+        $other = new Database($this->tmpDir . '/other.db', 'other');
+        $other->set('ab', '1');
+        $this->assertSame(0, $other->count('a\\b'), 'backslash pattern must not match the unescaped twin');
+        $other->close();
+
+        $this->assertSame(2, $this->db->count('a*'), 'wildcards keep working alongside the escape');
+    }
+
     public function testDeleteManyGlob(): void
     {
         $this->db->set('temp-1', 'v');
@@ -296,8 +348,14 @@ final class DatabaseTest extends TestCase
         $this->db->close();
         $this->db->close(); // Second call should be no-op.
 
-        // We just verify no exception is thrown on close().
-        $this->assertTrue(true);
+        // Observable proof the double-close stayed benign: the file on disk
+        // is intact and re-openable, and the row written before close()
+        // survived both calls.
+        $reopen = new Database($this->tmpDir . '/test.db', 'test');
+        $entry = $reopen->get('x');
+        $this->assertNotNull($entry, 'row must survive a double close()');
+        $this->assertSame('y', $entry->value);
+        $reopen->close();
     }
 
     public function testCloseThenSetThrowsError(): void

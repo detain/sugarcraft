@@ -209,11 +209,20 @@ final class Database
         $now = (new \DateTimeImmutable())->format(\DATE_ATOM);
 
         if ($pattern === null) {
-            $r = $this->db->query('SELECT COUNT(*) FROM entries');
+            // Total count must honour TTL exactly like get()/list()/allKeys():
+            // expired rows are dead and must not inflate the total.
+            $stmt = $this->db->prepare(
+                'SELECT COUNT(*) FROM entries
+                 WHERE expires_at IS NULL OR expires_at >= :now'
+            );
+            $stmt->bindValue(':now', $now, \SQLITE3_TEXT);
+            $r = $stmt->execute();
             if ($r === false) {
+                $stmt->close();
                 throw new \RuntimeException(Lang::t('database.query_failed'));
             }
             $row = $r->fetchArray();
+            $stmt->close();
             return (int) ($row[0] ?? 0);
         }
 
@@ -268,6 +277,12 @@ final class Database
                 $like .= '%';
             } elseif ($c === '?') {
                 $like .= '_';
+            } elseif ($c === '\\') {
+                // A literal backslash is the LIKE ESCAPE introducer itself:
+                // left unescaped it silently turns the NEXT character into an
+                // escape sequence (e.g. "\x" matching "x" instead of "\x").
+                // Must precede the %/_ branch so introduced escapes survive.
+                $like .= '\\\\';
             } elseif ($c === '%' || $c === '_') {
                 // Escape SQL LIKE wildcards
                 $like .= '\\' . $c;

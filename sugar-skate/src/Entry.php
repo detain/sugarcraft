@@ -41,13 +41,21 @@ final class Entry
 
     /**
      * Whether this entry has expired (applies only if expiresAt is set).
+     *
+     * Strictly-past comparison: at the exact expiry instant the entry is
+     * ALIVE, mirroring every SQL predicate in Database (`expires_at >= :now`
+     * keeps the row at equality) so the PHP-side and SQL-side answers agree
+     * on the boundary. A wall-clock race remains at sub-second resolution
+     * only because SQL stores DATE_ATOM (second precision) while this check
+     * reads microseconds — an entry stays SQL-visible for the remainder of
+     * its final second.
      */
     public function isExpired(): bool
     {
         if ($this->expiresAt === null) {
             return false;
         }
-        return $this->expiresAt <= new \DateTimeImmutable();
+        return $this->expiresAt < new \DateTimeImmutable();
     }
 
     /**

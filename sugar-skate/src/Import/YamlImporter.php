@@ -119,37 +119,41 @@ final class YamlImporter
                 );
             }
 
-            // Single-database: run all sets inside a transaction on that db.
+            // Single-database: run all sets inside a transaction on that db,
+            // via the public Store API (it routes to the same cached Database
+            // the sets below use, so they all join the transaction).
             $targetDb = $uniqueDbs[0] ?? $this->store->defaultDatabase();
-            $reflection = new \ReflectionClass($this->store);
-            $method = $reflection->getMethod('database');
-            $method->setAccessible(true);
-            /** @var \SugarCraft\Skate\Database $db */
-            $db = $method->invoke($this->store, $targetDb);
-            return $db->transaction($import);
+            return $this->store->transaction($targetDb, $import);
         }
 
         return $import();
     }
 
     /**
-     * Minimal YAML parser for simple key: value maps.
+     * YAML parser entry point.
      *
-     * Handles:
-     *   - Simple scalar values
-     *   - Quoted strings (single and double quotes)
-     *   - Nested objects (maps)
-     *   - Lists (arrays) — values extracted
+     * Two paths, and only one of them is live in a stock install:
      *
-     * Does NOT handle advanced YAML features (anchors, aliases, complex types).
-     * Install symfony/yaml for full YAML 1.2 support.
+     *  - symfony/yaml, IF the application happens to have it installed. It is
+     *    deliberately NOT a declared dependency of sugar-skate, so in this
+     *    repo the `class_exists` branch below never fires and the fallback
+     *    parser is the ONLY live path.
+     *  - {@see minimalYamlParse()} — a strict flat `key: value` reader. Its
+     *    real capability (see its docblock for the full contract): scalar
+     *    values, quote-stripped values, `~`/`null` folded to empty. It does
+     *    NOT handle nested maps (indentation is silently flattened into
+     *    top-level keys), lists, quoted keys, anchors or aliases — anything
+     *    that is not a flat `key: value` line throws RuntimeException
+     *    ('Syntax error'). Applications needing full YAML 1.2 must require
+     *    symfony/yaml themselves.
      *
-     * @param string $yaml
      * @return array<string, mixed>
      */
     private function parseYaml(string $yaml): array
     {
-        // Use symfony/yaml if available
+        // Opportunistic upgrade: only reached when the surrounding project
+        // ships symfony/yaml (not a sugar-skate dependency — dead branch in
+        // this repo's install graph, kept for host apps that do have it).
         if (\class_exists(\Symfony\Component\Yaml\Yaml::class)) {
             return \Symfony\Component\Yaml\Yaml::parse($yaml);
         }
@@ -159,7 +163,16 @@ final class YamlImporter
     }
 
     /**
-     * Minimal YAML parser fallback.
+     * Fallback parser: flat `key: value` lines only.
+     *
+     * Accepted per line (indentation-insensitive — leading whitespace is
+     * trimmed, so a nested `child:` under an empty `parent:` is silently
+     * flattened to another top-level key, with the parent stored as ''):
+     *   key: scalar-value        quotes around the value are stripped
+     *   key: / key:~/key:null    stored as empty string
+     * Keys must match [a-zA-Z0-9_\-.@]+ (no quotes, no spaces, no symbols).
+     * Any other non-empty, non-comment line (list item `- x`, bare scalar,
+     * quoted key, block scalar continuation) throws RuntimeException.
      *
      * @return array<string, mixed>
      */

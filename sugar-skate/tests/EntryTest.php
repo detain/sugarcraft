@@ -61,12 +61,24 @@ final class EntryTest extends TestCase
         $this->assertTrue($entry->isExpired());
     }
 
-    public function testIsExpiredTrueAtExactExpiryMoment(): void
+    public function testIsExpiredTrueJustAfterExpiry(): void
     {
-        // At the exact boundary, isExpired considers the entry expired
+        // One second past expiry: expired on BOTH sides. (The exact-boundary
+        // case cannot be point-tested against a moving wall clock; the
+        // alignment itself — alive at equality, mirroring SQL
+        // `expires_at >= :now` — is expressed by the strict `<` in
+        // Entry::isExpired() and pinned SQL-side by
+        // DatabaseTest::testCountExcludesExpiredRows / testSetWithTtl.)
         $past = (new \DateTimeImmutable())->modify('-1 second');
         $entry = new Entry('k', 'v', false, null, null, $past);
         $this->assertTrue($entry->isExpired());
+    }
+
+    public function testIsExpiredFalseWhileValueIsStrictlyInTheFuture(): void
+    {
+        // Polarity twin: the strict comparison must not flip alive rows.
+        $entry = new Entry('k', 'v', false, null, null, new \DateTimeImmutable('+1 hour'));
+        $this->assertFalse($entry->isExpired());
     }
 
     // ─── fromRow ─────────────────────────────────────────────────────────────
