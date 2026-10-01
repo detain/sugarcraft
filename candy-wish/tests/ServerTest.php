@@ -79,8 +79,24 @@ final class ServerTest extends TestCase
 
     public function testEmptyStackIsNoop(): void
     {
-        Server::new()->serve($this->fakeSession());
-        $this->assertTrue(true);
+        $this->assertSame(0, Server::new()->serve($this->fakeSession()));
+    }
+
+    public function testServeReturnsTheTransportExitStatus(): void
+    {
+        // MEDIUM-2 seam pin: serve() hands the transport's status to
+        // the ForceCommand script, which exits with it so the SSH
+        // client sees the child's real failure code.
+        $transport = new class implements \SugarCraft\Wish\Transport {
+            public function run(Context $ctx, Session $session, array $stack): int
+            {
+                return 42;
+            }
+        };
+
+        $server = Server::new()->withTransport($transport);
+
+        $this->assertSame(42, $server->serve($this->fakeSession()));
     }
 
     public function testDefaultTransportIsInProcess(): void
@@ -112,12 +128,13 @@ final class ServerTest extends TestCase
                 private ?Session &$session,
                 private ?array &$stack,
             ) {}
-            public function run(Context $ctx, Session $session, array $stack): void
+            public function run(Context $ctx, Session $session, array $stack): int
             {
                 $this->log[] = 'transport-run';
                 $this->ctx = $ctx;
                 $this->session = $session;
                 $this->stack = $stack;
+                return 0;
             }
         };
 

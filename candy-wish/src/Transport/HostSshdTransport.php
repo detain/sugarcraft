@@ -26,8 +26,14 @@ final class HostSshdTransport implements Transport
 {
     use DispatchesMiddlewareStack;
 
-    public function run(Context $ctx, Session $session, array $stack): void
+    public function run(Context $ctx, Session $session, array $stack): int
     {
         $this->dispatch($ctx, $session, $stack, 0);
+
+        // No child process exists under the inline transport — the
+        // middleware chain completing without a raise IS success here
+        // (a BubbleTea Program's own status never crosses the sshd PTY
+        // boundary any differently than an interactive shell's would).
+        return 0;
     }
 }

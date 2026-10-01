@@ -244,6 +244,44 @@ final class InProcessTransportRunChildTest extends TestCase
         }
     }
 
+    public function testSpawnRunChainExitsWithChildCodeThroughTransportSlot(): void
+    {
+        // MEDIUM-2 e2e: Spawn -> runChild -> lastChildStatus -> run()
+        // return -> server-script exit. Also proves the typed
+        // TransportAware injection fires — Spawn without it throws
+        // "no transport" and the fixture would exit 2.
+        $this->requirePtySyscalls();
+        $this->skipIfCiPtyFlake();
+
+        $fixture = __DIR__ . '/_fixtures/spawnrun.php';
+        if (!\is_file($fixture)) {
+            $this->markTestSkipped('spawnrun fixture missing: ' . $fixture);
+        }
+
+        $argv = [PHP_BINARY, $fixture, '/bin/sh', '-c', 'exit 9'];
+        $pipes = [];
+        $proc = \proc_open($argv, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $this->assertIsResource($proc);
+        \fclose($pipes[0]); // No interactive input — child exits on its own.
+        \stream_set_blocking($pipes[1], false);
+
+        $deadline = \microtime(true) + 5.0;
+        $status = \proc_get_status($proc);
+        while ($status['running'] && \microtime(true) < $deadline) {
+            @\fread($pipes[1], 4096);
+            \usleep(20_000);
+            $status = \proc_get_status($proc);
+        }
+
+        $stderrBytes = \stream_get_contents($pipes[2]) ?: '';
+        $this->assertFalse($status['running'], "spawnrun supervisor must finish; stderr={$stderrBytes}");
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        $code = \proc_close($proc); // Reaps and returns the exit code.
+
+        $this->assertSame(9, $code, "run() must surface the child's exit code; stderr={$stderrBytes}");
+    }
+
     public function testRunChildRejectsNonResourceStdin(): void
     {
         $this->requirePtySyscalls();

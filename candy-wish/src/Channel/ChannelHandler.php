@@ -27,6 +27,19 @@ use SugarCraft\Wish\Session;
 interface ChannelHandler
 {
     /**
+     * Current columns the handler wants the spawned PTY to carry.
+     *
+     * The transport reads these through the interface when sizing the
+     * child PTY (a window-change may have landed before spawn), so
+     * they are part of the contract, not a DefaultChannelHandler
+     * implementation detail.
+     */
+    public function cols(): int;
+
+    /** Current rows the handler wants the spawned PTY to carry. */
+    public function rows(): int;
+
+    /**
      * Handle a PTY request message.
      */
     public function handlePtyReq(PtyReqMsg $msg, Session $session): void;

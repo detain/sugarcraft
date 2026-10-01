@@ -20,6 +20,7 @@ use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Session;
 use SugarCraft\Wish\Transport;
+use SugarCraft\Wish\TransportAware;
 
 /**
  * Default transport — allocates a `candy-pty` master/slave pair via
@@ -72,6 +73,14 @@ final class InProcessTransport implements Transport, ChildSpawner
 
     /** PID of the most recently spawned child, used for signal forwarding. */
     private ?int $childPid = null;
+
+    /**
+     * Exit status of the most recently pumped child within the current
+     * {@see run()} — null until a child actually settles. Surfaced as the
+     * run() return value (MEDIUM-2) so Server::serve() can hand the real
+     * code to the ForceCommand process.
+     */
+    private ?int $lastChildStatus = null;
 
     /**
      * The active master for the current session. Stored here so the
@@ -159,18 +168,22 @@ final class InProcessTransport implements Transport, ChildSpawner
      *
      * @throws \RuntimeException if called outside of pump loop
      */
-    public function getPty(): MasterPty
+    public function pty(): MasterPty
     {
         if ($this->master === null) {
-            throw new \RuntimeException('getPty() called outside of active pump loop');
+            throw new \RuntimeException('pty() called outside of active pump loop');
         }
         return $this->master;
     }
 
-    public function run(Context $ctx, Session $session, array $stack): void
+    public function run(Context $ctx, Session $session, array $stack): int
     {
+        // Fresh session ⇒ fresh status slot; a stale child code from a
+        // previous run() must never leak into this one's return value.
+        $this->lastChildStatus = null;
+
         foreach ($stack as $mw) {
-            if (\method_exists($mw, 'setTransport')) {
+            if ($mw instanceof TransportAware) {
                 $mw->setTransport($this);
             }
         }
@@ -205,6 +218,11 @@ final class InProcessTransport implements Transport, ChildSpawner
         );
 
         $this->dispatch($ctx, $authenticatedSession, $stack, 0);
+
+        // The session's exit status: the pumped child's code when a
+        // Spawn/DefaultChannelHandler path ran, 0 when the chain
+        // completed without ever spawning a child.
+        return $this->lastChildStatus ?? 0;
     }
 
     /**
@@ -357,10 +375,15 @@ final class InProcessTransport implements Transport, ChildSpawner
             }
         }
 
-        if ($pumpResult >= 0) {
-            return $pumpResult;
-        }
-        return $child !== null ? $child->wait() : 0;
+        $status = $pumpResult >= 0
+            ? $pumpResult
+            : ($child !== null ? $child->wait() : 0);
+
+        // MEDIUM-2: keep the settled child's code on the transport so
+        // run() can surface it after the stack walk unwinds.
+        $this->lastChildStatus = $status;
+
+        return $status;
     }
 
     /**

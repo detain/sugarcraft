@@ -99,20 +99,20 @@ final class KeepaliveTest extends TestCase
         $this->assertTrue($nextCalled, 'Keepalive must call $next');
     }
 
-    public function testGetPtyThrowsOutsidePumpLoop(): void
+    public function testPtyThrowsOutsidePumpLoop(): void
     {
         $transport = new InProcessTransport();
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('getPty() called outside of active pump loop');
-        $transport->getPty();
+        $this->expectExceptionMessage('pty() called outside of active pump loop');
+        $transport->pty();
     }
 
     public function testInProcessTransportInjectsItselfIntoSetTransportAwareMiddleware(): void
     {
         // Verify that InProcessTransport's run() walks the stack and
-        // calls setTransport on middleware that implement the hook.
+        // calls setTransport on middleware implementing TransportAware.
         $observed = null;
-        $probe = new class($observed) implements \SugarCraft\Wish\Middleware {
+        $probe = new class($observed) implements \SugarCraft\Wish\Middleware, \SugarCraft\Wish\TransportAware {
             public function __construct(private mixed &$captured) {}
             public function setTransport(ChildSpawner $t): void
             {

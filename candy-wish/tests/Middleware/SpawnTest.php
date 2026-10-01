@@ -141,13 +141,13 @@ final class SpawnTest extends TestCase
     {
         // Verify injection by observing that Spawn becomes able to
         // call handle() without throwing a "no transport" error AFTER
-        // the transport's run() walks the stack. The duck-typed
-        // setTransport hook is what InProcessTransport invokes.
+        // the transport's run() walks the stack. The typed
+        // TransportAware seam is what InProcessTransport invokes.
         //
-        // We use a setTransport-aware probe middleware (NOT extending
+        // We use a TransportAware probe middleware (NOT extending
         // the final Spawn class) to capture the injected instance.
         $observed = null;
-        $probe = new class($observed) implements \SugarCraft\Wish\Middleware {
+        $probe = new class($observed) implements \SugarCraft\Wish\Middleware, \SugarCraft\Wish\TransportAware {
             public function __construct(private mixed &$captured) {}
             public function setTransport(ChildSpawner $t): void
             {

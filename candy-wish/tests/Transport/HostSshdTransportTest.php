@@ -80,8 +80,25 @@ final class HostSshdTransportTest extends TestCase
 
     public function testEmptyStackIsHarmless(): void
     {
-        (new HostSshdTransport())->run(Context::background(), $this->fakeSession(), []);
-        $this->assertTrue(true);
+        $this->assertSame(0, (new HostSshdTransport())->run(Context::background(), $this->fakeSession(), []));
+    }
+
+    public function testRunReportsZeroStatusBecauseNoChildEverExists(): void
+    {
+        // MEDIUM-2 seam pin: under the inline transport the chain
+        // completing without a raise IS success — there is no child
+        // whose code could surface.
+        $ran = false;
+        $mw = new class($ran) implements Middleware {
+            public function __construct(private bool &$ran) {}
+            public function handle(Context $ctx, Session $s, callable $next): void
+            {
+                $this->ran = true;
+            }
+        };
+
+        $this->assertSame(0, (new HostSshdTransport())->run(Context::background(), $this->fakeSession(), [$mw]));
+        $this->assertTrue($ran);
     }
 
     public function testSessionPropagatesUnchangedToTerminalMiddleware(): void

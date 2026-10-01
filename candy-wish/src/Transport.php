@@ -40,6 +40,15 @@ interface Transport
      * @param list<Middleware> $stack Registered middleware in
      *        registration order; the transport is responsible for
      *        invoking them (`->handle($ctx, $session, $next)` style).
+     *
+     * @return int The session's exit status — the child's exit code
+     *         under a spawner transport (Spawn / DefaultChannelHandler
+     *         exec/shell), `0` when the chain completed without ever
+     *         spawning a child. MEDIUM-2: the ForceCommand process must
+     *         surface this via `exit()` so `ssh host cmd; echo $?`
+     *         reports the real failure instead of always 0. Failures of
+     *         the machinery itself raise (PtyException etc.) rather than
+     *         encoding a status.
      */
-    public function run(Context $ctx, Session $session, array $stack): void;
+    public function run(Context $ctx, Session $session, array $stack): int;
 }

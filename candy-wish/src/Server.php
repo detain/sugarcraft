@@ -127,18 +127,28 @@ final class Server
      * inner process exits or the SSH client disconnects.
      *
      * **Note on async middleware.** Promise-returning middleware is
-     * supported: if a middleware's `handle()' returns a
+     * supported: if a middleware's `handle()` returns a
      * `\React\Promise\PromiseInterface`, the transport's dispatcher
      * (`InProcessTransport::dispatch()` / `HostSshdTransport::dispatch()`)
      * calls `->wait()` before continuing the chain. This is
      * functionally equivalent to awaiting in Server::serve() but
      * delegates to the transport so each transport can control the
      * event loop integration point.
+     *
+     * **Exit status (MEDIUM-2).** Returns the session's exit status —
+     * the spawned child's exit code under a spawner transport, `0`
+     * when no child was ever spawned. A ForceCommand server script
+     * must hand it to `exit()` so the SSH client sees the real code
+     * (`ssh host cmd; echo $?`):
+     *
+     * ```php
+     * exit($server->serve());
+     * ```
      */
-    public function serve(?Session $session = null): void
+    public function serve(?Session $session = null): int
     {
         $session ??= Session::fromEnvironment();
         $ctx = Context::background();
-        $this->transport->run($ctx, $session, $this->stack);
+        return $this->transport->run($ctx, $session, $this->stack);
     }
 }

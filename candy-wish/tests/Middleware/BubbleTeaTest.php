@@ -49,8 +49,9 @@ final class BubbleTeaTest extends TestCase
 
     public function testThrowsWhenTransportInjectsItself(): void
     {
-        // PR5: BubbleTea exposes a duck-typed setTransport(ChildSpawner)
-        // hook — when InProcessTransport injects itself at stack-walk
+        // PR5: BubbleTea implements the typed TransportAware seam,
+        // setTransport(ChildSpawner) — when InProcessTransport injects
+        // itself at stack-walk
         // time, BubbleTea flips into in-process-mode and refuses to
         // run inline (Program would collide with the bytes pump).
         $mw = new BubbleTea(function () {

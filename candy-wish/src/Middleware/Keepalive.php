@@ -10,6 +10,7 @@ use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
 use SugarCraft\Wish\Transport\ChildSpawner;
 use SugarCraft\Wish\Transport\InProcessTransport;
+use SugarCraft\Wish\TransportAware;
 
 /**
  * Middleware that periodically sends SSH-level keepalive messages
@@ -31,7 +32,7 @@ use SugarCraft\Wish\Transport\InProcessTransport;
  *     ->serve();
  * ```
  */
-final class Keepalive implements Middleware
+final class Keepalive implements Middleware, TransportAware
 {
     /**
      * @param int $intervalSeconds Interval between keepalive messages (minimum 1)
@@ -70,7 +71,7 @@ final class Keepalive implements Middleware
                 // for shells and most line-oriented programs — it is
                 // ignored at the application layer but travels over
                 // the wire, keeping the connection alive.
-                $transport->getPty()->write("\0");
+                $transport->pty()->write("\0");
                 $lastSent = $now;
             }
         });

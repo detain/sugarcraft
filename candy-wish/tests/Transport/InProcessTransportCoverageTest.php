@@ -12,7 +12,7 @@ use SugarCraft\Wish\Transport\InProcessTransport;
 /**
  * Tests for InProcessTransport methods with low or no coverage:
  * - setKeepaliveCallback
- * - getPty (RuntimeException path)
+ * - pty (RuntimeException path)
  * - run transport injection into middleware via setTransport
  * - runChild invalid argument validation
  */
@@ -27,13 +27,13 @@ final class InProcessTransportCoverageTest extends TestCase
         );
     }
 
-    public function testGetPtyThrowsRuntimeExceptionWhenNotInPumpLoop(): void
+    public function testPtyThrowsRuntimeExceptionWhenNotInPumpLoop(): void
     {
         $transport = new InProcessTransport();
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('getPty() called outside of active pump loop');
-        $transport->getPty();
+        $this->expectExceptionMessage('pty() called outside of active pump loop');
+        $transport->pty();
     }
 
     public function testSetKeepaliveCallbackStoresCallback(): void
@@ -87,7 +87,7 @@ final class InProcessTransportCoverageTest extends TestCase
         $capturedTransport = null;
 
         // Use reflection to capture what gets passed to setTransport
-        $middlewareWithCapture = new class($capturedTransport) implements \SugarCraft\Wish\Middleware {
+        $middlewareWithCapture = new class($capturedTransport) implements \SugarCraft\Wish\Middleware, \SugarCraft\Wish\TransportAware {
             private ?\SugarCraft\Wish\Transport\ChildSpawner $receivedTransport = null;
 
             public function __construct(private mixed &$captured) {}

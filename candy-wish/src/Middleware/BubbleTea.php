@@ -9,6 +9,7 @@ use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
 use SugarCraft\Wish\Transport\ChildSpawner;
+use SugarCraft\Wish\TransportAware;
 
 /**
  * Terminal middleware that mounts a SugarCraft Program for the
@@ -41,7 +42,7 @@ use SugarCraft\Wish\Transport\ChildSpawner;
  *      a SugarCraft Program — at the cost of subprocess startup.
  *
  * If `BubbleTea::handle()` runs under InProcessTransport (detected
- * via the duck-typed `setTransport` injection that InProcess
+ * via the typed {@see TransportAware} injection that InProcess
  * performs at stack-walk time), it throws a clear error pointing
  * at both migration paths.
  *
@@ -50,7 +51,7 @@ use SugarCraft\Wish\Transport\ChildSpawner;
  * stand-in (mock, alternative model, etc.) — useful for tests
  * that don't want to drag in a full bubble-tea cycle.
  */
-final class BubbleTea implements Middleware
+final class BubbleTea implements Middleware, TransportAware
 {
     /** @var callable(Session): object */
     private $factory;
@@ -71,8 +72,8 @@ final class BubbleTea implements Middleware
     }
 
     /**
-     * Duck-typed seam invoked by InProcessTransport at stack-walk
-     * time. The mere presence of an injected ChildSpawner means
+     * TransportAware seam invoked by InProcessTransport at
+     * stack-walk time. The mere presence of an injected ChildSpawner means
      * we're under in-process mode and inline Program execution
      * would conflict with the bytes-pump loop — so flag it for
      * `handle()` to refuse.

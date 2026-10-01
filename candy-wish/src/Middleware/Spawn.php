@@ -9,6 +9,7 @@ use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
 use SugarCraft\Wish\Transport\ChildSpawner;
+use SugarCraft\Wish\TransportAware;
 
 /**
  * Terminal middleware that spawns a child process inside the
@@ -20,8 +21,8 @@ use SugarCraft\Wish\Transport\ChildSpawner;
  * per user (`HOME`/`USER` / login shell selection / env scrubbing).
  *
  * Only works under {@see \SugarCraft\Wish\Transport\InProcessTransport}.
- * The transport injects itself via duck-typed `setTransport` at
- * stack-walk time. If the active transport has no PTY supervisor
+ * The transport injects itself via the typed {@see TransportAware}
+ * contract at stack-walk time. If the active transport has no PTY supervisor
  * (HostSshd legacy mode), `handle()` throws at session-time —
  * migrate to {@see BubbleTea} (which works under HostSshd) or
  * switch the Server to `withTransport(new InProcessTransport())`.
@@ -50,7 +51,7 @@ use SugarCraft\Wish\Transport\ChildSpawner;
  *     ->serve();
  * ```
  */
-final class Spawn implements Middleware
+final class Spawn implements Middleware, TransportAware
 {
     /** @var callable(Session): array */
     private $factory;
