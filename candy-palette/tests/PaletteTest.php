@@ -133,9 +133,31 @@ final class PaletteTest extends TestCase
         $this->assertSame(Profile::TrueColor, $profile);
     }
 
-    public function testITerm2TermProgramImpliesTrueColor(): void
+    public function testITerm2DoesNotResurrectColorOverDumbTerminal(): void
     {
+        // audit #2: TERM=dumb disables color unconditionally — an advertised
+        // iTerm.app session must not override it.
         $profile = Palette::detect(null, ['TERM_PROGRAM' => 'iTerm.app', 'TERM' => 'dumb']);
+        $this->assertSame(Profile::NoTTY, $profile);
+    }
+
+    public function testITerm2DoesNotResurrectColorOverNoColor(): void
+    {
+        $profile = Palette::detect(null, ['TERM_PROGRAM' => 'iTerm.app', 'NO_COLOR' => '1']);
+        $this->assertSame(Profile::NoTTY, $profile);
+    }
+
+    public function testITerm2DoesNotResurrectColorOverClicolorZero(): void
+    {
+        $profile = Palette::detect(null, ['TERM_PROGRAM' => 'iTerm.app', 'CLICOLOR' => '0']);
+        $this->assertSame(Profile::NoTTY, $profile);
+    }
+
+    public function testITerm2UpgradesColorCapableTerminalToTrueColor(): void
+    {
+        // The upgrade half of audit #2 stays: once the chain allows color,
+        // iTerm.app advertises 24-bit.
+        $profile = Palette::detect(null, ['TERM_PROGRAM' => 'iTerm.app', 'TERM' => 'xterm']);
         $this->assertSame(Profile::TrueColor, $profile);
     }
 

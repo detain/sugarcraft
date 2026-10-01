@@ -43,9 +43,10 @@ final class Palette
      *  3. NO_COLOR=          → NoTTY
      *  4. CLICOLOR=0         → NoTTY
      *  5. COLORTERM=24bit|truecolor|yes → TrueColor
-     *  6. TERM_PROGRAM=iTerm.app → TrueColor
-     *  7. TERM=dumb          → NoTTY
-     *  8. WT_SESSION set     → TrueColor
+     *  6. TERM=dumb          → NoTTY
+     *  7. TERM_PROGRAM=iTerm.app → TrueColor (Palette-only upgrade — never
+     *     overrides steps 3/4/6: an explicit no-color env wins, audit #2)
+     *  8. WT_SESSION non-empty → TrueColor
      *  9. GOOGLE_CLOUD_SHELL=true → TrueColor
      * 10. TMUX||STY + TERM screen/tmux → ANSI256
      * 11. TERM=*-256color|xterm-kitty|xterm-ghostty → ANSI256
@@ -187,9 +188,10 @@ final class Palette
      *  3. NO_COLOR (any value) → NoTTY
      *  4. CLICOLOR=0            → NoTTY
      *  5. COLORTERM=24bit|truecolor|yes → TrueColor
-     *  6. TERM_PROGRAM=iTerm.app → TrueColor (Palette-specific, not in Probe)
-     *  7. TERM=dumb             → NoTTY
-     *  8. WT_SESSION set        → TrueColor (Windows Terminal)
+     *  6. TERM=dumb             → NoTTY
+     *  7. TERM_PROGRAM=iTerm.app → TrueColor (Palette-specific upgrade, only
+     *     when steps 3/4/6 allow color — NO_COLOR/CLICOLOR=0/TERM=dumb win)
+     *  8. WT_SESSION non-empty  → TrueColor (Windows Terminal)
      *  9. GOOGLE_CLOUD_SHELL=true → TrueColor
      * 10. TMUX||STY + base TERM screen/tmux → ANSI256
      * 11. TERM=*-256color|xterm-kitty|xterm-ghostty → ANSI256
@@ -220,13 +222,11 @@ final class Palette
         // Use DetectionChain for core env-based detection (steps 3-12)
         $chain = DetectionChain::detect($env);
 
-        // 3-7: Handle NO_COLOR, CLICOLOR=0, TERM=dumb via DetectionChain
+        // 3-7: NO_COLOR, CLICOLOR=0, TERM=dumb disable color unconditionally.
+        // An advertised TERM_PROGRAM=iTerm.app must NOT resurrect color over an
+        // explicit no-color environment (audit #2): the iTerm upgrade below
+        // only runs when the chain allows color.
         if (!$chain->allowsColor()) {
-            // TERM_PROGRAM=iTerm.app check is Palette-specific (not in Probe/TerminalProbe)
-            $termProgram = $env['TERM_PROGRAM'] ?? $_ENV['TERM_PROGRAM'] ?? \getenv('TERM_PROGRAM') ?: null;
-            if ($termProgram === 'iTerm.app') {
-                return Profile::TrueColor;
-            }
             return Profile::NoTTY;
         }
 

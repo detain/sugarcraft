@@ -93,9 +93,27 @@ final class Probe
     // Private helpers — env read (protected for testability)
     // -------------------------------------------------------------------------
 
+    /**
+     * Read an env var with a single, uniform polarity: a var that is SET —
+     * even to the empty string — returns its string value; only a genuinely
+     * unset var returns null.
+     *
+     * The old `getenv($name) ?: null` collapsed set-but-empty to null, so
+     * `$_ENV['NO_COLOR'] = ''` (via the superglobal map) disabled color while
+     * `putenv('NO_COLOR=')` (visible only to getenv) did not — two answers to
+     * one question. getenv() itself distinguishes '' (set-empty) from false
+     * (unset); this helper preserves that.
+     */
     private static function getEnv(string $name): ?string
     {
-        $value = $_ENV[$name] ?? (getenv($name) ?: null);
+        if (\array_key_exists($name, $_ENV)) {
+            $value = $_ENV[$name];
+
+            return $value === null ? null : (string) $value;
+        }
+
+        $value = \getenv($name);
+
         return $value === false ? null : $value;
     }
 

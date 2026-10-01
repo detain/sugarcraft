@@ -62,8 +62,8 @@ final class DetectionChain
         $termLower = strtolower($term);
 
         // 1. CLICOLOR_FORCE=1 → truecolor (overrides everything)
-        $cliclorForce = $env['CLICOLOR_FORCE'] ?? null;
-        if ($cliclorForce === '1') {
+        $clicolorForce = $env['CLICOLOR_FORCE'] ?? null;
+        if ($clicolorForce === '1') {
             return new self(self::LEVEL_TRUECOLOR, 'env:CLICOLOR_FORCE', $term);
         }
 

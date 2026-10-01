@@ -23,15 +23,15 @@ use SugarCraft\Palette\DetectionChain;
  * 11. Default                            → Color16
  * 12. Optional Phase 2: infocmp Tc/RGB    → upgrade Color16 → TrueColor
  *
- * Additional capability detection:
- * - Sixel: via terminfo (`infocmp -1` Sixel capability) and, if interactive,
- *   escape query (OSC 4 ; 1 ; ? \x07)
- * - Kitty: TERM=xterm-kitty or escape query
- * - ITerm2: TERM_PROGRAM=iTerm.app or escape query
- * - Hyperlinks: OSC 8 support via escape query
- * - BracketedPaste: OSC 2004 support
- * - FocusEvents: OSC 1004 support
+ * Additional capability detection (all env/terminfo lookups — this probe
+ * issues no raw OSC query round-trips; see checkEscapeQueries):
+ * - Sixel: terminfo (`infocmp -1` Sixel capability)
+ * - Kitty: TERM=xterm-kitty
+ * - ITerm2: TERM_PROGRAM=iTerm.app|Apple_Terminal table
+ * - Hyperlinks: TERM_PROGRAM=Hyper table
+ * - TrueColor upgrade: TERM_PROGRAM=WezTerm|vscode|Ghostty table
  * - KittyKeyboard: TERM=xterm-kitty
+ * - BracketedPaste/FocusEvents: not probed (upstream TUI layer negotiates)
  *
  * @see https://github.com/charmbracelet/colorprofile
  * @see https://sw.kovidgoyal.net/kitty/graphics-protocol/
@@ -47,7 +47,12 @@ class TerminalProbe
      * Create a new probe with optional environment overrides.
      *
      * @param array<string, string|null> $env  Environment map for testing
-     * @param bool                      $interactive  Whether to run escape queries
+     * @param bool                      $interactive  Whether the environment
+     *                                                upgrade table (Phase 3)
+     *                                                may run; ANDed with
+     *                                                isInteractive() here and
+     *                                                honored by runProbe() unless
+     *                                                that call overrides it
      */
     public function __construct(array $env = [], bool $interactive = true)
     {
@@ -68,19 +73,23 @@ class TerminalProbe
     /**
      * Run the full probe pipeline with optional environment overrides.
      *
-     * @param array<string, string|null> $env  Environment overrides
-     * @param bool                      $interactive  Run escape queries
+     * @param array<string, string|null> $env          Environment overrides
+     * @param bool|null                  $interactive  null (default) keeps the
+     *                                                 constructor's decision;
+     *                                                 true re-evaluates
+     *                                                 isInteractive(); false
+     *                                                 forces Phase 3 off
      */
-    public function runProbe(array $env = [], bool $interactive = true): ProbeReport
+    public function runProbe(array $env = [], ?bool $interactive = null): ProbeReport
     {
         if ($env !== []) {
             $this->env = array_merge($this->env, $env);
         }
-        if (!$interactive) {
-            $this->interactive = false;
-        } else {
-            $this->interactive = $this->isInteractive();
-        }
+        $this->interactive = match ($interactive) {
+            false => false,
+            true => $this->isInteractive(),
+            null => $this->interactive,
+        };
 
         $caps = $this->checkEnvVars();
 
@@ -131,12 +140,9 @@ class TerminalProbe
             return $caps;
         }
 
-        // 5. TrueColor from sources other than COLORTERM (which is handled below)
-        // CLICOLOR_FORCE=1 was already handled above, so this catches WT_SESSION, GOOGLE_CLOUD_SHELL, etc.
-        if ($chain->level() === DetectionChain::LEVEL_TRUECOLOR
-            && !str_contains($chain->source(), 'COLORTERM')) {
-            // These set TrueColor but don't return - continue to check TMUX||STY
-        }
+        // 5. TrueColor from sources other than COLORTERM (handled below) is set
+        // by the chain match above via LEVEL_TRUECOLOR; WT_SESSION and
+        // GOOGLE_CLOUD_SHELL (steps 6-7) additionally record the capability.
 
         // 5. COLORTERM=24bit|truecolor|yes → TrueColor (returns immediately)
         $colorterm = $this->getEnv('COLORTERM');
@@ -148,8 +154,10 @@ class TerminalProbe
             }
         }
 
-        // 6. WT_SESSION set → TrueColor (set but don't return - continue to step 8)
-        if ($this->getEnv('WT_SESSION') !== null) {
+        // 6. WT_SESSION non-empty → TrueColor (set but don't return - continue
+        // to step 8). An empty WT_SESSION is not a Windows Terminal session.
+        $wtSession = $this->getEnv('WT_SESSION');
+        if ($wtSession !== null && $wtSession !== '') {
             $caps[capabilityKey(Capability::TrueColor)] = 'env:WT_SESSION';
         }
 
@@ -158,13 +166,15 @@ class TerminalProbe
             $caps[capabilityKey(Capability::TrueColor)] = 'env:GOOGLE_CLOUD_SHELL';
         }
 
-        // 8. TMUX || STY set + base TERM checks tmux/screen first → Color256
+        // 8. TMUX || STY non-empty + base TERM checks tmux/screen first → Color256
         $tmux = $this->getEnv('TMUX');
         $sty = $this->getEnv('STY');
-        if ($tmux !== null || $sty !== null) {
+        $inTmux = $tmux !== null && $tmux !== '';
+        $inSty = $sty !== null && $sty !== '';
+        if ($inTmux || $inSty) {
             $term = $this->getEnv('TERM') ?? '';
             if ($this->termIsScreen($term) || $this->termIsTmux($term)) {
-                $caps[capabilityKey(Capability::Color256)] = 'env:TMUX|STY+' . ($tmux !== null ? 'TMUX' : 'STY');
+                $caps[capabilityKey(Capability::Color256)] = 'env:TMUX|STY+' . ($inTmux ? 'TMUX' : 'STY');
                 return $caps;
             }
         }
@@ -299,19 +309,20 @@ class TerminalProbe
     }
 
     /**
-     * Step 3: Run escape queries for interactive terminals.
+     * Step 3: Interactive-only capability upgrade from the advertised environment.
+     *
+     * Despite the historical name this issues no raw OSC query round-trips
+     * (DA1, OSC 4;1;?, OSC 8, 2004, 1004): the implementation is a
+     * TERM_PROGRAM lookup table plus the TERM=xterm-kitty keyboard rule.
+     * Real query I/O would need raw-mode read-back owned by the TUI layer;
+     * until then terminfo (Phase 2) is the authoritative deep probe.
      *
      * @param array<string, string> $caps
      * @return array<string, string>
      */
     private function checkEscapeQueries(array $caps): array
     {
-        // Note: Escape queries require actually writing to the terminal
-        // and reading the response. This is typically done via DA1 (Primary
-        // device attributes) query. For now, we detect known capabilities
-        // based on TERM_PROGRAM.
-
-        // TERM_PROGRAM hints for iTerm2
+        // TERM_PROGRAM hints for iTerm2 (and friends) — table lookup, no query.
         $termProgram = $this->getEnv('TERM_PROGRAM');
         if ($termProgram !== null) {
             $known = [
@@ -338,12 +349,9 @@ class TerminalProbe
             $caps[$key] = 'env:TERM=xterm-kitty';
         }
 
-        // Bracketed paste mode is widely supported; check via escape query
-        // OSC 2004 can query bracketed paste support
-        // For now, we assume modern terminals support it if not disabled
-
-        // Focus events - OSC 1004
-        // Most modern terminals support this
+        // BracketedPaste (OSC 2004) and FocusEvents (OSC 1004) are NOT probed
+        // here: reporting them requires the raw-mode query round-trip described
+        // above, which this library deliberately leaves to the TUI layer.
 
         return $caps;
     }
