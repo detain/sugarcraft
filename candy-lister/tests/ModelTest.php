@@ -21,9 +21,9 @@ final class ModelTest extends TestCase
     public function testNewModelIsNotEmpty(): void
     {
         $m = Model::new();
-        $this->assertSame(80, $m->width);
-        $this->assertSame(24, $m->height);
-        $this->assertSame(5, $m->cursorOffset);
+        $this->assertSame(80, $m->width());
+        $this->assertSame(24, $m->height());
+        $this->assertSame(5, $m->cursorOffset());
     }
 
     public function testAddItem(): void
@@ -44,10 +44,10 @@ final class ModelTest extends TestCase
             ->setCursorOffset(7)
             ->setWrap(5);
 
-        $this->assertSame(120, $m->width);
-        $this->assertSame(40, $m->height);
-        $this->assertSame(7, $m->cursorOffset);
-        $this->assertSame(5, $m->wrap);
+        $this->assertSame(120, $m->width());
+        $this->assertSame(40, $m->height());
+        $this->assertSame(7, $m->cursorOffset());
+        $this->assertSame(5, $m->wrap());
     }
 
     public function testCursorNavigation(): void
@@ -102,8 +102,9 @@ final class ModelTest extends TestCase
             $this->model = $this->model->addItem(new StringItem($v));
         }
 
-        $this->model->lessFunc = fn($a, $b) => \strcmp((string) $a, (string) $b);
-        $this->model = $this->model->sort();
+        $this->model = $this->model
+            ->setLessFunc(fn($a, $b) => \strcmp((string) $a, (string) $b))
+            ->sort();
 
         // After sort, cursor stays on the same logical item ('z' was at cursor index 0).
         $this->assertSame('z', (string) $this->model->cursorItem());
@@ -127,7 +128,7 @@ final class ModelTest extends TestCase
             $this->model = $this->model->addItem(new StringItem($v));
         }
 
-        $this->model->equalsFunc = fn($a, $b) => (string) $a === (string) $b;
+        $this->model = $this->model->setEqualsFunc(fn($a, $b) => (string) $a === (string) $b);
         $this->assertSame(0, $this->model->find(new StringItem('aa')));
         $this->assertSame(-1, $this->model->find(new StringItem('xx')));
     }
@@ -163,7 +164,7 @@ final class ModelTest extends TestCase
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer());
 
-        $view = $m->View();
+        $view = $m->view();
         $this->assertIsString($view);
         $this->assertStringContainsString('item one', $view);
         $this->assertStringContainsString('item two', $view);
@@ -227,14 +228,14 @@ final class ModelTest extends TestCase
 
         // Original model unchanged
         $this->assertSame(3, $this->model->length());
-        $this->assertNull($this->model->filterFn);
-        $this->assertNull($this->model->filterState);
+        $this->assertNull($this->model->filterFn());
+        $this->assertNull($this->model->filterState());
 
         // New model has filtered items
         $this->assertSame(1, $filtered->length());
         $this->assertSame('banana', (string) $filtered->cursorItem());
-        $this->assertNotNull($filtered->filterFn);
-        $this->assertSame(FilterState::filtering, $filtered->filterState);
+        $this->assertNotNull($filtered->filterFn());
+        $this->assertSame(FilterState::filtering, $filtered->filterState());
     }
 
     public function testWithFilterFnFiltersItemsCorrectly(): void
@@ -263,8 +264,8 @@ final class ModelTest extends TestCase
 
         $restored = $filtered->withoutFilter();
         $this->assertSame(3, $restored->length());
-        $this->assertNull($restored->filterFn);
-        $this->assertSame(FilterState::unfiltered, $restored->filterState);
+        $this->assertNull($restored->filterFn());
+        $this->assertSame(FilterState::unfiltered, $restored->filterState());
     }
 
     public function testWithoutFilterOnUnfilteredModelReturnsSelf(): void
@@ -291,10 +292,10 @@ final class ModelTest extends TestCase
     public function testFilterStateIsFilteringAfterSet(): void
     {
         $this->model = $this->model->addItem(new StringItem('apple'));
-        $this->assertNull($this->model->filterState);
+        $this->assertNull($this->model->filterState());
 
         $filtered = $this->model->withFilterFn(fn() => true);
-        $this->assertSame(FilterState::filtering, $filtered->filterState);
+        $this->assertSame(FilterState::filtering, $filtered->filterState());
     }
 
     // ─── Additional edge cases ───────────────────────────────────────────────
@@ -321,21 +322,21 @@ final class ModelTest extends TestCase
     {
         // lineOffset is now an internal scroll anchor, no longer aliased to cursorOffset.
         $m = $this->model->setCursorOffset(7);
-        $this->assertSame(7, $m->cursorOffset);
+        $this->assertSame(7, $m->cursorOffset());
         // lineOffset retains its default value (not overwritten by setCursorOffset).
-        $this->assertSame(5, $m->lineOffset);
+        $this->assertSame(5, $m->lineOffset());
     }
 
     public function testSetLineStyle(): void
     {
         $m = $this->model->setLineStyle("\x1b[2m");
-        $this->assertSame("\x1b[2m", $m->lineStyle);
+        $this->assertSame("\x1b[2m", $m->lineStyle());
     }
 
     public function testSetCurrentStyle(): void
     {
         $m = $this->model->setCurrentStyle("\x1b[1m");
-        $this->assertSame("\x1b[1m", $m->currentStyle);
+        $this->assertSame("\x1b[1m", $m->currentStyle());
     }
 
     // --- Style escape-injection guard (SEC) --------------------------------
@@ -346,7 +347,7 @@ final class ModelTest extends TestCase
             ->addItem(new StringItem('cur'))
             ->addItem(new StringItem('row'))
             ->setLineStyle('1;31');
-        $this->assertSame('1;31', $m->lineStyle);
+        $this->assertSame('1;31', $m->lineStyle());
         // lineStyle applies to non-current rows; the bare codes must render as a
         // well-formed SGR sequence (proving a legit "1;31" passes the guard).
         $this->assertStringContainsString("\x1b[1;31m", implode("\n", $m->lines()));
@@ -365,12 +366,31 @@ final class ModelTest extends TestCase
         $this->model->setCurrentStyle("1;31m\x1b]0;pwned");
     }
 
-    public function testApplyStyleRejectsInjectionFromDirectPropertyAssignment(): void
+    public function testStylePropertiesAreNoLongerPubliclyWritable(): void
     {
-        // The public $currentStyle bypasses the setter — the render-time guard
-        // must still refuse to splice a raw escape into the output stream.
+        // Audit M7 fix wave: the fluent API is the only write surface. A plain
+        // property write must now be an Error, not a silent guard bypass.
+        $ref = new \ReflectionClass(Model::class);
+        foreach (['width', 'height', 'cursorOffset', 'lineOffset', 'wrap',
+                  'lessFunc', 'equalsFunc', 'prefixer', 'suffixer',
+                  'lineStyle', 'currentStyle', 'filterFn', 'filterState'] as $field) {
+            $prop = $ref->getProperty($field);
+            $this->assertFalse($prop->isPublic(), "\${$field} must not be public");
+        }
+
         $m = $this->model->addItem(new StringItem('row'));
-        $m->currentStyle = "\x1b]0;pwned\x07";
+        $this->expectException(\Error::class);
+        $m->width = 1_000_000; // PHP 8 raises Error on inaccessible property write
+    }
+
+    public function testApplyStyleRejectsInjectionEvenViaReflectionWrite(): void
+    {
+        // Defense in depth (the original M7 hazard): even a worst-case write
+        // straight into the private field must not splice a raw escape — the
+        // render-time sgrCodes() guard re-validates at the splice point.
+        $m = $this->model->addItem(new StringItem('row'));
+        $prop = new \ReflectionProperty(Model::class, 'currentStyle');
+        $prop->setValue($m, "\x1b]0;pwned\x07");
         $this->expectException(\InvalidArgumentException::class);
         $m->lines();
     }
@@ -406,8 +426,8 @@ final class ModelTest extends TestCase
     {
         // Zero stays valid at the setter (lines() rejects a zero viewport at
         // render time); the upper bound itself is accepted.
-        $this->assertSame(0, $this->model->setWidth(0)->width);
-        $this->assertSame(Model::MAX_DIMENSION, $this->model->setWidth(Model::MAX_DIMENSION)->width);
+        $this->assertSame(0, $this->model->setWidth(0)->width());
+        $this->assertSame(Model::MAX_DIMENSION, $this->model->setWidth(Model::MAX_DIMENSION)->width());
     }
 
     public function testSortWithNullLessFuncReturnsSelf(): void
@@ -460,13 +480,13 @@ final class ModelTest extends TestCase
     public function testSetPrefixer(): void
     {
         $m = $this->model->setPrefixer(new DefaultPrefixer());
-        $this->assertInstanceOf(DefaultPrefixer::class, $m->prefixer);
+        $this->assertInstanceOf(DefaultPrefixer::class, $m->prefixer());
     }
 
     public function testSetSuffixer(): void
     {
         $m = $this->model->setSuffixer(new DefaultSuffixer());
-        $this->assertInstanceOf(DefaultSuffixer::class, $m->suffixer);
+        $this->assertInstanceOf(DefaultSuffixer::class, $m->suffixer());
     }
 
     public function testCursorItemThrowsOnEmptyList(): void
@@ -623,7 +643,7 @@ final class ModelTest extends TestCase
             ->setSuffixer(new DefaultSuffixer())
             ->setCurrentStyle("\x1b[1m");
 
-        $out = $m->View();
+        $out = $m->view();
         $this->assertIsString($out);
         $this->assertNotEmpty($out);
         $this->assertStringContainsString('apple', $out);
@@ -633,7 +653,7 @@ final class ModelTest extends TestCase
         $this->assertStringContainsString('╭', $out);
         // Second frame: cursor move produces a delta (shorter than full render)
         $m2 = $m->setCursor(1);
-        $out2 = $m2->View();
+        $out2 = $m2->view();
         $this->assertIsString($out2);
         $this->assertLessThan(\strlen($out), \strlen($out2));
     }
@@ -653,11 +673,11 @@ final class ModelTest extends TestCase
             ->setSuffixer(new DefaultSuffixer())
             ->setLineStyle("\x1b[2m");
 
-        $frame1Out = $m->View();
+        $frame1Out = $m->view();
         $this->assertNotEmpty($frame1Out);
 
         $m2 = $m->setCursor(1);
-        $frame2Out = $m2->View();
+        $frame2Out = $m2->view();
 
         $this->assertLessThan(\strlen($frame1Out), \strlen($frame2Out));
         $this->assertStringContainsString('item 1', $frame2Out);
@@ -686,11 +706,11 @@ final class ModelTest extends TestCase
             ->setSuffixer(new DefaultSuffixer());
 
         // Render unfiltered model first (stores previousFrame in $m)
-        $m->View();
+        $m->view();
 
         // Apply filter: different line set → next View() must be full, not delta
         $filtered = $m->withFilterFn(fn($v) => (string) $v === 'banana');
-        $frame2 = $filtered->View();
+        $frame2 = $filtered->view();
 
         // With the fix: first filtered View() = full frame (~43 bytes, 1 line).
         // Without the fix: delta vs unfiltered frame (~20-30 bytes).
@@ -710,7 +730,7 @@ final class ModelTest extends TestCase
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer())
             ->withFilterFn(fn($v) => (string) $v === 'banana');
-        $freshFrame = $freshFiltered->View();
+        $freshFrame = $freshFiltered->view();
         $this->assertSame(\strlen($freshFrame), \strlen($frame2));
     }
 
@@ -734,11 +754,11 @@ final class ModelTest extends TestCase
             ->setLineStyle('')
             ->setCurrentStyle("\x1b[7m");
 
-        $frame1Out = $m->View();
+        $frame1Out = $m->view();
         $this->assertNotEmpty($frame1Out);
 
         $m2 = $m->setCursor(1);
-        $frame2Out = $m2->View();
+        $frame2Out = $m2->view();
 
         $this->assertNotEmpty($frame2Out);
         // The delta contains "item one" but fragmented across ANSI sequences
@@ -759,18 +779,18 @@ final class ModelTest extends TestCase
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer());
 
-        $frame1Out = $m->View();
+        $frame1Out = $m->view();
         $this->assertNotEmpty($frame1Out);
         $len1 = \strlen($frame1Out);
 
         // Same dimensions → delta
         $m2 = $m->setCursor(1);
-        $frame2Out = $m2->View();
+        $frame2Out = $m2->view();
         $this->assertLessThan($len1, \strlen($frame2Out));
 
         // Resize to wider viewport → must emit FULL frame
         $m3 = $m2->setViewport(60, 5);
-        $frame3Out = $m3->View();
+        $frame3Out = $m3->view();
         $this->assertGreaterThan($len1, \strlen($frame3Out));
         $this->assertStringContainsString('item 0', $frame3Out);
     }
@@ -788,16 +808,16 @@ final class ModelTest extends TestCase
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer());
 
-        $frame1Out = $m->View();
+        $frame1Out = $m->view();
         $len1 = \strlen($frame1Out);
 
         $m2 = $m->setCursor(1);
-        $frame2Out = $m2->View();
+        $frame2Out = $m2->view();
         $this->assertLessThan($len1, \strlen($frame2Out));
 
         // Reset → next frame must be full
         $m2->resetPreviousFrame();
-        $frame3Out = $m2->View();
+        $frame3Out = $m2->view();
         $this->assertGreaterThan(\strlen($frame2Out), \strlen($frame3Out));
     }
 
@@ -843,17 +863,17 @@ final class ModelTest extends TestCase
             ->addItem(new \SugarCraft\Lister\StringItem('item 2'));
 
         // Frame 1: full render
-        $out1 = $model->View();
+        $out1 = $model->view();
         $bytes1 = \strlen($out1);
 
         // Frame 2: change cursor position (small visual change)
         $model2 = $model->setCursor(1);
-        $out2 = $model2->View();
+        $out2 = $model2->view();
         $bytes2 = \strlen($out2);
 
         // Frame 3: change cursor position again
         $model3 = $model2->setCursor(0);
-        $out3 = $model3->View();
+        $out3 = $model3->view();
         $bytes3 = \strlen($out3);
 
         // Delta frames should be smaller than full re-render (not absolute byte count)
@@ -867,7 +887,7 @@ final class ModelTest extends TestCase
     public function testSetLineOffset(): void
     {
         $m = $this->model->setLineOffset(10);
-        $this->assertSame(10, $m->lineOffset);
+        $this->assertSame(10, $m->lineOffset());
     }
 
     public function testAddItems(): void
@@ -1014,7 +1034,7 @@ final class ModelTest extends TestCase
             $m = $m->addItem(new StringItem("item $i"));
         }
 
-        $ids = $m->getItemIds();
+        $ids = $m->itemIds();
         $this->assertCount(3, $ids);
         $this->assertNotContains($ids[0], \array_slice($ids, 1));
         // IDs should be strictly increasing
@@ -1052,7 +1072,7 @@ final class ModelTest extends TestCase
             ->setViewport(0, 0) // Will trigger RuntimeException in lines()
             ->addItem(new StringItem('x'));
 
-        $out = $m->View();
+        $out = $m->view();
         // Should return the error message string, not throw
         $this->assertIsString($out);
         $this->assertNotEmpty($out);
@@ -1063,9 +1083,9 @@ final class ModelTest extends TestCase
     public function testApplyStyleWithEmptyStyleReturnsOriginal(): void
     {
         // When style is empty, applyStyle should return the original string
-        // This exercises the early return at line 829-830
-        $m = $this->model->addItem(new StringItem('test'));
-        $m->lineStyle = ''; // Direct bypass of setter
+        // (default lineStyle is already ''; setLineStyle('') proves the setter
+        // path reaches the same early return).
+        $m = $this->model->addItem(new StringItem('test'))->setLineStyle('');
 
         $lines = $m->lines();
         $this->assertNotEmpty($lines);
@@ -1142,8 +1162,8 @@ final class ModelTest extends TestCase
 
         $restored = $second->withoutFilter();
         $this->assertSame(5, $restored->length(), 'two-stage filter must still restore all originals');
-        $this->assertSame([0, 1, 2, 3, 4], $restored->getItemIds());
-        $this->assertSame(FilterState::unfiltered, $restored->filterState);
+        $this->assertSame([0, 1, 2, 3, 4], $restored->itemIds());
+        $this->assertSame(FilterState::unfiltered, $restored->filterState());
     }
 
     /**
@@ -1163,9 +1183,9 @@ final class ModelTest extends TestCase
         // default-height viewport (100000×24 = 2.4M) also stays legal, keeping
         // the existing MAX_DIMENSION upper-bound pin green.
         $m = Model::new()->setViewport(2000, 2000);
-        $this->assertSame(2000, $m->width);
-        $this->assertSame(2000, $m->height);
-        $this->assertSame(Model::MAX_DIMENSION, Model::new()->setWidth(Model::MAX_DIMENSION)->width);
+        $this->assertSame(2000, $m->width());
+        $this->assertSame(2000, $m->height());
+        $this->assertSame(Model::MAX_DIMENSION, Model::new()->setWidth(Model::MAX_DIMENSION)->width());
     }
 
     public function testSetHeightRejectsAreaOverflowAgainstCurrentWidth(): void

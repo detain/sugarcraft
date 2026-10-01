@@ -8,7 +8,6 @@ use Psr\Log\LoggerInterface;
 use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
 use SugarCraft\Buffer\Diff\DiffEncoder;
-use SugarCraft\Lister\Lang;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
@@ -37,12 +36,11 @@ use SugarCraft\Core\Util\Width;
  *
  * Usage:
  * ```php
- * $model = Model::new();
- * $model->setWidth(80)->setHeight(24);
+ * $model = Model::new()->setWidth(80)->setHeight(24);
  * foreach (['apple', 'banana', 'cherry'] as $f) {
- *     $model->addItem(new StringItem($f));
+ *     $model = $model->addItem(new StringItem($f));
  * }
- * echo $model->View();
+ * echo $model->view();
  * ```
  *
  * @see https://github.com/treilik/bubblelister
@@ -70,31 +68,37 @@ final class Model
      */
     public const MAX_TOTAL_CELLS = 4_000_000;
 
-    public int $width  = 80;  // viewport width in cells
-    public int $height = 24;  // viewport height in lines
-    public int $cursorOffset = 5;  // gap between cursor and viewport edge
-    public int $lineOffset = 5;    // how many lines before cursor to show
-    public int $wrap = 0;          // max lines per item (0 = unlimited)
+    // Configuration is PRIVATE (audit M7 fix wave): every field below has a
+    // guarded fluent setter and a bare accessor, so no write can bypass
+    // assertDimension()/assertArea()/sgrCodes()/the filter bookkeeping. The
+    // previous public surface let `$m->width = 1_000_000` skip the guards and
+    // let `$m->filterFn = ...` desynchronise items/originalItems.
+
+    private int $width  = 80;  // viewport width in cells
+    private int $height = 24;  // viewport height in lines
+    private int $cursorOffset = 5;  // gap between cursor and viewport edge
+    private int $lineOffset = 5;    // how many lines before cursor to show
+    private int $wrap = 0;          // max lines per item (0 = unlimited)
 
     /** @var \Closure(\Stringable, \Stringable): int|null */
-    public ?\Closure $lessFunc = null;
+    private ?\Closure $lessFunc = null;
 
     /** @var \Closure(\Stringable, \Stringable): bool|null */
-    public ?\Closure $equalsFunc = null;
+    private ?\Closure $equalsFunc = null;
 
-    public ?Prefixer $prefixer = null;
-    public ?Suffixer $suffixer = null;
+    private ?Prefixer $prefixer = null;
+    private ?Suffixer $suffixer = null;
 
-    /** Style for non-current items (ANSI string). */
-    public string $lineStyle = '';
+    /** Style for non-current items (ANSI string); set via setLineStyle(). */
+    private string $lineStyle = '';
 
-    /** Style for current item (ANSI string). */
-    public string $currentStyle = '';
+    /** Style for current item (ANSI string); set via setCurrentStyle(). */
+    private string $currentStyle = '';
 
     /** @var \Closure(\Stringable): bool|null */
-    public ?\Closure $filterFn = null;
+    private ?\Closure $filterFn = null;
 
-    public ?FilterState $filterState = null;
+    private ?FilterState $filterState = null;
 
     // -------------------------------------------------------------------------
     // Internal state
@@ -109,7 +113,7 @@ final class Model
     private int $cursorIndex = 0;
     /** Per-instance item ID counter. Cloned models inherit the counter's
      * current value, so different Model instances may produce items with
-     * colliding IDs. Use getItemIds() for stable in-model identity only. */
+     * colliding IDs. Use itemIds() for stable in-model identity only. */
     private int $idCounter = 0;
 
     /** @var Buffer|null Previous rendered frame for diff-based emission */
@@ -225,6 +229,59 @@ final class Model
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Accessors (bare, per repo convention — audit M7/#11 fix wave)
+    // -------------------------------------------------------------------------
+
+    public function width(): int { return $this->width; }
+
+    public function height(): int { return $this->height; }
+
+    public function cursorOffset(): int { return $this->cursorOffset; }
+
+    public function lineOffset(): int { return $this->lineOffset; }
+
+    public function wrap(): int { return $this->wrap; }
+
+    /** @return \Closure(\Stringable, \Stringable): int|null */
+    public function lessFunc(): ?\Closure { return $this->lessFunc; }
+
+    /** @return \Closure(\Stringable, \Stringable): bool|null */
+    public function equalsFunc(): ?\Closure { return $this->equalsFunc; }
+
+    public function prefixer(): ?Prefixer { return $this->prefixer; }
+
+    public function suffixer(): ?Suffixer { return $this->suffixer; }
+
+    public function lineStyle(): string { return $this->lineStyle; }
+
+    public function currentStyle(): string { return $this->currentStyle; }
+
+    /** @return \Closure(\Stringable): bool|null */
+    public function filterFn(): ?\Closure { return $this->filterFn; }
+
+    public function filterState(): ?FilterState { return $this->filterState; }
+
+    /**
+     * Install the comparison used by {@see sort()}.
+     *
+     * @param \Closure(\Stringable, \Stringable): int|null $fn
+     */
+    public function setLessFunc(?\Closure $fn): self
+    {
+        return $this->mutate(fn($m) => $m->lessFunc = $fn);
+    }
+
+    /**
+     * Install the comparison used by {@see find()}.
+     *
+     * @param \Closure(\Stringable, \Stringable): bool|null $fn
+     */
+    public function setEqualsFunc(?\Closure $fn): self
+    {
+        return $this->mutate(fn($m) => $m->equalsFunc = $fn);
+    }
+
     public function setCursorOffset(int $n): self
     {
         return $this->mutate(fn($m) => $m->cursorOffset = $n);
@@ -289,7 +346,7 @@ final class Model
         ));
         // Clamp cursor to new length
         $clone->cursorIndex = min($clone->cursorIndex, max(0, count($clone->items) - 1));
-        // Reset diff state so the next View() emits a full frame, not a delta
+        // Reset diff state so the next view() emits a full frame, not a delta
         // against the pre-filter frame (which has a different line set).
         $clone->previousFrame = null;
         $clone->prevWidth = null;
@@ -320,7 +377,7 @@ final class Model
         $clone->originalItems = [];
         // Clamp cursor
         $clone->cursorIndex = min($clone->cursorIndex, max(0, count($clone->items) - 1));
-        // Reset diff state so the next View() emits a full frame, not a delta
+        // Reset diff state so the next view() emits a full frame, not a delta
         // against the pre-unfilter frame (which has a different line set).
         $clone->previousFrame = null;
         $clone->prevWidth = null;
@@ -444,7 +501,7 @@ final class Model
      *
      * Mirrors Go upstream's GetCursorItem.
      *
-     * Error strategy: fail-fast (throws). Unlike View() which catches
+     * Error strategy: fail-fast (throws). Unlike view() which catches
      * exceptions and returns an error string for resilient TUI rendering,
      * cursorItem() is a query API that expects the caller to handle the
      * empty-list case explicitly. Throwing keeps the API predictable.
@@ -555,7 +612,7 @@ final class Model
      *
      * @return list<int>
      */
-    public function getItemIds(): array
+    public function itemIds(): array
     {
         return \array_map(fn(Item $item): int => $item->id, $this->items);
     }
@@ -678,11 +735,12 @@ final class Model
     }
 
     /**
-     * Generator-based line renderer — yields lines one at a time.
+     * Generator wrapper over lines().
      *
-     * Unlike lines() which returns a complete array, this yields each line
-     * as it is computed, providing safe interleaving points for event loops.
-     * Output is identical to lines() when fully consumed.
+     * HONEST SCOPE (audit #17): rendering is EAGER — lines() computes the
+     * complete array before the first yield, so this provides no interleaving
+     * points for event loops. It exists only for generator-shaped consumers;
+     * output is identical to lines() when fully consumed.
      *
      * @return \Generator<int, string, mixed, void>
      */
@@ -702,7 +760,7 @@ final class Model
      *
      * @param LoggerInterface|null $logger If provided, errors are logged at WARNING level
      */
-    public function View(?LoggerInterface $logger = null): string
+    public function view(?LoggerInterface $logger = null): string
     {
         try {
             // Detect window resize — reset diff state so we emit a full frame.
@@ -773,7 +831,7 @@ final class Model
         // control bytes — its contract is "caller sanitizes". Ansi::strip()
         // alone removes only ESC-initiated sequences, so bare C0 (NUL/BEL/BS/
         // VT/FF/SO-US) and DEL from the untrusted item value would flow through
-        // renderItem() into BOTH View() sinks: the first-frame `return
+        // renderItem() into BOTH view() sinks: the first-frame `return
         // $fullOutput` and the diff-delta cells built by bufferFromOutput().
         // Sanitize::untrusted() is the single choke point that neutralizes C0/
         // DEL (and C1) here at the source so both paths inherit clean content.
@@ -901,9 +959,9 @@ final class Model
         if ($style === '') {
             return $s;
         }
-        // Re-validate at the splice point: the public $lineStyle/$currentStyle
-        // properties can be assigned directly, bypassing the setters, so an
-        // injected OSC/APC/other escape must not reach the output stream.
+        // Re-validate at the splice point (defense in depth): setters already
+        // reject non-SGR styles, but reflection into the now-private fields must
+        // still not smuggle an OSC/APC/other escape into the output stream.
         $codes = self::sgrCodes($style);
         if ($codes === '') {
             return $s;
@@ -950,7 +1008,7 @@ final class Model
      * All cells are created with null style — the diff algorithm will
      * still work correctly for detecting changed character positions.
      *
-     * @param string $output Multi-line string from View()
+     * @param string $output Multi-line string from view()
      * @param int    $width  Buffer width in cells
      * @param int    $height Buffer height in rows
      */
@@ -990,7 +1048,7 @@ final class Model
     }
 
     /**
-     * Reset the previous-frame buffer, forcing the next View to emit
+     * Reset the previous-frame buffer, forcing the next view() to emit
      * a full frame (used on window resize or cursor-position-lost events).
      *
      * This method intentionally mutates the internal state for performance

@@ -49,7 +49,7 @@ final class IntegrationTest extends TestCase
         $this->assertSame('first item', (string) $m->cursorItem());
 
         // Render with cursor on first item
-        $out = $m->View();
+        $out = $m->view();
         $this->assertIsString($out);
         $this->assertStringContainsString('first item', $out);
         $this->assertStringContainsString('second item', $out);
@@ -73,20 +73,20 @@ final class IntegrationTest extends TestCase
             ->setSuffixer(new DefaultSuffixer());
 
         // Frame 1: full output
-        $frame1 = $m->View();
+        $frame1 = $m->view();
         $bytes1 = \strlen($frame1);
         $this->assertNotEmpty($frame1);
         $this->assertStringContainsString('item 0', $frame1);
 
         // Frame 2: cursor move → delta (smaller than full)
         $m2 = $m->setCursor(1);
-        $frame2 = $m2->View();
+        $frame2 = $m2->view();
         $this->assertNotEmpty($frame2);
         $this->assertLessThan($bytes1, \strlen($frame2));
 
         // Frame 3: another cursor move → delta
         $m3 = $m2->setCursor(2);
-        $frame3 = $m3->View();
+        $frame3 = $m3->view();
         $this->assertNotEmpty($frame3);
         $this->assertLessThan($bytes1, \strlen($frame3));
     }
@@ -107,14 +107,14 @@ final class IntegrationTest extends TestCase
             ->setSuffixer(new DefaultSuffixer());
 
         // Render unfiltered first (establishes previousFrame)
-        $m->View();
+        $m->view();
 
         // Apply filter and render
         $filtered = $m->withFilterFn(fn($v) => str_starts_with((string) $v, 'a'));
         $this->assertSame(2, $filtered->length());
         $this->assertSame('apple', (string) $filtered->cursorItem());
 
-        $out = $filtered->View();
+        $out = $filtered->view();
         $this->assertStringContainsString('apple', $out);
         $this->assertStringContainsString('apricot', $out);
         $this->assertStringNotContainsString('banana', $out);
@@ -122,8 +122,8 @@ final class IntegrationTest extends TestCase
         // Remove filter and verify restoration
         $restored = $filtered->withoutFilter();
         $this->assertSame(4, $restored->length());
-        $this->assertNull($restored->filterFn);
-        $this->assertSame(FilterState::unfiltered, $restored->filterState);
+        $this->assertNull($restored->filterFn());
+        $this->assertSame(FilterState::unfiltered, $restored->filterState());
     }
 
     /**
@@ -148,7 +148,7 @@ final class IntegrationTest extends TestCase
         $this->assertSame('zebra', (string) $m->cursorItem(), 'Cursor must stay on same logical item after sort');
 
         // Render and verify order
-        $out = $m->View();
+        $out = $m->view();
         $this->assertStringContainsString('apple', $out);
         $this->assertStringContainsString('mango', $out);
         $this->assertStringContainsString('zebra', $out);
@@ -168,17 +168,17 @@ final class IntegrationTest extends TestCase
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer());
 
-        $frame1 = $m->View();
+        $frame1 = $m->view();
         $len1 = \strlen($frame1);
 
         // Cursor move → delta (smaller)
         $m2 = $m->setCursor(1);
-        $frame2 = $m2->View();
+        $frame2 = $m2->view();
         $this->assertLessThan($len1, \strlen($frame2));
 
         // Resize to wider viewport → full frame
         $m3 = $m2->setViewport(80, 5);
-        $frame3 = $m3->View();
+        $frame3 = $m3->view();
         $this->assertGreaterThan($len1, \strlen($frame3));
         $this->assertStringContainsString('item 0', $frame3);
     }
@@ -222,7 +222,7 @@ final class IntegrationTest extends TestCase
             ->setLineStyle("\x1b[2m")   // dim for non-current
             ->setCurrentStyle("\x1b[1m"); // bold for current
 
-        $out0 = $m0->View();
+        $out0 = $m0->view();
         $this->assertIsString($out0);
         $this->assertStringContainsString('item 0', $out0);
         $this->assertStringContainsString('item 1', $out0);
@@ -239,7 +239,7 @@ final class IntegrationTest extends TestCase
             ->setLineStyle("\x1b[2m")
             ->setCurrentStyle("\x1b[7m"); // reverse video for current item
 
-        $out1 = $m1->View();
+        $out1 = $m1->view();
         $this->assertIsString($out1);
         $this->assertStringContainsString('item 1', $out1);
         $this->assertStringContainsString("\x1b[7m", $out1); // currentStyle applied
@@ -277,17 +277,17 @@ final class IntegrationTest extends TestCase
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer());
 
-        $frame1 = $m->View();
+        $frame1 = $m->view();
         $len1 = \strlen($frame1);
 
         // Move cursor → delta
         $m2 = $m->setCursor(1);
-        $frame2 = $m2->View();
+        $frame2 = $m2->view();
         $this->assertLessThan($len1, \strlen($frame2));
 
         // Reset and render again → full frame
         $m2->resetPreviousFrame();
-        $frame3 = $m2->View();
+        $frame3 = $m2->view();
         $this->assertGreaterThan(\strlen($frame2), \strlen($frame3));
     }
 
@@ -314,14 +314,14 @@ final class IntegrationTest extends TestCase
         // Original is unchanged
         $this->assertSame(1, $original->length());
         $this->assertSame(0, $original->cursorIndex());
-        $this->assertSame(40, $original->width);
-        $this->assertSame(5, $original->cursorOffset);
+        $this->assertSame(40, $original->width());
+        $this->assertSame(5, $original->cursorOffset());
 
         // Modified has all changes
         $this->assertSame(2, $modified->length());
         $this->assertSame(1, $modified->cursorIndex());
-        $this->assertSame(60, $modified->width);
-        $this->assertSame(3, $modified->cursorOffset);
+        $this->assertSame(60, $modified->width());
+        $this->assertSame(3, $modified->cursorOffset());
     }
 
     /**
@@ -343,12 +343,12 @@ final class IntegrationTest extends TestCase
         // Original is completely unchanged
         $this->assertSame(3, $original->length());
         $this->assertSame(0, $original->cursorIndex());
-        $this->assertNull($original->filterFn);
-        $this->assertNull($original->filterState);
+        $this->assertNull($original->filterFn());
+        $this->assertNull($original->filterState());
 
         // Restored is same as original
         $this->assertSame($original->length(), $restored->length());
-        $this->assertNull($restored->filterFn);
+        $this->assertNull($restored->filterFn());
     }
 
     /**
@@ -367,7 +367,7 @@ final class IntegrationTest extends TestCase
             ->setCurrentStyle("\x1b[1m"); // bold — injects a legit SGR ESC
 
         // First frame: full output path (`return $fullOutput`).
-        $first = $m->View();
+        $first = $m->view();
 
         // C0/DEL bytes must be gone from the wire.
         $this->assertStringNotContainsString("\x07", $first, 'BEL leaked');
@@ -382,7 +382,7 @@ final class IntegrationTest extends TestCase
         // delta encodes only changed cells, so re-render an identical model to
         // force a full-content frame through bufferFromOutput and inspect its
         // buffer directly for any surviving control byte.
-        $delta = $m->View();
+        $delta = $m->view();
         $this->assertIsString($delta);
         $this->assertStringNotContainsString("\x07", $delta, 'BEL leaked (delta)');
         $this->assertStringNotContainsString("\x00", $delta, 'NUL leaked (delta)');
