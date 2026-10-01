@@ -7,19 +7,25 @@ namespace SugarCraft\Wish\Middleware\Auth;
 use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
+use SugarCraft\Wish\StreamHelper;
 
 /**
  * Challenge-response keyboard-interactive authentication.
  *
- * Implements the SSH_MSG_USERAUTH_INFO_REQUEST exchange: the server
- * sends one or more prompts to the client, the client displays them
- * to the user, collects answers, and sends back SSH_MSG_USERAUTH_INFO_RESPONSE.
+ * **Informational only — this middleware does NOT negotiate the
+ * RFC 4256 wire format.** The real SSH_MSG_USERAUTH_INFO_REQUEST /
+ * INFO_RESPONSE binary packets are completed inside sshd before a
+ * ForceCommand process like this one ever runs (mirrors the honest
+ * disclaimer on {@see \SugarCraft\Wish\Middleware\AuthMethods} for
+ * RFC 4252). What ships here is an app-line stdio simulation: it
+ * writes plaintext prompt lines to the session's STDOUT and reads
+ * newline-delimited answers from STDIN.
  *
- * In a CLI/PHP-FPM context the "client" is the SSH client's stdin.
  * This middleware:
  *
  *   1. Writes Name, Instruction, prompt count, and per-prompt
- *      prompt/echo-flag lines to STDOUT per RFC 4256.
+ *      prompt/echo-flag lines to STDOUT following the RFC 4256
+ *      *shape* (as plain application lines, not SSH packets).
  *   2. Reads newline-delimited responses from STDIN until all
  *      prompts have been answered. The read blocks by contract —
  *      see {@see readResponses()} for the per-connection-process
@@ -31,7 +37,7 @@ use SugarCraft\Wish\Session;
  *      stderr; a validator that returns `true` (or no validator)
  *      passes control to `$next`.
  *
- * Wire format (RFC 4256, SSH_MSG_USERAUTH_INFO_REQUEST):
+ * Line format (RFC-4256-shaped, plaintext):
  *
  *     Name\r\n
  *     Instruction\r\n
@@ -45,9 +51,6 @@ use SugarCraft\Wish\Session;
  *     Response1\r\n
  *     Response2\r\n
  *     ...
- *
- * @property string $name        RFC-4256 Name field (e.g. "Login")
- * @property string $instruction RFC-4256 Instruction field
  */
 final class KeyboardInteractive implements Middleware
 {
@@ -94,33 +97,12 @@ final class KeyboardInteractive implements Middleware
         $this->validate = $validate;
         $this->name = $name;
         $this->instruction = $instruction;
-        if ($stdout === null) {
-            $stream = fopen('php://stdout', 'w');
-            if ($stream === false) {
-                throw new \RuntimeException('cannot open php://stdout');
-            }
-            $this->stdout = $stream;
-        } else {
-            $this->stdout = $stdout;
-        }
-        if ($stdin === null) {
-            $stream = fopen('php://stdin', 'r');
-            if ($stream === false) {
-                throw new \RuntimeException('cannot open php://stdin');
-            }
-            $this->stdin = $stream;
-        } else {
-            $this->stdin = $stdin;
-        }
-        if ($stderr === null) {
-            $stream = fopen('php://stderr', 'w');
-            if ($stream === false) {
-                throw new \RuntimeException('cannot open php://stderr');
-            }
-            $this->stderr = $stream;
-        } else {
-            $this->stderr = $stderr;
-        }
+        // Fail-fast validation of injected streams happens at the
+        // boundary (audit LOW-15): a bad stdin now throws here, not
+        // deep inside the first fgets().
+        $this->stdout = StreamHelper::openOrValidate($stdout, 'php://stdout');
+        $this->stdin = StreamHelper::openOrValidate($stdin, 'php://stdin', 'r');
+        $this->stderr = StreamHelper::openOrValidate($stderr);
     }
 
     public function handle(Context $ctx, Session $session, callable $next)

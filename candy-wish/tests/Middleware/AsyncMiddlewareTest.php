@@ -190,4 +190,27 @@ final class AsyncMiddlewareTest extends TestCase
         PromiseAwait::settle($result);
         $this->assertTrue($chainDone);
     }
+
+    public function testHandlePassesTheChainNextCallableThroughUntouched(): void
+    {
+        // LOW-14 (audit round): the pre-E730 identity wrapper is gone —
+        // handleAsync receives the very callable handle() got.
+        $seen = null;
+        $middleware = new class($seen) extends AsyncMiddleware {
+            public function __construct(private mixed &$seen)
+            {
+            }
+
+            protected function handleAsync(Context $ctx, Session $session, callable $next): PromiseInterface
+            {
+                $this->seen = $next;
+                return \React\Promise\resolve(null);
+            }
+        };
+
+        $next = static function (Context $c, Session $s): void {};
+        $middleware->handle(Context::background(), $this->session(), $next);
+
+        $this->assertSame($next, $seen);
+    }
 }

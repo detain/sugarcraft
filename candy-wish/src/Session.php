@@ -141,6 +141,34 @@ final class Session
     }
 
     /**
+     * Create a new Session with a different terminal geometry,
+     * carrying every other field — protocol metadata included
+     * (parse-once/carry: rebuilds must never silently drop
+     * sessionId/authMethod/versions).
+     */
+    public function withSize(int $cols, int $rows): self
+    {
+        return new self(
+            user:             $this->user,
+            clientHost:       $this->clientHost,
+            clientPort:       $this->clientPort,
+            serverHost:       $this->serverHost,
+            serverPort:       $this->serverPort,
+            term:             $this->term,
+            cols:             $cols,
+            rows:             $rows,
+            tty:              $this->tty,
+            command:          $this->command,
+            lang:             $this->lang,
+            sessionId:        $this->sessionId,
+            authMethod:       $this->authMethod,
+            keyFingerprint:   $this->keyFingerprint,
+            clientVersion:    $this->clientVersion,
+            serverVersion:    $this->serverVersion,
+        );
+    }
+
+    /**
      * @return array<string,string>
      */
     public function toLogContext(): array

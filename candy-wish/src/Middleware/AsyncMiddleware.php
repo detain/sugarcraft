@@ -46,11 +46,7 @@ abstract class AsyncMiddleware implements MiddlewareContract
 {
     public function handle(Context $ctx, Session $session, callable $next): PromiseInterface
     {
-        $wrappedNext = function (Context $c, Session $s) use ($next): void {
-            $next($c, $s);
-        };
-
-        return $this->handleAsync($ctx, $session, $wrappedNext);
+        return $this->handleAsync($ctx, $session, $next);
     }
 
     /**

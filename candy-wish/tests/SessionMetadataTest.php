@@ -128,4 +128,25 @@ final class SessionMetadataTest extends TestCase
         $this->assertNull($session->clientVersion);
         $this->assertNull($session->serverVersion);
     }
+
+    public function testWithSizeCarriesEveryOtherFieldIncludingMetadata(): void
+    {
+        $session = (new Session(
+            user: 'alice', clientHost: '10.0.0.1', clientPort: 5555, serverHost: '10.0.0.2',
+            serverPort: 22, term: 'xterm', cols: 80, rows: 24, tty: '/dev/pts/3',
+            command: 'ls', lang: 'en_US.UTF-8',
+        ))->withProtocolMetadata('abc123', 'password', null, 'SSH-2.0-a', 'SSH-2.0-b')
+          ->withSize(120, 50);
+
+        $this->assertSame(120, $session->cols);
+        $this->assertSame(50, $session->rows);
+        $this->assertSame('abc123', $session->sessionId);
+        $this->assertSame('password', $session->authMethod);
+        $this->assertSame('SSH-2.0-a', $session->clientVersion);
+        $this->assertSame('SSH-2.0-b', $session->serverVersion);
+        $this->assertSame('alice', $session->user);
+        $this->assertSame('/dev/pts/3', $session->tty);
+        $this->assertSame('ls', $session->command);
+        $this->assertSame('en_US.UTF-8', $session->lang);
+    }
 }

@@ -157,12 +157,70 @@ final class ServerTest extends TestCase
         $this->assertSame($session, $captured2);
     }
 
-    public function testWithKeepaliveReturnsFluentSelf(): void
+    public function testWithKeepaliveReturnsANewInstance(): void
     {
+        // LOW-12 (audit round): with* builders clone — the receiver
+        // keeps its own stack untouched, so a shared base Server can
+        // be branched per route.
         $server = Server::new();
         $result = $server->withKeepalive();
 
-        $this->assertSame($server, $result);
+        $this->assertNotSame($server, $result);
+
+        $originalStack = (function (): array {
+            return $this->stack;
+        })->call($server);
+        $this->assertCount(0, $originalStack);
+    }
+
+    public function testWithTransportReturnsANewInstance(): void
+    {
+        $server = Server::new();
+        $hostSshd = new \SugarCraft\Wish\Transport\HostSshdTransport();
+        $result = $server->withTransport($hostSshd);
+
+        $this->assertNotSame($server, $result);
+        $this->assertInstanceOf(
+            \SugarCraft\Wish\Transport\InProcessTransport::class,
+            $server->transport(),
+            'the receiver must keep its default transport',
+        );
+        $this->assertSame($hostSshd, $result->transport());
+    }
+
+    public function testServeThreadsTheInjectedContext(): void
+    {
+        // LOW-12 seam: serve() exposes a Context injection point, so
+        // the M1 cancel-propagation machinery is reachable through the
+        // public API instead of only via transport->run() directly.
+        $captured = null;
+        $recorder = new class ($captured) implements \SugarCraft\Wish\Middleware {
+            public function __construct(private mixed &$captured)
+            {
+            }
+
+            public function handle(Context $ctx, Session $session, callable $next)
+            {
+                $this->captured = $ctx;
+                return null;
+            }
+        };
+
+        $transport = new class implements \SugarCraft\Wish\Transport {
+            public function run(Context $ctx, Session $session, array $stack): int
+            {
+                foreach ($stack as $mw) {
+                    $mw->handle($ctx, $session, static fn () => null);
+                }
+                return 0;
+            }
+        };
+
+        $ctx = Context::background();
+        $server = Server::new()->withTransport($transport)->use($recorder);
+        $server->serve($this->fakeSession(), $ctx);
+
+        $this->assertSame($ctx, $captured);
     }
 
     public function testWithKeepaliveAppendsKeepaliveMiddleware(): void

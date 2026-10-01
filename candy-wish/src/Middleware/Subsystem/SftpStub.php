@@ -8,13 +8,18 @@ use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Session;
 
 /**
+ * QUARANTINED EXAMPLE — demo wiring only, never for production use.
+ *
  * Stub demonstrating {@see SubsystemHandler} wiring for the SFTP
  * subsystem.
  *
  * This is NOT a real SFTP implementation — it shows how a handler is
- * registered and invoked. A production implementation would speak
+ * registered and invoked, and its {@see wasCalled()} accessor exists
+ * purely so {@see \SugarCraft\Wish\Tests\Middleware\SubsystemTest} can
+ * observe dispatch. A production implementation would speak
  * the SFTP protocol over the session's stdin/stdout after this
- * handler is called.
+ * handler is called; swapping one in means implementing
+ * SubsystemHandler yourself, not extending this class.
  *
  * Wiring example:
  * ```php

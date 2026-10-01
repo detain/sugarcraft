@@ -92,11 +92,16 @@ final class Server
     /**
      * Override the active transport. Defaults to
      * {@see InProcessTransport} when not called.
+     *
+     * Immutable: returns a new Server, leaving this one untouched
+     * (house with*-law; `use()` keeps upstream Go-wish mutation
+     * semantics deliberately).
      */
     public function withTransport(Transport $t): self
     {
-        $this->transport = $t;
-        return $this;
+        $new = clone $this;
+        $new->transport = $t;
+        return $new;
     }
 
     public function transport(): Transport
@@ -120,8 +125,9 @@ final class Server
      */
     public function withKeepalive(int $intervalSeconds = 60): self
     {
-        $this->stack[] = new Keepalive($intervalSeconds);
-        return $this;
+        $new = clone $this;
+        $new->stack[] = new Keepalive($intervalSeconds);
+        return $new;
     }
 
     /**
@@ -149,11 +155,16 @@ final class Server
      * ```php
      * exit($server->serve());
      * ```
+     *
+     * @param Context|null $ctx Root context for the run — pass a
+     *                          cancellable context to make the M1
+     *                          cancel-propagation machinery reachable
+     *                          through the public API; null uses a
+     *                          fresh {@see Context::background()}.
      */
-    public function serve(?Session $session = null): int
+    public function serve(?Session $session = null, ?Context $ctx = null): int
     {
         $session ??= Session::fromEnvironment();
-        $ctx = Context::background();
-        return $this->transport->run($ctx, $session, $this->stack);
+        return $this->transport->run($ctx ?? Context::background(), $session, $this->stack);
     }
 }

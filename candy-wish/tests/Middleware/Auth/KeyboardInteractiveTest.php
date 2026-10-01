@@ -319,4 +319,17 @@ final class KeyboardInteractiveTest extends TestCase
         $this->assertFalse($reached);
         $this->assertStringContainsString('Authentication failed', $readErr());
     }
+
+    public function testConstructorRefusesANonResourceStdinAtTheBoundary(): void
+    {
+        // LOW-15 (audit round): injected streams are validated in the
+        // constructor — a bad stdin fails fast here, not deep inside
+        // the first fgets().
+        $this->expectException(\InvalidArgumentException::class);
+
+        new KeyboardInteractive(
+            [['prompt' => 'Password?']],
+            stdin: 'not-a-stream',
+        );
+    }
 }

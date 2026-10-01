@@ -209,23 +209,14 @@ final class DefaultChannelHandler implements ChannelHandler
             return;
         }
         $env = $this->buildEnv($session);
-        $cols = $this->cols > 0 ? $this->cols : 80;
-        $rows = $this->rows > 0 ? $this->rows : 24;
-        $sessColsRows = $session->cols > 0 ? $session->cols : $cols;
-        $sessRows = $session->rows > 0 ? $session->rows : $rows;
-        $effectiveSession = new Session(
-            user: $session->user,
-            clientHost: $session->clientHost,
-            clientPort: $session->clientPort,
-            serverHost: $session->serverHost,
-            serverPort: $session->serverPort,
-            term: $session->term,
-            cols: $sessColsRows,
-            rows: $sessRows,
-            tty: $session->tty,
-            command: $session->command,
-            lang: $session->lang,
-        );
+        $fallbackCols = $this->cols > 0 ? $this->cols : 80;
+        $fallbackRows = $this->rows > 0 ? $this->rows : 24;
+        $effectiveCols = $session->cols > 0 ? $session->cols : $fallbackCols;
+        $effectiveRows = $session->rows > 0 ? $session->rows : $fallbackRows;
+        // Carry protocol metadata (sessionId/authMethod/versions) that
+        // InProcessTransport::run attached — only geometry is re-derived
+        // here, never the handshake fields (audit LOW-18).
+        $effectiveSession = $session->withSize($effectiveCols, $effectiveRows);
         $this->spawner->runChild($effectiveSession, [$this->resolveShell(), '-l'], $env);
     }
 

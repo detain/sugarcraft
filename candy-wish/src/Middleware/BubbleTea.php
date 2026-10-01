@@ -22,7 +22,7 @@ use SugarCraft\Wish\TransportAware;
  * STDOUT (the slave side of sshd's PTY); control returns when the
  * user disconnects.
  *
- * The middleware does NOT call `\$next` — by design, this is the
+ * The middleware does NOT call `$next` — by design, this is the
  * end of the chain.
  *
  * **Transport compatibility.** `BubbleTea` only works under

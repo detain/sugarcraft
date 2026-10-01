@@ -11,6 +11,8 @@ declare(strict_types=1);
 return [
     'middleware.cannot_open_stderr' => 'cannot open php://stderr',
     'middleware.stderr_not_resource' => 'stderr must be a resource',
+    'middleware.cannot_open_stream' => 'cannot open {target}',
+    'middleware.stream_not_resource' => '{target} must be a resource',
     'logger.cannot_open_target'      => 'cannot open log target: {target}',
     'logger.invalid_target'          => 'Logger target must be a path, resource, or null',
     'bubbletea.bad_factory'          => 'BubbleTea factory must return an object with a run() method; got {got}',

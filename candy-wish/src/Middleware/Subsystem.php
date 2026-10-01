@@ -19,7 +19,11 @@ use SugarCraft\Wish\Session;
  * stops the middleware chain — subsystem handlers are terminal by
  * design.
  *
- * Non-subsystem requests pass through to `$next` unchanged.
+ * Non-subsystem requests pass through to `$next` unchanged. An
+ * UNREGISTERED subsystem name passes through too — deliberately, so
+ * `subsystem sftp` can fall on through to `Spawn` and land in a
+ * shell when no handler was registered; register the name (or a
+ * rejecting handler) if that fallback is not what you want.
  *
  * Example:
  * ```php

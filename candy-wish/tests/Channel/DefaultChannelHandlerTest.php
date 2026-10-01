@@ -502,4 +502,49 @@ final class DefaultChannelHandlerTest extends TestCase
             $this->captureShellArgv(null, '   '),
         );
     }
+
+    /**
+     * LOW-18 (audit round): spawnShell must re-derive ONLY geometry —
+     * the protocol metadata InProcessTransport::run attached via
+     * withProtocolMetadata rides into the child session untouched.
+     */
+    public function testSpawnShellCarriesProtocolMetadataIntoChildSession(): void
+    {
+        $captured = null;
+        $spy = new class($captured) implements ChildSpawner {
+            private mixed $sink;
+
+            public function __construct(mixed &$sink)
+            {
+                $this->sink = &$sink;
+            }
+
+            public function runChild(Session $session, array $cmd, ?array $env = null): int
+            {
+                $this->sink = $session;
+                return 0;
+            }
+
+            public function signalChild(int $signal): void {}
+        };
+
+        $session = $this->fakeSession()->withProtocolMetadata(
+            sessionId: 'deadbeef',
+            authMethod: 'publickey',
+            keyFingerprint: null,
+            clientVersion: 'SSH-2.0-test',
+            serverVersion: 'SSH-2.0-wish',
+        )->withSize(132, 43);
+
+        $handler = new DefaultChannelHandler($spy);
+        $handler->handleShell(new ShellMsg(wantShell: true), $session);
+
+        $this->assertInstanceOf(Session::class, $captured);
+        $this->assertSame('deadbeef', $captured->sessionId);
+        $this->assertSame('publickey', $captured->authMethod);
+        $this->assertSame('SSH-2.0-test', $captured->clientVersion);
+        $this->assertSame('SSH-2.0-wish', $captured->serverVersion);
+        $this->assertSame(132, $captured->cols);
+        $this->assertSame(43, $captured->rows);
+    }
 }
