@@ -57,8 +57,16 @@
 
 - ProcessContainment (setsid-wrapped detached spawn, PATH pre-check, curated
   env) stays downstream — product policy about WHO may be spawned, not the
-  wire protocol. Library: plain argv spawn, `env === []` inherits, otherwise
-  `array_merge(getenv(), $overrides)`.
+  wire protocol. Library default: plain argv spawn, `env === []` inherits,
+  otherwise `array_merge(getenv(), $overrides)`. Embedders that need the wrap
+  inject it through the `$spawnPlanner` ctor seam — a closure
+  `($name, $argv, $env) → [command, env|null]` whose return is handed to
+  proc_open verbatim after shape validation, and which may throw to refuse a
+  launch before any child exists (that is where crush's PATH pre-check lives).
+- `$clientInfo` is the other ctor seam: the initialize-handshake identity,
+  parsed fail-fast at construction (non-empty string `name` + string
+  `version`); default advertises sugar-mcp, sugar-crush's adapter sends its
+  own product identity through it.
 - Router takes a plain `list<string>` allow-list; sugar-crush's AgentPreset
   extraction (`$preset->mcpServers`) stays downstream.
 - MAX_FRAME_BYTES restates the product family's 64MiB cap as a library-local

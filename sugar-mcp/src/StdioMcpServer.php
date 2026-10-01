@@ -14,12 +14,13 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * framing, handshake and lifecycle algorithms are faithful, with two
  * deliberate deltas documented below.
  *
- * DELTA — containment policy stays downstream: sugar-crush launches through
- * ProcessContainment (setsid-wrapped detached spawn, PATH pre-check, curated
- * environment). That is product policy about WHO may be spawned from the TUI,
- * not part of the wire protocol, so this library calls proc_open directly with
- * the plain argv array and inherits the ambient environment unless overrides
- * are given. Embedders that need containment wrap it themselves.
+ * DELTA — containment policy stays downstream, injected through a seam:
+ * sugar-crush launches through ProcessContainment (setsid-wrapped detached
+ * spawn, PATH pre-check, curated environment). That is product policy about
+ * WHO may be spawned, not part of the wire protocol, so the library spawns
+ * plainly by default — plain argv array, ambient environment unless overrides
+ * are given — and embedders that need containment pass a $spawnPlanner
+ * closure deciding the exact proc_open command and env per launch.
  *
  * DELTA — teardown goes through candy-core's BoundedShutdown instead of the
  * product's ProcessReaper+ProcessContainment::groupId pair.
@@ -117,6 +118,12 @@ final class StdioMcpServer implements McpServer
 
     private bool $stderrOpen = false;
 
+    /** Identity this client advertises in the initialize handshake. */
+    private const DEFAULT_CLIENT_INFO = ['name' => 'sugar-mcp', 'version' => '0.1.0'];
+
+    /** @var array<string,mixed> parsed in the constructor, trusted afterwards */
+    private readonly array $clientInfo;
+
     private float $startTimeoutSeconds;
 
     /**
@@ -127,6 +134,16 @@ final class StdioMcpServer implements McpServer
      * @param float|null $startTimeoutSeconds handshake ceiling; null or <= 0
      *        falls back to DEFAULT_START_TIMEOUT_SECONDS so a bad setting can
      *        never disable the bound entirely
+     * @param \Closure|null $spawnPlanner embedder seam deciding the spawn:
+     *        called as ($name, $argv, $env) and returning [command, env] in
+     *        proc_open's own shapes (string|array command, null|array env);
+     *        null spawns plainly. A planner may throw to refuse a launch
+     *        before any child exists — that refusal is the product's PATH
+     *        pre-check living downstream where it belongs.
+     * @param array<string,mixed> $clientInfo initialize-handshake identity;
+     *        must carry a non-empty string 'name' and a string 'version' —
+     *        the default constant is the only shape that may stand in for an
+     *        omission, a caller-supplied [] is a bug, not a reset
      */
     public function __construct(
         public readonly string $name,
@@ -134,10 +151,35 @@ final class StdioMcpServer implements McpServer
         private readonly array $args = [],
         private readonly array $env = [],
         ?float $startTimeoutSeconds = null,
+        private readonly ?\Closure $spawnPlanner = null,
+        array $clientInfo = self::DEFAULT_CLIENT_INFO,
     ) {
         $this->startTimeoutSeconds = $startTimeoutSeconds !== null && $startTimeoutSeconds > 0
             ? $startTimeoutSeconds
             : self::DEFAULT_START_TIMEOUT_SECONDS;
+
+        $this->assertClientInfoShaped($clientInfo);
+        $this->clientInfo = $clientInfo;
+    }
+
+    /**
+     * Fail fast at the boundary: a half-declared identity would send an
+     * initialize frame a server can neither match nor debug.
+     *
+     * @param array<string,mixed> $clientInfo
+     */
+    private function assertClientInfoShaped(array $clientInfo): void
+    {
+        if (!isset($clientInfo['name'], $clientInfo['version'])
+            || !is_string($clientInfo['name'])
+            || $clientInfo['name'] === ''
+            || !is_string($clientInfo['version'])
+        ) {
+            $keys = implode(', ', array_map(static fn (string $k): string => "[$k]", array_keys($clientInfo)));
+            throw new \InvalidArgumentException(
+                "MCP clientInfo needs a non-empty 'name' and a 'version' string, got {$keys}"
+            );
+        }
     }
 
     /**
@@ -149,6 +191,38 @@ final class StdioMcpServer implements McpServer
         $this->stop();
     }
 
+    /**
+     * Resolve the (command, env) pair handed to proc_open. Default keeps the
+     * library's plain-spawn contract byte-identical; a planner returns the
+     * pair verbatim after shape validation, so a containment wrapper can own
+     * the whole spawn decision (setsid wrap, scrubbed env, or null env).
+     *
+     * @return array{0: string|list<string>, 1: ?array<string,string>}
+     */
+    private function spawnPlan(): array
+    {
+        $argv = [$this->command, ...array_map(static fn (mixed $arg): string => (string) $arg, array_values($this->args))];
+
+        if ($this->spawnPlanner === null) {
+            return [$argv, $this->env === [] ? null : array_merge(getenv(), $this->env)];
+        }
+
+        /** @var array{0: string|list<string>, 1: ?array<string,string>} $plan */
+        $plan = ($this->spawnPlanner)($this->name, $argv, $this->env);
+
+        if (!is_array($plan)
+            || array_keys($plan) !== [0, 1]
+            || !(is_string($plan[0]) || is_array($plan[0]))
+            || !($plan[1] === null || is_array($plan[1]))
+        ) {
+            throw new \InvalidArgumentException(
+                "MCP spawnPlanner for {$this->name} must return [command, env|null], got " . get_debug_type($plan)
+            );
+        }
+
+        return $plan;
+    }
+
     public function start(): void
     {
         // Fail fast on re-entry: overwriting $this->process would drop the
@@ -158,8 +232,13 @@ final class StdioMcpServer implements McpServer
             throw new \RuntimeException("MCP server double start(): {$this->name} is already running — call stop() first");
         }
 
+        // The planner runs BEFORE any child exists: a refusal (a product
+        // pre-check, a malformed plan) throws here and leaves the object as
+        // dormant as it was, nothing to reap.
+        [$spawnCommand, $spawnEnv] = $this->spawnPlan();
+
         $this->process = @proc_open(
-            [$this->command, ...array_map(static fn (mixed $arg): string => (string) $arg, array_values($this->args))],
+            $spawnCommand,
             [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
@@ -167,7 +246,7 @@ final class StdioMcpServer implements McpServer
             ],
             $this->pipes,
             null,
-            $this->env === [] ? null : array_merge(getenv(), $this->env),
+            $spawnEnv,
         );
 
         if (!is_resource($this->process)) {
@@ -189,7 +268,7 @@ final class StdioMcpServer implements McpServer
             $response = $this->request('initialize', [
                 'protocolVersion' => self::PROTOCOL_VERSION,
                 'capabilities' => [],
-                'clientInfo' => ['name' => 'sugar-mcp', 'version' => '0.1.0'],
+                'clientInfo' => $this->clientInfo,
             ], $deadline);
 
             // A successful initialize answers with a result object; an error reply
