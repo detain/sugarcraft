@@ -375,7 +375,7 @@ final class DecoderTest extends TestCase
             $this->markTestSkipped('ext-gd not available');
         }
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('candy-flip: cell grid product exceeds maximum (100000)');
+        $this->expectExceptionMessage('candy-flip: cell grid product exceeds maximum (' . Decoder::MAX_CELLS . ')');
         Decoder::decode($this->gifPath, 500, 500);
     }
 }

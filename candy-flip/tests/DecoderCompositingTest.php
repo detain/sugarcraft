@@ -320,6 +320,30 @@ final class DecoderCompositingTest extends TestCase
     }
 
     /** A palette image with the canonical black/red/green/blue table. */
+    /**
+     * MAX_FRAMES wiring: a legal animation longer than the cap must be
+     * truncated to exactly Decoder::MAX_FRAMES frames (README documents the
+     * same line), not rejected outright and not run unbounded.
+     */
+    public function testFrameCapTruncatesLongAnimation(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $gd = $this->gdGifBytes($this->newSharedPaletteImage());
+        $gif = $this->sharedPaletteHeader();
+        for ($f = 0; $f < Decoder::MAX_FRAMES + 2; $f++) {
+            $gif .= $this->composeFrameBlock($gd, 1, false, 0);
+        }
+        $gif .= "\x3B";
+
+        $this->tmpPath = sys_get_temp_dir() . '/frame-cap-' . uniqid() . '.gif';
+        file_put_contents($this->tmpPath, $gif);
+
+        $frames = Decoder::decode($this->tmpPath, cellsW: 8, cellsH: 8);
+        $this->assertCount(Decoder::MAX_FRAMES, $frames);
+    }
+
     private function newSharedPaletteImage(int $size = 4): \GdImage
     {
         $im = imagecreate($size, $size);

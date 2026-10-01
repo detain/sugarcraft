@@ -37,6 +37,24 @@ final class Decoder
      */
     public const MAX_CELLS = 100_000;
 
+    /**
+     * Maximum GIF logical-screen area in pixels (header width * height).
+     *
+     * {@see self::MAX_CELLS} bounds only the OUTPUT grid; the compositing canvas
+     * and the DISPOSAL_PREVIOUS snapshot are allocated truecolor at the SOURCE
+     * screen size, and GD decodes each frame before it is downsampled — so a
+     * crafted 65535x65535 header would ask for ~17 GB before any cell cap ever
+     * ran. 2,000,000 px (~1414x1414) keeps each canvas at ~8 MB and stays far
+     * above any GIF worth playing in a terminal.
+     */
+    public const MAX_TOTAL_PIXELS = 2_000_000;
+
+    /**
+     * Maximum frames per animation so a pathological file cannot OOM the
+     * walk or the composited list. The README documents this line as 256.
+     */
+    public const MAX_FRAMES = 256;
+
     /** @return list<Frame> */
     public static function decode(string $path, int $cellsW, int $cellsH): array
     {
@@ -61,6 +79,13 @@ final class Decoder
             throw new \RuntimeException(Lang::t('decoder.grid_too_large', ['max' => (string) self::MAX_CELLS]));
         }
         $header = self::parseHeader($bytes);
+
+        // Cap the SOURCE canvas as well as the output grid: everything below
+        // (compositing canvas, snapshot, per-frame GD decode) is sized from the
+        // header's screen dimensions, so the pixel line must fire before them.
+        if ($header['width'] * $header['height'] > self::MAX_TOTAL_PIXELS) {
+            throw new \RuntimeException(Lang::t('decoder.screen_too_large', ['max' => (string) self::MAX_TOTAL_PIXELS]));
+        }
 
         $screenW = $header['width'];
         $screenH = $header['height'];
@@ -406,8 +431,13 @@ final class Decoder
                     'frameW' => $frameW,
                     'frameH' => $frameH,
                 ];
-                // Skip image data: LZW sub-blocks (length-prefixed) until block terminator (0x00).
-                $j = $i + 10;
+                // Skip image data: the one-byte LZW minimum code size (and the
+                // Local Color Table when the descriptor declared one), then the
+                // length-prefixed sub-blocks until the block terminator (0x00).
+                // Starting at +10 read the min-code byte as a block length and
+                // desynchronised the walk on some frame counts (MAX_FRAMES pin
+                // test caught it at n=8).
+                $j = $i + 11 + $lctBytes;
                 while ($j < $len) {
                     $subLen = ord($bytes[$j]);
                     $j++;
@@ -425,13 +455,13 @@ final class Decoder
             // Unexpected byte — step forward cautiously.
             $i++;
         }
-        // Cap pathological GIFs at 256 frames so the decoder doesn't OOM.
+        // Cap pathological GIFs at MAX_FRAMES so the decoder doesn't OOM.
         return [
             'width' => $width,
             'height' => $height,
             'hasGct' => $hasGct,
             'gctBytes' => $gctBytes,
-            'frameInfos' => array_slice($frameInfos, 0, 256),
+            'frameInfos' => array_slice($frameInfos, 0, self::MAX_FRAMES),
         ];
     }
 

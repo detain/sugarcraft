@@ -41,7 +41,7 @@ The decoder uses PHP's built-in `imagecreatefromstring()` for in-memory single-f
 4. Reassemble a minimal single-frame GIF payload in memory and pass it to `imagecreatefromstring()`.
 5. Area-average downsample the resulting `GdImage` to the requested cell grid, skipping transparent pixels in the average.
 
-GIF parsing is hand-rolled to avoid loading the entire animation into a `GdImage` at once; each frame is decoded independently. The decoder caps at 256 frames so memory usage stays bounded for typical animations.
+GIF parsing is hand-rolled to avoid loading the entire animation into a `GdImage` at once; each frame is decoded independently. The decoder caps at 256 frames, refuses logical screens larger than 2,000,000 pixels, and caps the output grid at 100,000 cells, so memory usage stays bounded for typical animations and for hostile headers alike.
 
 ## Architecture
 
@@ -53,7 +53,7 @@ GIF parsing is hand-rolled to avoid loading the entire animation into a `GdImage
 | `Player`          | SugarCraft Model — index + paused + preset + renderer state. `Cmd::tick(...)` schedules frame advance using per-frame delays. Handles `WindowSizeMsg` by re-clamping the renderer to the new viewport (rows-1 for the status line). |
 | `TickMsg`         | Frame-tick message produced by the Cmd.                                                            |
 
-The decoder caps at 256 frames so a runaway file can't OOM the runtime; pause + manual step are always available even on long animations.
+The decoder caps at 256 frames and at a 2,000,000-pixel logical screen so a runaway file — or a crafted header — can't OOM the runtime before the first frame is even composited; pause + manual step are always available even on long animations.
 
 ## Test
 
