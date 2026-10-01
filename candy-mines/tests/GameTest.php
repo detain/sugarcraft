@@ -445,7 +445,7 @@ final class GameTest extends TestCase
             [$g, ] = $g->update(self::key(KeyType::Space));   // win → persisted
 
             $this->assertFileExists($path, 'winning game must write the opt-in stats file');
-            $loaded = DifficultyStats::load($path)?->getStats();
+            $loaded = DifficultyStats::load($path)?->stats();
             $this->assertNotNull($loaded);
             $this->assertSame(1, $loaded->gamesPlayed(Difficulty::EASY));
             $this->assertSame(1, $loaded->wins(Difficulty::EASY));
@@ -721,7 +721,7 @@ final class GameTest extends TestCase
             $g = self::nearWinStandardGame($path);
             [$g, ] = $g->update(self::key(KeyType::Space));   // win → persisted
 
-            $loaded = DifficultyStats::load($path)?->getStats();
+            $loaded = DifficultyStats::load($path)?->stats();
             $this->assertNotNull($loaded);
             $this->assertSame(1, $loaded->gamesPlayed(Difficulty::STANDARD));
             $this->assertSame(1, $loaded->wins(Difficulty::STANDARD));

@@ -7,13 +7,13 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-mines)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-mines)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/candy-mines?label=packagist)](https://packagist.org/packages/sugarcraft/candy-mines)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
 ![demo](.vhs/play.gif)
 
-Minesweeper on the SugarCraft stack — port of [`maxpaulus43/go-sweep`](https://github.com/maxpaulus43/go-sweep). Customisable board, recursive flood-fill, win / lose detection, vim-style movement.
+Minesweeper on the SugarCraft stack — port of [`maxpaulus43/go-sweep`](https://github.com/maxpaulus43/go-sweep). Customisable board, iterative flood-fill, win / lose detection, vim-style movement.
 
 Difficulty presets are available via `Game::withDifficulty()`, passing a `Difficulty` case — `Difficulty::EASY` (9×9, 10 mines), `Difficulty::STANDARD` (10×10, 12 mines — the shape the CLI defaults to), `Difficulty::MEDIUM` (16×16, 40 mines), `Difficulty::EXPERT` (30×16, 99 mines).
 
@@ -22,7 +22,7 @@ Difficulty presets are available via `Game::withDifficulty()`, passing a `Diffic
 ```bash
 composer install
 ./bin/candy-mines                            # default 10×10, 12 mines
-./bin/candy-mines [width] [height] [mines]   # custom board (validated: 2–50 per side, 1..w×h−9 mines)
+./bin/candy-mines [width] [height] [mines]   # custom board (validated: 2–50 per side, 1..w×h−9 mines — at least 10 cells)
 ./bin/candy-mines --easy | --standard | --medium | --expert
 ```
 
@@ -52,7 +52,7 @@ Five pure-state classes plus the runtime Model, renderer, UI helper, and persist
 | `Game` (Model)          | Cursor + key routing + restart + win/lose gate + sub-second timer (`microtime(true)`), advanced on screen by a 1 Hz `TickMsg` subscription armed from the first reveal until the board is over — the status clock runs without keypresses. Records the result into `Stats` on the win/lose transition; persists via `DifficultyStats` when an opt-in stats path is configured. |
 | `Stats`                 | Immutable difficulty stats — games, wins, best time per preset                                    |
 | `DifficultyStats`       | Atomic JSON persistence wrapper (tmp+rename, Homestead pattern)                                   |
-| `Ui/CustomDifficulty`   | Validated custom board dimensions — rows (2–50), cols (2–50), mines (1 to rows×cols−9). Throws i18n-aware `InvalidArgumentException` on constraint violation. |
+| `Ui/CustomDifficulty`   | Validated custom board dimensions — rows (2–50), cols (2–50), mines (1 to rows×cols−9). The mine cap means boards smaller than 10 cells (e.g. 2×2, 3×3) pass the side checks but can never validate; error messages name the violated bound. Throws i18n-aware `InvalidArgumentException` on constraint violation. |
 | `Renderer`              | Pure view function. CandySprinkles `Style` + `Border::rounded()`                                   |
 
 The first reveal is always safe — mines are placed only after click 1, with the clicked cell's 3×3 neighbourhood excluded so the player gets a non-trivial flood-fill on every game.

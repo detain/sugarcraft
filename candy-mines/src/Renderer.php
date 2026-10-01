@@ -22,7 +22,7 @@ use SugarCraft\Sprinkles\Style as SprinklesStyle;
  * {@see Scanner::hit()} can resolve mouse coordinates to cell
  * positions on click/flag events.
  *
- * Mirrors charmbracelet/bubbletea — Minesweeper renderer.
+ * Mirrors maxpaulus43/go-sweep — Minesweeper renderer.
  */
 final class Renderer
 {

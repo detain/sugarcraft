@@ -47,7 +47,7 @@ final class DifficultyStatsTest extends TestCase
         $loaded = DifficultyStats::load($this->persistencePath);
         $this->assertNotNull($loaded);
 
-        $loadedStats = $loaded->getStats();
+        $loadedStats = $loaded->stats();
         $this->assertSame(5, $loadedStats->easyGames);
         $this->assertSame(3, $loadedStats->easyWins);
         $this->assertSame(42, $loadedStats->easyBest);
@@ -70,11 +70,11 @@ final class DifficultyStatsTest extends TestCase
         $ds2 = $ds->withGame(Difficulty::EASY, true, 30);
 
         $this->assertNotSame($ds, $ds2);
-        $this->assertSame(1, $ds2->getStats()->gamesPlayed(Difficulty::EASY));
-        $this->assertSame(30, $ds2->getStats()->bestTime(Difficulty::EASY));
+        $this->assertSame(1, $ds2->stats()->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(30, $ds2->stats()->bestTime(Difficulty::EASY));
 
         // Original is unchanged.
-        $this->assertSame(0, $ds->getStats()->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(0, $ds->stats()->gamesPlayed(Difficulty::EASY));
     }
 
     public function testSaveOverwritesExistingFile(): void
@@ -86,7 +86,7 @@ final class DifficultyStatsTest extends TestCase
         $ds2->save($this->persistencePath);
 
         $loaded = DifficultyStats::load($this->persistencePath);
-        $this->assertSame(99, $loaded->getStats()->easyGames);
+        $this->assertSame(99, $loaded->stats()->easyGames);
     }
 
     public function testLoadThrowsOnNonIntegerField(): void
@@ -157,7 +157,7 @@ final class DifficultyStatsTest extends TestCase
         );
 
         DifficultyStats::fromStats($stats)->save($this->persistencePath);
-        $loaded = DifficultyStats::load($this->persistencePath)?->getStats();
+        $loaded = DifficultyStats::load($this->persistencePath)?->stats();
 
         $this->assertNotNull($loaded);
         $this->assertSame(7, $loaded->easyGames);
@@ -266,7 +266,7 @@ final class DifficultyStatsTest extends TestCase
         ], JSON_THROW_ON_ERROR);
         file_put_contents($this->persistencePath, $legacy);
 
-        $loaded = DifficultyStats::load($this->persistencePath)?->getStats();
+        $loaded = DifficultyStats::load($this->persistencePath)?->stats();
         $this->assertNotNull($loaded);
         $this->assertSame(11, $loaded->easyGames);
         $this->assertSame(6, $loaded->easyWins);

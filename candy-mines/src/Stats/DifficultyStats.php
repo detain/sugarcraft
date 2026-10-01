@@ -155,9 +155,9 @@ final class DifficultyStats
     }
 
     /**
-     * Get the underlying Stats object.
+     * Underlying Stats snapshot (bare accessor — house convention, no `get`).
      */
-    public function getStats(): Stats
+    public function stats(): Stats
     {
         return $this->stats;
     }

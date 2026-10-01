@@ -14,6 +14,11 @@ use SugarCraft\Mines\Lang;
  *   - Minimum 2 rows and 2 columns
  *   - Maximum 50 rows and 50 columns
  *   - At least 1 mine, at most (rows × cols) − 9 (leaving a safe 3×3 on first click)
+ *
+ * Note on the advertised minimum: the mine cap makes the two rules interact —
+ * any board of fewer than 10 cells (2×2 … 3×3) passes the side-length checks
+ * but can never satisfy "1 … rows×cols−9 mines", so it is rejected with the
+ * mine-count message rather than a dimension one.
  */
 final class CustomDifficulty
 {

@@ -57,7 +57,7 @@ $statsPath = ($statsPathEnv !== false && $statsPathEnv !== '') ? $statsPathEnv :
 $stats = null;
 if ($statsPath !== null && is_file($statsPath)) {
     try {
-        $stats = DifficultyStats::load($statsPath)?->getStats();
+        $stats = DifficultyStats::load($statsPath)?->stats();
     } catch (\Throwable $e) {
         fwrite(STDERR, "candy-mines: ignoring unreadable stats file ({$e->getMessage()})\n");
     }
