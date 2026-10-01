@@ -107,4 +107,26 @@ final class FuzzyMatchTest extends TestCase
         $this->assertSame('test', (string) $item);
         $this->assertIsInt($score);
     }
+
+    /**
+     * Audit #16: the documented deviation from SmithWatermanMatcher::matchAll()
+     * (haystack-ascending tiebreak) is input-order stability for equal scores.
+     * It had no pin — the three candidates below score identically (11), so a
+     * silent switch to the SSOT tiebreak would reorder them unnoticed.
+     */
+    public function testMatchKeepsInputOrderForEqualScores(): void
+    {
+        $items = [new StringItem('abx'), new StringItem('aby'), new StringItem('abz')];
+        $result = $this->matcher->match('ab', $items);
+
+        $scores = \array_column($result, 1);
+        $this->assertCount(3, $result);
+        $this->assertSame($scores[0], $scores[1]);
+        $this->assertSame($scores[1], $scores[2]);
+        $this->assertSame(
+            ['abx', 'aby', 'abz'],
+            \array_map(static fn(array $pair): string => (string) $pair[0], $result),
+            'equal scores must preserve input order (candy-lister contract)'
+        );
+    }
 }

@@ -29,7 +29,9 @@ final class IntegrationTest extends TestCase
      *
      * Note: With cursorOffset=2 and cursor on index 1, viewport-follow shifts
      * the window down so item 0 may not be visible (the cursor stays 2 lines
-     * from the bottom edge). We use cursorIndex=0 to keep the first item visible.
+     * from the bottom edge). We use cursorIndex=0 to keep the first item
+     * visible. The shifted path itself is pinned exactly in ModelTest
+     * (testLinesViewportFollowBottomGap + the audit-M1 tail-duplication repro).
      */
     public function testFullLifecycleCreateNavigateRender(): void
     {
