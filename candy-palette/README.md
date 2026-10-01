@@ -33,26 +33,24 @@ composer require sugarcraft/candy-palette
 ## Quick Start
 
 ```php
-use SugarCraft\Palette\Palette;
-use SugarCraft\Palette\Profile;
 use SugarCraft\Palette\Color;
+use SugarCraft\Palette\Palette;
+use SugarCraft\Palette\ProfileWriter;
 
 // Detect the terminal's color profile
-$profile = Palette::detect();
+$palette = new Palette();
+$profile = $palette->profile();
 
-echo "Your terminal supports: " . $profile->name . "\n";
+echo "Your terminal supports: {$profile->label()}\n";
 
-// Convert a TrueColor color to the detected profile
-$color = new Color(0x6b, 0x50, 0xff, 0xff); // #6b50ff
-$converted = Palette::convert($color, $profile);
-echo "Converted: " . $converted->toAnsi() . "\n";
+// Downsample a TrueColor color to the detected profile
+$color = new Color(0x6b, 0x50, 0xff); // #6b50ff
+$converted = $palette->convert($color);
+echo "Converted: {$converted->toHex()}\n";
 
-// Wrap stdout for automatic color degradation
-$writer = ProfileWriter::wrap(STDOUT, [
-    'TERM' => getenv('TERM'),
-    'COLORTERM' => getenv('COLORTERM'),
-]);
-fwrite($writer, "\x1b[38;2;107;80;255mFancy text\x1b[0m\n");
+// Wrap a stream for automatic color degradation on write
+$writer = ProfileWriter::wrap(STDOUT);
+$writer->write("\x1b[38;2;107;80;255mFancy text\x1b[0m\n");
 ```
 
 ## Profiles
@@ -68,18 +66,21 @@ fwrite($writer, "\x1b[38;2;107;80;255mFancy text\x1b[0m\n");
 ## Color Degradation
 
 ```php
+use SugarCraft\Palette\Color;
 use SugarCraft\Palette\Palette;
 use SugarCraft\Palette\Profile;
-use SugarCraft\Palette\Color;
 
 $color = new Color(100, 50, 255, 255);
 
-// Auto-detect
-$converted = Palette::convert($color, Palette::detect());
+// Downsample to an explicit profile (static one-off shortcut)
+$ansi256 = Palette::toProfile($color, Profile::ANSI256); // nearest cube/grey index
+$ansi    = Palette::toProfile($color, Profile::ANSI);    // nearest of the 16 slots
 
-// Manual downgrade
-$ansi256 = Palette::convert($color, Profile::ANSI256);
-$ansi    = Palette::convert($color, Profile::ANSI);
+echo $ansi256->toAnsi256Foreground(); // "\x1b[38;5;…m"
+echo $ansi->toAnsi16Foreground();     // "\x1b[…m" — 4-bit SGR
+
+// Or convert against the detected terminal
+$auto = (new Palette())->convert($color);
 ```
 
 ## Perceptual Color Distance (opt-in)
@@ -89,26 +90,27 @@ For perceptual matching — where blues, greens and near-greys rank correctly �
 
 ```php
 use SugarCraft\Palette\Color;
-use SugarCraft\Palette\ColorMath;
 use SugarCraft\Palette\ColorDistance;
+use SugarCraft\Palette\ColorMath;
 use SugarCraft\Palette\DeltaE;
 use SugarCraft\Palette\NearestColor;
 
 // sRGB -> linear -> XYZ (D65) -> CIELAB
-$lab = ColorMath::toLab(64, 96, 128);            // ['l' => …, 'a' => …, 'b' => …]
-$lab = (new Color(64, 96, 128))->toLab();        // same thing, from a Color
+$lab  = ColorMath::toLab(64, 96, 128);         // ['l' => …, 'a' => …, 'b' => …]
+$lab2 = (new Color(200, 30, 90))->toLab();     // same chain, from a Color
 
 // ΔE metrics (CIE 15:2004; CIEDE2000 per Sharma/Wu/Dalal 2005)
-$d76  = DeltaE::cie76($lab, $other);
-$d94  = DeltaE::cie94($lab, $other);             // graphic-arts kL = 1
-$d00  = DeltaE::cie2000($lab, $other);
+$d76 = DeltaE::cie76($lab, $lab2);
+$d94 = DeltaE::cie94($lab, $lab2);             // graphic-arts kL = 1
+$d00 = DeltaE::cie2000($lab, $lab2);
 
-// Nearest palette entry under a chosen strategy (default: EUCLIDEAN)
+// Nearest ANSI-256 palette index under a chosen strategy (default: EUCLIDEAN)
 $matcher = new NearestColor(ColorDistance::Cie2000);
 $index   = $matcher->ansi256(new Color(30, 120, 30));
 
 // Arbitrary palette (list or map), returns the key of the winner
-$key = $matcher->closest(new Color(12, 34, 56), $myColors);
+$brand = ['logo' => new Color(10, 20, 30), 'accent' => new Color(240, 250, 255)];
+$key   = $matcher->closest(new Color(12, 34, 56), $brand);
 ```
 
 The 256-entry and 16-entry palette Lab tables are memoised statically, so a warm
@@ -160,6 +162,7 @@ if (Probe::reducedMotion()) {
 
 ```php
 use SugarCraft\Palette\ColorProfile;
+use SugarCraft\Palette\Probe;
 
 $profile = Probe::colorProfile();
 

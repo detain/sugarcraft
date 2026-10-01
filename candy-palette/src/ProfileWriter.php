@@ -10,7 +10,10 @@ declare(strict_types=1);
  *
  * Usage:
  *   $w = ProfileWriter::wrap(STDOUT);
- *   fwrite($w, \"\\x1b[38;2;255;0;0mred\\x1b[0m\"); // auto-degrades if terminal is ANSI256/ANSI
+ *   $w->write("\x1b[38;2;255;0;0mred\x1b[0m"); // auto-degrades if terminal is ANSI256/ANSI
+ *
+ * ProfileWriter is an object, not a stream resource — fwrite() on it is a
+ * TypeError; all output must go through write()/printf().
  */
 namespace SugarCraft\Palette;
 
@@ -22,7 +25,7 @@ use SugarCraft\Palette\Profile;
  *
  * Example:
  *   $w = ProfileWriter::wrap(STDOUT, ['TERM' => 'xterm-256color']);
- *   fwrite($w, \"\\x1b[38;2;100;200;50mGreenish\\x1b[0m\\n\");
+ *   $w->write("\x1b[38;2;100;200;50mGreenish\x1b[0m\n");
  */
 final class ProfileWriter
 {
