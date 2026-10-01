@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-stash)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-stash)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-stash?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-stash)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
@@ -88,12 +88,12 @@ All translatable strings live in `lang/en.php` under the `'stash'` namespace.
 |------------------------|-------------------------------------------------------------------|------------|
 | `git.spawn_failed`      | `git: failed to spawn`                                           | —          |
 | `git.error`            | `git: {stderr}`                                                  | `{stderr}` |
-| `cli.not_a_repo`       | `sugar-stash: not a git repository (no .git in {cwd})`             | `{cwd}`    |
+| `cli.not_a_repo`       | `sugar-stash: not a git repository: {cwd}`             | `{cwd}`    |
 | `ui.error_prefix`      | `error: `                                                        | —          |
 | `status.clean`          | `clean working tree`                                            | —          |
 | `branches.empty`       | `(no branches)`                                                  | —          |
 | `log.empty`            | `(empty log)`                                                    | —          |
-| `help.keyhints`         | `tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  R  refresh  ·  q  quit` | —    |
+| `help.keyhints`         | `S  stash  ·  V  cherry-pick  ·  i  rebase-i  ·  w  worktrees  ·  tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  d  discard  ·  P  diff  ·  space  checkout  ·  c  commit  ·  A  amend  ·  n  new branch  ·  R  refresh  ·  u  undo  ·  M  merge  ·  r  rebase  ·  ?  help  ·  q  quit` | —          |
 
 To add a locale, copy `lang/en.php` to `lang/<code>.php` and translate the
 values. The lookup chain follows `SugarCraft\Core\I18n\T`:
@@ -127,6 +127,9 @@ $msg = Lang::t('git.error', ['stderr' => $stderr]);
 ### Staging workflow
 
 ![stage](.vhs/stage.gif)
+
+> `stage.tape` drives the real `./bin/sugar-stash` against the CI checkout, so its
+> rows are environment-dependent; the hero demo above (`play.tape`) is hermetic.
 
 ## Shared foundations
 

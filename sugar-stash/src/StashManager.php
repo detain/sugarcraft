@@ -13,7 +13,8 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  * of stashes with cursor navigation, 'a' to apply, 'd' to drop.
  *
  * @readonly
- */
+ *
+ * Mirrors jesseduffield/lazygit stash panel controllers — list, apply, drop over `git stash list`. */
 final readonly class StashManager
 {
     /**
@@ -28,31 +29,29 @@ final readonly class StashManager
     /**
      * Build a StashManager from raw `git stash list` output.
      *
-     * Each line looks like:
-     *   stash@{0}: WIP on main: abc1234 Last commit message
+     * The three real shapes git emits (audit #15):
+     *   stash@{0}: WIP on main: abc1234 Last commit subject
+     *   stash@{0}: index on main: abc1234 Last commit subject
+     *   stash@{0}: On main: hand-written stash message   <- NO sha here
+     * The old generic `(.+?): ([a-f0-9]+) (.+)` inner match labelled the
+     * whole "WIP on main" as the branch and dropped everything else into
+     * the else-arm for the `On <branch>: <msg>` form (empty branch/sha).
      *
+     * @param list<string> $lines
      * @return list<StashEntry>
      */
     public static function fromGitOutput(array $lines): array
     {
         $stashes = [];
-        foreach ($lines as $i => $line) {
+        foreach ($lines as $line) {
             if ($line === '') continue;
-            // Parse "stash@{n}: WIP on branch: sha message"
-            if (preg_match('#^stash@\{(\d+)\}: (.+)$#', $line, $m)) {
-                $index = (int) $m[1];
-                $rest = $m[2];
-                // Try to extract SHA and message
-                if (preg_match('#^(.+?): ([a-f0-9]+) (.+)$#', $rest, $mm)) {
-                    $branch = $mm[1];
-                    $sha = $mm[2];
-                    $message = $mm[3];
-                } else {
-                    $branch = '';
-                    $sha = '';
-                    $message = $rest;
-                }
-                $stashes[] = new StashEntry($index, $sha, $branch, $message);
+            if (preg_match('#^stash@\{(\d+)\}: (?:WIP|index) on (.+?): ([0-9a-f]{4,40}) (.*)$#', $line, $m)) {
+                $stashes[] = new StashEntry((int) $m[1], $m[3], $m[2], $m[4]);
+            } elseif (preg_match('#^stash@\{(\d+)\}: On (.+?): (.*)$#', $line, $m)) {
+                $stashes[] = new StashEntry((int) $m[1], '', $m[2], $m[3]);
+            } elseif (preg_match('#^stash@\{(\d+)\}: (.+)$#', $line, $m)) {
+                // Unknown decoration — keep it visible rather than dropping the row.
+                $stashes[] = new StashEntry((int) $m[1], '', '', $m[2]);
             }
         }
         return $stashes;

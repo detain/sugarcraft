@@ -1,5 +1,7 @@
 # VHS tape — SugarStash git staging workflow.
 # s key stages/unstages the highlighted file.
+# NOTE: drives the REAL ./bin/sugar-stash against the CI checkout — output is
+# environment-dependent (see README Demos).
 # Render with: `vhs sugar-stash/.vhs/stage.tape`
 Output .vhs/stage.gif
 

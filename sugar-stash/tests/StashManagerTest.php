@@ -14,15 +14,43 @@ final class StashManagerTest extends TestCase
     {
         $lines = [
             'stash@{0}: WIP on main: abc1234 WIP commit message',
-            'stash@{1}: On feature: def5678 Another commit',
+            'stash@{1}: On feature: my hand-written stash',
+            'stash@{2}: index on dev: deadbee Staged-only stash',
+            'stash@{3}: some future decoration shape',
         ];
         $stashes = StashManager::fromGitOutput($lines);
 
-        $this->assertCount(2, $stashes);
+        // WIP form: branch is 'main', NOT the whole 'WIP on main' label.
+        $this->assertCount(4, $stashes);
         $this->assertSame(0, $stashes[0]->index);
         $this->assertSame('abc1234', $stashes[0]->sha);
-        $this->assertSame('WIP on main', $stashes[0]->branch);
+        $this->assertSame('main', $stashes[0]->branch);
         $this->assertSame('WIP commit message', $stashes[0]->message);
+
+        // Named 'On <branch>: <msg>' form carries no sha.
+        $this->assertSame(1, $stashes[1]->index);
+        $this->assertSame('feature', $stashes[1]->branch);
+        $this->assertSame('', $stashes[1]->sha);
+        $this->assertSame('my hand-written stash', $stashes[1]->message);
+
+        // 'index on' variant shares the WIP shape.
+        $this->assertSame('dev', $stashes[2]->branch);
+        $this->assertSame('deadbee', $stashes[2]->sha);
+        $this->assertSame('Staged-only stash', $stashes[2]->message);
+
+        // Unknown decoration stays visible rather than dropping the row.
+        $this->assertSame('', $stashes[3]->branch);
+        $this->assertSame('some future decoration shape', $stashes[3]->message);
+    }
+
+    public function testDisplayLineCollapsesEmptyShaForNamedStashes(): void
+    {
+        $named = new StashEntry(1, '', 'feature', 'hand-written stash');
+        $this->assertSame(
+            'stash@{1} hand-written stash',
+            $named->displayLine(),
+            'an absent sha must not leave a double space',
+        );
     }
 
     public function testStashEntryDisplayLine(): void

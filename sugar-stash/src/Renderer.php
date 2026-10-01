@@ -7,6 +7,7 @@ namespace SugarCraft\Stash;
 use SugarCraft\Core\Syntax\TokenKind;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
@@ -15,7 +16,8 @@ use SugarCraft\Sprinkles\Style;
 /**
  * Pure view function. Renders three panes side-by-side; the focused
  * pane gets a brighter border accent.
- */
+ *
+ * Mirrors jesseduffield/lazygit pkg/gui/views + commands — pane borders, focus accent, panel rows. */
 final class Renderer
 {
     /**
@@ -171,8 +173,10 @@ final class Renderer
             $sha     = Style::new()->foreground(Color::hex('#fde68a'))->render($entry['sha']);
             $subject = self::sanitize($entry['subject']);
             $subjectMax = $a->logSubjectWidth();
-            if (mb_strlen($subject) > $subjectMax) {
-                $subject = mb_substr($subject, 0, $subjectMax - 1) . '…';
+            // Cell-width aware: mb_strlen counts codepoints, so CJK subjects
+            // (double-width) overran the pane budget (audit #14).
+            if (Width::of($subject) > $subjectMax) {
+                $subject = Width::truncate($subject, max(0, $subjectMax - 1)) . '…';
             }
             $line = $sha . '  ' . $subject;
             if ($a->pane === Pane::Log && $i === $a->logCursor) {
@@ -188,10 +192,10 @@ final class Renderer
 
     private static function truncate(string $s, int $max): string
     {
-        if (mb_strlen($s) <= $max) {
+        if (Width::of($s) <= $max) {
             return $s;
         }
-        return mb_substr($s, 0, $max - 1) . '…';
+        return Width::truncate($s, max(0, $max - 1)) . '…';
     }
 
     private static function frame(App $a, Pane $p, string $title, string $body, int $width): string
@@ -507,11 +511,15 @@ final class Renderer
                         RebaseAction::Squash => '#fde68a',
                         RebaseAction::Drop => '#ff5f87',
                     };
-                    $line = sprintf('  %-8s %s %s',
-                        Style::new()->foreground(Color::hex($actionColor))->render($commit->action->value),
-                        Style::new()->foreground(Color::hex('#fde68a'))->render($commit->sha),
-                        self::sanitize($commit->subject)
-                    );
+                    // Pad the PLAIN action text to 8 cells before colorizing:
+                    // sprintf %-8s counted the SGR bytes of the rendered string
+                    // as content, so every column collapsed (audit #14).
+                    $line = '  '
+                        . Style::new()->foreground(Color::hex($actionColor))->render(Width::padRight($commit->action->value, 8))
+                        . ' '
+                        . Style::new()->foreground(Color::hex('#fde68a'))->render($commit->sha)
+                        . ' '
+                        . self::sanitize($commit->subject);
                     if ($i === $ir->cursor) {
                         $line = Style::new()->reverse()->render($line);
                     }

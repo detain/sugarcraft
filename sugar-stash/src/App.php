@@ -19,7 +19,8 @@ use SugarCraft\Core\Util\Clamp;
  * stages all files; Space (branches pane) checks out the selected
  * branch; `c` opens inline commit message collection; `?` shows the
  * help overlay; `R` refreshes from disk. `u` / Ctrl+r for undo/redo.
- */
+ *
+ * Mirrors jesseduffield/lazygit pkg/gui — three-pane focus model and per-key controller dispatch. */
 final class App implements Model
 {
     /** Pane frame width used until the terminal reports its size via WindowSizeMsg. */
@@ -50,7 +51,7 @@ final class App implements Model
         public readonly bool $collectingCommit = false,
         /** The accumulated commit message while collectingCommit is true. */
         public readonly string $commitMessage = '',
-        /** Diff viewer overlay (shown when 'd' is pressed on a status file). */
+        /** Diff viewer overlay (opened with 'P' on a status file; 'd' discards, and also closes the open viewer). */
         public readonly ?DiffViewer $diffViewer = null,
         /** Whether the app is collecting a branch name character-by-character. */
         public readonly bool $collectingBranchName = false,
@@ -147,11 +148,8 @@ final class App implements Model
             return [$this, null];
         }
 
-        // Stash manager overlay
+        // Stash manager overlay (Escape closes it via the global block above)
         if ($this->stashManager !== null) {
-            if ($msg->type === KeyType::Escape) {
-                return [$this->withStashManager(null), null];
-            }
             if ($msg->type === KeyType::Char && $msg->rune === 'a') {
                 return [$this->executeStashApply(), null];
             }
@@ -167,11 +165,8 @@ final class App implements Model
             return [$this, null];
         }
 
-        // Cherry-pick mode
+        // Cherry-pick mode (Escape closes it via the global block above)
         if ($this->cherryPick !== null && $this->cherryPick->collecting === TRUE) {
-            if ($msg->type === KeyType::Escape) {
-                return [$this->withCherryPick(null), null];
-            }
             if ($msg->type === KeyType::Enter) {
                 return [$this->executeCherryPick(), null];
             }
@@ -181,13 +176,12 @@ final class App implements Model
             return [$this, null];
         }
 
-        // Worktrees overlay
+        // Worktrees overlay (Escape closes the whole overlay via the global
+        // block above — even mid-add; the old per-branch cancelAdding arms
+        // sat behind that block and were unreachable).
         if ($this->worktrees !== null) {
-            // When adding, only Escape (cancel), Enter (confirm), and Char (append to path) are processed
+            // When adding, only Enter (confirm) and Char (append to path) are processed
             if ($this->worktrees->adding === TRUE) {
-                if ($msg->type === KeyType::Escape) {
-                    return [$this->withWorktrees($this->worktrees->cancelAdding()), null];
-                }
                 if ($msg->type === KeyType::Enter) {
                     return [$this->executeWorktreeAdd(), null];
                 }
@@ -197,9 +191,6 @@ final class App implements Model
                 return [$this, null];
             }
             // When not adding
-            if ($msg->type === KeyType::Escape) {
-                return [$this->withWorktrees(null), null];
-            }
             if ($msg->type === KeyType::Char && $msg->rune === 'a') {
                 return [$this->withWorktrees($this->worktrees->startAdding()), null];
             }
@@ -223,11 +214,8 @@ final class App implements Model
             return [$this, null];
         }
 
-        // Interactive rebase overlay
+        // Interactive rebase overlay (Escape closes it via the global block above)
         if ($this->interactiveRebase !== null) {
-            if ($msg->type === KeyType::Escape) {
-                return [$this->withInteractiveRebase(null), null];
-            }
             // Selecting N: enter digit
             if ($this->interactiveRebase->selectingN) {
                 if ($msg->type === KeyType::Enter) {
@@ -292,12 +280,10 @@ final class App implements Model
             return [$this, null];
         }
 
-        // Help overlay: only Escape closes it
-        if ($this->showHelp && $msg->type === KeyType::Escape) {
-            return [$this->withShowHelp(false), null];
-        }
+        // (Help overlay needs no Escape arm here: the global block above
+        // already closes it, and 'q' while help is open dismisses it too.)
 
-        // Diff viewer: Space stages the current hunk, Up/Down navigate hunks, Escape closes
+        // Diff viewer: Space stages the current hunk, Up/Down navigate hunks, Escape/d closes
         if ($this->diffViewer !== null) {
             if ($msg->type === KeyType::Escape || ($msg->type === KeyType::Char && $msg->rune === 'd')) {
                 return [$this->withDiffViewer(null), null];

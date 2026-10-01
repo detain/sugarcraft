@@ -19,7 +19,8 @@ namespace SugarCraft\Stash;
  * the 64KiB pipe and a blocking write would wedge the UI thread OUTSIDE the
  * timeout budget entirely — the loop keeps the deadline authoritative over the
  * write phase too.
- */
+ *
+ * Mirrors jesseduffield/lazygit pkg/utils exec command-runner — capture + bounded execution of git. */
 final class Process
 {
     /**

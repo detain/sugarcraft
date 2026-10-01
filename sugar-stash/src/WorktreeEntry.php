@@ -49,7 +49,9 @@ final readonly class WorktreeEntry
             }
 
             if (str_starts_with($line, 'worktree ') === TRUE) {
-                $pending['path'] = trim(substr($line, 9));
+                // Porcelain is verbatim — a path may legitimately end in a
+                // space, so substr() without trim() (audit #15).
+                $pending['path'] = substr($line, 9);
             } elseif (str_starts_with($line, 'HEAD ') === TRUE) {
                 $pending['HEAD'] = trim(substr($line, 5));
             } elseif (str_starts_with($line, 'branch ') === TRUE) {

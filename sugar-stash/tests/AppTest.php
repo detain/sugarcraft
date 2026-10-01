@@ -746,6 +746,25 @@ final class AppTest extends TestCase
         $this->assertNotNull($a->worktrees);
     }
 
+    /**
+     * Audit #13: the per-overlay Escape arms were dead code (the global
+     * block closes overlays first). Deleting them must not change behaviour:
+     * Escape while adding a worktree still tears down the WHOLE overlay —
+     * it does not merely cancel the add prompt.
+     */
+    public function testEscapeWhileAddingWorktreeClosesWholeOverlay(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → branches
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'w')); // open worktrees
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a')); // start adding
+        $this->assertNotNull($a->worktrees);
+        $this->assertTrue($a->worktrees->adding);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertNull($a->worktrees);
+    }
+
     public function testWKeyDoesNothingInStatusPane(): void
     {
         $g = $this->git();

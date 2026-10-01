@@ -18,10 +18,17 @@ final readonly class StashEntry
 
     /**
      * Format for display in the stash list.
+     *
+     * Empty fields (the `On <branch>: <msg>` form carries no sha) collapse
+     * instead of leaving a double space (audit #15).
      */
     public function displayLine(): string
     {
-        return 'stash@{' . $this->index . '} ' . $this->sha . ' ' . $this->message;
+        $parts = array_filter(
+            ['stash@{' . $this->index . '}', $this->sha, $this->message],
+            static fn(string $part): bool => $part !== '',
+        );
+        return implode(' ', $parts);
     }
 
     /**

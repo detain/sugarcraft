@@ -12,7 +12,8 @@ namespace SugarCraft\Stash;
  * Then shows a list where you can change each commit's action.
  *
  * @readonly
- */
+ *
+ * Mirrors jesseduffield/lazygit commit-panel interactive rebase todo — action cycling (execution deferred). */
 final readonly class InteractiveRebase
 {
     /**

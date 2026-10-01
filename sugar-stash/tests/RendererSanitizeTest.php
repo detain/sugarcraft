@@ -7,6 +7,7 @@ namespace SugarCraft\Stash\Tests;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use SugarCraft\Stash\App;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Stash\Renderer;
 
 /**
@@ -97,4 +98,40 @@ final class RendererSanitizeTest extends TestCase
         $this->assertStringNotContainsString("\x07", $out);
         $this->assertStringContainsString('posessed', $out);
     }
+
+    /**
+     * Audit #14c: truncation counted codepoints (mb_*), so a double-width
+     * subject claimed at most half its real cell budget and the log row
+     * overran the pane. Truncation must speak in CELLS.
+     */
+    public function testTruncateCutsByCellWidthNotCodepoints(): void
+    {
+        $m = new ReflectionMethod(Renderer::class, 'truncate');
+
+        // 25-cell budget: 12 full-width glyphs (24 cells) + the ellipsis (1).
+        $cut = $m->invoke(null, str_repeat("\u{5b8c}", 40), 25);
+        $this->assertSame(str_repeat("\u{5b8c}", 12) . "\u{2026}", $cut);
+
+        // ASCII path is byte-identical to the old behaviour.
+        $this->assertSame(str_repeat('a', 24) . "\u{2026}", $m->invoke(null, str_repeat('a', 90), 25));
+    }
+
+    /** End-to-end: a CJK log subject cannot push the row past its cell budget. */
+    public function testWideLogSubjectStaysWithinCellBudget(): void
+    {
+        $g = new FixtureGit([], [], []);
+        $subject = str_repeat("\u{5b8c}", 40); // 80 cells
+        $a = new App($g, log: [
+            ['sha' => 'abc1', 'subject' => $subject, 'author' => 'Joe', 'ago' => '5m ago'],
+        ], width: 80, height: 24);
+        $out = Renderer::render($a);
+
+        $this->assertStringNotContainsString($subject, $out, 'full 80-cell run must be cut');
+        $this->assertMatchesRegularExpression('/\p{Han}+\x{2026}/u', $out, 'cut leaves an ellipsis');
+
+        preg_match('/(\p{Han}+)/u', $out, $m);
+        $budget = $a->logSubjectWidth();
+        $this->assertLessThanOrEqual($budget, Width::of($m[1]), "rendered subject exceeds the {$budget}-cell budget");
+    }
 }
+

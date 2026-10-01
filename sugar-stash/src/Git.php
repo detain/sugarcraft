@@ -12,7 +12,8 @@ use SugarCraft\Stash\Lang;
  * reimplementation. The wrapper is split out so tests can swap in a
  * fixture-backed `Git` (or its parent interface, {@see GitDriver})
  * without touching the runtime.
- */
+ *
+ * Mirrors jesseduffield/lazygit pkg/commands — the shell-out wrapper and porcelain parsing. */
 final class Git implements GitDriver
 {
     /** Wall-clock ceiling (seconds) for a single git invocation before it is killed. */

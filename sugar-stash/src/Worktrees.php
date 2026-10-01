@@ -11,7 +11,8 @@ namespace SugarCraft\Stash;
  * worktrees with options to add/remove.
  *
  * @readonly
- */
+ *
+ * Mirrors jesseduffield/lazygit worktrees panel — `git worktree list --porcelain` with add/remove. */
 final readonly class Worktrees
 {
     /**
