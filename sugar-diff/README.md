@@ -69,6 +69,8 @@ Non-visual engine: no ANSI, no rendering, no demos — view layers (gutters, col
 
 - Default options reproduce `sugar-crush`'s `BuildsUnifiedDiff` output byte-for-byte; the `\ No newline` markers and `/dev/null` labels are opt-in GNU affordances the trait never emitted.
 - Empty hunk sides anchor at `0` (git's `@@ -1,1 +0,0 @@` shape), inherited from the source's rule rather than GNU's mid-file zero-length convention.
+- Hunk ranges always carry an explicit count: a single line renders `@@ -4,1 +4,1 @@`, where both GNU `diff -u` and git elide the `,1` as `@@ -4 +4 @@`.
+- File headers are git-style `--- a/<path>` / `+++ b/<path>` with no timestamps; GNU emits bare paths tab-separated from a date column.
 - Like git, a line's newline termination is invisible to the diff itself: `"a\n"` vs `"a"` compare equal; `"a\n"` vs `"a\n\n"` shows one added empty row.
 
 ## License

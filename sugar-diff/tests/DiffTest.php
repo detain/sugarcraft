@@ -272,6 +272,25 @@ final class DiffTest extends TestCase
         $this->assertStringContainsString(" x = 1;\n", $diff->unified('f'));
     }
 
+    public function testIgnoreWhitespaceFoldsInvalidUtf8ByteWiseInsteadOfCollapsingToEmpty(): void
+    {
+        // Review probe: preg_replace('/\s+/u', ...) returns NULL when the
+        // subject is not valid UTF-8. The old `(string)` cast folded EVERY
+        // malformed line to the same empty fingerprint — distinct binary
+        // lines silently judged Equal, a diff that hides real changes. The
+        // byte-wise fallback keeps them distinct while still folding spaces.
+        $options = DiffOptions::new()->withIgnoreWhitespace();
+
+        $this->assertFalse(
+            Diff::compute("abc\xff\xfe\n", "xyz\xff\xfe\n", $options)->isEmpty(),
+            'two DIFFERENT malformed lines must never fold Equal',
+        );
+        $this->assertTrue(
+            Diff::compute("ab\xce c\n", "ab\xce  c\n", $options)->isEmpty(),
+            'whitespace folding still applies to malformed lines via the byte fallback',
+        );
+    }
+
     public function testIgnoreCaseFoldsComparisonAndKeepsOldBytes(): void
     {
         $options = DiffOptions::new()->withIgnoreCase();

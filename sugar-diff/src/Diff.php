@@ -302,7 +302,15 @@ final class Diff
         $folded = $line;
 
         if ($options->ignoreWhitespace) {
-            $folded = (string) preg_replace('/\s+/u', '', $folded);
+            // preg_replace with /u returns NULL on a subject that is not valid
+            // UTF-8 (a binary-diff line, a Latin-1 file read as UTF-8). Casting
+            // that NULL to '' would fold EVERY malformed line to the same
+            // fingerprint and silently judge distinct content Equal — a diff
+            // that hides real changes. Fail over to the byte-wise pattern,
+            // which cannot fail: it folds ASCII whitespace and leaves the
+            // malformed bytes intact, so distinct lines stay distinct.
+            $stripped = preg_replace('/\s+/u', '', $folded);
+            $folded = $stripped ?? (string) preg_replace('/\s+/', '', $folded);
         }
 
         if ($options->ignoreCase) {
