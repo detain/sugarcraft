@@ -42,17 +42,19 @@ final class DefaultPrefixer implements Prefixer
         int $lineOffset,
         int $width,
         int $height,
+        int $totalItems,
     ): int {
         $this->currentIndex = $currentIndex;
         $this->cursorIndex  = $cursorIndex;
 
-        // Compute number field width
+        // Compute number field width from the LARGEST number a pass can render.
+        // Sizing on $currentIndex alone made item 9 reserve 6 prefix columns and
+        // item 10 reserve 7 — ragged borders for every ≥10-item list (audit M6
+        // fix wave). Absolute mode renders indices up to totalItems-1 and
+        // relative mode renders distances bounded by the same value, so one
+        // width serves both.
         if ($this->number) {
-            $this->numWidth = \strlen((string) $currentIndex);
-            if ($this->numberRelative) {
-                $max = \max($cursorIndex, \abs($cursorIndex - $lineOffset));
-                $this->numWidth = \strlen((string) $max);
-            }
+            $this->numWidth = \max(1, \strlen((string) \max(0, $totalItems - 1)));
         }
 
         // Separator widths
@@ -95,8 +97,4 @@ final class DefaultPrefixer implements Prefixer
 
         return "{$sep} {$numStr}{$mark} ";
     }
-
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
 }

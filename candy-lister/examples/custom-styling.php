@@ -16,7 +16,7 @@ class StarsPrefixer implements Prefixer {
     public int $cursorIndex = 0;
     public function initPrefixer(
         \Stringable $value, int $currentIndex, int $cursorIndex,
-        int $lineOffset, int $width, int $height
+        int $lineOffset, int $width, int $height, int $totalItems
     ): int {
         $this->cursorIndex = $currentIndex;
         return 3; // width for "*** "

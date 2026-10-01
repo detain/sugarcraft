@@ -4,123 +4,138 @@ declare(strict_types=1);
 
 namespace SugarCraft\Lister\Tests;
 
-use SugarCraft\Core\Util\Width;
-use SugarCraft\Lister\{DefaultPrefixer, DefaultSuffixer, StringItem};
+use SugarCraft\Lister\{DefaultPrefixer, Model, StringItem};
 use PHPUnit\Framework\TestCase;
 
+/**
+ * DefaultPrefixer behaviour pins.
+ *
+ * The original suite asserted only `assertGreaterThan(0, $width)` /
+ * `assertIsString` — it never pinned the computed width or marker text, so the
+ * per-item number sizing (ragged at ≥10 items) stayed invisible (audit M6/#16
+ * fix wave). Every width and shape claim below is now exact.
+ */
 final class DefaultPrefixerTest extends TestCase
 {
-    public function testInitPrefixerReturnsPrefixWidth(): void
+    public function testInitPrefixerWidthFormulaSmallList(): void
     {
         $p = new DefaultPrefixer();
-        $width = $p->initPrefixer(new StringItem('item'), 0, 0, 5, 80, 24);
-        $this->assertGreaterThan(0, $width);
+        // sep(1) + number(1) + number-space(1) + marker(1) + trailing(2) = 6
+        $width = $p->initPrefixer(new StringItem('item'), 0, 0, 5, 80, 24, 5);
+        $this->assertSame(6, $width);
     }
 
-    public function testInitPrefixerComputesPrefixWidth(): void
+    public function testNumberColumnPadsToTotalNotCurrentIndex(): void
     {
+        // The M6 defect: item 9 reserved a narrower column than item 10.
+        // With 12 items the column is 2 cells wide for EVERY item.
         $p = new DefaultPrefixer();
-        $width = $p->initPrefixer(new StringItem('item'), 5, 3, 5, 80, 24);
-        // The prefix width should be computed based on separator, number, marker, and spaces
-        $this->assertGreaterThan(0, $width);
+        $w9  = $p->initPrefixer(new StringItem('i'), 9, 0, 5, 80, 24, 12);
+        $w10 = $p->initPrefixer(new StringItem('i'), 10, 0, 5, 80, 24, 12);
+        $this->assertSame($w9, $w10, 'prefix width must be pass-invariant');
+        $this->assertSame(7, $w9); // 6 + one extra digit
     }
 
-    public function testPrefixOnFirstLine(): void
+    public function testNumberColumnSingleDigitList(): void
     {
         $p = new DefaultPrefixer();
-        $p->initPrefixer(new StringItem('first'), 0, 0, 5, 80, 24);
-        $result = $p->prefix(0, 3);
-        $this->assertStringContainsString('╭', $result);
+        $this->assertSame(6, $p->initPrefixer(new StringItem('i'), 8, 0, 5, 80, 24, 9));
     }
 
-    public function testPrefixOnSubsequentLine(): void
+    public function testWidthWithoutNumbers(): void
     {
         $p = new DefaultPrefixer();
-        $p->initPrefixer(new StringItem('item'), 1, 1, 5, 80, 24);
-        $result = $p->prefix(1, 3);
-        // Should contain separator (├ or │)
-        $this->assertIsString($result);
+        $p->number = false;
+        // sep(1) + marker(1) + trailing(2) = 4, independent of total
+        $this->assertSame(4, $p->initPrefixer(new StringItem('i'), 42, 0, 5, 80, 24, 999));
     }
 
-    public function testPrefixWithWrapContinuation(): void
+    public function testPrefixShapeFirstLineOfCurrentItem(): void
     {
         $p = new DefaultPrefixer();
-        $p->initPrefixer(new StringItem('item'), 2, 1, 5, 80, 24);
-        $result = $p->prefix(1, 3);
-        $this->assertStringContainsString('│', $result);
+        $p->initPrefixer(new StringItem('first'), 0, 0, 5, 80, 24, 5);
+        // "╭ " + "0 " + ">" + " "
+        $this->assertSame('╭ 0 > ', $p->prefix(0, 3));
     }
 
-    public function testPrefixShowsCurrentMarkerForCurrentItem(): void
+    public function testPrefixShapeNonCurrentItem(): void
     {
         $p = new DefaultPrefixer();
-        $p->initPrefixer(new StringItem('current'), 0, 0, 5, 80, 24);
-        $result = $p->prefix(0, 3);
-        $this->assertStringContainsString('>', $result);
+        $p->initPrefixer(new StringItem('other'), 1, 0, 5, 80, 24, 5);
+        $this->assertSame('╭ 1   ', $p->prefix(0, 3)); // first line of EVERY item uses firstSep
     }
 
-    public function testPrefixShowsEmptyMarkerForNonCurrentItem(): void
+    public function testPrefixShapeWrapContinuation(): void
     {
         $p = new DefaultPrefixer();
-        $p->initPrefixer(new StringItem('other'), 1, 0, 5, 80, 24);
-        $result = $p->prefix(0, 3);
-        $this->assertStringContainsString(' ', $result);
+        $p->initPrefixer(new StringItem('item'), 2, 1, 5, 80, 24, 5);
+        // Wrap lines blank out the number field (2 chars at this total) and marker.
+        $this->assertSame('│     ', $p->prefix(1, 3));
+    }
+
+    public function testPrefixPadsNumberFieldTwoDigits(): void
+    {
+        $p = new DefaultPrefixer();
+        $p->initPrefixer(new StringItem('ten'), 10, 0, 5, 80, 24, 12);
+        $this->assertSame('╭ 10   ', $p->prefix(0, 1));
+        $p->initPrefixer(new StringItem('nine'), 9, 0, 5, 80, 24, 12);
+        $this->assertSame('╭  9   ', $p->prefix(0, 1));
     }
 
     public function testPrefixWithRelativeNumbers(): void
     {
         $p = new DefaultPrefixer();
         $p->numberRelative = true;
-        $p->initPrefixer(new StringItem('rel'), 0, 5, 3, 80, 24);
-        $result = $p->prefix(0, 3);
-        $this->assertIsString($result);
+        $p->initPrefixer(new StringItem('rel'), 3, 5, 3, 80, 24, 12);
+        // distance |3-5| = 2 in a 2-cell right-aligned field; no marker (not the cursor)
+        $this->assertSame('╭  2   ', $p->prefix(0, 1));
+        $p->initPrefixer(new StringItem('cur'), 5, 5, 3, 80, 24, 12);
+        $this->assertSame('╭  0 > ', $p->prefix(0, 1));
     }
 
-    public function testPrefixWithoutNumbers(): void
+    public function testPrefixWithoutNumbersHasNoDigits(): void
     {
         $p = new DefaultPrefixer();
         $p->number = false;
-        $p->initPrefixer(new StringItem('nonum'), 0, 0, 5, 80, 24);
-        $result = $p->prefix(0, 3);
-        // Should not contain digits for line numbers
-        $this->assertIsString($result);
-    }
-
-    public function testAnsiWidthHelper(): void
-    {
-        $w = Width::string('hello');
-        $this->assertSame(5, $w);
-    }
-
-    public function testAnsiWidthHelperWithAnsi(): void
-    {
-        $w = Width::string("\x1b[1mbold\x1b[0m");
-        $this->assertSame(4, $w);
+        $p->initPrefixer(new StringItem('nonum'), 42, 42, 5, 80, 24, 999);
+        $this->assertStringNotContainsString('9', $p->prefix(0, 1));
+        $this->assertStringNotContainsString('4', $p->prefix(0, 1));
     }
 
     /**
-     * Regression: when cursor is on a non-zero index, the > marker must appear
-     * on the cursor item, NOT only on index 0.
+     * Marker on the cursor item only, regardless of index (kept from the
+     * original suite — it pinned real behaviour).
      */
     public function testMarkerOnNonZeroCursorItem(): void
     {
         $p = new DefaultPrefixer();
-        // Cursor at index 2, rendering item at index 2 (the cursor item)
-        $p->initPrefixer(new StringItem('item2'), 2, 2, 5, 80, 24);
-        $prefix = $p->prefix(0, 1);
-        $this->assertStringContainsString('>', $prefix);
+        $p->initPrefixer(new StringItem('item2'), 2, 2, 5, 80, 24, 5);
+        $this->assertStringContainsString('>', $p->prefix(0, 1));
 
-        // Rendering item at index 0 (not the cursor)
         $p2 = new DefaultPrefixer();
-        $p2->initPrefixer(new StringItem('item0'), 0, 2, 5, 80, 24);
+        $p2->initPrefixer(new StringItem('item0'), 0, 2, 5, 80, 24, 5);
         $prefix0 = $p2->prefix(0, 1);
         $this->assertStringContainsString(' ', $prefix0);
         $this->assertStringNotContainsString('>', $prefix0);
+    }
 
-        // Rendering item at index 1 (not the cursor)
-        $p3 = new DefaultPrefixer();
-        $p3->initPrefixer(new StringItem('item1'), 1, 2, 5, 80, 24);
-        $prefix1 = $p3->prefix(0, 1);
-        $this->assertStringContainsString(' ', $prefix1);
-        $this->assertStringNotContainsString('>', $prefix1);
+    /**
+     * End-to-end alignment: through Model::lines() with 11 items, the content
+     * ("item N") must start at the SAME column for single-digit and
+     * double-digit items — the user-visible symptom of the M6 defect.
+     */
+    public function testContentColumnIsUniformAcrossTenItemBoundary(): void
+    {
+        $m = Model::new()->setViewport(40, 24); // default cursorOffset 5: no follow-shift for 11 lines
+        foreach (\range(0, 10) as $i) {
+            $m = $m->addItem(new StringItem("item $i"));
+        }
+        $m = $m->setPrefixer(new DefaultPrefixer());
+
+        $lines = $m->lines();
+        $this->assertCount(11, $lines);
+        $columns = \array_map(static fn(string $line): int => \strpos($line, 'item '), $lines);
+        $this->assertSame(\array_fill(0, 11, $columns[0]), $columns,
+            'content must start at one column for every item (M6 alignment)');
     }
 }

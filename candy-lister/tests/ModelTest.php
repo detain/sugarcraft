@@ -525,6 +525,21 @@ final class ModelTest extends TestCase
         $this->assertGreaterThan(1, \count($lines));
     }
 
+    /**
+     * Audit M5 regression pin: chunking counted GRAPHEMES while the fit test
+     * measured CELLS — a CJK word of display width 16 passed unsplitted
+     * through a 12-cell viewport. Splitting is now cell-budgeted.
+     */
+    public function testWideCharWordSplitsOnDisplayWidthNotGraphemeCount(): void
+    {
+        // 8 CJK ideographs = 16 display cells, viewport width 12, no prefixer.
+        $m = Model::new()
+            ->setViewport(12, 5)
+            ->addItem(new StringItem('日本語日本語日'));
+
+        $this->assertSame(['日本語日本語', '日'], $m->lines());
+    }
+
     public function testLinesWithMultiParagraphTextExercisingHardWrap(): void
     {
         // Multi-paragraph text (contains \n) exercises hardWrap

@@ -754,6 +754,7 @@ final class Model
             $prefixWidth = $this->prefixer->initPrefixer(
                 $item->value, $itemIndex, $this->cursorIndex,
                 $this->lineOffset, $this->width, $this->height,
+                \count($this->items),
             );
         }
         if ($this->suffixer !== null) {
@@ -854,17 +855,38 @@ final class Model
     }
 
     /**
-     * Split a word that exceeds maxWidth into chunks using grapheme boundaries.
+     * Split a word that exceeds maxWidth into cell-budgeted chunks.
+     *
+     * Chunks accumulate whole graphemes while their DISPLAY WIDTH (CandyCore
+     * Width — CJK/emoji count 2 cells) fits maxWidth; the previous
+     * grapheme-count chunking let a CJK word of width 16 through a 12-cell
+     * viewport unsplitted (audit M5 fix wave). A grapheme wider than the whole
+     * budget cannot be split further and keeps its own (overflowing) chunk.
      *
      * @return list<string>
      */
     private function splitOverWidth(string $word, int $maxWidth): array
     {
         $chunks = [];
-        $len = \grapheme_strlen($word);
-        for ($i = 0; $i < $len; $i += $maxWidth) {
-            $chunks[] = \grapheme_substr($word, $i, $maxWidth);
+        // grapheme_str_split() is unavailable on older bundled ext-intl, so
+        // walk grapheme units explicitly via grapheme_substr.
+        $total = \grapheme_strlen($word);
+
+        for ($start = 0; $start < $total;) {
+            $end = $start;
+            $width = 0;
+            while ($end < $total) {
+                $graphemeWidth = \max(1, Width::string(\grapheme_substr($word, $end, 1)));
+                if ($end > $start && $width + $graphemeWidth > $maxWidth) {
+                    break;
+                }
+                $width += $graphemeWidth;
+                $end++;
+            }
+            $chunks[] = \grapheme_substr($word, $start, $end - $start);
+            $start = $end;
         }
+
         return $chunks ?: [''];
     }
 

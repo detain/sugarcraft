@@ -71,10 +71,10 @@ $model->addItem(new MyItem());
 ```php
 use SugarCraft\Lister\{Prefixer, Model};
 
-$model->setPrefixer(new class implements Prefixer {
+$model = $model->setPrefixer(new class implements Prefixer {
     public function initPrefixer(
         \Stringable $value, int $currentIndex, int $cursorIndex,
-        int $lineOffset, int $width, int $height
+        int $lineOffset, int $width, int $height, int $totalItems
     ): int {
         return 0; // no prefix width
     }

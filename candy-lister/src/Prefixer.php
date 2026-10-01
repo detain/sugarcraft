@@ -7,14 +7,18 @@ namespace SugarCraft\Lister;
 /**
  * Generates a per-line prefix string for list rendering.
  *
- * The Prefixer is called once at the start of rendering (`initPrefixer`)
- * to compute the total width reserved for prefixes. Then `prefix()` is
- * called once per visible line to produce the actual prefix string.
+ * `initPrefixer()` is called once PER ITEM of a rendering pass (not once per
+ * pass) to (re)initialise state and report the width reserved for prefixes;
+ * `prefix()` is then called once per line of that item to produce the actual
+ * prefix string. Because every item's returned width feeds its own layout,
+ * implementations must derive any padding from a pass-invariant value —
+ * e.g. `$totalItems`, not `$currentIndex` — or columns render ragged
+ * (audit M6 fix wave).
  */
 interface Prefixer
 {
     /**
-     * Called once per rendering pass to initialise state.
+     * Called once per item within a rendering pass to initialise state.
      *
      * @param \Stringable $value          The current item's value
      * @param int         $currentIndex   Index of the current item in the list
@@ -22,6 +26,7 @@ interface Prefixer
      * @param int         $lineOffset     How many lines to keep visible above/below cursor
      * @param int         $width          Viewport width in cells
      * @param int         $height         Viewport height in lines
+     * @param int         $totalItems     Number of items in the (post-filter) list
      * @return int                         Width in cells consumed by the prefix
      */
     public function initPrefixer(
@@ -31,6 +36,7 @@ interface Prefixer
         int $lineOffset,
         int $width,
         int $height,
+        int $totalItems,
     ): int;
 
     /**
