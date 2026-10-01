@@ -219,6 +219,56 @@ final class TaskToolTest extends TestCase
         $this->assertSame('test-model', $executor->seen[0]['model']);
     }
 
+    public function testSubagentTypeIsAcceptedAsTheUpstreamAliasOfAgent(): void
+    {
+        // F4 deprecation tolerance: a call carrying only the prior field name
+        // dispatches exactly like the canonical shape.
+        [$tool, , $executor] = $this->boundTool();
+
+        $result = $tool->execute(self::call(['agent' => '', 'subagent_type' => 'coder']));
+
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertSame('coder', $executor->seen[0]['agent']);
+    }
+
+    public function testTheCanonicalAgentFieldWinsOverTheAlias(): void
+    {
+        [$tool, , $executor] = $this->boundTool();
+
+        $result = $tool->execute(self::call(['agent' => 'reviewer', 'subagent_type' => 'coder']));
+
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertSame('reviewer', $executor->seen[0]['agent']);
+        $this->assertCount(1, $executor->seen);
+    }
+
+    public function testNeitherAgentNorAliasRefusesWithTheCanonicalWording(): void
+    {
+        // The refusal names only "agent": tolerating the alias must not teach
+        // the model that the alias is the contract.
+        [$tool, , $executor] = $this->boundTool();
+
+        $result = $tool->execute(self::call(['agent' => '', 'subagent_type' => '   ']));
+
+        $this->assertTrue($result->isError());
+        $this->assertStringContainsString('non-empty "agent"', $result->content());
+        $this->assertStringNotContainsString('subagent_type', $result->content());
+        $this->assertSame([], $executor->seen);
+    }
+
+    public function testTheSchemaShipsTheAliasAsOptionalString(): void
+    {
+        $schema = (new TaskTool())->inputSchema();
+
+        $this->assertSame('string', $schema['properties']['subagent_type']['type']);
+        $this->assertStringContainsString('alias', $schema['properties']['subagent_type']['description']);
+        $this->assertSame(
+            ['description', 'prompt', 'agent'],
+            $schema['required'],
+            'the alias never enters the required set — agent stays the contract',
+        );
+    }
+
     public function testTheDelegatedBatchCarriesTheAgentsOwnGrantsAndNotTheSessionsTools(): void
     {
         // E644 THROUGHPUT: the tool dispatches via executeAll precisely so the

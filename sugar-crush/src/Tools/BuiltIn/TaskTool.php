@@ -258,6 +258,13 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                         . ' "architect", "tester", "devops"); an unknown name is refused and the live roster is'
                         . ' named in the failure',
                 ],
+                // Deprecation-tolerant alias (F4): NOT in `required`, NOT
+                // mentioned first anywhere — `agent` stays the contract.
+                'subagent_type' => [
+                    'type' => 'string',
+                    'description' => 'Optional alias of `agent` accepted for callers that emit this name instead;'
+                        . ' `agent` wins when both are present. Prefer `agent`.',
+                ],
                 'resume' => [
                     'type' => 'string',
                     'description' => 'Optional. The resume id from an earlier Task result that ended without a'
@@ -280,7 +287,16 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             return $this->refusal($toolCallId, 'the Task tool needs a non-empty "prompt": the complete, self-contained task the sub-agent should carry out');
         }
 
+        // F4: `subagent_type` is the field name this model family carries from
+        // its upstream priors, so it is accepted as an ALIAS of `agent` — the
+        // canonical name still wins whenever it is non-blank, and a call that
+        // fills neither gets the byte-identical refusal, naming only `agent`.
+        // Tolerating the prior beats refusing it; documenting only `agent` as
+        // canonical keeps the prior from becoming the wire contract.
         $agentName = trim((string) ($args['agent'] ?? ''));
+        if ($agentName === '') {
+            $agentName = trim((string) ($args['subagent_type'] ?? ''));
+        }
         if ($agentName === '') {
             return $this->refusal($toolCallId, 'the Task tool needs a non-empty "agent": the roster name to run the task as');
         }
