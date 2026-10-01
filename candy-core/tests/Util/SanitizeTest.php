@@ -25,11 +25,11 @@ final class SanitizeTest extends TestCase
     /** � U+FFFD REPLACEMENT CHARACTER — cellValue's invalid-UTF-8 marker. */
     private const FFFD = "\xEF\xBF\xBD";
 
-    /** U+E000 — candy-mouse's zone-OPEN sentinel (also ImageOverlay marker id 0). */
+    /** U+E000 — candy-mouse's zone-OPEN sentinel (ImageOverlay starts at U+E002, disjoint). */
     private const SENTINEL_OPEN = "\xEE\x80\x80";
-    /** U+E001 — candy-mouse's zone-CLOSE sentinel (also ImageOverlay marker id 1). */
+    /** U+E001 — candy-mouse's zone-CLOSE sentinel (never an image marker). */
     private const SENTINEL_CLOSE = "\xEE\x80\x81";
-    /** U+E002 — a private-use codepoint that is NOT a sentinel (marker id 2). */
+    /** U+E002 — the first ImageOverlay marker (id 0); NOT a zone sentinel. */
     private const IMAGE_MARKER = "\xEE\x80\x82";
     /** U+F8FF — top of the BMP Private Use Area. */
     private const PUA_LAST = "\xEF\xA3\xBF";
@@ -482,16 +482,25 @@ final class SanitizeTest extends TestCase
         $this->assertSame("\xEE\x80\x81", Sanitize::ZONE_SENTINEL_CLOSE);
     }
 
-    public function testImageOverlayMarkersLandInsideTheReservedArenaToday(): void
+    public function testImageOverlayMarkersAreDisjointFromTheZoneSentinels(): void
     {
-        // The collision sugar-crush masks with a private maskImageMarkers():
-        // image id 0 IS the zone-open sentinel and id 1 IS the close sentinel, so
-        // a rendered screenshot silently feeds the zone parser markup. Pinned
-        // deliberately — when the allocator finally moves to a disjoint range,
-        // this test is the tripwire that forces the reservation docblock (and the
-        // downstream workaround) to be retired in the same commit.
-        $this->assertSame(Sanitize::ZONE_SENTINEL_OPEN, ImageOverlay::marker(0));
-        $this->assertSame(Sanitize::ZONE_SENTINEL_CLOSE, ImageOverlay::marker(1));
-        $this->assertSame(self::IMAGE_MARKER, ImageOverlay::marker(2));
+        // The tripwire pinned at the collision era fired as designed: the
+        // allocator moved to U+E002 + id (a32c4faae ruling, follow-up 2 of 2),
+        // so image ids 0/1 are no longer the zone sentinels and a rendered
+        // screenshot can never speak the zone language. The whole PUA sweep in
+        // sugar-crush's maskImageMarkers() stays as defense-in-depth, but the
+        // byte-identity premise it documented is hereby retired.
+        $this->assertNotSame(Sanitize::ZONE_SENTINEL_OPEN, ImageOverlay::marker(0));
+        $this->assertNotSame(Sanitize::ZONE_SENTINEL_CLOSE, ImageOverlay::marker(1));
+        $this->assertNotSame(Sanitize::ZONE_SENTINEL_OPEN, ImageOverlay::marker(1));
+        $this->assertNotSame(Sanitize::ZONE_SENTINEL_CLOSE, ImageOverlay::marker(0));
+        $this->assertSame(self::IMAGE_MARKER, ImageOverlay::marker(0));
+        $this->assertSame(mb_ord(Sanitize::ZONE_SENTINEL_OPEN) + 2, mb_ord(ImageOverlay::marker(0)));
+        // Disjoint across the full arena: no image id ever spells a sentinel.
+        foreach ([2, 100, ImageOverlay::MAX_IMAGES - 1] as $id) {
+            $marker = ImageOverlay::marker($id);
+            $this->assertNotSame(Sanitize::ZONE_SENTINEL_OPEN, $marker);
+            $this->assertNotSame(Sanitize::ZONE_SENTINEL_CLOSE, $marker);
+        }
     }
 }

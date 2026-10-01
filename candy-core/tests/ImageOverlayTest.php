@@ -30,8 +30,13 @@ final class ImageOverlayTest extends TestCase
     {
         $m = ImageOverlay::marker(0);
         self::assertSame(1, mb_strlen($m, 'UTF-8'));
-        self::assertSame(0xE000, mb_ord($m, 'UTF-8'));
-        self::assertSame(0xE001, mb_ord(ImageOverlay::marker(1), 'UTF-8'));
+        // Arena starts at U+E002: U+E000/U+E001 belong to the candy-mouse zone
+        // sentinels (Sanitize::ZONE_SENTINEL_*), disjoint by the a32c4faae ruling.
+        self::assertSame(0xE002, mb_ord($m, 'UTF-8'));
+        self::assertSame(0xE003, mb_ord(ImageOverlay::marker(1), 'UTF-8'));
+        // And it tops out exactly at U+F8FF — never spilling into the CJK
+        // Compatibility Ideographs block that follows the reserved arena.
+        self::assertSame(0xF8FF, mb_ord(ImageOverlay::marker(ImageOverlay::MAX_IMAGES - 1), 'UTF-8'));
     }
 
     public function testMarkerRejectsOutOfRangeId(): void

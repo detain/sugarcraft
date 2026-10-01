@@ -24,23 +24,33 @@ use SugarCraft\Core\Util\Width;
  * blobs on top of the rendered text by moving the cursor to each position and
  * emitting the bytes — an additive layer the diff never has to understand.
  *
- * Markers occupy the PUA range U+E000…(U+E000 + {@see MAX_IMAGES} − 1); the
- * surrounding cells of the image box are ordinary spaces the widget emits
- * itself, so the box reserves the right area in the text layout.
+ * Markers occupy the PUA range U+E002…(U+E002 + {@see MAX_IMAGES} − 1); the
+ * first two codepoints of the block (U+E000/U+E001) stay reserved for the
+ * candy-mouse click/frame zone sentinels (Sanitize::ZONE_SENTINEL_*), so a
+ * pasted image id can never forge a marker and vice versa. The surrounding
+ * cells of the image box are ordinary spaces the widget emits itself, so the
+ * box reserves the right area in the text layout.
  *
  * @internal
  */
 final class ImageOverlay
 {
-    /** First Private-Use-Area codepoint used as an image marker. */
-    private const MARKER_BASE = 0xE000;
+    /**
+     * First Private-Use-Area codepoint used as an image marker. U+E000/U+E001
+     * are deliberately skipped: they are the candy-mouse zone sentinels and
+     * Sanitize owns the reservation (a32c4faae ruling, follow-up 2 of 2).
+     */
+    private const MARKER_BASE = 0xE002;
 
     /**
-     * Number of distinct image markers — the whole BMP Private-Use-Area block
-     * U+E000…U+F8FF. A caller can therefore use a stable per-item index as the
-     * image id without an allocator; ids past this range simply get no marker.
+     * Number of distinct image markers — the BMP Private-Use-Area block
+     * U+E000…U+F8FF minus the two sentinel codepoints at its head, so the
+     * arena tops out exactly at U+F8FF (U+F900+ is the CJK Compatibility
+     * Ideographs block and must never be spilled into). A caller can
+     * therefore use a stable per-item index as the image id without an
+     * allocator; ids past this range simply get no marker.
      */
-    public const MAX_IMAGES = 6400;
+    public const MAX_IMAGES = 6398;
 
     /**
      * The marker cell for image $id — a single width-1 codepoint a widget drops
