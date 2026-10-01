@@ -12,24 +12,10 @@ use SugarCraft\Sprinkles\VAlign;
 /**
  * Immutable layout tree node.
  *
- * @property NodeKind              $kind         LEAF | HORIZONTAL | VERTICAL | NOBORDER
- * @property list<Node>            $children     Child nodes (empty for LEAF)
- * @property string                $content      Leaf string content
- * @property int                   $minWidth
- * @property int                   $maxWidth
- * @property int                   $minHeight
- * @property int                   $maxHeight
- * @property int                   $padding      Inner padding (cells)
- * @property bool                  $border       Whether to draw box border
- * @property int                   $spacing      Gap between children (cells)
- * @property Border|null           $borderStyle  Canonical border chars (candy-sprinkles)
- * @property Style|null            $style        Canonical style (candy-sprinkles)
- * @property string                $title        Box title text
- * @property array{int,int,int,int} $margin      Outer spacing (top/right/bottom/left)
- * @property Align|null            $alignH       Horizontal text alignment
- * @property VAlign|null           $alignV       Vertical text alignment
+ * Every public dimension/style facet is a declared `readonly` property below;
+ * the `with*()` builders return new instances (audit #10: the previous
+ * @property mirror block drifted and cited a phantom `NodeKind` type).
  */
-
 final class Node
 {
     public const LEAF       = 'leaf';
@@ -181,7 +167,7 @@ final class Node
         $borderStyle = $show === true
             ? ($this->borderStyle ?? Border::rounded())
             : $this->borderStyle;
-        return $this->with(border: $show, borderStyle: $borderStyle);
+        return $this->with(border: $show, borderStyle: $borderStyle, borderStyleSet: true);
     }
 
     public function withSpacing(int $cells): self
@@ -192,28 +178,31 @@ final class Node
 
     /**
      * Set the border character set from candy-sprinkles.
-     * Passing null clears the border style (border bool still controls visibility).
+     * Passing null CLEARS the style (audit #4): the frame then falls back to
+     * {@see Border::rounded()} at draw time. The border bool still controls
+     * visibility — clearing the style does not hide the border.
      */
     public function withBorderStyle(?Border $b): self
     {
-        // Pass sentinel to preserve all other properties via with()'s fallback
-        return $this->with(borderStyle: $b, style: self::preserve(), alignH: self::preserve(), alignV: self::preserve());
+        return $this->with(borderStyle: $b, borderStyleSet: true);
     }
 
     /**
      * Set the canonical style from candy-sprinkles.
+     * Passing null CLEARS the style — content renders unstyled.
      */
     public function withStyle(?Style $s): self
     {
-        return $this->with(style: $s, borderStyle: self::preserve(), alignH: self::preserve(), alignV: self::preserve());
+        return $this->with(style: $s, styleSet: true);
     }
 
     /**
      * Set the box title text.
+     * Passing '' CLEARS the title — the top edge renders as an unbroken run.
      */
     public function withTitle(string $t): self
     {
-        return $this->with(title: $t, borderStyle: self::preserve(), style: self::preserve(), alignH: self::preserve(), alignV: self::preserve());
+        return $this->with(title: $t, titleSet: true);
     }
 
     /**
@@ -233,23 +222,25 @@ final class Node
         $left   ??= $right;
         // Clamp negatives to 0 — a margin can never be < 0. Mirrors withFlex().
         $margin = [\max(0, $top), \max(0, $right), \max(0, $bottom), \max(0, $left)];
-        return $this->with(margin: $margin, borderStyle: self::preserve(), style: self::preserve(), alignH: self::preserve(), alignV: self::preserve());
+        return $this->with(margin: $margin, marginSet: true);
     }
 
     /**
      * Set horizontal text alignment (sugar-boxer-specific).
+     * Passing null CLEARS the alignment — content renders left-aligned.
      */
-    public function withAlignH(Align $a): self
+    public function withAlignH(?Align $a): self
     {
-        return $this->with(alignH: $a, borderStyle: self::preserve(), style: self::preserve(), alignV: self::preserve());
+        return $this->with(alignH: $a, alignHSet: true);
     }
 
     /**
      * Set vertical text alignment (sugar-boxer-specific).
+     * Passing null CLEARS the alignment — content renders top-aligned.
      */
-    public function withAlignV(VAlign $v): self
+    public function withAlignV(?VAlign $v): self
     {
-        return $this->with(alignV: $v, borderStyle: self::preserve(), style: self::preserve(), alignH: self::preserve());
+        return $this->with(alignV: $v, alignVSet: true);
     }
 
     public function withContent(string $content): self
@@ -332,14 +323,18 @@ final class Node
     // -------------------------------------------------------------------------
 
     /**
-     * Sentinel for "do not change" vs explicit null.
+     * Rebuild with the given overrides.
+     *
+     * House XSet law (AGENTS "nullable fields use a paired bool $XSet
+     * sentinel", canonical candy-sprinkles Style / candy-core Mutable): each
+     * clearable nullable field has a paired `...Set` flag. Omitting both keeps
+     * the current value; passing `field: $v, fieldSet: true` WRITES $v even
+     * when $v is null/''/[0,0,0,0] — so an explicit clear is observable
+     * (audit #4: the old Preserve-sentinel scheme let explicit nulls silently
+     * no-op, contradicting the docblocks and README).
+     *
+     * @param array{int,int,int,int}|null $margin
      */
-    private static function preserve(): Preserve
-    {
-        static $sentinel;
-        return $sentinel ??= new Preserve();
-    }
-
     private function with(
         ?string $content = null,
         ?int $minWidth = null,
@@ -349,32 +344,20 @@ final class Node
         ?int $padding = null,
         ?bool $border = null,
         ?int $spacing = null,
-        mixed $borderStyle = null,
-        mixed $style = null,
-        string $title = '',
-        array $margin = [0, 0, 0, 0],
-        mixed $alignH = null,
-        mixed $alignV = null,
+        ?Border $borderStyle = null,
+        bool $borderStyleSet = false,
+        ?Style $style = null,
+        bool $styleSet = false,
+        ?string $title = null,
+        bool $titleSet = false,
+        ?array $margin = null,
+        bool $marginSet = false,
+        ?Align $alignH = null,
+        bool $alignHSet = false,
+        ?VAlign $alignV = null,
+        bool $alignVSet = false,
         ?int $flex = null,
     ): self {
-        // Preserve existing value when sentinel is passed (no arg).
-        // Explicitly pass null to clear.
-            $resolvedBorderStyle = $borderStyle === self::preserve()
-            ? $this->borderStyle
-            : ($borderStyle ?? ($this->borderStyle ?? null));
-
-        $resolvedStyle = $style === self::preserve()
-            ? $this->style
-            : ($style ?? $this->style);
-
-        $resolvedAlignH = $alignH === self::preserve()
-            ? $this->alignH
-            : ($alignH ?? $this->alignH);
-
-        $resolvedAlignV = $alignV === self::preserve()
-            ? $this->alignV
-            : ($alignV ?? $this->alignV);
-
         return new self(
             $this->kind,
             $content ?? $this->content,
@@ -389,13 +372,13 @@ final class Node
             // silently re-enable a border that withBorder(false) turned off.
             $border ?? $this->border,
             $spacing     ?? $this->spacing,
-            $resolvedBorderStyle,
-            $resolvedStyle,
-            $title !== '' ? $title : $this->title,
-            $margin      !== [0, 0, 0, 0] ? $margin : $this->margin,
-            $resolvedAlignH,
-            $resolvedAlignV,
-            $flex        ?? $this->flex,
+            $borderStyleSet ? $borderStyle : $this->borderStyle,
+            $styleSet      ? $style        : $this->style,
+            $titleSet      ? (string) $title : $this->title,
+            $marginSet     ? $margin : $this->margin,
+            $alignHSet      ? $alignH     : $this->alignH,
+            $alignVSet      ? $alignV     : $this->alignV,
+            $flex           ?? $this->flex,
         );
     }
 }

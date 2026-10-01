@@ -21,30 +21,34 @@ This keeps sugar-boxer decoupled from the rendering internals of
 candy-sprinkles while still producing compatible border characters and
 style attributes.
 
-## pattern:sentinel-nop
+## pattern:xset-sentinel
 
-**Private static sentinel to distinguish "do not change" from explicit null.**
+**Paired `bool $XSet` sentinel to distinguish "do not change" from explicit clear.**
 
-The Node `with*` chain uses a private `nop(): \stdClass` sentinel factory
-so that `null` can be passed explicitly (to clear a value) without
-colliding with "no argument was given, preserve existing".
+The house law (AGENTS: "nullable fields use a paired bool $XSet sentinel",
+canonical candy-sprinkles `Style`, trait candy-core `Concerns\Mutable`) is that
+every clearable field of `Node::with()` carries a companion flag:
 
 ```php
-private static function nop(): \stdClass
-{
-    static $sentinel;
-    return $sentinel ??= new \stdClass();
+private function with(
+    ?Border $borderStyle = null,
+    bool $borderStyleSet = false,
+    ...
+): self {
+    ...
+    $borderStyleSet ? $borderStyle : $this->borderStyle,  // set/clear vs keep
 }
-
-// Usage in with():
-$resolvedBorderStyle = $borderStyle === self::nop()
-    ? $this->borderStyle           // preserve
-    : ($borderStyle ?? $this->borderStyle);  // set or clear
 ```
 
-This pattern is necessary when chaining multiple `with*` calls that
-each forward only their own changed field while passing sentinels for
-all others.
+`withBorderStyle(?Border $b)` etc. forward `borderStyle: $b, borderStyleSet: true`,
+so an explicit `null` (or `''` title, `[0,0,0,0]` margin) actually clears.
+
+History (audit #4): this lib previously used a `Preserve` class-object sentinel
+(before that a `nop(): \stdClass`), but only the public setters passed it —
+inside `with()` the fallback `?? $this->x` / `!== ''` / `!== [0,0,0,0]` made an
+explicit clear silently no-op while the docblocks and README promised clearing.
+The flag-pair form removes that divergence between "argument omitted" and
+"argument sent, value equals empty" by construction.
 
 ## gotcha:border-and-borderstyle
 

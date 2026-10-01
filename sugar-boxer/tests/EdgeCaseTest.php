@@ -126,7 +126,8 @@ final class EdgeCaseTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // Node preserve() sentinel (private static, used by with* builders)
+    // Node with() XSet-sentinel clears (audit #4) — explicit null/''/zeros
+    // clear; omitted arguments keep.
     // -------------------------------------------------------------------------
 
     public function testWithBorderStylePreservesOtherProperties(): void
@@ -199,6 +200,78 @@ final class EdgeCaseTest extends TestCase
             ->withAlignV(VAlign::Bottom);
 
         $this->assertSame(VAlign::Bottom, $node->alignV);
+    }
+
+    // -------------------------------------------------------------------------
+    // Audit #4 — explicit clears are observable (state + rendered)
+    // -------------------------------------------------------------------------
+
+    public function testBorderStyleNullClearsTheStyle(): void
+    {
+        $double = Border::double();
+        $node = Node::leaf('hi')->withBorder(true)->withBorderStyle($double);
+        $this->assertSame($double, $node->borderStyle);
+
+        $cleared = $node->withBorderStyle(null);
+        $this->assertNull($cleared->borderStyle);
+        // Border stays visible; the frame falls back to rounded at draw time.
+        $this->assertTrue($cleared->border);
+        $framed = SugarBoxer::new()->render($node, 10, 3);
+        $plain  = SugarBoxer::new()->render($cleared, 10, 3);
+        $this->assertStringContainsString('╔', $framed);
+        $this->assertStringContainsString('╭', $plain);
+        $this->assertStringNotContainsString('╔', $plain);
+    }
+
+    public function testStyleNullClearsTheStyle(): void
+    {
+        $node = Node::leaf('hi')->withBorder(false)
+            ->withStyle(Style::new()->fg(Color::ansi(4)));
+        $this->assertNotNull($node->style);
+
+        $cleared = $node->withStyle(null);
+        $this->assertNull($cleared->style);
+        $this->assertStringContainsString("\x1b[", SugarBoxer::new()->render($node, 6, 1));
+        $this->assertStringNotContainsString("\x1b[", SugarBoxer::new()->render($cleared, 6, 1));
+    }
+
+    public function testTitleEmptyStringClearsTheTitle(): void
+    {
+        $node = Node::leaf('hi')->withBorder(true)->withTitle('T');
+        $this->assertSame('T', $node->title);
+
+        $cleared = $node->withTitle('');
+        $this->assertSame('', $cleared->title);
+        $titled = SugarBoxer::new()->render($node, 10, 3);
+        $plain  = SugarBoxer::new()->render($cleared, 10, 3);
+        $this->assertStringContainsString('T', $titled);
+        // Unbroken top edge: 8 ─ between the corners.
+        $this->assertStringStartsWith("╭────────╮", $plain);
+    }
+
+    public function testMarginZerosClearTheMargin(): void
+    {
+        $node = Node::leaf('hi')->withBorder(true)->withMargin(3);
+        $this->assertSame([3, 3, 3, 3], $node->margin);
+
+        $cleared = $node->withMargin(0, 0, 0, 0);
+        $this->assertSame([0, 0, 0, 0], $cleared->margin);
+        // Margined frame is inset (3 blank rows, then 3-space left pad);
+        // cleared frame hugs the viewport corner.
+        $rows = \explode("\n", SugarBoxer::new()->render($node, 12, 8));
+        $this->assertStringStartsWith('   ╭', $rows[3]);
+        $this->assertStringStartsWith('╭', SugarBoxer::new()->render($cleared, 12, 8));
+    }
+
+    public function testAlignNullClearsTheAlignments(): void
+    {
+        $node = Node::leaf('hi')->withAlignH(Align::Right)->withAlignV(VAlign::Bottom);
+        $this->assertSame(Align::Right, $node->alignH);
+        $this->assertSame(VAlign::Bottom, $node->alignV);
+
+        $cleared = $node->withAlignH(null)->withAlignV(null);
+        $this->assertNull($cleared->alignH);
+        $this->assertNull($cleared->alignV);
     }
 
     // -------------------------------------------------------------------------
