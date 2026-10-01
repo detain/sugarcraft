@@ -29,13 +29,23 @@ final class NearestColorTest extends TestCase
         self::assertSame('#eeeeee', $palette[255]->toHex());
     }
 
-    public function testCubeIsEvenlySteppedAt51(): void
+    public function testCubeUsesTheCanonicalXtermLevels(): void
     {
         $palette = NearestColor::palette256();
-        // index 16 + 36*r + 6*g + b -> channel = level * 51.
-        self::assertSame('#333333', $palette[16 + 36 + 6 + 1]->toHex()); // levels (1,1,1)
+        // audit #1: the cube is the industry-standard xterm 6×6×6 with channel
+        // levels 0,95,135,175,215,255 (Color::CUBE_LEVELS) — NOT the old even
+        // 51-step table. index 16 + 36*r + 6*g + b -> channel = CUBE_LEVELS[level].
+        self::assertSame('#00005f', $palette[17]->toHex());              // levels (0,0,1)
+        self::assertSame('#5f5f5f', $palette[16 + 36 + 6 + 1]->toHex()); // levels (1,1,1)
         self::assertSame('#ff0000', $palette[16 + 36 * 5]->toHex());     // levels (5,0,0)
         self::assertSame('#00ff00', $palette[16 + 6 * 5]->toHex());      // levels (0,5,0)
+        // Every cube channel byte is one of the six xterm levels.
+        $levels = [0, 95, 135, 175, 215, 255];
+        foreach (array_slice($palette, 16, 216) as $color) {
+            self::assertContains($color->r, $levels);
+            self::assertContains($color->g, $levels);
+            self::assertContains($color->b, $levels);
+        }
     }
 
     public function testPaletteMemoIsStableAcrossCalls(): void
@@ -71,8 +81,8 @@ final class NearestColorTest extends TestCase
     public function testEuclideanAnsi256SnapsToExactCubeAndRampNodes(): void
     {
         $matcher = new NearestColor();
-        // (153,102,51) is cube level (3,2,1) -> distance 0, unique winner.
-        self::assertSame(16 + 36 * 3 + 6 * 2 + 1, $matcher->ansi256(new Color(153, 102, 51)));
+        // (175,95,0) is cube level (3,1,0) -> distance 0, unique winner.
+        self::assertSame(16 + 36 * 3 + 6 * 1 + 0, $matcher->ansi256(new Color(175, 95, 0)));
         // (128,128,128) is grey-ramp step 12 (8 + 12*10) -> distance 0.
         self::assertSame(232 + 12, $matcher->ansi256(new Color(128, 128, 128)));
     }
@@ -87,8 +97,8 @@ final class NearestColorTest extends TestCase
     public static function exactNodeProvider(): array
     {
         return [
-            'cube (0,0,1)'    => [17, new Color(0, 0, 51)],
-            'cube (3,1,0)'    => [130, new Color(153, 51, 0)],
+            'cube (0,0,1)'    => [17, new Color(0, 0, 95)],
+            'cube (3,1,0)'    => [130, new Color(175, 95, 0)],
             'grey ramp first' => [232, new Color(8, 8, 8)],
             'grey ramp last'  => [255, new Color(238, 238, 238)],
         ];
@@ -137,23 +147,25 @@ final class NearestColorTest extends TestCase
         }
     }
 
-    public function testEuclideanAndCie2000DivergeForSaturatedGreen(): void
+    public function testEuclideanAndCie2000DivergeNearGreenLevelBoundary(): void
     {
-        // The motivating case: RGB Euclidean pulls (30,120,30) toward the
-        // desaturated olive cube node (51,102,51) #336633, while CIE2000 keeps
-        // it on the pure green (0,102,0) #006600 — dE00 6.29 vs 8.53.
-        $green = new Color(30, 120, 30);
-        self::assertSame(65, (new NearestColor())->ansi256($green));
+        // The metric still matters on the canonical table: (0,143,52) sits
+        // between cube greens, Euclidean drifts to the teal-tinged (0,135,95)
+        // #00875f while CIE2000 keeps the pure hue at (0,135,0) #008700.
+        $green = new Color(0, 143, 52);
+        self::assertSame(29, (new NearestColor())->ansi256($green));
         self::assertSame(28, (new NearestColor(ColorDistance::Cie2000))->ansi256($green));
     }
 
-    public function testCie2000BlueWinnerKeepsTheHueNavyNotTeal(): void
+    public function testDarkNavyMapsToGreyRampWithMetricSplit(): void
     {
-        // (12,34,56): Euclidean -> 23 #003333 (teal, dE00 17.41) while CIE2000
-        // -> 24 #003366 (navy, dE00 8.72) — the mis-rank this feature fixes.
+        // (12,34,56) on the old even-51 table was the teal-vs-navy cube story
+        // (#003333 vs #003366). On the canonical xterm cube no dark saturated
+        // blue node is close enough — both metrics now pick the grey ramp,
+        // Euclidean step 3 (#262626) and CIE2000 step 2 (#1c1c1c).
         $navy = new Color(12, 34, 56);
-        self::assertSame(23, (new NearestColor())->ansi256($navy));
-        self::assertSame(24, (new NearestColor(ColorDistance::Cie2000))->ansi256($navy));
+        self::assertSame(235, (new NearestColor())->ansi256($navy));
+        self::assertSame(234, (new NearestColor(ColorDistance::Cie2000))->ansi256($navy));
     }
 
     /**

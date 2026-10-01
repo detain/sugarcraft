@@ -117,6 +117,13 @@ The 256-entry and 16-entry palette Lab tables are memoised statically, so a warm
 CIEDE2000 search costs ~1 ms on a stock laptop; recomputing the 256 sRGB→Lab
 conversions per search would add ≈40 % on top (see `NearestColorTest`).
 
+The matcher's 256-entry table is the canonical xterm palette: slots 0-15 are the
+ANSI-16 set, 16-231 the 6×6×6 cube at channel levels 0/95/135/175/215/255, and
+232-255 the `8+10n` grey ramp — derived from `Color::fromAnsi256Index()` and
+cross-pinned to candy-core's decoder (`Ansi256TableParityTest`). Earlier
+versions shipped a private even-51-step cube; that table never matched a real
+terminal and is gone.
+
 ## Probe — Static Environment Detection
 
 The `Probe` class provides precedence-ordered environment probing for terminal color capability and reduced-motion preference. Use it directly when you need raw detection values without constructing a `Palette` instance.

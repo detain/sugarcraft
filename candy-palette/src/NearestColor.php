@@ -20,24 +20,19 @@ namespace SugarCraft\Palette;
  * on PHP 8.3 (see NearestColorTest): a warm CIEDE2000 search over all 256
  * entries costs about 1 ms; re-converting the palette would add ~40 % on top.
  *
- * Palette table: indices 0-15 are the {@see StandardColors} ANSI-16 set; 16-231
- * are the 6×6×6 cube at this library's even 51-step quantization (the exact
- * inverse of {@see Color::toAnsi256Index()}'s encoder); 232-255 the 8+10n grey
- * ramp. {@see Color::fromAnsi256Index()} is deliberately not used to build the
- * table: its cube decode divides with floats instead of `intdiv()`, so indices
- * 16-231 come back wrong (e.g. 17 -> #010933 instead of #000033).
+ * Palette table: indices 0-15 are the {@see StandardColors} ANSI-16 set;
+ * 16-231 the canonical xterm 6×6×6 cube (channel levels 0, 95, 135, 175, 215,
+ * 255 — {@see Color::CUBE_LEVELS}); 232-255 the 8+10n grey ramp. The table is
+ * built straight from {@see Color::fromAnsi256Index()} so the matcher's
+ * palette, the encoder's rounding targets, and candy-core's Util\Color::ansi256
+ * share ONE source of truth (a cross-library pin guards this — the old local
+ * even-51-step cube diverged from every real terminal in 721 channel values
+ * and made encode/decode round-trips disagree with matching).
  *
  * Exact ties resolve to the first matching palette entry (lowest index).
  */
 final class NearestColor
 {
-    /** Channel step of this library's even 6-level cube (0, 51, 102, 153, 204, 255). */
-    private const CUBE_STEP = 51;
-
-    /** First grey ramp byte and its step — indices 232-255, same as Color::fromAnsi256Index(). */
-    private const GREY_BASE = 8;
-    private const GREY_STEP = 10;
-
     /** @var list<Color>|null Memoized ANSI-256 palette (index == palette key). */
     private static ?array $ansi256Palette = null;
 
@@ -137,17 +132,8 @@ final class NearestColor
         }
 
         $palette = StandardColors::all();
-        for ($index = 16; $index < 232; $index++) {
-            $n = $index - 16;
-            $palette[] = new Color(
-                intdiv($n, 36) * self::CUBE_STEP,
-                intdiv($n % 36, 6) * self::CUBE_STEP,
-                ($n % 6) * self::CUBE_STEP,
-            );
-        }
-        for ($step = 0; $step < 24; $step++) {
-            $grey = self::GREY_BASE + $step * self::GREY_STEP;
-            $palette[] = new Color($grey, $grey, $grey);
+        for ($index = 16; $index < 256; $index++) {
+            $palette[] = Color::fromAnsi256Index($index);
         }
 
         return self::$ansi256Palette = $palette;
