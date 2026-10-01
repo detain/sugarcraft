@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-spark)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-spark)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-spark?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-spark)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
@@ -27,8 +27,10 @@ composer require sugarcraft/sugar-spark
 $ printf '\e[31mhello\e[0m world\n' | sugarspark
 ESC[31m  SGR foreground red
 hello
-ESC[0m   SGR reset
+ESC[0m  SGR reset
  world
+
+  C0 LF (line feed)
 ```
 
 ```sh
@@ -40,6 +42,14 @@ ESC]0;new title  set window title to "new title"
 $ printf '\e[?2026h' | sugarspark
 ESC[?2026h  enable synchronized output
 ```
+
+An empty source is a valid report of nothing: an empty file, or a command that
+printed nothing, yields an empty report and exit status **0**, so
+`cmd | sugarspark` stays chainable when `cmd` has no output. Usage is printed on
+stderr with exit status **1** only when no source was named at all (no file
+argument and no piped stdin), and a path argument that is not a readable local
+file — including a stream wrapper such as `php://` or `data://` — is refused the
+same way rather than being read or fetched.
 
 ## Library
 

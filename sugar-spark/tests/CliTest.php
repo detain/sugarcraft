@@ -62,6 +62,73 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('not a readable file', $stderr);
     }
 
+    /**
+     * Run the CLI with piped stdin (never a TTY) and optional file argument.
+     *
+     * @param string           $stdin bytes to feed on stdin before closing it
+     * @param list<string>     $args  argv tail
+     *
+     * @return array{0: int, 1: string, 2: string} [exitCode, stdout, stderr]
+     */
+    private static function runCliWithStdin(string $stdin, array $args = []): array
+    {
+        $cmd = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(self::bin());
+        foreach ($args as $arg) {
+            $cmd .= ' ' . escapeshellarg($arg);
+        }
+
+        $proc = proc_open(
+            $cmd,
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($proc);
+        fwrite($pipes[0], $stdin);
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        // Drain-then-reap (proc_close) — a single-shot proc_get_status after
+        // pipe EOF is racy on Linux 6.x.
+        return [proc_close($proc), $stdout, $stderr];
+    }
+
+    public function testEmptyFileIsSuccessWithEmptyReport(): void
+    {
+        // A source that exists and is empty is legitimate input, not misuse:
+        // the empty stream's report is empty and the exit code is 0 (audit C7 —
+        // rc=1 here broke scripts piping possibly-empty command output).
+        $tmp = tempnam(sys_get_temp_dir(), 'spark-empty');
+        $this->assertIsString($tmp);
+        try {
+            [$code, $stdout, $stderr] = self::runCli($tmp);
+            $this->assertSame(0, $code, $stderr);
+            $this->assertSame('', $stdout);
+            $this->assertSame('', $stderr);
+        } finally {
+            @unlink($tmp);
+        }
+    }
+
+    public function testEmptyStdinPipeIsSuccessWithEmptyReport(): void
+    {
+        [$code, $stdout, $stderr] = self::runCliWithStdin('');
+        $this->assertSame(0, $code, $stderr);
+        $this->assertSame('', $stdout);
+        $this->assertSame('', $stderr);
+    }
+
+    public function testPipedInputStillReportsNormally(): void
+    {
+        // Polarity: the empty-pipe success path must not short-circuit real
+        // stdin content.
+        [$code, $stdout] = self::runCliWithStdin("\x1b[31mred");
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('SGR foreground red', $stdout);
+        $this->assertStringContainsString('red', $stdout);
+    }
+
     public function testReadsRealLocalFile(): void
     {
         $tmp = tempnam(sys_get_temp_dir(), 'spark');

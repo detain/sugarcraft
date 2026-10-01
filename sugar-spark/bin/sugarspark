@@ -19,6 +19,10 @@ foreach ($autoloadCandidates as $autoload) {
 }
 
 $input = '';
+// Did the caller actually hand us a source (file argument or a piped stdin)?
+// "No source at all" (interactive TTY, no argument) is misuse and answers with
+// usage; a source that happens to be empty is a legitimate report of nothing.
+$sawSource = false;
 if (!empty($argv[1])) {
     // Reject stream wrappers (php://, data://, http://, …) — a file-path argument
     // must not be coerced into fetching a URL or evaluating a wrapper. is_file()
@@ -28,14 +32,25 @@ if (!empty($argv[1])) {
         fwrite(STDERR, Lang::t('cli.not_a_file', ['path' => (string) $argv[1]]) . "\n");
         exit(1);
     }
+    $sawSource = true;
     $input = (string) file_get_contents($argv[1]);
 } elseif (!stream_isatty(STDIN)) {
+    $sawSource = true;
     $input = (string) stream_get_contents(STDIN);
 }
 
 if ($input === '') {
-    fwrite(STDERR, Lang::t('cli.usage') . "\n");
-    exit(1);
+    if (!$sawSource) {
+        // Nothing was piped and no file was named (interactive TTY): the caller
+        // has not said what to inspect — usage is the honest answer.
+        fwrite(STDERR, Lang::t('cli.usage') . "\n");
+        exit(1);
+    }
+    // A source WAS given and it is empty (empty file, `printf '' | sugarspark`):
+    // the report of an empty stream is an empty report, and inspecting nothing
+    // successfully is success. Exiting 1 here used to break scripts that pipe
+    // possibly-empty command output into the inspector.
+    exit(0);
 }
 
 echo Inspector::report($input), PHP_EOL;
