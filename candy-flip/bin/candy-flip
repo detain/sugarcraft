@@ -33,8 +33,11 @@ if ($path === null) {
 
 // Size the decode grid to the terminal viewport (cols, rows-1 for status line).
 // Fall back to 60x24 when not running in a TTY (e.g. piped/CI).
-if (posix_isatty(STDOUT)) {
-    $size = SizeIoctl::query((int) STDOUT);
+// Descriptor 1 is spelled as the literal: `(int) STDOUT` is the RESOURCE ID 2,
+// which names STDERR — the same defect fixed in Renderer::withAdaptiveSize().
+// stream_isatty() is core PHP, so the gate needs no ext-posix either.
+if (stream_isatty(STDOUT)) {
+    $size = SizeIoctl::query(1);
     $cellsW = $size['cols'];
     $cellsH = max(1, $size['rows'] - 1); // reserve 1 row for the status line
 } else {
