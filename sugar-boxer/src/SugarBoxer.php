@@ -732,7 +732,9 @@ final class SugarBoxer
                 $result[] = $paragraphLine;
                 continue;
             }
-            $words = \preg_split('/\s+/', $paragraphLine) !== false ? \preg_split('/\s+/', $paragraphLine) : [];
+            // Audit #12: single preg_split call (the old expression ran it twice).
+            $split = \preg_split('/\s+/', $paragraphLine);
+            $words = $split !== false ? $split : [];
             $current = '';
 
             foreach ($words as $word) {

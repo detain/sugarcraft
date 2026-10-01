@@ -102,7 +102,11 @@ final class SugarBoxerTest extends TestCase
     {
         $layout = Node::leaf('');
         $result = $this->boxer->render($layout, 10, 5);
-        $this->assertIsString($result);
+        // Empty leaf still draws its full rounded frame.
+        $this->assertSame(
+            "╭────────╮\n│        │\n│        │\n│        │\n╰────────╯",
+            $result,
+        );
     }
 
     public function testRenderLeafWithBorder(): void
