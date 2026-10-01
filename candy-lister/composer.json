@@ -8,6 +8,7 @@
         "list",
         "tree",
         "bubble",
+        "bubblelister",
         "terminal",
         "sugarcraft"
     ],
@@ -21,7 +22,8 @@
     ],
     "support": {
         "issues": "https://github.com/sugarcraft/candy-lister/issues",
-        "source": "https://github.com/sugarcraft/candy-lister"
+        "source": "https://github.com/sugarcraft/candy-lister",
+        "docs": "https://sugarcraft.github.io/lib/candy-lister.html"
     },
     "require": {
         "php": "^8.3",
