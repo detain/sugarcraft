@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wish\Middleware;
 
+use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
@@ -207,7 +208,7 @@ final class RateLimit implements Middleware
             }
             /** @var array<string,array{tokens:float,last:float}> $data */
             $decision = $fn($data);
-            $this->writeBack($fh, $data);
+            $this->writeBack($data);
             return $decision;
         } finally {
             \flock($fh, LOCK_UN);
@@ -236,36 +237,22 @@ final class RateLimit implements Middleware
      * @param resource                                     $fh
      * @param array<string,array{tokens:float,last:float}> $data
      */
-    private function writeBack($fh, array $data): void
+    private function writeBack(array $data): void
     {
-        $payload = json_encode($data, JSON_UNESCAPED_SLASHES);
-        if ($payload === false) {
-            return;
-        }
-        // Atomic write: write to a temp file in the same directory,
-        // chmod it owner-only, then rename over the original. rename() is
-        // atomic on POSIX filesystems, so readers either see the old
-        // complete content or the new complete content — never an
-        // empty/truncated file — and the final inode is 0600 regardless
-        // of the process umask.
-        $dir = \dirname($this->statePath);
-        $tmp = $dir . '/.ratelimit_tmp_' . \bin2hex(\random_bytes(8));
+        // AtomicJsonFile sets 0600 on the temp inode BEFORE the payload
+        // and before the publishing rename (candy-core a32c4faae), so the
+        // bucket map — which reveals who has been connecting — is never
+        // briefly world/group readable the way chmod-after-write allowed
+        // (audit LOW-19). The caller's flock on the original handle still
+        // serialises concurrent readers/writers.
         try {
-            if (@file_put_contents($tmp, $payload) === false) {
-                return;
-            }
-            // Restrict to owner before publishing so the bucket map (which
-            // reveals who has been connecting) isn't world/group readable.
-            @\chmod($tmp, 0600);
-            // The lock is still held from withState(), so rename is safe.
-            if (!\rename($tmp, $this->statePath)) {
-                @\unlink($tmp);
-            }
-        } finally {
-            // Clean up temp file if rename somehow failed mid-operation.
-            if (\file_exists($tmp)) {
-                @\unlink($tmp);
-            }
+            AtomicJsonFile::new($this->statePath)
+                ->withPermissions(0600)
+                ->write($data);
+        } catch (\Throwable) {
+            // Best-effort, matching the previous silent early-returns: a
+            // state-write failure must not break the auth decision the
+            // caller already computed.
         }
     }
 }
