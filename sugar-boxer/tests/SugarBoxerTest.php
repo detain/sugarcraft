@@ -759,4 +759,100 @@ final class SugarBoxerTest extends TestCase
         )->withBorder(false);
         $this->assertSame(10, $horizontal->totalWidth(), 'HORIZONTAL width = sum of children');
     }
+
+    // -------------------------------------------------------------------------
+    // Audit #1 — alignment padding must stay inside the content region
+    // -------------------------------------------------------------------------
+
+    public function testRightAlignedLineKeepsTheRightBorderIntact(): void
+    {
+        $rows = \explode("\n", $this->boxer->render(
+            Node::leaf('hi')->withAlignH(Align::Right), 20, 5,
+        ));
+        // Pre-fix the remainder padding written from the shifted origin spilled
+        // leftPad cells past the region edge and blanked col 19 of the content row.
+        $this->assertSame('│                hi│', $rows[1]);
+        $this->assertSame('│', \mb_substr($rows[1], 19, 1), 'Right border survives right-align padding');
+    }
+
+    public function testCenterAlignedLineKeepsBothBordersIntact(): void
+    {
+        $rows = \explode("\n", $this->boxer->render(
+            Node::leaf('hi')->withAlignH(Align::Center), 20, 5,
+        ));
+        // leftPad = intdiv(18-2,2) = 8 → 'hi' at cols 9-10 inside the region,
+        // 8 padding cells on each side — and both borders intact.
+        $this->assertSame('│        hi        │', $rows[1]);
+    }
+
+    // -------------------------------------------------------------------------
+    // Audit #2 — bordered boxes render their frame at min sizes
+    // -------------------------------------------------------------------------
+
+    public function testBorderedLeafAtTwoRowsStillDrawsFullFrame(): void
+    {
+        $out = SugarBoxer::new()->render(Node::leaf('hi'), 20, 2);
+        $this->assertSame("╭──────────────────╮\n╰──────────────────╯", $out, 'A 20x2 bordered box is exactly its frame');
+    }
+
+    public function testBorderedLeafAtTwoColumnsStillDrawsFullFrame(): void
+    {
+        $out = SugarBoxer::new()->render(Node::leaf('hi'), 2, 4);
+        $this->assertSame("╭╮\n││\n││\n╰╯", $out, 'A 2x4 bordered box is exactly its frame');
+    }
+
+    public function testBorderedHorizontalParentAtTwoRowsDrawsFrameOverCollapsedChildren(): void
+    {
+        // availableH = 2-2 = 0: children collapse, but the frame must still show.
+        $layout = Node::horizontal(
+            Node::leaf('hi')->withBorder(false),
+            Node::leaf('yo')->withBorder(false),
+        )->withBorder(true);
+        $out = SugarBoxer::new()->render($layout, 10, 2);
+        $this->assertSame("╭────────╮\n╰────────╯", $out);
+    }
+
+    public function testBorderedVerticalParentCollapsingTwoRowChildStillFrames(): void
+    {
+        // 5-row bordered vertical parent with two children: bottom row belongs to
+        // the frame; each child gets 1 content row at minimum (availableH=3 split),
+        // but even a fully collapsed child region must not blank the parent frame.
+        $layout = Node::vertical(
+            Node::leaf('top'),
+            Node::leaf('bot'),
+        )->withBorder(true);
+        $out = SugarBoxer::new()->render($layout, 6, 2);
+        $this->assertSame("╭────╮\n╰────╯", $out, 'Bordered V-parent at h=2 renders frame, children collapse');
+    }
+
+    // -------------------------------------------------------------------------
+    // Audit #5 — incremental diff keeps wide/styled cell columns truthful
+    // -------------------------------------------------------------------------
+
+    public function testWideGlyphDeltaPlacesCellsAtVisibleColumns(): void
+    {
+        $boxer = SugarBoxer::new();
+        $boxer->render(Node::leaf('中文')->withBorder(false), 10, 2);
+        // '中' spans cols 0-1, 'x' lands on col 2, '文' on cols 3-4. Pre-fix the
+        // diff buffer re-split the flattened string per codepoint (all width 1),
+        // emitting the run one cell too far left.
+        $delta = $boxer->render(Node::leaf('中x文')->withBorder(false), 10, 2);
+        $this->assertStringContainsString("\x1b[1;3H", $delta, 'Delta cursor targets col 2 (1-based 3) for x');
+        $this->assertStringNotContainsString("\x1b[1;2H", $delta, 'No stale col-1 cursor for the shifted run');
+        $this->assertStringContainsString('x', $delta);
+    }
+
+    public function testStyledContentChangeEmitsNonEmptyDelta(): void
+    {
+        $style = Style::new()->fg(Color::ansi(6));
+        $boxer = SugarBoxer::new();
+        $boxer->render(Node::leaf('ab')->withBorder(false)->withStyle($style), 10, 1);
+        // 'ab' -> 'a b' shifts the styled 'b' one cell right; the escape bytes ride
+        // inside the cell runes, so the changed cells diff and the delta is non-empty
+        // (the old codepoint re-split scattered escape bytes into phantom cells and
+        // the encoder could emit nothing for the styled row).
+        $delta = $boxer->render(Node::leaf('a b')->withBorder(false)->withStyle($style), 10, 1);
+        $this->assertNotSame('', $delta, 'Styled-content change must produce a delta');
+        $this->assertStringContainsString('b', $delta);
+    }
 }

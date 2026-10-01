@@ -51,8 +51,8 @@ final class SugarBoxer
     /** @var Buffer|null Lazily-built previous frame buffer for diff-based emission */
     private ?Buffer $previousFrame = null;
 
-    /** @var string|null Previous full rendered output (string), kept so the diff buffer can be built lazily on frame 2 */
-    private ?string $previousOutput = null;
+    /** @var list<list<string>>|null Previous frame's cell grid, kept so the diff buffer can be built lazily on frame 2 */
+    private ?array $previousCells = null;
 
     /** @var int|null Previous render width for resize detection */
     private ?int $prevWidth = null;
@@ -119,13 +119,23 @@ final class SugarBoxer
      * On subsequent renders with the same dimensions, emits only the
      * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
      *
-     * @param Node $root   Root layout node
-     * @param int  $width  Viewport width in cells
-     * @param int  $height Viewport height in lines
+     * @param Node $root   Layout node tree
+     * @param int  $width  Viewport width in cells (0 allowed → empty rows; negative rejected)
+     * @param int  $height Viewport height in lines (0 allowed → ''; negative rejected)
      * @return string      Rendered layout with box-drawing characters
+     *
+     * @throws \InvalidArgumentException If either viewport dimension is negative.
      */
     public function render(Node $root, int $width, int $height): string
     {
+        // Fail loud at the API boundary (audit #11): without this, a negative
+        // dimension leaks array_fill()'s raw ValueError from library internals.
+        if ($width < 0 || $height < 0) {
+            throw new \InvalidArgumentException(
+                "Viewport dimensions must not be negative, got {$width}x{$height}"
+            );
+        }
+
         // 2D cell grid: each cell holds one logical character (any byte length).
         // Storing as char-cells avoids byte/multibyte boundary corruption that
         // happens when slicing strings containing UTF-8 box-drawing glyphs.
@@ -138,12 +148,15 @@ final class SugarBoxer
         }
         $fullOutput = \implode("\n", $out);
 
-        // First frame (or after a resize): emit the full output and remember it as a
-        // STRING only. Building the diff buffer here is pure waste for callers that use
-        // a fresh SugarBoxer per render and never reach the diff path, so it is deferred
-        // to the first subsequent same-dimension render below.
-        if ($this->previousOutput === null || $this->prevWidth !== $width || $this->prevHeight !== $height) {
-            $this->previousOutput = $fullOutput;
+        // First frame (or after a resize): emit the full output and remember the
+        // cell GRID. Building the diff buffer here is pure waste for callers that
+        // use a fresh SugarBoxer per render and never reach the diff path, so it
+        // is deferred to the first subsequent same-dimension render below. The
+        // grid — not the flattened string — is the retained state: re-splitting
+        // the flat string cannot recover cell boundaries once multi-byte glyphs
+        // and escape-prefixed cells have been concatenated (audit #5).
+        if ($this->previousCells === null || $this->prevWidth !== $width || $this->prevHeight !== $height) {
+            $this->previousCells = $cells;
             $this->prevWidth = $width;
             $this->prevHeight = $height;
             $this->previousFrame = null;
@@ -154,11 +167,11 @@ final class SugarBoxer
         // (exactly ONCE — cached in $previousFrame), build the current buffer, diff and
         // emit the delta. Reused callers thus build exactly one buffer per frame, same as
         // before; fresh-instance callers build zero.
-        $prev = $this->previousFrame ??= $this->bufferFromOutput($this->previousOutput, $width, $height);
-        $current = $this->bufferFromOutput($fullOutput, $width, $height);
+        $prev = $this->previousFrame ??= $this->bufferFromGrid($this->previousCells, $width, $height);
+        $current = $this->bufferFromGrid($cells, $width, $height);
         $ops = $current->diff($prev);
         $this->previousFrame = $current;
-        $this->previousOutput = $fullOutput;
+        $this->previousCells = $cells;
 
         $encoder = new DiffEncoder();
         return $encoder->encode($ops);
@@ -212,6 +225,14 @@ final class SugarBoxer
         $cw = $w - $b * 2;      // content width
         $ch = $h - $b * 2;      // content height
 
+        // Draw the frame BEFORE the content-region guards (audit #2): a bordered
+        // box whose region is exactly its border (h=2 or w=2) still has a valid
+        // frame to show — returning early here used to blank the whole box.
+        // drawBorder itself no-ops below 2x2, so this stays safe at 1-wide/tall.
+        if ($node->border === true) {
+            $this->drawBorder($node, $x, $y, $w, $h, $cells);
+        }
+
         if ($cw <= 0 || $ch <= 0) return;
 
         // Clamp padding when it would consume the entire content axis. Without
@@ -246,10 +267,6 @@ final class SugarBoxer
 
         if ($pcw <= 0 || $pch <= 0) return;
 
-        if ($node->border === true) {
-            $this->drawBorder($node, $x, $y, $w, $h, $cells);
-        }
-
         $this->renderContent($node->content, $pcx, $pcy, $pcw, $pch, $cells, $node->style, $node->alignH, $node->alignV);
     }
 
@@ -281,6 +298,12 @@ final class SugarBoxer
         $availableW = $w - $b * 2;
         $availableH = $h - $b * 2;
 
+        // Draw outer border first (audit #2): before the collapse guard, so a
+        // panel whose children area shrinks to zero still shows its frame.
+        if ($node->border) {
+            $this->drawBorder($node, $x, $y, $w, $h, $cells);
+        }
+
         if ($availableW <= 0 || $availableH <= 0) return;
 
         // Flex children grow to fill the leftover after fixed siblings; without
@@ -298,11 +321,6 @@ final class SugarBoxer
             $weights = \array_map(fn(Node $c) => $c->minWidth > 0 ? $c->minWidth : 1, $children);
             $totalWeight = \array_sum($weights);
             $offsets = $this->distribute($availableW, $weights, $totalWeight, $sp, $b);
-        }
-
-        // Draw outer border first
-        if ($node->border) {
-            $this->drawBorder($node, $x, $y, $w, $h, $cells);
         }
 
         // Render each child. distribute() already bakes the border pad into
@@ -356,6 +374,12 @@ final class SugarBoxer
         $availableW = $w - $b * 2;
         $availableH = $h - $b * 2;
 
+        // Draw outer border first (audit #2): before the collapse guard, so a
+        // panel whose children area shrinks to zero still shows its frame.
+        if ($node->border) {
+            $this->drawBorder($node, $x, $y, $w, $h, $cells);
+        }
+
         if ($availableW <= 0 || $availableH <= 0) return;
 
         // Flex children grow to fill the leftover after fixed siblings; without
@@ -374,10 +398,6 @@ final class SugarBoxer
             $weights = \array_map(fn(Node $c) => $c->minHeight > 0 ? $c->minHeight : 1, $children);
             $totalWeight = \array_sum($weights);
             $offsets = $this->distribute($availableH, $weights, $totalWeight, $sp, $b);
-        }
-
-        if ($node->border) {
-            $this->drawBorder($node, $x, $y, $w, $h, $cells);
         }
 
         for ($i = 0; $i < $n; $i++) {
@@ -465,9 +485,13 @@ final class SugarBoxer
             }
             $leftPad = \max(0, $leftPad);
 
-            // Prepend SGR prefix to styled lines
+            // Prepend SGR prefix to styled lines.
+            // The pad bound passed to placeLine is the REMAINING width after the
+            // alignment shift: padding to the full $w from the shifted origin
+            // would write leftPad cells past the region's right edge and erase
+            // the already-drawn border (audit #1).
             $lineToPlace = $sgrPrefix !== '' ? $sgrPrefix . $line : $line;
-            $this->placeLine($lineToPlace, $x + $leftPad, $lineY, $w, $cells);
+            $this->placeLine($lineToPlace, $x + $leftPad, $lineY, $w - $leftPad, $cells);
         }
     }
 
@@ -1015,30 +1039,37 @@ final class SugarBoxer
     }
 
     /**
-     * Build a Buffer from a multi-line string output.
+     * Build a Buffer from a rendered cell grid.
      *
-     * All cells are created with null style — the diff algorithm will
-     * still work correctly for detecting changed character positions.
+     * Each grid slot holds exactly one logical cell: the visible grapheme plus
+     * any escape sequences / zero-width carry riding on it (placeLine's write
+     * unit). The slot's display width is therefore its VISIBLE width — 2 for a
+     * wide glyph (whose continuation slot is the empty string → width 0, the
+     * pairing Buffer::diff() requires), 1 otherwise. All cells carry a null
+     * style: style changes still diff correctly because the raw escape bytes
+     * ride inside the rune and break cell equality.
      *
-     * @param string $output Multi-line string from render()
-     * @param int    $width  Buffer width in cells
-     * @param int    $height Buffer height in rows
+     * Re-splitting the flattened output string instead (the previous approach)
+     * mis-mapped every wide glyph and every escape-prefixed cell to width 1 at
+     * shifted columns, so deltas misplaced or silently dropped styled/wide
+     * content (audit #5).
+     *
+     * @param list<list<string>> $cells  Grid from render(): one string per cell
+     * @param int                $width  Buffer width in cells
+     * @param int                $height Buffer height in rows
      */
-    private function bufferFromOutput(string $output, int $width, int $height): Buffer
+    private function bufferFromGrid(array $cells, int $width, int $height): Buffer
     {
-        $lines = \explode("\n", $output);
         /** @var list<Cell> $grid */
         $grid = [];
         for ($row = 0; $row < $height; $row++) {
-            $line = $lines[$row] ?? '';
-            $byteLen = \strlen($line);
-            $chars = \mb_str_split($line);              // O(len) ONCE per line (was mb_substr per cell)
+            $line = $cells[$row] ?? [];
             for ($col = 0; $col < $width; $col++) {
-                // EXACT replication of the old `isset($line[$col]) ? mb_substr($line,$col,1) : ' '`:
-                //   col <  byteLen  -> the col-th char, or '' for the multibyte byte-tail
-                //   col >= byteLen  -> ' '
-                $char = $col < $byteLen ? ($chars[$col] ?? '') : ' ';
-                $grid[$row * $width + $col] = Cell::new($char, null, null, 1);
+                $char = $line[$col] ?? ' ';
+                // '' is a wide-glyph continuation (zero visible columns); every
+                // other slot shows at least one column.
+                $cellWidth = $char === '' ? 0 : \max(1, $this->strWidth($char));
+                $grid[$row * $width + $col] = Cell::new($char, null, null, $cellWidth);
             }
         }
 
@@ -1052,7 +1083,7 @@ final class SugarBoxer
     public function resetPreviousFrame(): void
     {
         $this->previousFrame = null;
-        $this->previousOutput = null;
+        $this->previousCells = null;
         $this->prevWidth = null;
         $this->prevHeight = null;
         // Drop the per-Style SGR-prefix cache too: a reset means "forget prior

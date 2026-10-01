@@ -244,14 +244,17 @@ final class EdgeCaseTest extends TestCase
     public function testRenderNegativeWidthViewport(): void
     {
         $layout = Node::leaf('content')->withBorder(false);
-        $this->expectException(\ValueError::class);
+        // Audit #11: the named-domain guard replaces array_fill()'s raw ValueError.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Viewport dimensions must not be negative, got -5x5');
         $this->boxer->render($layout, -5, 5);
     }
 
     public function testRenderNegativeHeightViewport(): void
     {
         $layout = Node::leaf('content')->withBorder(false);
-        $this->expectException(\ValueError::class);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Viewport dimensions must not be negative, got 10x-5');
         $this->boxer->render($layout, 10, -5);
     }
 
@@ -312,8 +315,9 @@ final class EdgeCaseTest extends TestCase
 
     public function testWordWrapNegativeWidthThrows(): void
     {
+        // Reached via render()'s boundary guard (audit #11) before any wrapping.
         $layout = Node::leaf('hello')->withBorder(false);
-        $this->expectException(\ValueError::class);
+        $this->expectException(\InvalidArgumentException::class);
         $this->boxer->render($layout, -1, 3);
     }
 
@@ -742,28 +746,54 @@ final class EdgeCaseTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // bufferFromOutput edge cases
+    // bufferFromGrid edge cases (cells asserted, not just dimensions — audit #17)
     // -------------------------------------------------------------------------
 
-    public function testBufferFromOutputFewerLinesThanHeight(): void
+    public function testBufferFromGridFewerRowsThanHeight(): void
     {
-        // When output has fewer lines than height, missing lines use ' '.
+        // When the grid has fewer rows than height, missing rows fall back to ' '.
         $boxer = SugarBoxer::new();
-        $ref = new \ReflectionMethod($boxer, 'bufferFromOutput');
+        $ref = new \ReflectionMethod($boxer, 'bufferFromGrid');
         $ref->setAccessible(true);
-        $buf = $ref->invoke($boxer, "short\n", 10, 5);
-        $this->assertSame(10, $buf->width());
-        $this->assertSame(5, $buf->height());
+        $buf = $ref->invoke($boxer, [['a', 'b']], 3, 2);
+        $this->assertSame(3, $buf->width());
+        $this->assertSame(2, $buf->height());
+        $this->assertSame('a', $buf->cellAt(0, 0)->rune());
+        $this->assertSame('b', $buf->cellAt(1, 0)->rune());
+        $this->assertSame(' ', $buf->cellAt(2, 0)->rune());
+        $this->assertSame(' ', $buf->cellAt(0, 1)->rune());
     }
 
-    public function testBufferFromOutputMultibyteChars(): void
+    public function testBufferFromGridWideAndContinuationCells(): void
     {
+        // A wide glyph carries its real display width; the empty continuation
+        // slot next to it maps to a zero-width cell (the pairing Buffer::diff
+        // relies on). Flattened-string re-splitting used to give every cell
+        // width 1 and shift wide content left (audit #5).
         $boxer = SugarBoxer::new();
-        $ref = new \ReflectionMethod($boxer, 'bufferFromOutput');
+        $ref = new \ReflectionMethod($boxer, 'bufferFromGrid');
         $ref->setAccessible(true);
-        $buf = $ref->invoke($boxer, "日本語\n", 10, 2);
-        $this->assertSame(10, $buf->width());
-        $this->assertSame(2, $buf->height());
+        $buf = $ref->invoke($boxer, [['日', '', '本', '', 'x']], 5, 1);
+        $this->assertSame('日', $buf->cellAt(0, 0)->rune());
+        $this->assertSame(2, $buf->cellAt(0, 0)->width());
+        $this->assertSame('', $buf->cellAt(1, 0)->rune());
+        $this->assertSame(0, $buf->cellAt(1, 0)->width());
+        $this->assertSame(2, $buf->cellAt(2, 0)->width());
+        $this->assertSame('x', $buf->cellAt(4, 0)->rune());
+        $this->assertSame(1, $buf->cellAt(4, 0)->width());
+    }
+
+    public function testBufferFromGridEscapePrefixedCellKeepsOneColumn(): void
+    {
+        // placeLine writes "\x1b[31ma" into a single cell; the buffer must read
+        // its VISIBLE width (1), never one column per escape byte.
+        $boxer = SugarBoxer::new();
+        $ref = new \ReflectionMethod($boxer, 'bufferFromGrid');
+        $ref->setAccessible(true);
+        $buf = $ref->invoke($boxer, [["\x1b[31ma", "b\x1b[0m", ' ']], 3, 1);
+        $this->assertSame(1, $buf->cellAt(0, 0)->width());
+        $this->assertSame(1, $buf->cellAt(1, 0)->width());
+        $this->assertSame(1, $buf->cellAt(2, 0)->width());
     }
 
     // -------------------------------------------------------------------------
