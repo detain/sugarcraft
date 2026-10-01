@@ -214,6 +214,18 @@ final class LayeredSettings
      *                 onto {@see \SugarCraft\Crush\Providers\CompleteRequest::$maxTokens}
      *                 (E707); unset means the key is absent from the request and
      *                 each provider's own default applies.
+     *  - `modelPrices`
+     *                 {@see \SugarCraft\Crush\Providers\OpenAIProvider}'s rate
+     *                 table — USD per 1M tokens per model (`{"input": …,
+     *                 "output": …}`), read by
+     *                 {@see \SugarCraft\Crush\Providers\ProviderFactory::createOpenAI()}
+     *                 off this merged view and passed as the provider's price
+     *                 overrides. It is USER-TIER ONLY on the same money axis as
+     *                 `maxOutputTokens`, mirrored: that key can raise what ONE
+     *                 request bills, this one can lower what EVERY token bills —
+     *                 a project-supplied map could zero a rate and silently blind
+     *                 the spend cap and `/budget` totals, which is the exact
+     *                 failure the unpriced-model notice exists to make loud.
      *  - `allowedTools` / `disabledTools`
      *                 {@see \SugarCraft\Crush\Cli\Bootstrap::tools()}, which
      *                 filters the model-facing tool set before any of its three
@@ -347,6 +359,7 @@ final class LayeredSettings
         'parallelToolCalls',
         'parallelToolDeadlineSeconds',
         'maxOutputTokens',
+        'modelPrices',
         'allowedTools',
         'disabledTools',
         'statusLine',
@@ -569,8 +582,8 @@ final class LayeredSettings
      *
      * DERIVED, not written out, so the two lists above cannot drift apart into a
      * third list that agrees with neither. Today it is `provider`,
-     * `instructions`, `disabledRules`, `maxOutputTokens`, `allowedTools`,
-     * `statusLine` and `layout`, in {@see LAYERED_KEYS} order — named rather than numbered
+     * `instructions`, `disabledRules`, `maxOutputTokens`, `modelPrices`,
+     * `allowedTools`, `statusLine` and `layout`, in {@see LAYERED_KEYS} order — named rather than numbered
      * here, because the
      * ordinals this sentence used to carry went stale the moment a fifth key
      * joined the list. `allowedTools`'s argument is on {@see PROJECT_TIER_KEYS},

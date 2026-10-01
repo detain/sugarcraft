@@ -319,6 +319,46 @@ final class ProviderFactoryTest extends TestCase
         $this->factory->create(['type' => 'custom']);
     }
 
+    // -------------------------------------------------------------------------
+    // modelPrices threading (billing fix — the config seam must REACH the wire)
+    // -------------------------------------------------------------------------
+
+    public function testCreateOpenAiThreadsModelPricesIntoTheProvider(): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'openai',
+            'apiKey' => 'test-key',
+            'model' => 'gpt-4o',
+            // USD per 1M, the documented config unit.
+            'modelPrices' => ['gpt-4o' => ['input' => 7.5, 'output' => 30]],
+        ]);
+
+        $this->assertInstanceOf(OpenAIProvider::class, $provider);
+        // The map is threaded to the provider, not swallowed by the factory:
+        // per-1M converts to per-1K at the lookup, overriding the stale row.
+        $this->assertSame(0.0075, $provider->costPer1kTokens('gpt-4o', 'input'));
+        $this->assertSame(0.03, $provider->costPer1kTokens('gpt-4o', 'output'));
+        // An unlisted model is priced by the built-in table, not zeroed.
+        $this->assertSame(0.00015, $provider->costPer1kTokens('gpt-4o-mini', 'input'));
+    }
+
+    public function testCreateOpenAiRefusesNonArrayModelPricesWithoutFatal(): void
+    {
+        // A hand-edited config can hold any JSON shape; the tolerant-read
+        // posture (same as every other readUserConfig consumer) costs the
+        // override, never the launch and never the built-in table.
+        $provider = $this->factory->create([
+            'type' => 'openai',
+            'apiKey' => 'test-key',
+            'model' => 'gpt-4o',
+            'modelPrices' => 'not-a-map',
+        ]);
+
+        $this->assertInstanceOf(OpenAIProvider::class, $provider);
+        $this->assertSame(0.0025, $provider->costPer1kTokens('gpt-4o', 'input'));
+        $this->assertNull($provider->costPer1kTokens('brand-new-model', 'input'));
+    }
+
     public function testCreateWithEmptyStringTypeThrowsInvalidArgumentException(): void
     {
         $this->expectException(\InvalidArgumentException::class);

@@ -616,7 +616,40 @@ final readonly class ProviderFactory
 
         $model = $config['model'] ?? 'gpt-4o';
 
-        return new OpenAIProvider($client, $model);
+        // Billing fix: operator-declared rates ride the provider all the way to
+        // `calculateCost()`. An explicit `modelPrices` inside THIS provider's
+        // file config wins (it is the narrower statement); otherwise the key is
+        // read off the merged user-tier settings, which is where the
+        // `LayeredSettings::LAYERED_KEYS` entry lives — and because
+        // `readUserConfig()` answers `mergedConfig(true)`, the project tier has
+        // already been stripped from `modelPrices` inside that merge (it is
+        // user-tier only), so this read cannot be poisoned by a checkout.
+        $prices = $config['modelPrices'] ?? self::userTierModelPrices();
+
+        return new OpenAIProvider($client, $model, is_array($prices) ? $prices : []);
+    }
+
+    /**
+     * The `modelPrices` map from {@see \SugarCraft\Crush\Cli\Bootstrap::readUserConfig()}
+     * — USD per 1M tokens per model. A malformed shape degrades to "no
+     * overrides" exactly like every other tolerant read of that funnel; an
+     * unparseable per-direction value is caught downstream by
+     * {@see OpenAIProvider::costPer1kTokens()}'s `is_numeric` gate, which
+     * fails LOUD through the unpriced-model signal rather than pricing at zero.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private static function userTierModelPrices(): array
+    {
+        try {
+            $prices = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig()['modelPrices'] ?? [];
+        } catch (\Throwable) {
+            // Same posture as EngineBackend::userConfig(): a settings read may
+            // never take the provider launch down with it.
+            return [];
+        }
+
+        return is_array($prices) ? $prices : [];
     }
 
     /**

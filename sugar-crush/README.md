@@ -173,10 +173,10 @@ cannot tell whether the sentence is about them.)
 > was wrong. `config.json` keeps working indefinitely, and there is nothing to
 > migrate *to*: `settings.json` is never written.
 
-Only these fourteen keys are layered — `provider`, `theme`, `titleModel`,
+Only these fifteen keys are layered — `provider`, `theme`, `titleModel`,
 `summaryModel`, `instructions`, `disabledSkills`, `disabledRules`,
 `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxOutputTokens`,
-`allowedTools`,
+`modelPrices`, `allowedTools`,
 `disabledTools`, `statusLine`, `layout`. The
 `trustedProject*` lists are read from `~/.sugar-crush/config.json` **alone**, so
 no lower layer can grant itself trust.
@@ -210,7 +210,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, seven keys are **never** taken from a project file:
+Even for a trusted project, eight keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path;
@@ -224,7 +224,11 @@ prompt prose the operator wrote, not a capability the harness enforces (see
 `RulesState`); `maxOutputTokens`, because it is the one layered key whose
 meaningful direction is UP — every raise sends bigger paid requests on the
 operator's credential, and a spend ceiling a checkout can lift is a bill a
-clone can run up; `layout`, because it records where the operator chose to put
+clone can run up; `modelPrices`, because it sets the rate every billed token
+converts at — the mirrored direction on the same money axis, where a
+project-supplied map could zero a rate and silently blind the spend cap and the
+`/budget` totals, the exact failure the unpriced-model notice exists to make
+loud; `layout`, because it records where the operator chose to put
 their own windows — frame geometry is a personal habit, not a property of the
 checked-out code, and a project that moves your panes behind your back is
 answering to the wrong owner; and `allowedTools`, for a reason worth spelling
@@ -1246,7 +1250,7 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**12,472 tests / 177,368 assertions, 0 failures, 1 skipped** — the whole of
+**12,482 tests / 177,368 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
 15m30s. Measured 2026-09-30. The pane-docking feature re-pinned the figure in stages,

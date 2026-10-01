@@ -159,11 +159,12 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `parallelToolCalls` | `EngineBackend::complete()` | yes |
 | `parallelToolDeadlineSeconds` | `EngineBackend::complete()` | yes |
 | `maxOutputTokens` | `EngineBackend::complete()` | **no** |
+| `modelPrices` | `ProviderFactory::createOpenAI()` → `userTierModelPrices()` | **no** |
 | `statusLine` | `Bootstrap::chat()` → `StatusLineCommand::fromSettings()` | **no** |
 | `layout` | `Bootstrap::app()` → `App::$dock` via `DockLayout::fromArray()` | **no** |
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these fourteen, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these fifteen, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. A key nothing reads is worse than
@@ -179,6 +180,17 @@ repository (the full argument lives on `LayeredSettings::LAYERED_KEYS`). When a
 reply actually hits whatever ceiling is in force, the provider's stop verdict
 now reaches the transcript as a system notice instead of a silently truncated
 turn.
+
+`modelPrices` is that argument mirrored on the price axis rather than the size
+axis. It declares rates — **USD per 1M tokens**, `{"<model>": {"input": 7.5,
+"output": 30}}` — for models the OpenAI-shaped provider has no built-in price
+for, overriding or extending its table. Unset is not zero either: a model with
+no rate anywhere bills $0.00 as a disclosed **lower bound** — the turn earns a
+system notice naming it, and `/budget` marks the session total as under-counted
+— rather than the fabricated cent-per-thousand the old fallback invented. It is
+user-tier only because a checked-out repository that could supply this map
+could zero a rate and blind the spend cap on the operator's credential, which
+is the same money decision `maxOutputTokens` refuses to delegate.
 
 Where a row names two methods, the first is the public entry point and the
 second is the method that does the read — cited because that is the one to
@@ -652,10 +664,10 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   all four `trustedProject*` grants.
 - [`MEMORY.md`](MEMORY.md) — the rest of the `~/.sugar-crush/` layout.
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
-  this stack. They do not cover it: only five of the fourteen layered keys have an
+  this stack. They do not cover it: only five of the fifteen layered keys have an
   env override (`provider`, `titleModel`, `summaryModel`, `parallelToolCalls`,
   `parallelToolDeadlineSeconds`). `theme`, `instructions`, `disabledSkills`,
   `disabledRules`, `allowedTools`, `disabledTools`, `maxOutputTokens`,
-  `statusLine` and `layout` have none.
+  `modelPrices`, `statusLine` and `layout` have none.
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.)
