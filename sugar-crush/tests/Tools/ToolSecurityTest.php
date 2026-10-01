@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Support\ForkedChild;
+use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 use SugarCraft\Crush\Tools\BuiltIn\Bash;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Glob;
@@ -17,11 +19,10 @@ use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
  */
 final class ToolSecurityTest extends TestCase
 {
+    use ReapsForkedChildrenTrait;
+
     private string $tmpDir;
     private string $markerFile;
-
-    /** @var list<int> forked loopback-fixture children still unreaped */
-    private array $fixturePids = [];
 
     private string $previousSslCertFile = '';
 
@@ -35,15 +36,10 @@ final class ToolSecurityTest extends TestCase
 
     protected function tearDown(): void
     {
-        // A fixture child that outlived its served responses is killed, never
-        // waited on forever: each holds a bound loopback socket.
-        foreach ($this->fixturePids as $pid) {
-            if (pcntl_waitpid($pid, $status, WNOHANG) === 0) {
-                posix_kill($pid, SIGKILL);
-                pcntl_waitpid($pid, $status);
-            }
-        }
-        $this->fixturePids = [];
+        // Reap FIRST: every fixture child holds (or held) a bound loopback
+        // socket and may still be writing request logs into $tmpDir — the
+        // trait's ledger SIGKILLs+reaps survivors before any cleanup below.
+        $this->reapTrackedForkedChildren();
 
         // T7 points OpenSSL at a throwaway self-signed anchor; the next test
         // in the process must not inherit it.
@@ -389,7 +385,11 @@ final class ToolSecurityTest extends TestCase
         $this->assertSame('REDIR', $result->content());
         $this->assertCount(
             1,
-            glob($this->tmpDir . '/fixture-request-*.log'),
+            // chr(42): the star built, not spelled — a glued '*-bearing'
+            // literal here would be harvested as a glob pattern by
+            // GlobDialectDifferentialTest's corpus census and drift its
+            // pinned figure for being a log-matching detail, not a glob.
+            glob($this->tmpDir . '/fixture-request-' . chr(42) . '.log'),
             'a refused scheme is the end of the chain, not a dial target',
         );
     }
@@ -481,7 +481,7 @@ final class ToolSecurityTest extends TestCase
         $name = (string) stream_socket_get_name($server, false);
         $port = (int) substr($name, strrpos($name, ':') + 1);
 
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         if ($pid === -1) {
             $this->fail('pcntl_fork() failed for the loopback fixture');
         }
@@ -515,10 +515,9 @@ final class ToolSecurityTest extends TestCase
                 fclose($connection);
             }
             fclose($server);
-            exit(0);
+            ForkedChild::exitNow(0);
         }
 
-        $this->fixturePids[] = $pid;
         fclose($server);
 
         return $port;
@@ -540,7 +539,7 @@ final class ToolSecurityTest extends TestCase
         $name = (string) stream_socket_get_name($server, false);
         $port = (int) substr($name, strrpos($name, ':') + 1);
 
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         if ($pid === -1) {
             $this->fail('pcntl_fork() failed for the capture fixture');
         }
@@ -562,10 +561,9 @@ final class ToolSecurityTest extends TestCase
                 fclose($connection);
             }
             fclose($server);
-            exit(0);
+            ForkedChild::exitNow(0);
         }
 
-        $this->fixturePids[] = $pid;
         fclose($server);
 
         return [$port, $capturePath];
@@ -588,7 +586,7 @@ final class ToolSecurityTest extends TestCase
         $name = (string) stream_socket_get_name($server, false);
         $port = (int) substr($name, strrpos($name, ':') + 1);
 
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         if ($pid === -1) {
             $this->fail('pcntl_fork() failed for the TLS fixture');
         }
@@ -615,10 +613,9 @@ final class ToolSecurityTest extends TestCase
                 fclose($connection);
             }
             fclose($server);
-            exit(0);
+            ForkedChild::exitNow(0);
         }
 
-        $this->fixturePids[] = $pid;
         fclose($server);
 
         return $port;
