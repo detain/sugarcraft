@@ -852,4 +852,63 @@ final class InspectorTest extends TestCase
         $this->assertStringContainsString('ESC', $desc);
         $this->assertStringContainsString('set window title', $desc);
     }
+
+    // --- Audit wave 1: C1 sweep + describeOsc unsanitized branches ---
+
+    public function testStandAloneC1InMatchedOscLabelIsTokenised(): void
+    {
+        // candy-ansi collects 8-bit bytes verbatim into OSC payloads; a captured
+        // 0x9B replayed raw inside the label would re-arm a CSI parser on any
+        // 8-bit-capable downstream terminal.
+        $desc = Inspector::describeOsc("0;a\x9b31m b");
+        $this->assertSame('set window title to "aCSI31m b"', $desc);
+        $this->assertStringNotContainsString("\x9b", $desc);
+    }
+
+    public function testUnknownOscCodeBranchSanitizesDelAndC1(): void
+    {
+        // Regex-matched `digit;…` with an unlisted code went through the
+        // sanitizer-free `default => "OSC $payload"`; DEL and C1 leaked raw.
+        $desc = Inspector::describeOsc("999;a\x7fb\x9dc");
+        $this->assertSame('OSC 999;aDELbOSCc', $desc);
+        $this->assertStringNotContainsString("\x7f", $desc);
+        $this->assertStringNotContainsString("\x9d", $desc);
+    }
+
+    public function testOscWithoutNumericPrefixSanitizesItsPayload(): void
+    {
+        // The regex-miss branch (`OSC abc…`) skipped the sanitizer entirely.
+        $desc = Inspector::describeOsc("abc\x7fd\x9be");
+        $this->assertSame('OSC abcDELdCSIe', $desc);
+    }
+
+    public function testSanitizerNeutralisesC1ThroughTheParserEndToEnd(): void
+    {
+        // Same guarantee through Inspector::parse: no label byte in the emitted
+        // report may sit in the raw C1 range, whatever the payload claimed.
+        $seg = Inspector::parse("\x1b]0;a\x9b31m b\x07")[0];
+        $desc = $seg->describe();
+        // describe() renders the raw replay (fidelity contract: bytes as sent)
+        // plus the human label; only the label is sanitised.
+        $this->assertStringContainsString('set window title to "aCSI31m b"', $desc);
+        $label = substr($desc, (int) strpos($desc, 'set window'));
+        $this->assertStringNotContainsString("\x9b", $label);
+        // The raw segment stays byte-faithful — sanitising labels never edits
+        // the replayed input bytes.
+        $this->assertSame("\x1b]0;a\x9b31m b\x07", $seg->raw());
+    }
+
+    public function testUtf8ContinuationBytesThatLookLikeC1SurviveInLabels(): void
+    {
+        // Polarity pin for the UTF-8-aware sweep: € = E2 82 AC and 一 = E4 B8 80
+        // carry continuation bytes inside 0x80-0x9F; tokenising them by byte
+        // would mangle every non-English window title.
+        $this->assertSame(
+            'set window title to "€一你好"',
+            Inspector::describeOsc("0;€一你好"),
+        );
+        // And a 0x9B that IS a valid rune body stays: `Û` is spelled C3 9B,
+        // the very byte the stand-alone pin above tokenises.
+        $this->assertSame('set window title to "aÛb"', Inspector::describeOsc("0;aÛb"));
+    }
 }

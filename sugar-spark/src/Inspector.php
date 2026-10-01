@@ -401,7 +401,7 @@ final class Inspector
                 '110'     => 'reset foreground colour',
                 '111'     => 'reset background colour',
                 '112'     => 'reset cursor colour',
-                default   => "OSC $payload",
+                default   => 'OSC ' . self::sanitizeLabelBytes($payload),
             };
         }
         if (in_array($payload, ['110', '111', '112'], true)) {
@@ -411,7 +411,9 @@ final class Inspector
                 '112' => 'reset cursor colour',
             };
         }
-        return "OSC $payload";
+        // Regex-miss payload (no `digit;` prefix) is as attacker-controlled as
+        // the matched branches — sanitize before it reaches the report label.
+        return 'OSC ' . self::sanitizeLabelBytes($payload);
     }
 
     /** Decode DCS payloads — XTVERSION reply, DECRQSS, DECRPSS, sixel. */
@@ -561,17 +563,29 @@ final class Inspector
     }
 
     /**
-     * Replace C0 control bytes in a label interpolation with visible tokens.
+     * Replace C0, DEL and C1 control bytes in a label interpolation with visible tokens.
      *
      * Prevents an embedded ESC in a captured OSC/APC/DCS payload from re-arming
-     * a sequence when the report is rendered to a live terminal.
+     * a sequence when the report is rendered to a live terminal. The C1 range
+     * (0x80–0x9F) carries the 8-bit spellings of the very controls a report is
+     * about — CSI (0x9B), OSC (0x9D), ST (0x9C) — and candy-ansi collects them
+     * verbatim into string payloads, so a captured 0x9B replayed raw inside a
+     * label would re-arm a CSI parser on any 8-bit-capable downstream terminal.
+     *
+     * The C1 sweep is UTF-8 aware: the leading alternation consumes every
+     * well-formed rune (ASCII printable plus 2–4 byte sequences) and refuses it
+     * with `(*SKIP)(*FAIL)`, so continuation bytes that merely *look* like C1
+     * (`€` = `E2 82 AC`, `一` = `E4 B8 80`) survive intact inside a title and
+     * only a stand-alone 0x80–0x9F byte — which no valid rune can begin with —
+     * is tokenised. Without this, neutralising injection would mangle every
+     * non-English OSC window title, trading a security fix for a fidelity bug.
      *
      * @param string $s Raw payload string interpolated into a human-readable label.
      */
     private static function sanitizeLabelBytes(string $s): string
     {
         return preg_replace_callback(
-            '/[\x00-\x1F\x7F]/',
+            '/(?:[\x20-\x7E]|[\xC2-\xDF][\x80-\xBF]|[\xE0-\xEF][\x80-\xBF]{2}|[\xF0-\xF4][\x80-\xBF]{3})(*SKIP)(*FAIL)|[\x00-\x1F\x7F-\x9F]/',
             static fn(array $m): string => match ($m[0][0]) {
                 "\x1b" => 'ESC',
                 "\x00" => 'NUL', "\x01" => 'SOH', "\x02" => 'STX', "\x03" => 'ETX',
@@ -582,6 +596,10 @@ final class Inspector
                 "\x14" => 'DC4', "\x15" => 'NAK', "\x16" => 'SYN', "\x17" => 'ETB',
                 "\x18" => 'CAN', "\x19" => 'EM',  "\x1a" => 'SUB', "\x1c" => 'FS',
                 "\x1d" => 'GS',  "\x1e" => 'RS',  "\x1f" => 'US',  "\x7f" => 'DEL',
+                "\x84" => 'IND', "\x85" => 'NEL', "\x88" => 'HTS', "\x8d" => 'RI',
+                "\x8e" => 'SS2', "\x8f" => 'SS3', "\x90" => 'DCS', "\x98" => 'SOS',
+                "\x9b" => 'CSI', "\x9c" => 'ST',  "\x9d" => 'OSC', "\x9e" => 'PM',
+                "\x9f" => 'APC',
                 default => sprintf('\\x%02X', ord($m[0])),
             },
             $s,

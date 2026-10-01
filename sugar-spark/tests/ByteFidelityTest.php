@@ -816,6 +816,41 @@ final class ByteFidelityTest extends TestCase
         }
     }
 
+    public function testMidStreamInvalidUtf8BytesAreDroppedExactlyAsTheParserDropsThem(): void
+    {
+        // Deviation #10: item 8's end-of-stream truncation has a mid-stream twin —
+        // candy-ansi's UTF-8 window rejects a stray lead (0xF5–0xFF and friends), a
+        // lead interrupted by a non-continuation byte, and a lone continuation byte,
+        // dropping the offending byte(s) with no callback, so no segment can exist
+        // for them. The interrupting/surrounding bytes survive normally. Surfacing
+        // these needs a new candy-ansi callback (deferred); pinned meanwhile.
+        $cases = [
+            "a\xffb" => ['ab'],          // stray lead 0xFF dies, text merges
+            "a\xf5b" => ['ab'],          // 0xF5: first invalid lead
+            "a\xb0b" => ['ab'],          // lone continuation byte, no lead
+            "a\xc3(b" => ['a(b'],        // lead interrupted; `(` re-prints
+            "a\xc3\xffb" => ['ab'],      // lead dies, then 0xFF dies too
+            "a\xe2\xe2Ab" => ['aAb'],    // second lead abandons the first rune
+            "\x1b[31m\xffm" => ["\x1b[31m", 'm'], // sequences unaffected around it
+        ];
+
+        foreach ($cases as $input => $expected) {
+            $this->assertSame(
+                $expected,
+                array_map(static fn($segment): string => $segment->raw(), Inspector::parse($input)),
+                bin2hex($input),
+            );
+        }
+
+        // Polarity: the C1 controls candy-ansi EXECUTES are not lost — they
+        // arrive as their own sequence segments, which is why the deviation is
+        // confined to what the UTF-8 window rejects.
+        $this->assertSame(
+            ['a', "\x85", 'b'],
+            array_map(static fn($segment): string => $segment->raw(), Inspector::parse("a\x85b")),
+        );
+    }
+
     public function testIgnoredControlBytesAndParserCapsArriveAsTheParserRewroteThem(): void
     {
         // Three more ways the re-emitted bytes can differ from the input, all of

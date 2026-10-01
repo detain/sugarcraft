@@ -24,9 +24,11 @@ use SugarCraft\Ansi\Parser\State;
  * pins one by one: the BEL/ST spelling, the lossy DCS prelude rebuild,
  * candy-ansi's parameter-count, parameter-value and string-size caps, the C0
  * bytes it ignores inside an OSC payload, the sequence it cancels on an illegal
- * parameter byte or on CAN/SUB (so nothing of it reaches this handler), and a
+ * parameter byte or on CAN/SUB (so nothing of it reaches this handler), a
  * truncated UTF-8 rune at end of stream, which is not an escape-sequence state
- * for `Parser::flush()` to report.
+ * for `Parser::flush()` to report, and an invalid UTF-8 byte mid-stream, which
+ * the parser's UTF-8 window rejects without ever calling back into a handler
+ * (surfacing it needs a candy-ansi callback — deferred, README deviation 10).
  *
  * Mirrors charmbracelet/x/ansi Handler — accumulates segments rather than
  * rendering to a terminal.

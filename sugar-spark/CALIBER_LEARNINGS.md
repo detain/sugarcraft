@@ -17,7 +17,8 @@ the parameters — that is the deferred fidelity item, and it is why the new tes
 uses prelude inputs without an intermediate byte.) Six more deviations live in
 the shared parser rather than in this handler — the rewriting itself is
 byte-identical to `master`, each case is pinned by name in `ByteFidelityTest`, and
-`README.md` lists all eight with their tests. `Parser::MAX_PARAMS` is 32 (past it the separator is
+`README.md` lists every deviation with its tests (de-numeralised so the list can
+grow without this sentence drifting). `Parser::MAX_PARAMS` is 32 (past it the separator is
 dropped and digits keep accumulating, so `…;32;33m` reports `3233` one byte
 shorter); `MAX_PARAM_VALUE` is 65535, so `ESC[99999m` arrives as `ESC[65535m`;
 `MAX_STRING_BUFFER` is 64 KiB and `put()` refuses the rest, so an oversized OSC is

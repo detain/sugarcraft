@@ -89,7 +89,7 @@ inside the sequence it closed; an abandoned `ESC O` leaves the text behind it
 alone; and a sequence the stream cut short still arrives, as a `truncated …`
 segment carrying its raw bytes.
 
-Nine deviations from exact byte equality are known, and each is pinned by a
+Ten deviations from exact byte equality are known, and each is pinned by a
 named test rather than hidden — anything *else* that loses a byte is a bug:
 
 1. An OSC is re-emitted with a BEL terminator (`ESC ] … BEL`) even when the input
@@ -133,9 +133,21 @@ named test rather than hidden — anything *else* that loses a byte is a bug:
    verbatim, keeping the raw C1 introducer.
    (`testEightBitCsiIntroducerIsReplayedInSevenBitForm`,
    `testEightBitSosAndPmCarryTheirPayloadThroughTheSevenBitReplay`)
+10. An **invalid UTF-8 byte mid-stream** is dropped along with its position:
+    a stray lead (`a\xffb` → text `ab`), a lead interrupted by a non-continuation
+    byte (the rune dies, the interrupting byte survives: `a\xc3(b` → `a(b`), and a
+    second lead arriving before the first rune completes (`a\xe2\xe2Ab` → `aAb`)
+    all vanish with no segment. The C1 controls candy-ansi executes (`0x80`–`0x8F`,
+    `0x99`, `0x9A`) do survive, as `C1 …` sequence segments — the loss is confined
+    to bytes the UTF-8 window rejects. Item 8 is only its end-of-stream shadow;
+    surfacing these as reported elements needs a candy-ansi callback (the parser's
+    `replaceMalformed` flag is not enough — it never re-checks a ground-state byte
+    it ignores, and a synthesised U+FFFD would be indistinguishable from a
+    legitimately sent one).
+    (`testMidStreamInvalidUtf8BytesAreDroppedExactlyAsTheParserDropsThem`)
 
-The first two are this inspector's own re-emission choices. Items 3–8 are
-candy-ansi rewriting the bytes before this lib ever sees a dispatch — recorded in
+The first two are this inspector's own re-emission choices. Items 3–8 and 10 are
+candy-ansi rewriting or dropping the bytes before this lib ever sees a dispatch — recorded in
 `CALIBER_LEARNINGS.md`, and each transformation is byte-identical to the behaviour
 before this contract was written, so they are fidelity items for candy-ansi, not
 for this inspector. Item 9 is the same fold in the other direction: candy-ansi
