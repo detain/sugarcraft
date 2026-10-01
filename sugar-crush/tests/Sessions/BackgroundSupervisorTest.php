@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Sessions;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Sessions\BackgroundSession;
+use SugarCraft\Crush\Sessions\BackgroundSessionRunner;
 use SugarCraft\Crush\Sessions\BackgroundSessionStatus;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\Sessions\SessionNotificationInterface;
@@ -140,19 +141,35 @@ final class BackgroundSupervisorTest extends TestCase
     // Daemon spawn plumbing (crush_feat.md section 5 E3)
     // =========================================================================
 
-    public function testParseHandshakePidExtractsTheDaemonPid(): void
+    public function testParseHandshakeExtractsTheAuthenticatedCredentialTriple(): void
     {
-        $this->assertSame(4321, BackgroundSupervisor::parseHandshakePid("HELLO:sess_x:4321\n"));
+        $token = bin2hex(random_bytes(16));
+        $this->assertSame(
+            ['sessionId' => 'sess_x', 'pid' => 4321, 'token' => $token],
+            BackgroundSupervisor::parseHandshake("HELLO:sess_x:4321:{$token}\n"),
+        );
     }
 
-    public function testParseHandshakePidRejectsAnythingElse(): void
+    public function testParseHandshakeRefusesTheLegacyUnauthenticatedForm(): void
+    {
+        // Audit M5: the pre-fix handshake was HELLO:<sessionId>:<pid> — first
+        // connection trusted. It must parse to NULL (a refusal), never to a
+        // lesser trust: an unauthenticated pid off the wire is exactly the
+        // spoof the token field exists to defeat.
+        $this->assertNull(BackgroundSupervisor::parseHandshake("HELLO:sess_x:4321\n"));
+    }
+
+    public function testParseHandshakeRejectsMalformedCredentials(): void
     {
         // The pre-W3 daemon handshake was the bare session id — it carries no
         // pid, so it must fall back rather than be misread as one.
-        $this->assertNull(BackgroundSupervisor::parseHandshakePid("sess_x\n"));
-        $this->assertNull(BackgroundSupervisor::parseHandshakePid('HELLO:sess_x:not-a-pid'));
-        $this->assertNull(BackgroundSupervisor::parseHandshakePid('HELLO:sess_x:0'));
-        $this->assertNull(BackgroundSupervisor::parseHandshakePid(''));
+        $this->assertNull(BackgroundSupervisor::parseHandshake("sess_x\n"));
+        $this->assertNull(BackgroundSupervisor::parseHandshake('HELLO:sess_x:not-a-pid:abcd'));
+        $this->assertNull(BackgroundSupervisor::parseHandshake('HELLO:sess_x:0:abcd'));
+        $this->assertNull(BackgroundSupervisor::parseHandshake('HELLO:sess_x:4321:'));
+        $this->assertNull(BackgroundSupervisor::parseHandshake('HELLO:sess_x:4321:zzzz'));
+        $this->assertNull(BackgroundSupervisor::parseHandshake('HELLO:sess_x:4321:abcd:extra'));
+        $this->assertNull(BackgroundSupervisor::parseHandshake(''));
     }
 
     public function testAutoloadPathResolvesToARealComposerAutoloader(): void
@@ -167,6 +184,7 @@ final class BackgroundSupervisorTest extends TestCase
         $code = (new BackgroundSupervisor())->buildSessionDaemonCode(
             socketPath: '/tmp/s.sock',
             bufferPath: '/tmp/s.buffer',
+            tokenPath: '/tmp/s.token',
             sessionId: 'sess_x',
             task: 'summarize the audit',
             workingDirectory: '/tmp',
@@ -181,6 +199,16 @@ final class BackgroundSupervisorTest extends TestCase
         $this->assertStringContainsString('summarize the audit', $code);
         $this->assertStringContainsString('require $autoload;', $code);
         $this->assertStringContainsString('pcntl_fork', $code);
+
+        // Audit M5: the config carries the token PATH (world-readable argv must
+        // never hold the secret bytes), and the daemon umask is owner-only —
+        // the pre-fix `umask(0)` made every file the daemon touched public.
+        $this->assertStringContainsString('tokenPath', $code);
+        // The config rides json_encode, which escapes slashes — pin the
+        // unescaped leaf of the path, not the full string.
+        $this->assertStringContainsString('s.token', $code);
+        $this->assertStringContainsString('umask(0o077)', $code);
+        $this->assertStringNotContainsString('umask(0);', $code);
     }
 
     public function testTickTreatsAnAdvancingSessionBufferAsAHeartbeat(): void
@@ -381,6 +409,233 @@ final class BackgroundSupervisorTest extends TestCase
         $this->assertSame(BackgroundSessionStatus::Stalled, $supervisor->getSession('s1')->status);
     }
 
+    // =========================================================================
+    // Audit M5 — IPC trust pins (spawn-side)
+    // =========================================================================
+
+    public function testSpawnedSessionIpcFilesAreOwnerPrivate(): void
+    {
+        foreach (['proc_open', 'pcntl_fork', 'posix_setsid', 'stream_socket_server', 'posix_getuid'] as $fn) {
+            if (!function_exists($fn)) {
+                $this->markTestSkipped("{$fn}() unavailable");
+            }
+        }
+
+        $previousCmd = getenv('SUGARCRUSH_BACKEND_CMD');
+        $previousProvider = getenv('SUGARCRUSH_PROVIDER');
+        putenv('SUGARCRUSH_PROVIDER=');
+        putenv('SUGARCRUSH_BACKEND_CMD=cat >/dev/null; printf PRIVDONE7');
+
+        $supervisor = new BackgroundSupervisor();
+        $ipc = null;
+
+        try {
+            $session = $supervisor->spawnSession(
+                name: 'perms probe',
+                agent: $this->makeAgent(),
+                task: 'probe the permissions',
+                workingDirectory: sys_get_temp_dir(),
+                timeoutSeconds: 30,
+            );
+            $ipc = (new \ReflectionProperty(BackgroundSupervisor::class, 'sessionIpc'))
+                ->getValue($supervisor)[$session->id];
+
+            // The pre-M5 shape was a world-visible socket + buffer sitting
+            // loose in /tmp. Everything must now live inside one 0700 directory
+            // and every file inside it must be 0600.
+            $dir = dirname($ipc['socketPath']);
+            $dirStat = stat($dir);
+            $this->assertIsArray($dirStat);
+            $this->assertSame(0o0700, $dirStat['mode'] & 0o777, 'IPC dir must be owner-only');
+            $this->assertSame(posix_getuid(), $dirStat['uid']);
+
+            foreach ([$ipc['tokenPath'], $ipc['bufferPath'], $ipc['bufferPath'] . '.log'] as $privateFile) {
+                $fileStat = stat($privateFile);
+                $this->assertIsArray($fileStat, "{$privateFile} missing");
+                $this->assertSame(0o0600, $fileStat['mode'] & 0o777, "{$privateFile} must be owner-only");
+            }
+
+            $token = trim((string) file_get_contents($ipc['tokenPath']));
+            $this->assertSame(32, strlen($token), 'token is bin2hex(random_bytes(16))');
+            $this->assertTrue(ctype_xdigit($token));
+
+            // Let the daemon finish so its own files settle before cleanup.
+            $deadline = microtime(true) + 20.0;
+            while (microtime(true) < $deadline && posix_kill($ipc['pid'], 0)) {
+                usleep(100_000);
+            }
+        } finally {
+            putenv($previousCmd === false ? 'SUGARCRUSH_BACKEND_CMD' : 'SUGARCRUSH_BACKEND_CMD=' . $previousCmd);
+            putenv($previousProvider === false ? 'SUGARCRUSH_PROVIDER' : 'SUGARCRUSH_PROVIDER=' . $previousProvider);
+            if ($ipc !== null) {
+                @unlink($ipc['socketPath']);
+                @unlink($ipc['bufferPath']);
+                @unlink($ipc['bufferPath'] . '.log');
+                @unlink($ipc['tokenPath']);
+                @rmdir(dirname($ipc['socketPath']));
+            }
+        }
+    }
+
+    public function testStrangerCannotStopALiveSessionButTheTokenHolderCan(): void
+    {
+        foreach (['proc_open', 'pcntl_fork', 'posix_setsid', 'stream_socket_server'] as $fn) {
+            if (!function_exists($fn)) {
+                $this->markTestSkipped("{$fn}() unavailable");
+            }
+        }
+
+        $previousCmd = getenv('SUGARCRUSH_BACKEND_CMD');
+        $previousProvider = getenv('SUGARCRUSH_PROVIDER');
+        // The worker sleeps, so the daemon stays alive and is serving clients
+        // on its re-bound socket while this test attacks it.
+        putenv('SUGARCRUSH_PROVIDER=');
+        putenv('SUGARCRUSH_BACKEND_CMD=sleep 8; printf LATE99');
+
+        $supervisor = new BackgroundSupervisor();
+        $ipc = null;
+
+        try {
+            $session = $supervisor->spawnSession(
+                name: 'stop probe',
+                agent: $this->makeAgent(),
+                task: 'hold while the socket is probed',
+                workingDirectory: sys_get_temp_dir(),
+                timeoutSeconds: 30,
+            );
+            $ipc = (new \ReflectionProperty(BackgroundSupervisor::class, 'sessionIpc'))
+                ->getValue($supervisor)[$session->id];
+
+            // The supervisor closes its server after the handshake; the daemon
+            // unlinks and re-binds the same path. Retry until it answers.
+            $deadline = microtime(true) + 15.0;
+            $daemon = @stream_socket_client('unix://' . $ipc['socketPath'], $errno, $errstr, 1.0);
+            while ($daemon === false && microtime(true) < $deadline) {
+                usleep(100_000);
+                $daemon = @stream_socket_client('unix://' . $ipc['socketPath'], $errno, $errstr, 1.0);
+            }
+            $this->assertNotFalse($daemon, 'daemon never re-bound its socket');
+
+            // (a) A cold STOP — the pre-M5 wire in full — must be refused in
+            // silence: no reply, the daemon stays alive, and the buffer keeps
+            // the forensic record.
+            stream_set_timeout($daemon, 2);
+            fwrite($daemon, "STOP\n");
+            $reply = (string) fread($daemon, 4096);
+            fclose($daemon);
+            $this->assertStringNotContainsString('OK:stopping', $reply);
+
+            $this->assertTrue(posix_kill($ipc['pid'], 0), 'refusal must not disturb the daemon');
+
+            $buffer = (string) @file_get_contents($ipc['bufferPath']);
+            $authDeadline = microtime(true) + 5.0;
+            while (!str_contains($buffer, '[session:auth:refused]') && microtime(true) < $authDeadline) {
+                usleep(100_000);
+                $buffer = (string) @file_get_contents($ipc['bufferPath']);
+            }
+            $this->assertStringContainsString('[session:auth:refused]', $buffer);
+
+            // (b) The same STOP behind the token the spawn minted is honoured.
+            $token = trim((string) file_get_contents($ipc['tokenPath']));
+            $daemon = stream_socket_client('unix://' . $ipc['socketPath'], $errno, $errstr, 2.0);
+            $this->assertNotFalse($daemon, 'daemon socket vanished between probes');
+            stream_set_timeout($daemon, 2);
+            fwrite($daemon, BackgroundSessionRunner::AUTH_PREFIX . $token . "\nSTOP\n");
+            $reply = (string) fread($daemon, 4096);
+            fclose($daemon);
+            $this->assertStringContainsString('OK:stopping', $reply);
+
+            // And the stop actually lands: the worker is escalated and the
+            // daemon logs the settled stop.
+            $stopDeadline = microtime(true) + 15.0;
+            while (!str_contains($buffer, '[session:task:stopped]') && microtime(true) < $stopDeadline) {
+                usleep(100_000);
+                $buffer = (string) @file_get_contents($ipc['bufferPath']);
+            }
+            $this->assertStringContainsString('[session:task:stopped]', $buffer);
+        } finally {
+            putenv($previousCmd === false ? 'SUGARCRUSH_BACKEND_CMD' : 'SUGARCRUSH_BACKEND_CMD=' . $previousCmd);
+            putenv($previousProvider === false ? 'SUGARCRUSH_PROVIDER' : 'SUGARCRUSH_PROVIDER=' . $previousProvider);
+            if ($ipc !== null) {
+                @posix_kill($ipc['pid'], 15);
+                @unlink($ipc['socketPath']);
+                @unlink($ipc['bufferPath']);
+                @unlink($ipc['bufferPath'] . '.log');
+                @unlink($ipc['tokenPath']);
+                @rmdir(dirname($ipc['socketPath']));
+            }
+        }
+    }
+
+    public function testRecycledPidWithWrongStartTimeIsNotKeptAlive(): void
+    {
+        if (!function_exists('posix_kill')) {
+            $this->markTestSkipped('posix_kill() unavailable');
+        }
+        $realStart = BackgroundSupervisor::procStartTime(getmypid());
+        if ($realStart === null) {
+            $this->markTestSkipped('/proc start-time fingerprint unavailable');
+        }
+
+        $supervisor = new BackgroundSupervisor();
+        $session = $this->makeSession('s1', BackgroundSessionStatus::Running);
+        $this->ageHeartbeat($session, 20);
+        $supervisor->addSession($session);
+
+        $bufferPath = tempnam(sys_get_temp_dir(), 'crush_bg_ident_');
+        file_put_contents(
+            $bufferPath,
+            "[session:task:start]\nthe background answer\n[session:task:completed]\n[session:daemon:exit]\n"
+        );
+
+        try {
+            // A LIVE pid (this test process) presented with someone else's
+            // start time is the pid-reuse spoof: the number is running, but it
+            // is not the session's daemon, so the session must settle from the
+            // buffer rather than be kept Running on a stranger's liveness.
+            $this->setIpc($supervisor, 's1', $bufferPath, getmypid(), $realStart + 1_000_000);
+            $supervisor->tick();
+            $this->assertSame(
+                BackgroundSessionStatus::Completed,
+                $supervisor->getSession('s1')->status,
+                'a recycled pid must read as DEAD',
+            );
+        } finally {
+            @unlink($bufferPath);
+        }
+    }
+
+    public function testMatchingIdentityKeepsTheSessionAlive(): void
+    {
+        if (!function_exists('posix_kill')) {
+            $this->markTestSkipped('posix_kill() unavailable');
+        }
+        $realStart = BackgroundSupervisor::procStartTime(getmypid());
+        if ($realStart === null) {
+            $this->markTestSkipped('/proc start-time fingerprint unavailable');
+        }
+
+        $supervisor = new BackgroundSupervisor();
+        $session = $this->makeSession('s1', BackgroundSessionStatus::Running);
+        $this->ageHeartbeat($session, 20);
+        $supervisor->addSession($session);
+
+        $bufferPath = tempnam(sys_get_temp_dir(), 'crush_bg_ident_');
+        file_put_contents($bufferPath, "[session:heartbeat] pid=1\n");
+        $this->setIpc($supervisor, 's1', $bufferPath, getmypid(), $realStart);
+
+        try {
+            // Same fixture shape as the keep-alive refusal above, correct
+            // identity this time: one tick absorbs the mtime as a heartbeat and
+            // the session stays Running — the guard discriminates, it does not
+            // simply kill every setIpc-installed session.
+            $supervisor->tick();
+            $this->assertSame(BackgroundSessionStatus::Running, $supervisor->getSession('s1')->status);
+        } finally {
+            @unlink($bufferPath);
+        }
+    }
+
     private function ageHeartbeat(BackgroundSession $session, int $seconds): void
     {
         $prop = new \ReflectionProperty(BackgroundSession::class, 'lastHeartbeat');
@@ -392,7 +647,7 @@ final class BackgroundSupervisorTest extends TestCase
      * process so the session reads as a LIVE daemon — a dead pid is the
      * supervisor's completion signal and would settle the session instead.
      */
-    private function setIpc(BackgroundSupervisor $supervisor, string $id, string $bufferPath, ?int $pid = null): void
+    private function setIpc(BackgroundSupervisor $supervisor, string $id, string $bufferPath, ?int $pid = null, ?int $startTime = null): void
     {
         $prop = new \ReflectionProperty(BackgroundSupervisor::class, 'sessionIpc');
         $ipc = $prop->getValue($supervisor);
@@ -400,6 +655,7 @@ final class BackgroundSupervisorTest extends TestCase
             'socketPath' => $bufferPath . '.sock',
             'bufferPath' => $bufferPath,
             'pid' => $pid ?? getmypid(),
+            'startTime' => $startTime,
         ];
         $prop->setValue($supervisor, $ipc);
     }

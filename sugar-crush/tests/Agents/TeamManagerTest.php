@@ -574,19 +574,83 @@ final class TeamManagerTest extends TestCase
             leadAgentId: 'lead-1',
         );
 
-        // Make the registry file read-only so subsequent saves fail
+        // Audit M2 changed what "save fails" looks like: the writer now
+        // publishes by rename, and rename(2) onto a READ-ONLY TARGET FILE
+        // still succeeds (only the directory's write bit matters) — so the
+        // pre-M2 `chmod($registryFile, 0444)` fixture would no longer prove
+        // anything. Blocking the PUBLISH itself is the honest shape: an
+        // occupied path where the file must land makes the rename fail.
         $registryFile = $this->tempDir . '/teams/registry.json';
-        chmod($registryFile, 0444);
+        unlink($registryFile);
+        mkdir($registryFile);
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Failed to write registry');
 
-        // This should fail because the registry file is read-only
+        // The second createTeam reaches saveRegistry and cannot publish.
         $tm->createTeam(
             teamId: 'write-test-2',
             name: 'Write Test 2',
             leadAgentId: 'lead-1',
         );
+    }
+
+    public function testCorruptRegistryIsQuarantinedNotOverwritten(): void
+    {
+        // Audit M2: a decode failure still resets — the manager cannot trust
+        // bytes it cannot read — but the old code left the corpse underfoot
+        // for the next saveRegistry to silently overwrite, making the loss
+        // unrecoverable. The bytes must now survive at registry.json.corrupt-*.
+        $this->tempDir = $this->createTempDir();
+        $teamsDir = $this->tempDir . '/teams';
+        mkdir($teamsDir, 0700, true);
+        file_put_contents($teamsDir . '/registry.json', '{"teams": TRUNCATED');
+
+        $tm = new TeamManager($teamsDir);
+        $tm->createTeam(
+            teamId: 'after-corrupt',
+            name: 'Fresh',
+            leadAgentId: 'lead-1',
+        );
+
+        // scandir+filter, not glob(): a wildcard literal here would join the
+        // GlobDialectDifferentialTest corpus and drift the pinned PathGlob
+        // docblock figure.
+        $quarantined = array_values(array_map(
+            static fn(string $entry): string => $teamsDir . '/' . $entry,
+            array_filter(
+                scandir($teamsDir) ?: [],
+                static fn(string $entry): bool => str_starts_with($entry, 'registry.json.corrupt-'),
+            ),
+        ));
+        $this->assertCount(1, $quarantined, 'the undecodable file must be moved aside, not deleted');
+        $this->assertStringContainsString('TRUNCATED', (string) file_get_contents($quarantined[0]));
+        $this->assertFileExists($teamsDir . '/registry.json', 'the new save must land on the freed path');
+    }
+
+    public function testRegistryIsWrittenOwnerOnlyAndAtomically(): void
+    {
+        // Audit M2's perm half (pre-fix: direct write, default-umask 0644) and
+        // the adoption of candy-core AtomicJsonFile (Session.php precedent).
+        $this->tempDir = $this->createTempDir();
+        $tm = new TeamManager($this->tempDir . '/teams');
+        $tm->createTeam(
+            teamId: 'perm-probe',
+            name: 'Perm Probe',
+            leadAgentId: 'lead-1',
+        );
+
+        $registry = $this->tempDir . '/teams/registry.json';
+        clearstatcache();
+        $this->assertSame(0o600, fileperms($registry) & 0o777);
+        $this->assertSame([], array_values(array_filter(
+            scandir(dirname($registry)) ?: [],
+            static fn(string $entry): bool => str_contains($entry, '.tmp.'),
+        )), 'no orphan temp after publish');
+
+        // Round-trip through a fresh manager: atomic write must be loadable JSON.
+        $reloaded = new TeamManager($this->tempDir . '/teams');
+        $this->assertNotNull($reloaded->getTeam('perm-probe'));
     }
 
     // -------------------------------------------------------------------------

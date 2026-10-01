@@ -46,11 +46,49 @@ use SugarCraft\Crush\Support\ProcessReaper;
  * such write atomic, so a heartbeat record can never land inside a line of
  * model output. Lines prefixed `[session:` are internal and are skipped by
  * {@see BackgroundSupervisor::reconnect()}; everything else is the answer.
+ *
+ * ## Command trust model (audit M5)
+ *
+ * Once the daemon re-binds the socket path it is a SERVER on a filesystem
+ * name any local user could previously reach, and its `STOP` command kills
+ * the session — before this fix, any same-host process that connected first
+ * could stop sessions it never owned. Defence in depth, matching
+ * {@see BackgroundSupervisor}'s handshake side:
+ *
+ * - The daemon (and everything it creates, including the re-bound socket)
+ *   runs under `umask(0o077)` set in the spawn bootstrap, so the socket node
+ *   itself is owner-only connectable.
+ * - Every accepted connection must open with `AUTH <token>` where `<token>`
+ *   equals the CURRENT contents of the per-spawn 0600 token file
+ *   ({@see self::$tokenPath}), compared with `hash_equals`. It is re-read per
+ *   connection so the file, not a cached copy, is the single source of truth.
+ * - Missing or empty token file at connect time is a REFUSAL, not a
+ *   fall-back to trusting the peer — a deleted/garbled secret narrows
+ *   availability, never widens it.
+ *
+ * The legitimate supervisor already knows the token: it minted the file and
+ * hands the daemon only its PATH, so possession of the 0600 file (uid-owned,
+ * 0700 directory) is the capability. `STOP` is only reachable post-AUTH, and
+ * the pid it acts on is the daemon's own fork-local worker — never a
+ * peer-supplied number.
  */
 final class BackgroundSessionRunner
 {
-    /** Handshake prefix the supervisor parses the daemon PID out of. */
+    /** Handshake prefix the supervisor authenticates on spawn (audit M5). */
     public const HANDSHAKE_PREFIX = 'HELLO:';
+
+    /**
+     * Command-line auth prefix (audit M5).
+     *
+     * Sent by {@see BackgroundSupervisor::reconnect()} and required by
+     * {@see self::serveClient()} as the FIRST line of every accepted
+     * connection on the daemon-rebound socket: `AUTH <token>` where `<token>`
+     * is the current contents of the per-spawn 0600 token file. The trailing
+     * space is part of the wire constant — both sides reference THIS instead
+     * of spelling `'AUTH '` separately, so a respelling can never desync the
+     * greeter from the gate.
+     */
+    public const AUTH_PREFIX = 'AUTH ';
 
     /**
      * Record prefix for a tool call this session was not allowed to make
@@ -118,6 +156,19 @@ final class BackgroundSessionRunner
     /** How long signal 9 gets before the daemon exits without having reaped. */
     private const KILL_GRACE_SECONDS = 2.0;
 
+    /**
+     * How long the initial connect to the supervisor's spawn listener may be
+     * retried before the daemon gives up (audit M5 follow-up).
+     *
+     * The supervisor binds that socket just AFTER `proc_open()`, so a daemon
+     * that starts fast can legitimately find no path yet — MEASURED, the
+     * launcher reached the connect before the bind under load. The window must
+     * stay inside {@see BackgroundSupervisor::SPAWN_AUTH_TIMEOUT_SECS} so the
+     * supervisor's own auth budget, not this one, decides when a spawn is
+     * declared stillborn.
+     */
+    public const CONNECT_WAIT_SECONDS = 3.0;
+
 
     public function __construct(
         public readonly string $sessionId,
@@ -128,6 +179,7 @@ final class BackgroundSessionRunner
         public readonly string $provider = '',
         public readonly string $model = '',
         public readonly int $timeoutSeconds = 3600,
+        public readonly string $tokenPath = '',
     ) {}
 
     /**
@@ -146,6 +198,7 @@ final class BackgroundSessionRunner
             provider: (string) ($config['provider'] ?? ''),
             model: (string) ($config['model'] ?? ''),
             timeoutSeconds: (int) ($config['timeoutSeconds'] ?? 3600),
+            tokenPath: (string) ($config['tokenPath'] ?? ''),
         );
     }
 
@@ -173,15 +226,38 @@ final class BackgroundSessionRunner
      */
     public function run(?Backend $backend = null): int
     {
-        $supervisor = @\stream_socket_client('unix://' . $this->socketPath, $errno, $errstr, 2);
-        if ($supervisor === false) {
-            $this->log('[session:connect:error] ' . $this->oneLine((string) $errstr));
+        // Bounded retry against the post-fork bind (see CONNECT_WAIT_SECONDS);
+        // a supervisor that never binds costs the daemon its deadline and then
+        // the same honest [session:connect:error] record as before.
+        $deadline = \microtime(true) + self::CONNECT_WAIT_SECONDS;
+        $supervisor = false;
+        while (true) {
+            $supervisor = @\stream_socket_client('unix://' . $this->socketPath, $errno, $errstr, 2);
+            if ($supervisor !== false) {
+                break;
+            }
+            if (\microtime(true) >= $deadline) {
+                $this->log('[session:connect:error] ' . $this->oneLine((string) $errstr));
 
-            return 1;
+                return 1;
+            }
+            \usleep(50_000);
         }
 
         \stream_set_timeout($supervisor, 1);
-        \fwrite($supervisor, self::HANDSHAKE_PREFIX . $this->sessionId . ':' . \getmypid() . "\n");
+        // Audit M5: the handshake carries the per-spawn secret as a fourth
+        // field. The token bytes live only in the 0600 file the supervisor
+        // minted — never in argv, which every local user can read through
+        // /proc for the daemon's whole life. An unreadable/empty token file
+        // still sends the (empty) field rather than the legacy 3-field form:
+        // the supervisor's parse rejects both shapes identically, so a lost
+        // secret costs this spawn its registration instead of silently
+        // downgrading it to un-authenticated trust.
+        $token = $this->tokenPath === '' ? '' : \trim((string) @file_get_contents($this->tokenPath));
+        if ($token === '') {
+            $this->log('[session:auth:no-token] handshake will be refused');
+        }
+        \fwrite($supervisor, self::HANDSHAKE_PREFIX . $this->sessionId . ':' . \getmypid() . ':' . $token . "\n");
         \fflush($supervisor);
         // The supervisor reads the handshake and drops this connection; the
         // daemon owns the socket path from here on (see class docblock).
@@ -535,7 +611,10 @@ final class BackgroundSessionRunner
     }
 
     /**
-     * Answer one supervisor connection.
+     * Answer one supervisor connection, after it authenticates.
+     *
+     * The first line must be `AUTH <token>` ({@see self::authenticate()},
+     * audit M5); HEARTBEAT/RESUME/STOP are only processed afterwards.
      *
      * Keeps the wire words the previous inline daemon used — HEARTBEAT,
      * RESUME and STOP — and adds a single `STATUS:` line so a RESUME can
@@ -550,6 +629,12 @@ final class BackgroundSessionRunner
     public function serveClient($client, ?string $result): bool
     {
         \stream_set_timeout($client, 1);
+
+        // Audit M5: nothing below — least of all STOP — is reachable until
+        // the peer proves it holds the per-spawn secret.
+        if (!$this->authenticate($client)) {
+            return false;
+        }
 
         while (!\feof($client)) {
             $line = @\fgets($client);
@@ -577,6 +662,56 @@ final class BackgroundSessionRunner
         }
 
         return false;
+    }
+
+    /**
+     * Require `AUTH <token>` as the first line, matching the per-spawn secret
+     * currently in {@see self::$tokenPath} (audit M5).
+     *
+     * Fail-safe on every degenerate shape: no token path, an unreadable or
+     * empty token file, a closed or non-AUTH first line — each is a refusal
+     * recorded in the session buffer, never a fall-back to serving commands
+     * un-authenticated. Refusals deliberately echo nothing back, so a probing
+     * peer learns only that the connection closes.
+     *
+     * @param resource $client
+     */
+    private function authenticate($client): bool
+    {
+        $expected = $this->tokenPath === ''
+            ? ''
+            : \trim((string) @file_get_contents($this->tokenPath));
+
+        if ($expected === '') {
+            // The secret is gone (never issued, deleted, or zeroed). Trusting
+            // an unauthenticated peer instead would be the exact bug M5
+            // reports, so availability narrows to a refused connection.
+            $this->log('[session:auth:refused] token-unavailable');
+
+            return false;
+        }
+
+        $line = @\fgets($client);
+        if ($line === false) {
+            $this->log('[session:auth:refused] no-credentials');
+
+            return false;
+        }
+
+        $presented = \trim($line);
+        if (!\str_starts_with($presented, self::AUTH_PREFIX)) {
+            $this->log('[session:auth:refused] missing-prefix');
+
+            return false;
+        }
+
+        if (!\hash_equals($expected, \substr($presented, \strlen(self::AUTH_PREFIX)))) {
+            $this->log('[session:auth:refused] token-mismatch');
+
+            return false;
+        }
+
+        return true;
     }
 
     /**

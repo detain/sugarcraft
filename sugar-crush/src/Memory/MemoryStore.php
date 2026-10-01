@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Memory;
 
 use SugarCraft\Crush\Agents\MemoryScope;
+use SugarCraft\Crush\Support\AtomicFileWriter;
 use SugarCraft\Crush\Support\Frontmatter;
 use Symfony\Component\Yaml\Yaml;
 
@@ -360,9 +361,13 @@ final class MemoryStore
             $content = mb_strcut($content, 0, self::MAX_INDEX_BYTES, 'UTF-8');
         }
 
-        $written = file_put_contents($indexPath, $content);
-        if ($written === false) {
-            throw new \RuntimeException("Failed to write index file: {$indexPath}");
+        // Audit M3: temp+rename publish, never a torn index. 0600 because a
+        // memory index can quote user facts; the pre-fix direct write landed
+        // 0644 under a default umask.
+        try {
+            AtomicFileWriter::write($indexPath, $content, 0600);
+        } catch (\RuntimeException $e) {
+            throw new \RuntimeException("Failed to write index file: {$indexPath}", 0, $e);
         }
     }
 
@@ -465,7 +470,10 @@ final class MemoryStore
 
         $dir = $this->memoryPath . '/' . $safeScope;
 
-        if ($createIfMissing && !is_dir($dir) && !mkdir($dir, 0777, true) && !is_dir($dir)) {
+        // 0700, not the pre-audit 0777: scope dirs hold the memory .md files
+        // themselves (audit M3); the umask would have shaved it to 0755 on a
+        // normal box, still world-traversable and listable.
+        if ($createIfMissing && !is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
             throw new \RuntimeException("Failed to create scope directory: {$dir}");
         }
 
@@ -548,9 +556,12 @@ final class MemoryStore
 
         $fileContent = "---\n" . $frontmatter . "---\n" . $entry->content();
 
-        $written = file_put_contents($file, $fileContent);
-        if ($written === false) {
-            throw new \RuntimeException("Failed to write memory file: {$file}");
+        // Audit M3: a memory note is the user's own words with no regeneration
+        // story — exactly the payload that must never be catchable half-written.
+        try {
+            AtomicFileWriter::write($file, $fileContent, 0600);
+        } catch (\RuntimeException $e) {
+            throw new \RuntimeException("Failed to write memory file: {$file}", 0, $e);
         }
     }
 

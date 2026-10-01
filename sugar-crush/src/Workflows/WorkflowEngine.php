@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Workflows;
 
+use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Agents\Agent;
@@ -509,12 +510,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
             'pausedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
         ];
 
-        $dir = dirname($pauseFile);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-
-        file_put_contents($pauseFile, json_encode($data, JSON_PRETTY_PRINT) . "\n");
+        // Audit M4: the pre-fix write ignored file_put_contents' return (a
+        // failed pause silently lost the run) and wrote the live path
+        // directly (a crash mid-write tore the file resume() needs).
+        // AtomicJsonFile both throws on any failure and publishes by rename;
+        // callers that must survive a lost pause — the signal handler does —
+        // already wrap this in their own catch. 0600: the file holds the
+        // workflow's accumulated context verbatim.
+        AtomicJsonFile::new($pauseFile)
+            ->withPermissions(0600)
+            ->write($data);
     }
 
     /**

@@ -744,6 +744,65 @@ final class WorkflowEngineTest extends TestCase
         }
     }
 
+    public function testPausePublishesOwnerOnlyThroughATempAndCreatesItsDirectory(): void
+    {
+        // Audit M4: the pre-fix pause mkdir'ed 0755 and file_put_contents'ed
+        // the live path while IGNORING the return — a lost pause was silent
+        // and a crash mid-write tore the file resume() reads. It now goes
+        // through candy-core AtomicJsonFile: parent created 0700, payload
+        // 0600, published by rename, every failure a throw.
+        $workflow = (new WorkflowBuilder())
+            ->name('perm-pause-test')
+            ->description('Test pause persistence modes')
+            ->stage('stage-1', Tasks::agent('coder')->prompt('Step 1'))
+            ->build();
+
+        $this->registry->register($workflow);
+
+        $this->mockExecutor
+            ->expects($this->once())
+            ->method('execute')
+            ->willReturn($this->successfulAgentResult('perm-output'));
+
+        $this->engine->run('perm-pause-test', []);
+
+        $oldHome = $_SERVER['HOME'] ?? '/root';
+        // Deliberately do NOT pre-create .running: the writer must own it.
+        $tmpDir = sys_get_temp_dir() . '/sugar-crush-perm-pause-' . uniqid((string) getmypid(), true);
+        mkdir($tmpDir);
+        $_SERVER['HOME'] = $tmpDir;
+        putenv('HOME=' . $_SERVER['HOME']);
+
+        try {
+            $this->engine->pause('perm-pause-test');
+
+            $pauseFile = $tmpDir . '/.sugar-crush/workflows/.running/perm-pause-test.json';
+            $this->assertFileExists($pauseFile);
+            clearstatcache();
+            $this->assertSame(0o600, fileperms($pauseFile) & 0o777);
+            $this->assertSame(0o700, fileperms($tmpDir . '/.sugar-crush/workflows/.running') & 0o777);
+            $this->assertSame([], array_values(array_filter(
+                scandir(dirname($pauseFile)) ?: [],
+                // str_contains needle, no wildcard: the shape GlobDialect's
+                // corpus harvest ignores (see MemoryStoreTest's same-law note).
+                static fn(string $entry): bool => str_contains($entry, '.tmp.'),
+            )), 'no orphan temp');
+
+            // The published file is exactly what resume()'s reader wants.
+            $data = json_decode((string) file_get_contents($pauseFile), true);
+            $this->assertIsArray($data);
+            $this->assertSame('paused', $data['status']);
+        } finally {
+            $_SERVER['HOME'] = $oldHome;
+            putenv('HOME=' . $_SERVER['HOME']);
+            @unlink($tmpDir . '/.sugar-crush/workflows/.running/perm-pause-test.json');
+            @rmdir($tmpDir . '/.sugar-crush/workflows/.running');
+            @rmdir($tmpDir . '/.sugar-crush/workflows');
+            @rmdir($tmpDir . '/.sugar-crush');
+            @rmdir($tmpDir);
+        }
+    }
+
     public function testResumeContinuesFromPausedState(): void
     {
         $workflow = (new WorkflowBuilder())

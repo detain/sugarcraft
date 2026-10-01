@@ -370,9 +370,19 @@ final class ReadPathCensusTest extends TestCase
         'Session/PromptHistory.php|fopen' => [
             'SELF_LOCATED — the same file, opened c+ under an exclusive lock to append',
         ],
+        'Sessions/BackgroundSessionRunner.php|file_get_contents' => [
+            'SELF_LOCATED — the per-spawn token file the supervisor minted in its 0700 '
+                . 'IPC dir, read to authenticate the daemon\'s handshake (audit M5)',
+            'SELF_LOCATED — the same token file, re-read per connection to gate '
+                . 'HEARTBEAT/RESUME/STOP (audit M5)',
+        ],
         'Sessions/BackgroundSupervisor.php|file_get_contents' => [
             'SELF_LOCATED — the IPC buffer this supervisor named for its own child',
             'SELF_LOCATED — the same buffer, re-read while streaming',
+            'SELF_LOCATED — the per-spawn token file this supervisor minted, read to '
+                . 'authenticate a reconnect (audit M5)',
+            'PROCESS_DERIVED — `/proc/<pid>/stat`, a kernel interface named by a '
+                . 'literal, read to fingerprint a daemon pid against reuse (audit M5)',
         ],
         'Sessions/BackgroundSupervisor.php|require' => [
             'PROCESS_DERIVED — inside the GENERATED child script: the composer autoload of the '
@@ -395,6 +405,11 @@ final class ReadPathCensusTest extends TestCase
                 . 'boundary. DORMANT: nothing in `src/` constructs it, so the first consumer must '
                 . 'pass a jailed root — recorded as a gap rather than given a boundary with no anchor',
             'NAMES_ONLY — the same, in the chunked variant',
+        ],
+        'Support/AtomicFileWriter.php|fopen' => [
+            'SELF_LOCATED — the uniquely-named temp this writer creates beside the '
+                . 'target and renames onto it; the path is dirname(target) plus a '
+                . 'random suffix, never caller-supplied beyond the target itself',
         ],
         'Support/ToolIpcFiles.php|glob' => [
             'SELF_LOCATED — sweeps this package\'s own IPC prefixes, uid-checked per entry',

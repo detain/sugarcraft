@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Crush\Support\HomeDirectory;
 
 /**
@@ -65,7 +66,12 @@ final class TeamManager
         // Ensure the team directory exists before creating Team (TaskList needs it)
         $teamDir = $this->expandPath($this->basePath) . '/' . $teamId;
         if (!is_dir($teamDir)) {
-            mkdir($teamDir, 0755, true);
+            // 0700, not the pre-audit 0755: a team inbox carries whole tool
+            // payloads (audit M2); no other uid has a reason to traverse it.
+            // mkdir's mode is umask-filtered, so widen nothing afterwards —
+            // the value asked for is the value on a default-umask box, and
+            // AtomicJsonFile re-asserts the registry dir's mode itself.
+            @mkdir($teamDir, 0700, true);
         }
 
         $team = new Team(
@@ -280,8 +286,13 @@ final class TeamManager
      * Read and decode the raw registry JSON from disk.
      *
      * Returns an empty array if the file does not exist, is empty,
-     * or contains malformed JSON. Callers should not assume partial
-     * data is valid — this treats any decode failure as a full reset.
+     * or contains malformed JSON. Decoding still fails safe to a reset —
+     * the manager cannot trust a file it cannot read — but audit M2's
+     * "silent loss" half is closed two ways: atomic publishing (see
+     * {@see saveRegistry()}) means a decode failure can no longer come from
+     * OUR torn write, and a foreign-corrupted file is now QUARANTINED to
+     * `registry.json.corrupt-<epoch>` instead of being left in place for the
+     * next save to overwrite, so the bytes stay recoverable by hand.
      *
      * @return array<string, array<string, mixed>>
      */
@@ -298,10 +309,40 @@ final class TeamManager
 
         try {
             $data = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
-            return is_array($data) ? $data : [];
         } catch (\JsonException) {
+            $this->quarantineCorruptRegistry();
+
             return [];
         }
+
+        if (!is_array($data)) {
+            $this->quarantineCorruptRegistry();
+
+            return [];
+        }
+
+        return $data;
+    }
+
+    /**
+     * Move an undecodable registry aside instead of leaving it underfoot.
+     *
+     * Best-effort: if the rename itself fails (read-only dir), the reset
+     * proceeds anyway — keeping the process alive is worth more here than
+     * guaranteeing the forensics, and the save path will loudly throw if the
+     * directory truly is unwritable.
+     */
+    private function quarantineCorruptRegistry(): void
+    {
+        $stamp = date('Ymd-His');
+        $target = $this->registryPath . '.corrupt-' . $stamp;
+        // Suffix on collision: two loads inside one second (a reload loop)
+        // must not have the second quarantine silently overwrite the first.
+        if (file_exists($target)) {
+            $target .= '-' . substr(bin2hex(random_bytes(3)), 0, 6);
+        }
+
+        @rename($this->registryPath, $target);
     }
 
     /**
@@ -314,11 +355,9 @@ final class TeamManager
      */
     private function saveRegistry(): void
     {
-        $dir = dirname($this->registryPath);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-
+        // No manual mkdir here: AtomicJsonFile::write() creates the parent
+        // itself, at 0700 derived from the requested file mode (the pre-M2
+        // 0755 came from this line).
         $data = [];
         foreach ($this->teams as $teamId => $team) {
             $config = $this->teamConfigs[$teamId] ?? new TeamConfig();
@@ -336,21 +375,26 @@ final class TeamManager
             ];
         }
 
-        // @-suppressed because the failure is NOT swallowed: the $bytes check
-        // below converts it into a RuntimeException naming the path, which is
-        // strictly more useful than PHP's warning. Without the @, an
-        // unwritable registry emits a raw "Failed to open stream" warning
-        // *and* the exception -- and under a TUI that warning paints straight
-        // onto the terminal outside the managed frame.
-        $bytes = @file_put_contents(
-            $this->registryPath,
-            json_encode($data, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR),
-            LOCK_EX,
-        );
-
-        if ($bytes === false) {
+        // Audit M2: the pre-fix write was a direct file_put_contents(LOCK_EX)
+        // onto the live path — a crash mid-write tore the registry, and the
+        // loader read any torn file as a FULL reset, silently losing every
+        // team. candy-core's AtomicJsonFile is this package's canonical answer
+        // (adopted at Session.php for exactly this reason): full payload into
+        // a same-dir temp, mode settled before the first byte, one rename to
+        // publish. 0600 because the registry names teams, leads and inbox
+        // paths — nothing a co-tenant should read.
+        try {
+            AtomicJsonFile::new($this->registryPath)
+                ->withPermissions(0600)
+                ->write($data);
+        } catch (\Throwable $e) {
+            // Re-thrown with the registry's own vocabulary (the message is
+            // pinned by TeamManagerTest): the underlying failure names a temp
+            // the caller has never seen.
             throw new \RuntimeException(
-                sprintf('Failed to write registry to "%s".', $this->registryPath),
+                sprintf('Failed to write registry to "%s": %s', $this->registryPath, $e->getMessage()),
+                0,
+                $e,
             );
         }
     }

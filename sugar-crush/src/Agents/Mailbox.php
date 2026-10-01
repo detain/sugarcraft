@@ -86,6 +86,41 @@ final class Mailbox
 
             try {
                 $data = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
+                // Audit M1: valid JSON is not a message. `123`, `"abc"`, `null`
+                // and `[]` all decode cleanly, and constructing from them threw
+                // a TypeError — which the old `catch (\Exception)` never saw,
+                // so one hand-corrupted line killed every teammate's message
+                // processing for the rest of the session, breaking the
+                // documented skip-malformed guarantee. Parse-don't-validate:
+                // shape-check here, trust the array below.
+                if (!is_array($data)
+                    || !isset(
+                        $data['id'],
+                        $data['fromTeammateId'],
+                        $data['toTeammateId'],
+                        $data['type'],
+                        $data['payload'],
+                        $data['sentAt'],
+                    )
+                    || !is_string($data['id'])
+                    || !is_string($data['fromTeammateId'])
+                    || !is_string($data['toTeammateId'])
+                    || !is_string($data['type'])
+                    || !is_array($data['payload'])
+                ) {
+                    continue;
+                }
+
+                // sentAt must be a string a DateTimeImmutable will accept; the
+                // constructor throws DateMalformedStringException otherwise,
+                // which the Throwable arm below turns into the same skip as
+                // every other malformed shape (audit M1's guarantee is that NO
+                // line can escape as a crash).
+                if (!is_string($data['sentAt'])) {
+                    continue;
+                }
+                $sentAt = new \DateTimeImmutable($data['sentAt']);
+
                 // Message is read if flagged inline OR if its Id appears in the
                 // append-only read-markers file (which markRead appends to).
                 $isRead = ($data['read'] ?? false) || isset($readMarkers[$data['id']]);
@@ -95,11 +130,12 @@ final class Mailbox
                     toTeammateId: $data['toTeammateId'],
                     type: $data['type'],
                     payload: $data['payload'],
-                    sentAt: new \DateTimeImmutable($data['sentAt']),
+                    sentAt: $sentAt,
                     read: $isRead,
                 );
-            } catch (\Exception) {
-                // Malformed line — skip and continue
+            } catch (\Throwable) {
+                // Malformed line — skip and continue. Throwable, not Exception:
+                // a TypeError escaping here is exactly the M1 crash (audit).
                 continue;
             }
         }
@@ -259,7 +295,12 @@ final class Mailbox
     private function ensureInboxDirectory(string $teammateId): void
     {
         $dir = dirname($this->inboxPath($teammateId));
-        if (!is_dir($dir) && !mkdir($dir, 0750, true)) {
+        // mkdir race (audit L2): two concurrent senders to one recipient — the
+        // loser of the mkdir sees `false` even though the directory now EXISTS,
+        // because another process created it a microsecond earlier. The second
+        // is_dir() is what distinguishes "someone else won the race" (success)
+        // from "the filesystem really refused" (the RuntimeException below).
+        if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) {
             throw new \RuntimeException("Failed to create inbox directory: {$dir}");
         }
     }

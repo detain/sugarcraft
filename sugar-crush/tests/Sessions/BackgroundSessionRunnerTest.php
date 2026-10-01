@@ -48,13 +48,30 @@ final class BackgroundSessionRunnerTest extends TestCase
         return $path;
     }
 
-    private function runner(string $bufferPath, string $task = 'ship the thing'): BackgroundSessionRunner
+    private const BGTEST_TOKEN = 'bgtest-token-a1b2';
+
+    /**
+     * A token file an IPC peer can present. Audit M5: possession of this
+     * secret is the only capability that can STOP a session, so the honoured
+     * serveClient tests must carry it and the refusal pins must withhold it.
+     */
+    private function authTokenFile(string $token = self::BGTEST_TOKEN): string
+    {
+        $path = tempnam(sys_get_temp_dir(), 'crush_bg_token_');
+        $this->paths[] = $path;
+        file_put_contents($path, $token);
+
+        return $path;
+    }
+
+    private function runner(string $bufferPath, string $task = 'ship the thing', ?string $tokenPath = null): BackgroundSessionRunner
     {
         return new BackgroundSessionRunner(
             sessionId: 'sess_test_1',
             socketPath: $bufferPath . '.sock',
             bufferPath: $bufferPath,
             task: $task,
+            tokenPath: $tokenPath ?? '',
         );
     }
 
@@ -741,10 +758,11 @@ final class BackgroundSessionRunnerTest extends TestCase
     public function testServeClientAnswersHeartbeatAndReportsStatusOnResume(): void
     {
         $buffer = $this->bufferPath();
-        $runner = $this->runner($buffer);
+        $tokenPath = $this->authTokenFile();
+        $runner = $this->runner($buffer, 'ship the thing', $tokenPath);
         [$client, $daemon] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
 
-        fwrite($client, "HEARTBEAT\nRESUME\n");
+        fwrite($client, "AUTH " . self::BGTEST_TOKEN . "\nHEARTBEAT\nRESUME\n");
         stream_socket_shutdown($client, STREAM_SHUT_WR);
 
         $stopped = $runner->serveClient($daemon, null);
@@ -760,10 +778,11 @@ final class BackgroundSessionRunnerTest extends TestCase
 
     public function testServeClientReportsSettledResultOnResume(): void
     {
-        $runner = $this->runner($this->bufferPath());
+        $tokenPath = $this->authTokenFile();
+        $runner = $this->runner($this->bufferPath(), 'ship the thing', $tokenPath);
         [$client, $daemon] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
 
-        fwrite($client, "RESUME\n");
+        fwrite($client, "AUTH " . self::BGTEST_TOKEN . "\nRESUME\n");
         stream_socket_shutdown($client, STREAM_SHUT_WR);
         $runner->serveClient($daemon, 'completed');
         fclose($daemon);
@@ -774,7 +793,31 @@ final class BackgroundSessionRunnerTest extends TestCase
 
     public function testServeClientReportsStopRequest(): void
     {
-        $runner = $this->runner($this->bufferPath());
+        $tokenPath = $this->authTokenFile();
+        $runner = $this->runner($this->bufferPath(), 'ship the thing', $tokenPath);
+        [$client, $daemon] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+
+        fwrite($client, "AUTH " . self::BGTEST_TOKEN . "\nSTOP\n");
+        stream_socket_shutdown($client, STREAM_SHUT_WR);
+        $stopped = $runner->serveClient($daemon, null);
+        fclose($daemon);
+
+        $this->assertTrue($stopped);
+        $this->assertStringContainsString('OK:stopping', (string) stream_get_contents($client));
+        fclose($client);
+    }
+
+    // =========================================================================
+    // Audit M5 refusal pins. Before the fix any connection the daemon accepted
+    // was trusted, and its first line could be a bare STOP. Every shape below
+    // must now be refused IN SILENCE: no protocol reply, a forensic record in
+    // the buffer, and the socket closed.
+    // =========================================================================
+
+    public function testServeClientRefusesCommandsThatArriveUnauthenticated(): void
+    {
+        $buffer = $this->bufferPath();
+        $runner = $this->runner($buffer, 'ship the thing', $this->authTokenFile());
         [$client, $daemon] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
 
         fwrite($client, "STOP\n");
@@ -782,8 +825,48 @@ final class BackgroundSessionRunnerTest extends TestCase
         $stopped = $runner->serveClient($daemon, null);
         fclose($daemon);
 
-        $this->assertTrue($stopped);
-        $this->assertStringContainsString('OK:stopping', (string) stream_get_contents($client));
+        $this->assertFalse($stopped);
+        $this->assertSame('', (string) stream_get_contents($client));
+        $this->assertStringContainsString('[session:auth:refused]', (string) file_get_contents($buffer));
+        fclose($client);
+    }
+
+    public function testServeClientRefusesTheWrongToken(): void
+    {
+        $buffer = $this->bufferPath();
+        $runner = $this->runner($buffer, 'ship the thing', $this->authTokenFile());
+        [$client, $daemon] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+
+        fwrite($client, "AUTH not-the-token\nSTOP\n");
+        stream_socket_shutdown($client, STREAM_SHUT_WR);
+        $stopped = $runner->serveClient($daemon, null);
+        fclose($daemon);
+
+        $this->assertFalse($stopped);
+        $this->assertStringNotContainsString('OK:', (string) stream_get_contents($client));
+        $this->assertStringContainsString('[session:auth:refused] token-mismatch', (string) file_get_contents($buffer));
+        fclose($client);
+    }
+
+    public function testServeClientRefusesWhenTheTokenFileIsGone(): void
+    {
+        // Fail-safe direction: an unreadable secret means NO trust, never the
+        // pre-M5 trust-anything default. This is also the shape of a session
+        // whose IPC directory was cleaned out from under the daemon.
+        $buffer = $this->bufferPath();
+        $tokenPath = $this->authTokenFile();
+        @unlink($tokenPath);
+        $runner = $this->runner($buffer, 'ship the thing', $tokenPath);
+        [$client, $daemon] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+
+        fwrite($client, "AUTH " . self::BGTEST_TOKEN . "\nSTOP\n");
+        stream_socket_shutdown($client, STREAM_SHUT_WR);
+        $stopped = $runner->serveClient($daemon, null);
+        fclose($daemon);
+
+        $this->assertFalse($stopped);
+        $this->assertSame('', (string) stream_get_contents($client));
+        $this->assertStringContainsString('[session:auth:refused] token-unavailable', (string) file_get_contents($buffer));
         fclose($client);
     }
 
@@ -821,6 +904,7 @@ final class BackgroundSessionRunnerTest extends TestCase
             'provider' => 'anthropic',
             'model' => 'claude-sonnet-4-6',
             'timeoutSeconds' => 42,
+            'tokenPath' => '/tmp/s1.token',
         ]);
 
         $this->assertSame('s1', $runner->sessionId);
@@ -831,6 +915,7 @@ final class BackgroundSessionRunnerTest extends TestCase
         $this->assertSame('anthropic', $runner->provider);
         $this->assertSame('claude-sonnet-4-6', $runner->model);
         $this->assertSame(42, $runner->timeoutSeconds);
+        $this->assertSame('/tmp/s1.token', $runner->tokenPath);
     }
 
     public function testMainRejectsAnIncompleteConfig(): void

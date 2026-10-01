@@ -181,6 +181,54 @@ final class MailboxTest extends TestCase
         $this->assertSame('msg-good-2', $messages[1]->id);
     }
 
+    /**
+     * Audit M1: these lines ALL decode as valid JSON but are not messages.
+     * Pre-fix, string-offset access on a scalar (or `TeamMessage(id: null,…)`)
+     * threw a TypeError that `catch (\Exception)` never saw — one such line
+     * killed every teammate's processing for the session's remaining life.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function decodableNonMessageLines(): array
+    {
+        return [
+            'integer' => ['123'],
+            'string' => ['"abc"'],
+            'null' => ['null'],
+            'empty-list' => ['[]'],
+            'scalar-typed-object' => ['{"id": 7, "fromTeammateId": "a", "toTeammateId": "b", "type": "idle", "payload": [], "sentAt": "2026-01-01T10:00:00+00:00"}'],
+            'missing-fields' => ['{"id": "x"}'],
+            'null-payload' => ['{"id": "x", "fromTeammateId": "a", "toTeammateId": "b", "type": "idle", "payload": null, "sentAt": "2026-01-01T10:00:00+00:00"}'],
+            'garbage-sentAt' => ['{"id": "x", "fromTeammateId": "a", "toTeammateId": "b", "type": "idle", "payload": [], "sentAt": "not-a-date"}'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('decodableNonMessageLines')]
+    public function testReceiveSkipsDecodableWrongShapeLinesWithoutCrashing(string $badLine): void
+    {
+        $mailbox = new Mailbox($this->basePath);
+        $inboxPath = $this->basePath . '/teammate-m1/inbox.jsonl';
+        mkdir(dirname($inboxPath), 0750, true);
+
+        $good = static fn(string $id): string => json_encode([
+            'id' => $id,
+            'fromTeammateId' => 'teammate-a',
+            'toTeammateId' => 'teammate-m1',
+            'type' => 'idle',
+            'payload' => [],
+            'sentAt' => '2026-01-01T10:00:00+00:00',
+            'read' => false,
+        ]);
+
+        file_put_contents($inboxPath, $good('m1-before') . "\n" . $badLine . "\n" . $good('m1-after') . "\n");
+
+        // generator->current() would throw pre-fix on seeking past the bad line.
+        $messages = iterator_to_array($mailbox->receive('teammate-m1'));
+
+        $this->assertCount(2, $messages);
+        $this->assertSame(['m1-before', 'm1-after'], array_map(static fn($m): string => $m->id, $messages));
+    }
+
     // -------------------------------------------------------------------------
     // peek
     // -------------------------------------------------------------------------

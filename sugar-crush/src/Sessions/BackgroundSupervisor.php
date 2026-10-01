@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Sessions;
 
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Support\ProcessReaper;
+use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\Tui\StallDetector;
 use SugarCraft\Crush\Tui\StallWarning;
 
@@ -19,6 +20,32 @@ use SugarCraft\Crush\Tui\StallWarning;
  * marks it stalled if heartbeats stop arriving.
  *
  * Mirrors charmbracelet/charmcrush background session supervisor design.
+ *
+ * ## IPC trust model (audit M5)
+ *
+ * Every background session's socket, buffer, secret token and sidecar log live
+ * inside ONE per-process directory under `sys_get_temp_dir()` created 0700, and
+ * every file inside it is created 0600. That alone takes a foreign uid out of
+ * reach on Linux — a unix-socket `connect()` and an append to the buffer both
+ * need directory traversal — but the directory is not the only line:
+ *
+ *  - The first handshake used to be trusted by arrival order (`HELLO:<id>:<pid>`
+ *    parsed whoever spoke first) and the session id is a timestamp plus four
+ *    random bytes, not a credential. A co-tenant on a shared `/tmp` could race
+ *    the real daemon, register under a spoofed pid, and later receive the
+ *    RESUME traffic — or drive `STOP` against a pid the supervisor never
+ *    spawned (local DoS once that pid was recycled).
+ *  - So the handshake now carries a per-spawn secret: `spawnSession()` mints 32
+ *    hex bytes with `random_bytes()`, writes them 0600 to a token file, and
+ *    hands the DAEMON ONLY THE PATH in its argv config — the token bytes never
+ *    travel in argv, which every local user can read through `/proc`. The
+ *    connection is accepted only when the fourth handshake field matches the
+ *    minted token under `hash_equals()`, and the recorded pid is kept together
+ *    with that process's `/proc` start time so `isProcessRunning()` refuses a
+ *    recycled pid wearing the dead daemon's number.
+ *  - Fail-safe in both directions: a missing or unreadable token file is a
+ *    refusal, never a trust; the runner's command loop authenticates every
+ *    connection the same way before honouring `STOP`.
  */
 final class BackgroundSupervisor implements SessionNotificationInterface
 {
@@ -26,6 +53,14 @@ final class BackgroundSupervisor implements SessionNotificationInterface
      * Heartbeat timeout in seconds — matching Phase 1's ProcessExecutor.
      */
     public const HEARTBEAT_TIMEOUT_SECS = 15;
+
+    /**
+     * How long {@see spawnSession()} waits, total, for an AUTHENTICATED
+     * handshake from the daemon it just launched. Connections that fail the
+     * token check are refused inside this window and the accept loop keeps
+     * going, so a hostile local connect cannot consume the budget by itself.
+     */
+    private const SPAWN_AUTH_TIMEOUT_SECS = 5.0;
 
     /** @var array<string, BackgroundSession> Sessions indexed by session ID */
     private array $sessions = [];
@@ -37,11 +72,22 @@ final class BackgroundSupervisor implements SessionNotificationInterface
     private bool $reconnected = false;
 
     /**
-     * IPC state per session: socket path, buffer file path, child PID.
+     * IPC state per session: socket path, buffer file path, secret-token file
+     * path, child PID, and the daemon's `/proc` start time — the pid identity
+     * fingerprint that lets a recycled pid be refused (audit M5).
      *
-     * @var array<string, array{socketPath: string, bufferPath: string, pid: int}>
+     * `tokenPath`/`startTime` are optional only for entries a test injects in
+     * the pre-M5 three-key shape; {@see spawnSession()} always writes all five.
+     *
+     * @var array<string, array{socketPath: string, bufferPath: string, pid: int, tokenPath?: string, startTime?: int|null}>
      */
     private array $sessionIpc = [];
+
+    /**
+     * Per-process private directory every session's IPC files live in.
+     * Created 0700 on first use by {@see ensurePrivateIpcDir()}.
+     */
+    private string $ipcDir = '';
 
     /** Tracks per-session token output rates to detect stalls. */
     private StallDetector $stallDetector;
@@ -133,7 +179,9 @@ final class BackgroundSupervisor implements SessionNotificationInterface
      * buffer file while the daemon keeps servicing HEARTBEAT/RESUME/STOP.
      *
      * @return BackgroundSession The newly spawned session
-     * @throws \RuntimeException If child fails to connect within timeout
+     * @throws \RuntimeException If the private IPC directory or files cannot be
+     *         created, or the child fails to authenticate within the handshake
+     *         window
      */
     public function spawnSession(
         string $name,
@@ -144,25 +192,33 @@ final class BackgroundSupervisor implements SessionNotificationInterface
         ?array $tags = null,
     ): BackgroundSession {
         $sessionId = $this->generateSessionId();
-        $socketPath = sys_get_temp_dir() . '/sugar_crush_' . $sessionId . '.sock';
-        $bufferPath = sys_get_temp_dir() . '/sugar_crush_' . $sessionId . '.buffer';
+        // All four files live inside a 0700 per-process directory rather than
+        // loose in a world-writable /tmp (audit M5): directory permissions are
+        // what make the socket unconnectable and the buffer un-appendable by a
+        // foreign uid, and the token below is what makes the session
+        // un-hijackable even by a same-uid process that somehow reads them.
+        $dir = $this->ensurePrivateIpcDir();
+        $socketPath = $dir . '/' . $sessionId . '.sock';
+        $bufferPath = $dir . '/' . $sessionId . '.buffer';
+        $tokenPath = $dir . '/' . $sessionId . '.token';
+        // Daemon stdout/stderr go to a sidecar log rather than the session
+        // buffer: the buffer is the curated transcript reconnect() restores
+        // as session output, and a stray provider warning printed on stderr
+        // must not end up quoted back to the user as model output.
+        $logPath = $bufferPath . '.log';
 
-        // Remove any stale socket/buffer from previous runs
-        @unlink($socketPath);
-        @file_put_contents($bufferPath, '');
-
-        // Create Unix socket server for IPC
-        $serverSocket = stream_socket_server(
-            'unix://' . $socketPath,
-            $errno,
-            $errstr
-        );
-        if (!$serverSocket) {
-            @unlink($socketPath);
-            @unlink($bufferPath);
-            throw new \RuntimeException("Failed to create IPC socket: {$errstr}");
+        // Per-spawn shared secret. The DAEMON learns only the token PATH (in
+        // its argv config): `php -r` argv is world-readable through /proc for
+        // the launcher's whole life, so the bytes themselves must never ride
+        // argv. Created 0600 via the house umask-narrowed write so the secret
+        // is owner-only from its first byte.
+        $token = bin2hex(random_bytes(16));
+        if (!ToolIpcFiles::write($tokenPath, $token)
+            || !ToolIpcFiles::write($bufferPath, '')
+            || !ToolIpcFiles::write($logPath, '')
+        ) {
+            throw new \RuntimeException("Failed to create private IPC files under {$dir}");
         }
-        stream_set_timeout($serverSocket, 5);
 
         // Build the argv for the session subprocess, which will daemonize,
         // connect to the socket and run the task.
@@ -185,6 +241,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface
             $this->buildSessionDaemonCode(
                 $socketPath,
                 $bufferPath,
+                $tokenPath,
                 $sessionId,
                 $task,
                 $workingDirectory,
@@ -194,11 +251,6 @@ final class BackgroundSupervisor implements SessionNotificationInterface
             ),
         ];
 
-        // Daemon stdout/stderr go to a sidecar log rather than the session
-        // buffer: the buffer is the curated transcript reconnect() restores
-        // as session output, and a stray provider warning printed on stderr
-        // must not end up quoted back to the user as model output.
-        $logPath = $bufferPath . '.log';
         $proc = proc_open(
             $cmd,
             [['file', '/dev/null', 'r'], ['file', $logPath, 'a'], ['file', $logPath, 'a']],
@@ -206,29 +258,89 @@ final class BackgroundSupervisor implements SessionNotificationInterface
         );
 
         if (!is_resource($proc)) {
-            fclose($serverSocket);
-            @unlink($socketPath);
-            @unlink($bufferPath);
+            $this->discardIpcFiles($socketPath, $bufferPath, $tokenPath, $logPath);
             throw new \RuntimeException('Failed to spawn session process');
         }
 
-        // Wait for child to connect to our socket (with timeout)
-        $clientSocket = @stream_socket_accept($serverSocket, 5);
-        if ($clientSocket === false) {
+        // Create the Unix socket server AFTER the fork, deliberately (audit
+        // M5 follow-up, measured): a listener bound BEFORE proc_open is
+        // inherited by the launcher and survives every fclose on this side —
+        // MEASURED, `ss -x` showed the daemon, its worker, and even the
+        // `sh`/`sleep` grandchildren holding the LISTEN fd open. The zombie
+        // listener keeps completing connect() handshakes into an accept queue
+        // nobody ever drains, so bytes written to it vanish without ever
+        // reaching serveClient — an orphan half-channel the daemon's re-bind
+        // cannot clear until it unlinks the path. Binding after the spawn means
+        // no child ever sees the fd; the daemon's initial connect then retries
+        // ({@see BackgroundSessionRunner::CONNECT_WAIT_SECONDS}) against the
+        // small window where the child outruns the bind.
+        $serverSocket = stream_socket_server(
+            'unix://' . $socketPath,
+            $errno,
+            $errstr
+        );
+        if (!$serverSocket) {
+            ProcessReaper::terminateAndClose($proc);
+            $this->discardIpcFiles($socketPath, $bufferPath, $tokenPath, $logPath);
+            throw new \RuntimeException("Failed to create IPC socket: {$errstr}");
+        }
+
+        // Wait for the child to connect AND prove it is the child: accept in a
+        // bounded loop, authenticate every handshake, refuse the ones that do
+        // not carry the token this spawn minted. The pre-M5 code trusted the
+        // FIRST connection's word for its own pid; arrival order is not an
+        // identity, and on a shared /tmp it was not even a race the honest
+        // daemon reliably won.
+        $childPid = 0;
+        $authDeadline = microtime(true) + self::SPAWN_AUTH_TIMEOUT_SECS;
+        while (true) {
+            $remaining = $authDeadline - microtime(true);
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $clientSocket = @stream_socket_accept($serverSocket, $remaining);
+            if ($clientSocket === false) {
+                // The accept itself timed out — no connection is coming.
+                break;
+            }
+
+            stream_set_timeout($clientSocket, 2);
+            $handshake = @fgets($clientSocket);
+            fclose($clientSocket);
+
+            $parsed = self::parseHandshake(is_string($handshake) ? $handshake : '');
+            if ($parsed === null
+                || $parsed['sessionId'] !== $sessionId
+                || !hash_equals($token, $parsed['token'])
+            ) {
+                // Refused, and logged for the operator's forensics — with a
+                // fixed string, never the attacker's bytes, and into the
+                // 0600 sidecar rather than any emitter channel. Then keep
+                // listening: one poisoned connect must not evict the real
+                // daemon that is still starting up.
+                @file_put_contents($logPath, "[session:auth:refused] spawn-handshake\n", FILE_APPEND);
+                continue;
+            }
+
+            $childPid = $parsed['pid'];
+            break;
+        }
+
+        if ($childPid === 0) {
             // BOUNDED, because this is the path where the launcher is by
-            // definition misbehaving: it did not connect within five seconds, so
-            // assuming it is about to exit is assuming away the failure. A bare
-            // `proc_close()` here WAITS — MEASURED on this host, against a child
-            // that ignores SIGTERM, `proc_terminate()` + `proc_close()` returns
-            // only after the child's whole remaining lifetime (7.77s for an 8s
-            // child), and with no signal at all it waits indefinitely. A wedged
-            // launcher would therefore hang the TUI thread that asked for a
-            // background session.
+            // definition misbehaving: it did not authenticate within five
+            // seconds, so assuming it is about to exit is assuming away the
+            // failure. A bare `proc_close()` here WAITS — MEASURED on this
+            // host, against a child that ignores SIGTERM, `proc_terminate()` +
+            // `proc_close()` returns only after the child's whole remaining
+            // lifetime (7.77s for an 8s child), and with no signal at all it
+            // waits indefinitely. A wedged launcher would therefore hang the
+            // TUI thread that asked for a background session.
             ProcessReaper::terminateAndClose($proc);
             fclose($serverSocket);
-            @unlink($socketPath);
-            @unlink($bufferPath);
-            throw new \RuntimeException('Session process failed to connect to IPC channel within timeout');
+            $this->discardIpcFiles($socketPath, $bufferPath, $tokenPath, $logPath);
+            throw new \RuntimeException('Session process failed to authenticate on the IPC channel within timeout');
         }
 
         // Close the server socket — we only needed it to accept the connection
@@ -245,7 +357,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface
             tags: $tags,
         );
 
-        // Read the handshake and take the DAEMON's pid from it.
+        // The authenticated handshake carries the DAEMON's pid.
         //
         // WHAT THIS COMMENT SAID: that the pid `proc_get_status()` reports
         // belongs to the `php -r` launcher, which exits during the daemon's
@@ -257,14 +369,18 @@ final class BackgroundSupervisor implements SessionNotificationInterface
         // the direct child, it DOES exit during the double fork, and tracking it
         // would still make isProcessRunning() false immediately and have
         // reconnect() report every freshly spawned session as already Completed.
-        // Hence the handshake pid, with the launcher pid only as a fallback for
-        // a handshake that did not parse.
-        stream_set_timeout($clientSocket, 2);
-        $handshake = @fgets($clientSocket);
-        fclose($clientSocket);
-
-        $childPid = self::parseHandshakePid(is_string($handshake) ? $handshake : '')
-            ?? (proc_get_status($proc)['pid'] ?? 0);
+        // Hence the handshake pid — which since audit M5 is ALSO the whole
+        // reason a handshake parse failure can no longer fall back to the
+        // launcher pid: an unauthenticated number off the wire is exactly the
+        // spoof the token check exists to refuse, so a connection that fails it
+        // is dropped, not believed with less confidence.
+        //
+        // The pid then gets a fingerprint: the daemon's `/proc` start time,
+        // read while the handshake's freshness guarantees it is that process.
+        // {@see isProcessRunning()} compares it before ever answering "alive",
+        // which is what makes a recycled pid read as DEAD rather than as the
+        // session's own daemon.
+        $startTime = self::procStartTime($childPid);
 
         // REAP THE LAUNCHER, EXPLICITLY — and never signal it.
         //
@@ -295,7 +411,9 @@ final class BackgroundSupervisor implements SessionNotificationInterface
         $this->sessionIpc[$sessionId] = [
             'socketPath' => $socketPath,
             'bufferPath' => $bufferPath,
+            'tokenPath' => $tokenPath,
             'pid' => $childPid,
+            'startTime' => $startTime,
         ];
 
         return $session;
@@ -308,10 +426,18 @@ final class BackgroundSupervisor implements SessionNotificationInterface
      * to {@see BackgroundSessionRunner::main()} — because code embedded in a
      * `php -r` string cannot be unit-tested, static-analysed or read
      * comfortably. The agent loop itself therefore lives in a real class.
+     *
+     * The config carries the token PATH, never the token: this string is argv
+     * and argv is world-readable. And the generated umask is 0o077, not the
+     * pre-M5 0 — the daemon re-binds the socket path as its own server and
+     * keeps appending to the buffer, and every file it creates from here on
+     * should be owner-only for its whole life, not merely inside a 0700
+     * directory that a wider mode would keep leaning on.
      */
     public function buildSessionDaemonCode(
         string $socketPath,
         string $bufferPath,
+        string $tokenPath,
         string $sessionId,
         string $task,
         string $workingDirectory,
@@ -323,6 +449,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface
             'sessionId' => $sessionId,
             'socketPath' => $socketPath,
             'bufferPath' => $bufferPath,
+            'tokenPath' => $tokenPath,
             'task' => $task,
             'workingDirectory' => $workingDirectory,
             'provider' => $provider,
@@ -332,7 +459,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface
 
         return sprintf(
             '
-umask(0);
+umask(0o077);
 $pid = pcntl_fork();
 if ($pid < 0) { exit(1); }
 if ($pid > 0) { exit(0); }
@@ -387,25 +514,143 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
     }
 
     /**
-     * Extract the daemon PID from a `HELLO:<sessionId>:<pid>` handshake.
+     * Parse a `HELLO:<sessionId>:<pid>:<token>` handshake into its three
+     * payload fields, or null when the line is anything else.
      *
-     * Returns null for anything else so a malformed or missing handshake
-     * falls back to the launcher PID rather than tracking pid 0.
+     * Parse-don't-validate at the trust boundary: the caller receives either a
+     * fully-shaped credential triple it can verify against the minted token, or
+     * nothing. The pre-M5 three-field form (`HELLO:<sessionId>:<pid>`) parses to
+     * null HERE, and is therefore unauthenticated — arrival of an un-trusted
+     * credential is a refusal, never a lesser trust.
+     *
+     * @return array{sessionId: string, pid: int, token: string}|null
      */
-    public static function parseHandshakePid(string $handshake): ?int
+    public static function parseHandshake(string $handshake): ?array
     {
         $handshake = trim($handshake);
         if (!str_starts_with($handshake, BackgroundSessionRunner::HANDSHAKE_PREFIX)) {
             return null;
         }
 
+        // Exactly four colon-separated parts: neither sessionId (date + hex)
+        // nor the pid nor a hex token can contain a colon, so a fifth part is
+        // hostile shape, not data to be lenient about.
         $parts = explode(':', $handshake);
-        $pid = end($parts);
-        if (!is_string($pid) || !ctype_digit($pid) || (int) $pid <= 0) {
+        if (count($parts) !== 4) {
             return null;
         }
 
-        return (int) $pid;
+        [, $sessionId, $pid, $token] = $parts;
+        if ($sessionId === ''
+            || !ctype_digit($pid)
+            || (int) $pid <= 0
+            || $token === ''
+            || !ctype_xdigit($token)
+        ) {
+            return null;
+        }
+
+        return ['sessionId' => $sessionId, 'pid' => (int) $pid, 'token' => $token];
+    }
+
+    /**
+     * The kernel start time (clock ticks since boot, `/proc/<pid>/stat` field
+     * 22) of $pid, or null when procfs cannot answer.
+     *
+     * Together with the pid this is a process IDENTITY: a number the pid
+     * allocator recycles does not come back with its predecessor's start time,
+     * which is the spoof {@see isProcessRunning()} refuses. Field indexing
+     * follows the {@see BackgroundSessionRunner} test precedent — fields 1-2
+     * (pid, comm) sit before the state field, comm may contain spaces, so the
+     * split starts after the LAST ')' and starttime is then rest[22-3].
+     */
+    public static function procStartTime(int $pid): ?int
+    {
+        if ($pid <= 0) {
+            return null;
+        }
+
+        $stat = @file_get_contents('/proc/' . $pid . '/stat');
+        if (!is_string($stat)) {
+            return null;
+        }
+
+        $close = strrpos($stat, ')');
+        if ($close === false) {
+            return null;
+        }
+
+        $rest = preg_split('/\s+/', trim(substr($stat, $close + 1)));
+        // state(3) .. starttime(22) means the slice needs at least 20 entries.
+        if ($rest === false || count($rest) < 20 || !ctype_digit($rest[19])) {
+            return null;
+        }
+
+        return (int) $rest[19];
+    }
+
+    /**
+     * Create — once per supervisor process — the private 0700 directory every
+     * session's IPC files live in, and refuse to continue if it is anything
+     * other than what was asked for.
+     *
+     * The mode is produced by narrowing the umask around `mkdir` (the house
+     * pattern: the directory is 0700 for its whole life, never 0777-then-
+     * chmod'ed) and then VERIFIED off `lstat`, because this method's promise is
+     * exactly the thing audit M5 was about — trusting a mode that was merely
+     * requested. `lstat` rather than `stat`: a pre-planted symlink at the
+     * random path must read as what it is and be refused, not followed.
+     *
+     * @throws \RuntimeException When the directory cannot be created or is not private.
+     */
+    private function ensurePrivateIpcDir(): string
+    {
+        if ($this->ipcDir !== '') {
+            return $this->ipcDir;
+        }
+
+        $uid = function_exists('posix_getuid') ? posix_getuid() : (int) getmypid();
+        $dir = sys_get_temp_dir() . '/sugar_crush_bg_' . $uid . '_' . bin2hex(random_bytes(8));
+
+        $previous = umask(0o077);
+        try {
+            if (!@mkdir($dir, 0700) && !is_dir($dir)) {
+                throw new \RuntimeException("Failed to create private IPC directory {$dir}");
+            }
+        } finally {
+            umask($previous);
+        }
+
+        clearstatcache(true, $dir);
+        $stat = @lstat($dir);
+        $isPrivateDir = $stat !== false
+            && ($stat['mode'] & 0o170000) === 0o040000 // S_ISDIR on the lstat'd inode itself
+            && ($stat['uid'] === $uid || !function_exists('posix_getuid'))
+            && ($stat['mode'] & 0o777) === 0700;
+        if (!$isPrivateDir) {
+            throw new \RuntimeException("Private IPC directory {$dir} is not owner-private (0700) — refusing to spawn");
+        }
+
+        $this->ipcDir = $dir;
+
+        return $dir;
+    }
+
+    /**
+     * Drop ONE session's IPC files after a failed spawn.
+     *
+     * Deliberately does NOT remove the directory: it is per-process, shared by
+     * every session this supervisor spawns, and a failed spawn has no
+     * authority over its siblings — an rmdir here would race live sessions and
+     * force re-creation for later ones.
+     *
+     * @param string ...$paths socketPath, bufferPath, tokenPath, logPath
+     */
+    private function discardIpcFiles(string ...$paths): void
+    {
+        foreach ($paths as $path) {
+            @unlink($path);
+        }
     }
 
     /**
@@ -489,7 +734,7 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
         // pid 0 means BOTH the handshake and proc_get_status() failed, so this
         // daemon's liveness is unknown — fall through to the stall check
         // rather than declaring a session finished that we cannot observe.
-        if ($ipc === null || $ipc['pid'] <= 0 || $this->isProcessRunning($ipc['pid'])) {
+        if ($ipc === null || $ipc['pid'] <= 0 || $this->isProcessRunning($ipc['pid'], $ipc['startTime'] ?? null)) {
             return false;
         }
 
@@ -633,10 +878,21 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
 
             // If session has IPC data, check if child is still running and connect
             if ($ipc !== null) {
-                $childRunning = $this->isProcessRunning($ipc['pid']);
+                $childRunning = $this->isProcessRunning($ipc['pid'], $ipc['startTime'] ?? null);
 
                 if ($childRunning && file_exists($ipc['socketPath'])) {
-                    // Child is still running — connect and send RESUME over IPC
+                    // Child is still running — authenticate, then send RESUME
+                    // over IPC. The daemon's command loop refuses every
+                    // connection that does not open with the token line
+                    // ({@see BackgroundSessionRunner::serveClient()}), so an
+                    // unauthenticated reconnect simply gets nothing back —
+                    // the same shape as a dead socket, and the right shape for
+                    // a stranger. The token lives in a 0600 file only this
+                    // (owner-verified) process can read.
+                    $token = isset($ipc['tokenPath'])
+                        ? trim((string) @file_get_contents($ipc['tokenPath']))
+                        : '';
+
                     $supervisor = @stream_socket_client(
                         'unix://' . $ipc['socketPath'],
                         $errno,
@@ -646,6 +902,9 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
 
                     if ($supervisor !== false) {
                         stream_set_timeout($supervisor, 1);
+                        if ($token !== '') {
+                            fwrite($supervisor, BackgroundSessionRunner::AUTH_PREFIX . $token . "\n");
+                        }
                         fwrite($supervisor, "RESUME\n");
                         fflush($supervisor);
 
@@ -687,13 +946,33 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
     }
 
     /**
-     * Check if a process is running by PID.
+     * Check if the recorded daemon is still the process its pid named at spawn.
+     *
+     * A bare `posix_kill($pid, 0)` answers "does SOMETHING hold this number",
+     * and the kernel recycles numbers — audit M5's forged-status path. When a
+     * start-time fingerprint was captured at the authenticated handshake, the
+     * identity must match before liveness counts at all.
+     *
+     * If procfs cannot answer, this falls through to signal 0 rather than
+     * declaring death: a false "running" only delays reaping (the stall ticker
+     * still bounds it), while a false "dead" would settle a live session as
+     * Completed and stop its user from ever seeing the answer. On Linux with
+     * /proc mounted — the only shape this suite's platform tripwire says CI
+     * runs — the fingerprint path is the one that executes.
      */
-    private function isProcessRunning(int $pid): bool
+    private function isProcessRunning(int $pid, ?int $startTime = null): bool
     {
         if ($pid <= 0) {
             return false;
         }
+
+        if ($startTime !== null) {
+            $observed = self::procStartTime($pid);
+            if ($observed !== null) {
+                return $observed === $startTime;
+            }
+        }
+
         // Send signal 0 — checks if process exists without sending any signal
         return posix_kill($pid, 0);
     }

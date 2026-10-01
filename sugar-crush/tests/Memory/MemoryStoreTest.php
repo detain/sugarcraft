@@ -45,6 +45,37 @@ final class MemoryStoreTest extends TestCase
         $this->assertStringContainsString('Test memory content', $content);
     }
 
+    public function testNoteAndIndexLandOwnerOnlyWithNoOrphanTemps(): void
+    {
+        // Audit M3: notes/index went out via bare file_put_contents (0644
+        // under a default umask, torn on crash). They now publish through
+        // AtomicFileWriter at 0600; scope dirs are created 0700.
+        $store = new MemoryStore($this->tempDir);
+
+        $id = $store->add('Durable fact for the perm pin', 'user');
+        $store->generateIndex('user');
+
+        $note = $this->tempDir . '/user/' . $id . '.md';
+        $index = $this->tempDir . '/user/MEMORY.md';
+        clearstatcache();
+        $this->assertSame(0o600, fileperms($note) & 0o777, 'memory note must be owner-only');
+        $this->assertSame(0o600, fileperms($index) & 0o777, 'generated index must be owner-only');
+        $this->assertSame(0o700, fileperms($this->tempDir . '/user') & 0o777, 'scope dir must be owner-only');
+        // scandir+filter, not a wildcard glob(): glob-shaped literals in tests
+        // join the GlobDialectDifferentialTest corpus and drift its pinned
+        // PathGlob docblock figure.
+        $this->assertSame([], array_values(array_filter(
+            scandir($this->tempDir . '/user') ?: [],
+            static fn(string $entry): bool => str_contains($entry, '.tmp.'),
+        )), 'no orphan temp survives the publish');
+
+        // The published bytes are exactly what the reader expects — rename
+        // landed the FULL payload (idempotent re-read through the public API).
+        $entry = $store->get($id);
+        $this->assertNotNull($entry);
+        $this->assertStringContainsString('Durable fact', $entry->content());
+    }
+
     public function testListReturnsEntriesForScope(): void
     {
         $store = new MemoryStore($this->tempDir);
