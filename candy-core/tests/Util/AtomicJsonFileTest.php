@@ -358,7 +358,17 @@ final class AtomicJsonFileTest extends TestCase
         $this->assertSame(0600, $private->permissions());
         // Confinement resolved at new() survives the derive.
         $this->assertSame($store->path(), $private->path());
-        $this->assertSame($base . '/state.json', $private->path());
+        // Compared through the SAME normalization confine() applies: it
+        // re-anchors onto realpath()'d parent, and on macOS
+        // sys_get_temp_dir() spells the base through the /var symlink
+        // (/var/folders/...) while realpath collapses it to
+        // /private/var/folders/.... realpath() is the identity on Linux, so
+        // this pins the identical string equality there; the pin that the
+        // `..` detour collapses onto base/state.json stays exact — an
+        // uncollapsed or differently-anchored path() reddens it on any host.
+        $realBase = realpath($base);
+        $this->assertIsString($realBase, 'realpath() could not resolve ' . $base);
+        $this->assertSame($realBase . '/state.json', $private->path());
     }
 
     public function testWithPermissionsRejectsValuesThatAreNotPermissionBits(): void
