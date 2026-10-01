@@ -29,7 +29,10 @@ use SugarCraft\Forms\Validator\Validator;
  * clamp reddens the census even when the behavioural pins stay green).
  * Int-ness survives when min and step are both int; float results are
  * normalised to 10 decimals so lattice arithmetic never leaks
- * `0.30000000000000004` into a value or a rendered label.
+ * `0.30000000000000004` into a value or a rendered label. The snap itself
+ * is the explicit EPS-tolerant rule in {@see latticeIndex()} — never a bare
+ * round() call, whose version-varying tie fuzz made float lattices drift
+ * between PHP 8.3 and 8.4.
  *
  * Nonsense geometry throws at the boundary (Fail Fast): min at-or-above
  * max, a zero/negative step and a sub-unit width are unusable
@@ -90,7 +93,7 @@ final class Slider implements \SugarCraft\Forms\Field
         if ($width < 1) {
             throw new \InvalidArgumentException(Lang::t('slider.width_positive'));
         }
-        $lattice = (int) round((self::clamp($min, $max, $raw) - $min) / $step);
+        $lattice = self::latticeIndex((self::clamp($min, $max, $raw) - $min) / $step);
         $top     = (int) floor(($max - $min) / $step + self::EPS);
         if ($lattice < 0) {
             $lattice = 0;
@@ -178,7 +181,7 @@ final class Slider implements \SugarCraft\Forms\Field
     /** Lattice index of the current value: 0 == min, `steps()` == top. */
     public function position(): int
     {
-        return (int) round(($this->value - $this->min) / $this->step);
+        return self::latticeIndex(($this->value - $this->min) / $this->step);
     }
 
     /** Number of step increments between min and max (lattice top index). */
@@ -272,6 +275,31 @@ final class Slider implements \SugarCraft\Forms\Field
     private static function clamp(int|float $min, int|float $max, int|float $v): int|float
     {
         return max($min, min($max, $v));
+    }
+
+    /**
+     * The documented lattice snap: nearest step, exact ties away from zero,
+     * and anything inside the class EPS of a tie treated as ON the tie — so
+     * a seed whose double lands a few ulps below the halfway quotient
+     * (0.35 / 0.1 == 3.4999999999999996) snaps up like the decimal value it
+     * stands for. The quotient is always >= 0 here: normalise() clamps the
+     * value into range before dividing, and every stored value is already a
+     * lattice point, so floor(q + 0.5) is exactly half-up.
+     *
+     * Mirrors charmbracelet/bubbles' slider snapping, and deliberately does
+     * NOT call round(): through PHP 8.3 round() "pre-rounded" — it nudged
+     * values within ~1e-9 of a tie over it, silently implementing this rule
+     * by accident. PHP 8.4 removed that pre-round as a bug fix (see
+     * migration84.other-changes: 0.49999999999999994 now rounds to 0, not
+     * 1), which made every round()-derived lattice drift between versions
+     * (SliderTest::testFloatLatticeIsClean was green on 8.3, red on 8.4).
+     * The tolerance now lives in this class's contract — pure IEEE
+     * arithmetic, identical on every runtime — matching the same EPS the
+     * `$top`/steps() floors already use.
+     */
+    private static function latticeIndex(int|float $quotient): int
+    {
+        return (int) floor($quotient + 0.5 + self::EPS);
     }
 
     /** Walk the lattice by $delta steps, saturating at both ends. */

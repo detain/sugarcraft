@@ -62,18 +62,33 @@ final class SliderTest extends TestCase
     {
         $this->assertSame(5,  Slider::new('s', 0, 20, 5)->withValue(7)->value());
         $this->assertSame(10, Slider::new('s', 0, 20, 5)->withValue(8)->value());
-        // PHP round() ties go away from zero — pin the house convention.
+        // Exact ties snap away from zero — the house convention, now an
+        // explicit lattice rule in src (Slider::latticeIndex), NOT a
+        // round() call: 8.3's round() agreed via its undocumented
+        // pre-round fuzz, 8.4's no longer does.
         $this->assertSame(10, Slider::new('s', 0, 20, 5)->withValue(7.5)->value());
     }
 
     public function testFloatLatticeIsClean(): void
     {
+        // 0.35 is the decimal halfway between the 0.3 and 0.4 lattice
+        // points, and its double (0.34999999999999997779…) divided by 0.1
+        // lands a few ulps BELOW the tie: 3.4999999999999996. The
+        // documented snap treats anything inside EPS of a tie as ON it and
+        // ties go away from zero, so 0.4 is the answer on EVERY PHP
+        // runtime — pure floor/+0.5 IEEE arithmetic, no round() tie fuzz
+        // (that hidden dependency is what reddened this pin on 8.4).
         $s = Slider::new('v', 0, 1, 0.1, 0.35);
         $this->assertSame(0.4, $s->value(), 'naive float math would land 0.30000000000000004-ish');
         $walked = $s;
         for ($i = 0; $i < 6; $i++) {
             [$walked, ] = $walked->focus();
             [$walked, ] = $walked->update(new KeyMsg(KeyType::Right));
+            // Each stop re-derived from the lattice rule with an explicit
+            // tolerance, not a version-coupled literal: stop k must sit on
+            // k*step within a billionth.
+            $this->assertSame($i + 5, $walked->position());
+            $this->assertEqualsWithDelta(($i + 5) * 0.1, $walked->value(), 1e-9, "stop " . ($i + 5) . ' off the lattice');
         }
         $this->assertSame(1.0, $walked->value());
         $this->assertSame('1', (string) $walked->value(), 'the rendered label must not print 1.0000000000000002');
