@@ -64,8 +64,11 @@ final class VeilStack implements \Countable
     /**
      * Composite all veils onto the background in z-index order (lowest first).
      *
-     * Each veil is composited onto the result of the previous one, so veils
-     * with higher z-index end up on top.
+     * Each veil paints its own {@see Veil::content()} (attach one with
+     * {@see Veil::withContent()}; a content-less veil is a backdrop-only dim
+     * layer) ONTO THE ACCUMULATED canvas, so veils with higher z-index end
+     * up on top — each layer sees everything beneath it, including dims
+     * applied by earlier layers.
      *
      * @param string $background The base content
      * @param Position $vertical Vertical position anchor
@@ -87,17 +90,22 @@ final class VeilStack implements \Countable
         foreach ($sorted as $veil) {
             // Use withoutSession() so inner compositing always emits full frame
             // output, not a delta that would corrupt the chaining computation.
-            $result = $veil->withoutSession()->composite($result, $background, $vertical, $horizontal, $xOffset, $yOffset);
+            // The veil's OWN content rides over the ACCUMULATED $result — using
+            // the accumulated canvas as the foreground instead would cover every
+            // row and make the whole pass a silent no-op.
+            $result = $veil->withoutSession()->composite($veil->content(), $result, $vertical, $horizontal, $xOffset, $yOffset);
         }
         return $result;
     }
 
     /**
-     * Composite all veils at their individual fixed TOP,LEFT positions.
+     * Composite all veils at their individual positions.
      *
-     * Each veil is composited onto the accumulated result at its own
-     * vPosition()/hPosition() anchor with positionX()/positionY() offsets,
-     * so higher z-index veils appear on top of lower ones.
+     * Each veil is composited onto the ACCUMULATED result at its own
+     * vPosition()/hPosition() anchor (CENTER when unset) with
+     * positionX()/positionY() offsets, painting its own
+     * {@see Veil::content()}, so higher z-index veils appear on top of
+     * lower ones.
      *
      * @param string $background The base content
      * @return string The composited output
@@ -109,9 +117,11 @@ final class VeilStack implements \Countable
         foreach ($sorted as $veil) {
             // Use withoutSession() so inner compositing always emits full frame
             // output, not a delta that would corrupt the chaining computation.
+            // $result (not $background) is the backdrop: later layers must see
+            // everything earlier layers painted.
             $result = $veil->withoutSession()->composite(
+                $veil->content(),
                 $result,
-                $background,
                 $veil->vPosition() ?? Position::CENTER,
                 $veil->hPosition() ?? Position::CENTER,
                 $veil->positionX(),

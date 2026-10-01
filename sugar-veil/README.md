@@ -3,7 +3,7 @@
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-veil)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-veil)
-[![Packagist Version](https://img.shields.io/packagist/v/sugarcore/sugar-veil?label=packagist)](https://packagist.org/packages/sugarcore/sugar-veil)
+[![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-veil?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-veil)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
@@ -18,9 +18,10 @@ PHP port of [rmhubbert/bubbletea-overlay](https://github.com/rmhubbert/bubbletea
 - **Pixel-precise offsets**: X/Y offsets fine-tune any position
 - **Pure rendering**: composites any background + foreground strings
 - **Works with any TUI framework**: render your models first, then composite
-- **Backdrop dimming**: apply ANSI dim overlay (0–100 opacity) to background
+- **Backdrop dimming**: truecolor opacity blend (0–100) applied to plain background lines during assembly
 - **Animated transitions**: Slide, Fade, and Scale animations driven by honey-bounce CubicBezier easing
 - **Z-index stacking**: control render order across multiple overlays via `withZIndex()`
+- **Stack content channel**: `withContent(string)` gives a veil its own foreground so `VeilStack` layers render their boxes, not just their dim
 - **Click-outside dismiss**: detect when a mouse click falls outside a veil's zone via `withClickOutsideDismiss()`
 - **Auto-size**: compute veil dimensions from content rather than fixed width/height via `withAutoSize()`
 - **Border chrome**: wrap veil content in a terminal border via `withBorder()`
@@ -35,6 +36,7 @@ composer require sugarcraft/sugar-veil
 ## Quick Start
 
 ```php
+use SugarCraft\Veil\Position;
 use SugarCraft\Veil\Veil;
 
 $veil = Veil::new();
@@ -79,7 +81,7 @@ $veil->composite($fg, $bg, Position::BOTTOM, Position::LEFT, xOffset: 2, yOffset
 
 ## Backdrop Dimming
 
-Dim the background behind the overlay using `withBackdrop(int $opacity)` where opacity ranges from 0 (no dimming) to 100 (fully dimmed). The backdrop is applied via ANSI SGR codes before compositing.
+Dim the background behind the overlay using `withBackdrop(int $opacity)` where opacity ranges from 0 (no dimming) to 100 (fully dimmed). Plain background lines are wrapped in a truecolor foreground blended from the approximated default white toward black by the opacity percentage; lines that already carry an escape introducer (SGR-styled output, OSC hyperlinks, …) are passed through unchanged, since rewriting their color runs would fight the producer's own palette. Because the dim ride lands as real SGR on the assembled frame, `composite()` diffs detect opacity-only changes between frames.
 
 ```php
 // Dim the background to 50% intensity
@@ -95,7 +97,7 @@ Overlay transitions can be animated using `withAnimation(AnimationKind)`. The `a
 
 | Kind   | Behavior |
 |--------|----------|
-| `SLIDE` | Foreground enters from the anchor direction |
+| `SLIDE` | Foreground enters from the anchor direction (no-op when anchored at `CENTER` on both axes — there is no edge to enter from) |
 | `FADE`  | Foreground opacity increases from 0 to 1 (terminal-dependent) |
 | `SCALE` | Lines appear from the center outward |
 
@@ -108,14 +110,16 @@ $veil = Veil::new()
     ->withAnimation(AnimationKind::SLIDE)
     ->withBackdrop(30);
 
-// Animate from 0% to 100% progress
+// Animate from 0% to 100% progress, sliding in from the top edge.
+// (SLIDE needs at least one edge anchor: CENTER/CENTER would render the
+// final position on every frame.)
 for ($p = 0.0; $p <= 1.0; $p += 0.1) {
-    $output = $veil->animate($fg, $bg, Position::CENTER, Position::CENTER, progress: $p);
+    $output = $veil->animate($fg, $bg, Position::TOP, Position::CENTER, progress: $p);
     // render $output ...
 }
 ```
 
-The `animate()` method composes the overlay with the animation applied at the given progress value. For `SLIDE`, the foreground is offset toward the anchor direction. For `SCALE`, lines are revealed from the center outward. For `FADE`, the foreground is returned unchanged but the easing progress is calculated for external use.
+The `animate()` method composes the overlay with the animation applied at the given progress value. For `SLIDE`, the foreground starts displaced off-screen toward the anchored edge and eases into its final position — anchored at `CENTER` on an axis that axis contributes no displacement. For `SCALE`, lines are revealed from the center outward. For `FADE`, the foreground is returned unchanged but the easing progress is calculated for external use.
 
 ## Z-Index Stacking
 
@@ -135,7 +139,7 @@ Accessor: `zIndex(): int`
 
 ## VeilStack (Multi-Veil Rendering)
 
-`VeilStack` manages multiple veils ordered by z-index. When compositing, it sorts veils ascending by z-index and composites each onto the result of the previous one, so higher z-index veils appear on top of lower ones.
+`VeilStack` manages multiple veils ordered by z-index. When compositing, it sorts veils ascending by z-index and composites each onto the result of the previous one, so higher z-index veils appear on top of lower ones. Each layer composites its own `withContent(string)` foreground onto the accumulated canvas; a layer with no content contributes only its backdrop dim.
 
 ```php
 use SugarCraft\Veil\Veil;
@@ -143,8 +147,16 @@ use SugarCraft\Veil\VeilStack;
 use SugarCraft\Veil\Position;
 
 $stack = VeilStack::new()
-    ->add(Veil::new()->withZIndex(0)->withBackdrop(30))           // base dim layer
-    ->add(Veil::new()->withZIndex(10)->withBackdrop(0));           // modal on top
+    ->add(
+        Veil::new()
+            ->withZIndex(0)
+            ->withBackdrop(30)                                          // base dim layer (no content)
+    )
+    ->add(
+        Veil::new()
+            ->withZIndex(10)
+            ->withContent("╔════════╗\n║ MODAL  ║\n╚════════╝")  // modal box on top
+    );
 
 $output = $stack->composite($background, Position::CENTER, Position::CENTER);
 ```
@@ -224,7 +236,7 @@ if ($outside) {
 
 Accessors: `clickOutsideDismiss(): bool`
 
-The `isClickOutside(MouseMsg $mouse): bool` method returns `true` when `clickOutsideDismiss` is enabled, a rendered output has been scanned, and the click falls outside all tracked zones. Returns `false` when no scan data is available or when click-outside-dismiss is disabled.
+The `isClickOutside(MouseMsg $mouse): bool` method returns `true` when `clickOutsideDismiss` is enabled, a rendered output has been scanned, and the click falls outside all tracked zones. Returns `false` when `clickOutsideDismiss` is disabled. When dismissal is enabled but `scan()` has not run yet, it throws a `RuntimeException` rather than silently answering "inside" — a dismiss handler built on an unscanned veil would never fire, so the miss is surfaced loudly.
 
 ## Buffer diffing
 
@@ -233,6 +245,13 @@ call it builds the current Buffer, computes `current->diff(previous)` (from
 [candy-buffer](https://github.com/detain/sugarcraft-candy-buffer)), and emits only
 the delta ANSI ops via `DiffEncoder::encode($ops)`. The current frame then replaces
 `previousFrame` for the next render.
+
+Frames are modeled as candy-buffer cell grids with terminal-faithful layout: wide
+graphemes (CJK, emoji) occupy two cells with a continuation tail, SGR sequences set
+a per-cell style pen, OSC 8 hyperlinks attach real `Hyperlink` metadata, and the
+invisible candy-mouse zone sentinels consume no columns. Style-only, link-only and
+backdrop-opacity-only frame changes therefore produce correct deltas instead of
+empty ones.
 
 **SSH bandwidth + flicker win:** a one-character change in an 80×24 viewport
 produces ~8 bytes of delta ops instead of ~1 940 bytes for a full repaint.

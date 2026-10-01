@@ -6,7 +6,8 @@ namespace SugarCraft\Veil;
 
 use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
-use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Buffer\Hyperlink;
+use SugarCraft\Buffer\Style as BufferStyle;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
@@ -73,8 +74,8 @@ final class Veil
     /** @var int Y offset in rows */
     private readonly int $posY;
 
-    /** @var bool Whether per-veil position was explicitly set */
-    private readonly bool $positionSet;
+    /** @var string Overlay content this veil paints when driven by a VeilStack (empty = backdrop-only layer) */
+    private readonly string $content;
 
     /**
      * @param int             $backdropOpacity 0–100 backdrop dimming
@@ -90,7 +91,7 @@ final class Veil
      * @param Position|null $hPosition Horizontal position anchor
      * @param int $posX X offset in columns
      * @param int $posY Y offset in rows
-     * @param bool $positionSet Whether position was explicitly set
+     * @param string $content Overlay content for stack-driven compositing
      */
     private function __construct(
         int $backdropOpacity = 0,
@@ -106,7 +107,7 @@ final class Veil
         ?Position $hPosition = null,
         int $posX = 0,
         int $posY = 0,
-        bool $positionSet = false,
+        string $content = '',
     ) {
         $this->backdropOpacity = \max(0, \min(100, $backdropOpacity));
         $this->animationKind = $animationKind;
@@ -122,7 +123,7 @@ final class Veil
         $this->hPosition = $hPosition;
         $this->posX = $posX;
         $this->posY = $posY;
-        $this->positionSet = $positionSet;
+        $this->content = $content;
     }
 
     /**
@@ -145,10 +146,12 @@ final class Veil
 
     /**
      * Set the animation kind for overlay transitions.
+     *
+     * Passing null clears the animation (composite runs un-animated).
      */
-    public function withAnimation(AnimationKind $kind): self
+    public function withAnimation(?AnimationKind $kind): self
     {
-        return $this->mutate(animationKind: $kind);
+        return $this->mutate(animationKind: $kind, animationKindSet: true);
     }
 
     /** Read-only accessor for z-index. */
@@ -210,37 +213,59 @@ final class Veil
     }
 
     /**
-     * Set the border chrome for wrapping veil content.
+     * Set the border chrome for wrapping veil content, or clear it with null.
      *
      * Uses candy-sprinkles Border + Style to wrap the content with
      * a terminal border. When combined with autoSize, dimensions
      * are computed from the bordered content.
      */
-    public function withBorder(Border $border): self
+    public function withBorder(?Border $border): self
     {
-        return $this->mutate(border: $border);
+        return $this->mutate(border: $border, borderSet: true);
     }
 
     /**
      * Set the vertical and horizontal position anchors for this veil.
      *
      * When set on a Veil in a VeilStack, compositeAll() will use these
-     * positions instead of the hardcoded TOP/LEFT defaults.
+     * positions instead of defaulting to CENTER/CENTER.
      *
-     * @param Position $vertical Vertical anchor (TOP, CENTER, BOTTOM)
-     * @param Position $horizontal Horizontal anchor (LEFT, CENTER, RIGHT)
+     * Passing null for an axis CLEARS that anchor (the veil falls back to
+     * the stack default on that axis); offsets always reset to the given
+     * values, so withPosition(null, null) restores full defaults.
+     *
+     * @param Position|null $vertical Vertical anchor (TOP, CENTER, BOTTOM) or null to clear
+     * @param Position|null $horizontal Horizontal anchor (LEFT, CENTER, RIGHT) or null to clear
      * @param int $x Additional columns rightward (+) / leftward (-)
      * @param int $y Additional lines downward (+) / upward (-)
      */
-    public function withPosition(Position $vertical, Position $horizontal, int $x = 0, int $y = 0): self
+    public function withPosition(?Position $vertical, ?Position $horizontal, int $x = 0, int $y = 0): self
     {
         return $this->mutate(
             vPosition: $vertical,
+            vPositionSet: true,
             hPosition: $horizontal,
+            hPositionSet: true,
             posX: $x,
             posY: $y,
-            positionSet: true,
         );
+    }
+
+    /**
+     * Attach the overlay content this veil paints when a VeilStack drives
+     * it. A veil WITHOUT content acts as a backdrop-only layer: the stack
+     * pass dims (or passes through) the canvas beneath it and writes no
+     * foreground of its own.
+     */
+    public function withContent(string $content): self
+    {
+        return $this->mutate(content: $content);
+    }
+
+    /** Read-only accessor for the stack-driven overlay content ('' = none). */
+    public function content(): string
+    {
+        return $this->content;
     }
 
     /** Read-only accessor for vertical position anchor. */
@@ -316,11 +341,17 @@ final class Veil
      * hit() or isClickOutside().
      *
      * Uses candy-mouse Scanner internally — no external Manager needed.
+     *
+     * The clone carries a FRESH scanner holding only this render's zones:
+     * Scanner::scan() replaces zones wholesale, so reusing the shared
+     * instance would only smuggle hidden state across with*() clones
+     * (scanning a clone would retro-change the original's hit-testing).
      */
     public function scan(string $rendered): self
     {
-        $this->scanner->scan($rendered);
-        return $this->mutate(scanner: $this->scanner, lastRendered: $rendered);
+        $scanner = Scanner::new();
+        $scanner->scan($rendered);
+        return $this->mutate(scanner: $scanner, lastRendered: $rendered, lastRenderedSet: true);
     }
 
     /**
@@ -480,15 +511,28 @@ final class Veil
                 continue;
             }
 
-            // Clip the foreground line to the room left on this row (keeping its
-            // escapes) and measure its visible footprint.
-            $fgLine = Width::truncateAnsi($fgLines[$fy], $bgWidth - $x);
+            // Mirror guard for the left edge: an overlay whose whole footprint
+            // ends at or left of column 0 (negative xOffset, or an anchor
+            // centre where fg is wider than bg) shows nothing — including a
+            // zero-width line, whose drop below lands at x=0.
+            if ($x + Width::string($fgLines[$fy]) <= 0) {
+                $output[$row] = $this->dimLine($bgLine);
+                continue;
+            }
+
+            // Clip the foreground line to the row, keeping its escapes cell-
+            // aware (via Width): drop the head when x < 0 so off-screen-left
+            // columns never leak onto col 0, then truncate to the room left.
+            $fgLine = $x < 0
+                ? Width::truncateAnsi(Width::dropAnsi($fgLines[$fy], -$x), $bgWidth)
+                : Width::truncateAnsi($fgLines[$fy], $bgWidth - $x);
             $fgVis  = Width::string($fgLine);
 
-            // Compute prefix/suffix from the background, handling off-screen left.
+            // Compute prefix/suffix from the background; with the head clipped
+            // the overlay always starts at column max(0, x).
             $prefixWidth = \max(0, $x);
             $prefix = Width::padRight(Width::truncateAnsi($bgLine, $prefixWidth), $prefixWidth);
-            $suffix = Width::dropAnsi($bgLine, $x + $fgVis);
+            $suffix = Width::dropAnsi($bgLine, $prefixWidth + $fgVis);
 
             $output[$row] = $this->dimLine($prefix) . $fgLine . $this->dimLine($suffix);
         }
@@ -518,12 +562,11 @@ final class Veil
      *
      * For backdrop lines (lines without embedded ANSI styling that starts the
      * line), the gray blend achieves visible dimming. For lines that START
-     * with an ANSI sequence (e.g. the foreground overlay row with its own
-     * bold/color codes), the line is returned unchanged to preserve original
-     * styling (matching the old FAINT behavior where styled text was not dimmed).
-     *
-     * Lines that start with the old FAINT code (\e[2m) are replaced with the
-     * truecolor blend so the gradient is continuous rather than 2-state.
+     * with an escape sequence (CSI styling like bold/color codes, or OSC
+     * payloads such as hyperlinks), the line is returned unchanged to
+     * preserve original styling (matching the old FAINT behavior where
+     * styled text was not dimmed) — wrapping an escape-led line in color SGR
+     * would corrupt the payload it carries.
      */
     private function dimLine(string $line): string
     {
@@ -532,11 +575,10 @@ final class Veil
             return $line;
         }
 
-        // If line starts with an ANSI sequence, preserve it unchanged.
-        // This matches the old FAINT behavior: styled text (starting with bold,
-        // color, etc.) was not dimmed. Lines that start with \e[2m (old FAINT
-        // dim codes) are replaced with truecolor for the gradient effect.
-        if ($line[0] === "\e" && $line[1] === '[') {
+        // If line starts with ANY escape introducer (CSI 'ESC [', OSC 'ESC ]',
+        // charset selects, …), preserve it unchanged. A lone trailing ESC is
+        // length-guarded so no offset read walks past the string end.
+        if ($line[0] === "\e" && $line !== "\e") {
             return $line;
         }
 
@@ -590,47 +632,69 @@ final class Veil
 
     /**
      * Create a new instance with updated properties.
+     *
+     * Nullable fields use paired `…Set` sentinels so an explicit null
+     * CLEARS the value (house immutable-fluent law): without a sentinel,
+     * `?? $this->x` cannot distinguish "set to null" from "leave alone".
      */
     private function mutate(
         ?int $backdropOpacity = null,
         ?AnimationKind $animationKind = null,
+        bool $animationKindSet = false,
         ?int $zIndex = null,
         ?bool $clickOutsideDismiss = null,
         ?bool $autoSize = null,
         ?Border $border = null,
+        bool $borderSet = false,
         ?Scanner $scanner = null,
         ?string $lastRendered = null,
+        bool $lastRenderedSet = false,
         ?Position $vPosition = null,
+        bool $vPositionSet = false,
         ?Position $hPosition = null,
+        bool $hPositionSet = false,
         ?int $posX = null,
         ?int $posY = null,
-        ?bool $positionSet = null,
+        ?string $content = null,
     ): self {
         return new self(
             backdropOpacity: $backdropOpacity ?? $this->backdropOpacity,
-            animationKind: $animationKind ?? $this->animationKind,
+            animationKind: $animationKindSet ? $animationKind : $this->animationKind,
             zIndex: $zIndex ?? $this->zIndex,
             clickOutsideDismiss: $clickOutsideDismiss ?? $this->clickOutsideDismiss,
             autoSize: $autoSize ?? $this->autoSize,
-            border: $border ?? $this->border,
+            border: $borderSet ? $border : $this->border,
             scanner: $scanner,
-            lastRendered: $lastRendered ?? $this->lastRendered,
+            lastRendered: $lastRenderedSet ? $lastRendered : $this->lastRendered,
             session: $this->session,
-            vPosition: $vPosition ?? $this->vPosition,
-            hPosition: $hPosition ?? $this->hPosition,
+            vPosition: $vPositionSet ? $vPosition : $this->vPosition,
+            hPosition: $hPositionSet ? $hPosition : $this->hPosition,
             posX: $posX ?? $this->posX,
             posY: $posY ?? $this->posY,
-            positionSet: $positionSet ?? $this->positionSet,
+            content: $content ?? $this->content,
         );
     }
 
     /**
      * Build a Buffer from a multi-line string output.
      *
-     * Uses ANSI-aware iteration to map VISIBLE characters (not raw bytes)
-     * to grid columns, so SGR escape sequences do not shift visible content.
-     * All cells are created with null style — the diff algorithm will
-     * still work correctly for detecting changed character positions.
+     * Walks each row with a terminal-faithful tokenizer (mirroring the
+     * candy-vt emulator's cell representation, ESC-2/ESC-3 in commit
+     * 9a8c8879c) so the diff compares what a terminal would actually
+     * SHOW, not raw bytes:
+     *
+     *  - grapheme clusters get their DISPLAY width from Width::of();
+     *    a width-2 head is followed by a Cell::continuation() tail, so
+     *    CJK text lands on the columns the terminal paints it on.
+     *  - CSI SGR sequences mutate a running pen; every cell stamped
+     *    after them carries that Style, so a style-only frame change
+     *    (e.g. backdrop opacity) is visible to Cell::equals() and
+     *    produces a delta instead of being diffed away.
+     *  - OSC 8 hyperlinks open/close a running link pen (an empty URI
+     *    closes; SGR reset does NOT, per xterm) and other OSC sequences
+     *    are consumed through BEL/ST — never emitted as visible cells.
+     *  - candy-mouse zone sentinels (U+E000 id U+E001 triples) are
+     *    invisible to terminals, so they consume ZERO columns here.
      *
      * @param string $output Multi-line string from composite()
      * @param int    $width  Buffer width in cells
@@ -642,48 +706,8 @@ final class Veil
         /** @var list<Cell> $grid */
         $grid = [];
         for ($row = 0; $row < $height; $row++) {
-            $line = $lines[$row] ?? '';
-            $col = 0;
-            $lineLen = \strlen($line);
-            $pos = 0;
-
-            // Split into characters ONCE per row so the per-column read below is
-            // O(1). mb_substr($line, $pos, 1) is O($pos) (it re-scans from the
-            // start of the string to reach character offset $pos), which made the
-            // old per-position loop O(n²) per row. mb_str_split()[$pos] ?? '' is
-            // byte-for-byte identical to mb_substr($line, $pos, 1) for every
-            // $pos >= 0 — including the byte-tail edge where $pos exceeds the
-            // character count and both yield '' (see testMultibyteLineThroughDiffBuffer).
-            $chars = \mb_str_split($line);
-
-            while ($pos < $lineLen) {
-                // Skip ANSI escape sequences (CSI format: ESC [ ... letter)
-                if ($line[$pos] === "\e" && $pos + 1 < $lineLen && $line[$pos + 1] === '[') {
-                    $pos += 2; // skip ESC [
-                    while ($pos < $lineLen && \ctype_alpha($line[$pos]) === FALSE) {
-                        $pos++;
-                    }
-                    if ($pos < $lineLen) {
-                        $pos++; // skip the terminating letter
-                    }
-                    continue;
-                }
-
-                if ($col >= $width) {
-                    break;
-                }
-
-                // Place this visible character at the current column
-                $char = $chars[$pos] ?? '';
-                $grid[$row * $width + $col] = Cell::new($char, null, null, 1);
-                $col++;
-                $pos++;
-            }
-
-            // Pad remaining columns with spaces
-            while ($col < $width) {
-                $grid[$row * $width + $col] = Cell::new(' ', null, null, 1);
-                $col++;
+            foreach ($this->paintRow($lines[$row] ?? '', $width) as $cell) {
+                $grid[] = $cell;
             }
         }
 
@@ -691,13 +715,313 @@ final class Veil
     }
 
     /**
+     * Tokenize one rendered row into exactly $width grid cells.
+     *
+     * @return list<Cell>
+     */
+    private function paintRow(string $line, int $width): array
+    {
+        // Blank row first; visible placement overwrites from the left. This
+        // keeps fromGrid()'s exact width*height contract regardless of where
+        // the walk stops (row overrun, unplaceable wide glyph).
+        /** @var list<Cell> $cells */
+        $cells = [];
+        for ($i = 0; $i < $width; $i++) {
+            $cells[] = Cell::new(' ', null, null, 1);
+        }
+
+        $pen  = null;   // running SGR style
+        $link = null;   // running OSC 8 link (survives SGR reset, per xterm)
+
+        $len = \strlen($line);
+        $pos = 0;
+        $col = 0;
+
+        while ($pos < $len) {
+            $byte = $line[$pos];
+
+            // ESC-introducers: CSI and OSC only — both consume zero columns.
+            if ($byte === "\e" && $pos + 1 < $len) {
+                $intro = $line[$pos + 1];
+
+                if ($intro === '[') {
+                    // CSI: parameters run until the first final byte (0x40–0x7E).
+                    // Only SGR ('m') feeds the pen; cursor moves and the rest are
+                    // skipped whole (the old ctype_alpha scan mis-terminated on
+                    // parameter bytes like 'p' or '>').
+                    $p = $pos + 2;
+                    while ($p < $len && \ord($line[$p]) < 0x40) {
+                        $p++;
+                    }
+                    if ($p < $len && $line[$p] === 'm') {
+                        $pen = self::penFromSgr(\substr($line, $pos + 2, $p - $pos - 2), $pen);
+                    }
+                    $pos = $p < $len ? $p + 1 : $len;
+                    continue;
+                }
+
+                if ($intro === ']') {
+                    // OSC: terminated by BEL or ST (ESC \). Unterminated OSC
+                    // swallows the rest of the row, matching the emulator.
+                    $tail = $pos + 2 + \strcspn($line, "\x07\x1b", $pos + 2);
+                    $body = \substr($line, $pos + 2, $tail - $pos - 2);
+                    if ($tail < $len && $line[$tail] === "\x1b") {
+                        $pos = $tail + 2; // swallow ESC + the ST backslash
+                    } else {
+                        $pos = $tail < $len ? $tail + 1 : $len; // BEL consumed
+                    }
+                    $link = self::linkFromOsc($body, $link);
+                    continue;
+                }
+
+                // Any other two-byte ESC sequence (ESC ( B charset selects, a
+                // stray ST, …): consume both bytes without touching the pens.
+                $pos += 2;
+                continue;
+            }
+
+            // candy-mouse zone sentinels: U+E000 … U+E001 triples (the id
+            // rides BETWEEN them in plain ASCII) plus stray closes are
+            // zero-column to a terminal. An unmatched open swallows the tail.
+            if ($byte === "\xEE" && $pos + 2 < $len && $line[$pos + 1] === "\x80") {
+                if ($line[$pos + 2] === "\x80") { // U+E000 OPEN — skip id to CLOSE
+                    $close = \strpos($line, "\xEE\x80\x81", $pos + 3);
+                    $pos = $close === FALSE ? $len : $close + 3;
+                    continue;
+                }
+                if ($line[$pos + 2] === "\x81") { // U+E001 CLOSE without an OPEN
+                    $pos += 3;
+                    continue;
+                }
+            }
+
+            $cluster = self::nextCluster($line, $pos);
+            $gw      = Width::of($cluster);
+
+            if ($gw === 0) {
+                // Combining marks / ZWJ joiners render inside the preceding
+                // cell; giving them their own column would shift the row
+                // against the terminal's own layout. Drop them (the base
+                // grapheme already placed at this column carries the glyph).
+                $pos += \strlen($cluster);
+                continue;
+            }
+
+            if ($col + $gw > $width) {
+                break; // no room left on this row (wide glyph at last column)
+            }
+
+            $cells[$col] = Cell::new($cluster, $pen, $link, $gw);
+            if ($gw === 2) {
+                $cells[$col + 1] = Cell::continuation();
+            }
+            $col += $gw;
+            $pos += \strlen($cluster);
+        }
+
+        return $cells;
+    }
+
+    /**
+     * Next user-perceived grapheme cluster starting at byte $pos.
+     *
+     * grapheme_str_split() is PHP 8.4+; on 8.3 fall back to the UTF-8
+     * lead-byte walk (same cascade sugar-charts' BufferHelper uses) so
+     * clustering is stable across PHP versions. Combining marks ride with
+     * their base character here rather than becoming stray cells.
+     */
+    private static function nextCluster(string $s, int $pos): string
+    {
+        $b = \ord($s[$pos]);
+        $len = $b < 0x80 ? 1 : (($b & 0xE0) === 0xC0 ? 2 : (($b & 0xF0) === 0xE0 ? 3 : (($b & 0xF8) === 0xF0 ? 4 : 1)));
+        $cluster = \substr($s, $pos, $len);
+
+        // Attach following combining marks (U+0300–U+036F) and variation
+        // selectors (U+FE00–U+FE0F) so one cell = one rendered glyph.
+        $i = $pos + $len;
+        $sLen = \strlen($s);
+        while ($i < $sLen) {
+            $nb = \ord($s[$i]);
+            if ($nb === 0xCC || $nb === 0xCD) { // U+0300–U+036F (2-byte 0xCC 0x80–0xBF, 0xCD 0x80–0xAF)
+                $cp = (($nb & 0x1F) << 6) | (\ord($s[$i + 1] ?? "\x80") & 0x3F);
+                if ($cp >= 0x0300 && $cp <= 0x036F) {
+                    $cluster .= \substr($s, $i, 2);
+                    $i += 2;
+                    continue;
+                }
+                break;
+            }
+            if ($nb === 0xEF) { // 3-byte U+FE00–U+FE0F: EF B8 80–BF / EF B8 90–8F…
+                $cpSub = \substr($s, $i, 3);
+                if (\preg_match('/\A\xEF\xB8[\x80-\xAF]\z/', $cpSub) === 1) {
+                    $cluster .= $cpSub;
+                    $i += 3;
+                    continue;
+                }
+                break;
+            }
+            break;
+        }
+
+        return $cluster;
+    }
+
+    /**
+     * Merge one CSI SGR parameter string into the live pen.
+     *
+     * Mirrors Buffer::styleFromSgr() (private in candy-buffer) — reset,
+     * 16-colour + bright ranges, 38;5/38;2 and 48;5/48;2 colour keys,
+     * 39/49 default colours, and the attribute on-codes — so veil's diff
+     * pen and candy-buffer's own parse agree on what a style means.
+     * SGR reset deliberately does NOT clear the link pen (xterm scopes
+     * links to the OSC 8 protocol).
+     */
+    private static function penFromSgr(string $params, ?BufferStyle $carry): ?BufferStyle
+    {
+        $codes = \array_map('intval', \explode(';', $params));
+
+        $fg    = $carry?->fg();
+        $bg    = $carry?->bg();
+        $attrs = $carry?->attrs() ?? 0;
+
+        $count = \count($codes);
+        for ($i = 0; $i < $count; $i++) {
+            $p = $codes[$i];
+            if ($p === 0) {
+                $fg = null;
+                $bg = null;
+                $attrs = 0;
+            } elseif ($p >= 30 && $p <= 37) {
+                $fg = self::ansiColorToHex($p - 30);
+            } elseif ($p >= 40 && $p <= 47) {
+                $bg = self::ansiColorToHex($p - 40);
+            } elseif ($p >= 90 && $p <= 97) {
+                $fg = self::ansiColorToHex($p - 90, bright: true);
+            } elseif ($p >= 100 && $p <= 107) {
+                $bg = self::ansiColorToHex($p - 100, bright: true);
+            } elseif ($p === 39) {
+                $fg = null;
+            } elseif ($p === 49) {
+                $bg = null;
+            } elseif (($p === 38 || $p === 48) && $i + 1 < $count) {
+                if ($codes[$i + 1] === 2 && $i + 4 < $count) {
+                    $rgb = (($codes[$i + 2] & 0xFF) << 16)
+                        | (($codes[$i + 3] & 0xFF) << 8)
+                        | ($codes[$i + 4] & 0xFF);
+                    if ($p === 38) {
+                        $fg = $rgb;
+                    } else {
+                        $bg = $rgb;
+                    }
+                    $i += 4; // consumed 2;r;g;b
+                } elseif ($codes[$i + 1] === 5 && $i + 2 < $count) {
+                    $rgb = self::xterm256ToHex($codes[$i + 2]);
+                    if ($p === 38) {
+                        $fg = $rgb;
+                    } else {
+                        $bg = $rgb;
+                    }
+                    $i += 2; // consumed 5;n
+                } else {
+                    $i = $count; // malformed extended colour: stop, keep prior pen
+                }
+            } elseif ($p === 1) {
+                $attrs |= BufferStyle::ATTR_BOLD;
+            } elseif ($p === 2) {
+                $attrs |= BufferStyle::ATTR_FAINT;
+            } elseif ($p === 3) {
+                $attrs |= BufferStyle::ATTR_ITALIC;
+            } elseif ($p === 4) {
+                $attrs |= BufferStyle::ATTR_UNDERLINE;
+            } elseif ($p === 5) {
+                $attrs |= BufferStyle::ATTR_BLINK;
+            } elseif ($p === 7) {
+                $attrs |= BufferStyle::ATTR_REVERSE;
+            } elseif ($p === 8) {
+                $attrs |= BufferStyle::ATTR_INVISIBLE;
+            } elseif ($p === 9) {
+                $attrs |= BufferStyle::ATTR_STRIKE;
+            }
+        }
+
+        return $fg !== null || $bg !== null || $attrs !== 0
+            ? new BufferStyle($fg, $bg, $attrs)
+            : null;
+    }
+
+    /** Base-16 palette hexes, matching Buffer::ansiColorToHex(). */
+    private static function ansiColorToHex(int $idx, bool $bright = false): int
+    {
+        $palette = [
+            0x000000, 0xff0000, 0x00ff00, 0xffff00,
+            0x0000ff, 0xff00ff, 0x00ffff, 0xffffff,
+        ];
+        $base = $palette[$idx] ?? 0xffffff;
+        if ($bright === false) {
+            return $base;
+        }
+        $lift = static fn(int $c): int => min(255, (int) ($c + ($c * 0.4)));
+        return ($lift(($base >> 16) & 0xFF) << 16) | ($lift(($base >> 8) & 0xFF) << 8) | $lift($base & 0xFF);
+    }
+
+    /** Standard xterm 256-colour cube → 0xRRGGBB. */
+    private static function xterm256ToHex(int $n): int
+    {
+        if ($n < 8) {
+            return self::ansiColorToHex($n);
+        }
+        if ($n < 16) {
+            return self::ansiColorToHex($n - 8, bright: true);
+        }
+        if ($n >= 232) {
+            $gray = 8 + ($n - 232) * 10;
+            return ($gray << 16) | ($gray << 8) | $gray;
+        }
+        $cube = $n - 16;
+        $step = static fn(int $v): int => $v === 0 ? 0 : 55 + $v * 40;
+        return ($step(intdiv($cube, 36)) << 16)
+            | ($step(intdiv($cube % 36, 6)) << 8)
+            | $step($cube % 6);
+    }
+
+    /**
+     * Apply one OSC body to the link pen: OSC 8 opens (or, with an empty
+     * URI, closes) a hyperlink; every other OSC code is consumed without
+     * touching the pen.
+     */
+    private static function linkFromOsc(string $body, ?Hyperlink $carry): ?Hyperlink
+    {
+        if (\str_starts_with($body, '8;') === false) {
+            return $carry;
+        }
+        $rest = \substr($body, 2);
+        $sep  = \strpos($rest, ';');
+        if ($sep === FALSE) {
+            return $carry; // malformed OSC 8 (no URI field) — leave pen unchanged
+        }
+        $params = \substr($rest, 0, $sep);
+        $url    = \substr($rest, $sep + 1);
+
+        if ($url === '') {
+            return null; // empty URI closes the link (OSC 8 spec)
+        }
+
+        // BEL/ST terminated the body already, so the URL carries no C0
+        // controls by construction; Hyperlink's own guard stays load-bearing
+        // against anything that skips past this parse.
+        \preg_match('/(?:\A|:)id=([^:]*)/', $params, $m);
+        return new Hyperlink($url, $m[1] ?? '');
+    }
+
+    /**
      * Reset the previous-frame buffer, forcing the next composite to emit
      * a full frame (used on window resize or cursor-position-lost events).
      *
-     * NOTE: This does NOT reset the scanner state. The scanner accumulates
-     * zone data across frames intentionally — zones from previous renders
-     * persist for hit-testing. If you need a fresh scanner, create a new
-     * Veil instance instead.
+     * NOTE: This does NOT reset the scanner state. Hit-testing reads the
+     * zones from the most recent scan() output — Scanner::scan() replaces
+     * zones wholesale, so a re-scan after the next render refreshes them;
+     * zones are not accumulated across frames. If you need an unscanned
+     * instance, create a new Veil instead.
      *
      * @see scan()
      * @see withoutSession()
@@ -730,7 +1054,7 @@ final class Veil
             hPosition: $this->hPosition,
             posX: $this->posX,
             posY: $this->posY,
-            positionSet: $this->positionSet,
+            content: $this->content,
         );
     }
 }

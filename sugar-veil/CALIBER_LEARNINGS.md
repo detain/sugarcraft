@@ -11,7 +11,7 @@
 
 ## Animation System
 
-- `AnimationKind` is a backed enum with three cases: `SLIDE`, `FADE`, `SCALE`
+- `AnimationKind` is a pure (unit) enum with three cases: `SLIDE`, `FADE`, `SCALE`
 - All three animations consume `SugarCraft\Bounce\Easing\CubicBezier` (honey-bounce)
 - Default easing per animation:
   - `Slide` → `CubicBezier::easeOut()`
@@ -24,6 +24,7 @@
 - Returns offset deltas for `xOffset`/`yOffset` rather than modifying the foreground string
 - Anchor detection: vertical anchor from `Position` (TOP/BOTTOM), horizontal from `Position` (LEFT/RIGHT)
 - Factor = `1.0 - easedProgress` so the overlay slides IN toward its final position as progress increases
+- Polarity: at p=0 the foreground is displaced OFF-SCREEN toward the anchored edge (LEFT/TOP → negative offsets, RIGHT/BOTTOM → positive); `CENTER` on an axis contributes no displacement — a CENTER/CENTER slide is a deliberate no-op
 
 ### Fade Animation
 

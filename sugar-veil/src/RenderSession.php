@@ -138,6 +138,12 @@ final class RenderSession
         $this->previousOutput = null;
         $this->prevWidth = null;
         $this->prevHeight = null;
+        // Clear the transient flags too: a session reset must not leave a
+        // one-shot justClearedFrame grant or a stale diffWasCalled armed for
+        // the next frame (both are masked today by previousOutput !== null
+        // conjuncts, but that coupling is latent — reset means reset).
+        $this->justClearedFrame = false;
+        $this->diffWasCalled = false;
     }
 
     /**

@@ -546,8 +546,9 @@ final class VeilTest extends TestCase
 
     public function testScanUpdatesScannerAndLastRendered(): void
     {
-        // scan() passes $this->scanner (non-null) to mutate
-        // mutate passes it to constructor where $scanner ?? Scanner::new() uses the passed value
+        // scan() hands the clone a FRESH scanned Scanner (zone state must
+        // not leak across with*() clones); the constructor's ?? Scanner::new()
+        // fallback only serves uncannned instances.
         $marked = $this->veil->mark('test-zone', 'B');
         $rendered = $marked;
 
@@ -818,19 +819,16 @@ final class VeilTest extends TestCase
     }
 
     /**
-     * Byte-for-byte parity anchor for the mb_str_split() refactor of
-     * bufferFromOutput(). The per-column read now indexes a once-per-row
-     * mb_str_split() array instead of calling mb_substr($line, $pos, 1) inside
-     * the loop (O(n²) -> O(n) per row). Because mb_substr($s, $i, 1) equals
-     * mb_str_split($s)[$i] ?? '' for every $i >= 0, the diff-path output must be
-     * identical to the last byte. These golden strings were captured from the
-     * pre-refactor mb_substr() implementation — reverting the optimization must
-     * reproduce them exactly, so any drift in the diff encoding is caught here.
+     * Byte-for-byte pins for the diff path over wide (CJK) and ASCII frames.
      *
-     * The wide-CJK frame is the important case: it exercises the byte-index vs
-     * character-index tail where a 3-byte rune spans several $pos values and the
-     * out-of-range reads return '' — precisely where a naive character-indexed
-     * rewrite would silently change the emitted bytes.
+     * These goldens were RE-DERIVED when bufferFromOutput() became width-
+     * faithful (audit fix, sugar-veil): the pre-fix walk gave every grapheme
+     * one column, so a CJK frame diff sprayed a corrupted run of background
+     * text ("\e[4;14HXding here") to "repair" phantom tail cells. With wide
+     * heads + continuation cells, changing line 2's last full-width ト to X
+     * replaces the head at column 18 AND the continuation at column 19 — and
+     * nothing further right shifts, because "ing here" sits where the
+     * terminal actually paints it. ASCII (all width-1) is unchanged.
      */
     public function testBufferFromOutputDiffBytesAreStableAcrossMbRefactor(): void
     {
@@ -841,9 +839,9 @@ final class VeilTest extends TestCase
         $cjk->composite("日本語テスト\nコンポジット", $bg, Position::CENTER, Position::CENTER);
         $cjkDelta = $cjk->composite("日本語テスト\nコンポジッX", $bg, Position::CENTER, Position::CENTER);
         $this->assertSame(
-            "\e[4;14HXding here",
+            "\e[4;19HXd",
             $cjkDelta,
-            'Wide-CJK diff-path bytes must be byte-identical to the pre-refactor mb_substr() output',
+            'Wide-CJK delta must repair only the changed head+continuation columns, not the shifted phantom tail',
         );
 
         // ASCII overlay: single-character change between frames.
@@ -1076,15 +1074,15 @@ final class VeilTest extends TestCase
     // ─── Position accessors via withPosition ─────────────────────────────────
 
     /**
-     * Test positionSet flag is true when withPosition is called.
+     * Test withPosition threads every argument to its accessor.
      */
-    public function testPositionSetFlagIsTrueAfterWithPosition(): void
+    public function testWithPositionSetsAllFourAccessors(): void
     {
         $v = Veil::new()->withPosition(Position::TOP, Position::LEFT, x: 1, y: 2);
 
-        // The positionSet flag controls behavior in VeilStack::compositeAll()
-        // When true, per-veil positions are used; when false, passed positions are used.
-        // We test that withPosition sets all the related properties correctly.
+        // (The old positionSet flag was write-only dead state and is gone;
+        // VeilStack::compositeAll() keys per-veil positioning off the
+        // nullable accessors themselves, not a side-channel boolean.)
         $this->assertSame(Position::TOP, $v->vPosition());
         $this->assertSame(Position::LEFT, $v->hPosition());
         $this->assertSame(1, $v->positionX());
