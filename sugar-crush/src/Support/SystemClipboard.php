@@ -47,6 +47,21 @@ final class SystemClipboard
     private static ?\Closure $runner = null;
 
     /**
+     * Test seam: replaces candidate DISCOVERY, not the spawn. {@see $runner}
+     * stands in for one tool's spawn AFTER discovery found it; on a headless
+     * host — CI, a bare ssh session — discovery legitimately finds nothing
+     * (no TMUX, no DISPLAY, no WAYLAND_DISPLAY), so a flow test there never
+     * reaches the runner at all. This seam stands in for the found list
+     * itself. It widens no gate: production never sets it, and the real
+     * {@see candidates()} still demands the env hint AND a located binary
+     * before a spawn is ever aimed anywhere — that polarity is pinned in
+     * `SystemClipboardTest::testAHeadlessHostDiscoversNothingForTheRealGate()`.
+     *
+     * @var list<list<string>>|null
+     */
+    private static ?array $candidatesOverride = null;
+
+    /**
      * Copy $text with the first clipboard tool this host offers.
      *
      * @return bool true when a tool accepted the text
@@ -75,6 +90,10 @@ final class SystemClipboard
      */
     public static function candidates(): array
     {
+        if (self::$candidatesOverride !== null) {
+            return self::$candidatesOverride;
+        }
+
         $found = [];
         $add = static function (string $binary, string ...$args) use (&$found): void {
             $path = ProcessContainment::locateOnPath($binary);
@@ -113,6 +132,16 @@ final class SystemClipboard
     public static function useRunnerForTesting(?\Closure $runner): void
     {
         self::$runner = $runner;
+    }
+
+    /**
+     * Arm or clear the discovery override of {@see candidates()}.
+     *
+     * @param list<list<string>>|null $candidates
+     */
+    public static function useCandidatesForTesting(?array $candidates): void
+    {
+        self::$candidatesOverride = $candidates;
     }
 
     /**

@@ -24,6 +24,10 @@ final class SystemClipboardTest extends TestCase
 
     protected function setUp(): void
     {
+        // This file pins the REAL discovery gates, so the discovery override
+        // must start clear no matter what ran before it in this process.
+        SystemClipboard::useCandidatesForTesting(null);
+
         foreach (self::VARS as $var) {
             $this->saved[$var] = getenv($var);
             putenv($var);
@@ -85,6 +89,22 @@ final class SystemClipboardTest extends TestCase
 
         self::assertSame([], SystemClipboard::candidates(), 'a spawn is never aimed at a missing binary');
         self::assertFalse(SystemClipboard::copy('text'));
+    }
+
+    /**
+     * The headless polarity of the discovery gate: with no TMUX, no DISPLAY
+     * and no WAYLAND_DISPLAY (setUp cleared them all) and PATH pointing at an
+     * empty stub dir, the real discovery finds nothing on any OS — pbcopy,
+     * wl-copy, xclip and xsel all still demand a located binary. This is why
+     * a flow test on CI must stub discovery
+     * ({@see SystemClipboard::useCandidatesForTesting()}) rather than only
+     * the spawn, and why the tmux/display tests above setting the env hints
+     * are the proof the gate works in the positive direction.
+     */
+    public function testAHeadlessHostDiscoversNothingForTheRealGate(): void
+    {
+        self::assertSame([], SystemClipboard::candidates(), 'no env hint, so no candidate to aim a spawn at');
+        self::assertFalse(SystemClipboard::copy('text'), 'a headless copy is simply not served by a host tool');
     }
 
     public function testCopyStopsAtTheFirstToolThatAcceptsAndSkipsEmptyText(): void

@@ -43,6 +43,18 @@ final class MouseTextSelectionTest extends TestCase
 {
     private const VARS = ['SUGARCRUSH_DISABLE_MOUSE', 'SUGARCRUSH_DISABLE_MOUSE_CLICKS'];
 
+    /**
+     * The candidate the discovery seam reports for every copy here. CI runs
+     * headless — no TMUX, no DISPLAY, no WAYLAND_DISPLAY — so the real
+     * {@see SystemClipboard::candidates()} is legitimately empty there and
+     * the runner seam alone would never fire; discovery is stubbed alongside
+     * it. The argv's contents are pinned as-passed, not asserted to be real:
+     * what the copy flow must prove is that whatever discovery found reaches
+     * the spawn seam with the copied text. The env-gated REAL discovery (and
+     * the headless host finding nothing) is pinned in SystemClipboardTest.
+     */
+    private const STUB_CANDIDATE = ['/usr/bin/tmux', 'load-buffer', '-w', '-'];
+
     /** @var list<array{0:list<string>,1:string}> */
     private array $nativeCopies = [];
 
@@ -53,6 +65,7 @@ final class MouseTextSelectionTest extends TestCase
         }
         $this->resetMouseState();
         $this->nativeCopies = [];
+        SystemClipboard::useCandidatesForTesting([self::STUB_CANDIDATE]);
         SystemClipboard::useRunnerForTesting(function (array $argv, string $text): bool {
             $this->nativeCopies[] = [$argv, $text];
 
@@ -67,6 +80,7 @@ final class MouseTextSelectionTest extends TestCase
         }
         $this->resetMouseState();
         SystemClipboard::useRunnerForTesting(static fn (): bool => false);
+        SystemClipboard::useCandidatesForTesting(null);
         App::resetPaneDragController();
     }
 
@@ -109,6 +123,7 @@ final class MouseTextSelectionTest extends TestCase
         self::assertSame([Ansi::setClipboard($expected)], $this->rawWrites($cmd), 'one OSC 52 write, the exact text');
         self::assertCount(1, $this->nativeCopies);
         self::assertSame($expected, $this->nativeCopies[0][1]);
+        self::assertSame(self::STUB_CANDIDATE, $this->nativeCopies[0][0], 'the stubbed candidate rides through to the spawn seam');
 
         $selection = Chat::textSelection();
         self::assertNotNull($selection);
