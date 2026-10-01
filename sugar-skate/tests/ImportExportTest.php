@@ -226,45 +226,47 @@ final class ImportExportTest extends TestCase
 
     public function testJsonExportRoundTrip(): void
     {
+        // Formerly called run(), which writes with fwrite(STDOUT) — noise the
+        // runner's output buffer cannot capture — then asserted nothing about
+        // the export itself (audit #15). Now asserts real CONTENT and an
+        // actual round trip; run()'s stdout path is child-process-covered in
+        // CliSmokeTest::testExportRunWritesJsonEntriesToStdout.
         $this->store->set('x', '1');
         $this->store->set('y', '2');
 
         $cli = new \SugarCraft\Skate\Cli\ExportCommand($this->store);
-        $exitCode = $cli->run('json');
+        $json = $cli->exportToString('json');
 
-        $this->assertSame(0, $exitCode);
-        $this->assertNotNull($this->store->entry('x'));
-        $this->assertNotNull($this->store->entry('y'));
+        $decoded = \json_decode($json, true);
+        $this->assertIsArray($decoded, 'export output must be valid JSON');
+        $this->assertSame('1', $decoded['x'] ?? null);
+        $this->assertSame('2', $decoded['y'] ?? null);
+
+        // Round trip: importing the export into a fresh store reproduces it.
+        $dirB = $this->tmpDir . '/roundtrip';
+        \mkdir($dirB, 0o700, true);
+        $storeB = new Store($dirB, 'testdb');
+        $count = (new JsonImporter($storeB))->importFromString($json, false);
+        $this->assertSame(2, $count);
+        $this->assertSame('1', $storeB->get('x'));
+        $this->assertSame('2', $storeB->get('y'));
     }
 
     public function testJsonExportWithTtl(): void
     {
+        // Asserts the EXPORT PAYLOAD carries the TTL (the old body's
+        // "verify export output" loop re-queried the store, not the output).
         $this->store->set('t', 'v', false, 3600);
 
         $exportCmd = new \SugarCraft\Skate\Cli\ExportCommand($this->store);
-        $exitCode = $exportCmd->run('json');
+        $decoded = \json_decode($exportCmd->exportToString('json'), true);
 
-        $this->assertSame(0, $exitCode);
-
-        // Capture stdout via a temp file
-        $tmpFile = $this->tmpDir . '/export_out.json';
-        \file_put_contents($tmpFile, '');
-
-        // Run again with output redirect
-        $entry = $this->store->entry('t');
-        $this->assertNotNull($entry);
-        $this->assertNotNull($entry->expiresAt);
-        $this->assertGreaterThan(0, $entry->expiresAt->getTimestamp() - time());
-
-        // Verify export output has TTL info
-        $allKeys = $this->store->list();
-        $hasTtl = false;
-        foreach ($this->store->list() as $e) {
-            if ($e instanceof \SugarCraft\Skate\Entry && $e->expiresAt !== null) {
-                $hasTtl = true;
-            }
-        }
-        $this->assertTrue($hasTtl, 'Entry with TTL should appear in list');
+        $this->assertIsArray($decoded);
+        $this->assertSame('v', $decoded['t'] ?? null);
+        $this->assertArrayHasKey('_ttl', $decoded, 'remaining TTL must ride the export payload');
+        $this->assertArrayHasKey('t', $decoded['_ttl']);
+        $this->assertGreaterThan(3000, $decoded['_ttl']['t'], 'exported TTL should be ~1h of remaining seconds');
+        $this->assertLessThanOrEqual(3600, $decoded['_ttl']['t']);
     }
 
     // ─── ExportCommand error paths ─────────────────────────────────────────────

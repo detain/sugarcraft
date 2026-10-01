@@ -101,23 +101,15 @@ final class ImportCommandTest extends TestCase
         $this->assertSame('2', $this->store->get('y'));
     }
 
-    // ─── stdin import ────────────────────────────────────────────────────────
-    // The '-' path calls file_get_contents('php://stdin'). We test the code
-    // path does not throw when stdin is empty/missing (returns 1).
-
-    public function testRunStdinPathReturnsOneWhenNoPipedData(): void
-    {
-        // When no data is piped, file_get_contents returns false → exit 1
-        $exit = $this->cmd->run('json', '-', false);
-        $this->assertSame(1, $exit);
-    }
-
-    public function testRunDevStdinPathReturnsOneWhenNoData(): void
-    {
-        // /dev/stdin path when there's no piped data should return 1
-        $exit = $this->cmd->run('json', '/dev/stdin', false);
-        $this->assertSame(1, $exit);
-    }
+    // ─── stdin import — deliberately NOT covered here ───────────────────────
+    // The '-' path calls file_get_contents('php://stdin') IN-PROCESS. Run
+    // inside the PHPUnit runner that blocks forever whenever the suite's
+    // stdin is a terminal (the two former cases here hung >300s under a PTY —
+    // audit #2), and their comment claimed the wrong mechanism: an empty pipe
+    // makes file_get_contents return '' (never false), so exit 1 actually
+    // arrives via the JSON-decode exception, not the dead `$json === false`
+    // branch. stdin coverage lives in CliSmokeTest, which drives the real
+    // binary as a child process with stdin closed/piped.
 
     // ─── error cases ─────────────────────────────────────────────────────────
 
