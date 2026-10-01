@@ -134,6 +134,30 @@ final class TaskToolTest extends TestCase
         $this->assertStringContainsString('active voice', $schema['properties']['description']['description']);
     }
 
+    public function testPromptGuidanceCarriesBatchDoctrineAndStaysRosterlessUnbound(): void
+    {
+        // F1: the spawn-latency doctrine rides the session prompt, and the
+        // unbound corpus shape renders it WITHOUT a roster line — naming an
+        // empty roster would be the lie the manager-null refusal exists to
+        // avoid on the execute() path too.
+        $guidance = (new TaskTool())->promptGuidance();
+
+        $this->assertStringContainsString('one Task call per independent unit of work inside a SINGLE message', $guidance);
+        $this->assertStringContainsString('costs one step', $guidance);
+        $this->assertStringNotContainsString('Current agent roster', $guidance);
+    }
+
+    public function testBoundPromptGuidanceNamesTheLiveRoster(): void
+    {
+        [$tool] = $this->boundTool();
+
+        $this->assertStringContainsString(
+            'Current agent roster: coder, reviewer.',
+            $tool->promptGuidance(),
+            'a bound manager makes the live roster part of the spawn guidance',
+        );
+    }
+
     public function testAnUnboundTaskRefusesLoudlyAndNeverThrows(): void
     {
         // The corpus builds this exact standalone shape and calls execute([])

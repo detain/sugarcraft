@@ -22,7 +22,11 @@ file left untouched. Edit cannot create a file; use Write for a path that
 does not exist yet. Read-only calls that do not depend on each other
 (several Reads, a Grep alongside a Glob) can be issued as one batch. They
 are run concurrently where this build can fork, and one after another where
-it cannot, so batching is never wrong — only sometimes no faster. A call
+it cannot, so batching is never wrong — only sometimes no faster.
+Delegating to sub-agents batches the same way: spawn independent
+sub-agents as several Task calls in one message — they run concurrently
+and cost one step, while one Task per message pays a fresh round-trip
+for every spawn. A call
 that writes runs on its own, in the position you asked for it, so the order
 you request calls in is the order they take effect. When a tool call comes
 back an error, read what it says and fix the call — the same call repeated

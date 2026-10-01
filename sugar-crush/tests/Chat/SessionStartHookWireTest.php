@@ -516,9 +516,9 @@ final class SessionStartHookWireTest extends TestCase
         // P7.S3, when the golden was regenerated to drop the enabled skill's
         // double-presented listing line — see the measurement history in
         // BaseSystemPromptTest; the pinned bytes are still pinned exactly.)
-        $this->assertSame(8278, filesize($fixtures . 'golden-system-prompt.txt'));
+        $this->assertSame(8504, filesize($fixtures . 'golden-system-prompt.txt'));
         $this->assertSame(1060, filesize($fixtures . 'golden-agent-prompt.txt'));
-        $this->assertSame('f5de3858c1bc130d1e97a120d3ead485', md5_file($fixtures . 'golden-system-prompt.txt'));
+        $this->assertSame('66c443cc4a657107a0bcbbb405eae267', md5_file($fixtures . 'golden-system-prompt.txt'));
         $this->assertSame('ef0326dd38535aaa2f1d715919bff26e', md5_file($fixtures . 'golden-agent-prompt.txt'));
 
         // And a hooked turn changes neither.
@@ -527,7 +527,7 @@ final class SessionStartHookWireTest extends TestCase
             $this->noteHook('ss', HookEvent::SessionStart, self::SESSION_NOTE),
         ]), 'a turn with a session note attached');
 
-        $this->assertSame('f5de3858c1bc130d1e97a120d3ead485', md5_file($fixtures . 'golden-system-prompt.txt'));
+        $this->assertSame('66c443cc4a657107a0bcbbb405eae267', md5_file($fixtures . 'golden-system-prompt.txt'));
         $this->assertSame('ef0326dd38535aaa2f1d715919bff26e', md5_file($fixtures . 'golden-agent-prompt.txt'));
     }
 

@@ -21,6 +21,7 @@ use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Tools\DelegatesToEngine;
 use SugarCraft\Crush\Tools\ExemptFromParallelDeadline;
 use SugarCraft\Crush\Tools\ParallelSafe;
+use SugarCraft\Crush\Tools\PromptGuidance;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 
@@ -128,7 +129,7 @@ use SugarCraft\Crush\Tools\ToolResult;
  * {@see AgentWorkerPool::executeAll()} for what a dispatched worker actually
  * carries across the fork.
  */
-final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine
+final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine, PromptGuidance
 {
     /** Step cap for a preset that declares no `maxTurns`. */
     public const DEFAULT_MAX_TURNS = 50;
@@ -207,6 +208,30 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             . ' policy, so a narrower agent cannot be widened by phrasing.'
             . ' The result is the sub-agent\'s report or a loud failure naming why; it is not a diff, and the working'
             . ' tree may have moved underneath by the time it returns.';
+    }
+
+    /**
+     * Batch-spawn doctrine for the session prompt (spawn-latency plan F1, with
+     * the orchestration-mode sanction of F7). The one-call-per-message pattern
+     * this prose exists to break is the dominant latency cost of delegating on
+     * this harness: every un-batched spawn pays a full model round-trip before
+     * the next worker even starts, while a message carrying N Task calls forks
+     * all N at once for a single step.
+     *
+     * The fragment names no sibling tool ({@see PromptGuidance}), stays
+     * self-contained when the tool is wired alone, and carries the live roster
+     * only when a manager is bound — an unbound corpus build renders the
+     * doctrine without a roster line rather than the lie of an empty one.
+     */
+    public function promptGuidance(): string
+    {
+        $doctrine = 'Delegate breadth-first work by emitting one Task call per independent unit of work inside a SINGLE message: every spawn in that message launches together, runs concurrently, and the whole batch costs one step — while one Task per message pays a fresh model round-trip for each spawn. Batching Task calls this way is the sanctioned shape of orchestration in this build, even where project instructions advise running sub-agents one at a time: that rule scopes to concurrent writes onto shared files, not to the spawn calls themselves. Keep spawns that share a message on disjoint files, and never batch a spawn that depends on an earlier spawn\'s answer — a dependency stays sequential. A name off the live roster is refused loudly with the full roster named in the refusal, so a batched guess is cheap to correct.';
+
+        if ($this->agentManager === null) {
+            return $doctrine;
+        }
+
+        return $doctrine . "\n\n" . 'Current agent roster: ' . $this->rosterNames() . '.';
     }
 
     /**

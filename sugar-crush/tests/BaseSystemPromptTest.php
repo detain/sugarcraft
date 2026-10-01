@@ -310,8 +310,13 @@ final class BaseSystemPromptTest extends TestCase
      * says so.
      */
     private const PROSE_WORDS = [
-        'AI', 'Act', 'Acting', 'Before', 'If', 'Keep', 'Never', 'Reach',
-        'Security', 'Skip', 'SugarCrush', 'That', 'They', 'Tone', 'Tool',
+        // 'Task' is the real wire name of the delegation tool, but that tool
+        // rides the session AgentManager feed (E675) and is therefore absent
+        // from the managerless Bootstrap::tools() the $real list is built
+        // from — the F1 batching sentence names it in prose, so it lives here
+        // until the tool lands in that roster on its own.
+        'AI', 'Act', 'Acting', 'Before', 'Delegating', 'If', 'Keep', 'Never', 'Reach',
+        'Security', 'Skip', 'SugarCrush', 'Task', 'That', 'They', 'Tone', 'Tool',
         'Treat', 'When', 'You',
     ];
 
@@ -897,8 +902,14 @@ final class BaseSystemPromptTest extends TestCase
         // insert op, zero delete/replace ops, old bytes [0:2154] identical,
         // old tail identical from new offset 2,700 - the two affordance
         // clauses folded into the tail of the # Tool use paragraph.
+        // MEASURED 2026-10-01 at F1 (spawn-latency plan): 8,278 -> 8,504,
+        // exactly ONE pure insertion of 225 B at offset 1,507 - proven by a
+        // byte-walk of old vs new: head [0:1507] identical, tail identical
+        // landing at new offset 1,732, single insert op, zero deletes - the
+        // Task-batching sentence folded into the # Tool use paragraph right
+        // after the read-only batching clause.
         self::assertSame(
-            8278,
+            8504,
             strlen($golden),
             'the system-prompt golden is not its committed length - it has been truncated or padded '
             . 'somewhere the absence assertions below would scan straight past',

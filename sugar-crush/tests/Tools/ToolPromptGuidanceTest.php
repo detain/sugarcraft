@@ -16,6 +16,7 @@ use SugarCraft\Crush\Providers\EchoProvider;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
+use SugarCraft\Crush\Tools\BuiltIn\TaskTool;
 use SugarCraft\Crush\Tools\BuiltIn\Write;
 use SugarCraft\Crush\Tools\PromptGuidance;
 use SugarCraft\Crush\Tools\Tool;
@@ -104,10 +105,12 @@ final class ToolPromptGuidanceTest extends TestCase
     {
         $fragments = [
             'Read' => (new Read())->promptGuidance(),
+            'Task' => (new TaskTool())->promptGuidance(),
             'Write' => (new Write())->promptGuidance(),
         ];
 
         self::assertNotEmpty($fragments['Read']);
+        self::assertNotEmpty($fragments['Task']);
         self::assertNotEmpty($fragments['Write']);
 
         $wired = [];
