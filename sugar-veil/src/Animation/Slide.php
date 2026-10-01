@@ -11,8 +11,17 @@ use SugarCraft\Veil\Position;
 /**
  * Slide animation — foreground enters from the anchor direction.
  *
- * At progress 0, the foreground is offset in the slide direction.
- * At progress 1, the foreground is in its final position.
+ * At progress 0, the foreground sits fully OFF-SCREEN on the anchor side
+ * (a LEFT anchor starts at columns −fgWidth, a TOP anchor starts at rows
+ * −fgHeight, …) and travels toward its final position as progress grows;
+ * at progress 1 the offsets are zero. Negative-x/y placement is clipped
+ * away by Veil::composite(), so progress 0 shows nothing rather than a
+ * sliver.
+ *
+ * A CENTER (or axis-centred) anchor has no edge to enter from, so SLIDE
+ * is a deliberate no-op there — both offsets stay 0 at every progress.
+ * Anchor at an edge (TOP/LEFT/RIGHT/BOTTOM or a corner) to get a slide.
+ *
  * The offset is applied via the returned vertical/horizontal offsets
  * which should be added to the composite() call's xOffset/yOffset.
  */
@@ -57,16 +66,19 @@ final class Slide
         $vOffset = 0;
         $hOffset = 0;
 
+        // A LEFT-anchored overlay's final column is the left edge, so it must
+        // START left of there (negative = off-screen left) and travel right.
+        // A RIGHT anchor mirrors it. TOP/BOTTOM do the same on the row axis.
         if ($this->isLeftAnchor($vertical, $horizontal) === TRUE) {
-            $hOffset = (int) \round($factor * $fgWidth);
-        } elseif ($this->isRightAnchor($vertical, $horizontal) === TRUE) {
             $hOffset = -(int) \round($factor * $fgWidth);
+        } elseif ($this->isRightAnchor($vertical, $horizontal) === TRUE) {
+            $hOffset = (int) \round($factor * $fgWidth);
         }
 
         if ($this->isTopAnchor($vertical, $horizontal) === TRUE) {
-            $vOffset = (int) \round($factor * $fgHeight);
-        } elseif ($this->isBottomAnchor($vertical, $horizontal) === TRUE) {
             $vOffset = -(int) \round($factor * $fgHeight);
+        } elseif ($this->isBottomAnchor($vertical, $horizontal) === TRUE) {
+            $vOffset = (int) \round($factor * $fgHeight);
         }
 
         return [

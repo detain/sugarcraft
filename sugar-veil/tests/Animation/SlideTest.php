@@ -26,8 +26,14 @@ final class SlideTest extends TestCase
         $slide = new Slide();
         $result = $slide->apply("A\nB", 0.0, Position::TOP, Position::LEFT);
 
-        // At progress 0, the offset should be maximum (content off-screen)
-        $this->assertGreaterThan(0, $result['verticalOffset']);
+        // At progress 0 the offset is maximal and NEGATIVE: a TOP anchor
+        // starts fully off-screen ABOVE its final row and slides down.
+        $this->assertLessThan(0, $result['verticalOffset']);
+        // Deterministic magnitude: easeOut(0)=0 → factor 1 → −fgHeight rows
+        // and −fgWidth cols (the LEFT horizontal anchor slides in too).
+        $exact = $slide->apply("A\nB", 0.0, Position::TOP, Position::LEFT);
+        $this->assertSame(-2, $exact['verticalOffset']);
+        $this->assertSame(-1, $exact['horizontalOffset']);
     }
 
     public function testSlideFromTopAtProgressOne(): void
@@ -45,8 +51,8 @@ final class SlideTest extends TestCase
         $slide = new Slide();
         $result = $slide->apply("ABC", 0.5, Position::TOP, Position::LEFT);
 
-        // Should have horizontal offset (positive = from left)
-        $this->assertGreaterThan(0, $result['horizontalOffset']);
+        // A LEFT anchor enters from off-screen left: NEGATIVE column offset.
+        $this->assertLessThan(0, $result['horizontalOffset']);
     }
 
     public function testSlideFromRightAnchor(): void
@@ -54,8 +60,8 @@ final class SlideTest extends TestCase
         $slide = new Slide();
         $result = $slide->apply("ABC", 0.5, Position::TOP, Position::RIGHT);
 
-        // Should have negative horizontal offset (from right)
-        $this->assertLessThan(0, $result['horizontalOffset']);
+        // A RIGHT anchor starts right of its final column (off-screen): POSITIVE.
+        $this->assertGreaterThan(0, $result['horizontalOffset']);
     }
 
     public function testSlideFromBottomAnchor(): void
@@ -64,8 +70,8 @@ final class SlideTest extends TestCase
         // Use multi-line content so vertical offset rounds to non-zero
         $result = $slide->apply("A\nB\nC\nD", 0.5, Position::BOTTOM, Position::LEFT);
 
-        // Should have negative vertical offset (from bottom)
-        $this->assertLessThan(0, $result['verticalOffset']);
+        // A BOTTOM anchor starts below the last row (off-screen): POSITIVE.
+        $this->assertGreaterThan(0, $result['verticalOffset']);
     }
 
     public function testSlideFromBottomRightAnchor(): void
@@ -74,9 +80,9 @@ final class SlideTest extends TestCase
         // Use content with both height and width for non-zero offsets
         $result = $slide->apply("ABCD\nEFGH\nIJKL\nMNOP", 0.5, Position::BOTTOM, Position::RIGHT);
 
-        // Should have negative offsets in both directions
-        $this->assertLessThan(0, $result['verticalOffset']);
-        $this->assertLessThan(0, $result['horizontalOffset']);
+        // Enters from off-screen bottom-right: positive on both axes.
+        $this->assertGreaterThan(0, $result['verticalOffset']);
+        $this->assertGreaterThan(0, $result['horizontalOffset']);
     }
 
     public function testSlideFromTopLeftAnchor(): void
@@ -85,9 +91,9 @@ final class SlideTest extends TestCase
         // Use content with both height and width for non-zero offsets
         $result = $slide->apply("ABCD\nEFGH\nIJKL\nMNOP", 0.5, Position::TOP_LEFT, Position::LEFT);
 
-        // Should have positive offsets in both directions (from top-left corner)
-        $this->assertGreaterThan(0, $result['verticalOffset']);
-        $this->assertGreaterThan(0, $result['horizontalOffset']);
+        // Enters from off-screen top-left: negative on both axes.
+        $this->assertLessThan(0, $result['verticalOffset']);
+        $this->assertLessThan(0, $result['horizontalOffset']);
     }
 
     public function testSlideWithCustomEasing(): void

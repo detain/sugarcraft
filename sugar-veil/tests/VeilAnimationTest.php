@@ -216,11 +216,17 @@ final class VeilAnimationTest extends TestCase
         $bg = "..........\n..........\n..........";
         $fg = "X";
 
+        // easeOut(0.5)=0.75 ⇒ factor 0.25 ⇒ offsets -round(0.25*1)=0 on both
+        // axes: the single "X" has already landed at the TOP/LEFT anchor.
         $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.5);
-        // animate returns the full composited result
-        $this->assertNotEmpty($result);
-        // X should be present somewhere
-        $this->assertStringContainsString('X', $result);
+        $this->assertStringStartsWith('X.........', explode("\n", $result)[0]);
+
+        // The vacuity twin: at p=0 the slide is one full cell off the left
+        // edge (x=-1, x+width=0 ⇒ clipped) — no "X" anywhere.
+        $atZero = Veil::new()
+            ->withAnimation(AnimationKind::SLIDE)
+            ->animate($fg, $bg, Position::TOP, Position::LEFT, 0.0);
+        $this->assertStringNotContainsString('X', $atZero);
     }
 
     public function testAnimateFadeAtProgressZeroReturnsBackgroundUnchanged(): void
@@ -308,20 +314,29 @@ final class VeilAnimationTest extends TestCase
 
     public function testAnimateSlideProducesDifferentOutputAtDifferentProgress(): void
     {
-        $v = Veil::new()->withAnimation(AnimationKind::SLIDE);
         $bg = "....................\n....................\n....................";
         $fg = "TEST";
 
-        $result0 = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.0);
-        $result50 = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.5);
-        $result100 = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 1.0);
+        // Fresh veil per progress: each call is the frame-1 full render, so
+        // the asserts below score layout, not diff residue from a shared
+        // session (a reused $v would emit deltas after the first call).
+        $slide = static function (float $p) use ($fg, $bg): string {
+            return Veil::new()
+                ->withAnimation(AnimationKind::SLIDE)
+                ->animate($fg, $bg, Position::TOP, Position::LEFT, $p);
+        };
 
-        // All results should be valid strings
-        $this->assertIsString($result0);
-        $this->assertIsString($result50);
-        $this->assertIsString($result100);
-        // At full progress, foreground should be present
-        $this->assertStringContainsString('TEST', $result100);
+        $result0 = $slide(0.0);
+        $result50 = $slide(0.5);
+        $result100 = $slide(1.0);
+
+        // LEFT enters from the left: at p=0 the whole "TEST" (4 cols) is
+        // pushed off-screen (x=-4, x+width=0 ⇒ clipped), at p=0.5 easeOut
+        // pushes it 1 col left so only "EST" peeks in at col 0, at p=1 it
+        // lands whole. Deterministic values, measured — vacuity repair.
+        $this->assertSame($bg, $result0, 'at p=0 the slide is fully off-screen left');
+        $this->assertStringStartsWith("EST.....", $result50, 'at p=0.5 the head "T" is clipped off the left edge');
+        $this->assertStringStartsWith("TEST....", $result100, 'at p=1 the foreground sits at its anchor');
     }
 
     public function testAnimateFadeProducesFullContentAtProgressOne(): void
