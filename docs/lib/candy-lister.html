@@ -55,14 +55,14 @@
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code>use SugarCraft\Lister\{Model, StringItem, DefaultPrefixer};
 
-$model = Model::new();
-$model->setWidth(80)->setHeight(24);
-$model->addItem(new StringItem('src/main.php'));
-$model->addItem(new StringItem('src/Model.php'));
-$model->addItem(new StringItem('tests/MainTest.php'));
-$model->setPrefixer(new DefaultPrefixer());
+// Fluent setters return NEW Models - rebind; instances are immutable.
+$model = Model::new()->setWidth(80)->setHeight(24);
+$model = $model->addItem(new StringItem('src/main.php'));
+$model = $model->addItem(new StringItem('src/Model.php'));
+$model = $model->addItem(new StringItem('tests/MainTest.php'));
+$model = $model->setPrefixer(new DefaultPrefixer());
 
-echo $model->View();
+echo $model->view();
 // Renders the list with ╭ ├ │ prefixes and > cursor marker</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
@@ -70,7 +70,7 @@ echo $model->View();
       <div class="feature"><strong>Box-drawing prefixes</strong><span>Customizable prefixers per depth level — lines, bullets, arrows.</span></div>
             <div class="feature"><strong>Cursor navigation</strong><span>Up / Down / Home / End movement with viewport tracking.</span></div>
             <div class="feature"><strong>Word-wrap</strong><span>Auto-wrap long items to terminal width.</span></div>
-            <div class="feature"><strong>Filter state machine</strong><span>withFilterFn() / withoutFilter() with FilterState enum (unfiltered / filtering / filtered).</span></div>
+            <div class="feature"><strong>Filter state machine</strong><span>withFilterFn() / withoutFilter() with FilterState enum (unfiltered / filtering).</span></div>
             <div class="feature"><strong>Fuzzy matching</strong><span>Smith-Waterman local alignment scorer — scores and ranks candidates.</span></div>
             
     </div>
@@ -89,7 +89,7 @@ echo $model->View();
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Model</td><td>new()</td><td>Create model with defaults</td></tr>
-<tr><td>Model</td><td>withFilterFn(\Closure)</td><td>Filter items; returns new Model; filterState → filtering → filtered</td></tr>
+<tr><td>Model</td><td>withFilterFn(\Closure)</td><td>Filter items; returns new Model; filterState → filtering</td></tr>
 <tr><td>Model</td><td>withoutFilter()</td><td>Clear filter; restore original items; filterState → unfiltered</td></tr>
 <tr><td>Model</td><td>addItem(\Stringable)</td><td>Append a list item</td></tr>
 <tr><td>Model</td><td>setWidth(int)</td><td>Set viewport width in cells</td></tr>
@@ -97,11 +97,10 @@ echo $model->View();
 <tr><td>Model</td><td>setPrefixer(Prefixer)</td><td>Attach a prefixer instance</td></tr>
 <tr><td>Model</td><td>setSuffixer(Suffixer)</td><td>Attach a suffixer instance</td></tr>
 <tr><td>Model</td><td>lines()</td><td>Return visible lines as array</td></tr>
-<tr><td>Model</td><td>View()</td><td>Render list as ANSI string</td></tr>
-<tr><td>Model</td><td>filterState</td><td>Current FilterState (unfiltered / filtering / filtered)</td></tr>
+<tr><td>Model</td><td>view()</td><td>Render list as ANSI string</td></tr>
+<tr><td>Model</td><td>filterState()</td><td>Current FilterState (unfiltered / filtering)</td></tr>
 <tr><td>FilterState</td><td>unfiltered</td><td>No filter active</td></tr>
-<tr><td>FilterState</td><td>filtering</td><td>Filter function set, applying</td></tr>
-<tr><td>FilterState</td><td>filtered</td><td>Filtering complete, results shown</td></tr>
+<tr><td>FilterState</td><td>filtering</td><td>Filter function set and applied</td></tr>
 <tr><td>FuzzyMatch</td><td>score(query, candidate)</td><td>Smith-Waterman alignment score (int, higher = better)</td></tr>
 <tr><td>FuzzyMatch</td><td>match(query, list&lt;\Stringable&gt;)</td><td>Filter and rank items by score; returns list of [item, score] pairs</td></tr>
 <tr><td>Item</td><td>value</td><td>The underlying \Stringable</td></tr>
@@ -132,7 +131,7 @@ echo $model->View();
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/candy-lister">Packagist</a> ·

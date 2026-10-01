@@ -5,7 +5,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-lister)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-lister)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/candy-lister?label=packagist)](https://packagist.org/packages/sugarcraft/candy-lister)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 # CandyLister
@@ -37,33 +37,35 @@ composer require sugarcraft/candy-lister
 ```php
 use SugarCraft\Lister\{Model, StringItem, DefaultPrefixer, DefaultSuffixer};
 
-$model = Model::new();
-$model->setWidth(80)->setHeight(24);
-$model->addItem(new StringItem('First item'));
-$model->addItem(new StringItem('Second item'));
-$model->addItem(new StringItem('Third item'));
-$model->setPrefixer(new DefaultPrefixer());
-$model->setSuffixer(new DefaultSuffixer());
+// Fluent setters RETURN NEW Models — rebind (or chain); instances are immutable.
+$model = Model::new()->setWidth(80)->setHeight(24);
+$model = $model->addItem(new StringItem('First item'));
+$model = $model->addItem(new StringItem('Second item'));
+$model = $model->addItem(new StringItem('Third item'));
+$model = $model->setPrefixer(new DefaultPrefixer());
+$model = $model->setSuffixer(new DefaultSuffixer());
 
-echo $model->View();
+echo $model->view();
 // Renders the list with ╭ ├ │ prefixes, line numbers, and > cursor marker
 ```
 
 ## Item Types
 
-**Note:** Item values are emitted verbatim via `(string) $value`. If item text
-originates from a database or other untrusted source, sanitize it before adding
-to the model — the list does not perform any escaping.
+**Note:** Item values are rendered through the candy-core sanitize choke point
+(`Sanitize::untrusted`): C0/C1 control bytes, DEL, and any ANSI embedded in the
+item text are stripped at render time. The only styles that reach the output
+are the SGR parameters you pass to `setLineStyle()`/`setCurrentStyle()` (both
+reject non-SGR escapes).
 
 ```php
 // Plain string adapter
-$model->addItem(new StringItem('Plain string item'));
+$model = $model->addItem(new StringItem('Plain string item'));
 
 // Any Stringable object
 class MyItem implements \Stringable {
     public function __toString(): string { return 'Formatted item'; }
 }
-$model->addItem(new MyItem());
+$model = $model->addItem(new MyItem());
 ```
 
 ## Custom Prefixer
@@ -89,7 +91,7 @@ $model = $model->setPrefixer(new class implements Prefixer {
 ```php
 use SugarCraft\Lister\{Suffixer, Model};
 
-$model->setSuffixer(new class implements Suffixer {
+$model = $model->setSuffixer(new class implements Suffixer {
     public function initSuffixer(
         \Stringable $value, int $currentIndex, int $cursorIndex,
         int $lineOffset, int $width, int $height
@@ -104,11 +106,11 @@ $model->setSuffixer(new class implements Suffixer {
 
 ## Viewport
 
-Set the rendering viewport dimensions before calling `View()`:
+Set the rendering viewport dimensions before calling `view()`:
 
 ```php
-$model->setWidth(80)->setHeight(25);
-$model->setCursorOffset(3); // keep 3 lines between cursor and screen edge
+$model = $model->setWidth(80)->setHeight(25);
+$model = $model->setCursorOffset(3); // keep 3 lines between cursor and screen edge
 ```
 
 ## Filtering
@@ -118,11 +120,10 @@ Attach a filter function to narrow the visible items. The model tracks filter st
 ```php
 use SugarCraft\Lister\{Model, StringItem, FilterState};
 
-// Start with a list
-$model = Model::new();
-$model->setWidth(80)->setHeight(24);
+// Start with a list (rebind each step — the model is immutable)
+$model = Model::new()->setWidth(80)->setHeight(24);
 foreach (['apple', 'banana', 'cherry', 'apricot', 'blueberry'] as $f) {
-    $model->addItem(new StringItem($f));
+    $model = $model->addItem(new StringItem($f));
 }
 
 // Filter to items starting with "a"
@@ -132,7 +133,7 @@ $filtered = $model->withFilterFn(
 // filterState is now FilterState::filtering
 
 echo $filtered->length(); // 2 (apple, apricot)
-echo $filtered->View();
+echo $filtered->view();
 
 // Remove filter and restore original items
 $restored = $filtered->withoutFilter();
@@ -174,7 +175,7 @@ $results = $matcher->match('sep', $items);
 
 ## Buffer diffing
 
-The `Model::View()` maintains a `?Buffer $previousFrame` across renders. On each render it
+The `Model::view()` maintains a `?Buffer $previousFrame` across renders. On each render it
 builds the current Buffer, computes `current->diff(previous)` (from
 [candy-buffer](https://github.com/detain/sugarcraft-candy-buffer)), and emits only
 the delta ANSI ops via `DiffEncoder::encode($ops)`. The current frame then replaces

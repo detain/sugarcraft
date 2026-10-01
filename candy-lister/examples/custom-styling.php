@@ -62,8 +62,8 @@ $items = [
 ];
 
 foreach ($items as $item) {
-    $model->addItem(new StringItem($item));
+    $model = $model->addItem(new StringItem($item)); // rebind — immutable model
 }
 
 echo "=== Custom Prefixer (★) + Suffixer (◉) ===\n";
-echo $model->View();
+echo $model->view();

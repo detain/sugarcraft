@@ -26,8 +26,8 @@ $descriptions = [
 ];
 
 foreach ($descriptions as $d) {
-    $model->addItem($d);
+    $model = $model->addItem($d); // rebind — instances are immutable
 }
 
 echo "=== Word-wrap demo (viewport: 60 cols) ===\n";
-echo $model->View();
+echo $model->view();

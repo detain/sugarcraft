@@ -20,13 +20,16 @@ $model = Model::new()
 
 $fruits = ['Apple', 'Banana', 'Cherry', 'Dragonfruit', 'Elderberry'];
 foreach ($fruits as $f) {
-    $model->addItem(new StringItem($f));
+    // Fluent setters return NEW models — rebind or the item is lost.
+    $model = $model->addItem(new StringItem($f));
 }
 
 echo "=== CandyLister Demo (cursor on: Apple) ===\n";
-echo $model->View();
+echo $model->view();
 
-// Move cursor down
-$model->setCursor(2);
+// Move cursor down; reset the diff state so this demo paints a full frame
+// under its own header instead of a positional delta.
+$model = $model->setCursor(2);
+$model->resetPreviousFrame();
 echo "=== Cursor moved to Cherry ===\n";
-echo $model->View();
+echo $model->view();
