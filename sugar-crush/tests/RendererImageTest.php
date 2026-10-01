@@ -29,8 +29,8 @@ final class RendererImageTest extends TestCase
 
     private string $homeSandbox = '';
 
-    /** First Private-Use-Area codepoint candy-core's ImageOverlay uses as a marker. */
-    private const MARKER = "\u{E000}";
+    /** First Private-Use-Area codepoint candy-core's ImageOverlay uses as a marker (U+E000/U+E001 belong to the zone sentinels). */
+    private const MARKER = "\u{E002}";
 
     protected function setUp(): void
     {

@@ -397,7 +397,7 @@ final class StatusLineSegmentTest extends TestCase
 
         // And nothing anywhere in the Private-Use block, which is also where
         // candy-core's image markers live (`ImageOverlay::MARKER_BASE` is
-        // U+E000 and a marker is MARKER_BASE + id).
+        // U+E002 and a marker is MARKER_BASE + id).
         $segment = substr($raw, (int) strrpos($raw, ' · ') + \strlen(' · '));
         self::assertSame(
             0,

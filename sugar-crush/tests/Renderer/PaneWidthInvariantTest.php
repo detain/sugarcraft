@@ -529,12 +529,12 @@ final class PaneWidthInvariantTest extends TestCase
         $frame = Renderer::render($chat);
 
         self::assertRowsFit($frame, 100);
-        // NOT `assertStringNotContainsString(Sentinel::OPEN, …)`: an image
-        // marker cell is `ImageOverlay::MARKER_BASE + id` and MARKER_BASE is
-        // U+E000, so the first picture in a frame emits a byte-identical copy
-        // of the opening sentinel — and that copy MUST survive to the terminal
-        // for `Program::renderFrame()` to resolve into a paint. What may not
-        // survive is well-formed zone MARKUP, which `scanRoot()` strips.
+        // NOT `assertStringNotContainsString(Sentinel::OPEN, …)` on principle:
+        // what may not survive to the terminal is well-formed zone MARKUP,
+        // which `scanRoot()` strips. (Since the a32c4faae follow-up the image
+        // arena starts at U+E002 + id, disjoint from the sentinel pair, so a
+        // picture no longer emits a byte-identical copy of the opening
+        // sentinel; the triple-pattern pin below stays as the exact contract.)
         self::assertSame(
             0,
             preg_match('/\x{E000}\/?[A-Za-z0-9._:-]*\x{E001}/u', $frame),

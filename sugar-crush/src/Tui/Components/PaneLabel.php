@@ -60,9 +60,10 @@ final class PaneLabel
      * INSIDE a bordered pane rather than on a label row.
      *
      * `untrusted()` leaves the Private-Use block alone because it is printable,
-     * and U+E000 is where candy-core's image markers AND candy-mouse's zone
-     * sentinels both begin, so a model or tool that echoes one back forges a
-     * clickable region (or a graphics placeholder) in our own frame. Every
+     * and the block hosts both candy-mouse's zone sentinels (U+E000/U+E001)
+     * and candy-core's image markers (U+E002 upward), so a model or tool that
+     * echoes one back forges a clickable region (or a graphics placeholder) in
+     * our own frame. Every
      * pane that renders a live agent buffer wants both halves;
      * {@see AgentDashboardPane} and {@see AgentSplitColumn} each carried their
      * own copy of exactly this pair before it moved here.

@@ -47,8 +47,8 @@ use SugarCraft\Mosaic\TmuxPassthroughDecorator;
  */
 final class ImageRenderingTest extends TestCase
 {
-    /** First Private-Use-Area codepoint candy-core's ImageOverlay uses as a marker. */
-    private const MARKER = "\u{E000}";
+    /** First Private-Use-Area codepoint candy-core's ImageOverlay uses as a marker (U+E000/U+E001 belong to the zone sentinels). */
+    private const MARKER = "\u{E002}";
 
     /** The tmux passthrough envelope's opening bytes: `ESC P tmux ;`. */
     private const TMUX_ENVELOPE = "\x1bPtmux;";
@@ -359,7 +359,7 @@ final class ImageRenderingTest extends TestCase
                 'placements' => count(\$view->images),
                 'wrapped' => \$placement !== null && str_starts_with(\$placement->bytes, "\\x1bPtmux;"),
                 'doubled' => \$placement !== null && str_contains(\$placement->bytes, "\\x1b\\x1bP"),
-                'marker' => str_contains(\$view->body, "\\u{E000}"),
+                'marker' => str_contains(\$view->body, "\\u{E002}"),
                 'bodyDcs' => str_contains(\$view->body, "\\x1bP"),
             ]));
             PHP;

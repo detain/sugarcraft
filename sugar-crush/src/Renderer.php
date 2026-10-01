@@ -1155,15 +1155,21 @@ final class Renderer
      * Blank every Private-Use cell that is NOT part of a well-formed zone
      * sentinel, for the scan copy only.
      *
-     * The image overlay and the zone marker landed on the same codepoints:
-     * `ImageOverlay::MARKER_BASE` is U+E000 and an image's marker cell is
-     * `MARKER_BASE + id`, so the first picture {@see renderToolImage()} places
-     * in a frame emits a byte-identical copy of {@see Sentinel::OPEN} and the
-     * second emits {@see Sentinel::CLOSE}. Handed to the scanner verbatim,
-     * those stray sentinels parse as zone markup: measured, one image marker
-     * sitting between two marked regions makes the scan drop every zone after
-     * it — session tabs, tool rows, and the status bar's `pane:menu` all stop
-     * responding to clicks the moment a screenshot is on screen.
+     * Historically the image overlay and the zone marker landed on the same
+     * codepoints — `ImageOverlay::MARKER_BASE` was U+E000 and a marker cell was
+     * `MARKER_BASE + id`, so the first picture {@see renderToolImage()} placed
+     * in a frame emitted a byte-identical copy of {@see Sentinel::OPEN} and the
+     * second emitted {@see Sentinel::CLOSE}. Handed to the scanner verbatim,
+     * those stray sentinels parsed as zone markup: measured, one image marker
+     * sitting between two marked regions made the scan drop every zone after
+     * it — session tabs, tool rows, and the status bar's `pane:menu` all
+     * stopped responding to clicks the moment a screenshot was on screen.
+     * The allocator has since moved to U+E002 + id (a32c4faae ruling,
+     * follow-up 2 of 2), so live image markers can no longer speak the zone
+     * language. The mask stays as defense-in-depth: any other PUA codepoint
+     * that reaches a frame — a Nerd Font glyph in model output, a marker from
+     * a pre-move recording — is blanked to an equal-width space instead of
+     * being handed to the scanner to interpret.
      *
      * Only the string the scanner reads is masked; the frame that goes to the
      * terminal keeps its real markers, because `Program` still has to resolve
