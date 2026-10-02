@@ -1140,7 +1140,20 @@ string, so a server launched as `--served-model-name default` reports `default`
 from `/v1/models`, and copying that into `model` silently gets you the legacy
 `temperature = 0.7`, no `top_p`, no `reasoning_effort` and a 196,608-token
 context window while you are in fact talking to DeepSeek-V4. There is no way to
-detect that from the id alone.
+detect that from the id alone — but the server can say, see below.
+
+The provider also asks the server about itself: once per session it reads
+`GET /model_info` and `GET /server_info` from the server root (`baseUrl` minus
+`/v1`), with a 3-second bound, and fails soft. From them it takes the context
+window (`min(context_length, max_req_input_len − 4096)`, so the compaction
+tiers follow the deployment rather than a transcription of it) and the default
+`max_tokens` (`min(262144, the room the prompt leaves)`; `maxOutputTokens`
+still wins). When the reads fail, per-family figures stand in: 262144 output
+tokens for DeepSeek-V4 and Qwen3.8, 4096 for anything else. The same read
+names the served model and its `--tool-call-parser`: a served model of another
+family than `model`, or a server with no tool-call parser while no textual
+fallback is armed, raises a one-time transcript notice. Set
+`"discoverServerInfo": false` in the provider block to skip the reads.
 
 That default exists because an *absent* `reasoning_effort` is not neutral. On
 DeepSeek-V4-Flash, a request without it comes back with `reasoning_content:

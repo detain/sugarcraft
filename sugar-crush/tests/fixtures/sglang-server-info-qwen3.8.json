@@ -1,0 +1,21 @@
+{
+    "model_path": "Qwen/Qwen3.8-Flash-Next-FP8",
+    "served_model_name": "Qwen/Qwen3.8-Flash-Next-FP8",
+    "context_length": 1000000,
+    "max_req_input_len": 999994,
+    "max_total_num_tokens": 6248064,
+    "max_running_requests": 96,
+    "chunked_prefill_size": 16384,
+    "allow_auto_truncate": false,
+    "enable_cache_report": true,
+    "disable_radix_cache": false,
+    "tool_call_parser": "qwen3_coder",
+    "reasoning_parser": "qwen3",
+    "api_key": null,
+    "version": "0.5.21.dev889+gd8afe1af9",
+    "internal_states": [
+        {
+            "context_length": 1000000
+        }
+    ]
+}

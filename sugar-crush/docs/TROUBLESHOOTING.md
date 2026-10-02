@@ -299,6 +299,31 @@ sugarcrush models          # every selectable provider, "*" marks the selected o
   ceiling on a forked completion child: every frame the child streams resets it,
   so a turn making visible progress stays alive indefinitely.
   `SUGARCRUSH_CONNECT_TIMEOUT` bounds the connect phase only.
+- **An `sglang` reply stops mid-thought with `finish_reason: length`, or the
+  context gauge looks wrong for the model.** The provider reads the server's
+  own limits from `GET /model_info` and `GET /server_info` at the server root
+  (the configured `baseUrl` minus `/v1`), once per session, on the first frame
+  or the first request. The context window is then
+  `min(context_length, max_req_input_len − 4096)` and the default `max_tokens`
+  is `min(262144, the room the prompt leaves)`. If those reads fail — a proxy
+  that only forwards `/v1`, a 401, a server slower than 3 seconds to answer —
+  the provider falls back to transcribed per-family figures, which can be out
+  of date. Check them directly:
+  `curl -s <root>/server_info | jq '{context_length, max_req_input_len, served_model_name, tool_call_parser}'`.
+  `"discoverServerInfo": false` in the provider block turns the reads off; a
+  `maxOutputTokens` setting replaces the derived `max_tokens` either way.
+- **A transcript notice says the SGLang server "serves" a different model.**
+  The server's `served_model_name` is of another model family than your
+  configured `model`. Sampling, reasoning effort, the default tool-call parser
+  and the fallback window all follow the configured id, so they are the wrong
+  family's. Set `model` to the served id. A spelling difference inside one
+  family (`…-Flash-Next` against `…-Flash-Next-FP8`) does not raise it.
+- **A transcript notice says the server "was launched without
+  --tool-call-parser".** `/model_info` reported `tool_call_parser: null`, so
+  the model's tool calls arrive as raw text in the reply. Relaunch SGLang with
+  the parser for its model (`qwen3_coder` for Qwen3.8), or set
+  `toolCallParser` to a textual fallback (`dsml`, `minimax-xml-fallback`) that
+  matches the model's markup.
 
 ---
 

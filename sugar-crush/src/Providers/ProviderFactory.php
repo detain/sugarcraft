@@ -87,7 +87,7 @@ final readonly class ProviderFactory
         ],
         'sglang' => [
             'required' => ['baseUrl', 'model'],
-            'optional' => ['apiKey', 'toolCallParser', 'reasoningEffort', 'templateKwargs'],
+            'optional' => ['apiKey', 'toolCallParser', 'reasoningEffort', 'templateKwargs', 'discoverServerInfo'],
         ],
         'bedrock' => [
             'required' => ['region'],
@@ -761,7 +761,47 @@ final readonly class ProviderFactory
             // keys); values ride to the server untouched, where the Jinja
             // template is the authority on them.
             extraTemplateKwargs: self::configuredTemplateKwargs($config['templateKwargs'] ?? null),
+            // Audit 15a A18: read the live server's limits once per provider
+            // (lazily - construction stays I/O-free), so the context window
+            // and the default `max_tokens` follow the deployment instead of a
+            // transcription of it. On by default; `"discoverServerInfo":
+            // false` turns it off for a proxy that blocks the root endpoints.
+            discoverServerInfo: self::configuredDiscoverServerInfo($config['discoverServerInfo'] ?? null),
         );
+    }
+
+    /**
+     * Normalises the optional `discoverServerInfo` flag (audit 15a A18).
+     *
+     * Absent, null and `''` all mean ON - `''` being what
+     * {@see resolveEnvVars()} yields for an unset `${VAR}` placeholder, the
+     * same "absent, not misspelled" exception {@see toolCallParser()} makes.
+     * A JSON boolean is taken as is; because a placeholder always resolves to
+     * a STRING, the spellings `true`/`false`/`1`/`0`/`yes`/`no`/`on`/`off`
+     * are accepted too. Anything else throws, so a typo does not silently
+     * leave discovery in the state the operator was trying to change.
+     */
+    private static function configuredDiscoverServerInfo(mixed $value): bool
+    {
+        if ($value === null || $value === '') {
+            return true;
+        }
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_string($value) || is_int($value)) {
+            $parsed = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($parsed !== null) {
+                return $parsed;
+            }
+        }
+
+        throw new \InvalidArgumentException(sprintf(
+            'discoverServerInfo must be true or false, got %s',
+            is_scalar($value) ? var_export($value, true) : get_debug_type($value),
+        ));
     }
 
     /**
@@ -947,6 +987,20 @@ final readonly class ProviderFactory
      * contain the family token - costs exactly today's behaviour, the OpenAI
      * parser alone, and is recoverable by naming `dsml` explicitly. So both
      * error directions are strictly better than the status quo.
+     *
+     * QWEN3.8 GETS `openai`, AND THAT IS CORRECT - re-checked against the live
+     * server for audit 15a A18 on 2026-10-02. skynet2's `/model_info` reports
+     * `served_model_name: "Qwen/Qwen3.8-Flash-Next-FP8"` with
+     * `tool_call_parser: "qwen3_coder"`, so SGLang itself decodes the model's
+     * `<tool_call><function=…>` markup and returns the standard OpenAI
+     * `tool_calls[]` array (measured on this family as qwen.md E-24/E-26:
+     * `arguments` a JSON string, streamed fragments keyed by `index`). The
+     * array parser is the whole job; no Qwen textual fallback class is needed,
+     * and DSML stays DeepSeek-only - a DSML envelope cannot appear in Qwen
+     * output. The one way that breaks - a server relaunched WITHOUT
+     * `--tool-call-parser` - is now detected rather than silent:
+     * {@see SglangProvider::serverInfo()} reads the parser the server reports
+     * and warns when it is null and no textual fallback is armed.
      */
     private function defaultToolCallParserFor(
         string $model,

@@ -122,7 +122,7 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — TWENTY-ONE
+ *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — TWENTY-THREE
  *     of them, in SIX files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
@@ -491,7 +491,17 @@ final class StderrEmitterCensusTest extends TestCase
         // the refusals do (lane decision 2026-09-04, riding the Q9 commit).
         // The one site round 48 left on error_log() stayed on channel 3 —
         // see its entry there.
-        'src/Providers/SglangProvider.php' => 5,
+        // Audit 15a A18 added two more, both behind the once-per-provider
+        // discovery memo so each is at most one row per session: a served
+        // model of another family than the configured one (every
+        // model-keyed default is then the wrong family's - DeepSeek's
+        // effort 400s every Qwen request), and a server launched without
+        // `--tool-call-parser` while no textual fallback is armed (every tool
+        // call the model asks for would then be lost - the routing rule's
+        // "failed to produce the call" arm, predicted rather than observed).
+        // Neither is recoverable by this process, and in the TUI error_log()
+        // alone lands in a file the user never sees.
+        'src/Providers/SglangProvider.php' => 7,
         'src/Providers/ToolCallParser/DsmlToolCallParser.php' => 4,
         'src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php' => 4,
     ];

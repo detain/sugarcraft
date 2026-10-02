@@ -174,13 +174,19 @@ a missing one, because it looks configurable.
 `maxOutputTokens` is the exception that has no exception: it is E707's opt-in
 output ceiling, and **unset is not zero** — an absent key sends no `max_tokens`
 override, and every provider keeps the documented default it already ships
-(4096 on the Anthropic-shaped wires). Setting it raises the per-request paid
-ceiling on the operator's own credential, which is why the tier column says
-**no**: no key whose meaningful direction is UP belongs to a checked-out
-repository (the full argument lives on `LayeredSettings::LAYERED_KEYS`). When a
-reply actually hits whatever ceiling is in force, the provider's stop verdict
-now reaches the transcript as a system notice instead of a silently truncated
-turn.
+(4096 on the Anthropic-shaped wires). The `sglang` provider's default is not a
+constant: it is `min(262144, window − estimated prompt − margin)`, where the
+window is what the server itself reports from `/server_info` (read once per
+session), else a per-family table (DeepSeek-V4 and Qwen3.8), else 4096 for a
+model nobody measured — so a long reasoning turn is not cut off at 4096
+tokens, and a prompt near the end of the window still leaves room to answer.
+A set `maxOutputTokens` replaces that derivation outright, unclamped.
+Setting it raises the per-request paid ceiling on the operator's own
+credential, which is why the tier column says **no**: no key whose meaningful
+direction is UP belongs to a checked-out repository (the full argument lives
+on `LayeredSettings::LAYERED_KEYS`). When a reply actually hits whatever
+ceiling is in force, the provider's stop verdict now reaches the transcript as
+a system notice instead of a silently truncated turn.
 
 Its value is a positive token count; a fraction truncates toward zero (`2047.9`
 asks for 2047), and zero, negatives or non-numbers mean unset. There is no

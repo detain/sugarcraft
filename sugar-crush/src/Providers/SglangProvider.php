@@ -27,6 +27,7 @@ use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Providers\Concerns\SessionAffinity;
 use SugarCraft\Crush\Providers\Concerns\ToolSchema;
 use SugarCraft\Crush\Usage;
+use SugarCraft\Crush\Util\TokenEstimate;
 
 final readonly class SglangProvider implements ProviderInterface
 {
@@ -87,6 +88,18 @@ final readonly class SglangProvider implements ProviderInterface
      * @var \ArrayObject<string, true>
      */
     private \ArrayObject $truncationRiskWarned;
+
+    /**
+     * Audit 15a A18: the once-per-provider memo for {@see serverInfo()} -
+     * key `loaded` once the loader has run (success OR failure, so a dead
+     * server is asked once, not on every frame), key `info` holding the
+     * {@see SglangServerInfo} or null. An object behind a once-assigned
+     * property for the same `final readonly class` reason as
+     * {@see $truncationRiskWarned}.
+     *
+     * @var \ArrayObject<string, mixed>
+     */
+    private \ArrayObject $serverInfoMemo;
 
     /**
      * §Q8 (E-56): longest server-authored error text kept when it is lifted
@@ -314,6 +327,13 @@ final readonly class SglangProvider implements ProviderInterface
      * baked into the derived {@see QWEN3_NEXT_CONTEXT_WINDOW}, because the
      * later compaction math in this plan needs the RAW ceiling beside the
      * safe window.
+     *
+     * DECAYED, AND KEPT AS IS ON PURPOSE (audit 15a A18): the same server
+     * reported `max_req_input_len` **999,994** on 2026-10-02. That figure is
+     * now READ LIVE ({@see SglangServerInfo}) whenever the server answers, so
+     * this transcription only ever applies when it cannot be asked - and then
+     * the older, smaller number is the safe one to fall back on, because a
+     * window that errs small only compacts earlier.
      */
     private const QWEN3_NEXT_MAX_REQUEST_INPUT_LEN = 748_602;
 
@@ -330,10 +350,13 @@ final readonly class SglangProvider implements ProviderInterface
      *   window. Which field, and why, is the argument
      *   {@see DEEPSEEK_V4_CONTEXT_WINDOW}'s docblock makes at length; it
      *   applies verbatim here.
-     * - 4,096: output headroom - this provider's own default `max_tokens`
-     *   (E-50). Input and generated output share the scheduling budget
-     *   (`max_total_num_tokens` 748,608, E-71), so a request whose input sat
-     *   at 748,602 could not generate anything.
+     * - 4,096: output headroom - what was this provider's flat default
+     *   `max_tokens` when the figure was derived (E-50; since audit 15a A18
+     *   the default is derived per request, {@see defaultMaxTokens()}, and
+     *   4,096 survives as {@see CONTEXT_WINDOW_OUTPUT_HEADROOM} and as the
+     *   floor {@see MIN_DEFAULT_MAX_TOKENS}). Input and generated output share
+     *   the scheduling budget (`max_total_num_tokens` 748,608, E-71), so a
+     *   request whose input sat at 748,602 could not generate anything.
      *
      * WHY CONSERVATIVE: with `allow_auto_truncate=false` an over-long
      * request hard-errors (E-71), and every context tier in Chat is a
@@ -343,6 +366,11 @@ final readonly class SglangProvider implements ProviderInterface
      * wrong denominator). Erring small costs only an earlier compaction.
      * The raw constants stay exposed so the margin can be re-tuned without
      * re-deriving the evidence.
+     *
+     * FALLBACK ONLY since audit 15a A18: {@see contextWindow()} derives the
+     * same formula from the live `/server_info` first (995,898 on
+     * 2026-10-02) and reaches this constant only when discovery is not armed
+     * or failed.
      */
     private const QWEN3_NEXT_CONTEXT_WINDOW = 744_506;
 
@@ -362,6 +390,80 @@ final readonly class SglangProvider implements ProviderInterface
      * pre-existing behaviour is preserved rather than improved here.
      */
     private const LEGACY_DEFAULT_CONTEXT_WINDOW = 196_608;
+
+    /**
+     * Audit 15a A18 (revised, user decision 2026-10-02): the largest
+     * `max_tokens` this class sends when the caller named none - the user's
+     * recommended output cap for current large-context models.
+     *
+     * WHY THE OLD FLAT 4096 HAD TO GO: SGLang counts generated REASONING tokens
+     * against `max_tokens`, so a max-effort think on DeepSeek-V4 (or an
+     * `xhigh` one on Qwen3.8) could spend the whole 4096 thinking and end with
+     * `finish_reason: length` and an empty reply - known #28's "thinking-only
+     * reply ends the turn", on the default configuration.
+     *
+     * A cap, not the value sent: {@see defaultMaxTokens()} sends
+     * `min(this, the room the prompt leaves)`.
+     */
+    private const DEFAULT_OUTPUT_TOKEN_CAP = 262_144;
+
+    /**
+     * What this class sent for every request before A18, and still sends for
+     * a model it knows nothing about when the server could not be asked: the
+     * conservative default for a window nobody measured.
+     */
+    private const LEGACY_DEFAULT_MAX_TOKENS = 4096;
+
+    /**
+     * The fewest output tokens {@see defaultMaxTokens()} will ask for. Below
+     * this the estimated room is noise - the prompt is within the safety
+     * margin of the window, where Chat's 95% tier should already have refused
+     * the turn - and the request goes out with this floor so an over-long
+     * prompt fails LOUDLY with the server's own context-length 400 (surfaced
+     * by {@see errorBodyMessage()}), rather than a zero or negative budget.
+     */
+    private const MIN_DEFAULT_MAX_TOKENS = 4096;
+
+    /**
+     * The smallest slack {@see defaultMaxTokens()} leaves between the
+     * estimated prompt and the window. Covers the chat template's own framing
+     * tokens, which no client-side estimate sees.
+     */
+    private const PROMPT_SAFETY_MARGIN_FLOOR = 8192;
+
+    /**
+     * The proportional half of that slack, as a divisor: a quarter of the
+     * estimate. {@see \SugarCraft\Crush\Util\TokenEstimate} is chars/4 on
+     * ASCII, and real tokenizers spend nearer one token per three characters
+     * on code and JSON, so an estimate can run ~25% short. Overshooting the
+     * window is a hard 400 on a server with `allow_auto_truncate=false`;
+     * undershooting costs only output room on a prompt already near the limit.
+     */
+    private const PROMPT_SAFETY_MARGIN_DIVISOR = 4;
+
+    /**
+     * Output headroom subtracted from a DISCOVERED `max_req_input_len` when
+     * {@see contextWindow()} derives the input budget from it - the same 4,096
+     * the transcribed {@see QWEN3_NEXT_CONTEXT_WINDOW} was derived with, kept
+     * so the live and the fallback windows follow one formula.
+     */
+    private const CONTEXT_WINDOW_OUTPUT_HEADROOM = 4096;
+
+    /**
+     * Fallback TOTAL windows (prompt + output) for {@see defaultMaxTokens()}
+     * when discovery failed, keyed by the same family tokens as everything
+     * else here. Transcribed, and decaying like every other transcription in
+     * this class - they are only read when the server could not be asked.
+     *
+     * - DeepSeek-V4: `max_model_len` 1,048,576 from `/v1/models`, 2026-08-20
+     *   (see {@see DEEPSEEK_V4_CONTEXT_WINDOW} for why that differs from the
+     *   input ceiling by six).
+     * - Qwen3.8: `context_length` 1,000,000 from `/server_info`, unchanged
+     *   between the 2026-09-01 and 2026-10-02 reads.
+     */
+    private const DEEPSEEK_V4_TOTAL_WINDOW = 1_048_576;
+
+    private const QWEN3_NEXT_TOTAL_WINDOW = 1_000_000;
 
     /**
      * The `temperature` this class has sent since it existed, for any model
@@ -493,14 +595,35 @@ final readonly class SglangProvider implements ProviderInterface
          * the id current live in the {@see SessionAffinity} trait docblock.
          */
         private ?string $sessionAffinityId = null,
+        /**
+         * Audit 15a A18: reads the live server's limits
+         * ({@see SglangServerInfo::discover()}), run at most ONCE per
+         * provider by {@see serverInfo()}. Null (the default) means "never
+         * ask", which keeps a directly-constructed provider - every test, every
+         * embedder - free of network I/O beyond the completions it is asked
+         * for, and leaves the transcribed per-family figures in charge.
+         * {@see ProviderFactory::createSglang()} arms it.
+         *
+         * @var (\Closure(): ?SglangServerInfo)|null
+         */
+        private ?\Closure $serverInfoLoader = null,
     ) {
         if ($this->reasoningEffort !== null) {
             self::validatedReasoningEffort($this->reasoningEffort, 'provider config');
         }
 
         $this->truncationRiskWarned = new \ArrayObject();
+        $this->serverInfoMemo = new \ArrayObject();
     }
 
+    /**
+     * @param bool $discoverServerInfo Audit 15a A18: arm a once-per-provider
+     *        read of the server's `/model_info` + `/server_info`
+     *        ({@see SglangServerInfo::discover()}). Off by default so this
+     *        factory stays I/O-free at construction AND afterwards unless a
+     *        caller opts in; {@see ProviderFactory::createSglang()} opts in
+     *        unless the config block says `"discoverServerInfo": false`.
+     */
     public static function openAiCompatible(
         string $baseUrl,
         string $model = self::DEFAULT_MODEL,
@@ -509,6 +632,7 @@ final readonly class SglangProvider implements ProviderInterface
         string|float|null $reasoningEffort = null,
         array $extraTemplateKwargs = [],
         ?string $sessionAffinityId = null,
+        bool $discoverServerInfo = false,
     ): self {
         $headers = [
             'Content-Type' => 'application/json',
@@ -531,7 +655,130 @@ final readonly class SglangProvider implements ProviderInterface
             'headers' => $headers,
         ]);
 
-        return new self($baseUrl, $model, $apiKey, $client, $toolCallParser, $reasoningEffort, $extraTemplateKwargs, $sessionAffinityId);
+        $serverInfoLoader = $discoverServerInfo
+            ? static fn (): ?SglangServerInfo => SglangServerInfo::discover($baseUrl, $apiKey)
+            : null;
+
+        return new self(
+            $baseUrl,
+            $model,
+            $apiKey,
+            $client,
+            $toolCallParser,
+            $reasoningEffort,
+            $extraTemplateKwargs,
+            $sessionAffinityId,
+            $serverInfoLoader,
+        );
+    }
+
+    /**
+     * Audit 15a A18: what the server said about itself, read once per
+     * provider and memoised - null when no loader is armed or the read failed.
+     *
+     * LAZY, AND CALLED FROM TWO PLACES ON PURPOSE. Construction must stay
+     * I/O-free (a provider is built for `doctor`, the model picker and a
+     * dozen tests that never complete anything). The first caller is
+     * normally {@see contextWindow()} on the TUI's first frame, in the PARENT
+     * process - which matters, because every turn runs in a `pcntl_fork()`ed
+     * child: a read that happened only inside a turn would die with the child
+     * and the parent's context tiers would never see it. Reading in the
+     * parent once means every later child inherits the memo. The request
+     * path ({@see buildParams()}) is the second caller, for `-p` runs that
+     * never render a frame. A failed read is memoised too, so an unreachable
+     * server costs one bounded attempt
+     * ({@see SglangServerInfo::DISCOVERY_TIMEOUT_SECONDS}), not one per frame.
+     */
+    public function serverInfo(): ?SglangServerInfo
+    {
+        if ($this->serverInfoLoader === null) {
+            return null;
+        }
+
+        if (!isset($this->serverInfoMemo['loaded'])) {
+            $this->serverInfoMemo['loaded'] = true;
+
+            try {
+                $info = ($this->serverInfoLoader)();
+            } catch (\Throwable) {
+                $info = null;
+            }
+
+            $this->serverInfoMemo['info'] = $info instanceof SglangServerInfo ? $info : null;
+
+            if ($info instanceof SglangServerInfo) {
+                $this->warnAboutServerMismatch($info);
+            }
+        }
+
+        $info = $this->serverInfoMemo['info'] ?? null;
+
+        return $info instanceof SglangServerInfo ? $info : null;
+    }
+
+    /**
+     * The two discovered facts that mean this provider is about to behave
+     * wrongly, surfaced ONCE (discovery runs once) on both channels of
+     * {@see RuntimeNoticeSink::warn()}.
+     *
+     * 1. A model FAMILY mismatch. Sampling, reasoning-effort placement, the
+     *    default tool-call parser and the fallback window are all keyed on the
+     *    CONFIGURED id; if the server serves another family every one of them
+     *    is the wrong family's (DeepSeek's top-level `reasoning_effort: max`
+     *    400s on every thinking-on Qwen3.8 request, qwen.md E-41). Judged by
+     *    family, not by string, so `Qwen/Qwen3.8-Flash-Next` configured
+     *    against `Qwen/Qwen3.8-Flash-Next-FP8` served - the repo's own
+     *    dev-sglang block today - stays quiet.
+     * 2. A server that reports `tool_call_parser: null` while this provider
+     *    has no textual fallback armed: every tool call then arrives as raw
+     *    markup in `content` and the agent silently does nothing.
+     */
+    private function warnAboutServerMismatch(SglangServerInfo $info): void
+    {
+        $served = $info->servedModelName;
+        if ($served !== null && self::modelFamily($served) !== self::modelFamily($this->model)) {
+            RuntimeNoticeSink::warn(sprintf(
+                'SGLang server %s serves "%s" but the configured model is "%s"; '
+                . 'sampling, reasoning effort and the default tool-call parser follow the '
+                . 'configured id, so set "model" to the served one.',
+                SglangServerInfo::rootUrl($this->baseUrl),
+                $served,
+                $this->model,
+            ));
+        }
+
+        if ($info->reportsToolCallParser
+            && $info->toolCallParser === null
+            && !$this->toolCallParser instanceof EnvelopeAware
+        ) {
+            RuntimeNoticeSink::warn(sprintf(
+                'SGLang server %s was launched without --tool-call-parser, so tool calls arrive '
+                . 'as raw text; set "toolCallParser" to "dsml" or "minimax-xml-fallback" to '
+                . 'recover them, or relaunch the server with the parser for its model.',
+                SglangServerInfo::rootUrl($this->baseUrl),
+            ));
+        }
+    }
+
+    /**
+     * The family a model id belongs to, for {@see warnAboutServerMismatch()}:
+     * the same two substring predicates every family default here uses, so
+     * "same family" cannot mean something different in the notice than in
+     * the behaviour it warns about.
+     */
+    private static function modelFamily(string $model): string
+    {
+        return match (true) {
+            self::isDeepSeekV4($model) => self::DEEPSEEK_V4_FAMILY_TOKEN,
+            self::isQwen3Next($model) => self::QWEN3_NEXT_FAMILY_TOKEN,
+            // Every other id is ONE bucket: two unknown-family ids carry the
+            // same (legacy) behaviour, so a mere spelling difference between
+            // them - an org prefix, a quantisation suffix - is not worth a
+            // notice. An alias like `default` configured against a served
+            // DeepSeek-V4 still differs, which is the under-match the
+            // DEEPSEEK_V4_FAMILY_TOKEN docblock said nothing could detect.
+            default => 'other',
+        };
     }
 
     /**
@@ -598,7 +845,23 @@ final readonly class SglangProvider implements ProviderInterface
      * single figure it used to return was measured on a model this server no
      * longer runs.
      *
-     * THREE figures, each with its own domain:
+     * AND NOW LIVE FIRST (audit 15a A18, 2026-10-02). When a discovery loader
+     * is armed ({@see ProviderFactory::createSglang()} arms it) and the server
+     * answered, the window is DERIVED from what it reported:
+     * `min(context_length, max_req_input_len − 4096)`
+     * ({@see SglangServerInfo::inputWindow()}, headroom
+     * {@see CONTEXT_WINDOW_OUTPUT_HEADROOM}) - the same formula the Qwen3.8
+     * constant below was derived with, over today's figures instead of
+     * 2026-09-01's. On skynet2 that is `min(1,000,000, 999,994 − 4,096)` =
+     * **995,898**, where the transcription still says 744,506. The first call
+     * performs the read (bounded by
+     * {@see SglangServerInfo::DISCOVERY_TIMEOUT_SECONDS}, once per provider -
+     * see {@see serverInfo()} for why here and not at construction).
+     *
+     * The three transcribed figures below are what remains when there is no
+     * loader or the server could not be asked. They are FALLBACKS now, and
+     * the Qwen3.8 one is knowingly stale (conservative: erring small only
+     * compacts earlier):
      *
      * - {@see DEEPSEEK_V4_CONTEXT_WINDOW} = 1,048,570 for the DeepSeek-V4
      *   family. Not a guess and not from a card: it is `max_req_input_len` in
@@ -664,6 +927,11 @@ final readonly class SglangProvider implements ProviderInterface
      */
     public function contextWindow(): int
     {
+        $discovered = $this->serverInfo()?->inputWindow(self::CONTEXT_WINDOW_OUTPUT_HEADROOM);
+        if ($discovered !== null) {
+            return $discovered;
+        }
+
         if (self::isDeepSeekV4($this->model)) {
             return self::DEEPSEEK_V4_CONTEXT_WINDOW;
         }
@@ -1263,7 +1531,11 @@ final readonly class SglangProvider implements ProviderInterface
             // 1.0 minus 0.3. Keyed on $request->model, the id this body is
             // addressed to - see defaultTemperature().
             'temperature' => $request->temperature ?? self::defaultTemperature($request->model),
-            'max_tokens' => $request->maxTokens ?? 4096,
+            // Placeholder for the key's POSITION only: the default needs the
+            // finished body to estimate the prompt, so it is filled in just
+            // before the return - see defaultMaxTokens() (audit 15a A18).
+            // An explicit value (`maxOutputTokens`) is sent untouched.
+            'max_tokens' => $request->maxTokens ?? self::LEGACY_DEFAULT_MAX_TOKENS,
 
             // Pin SGLang's reasoning-splitting behavior explicitly rather than
             // relying on its (currently true) default - see D3/D4: this is
@@ -1372,7 +1644,82 @@ final readonly class SglangProvider implements ProviderInterface
             $params['tools'] = $this->formatTools($request->tools);
         }
 
+        if ($request->maxTokens === null) {
+            $params['max_tokens'] = $this->defaultMaxTokens($request->model, $params);
+        }
+
         return $params;
+    }
+
+    /**
+     * Audit 15a A18 (revised, user decision 2026-10-02): the `max_tokens` to
+     * send when the caller named none -
+     * `min(262144, total_window − estimated_prompt − safety_margin)`.
+     *
+     * WHERE THE WINDOW COMES FROM, in order:
+     * 1. the live server ({@see serverInfo()}): `context_length`, else
+     *    `max_req_input_len` ({@see SglangServerInfo::totalWindow()}) - for
+     *    ANY model, since the server's own answer needs no family table;
+     * 2. the per-family fallback table, keyed on the id this request is
+     *    addressed to (the same key the sampling defaults use):
+     *    {@see DEEPSEEK_V4_TOTAL_WINDOW}, {@see QWEN3_NEXT_TOTAL_WINDOW};
+     * 3. otherwise the pre-A18 {@see LEGACY_DEFAULT_MAX_TOKENS}, unclamped: a
+     *    model whose window nobody measured keeps the conservative 4096
+     *    rather than a guess at 262,144.
+     *
+     * WHY CLAMP AT ALL rather than always sending the cap: prompt and output
+     * share the window, and SGLang refuses (HTTP 400, "Requested token count
+     * exceeds the model's maximum context length") a request whose input plus
+     * `max_tokens` overruns it - so a flat 262,144 would break every turn of a
+     * session past ~740k tokens on a 1M window, long before the input itself
+     * is too big. The prompt is estimated from the finished request body
+     * ({@see estimatedPromptTokens()}), with slack for the estimate's error
+     * ({@see PROMPT_SAFETY_MARGIN_FLOOR}, {@see PROMPT_SAFETY_MARGIN_DIVISOR})
+     * and a floor ({@see MIN_DEFAULT_MAX_TOKENS}) for a prompt already at the
+     * edge.
+     *
+     * The settings key `maxOutputTokens` still wins outright: it arrives as
+     * `$request->maxTokens` and this method is never called.
+     *
+     * @param array<string, mixed> $params the otherwise-finished request body
+     */
+    private function defaultMaxTokens(string $model, array $params): int
+    {
+        $total = $this->serverInfo()?->totalWindow() ?? match (true) {
+            self::isDeepSeekV4($model) => self::DEEPSEEK_V4_TOTAL_WINDOW,
+            self::isQwen3Next($model) => self::QWEN3_NEXT_TOTAL_WINDOW,
+            default => null,
+        };
+
+        if ($total === null) {
+            return self::LEGACY_DEFAULT_MAX_TOKENS;
+        }
+
+        $estimate = self::estimatedPromptTokens($params);
+        $margin = max(self::PROMPT_SAFETY_MARGIN_FLOOR, intdiv($estimate, self::PROMPT_SAFETY_MARGIN_DIVISOR));
+        $room = $total - $estimate - $margin;
+
+        return max(self::MIN_DEFAULT_MAX_TOKENS, min(self::DEFAULT_OUTPUT_TOKEN_CAP, $room));
+    }
+
+    /**
+     * The prompt side of {@see defaultMaxTokens()}: a script-weighted estimate
+     * ({@see TokenEstimate}) over the JSON of what the server will tokenise -
+     * the messages (system row included) and the tool schemas, which the chat
+     * template renders into the prompt too. Measured over the WIRE form rather
+     * than the message objects so nothing the template sees is missed; JSON's
+     * quoting and escaping only push the estimate up, the safe direction.
+     *
+     * @param array<string, mixed> $params
+     */
+    private static function estimatedPromptTokens(array $params): int
+    {
+        $json = json_encode(
+            ['messages' => $params['messages'] ?? [], 'tools' => $params['tools'] ?? []],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
+        );
+
+        return TokenEstimate::ofText(is_string($json) ? $json : '');
     }
 
     /**

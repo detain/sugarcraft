@@ -67,6 +67,19 @@ final class ProviderConnectTimeoutTest extends TestCase
         'VertexProvider.php' => 'grpc seam',
     ];
 
+    /**
+     * Files under `src/Providers/` that make a METADATA read, never a
+     * completion, and may therefore bound its TOTAL time - exempt from
+     * {@see testNoProviderSetsATotalRequestTimeout()} only (they must still
+     * build their client through the shared seam), and listed by name with
+     * the reason for the same "exempt, not forgotten" rule as above.
+     */
+    private const METADATA_READS = [
+        // Audit 15a A18: `/model_info` + `/server_info`, read on the TUI's
+        // first frame; a server that accepts and then stalls must not hold it.
+        'SglangServerInfo.php' => 'two metadata GETs on the render path',
+    ];
+
     // -------------------------------------------------------------------------
     // Concrete: the clients providers actually build
     // -------------------------------------------------------------------------
@@ -354,6 +367,14 @@ final class ProviderConnectTimeoutTest extends TestCase
             return;
         }
 
+        if (isset(self::METADATA_READS[$name])) {
+            // The exemption is for a SHORT bound: pin that the file names its
+            // own discovery budget rather than an arbitrary figure.
+            $this->assertStringContainsString('DISCOVERY_TIMEOUT_SECONDS', $source, $name . ' lost its named discovery budget');
+
+            return;
+        }
+
         $why = $name . " sets a total request 'timeout'. LLM completions legitimately run for "
             . 'tens of minutes; only a connect bound belongs on a provider client '
             . '(crush_code.md Phase 0 item 4).';
@@ -419,7 +440,7 @@ final class ProviderConnectTimeoutTest extends TestCase
             $this->assertContains($expected, $found);
         }
 
-        foreach (array_keys(self::NO_HTTP_CLIENT) as $exempt) {
+        foreach ([...array_keys(self::NO_HTTP_CLIENT), ...array_keys(self::METADATA_READS)] as $exempt) {
             $this->assertContains($exempt, $found, 'exemption list names a file that no longer exists');
         }
 
