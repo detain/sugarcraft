@@ -111,16 +111,24 @@ way.
 
 Both flags apply to the TUI and to `-p`/`run` alike.
 
-The project root can also be given as a bare argument: one that looks like a
-path (`sugarcrush ../other-project`, `./app`, `/srv/app`) or names an existing
-directory (`sugarcrush src`). It is what the Bash/Read/Edit/Glob tools
-are jailed to and where `CLAUDE.md`/`AGENTS.md` and `.sugar-crush/skills` are
-looked for.
+The project root can also be given as a bare argument: a **first** argument
+that looks like a path (`sugarcrush ../other-project`, `./app`, `/srv/app`) or
+names an existing directory (`sugarcrush src`). It is what the
+Bash/Read/Edit/Glob tools are jailed to and where `CLAUDE.md`/`AGENTS.md` and
+`.sugar-crush/skills` are looked for.
 
-Any other bare argument is a usage error (exit 2), never silently dropped:
-`sugarcrush fix the login bug` refuses and points at `-p "<prompt>"`, a word
-left after the prompt (`-p hi extra`, `-p hi -- extra`) asks you to quote the
-whole prompt, and a second directory — another bare one, or one beside
+Any other bare words open the TUI with them as its **first prompt**, the way
+`claude "<prompt>"` does: `sugarcrush fix the login bug` starts a session and
+sends `fix the login bug` as soon as it is up, and `sugarcrush src fix the
+login bug` does the same rooted at `src`. Only the first argument can be the
+root, so a directory or file named later is part of the prompt
+(`sugarcrush explain src/Chat.php`). Words are joined with single spaces; quote
+the prompt to keep its own spacing. With `-c`/`--resume <id>` the prompt goes
+to the reopened session (a bare `--resume` puts it in the box once you have
+picked one). On a `-p`/`run` one-shot run, where the prompt was already given,
+a word left over is still a usage error (exit 2) that asks you to quote the
+whole prompt (`-p hi extra`, `-p hi -- extra`), and so is a word before a
+subcommand. A lone second directory — another bare one, or one beside
 `--root` — is refused rather than letting one of them win. `--root` itself
 needs a value that is not an option: `--root --model x` is a usage error rather
 than a root named `--model` (use `--root=<dir>` for a directory whose name
@@ -390,7 +398,7 @@ The same three exit codes govern every subcommand below.
 | --- | --- |
 | `0` | the prompt ran and produced an answer, or the subcommand answered |
 | `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, or a trusted `.mcp.json` could not be parsed — retrying may help. `error.type`: `backend`, `encoding`, `mcp-config`, `not-found` |
-| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, a bare argument that names no existing directory (or a second project directory), an `--output-format` value that is neither `text` nor `json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.sugar-crush/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$SUGARCRUSH_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help. `error.type`: `usage`, `provider_configuration`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
+| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, a word left over after `-p`/`run`'s prompt or before a subcommand, a second project directory, an `--output-format` value that is neither `text` nor `json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.sugar-crush/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$SUGARCRUSH_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help. `error.type`: `usage`, `provider_configuration`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
 
 `2` covers "no prompt given" (`sugarcrush -p`, `sugarcrush run`) deliberately:
 the invocation is malformed, no backend is ever selected, and a CI gate that

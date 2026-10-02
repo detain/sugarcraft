@@ -248,7 +248,9 @@ final class BinSugarcrushDispatchTest extends TestCase
             'no prompt given'   => [['--output-format', 'json', 'run'], 'no prompt given'],
             // Audit CLI-2: a prompt typed without -p used to open the TUI in
             // the cwd, and a word after the prompt was dropped.
-            'leftover operands' => [['no-such-word-a', 'no-such-word-b', '--output-format', 'json'], 'unexpected arguments: no-such-word-a, no-such-word-b'],
+            // Since audit CLI-2(b) leftover words on a TUI launch are its first
+            // prompt; before a subcommand they are still refused.
+            'leftover operands' => [['no-such-word-a', 'no-such-word-b', 'session', 'list', '--output-format', 'json'], 'unexpected arguments: no-such-word-a, no-such-word-b'],
             'word after --'     => [['--output-format', 'json', '-p', 'hi', '--', 'no-such-word'], 'unexpected argument after the prompt: no-such-word'],
             '--root handed a flag' => [['--root', '--output-format', 'json'], '--root expects a directory'],
         ];
@@ -290,15 +292,20 @@ final class BinSugarcrushDispatchTest extends TestCase
 
     /**
      * Audit CLI-2, the refusing half at the binary: exit 2, the hint on
-     * stderr, nothing on stdout, and never the TUI.
+     * stderr, nothing on stdout, and never the TUI. Since CLI-2(b) bare words
+     * on a TUI launch are its first prompt, so the refusal left to pin is the
+     * one-shot run, where the prompt was already given.
      */
     public function testALeftoverOperandIsAUsageErrorAtTheBinary(): void
     {
-        $result = $this->runBin(['no-such-word-a', 'no-such-word-b'], []);
+        $result = $this->runBin(['-p', 'hi', 'no-such-word-a', 'no-such-word-b'], []);
 
         $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
         $this->assertSame('', $result['stdout']);
-        $this->assertStringContainsString('unexpected arguments: no-such-word-a, no-such-word-b', $result['stderr']);
+        $this->assertStringContainsString(
+            'unexpected arguments after the prompt: no-such-word-a, no-such-word-b',
+            $result['stderr'],
+        );
         $this->assertStringContainsString('-p "<prompt>"', $result['stderr']);
     }
 

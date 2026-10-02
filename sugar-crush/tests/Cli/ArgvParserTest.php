@@ -553,13 +553,17 @@ final class ArgvParserTest extends TestCase
 
     /**
      * A second `--` is just an operand — only the first one is the separator.
+     * Being the FIRST operand, it is also what the root rule looks at, so the
+     * path after it is an ordinary operand too (audit CLI-2(b): only the first
+     * operand can name the root).
      */
     public function testSecondDoubleDashIsAnOrdinaryOperand(): void
     {
         $result = ArgvParser::parse(['sugarcrush', '--', '--', '/tmp/repo']);
 
         $this->assertSame([], $result->unknownFlags);
-        $this->assertSame('/tmp/repo', $result->root);
+        $this->assertNull($result->root);
+        $this->assertSame(['--', '/tmp/repo'], $result->positionals);
     }
 
     /**

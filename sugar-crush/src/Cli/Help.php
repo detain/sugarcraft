@@ -41,7 +41,9 @@ SugarCrush — AI coding assistant for the terminal.
 Usage:
   sugarcrush                       Start the interactive TUI (default)
   sugarcrush <dir>                 Start the TUI rooted at <dir>, which must
-                                   exist; any other bare argument is refused
+                                   exist (only as the first argument)
+  sugarcrush [<dir>] <words…>      Start the TUI and send the words as its
+                                   first prompt, e.g. sugarcrush fix the bug
   sugarcrush -c                    Continue the most recent session
   sugarcrush --resume [<id>]       Resume a stored session (picker if no id)
   sugarcrush -p <prompt>           Run a single prompt and exit (one-shot)

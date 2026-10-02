@@ -77,13 +77,18 @@ final class ArgvParser
      * "definitely the root".
      *
      * Positional arguments (those not consumed by any flag) are collected.
-     * If a positional argument looks like a path (starts with / or . or
-     * contains a path separator), it is assigned to root. The first such
-     * positional wins. Every other positional -- a bare word, a second path --
-     * is carried in {@see ParsedArgs::$positionals}, NOT discarded:
-     * {@see self::resolveOperands()} makes an existing directory among them
-     * the root and refuses the rest (audit CLI-2). That half needs is_dir(),
-     * which is why it is not done here.
+     * If the FIRST positional looks like a path (starts with / or . or
+     * contains a path separator), it is assigned to root. Every other
+     * positional is carried in {@see ParsedArgs::$positionals}, NOT
+     * discarded: {@see self::resolveOperands()} makes a first operand that is
+     * an existing directory the root and turns the rest into the TUI's first
+     * prompt (audit CLI-2). That half needs is_dir(), which is why it is not
+     * done here.
+     *
+     * ONLY THE FIRST, since leftover words became a prompt (CLI-2(b)): a
+     * path-shaped word further along is part of what the user is asking
+     * (`sugarcrush explain src/Chat.php`), and claiming it as the root turned
+     * that request into a "not a directory" usage error.
      *
      * `promptRequested` records whether the user asked for one-shot mode at
      * all (`-p` / `--prompt` / `--prompt=` / `run`), independently of whether
@@ -607,25 +612,20 @@ final class ArgvParser
             $usageHint = 'Drop -p to continue the conversation in the TUI.';
         }
 
-        // Assign first positional that looks like a path to root. The one it
-        // claims leaves the list; the rest stay for resolveOperands().
-        if ($root === null) {
-            foreach ($positional as $index => $pos) {
-                if (self::looksLikePath($pos)) {
-                    $root = $pos;
-                    unset($positional[$index]);
-                    break;
-                }
-            }
+        // The FIRST positional, when it looks like a path, is the root (see
+        // the doc-block for why only the first). It leaves the list; the rest
+        // stay for resolveOperands().
+        if ($root === null && $positional !== [] && self::looksLikePath($positional[0])) {
+            $root = \array_shift($positional);
         }
 
         return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional));
     }
 
     /**
-     * The filesystem half of operand handling (audit CLI-2): turn a bare
-     * operand that names an existing directory into the root, and refuse
-     * every operand left after that.
+     * The filesystem half of operand handling (audit CLI-2): turn a first
+     * operand that names an existing directory into the root, and the words
+     * after it into the TUI's first prompt.
      *
      * Kept OUT of {@see parse()} for the reason {@see rootError()} is: parse()
      * stays a pure argv->value-object transform. `bin/sugarcrush` calls this
@@ -640,22 +640,22 @@ final class ArgvParser
      * The rules, in order:
      *
      *  - `sugarcrush src` with `src/` present: `src` becomes the root, exactly
-     *    as `sugarcrush ./src` always did. Only when nothing claimed the root
-     *    yet; the FIRST directory operand wins, mirroring parse()'s
-     *    first-path-shaped rule. It applies to `-p`/`run` and subcommand runs
+     *    as `sugarcrush ./src` always did. Only the FIRST operand, and only
+     *    when nothing claimed the root yet -- a directory name further along
+     *    is a word of the prompt. It applies to `-p`/`run` and subcommand runs
      *    too, because a path-shaped operand already did.
-     *  - Anything left is a usage error, never dropped. That includes a
-     *    second directory, and a directory beside `--root`: two operands both
-     *    naming the project root cannot both win, and quietly letting one of
-     *    them do so is the silent drop this closes. `--root` USED to win over
-     *    a path-shaped operand without a word; it is now an error instead.
+     *  - A single operand left beside a root that itself names a directory
+     *    (`sugarcrush src lib`, `--root /tmp src`) is a usage error: two
+     *    operands both naming the project root cannot both win, and one word
+     *    that is a directory is not a plausible prompt.
+     *  - On a `-p`/`run` run anything left is a usage error (the prompt was
+     *    already given), and so it is before a subcommand.
+     *  - Otherwise -- a TUI launch -- the words left are joined with single
+     *    spaces into {@see ParsedArgs::$initialPrompt}, which the TUI submits
+     *    as its first prompt (CLI-2(b), Claude Code's `claude "<prompt>"`).
+     *    Before this they were a usage error pointing at `-p`.
      *  - Subcommand operands never reach here; parse() routes them to
      *    {@see ParsedArgs::$subcommandArgs}.
-     *
-     * The other reading -- leftover words as the TUI's first prompt, as Claude
-     * Code does -- is not implemented. {@see ParsedArgs::$positionals} keeps
-     * the words, so that reading could replace the final refusal below
-     * without touching the parser.
      */
     public static function resolveOperands(ParsedArgs $args): ParsedArgs
     {
@@ -664,40 +664,25 @@ final class ArgvParser
         }
 
         $leftover = $args->positionals;
-        if ($args->root === null) {
-            foreach ($leftover as $index => $operand) {
-                if ($operand !== '' && \is_dir($operand)) {
-                    unset($leftover[$index]);
-                    $args = $args->withRoot($operand, \array_values($leftover));
-                    break;
-                }
-            }
-            $leftover = $args->positionals;
+        if ($args->root === null && $leftover[0] !== '' && \is_dir($leftover[0])) {
+            $root = \array_shift($leftover);
+            $args = $args->withRoot($root, $leftover);
             if ($leftover === []) {
                 return $args;
             }
         }
 
-        if ($args->root !== null) {
-            $rootLike = \array_values(\array_filter(
-                $leftover,
-                static fn (string $operand): bool => self::looksLikePath($operand)
-                    || ($operand !== '' && \is_dir($operand)),
-            ));
-            if ($rootLike !== []) {
-                $one = \count($rootLike) === 1;
-
-                return $args->withUsageError(
-                    \sprintf(
-                        'sugarcrush: the project root is already %s, but the argument%s %s also name%s one',
-                        $args->root,
-                        $one ? '' : 's',
-                        self::listOperands($rootLike),
-                        $one ? 's' : '',
-                    ),
-                    'Name the project directory once: as a bare argument or with --root <dir>, not both.',
-                );
-            }
+        if ($args->root !== null && \count($leftover) === 1
+            && (self::looksLikePath($leftover[0]) || ($leftover[0] !== '' && \is_dir($leftover[0])))
+        ) {
+            return $args->withUsageError(
+                \sprintf(
+                    'sugarcrush: the project root is already %s, but the argument %s also names one',
+                    $args->root,
+                    self::listOperands($leftover),
+                ),
+                'Name the project directory once: as a bare argument or with --root <dir>, not both.',
+            );
         }
 
         $listed = self::listOperands($leftover);
@@ -710,10 +695,16 @@ final class ArgvParser
             );
         }
 
-        return $args->withUsageError(
-            \sprintf('sugarcrush: unexpected argument%s: %s', $plural, $listed),
-            'To run a one-shot prompt, use -p "<prompt>". A bare argument is accepted only when it names an existing directory, which becomes the project root.',
-        );
+        $prompt = \implode(' ', $leftover);
+        if ($args->subcommand !== null || \trim($prompt) === '') {
+            return $args->withUsageError(
+                \sprintf('sugarcrush: unexpected argument%s: %s', $plural, $listed),
+                'Words after the options open the TUI with them as the first prompt; to run a one-shot prompt, '
+                . 'use -p "<prompt>". A subcommand takes no prompt, and an empty argument is not one.',
+            );
+        }
+
+        return $args->withInitialPrompt($prompt);
     }
 
     /**

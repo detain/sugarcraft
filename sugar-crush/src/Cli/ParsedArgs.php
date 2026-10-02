@@ -90,8 +90,9 @@ final readonly class ParsedArgs
      *   operand {@see ArgvParser::parse()} made the root. Carried rather than
      *   dropped (audit CLI-2) so {@see ArgvParser::resolveOperands()} can do
      *   the filesystem half -- an existing directory becomes the root -- and
-     *   refuse what is left, instead of `sugarcrush fix the login bug`
-     *   silently opening the TUI in the cwd.
+     *   turn what is left into {@see $initialPrompt} (or refuse it on a
+     *   `-p`/`run` or subcommand run), instead of `sugarcrush fix the login
+     *   bug` silently opening the TUI in the cwd.
      */
     private function __construct(
         public bool $help,
@@ -119,6 +120,13 @@ final readonly class ParsedArgs
         /** Whether `--resume` appeared at all, with or without a value. */
         public bool $resumeRequested = false,
         public array $positionals = [],
+        /**
+         * The leftover words of a TUI launch, joined with single spaces —
+         * `sugarcrush fix the login bug` — which the TUI submits as its first
+         * prompt (audit CLI-2(b)). Set only by
+         * {@see ArgvParser::resolveOperands()}; null when there were none.
+         */
+        public ?string $initialPrompt = null,
     ) {
     }
 
@@ -132,6 +140,16 @@ final readonly class ParsedArgs
     public function withRoot(string $root, array $positionals): self
     {
         return $this->copyWith(['root' => $root, 'positionals' => $positionals]);
+    }
+
+    /**
+     * A copy whose leftover operands became the TUI's first prompt — see
+     * {@see $initialPrompt}. The operands are consumed: nothing is left for a
+     * later step to refuse.
+     */
+    public function withInitialPrompt(string $prompt): self
+    {
+        return $this->copyWith(['initialPrompt' => $prompt, 'positionals' => []]);
     }
 
     /**

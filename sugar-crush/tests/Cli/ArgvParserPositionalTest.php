@@ -17,8 +17,10 @@ use SugarCraft\Crush\Cli\ParsedArgs;
  * root the literal "--model". {@see ArgvParser::parse()} now carries what it
  * did not claim in {@see ParsedArgs::$positionals}, and
  * {@see ArgvParser::resolveOperands()} -- the filesystem half, which
- * bin/sugarcrush calls after the unknown-flag check -- makes an existing
- * directory the root and refuses the rest.
+ * bin/sugarcrush calls after the unknown-flag check -- makes a first operand
+ * that is an existing directory the root. What is left becomes the TUI's
+ * first prompt (audit CLI-2(b)), or is refused on a `-p`/`run` or subcommand
+ * run, where a prompt cannot go.
  *
  * Each case runs in a scratch cwd holding `src/` and `lib/`, so a bare `src`
  * is an existing directory and `fix` is not.
@@ -129,16 +131,6 @@ final class ArgvParserPositionalTest extends TestCase
     public static function refusedOperands(): array
     {
         return [
-            'a prompt typed without -p' => [
-                ['fix', 'the', 'bug'],
-                'sugarcrush: unexpected arguments: fix, the, bug',
-                'use -p "<prompt>"',
-            ],
-            'one stray word' => [
-                ['fix'],
-                'sugarcrush: unexpected argument: fix',
-                'use -p "<prompt>"',
-            ],
             'a word after the prompt' => [
                 ['-p', 'hi', 'extra'],
                 'sugarcrush: unexpected argument after the prompt: extra',
@@ -187,13 +179,6 @@ final class ArgvParserPositionalTest extends TestCase
                 'sugarcrush: the project root is already /tmp, but the argument ./src also names one',
                 'Name the project directory once',
             ],
-            // A word beside a root is the ordinary refusal, not the "two
-            // roots" one -- the word names no directory.
-            'a word beside --root' => [
-                ['--root', '/tmp', 'fix'],
-                'sugarcrush: unexpected argument: fix',
-                'use -p "<prompt>"',
-            ],
             'a stray word before a subcommand' => [
                 ['fix', 'session', 'list'],
                 'sugarcrush: unexpected argument: fix',
@@ -213,6 +198,57 @@ final class ArgvParserPositionalTest extends TestCase
 
         $this->assertSame($error, $args->usageError);
         $this->assertStringContainsString($hintFragment, (string) $args->usageHint);
+    }
+
+    // -------------------------------------------------------------------------
+    // Leftover words become the TUI's first prompt (audit CLI-2(b))
+    // -------------------------------------------------------------------------
+
+    /**
+     * @return array<string, array{0: list<string>, 1: ?string, 2: string}>
+     */
+    public static function promptOperands(): array
+    {
+        return [
+            'a prompt typed without -p'          => [['fix', 'the', 'bug'], null, 'fix the bug'],
+            'one word'                           => [['fix'], null, 'fix'],
+            'a word beside --root'               => [['--root', '/tmp', 'fix'], '/tmp', 'fix'],
+            'a directory, then the prompt'       => [['src', 'fix', 'the', 'bug'], 'src', 'fix the bug'],
+            'a path-shaped root, then the prompt' => [['./src', 'fix', 'it'], './src', 'fix it'],
+            // Only the FIRST operand can be the root: a directory or a path
+            // further along is a word of the request.
+            'a directory name inside the prompt' => [['fix', 'src', 'please'], null, 'fix src please'],
+            'a file path inside the prompt'      => [['explain', 'src/Chat.php'], null, 'explain src/Chat.php'],
+            'a second directory and more words'  => [['src', 'lib', 'tests'], 'src', 'lib tests'],
+            'a quoted prompt stays one word'     => [['fix the login bug'], null, 'fix the login bug'],
+            'flag-shaped words after --'         => [['--', '-v', 'is', 'broken'], null, '-v is broken'],
+            'beside --continue'                  => [['-c', 'carry', 'on'], null, 'carry on'],
+        ];
+    }
+
+    /**
+     * @param list<string> $tokens
+     *
+     * @dataProvider promptOperands
+     */
+    public function testLeftoverWordsBecomeTheInitialPrompt(array $tokens, ?string $root, string $prompt): void
+    {
+        $args = self::resolve($tokens);
+
+        $this->assertNull($args->usageError, (string) $args->usageError);
+        $this->assertSame($root, $args->root);
+        $this->assertSame($prompt, $args->initialPrompt);
+        $this->assertSame([], $args->positionals, 'the words are consumed, not left for a refusal');
+    }
+
+    /**
+     * A launch with nothing left over carries no initial prompt.
+     */
+    public function testNoLeftoverWordsMeansNoInitialPrompt(): void
+    {
+        $this->assertNull(self::resolve([])->initialPrompt);
+        $this->assertNull(self::resolve(['src'])->initialPrompt);
+        $this->assertNull(self::resolve(['-p', 'hi'])->initialPrompt);
     }
 
     /**
