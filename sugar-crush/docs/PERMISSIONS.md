@@ -271,12 +271,31 @@ name; argument-scoped patterns have matched since the matcher moved into
 
 How the argument half is matched:
 
-- **Shell subjects** (`Bash`) are split on `;`, `&`, `|` and newline. A
+- **Shell subjects** (`Bash`) are split into simple commands by a quote-aware
+  tokeniser (`ShellWords`): on every **unquoted** `;`, `&`, `&&`, `|`, `||`,
+  newline and subshell paren, so `git commit -m "a; b"` is one command. A
   restrictive rule (`deny`, `ask`) fires when the whole command **or any
-  segment** matches; a permissive one (`allow`) fires only when **every**
-  segment matches. So `Deny Bash(rm *)` catches `echo hi && rm -rf build`, and
-  `Allow Bash(git *)` does **not** grant `git log && rm x` (measured: Deny under
-  `dont-ask`).
+  segment** matches — each segment read both as written and after quote
+  removal, so `Deny Bash(rm *)` catches `echo hi && rm -rf build` and
+  `true; 'rm' -rf build`. A permissive one (`allow`) fires only when **every**
+  segment matches, so `Allow Bash(git *)` does **not** grant `git log && rm x`
+  (measured: Deny under `dont-ask`).
+- **A shell `allow` fails closed** (audit F-P5). A greedy `*` used to swallow
+  whatever sat inside one segment: measured under `dont-ask` with
+  `Allow Bash(git *)`, `git log $(id)`, ``git log `id` `` and
+  `git log > /home/u/.bashrc` were all **Allow**. Now an `allow` rule does not
+  match — the call falls through to the mode — when the command line holds,
+  outside single quotes, a command or process substitution (`$(…)`, backticks,
+  `<(…)`, `>(…)`), a `${…}` / `$[…]` expansion, or a redirection that writes or
+  opens something (`>`, `>>`, `&>` onto a file, `<>`, a here-doc); or when it
+  does not parse (an unterminated quote). All three of the measured commands
+  are now **Deny** under `dont-ask`. Still granted by `Allow Bash(git *)`:
+  `git log 2>/dev/null`, `git log 2>&1`, `git apply < fix.patch`, and
+  `git log --format='$(x)'` (single-quoted, so literal). A rule that **spells
+  the construct itself** covers it — `Allow Bash(git log > /tmp/*)` grants
+  `git log > /tmp/out` — and is then matched against the command as written,
+  never the quote-removed words, so a quoted `'>'` cannot stand in for a real
+  redirection.
 - **Path subjects** are normalised lexically on both sides — `./`, `//`, `.`
   and `..` segments — so `Deny Read(./.env)` also covers `.env` and
   `./foo/../.env`, and a relative restrictive pattern matches at any depth
@@ -289,13 +308,13 @@ Its limits, stated because each one is real:
   `/bin/rm -rf build` (measured: Allow), `$(echo rm) -rf build`,
   `bash -c 'rm -rf build'` or `find build -delete`; a path deny does not
   survive a symlink. Treat it as a guard rail against an accident.
-- **An argument-scoped `allow` grants more than it reads as** (audit F-P5,
-  not yet fixed). The split is on separators only, so a command substitution,
-  a backtick or a redirection stays inside the one segment the glob matches.
-  Measured under `dont-ask` with `Allow Bash(git *)`: `git log $(id)`,
-  ``git log `id` `` and `git log > /home/u/.bashrc` are all **Allow**. Until
-  that is closed, write a `Bash(...)` allow rule as if it granted the whole
-  command line after its prefix.
+- **A shell `allow` is per rule, and still a glob over arguments.**
+  `Allow Bash(git *)` plus `Allow Bash(grep *)` does not grant
+  `git log | grep x` — rules are first-match-wins and no single rule covers
+  both commands, so spell such a pipeline as its own rule. And `git *` grants
+  every `git` argument list, including ones that make git itself run a
+  program (`git -c core.pager=…`); the fail-closed checks stop the *shell*
+  from running something extra, not the granted program.
 - Rules are evaluated **before** the mode, so an `allow` rule overrides even
   `plan`'s read-only `Bash` check (`Allow Bash(git *)` lets `git push --force`
   run under `plan`).

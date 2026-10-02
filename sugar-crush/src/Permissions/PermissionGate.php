@@ -1027,43 +1027,17 @@ final class PermissionGate
     ];
 
     /**
-     * Output targets a Plan-mode redirection may name: writing to them changes
-     * no file.
-     */
-    private const PLAN_HARMLESS_OUTPUT_TARGETS = ['/dev/null', '/dev/stdout', '/dev/stderr'];
-
-    /**
-     * A redirection Plan can allow — judged on the operator AND the target,
-     * because the old check's mistake was judging spacing.
-     *
-     * - `2>&1`, `>&2`, `3<&0`, `2>&-`: fd duplication / closing, no file.
-     * - `>`, `>>`, `>|`, `&>`, `&>>` (and `>& word`, which bash reads as
-     *   `&> word`) only onto {@see PLAN_HARMLESS_OUTPUT_TARGETS} — so
-     *   `cmd 2>/dev/null` is allowed and `cmd 2> f` is not, in any spacing.
-     * - `<` reads a file, so any target — except bash's `/dev/tcp/…` and
-     *   `/dev/udp/…`, which open a network connection rather than a file.
-     * - `<<<` feeds a word to stdin; the word was already parsed, and any
-     *   substitution in it already refused the line.
-     * - Refused: `<>` opens read-WRITE (creating the file), and `<<`/`<<-`
-     *   here-doc bodies are expanded by bash (`$(…)` in a body runs) but are
-     *   skipped, unparsed, by {@see ShellWords} — so nothing here has looked
-     *   at them.
+     * A redirection Plan can allow. The judgement itself lives in
+     * {@see ShellWords::isInertRedirection()} because an argument-scoped
+     * `Allow Bash(...)` rule needs the identical answer (audit F-P5) — two
+     * copies of "which redirections write nothing" would be two places for
+     * `2> f` to mean different things.
      *
      * @param array{command: int, fd: ?string, op: string, target: ?string} $redirection
      */
     private function isHarmlessPlanRedirection(array $redirection): bool
     {
-        $target = $redirection['target'] ?? '';
-
-        return match ($redirection['op']) {
-            '>&' => preg_match('/^(?:\d+-?|-)$/', $target) === 1
-                || in_array($target, self::PLAN_HARMLESS_OUTPUT_TARGETS, true),
-            '<&' => preg_match('/^(?:\d+-?|-)$/', $target) === 1,
-            '>', '>>', '>|', '&>', '&>>' => in_array($target, self::PLAN_HARMLESS_OUTPUT_TARGETS, true),
-            '<' => !str_starts_with($target, '/dev/tcp/') && !str_starts_with($target, '/dev/udp/'),
-            '<<<' => true,
-            default => false,
-        };
+        return ShellWords::isInertRedirection($redirection);
     }
 
     /**

@@ -250,4 +250,46 @@ final class ShellWordsTest extends TestCase
             ShellWords::parse("rm '-rf' x 2>/dev/null; find . \"-delete\"")->dequoted(),
         );
     }
+
+    /**
+     * The raw source of each simple command, split on UNQUOTED operators only
+     * and kept parallel to {@see ShellWords::$commands} — including across a
+     * redirection-only command and a skipped here-doc body.
+     */
+    public function testSourcesKeepEachCommandsRawTextParallelToItsWords(): void
+    {
+        $parsed = ShellWords::parse("git commit -m \"a; b\" 2>/dev/null && echo `id` | > f\ncat <<EOF\nbody; rm x\nEOF\nls");
+
+        $this->assertSame(
+            ['git commit -m "a; b" 2>/dev/null', 'echo `id`', '> f', 'cat <<EOF', 'ls'],
+            $parsed->sources,
+        );
+        $this->assertCount(\count($parsed->commands), $parsed->sources);
+    }
+
+    /**
+     * @return iterable<string, array{string, bool}>
+     */
+    public static function redirectionInertness(): iterable
+    {
+        yield 'stderr to /dev/null' => ['ls 2>/dev/null', true];
+        yield 'fd duplication' => ['ls 2>&1', true];
+        yield 'fd close' => ['ls 2>&-', true];
+        yield 'input from a file' => ['wc -l < f', true];
+        yield 'here-string' => ['cat <<< hi', true];
+        yield 'output to a file' => ['ls > f', false];
+        yield 'append to a file' => ['ls >> f', false];
+        yield 'both streams to a file' => ['ls &> f', false];
+        yield 'read-write open' => ['ls <> f', false];
+        yield 'network input' => ['cat < /dev/tcp/example.com/80', false];
+        yield 'here-doc body is never examined' => ["cat <<EOF\nx\nEOF", false];
+    }
+
+    #[DataProvider('redirectionInertness')]
+    public function testIsInertRedirectionJudgesOperatorAndTarget(string $line, bool $inert): void
+    {
+        $redirections = ShellWords::parse($line)->redirections;
+        $this->assertCount(1, $redirections);
+        $this->assertSame($inert, ShellWords::isInertRedirection($redirections[0]));
+    }
 }

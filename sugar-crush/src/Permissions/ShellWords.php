@@ -90,6 +90,15 @@ final readonly class ShellWords
      *        `${x:=…}` can assign on the same line. No text check can see a
      *        substitution that only exists after an assignment, so a
      *        fail-closed caller has to refuse the operator itself.
+     * @param list<string> $sources Parallel to {@see $commands}: each simple
+     *        command's RAW source text — quotes, redirections and
+     *        substitutions intact, the control operator that ended it
+     *        excluded. The words are what the program receives; the source is
+     *        what the user wrote, and a permission glob may be written against
+     *        either (`Bash(git commit -m "*")` names quotes, `Bash(* > /tmp/*)`
+     *        names a redirection the word list no longer carries). Splitting
+     *        happens HERE, on unquoted operators only, so `echo "a;b"` stays one
+     *        source where a regex split on `;` produced two halves of nothing.
      */
     private function __construct(
         public array $commands,
@@ -99,6 +108,7 @@ final readonly class ShellWords
         public bool $complete,
         public array $expandable = [],
         public array $parameterExpansions = [],
+        public array $sources = [],
     ) {
     }
 
@@ -118,6 +128,9 @@ final readonly class ShellWords
         $wordFlags = [];
         $expandable = [];
         $parameterExpansions = [];
+        $sources = [];
+        // Byte offset where the current simple command's source text starts.
+        $segmentStart = 0;
         $hasRedirect = false;
         $current = '';
         $inWord = false;
@@ -152,7 +165,7 @@ final readonly class ShellWords
             $quoted = false;
             $expands = false;
         };
-        $endCommand = static function () use (&$words, &$wordFlags, &$expandable, &$hasRedirect, &$commands, &$pendingRedirect, &$complete, $endWord): void {
+        $endCommand = static function (string $source) use (&$words, &$wordFlags, &$expandable, &$sources, &$hasRedirect, &$commands, &$pendingRedirect, &$complete, $endWord): void {
             $endWord();
             if ($pendingRedirect !== null) {
                 // `echo >; ls` — bash: syntax error near unexpected token.
@@ -162,6 +175,7 @@ final readonly class ShellWords
             if ($words !== [] || $hasRedirect) {
                 $commands[] = $words;
                 $expandable[] = $wordFlags;
+                $sources[] = trim($source);
             }
             $words = [];
             $wordFlags = [];
@@ -287,13 +301,14 @@ final readonly class ShellWords
                 || $char === "\n" || $char === "\r"
             ) {
                 $op = $char;
+                $opStart = $i;
                 if (($char === ';' && $next === ';') || ($char === '&' && $next === '&')
                     || ($char === '|' && ($next === '|' || $next === '&'))
                 ) {
                     $op .= $next;
                     ++$i;
                 }
-                $endCommand();
+                $endCommand(substr($line, $segmentStart, $opStart - $segmentStart));
                 $operators[] = $op;
                 if ($char === "\n" && $pendingHeredocs !== []) {
                     if (!self::skipHeredocBodies($line, $i, $pendingHeredocs)) {
@@ -301,6 +316,7 @@ final readonly class ShellWords
                     }
                     $pendingHeredocs = [];
                 }
+                $segmentStart = $i + 1;
                 continue;
             }
 
@@ -324,13 +340,13 @@ final readonly class ShellWords
             $inWord = true;
         }
 
-        $endCommand();
+        $endCommand(substr($line, $segmentStart));
         if ($pendingHeredocs !== []) {
             // `cat <<EOF` with no body line at all.
             $complete = false;
         }
 
-        return new self($commands, $redirections, $substitutions, $operators, $complete, $expandable, $parameterExpansions);
+        return new self($commands, $redirections, $substitutions, $operators, $complete, $expandable, $parameterExpansions, $sources);
     }
 
     /**
@@ -629,6 +645,49 @@ final readonly class ShellWords
         }
 
         return true;
+    }
+
+    /**
+     * Output targets an inert redirection may name: writing to them changes no
+     * file.
+     */
+    public const INERT_OUTPUT_TARGETS = ['/dev/null', '/dev/stdout', '/dev/stderr'];
+
+    /**
+     * Does this redirection leave every file alone and open nothing beyond
+     * the command's own descriptors? Judged on the operator AND the target,
+     * because the checks this replaced judged spacing.
+     *
+     * - `2>&1`, `>&2`, `3<&0`, `2>&-`: fd duplication / closing, no file.
+     * - `>`, `>>`, `>|`, `&>`, `&>>` (and `>& word`, which bash reads as
+     *   `&> word`) only onto {@see INERT_OUTPUT_TARGETS} — so `cmd 2>/dev/null`
+     *   is inert and `cmd 2> f` is not, in any spacing.
+     * - `<` reads a file, so any target — except bash's `/dev/tcp/…` and
+     *   `/dev/udp/…`, which open a network connection rather than a file.
+     * - `<<<` feeds a word to stdin; the word was already parsed, and any
+     *   substitution in it is already in {@see $substitutions}.
+     * - NOT inert: `<>` opens read-WRITE (creating the file), and `<<`/`<<-`
+     *   here-doc bodies are expanded by bash (`$(…)` in a body runs) but are
+     *   skipped, unparsed, by {@see parse()} — so nothing has looked at them.
+     *
+     * Shared by Plan mode's read-only Bash check and the fail-closed `Allow`
+     * arm of {@see PermissionRule}; both GRANT on a true answer.
+     *
+     * @param array{command: int, fd: ?string, op: string, target: ?string} $redirection
+     */
+    public static function isInertRedirection(array $redirection): bool
+    {
+        $target = $redirection['target'] ?? '';
+
+        return match ($redirection['op']) {
+            '>&' => preg_match('/^(?:\d+-?|-)$/', $target) === 1
+                || in_array($target, self::INERT_OUTPUT_TARGETS, true),
+            '<&' => preg_match('/^(?:\d+-?|-)$/', $target) === 1,
+            '>', '>>', '>|', '&>', '&>>' => in_array($target, self::INERT_OUTPUT_TARGETS, true),
+            '<' => !str_starts_with($target, '/dev/tcp/') && !str_starts_with($target, '/dev/udp/'),
+            '<<<' => true,
+            default => false,
+        };
     }
 
     public function hasSubstitution(): bool

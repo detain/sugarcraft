@@ -135,6 +135,14 @@ use SugarCraft\Crush\ToolCall;
  * never fires, since neither segment matches it. Spell a permissive rule
  * per-segment.
  *
+ * Separators were not the only thing a greedy `*` swallows (audit F-P5): a
+ * command substitution, a backtick, a process substitution and an output
+ * redirection all sit INSIDE one segment, so `Allow Bash(git *)` granted
+ * `git log $(id)` and `git log > ~/.bashrc`. The `Allow` arm therefore also
+ * refuses — falls through to the mode — any line that holds one of those
+ * outside single quotes, or does not parse, unless the pattern itself spells
+ * the construct; see {@see allowCoversShellSubject()}.
+ *
  * @see PermissionGate for where rules sit in the decision order (first match
  *      wins, after the unconditional `rm -rf /` breaker and before the mode).
  */
@@ -440,68 +448,137 @@ final class PermissionRule
     /**
      * Match a SHELL subject: the whole command, and each command in a chain.
      *
-     * SPLIT FIRST, COLLAPSE PER SEGMENT — and that ORDER is the fix rather than
-     * an implementation detail. The first cut collapsed whitespace over the
-     * whole subject and then split on `/[;&|]+/`, which meant
-     * `preg_replace('/\s+/', ' ')` had already turned every newline into a
-     * space before the splitter could see it. A newline separates two commands
-     * exactly as `;` does, so `echo hi\nrm -rf x` reached the matcher as one
-     * command beginning `echo` and walked past `Deny Bash(rm -rf *)` — measured
-     * as `Ask` where the `&&` spelling of the same thing was `Deny`. The
-     * separator class therefore includes `\r` and `\n`, and the raw subject is
-     * what gets split.
+     * The class doc-block's asymmetry decides the shape — union for
+     * `Deny`/`Ask`, intersection for `Allow` — and the two arms read the
+     * command differently because they fail in opposite directions.
      *
-     * Then the class doc-block's asymmetry applies — union for `Deny`/`Ask`,
-     * intersection for `Allow`. The same `preg_split()` class is used by
-     * {@see PermissionGate::isRmRfRootOrHome()}, for the same reason.
+     * SPLIT FIRST, COLLAPSE PER SEGMENT, and that ORDER is the fix rather than
+     * an implementation detail: collapsing whitespace before splitting turned
+     * every newline into a space, so `echo hi\nrm -rf x` reached the matcher as
+     * one command beginning `echo` and walked past `Deny Bash(rm -rf *)`.
      */
     private function matchesShellSubject(string $subject, string $argumentPattern): bool
     {
-        $segments = [];
-        foreach (preg_split('/[;&|\r\n]+/', $subject) ?: [] as $segment) {
-            $segment = self::collapseWhitespace($segment);
-            if ($segment !== '') {
-                $segments[] = $segment;
-            }
-        }
+        $parsed = ShellWords::parse($subject);
 
         if ($this->action === PermissionAction::Allow) {
-            // INTERSECTION, and deliberately WITHOUT an "or the whole command
-            // matched" escape hatch: `fnmatch('git *', 'git log && rm -rf /')`
-            // is true, so a whole-command match is exactly the evidence that
-            // must not be enough to grant. An empty segment list (a command of
-            // nothing but separators) grants nothing.
-            if ($segments === []) {
-                return false;
-            }
-
-            foreach ($segments as $segment) {
-                if (!fnmatch($argumentPattern, $segment)) {
-                    return false;
-                }
-            }
-
-            return true;
+            return self::allowCoversShellSubject($parsed, $argumentPattern);
         }
 
-        // UNION for the restrictive actions: the whole command, or any one
-        // segment of it. The whole-command reading is kept here (unlike the
-        // Allow arm) because for a deny a greedy `*` erring towards MORE
-        // matches is the safe direction, and it is what makes a pattern that
-        // spans a separator (`Deny Bash(* && rm *)`) work at all — a pattern no
-        // single segment can ever match, since the split removed the `&&` the
-        // pattern is written around.
-        if (fnmatch($argumentPattern, self::collapseWhitespace($subject))) {
-            return true;
+        // UNION for the restrictive actions: ANY reading of ANY segment. The
+        // whole-command reading is kept (unlike the Allow arm) because for a
+        // deny a greedy `*` erring towards MORE matches is the safe direction,
+        // and it is what makes a pattern that spans a separator
+        // (`Deny Bash(* && rm *)`) work at all — a pattern no single segment
+        // can match, since the split removed the `&&` it is written around.
+        //
+        // The raw `[;&|\r\n]` split is kept beside the quote-aware one because
+        // it is the reading that still works when the line does NOT parse
+        // (`ShellWords::$complete` false), and because over-splitting a quoted
+        // `;` only ever adds readings — which for a deny is over-blocking, the
+        // safe direction. The tokeniser's readings add the quote-removed words
+        // (`'rm' -rf x` IS `rm -rf x` to the process) and the per-command
+        // source text.
+        $readings = [self::collapseWhitespace($subject)];
+        foreach (preg_split('/[;&|\r\n]+/', $subject) ?: [] as $segment) {
+            $readings[] = self::collapseWhitespace($segment);
+        }
+        foreach ($parsed->commands as $index => $words) {
+            $readings[] = self::collapseWhitespace(implode(' ', $words));
+            $readings[] = self::collapseWhitespace($parsed->sources[$index] ?? '');
         }
 
-        foreach ($segments as $segment) {
-            if (fnmatch($argumentPattern, $segment)) {
+        foreach (array_unique($readings) as $reading) {
+            if ($reading !== '' && fnmatch($argumentPattern, $reading)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * The `Allow` arm of {@see matchesShellSubject()}: FAIL CLOSED, so that a
+     * grant written as `Bash(git *)` grants `git` commands and nothing the
+     * glob's `*` happens to swallow (audit F-P5).
+     *
+     * Before this, the subject was split on `[;&|\r\n]` alone, and `*` matched
+     * whatever stayed inside a segment. Measured under `dont-ask` with
+     * `Allow Bash(git *)`: `git log $(python3 -c …)`, ``git log `id` `` and
+     * `git log > /home/u/.bashrc` were all ALLOW — a command substitution runs
+     * an arbitrary program BEFORE git starts, and a redirection writes a file
+     * git never opens, so none of the three is "a git command" in any sense a
+     * user granting `git *` meant. Four refusals now, in order:
+     *
+     * 1. A line {@see ShellWords} cannot parse completely (an unterminated
+     *    quote or substitution, a dangling redirection) grants nothing: the
+     *    split it would be judged by is a guess.
+     * 2. A command / process substitution (`$(`, a backtick, `<(`, `>(`) or a
+     *    `${…}` / `$[…]` expansion (which can run a substitution held in a
+     *    variable's value) anywhere outside single quotes grants nothing —
+     *    single-quoted text is literal, so `git log --format='$(x)'` is fine.
+     * 3. A redirection that is not inert ({@see ShellWords::isInertRedirection()}:
+     *    `2>/dev/null`, `2>&1` and `< file` are; `> file`, `>> file`, `<>`
+     *    and a here-doc are not) grants nothing.
+     * 4. EVERY simple command must match the glob — the intersection — split on
+     *    UNQUOTED operators only, so `git commit -m "a; b"` is one command (the
+     *    regex split made it two and refused it) while `git log && rm x` is
+     *    still two and refused.
+     *
+     * "UNLESS THE RULE EXPLICITLY COVERS IT": refusals 2 and 3 are lifted for a
+     * construct whose own operator text appears in the pattern — a user who
+     * writes `Allow Bash(git log > /tmp/*)` or `Allow Bash(echo $(date))` asked
+     * for exactly that. The segments are then matched against their RAW source
+     * only, because the quote-removed word list has the redirection removed
+     * and the quotes stripped: matched against it, `git log '>' /tmp/x 2> f`
+     * would read `git log > /tmp/x` and grant the real `2> f` on the strength
+     * of a quoted literal. Without such a construct either reading may grant —
+     * the words (`'git' log` IS `git log`) or the source (`git commit -m "*"`
+     * is a pattern written with quotes) — since both then describe one plain
+     * program invocation and differ only in quoting.
+     *
+     * The honest limit: this is per RULE. `Allow Bash(git *)` plus
+     * `Allow Bash(grep *)` does not grant `git log | grep x`, because rules are
+     * first-match-wins and no one rule covers both commands; spell such a
+     * pipeline as its own rule.
+     */
+    private static function allowCoversShellSubject(ShellWords $parsed, string $argumentPattern): bool
+    {
+        if (!$parsed->complete || $parsed->commands === []) {
+            return false;
+        }
+
+        $rawOnly = false;
+        foreach ([...$parsed->substitutions, ...$parsed->parameterExpansions] as $opener) {
+            if (!str_contains($argumentPattern, $opener)) {
+                return false;
+            }
+            $rawOnly = true;
+        }
+        foreach ($parsed->redirections as $redirection) {
+            if (ShellWords::isInertRedirection($redirection)) {
+                continue;
+            }
+            if (!str_contains($argumentPattern, $redirection['op'])) {
+                return false;
+            }
+            $rawOnly = true;
+        }
+
+        foreach ($parsed->commands as $index => $words) {
+            $source = self::collapseWhitespace($parsed->sources[$index] ?? '');
+            if ($source !== '' && fnmatch($argumentPattern, $source)) {
+                continue;
+            }
+            $dequoted = self::collapseWhitespace(implode(' ', $words));
+            if (!$rawOnly && $dequoted !== '' && fnmatch($argumentPattern, $dequoted)) {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     /**
