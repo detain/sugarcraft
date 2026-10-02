@@ -1669,6 +1669,10 @@ final class Chat implements Model
      * The thought that led to the call rides along, as it does onto a
      * finished row ({@see replaceToolRunningPlaceholder()}).
      *
+     * The REASON differs (audit R15): nothing restarted here, the user
+     * cancelled, and the row's text is what the model reads about the call on
+     * the next request, so it says {@see CANCELLED_TOOL_CALL}.
+     *
      * @return list<Message>
      */
     private function historyWithInterruptedPlaceholders(): array
@@ -1678,7 +1682,11 @@ final class Chat implements Model
                 return $message;
             }
 
-            $healed = self::reviveCheckpointMessage($message->jsonSerialize());
+            $healed = self::interruptedToolCallMessage(
+                $message->content,
+                $message->pendingToolCallId,
+                self::CANCELLED_TOOL_CALL,
+            );
 
             return trim((string) $message->reasoning) !== ''
                 ? $healed->withReasoning($message->reasoning)
@@ -7804,6 +7812,18 @@ final class Chat implements Model
     public const INTERRUPTED_TOOL_CALL = 'Tool call interrupted by restart';
 
     /**
+     * Verbatim error text {@see historyWithInterruptedPlaceholders()} writes
+     * onto a tool call that was still running when the USER cancelled the
+     * turn (double-Escape). The row is otherwise the restart row
+     * {@see reviveCheckpointMessage()} builds; only the reason differs,
+     * because "by restart" was false for a session that never restarted and
+     * the model reads this text on the next request (audit R15, the 15b-02
+     * residual). {@see isInterruptedResult()} matches it too, so it draws the
+     * same struck-through `⊘ interrupted` state.
+     */
+    public const CANCELLED_TOOL_CALL = 'Tool call interrupted: the user cancelled the turn';
+
+    /**
      * True when $result is a refusal - a call the user or a hook stopped -
      * rather than a call that ran and failed.
      *
@@ -7840,7 +7860,8 @@ final class Chat implements Model
      */
     public static function isInterruptedResult(ToolResult $result): bool
     {
-        return $result->error === self::INTERRUPTED_TOOL_CALL;
+        return $result->error === self::INTERRUPTED_TOOL_CALL
+            || $result->error === self::CANCELLED_TOOL_CALL;
     }
 
     /**
@@ -7896,12 +7917,7 @@ final class Chat implements Model
         $pendingId = $row['pendingToolCallId'] ?? null;
 
         if (\is_string($pendingId) && $pendingId !== '') {
-            return Message::assistant(self::INTERRUPTED_TOOL_CALL)
-                ->withToolResults([ToolResult::error(
-                    $content !== '' ? $content : $pendingId,
-                    self::INTERRUPTED_TOOL_CALL,
-                    $pendingId,
-                )]);
+            return self::interruptedToolCallMessage($content, $pendingId, self::INTERRUPTED_TOOL_CALL);
         }
 
         $message = match ($row['role'] ?? '') {
@@ -7913,6 +7929,24 @@ final class Chat implements Model
         // A command echo or notice must come back off a `/rewind` as UI-only
         // as it went in (audit 15b-03), or the restore would put it on the wire.
         return ($row['uiOnly'] ?? false) === true ? $message->withUiOnly() : $message;
+    }
+
+    /**
+     * The "this call lost its runner" row: a synthetic assistant turn whose
+     * error tool_result answers $callId, so the next request's wire has no
+     * `tool_use` left unanswered. One builder for every heal path, so they
+     * render and serialise identically and differ only in $reason
+     * ({@see INTERRUPTED_TOOL_CALL} after a restart, {@see CANCELLED_TOOL_CALL}
+     * after a user cancel).
+     */
+    private static function interruptedToolCallMessage(string $content, string $callId, string $reason): Message
+    {
+        return Message::assistant($reason)
+            ->withToolResults([ToolResult::error(
+                $content !== '' ? $content : $callId,
+                $reason,
+                $callId,
+            )]);
     }
 
     /**

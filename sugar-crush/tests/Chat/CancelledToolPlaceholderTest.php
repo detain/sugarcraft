@@ -84,7 +84,9 @@ final class CancelledToolPlaceholderTest extends TestCase
     /**
      * The healed row is the one /rewind and resume already build, so the three
      * "this call lost its runner" paths render and serialise identically —
-     * including the tool_result that keeps the next request's wire valid.
+     * including the tool_result that keeps the next request's wire valid. The
+     * one difference is the reason (audit R15): nothing restarted, the user
+     * cancelled, and the model reads that text on the next request.
      */
     public function testHealedRowMatchesTheCheckpointRevivalShape(): void
     {
@@ -98,12 +100,40 @@ final class CancelledToolPlaceholderTest extends TestCase
         [$cancelled] = $chat->update(new KeyMsg(KeyType::Escape, ''));
 
         $healed = $cancelled->history[count($cancelled->history) - 2];
-        $this->assertEquals(
-            Chat::reviveCheckpointMessage($placeholder->jsonSerialize())->toolResults,
-            $healed->toolResults,
-        );
+        $revived = Chat::reviveCheckpointMessage($placeholder->jsonSerialize());
+        $this->assertCount(1, $healed->toolResults);
+        $this->assertSame($revived->toolResults[0]->name, $healed->toolResults[0]->name, 'same row, named the same way');
+        $this->assertSame($revived->toolResults[0]->id, $healed->toolResults[0]->id);
+        $this->assertSame($revived->role, $healed->role);
+        $this->assertTrue($healed->toolResults[0]->isError());
         $this->assertSame('call_7', $healed->toolResults[0]->id);
-        $this->assertTrue(Chat::isInterruptedResult($healed->toolResults[0]));
+        $this->assertTrue(Chat::isInterruptedResult($healed->toolResults[0]), 'drawn as the same ⊘ interrupted state');
+    }
+
+    /**
+     * Audit R15 (15b-02 residual): the cancel heal reused the restart text, so
+     * a session that never restarted told the user — and, on the next request,
+     * the model — that the call was "interrupted by restart".
+     */
+    public function testACancelHealSaysTheUserCancelledNotThatTheProcessRestarted(): void
+    {
+        $chat = $this->submit(new Chat(backend: new EchoBackend()), 'go');
+        $call = new EngineToolCall('call_8', 'bash', ['command' => 'sleep 9', 'description' => 'wait']);
+        $chat->enqueueToolEvent(ToolStarted::fromCall($call));
+        [$chat] = $chat->update(new ToolEventPumpMsg());
+
+        [$chat] = $chat->update(new KeyMsg(KeyType::Escape, ''));
+        [$cancelled] = $chat->update(new KeyMsg(KeyType::Escape, ''));
+
+        $healed = $cancelled->history[count($cancelled->history) - 2];
+        $this->assertSame(Chat::CANCELLED_TOOL_CALL, $healed->content);
+        $this->assertSame(Chat::CANCELLED_TOOL_CALL, $healed->toolResults[0]->error);
+        $this->assertStringNotContainsString('restart', $healed->content);
+        $this->assertStringNotContainsString('restart', (string) $healed->toolResults[0]->error);
+
+        // A real restart still says restart: the checkpoint revival is unchanged.
+        $revived = Chat::reviveCheckpointMessage(['role' => 'system', 'content' => 'wait', 'pendingToolCallId' => 'call_9']);
+        $this->assertSame(Chat::INTERRUPTED_TOOL_CALL, $revived->toolResults[0]->error);
     }
 
     /**
