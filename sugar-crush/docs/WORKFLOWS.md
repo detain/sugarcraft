@@ -131,13 +131,53 @@ Three forms, substituted in this order (`WorkflowEngine::interpolateContext()`):
 
 | Form | Resolves to |
 |---|---|
-| `{{stageName.output}}` | a prior stage's collected output |
-| `{{agentName.results}}` | one parallel agent's output |
-| `{{variable}}` | a key from the context passed to `run()` |
+| `{{name.results}}` | one agent's output, by its result name (below) — any stage type |
+| `{{stageName.output}}` | a prior stage's collected output (a parallel stage's is every agent's output joined by newlines) |
+| `{{variable}}` | a key from the context passed to `run()` (`/workflow run <name> key=val …`) |
 
 Names must match `[a-zA-Z_][a-zA-Z0-9_]*`. An **unresolved** reference is left
 as written, not blanked — so a typo appears verbatim in the prompt rather than
-vanishing.
+vanishing. So is a context value that is not a string or a number (a PHP
+caller's array, say). Pipeline steps and a verifier also see `{{prevResult}}`,
+the previous step's or the task's output.
+
+#### What `{{name.results}}` is named by
+
+Every agent a stage runs records its output under a **result name**: its task's
+own `name` when it has one, otherwise a name derived from the stage. The
+agent **type** (`agent:` / `type:`, default `coder`) is never a result name, so
+two unnamed stages on the default agent no longer overwrite each other, and
+`{{coder.results}}` resolves only for a task actually named `coder`.
+
+| Stage type | A named task | An unnamed task |
+|---|---|---|
+| regular | its `name` | the stage's name |
+| `parallel: true` | the agent's `name` | `<stage>_<n>`, 1-based in declaration order (`fix_2`) |
+| `pipeline` step | the step task's `name` | the step's name (`WorkflowBuilder::pipeline()` names a step after its task name or agent type) |
+| verification task | its `name` | the stage's name |
+| verification verifier | its `name` | `<stage>_verifier` |
+
+- A parallel agent's result is matched to the agent it came from, whatever
+  order the agents finished in. An agent cancelled before it produced a result
+  (`stopOnFirstFailure`) records nothing, and so does a stage refused before
+  it dispatched anything.
+- A failed agent records its output too, empty when it produced none.
+- A pipeline step can read the earlier steps' results, and a verifier the
+  task's, as well as later stages.
+- **The same result name twice: the later one wins.** Two agents named `fixer`
+  in different stages leave the second's output under `fixer`.
+- A result name outside the interpolation grammar — the schema example's
+  `style-fixer`, or a stage named that way — is recorded but cannot be
+  referenced. Name the agent `style_fixer` to address it.
+
+Results are kept in the run's context under the reserved key `@results`
+(`WorkflowEngine::RESULTS_CONTEXT_KEY`), apart from the caller's own keys. So
+the pause file carries them, and a resumed run still interpolates the results
+of the stages it skipped. Before, they shared the caller's namespace:
+`/workflow run three coder=x` crashed stage `a` after its agent ran and dropped
+that agent's tokens. **A context key starting with `@` is refused**:
+`run()` and `runFromPhp()` throw `InvalidArgumentException` before anything is
+dispatched, and `/workflow run` prints it as an error.
 
 ---
 
@@ -228,7 +268,9 @@ name; both resolve to the same run.
   (`completed` / `failed`) for runs this session performed.
 
 Granularity is still one whole stage. A `parallel` stage that is still running
-when an interrupt lands is re-run from scratch on resume.
+when an interrupt lands is re-run from scratch on resume. The run's context,
+with every finished stage's `{{name.results}}` entries, is in the pause file,
+so the resumed stages interpolate exactly as they would have.
 
 `WorkflowEngine` is handed the launch's model, provider and `PermissionGate`.
 The gate is consulted **before** the first sub-agent is dispatched, on the

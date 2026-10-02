@@ -25,8 +25,10 @@ use SugarCraft\Crush\Tools\Tool;
  *
  * Coordinates with AgentWorkerPool to run agent tasks for each stage,
  * collecting results into a WorkflowResult. Handles context interpolation
- * so that `{{variable}}` tokens in prompts are replaced with context values
- * and `{{stageName.output}}` tokens reference prior stage outputs.
+ * so that `{{variable}}` tokens in prompts are replaced with context values,
+ * `{{stageName.output}}` tokens reference prior stage outputs, and
+ * `{{name.results}}` tokens reference one agent's output from any stage type
+ * (see {@see RESULTS_CONTEXT_KEY} and {@see resultKey()}).
  *
  * Real interrupts (R28): when the pcntl extension is available, run()/
  * resume() install SIGINT/SIGTERM handlers for the duration of the
@@ -65,6 +67,24 @@ use SugarCraft\Crush\Tools\Tool;
 final class WorkflowEngine implements WorkflowEngineInterface
 {
     private const PAUSE_DIR = '.running';
+
+    /**
+     * The context entry that holds every agent's output by result name, for
+     * `{{name.results}}` (AUDIT WF-3).
+     *
+     * A namespace of its own because results used to live beside the user's
+     * run context, as `$context[<agent>]['results']`: `/workflow run three
+     * coder=x` made `$context['coder']` a string, and the write crashed the
+     * stage AFTER its agent had run, dropping that agent's tokens. A
+     * `key=val` pair can still spell `@results=…`, so the run entry points
+     * refuse every `@`-prefixed key ({@see refuseReservedContextKeys()})
+     * rather than trusting the spelling to be unlikely. It lives inside the
+     * context so the pause file carries it and a resumed run can still
+     * interpolate the results of the stages it skipped.
+     *
+     * @see resultKey() for how each stage type names its agents.
+     */
+    public const RESULTS_CONTEXT_KEY = '@results';
 
     /**
      * Finished (or interrupted) runs this engine can still pause, keyed by the
@@ -434,11 +454,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @param string $workflowPath Workflow name (loaded from registry).
      * @param array  $context      Key-value pairs for {{variable}} interpolation.
      * @return WorkflowResult
+     * @throws \InvalidArgumentException When a context key is reserved (starts with `@`).
      * @throws WorkflowNotFoundException When the workflow does not exist.
      * @throws WorkflowLoadException When the workflow cannot be loaded.
      */
     public function run(string $workflowPath, array $context = []): WorkflowResult
     {
+        self::refuseReservedContextKeys($context);
         $workflow = $this->registry->load($workflowPath);
         $result = $this->runFromWorkflow($workflow, $context, 0, null, $workflowPath, $workflowPath);
         $this->rememberResult($workflowPath, $result, $workflowPath);
@@ -452,10 +474,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @param callable|string $workflowClass Fully-qualified class name or callable returning a Workflow.
      * @param array            $context       Key-value pairs for {{variable}} interpolation.
      * @return WorkflowResult
+     * @throws \InvalidArgumentException When a context key is reserved (starts with `@`).
      * @throws WorkflowLoadException When the input cannot produce a Workflow.
      */
     public function runFromPhp(callable|string $workflowClass, array $context = []): WorkflowResult
     {
+        self::refuseReservedContextKeys($context);
+
         // If it's callable (including anonymous functions), invoke it directly
         if (is_callable($workflowClass)) {
             $workflow = $workflowClass();
@@ -607,7 +632,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         $workflow = $this->registry->load($workflowPath);
-        $context = is_array($data['context'] ?? null) ? $data['context'] : [];
+        $context = self::withSanitizedResults(is_array($data['context'] ?? null) ? $data['context'] : []);
         [$stagesCompleted, $prior] = $this->priorProgress($data, $workflow, $context);
 
         // The pause file's OWN name is the pause identity, not the string the
@@ -1292,63 +1317,43 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $stageStartedAt = new \DateTimeImmutable();
 
                 $stageType = $stage['type'] ?? '';
-
-                if ($stageType === 'parallel') {
-                    try {
-                        $stageResult = $this->executeParallelStage($stage, $context, $workflow);
-                    } catch (\Throwable $e) {
-                        $stageResult = new StageResult(
-                            stageName: $stage['name'] ?? 'unknown',
-                            status: WorkflowStatus::Failed,
-                            error: $e->getMessage(),
-                            startedAt: $stageStartedAt,
-                            completedAt: new \DateTimeImmutable(),
-                        );
-                    }
-                } elseif ($stageType === 'stage') {
-                    try {
-                        $stageResult = $this->executeStage($stage, $context, $workflow->timeout);
-                    } catch (\Throwable $e) {
-                        $stageResult = new StageResult(
-                            stageName: $stage['name'] ?? 'unknown',
-                            status: WorkflowStatus::Failed,
-                            error: $e->getMessage(),
-                            startedAt: $stageStartedAt,
-                            completedAt: new \DateTimeImmutable(),
-                        );
-                    }
-                } elseif ($stageType === 'pipeline') {
-                    try {
-                        $stageResult = $this->executePipelineStage($stage, $context, $workflow->maxConcurrent, $workflow->timeout);
-                    } catch (\Throwable $e) {
-                        $stageResult = new StageResult(
-                            stageName: $stage['name'] ?? 'unknown',
-                            status: WorkflowStatus::Failed,
-                            error: $e->getMessage(),
-                            startedAt: $stageStartedAt,
-                            completedAt: new \DateTimeImmutable(),
-                        );
-                    }
-                } elseif ($stageType === 'verification') {
-                    try {
-                        $stageResult = $this->executeVerificationStage($stage, $context, $workflow->timeout);
-                    } catch (\Throwable $e) {
-                        $stageResult = new StageResult(
-                            stageName: $stage['name'] ?? 'unknown',
-                            status: WorkflowStatus::Failed,
-                            error: $e->getMessage(),
-                            startedAt: $stageStartedAt,
-                            completedAt: new \DateTimeImmutable(),
-                        );
-                    }
-                } else {
+                if (!in_array($stageType, ['parallel', 'stage', 'pipeline', 'verification'], true)) {
                     throw new UnsupportedStageTypeException(
                         "Stage type '{$stageType}' is not supported. Only 'stage', 'parallel', 'pipeline', and 'verification' are implemented."
                     );
                 }
 
-                // Update context with this stage's output for downstream interpolation
+                // Every agent the stage ran, with its result name, recorded by
+                // the executor as each one settles — so an executor that throws
+                // AFTER an agent ran still hands that agent's tokens and output
+                // to the failed StageResult below instead of dropping them.
+                $dispatched = [];
+                try {
+                    if ($stageType === 'parallel') {
+                        $stageResult = $this->executeParallelStage($stage, $context, $workflow, $dispatched);
+                    } elseif ($stageType === 'stage') {
+                        $stageResult = $this->executeStage($stage, $context, $dispatched, $workflow->timeout);
+                    } elseif ($stageType === 'pipeline') {
+                        $stageResult = $this->executePipelineStage($stage, $context, $dispatched, $workflow->maxConcurrent, $workflow->timeout);
+                    } else {
+                        $stageResult = $this->executeVerificationStage($stage, $context, $dispatched, $workflow->timeout);
+                    }
+                } catch (\Throwable $e) {
+                    $stageResult = new StageResult(
+                        stageName: $stage['name'] ?? 'unknown',
+                        status: WorkflowStatus::Failed,
+                        error: $e->getMessage(),
+                        agents: array_column($dispatched, 'result'),
+                        startedAt: $stageStartedAt,
+                        completedAt: new \DateTimeImmutable(),
+                    );
+                }
+
+                // This stage's output and its agents' results, for downstream
+                // interpolation — written here, once the stage has settled, so
+                // a live pause's snapshot never holds half a stage.
                 $context[$stageResult->stageName . '.output'] = $stageResult->output ?? '';
+                $context = self::withResults($context, $dispatched);
 
                 $stageResults[] = $stageResult;
                 $totalTokens += $this->sumTokens($stageResult);
@@ -1398,12 +1403,17 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * Builds a SubAgent from the stage's task and calls AgentWorkerPool::executeOne().
      *
+     * The agent's result is named by its task name, falling back to the STAGE
+     * name — never to the agent type: two stages on the default `coder` agent
+     * used to overwrite each other's `{{coder.results}}` (AUDIT WF-3).
+     *
      * @param array $stage        Stage array from Workflow::$stages.
      * @param array $context      Current workflow context for interpolation.
+     * @param list<array{key: string, result: AgentResult}> $dispatched Out: the agent this stage ran, once it settles.
      * @param int   $stageTimeout Workflow::$timeout — this stage's wall-clock budget, in seconds.
      * @return StageResult
      */
-    private function executeStage(array $stage, array &$context, int $stageTimeout): StageResult
+    private function executeStage(array $stage, array $context, array &$dispatched, int $stageTimeout): StageResult
     {
         $stageName = $stage['name'] ?? 'unknown';
         $stageStartedAt = new \DateTimeImmutable();
@@ -1465,10 +1475,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         // Execute via pool
         $agentResult = $this->dispatchOne($subAgent, $request, $this->stagePool($stageTimeout, $stageClock));
-
-        // Store agent result in context for {{agentName.results}} interpolation
-        $agentName = $task->name ?? $task->agentType;
-        $context[$agentName]['results'] = $agentResult->output ?? '';
+        $dispatched[] = ['key' => self::resultKey($task->name, $stageName), 'result' => $agentResult];
 
         return $this->buildStageResult($stageName, $agentResult, $stageStartedAt);
     }
@@ -1480,15 +1487,21 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * `{{prevResult}}` to the next stage. Each nested stage also gets
      * `{{stageName.output}}` available for context interpolation.
      *
+     * Each step's result is named by the step's task name, falling back to the
+     * step's own name (which {@see WorkflowBuilder::pipeline()} sets to the task
+     * name or agent type), and is visible as `{{name.results}}` to the steps
+     * after it as well as to later stages.
+     *
      * @param array $stage          Stage array from Workflow::$stages.
      * @param array $context        Current workflow context for interpolation.
+     * @param list<array{key: string, result: AgentResult}> $dispatched Out: each step's agent, as it settles.
      * @param int   $maxConcurrent Maximum agents that may run concurrently.
      * @param int   $stageTimeout  Workflow::$timeout — the budget for the whole
      *                             pipeline: each step gets what the steps
      *                             before it left, not a fresh allowance.
      * @return StageResult
      */
-    private function executePipelineStage(array $stage, array $context, int $maxConcurrent, int $stageTimeout): StageResult
+    private function executePipelineStage(array $stage, array $context, array &$dispatched, int $maxConcurrent, int $stageTimeout): StageResult
     {
         $stageName = $stage['name'] ?? 'unknown';
         $stageStartedAt = new \DateTimeImmutable();
@@ -1527,7 +1540,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $firstStartedAt = null;
         $lastCompletedAt = null;
 
-        foreach ($nestedStages as $nestedStage) {
+        foreach ($nestedStages as $stepIndex => $nestedStage) {
             $nestedStageName = $nestedStage['name'] ?? 'unknown';
             $nestedStartedAt = new \DateTimeImmutable();
 
@@ -1579,6 +1592,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
             );
 
             $agentResult = $this->dispatchOne($subAgent, $request, $this->stagePool($stageTimeout, $stageClock));
+            $record = [
+                'key' => self::resultKey($task->name, $nestedStage['name'] ?? $stageName . '_' . ($stepIndex + 1)),
+                'result' => $agentResult,
+            ];
+            $dispatched[] = $record;
+            $pipelineContext = self::withResults($pipelineContext, [$record]);
 
             // Track timing
             if ($firstStartedAt === null) {
@@ -1619,13 +1638,21 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * available as {{prevResult}}. If the verifier returns failure (or
      * the task itself fails), the entire stage is marked failed.
      *
+     * The task's result is named by its task name, falling back to the stage
+     * name; the verifier's by its own task name, falling back to
+     * `<stage>_verifier`. The verifier's prompt can already address the task's.
+     *
+     * A failing verifier's stage carries BOTH agents, so the task's tokens and
+     * cost stay in the run's totals; its output and error are the verifier's.
+     *
      * @param array $stage        Stage array from Workflow::$stages.
      * @param array $context      Current workflow context for interpolation.
+     * @param list<array{key: string, result: AgentResult}> $dispatched Out: the task's and the verifier's agents, as each settles.
      * @param int   $stageTimeout Workflow::$timeout — one budget shared by the
      *                            task and its verifier.
      * @return StageResult
      */
-    private function executeVerificationStage(array $stage, array $context, int $stageTimeout): StageResult
+    private function executeVerificationStage(array $stage, array $context, array &$dispatched, int $stageTimeout): StageResult
     {
         $stageName = $stage['name'] ?? 'unknown';
         $stageStartedAt = new \DateTimeImmutable();
@@ -1683,6 +1710,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
         );
 
         $taskResult = $this->dispatchOne($taskSubAgent, $taskRequest, $this->stagePool($stageTimeout, $stageClock));
+        $taskRecord = ['key' => self::resultKey($task->name, $stageName), 'result' => $taskResult];
+        $dispatched[] = $taskRecord;
 
         // If task itself fails, the whole stage fails immediately
         if ($taskResult->status === AgentStatus::Failed || $taskResult->status === AgentStatus::TimedOut) {
@@ -1690,7 +1719,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         // --- Run the verifier, injecting task output as {{prevResult}} ---
-        $verifierContext = $context;
+        $verifierContext = self::withResults($context, [$taskRecord]);
         $verifierContext['prevResult'] = $taskResult->output ?? '';
 
         $verifierPrompt = $this->interpolateContext($verifier->prompt, $verifierContext);
@@ -1726,10 +1755,22 @@ final class WorkflowEngine implements WorkflowEngineInterface
         );
 
         $verifierResult = $this->dispatchOne($verifierSubAgent, $verifierRequest, $this->stagePool($stageTimeout, $stageClock));
+        $dispatched[] = ['key' => self::resultKey($verifier->name, $stageName . '_verifier'), 'result' => $verifierResult];
 
-        // Verifier failure marks the whole stage as failed
+        // Verifier failure marks the whole stage as failed. The task's agent
+        // stays on the result: it ran, and its spend is real.
         if ($verifierResult->status === AgentStatus::Failed || $verifierResult->status === AgentStatus::TimedOut) {
-            return $this->buildStageResult($stageName, $verifierResult, $stageStartedAt);
+            $failed = $this->buildStageResult($stageName, $verifierResult, $stageStartedAt);
+
+            return new StageResult(
+                stageName: $failed->stageName,
+                status: $failed->status,
+                output: $failed->output,
+                error: $failed->error,
+                agents: [$taskResult, $verifierResult],
+                startedAt: $taskResult->startedAt ?? $stageStartedAt,
+                completedAt: $failed->completedAt,
+            );
         }
 
         // Both succeeded — return combined output
@@ -1816,12 +1857,19 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *   - WorkflowRegistry.php: parseStages() recognizes 'parallel' type stages
      *   - AgentWorkerPool.php: executeAll() runs agents concurrently; withStopOnFirstFailure() enables early termination
      *
+     * Each agent's result is named by its task name, falling back to
+     * `<stage>_<n>` (1-based, in declaration order), and is recorded in
+     * DECLARATION order whatever order the agents finished in. An agent the
+     * pool cancelled before it produced a result (stopOnFirstFailure) records
+     * nothing.
+     *
      * @param array    $stage   Stage array from Workflow::$stages.
      * @param array    $context Current workflow context for interpolation.
      * @param Workflow $workflow The workflow definition (provides maxConcurrent, stopOnFirstFailure).
+     * @param list<array{key: string, result: AgentResult}> $dispatched Out: one entry per agent that settled.
      * @return StageResult
      */
-    private function executeParallelStage(array $stage, array $context, Workflow $workflow): StageResult
+    private function executeParallelStage(array $stage, array $context, Workflow $workflow, array &$dispatched): StageResult
     {
         $stageName = $stage['name'] ?? 'unknown';
         $stageStartedAt = new \DateTimeImmutable();
@@ -1885,6 +1933,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
         );
 
         $subAgents = [];
+        /** @var array<string, string> $resultKeys SubAgent id => result name, in declaration order */
+        $resultKeys = [];
         $agentIndex = 0;
         foreach ($tasks as $task) {
             /** @var WorkflowTask $task */
@@ -1922,7 +1972,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 environmentRoot: $this->environmentRoot,
             );
 
-            $subAgents[] = new SubAgent(
+            $subAgent = new SubAgent(
                 id: $stageName . '-' . $agentIndex . '-' . uniqid(getmypid() . '_', true),
                 agent: $agent,
                 task: $interpolatedPrompt,
@@ -1931,6 +1981,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 isolation: $task->isolation ?? \SugarCraft\Crush\Agents\Isolation::None,
                 permissionGate: $this->permissionGate,
             );
+            $subAgents[] = $subAgent;
+            $resultKeys[$subAgent->id] = self::resultKey($task->name, $stageName . '_' . $agentIndex);
         }
 
         // Create a fresh pool scoped to this parallel stage so that workflow-level
@@ -1980,6 +2032,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         foreach ($results as $agentResult) {
             $agentResults[] = $agentResult;
         }
+        $dispatched = [...$dispatched, ...self::recordsInDeclarationOrder($resultKeys, $agentResults)];
 
         // Build StageResult from all agent results
         $anyFailure = false;
@@ -2288,11 +2341,17 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
-     * Interpolate {{variable}}, {{stageName.output}}, and {{agentName.results}} tokens in a string.
+     * Interpolate {{variable}}, {{stageName.output}}, and {{name.results}} tokens in a string.
      *
-     * - `{{variable}}` is replaced with $context['variable'] if set, otherwise left as-is.
+     * - `{{name.results}}` is replaced with one agent's output, from the
+     *   {@see RESULTS_CONTEXT_KEY} map ({@see resultKey()} names its entries).
      * - `{{stageName.output}}` is replaced with the output of a prior stage result.
-     * - `{{agentName.results}}` is replaced with the results of a named agent from the context.
+     * - `{{variable}}` is replaced with $context['variable'].
+     *
+     * An unresolved token is left as written. So is one whose value is not a
+     * string or a number: a `runFromPhp()` caller can put anything in the
+     * context, and an array reaching the replacement used to be a TypeError
+     * that failed the stage — after the agents before it had run.
      *
      * @param string $text    The text containing interpolation tokens.
      * @param array  $context Current workflow context.
@@ -2300,36 +2359,155 @@ final class WorkflowEngine implements WorkflowEngineInterface
      */
     private function interpolateContext(string $text, array $context): string
     {
-        // Replace {{agentName.results}} references (they contain .results)
+        $results = $context[self::RESULTS_CONTEXT_KEY] ?? [];
+        $results = is_array($results) ? $results : [];
+
         $text = preg_replace_callback(
             '/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\.results\}\}/',
-            static function (array $matches) use ($context): string {
-                $agentName = $matches[1];
-                return $context[$agentName]['results'] ?? $matches[0];
-            },
+            static fn (array $matches): string => self::interpolatable($results[$matches[1]] ?? null) ?? $matches[0],
             $text
         );
 
-        // Replace {{stageName.output}} references first (they contain dots)
         $text = preg_replace_callback(
             '/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\.output\}\}/',
-            static function (array $matches) use ($context): string {
-                $key = $matches[1] . '.output';
-                return $context[$key] ?? $matches[0];
-            },
+            static fn (array $matches): string => self::interpolatable($context[$matches[1] . '.output'] ?? null) ?? $matches[0],
             $text
         );
 
-        // Replace simple {{variable}} references
-        $text = preg_replace_callback(
+        return preg_replace_callback(
             '/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/',
-            static function (array $matches) use ($context): string {
-                return $context[$matches[1]] ?? $matches[0];
-            },
+            static fn (array $matches): string => self::interpolatable($context[$matches[1]] ?? null) ?? $matches[0],
             $text
         );
+    }
 
-        return $text;
+    /** $value as interpolated text, or null when it is not text a prompt can carry. */
+    private static function interpolatable(mixed $value): ?string
+    {
+        return is_string($value) || is_int($value) || is_float($value) ? (string) $value : null;
+    }
+
+    /**
+     * The name an agent's output is recorded under for `{{name.results}}`:
+     * its task's own name, else $fallback — the stage name for a sequential
+     * stage or a verification task, the step name for a pipeline step,
+     * `<stage>_verifier` for a verifier, `<stage>_<n>` for a parallel agent.
+     *
+     * AUDIT WF-3: the fallback used to be the agent TYPE, so every unnamed
+     * stage on the default `coder` agent wrote the same `coder` entry.
+     */
+    private static function resultKey(?string $taskName, string $fallback): string
+    {
+        return $taskName !== null && $taskName !== '' ? $taskName : $fallback;
+    }
+
+    /**
+     * $context with each record's output written into its
+     * {@see RESULTS_CONTEXT_KEY} map, in record order — a later record with
+     * the same name overwrites an earlier one, as a later stage's does.
+     *
+     * @param array<array-key, mixed> $context
+     * @param list<array{key: string, result: AgentResult}> $records
+     * @return array<array-key, mixed>
+     */
+    private static function withResults(array $context, array $records): array
+    {
+        if ($records === []) {
+            return $context;
+        }
+
+        $results = $context[self::RESULTS_CONTEXT_KEY] ?? [];
+        $results = is_array($results) ? $results : [];
+        foreach ($records as $record) {
+            $results[$record['key']] = $record['result']->output ?? '';
+        }
+        $context[self::RESULTS_CONTEXT_KEY] = $results;
+
+        return $context;
+    }
+
+    /**
+     * A parallel stage's results paired with the names they are recorded
+     * under, in DECLARATION order.
+     *
+     * The pool yields in COMPLETION order (and not at all for an agent
+     * stopOnFirstFailure cancelled), so `$agentResults[$i]` is not
+     * `$tasks[$i]`'s: each result is matched by its SubAgent id. A result
+     * whose id names no agent of this stage — an executor that did not echo
+     * the id it was handed — takes the first name no result has claimed.
+     *
+     * @param array<string, string> $resultKeys   SubAgent id => result name, in declaration order
+     * @param list<AgentResult>     $agentResults
+     * @return list<array{key: string, result: AgentResult}>
+     */
+    private static function recordsInDeclarationOrder(array $resultKeys, array $agentResults): array
+    {
+        $byId = [];
+        $unmatched = [];
+        foreach ($agentResults as $agentResult) {
+            if (isset($resultKeys[$agentResult->agentId]) && !isset($byId[$agentResult->agentId])) {
+                $byId[$agentResult->agentId] = $agentResult;
+            } else {
+                $unmatched[] = $agentResult;
+            }
+        }
+
+        $records = [];
+        foreach ($resultKeys as $id => $key) {
+            $agentResult = $byId[$id] ?? array_shift($unmatched);
+            if ($agentResult !== null) {
+                $records[] = ['key' => $key, 'result' => $agentResult];
+            }
+        }
+
+        return $records;
+    }
+
+    /**
+     * Refuse a run context that would shadow the engine's own entries.
+     *
+     * Every `@`-prefixed key is reserved, not only {@see RESULTS_CONTEXT_KEY}:
+     * `/workflow run <name> @results=x` would otherwise replace every
+     * agent's recorded output with a string. {@see resume()} does not come
+     * through here — its context is the pause file's, which legitimately
+     * carries the results map ({@see withSanitizedResults()}).
+     *
+     * @param array<array-key, mixed> $context
+     * @throws \InvalidArgumentException When a key starts with `@`.
+     */
+    private static function refuseReservedContextKeys(array $context): void
+    {
+        foreach (array_keys($context) as $key) {
+            if (is_string($key) && str_starts_with($key, '@')) {
+                throw new \InvalidArgumentException(
+                    "Workflow context key '{$key}' is reserved: keys starting with '@' hold the engine's own "
+                    . "state (agent results for {{name.results}} live under '" . self::RESULTS_CONTEXT_KEY . "'). "
+                    . 'Rename the key.'
+                );
+            }
+        }
+    }
+
+    /**
+     * A pause file's context with its results map reduced to name => text
+     * entries — the only shape {@see interpolateContext()} reads — so a
+     * hand-edited or truncated file cannot put anything else there.
+     *
+     * @param array<array-key, mixed> $context
+     * @return array<array-key, mixed>
+     */
+    private static function withSanitizedResults(array $context): array
+    {
+        if (!array_key_exists(self::RESULTS_CONTEXT_KEY, $context)) {
+            return $context;
+        }
+
+        $results = $context[self::RESULTS_CONTEXT_KEY];
+        $context[self::RESULTS_CONTEXT_KEY] = is_array($results)
+            ? array_filter($results, static fn (mixed $v, int|string $k): bool => is_string($k) && is_string($v), ARRAY_FILTER_USE_BOTH)
+            : [];
+
+        return $context;
     }
 
     /**
