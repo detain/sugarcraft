@@ -13836,8 +13836,10 @@ final class Chat implements Model
      * Handle /fork — clone this conversation and run $prompt against the
      * clone in a background session.
      *
-     * The transcript copy is {@see SessionStore::forkSession()}, the same
-     * call `/branch` makes, but `currentSessionId` deliberately stays put:
+     * The transcript copy is {@see EnhancedSessionStore::forkSession()},
+     * which copies the transcript, checkpoints, blobs and meta in one
+     * transaction around {@see SessionStore::forkSession()}'s row copy — the
+     * same call `/branch` makes — but `currentSessionId` deliberately stays put:
      * `/branch` MOVES the user onto the new branch, whereas `/fork` leaves
      * them where they are and sends the copy away to work (Claude Code's
      * split between the two). The forked id rides along as a tag so the
