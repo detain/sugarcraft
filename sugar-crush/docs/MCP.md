@@ -441,6 +441,31 @@ takes over — if the server will not re-issue credentials, re-run
 `GitCommandHandlers`, `HttpMcpServer`, `StdioMcpServer`. `GitMcpServer` is
 reachable as a `type: git` entry in your own `.mcp.json`, i.e. SugarCrush
 serving git operations to itself. There is no `sugarcrush serve` subcommand.
+
+Every git tool argument comes from the model, so the git server bounds what
+the model can aim it at:
+
+- **`path` is contained to the configured root.** The root is the entry's
+  `path`, or this project when that is omitted. A per-call `path` is resolved
+  against that root, and anything that does not resolve inside it is refused
+  before git runs: `/`, `../other`, a symlink pointing out, or a directory
+  that does not exist. The model cannot point the tools at another repository
+  on disk.
+- **Values are never parsed as git options.** A ref, commit, branch name,
+  config key, checkout target, worktree path, LFS pattern or git-flow name
+  that starts with `-` is refused. Branch names must also pass
+  `git check-ref-format --branch`. Where git honours one, the argv also
+  carries `--end-of-options` or `--` before the value. Files given to
+  `gitAdd` and `gitBlame` go after `--`, so a file named `-A` is matched as a
+  path and never read as a flag.
+- **`gitWorktreeAdd` creates worktrees beside the root or below it.** The new
+  worktree's parent directory must already exist inside the directory that
+  holds the root, so `../myproject-feature` works and `/elsewhere/wt` is
+  refused. `gitWorktreeRemove` is not bounded the same way because git only
+  removes worktrees that this repository has already registered.
+- **Tool calls may only use the parameters the tool declares.** Unknown or
+  positional arguments are refused.
+
 `sugarcrush --help` lists exactly five under its **Subcommands** heading —
 `doctor`, `models`, `session list|delete`, `mcp list|import`,
 `completion bash|zsh|fish` — and those five are the ones that answer and exit

@@ -94,7 +94,7 @@ namespace SugarCraft\Crush\Support;
  * way that made the file read as audited while its two PRIMARY read paths had no
  * compare at all (see below). Per-file, executable lines only:
  *
- *   - THIRTY-NINE call sites in SEVENTEEN files ask this class. THIS SENTENCE
+ *   - FORTY-ONE call sites in EIGHTEEN files ask this class. THIS SENTENCE
  *     WAS FIVE SITES AND THREE FILES STALE when a reviewer measured it — it
  *     read "TWENTY-SEVEN in ELEVEN" while
  *     {@see \SugarCraft\Crush\Tests\Support\ContainedPathInventoryTest}'s
@@ -143,7 +143,10 @@ namespace SugarCraft\Crush\Support;
  *     against the repo root, and each copy pattern's source against it too),
  *     and {@see \SugarCraft\Crush\Chat} (1 — P7.S6: the `/memory import`
  *     sentinel directory `.sugar-crush/memory` under the project root, gated
- *     before its WRITE).
+ *     before its WRITE), and {@see \SugarCraft\Crush\MCP\GitCommandHandlers}
+ *     (2 — audit GIT-1: the model-supplied per-call `path` against the
+ *     configured repository root, and a new worktree's parent directory
+ *     against the directory holding that root).
  *   - EIGHT spellings remain by hand, in FOUR files, and they are a DIFFERENT
  *     CONTRACT rather than copies waiting to be swept up:
  *

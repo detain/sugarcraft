@@ -426,6 +426,27 @@ final class GitMcpServer implements McpServer
             ];
         }
 
+        // The model's arguments are spread straight onto the handler, so only
+        // the handler's own declared parameters may be named. Integer keys
+        // would bind POSITIONALLY — onto whatever parameter happens to sit in
+        // that slot, not the one the schema advertised — and an unknown name
+        // would surface as a bare PHP "Unknown named parameter" error; both
+        // are refused here with a message that says what was wrong. The
+        // VALUES are then the handler's to validate (audit GIT-1): see
+        // GitArgument and GitCommandHandlers::resolveWorkDir().
+        $declared = array_map(
+            static fn (\ReflectionParameter $p): string => $p->getName(),
+            (new \ReflectionMethod($this->handlers, $method))->getParameters(),
+        );
+        foreach (array_keys($args) as $key) {
+            if (!is_string($key) || !in_array($key, $declared, true)) {
+                return [
+                    'success' => false,
+                    'error' => "Unknown argument '{$key}' for {$toolName}; expected one of: " . implode(', ', $declared),
+                ];
+            }
+        }
+
         try {
             $result = $this->handlers->$method(...$args);
 
