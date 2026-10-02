@@ -128,8 +128,15 @@ final class SkillLoader
      * The diagnostic is kept rather than dropped: every skip is readable from
      * {@see skipped()}, and `SUGARCRUSH_DEBUG_SKILLS=1` puts the lines back on
      * stderr for whoever is actually debugging a missing skill.
+     *
+     * Public for exactly one outside caller: {@see SkillManager::loadAll()},
+     * whose registration of a loaded manifest is the last step that can fail on
+     * a repository's file, and whose failure belongs in the same {@see skipped()}
+     * list the launch notice reads rather than in a second one.
+     *
+     * @internal
      */
-    private function recordSkip(string $path, string $reason): void
+    public function recordSkip(string $path, string $reason): void
     {
         $this->skipped[$path] = $reason;
 
@@ -640,21 +647,27 @@ final class SkillLoader
         }
 
         // Parse frontmatter only (stage 1 - don't load body)
-        if (preg_match(self::FRONTMATTER_PATTERN, $content, $matches)) {
-            $frontmatter = Frontmatter::parse($matches[1]);
-        } else {
-            $frontmatter = [];
-        }
+        $parsed = preg_match(self::FRONTMATTER_PATTERN, $content, $matches)
+            ? Frontmatter::parse($matches[1])
+            : null;
 
         $name = basename($skillDir);
 
+        // The raw YAML values used to go straight into this array and on to
+        // SkillRegistry::registerFromManifest()'s typed Skill constructor,
+        // OUTSIDE every catch: one `paths: src/**` in a cloned repository's
+        // skill was an uncaught TypeError at launch (audit 15d-01). Typed here
+        // instead, a bad field throws inside loadManifestsFromDirectory()'s
+        // catch and becomes a recorded skip.
+        $meta = SkillFrontmatter::fromParsed($parsed, $name);
+
         return [
             'name' => $name,
-            'description' => $frontmatter['description'] ?? "Skill: $name",
-            'disableModelInvocation' => (bool)($frontmatter['disable-model-invocation'] ?? false),
-            'userInvocable' => (bool)($frontmatter['user-invocable'] ?? true),
-            'context' => $frontmatter['context'] ?? 'thread',
-            'paths' => $frontmatter['paths'] ?? [],
+            'description' => $meta->description,
+            'disableModelInvocation' => $meta->disableModelInvocation,
+            'userInvocable' => $meta->userInvocable,
+            'context' => $meta->context,
+            'paths' => $meta->paths,
             'sourcePath' => realpath($skillPath) ?: $skillPath,
         ];
     }

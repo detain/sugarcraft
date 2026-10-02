@@ -81,6 +81,24 @@ Everything after the closing `---` is the body.
 `---` fence is refused, recorded on `SkillLoader::skipped()`, and skipped. The
 skill's default name is its parent directory's name, not a `name:` field.
 
+**A mistyped field skips the skill, never the launch.** Both readers — the
+Stage-1 `SkillLoader::loadSkillManifest()` and the eager `Skill::parse()` — type
+the frontmatter through one class, `SkillFrontmatter`. A field of the wrong type
+throws an error naming the field, the skill is recorded on
+`SkillLoader::skipped()` like any unreadable file, and the launch notice reports
+it; the other skills load as usual. What is coerced and what is refused:
+
+- `paths:` written as one glob (`paths: src/**/*.php`) is read as a one-element
+  list. A list entry that is not a string (`- 2024`) is refused.
+- `user-invocable` and `disable-model-invocation` accept `true`/`false` and the
+  YAML 1.1 words `yes`/`no`/`on`/`off`, which the YAML 1.2 parser hands back as
+  strings. Anything else is refused.
+- `allowed-tools` / `disallowed-tools` accept a string or a list of strings.
+- `description`, `context`, `model` and `effort` must be strings. A number or
+  an unquoted date (`description: 2024-01-01`, which YAML reads as an integer
+  timestamp) is refused rather than turned into text. Quote it.
+- A frontmatter block that is not a mapping of fields is refused.
+
 | Key | Default | Read by | Effect today |
 |---|---|---|---|
 | `description` | `Skill: <name>` | `SkillMatcher::listForPrompt()` | Live. This one line is what the model sees at session start; it is the whole basis on which the model decides to invoke the skill. |

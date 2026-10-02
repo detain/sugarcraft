@@ -55,30 +55,37 @@ final readonly class Skill
 
     /**
      * Parse SKILL.md content.
+     *
+     * @throws \InvalidArgumentException when a frontmatter field has the wrong
+     *         type ({@see SkillFrontmatter::fromParsed()}).
      */
     public static function parse(string $content, string $name, string $sourcePath = ''): self
     {
         // Split frontmatter from content
         if (preg_match('/^---\s*\n(.*?)\n---\s*\n/s', $content, $matches)) {
-            $frontmatter = $matches[1];
             $body = substr($content, strlen($matches[0]));
-            $meta = Frontmatter::parse($frontmatter);
+            $parsed = Frontmatter::parse($matches[1]);
         } else {
-            $meta = [];
+            $parsed = null;
             $body = $content;
         }
 
+        // Typed at the boundary, by the same reader the Stage-1 manifest uses,
+        // so a mistyped field fails here with its name rather than as a
+        // TypeError out of the constructor below — see SkillFrontmatter.
+        $meta = SkillFrontmatter::fromParsed($parsed, $name);
+
         return new self(
             name: $name,
-            description: $meta['description'] ?? "Skill: $name",
-            userInvocable: (bool)($meta['user-invocable'] ?? true),
-            disableModelInvocation: (bool)($meta['disable-model-invocation'] ?? false),
-            allowedTools: $meta['allowed-tools'] ?? null,
-            disallowedTools: $meta['disallowed-tools'] ?? null,
-            model: $meta['model'] ?? null,
-            effort: $meta['effort'] ?? 'medium',
-            context: $meta['context'] ?? 'thread',
-            paths: $meta['paths'] ?? [],
+            description: $meta->description,
+            userInvocable: $meta->userInvocable,
+            disableModelInvocation: $meta->disableModelInvocation,
+            allowedTools: $meta->allowedTools,
+            disallowedTools: $meta->disallowedTools,
+            model: $meta->model,
+            effort: $meta->effort,
+            context: $meta->context,
+            paths: $meta->paths,
             content: trim($body),
             sourcePath: $sourcePath,
         );

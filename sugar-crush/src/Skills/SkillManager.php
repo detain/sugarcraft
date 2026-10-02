@@ -95,7 +95,20 @@ final class SkillManager
         $this->registry->register($this->foreign->discoverOpencode($projectRoot));
 
         foreach ($this->loader->loadAllManifests($projectRoot) as $manifest) {
-            $this->registry->registerFromManifest($manifest);
+            // The backstop for audit 15d-01: loadSkillManifest() now types every
+            // field (SkillFrontmatter), so this should not throw — but this loop
+            // runs at launch on files a cloned repository chose, and the one
+            // thing it must never do is take the launch down. A throw here is
+            // the same event as an unparseable SKILL.md and is recorded the same
+            // way, so it reaches the launch notice through skipped().
+            try {
+                $this->registry->registerFromManifest($manifest);
+            } catch (\Throwable $e) {
+                $this->loader->recordSkip(
+                    (string) ($manifest['sourcePath'] ?? $manifest['name'] ?? '?'),
+                    $e->getMessage(),
+                );
+            }
         }
     }
 

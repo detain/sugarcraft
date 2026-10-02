@@ -11,6 +11,7 @@ use SugarCraft\Crush\Skills\ForeignSkillDiscovery;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Skills\SkillManager;
+use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Skills\SkillSource;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
@@ -181,6 +182,127 @@ SKILL;
         } finally {
             $this->removeTestProject($projectRoot);
         }
+    }
+
+    // =========================================================================
+    // loadAll() - mistyped frontmatter (audit 15d-01)
+    //
+    // A project skill's raw YAML values used to reach the typed Skill
+    // constructor outside every catch, so one `paths: src/**` in a cloned
+    // repository was an uncaught TypeError at launch.
+    // =========================================================================
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function mistypedFrontmatterProvider(): iterable
+    {
+        yield 'description is an int' => ["description: 42", 'description'];
+        yield 'description is an unquoted date' => ["description: 2024-01-01", 'description'];
+        yield 'context is a list' => ["description: x\ncontext: [a]", 'context'];
+        // Spelled `'paths: ' . '[...]'` because GlobDialectDifferentialTest
+        // harvests every `paths: [...]` in the tree into its path corpus, and an
+        // unquoted integer entry there becomes an int array key it cannot take.
+        yield 'paths entry is an int' => ["description: x\npaths: " . '[1]', 'paths[0]'];
+        yield 'paths has a non-string entry after a glob' => ["description: x\npaths: " . '[src/**, 2024]', 'paths[1]'];
+        yield 'user-invocable is not a boolean word' => ["description: x\nuser-invocable: maybe", 'user-invocable'];
+        yield 'frontmatter is a bare scalar' => ["just words", 'mapping'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('mistypedFrontmatterProvider')]
+    public function testAMistypedProjectSkillIsSkippedNotFatal(string $frontmatter, string $field): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($projectRoot . '/.sugar-crush/skills/good', 'A valid sibling');
+        $badDir = $projectRoot . '/.sugar-crush/skills/bad';
+        mkdir($badDir, 0777, true);
+        file_put_contents($badDir . '/SKILL.md', "---\n{$frontmatter}\n---\n\nBody.\n");
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertNull($this->registry->get('bad'), 'the mistyped skill must not register');
+            $this->assertNotNull($this->registry->get('good'), 'a valid sibling must still register');
+
+            $reasons = array_filter(
+                $this->manager->skipped(),
+                static fn(string $path): bool => str_contains($path, '/bad/'),
+                ARRAY_FILTER_USE_KEY,
+            );
+            $this->assertCount(1, $reasons, 'the skip must be recorded so the launch notice reports it');
+            $this->assertStringContainsString($field, (string) reset($reasons));
+
+            // Built-in skills legitimately match src/a.php; what matters is that
+            // the nudge returns at all and never names the refused skill.
+            $nudge = (new SkillPathNudge($this->registry))->forPath('src/a.php');
+            $this->assertStringNotContainsString('- bad:', (string) $nudge);
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testAScalarPathsValueIsReadAsAOneElementList(): void
+    {
+        $projectRoot = $this->makeProject();
+        $dir = $projectRoot . '/.sugar-crush/skills/linter';
+        mkdir($dir, 0777, true);
+        file_put_contents($dir . '/SKILL.md', "---\ndescription: Lint PHP\npaths: x\n---\n\nBody.\n");
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertSame(['x'], $this->registry->get('linter')?->paths);
+            $this->assertSame([], array_filter(
+                $this->manager->skipped(),
+                static fn(string $path): bool => str_contains($path, '/linter/'),
+                ARRAY_FILTER_USE_KEY,
+            ));
+            $this->assertStringContainsString('linter', (string) (new SkillPathNudge($this->registry))->forPath('x'));
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testUserInvocableNoHidesAProjectSkillFromThePicker(): void
+    {
+        $projectRoot = $this->makeProject();
+        $dir = $projectRoot . '/.sugar-crush/skills/hidden';
+        mkdir($dir, 0777, true);
+        file_put_contents($dir . '/SKILL.md', "---\ndescription: Hidden\nuser-invocable: no\n---\n\nBody.\n");
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertFalse($this->registry->get('hidden')?->userInvocable);
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testANonStringPathsEntryOnADirectlyRegisteredSkillNeverThrowsFromTheNudge(): void
+    {
+        // Skill's constructor takes any array; a skill built in code and
+        // register()ed bypasses both loaders' validation. (A variable, not an
+        // inline literal, for the harvest reason given in the provider above.)
+        $mixedPaths = [2024, 'src/**'];
+        $skill = new Skill(
+            name: 'direct',
+            description: 'Direct',
+            userInvocable: true,
+            disableModelInvocation: false,
+            allowedTools: null,
+            disallowedTools: null,
+            model: null,
+            effort: 'medium',
+            context: 'thread',
+            paths: $mixedPaths,
+            content: '',
+            sourcePath: '',
+        );
+        $this->registry->register(['direct' => $skill]);
+
+        $this->assertSame([$skill], $this->manager->getSkillsForPaths(['src/a.php']));
+        $this->assertStringContainsString('direct', (string) (new SkillPathNudge($this->registry))->forPath('src/a.php'));
     }
 
     // =========================================================================

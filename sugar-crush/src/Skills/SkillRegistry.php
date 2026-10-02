@@ -395,6 +395,13 @@ final class SkillRegistry
 
         foreach ($this->all() as $skill) {
             foreach ($skill->paths as $pattern) {
+                // Both loaders validate `paths:` (SkillFrontmatter), but a Skill
+                // can also be built directly and register()ed; a non-string entry
+                // reaching pathMatches() would throw out of SkillPathNudge AFTER
+                // an Edit/Write already landed (audit 15d-01). Never a match.
+                if (!is_string($pattern)) {
+                    continue;
+                }
                 $patternMatched = false;
                 foreach ($paths as $path) {
                     if (self::pathMatches($pattern, $path)) {
