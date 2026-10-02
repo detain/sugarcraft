@@ -977,17 +977,17 @@ final class CustomProviderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // 17. embeddings() returns empty EmbeddingsResponse on exception
+    // 17. embeddings() throws on transport failure (audit A17) instead of
+    //     returning an empty EmbeddingsResponse
     // -------------------------------------------------------------------------
 
-    public function testEmbeddingsReturnsEmptyOnException(): void
+    public function testEmbeddingsThrowsOnExceptionInsteadOfReturningEmpty(): void
     {
-        $mock = new MockHandler([
-            new ConnectException(
-                'Connection failed',
-                new Request('POST', 'https://api.example.com/embeddings')
-            ),
-        ]);
+        $connect = new ConnectException(
+            'Connection failed',
+            new Request('POST', 'https://api.example.com/embeddings')
+        );
+        $mock = new MockHandler([$connect]);
 
         $handlerStack = HandlerStack::create($mock);
         $client = new Client(['handler' => $handlerStack]);
@@ -1007,10 +1007,16 @@ final class CustomProviderTest extends TestCase
             input: ['Hello'],
         );
 
-        $response = $provider->embeddings($request);
+        $thrown = null;
+        try {
+            $provider->embeddings($request);
+        } catch (\RuntimeException $e) {
+            $thrown = $e;
+        }
 
-        $this->assertInstanceOf(EmbeddingsResponse::class, $response);
-        $this->assertCount(0, $response->embeddings);
+        $this->assertNotNull($thrown, 'embeddings() swallowed a transport failure');
+        $this->assertSame('custom embeddings request failed: Connection failed', $thrown->getMessage());
+        $this->assertSame($connect, $thrown->getPrevious());
     }
 
     // -------------------------------------------------------------------------

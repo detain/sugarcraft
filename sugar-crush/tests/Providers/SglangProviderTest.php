@@ -1034,15 +1034,16 @@ final class SglangProviderTest extends TestCase
         $this->assertCount(0, $result->embeddings);
     }
 
-    public function testEmbeddingsReturnsEmptyArrayOnGuzzleException(): void
+    public function testEmbeddingsThrowsOnGuzzleExceptionInsteadOfReturningEmpty(): void
     {
+        $connect = new \GuzzleHttp\Exception\ConnectException(
+            'Connection failed',
+            new Request('POST', 'embeddings')
+        );
         $httpClient = $this->createMock(Client::class);
         $httpClient->expects($this->once())
             ->method('post')
-            ->willThrowException(new \GuzzleHttp\Exception\ConnectException(
-                'Connection failed',
-                new Request('POST', 'embeddings')
-            ));
+            ->willThrowException($connect);
 
         $provider = new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $httpClient);
 
@@ -1051,11 +1052,18 @@ final class SglangProviderTest extends TestCase
             input: ['Hello'],
         );
 
-        $result = $provider->embeddings($request);
+        // Audit A17: an outage must not read as "no embeddings".
+        $thrown = null;
+        try {
+            $provider->embeddings($request);
+        } catch (\RuntimeException $e) {
+            $thrown = $e;
+        }
 
-        // Per the implementation, embeddings returns empty array on exception
-        $this->assertInstanceOf(EmbeddingsResponse::class, $result);
-        $this->assertCount(0, $result->embeddings);
+        $this->assertNotNull($thrown, 'embeddings() swallowed a transport failure');
+        $this->assertSame('SGLANG embeddings request failed: Connection failed', $thrown->getMessage());
+        $this->assertSame($connect, $thrown->getPrevious());
+        $this->assertTrue(TransientFailure::isTransient($thrown));
     }
 
     // -------------------------------------------------------------------------

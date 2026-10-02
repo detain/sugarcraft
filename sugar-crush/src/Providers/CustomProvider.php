@@ -549,6 +549,19 @@ final readonly class CustomProvider implements ProviderInterface
         }
     }
 
+    /**
+     * Audit A17: a transport failure or a 2xx body that is not an embeddings
+     * payload THROWS instead of returning an empty list. The old silent `[]`
+     * made an outage look exactly like "no results", so a semantic-search
+     * consumer degraded without ever telling the user why. The message
+     * carries `$e->getMessage()` (the same text complete() reports as
+     * errorMessage), code 0, and the Guzzle exception as previous so
+     * TransientFailure::isTransient() still classifies 5xx/429/connect as
+     * transient and 400 as permanent. A present-but-empty `data: []` remains
+     * a legitimate empty result.
+     *
+     * @throws \RuntimeException on transport failure or a malformed payload
+     */
     public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
     {
         try {
@@ -559,17 +572,51 @@ final readonly class CustomProvider implements ProviderInterface
                 ],
                 'headers' => $this->sessionAffinityHeaders(),
             ]);
-
-            $data = json_decode($response->getBody()->getContents(), true);
-            return new EmbeddingsResponse(
-                embeddings: array_map(
-                    fn($item) => $item['embedding'],
-                    $data['data'] ?? []
-                )
-            );
         } catch (GuzzleException $e) {
-            return new EmbeddingsResponse(embeddings: []);
+            throw new \RuntimeException(
+                sprintf('%s embeddings request failed: %s', $this->name, $e->getMessage()),
+                0,
+                $e
+            );
         }
+
+        return new EmbeddingsResponse(
+            embeddings: self::embeddingVectors(
+                json_decode($response->getBody()->getContents(), true),
+                $this->name,
+            )
+        );
+    }
+
+    /**
+     * Extracts the `data[*].embedding` vectors from a decoded
+     * `/v1/embeddings` body, refusing anything that is not that shape (audit
+     * A17) - a non-JSON body, a missing or non-list `data`, or an item with
+     * no array `embedding` used to collapse silently into `[]`.
+     *
+     * @return list<array<mixed>>
+     * @throws \RuntimeException when the payload is not an embeddings response
+     */
+    private static function embeddingVectors(mixed $decoded, string $label): array
+    {
+        if (!is_array($decoded)) {
+            throw new \RuntimeException("{$label} embeddings response is not a JSON object");
+        }
+
+        $data = $decoded['data'] ?? null;
+        if (!is_array($data) || !array_is_list($data)) {
+            throw new \RuntimeException("{$label} embeddings response has no `data` list");
+        }
+
+        $vectors = [];
+        foreach ($data as $index => $item) {
+            if (!is_array($item) || !is_array($item['embedding'] ?? null)) {
+                throw new \RuntimeException("{$label} embeddings response item {$index} has no `embedding` array");
+            }
+            $vectors[] = $item['embedding'];
+        }
+
+        return $vectors;
     }
 
     /**
