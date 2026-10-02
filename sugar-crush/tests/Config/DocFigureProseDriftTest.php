@@ -1212,6 +1212,10 @@ final class DocFigureProseDriftTest extends TestCase
      * sentence over two literal loops, and the write-idle cite names a constant
      * with its decimal. The "poll for 1.8s" narrative (attempts plus read time,
      * measured) stays held; only the derivable digits are pinned.
+     *
+     * Audit B1/AG-1 moved the ONE poll loop into exchange(), which runs it
+     * under the cross-process lock; callTool() and listTools() must both still
+     * reach it, so the prose's "callTool() and listTools() drive" stays true.
      */
     public function testMcpWritePumpRetryProseSurvivesItsLiterals(): void
     {
@@ -1224,7 +1228,10 @@ final class DocFigureProseDriftTest extends TestCase
         );
         $attempts = (int) $m[1];
         $intervalMs = (int) $m[2];
-        foreach (['callTool', 'listTools'] as $pump) {
+        foreach (['callTool', 'listTools'] as $driver) {
+            self::assertStringContainsString('return $this->exchange(', self::bodyExcerpt($mcp, $driver), "{$driver}() no longer drives the shared poll loop");
+        }
+        foreach (['exchange'] as $pump) {
             $body = self::bodyExcerpt($mcp, $pump);
             self::assertSame(1, preg_match('/while \(\$attempts < (\d+)\)/', $body, $loop), "{$pump}() lost its counted retry loop — the prose attempts count lost its referent");
             self::assertSame(1, preg_match('/usleep\((\d+)\)/', $body, $poll), "{$pump}() no longer polls with a fixed usleep — the prose interval lost its referent");

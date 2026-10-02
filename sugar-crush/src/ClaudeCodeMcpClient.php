@@ -8,6 +8,8 @@ use RuntimeException;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\ProcessReaper;
+use SugarCraft\Mcp\ExchangeLock;
+use SugarCraft\Mcp\RequestIdSequence;
 
 /**
  * MCP client that connects to Claude Code via stdio transport.
@@ -337,6 +339,28 @@ final class ClaudeCodeMcpClient
     private bool $stdinFragmentPending = false;
 
     /**
+     * FORK SAFETY (audit B1 / AG-1) — the same law as the library stdio
+     * transport ({@see \SugarCraft\Mcp\StdioMcpServer}'s FORK SAFETY note).
+     * The `claude-mcp` server is started in the TUI parent and called from
+     * forked turn and sub-agent processes, each holding copies of these pipes.
+     * Ids are unique across processes ({@see $ids}); every {@see callTool()} /
+     * {@see listTools()} exchange runs under {@see $lock}, which also carries
+     * the unread stdout bytes and the W/R phase marker a killed holder leaves,
+     * so concurrent calls from parallel agents SERIALISE on one server instead
+     * of reading each other's replies. Only {@see $ownerPid} tears it down.
+     */
+    private readonly RequestIdSequence $ids;
+
+    /** Null until {@see connect()} — and for a test-injected connection, which runs unlocked. */
+    private ?ExchangeLock $lock = null;
+
+    /** The pid that called {@see connect()}; 0 = not connected by this object. */
+    private int $ownerPid = 0;
+
+    /** The child's pid, for liveness probes from processes that are not its parent. */
+    private int $serverPid = 0;
+
+    /**
      * @param array<string, mixed>|null $initialOptions
      * @param array<string, string> $env E699: overrides merged onto the
      *        inherited environment at spawn, routed through
@@ -353,7 +377,10 @@ final class ClaudeCodeMcpClient
         private bool $connected = false,
         private int $requestId = 0,
         public readonly array $env = [],
-    ) {}
+    ) {
+        // Owner ids continue the historical `++$requestId` sequence (1, 2, …).
+        $this->ids = new RequestIdSequence(firstOwnerId: $requestId + 1);
+    }
 
     /**
      * Start the Claude Code MCP process and perform handshake.
@@ -395,6 +422,8 @@ final class ClaudeCodeMcpClient
         // StdioMcpServer::start() gives it: an unresolvable program under
         // the wrapper would put a PHP warning over the TUI on a path that
         // already reports itself properly below.
+        $lock = ExchangeLock::create('claude-mcp');
+
         /** @var array{0: resource, 1: resource, 2: resource} */
         $processHandles = @proc_open(
             ProcessContainment::spawnSpec(array_merge([$command], $args)),
@@ -405,9 +434,15 @@ final class ClaudeCodeMcpClient
         );
 
         if (!is_resource($processHandles)) {
+            $lock->destroy();
+
             throw new RuntimeException("Failed to spawn MCP process: " . basename($command));
         }
 
+        $this->lock = $lock;
+        $this->ownerPid = (int) getmypid();
+        $this->serverPid = (int) proc_get_status($processHandles)['pid'];
+        $this->ids->claim();
         $this->process = $processHandles;
         $this->pipes = $pipes;
         $this->connected = true;
@@ -430,7 +465,14 @@ final class ClaudeCodeMcpClient
         $this->sendMessage($initMsg);
 
         // Read initial responses (may include server info, capabilities, error)
-        return $this->readMessages();
+        $messages = $this->readMessages();
+
+        // Any half line read here belongs in the SHARED buffer: the first
+        // exchange may run in a forked process, which loads it from the lock.
+        $this->lock->store(ExchangeLock::PHASE_CLEAN, $this->readBuffer);
+        $this->readBuffer = '';
+
+        return $messages;
     }
 
     /**
@@ -446,7 +488,7 @@ final class ClaudeCodeMcpClient
             throw new RuntimeException('MCP client not connected');
         }
 
-        $id = (string) ++$this->requestId;
+        $id = (string) $this->ids->next();
         // `arguments` is a JSON object in the schema; PHP's `[]` encodes as an
         // array, which the SDK servers reject ("expected record, received
         // array") — so an omitted or empty map must leave as `{}`.
@@ -470,22 +512,7 @@ final class ClaudeCodeMcpClient
         // and nothing in this tree measures how often the second happens. The
         // asymmetry is recorded so the next reader is choosing rather than
         // inheriting. See the round-57 lane b report.
-        $this->sendMessage($request);
-
-        // Read until we get a response with matching id
-        $attempts = 0;
-        while ($attempts < 100) {
-            $messages = $this->readMessages();
-            foreach ($messages as $msg) {
-                if ($msg->id === $id) {
-                    return $msg;
-                }
-            }
-            usleep(10000); // 10ms
-            $attempts++;
-        }
-
-        throw new RuntimeException("No response received for request {$id}");
+        return $this->exchange($request, "No response received for request {$id}");
     }
 
     /**
@@ -500,25 +527,103 @@ final class ClaudeCodeMcpClient
             throw new RuntimeException('MCP client not connected');
         }
 
-        $id = (string) ++$this->requestId;
+        $id = (string) $this->ids->next();
         $request = McpMessage::request($id, 'tools/list', null);
 
-        $this->sendMessage($request);
+        return $this->exchange($request, 'No response received for tools/list request');
+    }
 
-        // Read until we get a response with matching id
-        $attempts = 0;
-        while ($attempts < 100) {
-            $messages = $this->readMessages();
-            foreach ($messages as $msg) {
-                if ($msg->id === $id) {
-                    return $msg;
-                }
-            }
-            usleep(10000);
-            $attempts++;
+    /**
+     * Send $request and poll for the response carrying its id, as ONE exchange
+     * under the cross-process lock (see {@see $ids}).
+     *
+     * The shared state is loaded at the start and written back at the end. A
+     * holder that died mid-exchange left W (its request line may be half
+     * written: this send leads with a newline, the {@see $stdinFragmentPending}
+     * mechanism) or R (stdout may start mid-line: its buffer is dropped, and
+     * {@see readMessages()} already skips the unparseable fragment). A failed
+     * exchange leaves its own marker the same way.
+     *
+     * @throws RuntimeException when the write fails, the server is gone, or no
+     *         response arrives within the poll budget
+     */
+    private function exchange(McpMessage $request, string $timeoutMessage): McpMessage
+    {
+        $id = $request->id;
+        $lock = $this->lock;
+
+        if ($lock !== null && !$lock->acquire(null, fn (): bool => $this->serverIsRunning())) {
+            throw new RuntimeException('MCP server is not running');
         }
 
-        throw new RuntimeException("No response received for tools/list request");
+        $completed = false;
+
+        try {
+            if ($lock !== null) {
+                [$phase, $buffer] = $lock->load();
+                $this->readBuffer = $phase === ExchangeLock::PHASE_CLEAN ? $buffer : '';
+                $this->stdinFragmentPending = $phase === ExchangeLock::PHASE_WRITING;
+                $lock->markPhase(ExchangeLock::PHASE_WRITING);
+            }
+
+            $this->sendMessage($request);
+            $lock?->markPhase(ExchangeLock::PHASE_READING);
+
+            // Read until we get a response with matching id
+            $attempts = 0;
+            while ($attempts < 100) {
+                $messages = $this->readMessages();
+                foreach ($messages as $msg) {
+                    if ($msg->id === $id) {
+                        $completed = true;
+
+                        return $msg;
+                    }
+                }
+                usleep(10000); // 10ms
+                $attempts++;
+            }
+
+            throw new RuntimeException($timeoutMessage);
+        } finally {
+            if ($lock !== null) {
+                if ($completed) {
+                    $lock->store(ExchangeLock::PHASE_CLEAN, $this->readBuffer);
+                } else {
+                    [$reached] = $lock->load();
+                    $lock->store($reached === ExchangeLock::PHASE_CLEAN ? ExchangeLock::PHASE_READING : $reached, '');
+                }
+
+                // Both live in the lock file now; a private copy would go stale
+                // the moment another process takes the next exchange.
+                $this->readBuffer = '';
+                $this->stdinFragmentPending = false;
+                $lock->release();
+            }
+        }
+    }
+
+    /**
+     * Liveness from any process: the owner asks proc_get_status(); a forked
+     * child cannot (waitpid() fails with ECHILD and PHP reports "not running"),
+     * so it probes the pid captured at connect with signal 0, or assumes up
+     * without ext-posix and lets the pipes report a dead server.
+     */
+    private function serverIsRunning(): bool
+    {
+        if (!is_resource($this->process)) {
+            return false;
+        }
+
+        if ($this->ownerPid === 0 || $this->ownerPid === (int) getmypid()) {
+            return self::childIsRunning($this->process);
+        }
+
+        if ($this->serverPid <= 0 || !function_exists('posix_kill')) {
+            return true;
+        }
+
+        return posix_kill($this->serverPid, 0);
     }
 
     /**
@@ -685,7 +790,7 @@ final class ClaudeCodeMcpClient
             if ($ready === false) {
                 $consecutiveSelectFailures++;
 
-                if (!self::childIsRunning($this->process)
+                if (!$this->serverIsRunning()
                     || $consecutiveSelectFailures >= self::MAX_CONSECUTIVE_SELECT_FAILURES) {
                     return $total - strlen($payload);
                 }
@@ -866,6 +971,27 @@ final class ClaudeCodeMcpClient
             return;
         }
 
+        // A forked process holds COPIES of the pipes; the child belongs to the
+        // process that connected, which may still be serving it (and siblings
+        // may be mid-exchange). Close our copies and forget — no signal, no
+        // reap, no lock-file unlink.
+        if ($this->ownerPid !== 0 && $this->ownerPid !== (int) getmypid()) {
+            foreach ($this->pipes ?? [] as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            $this->lock?->close();
+            $this->lock = null;
+            $this->process = null;
+            $this->pipes = null;
+            $this->connected = false;
+            $this->readBuffer = '';
+            $this->stdinFragmentPending = false;
+
+            return;
+        }
+
         // ONE LAST DRAIN, BEFORE THE PIPES GO. A child blocked in write(2) on a
         // full stderr pipe cannot run its own SIGTERM handler, so it would take
         // the ladder's escalation to signal 9 every time. Emptying fd 2 first
@@ -886,6 +1012,8 @@ final class ClaudeCodeMcpClient
         // grandchildren of its own, and a bare pid signal would orphan them
         // with the pipes already closed.
         ProcessReaper::terminateAndClose($this->process, ProcessContainment::groupId($this->process));
+        $this->lock?->destroy();
+        $this->lock = null;
 
         $this->process = null;
         $this->pipes = null;
@@ -910,7 +1038,7 @@ final class ClaudeCodeMcpClient
      */
     public function isUp(): bool
     {
-        return $this->connected && self::childIsRunning($this->process);
+        return $this->connected && $this->serverIsRunning();
     }
 
     /**

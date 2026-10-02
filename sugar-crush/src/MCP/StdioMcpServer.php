@@ -31,6 +31,14 @@ use SugarCraft\Crush\Support\ProcessContainment;
  * The historical doc-blocks that made the argv-vs-shell spawn measurement, the
  * stderr-drain deadlock, and the close-pipes-before-signal ordering load-bearing
  * ride on in the library class; this file does not restate them.
+ *
+ * FORK SAFETY lives in the library too (audit B1/AG-1): servers start in the
+ * TUI parent and are called from every forked turn, sub-agent and parallel
+ * Task, so ONE server is shared by the process tree — with process-unique
+ * request ids, each exchange serialised under a cross-process lock, the unread
+ * stdout bytes kept in that lock's file, recovery after a holder is killed
+ * mid-exchange, and teardown reserved to the process that started it. See
+ * the library class's FORK SAFETY note.
  */
 final class StdioMcpServer implements McpServer
 {
@@ -126,7 +134,8 @@ final class StdioMcpServer implements McpServer
 
     /**
      * E698 liveness readout for the `/mcp` panel — the library answers the
-     * same proc_get_status question the product did.
+     * same proc_get_status question the product did in the process that
+     * started the server, and probes the server pid from a forked one.
      */
     public function isUp(): bool
     {

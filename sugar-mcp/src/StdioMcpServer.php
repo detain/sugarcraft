@@ -50,6 +50,35 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * work (a build, a fetch) and minutes are legitimate; it is bounded by child
  * liveness (a dead child fails the write or the read) rather than by a
  * wall-clock kill of in-flight work.
+ *
+ * FORK SAFETY (audit B1 / AG-1). An embedder may start a server in one process
+ * and use the object from pcntl_fork()ed children — sugar-crush runs every turn
+ * in a fork and parallel sub-agents in further forks. Every child inherits the
+ * same pipes, so ONE server is shared by the whole process tree, and sharing
+ * is made safe rather than avoided (re-spawning per process would relaunch an
+ * `npx` server on every turn and throw away its server-side state — a browser
+ * session, a memory store):
+ *  - ids are unique across processes ({@see RequestIdSequence}): the owner
+ *    keeps `0, 1, 2…`, any other pid sends `<pid>-<nonce>-<n>`, so the strict
+ *    id match in readResponse() discards a reply meant for someone else —
+ *    including the late reply of a call whose process was SIGKILLed;
+ *  - each whole exchange (request write + response read, or a notification
+ *    write) runs under a cross-process flock ({@see ExchangeLock}), so
+ *    concurrent calls on one server from parallel agents are SERIALISED, one
+ *    exchange at a time — the price of sharing one stdio stream;
+ *  - stdout bytes read past a response live in the lock file, not in a
+ *    process-private buffer, so the next exchange — in whichever process —
+ *    starts at a line boundary;
+ *  - a holder that dies mid-exchange leaves a W/R phase marker behind; the
+ *    next holder terminates a half-written request line with a leading "\n"
+ *    (the TS and Python SDK servers log the junk line and carry on) and skips
+ *    unparseable fragments until the first parseable message;
+ *  - only the owner (the pid that called start()) ever tears the server down:
+ *    stop()/__destruct in any other pid close that process' own handles and
+ *    leave the shared server running.
+ * stderr is NOT locked: it is diagnostics only, and the owner's pumpStderr()
+ * may drain it while a child is mid-exchange — the tail may then be split
+ * between processes, which loses nothing a protocol exchange depends on.
  */
 final class StdioMcpServer implements McpServer
 {
@@ -107,11 +136,27 @@ final class StdioMcpServer implements McpServer
     /** @var array<int,resource>|null */
     private ?array $pipes = null;
 
-    /** Monotonic request id source; ids travel as decimal strings. */
-    private int $nextId = 0;
+    /**
+     * Request id source; ids travel as strings — decimal for the owner,
+     * pid-tagged for forked processes (see the FORK SAFETY note above).
+     */
+    private readonly RequestIdSequence $ids;
 
-    /** Bytes read from stdout but not yet terminated by a newline. */
+    /**
+     * Bytes read from stdout but not yet consumed. Only meaningful INSIDE an
+     * exchange: it is loaded from, and written back to, the {@see ExchangeLock}
+     * file so it is shared by every process using this connection.
+     */
     private string $readBuffer = '';
+
+    /** Exclusion + shared state for exchanges; created by start(). */
+    private ?ExchangeLock $lock = null;
+
+    /** The pid that called start() — the only one allowed to tear down. */
+    private int $ownerPid = 0;
+
+    /** The server's pid, for liveness checks from processes that are not its parent. */
+    private int $serverPid = 0;
 
     /** Tail-bounded capture of everything the server wrote to stderr. */
     private string $stderrTail = '';
@@ -160,6 +205,7 @@ final class StdioMcpServer implements McpServer
 
         $this->assertClientInfoShaped($clientInfo);
         $this->clientInfo = $clientInfo;
+        $this->ids = new RequestIdSequence();
     }
 
     /**
@@ -237,6 +283,12 @@ final class StdioMcpServer implements McpServer
         // dormant as it was, nothing to reap.
         [$spawnCommand, $spawnEnv] = $this->spawnPlan();
 
+        // The lock exists before the child does: a server nobody can exchange
+        // with safely is not started at all.
+        $this->lock = ExchangeLock::create($this->name);
+        $this->ownerPid = (int) getmypid();
+        $this->ids->claim();
+
         $this->process = @proc_open(
             $spawnCommand,
             [
@@ -250,8 +302,14 @@ final class StdioMcpServer implements McpServer
         );
 
         if (!is_resource($this->process)) {
+            $this->process = null;
+            $this->lock->destroy();
+            $this->lock = null;
+
             throw new \RuntimeException("Failed to start MCP server: {$this->name}");
         }
+
+        $this->serverPid = (int) proc_get_status($this->process)['pid'];
 
         // stream_set_timeout does not work on proc_open pipes (measured: it
         // returns false and sets nothing), and blocking reads would ignore any
@@ -317,6 +375,18 @@ final class StdioMcpServer implements McpServer
 
     public function stop(): void
     {
+        if ($this->process !== null && !$this->isOwnerProcess()) {
+            // A forked process holds COPIES of the pipes and handle; the server
+            // belongs to the process tree's owner, which may still be serving
+            // (and other children may be mid-exchange). Close what is ours and
+            // forget the rest — no signal, no reap, no unlink.
+            $this->closePipes();
+            $this->lock?->close();
+            $this->forgetConnection();
+
+            return;
+        }
+
         if ($this->process !== null && is_resource($this->process)) {
             // Close pipes BEFORE signalling: on stdin EOF a well-behaved server
             // exits on its own, and the ladder below never has to pay for a
@@ -339,12 +409,49 @@ final class StdioMcpServer implements McpServer
         // Idempotent second pass covers the never-started and double-stop paths;
         // closed resources fail is_resource() and are skipped.
         $this->closePipes();
+        $this->lock?->destroy();
+        $this->forgetConnection();
+    }
 
+    private function forgetConnection(): void
+    {
         $this->process = null;
         $this->pipes = null;
+        $this->lock = null;
+        $this->serverPid = 0;
         $this->readBuffer = '';
         $this->stderrTail = '';
         $this->stderrOpen = false;
+    }
+
+    /** Is this the process that started the server (or nothing is started)? */
+    private function isOwnerProcess(): bool
+    {
+        return $this->ownerPid === 0 || $this->ownerPid === (int) getmypid();
+    }
+
+    /**
+     * Liveness that works from any process. The owner asks proc_get_status();
+     * a forked child cannot — waitpid() on a pid that is not its child fails
+     * with ECHILD and PHP reports "not running" — so it probes the pid captured
+     * at start with signal 0. Without ext-posix a child assumes the server is
+     * up and lets the pipes report a dead one (write failure / EOF).
+     */
+    private function serverIsRunning(): bool
+    {
+        if (!is_resource($this->process)) {
+            return false;
+        }
+
+        if ($this->isOwnerProcess()) {
+            return self::childIsRunning($this->process);
+        }
+
+        if ($this->serverPid <= 0 || !function_exists('posix_kill')) {
+            return true;
+        }
+
+        return posix_kill($this->serverPid, 0);
     }
 
     /**
@@ -371,7 +478,7 @@ final class StdioMcpServer implements McpServer
     /** Is the child process still alive? */
     public function isUp(): bool
     {
-        return self::childIsRunning($this->process);
+        return $this->serverIsRunning();
     }
 
     /** @return list<McpTool> */
@@ -431,18 +538,89 @@ final class StdioMcpServer implements McpServer
      */
     public function request(string $method, ?array $params = null, ?float $deadline = null): ?McpMessage
     {
-        $id = (string) $this->nextId++;
-        if (!$this->writeLine(McpMessage::request($id, $method, $params)->toJson(), $deadline)) {
-            return null;
-        }
+        $id = (string) $this->ids->next();
+        $json = McpMessage::request($id, $method, $params)->toJson();
 
-        return $this->readResponse($id, $deadline);
+        return $this->exchange($deadline, true, function (string $prefix, bool $recovering) use ($json, $id, $deadline): ?McpMessage {
+            if (!$this->writeLine($prefix . $json, $deadline)) {
+                return null;
+            }
+
+            $this->lock?->markPhase(ExchangeLock::PHASE_READING);
+
+            return $this->readResponse($id, $deadline, $recovering);
+        });
     }
 
     /** Fire-and-forget notification leg of the protocol. */
     public function notify(string $method, ?array $params = null, ?float $deadline = null): void
     {
-        $this->writeLine(McpMessage::notification($method, $params)->toJson(), $deadline);
+        $json = McpMessage::notification($method, $params)->toJson();
+
+        $this->exchange($deadline, false, fn (string $prefix): ?bool => $this->writeLine($prefix . $json, $deadline) ? true : null);
+    }
+
+    /**
+     * Run one exchange under the cross-process lock (see FORK SAFETY above).
+     *
+     * $body gets the line prefix ("\n" when a previous holder died while
+     * writing, so its half line is terminated before ours) and whether this
+     * exchange is recovering from a dead holder (its reader must skip
+     * fragments). A null from $body — or a throw — is a FAILED exchange: the
+     * phase marker it reached stays behind so the next holder recovers, since
+     * a request abandoned at a deadline can leave half a line on either pipe
+     * just as a killed process can.
+     *
+     * @template T
+     * @param \Closure(string, bool): (T|null) $body
+     * @return T|null
+     */
+    private function exchange(?float $deadline, bool $reads, \Closure $body): mixed
+    {
+        $lock = $this->lock;
+        if ($lock === null || !is_resource($this->process) || $this->pipes === null) {
+            return null;
+        }
+
+        if (!$lock->acquire($deadline, fn (): bool => $this->serverIsRunning())) {
+            return null;
+        }
+
+        $result = null;
+
+        try {
+            [$phase, $buffer] = $lock->load();
+            $dirty = $phase !== ExchangeLock::PHASE_CLEAN;
+
+            // A dead holder's buffer is not trustworthy: it may end in the head
+            // of a line whose tail is still in the pipe. Drop it and let the
+            // recovering reader skip the fragment instead.
+            $this->readBuffer = $dirty ? '' : $buffer;
+            $lock->markPhase(ExchangeLock::PHASE_WRITING);
+
+            $result = $body($phase === ExchangeLock::PHASE_WRITING ? "\n" : '', $dirty);
+        } finally {
+            if ($result === null) {
+                // Keep the marker this exchange reached (W or R); the buffer is
+                // dropped for the same reason a dead holder's is.
+                [$reached] = $lock->load();
+                $lock->store($reached === ExchangeLock::PHASE_CLEAN ? ExchangeLock::PHASE_READING : $reached, '');
+            } elseif (isset($dirty) && $dirty && !$reads) {
+                // Our line went out whole, so stdin is clean again — but stdout
+                // may still start mid-line and nothing has resynchronised it:
+                // hand the recovery to the next reader.
+                $lock->store(ExchangeLock::PHASE_READING, '');
+            } else {
+                $lock->store(ExchangeLock::PHASE_CLEAN, $this->readBuffer);
+            }
+
+            // The private copy must not outlive the lock: the next exchange may
+            // run in another process, and this copy would then be stale.
+            $this->readBuffer = '';
+            $lock->release();
+        }
+
+        return $result;
     }
 
     private function closePipes(): void
@@ -516,7 +694,7 @@ final class StdioMcpServer implements McpServer
                 // bounded-retry ceiling before we give up.
                 $consecutiveSelectFailures++;
 
-                if (!self::childIsRunning($this->process)
+                if (!$this->serverIsRunning()
                     || $consecutiveSelectFailures >= self::MAX_CONSECUTIVE_SELECT_FAILURES
                 ) {
                     return false;
@@ -573,8 +751,13 @@ final class StdioMcpServer implements McpServer
      * notifications and foreign ids. A non-JSON-RPC line ENDS the search as
      * failure: whoever sent it is not speaking the protocol, and continuing
      * past garbage risks matching a stale id from a desynchronised stream.
+     *
+     * EXCEPT while $recovering: a previous holder died mid-exchange, so the
+     * stream may start with the tail of a line it half consumed. Unparseable
+     * lines are skipped until the first parseable message proves the stream
+     * is at a line boundary again; from then on the garbage rule applies.
      */
-    private function readResponse(string $id, ?float $deadline = null): ?McpMessage
+    private function readResponse(string $id, ?float $deadline = null, bool $recovering = false): ?McpMessage
     {
         while (true) {
             if ($deadline !== null && self::nowSeconds() >= $deadline) {
@@ -588,8 +771,14 @@ final class StdioMcpServer implements McpServer
 
             $message = McpMessage::parse($line);
             if ($message === null) {
+                if ($recovering) {
+                    continue;
+                }
+
                 return null;
             }
+
+            $recovering = false;
 
             // Strict match: only a genuine response (no method) whose id is
             // byte-equal to ours answers the request. An id-less broadcast —

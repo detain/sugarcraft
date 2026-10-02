@@ -23,6 +23,8 @@ composer require sugarcraft/sugar-mcp
 | `McpServer` | Transport contract: `start` / `stop` / `listTools` / `callTool` |
 | `StdioMcpServer` | Child-process stdio transport: argv-array spawn, NDJSON framing, one-clock handshake deadline, tail-bounded stderr capture, `BoundedShutdown` teardown, `__destruct` orphan-proofing |
 | `McpRouter` | Deny-before-allow tool/server narrowing over raw config keys; empty allow-list means allow-all |
+| `RequestIdSequence` | JSON-RPC ids unique across `pcntl_fork()`: plain counters in the owner, `<pid>-<nonce>-<n>` elsewhere |
+| `ExchangeLock` | Cross-process `flock` for one connection, carrying the shared read buffer and the dead-holder phase marker |
 
 ## Quick start
 
@@ -52,6 +54,10 @@ $server->stop();                     // also runs automatically on destruct
 - An `initialize` reply carrying `error` is a start failure: `start()` stops
   the child and throws a `RuntimeException` naming the server's error code and
   message (plus any captured stderr), rather than reporting "up, 0 tools".
+- `callTool()` carries **no** deadline: a tool call is somebody's real work and
+  is bounded by child liveness, never by a wall-clock kill of in-flight work.
+- Every socket wait is bounded by `stream_select` polls; stderr is absorbed on
+  both wait sets so a full 64KiB kernel pipe can never deadlock the child.
 
 ## Wire shape
 
@@ -62,10 +68,28 @@ as `{}`, `initialize` sends `"capabilities":{}`, an argument-less `callTool()`
 sends `"arguments":{}`, and `tools/list` omits `params` entirely (as the
 reference TS client does). A nested empty map inside your own params must be
 spelled `new \stdClass()` to reach the wire as `{}`.
-- `callTool()` carries **no** deadline: a tool call is somebody's real work and
-  is bounded by child liveness, never by a wall-clock kill of in-flight work.
-- Every socket wait is bounded by `stream_select` polls; stderr is absorbed on
-  both wait sets so a full 64KiB kernel pipe can never deadlock the child.
+
+## Fork safety
+
+A started `StdioMcpServer` may be used from `pcntl_fork()`ed children of the
+process that started it — one server shared by the whole process tree:
+
+- ids are process-unique (`RequestIdSequence`), so a reply — even the late
+  reply of a SIGKILLed child's call — only ever matches the call that sent it;
+- every exchange runs under a cross-process `flock` (`ExchangeLock`; each
+  process opens its own handle, since an inherited one shares the lock).
+  **Concurrent calls on one server therefore serialise**; the lock wait
+  honours a request's deadline and gives up if the server dies;
+- stdout bytes read past a response are kept in the lock file, so the next
+  exchange starts at a line boundary whichever process runs it;
+- a holder killed mid-exchange leaves a phase marker: the next exchange
+  terminates a half-written request with a leading newline and skips the
+  fragment of a half-read reply until the first parseable message;
+- only the starting process stops the server; `stop()`/destruct in a child
+  closes that child's handles only. A child checks liveness with
+  `posix_kill($pid, 0)` (it cannot `waitpid` a sibling's child).
+
+stderr is not locked — it is diagnostics only.
 
 ## Deliberate exclusions
 
