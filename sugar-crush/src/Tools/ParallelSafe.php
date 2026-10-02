@@ -14,10 +14,11 @@ namespace SugarCraft\Crush\Tools;
  *
  *  1. It does not mutate anything a sibling could observe — no file writes, no
  *     shell, no network side effects. Two concurrent calls must be unable to
- *     race each other, and (because a forked tool child outlives a cancelled
- *     turn — nothing can signal it once its parent is SIGKILLed) an orphaned
- *     call must be unable to leave the workspace in a state the user did not
- *     ask for. This is why `Bash`/`Edit` are absent and why any `mcp__*` tool,
+ *     race each other, and (because a forked tool child CAN outlive a
+ *     cancelled turn — the teardown's tree kill is Linux-/proc-only, and even
+ *     there a member's in-flight side effect may already have landed) an
+ *     orphaned call must be unable to leave the workspace in a state the user
+ *     did not ask for. This is why `Bash`/`Edit` are absent and why any `mcp__*` tool,
  *     whose capability is server-defined and unknowable here, is absent too.
  *
  *  2. Any session-scoped state it DOES mutate survives the fork, either
@@ -54,27 +55,35 @@ namespace SugarCraft\Crush\Tools;
  * order of hook invocations — only the point at which they interleave with
  * the tool bodies moved.
  *
- * **An orphaned tool child has no deadline.** {@see
+ * **A ParallelSafe tool must still terminate on its own.** {@see
  * \SugarCraft\Crush\Runtime}'s 90s group deadline is enforced by the
- * completion child that forked the group. SIGKILL that parent (an
+ * completion child that forked the group. When that child is torn down (an
  * Escape-Escape cancel, or {@see
- * \SugarCraft\Crush\Backend\EngineBackend::COMPLETE_TIMEOUT_SECONDS}) and the
- * deadline dies with it — nothing is left to enforce it, and the orphan's only
- * remaining bound is the tool's own behaviour: a 30s stream timeout for
- * `WebFetch`/`WebSearch`, an `sh -c grep` great-grandchild for `Grep`. A
- * custom ParallelSafe tool that loops forever would linger indefinitely. This
- * is the second, less obvious half of point 1: a tool joining a group is
- * promising not just that its effects are safe, but that it terminates on its
- * own.
+ * \SugarCraft\Crush\Backend\EngineBackend::COMPLETE_TIMEOUT_SECONDS}) the
+ * teardown does not leave the group orphaned: it is
+ * {@see \SugarCraft\Crush\Support\ProcessContainment::killTree()}, which
+ * freezes the completion child, walks /proc for every descendant — each
+ * forked group member and every `setsid` command one of them started — and
+ * kills them all (audit 15a B2 / F-E2). The same walk is the parallel
+ * deadline's own kill. Two cases still leave a member to its own devices, so
+ * joining a group remains a promise that the tool's body ends by itself:
+ * where /proc or ext-posix's getpgrp is missing, killTree() degrades to a
+ * SIGKILL of the root alone and the members live on with no deadline — their
+ * only bound is the tool's own behaviour (a 30s stream timeout for
+ * `WebFetch`/`WebSearch`); and an {@see ExemptFromParallelDeadline} member
+ * (`Task`) is skipped by the deadline sweep by design, so only a teardown
+ * stops it.
  *
- * **An orphan also holds the parent's result socket open.** A forked tool
- * child inherits {@see
- * \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}'s `$childSocket`
- * (PHP does not set CLOEXEC/close-on-fork on it), so the TUI parent does not
- * see EOF until the last orphan exits — measured at 3.21s for a group of
- * WebFetches. That delay is invisible on the happy path, where the result
- * frame arrives first; it matters for the fallback that detects a completion
- * child dying WITHOUT writing a result frame, which is keyed on that EOF.
+ * **The result socket no longer waits on a member.** A forked group member
+ * still inherits the completion child's end of {@see
+ * \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}'s frame socket
+ * — close-on-exec is an exec rule and a fork keeps every descriptor — but no
+ * command anything in the turn EXECs does: both ends are marked `FD_CLOEXEC`
+ * ({@see \SugarCraft\Crush\Support\ProcessContainment::closeOnExec()}), the
+ * child closes the parent's end first, and the TUI parent notices a turn
+ * child that died without a result frame by polling its pid, not by waiting
+ * for EOF (audit 15a B3). A lingering member therefore no longer delays that
+ * fallback; it is the teardown's tree kill above that ends it.
  *
  * ---
  *
