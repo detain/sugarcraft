@@ -7284,7 +7284,7 @@ final class Chat implements Model
                 return [$this, Cmd::quit()];
             }
 
-            if (str_starts_with($text, '/') || str_starts_with($text, 'mcp auth')) {
+            if (str_starts_with($text, '/') || self::isBareMcpAuthCommand($text)) {
                 return $this->refuseInFlightCommand($text);
             }
 
@@ -8425,7 +8425,7 @@ final class Chat implements Model
         // prose and returns null for it. Kept as its own branch, ahead of the
         // parse, so existing muscle memory and the palette's ToggleMcp action
         // keep working.
-        if (str_starts_with($text, 'mcp auth')) {
+        if (self::isBareMcpAuthCommand($text)) {
             return $this->handleMcpAuthCommand($text);
         }
 
@@ -16455,6 +16455,24 @@ final class Chat implements Model
         $output = (string) ob_get_clean();
 
         return $this->mcpAuthResponse($inputBuf, $output);
+    }
+
+    /**
+     * Whether $text is the leading-slash-less `mcp auth …` command spelling.
+     *
+     * `mcp` and `auth` must each be WHOLE words: a raw `str_starts_with($text,
+     * 'mcp auth')` used to claim prose like "mcp authentication keeps failing on
+     * my server, why?" — idle it ran the handler ("Unknown sub-command
+     * 'authentication'") instead of asking the model, and mid-turn it refused the
+     * draft instead of queueing it (audit 15b-11). Any whitespace run separates
+     * the words because {@see parseMcpArgs()} tokenises on `\s+`, so every draft
+     * claimed here reduces to the argv the handler expects. One helper serves
+     * both {@see submit()}'s mid-turn refusal and {@see dispatchCommand()}'s idle
+     * dispatch, so what is refused mid-turn and what runs idle cannot drift.
+     */
+    private static function isBareMcpAuthCommand(string $text): bool
+    {
+        return preg_match('/^mcp\s+auth(?:\s|$)/', $text) === 1;
     }
 
     /**

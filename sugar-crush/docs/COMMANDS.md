@@ -338,10 +338,11 @@ answering a question loosely, because `/permissions rules` would ask the model
 about a gate it cannot see and answer plausibly, and `/rules terse` would never
 reach the toggle.
 
-One name reaches a handler with no leading slash at all: a draft starting
-`mcp auth` is routed to `Chat::handleMcpAuthCommand()` ahead of the parse, because
-that spelling predates the discoverable `/mcp` row and the palette's MCP list
-action still uses it.
+One name reaches a handler with no leading slash at all: a draft whose first two
+words are `mcp auth` is routed to `Chat::handleMcpAuthCommand()` ahead of the parse,
+because that spelling predates the discoverable `/mcp` row and the palette's MCP
+list action still uses it. Both must be whole words — "mcp authentication keeps
+failing" is prose and goes to the model (or is queued mid-turn).
 
 What keeps the table honest is not this page — no guard counts the rows here. It
 is `Commands\SlashDispatchTest::testEverySlashVisibleRegistryRowHasALiveDispatchHandler()`,
