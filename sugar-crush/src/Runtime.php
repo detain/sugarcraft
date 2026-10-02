@@ -2373,6 +2373,11 @@ final class Runtime
             $result = self::annotate($result, $postNote);
         }
 
+        // AFTER both notes (hook stdout is bytes this class does not control
+        // either) and BEFORE the emit, so the UI renders exactly what the model
+        // will read. PostToolUse above still observed the RAW output.
+        $result = self::utf8Safe($result);
+
         // A listener that throws is a UI bug. It must not take the turn's
         // other tool results down with it, and the model still needs this
         // result regardless of whether anything managed to render it.
@@ -2391,12 +2396,104 @@ final class Runtime
         // imageBytes/imageProtocol thread an image-bearing ToolResult
         // (e.g. Doctor's capability swatch) through to EngineBackend
         // (W1.G2 reachability fix) instead of being dropped here.
+        return self::resultMessage($toolCall, $result);
+    }
+
+    /**
+     * The ONE place this class builds a {@see ToolResultMessage} — {@see settle()}
+     * and {@see failure()} both end here — so no tool result reaches a provider
+     * without passing {@see utf8Safe()}. The scrub is idempotent (a valid
+     * string returns untouched), so re-running it over a result settle()
+     * already repaired costs one `mb_check_encoding()` and catches the one note
+     * appended after that repair: a throwing ToolFinished listener's message.
+     */
+    private static function resultMessage(ToolCall $toolCall, ToolResult $result): ToolResultMessage
+    {
+        $result = self::utf8Safe($result);
+
         return new ToolResultMessage(
             $toolCall->id(),
             $result->content(),
             $result->isError(),
             $result->imageBytes(),
             $result->imageProtocol(),
+        );
+    }
+
+    /**
+     * Guarantee a tool result's content is valid UTF-8, announcing it when it
+     * was not.
+     *
+     * WHY THIS EXISTS: a tool result is bytes the model's request is built
+     * from, and nothing upstream promises they are UTF-8 — Read returns a
+     * latin-1 file or a binary verbatim, Bash returns `printf 'caf\xe9'`
+     * verbatim, WebFetch returns an ISO-8859-1 page verbatim, and an MCP server
+     * or a hook's stdout can say anything. ONE such byte made
+     * `GuzzleHttp\Utils::jsonEncode()` (what `'json' => $params` reaches in
+     * {@see \SugarCraft\Crush\Providers\SglangProvider} and
+     * {@see \SugarCraft\Crush\Providers\CustomProvider}) throw "Malformed
+     * UTF-8 characters" — non-transient, and on EVERY later request too,
+     * because the row is replayed with the history (Task resume included) —
+     * while Vertex's `(string) json_encode(...)` sent an EMPTY body. A hostile
+     * page needed one `\xff` to end every turn that fetched it.
+     *
+     * WHY HERE AND NOT IN THE PROVIDERS. The same answer
+     * {@see \SugarCraft\Crush\Context\EnvironmentBlock}'s `utf8Safe()` gives
+     * for the prompt: repair at the producer and every consumer is fixed at
+     * once — every provider, the session store, the worker pool, the TUI —
+     * while a provider-wide `JSON_INVALID_UTF8_SUBSTITUTE` would fix one
+     * consumer and silently break a contract that is deliberate there: a
+     * caller-supplied `jsonSchema` that cannot encode must FAIL, not ship
+     * mangled (pinned by
+     * {@see \SugarCraft\Crush\Tests\Providers\SglangProviderRequestBuildingTest::testUnencodableArrayJsonSchemaSurfacesAnErrorAtTheCallSite()}).
+     * The engine's parallel arm makes the point too: its fork IPC is
+     * `serialize()`, which carries the bad bytes across intact, so nothing
+     * before this seam would have repaired them.
+     *
+     * WHY U+FFFD AND NOT EnvironmentBlock's `?`. That block picks `?` because
+     * it is scrubbed AFTER a byte cap a 3-byte substitute could breach; no cap
+     * runs after this seam (each tool capped its own output already), and `?`
+     * is a character real output is full of — the model could not tell `caf?`
+     * the filename from `caf?` the repair. U+FFFD is the one character that
+     * means "a byte was here that was not text". The cost, stated: a result
+     * that is mostly invalid bytes (a binary file) can grow up to 3x.
+     *
+     * WHY IT IS ANNOUNCED. Silent repair would let the model quote `caf\u{FFFD}`
+     * back as the file's real spelling, or write it into an Edit's
+     * `old_string` and miss. The count is of SUBSTITUTED SEQUENCES (mbstring
+     * emits one substitute per maximal invalid subpart), measured as the growth
+     * in U+FFFD occurrences so a genuine U+FFFD the tool returned is not
+     * counted.
+     */
+    private static function utf8Safe(ToolResult $result): ToolResult
+    {
+        $content = $result->content();
+        if (mb_check_encoding($content, 'UTF-8')) {
+            return $result;
+        }
+
+        // Global mbstring state, so it is restored even if the convert throws.
+        $previous = mb_substitute_character();
+        mb_substitute_character(0xFFFD);
+
+        try {
+            $scrubbed = mb_scrub($content, 'UTF-8');
+        } finally {
+            mb_substitute_character($previous);
+        }
+
+        $replaced = substr_count($scrubbed, "\u{FFFD}") - substr_count($content, "\u{FFFD}");
+
+        return new ToolResult(
+            toolCallId: $result->toolCallId(),
+            content: $scrubbed . "\n\n[encoding: {$replaced} invalid UTF-8 sequence(s) in this tool result"
+                . " were replaced with U+FFFD (\u{FFFD}); the underlying bytes are not UTF-8 text.]",
+            isError: $result->isError(),
+            durationMs: $result->durationMs(),
+            imageBytes: $result->imageBytes(),
+            imagePath: $result->imagePath(),
+            imageProtocol: $result->imageProtocol(),
+            diff: $result->diff(),
         );
     }
 
@@ -2740,12 +2837,13 @@ final class Runtime
      */
     private function failure(ToolCall $toolCall, string $message, ?callable $onEvent): ToolResultMessage
     {
-        $this->emit($onEvent, ToolFinished::fromResult(
-            $toolCall,
-            new ToolResult(toolCallId: $toolCall->id(), content: $message, isError: true),
-        ));
+        // Scrubbed too: a PreToolUse deny reason is a hook's stdout, bytes this
+        // class does not control any more than a tool's output.
+        $result = self::utf8Safe(new ToolResult(toolCallId: $toolCall->id(), content: $message, isError: true));
 
-        return new ToolResultMessage($toolCall->id(), $message, isError: true);
+        $this->emit($onEvent, ToolFinished::fromResult($toolCall, $result));
+
+        return self::resultMessage($toolCall, $result);
     }
 
     /**
