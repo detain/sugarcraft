@@ -184,7 +184,7 @@ final class BuiltInToolTest extends TestCase
         $tool = new WebSearch();
 
         $this->assertSame('WebSearch', $tool->name());
-        $this->assertSame('Search the web by sending a query to a configurable SearXNG endpoint and return a formatted text digest of the response. The digest can include direct answers, the top results with each title, URL and a short snippet, plus suggestions, corrections, infoboxes, and a note listing any engines that did not answer. It returns those snippets only, never the full contents of the pages it lists, and it errors on an empty or over-long query, a failed connection, an endpoint that replies with a client or server error status, or an endpoint that answers with a redirect, which it never follows. Optional parameters narrow the search by safesearch level, which takes 0, 1, or 2, and by a time_range of day, month, or year.', $tool->description());
+        $this->assertSame('Search the web by sending a query to a configurable SearXNG endpoint and return a formatted text digest of the response. The digest can include direct answers, the top results with each title, URL and a short snippet, plus suggestions, corrections, infoboxes, and a note listing any engines that did not answer. It returns those snippets only, never the full contents of the pages it lists, and it errors when no endpoint is configured, on an empty or over-long query, a failed connection, an endpoint that replies with a client or server error status, or an endpoint that answers with a redirect, which it never follows. Optional parameters narrow the search by safesearch level, which takes 0, 1, or 2, and by a time_range of day, month, or year.', $tool->description());
     }
 
     public function testDoctorToolHasCorrectName(): void

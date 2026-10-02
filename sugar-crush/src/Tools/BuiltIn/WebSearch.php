@@ -36,6 +36,10 @@ class WebSearch implements Tool, ParallelSafe
     /** Bounds the redirect target echoed in the refusal; it is remote text. */
     private const MAX_LOCATION_ECHO_BYTES = 256;
 
+    /**
+     * Null when nothing configured one — and then every search fails loudly
+     * (see {@see unconfiguredRefusal()}) rather than falling back anywhere.
+     */
     private ?string $endpoint;
 
     /** @var \Closure(string): list<string> */
@@ -45,6 +49,20 @@ class WebSearch implements Tool, ParallelSafe
     private \Closure $isBlockedAddress;
 
     /**
+     * THERE IS NO DEFAULT ENDPOINT (audit F-W3(b)). The constructor argument
+     * wins, then `SUGARCRUSH_SEARCH_ENDPOINT`; an empty value counts as unset.
+     * Until one is set the tool still constructs — Bootstrap, Chat and
+     * `/websearch` build it unconditionally, and the model is better told why
+     * a search failed than shown no tool — but every call is an error naming
+     * the variable. The shipped default used to be
+     * `http://skynet2.interserver.net:8080/search`: a private host, over
+     * CLEARTEXT http, so every model-composed query (which routinely quotes
+     * code, file names and error text from the user's repository) crossed the
+     * network unencrypted to a third party, unprompted under the default
+     * `bypass-permissions`. Switching it to https would still have sent every
+     * user's queries to one maintainer's box; the honest default for a
+     * third-party data flow is none.
+     *
      * The two trailing seams mirror {@see WebFetch}'s: production passes
      * neither and gets WebFetch's system resolver and its full range list
      * (audit F-W3 — this class used to keep its own shorter copy of both);
@@ -61,13 +79,33 @@ class WebSearch implements Tool, ParallelSafe
         ?callable $resolveAddresses = null,
         ?callable $isBlockedAddress = null,
     ) {
-        $this->endpoint = $endpoint ?? getenv('SUGARCRUSH_SEARCH_ENDPOINT') ?: 'http://skynet2.interserver.net:8080/search';
+        $configured = $endpoint ?? getenv('SUGARCRUSH_SEARCH_ENDPOINT');
+        $this->endpoint = is_string($configured) && trim($configured) !== '' ? $configured : null;
         $this->resolveAddresses = $resolveAddresses === null
             ? static fn (string $host): array => WebFetch::resolveViaSystemDns($host)
             : \Closure::fromCallable($resolveAddresses);
         $this->isBlockedAddress = $isBlockedAddress === null
             ? static fn (string $address): bool => WebFetch::addressIsBlocked($address)
             : \Closure::fromCallable($isBlockedAddress);
+    }
+
+    /**
+     * The loud failure for a session with no search endpoint. An error rather
+     * than an empty digest, because "no results" would read to the model as a
+     * fact about the web; and it names the variable, because the person who
+     * can fix it reads this through the model's reply or `/websearch`.
+     *
+     * @param array<string, mixed> $args
+     */
+    private function unconfiguredRefusal(array $args): ToolResult
+    {
+        return new ToolResult(
+            toolCallId: $args['id'] ?? '',
+            content: 'Error: no search endpoint is configured, so WebSearch cannot run. Set SUGARCRUSH_SEARCH_ENDPOINT '
+                . 'to the search URL of a SearXNG instance you trust '
+                . '(for example https://searx.example.org/search) and restart; there is no built-in default.',
+            isError: true,
+        );
     }
 
     /**
@@ -103,7 +141,7 @@ class WebSearch implements Tool, ParallelSafe
             . 'answers, the top results with each title, URL and a short snippet, plus '
             . 'suggestions, corrections, infoboxes, and a note listing any engines that did '
             . 'not answer. It returns those snippets only, never the full contents of the '
-            . 'pages it lists, and it errors on an empty or over-long query, a failed '
+            . 'pages it lists, and it errors when no endpoint is configured, on an empty or over-long query, a failed '
             . 'connection, an endpoint that replies with a client or server error status, '
             . 'or an endpoint that answers with a redirect, which it never follows. '
             . 'Optional parameters narrow the search by safesearch level, which takes 0, 1, '
@@ -155,6 +193,10 @@ class WebSearch implements Tool, ParallelSafe
 
         if (isset($args['time_range'])) {
             $params['time_range'] = $args['time_range'];
+        }
+
+        if ($this->endpoint === null) {
+            return $this->unconfiguredRefusal($args);
         }
 
         $url = $this->endpoint . '?' . http_build_query($params);

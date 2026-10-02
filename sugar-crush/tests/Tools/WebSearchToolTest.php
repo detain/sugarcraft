@@ -113,11 +113,87 @@ final class WebSearchToolTest extends TestCase
         $this->assertSame('WebSearch', $tool->name());
     }
 
-    public function testDefaultEndpointIsSet(): void
+    /**
+     * Audit F-W3(b): there is no default endpoint. This used to be
+     * `testDefaultEndpointIsSet`, and the default it took for granted was
+     * `http://skynet2.interserver.net:8080/search` — a private host reached
+     * over cleartext http, so every model-composed query left unencrypted for
+     * a third party. With nothing configured the tool still constructs (the
+     * launcher builds it unconditionally) but refuses every call, loudly, and
+     * never reaches the network.
+     */
+    public function testWithNoEndpointConfiguredEverySearchFailsLoudlyWithoutFetching(): void
     {
-        $tool = new WebSearch();
-        // Just verify it can be constructed without throwing
-        $this->assertInstanceOf(WebSearch::class, $tool);
+        $saved = getenv('SUGARCRUSH_SEARCH_ENDPOINT');
+        putenv('SUGARCRUSH_SEARCH_ENDPOINT');
+
+        try {
+            foreach ([null, '', '   '] as $endpoint) {
+                $tool = new class ($endpoint) extends WebSearch {
+                    public int $fetches = 0;
+
+                    protected function fetch(string $url, string $dialAddress): array
+                    {
+                        ++$this->fetches;
+
+                        return [false, []];
+                    }
+                };
+
+                $result = $tool->execute(['query' => 'php 8.3', 'description' => 'test', 'id' => 'c1']);
+
+                $label = var_export($endpoint, true);
+                $this->assertTrue($result->isError(), "endpoint {$label}: an unconfigured search must be an error");
+                $this->assertStringContainsString('SUGARCRUSH_SEARCH_ENDPOINT', $result->content());
+                $this->assertStringContainsString('no built-in default', $result->content());
+                $this->assertStringNotContainsString('skynet2', $result->content());
+                $this->assertSame('c1', $result->toolCallId());
+                $this->assertSame(0, $tool->fetches, "endpoint {$label}: nothing may be dialled without an endpoint");
+            }
+        } finally {
+            putenv($saved === false ? 'SUGARCRUSH_SEARCH_ENDPOINT' : 'SUGARCRUSH_SEARCH_ENDPOINT=' . $saved);
+        }
+    }
+
+    /**
+     * The environment variable is the configuration channel, and the
+     * constructor argument still wins over it.
+     */
+    public function testTheEnvironmentVariableConfiguresTheEndpointAndTheArgumentBeatsIt(): void
+    {
+        $saved = getenv('SUGARCRUSH_SEARCH_ENDPOINT');
+        putenv('SUGARCRUSH_SEARCH_ENDPOINT=https://from-env.example/search');
+
+        try {
+            $seen = static function (?string $endpoint): string {
+                $tool = new class ($endpoint) extends WebSearch {
+                    public string $url = '';
+
+                    public function __construct(?string $endpoint)
+                    {
+                        parent::__construct(
+                            $endpoint,
+                            resolveAddresses: static fn (string $host): array => ['93.184.215.14'],
+                        );
+                    }
+
+                    protected function fetch(string $url, string $dialAddress): array
+                    {
+                        $this->url = $url;
+
+                        return [json_encode(['query' => 'q', 'results' => []]), ['HTTP/1.1 200 OK']];
+                    }
+                };
+                $tool->execute(['query' => 'q', 'description' => 'test']);
+
+                return $tool->url;
+            };
+
+            $this->assertStringStartsWith('https://from-env.example/search?', $seen(null));
+            $this->assertStringStartsWith('https://from-arg.example/search?', $seen('https://from-arg.example/search'));
+        } finally {
+            putenv($saved === false ? 'SUGARCRUSH_SEARCH_ENDPOINT' : 'SUGARCRUSH_SEARCH_ENDPOINT=' . $saved);
+        }
     }
 
     public function testFormatResultsHandlesEmptyData(): void
