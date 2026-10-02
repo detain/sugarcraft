@@ -94,9 +94,21 @@ final class McpAuthCommand
      */
     private const COLUMN_FLOORS = ['Status' => 15, 'Expires' => 16];
 
+    private readonly \Closure $metadataFetcher;
+
+    /**
+     * @param callable(string): array<mixed>|null $metadataFetcher discovery
+     *        seam for `add`, the twin of {@see \SugarCraft\Crush\MCP\OAuthLoopbackFlow}'s:
+     *        production leaves it null and gets {@see self::fetchOAuthMetadata()};
+     *        tests inject a table so no request leaves the process.
+     */
     public function __construct(
         private readonly McpAuthStore $authStore,
+        ?callable $metadataFetcher = null,
     ) {
+        $this->metadataFetcher = $metadataFetcher !== null
+            ? \Closure::fromCallable($metadataFetcher)
+            : static fn (string $url): array => self::fetchOAuthMetadata($url);
     }
 
     /**
@@ -135,7 +147,7 @@ final class McpAuthCommand
         echo "\n";
         echo "  Interactive login is a shell command, not a chat turn:\n";
         echo "\n";
-        echo "    sugarcrush mcp auth login <server> [token-url] [authorize-url]\n";
+        echo "    sugarcrush mcp auth login <server> [token-url] [authorize-url] [registration-url]\n";
         echo "\n";
         echo "  It runs the OAuth authorization-code flow with PKCE: your browser\n";
         echo "  returns the code to a loopback listener in the shell, and the stored\n";
@@ -245,17 +257,18 @@ final class McpAuthCommand
         $registrationUrl = $args[2] ?? null;
         $tokenUrl = $args[3] ?? null;
 
-        // If registration URL not provided, try to discover from the server's well-known endpoint.
-        // Many OAuth servers publish their metadata at /.well-known/oauth-authorization-server.
-        if ($registrationUrl === null) {
-            $wellKnown = rtrim($serverUrl, '/') . '/.well-known/oauth-authorization-server';
-            try {
-                $metadata = self::fetchOAuthMetadata($wellKnown);
-                $registrationUrl = $metadata['registration_endpoint'] ?? null;
-                $tokenUrl = $metadata['token_endpoint'] ?? null;
-            } catch (\Throwable) {
-                // Discovery failed; require explicit URLs.
-            }
+        // Audit MCP-6: discovery is the shared RFC 9728 / RFC 8414 helper the
+        // login flow uses — this arm used to append the well-known suffix
+        // after the server path, which on a path-bearing MCP URL asks the MCP
+        // endpoint itself and gets a 401. Operands win over discovered values.
+        if ($registrationUrl === null || $tokenUrl === null) {
+            $metadata = (new \SugarCraft\Crush\MCP\OAuthDiscovery($this->metadataFetcher))->discover($serverUrl);
+            $registrationUrl ??= isset($metadata['registration_endpoint']) && is_string($metadata['registration_endpoint'])
+                ? $metadata['registration_endpoint']
+                : null;
+            $tokenUrl ??= isset($metadata['token_endpoint']) && is_string($metadata['token_endpoint'])
+                ? $metadata['token_endpoint']
+                : null;
         }
 
         if ($registrationUrl === null || $tokenUrl === null) {
@@ -371,6 +384,13 @@ final class McpAuthCommand
      * `authorization_endpoint` — the raw array is the whole document, the
      * consumers choose.
      *
+     * Audit MCP-6: a non-2xx status THROWS. An MCP endpoint answers a stray
+     * well-known request with a 401 whose body is a JSON error object, and
+     * that object used to be returned as if it were metadata; discovery now
+     * reads the throw as "not here" and tries its next candidate. The status
+     * is read after the exchange, so the request options above stay exactly
+     * the policy they were.
+     *
      * @return array<string, mixed>
      */
     public static function fetchOAuthMetadata(string $url): array
@@ -391,10 +411,15 @@ final class McpAuthCommand
         $body = curl_exec($ch);
         $errno = curl_errno($ch);
         $error = curl_error($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         curl_close($ch);
 
         if ($errno !== 0) {
             throw new \RuntimeException("cURL error {$errno}: {$error}");
+        }
+
+        if ($status < 200 || $status > 299) {
+            throw new \RuntimeException("HTTP {$status} from metadata URL");
         }
 
         if ($body === '' || $body === false) {

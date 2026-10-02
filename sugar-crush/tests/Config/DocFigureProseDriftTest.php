@@ -3816,12 +3816,14 @@ final class DocFigureProseDriftTest extends TestCase
             self::assertStringContainsString('`' . $key . '`', $mcp, "the page stopped naming the endpoint key `{$key}` the flow reads");
         }
 
-        self::assertStringContainsString(
-            "'/.well-known/oauth-authorization-server'",
-            $flowSource,
-            'the well-known path literal left the flow — the page sentence about discovery must move with it',
-        );
-        self::assertStringContainsString('/.well-known/oauth-authorization-server', $mcp, 'the page no longer states the discovery path the flow uses');
+        // Audit MCP-6: the well-known literals live in the ONE discovery
+        // helper both `add` and `login` call, and the flow must call it.
+        $discoverySource = self::sourceOf('MCP/OAuthDiscovery.php');
+        self::assertStringContainsString('new OAuthDiscovery(', $flowSource, 'the flow stopped discovering through the shared helper — the page sentence about discovery must move with it');
+        foreach (['/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource'] as $suffix) {
+            self::assertStringContainsString("'{$suffix}'", $discoverySource, "the well-known literal {$suffix} left the discovery helper — the page sentence about discovery must move with it");
+            self::assertStringContainsString($suffix, $mcp, "the page no longer states the discovery path {$suffix} the helper uses");
+        }
     }
 
     /**
@@ -3840,7 +3842,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame(1, preg_match('/bounded by 300 s/', $mcp), 'the page no longer prints the 300 s the constant holds');
 
         self::assertStringContainsString('[-- --timeout N]', $raw, 'the page fence stopped showing the separator-qualified flag form');
-        $hint = "Usage: sugarcrush mcp auth login <server> [token-url] [authorize-url] [-- --timeout N]";
+        $hint = "Usage: sugarcrush mcp auth login <server> [token-url] [authorize-url] [registration-url] [-- --timeout N]";
         self::assertSame(3, substr_count(self::sourceOf('Cli/Subcommands.php'), $hint), 'the verb usage hints no longer state the same invocation the page fence shows');
     }
 

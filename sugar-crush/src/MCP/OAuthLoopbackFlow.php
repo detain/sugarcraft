@@ -18,10 +18,12 @@ use SugarCraft\Crush\Commands\McpAuthCommand;
  *
  * The steps, in causal order:
  *
- * 1. Discover the three endpoints from the server's
- *    `/.well-known/oauth-authorization-server` document through the same
- *    public helper `mcp auth add` uses — registration, token, and
- *    (new here) authorize.
+ * 1. Discover the three endpoints — registration, token, and (new here)
+ *    authorize — through {@see OAuthDiscovery}, the same RFC 9728 / RFC 8414
+ *    order `mcp auth add` uses (audit MCP-6: the well-known segment goes
+ *    between origin and path, not after the path). Positional overrides
+ *    fill or replace any of the three; with all three given nothing is
+ *    fetched at all.
  * 2. Bind an ephemeral loopback listener FIRST, because dynamic client
  *    registration must carry the exact redirect URI the browser will be
  *    sent back to — `http://127.0.0.1:<bound-port>/callback`, never a
@@ -94,6 +96,15 @@ final class OAuthLoopbackFlow
      * fire the loopback request itself and ride the TCP backlog instead of
      * spawning a thread.
      *
+     * `$registrationUrl` is LAST, after the test-only `$browser`, so every
+     * existing positional caller keeps its meaning; the CLI passes it by name.
+     * It exists because a server without `registration_endpoint` in its
+     * metadata could otherwise never be logged in to (audit MCP-6).
+     *
+     * `$serverUrl` is the store key, byte-for-byte as given: the bearer
+     * attaches by exact `.mcp.json` URL match, so only the discovery URLs are
+     * derived from it, never the key.
+     *
      * @param callable(string): void|null $browser
      */
     public function login(
@@ -102,25 +113,21 @@ final class OAuthLoopbackFlow
         ?string $authorizeUrl = null,
         float $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS,
         ?callable $browser = null,
+        ?string $registrationUrl = null,
     ): int {
         echo "\n";
 
-        $wellKnown = rtrim($serverUrl, '/') . '/.well-known/oauth-authorization-server';
-        try {
-            $metadata = ($this->metadataFetcher)($wellKnown);
-        } catch (\Throwable) {
-            $metadata = [];
-        }
+        $metadata = $registrationUrl !== null && $tokenUrl !== null && $authorizeUrl !== null
+            ? []
+            : (new OAuthDiscovery($this->metadataFetcher))->discover($serverUrl);
 
-        $registrationUrl = isset($metadata['registration_endpoint']) && is_string($metadata['registration_endpoint'])
-            ? $metadata['registration_endpoint']
-            : null;
+        $registrationUrl = $registrationUrl ?? (isset($metadata['registration_endpoint']) && is_string($metadata['registration_endpoint']) ? $metadata['registration_endpoint'] : null);
         $tokenUrl = $tokenUrl ?? (isset($metadata['token_endpoint']) && is_string($metadata['token_endpoint']) ? $metadata['token_endpoint'] : null);
         $authorizeUrl = $authorizeUrl ?? (isset($metadata['authorization_endpoint']) && is_string($metadata['authorization_endpoint']) ? $metadata['authorization_endpoint'] : null);
 
         if ($registrationUrl === null || $tokenUrl === null || $authorizeUrl === null) {
             echo "  ✗ OAuth endpoints could not be discovered for `{$serverUrl}`.\n";
-            echo "  login needs registration, token and authorize endpoints; pass the two URLs positionally if the server omits one.\n";
+            echo "  login needs registration, token and authorize endpoints; pass the missing ones as [token-url] [authorize-url] [registration-url].\n";
 
             return 1;
         }

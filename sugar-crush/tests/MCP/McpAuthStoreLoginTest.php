@@ -74,8 +74,9 @@ final class McpAuthStoreLoginTest extends TestCase
         $output = (string) ob_get_clean();
 
         self::assertSame(0, $rc, $output);
-        self::assertIsString($discovered);
-        self::assertStringEndsWith('/.well-known/oauth-authorization-server', $discovered, 'discovery rides the RFC 8414 well-known path');
+        // The stub answers every URL, so the first RFC 8414 candidate wins:
+        // the PATH-INSERTED form (audit MCP-6), never `<server>/.well-known/...`.
+        self::assertSame('https://mcp.example.test/.well-known/oauth-authorization-server/server', $discovered, 'discovery rides the RFC 8414 path-inserted well-known URL');
 
         // The printed surface: the URL + the result lines, and NOTHING secret.
         self::assertStringContainsString('✓ Signed in `' . self::SERVER . '`', $output);
@@ -224,8 +225,210 @@ final class McpAuthStoreLoginTest extends TestCase
     }
 
     // =========================================================================
+    // Audit MCP-6: RFC 9728 / RFC 8414 discovery for path-bearing server URLs
+    // =========================================================================
+
+    /**
+     * The audit repro: the authorization server publishes its metadata ONLY
+     * at the origin, and the server URL has a path. Discovery used to ask for
+     * `https://h/mcp/.well-known/oauth-authorization-server` (the MCP
+     * endpoint itself, a 401) and stop there.
+     */
+    public function testAPathBearingServerFindsTheOriginOnlyMetadataAndStoresUnderItsExactUrl(): void
+    {
+        $history = [];
+        $flow = $this->flowWithTable([$this->registrationResponse(), $this->exchangeResponse()], $history, [
+            'https://h/.well-known/oauth-authorization-server' => $this->metadataFor('https://auth.example.test'),
+        ], $asked);
+
+        ob_start();
+        $rc = $flow->login('https://h/mcp', null, null, 5.0, $this->browserReturning('code-mcp6', $requests));
+        $output = (string) ob_get_clean();
+
+        self::assertSame(0, $rc, $output);
+        self::assertSame(self::REGISTRATION_URL, (string) $history[0]['request']->getUri(), 'login reached dynamic registration');
+        self::assertSame([
+            'https://h/.well-known/oauth-protected-resource/mcp',
+            'https://h/.well-known/oauth-protected-resource',
+            'https://h/.well-known/oauth-authorization-server/mcp',
+            'https://h/.well-known/oauth-authorization-server',
+        ], $asked, 'RFC 9728 first, then RFC 8414 path-inserted, then origin-only — and nothing appended after the path');
+
+        $persisted = (new OAuthClientRegistration(new Client(), $this->authFilePath))->loadAuth();
+        self::assertSame(['https://h/mcp'], array_keys($persisted), 'the store key is the exact .mcp.json URL, not the discovery origin');
+        self::assertSame(self::TOKEN_URL, $persisted['https://h/mcp']->tokenUrl);
+
+        $this->closeAll($requests);
+    }
+
+    public function testThePathInsertedAuthorizationServerDocumentWinsOverTheOriginOne(): void
+    {
+        $history = [];
+        $flow = $this->flowWithTable([$this->registrationResponse(), $this->exchangeResponse()], $history, [
+            'https://h/.well-known/oauth-authorization-server/mcp' => [
+                'registration_endpoint' => 'https://tenant.example.test/register',
+                'token_endpoint' => 'https://tenant.example.test/token',
+                'authorization_endpoint' => 'https://tenant.example.test/authorize',
+            ],
+            'https://h/.well-known/oauth-authorization-server' => $this->metadataFor('https://auth.example.test'),
+        ], $asked);
+
+        ob_start();
+        $rc = $flow->login('https://h/mcp', null, null, 5.0, $this->browserReturning('code-tenant', $requests));
+        $output = (string) ob_get_clean();
+
+        self::assertSame(0, $rc, $output);
+        self::assertSame('https://tenant.example.test/register', (string) $history[0]['request']->getUri());
+        self::assertSame('https://tenant.example.test/token', (string) $history[1]['request']->getUri());
+        self::assertNotContains('https://h/.well-known/oauth-authorization-server', $asked, 'the first hit ends discovery');
+
+        $this->closeAll($requests);
+    }
+
+    public function testProtectedResourceMetadataLeadsToTheNamedAuthorizationServer(): void
+    {
+        $history = [];
+        $flow = $this->flowWithTable([$this->registrationResponse(), $this->exchangeResponse()], $history, [
+            'https://h/.well-known/oauth-protected-resource/mcp' => [
+                'resource' => 'https://h/mcp',
+                'authorization_servers' => ['https://as.example.test/tenant-a'],
+            ],
+            'https://as.example.test/.well-known/oauth-authorization-server/tenant-a' => [
+                'issuer' => 'https://as.example.test/tenant-a',
+                'registration_endpoint' => 'https://as.example.test/tenant-a/register',
+                'token_endpoint' => 'https://as.example.test/tenant-a/token',
+                'authorization_endpoint' => 'https://as.example.test/tenant-a/authorize',
+            ],
+            // A decoy on the resource's own origin: the protected-resource
+            // document is authoritative, so this must never be read.
+            'https://h/.well-known/oauth-authorization-server' => $this->metadataFor('https://decoy.example.test'),
+        ], $asked);
+
+        ob_start();
+        $rc = $flow->login('https://h/mcp', null, null, 5.0, $this->browserReturning('code-prm', $requests));
+        $output = (string) ob_get_clean();
+
+        self::assertSame(0, $rc, $output);
+        self::assertSame('https://as.example.test/tenant-a/register', (string) $history[0]['request']->getUri());
+        self::assertSame([
+            'https://h/.well-known/oauth-protected-resource/mcp',
+            'https://as.example.test/.well-known/oauth-authorization-server/tenant-a',
+        ], $asked);
+        self::assertStringContainsString('https://as.example.test/tenant-a/authorize?', $output, 'the printed URL is the named issuer\'s authorize endpoint');
+
+        $persisted = (new OAuthClientRegistration(new Client(), $this->authFilePath))->loadAuth();
+        self::assertSame('https://as.example.test/tenant-a/register', $persisted['https://h/mcp']->registrationUrl);
+
+        $this->closeAll($requests);
+    }
+
+    public function testARegistrationUrlOverrideFillsTheEndpointDiscoveryLacks(): void
+    {
+        $history = [];
+        $flow = $this->flowWithTable([$this->registrationResponse(), $this->exchangeResponse()], $history, [
+            'https://h/.well-known/oauth-authorization-server' => [
+                'token_endpoint' => self::TOKEN_URL,
+                'authorization_endpoint' => self::AUTHORIZE_URL,
+            ],
+        ], $asked);
+
+        ob_start();
+        $rc = $flow->login('https://h/mcp', null, null, 5.0, $this->browserReturning('code-manual', $requests), registrationUrl: 'https://manual.example.test/register');
+        $output = (string) ob_get_clean();
+
+        self::assertSame(0, $rc, $output);
+        self::assertSame('https://manual.example.test/register', (string) $history[0]['request']->getUri());
+        $persisted = (new OAuthClientRegistration(new Client(), $this->authFilePath))->loadAuth();
+        self::assertSame('https://manual.example.test/register', $persisted['https://h/mcp']->registrationUrl, 'the override is what gets carried for RFC 7592 / refresh');
+
+        $this->closeAll($requests);
+    }
+
+    public function testAMissingRegistrationEndpointNamesTheOverrideInTheRefusal(): void
+    {
+        $history = [];
+        $flow = $this->flowWithTable([], $history, [
+            'https://h/.well-known/oauth-authorization-server' => [
+                'token_endpoint' => self::TOKEN_URL,
+                'authorization_endpoint' => self::AUTHORIZE_URL,
+            ],
+        ], $asked);
+
+        ob_start();
+        $rc = $flow->login('https://h/mcp', null, null, 5.0);
+        $output = (string) ob_get_clean();
+
+        self::assertSame(1, $rc);
+        self::assertStringContainsString('could not be discovered', $output);
+        self::assertStringContainsString('[registration-url]', $output, 'the refusal names the operand that fixes it');
+        self::assertSame([], $history);
+    }
+
+    public function testAllThreeOverridesSkipDiscoveryEntirely(): void
+    {
+        $history = [];
+        $flow = $this->flowWithTable([$this->registrationResponse(), $this->exchangeResponse()], $history, [], $asked);
+
+        ob_start();
+        $rc = $flow->login('https://h/mcp', self::TOKEN_URL, self::AUTHORIZE_URL, 5.0, $this->browserReturning('code-all', $requests), registrationUrl: self::REGISTRATION_URL);
+        $output = (string) ob_get_clean();
+
+        self::assertSame(0, $rc, $output);
+        self::assertSame([], $asked, 'nothing to discover — no metadata request is made');
+
+        $this->closeAll($requests);
+    }
+
+    // =========================================================================
     // Harness
     // =========================================================================
+
+    /**
+     * A discovery stub that answers ONLY the URLs in $table and throws for the
+     * rest — the shape a real server has (404/401 elsewhere) — recording every
+     * URL asked, in order.
+     *
+     * @param list<Response>                       $responses
+     * @param list<array<string, mixed>>           $history
+     * @param array<string, array<string, mixed>>  $table
+     * @param list<string>|null                    $asked
+     */
+    private function flowWithTable(array $responses, array &$history, array $table, ?array &$asked): OAuthLoopbackFlow
+    {
+        $asked = [];
+        $mock = new MockHandler($responses);
+        $stack = HandlerStack::create($mock);
+        $stack->push(Middleware::history($history));
+        $store = new McpAuthStore(new OAuthClientRegistration(new Client(['handler' => $stack]), $this->authFilePath));
+
+        return new OAuthLoopbackFlow(
+            $store->oauth(),
+            static function (string $url) use ($table, &$asked): array {
+                $asked[] = $url;
+                if (!isset($table[$url])) {
+                    throw new \RuntimeException("HTTP 401 from {$url}");
+                }
+
+                return $table[$url];
+            },
+        );
+    }
+
+    /**
+     * Metadata whose endpoints are the class constants, tagged by issuer so a
+     * decoy document is distinguishable.
+     *
+     * @return array<string, string>
+     */
+    private function metadataFor(string $issuer): array
+    {
+        return [
+            'issuer' => $issuer,
+            'registration_endpoint' => self::REGISTRATION_URL,
+            'token_endpoint' => self::TOKEN_URL,
+            'authorization_endpoint' => self::AUTHORIZE_URL,
+        ];
+    }
 
     /**
      * @param list<Response>                    $responses

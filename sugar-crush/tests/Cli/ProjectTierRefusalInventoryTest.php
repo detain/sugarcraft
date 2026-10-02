@@ -325,14 +325,14 @@ final class ProjectTierRefusalInventoryTest extends TestCase
 
         // Neither: not a tier this collector is about.
         'Agents/WorktreeConfig.php|.sugar-crush/worktrees' => self::NOT_A_TIER,
-        'Commands/McpAuthCommand.php|.well-known/oauth-authorization-server' => self::NOT_A_TIER,
-        // The SAME wire path in its SECOND file: E701's loopback flow does the
-        // RFC 8414 discovery fetch itself, so the literal moved into
-        // `MCP/OAuthLoopbackFlow.php` beside the command that already carried it.
-        // Still not a tier — it is a URL path segment on the issuer's origin,
-        // never joined to a filesystem root, which is the rule the row above it
-        // already states.
-        'MCP/OAuthLoopbackFlow.php|.well-known/oauth-authorization-server' => self::NOT_A_TIER,
+        // OAuth discovery's wire paths. They used to sit in TWO files — the
+        // `mcp auth add` command and E701's loopback flow each built the URL —
+        // and audit MCP-6 collapsed both into the one helper they now share,
+        // adding the RFC 9728 protected-resource suffix beside the RFC 8414
+        // one. Not a tier: each is a URL path segment on an HTTP origin, never
+        // joined to a filesystem root.
+        'MCP/OAuthDiscovery.php|.well-known/oauth-authorization-server' => self::NOT_A_TIER,
+        'MCP/OAuthDiscovery.php|.well-known/oauth-protected-resource' => self::NOT_A_TIER,
         'Tools/IgnoreRules.php|.git/info' => self::NOT_A_TIER,
     ];
 
@@ -360,7 +360,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
      * APPEARS IN. On this tree that is FORTY-ONE occurrences — one per entry
-     * in {@see DOT_PATHS} — of TWENTY-SEVEN distinct paths. NINETEEN of those
+     * in {@see DOT_PATHS} — of TWENTY-EIGHT distinct paths. NINETEEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
      * they are FIFTEEN distinct paths — which is the figure
@@ -531,7 +531,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             $distinct[$path] = true;
         }
 
-        self::assertCount(27, $distinct, 'distinct dot-DIRECTORY paths in src/');
+        self::assertCount(28, $distinct, 'distinct dot-DIRECTORY paths in src/');
         self::assertCount(15, $this->repositoryChosenPaths(), 'of which repository-chosen');
 
         $enumeration = $this->docBlockAbove(
@@ -540,7 +540,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         );
 
         self::assertStringContainsString('FIFTEEN repository-chosen', $enumeration);
-        self::assertStringContainsString('TWENTY-SEVEN distinct', $enumeration);
+        self::assertStringContainsString('TWENTY-EIGHT distinct', $enumeration);
 
         // AND THIS FILE'S OWN DOC-BLOCK, which is where all four figures went
         // stale unnoticed — the assertions above only ever read `Bootstrap`'s.
@@ -551,7 +551,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             36 => 'THIRTY-SIX', 37 => 'THIRTY-SEVEN', 38 => 'THIRTY-EIGHT',
             39 => 'THIRTY-NINE', 40 => 'FORTY', 41 => 'FORTY-ONE'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
-            24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN'];
+            24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
+            28 => 'TWENTY-EIGHT'];
         $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN',
             16 => 'SIXTEEN', 17 => 'SEVENTEEN', 18 => 'EIGHTEEN', 19 => 'NINETEEN'];
 

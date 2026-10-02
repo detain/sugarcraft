@@ -479,16 +479,26 @@ In chat, `mcp login` only prints the command — the interactive flow needs the
 terminal for itself, and the TUI owns this one. From a plain shell:
 
 ```
-sugarcrush mcp auth login <server> [token-url] [authorize-url] [-- --timeout N]
+sugarcrush mcp auth login <server> [token-url] [authorize-url] [registration-url] [-- --timeout N]
 ```
 
 It is the OAuth 2.0 authorization-code flow with PKCE, `S256` only. Step by
-step: it fetches the server's `/.well-known/oauth-authorization-server` document
-(RFC 8414) and reads `registration_endpoint`
-(a server without dynamic registration cannot be used with this command —
-`mcp auth add` stays the door for those), `token_endpoint` and
-`authorization_endpoint`; positional overrides fill in any endpoint the
-document omits. It binds an ephemeral loopback listener on `127.0.0.1` only
+step: it discovers the authorization server's metadata and reads
+`registration_endpoint` (a server without dynamic registration cannot be used
+with this command — `mcp auth add` stays the door for those), `token_endpoint`
+and `authorization_endpoint`; the positional overrides fill in or replace any
+of the three, and with all three given nothing is fetched. Discovery inserts
+the well-known segment between the origin and the server's path, never after
+it: for `https://h/mcp` it first asks for RFC 9728 protected-resource metadata
+(`https://h/.well-known/oauth-protected-resource/mcp`, then
+`https://h/.well-known/oauth-protected-resource`) and, if that names an
+authorization server, that issuer's RFC 8414 document; otherwise it asks for
+`https://h/.well-known/oauth-authorization-server/mcp`, then
+`https://h/.well-known/oauth-authorization-server`. The first JSON object that
+carries an endpoint wins; an error status or an error body counts as "not
+here", so the next form is tried. `mcp auth add` discovers through the same
+order. Credentials are still stored under the server URL exactly as you passed
+it, which is what the bearer match needs. It binds an ephemeral loopback listener on `127.0.0.1` only
 (never a wildcard interface), registers the client with that exact
 `http://127.0.0.1:<port>/callback` redirect URI, prints the authorization URL
 — which carries only public values: the client id, the state, and the SHA-256

@@ -717,7 +717,7 @@ final class Subcommands
     }
 
     /**
-     * `sugarcrush mcp auth login <server> [token-url] [authorize-url] [-- --timeout N]`
+     * `sugarcrush mcp auth login <server> [token-url] [authorize-url] [registration-url] [-- --timeout N]`
      * — E701's interactive authorization-code + PKCE login.
      *
      * INTERACTIVE BY DESIGN, and the JSON door says so rather than half-
@@ -746,7 +746,7 @@ final class Subcommands
                     ? 'sugarcrush: mcp auth: no action given'
                     : \sprintf('sugarcrush: mcp auth %s: unknown action', $action),
                 $args->outputFormat,
-                'Usage: sugarcrush mcp auth login <server> [token-url] [authorize-url] [-- --timeout N]',
+                'Usage: sugarcrush mcp auth login <server> [token-url] [authorize-url] [registration-url] [-- --timeout N]',
             );
         }
 
@@ -772,7 +772,7 @@ final class Subcommands
                 return NonInteractive::failUsage(
                     'sugarcrush: mcp auth login: --timeout needs a positive number of seconds',
                     $args->outputFormat,
-                    'Usage: sugarcrush mcp auth login <server> [token-url] [authorize-url] [-- --timeout N]',
+                    'Usage: sugarcrush mcp auth login <server> [token-url] [authorize-url] [registration-url] [-- --timeout N]',
                 );
             }
             $timeout = (float) $value;
@@ -784,7 +784,7 @@ final class Subcommands
             return NonInteractive::failUsage(
                 'sugarcrush: mcp auth login: no server URL given',
                 $args->outputFormat,
-                'Usage: sugarcrush mcp auth login <server> [token-url] [authorize-url] [-- --timeout N]',
+                'Usage: sugarcrush mcp auth login <server> [token-url] [authorize-url] [registration-url] [-- --timeout N]',
             );
         }
 
@@ -795,7 +795,13 @@ final class Subcommands
             \SugarCraft\Crush\MCP\McpAuthStore::create()->oauth(),
         );
 
-        return $flow->login($serverUrl, $operands[1] ?? null, $operands[2] ?? null, $timeout);
+        return $flow->login(
+            $serverUrl,
+            $operands[1] ?? null,
+            $operands[2] ?? null,
+            $timeout,
+            registrationUrl: $operands[3] ?? null,
+        );
     }
 
     /**
