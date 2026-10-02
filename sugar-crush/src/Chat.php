@@ -1138,7 +1138,8 @@ final class Chat implements Model
          * by the intra-exchange truncation or simply never blocked — is progress
          * rather than futility, and holds the run exactly as it stands
          * (ruling P8.S5-R6).
-         * {@see handleClearCommand()} resets it beside the transcript, and a
+         * {@see handleClearCommand()} resets it beside the transcript, as does
+         * every session change ({@see sessionChangeResets()}), and a
          * manual `/compact` never reads or writes it at all: the user chose that
          * one, so the breaker guards only the tier that acts on its own.
          */
@@ -1629,24 +1630,56 @@ final class Chat implements Model
      * transcripts now saved on change it would also have written that
      * conversation over the resumed session's own.
      *
-     * Everything tied to the transcript being replaced is released with it:
-     * an outstanding `/compact` summary, the scroll position, and any queued
-     * prompts typed for the old conversation.
+     * Everything tied to the transcript being replaced is released with it -
+     * see {@see sessionChangeResets()} for the list and the reason for each.
      */
     private function switchToSession(string $sessionId, ?string $name): self
     {
         $history = self::loadTranscript($this->sessionStore, $sessionId);
 
         return $this->mutate([
+            ...$this->sessionChangeResets(),
             'currentSessionId' => $sessionId,
             'currentSessionName' => $name,
             'history' => [...$history, Message::system(
                 '_Resumed session ' . ($name ?? $sessionId) . '._',
             )],
+        ]);
+    }
+
+    /**
+     * The state that belongs to the conversation being LEFT, reset whenever a
+     * different session is put in front of the user: {@see switchToSession()}
+     * (picker Enter, tab click, Ctrl+Tab) and the palette's New session
+     * ({@see handlePaletteNewSession()}). Shared so the two routes cannot drift
+     * apart again - the breaker reset was once present on `/clear` alone
+     * (audit 15b-06).
+     *
+     * - `pendingCompactionId`: a `/compact` issued against the old transcript
+     *   must not rewrite the new one when its summary lands.
+     * - `queuedPrompts`: typed for the old conversation, not this one.
+     * - `scrollOffset`: indexes into the transcript that went away.
+     * - `consecutiveRefillCompactions`: the thrash breaker counts refills of ONE
+     *   context - the same reason {@see handleClearCommand()} resets it. Carried
+     *   across, a tripped run in session A refused the first prompt of session B
+     *   through {@see thrashBreakerRefusal()} before B had compacted once.
+     * - `lastActivityAt`: when the user last prompted the OLD session. Read
+     *   against the new session's size it would judge B idle (or active) on A's
+     *   clock; null is "idleness unknown", which {@see IdleCompactionPolicy}
+     *   never prompts on - the same state a fresh launch or `--continue` starts
+     *   in. The next real prompt stamps it again.
+     *
+     * @return array<string, mixed>
+     */
+    private function sessionChangeResets(): array
+    {
+        return [
             'pendingCompactionId' => null,
             'queuedPrompts' => [],
             'scrollOffset' => 0,
-        ]);
+            'consecutiveRefillCompactions' => 0,
+            'lastActivityAt' => null,
+        ];
     }
 
     /**
@@ -14540,18 +14573,15 @@ final class Chat implements Model
         $this->sessionStore->createSession($sessionId, 'sugarcrush', 'unknown');
 
         return [$this->mutate([
+            // The pending `/compact`, queued prompts, scroll position, thrash
+            // breaker and activity stamp all belong to the session being left.
+            ...$this->sessionChangeResets(),
             // A new session starts from an empty transcript. Carrying the old
             // one across would send it to the model under the new id and, now
             // that transcripts are saved on change, store it there as well.
             'history' => [Message::assistant("New session created: {$sessionId}")],
             'currentSessionId' => $sessionId,
             'currentSessionName' => null,
-            'queuedPrompts' => [],
-            'scrollOffset' => 0,
-            // Released for the same reason `/clear` and `/rewind` release it: a
-            // `/compact` issued against the OLD session's transcript must not
-            // rewrite whatever is in front of the user under a new session id.
-            'pendingCompactionId' => null,
         ]), null];
     }
 
