@@ -8537,6 +8537,141 @@ final class Chat implements Model
     }
 
     /**
+     * Run a command line on the user's behalf — a menu-bar row, Ctrl+N,
+     * the shell's provider picker — WITHOUT touching the draft (audit 15b-05).
+     *
+     * WHY THIS EXISTS. The shell used to run these by feeding synthetic
+     * keystrokes into {@see update()}: Backspace/Delete until the box was
+     * empty, then `/name`, then Enter. The draft was therefore destroyed
+     * BEFORE anything decided whether the command could run, so mid-turn the
+     * user lost their half-written follow-up and was then told by
+     * {@see refuseInFlightCommand()} that "your draft is still in the box" —
+     * the box held `/model`, not anything they wrote. Idle, the command ran
+     * and the draft was silently gone. The keystrokes also went wherever
+     * {@see update()} routes keys first, so with an overlay or the permission
+     * prompt up they landed there instead of in the draft.
+     *
+     * SAME DOOR AS A TYPED COMMAND, MINUS THE DRAFT. Idle, the line is seeded
+     * into `inputBuf` and {@see submit()} runs unchanged — the
+     * {@see releaseQueuedPrompts()} technique — so the file-based override,
+     * every {@see dispatchCommand()} arm, and (for a line that turns out to be
+     * a prompt, e.g. a project command file) the spend cap, compaction tiers
+     * and turn hooks all apply exactly as when it is typed. The draft widget
+     * (text AND cursor) and the slash-popup highlight are put back afterwards.
+     *
+     * Three deliberate differences from Enter on a typed line:
+     *  - MID-TURN IT IS REFUSED BEFORE ANYTHING IS TOUCHED, with a notice that
+     *    says the draft was left alone — the typed refusal's "press Enter
+     *    again" would run the user's own draft, not this command. Bare
+     *    `/exit`/`/quit` still quit, as in submit().
+     *  - IT IS NOT RECORDED FOR ↑ RECALL ({@see recordInputHistory()}): recall
+     *    gives back what the user wrote, and a menu pick is not that.
+     *  - OVERLAYS ARE CLOSED FIRST (palette, session picker, key reference):
+     *    submit() is only ever reached from {@see update()} below all three
+     *    arms, so its handlers assume none is up; the command may open its own
+     *    (bare `/model` opens the provider list).
+     *
+     * WHEN THE COMMAND WRITES THE BOX ITSELF (`/rewind` puts the rewound
+     * prompt back), a non-blank user draft still wins: that prompt is in ↑
+     * recall, the unsent draft is nowhere else. A blank draft takes what the
+     * command left — what typing it would have shown — except the command's
+     * own line, which only a refusal leaves behind.
+     *
+     * Not a prompt door: a line that is not a command is rejected rather than
+     * sent to the model, because no caller of this means to send prose.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    public function runCommand(string $commandText): array
+    {
+        $text = trim($commandText);
+        if (!str_starts_with($text, '/') && !self::isBareMcpAuthCommand($text)) {
+            throw new \InvalidArgumentException(sprintf(
+                'runCommand() takes a command line (a leading "/", or "mcp auth ..."); got "%s".',
+                self::quoteDraftForNotice($text),
+            ));
+        }
+
+        if ($this->inFlight) {
+            if ($text === '/exit' || $text === '/quit') {
+                return [$this, Cmd::quit()];
+            }
+
+            return [$this->mutate([
+                'history' => [...$this->history, Message::notice(sprintf(
+                    '%s was not run: commands do not run while a turn is in flight — it would rewrite '
+                    . 'history this turn is about to append to. Your draft was not touched. Run it again '
+                    . 'once the turn finishes, or Esc Esc to cancel the turn now.',
+                    self::quoteDraftForNotice($text),
+                ))],
+            ]), null];
+        }
+
+        $draft = $this->input;
+        $draftBlank = trim($this->inputBuf) === '';
+
+        [$after, $cmd] = $this->mutate([
+            'palette' => null,
+            'sessionPicker' => null,
+            'keyHelp' => null,
+        ])->withInputBuf($text)->submit();
+
+        $left = trim($after->inputBuf);
+        if ($draftBlank && $left !== '' && $left !== $text) {
+            return [$after, $cmd];
+        }
+
+        return [$after->mutate([
+            'input' => $draft,
+            'slashMenuIndex' => $this->slashMenuIndex,
+        ]), $cmd];
+    }
+
+    /**
+     * Run a palette-only action (a {@see CommandRegistry} row flagged
+     * `slashVisible: false`, e.g. "New session") on the user's behalf, by its
+     * palette label — the {@see runCommand()} twin for rows {@see submit()}
+     * has no arm for.
+     *
+     * The shell used to open the palette with Ctrl+P and type the label into
+     * its filter. That never touched the draft while the palette was closed,
+     * but an ALREADY-open palette toggled shut on that Ctrl+P, so the label
+     * was typed into the draft and Enter sent it to the model as a prompt;
+     * with the session picker or key reference up the keys went there
+     * instead. This dispatches the action directly, from a fresh root palette
+     * so the handlers see the state Enter on that row would (MRU recorded,
+     * palette closed by the handler), and leaves the draft alone.
+     *
+     * Mid-turn it is refused exactly as Enter on that palette row is
+     * ({@see runSelectedPaletteActionWhileInFlight()}): Exit quits, anything
+     * else gets {@see refuseInFlightAction()}'s notice, which closes the
+     * palette and claims nothing about the draft.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    public function runPaletteAction(string $label): array
+    {
+        $action = PaletteAction::byLabel($label);
+        if ($action === null) {
+            throw new \InvalidArgumentException(sprintf('No palette action is labelled "%s".', $label));
+        }
+
+        $opened = $this->mutate([
+            'palette' => PaletteState::root(),
+            'sessionPicker' => null,
+            'keyHelp' => null,
+        ]);
+
+        if ($this->inFlight) {
+            return $action === PaletteAction::Exit
+                ? [$opened->mutate(['palette' => null]), Cmd::quit()]
+                : $opened->refuseInFlightAction($label);
+        }
+
+        return $opened->rememberPaletteUse($label)->runRootPaletteAction($label);
+    }
+
+    /**
      * Refuse, VISIBLY, an OVERLAY action chosen while a turn is running — a
      * Ctrl+P palette row or the session picker's `resume`.
      *
@@ -14611,8 +14746,8 @@ final class Chat implements Model
      * the start of the whole draft (newlines counted as one character each).
      *
      * Flat rather than (row, column) because every caller — Ctrl+W's word
-     * boundary, {@see Renderer::renderInput()}'s cursor glyph,
-     * {@see App\App::clearInputKeys()}'s synthetic clear — reasons about the
+     * boundary, {@see Renderer::renderInput()}'s cursor glyph, the
+     * {@see dispatchTurn()} draft capture `/rewind` restores — reasons about the
      * draft as one string, which is also the shape the checkpoint state map
      * and every slash-command parser see.
      */

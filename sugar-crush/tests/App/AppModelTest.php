@@ -887,52 +887,51 @@ final class AppModelTest extends TestCase
     }
 
     /**
-     * A menu command must not be appended to a half-typed draft: the shell
-     * backspaces the buffer empty before typing the command.
+     * A menu command must not be appended to a half-typed draft — and, since
+     * audit 15b-05, must not ERASE it either. This used to pin the erasure:
+     * the shell backspaced the buffer empty before typing the command, which
+     * kept the draft out of the command at the price of destroying it. The
+     * command now runs through Chat::runCommand(), which never touches the
+     * draft; MenuCommandDraftPreservationTest covers the mid-turn half.
      */
-    public function testDispatchingACommandClearsTheChatsDraftFirst(): void
+    public function testDispatchingACommandNeitherAppendsToNorErasesTheChatsDraft(): void
     {
         $app = $this->app()->withChat(new Chat([], 'half written'));
 
         [$next] = $app->consumeShellCmd(new MenuSelectedMsg('Session', 'Switch session'));
 
         $this->assertNotNull($next->chat);
-        $this->assertSame('', $next->chat->inputBuf);
+        $this->assertSame('half written', $next->chat->inputBuf, 'the draft is kept');
         $this->assertSame(
             '/sessions',
             $this->lastUserMessage($next->chat),
-            'the draft has to be GONE, not merely followed by the command',
+            'and the command ran as itself, not glued onto the draft',
         );
     }
 
     /**
      * The same, with the cursor parked in the middle of the draft.
      *
-     * `clearInputKeys()` used to be `mb_strlen($inputBuf)` backspaces, which
-     * was exactly right while the draft was an append-only string with no
-     * cursor. Once the draft became a `candy-forms` TextArea
-     * ({@see Chat::$input}), backspaces delete BEHIND the cursor, so this
-     * draft kept its whole tail and the menu command was typed into the gap —
-     * "half /sessionswritten". Half the clear is Deletes now, and only a
-     * cursor that is not at the end can tell the two forms apart.
+     * This used to pin the second half of the old synthetic clear: once the
+     * draft became a `candy-forms` TextArea ({@see Chat::$input}), backspaces
+     * deleted only BEHIND the cursor, so the tail survived and the command was
+     * typed into the gap — "half /sessionswritten". With no keystrokes typed
+     * into the draft at all (audit 15b-05) the cursor case is the one that
+     * proves the widget itself was restored, not just its text.
      */
-    public function testDispatchingACommandClearsADraftTheCursorIsSittingInsideOf(): void
+    public function testDispatchingACommandKeepsADraftTheCursorIsSittingInsideOf(): void
     {
         $chat = new Chat([], 'half written');
         foreach (array_fill(0, 8, new KeyMsg(KeyType::Left)) as $key) {
             [$chat] = $chat->update($key);
         }
-        $this->assertSame(
-            4,
-            $chat->inputCursorOffset(),
-            'fixture: eight characters of tail AHEAD of the cursor — which is the half a '
-            . 'backspace-only clear leaves behind',
-        );
+        $this->assertSame(4, $chat->inputCursorOffset(), 'fixture: the cursor sits inside the draft');
 
         [$next] = $this->app()->withChat($chat)->consumeShellCmd(new MenuSelectedMsg('Session', 'Switch session'));
 
         $this->assertNotNull($next->chat);
-        $this->assertSame('', $next->chat->inputBuf);
+        $this->assertSame('half written', $next->chat->inputBuf);
+        $this->assertSame(4, $next->chat->inputCursorOffset(), 'the cursor is where the user left it');
         $this->assertSame('/sessions', $this->lastUserMessage($next->chat));
     }
 

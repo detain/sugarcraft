@@ -1767,8 +1767,17 @@ final class App implements Model
      * `slashVisible`. A row flagged `slashVisible: false` is one that chain
      * has NO branch for (CommandRegistry's own docblock says so): submitting
      * its text would send a prompt to the model instead of running anything.
-     * Those rows carry a palette action, so they are driven through Chat's
-     * Ctrl+P palette, which does dispatch them.
+     * Those rows carry a palette action, so they are dispatched as that
+     * palette action instead.
+     *
+     * THROUGH CHAT'S COMMAND ENTRY POINTS, NOT SYNTHETIC KEYSTROKES (audit
+     * 15b-05). This used to backspace the user's draft empty, type `/name`
+     * and press Enter — so the draft was destroyed before Chat had decided
+     * whether the command could run at all, and mid-turn the refusal then
+     * told the user their draft was "still in the box" when the box held
+     * `/name`. {@see Chat::runCommand()} and {@see Chat::runPaletteAction()}
+     * refuse mid-turn before touching anything and leave the draft — text
+     * and cursor — exactly where it was when the command runs idle.
      *
      * @return array{0: self, 1: ?\Closure}
      */
@@ -1790,56 +1799,11 @@ final class App implements Model
             return [$this->withStatus("No chat is hosted — '{$name}' was not dispatched."), null];
         }
 
-        $keys = $spec->slashVisible
-            ? [...self::clearInputKeys($this->chat), ...self::typeKeys('/' . $spec->name)]
-            : [self::ctrl('p'), ...self::typeKeys($spec->label())];
-        $keys[] = new KeyMsg(KeyType::Enter);
+        [$next, $cmd] = $spec->slashVisible
+            ? $this->chat->runCommand('/' . $spec->name)
+            : $this->chat->runPaletteAction($spec->label());
 
-        return $this->feedChat($keys);
-    }
-
-    /**
-     * Backspaces enough to empty the chat's draft.
-     *
-     * A menu command is typed into the same input buffer the user's draft
-     * lives in, so it has to start from empty or "/compact" appended to a
-     * half-written sentence would be submitted as prose.
-     *
-     * Backspaces alone stopped being enough the moment the draft grew a
-     * cursor ({@see Chat::$input}): they delete BEHIND it, so a draft the
-     * user had arrowed into the middle of kept its whole tail and the menu
-     * command was typed into the gap. The tail is deleted FORWARD instead —
-     * one Delete per character after the cursor, both halves keystrokes the
-     * draft editor really handles rather than a direct buffer write.
-     *
-     * @return list<KeyMsg>
-     */
-    private static function clearInputKeys(Chat $chat): array
-    {
-        $before = $chat->inputCursorOffset();
-        $after = max(0, mb_strlen($chat->inputBuf) - $before);
-
-        return [
-            ...array_fill(0, $before, new KeyMsg(KeyType::Backspace)),
-            ...array_fill(0, $after, new KeyMsg(KeyType::Delete)),
-        ];
-    }
-
-    /**
-     * The keystrokes that type $text one character at a time.
-     *
-     * @return list<KeyMsg>
-     */
-    private static function typeKeys(string $text): array
-    {
-        $keys = [];
-        foreach (preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $char) {
-            $keys[] = $char === ' '
-                ? new KeyMsg(KeyType::Space)
-                : new KeyMsg(KeyType::Char, $char);
-        }
-
-        return $keys;
+        return [$next === $this->chat ? $this : $this->withChat($next), $cmd];
     }
 
     /** A Ctrl+<rune> chord as the live terminal decoder delivers it. */
