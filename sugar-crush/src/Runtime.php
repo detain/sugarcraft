@@ -2057,12 +2057,11 @@ final class Runtime
                     if ($job['settled'] || $job['pid'] === null) {
                         continue;
                     }
-                    $status = 0;
                     // Only ever our own pids, never waitpid(-1): Chat's own tool
                     // children and BackgroundSessionRunner's workers live in this
                     // same process tree and check the pid they get back, so a
                     // blind sweep would steal their exit statuses.
-                    if (pcntl_waitpid($job['pid'], $status, WNOHANG) === $job['pid']) {
+                    if (self::parallelJobHasExited($job['pid'])) {
                         $jobs[$index]['settled'] = true;
                     }
                 }
@@ -2141,8 +2140,7 @@ final class Runtime
             // written for — see ToolIpcFiles' class doc-block.
             for ($i = $next; $i < $total; $i++) {
                 if (!$jobs[$i]['settled'] && $jobs[$i]['pid'] !== null) {
-                    $status = 0;
-                    if (pcntl_waitpid($jobs[$i]['pid'], $status, WNOHANG) === $jobs[$i]['pid']) {
+                    if (self::parallelJobHasExited($jobs[$i]['pid'])) {
                         $jobs[$i]['settled'] = true;
                     }
                 }
@@ -2733,6 +2731,28 @@ final class Runtime
     private static function canFork(): bool
     {
         return function_exists('pcntl_fork') && function_exists('pcntl_waitpid');
+    }
+
+    /**
+     * Whether one parallel job's child is gone, from a single non-blocking
+     * wait on ITS pid (never `waitpid(-1)`; see phase 3).
+     *
+     * -1 counts as gone, not only the pid itself. ECHILD means this process
+     * no longer has a status to collect for that pid: something else already
+     * took it, either the kernel auto-reaping under `SIGCHLD = SIG_IGN` or an
+     * embedder's blanket `pcntl_wait()`. Either way the child has exited, and
+     * its payload file (written before exit) is all that is left to read.
+     * Waiting only for `=== $pid` turned that into an endless poll: the
+     * deadline kill settles a lost job, but it skips
+     * {@see ExemptFromParallelDeadline} jobs, so a group made only of
+     * delegated Tasks never finished (audit C1). 0 is the only "still
+     * running" answer.
+     */
+    private static function parallelJobHasExited(int $pid): bool
+    {
+        $status = 0;
+
+        return pcntl_waitpid($pid, $status, WNOHANG) !== 0;
     }
 
     /**
