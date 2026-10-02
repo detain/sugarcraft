@@ -209,6 +209,64 @@ final class Runtime
     private const STANDING_DEFERRED_NOTE = '... [%d further standing rule(s) deferred: budget; not rendered in this prompt.]';
 
     /**
+     * Audit 15d-09 / C3: the ceiling, in FRAMED post-escape bytes, on ONE
+     * instruction document (a CLAUDE.md or AGENTS.md with every `@import`
+     * inlined, or one forced `instructions:` match) as its
+     * `<project-instructions>` section. Until this existed the docs loop in
+     * {@see self::systemPromptSections()} spliced every document whole while the
+     * rules on either side of it were held to {@see self::MAX_STANDING_RULE_BYTES}:
+     * MEASURED, a 3,080,000-byte AGENTS.md gave a 3,085,377-byte system prompt,
+     * every step, with no notice.
+     *
+     * 64 KiB, the standing-rule figure, so one document may cost what one
+     * max-size rule file may; priced framed and escaped for the reason that
+     * figure is. This monorepo's own root CLAUDE.md, which imports AGENTS.md and
+     * CONTRIBUTING.md, expanded to 32,017 bytes when this was set, so the document
+     * every session here relies on inlines with room to double. The read side
+     * holds each document to {@see \SugarCraft\Crush\Context\InstructionFileLoader::MAX_DOCUMENT_BYTES}
+     * (4 KiB under this, for the fence and preamble) before it is read at all,
+     * so the multi-megabyte case never reaches memory; this ceiling is what
+     * decides, on the bytes the prompt would actually carry. A document over it
+     * is never clipped: it becomes one {@see \SugarCraft\Crush\Context\InstructionFileLoader::pointer()}
+     * line in the deferral fence and a {@see \SugarCraft\Crush\Context\InstructionFileLoader::refusedPaths()}
+     * entry.
+     */
+    private const MAX_INSTRUCTION_DOCUMENT_BYTES = 65_536;
+
+    /**
+     * The combined ceiling, in framed bytes, on every instruction document in
+     * one prompt build — the ancestor files, `$repoRoot`'s CLAUDE.md and
+     * AGENTS.md, and every forced match, spent in loader order. Kept apart from
+     * {@see self::MAX_STANDING_RULE_BYTES} rather than shared with it, so adding
+     * this bound moved no rule out of any prompt it was in.
+     *
+     * TWO documents' worth, 128 KiB: a `--root <lib>` run in a monorepo carries
+     * the ancestor CLAUDE.md as well as the library's own pair, and the ancestor
+     * tier is exactly where the largest document sits, so a single-document
+     * combined budget would make the per-document ceiling meaningless. With the
+     * rule budget beside it, the project-voiced layers of a prompt are bounded at
+     * 192 KiB, about 48k tokens at the four-bytes-per-token figure
+     * {@see \SugarCraft\Crush\Util\TokenEstimate} uses for ASCII — a quarter of a
+     * 200k window in the worst case, against the unbounded megabytes before. The
+     * pointer fence's worst case is reserved out of it up front, as the rule
+     * budget reserves its own ({@see self::instructionDeferReserve()}).
+     */
+    private const MAX_INSTRUCTION_BYTES = 131_072;
+
+    /**
+     * Pointer lines one instruction deferral fence may carry; further deferred
+     * documents are counted in {@see self::INSTRUCTION_DEFERRED_NOTE}, and each
+     * is named in the loader's {@see \SugarCraft\Crush\Context\InstructionFileLoader::refusedPaths()}
+     * whatever the count. Four, not the rule tier's two: documents are few (two
+     * per directory on the root walk) and each one named is a file the model can
+     * still choose to Read.
+     */
+    private const MAX_INSTRUCTION_POINTERS = 4;
+
+    /** The counted-not-dropped tail of the instruction deferral fence. */
+    private const INSTRUCTION_DEFERRED_NOTE = '... [%d further instruction file(s) deferred: budget; not rendered in this prompt.]';
+
+    /**
      * The three ways a tool call can be stopped before it runs, as the prefix
      * each one's reason string opens with (E210, E211).
      *
@@ -3396,35 +3454,87 @@ final class Runtime
         }
 
         if ($app->instructionLoader !== null) {
-            $docs = [
-                ...$app->instructionLoader->loadRoot(),
-                ...$app->instructionLoader->loadForced(),
-            ];
+            $loader = $app->instructionLoader;
 
-            foreach ($docs as $doc) {
-                if (trim($doc) === '') {
+            // Audit 15d-09 / C3: the same budget-and-pointer design as the
+            // standing rules — one running budget per build in loader order, the
+            // pointer fence's worst case reserved up front so a deferred document
+            // can always name itself, and a document that does not fit rendered
+            // as one pointer line rather than clipped. loadDocuments() rather
+            // than loadRoot()/loadForced() because the pointer must NAME the file,
+            // and those two return bare strings.
+            $docRemaining = self::MAX_INSTRUCTION_BYTES - self::instructionDeferReserve();
+            $docDeferred = [];
+            $docOverflow = 0;
+
+            foreach ($loader->loadDocuments() as $document) {
+                $doc = $document['body'];
+
+                if ($doc !== null && trim($doc) === '') {
                     continue;
                 }
 
+                // P5.S3: an instruction document is CONTENT — AGENTS.md
+                // travels with a cloned repository as surely as a commit
+                // subject does. Escape it before wrapping so a checked-in
+                // `</env>` cannot eject the prompt out of a later fence;
+                // the roster-wide rationale is in PromptFence, and this
+                // site carries the fourth production fence, which is
+                // constructed inline and therefore reaches the authority
+                // here rather than through any block's render().
+                // P5.S6: the authority preamble rides inside the fence,
+                // directly under the opener and split from the escaped
+                // body by a blank line — the same header-over-entries
+                // shape MemoryBlock gives its own notes, so the bytes
+                // that tell the model who authored the layer stay put
+                // whatever the document then tries to sound like.
+                $framed = $doc === null ? null : "<project-instructions>\n" . self::INSTRUCTIONS_AUTHORITY_PREAMBLE . "\n\n"
+                    . PromptFence::escape($doc) . "\n</project-instructions>";
+
+                // A null body is a document the loader would not read at all — it
+                // has already recorded why. Otherwise the decision is made here,
+                // on the framed bytes, and recorded on the loader so the refusal
+                // seam is the one place either verdict can be found.
+                if ($framed === null || strlen($framed) > self::MAX_INSTRUCTION_DOCUMENT_BYTES || strlen($framed) > $docRemaining) {
+                    if ($framed !== null) {
+                        $loader->recordDeferral($document['path'], strlen($framed) > self::MAX_INSTRUCTION_DOCUMENT_BYTES
+                            ? 'renders to ' . number_format(strlen($framed)) . ' framed prompt bytes, over the '
+                                . number_format(self::MAX_INSTRUCTION_DOCUMENT_BYTES) . '-byte per-document instruction budget; '
+                                . 'deferred to a pointer line'
+                            : 'renders to ' . number_format(strlen($framed)) . ' framed prompt bytes, more than the '
+                                . number_format(max(0, $docRemaining)) . ' left of the '
+                                . number_format(self::MAX_INSTRUCTION_BYTES) . '-byte combined instruction budget; '
+                                . 'deferred to a pointer line');
+                    }
+
+                    if (count($docDeferred) < self::MAX_INSTRUCTION_POINTERS) {
+                        $docDeferred[] = \SugarCraft\Crush\Context\InstructionFileLoader::pointer($document['path'], $document['bytes']);
+                    } else {
+                        ++$docOverflow;
+                    }
+
+                    continue;
+                }
+
+                $docRemaining -= strlen($framed);
                 $sections[] = $this->section(
                     '<project-instructions>',
                     Stability::PerSession,
-                    // P5.S3: an instruction document is CONTENT — AGENTS.md
-                    // travels with a cloned repository as surely as a commit
-                    // subject does. Escape it before wrapping so a checked-in
-                    // `</env>` cannot eject the prompt out of a later fence;
-                    // the roster-wide rationale is in PromptFence, and this
-                    // site carries the fourth production fence, which is
-                    // constructed inline and therefore reaches the authority
-                    // here rather than through any block's render().
-                    // P5.S6: the authority preamble rides inside the fence,
-                    // directly under the opener and split from the escaped
-                    // body by a blank line — the same header-over-entries
-                    // shape MemoryBlock gives its own notes, so the bytes
-                    // that tell the model who authored the layer stay put
-                    // whatever the document then tries to sound like.
-                    "<project-instructions>\n" . self::INSTRUCTIONS_AUTHORITY_PREAMBLE . "\n\n"
-                    . PromptFence::escape($doc) . "\n</project-instructions>",
+                    $framed,
+                );
+            }
+
+            if ($docDeferred !== []) {
+                $sections[] = $this->section(
+                    '<project-instructions>',
+                    Stability::PerSession,
+                    self::standingDeferFence(
+                        'project-instructions',
+                        self::INSTRUCTIONS_AUTHORITY_PREAMBLE,
+                        $docDeferred,
+                        $docOverflow,
+                        self::INSTRUCTION_DEFERRED_NOTE,
+                    ),
                 );
             }
         }
@@ -3484,9 +3594,41 @@ final class Runtime
         // is scope-selected rather than searched, and for what it costs.
         $sections[] = $this->memorySnapshot($app);
 
+        // Audit 15d-09: enabled skill bodies were spliced whole, while
+        // CompactorConfig has carried a per-skill and a combined skill budget all
+        // along. Those are the figures spent here, in tokens as they are written,
+        // measured with TokenEstimate::ofText() — the estimator Chat's tiers use,
+        // which is ceil(bytes / 4) on ASCII and heavier on CJK and emoji, where a
+        // plain bytes-per-token conversion would admit three to six times the
+        // budget. The defaults are read because the App carries no compactor
+        // config; Chat's own instance is the only other reader of these fields.
+        //
+        // WHY NOT ContextCompactor::filterSkills(), the dormant consumer of the
+        // same two fields: it truncates an over-budget body with an ellipsis and
+        // then drops whole skills least-recently-invoked first, by a
+        // `lastInvokedAt` an enabled skill does not have — so it would hand the
+        // model half a skill's steps as if they were all of them, and silently
+        // lose the first-enabled skill. Both are the outcomes the instruction and
+        // rule budgets above refuse. It is left as it is, unwired, not removed.
+        $skillBudget = \SugarCraft\Crush\Context\CompactorConfig::new();
+        $skillTokensLeft = $skillBudget->skillBudgetCombined;
         $enabledSkillNames = [];
         foreach ($app->enabledSkills as $skill) {
             if ($skill instanceof \SugarCraft\Crush\Skills\Skill) {
+                $contribution = $skill->systemPromptContribution();
+                $tokens = \SugarCraft\Crush\Util\TokenEstimate::ofText($contribution);
+
+                if ($tokens > $skillBudget->skillBudgetPerSkill || $tokens > $skillTokensLeft) {
+                    // Over budget: the body is not delivered and not clipped. Its
+                    // heading stays, so the skill still reads as enabled, and
+                    // the pointer under it says how to get the body; it is kept
+                    // out of the listing below like any enabled skill, because
+                    // the pointer already names it.
+                    $contribution = self::deferredSkillContribution($skill, $tokens, $skillBudget);
+                } else {
+                    $skillTokensLeft -= $tokens;
+                }
+
                 // The leading "\n\n" is load-bearing, not a doubling to strip:
                 // systemPromptContribution() already opens with its own "\n\n",
                 // and the pre-refactor append added a second on top, so a skill
@@ -3496,7 +3638,7 @@ final class Runtime
                 $sections[] = $this->section(
                     '',
                     Stability::PerTurn,
-                    "\n\n" . $skill->systemPromptContribution(),
+                    "\n\n" . $contribution,
                 );
                 $enabledSkillNames[] = $skill->name;
             }
@@ -3596,18 +3738,23 @@ final class Runtime
      * model sees must be spelled by exactly one line of code. Named rather
      * than spelled twice so the two tiers cannot drift apart mid-file.
      *
-     * @param list<string> $pointers lines from {@see RulePathNudge::pointer()}, at
-     *        most {@see self::MAX_STANDING_POINTERS} of them by caller construction.
+     * The instruction-document budget reuses it with its own $note, so a
+     * deferred document and a deferred rule share one fence geometry.
+     *
+     * @param list<string> $pointers lines from {@see RulePathNudge::pointer()} or
+     *        {@see \SugarCraft\Crush\Context\InstructionFileLoader::pointer()}, at most the caller's pointer
+     *        cap of them by caller construction.
      */
     private static function standingDeferFence(
         string $tag,
         string $preamble,
         array $pointers,
         int $overflow,
+        string $note = self::STANDING_DEFERRED_NOTE,
     ): string {
         $lines = $pointers;
         if ($overflow > 0) {
-            $lines[] = sprintf(self::STANDING_DEFERRED_NOTE, $overflow);
+            $lines[] = sprintf($note, $overflow);
         }
 
         return "<$tag>\n" . $preamble . "\n\n" . implode("\n", $lines) . "\n</$tag>";
@@ -3639,6 +3786,47 @@ final class Runtime
             + strlen("\n\n") + $interior + strlen("\n</project-instructions>");
 
         return $userFence + $projectFence;
+    }
+
+    /**
+     * The worst case of the instruction-document deferral fence, reserved out of
+     * {@see self::MAX_INSTRUCTION_BYTES} before the first document is priced —
+     * {@see self::standingDeferReserve()}'s argument and arithmetic for the one
+     * fence this budget can emit, so whole documents plus their pointer fence can
+     * never exceed the combined ceiling.
+     */
+    private static function instructionDeferReserve(): int
+    {
+        $interior = self::MAX_INSTRUCTION_POINTERS * \SugarCraft\Crush\Context\InstructionFileLoader::maxPointerBytes()
+            + (self::MAX_INSTRUCTION_POINTERS - 1)
+            + 1
+            + strlen(sprintf(self::INSTRUCTION_DEFERRED_NOTE, PHP_INT_MAX));
+
+        return strlen("<project-instructions>\n") + strlen(self::INSTRUCTIONS_AUTHORITY_PREAMBLE)
+            + strlen("\n\n") + $interior + strlen("\n</project-instructions>");
+    }
+
+    /**
+     * What an enabled skill contributes when its body is over the skill budget:
+     * the same `## Skill:` heading, and one line saying the body was deferred,
+     * roughly how large it is, and how to load it — the Skill tool by name, or
+     * Read on its file when it has one. The path is escaped for the reason every
+     * repository-chosen byte is.
+     */
+    private static function deferredSkillContribution(
+        \SugarCraft\Crush\Skills\Skill $skill,
+        int $tokens,
+        \SugarCraft\Crush\Context\CompactorConfig $budget,
+    ): string {
+        $line = 'Skill body deferred: budget (about ' . number_format($tokens) . ' tokens; the skill budget is '
+            . number_format($budget->skillBudgetPerSkill) . ' per skill and '
+            . number_format($budget->skillBudgetCombined) . ' combined; not in this prompt). '
+            . 'Load it with the Skill tool';
+        if ($skill->sourcePath !== '') {
+            $line .= ', or Read ' . PromptFence::escape($skill->sourcePath);
+        }
+
+        return "\n\n## Skill: " . \SugarCraft\Crush\Skills\SkillPromptLine::field($skill->name) . "\n\n" . $line . '.';
     }
 
     /**

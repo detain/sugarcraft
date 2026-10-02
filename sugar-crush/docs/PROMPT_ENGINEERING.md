@@ -27,15 +27,27 @@ volatile `<env>` block last. Counted from the live method, there are eleven slot
    repository facts.
 5. **User-tier rules** — each enabled rule from `RuleLoader::load()` whose tier is `user` gets its
    own fence, `user-rules`, with the operator-authority preamble.
-6. **Instruction documents** — `InstructionFileLoader::loadRoot()` then `loadForced()`, each
-   non-blank document its own `project-instructions` fence with the project-authority preamble.
+6. **Instruction documents** — `InstructionFileLoader::loadRoot()` then `loadForced()` (read
+   through their path-keyed sibling `loadDocuments()`), each non-blank document its own
+   `project-instructions` fence with the project-authority preamble. Budgeted like the rules
+   (audit 15d-09, C3): each document's framed, post-escape section is held to
+   `Runtime::MAX_INSTRUCTION_DOCUMENT_BYTES` and all of them together to
+   `Runtime::MAX_INSTRUCTION_BYTES`, and the loader does not read a file over
+   `InstructionFileLoader::MAX_DOCUMENT_BYTES` at all. A document that does not fit is never
+   clipped: it becomes one `InstructionFileLoader::pointer()` line, naming the file and its size,
+   in a deferral fence, and a `refusedPaths()` entry. An `@import` that would carry its document
+   past that ceiling is replaced at its import site by an `import-deferred` note carrying the same
+   pointer line.
 7. **Project-tier rules** — the same `project-instructions` fence and preamble as the documents,
    because the authorship claim is identical: bytes shipped inside the checkout.
 8. **Memory** (`MemoryBlock`) — fenced `project-memory`; the scope-selected standing notes,
    memoized per session like the repo map.
 9. **Enabled skill bodies** — every skill in `$app->enabledSkills` contributes its full
    `Skill::systemPromptContribution()` as a PerTurn section, name and body through
-   `PromptFence::escape()`.
+   `PromptFence::escape()`. Held to `CompactorConfig`'s `skillBudgetPerSkill` and
+   `skillBudgetCombined` tokens, measured with `TokenEstimate::ofText()`: a body over either keeps
+   its `## Skill:` heading and is replaced by one line saying how to load it (the Skill tool, or
+   Read on its file), never clipped.
 10. **Skill listing** — `SkillMatcher::listForPrompt()` names the remaining *discovered* skills at
     level-1 metadata (name and description), excluding those whose bodies the previous slot
     already carries. PerTurn. Fenced `available-skills` with the skill-listing preamble, because

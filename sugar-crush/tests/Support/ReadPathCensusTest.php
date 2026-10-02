@@ -244,17 +244,18 @@ final class ReadPathCensusTest extends TestCase
             'CALLER_SUPPLIED — an `@file` import, judged by the $boundaryCheck callback the caller '
                 . 'supplies (InstructionFileLoader passes one built on ContainedPath)',
         ],
+        // One sink since audit 15d-09 / C3 moved the four document reads into
+        // readBounded(), the size-bounded read; the four read DECISIONS are
+        // unchanged and each still compares its path before calling it.
         'Context/InstructionFileLoader.php|file_get_contents' => [
-            'CONTAINED — the root instruction file, one compare per read decision',
-            'CONTAINED — an ancestor (monorepo-parent) instruction file, compared against '
-                . 'InstructionFileLoader::ancestorRoot() rather than against $repoRoot: the file is '
-                . 'by construction outside $repoRoot, so that boundary would refuse every one of '
-                . 'them. The verdict word is still CONTAINED because the read is still gated by a '
-                . 'ContainedPath compare — what differs is WHICH boundary, and the boundary it uses '
-                . 'is established by a positive `.git` marker found above $repoRoot, never by a '
+            'CONTAINED — readBounded(), the one size-bounded read behind all four instruction-document '
+                . 'read decisions, each of which compares its path with ContainedPath BEFORE calling it: '
+                . 'the root instruction file and a walked-to one against $repoRoot, a configured '
+                . '`instructions:` glob match against $repoRoot, and an ancestor (monorepo-parent) file '
+                . 'against InstructionFileLoader::ancestorRoot() rather than $repoRoot — by construction '
+                . 'outside $repoRoot, so that boundary would refuse every one of them; the boundary it '
+                . 'uses is established by a positive `.git` marker found above $repoRoot, never by a '
                 . 'walk to `/`',
-            'CONTAINED — a walked-to instruction file',
-            'CONTAINED — a configured `instructions:` glob match',
         ],
         // Three sinks and THREE gates, which is the correction. This row set
         // shipped saying only one of the three followed a path the repository

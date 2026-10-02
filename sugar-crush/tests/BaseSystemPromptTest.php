@@ -1883,6 +1883,52 @@ final class BaseSystemPromptTest extends TestCase
     }
 
     /**
+     * Audit 15d-09: an AGENTS.md far over the instruction budget is neither
+     * inlined nor clipped. Its fence carries one pointer line naming the file
+     * and its size, the CLAUDE.md beside it still renders byte-intact under its
+     * preamble, and the loader records the refusal. Before the fix a
+     * 3,080,000-byte AGENTS.md went whole into the prompt and refusedPaths()
+     * stayed empty.
+     */
+    public function testAnOversizedInstructionDocumentIsDeferredNotInlined(): void
+    {
+        $preamble = (new \ReflectionClass(Runtime::class))->getConstant('INSTRUCTIONS_AUTHORITY_PREAMBLE');
+        self::assertIsString($preamble);
+
+        $claude = "# Fixture instructions\n\nWork only inside this repository.\n";
+        $agents = "# Generated AGENTS.md OVERSIZECANARY\n\n" . str_repeat("Generated reference line.\n", 120_000);
+
+        $fixture = new PromptFixture();
+
+        try {
+            $fixture->write('CLAUDE.md', $claude);
+            $fixture->write('AGENTS.md', $agents);
+            $path = $fixture->root() . '/AGENTS.md';
+            $app = $fixture->app();
+            $prompt = $fixture->systemPrompt($app);
+
+            self::assertStringNotContainsString('OVERSIZECANARY', $prompt, 'the oversized document must not be inlined');
+            self::assertStringNotContainsString('Generated reference line.', $prompt, 'nor any clipped part of it');
+            self::assertLessThan(strlen($agents), strlen($prompt), 'the prompt is no longer the size of the document');
+            self::assertStringContainsString(
+                "<project-instructions>\n" . $preamble . "\n\n" . $claude . "\n</project-instructions>",
+                $prompt,
+                'the in-budget document beside it renders exactly as before',
+            );
+            self::assertStringContainsString(
+                "<project-instructions>\n" . $preamble . "\n\n"
+                    . 'Instruction file deferred: budget (' . number_format(strlen($agents)) . ' bytes; not in this prompt). Read ' . $path
+                    . "\n</project-instructions>",
+                $prompt,
+                'one pointer line, naming the file and its size, inside the deferral fence',
+            );
+            self::assertArrayHasKey($path, $app->instructionLoader?->refusedPaths() ?? [], 'the deferral is recorded, not silent');
+        } finally {
+            $fixture->destroy();
+        }
+    }
+
+    /**
      * The exact fixture context the golden is generated from.
      *
      * Shared by the golden test and the regeneration procedure (a /tmp script

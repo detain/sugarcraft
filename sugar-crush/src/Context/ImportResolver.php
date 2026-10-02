@@ -11,6 +11,8 @@ namespace SugarCraft\Crush\Context;
  * Imports are depth-capped at MAX_DEPTH to prevent infinite recursion.
  * Skips @-references inside fenced and inline code spans (backtick-delimited).
  * Returns the original string unchanged when a referenced file is not found.
+ * A referenced file over {@see MAX_IMPORT_BYTES} is not read; its reference is
+ * replaced by a {@see deferredImport()} pointer instead.
  *
  * Mirrors opencode's import resolution behaviour.
  */
@@ -19,11 +21,50 @@ final class ImportResolver
     private const MAX_DEPTH = 4;
 
     /**
+     * The most bytes ONE imported file may be read at (audit 15d-09, C3).
+     *
+     * An `@import` was read with an unbounded `file_get_contents()` and spliced
+     * whole into its parent document, so `@CHANGELOG.md` in a CLAUDE.md put the
+     * whole changelog into every request. The figure is
+     * {@see InstructionFileLoader::MAX_DOCUMENT_BYTES}, deliberately: an import
+     * lands INSIDE a document, so a file the document ceiling would refuse on its
+     * own can never be admitted by arriving through an import instead. A file over
+     * it is not read at all (its size is a `filesize()` stat) and the reference is
+     * replaced by {@see deferredImport()} at its own site.
+     *
+     * This is the floor every caller gets, gate or no gate. The loader's gate is
+     * stricter — it prices each import against what is LEFT of its document's
+     * ceiling — so with the loader in front this check only fires on a file that
+     * grew between the gate's stat and this read.
+     */
+    public const MAX_IMPORT_BYTES = InstructionFileLoader::MAX_DOCUMENT_BYTES;
+
+    /**
      * Factory creating an ImportResolver with default settings.
      */
     public static function new(): self
     {
         return new self();
+    }
+
+    /**
+     * The inline replacement for an `@import` that is not inlined for budget.
+     *
+     * Tagged like its two siblings (`import-blocked`, `import-skipped`) so the
+     * model can tell a deferred import from text the author wrote, and carrying
+     * {@see InstructionFileLoader::pointer()} as its body so a deferred import
+     * and a deferred whole document are announced in ONE spelling — the line the
+     * model is told to act on cannot drift between the two sites.
+     *
+     * @param string $pathFragment the reference as the author wrote it
+     * @param string $path         the resolved file, which is what the pointer
+     *                             names because it is what Read can open
+     * @param int    $bytes        the file's size on disk
+     */
+    public static function deferredImport(string $pathFragment, string $path, int $bytes): string
+    {
+        return "<import-deferred reason=\"budget\">Import '" . $pathFragment . "' was not inlined. "
+            . InstructionFileLoader::pointer($path, $bytes) . '</import-deferred>';
     }
 
     /**
@@ -128,9 +169,29 @@ final class ImportResolver
                     }
                 }
 
-                $imported = file_get_contents($resolved);
+                // Measured BEFORE it is read, so a multi-gigabyte import costs a
+                // stat rather than the memory to hold it; and read BOUNDED, so a
+                // file that grows between the stat and the read still cannot
+                // deliver more than the ceiling plus the one byte that proves it
+                // overran. Either way the reference becomes a pointer, never a
+                // clipped body — half an imported convention reads as the whole.
+                $size = filesize($resolved);
+                if ($size === false) {
+                    return $m[0];
+                }
+
+                $shown = realpath($resolved) ?: $resolved;
+                if ($size > self::MAX_IMPORT_BYTES) {
+                    return self::deferredImport($pathFragment, $shown, $size);
+                }
+
+                $imported = file_get_contents($resolved, false, null, 0, self::MAX_IMPORT_BYTES + 1);
                 if ($imported === false) {
                     return $m[0];
+                }
+
+                if (strlen($imported) > self::MAX_IMPORT_BYTES) {
+                    return self::deferredImport($pathFragment, $shown, strlen($imported));
                 }
 
                 // An imported file is spliced into an instruction document and

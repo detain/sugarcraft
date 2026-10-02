@@ -52,9 +52,71 @@ use SugarCraft\Crush\Support\HomeDirectory;
  * the pull-based seam the other three repository-chosen tiers already expose.
  * See that method for the layout that motivated it and for what still does not
  * drain it.
+ *
+ * EVERY READ IS SIZE-BOUNDED TOO (audit 15d-09, C3). The four document reads
+ * and the `@import` expansion were unbounded `file_get_contents()` calls whose
+ * bytes went whole into every request: a 3,080,000-byte AGENTS.md gave a
+ * 3,085,377-byte system prompt and recorded nothing. Now a file is measured
+ * with a stat before it is read, a document over {@see MAX_DOCUMENT_BYTES} is
+ * never read at all, an import that would carry its document over that ceiling
+ * is replaced by a pointer at its import site, and each such decision is a
+ * {@see refusedPaths()} entry. What reaches the prompt is a
+ * {@see pointer()} line naming the file and its size — never a clipped body.
  */
 final class InstructionFileLoader
 {
+    /**
+     * The most bytes ONE instruction document may carry as read and expanded —
+     * the file itself plus every `@import` inlined into it.
+     *
+     * 60 KiB, and the number is the per-document budget
+     * `Runtime::MAX_INSTRUCTION_DOCUMENT_BYTES` (64 KiB of FRAMED, post-escape
+     * prompt bytes) minus 4 KiB of headroom for what the prompt splice adds
+     * around a document: the `<project-instructions>` fence and its authority
+     * preamble (under 500 bytes) and the three bytes {@see PromptFence::escape()}
+     * adds per neutralised tag. The headroom is what keeps this read-side guard
+     * from admitting a document the splice would then defer whole; the splice
+     * stays the authority, pricing the framed bytes it actually emits.
+     *
+     * 64 KiB itself is the standing-rule precedent, chosen so one instruction
+     * document may cost what one max-size rule file may
+     * ({@see RuleLoader::MAX_FILE_BYTES}, Runtime's MAX_STANDING_RULE_BYTES).
+     * The real document it must keep admitting is this monorepo's own: its root
+     * CLAUDE.md with the AGENTS.md and CONTRIBUTING.md it imports expands to
+     * 32,017 bytes as measured when this ceiling was set (25,110 when the
+     * ancestor pass was written) — about half the ceiling, so the docs can
+     * roughly double before the convention every session here relies on stops
+     * inlining. Claude Code's own warning threshold for one memory file is about
+     * 40,000 characters; this is looser, because sugar-crush defers rather than
+     * warns, and a deferral costs the model a Read call.
+     */
+    public const MAX_DOCUMENT_BYTES = 61_440;
+
+    /**
+     * The most bytes {@see pointer()} returns, by construction — the same 1 KiB
+     * line ceiling {@see RulePathNudge::pointer()} holds a deferred rule to, for
+     * the same reason: the splice reserves room for its pointer lines up front,
+     * and it can only reserve a number that is a bound.
+     */
+    private const MAX_POINTER_BYTES = 1024;
+
+    private const POINTER_HEAD = 'Instruction file deferred: budget (';
+
+    private const POINTER_TAIL = ' bytes; not in this prompt). Read ';
+
+    private const POINTER_CLIP = ' [clipped]';
+
+    /**
+     * The instruction files this session deferred to a pointer instead of
+     * inlining, real path => size in bytes. A subset of {@see $emittedPaths}
+     * (the pointer IS what was put in front of the model), kept apart so a
+     * second `@import` of the same file is answered with the pointer again
+     * rather than with an "already included" note that would be false.
+     *
+     * @var array<string, int>
+     */
+    private array $deferredPaths = [];
+
     /**
      * Every instruction file this loader has already put in front of the
      * model, keyed by resolved absolute path — whether emitted as its own
@@ -118,11 +180,13 @@ final class InstructionFileLoader
      * complete() down to one. Per-session caching would have to live on the
      * parent side of the fork.
      *
-     * @var string[]|null
+     * Each entry is one document as {@see loadDocuments()} returns it.
+     *
+     * @var list<array{path: string, body: ?string, bytes: int}>|null
      */
     private ?array $rootCache = null;
 
-    /** @var string[]|null */
+    /** @var list<array{path: string, body: ?string, bytes: int}>|null */
     private ?array $forcedCache = null;
 
     /**
@@ -190,6 +254,10 @@ final class InstructionFileLoader
      * (The per-library link is still refused by the `$repoRoot` gate below, and
      * still recorded; what changed is that the content arrives anyway.)
      *
+     * A document over {@see MAX_DOCUMENT_BYTES} is returned as its
+     * {@see pointer()} line rather than its body; {@see loadDocuments()} is the
+     * path-keyed form that tells the two apart.
+     *
      * @return string[] Contents of whichever ancestor and root files exist and
      *                  resolve inside their own boundary (missing files, files
      *                  resolving outside it, and files already inlined by an
@@ -198,7 +266,7 @@ final class InstructionFileLoader
     public function loadRoot(): array
     {
         if ($this->rootCache !== null) {
-            return $this->rootCache;
+            return self::bodies($this->rootCache);
         }
 
         // Ancestors first, and gated against the ANCESTOR root rather than
@@ -261,16 +329,179 @@ final class InstructionFileLoader
             // CLAUDE.md that a repository vendored through a link means "next
             // to where the repository put it", and resolving that too would
             // silently change which file an import names.
-            $raw = file_get_contents($realPath);
-            if ($raw === false) {
-                $contents[] = '';
+            $raw = $this->readBounded($realPath, $path, $bytes);
+            if ($raw === null) {
+                $contents[] = ['path' => $path, 'body' => null, 'bytes' => (int) $bytes];
+            } elseif ($raw === false) {
+                $contents[] = ['path' => $path, 'body' => '', 'bytes' => 0];
             } else {
                 [$doc, $note] = $this->utf8Document($raw, $path);
-                $contents[] = $this->expandImports($doc, dirname($path), $this->repoRoot) . $note;
+                $body = $this->expandImports($doc, dirname($path), $this->repoRoot) . $note;
+                $contents[] = ['path' => $path, 'body' => $body, 'bytes' => strlen($body)];
             }
         }
 
-        return $this->rootCache = $contents;
+        $this->rootCache = $contents;
+
+        return self::bodies($contents);
+    }
+
+    /**
+     * Every whole-session instruction document, in prompt order — the ancestor
+     * and root files {@see loadRoot()} reads, then the forced matches
+     * {@see loadForced()} reads — each with the path it was read from.
+     *
+     * THE PATH-KEYED SIBLING OF THOSE TWO, and the one the system-prompt splice
+     * reads, because pricing a document against a budget is only half the job:
+     * a document that does not fit must be NAMED in the pointer that replaces
+     * it, and a bare list of strings has lost which file each one was. The two
+     * string-list methods keep their contract for their other callers.
+     *
+     * `body` is null when this loader did not read the file at all because it is
+     * over {@see MAX_DOCUMENT_BYTES}; the refusal is already recorded and the
+     * caller owes the model a {@see pointer()} line for it. `bytes` is the
+     * file's size on disk in that case and the expanded body's length
+     * otherwise. Same memoized reads as the two string-list methods — calling
+     * both forms reads nothing twice.
+     *
+     * @return list<array{path: string, body: ?string, bytes: int}>
+     */
+    public function loadDocuments(): array
+    {
+        return [...$this->rootDocuments(), ...$this->forcedDocuments()];
+    }
+
+    /**
+     * Record that a document this loader DID read was nonetheless not inlined,
+     * because the caller's own budget had no room for it.
+     *
+     * The system-prompt splice prices FRAMED, post-escape bytes and knows the
+     * budget left after the documents before it, neither of which this class
+     * can see — so it is the splice that decides and this map that remembers,
+     * keeping {@see refusedPaths()} the one place a deferred document can be
+     * asked about whichever side made the call. Re-recording the same path
+     * overwrites, so a splice that runs once per agentic step adds one entry.
+     */
+    public function recordDeferral(string $path, string $why): void
+    {
+        $this->refusedPaths[$path] = $why;
+    }
+
+    /**
+     * The one line that stands in for an instruction file that is not inlined:
+     * what it is, how big, and the path to Read it from.
+     *
+     * Spelled HERE and nowhere else, so a whole document the splice defers and
+     * an `@import` deferred at its own site ({@see ImportResolver::deferredImport()})
+     * tell the model the same thing in the same words. The path is the payload
+     * and is therefore last, escaped through {@see PromptFence::escape()} (it is
+     * a repository-chosen string bound for the system prompt), and kept whole
+     * whenever it fits {@see MAX_POINTER_BYTES}; only a path that cannot fit even
+     * alone — over 950 bytes — clips the line. Held to that ceiling by
+     * construction, which is what lets the splice reserve room for pointers
+     * before it prices the first document.
+     */
+    public static function pointer(string $path, int $bytes): string
+    {
+        $line = self::POINTER_HEAD . number_format($bytes) . self::POINTER_TAIL . PromptFence::escape($path);
+
+        if (strlen($line) <= self::MAX_POINTER_BYTES) {
+            return $line;
+        }
+
+        return mb_strcut($line, 0, self::MAX_POINTER_BYTES - strlen(self::POINTER_CLIP), 'UTF-8') . self::POINTER_CLIP;
+    }
+
+    /** The ceiling {@see pointer()} enforces, for a caller pricing pointer lines. */
+    public static function maxPointerBytes(): int
+    {
+        return self::MAX_POINTER_BYTES;
+    }
+
+    /**
+     * @param list<array{path: string, body: ?string, bytes: int}> $documents
+     * @return list<string>
+     */
+    private static function bodies(array $documents): array
+    {
+        return array_map(
+            static fn(array $document): string => $document['body'] ?? self::pointer($document['path'], $document['bytes']),
+            $documents,
+        );
+    }
+
+    /**
+     * The read-side ceiling, applied before a document's bytes are read.
+     *
+     * Returns the document's body, or null when it is over
+     * {@see MAX_DOCUMENT_BYTES} — measured with a stat first, so a multi-GB file
+     * is never loaded to be measured, and read bounded second, so a file that
+     * grows between the two still cannot deliver more than the ceiling plus the
+     * one byte that proves it overran. `false` keeps the read-failure meaning
+     * each caller already gave it. On null the refusal is recorded, the file is
+     * marked deferred, and `$bytes` holds the size the pointer will report.
+     */
+    private function readBounded(string $realPath, string $spelledPath, ?int &$bytes): string|false|null
+    {
+        $size = filesize($realPath);
+        if ($size !== false && $size > self::MAX_DOCUMENT_BYTES) {
+            $bytes = $size;
+            $this->defer($realPath, $spelledPath, $size);
+
+            return null;
+        }
+
+        $raw = file_get_contents($realPath, false, null, 0, self::MAX_DOCUMENT_BYTES + 1);
+        if ($raw !== false && strlen($raw) > self::MAX_DOCUMENT_BYTES) {
+            $bytes = $size !== false ? max($size, strlen($raw)) : strlen($raw);
+            $this->defer($realPath, $spelledPath, $bytes);
+
+            return null;
+        }
+
+        $bytes = $raw === false ? 0 : strlen($raw);
+
+        return $raw;
+    }
+
+    private function defer(string $realPath, string $spelledPath, int $bytes): void
+    {
+        $this->deferredPaths[$realPath] = $bytes;
+        $this->emittedPaths[$realPath] = true;
+        $this->refusedPaths[$spelledPath] = 'is ' . number_format($bytes) . ' bytes, over the '
+            . number_format(self::MAX_DOCUMENT_BYTES) . '-byte instruction-document ceiling; not read, '
+            . 'deferred to a pointer line';
+    }
+
+    /**
+     * The memoized ancestor-then-root documents {@see loadRoot()} reads — the
+     * read loop stays in that method, which is the read decision the docs and
+     * the containment census credit with it; this only hands its records out.
+     *
+     * @return list<array{path: string, body: ?string, bytes: int}>
+     */
+    private function rootDocuments(): array
+    {
+        if ($this->rootCache === null) {
+            $this->loadRoot();
+        }
+
+        return $this->rootCache ?? [];
+    }
+
+    /**
+     * The memoized forced-instruction documents {@see loadForced()} reads,
+     * handed out the same way as {@see rootDocuments()}.
+     *
+     * @return list<array{path: string, body: ?string, bytes: int}>
+     */
+    private function forcedDocuments(): array
+    {
+        if ($this->forcedCache === null) {
+            $this->loadForced();
+        }
+
+        return $this->forcedCache ?? [];
     }
 
     /**
@@ -394,7 +625,7 @@ final class InstructionFileLoader
      * `/etc/…`) is refused AND RECORDED, so this pass does not reintroduce the
      * silent-escape shape the class docblock describes.
      *
-     * @return string[]
+     * @return list<array{path: string, body: ?string, bytes: int}>
      */
     private function loadAncestorRoots(): array
     {
@@ -457,12 +688,15 @@ final class InstructionFileLoader
                 // boundary to \dirname($ancestorRoot) is a mutation that
                 // testAnAncestorImportLeavingTheEnclosingCheckoutIsStillBlocked
                 // kills, which is what makes the argument checkable.)
-                $raw = file_get_contents($realPath);
-                if ($raw === false) {
-                    $contents[] = '';
+                $raw = $this->readBounded($realPath, $path, $bytes);
+                if ($raw === null) {
+                    $contents[] = ['path' => $path, 'body' => null, 'bytes' => (int) $bytes];
+                } elseif ($raw === false) {
+                    $contents[] = ['path' => $path, 'body' => '', 'bytes' => 0];
                 } else {
                     [$doc, $note] = $this->utf8Document($raw, $path);
-                    $contents[] = $this->expandImports($doc, \dirname($path), $ancestorRoot) . $note;
+                    $body = $this->expandImports($doc, \dirname($path), $ancestorRoot) . $note;
+                    $contents[] = ['path' => $path, 'body' => $body, 'bytes' => strlen($body)];
                 }
             }
         }
@@ -494,6 +728,10 @@ final class InstructionFileLoader
      * before loadForced(), so a glob that happens to cover CLAUDE.md adds
      * nothing but a second copy.
      *
+     * A match over {@see MAX_DOCUMENT_BYTES} is returned as its {@see pointer()}
+     * line rather than its body — a glob such as `docs/*.md` reaches a generated
+     * reference file as easily as a convention; see {@see loadDocuments()}.
+     *
      * @return string[] Contents of matching in-repo files (patterns with no
      *                  matches, matches outside repoRoot, and matches already
      *                  emitted elsewhere are skipped)
@@ -501,11 +739,13 @@ final class InstructionFileLoader
     public function loadForced(): array
     {
         if ($this->forcedCache !== null) {
-            return $this->forcedCache;
+            return self::bodies($this->forcedCache);
         }
 
         if ($this->forcedInstructions === []) {
-            return $this->forcedCache = [];
+            $this->forcedCache = [];
+
+            return [];
         }
 
         $contents = [];
@@ -550,19 +790,24 @@ final class InstructionFileLoader
                     continue;
                 }
 
-                $raw = file_get_contents($realPath);
-                if ($raw !== false) {
+                $raw = $this->readBounded($realPath, $path, $bytes);
+                if ($raw === null) {
+                    $contents[] = ['path' => $path, 'body' => null, 'bytes' => (int) $bytes];
+                } elseif ($raw !== false) {
                     $this->emittedPaths[$realPath] = true;
                     // A glob can match a binary as easily as a document, and
                     // one invalid byte here used to fail every request
                     // (audit 15d-08) — see utf8Document().
                     [$doc, $note] = $this->utf8Document($raw, $path);
-                    $contents[] = $doc . $note;
+                    $body = $doc . $note;
+                    $contents[] = ['path' => $path, 'body' => $body, 'bytes' => strlen($body)];
                 }
             }
         }
 
-        return $this->forcedCache = $contents;
+        $this->forcedCache = $contents;
+
+        return self::bodies($contents);
     }
 
     /**
@@ -696,7 +941,12 @@ final class InstructionFileLoader
                     $this->emittedPaths[$realPath] = true;
                     // Resolved, for the reason loadRoot() reads resolved; the
                     // import base stays spelled, for the reason it stays spelled.
-                    $raw = file_get_contents($realPath);
+                    // Bounded like the session documents: a nested file this
+                    // size would otherwise ride whole into a tool result.
+                    $raw = $this->readBounded($realPath, $fullPath, $bytes);
+                    if ($raw === null) {
+                        return self::pointer($fullPath, (int) $bytes);
+                    }
                     if ($raw === false) {
                         return null;
                     }
@@ -743,7 +993,9 @@ final class InstructionFileLoader
     }
 
     /**
-     * The instruction files this loader declined to read, and why.
+     * The instruction files this loader declined to read — or read and did not
+     * inline, for budget ({@see readBounded()}, {@see recordDeferral()}, and an
+     * `@import` the gate deferred) — and why.
      *
      * ACCUMULATED, not recomputed, which is the opposite of every sibling seam
      * and is deliberate: {@see loadRoot()} and {@see loadForced()} memoize, so a
@@ -891,7 +1143,16 @@ final class InstructionFileLoader
      */
     private function expandImports(string $content, string $baseDir, string $boundary): string
     {
-        $gate = function (string $realPath, string $pathFragment) use ($boundary): ?string {
+        // THE DOCUMENT'S CEILING IS SHARED BY EVERYTHING INLINED INTO IT (C3):
+        // an import is priced against what is LEFT of MAX_DOCUMENT_BYTES after
+        // the parent's own bytes and every import inlined before it, at every
+        // depth, so thirty 10 KB imports cannot add up to a 300 KB document that
+        // no single file check would have refused. Priced by stat, before the
+        // read. The note replacing a deferred import is charged too, so the
+        // running figure stays a statement about the bytes this expansion emits.
+        $remaining = self::MAX_DOCUMENT_BYTES - strlen($content);
+
+        $gate = function (string $realPath, string $pathFragment) use ($boundary, &$remaining): ?string {
             // ImportResolver `is_file()`-checks and `realpath()`s before calling
             // this, so $realPath is always a resolvable existing path and
             // within()'s re-resolution of it cannot change the verdict — it
@@ -908,14 +1169,40 @@ final class InstructionFileLoader
                     . " '{$realPath}', outside the repository root, and was not followed.</import-blocked>";
             }
 
+            // Checked before the already-included note: a deferred file was put
+            // in front of the model as a pointer, not as its body, so the honest
+            // answer for a second import of it is the pointer again.
+            if (isset($this->deferredPaths[$realPath])) {
+                $note = ImportResolver::deferredImport($pathFragment, $realPath, $this->deferredPaths[$realPath]);
+                $remaining -= strlen($note);
+
+                return $note;
+            }
+
             if (isset($this->emittedPaths[$realPath])) {
                 return "<import-skipped reason=\"already-included\">Import '{$pathFragment}' is already"
                     . ' included in this prompt and was not repeated.</import-skipped>';
             }
 
+            $size = filesize($realPath);
+            if ($size !== false && $size > $remaining) {
+                $this->deferredPaths[$realPath] = $size;
+                $this->emittedPaths[$realPath] = true;
+                $this->refusedPaths[$realPath] = "an @import from '{$pathFragment}' of " . number_format($size)
+                    . ' bytes, more than the ' . number_format(max(0, $remaining)) . ' bytes left of its document\'s '
+                    . number_format(self::MAX_DOCUMENT_BYTES) . '-byte instruction-document ceiling; not read, '
+                    . 'deferred to a pointer at its import site';
+
+                $note = ImportResolver::deferredImport($pathFragment, $realPath, $size);
+                $remaining -= strlen($note);
+
+                return $note;
+            }
+
+            $remaining -= (int) $size;
             $this->emittedPaths[$realPath] = true;
 
-            return null; // in-repo, not yet seen -- let ImportResolver expand it
+            return null; // in-repo, not yet seen, fits -- let ImportResolver expand it
         };
 
         return $this->importResolver->expand($content, $baseDir, 0, $gate);
