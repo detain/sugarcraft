@@ -307,13 +307,33 @@ final class BinSugarcrushDispatchTest extends TestCase
      * existing directory is the root the run uses. `mcp list` is the probe
      * because it answers without a TTY and names the path it looked in.
      * runBin()'s cwd is the package root, where `docs/` exists.
+     *
+     * `docs/` holds a `.sugar-crush`-free subdirectory of a git checkout, so
+     * since audit 15d-13 (b) its `.mcp.json` lookup walks up to the package
+     * root, which holds `.sugar-crush/`. The operand still IS the root — the
+     * walk starts from it — and a directory outside any work tree, which has
+     * nothing to walk to, shows it verbatim.
      */
     public function testABareDirectoryOperandIsTheRootTheBinaryUses(): void
     {
         $result = $this->runBin(['docs', 'mcp', 'list'], []);
 
         $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
-        $this->assertStringContainsString('/docs/' . Bootstrap::MCP_CONFIG_FILENAME, $result['stdout']);
+        $this->assertStringContainsString(
+            'looked for ' . dirname(__DIR__, 2) . '/' . Bootstrap::MCP_CONFIG_FILENAME,
+            $result['stdout'],
+        );
+
+        $outside = sys_get_temp_dir() . '/sc_bare_operand_' . bin2hex(random_bytes(6));
+        mkdir($outside, 0o700, true);
+        try {
+            $result = $this->runBin([$outside, 'mcp', 'list'], []);
+
+            $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
+            $this->assertStringContainsString($outside . '/' . Bootstrap::MCP_CONFIG_FILENAME, $result['stdout']);
+        } finally {
+            @rmdir($outside);
+        }
     }
 
     /**

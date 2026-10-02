@@ -535,6 +535,20 @@ final class Bootstrap
         . 'this session has only the tools that did load';
 
     /**
+     * The one-time launch row for audit 15d-05's legacy binding: unkeyed
+     * home-store project notes moved into THIS project's keyed directory
+     * ({@see \SugarCraft\Crush\Memory\MemoryStore::bindLegacyProjectNotes()}).
+     * Routed through {@see reportMemorySkips()}'s seam call, beside the
+     * unreadable-notes row.
+     *
+     * `%d` the count, `%s` the plural, `%s` is/are, `%s` the project root,
+     * `%s` the keyed directory.
+     */
+    public const MEMORY_LEGACY_BOUND_NOTICE_FORMAT =
+        '%d project memory note%s written before notes were kept per project %s now bound to this project '
+        . '(%s) and shown nowhere else, in %s; move a file out if it belongs to another project';
+
+    /**
      * How many CALL sites in this file route a warning onto
      * {@see warnPermissionConfigInTranscript()}.
      *
@@ -1228,7 +1242,7 @@ final class Bootstrap
             // a new session.
             history: $opened['history'],
             backend: $backend,
-            memoryStore: self::memoryStore(),
+            memoryStore: self::memoryStore($root),
             sessionStore: $sessionStore,
             currentSessionId: $sessionId,
             currentSessionName: $sessionName,
@@ -2881,7 +2895,7 @@ final class Bootstrap
             // Without this the Phase 5 item 9 memory block is unreachable from a
             // real run: the store would exist, /memory would still write to it,
             // and nothing the user recorded would ever reach the model.
-            ->withMemoryStore(self::memoryStoreOrNull());
+            ->withMemoryStore(self::memoryStoreOrNull($root));
 
         // F2: the settings ceiling lands before the approver, after every
         // with*() that ships in this chain — and `toollessBackend()`s engines
@@ -2977,7 +2991,7 @@ final class Bootstrap
             // Without this the Phase 5 item 9 memory block is unreachable from a
             // real run: the store would exist, /memory would still write to it,
             // and nothing the user recorded would ever reach the model.
-            ->withMemoryStore(self::memoryStoreOrNull());
+            ->withMemoryStore(self::memoryStoreOrNull($root));
 
         // F2: the settings ceiling lands before the approver, after every
         // with*() that ships in this chain — and `toollessBackend()`s engines
@@ -4308,25 +4322,49 @@ final class Bootstrap
      */
     private static function reportMemorySkips(?string $root): void
     {
+        $home = self::memoryStoreOrNull($root);
+        $notices = [];
+
+        // THE ONE-TIME BINDING NOTICE (audit 15d-05). Unkeyed project notes an
+        // earlier build left in the shared `project/` directory now belong to
+        // the first project whose launch read them; say so once, here, whether
+        // this launch or an earlier `-p` run did the moving — the store keeps
+        // the record until it is taken. Read BEFORE the unreadable scan, which
+        // is itself a read of the project scope and so performs the binding.
+        $bound = $home?->takeBoundLegacyNotes() ?? [];
+        if ($bound !== [] && $home !== null) {
+            $notices[] = sprintf(
+                self::MEMORY_LEGACY_BOUND_NOTICE_FORMAT,
+                \count($bound),
+                \count($bound) === 1 ? '' : 's',
+                \count($bound) === 1 ? 'is' : 'are',
+                ProjectRoot::resolve((string) $root),
+                $home->projectDirectory(),
+            );
+        }
+
         $unreadable = [];
-        foreach ([self::memoryStoreOrNull(), $root === null ? null : ProjectMemoryWriter::forRoot($root)?->store()] as $store) {
+        foreach ([$home, $root === null ? null : ProjectMemoryWriter::forRoot($root)?->store()] as $store) {
             if ($store !== null) {
                 $unreadable = [...$unreadable, ...$store->unreadable()];
             }
         }
 
         $new = array_diff_key($unreadable, self::$reportedMemorySkips);
-        if ($new === []) {
-            return;
-        }
-
         foreach (array_keys($new) as $path) {
             self::$reportedMemorySkips[$path] = true;
         }
+        if ($new !== []) {
+            // BOTH CHANNELS, ONE ROW whatever the count — the skill-skip row's
+            // contract ({@see reportSkillSkips()}).
+            $notices[] = UnreadableNotes::notice($new);
+        }
 
-        // BOTH CHANNELS, ONE ROW whatever the count — the skill-skip row's
-        // contract ({@see reportSkillSkips()}).
-        self::warnPermissionConfigInTranscript(UnreadableNotes::notice($new));
+        // One seam call site for both rows, so the census
+        // ({@see TRANSCRIPT_SEAM_CALL_SITES}) does not move.
+        foreach ($notices as $notice) {
+            self::warnPermissionConfigInTranscript($notice);
+        }
     }
 
     /**
@@ -8265,12 +8303,20 @@ final class Bootstrap
      * requires its directory to already exist and be writable, so the
      * directory is created here first.
      */
-    public static function memoryStore(): MemoryStore
+    public static function memoryStore(?string $root = null): MemoryStore
     {
         $dir = self::configDir() . '/memory';
         self::ensureDir($dir);
 
-        return new MemoryStore($dir);
+        // KEYED BY THE PROJECT (audit 15d-05): the home store's `project` scope
+        // is `project/<key>/` for the canonical project root, so a note written
+        // with `--scope project` here never reaches another repository's
+        // prompt. The root is the one `.sugar-crush/*` resolves against (audit
+        // 15d-13 (b)), so a subdirectory launch reads its repository's notes. A
+        // launch with no root keeps the unkeyed store.
+        return $root === null || $root === ''
+            ? new MemoryStore($dir)
+            : MemoryStore::forProject($dir, ProjectRoot::resolve($root));
     }
 
     /**
@@ -8289,10 +8335,10 @@ final class Bootstrap
      * Same shape as {@see \SugarCraft\Crush\Backend\EngineBackend::userConfig()}'s
      * guard: a broken optional input costs the feature, never the turn.
      */
-    private static function memoryStoreOrNull(): ?MemoryStore
+    private static function memoryStoreOrNull(?string $root = null): ?MemoryStore
     {
         try {
-            return self::memoryStore();
+            return self::memoryStore($root);
         } catch (\Throwable) {
             return null;
         }

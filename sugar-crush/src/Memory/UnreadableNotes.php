@@ -113,7 +113,14 @@ final class UnreadableNotes
      */
     private static function scopeOf(string $path): string
     {
-        return basename(\dirname($path));
+        // A home-store project note sits one level deeper, under its project
+        // key (`project/<key>/<id>.md`, audit 15d-05); the key is not a scope.
+        $dir = \dirname($path);
+        if (basename(\dirname($dir)) === 'project' && basename(\dirname($dir, 2)) === 'memory') {
+            return 'project';
+        }
+
+        return basename($dir);
     }
 
     /**

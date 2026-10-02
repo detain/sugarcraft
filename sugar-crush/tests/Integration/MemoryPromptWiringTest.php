@@ -248,6 +248,52 @@ final class MemoryPromptWiringTest extends TestCase
         $this->assertStringContainsString('second note', $this->promptFor($app, $provider));
     }
 
+    /**
+     * Audit 15d-05. The home store's `project` scope used to be one directory
+     * for every repository, so a note written "in projA" — the fallback when
+     * the repo cannot host `.sugar-crush/memory`, or any note older than E25 —
+     * was rendered into projB's prompt as "notes recorded for this project".
+     * The store a launch builds is now keyed by its project root.
+     */
+    public function testAHomeStoreProjectNoteFromAnotherRootDoesNotReachThisPrompt(): void
+    {
+        $home = $this->dir . '/home';
+        $projA = $this->dir . '/projA';
+        $projB = $this->dir . '/projB';
+        foreach ([$home, $projA, $projB] as $dir) {
+            mkdir($dir, 0o700, true);
+        }
+        $originalHome = getenv('HOME');
+        putenv('HOME=' . $home);
+
+        try {
+            Bootstrap::memoryStore($projA)->add('projA: deploy with kubectl apply -f prod/', MemoryScope::Project);
+
+            $backend = Bootstrap::backend($projB);
+            $this->assertInstanceOf(EngineBackend::class, $backend);
+            $storeB = (new \ReflectionProperty(EngineBackend::class, 'memoryStore'))->getValue($backend);
+            $this->assertInstanceOf(MemoryStore::class, $storeB);
+
+            $provider = new PromptCapturingProvider();
+            $promptB = $this->promptFor(
+                App::new($provider, 'test-model')->withMessages([new UserMessage('hi')])->withMemoryStore($storeB),
+                $provider,
+            );
+            $this->assertStringNotContainsString('kubectl', $promptB);
+
+            // ...while projA's own launch still sees it.
+            $promptA = $this->promptFor(
+                App::new($provider, 'test-model')
+                    ->withMessages([new UserMessage('hi')])
+                    ->withMemoryStore(Bootstrap::memoryStore($projA)),
+                $provider,
+            );
+            $this->assertStringContainsString('kubectl', $promptA);
+        } finally {
+            $originalHome === false ? putenv('HOME') : putenv('HOME=' . $originalHome);
+        }
+    }
+
     public function testARepoLocalProjectNoteReachesTheSystemPrompt(): void
     {
         // E25 piece 2: the writer half of the round trip. A note persisted by

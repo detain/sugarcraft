@@ -6,7 +6,7 @@ often confused, so they are documented side by side:
 | | **Memory store** | **Instruction files** |
 |---|---|---|
 | Written by | `/memory add`, as UUID-named markdown files | you, by hand |
-| Lives in | `~/.sugar-crush/memory/<scope>/<uuid>.md` | `CLAUDE.md` / `AGENTS.md` in the repo |
+| Lives in | `~/.sugar-crush/memory/<scope>/<uuid>.md` (`project/<key>/` per project) | `CLAUDE.md` / `AGENTS.md` in the repo |
 | Reaches the prompt as | a `<project-memory>` block | full documents |
 | Scope that reaches the prompt | **`project` only** | root files always; nested ones on touch |
 
@@ -21,7 +21,8 @@ only by a `scope:` field:
 ```
 ~/.sugar-crush/memory/
 ├── user/     <uuid>.md …  MEMORY.md
-├── project/  <uuid>.md …  MEMORY.md
+├── project/
+│   └── <key>/  <uuid>.md …  MEMORY.md   (one directory per project root)
 └── agent/    <uuid>.md …  MEMORY.md
 
 <repo>/.sugar-crush/memory/
@@ -50,6 +51,32 @@ change to that scope, so it does not sit in the tree going stale; one written by
 hand (anything not opening with the generated `# Memory Index (` header) is left
 alone. The home store under `~/.sugar-crush/memory/` is in no repository and
 keeps its index file.
+
+**The home store's `project` scope is keyed by project** (audit 15d-05). It used
+to be one directory for every repository, so a note written with `--scope
+project` where the repository could not host `.sugar-crush/memory` (a read-only
+checkout, a `.sugar-crush` symlinked out of the tree) — and every note older than
+the repo store — was rendered into the `<project-memory>` block of *every*
+repository, under a header calling it a note recorded for this project. A launch
+now builds the home store with `MemoryStore::forProject()`, which keeps the scope
+at `project/<key>/`: `<key>` is the project root's last path segment plus a
+16-hex hash of its canonical path (`MemoryStore::projectKeyFor()`), so two
+checkouts both named `app` never share one. The root is the one every
+`.sugar-crush/*` lookup uses — the repository, on a launch from one of its
+subdirectories ([`SETTINGS.md`](SETTINGS.md)). Listing, search, `get`, the index
+and the unreadable-notes scan all see this project's directory alone; the
+`user` and `agent` scopes are not project-shaped and stay shared.
+
+**Notes written before keying bind to the first project that reads them.** Any
+`*.md` left directly in `~/.sugar-crush/memory/project/` is moved into the
+keyed directory of the first launch that touches the scope
+(`MemoryStore::bindLegacyProjectNotes()`; `rename()`, so two launches racing in
+different roots each take a file at most once, and a name the keyed directory
+already holds is left in place). The launch says so once, in both channels — one
+row giving the count, the project root and the directory the notes now live in.
+A `-p` run that does the moving leaves the record
+for the next interactive launch to report. If a note landed in the wrong project,
+move its file into the right project's directory beside it.
 
 ### Note ids
 
@@ -379,7 +406,7 @@ and it has no channel to the user — but it is **recorded**, and
 ├── config.json        settings, permissions, the four trustedProject* keys
 ├── settings.json      hand-authored settings   → SETTINGS.md
 ├── session.db         SQLite session store
-├── memory/<scope>/    the memory store
+├── memory/<scope>/    the memory store (project/<key>/ per project)
 ├── agents/*.md        agent presets            → AGENTS_AUTHORING.md
 ├── skills/*/SKILL.md  skills                   → SKILLS.md
 ├── commands/*.md      custom slash commands    → COMMANDS.md

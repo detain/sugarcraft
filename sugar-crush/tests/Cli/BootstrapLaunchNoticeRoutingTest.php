@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Config\LayeredSettings;
+use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Memory\UnreadableNotes;
 use SugarCraft\Crush\Skills\SkillLoader;
 
@@ -267,6 +268,41 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         $expected = sprintf(UnreadableNotes::NOTICE_FORMAT, 2, 's', 'were', 'project: 1, user: 1', 'they are');
         self::assertSame([$expected], $notices);
         self::assertSame(1, substr_count($stderr, $expected));
+    }
+
+    /**
+     * Audit 15d-05: unkeyed project notes an earlier build left in the shared
+     * home `project/` directory bind to the first project that reads them —
+     * and the user is told so ONCE, in both channels. The second launch, in
+     * a fresh process, says nothing: the notes are this project's now.
+     */
+    public function testLegacyHomeProjectNotesBindToTheFirstLaunchWithOneNotice(): void
+    {
+        mkdir($this->configDir . '/memory/project', 0o700, true);
+        file_put_contents(
+            $this->configDir . '/memory/project/legacy.md',
+            "---\nid: legacy\ntype: pattern\nscope: project\n---\nWritten before keying.\n",
+        );
+
+        $launch = '\\SugarCraft\\Crush\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n";
+        [$stderr, $notices] = $this->launch($launch);
+
+        $expected = sprintf(
+            Bootstrap::MEMORY_LEGACY_BOUND_NOTICE_FORMAT,
+            1,
+            '',
+            'is',
+            $this->projectRoot,
+            $this->configDir . '/memory/project/' . MemoryStore::projectKeyFor($this->projectRoot),
+        );
+        self::assertSame([$expected], $notices);
+        self::assertSame(1, substr_count($stderr, $expected));
+        self::assertFileExists(
+            $this->configDir . '/memory/project/' . MemoryStore::projectKeyFor($this->projectRoot) . '/legacy.md',
+        );
+
+        [, $again] = $this->launch($launch);
+        self::assertSame([], $again);
     }
 
     /**

@@ -226,6 +226,9 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'PROJECT_TIER_REFUSAL_FORMAT' => ['method' => 'reportProjectTierRefusals', 'conversions' => 2],
         'MCP_PARTIAL_START_LOG_FORMAT' => ['method' => 'mcpClient', 'conversions' => 3],
         'MCP_PARTIAL_START_NOTICE_FORMAT' => ['method' => 'mcpClient', 'conversions' => 2],
+        // Audit 15d-05's one-time legacy-binding row, read back by
+        // BootstrapLaunchNoticeRoutingTest; quoted on no page.
+        'MEMORY_LEGACY_BOUND_NOTICE_FORMAT' => ['method' => 'reportMemorySkips', 'conversions' => 5],
         // The in-prompt attribution sentence a body-less preset inherits a
         // built-in's text with. Both `%s` slots are the tier word and the
         // definition name; nothing external reads the rendered line (it lives
@@ -439,6 +442,8 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'reportProjectTierRefusals' => ["'.'"],
         // The two decision keys it reads; both messages are named now.
         'mcpClient' => ["'path'", "'status'"],
+        // Audit 15d-05's binding row: the plural pair and the is/are pick.
+        'reportMemorySkips' => ["''", "'s'", "'is'", "'are'"],
         // The empty-inherited short circuit and the two tier words the ternary
         // picks between; the sentence itself is the named constant, so the only
         // literals in the body are the `''` guard and those two words.
@@ -739,7 +744,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $census = self::sprintfCensus(self::bootstrapSource());
 
         self::assertSame(
-            17,
+            18,
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );
