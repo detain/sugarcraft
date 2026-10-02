@@ -86,27 +86,40 @@ final class OAuthClientRegistration
             $metadata['scope'] = implode(' ', $scopes);
         }
 
+        // RFC 7591 §3.1: the client metadata IS the request body — its members
+        // (`redirect_uris`, `grant_types`, …) sit at the top level of the JSON
+        // object. This used to be wrapped in a `client_metadata` envelope
+        // (audit MCP-10), which a spec-following server reads as a request
+        // with no `redirect_uris` and refuses (`invalid_redirect_uri` /
+        // `invalid_client_metadata`), so `mcp auth login` failed exactly where
+        // discovery had just succeeded.
         $data = $this->requestJson($registrationUrl, [
             'method' => 'POST',
-            'json' => ['client_metadata' => $metadata],
+            'json' => $metadata,
             'headers' => [
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
             ],
         ]);
 
+        // RFC 7591 §3.2.1: `client_id` is the one REQUIRED member of the
+        // response. `client_secret` is issued only to confidential clients,
+        // and `registration_access_token` / `registration_client_uri` belong
+        // to RFC 7592 management, which a server is free not to run — so
+        // both are read when present (the responses this method always
+        // accepted still parse to the same array) and stored as '' when not,
+        // which {@see updateRegistration()} already refuses by name.
         $clientId = $data['client_id'] ?? null;
-        $clientSecret = $data['client_secret'] ?? null;
-        $accessToken = $data['registration_access_token'] ?? null;
-
-        if ($clientId === null || $accessToken === null) {
-            throw new \RuntimeException('Dynamic client registration response missing required fields');
+        if (!\is_string($clientId) || $clientId === '') {
+            throw new \RuntimeException('Dynamic client registration response missing required field client_id');
         }
 
         return [
             'clientId' => $clientId,
-            'clientSecret' => $clientSecret ?? '',
-            'registrationAccessToken' => $accessToken,
+            'clientSecret' => \is_string($data['client_secret'] ?? null) ? $data['client_secret'] : '',
+            'registrationAccessToken' => \is_string($data['registration_access_token'] ?? null)
+                ? $data['registration_access_token']
+                : '',
             // RFC 7592 §3: the per-client management URL. It is the ONLY
             // address a later read/update/delete of this registration may go
             // to — the registration endpoint itself only creates clients — so

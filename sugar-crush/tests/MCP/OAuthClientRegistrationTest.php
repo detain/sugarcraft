@@ -517,6 +517,78 @@ final class OAuthClientRegistrationTest extends TestCase
         $this->assertSame('', $ocr->registerClient('https://as/register', 'n')['registrationClientUri'], 'a server without RFC 7592 management yields no URI');
     }
 
+    // =========================================================================
+    // MCP-10: RFC 7591 §3.1 — the metadata is the request body, not an envelope
+    // =========================================================================
+
+    public function testRegisterClientSendsTheMetadataAtTheTopLevelOfTheBody(): void
+    {
+        $history = [];
+        // A spec-following registration endpoint: it reads redirect_uris from
+        // the top level and refuses the request when it finds none there.
+        $endpoint = static function (\Psr\Http\Message\RequestInterface $request): Response {
+            $body = json_decode((string) $request->getBody(), true);
+            if (!\is_array($body) || !\is_array($body['redirect_uris'] ?? null)) {
+                return new Response(400, [], (string) json_encode(['error' => 'invalid_redirect_uri']));
+            }
+
+            return new Response(201, [], (string) json_encode(['client_id' => 'cid-7591']));
+        };
+        $ocr = new OAuthClientRegistration($this->clientRecording([$endpoint], $history), $this->authFilePath);
+
+        $registered = $ocr->registerClient('https://as/register', 'sugar-crush/as', ['read', 'write'], ['http://127.0.0.1:4567/callback']);
+
+        $this->assertSame('cid-7591', $registered['clientId']);
+        $body = json_decode((string) $history[0]['request']->getBody(), true);
+        $this->assertSame(['http://127.0.0.1:4567/callback'], $body['redirect_uris']);
+        $this->assertSame('sugar-crush/as', $body['client_name']);
+        $this->assertSame('read write', $body['scope']);
+        $this->assertSame(['authorization_code', 'client_credentials'], $body['grant_types']);
+        $this->assertArrayNotHasKey('client_metadata', $body, 'no envelope: RFC 7591 metadata members are the body itself');
+    }
+
+    public function testRegisterClientAcceptsAResponseWithoutRfc7592ManagementFields(): void
+    {
+        // RFC 7591 §3.2.1 requires only client_id; the registration access
+        // token belongs to RFC 7592, which a server may not implement.
+        $ocr = new OAuthClientRegistration($this->clientAnswering([
+            new Response(201, [], (string) json_encode(['client_id' => 'cid-public'])),
+        ]), $this->authFilePath);
+
+        $this->assertSame(
+            ['clientId' => 'cid-public', 'clientSecret' => '', 'registrationAccessToken' => '', 'registrationClientUri' => ''],
+            $ocr->registerClient('https://as/register', 'n'),
+        );
+    }
+
+    public function testRegisterClientStillReadsTheFullResponseShape(): void
+    {
+        $ocr = new OAuthClientRegistration($this->clientAnswering([
+            new Response(201, [], (string) json_encode([
+                'client_id' => 'cid-full',
+                'client_secret' => 'sec-full',
+                'registration_access_token' => 'rat-full',
+                'registration_client_uri' => 'https://as/register/cid-full',
+            ])),
+        ]), $this->authFilePath);
+
+        $this->assertSame(
+            ['clientId' => 'cid-full', 'clientSecret' => 'sec-full', 'registrationAccessToken' => 'rat-full', 'registrationClientUri' => 'https://as/register/cid-full'],
+            $ocr->registerClient('https://as/register', 'n'),
+        );
+    }
+
+    public function testRegisterClientRefusesAResponseWithoutClientId(): void
+    {
+        $ocr = new OAuthClientRegistration($this->clientAnswering([
+            new Response(201, [], (string) json_encode(['registration_access_token' => 'rat'])),
+        ]), $this->authFilePath);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('client_id');
+        $ocr->registerClient('https://as/register', 'n');
+    }
+
     public function testUpdateRegistrationPutsTheFullMetadataToTheClientUri(): void
     {
         $history = [];

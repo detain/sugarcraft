@@ -90,7 +90,8 @@ final class McpAuthStoreLoginTest extends TestCase
         $registerBody = json_decode((string) $history[0]['request']->getBody(), true);
         self::assertIsArray($registerBody);
         $redirectUri = (string) $this->authorizeParams($output)['redirect_uri'];
-        self::assertSame([$redirectUri], $registerBody['client_metadata']['redirect_uris'], 'the registered redirect URI is byte-identical to the authorize URL (metadata rides the RFC 7591 client_metadata envelope)');
+        self::assertSame([$redirectUri], $registerBody['redirect_uris'], 'the registered redirect URI is byte-identical to the authorize URL (RFC 7591 metadata sits at the top level of the body)');
+        self::assertArrayNotHasKey('client_metadata', $registerBody, 'no envelope around the metadata (audit MCP-10)');
 
         // Wire leg 2 — the exchange posted the code, the verifier, and nothing else secret-shaped.
         parse_str((string) $history[1]['request']->getBody(), $exchangeForm);

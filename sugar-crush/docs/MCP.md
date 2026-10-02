@@ -537,7 +537,10 @@ here", so the next form is tried. `mcp auth add` discovers through the same
 order. Credentials are still stored under the server URL exactly as you passed
 it, which is what the bearer match needs. It binds an ephemeral loopback listener on `127.0.0.1` only
 (never a wildcard interface), registers the client with that exact
-`http://127.0.0.1:<port>/callback` redirect URI, prints the authorization URL
+`http://127.0.0.1:<port>/callback` redirect URI (RFC 7591: the client
+metadata is the top-level JSON body, and only `client_id` is required back —
+a server without RFC 7592 management simply leaves the registration
+un-updatable), prints the authorization URL
 — which carries only public values: the client id, the state, and the SHA-256
 challenge, never the verifier — and waits for the browser to bounce back.
 The callback is judged on GET method, exact `/callback` path, and a
