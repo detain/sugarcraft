@@ -212,9 +212,14 @@ sequential interleave.
 
 ### The two turn events
 
-`Chat::dispatchTurnHooks()` is the only production call site for both, reached
-from `submit()` on every prompt. Their verdicts behave differently from the
-tool gates:
+`Chat::dispatchTurnHooks()` is the only production dispatcher for both, reached
+from `submit()` on every prompt, or from `scheduleParkedCompaction()` instead
+when the automatic 85% compaction tier parks the prompt behind a model-written
+summary. Each submission takes exactly one of the two, and a parked prompt is
+judged when it is parked — so a block stops it before the summarization is paid
+for, and a note is written immediately ahead of the echoed prompt, where it rides
+the turn that goes out once the summary lands. Their verdicts behave differently
+from the tool gates:
 
 - **Fired gate-first.** `UserPromptSubmit` runs before `SessionStart`, so a
   SessionStart script never spawns just to learn its prompt was blocked. The

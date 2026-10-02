@@ -2245,11 +2245,16 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringNotContainsString(',', $argText, 'the only production new TaskList(…) no longer passes a single argument — the dispatcher is no longer left at its default');
         self::assertSame(1, preg_match('/\?HookDispatcher \$hookDispatcher = null/', self::sourceOf('Agents/TaskList.php')), 'TaskList lost the defaulted injected-dispatcher parameter the page explains dormancy with');
 
-        // Turn events: one call site, reached from the method the page names.
-        self::assertSame(1, preg_match('/`Chat::dispatchTurnHooks\(\)` is the only production call site for both, reached\s+from `(\w+)\(\)`/', $hooksRaw, $turn), 'the sole-call-site sentence no longer names its reaching method');
+        // Turn events: one dispatcher, reached from exactly the two methods the page
+        // names — submit()'s tail and the parked 85% route (audit 15b-01) — one call each.
+        self::assertSame(1, preg_match('/`Chat::dispatchTurnHooks\(\)` is the only production dispatcher for both, reached\s+from `(\w+)\(\)` on every prompt, or from `(\w+)\(\)` instead/', $hooksRaw, $turn), 'the sole-dispatcher sentence no longer names its two reaching methods');
         $turnHits = self::srcOccurrences('->dispatchTurnHooks(');
-        self::assertCount(1, $turnHits, 'dispatchTurnHooks() gained or lost a production call site — the page calls it the only one');
-        self::assertSame($turn[1], self::enclosingMethodName($turnHits[0][0], self::srcTexts()[$turnHits[0][0]], $turnHits[0][1]), 'the turn hooks are no longer reached from the method the page names');
+        self::assertCount(2, $turnHits, 'dispatchTurnHooks() gained or lost a production call site — the page names exactly two');
+        $turnCallers = array_map(
+            static fn(array $hit): string => self::enclosingMethodName($hit[0], self::srcTexts()[$hit[0]], $hit[1]),
+            $turnHits,
+        );
+        self::assertEqualsCanonicalizing([$turn[1], $turn[2]], $turnCallers, 'the turn hooks are no longer reached from the two methods the page names');
 
         // The documented divergence cites a real method; pin the symbol (E353 shape).
         self::assertSame(1, preg_match('/the strict\s*`HookEvent::(\w+)\(\)`\s*reading/', self::markdownProse($hooksRaw), $diverge), 'the divergence sentence no longer cites the HookEvent method it diverges from');

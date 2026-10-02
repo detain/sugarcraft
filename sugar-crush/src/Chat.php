@@ -4511,6 +4511,11 @@ final class Chat implements Model
      * message, or the refusal pair {@see submit()} must return instead of
      * dispatching anything.
      *
+     * TWO CALL SITES, ONE PER SUBMISSION: {@see submit()}'s tail for a prompt that
+     * goes out now, and {@see scheduleParkedCompaction()} for one parked behind the
+     * 85% tier's summarization — the parked route returns before submit()'s tail,
+     * so no submission reaches both (audit 15b-01).
+     *
      * THE TWO ORDERS DIFFER DELIBERATELY:
      * - FIRED gate-first: UserPromptSubmit before SessionStart. Each event spawns a
      *   real script process, and a SessionStart hook that fired only to discover its
@@ -7314,6 +7319,11 @@ final class Chat implements Model
             // "null falls back to exactly what this tier did before" is what makes
             // the model route safe to add here: the offline path is not merely
             // similar, it is the same code.
+            //
+            // A non-null answer has ALREADY run the UserPromptSubmit gate (and is
+            // its refusal when the hook blocked): parking submits the prompt, so
+            // the hook fires there, and this early return skips the tail call below
+            // so it never fires twice (audit 15b-01).
             $parked = $this->scheduleParkedCompaction($text, $tokenCount, $tokenLimit, $capNotice);
             if ($parked !== null) {
                 return $parked;
@@ -7452,11 +7462,17 @@ final class Chat implements Model
         // TURN-LIFECYCLE HOOKS (P7.S2) fire here and nowhere earlier. Every arm
         // above returns BEFORE a draft has become a submitted prompt — queued
         // mid-turn, custom-command expansion, built-in dispatch, spend cap, idle
-        // compaction, the 85%/95% tiers — and Anthropic fires UserPromptSubmit on
-        // the real submitted text, so a slash command that never reached a model
-        // must not look like one to a hook. A blocked prompt returns the refusal
-        // pair instead of dispatching; the notes, when there are any, go
-        // immediately ahead of the user's line.
+        // compaction, the thrash breaker and the 95% refusal — and Anthropic fires
+        // UserPromptSubmit on the real submitted text, so a slash command that
+        // never reached a model must not look like one to a hook. A blocked prompt
+        // returns the refusal pair instead of dispatching; the notes, when there
+        // are any, go immediately ahead of the user's line.
+        //
+        // The ONE arm above that does submit is the 85% tier's parked route, and
+        // it is not an exception to the gate: {@see scheduleParkedCompaction()}
+        // runs this same call at the moment it commits to parking and returns
+        // before reaching here, so each submission is judged exactly once
+        // (audit 15b-01 — it used to be judged never).
         [$turnHookNotes, $turnHookRefusal] = $this->dispatchTurnHooks($text);
 
         if ($turnHookRefusal !== null) {
@@ -11057,6 +11073,59 @@ final class Chat implements Model
             return null;
         }
 
+        // THE USERPROMPTSUBMIT GATE FIRES HERE on this route (audit 15b-01), and only
+        // once the request above has proved the prompt WILL be parked. Parking is
+        // the submission: the draft is consumed, the prompt is echoed and `inFlight`
+        // is held, and {@see applyModelCompaction()} sends it with no further say
+        // from the user. Before this, {@see submit()} returned the parked pair ahead
+        // of its own {@see dispatchTurnHooks()} call and the landing dispatched with
+        // no hook ever run — a secret-blocking hook that held below the tier let the
+        // very same prompt reach the model above it, and its note was lost.
+        //
+        // WHY HERE AND NOT EARLIER IN submit(): every null return above hands the
+        // prompt back to submit()'s heuristic route, which runs the hook itself at
+        // its tail — firing here first would run it twice for one submission, and
+        // firing before the tier at all would run it for prompts the thrash breaker
+        // and the synchronous 95% refusal turn away unsubmitted, which the gate's
+        // own contract (see submit()'s TURN-LIFECYCLE comment) rules out.
+        // WHY NOT AT THE LANDING: a blocked prompt would already have been echoed,
+        // parked and paid a summarization for. The one residue of firing at park
+        // time is that the landing's own refusals (spend cap crossed by the
+        // summary, still over 95%) can turn away a prompt the hook already saw;
+        // those are refusals of a prompt the user DID submit, so the hook having
+        // judged it is the accurate reading, not a phantom fire.
+        //
+        // A refusal is returned as-is: built from `$this`, so nothing is parked, no
+        // summarization Cmd leaves, the draft stays in the box and the last row is
+        // the `Hook denied:` notice — exactly what the unparked route returns.
+        [$hookNotes, $hookRefusal] = $this->dispatchTurnHooks($inputText);
+        if ($hookRefusal !== null) {
+            return $hookRefusal;
+        }
+
+        // THE NOTES ARE WRITTEN NOW, immediately ahead of the echoed prompt — the
+        // slot the unparked route gives them ("notes go immediately ahead of the
+        // user's line") — rather than carried on the HistoryCompactedMsg and spliced
+        // in at the landing. The echo is already the parked route's one committed
+        // copy of the turn, so a note written beside it reaches the dispatched turn
+        // through the same history the landing sends, and it needs no new state:
+        // nothing rides the message, so a double-Escape cancel or a superseded
+        // compaction id leaves the note in the transcript beside its own prompt —
+        // where the unparked route's cancel leaves it too — and can never resurface
+        // on a later, unrelated turn. The request is rebuilt over the probe that now
+        // includes them because the offered exchange set is derived from the exact
+        // shape compacted at the landing (see the probe comment above); it is pure,
+        // so discarding the first build costs nothing but the derivation. `??` keeps
+        // the first build if a rebuild ever found nothing, which only costs the
+        // newest condensed exchange its model summary, never the turn.
+        if ($hookNotes !== []) {
+            $request = $this->buildSummarizationRequest(
+                [...$this->history, Message::system(''), ...$hookNotes, Message::user($inputText)],
+                $inputText,
+                $cancellation,
+            ) ?? $request;
+        }
+
         $next = $this->mutate([
             // Kept short on purpose: {@see view()} paints a transcript message as
             // one unwrapped row (backlog §E22), so every character past the frame
@@ -11071,7 +11140,7 @@ final class Chat implements Model
                 $tokenLimit,
                 $request['count'],
                 $request['count'] === 1 ? 'exchange' : 'exchanges',
-            )), Message::user($inputText)],
+            )), ...$hookNotes, Message::user($inputText)],
             'inputBuf' => '',
             'inFlight' => true,
             'inFlightCancellation' => $cancellation,
