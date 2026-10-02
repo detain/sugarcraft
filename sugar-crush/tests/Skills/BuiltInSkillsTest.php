@@ -539,6 +539,28 @@ final class BuiltInSkillsTest extends TestCase
     }
 
     /**
+     * Every `<dir>/<skill>/SKILL.md`, sorted. A directory walk rather than a
+     * `glob()` pattern because tests/Context/GlobDialectDifferentialTest
+     * harvests every glob-shaped string literal under tests/ into a corpus
+     * whose size src/Util/PathGlob.php quotes — a pattern here would move
+     * that census without testing anything about globs.
+     *
+     * @return list<string>
+     */
+    private static function skillFilesUnder(string $dir): array
+    {
+        $files = [];
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry !== '.' && $entry !== '..' && is_file("{$dir}/{$entry}/SKILL.md")) {
+                $files[] = "{$dir}/{$entry}/SKILL.md";
+            }
+        }
+        sort($files);
+
+        return $files;
+    }
+
+    /**
      * No built-in may carry this monorepo's paths or conventions, or a command
      * that discards work or self-merges: a built-in is listed in EVERY
      * project's prompt, so its body runs wherever sugar-crush does. The whole
@@ -547,8 +569,7 @@ final class BuiltInSkillsTest extends TestCase
      */
     public function testNoBuiltInSkillNamesASugarCraftPathOrRunsADestructiveGitCommand(): void
     {
-        $files = glob($this->builtInSkillsPath . '/*/SKILL.md');
-        $this->assertIsArray($files);
+        $files = self::skillFilesUnder($this->builtInSkillsPath);
         $this->assertCount(8, $files, 'the scan must read every built-in, or it proves nothing');
 
         $forbidden = [
@@ -588,8 +609,8 @@ final class BuiltInSkillsTest extends TestCase
     public function testNoShippedSkillTellsTheModelToDiscardWork(): void
     {
         $files = [
-            ...(array) glob($this->builtInSkillsPath . '/*/SKILL.md'),
-            ...(array) glob(self::monorepoSkillsPath() . '/*/SKILL.md'),
+            ...self::skillFilesUnder($this->builtInSkillsPath),
+            ...self::skillFilesUnder(self::monorepoSkillsPath()),
         ];
         $this->assertGreaterThanOrEqual(12, count($files), 'the scan must cover both trees');
 
