@@ -278,6 +278,12 @@ final readonly class CustomProvider implements ProviderInterface
             // reason the loop below no longer returns at `finish_reason`.
             $streamUsage = null;
 
+            // Audit 15a A3: the two signals that a stream was CLOSED rather
+            // than CUT - Guzzle's StreamHandler reports a dropped connection
+            // as a plain eof(), so without them the two look identical.
+            $sawFinish = false;
+            $sawDone = false;
+
             while (!$stream->eof()) {
                 $chunk = $stream->read(8192);
                 $buffer .= $chunk;
@@ -289,6 +295,7 @@ final readonly class CustomProvider implements ProviderInterface
 
                     $line = trim($line);
                     if (str_starts_with($line, 'data: ')) {
+                        $sawDone = $sawDone || $line === 'data: [DONE]';
                         $data = json_decode(substr($line, 6), true);
                         if ($data === null) {
                             // JSON parse failed, skip — this is also the path
@@ -336,6 +343,7 @@ final readonly class CustomProvider implements ProviderInterface
                             $streamUsage = $this->parseUsage($data['usage']);
                         }
                         if ($finishReason !== null) {
+                            $sawFinish = true;
                             // Stop seen. NOT a return: on this wire the usage
                             // document arrives on the frame(s) AFTER the one
                             // that carries finish_reason, and the pre-fix
@@ -347,6 +355,31 @@ final readonly class CustomProvider implements ProviderInterface
                         }
                     }
                 }
+            }
+
+            // A server that closes after its last frame without the "\n" the
+            // loop splits on leaves that frame in $buffer; it can still be the
+            // sentinel, and a clean end must not be mistaken for a cut.
+            $sawDone = $sawDone || trim($buffer) === 'data: [DONE]';
+
+            // Audit 15a A3: EOF with neither a `finish_reason` nor `[DONE]` is
+            // a cut connection (proxy idle-timeout, server restart, reset),
+            // and the half-finished text used to stand as the whole answer.
+            // Reported as this provider reports every failure - one isError
+            // chunk, TRANSIENT - so Runtime retries while nothing has reached
+            // the screen and surfaces the cut otherwise.
+            if (!$sawFinish && !$sawDone) {
+                $stream->close();
+                $cut = ProviderStreamException::prematureEnd();
+
+                yield new CompleteResponse(
+                    content: '',
+                    isError: true,
+                    errorMessage: $cut->getMessage(),
+                    errorTransient: TransientFailure::isTransient($cut),
+                );
+
+                return;
             }
 
             if ($streamUsage !== null) {

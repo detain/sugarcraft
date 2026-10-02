@@ -1294,7 +1294,9 @@ JSON;
         // - the turn's usage vanishes while every test that never sends an
         // all-cached prefix stays green. This case exists to red that.
         $provider = $this->p4s2VertexStreamerWith([
-            ['candidates' => [['content' => ['parts' => [['text' => 'hi']]]]],
+            // finishReason closes the turn cleanly; a stream without one is a
+            // dropped connection (audit 15a A3).
+            ['candidates' => [['content' => ['parts' => [['text' => 'hi']]], 'finishReason' => 'STOP']],
              'usageMetadata' => ['promptTokenCount' => 10, 'cachedContentTokenCount' => 10, 'candidatesTokenCount' => 0]],
         ], 'gemini-1.5-pro-002');
 
@@ -1325,7 +1327,9 @@ JSON;
         // (testP4S2VertexGeminiNegativeWireCountsBillZeroThroughTheRealParsePath),
         // so this test overclaims nothing past the stream arm.
         $provider = $this->p4s2VertexStreamerWith([
-            ['candidates' => [['content' => ['parts' => [['text' => '']]]]],
+            // finishReason closes the turn cleanly (audit 15a A3), so the
+            // count below measures only the two gates under test.
+            ['candidates' => [['content' => ['parts' => [['text' => '']]], 'finishReason' => 'STOP']],
              'usageMetadata' => ['promptTokenCount' => -10, 'candidatesTokenCount' => -5]],
         ], 'gemini-1.5-pro-002');
 

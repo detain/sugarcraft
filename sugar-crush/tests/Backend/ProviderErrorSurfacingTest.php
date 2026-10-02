@@ -224,6 +224,77 @@ final class ProviderErrorSurfacingTest extends TestCase
         $this->assertSame(0, $mock->count(), 'one failed attempt, one retry');
     }
 
+    /**
+     * Audit 15a A3: a stream cut before any finish signal - no
+     * `finish_reason`, no `[DONE]` - is a dropped connection.
+     */
+    private static function cutStream(string $text): Response
+    {
+        return new Response(
+            200,
+            ['Content-Type' => 'text/event-stream'],
+            'data: {"choices":[{"index":0,"delta":{"content":"' . $text . '"}}]}' . "\n\n",
+        );
+    }
+
+    /**
+     * Audit 15a A3: a cut stream whose text never reached the screen is
+     * retried, and the turn is the retried attempt's whole answer - not the
+     * partial "The fix is to chan" the first attempt ended on.
+     */
+    public function testACutSglangStreamIsRetriedWhenNothingWasEmitted(): void
+    {
+        $mock = null;
+        $client = self::mockClient([self::cutStream('The fix is to chan'), self::okStream('recovered')], $mock);
+        $provider = new SglangProvider('http://provider.invalid', 'm', null, $client);
+
+        $reply = EngineBackend::new($provider, 'm')->withoutHooks()->complete([Message::user('hi')]);
+
+        $this->assertSame('recovered', $reply->content);
+        $this->assertSame(0, $mock->count(), 'one cut attempt, one retry');
+    }
+
+    /** Same, through CustomProvider's isError-chunk convention. */
+    public function testACutCustomStreamIsRetriedWhenNothingWasEmitted(): void
+    {
+        $mock = null;
+        $client = self::mockClient([self::cutStream(''), self::okStream('recovered')], $mock);
+        $provider = new CustomProvider('custom', 'http://provider.invalid', 'm', null, $client, true, true);
+
+        $reply = EngineBackend::new($provider, 'm')->withoutHooks()->complete([Message::user('hi')]);
+
+        $this->assertSame('recovered', $reply->content);
+        $this->assertSame(0, $mock->count(), 'one cut attempt, one retry');
+    }
+
+    /**
+     * Once the partial text has reached the screen a retry would duplicate
+     * it, so the cut is surfaced as the failure it is rather than standing as
+     * the whole answer.
+     */
+    public function testACutStreamAfterEmittedTextSurfacesInsteadOfPassingAsTheAnswer(): void
+    {
+        $mock = null;
+        $client = self::mockClient([self::cutStream('The fix is to chan'), self::okStream('recovered')], $mock);
+        $provider = new SglangProvider('http://provider.invalid', 'm', null, $client);
+
+        $tokens = '';
+        try {
+            $reply = EngineBackend::new($provider, 'm')->withoutHooks()->complete(
+                [Message::user('hi')],
+                static function (string $token) use (&$tokens): void {
+                    $tokens .= $token;
+                },
+            );
+            $this->fail('a cut stream must not come back as a reply; got content ' . var_export($reply->content, true));
+        } catch (ProviderStreamException $e) {
+            $this->assertSame('SGLANG request failed: ' . ProviderStreamException::PREMATURE_END_MESSAGE, $e->getMessage());
+        }
+
+        $this->assertSame('The fix is to chan', $tokens);
+        $this->assertSame(1, $mock->count(), 'emitted text is not retried');
+    }
+
     private function awaitRejection(PromiseInterface $promise): \Throwable
     {
         $loop = \React\EventLoop\Loop::get();

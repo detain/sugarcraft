@@ -390,16 +390,32 @@ final readonly class VertexProvider implements ProviderInterface
             $endpoint = $this->endpointFor($model);
             $body = $this->anthropicBody($request, stream: true);
 
+            // Audit 15a A3: whether the stream reached its terminal event. A
+            // transport cut ends the SDK's readAll() quietly, so falling out
+            // of the loop proves nothing; `message_stop` (or the
+            // `message_delta` carrying `stop_reason`, which precedes it) is
+            // the protocol saying the message is whole. An error chunk counts
+            // too: it already reports the failure, and a second, transient
+            // one would overwrite its verdict at the consumer.
+            $sawTerminal = false;
+
             foreach (($this->streamer)($endpoint, self::METHOD_STREAM_RAW_PREDICT, $body) as $event) {
-                $chunk = $this->parseAnthropicChunk(
-                    is_array($event) ? $event : [],
-                    $model,
-                    $toolCallBuffer,
-                );
+                $event = is_array($event) ? $event : [];
+                $chunk = $this->parseAnthropicChunk($event, $model, $toolCallBuffer);
+
+                $type = $event['type'] ?? null;
+                $sawTerminal = $sawTerminal
+                    || $type === 'message_stop'
+                    || ($type === 'message_delta' && ($event['delta']['stop_reason'] ?? null) !== null)
+                    || ($chunk !== null && $chunk->isError);
 
                 if ($chunk !== null) {
                     yield $chunk;
                 }
+            }
+
+            if (!$sawTerminal) {
+                yield self::prematureEndChunk('Vertex streamRawPredict: ');
             }
         } catch (\Throwable $e) {
             yield new CompleteResponse(
@@ -1282,6 +1298,25 @@ final readonly class VertexProvider implements ProviderInterface
     }
 
     /**
+     * The isError chunk both stream arms yield for a stream that ended before
+     * its terminal signal (audit 15a A3) - this class's convention for a
+     * failure, carrying {@see ProviderStreamException::prematureEnd()}'s
+     * message and TRANSIENT verdict so the two arms and the OpenAI-shaped
+     * providers cannot word or classify the cut differently.
+     */
+    private static function prematureEndChunk(string $prefix): CompleteResponse
+    {
+        $cut = ProviderStreamException::prematureEnd($prefix);
+
+        return new CompleteResponse(
+            content: '',
+            isError: true,
+            errorMessage: $cut->getMessage(),
+            errorTransient: TransientFailure::isTransient($cut),
+        );
+    }
+
+    /**
      * A truncated tool-call buffer can hold an entire file body, so the
      * fragment quoted back in an error message is bounded - the point is to
      * identify WHICH call broke, not to reproduce it.
@@ -1352,17 +1387,34 @@ final readonly class VertexProvider implements ProviderInterface
             // never sets it, which is the honest "did not see" answer.
             $lengthStopped = false;
 
+            // Audit 15a A3: whether any candidate closed with a finishReason.
+            // A cut stream ends readAll() quietly, so falling out of the loop
+            // proves nothing; Gemini states the end on the last candidate.
+            // An error chunk (a blocked prompt) counts too: it already
+            // reports the failure, and a second, transient one would
+            // overwrite its verdict at the consumer.
+            $sawFinish = false;
+
             foreach (($this->streamer)($endpoint, self::METHOD_STREAM_GENERATE_CONTENT, $body) as $event) {
-                $chunk = $this->parseGeminiChunk(
-                    is_array($event) ? $event : [],
-                    $model,
-                    $pendingUsage,
-                    $lengthStopped,
-                );
+                $event = is_array($event) ? $event : [];
+                $chunk = $this->parseGeminiChunk($event, $model, $pendingUsage, $lengthStopped);
+
+                $finishReason = is_array($event['candidates'][0] ?? null)
+                    ? ($event['candidates'][0]['finishReason'] ?? null)
+                    : null;
+                $sawFinish = $sawFinish
+                    || (is_string($finishReason) && $finishReason !== '')
+                    || ($chunk !== null && $chunk->isError);
 
                 if ($chunk !== null) {
                     yield $chunk;
                 }
+            }
+
+            if (!$sawFinish) {
+                // Before the usage emit: a cut turn is a failure, and the
+                // parked usage still bills below (Runtime folds every chunk).
+                yield self::prematureEndChunk('Vertex streamGenerateContent: ');
             }
 
             // E707: the flag-only frame rides BEFORE the terminal usage emit -

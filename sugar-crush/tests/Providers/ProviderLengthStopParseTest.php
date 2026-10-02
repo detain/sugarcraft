@@ -356,12 +356,16 @@ final class ProviderLengthStopParseTest extends TestCase
 
     public function testTheSglangStreamDoesNotCallATransportDeathACeiling(): void
     {
-        // No finish_reason frame at all: the stream dies mid-flight. The
-        // truncation GUARD still classifies it for the tool-call flush (that
-        // pre-existing law is untouched), but the E707 flag answers only what
-        // the wire SAID, so no flag frame may appear.
+        // No finish_reason frame at all, but the server still closed with
+        // `[DONE]`. The truncation GUARD still classifies it for the tool-call
+        // flush (that pre-existing law is untouched), but the E707 flag
+        // answers only what the wire SAID, so no flag frame may appear. (A
+        // stream with neither signal is a dropped connection and throws a
+        // transient failure instead - audit 15a A3, pinned in
+        // StreamPrematureEndTest.)
         $chunks = $this->sglangStream(
-            'data: {"choices":[{"delta":{"content":"par"}}]}' . "\n",
+            'data: {"choices":[{"delta":{"content":"par"}}]}' . "\n"
+            . 'data: [DONE]' . "\n",
         );
 
         foreach ($chunks as $chunk) {

@@ -392,7 +392,9 @@ final class PromptStabilityTest extends TestCase
         $this->history = [];
         $stack = HandlerStack::create(new MockHandler([
             new Response(200, [], '{"choices":[{"message":{"content":"ok"}}],"usage":{"total_tokens":1}}'),
-            new Response(200, [], "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n"),
+            // `[DONE]` closes the stream cleanly - without it the stream is a
+            // dropped connection and throws (audit 15a A3).
+            new Response(200, [], "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]\n\n"),
         ]));
         $stack->push(Middleware::history($this->history));
         $provider = new SglangProvider(

@@ -40,8 +40,8 @@ namespace SugarCraft\Crush\Providers;
  * Built only through named factories so each failure shape states its own
  * verdict in one place: {@see fromErrorEvent()} derives it from the server's
  * code with the same rule as an HTTP status
- * ({@see TransientFailure::statusIsTransient()}); a later "stream ended
- * prematurely" factory would simply pass `true`.
+ * ({@see TransientFailure::statusIsTransient()}); {@see prematureEnd()}
+ * simply passes `true`.
  *
  * WHY IT EXTENDS \RuntimeException
  * --------------------------------
@@ -60,6 +60,9 @@ final class ProviderStreamException extends \RuntimeException
 
     /** Used when the error frame carries no usable message text. */
     public const FALLBACK_MESSAGE = 'The server reported an error mid-stream without a message.';
+
+    /** What {@see prematureEnd()} says, after the provider's prefix. */
+    public const PREMATURE_END_MESSAGE = 'The stream ended before the response finished (connection dropped?)';
 
     /**
      * @param int|null $serverCode the server's in-band error code, when it
@@ -113,6 +116,27 @@ final class ProviderStreamException extends \RuntimeException
             $code,
             $code !== null && TransientFailure::statusIsTransient($code),
         );
+    }
+
+    /**
+     * A stream that reached EOF without the protocol's terminal signal - no
+     * `finish_reason` and no `data: [DONE]` on the OpenAI wire, no
+     * `message_stop` on Anthropic's, no `finishReason` on Gemini's (audit
+     * 15a A3).
+     *
+     * A proxy idle-timeout, a server restart or a reset connection does not
+     * throw on the streaming path: Guzzle's StreamHandler just reports
+     * `eof()`, so the half-finished text used to come back as a complete,
+     * untruncated answer. Always TRANSIENT - nothing the request said caused
+     * the cut, so a retry can produce the whole response; Runtime retries
+     * only while nothing has reached the screen and surfaces it otherwise.
+     *
+     * @param string $prefix prepended to the message, so a provider can keep
+     *                       its established wording
+     */
+    public static function prematureEnd(string $prefix = ''): self
+    {
+        return new self($prefix . self::PREMATURE_END_MESSAGE, null, true);
     }
 
     private static function displayMessage(mixed $message): string

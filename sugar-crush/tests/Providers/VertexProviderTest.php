@@ -1656,7 +1656,9 @@ final class VertexProviderTest extends TestCase
         // zero-token response. The mutation this catches is emitting the
         // parked usage unconditionally.
         $provider = $this->providerWithStreamer(
-            [['candidates' => [['content' => ['parts' => [['text' => 'hi']]]]]]],
+            // finishReason closes the turn cleanly; without it the stream
+            // is a dropped connection (audit 15a A3).
+            [['candidates' => [['content' => ['parts' => [['text' => 'hi']]], 'finishReason' => 'STOP']]]],
             $unused,
             self::GEMINI_MODEL,
         );
@@ -1808,6 +1810,9 @@ final class VertexProviderTest extends TestCase
                 'type' => 'input_json_delta', 'partial_json' => ':"a.txt"}',
             ]],
             ['type' => 'content_block_stop', 'index' => 1],
+            // The protocol's terminal event - without it the stream is a
+            // dropped connection (audit 15a A3).
+            ['type' => 'message_stop'],
         ]);
 
         $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
@@ -1891,6 +1896,7 @@ final class VertexProviderTest extends TestCase
                 'type' => 'tool_use', 'id' => 'tu-0', 'name' => 'ls',
             ]],
             ['type' => 'content_block_stop', 'index' => 0],
+            ['type' => 'message_stop'], // clean end (audit 15a A3)
         ]);
 
         $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
@@ -1944,6 +1950,7 @@ final class VertexProviderTest extends TestCase
                 'type' => 'input_json_delta', 'partial_json' => ' {} ',
             ]],
             ['type' => 'content_block_stop', 'index' => 0],
+            ['type' => 'message_stop'], // clean end (audit 15a A3)
         ]);
 
         $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(

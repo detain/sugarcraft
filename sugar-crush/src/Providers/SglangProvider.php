@@ -69,9 +69,11 @@ final readonly class SglangProvider implements ProviderInterface
      * {@see CompleteResponse::$truncated} in {@see parseResponse()}.
      * `error` is deliberately NOT in this set: it names Q8's error-body
      * surfacing, whose shape work must land before any tool-call behaviour
-     * rides on it. A stream that dies before ANY finish frame (hard cut, no
-     * `finish_reason` ever seen) flushes too - that is the `null` arm at the
-     * call site, not a member of this list.
+     * rides on it. A stream that closes with `[DONE]` but no `finish_reason`
+     * flushes too - that is the `null` arm at the call site, not a member of
+     * this list. A stream that dies before BOTH (hard cut) does not reach the
+     * flush at all: it throws {@see ProviderStreamException::prematureEnd()}
+     * (audit 15a A3).
      *
      * @var list<string>
      */
@@ -757,6 +759,12 @@ final readonly class SglangProvider implements ProviderInterface
             // it as ignorable noise that can ride a `tool_calls` finish.
             $streamFinishReason = null;
 
+            // Audit 15a A3: whether the `data: [DONE]` sentinel arrived. With
+            // $streamFinishReason it is how the end of the loop tells a
+            // stream the server CLOSED from one the transport CUT - Guzzle's
+            // StreamHandler reports a dropped connection as a plain eof().
+            $sawDone = false;
+
             // GuzzleHttp\Psr7\Stream has no readLine() - it implements only
             // the plain PSR-7 StreamInterface. Buffer raw chunks and split on
             // "\n" ourselves (same approach as CustomProvider::completeStream()).
@@ -768,6 +776,7 @@ final readonly class SglangProvider implements ProviderInterface
                     $buffer = substr($buffer, $newlinePos + 1);
 
                     if (str_starts_with($line, 'data: ')) {
+                        $sawDone = $sawDone || $line === 'data: [DONE]';
                         $data = json_decode(substr($line, 6), true);
                         // Audit 15a A2: an error raised after the 200 went out
                         // (context overflow, abort, OOM) arrives as an SSE
@@ -834,10 +843,31 @@ final readonly class SglangProvider implements ProviderInterface
                 }
             }
 
+            // A server that closes after its last frame without the "\n" the
+            // loop splits on leaves that frame in $buffer; it can still be the
+            // sentinel, and a clean end must not be mistaken for a cut.
+            $sawDone = $sawDone || trim($buffer) === 'data: [DONE]';
+
+            // Audit 15a A3: EOF with neither a `finish_reason` nor `[DONE]` is
+            // a cut connection (proxy idle-timeout, server restart, reset),
+            // not an answer - "The fix is to chan" used to come back as a
+            // final, untruncated reply. Throw a TRANSIENT failure, this
+            // provider's convention: Runtime retries it while nothing has
+            // reached the screen and surfaces it otherwise. It deliberately
+            // precedes the §Q7 flush below - a tool call salvaged from a
+            // dropped connection must not execute when a retry yields the
+            // whole, intended call.
+            if ($streamFinishReason === null && !$sawDone) {
+                $stream->close();
+
+                throw ProviderStreamException::prematureEnd('SGLANG request failed: ');
+            }
+
             // §Q7 (E-32): E-32's silent-loss window. The structured path
             // assembles only on `finish_reason: "tool_calls"`; when the turn
-            // is cut off (`length`/`abort`) - or the connection dies before
-            // any finish frame (`null`) - fragments that had already streamed
+            // is cut off (`length`/`abort`) - or the server closes with
+            // `[DONE]` but never sent a finish frame (`null`; a stream with
+            // neither threw above) - fragments that had already streamed
             // used to be dropped here WITHOUT A TRACE. Flush them
             // best-effort instead: args that decode to a complete JSON object
             // are emitted, everything else is dropped with the existing
@@ -911,9 +941,9 @@ final readonly class SglangProvider implements ProviderInterface
                 // streamed were indistinguishable from a clean turn by the
                 // time they reached the fold. One flag-only frame (empty
                 // content, zero billing, same inertness argument as the flush
-                // above) states it. A hard cut with NO finish frame is NOT
-                // included: the transport dying is not the ceiling biting,
-                // and the flag's contract is what the wire said.
+                // above) states it. A `[DONE]` with NO finish frame is NOT
+                // included: the flag's contract is what the wire said, and a
+                // hard cut with neither already threw (audit 15a A3).
                 yield new CompleteResponse(content: '', truncated: true);
             }
 

@@ -318,7 +318,9 @@ final class ProviderUsageCarriersTest extends TestCase
     public function testVertexGeminiStreamParkedResponseCarriesTheCumulativeDocumentOnce(): void
     {
         $provider = $this->vertexStreamWith([
-            ['candidates' => [['content' => ['parts' => [['text' => 'hi']]]]],
+            // finishReason closes the turn cleanly; a stream without one is a
+            // dropped connection (audit 15a A3).
+            ['candidates' => [['content' => ['parts' => [['text' => 'hi']]], 'finishReason' => 'STOP']],
              'usageMetadata' => ['promptTokenCount' => 10, 'cachedContentTokenCount' => 10, 'candidatesTokenCount' => 0]],
         ], 'gemini-1.5-pro-002');
 

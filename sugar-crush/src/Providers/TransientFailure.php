@@ -77,7 +77,9 @@ use Psr\Http\Client\NetworkExceptionInterface;
  *     true — a failure reported INSIDE a 200 SSE stream, where no HTTP status
  *     exists to classify. Its factory decides the verdict (an in-band error
  *     code goes through {@see statusIsTransient()}, so 5xx/408/429 retry and
- *     a 400 context-length overflow does not); this class only reads it.
+ *     a 400 context-length overflow does not; a stream that simply stops
+ *     before its terminal signal is always transient, audit A3); this class
+ *     only reads it.
  *
  * Explicitly NOT transient: any other 4xx (401/403 auth, 400 malformed,
  * 404, 413/422 context-length overflow), `\InvalidArgumentException` from a
