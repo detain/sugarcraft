@@ -397,10 +397,13 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * "EIGHT spellings remain by hand, in FOUR files" — plus the two the
+     * "EIGHT spellings remain by hand, in FOUR files" — plus the three the
      * inventory deliberately EXCLUDES, named here so the exclusion is a recorded
      * decision rather than a hole. `WorktreeManager`'s pair matches relative paths
-     * against a glob directory; it is not a boundary compare.
+     * against a glob directory; it is not a boundary compare. `SkillLoader`'s one
+     * (`skillKeyFor()`, audit 15d-18) derives a registry KEY for a SKILL.md the
+     * loader already found by walking that very base; nothing is admitted or
+     * refused on its answer.
      */
     public function testTheHandSpelledInventoryIncludingItsStatedExclusion(): void
     {
@@ -410,6 +413,7 @@ final class ContainedPathInventoryTest extends TestCase
             [
                 'Agents/WorktreeManager.php' => 2,
                 'Hooks/BuiltIn/BashEscapeDenyHook.php' => 1,
+                'Skills/SkillLoader.php' => 1,
                 'Tools/BuiltIn/Glob.php' => 1,
                 'Tools/IgnoreRules.php' => 1,
                 'Tools/PathJail.php' => 5,
@@ -417,7 +421,7 @@ final class ContainedPathInventoryTest extends TestCase
             $counts,
         );
 
-        unset($counts['Agents/WorktreeManager.php']);
+        unset($counts['Agents/WorktreeManager.php'], $counts['Skills/SkillLoader.php']);
         $this->assertSame(8, array_sum($counts), 'containment spellings still by hand');
         $this->assertCount(4, $counts, 'files still holding one');
     }

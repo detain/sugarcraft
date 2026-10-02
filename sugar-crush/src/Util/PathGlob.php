@@ -48,8 +48,8 @@ namespace SugarCraft\Crush\Util;
  *     declaring `src/*.php` that announces for `src/deep/x.php`, and row #32,
  *     bare `*` against `a/b.php`. Making `*` segment-scoped would silently stop
  *     those announcements. This direction moves nothing that ships: the skill
- *     channel's answer is proven identical over 140,621 pattern-path pairs
- *     (377 patterns x 373 paths), and the thirteen rows the rule trigger
+ *     channel's answer is proven identical over 142,880 pattern-path pairs
+ *     (380 patterns x 376 paths), and the thirteen rows the rule trigger
  *     moves on - ten wider, three narrower —
  *     are moves in a matcher that had no production reader when this step ran
  *     (reason 3). The three narrowings are rows #11, #22 and #23, every one of

@@ -192,7 +192,11 @@ namespace SugarCraft\Crush\Support;
  *     NOT in this count and not omitted by oversight: they match relative paths
  *     against a glob directory, not a path against a boundary. The inventory
  *     test names them explicitly so the exclusion is a decision rather than a gap.
- *     Its THIRD guard, `patternStaysInside()`, is not a prefix compare at all —
+ *     {@see \SugarCraft\Crush\Skills\SkillLoader}'s one (`skillKeyFor()`) is
+ *     excluded the same way: it derives a skill's registry KEY from a SKILL.md
+ *     the loader already found by walking that base, and admits or refuses
+ *     nothing on the answer.
+ *     WorktreeManager's THIRD guard, `patternStaysInside()`, is not a prefix compare at all —
  *     it walks a pattern's segments — and the reason it does not route here is
  *     the reason `BashEscapeDenyHook` does not: it judges a destination path
  *     that does not exist yet, which this class refuses outright.
