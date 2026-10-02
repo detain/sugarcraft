@@ -7592,6 +7592,17 @@ final class Chat implements Model
      * manager accumulates with `+=`, so the pool must never also be iterated
      * for the same SubAgent instances or usage would be counted twice.
      *
+     * A BUILT POOL BOUNDS EACH AGENT BY THE CONFIG'S TIMEOUT (audit AG-5).
+     * Since WF-1 the pool enforces {@see \SugarCraft\Crush\Agents\SubAgent::$timeout}
+     * on its forking path, and a SubAgent built without one carries the
+     * constructor's 300 s default — so an agent run here was killed at 300 s
+     * whatever {@see \SugarCraft\Crush\Agents\AgentPoolConfig::$defaultTimeoutSeconds}
+     * said, while the ProcessExecutor branch already took the config's figure.
+     * Each agent is therefore dispatched as a copy carrying the config's
+     * timeout (`0` = no per-agent bound); the copies are what the manager
+     * registers. An explicit pool ({@see withWorkerPool()}) is the caller's,
+     * and its agents run exactly as given.
+     *
      * @param \SugarCraft\Crush\Agents\SubAgent[] $agents
      * @return \Generator<AgentResult>
      * @throws \RuntimeException When no pool or config is available
@@ -7638,6 +7649,25 @@ final class Chat implements Model
                 ))->withStopOnFirstFailure($this->agentPoolConfig->stopOnFirstFailure)
                     ->withMaxRetries($this->agentPoolConfig->maxRetries);
             }
+
+            $timeout = $this->agentPoolConfig->defaultTimeoutSeconds;
+            $agents = array_map(
+                static fn(\SugarCraft\Crush\Agents\SubAgent $agent): \SugarCraft\Crush\Agents\SubAgent => $agent->timeout === $timeout
+                    ? $agent
+                    : new \SugarCraft\Crush\Agents\SubAgent(
+                        id: $agent->id,
+                        agent: $agent->agent,
+                        task: $agent->task,
+                        createdAt: $agent->createdAt,
+                        timeout: $timeout,
+                        maxRetries: $agent->maxRetries,
+                        isolation: $agent->isolation,
+                        permissionGate: $agent->permissionGate,
+                        teamId: $agent->teamId,
+                        teammateId: $agent->teammateId,
+                    ),
+                $agents,
+            );
         }
 
         if ($this->agentManager !== null) {
