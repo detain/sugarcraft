@@ -108,7 +108,7 @@ final class MenuCommandDraftPreservationTest extends TestCase
     private function lastUserMessage(Chat $chat): ?string
     {
         for ($i = count($chat->history) - 1; $i >= 0; $i--) {
-            if ($chat->history[$i]->role === Role::User) {
+            if ($chat->history[$i]->role === \SugarCraft\Crush\Role::User) {
                 return $chat->history[$i]->content;
             }
         }
