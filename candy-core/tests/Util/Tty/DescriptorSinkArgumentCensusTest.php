@@ -420,6 +420,22 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . 'and answers null (so no call is made) when no entry or more than one matches. '
             . 'Never a cast of a PHP stream.',
         ],
+        'sugar-crush/src/Tools/IgnoreRules.php::->close($start)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, the start-state closure in simulate(). IgnoreRules::close() is a private static helper of the gitignore glob automaton (audit F-T5): it adds an NFA state and its epsilon-reachable successors to a state SET passed by reference. Its first argument is an array, not a descriptor; it shares only the word close with libc close(2).',
+        ],
+        'sugar-crush/src/Tools/IgnoreRules.php::->close($next)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, the `/` that ends one `(?:[^/]+/)` iteration in step(). IgnoreRules::close() is a private static helper of the gitignore glob automaton (audit F-T5): it adds an NFA state and its epsilon-reachable successors to a state SET passed by reference. Its first argument is an array, not a descriptor; it shares only the word close with libc close(2).',
+        ],
+        'sugar-crush/src/Tools/IgnoreRules.php::->close($next) #2' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, a byte inside a `[...]` class in step(). IgnoreRules::close() is a private static helper of the gitignore glob automaton (audit F-T5): it adds an NFA state and its epsilon-reachable successors to a state SET passed by reference. Its first argument is an array, not a descriptor; it shares only the word close with libc close(2).',
+        ],
+        'sugar-crush/src/Tools/IgnoreRules.php::->close($next) #3' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, a literal, `?`, `*` or `**` advance in step(). IgnoreRules::close() is a private static helper of the gitignore glob automaton (audit F-T5): it adds an NFA state and its epsilon-reachable successors to a state SET passed by reference. Its first argument is an array, not a descriptor; it shares only the word close with libc close(2).',
+        ],
 
         // ---- the rest of the tree ----------------------------------------
         // Every one of these passes the STREAM ITSELF, uncast. `posix_isatty()`
