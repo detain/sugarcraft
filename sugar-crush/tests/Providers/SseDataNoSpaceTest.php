@@ -44,7 +44,7 @@ final class SseDataNoSpaceTest extends TestCase
         ]);
     }
 
-    private static function request(): CompleteRequest
+    private static function minimalRequest(): CompleteRequest
     {
         return new CompleteRequest(model: 'm', messages: [new UserMessage('hi')]);
     }
@@ -54,7 +54,7 @@ final class SseDataNoSpaceTest extends TestCase
     {
         $provider = new SglangProvider('http://provider.invalid', 'm', null, self::client($body));
 
-        return iterator_to_array($provider->completeStream(self::request()), false);
+        return iterator_to_array($provider->completeStream(self::minimalRequest()), false);
     }
 
     /** @return list<CompleteResponse> */
@@ -62,7 +62,7 @@ final class SseDataNoSpaceTest extends TestCase
     {
         $provider = new CustomProvider('custom', 'http://provider.invalid', 'm', null, self::client($body), true, true);
 
-        return iterator_to_array($provider->completeStream(self::request()), false);
+        return iterator_to_array($provider->completeStream(self::minimalRequest()), false);
     }
 
     /** @param list<CompleteResponse> $chunks */

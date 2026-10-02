@@ -2592,6 +2592,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'SETTINGS_DOC' => 'The suites point at the same settings documentation path.',
         'SHAPE_UNCLASSIFIED' => 'The two child-lifetime scanners emit the same token for an unclassified shape; it is a wire string, so the copies must move together.',
         'SMALL_BYTES' => 'The small-write byte count the stdin-wedge pair shares.',
+        'UNAUTHORIZED_BODY' => 'The provider-error surfacing suites (engine road and sub-agent road, audit AG-4) feed the same 401 body so both assert the same provider text reaches the user.',
         'VARS' => 'The environment roster the wiring suites pin is one list duplicated per suite; it belongs in a provider, and until it moves this row says so out loud.',
         'WEDGE_BYTES' => 'The stdin-wedge pair wedges the same volume; the drain suite wedges less.',
         'WINDOW' => 'The parked-compaction and rewind suites drive Chat through the same context-window size so both reach the same compaction threshold.',

@@ -366,6 +366,7 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — the same lookup before an update',
             'SELF_LOCATED — the same lookup before a delete',
             'SELF_LOCATED — a scope re-index',
+            'SELF_LOCATED — every scope\'s entries, read for the unreadable-notes report',
         ],
         'Memory/MemoryStore.php|file_get_contents' => [
             'SELF_LOCATED — a scope index this store wrote',
