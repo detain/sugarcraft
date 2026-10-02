@@ -62,7 +62,7 @@ final class McpAuthStoreLoginTest extends TestCase
         }
     }
 
-    public function testLoginRunsTheWholeFlowAndPersistsTheNineKeyEntry(): void
+    public function testLoginRunsTheWholeFlowAndPersistsTheTenKeyEntry(): void
     {
         $history = [];
         $flow = $this->flow([$this->registrationResponse(), $this->exchangeResponse()], $history, $discovered);
@@ -109,7 +109,7 @@ final class McpAuthStoreLoginTest extends TestCase
         self::assertSame('code', $params['response_type']);
         self::assertSame(OAuthPkce::METHOD, $params['code_challenge_method']);
 
-        // On-disk entry — same nine-key shape `add` writes, response scopes, endpoint carries.
+        // On-disk entry — same ten-key shape `add` writes, response scopes, endpoint carries.
         $persisted = (new OAuthClientRegistration(new Client(), $this->authFilePath))->loadAuth();
         self::assertArrayHasKey(self::SERVER, $persisted);
         $entry = $persisted[self::SERVER];
@@ -123,6 +123,33 @@ final class McpAuthStoreLoginTest extends TestCase
         self::assertSame(['read', 'write'], $entry->scopes, 'scopes come FROM THE RESPONSE');
         self::assertSame(self::TOKEN_URL, $entry->tokenUrl);
         self::assertSame(self::REGISTRATION_URL, $entry->registrationUrl);
+        self::assertSame(self::REGISTRATION_URL . '/cid-login', $entry->registrationClientUri, 'the RFC 7592 management URI rides onto the row');
+
+        $this->closeAll($requests);
+    }
+
+    /**
+     * Audit MCP-8: a token reply without `expires_in` (optional per RFC 6749)
+     * used to fail the whole login; it now stores an unknown expiry instead
+     * of `time() + null`, i.e. "expired the moment it was saved".
+     */
+    public function testLoginWithoutExpiresInStoresAnUnknownExpiry(): void
+    {
+        $history = [];
+        $flow = $this->flow([
+            $this->registrationResponse(),
+            new Response(200, ['Content-Type' => 'application/json'], json_encode(['access_token' => 'at-noexp'], JSON_THROW_ON_ERROR)),
+        ], $history, $discovered);
+
+        ob_start();
+        $rc = $flow->login(self::SERVER, null, null, 5.0, $this->browserReturning('code-noexp', $requests));
+        $output = (string) ob_get_clean();
+
+        self::assertSame(0, $rc, $output);
+        $entry = (new OAuthClientRegistration(new Client(), $this->authFilePath))->loadAuth()[self::SERVER];
+        self::assertSame('at-noexp', $entry->accessToken);
+        self::assertNull($entry->expiresAt);
+        self::assertFalse($entry->isExpired());
 
         $this->closeAll($requests);
     }
@@ -231,6 +258,7 @@ final class McpAuthStoreLoginTest extends TestCase
             'client_id' => 'cid-login',
             'client_secret' => 'secret-cid-login',
             'registration_access_token' => 'reg-login-token',
+            'registration_client_uri' => self::REGISTRATION_URL . '/cid-login',
         ], JSON_THROW_ON_ERROR));
     }
 

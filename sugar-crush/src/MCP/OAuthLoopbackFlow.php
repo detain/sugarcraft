@@ -175,10 +175,11 @@ final class OAuthLoopbackFlow
                 registrationAccessToken: $registered['registrationAccessToken'],
                 accessToken: $token['accessToken'],
                 refreshToken: $token['refreshToken'],
-                expiresAt: time() + $token['expiresIn'],
+                expiresAt: OAuthClientRegistration::expiresAtFor($token['expiresIn']),
                 scopes: $token['scopes'],
                 tokenUrl: $tokenUrl,
                 registrationUrl: $registrationUrl,
+                registrationClientUri: $registered['registrationClientUri'],
             );
             $this->oauth->saveAuth($serverUrl, $entry);
 

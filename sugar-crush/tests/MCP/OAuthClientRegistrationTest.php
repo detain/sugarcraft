@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\MCP;
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Chat;
@@ -315,7 +316,7 @@ final class OAuthClientRegistrationTest extends TestCase
         $this->assertSame('new-access-token', $result->accessToken);
     }
 
-    public function testGetValidAuthWithExpiredEntryAndEmptyRefreshTokenThrowsWithoutRegistrationUrl(): void
+    public function testGetValidAuthWithExpiredEntryAndEmptyRefreshTokenThrows(): void
     {
         $ocr = new OAuthClientRegistration(null, $this->authFilePath);
 
@@ -324,7 +325,7 @@ final class OAuthClientRegistrationTest extends TestCase
             clientSecret: 'secret-abc',
             registrationAccessToken: 'reg-token-xyz',
             accessToken: 'expired-access-token',
-            refreshToken: '', // empty — causes deadlock
+            refreshToken: '', // empty — cannot be renewed without the user
             expiresAt: time() - 100,
             scopes: ['read'],
         );
@@ -332,54 +333,260 @@ final class OAuthClientRegistrationTest extends TestCase
         $ocr->saveAuth('https://example.com/mcp', $entry);
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('expired with no refresh token');
+        $this->expectExceptionMessage('has expired and the server issued no refresh token');
 
         $ocr->getValidAuth('https://example.com/mcp', 'https://example.com/token');
     }
 
-    public function testGetValidAuthWithExpiredEntryAndEmptyRefreshTokenTriggersReRegistration(): void
+    // =========================================================================
+    // MCP-8: an expired refresh-less login asks for re-login; nothing is
+    // persisted before a token exchange succeeds
+    // =========================================================================
+
+    /**
+     * The audit repro. The old arm "re-registered" (a body-less PUT to the
+     * registration endpoint), SAVED an entry whose access token was the new
+     * client id with no expiry, and only then tried a client_credentials
+     * grant. The server refused that grant, and the never-expiring
+     * `Bearer cid2` stayed on disk for good. Now: the stored entry is
+     * byte-for-byte what it was, and the error names the command to run.
+     */
+    public function testExpiredRefreshlessLoginLeavesTheStoreUntouchedAndAsksForReLogin(): void
     {
-        // First response: PUT to registration endpoint (update)
-        $updateResponse = new Response(200, ['Content-Type' => 'application/json'], json_encode([
-            'client_id' => 'new-client-id',
-            'client_secret' => 'new-client-secret',
-            'registration_access_token' => 'new-reg-token',
-        ]));
+        $history = [];
+        $ocr = new OAuthClientRegistration($this->clientRecording([
+            new Response(200, [], (string) json_encode(['client_id' => 'cid2', 'registration_access_token' => 'rat2'])),
+            new Response(400, [], (string) json_encode(['error' => 'unauthorized_client'])),
+        ], $history), $this->authFilePath);
+        $ocr->saveAuth('https://z/mcp', $this->storeEntry('Z1', time() - 10));
+        $before = (string) file_get_contents($this->authFilePath);
 
-        // Second response: token fetch
-        $tokenResponse = new Response(200, ['Content-Type' => 'application/json'], json_encode([
-            'access_token' => 'new-access-token',
-            'refresh_token' => 'new-refresh-token',
-            'expires_in' => 7200,
-        ]));
+        $caught = null;
+        try {
+            // validAuthFor() is the per-request path; it used to hand the
+            // stored registrationUrl in, which is what armed the old arm.
+            $ocr->validAuthFor('https://z/mcp');
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
 
-        $mock = new MockHandler([$updateResponse, $tokenResponse]);
-        $handlerStack = HandlerStack::create($mock);
-        $httpClient = new Client(['handler' => $handlerStack]);
+        $this->assertNotNull($caught, 'an expired login with no refresh token must not be served');
+        $this->assertStringContainsString('sugarcrush mcp auth login https://z/mcp', $caught->getMessage());
+        $this->assertSame($before, (string) file_get_contents($this->authFilePath), 'the stored entry must be left exactly as it was');
 
-        $ocr = new OAuthClientRegistration($httpClient, $this->authFilePath);
+        $stored = (new OAuthClientRegistration(null, $this->authFilePath))->loadAuth()['https://z/mcp'];
+        $this->assertSame('Z1', $stored->accessToken, 'the client id must never be stored as a bearer token');
+        $this->assertNotNull($stored->expiresAt);
+        $this->assertTrue($stored->isExpired(), 'the entry is still the honest expired one, not a never-expiring replacement');
+    }
 
-        $entry = new AuthEntry(
-            clientId: 'old-client-123',
-            clientSecret: 'old-secret-abc',
-            registrationAccessToken: 'old-reg-token-xyz',
-            accessToken: 'expired-access-token',
-            refreshToken: '', // empty — triggers re-registration
-            expiresAt: time() - 100,
-            scopes: ['read'],
+    public function testExpiredRefreshlessLoginSendsNoRequestAtAll(): void
+    {
+        $history = [];
+        $ocr = new OAuthClientRegistration($this->clientRecording([
+            new Response(200, [], (string) json_encode(['client_id' => 'cid2', 'registration_access_token' => 'rat2'])),
+            new Response(200, [], (string) json_encode(['access_token' => 'guessed', 'expires_in' => 3600])),
+        ], $history), $this->authFilePath);
+        $ocr->saveAuth('https://z/mcp', $this->storeEntry('Z1', time() - 10));
+
+        foreach ([
+            fn () => $ocr->getValidAuth('https://z/mcp', 'https://as/token'),
+            fn () => $ocr->validAuthFor('https://z/mcp'),
+        ] as $call) {
+            try {
+                $call();
+                $this->fail('an expired refresh-less entry must throw');
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('mcp auth login', $e->getMessage());
+            }
+        }
+
+        $this->assertSame([], $history, 'no grant is guessed: neither a registration update nor a client_credentials token request may be sent');
+    }
+
+    public function testAFailedRefreshLeavesTheStoredEntryUntouched(): void
+    {
+        $ocr = new OAuthClientRegistration($this->clientAnswering([
+            new Response(400, [], (string) json_encode(['error' => 'invalid_grant'])),
+        ]), $this->authFilePath);
+        $ocr->saveAuth('https://z/mcp', $this->storeEntry('Z1', time() - 10, 'rZ1'));
+        $before = (string) file_get_contents($this->authFilePath);
+
+        try {
+            $ocr->getValidAuth('https://z/mcp', 'https://as/token');
+            $this->fail('a refused refresh must surface');
+        } catch (\RuntimeException) {
+        }
+
+        $this->assertSame($before, (string) file_get_contents($this->authFilePath));
+    }
+
+    // =========================================================================
+    // MCP-8: expires_in is optional (RFC 6749 §5.1) — unknown expiry, not a throw
+    // =========================================================================
+
+    public function testFetchTokenAcceptsAResponseWithoutExpiresIn(): void
+    {
+        $ocr = new OAuthClientRegistration($this->clientAnswering([
+            new Response(200, [], (string) json_encode(['access_token' => 'cc-token'])),
+        ]), $this->authFilePath);
+
+        $token = $ocr->fetchToken('https://as/token', 'cid', 'sec');
+
+        $this->assertSame('cc-token', $token['accessToken']);
+        $this->assertNull($token['expiresIn'], 'an omitted expires_in is an unknown lifetime');
+        $this->assertSame('', $token['refreshToken']);
+    }
+
+    public function testARefreshWithoutExpiresInIsStoredWithUnknownExpiry(): void
+    {
+        $ocr = new OAuthClientRegistration($this->clientAnswering([
+            new Response(200, [], (string) json_encode(['access_token' => 'rotated', 'refresh_token' => 'rt2'])),
+        ]), $this->authFilePath);
+        $ocr->saveAuth('https://z/mcp', $this->storeEntry('Z1', time() - 10, 'rt1'));
+
+        $served = $ocr->getValidAuth('https://z/mcp', 'https://as/token');
+
+        $this->assertSame('rotated', $served?->accessToken);
+        $this->assertNull($served->expiresAt, 'time() + null would have stored "expired now"');
+        $this->assertNull($this->onDisk()['https://z/mcp']['expiresAt']);
+        $this->assertSame('rt2', $this->onDisk()['https://z/mcp']['refreshToken']);
+    }
+
+    public function testTokenResponsesStillRequireAnAccessTokenAndANumericExpiry(): void
+    {
+        foreach (['{"expires_in":10}', '{"access_token":""}', '{"access_token":"a","expires_in":"soon"}'] as $body) {
+            $ocr = new OAuthClientRegistration($this->clientAnswering([new Response(200, [], $body)]), $this->authFilePath);
+
+            try {
+                $ocr->fetchToken('https://as/token', 'cid', '');
+                $this->fail('must reject: ' . $body);
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('Token response', $e->getMessage());
+            }
+        }
+    }
+
+    public function testExpiresAtForKeepsAnUnknownExpiryUnknown(): void
+    {
+        $this->assertNull(OAuthClientRegistration::expiresAtFor(null));
+        $this->assertSame(1060, OAuthClientRegistration::expiresAtFor(60, 1000));
+    }
+
+    public function testAddCommandStoresATokenWithoutExpiresInWithUnknownExpiry(): void
+    {
+        $serverUrl = 'https://add-noexp.example.com/mcp';
+        $store = new McpAuthStore(new OAuthClientRegistration($this->clientAnswering([
+            new Response(200, [], (string) json_encode(['client_id' => 'cid-n', 'registration_access_token' => 'reg-n'])),
+            new Response(200, [], (string) json_encode(['access_token' => 'at-n'])),
+        ]), $this->authFilePath));
+
+        ob_start();
+        $rc = (new McpAuthCommand($store))->execute(new Chat([]), ['add', $serverUrl, 'https://add-noexp.example.com/register', 'https://add-noexp.example.com/token']);
+        $output = (string) ob_get_clean();
+
+        $this->assertSame(0, $rc, $output);
+        $this->assertSame('at-n', $this->onDisk()[$serverUrl]['accessToken']);
+        $this->assertNull($this->onDisk()[$serverUrl]['expiresAt']);
+    }
+
+    // =========================================================================
+    // MCP-8: RFC 7592 registration updates go to registration_client_uri
+    // =========================================================================
+
+    public function testRegisterClientCapturesTheRegistrationClientUri(): void
+    {
+        $ocr = new OAuthClientRegistration($this->clientAnswering([
+            new Response(201, [], (string) json_encode([
+                'client_id' => 'cid',
+                'registration_access_token' => 'rat',
+                'registration_client_uri' => 'https://as/register/cid',
+            ])),
+            new Response(201, [], (string) json_encode(['client_id' => 'cid', 'registration_access_token' => 'rat'])),
+        ]), $this->authFilePath);
+
+        $this->assertSame('https://as/register/cid', $ocr->registerClient('https://as/register', 'n')['registrationClientUri']);
+        $this->assertSame('', $ocr->registerClient('https://as/register', 'n')['registrationClientUri'], 'a server without RFC 7592 management yields no URI');
+    }
+
+    public function testUpdateRegistrationPutsTheFullMetadataToTheClientUri(): void
+    {
+        $history = [];
+        $ocr = new OAuthClientRegistration($this->clientRecording([
+            new Response(200, [], (string) json_encode([
+                'client_id' => 'cid',
+                'client_secret' => 'sec-rotated',
+                'registration_access_token' => 'rat-rotated',
+                'registration_client_uri' => 'https://as/register/cid',
+                'client_name' => 'renamed',
+            ])),
+        ], $history), $this->authFilePath);
+        $ocr->saveAuth('https://z/mcp', $this->managedEntry());
+
+        $updated = $ocr->updateRegistration('https://z/mcp', ['client_name' => 'renamed', 'redirect_uris' => ['http://127.0.0.1:1/callback']]);
+
+        $this->assertCount(1, $history);
+        $request = $history[0]['request'];
+        $this->assertSame('PUT', $request->getMethod());
+        $this->assertSame('https://as/register/cid', (string) $request->getUri(), 'RFC 7592 updates go to the per-client URI, not the registration endpoint');
+        $this->assertSame('Bearer rat', $request->getHeaderLine('Authorization'));
+        $this->assertSame(
+            ['client_name' => 'renamed', 'redirect_uris' => ['http://127.0.0.1:1/callback'], 'client_id' => 'cid', 'client_secret' => 'sec'],
+            json_decode((string) $request->getBody(), true),
+            'the body carries the complete metadata plus the client credentials',
         );
 
-        $ocr->saveAuth('https://example.com/mcp', $entry);
+        $this->assertSame('sec-rotated', $updated->clientSecret);
+        $this->assertSame('rat-rotated', $updated->registrationAccessToken);
+        $this->assertSame('live-token', $updated->accessToken, 'an update never touches the tokens');
+        $this->assertSame('rat-rotated', $this->onDisk()['https://z/mcp']['registrationAccessToken']);
+        $this->assertSame('live-token', $this->onDisk()['https://z/mcp']['accessToken']);
+    }
 
-        $result = $ocr->getValidAuth(
-            'https://example.com/mcp',
-            'https://example.com/token',
-            'https://example.com/register',
-        );
+    public function testUpdateRegistrationWithoutAClientUriSendsNothing(): void
+    {
+        $history = [];
+        $ocr = new OAuthClientRegistration($this->clientRecording([], $history), $this->authFilePath);
+        $ocr->saveAuth('https://z/mcp', $this->storeEntry('Z1', time() + 3600));
 
-        $this->assertNotNull($result);
-        $this->assertSame('new-client-id', $result->clientId);
-        $this->assertSame('new-access-token', $result->accessToken);
+        try {
+            $ocr->updateRegistration('https://z/mcp', ['client_name' => 'x']);
+            $this->fail('no registration_client_uri means no RFC 7592 update');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('registration_client_uri', $e->getMessage());
+        }
+
+        $this->assertSame([], $history);
+    }
+
+    public function testUpdateRegistrationNamingAnotherClientStoresNothing(): void
+    {
+        $ocr = new OAuthClientRegistration($this->clientAnswering([
+            new Response(200, [], (string) json_encode(['client_id' => 'someone-else', 'registration_access_token' => 'x'])),
+        ]), $this->authFilePath);
+        $ocr->saveAuth('https://z/mcp', $this->managedEntry());
+        $before = (string) file_get_contents($this->authFilePath);
+
+        try {
+            $ocr->updateRegistration('https://z/mcp', ['client_name' => 'x']);
+            $this->fail('a reply for another client id must be refused');
+        } catch (\RuntimeException) {
+        }
+
+        $this->assertSame($before, (string) file_get_contents($this->authFilePath));
+    }
+
+    public function testALegacyRowWithoutRegistrationClientUriStillLoads(): void
+    {
+        file_put_contents($this->authFilePath, (string) json_encode(['https://old/mcp' => [
+            'clientId' => 'c', 'clientSecret' => '', 'registrationAccessToken' => 'r', 'accessToken' => 'a',
+            'refreshToken' => '', 'expiresAt' => null, 'scopes' => [], 'tokenUrl' => '', 'registrationUrl' => '',
+        ]]));
+
+        $entry = (new OAuthClientRegistration(null, $this->authFilePath))->loadAuth()['https://old/mcp'];
+
+        $this->assertSame('', $entry->registrationClientUri);
+        $this->assertSame('a', $entry->accessToken);
     }
 
     // =========================================================================
@@ -538,6 +745,7 @@ final class OAuthClientRegistrationTest extends TestCase
                 'client_id' => 'cid-add',
                 'client_secret' => 'secret-add',
                 'registration_access_token' => 'reg-add',
+                'registration_client_uri' => 'https://add-arm.example.com/register/cid-add',
             ])),
             new Response(200, ['Content-Type' => 'application/json'], json_encode([
                 'access_token' => 'at-add',
@@ -560,6 +768,7 @@ final class OAuthClientRegistrationTest extends TestCase
         $this->assertSame($tokenUrl, $persisted[$serverUrl]->tokenUrl);
         $this->assertSame($registrationUrl, $persisted[$serverUrl]->registrationUrl);
         $this->assertSame('at-add', $persisted[$serverUrl]->accessToken);
+        $this->assertSame('https://add-arm.example.com/register/cid-add', $persisted[$serverUrl]->registrationClientUri, 'the RFC 7592 management URI is carried onto the row');
     }
 
     // =========================================================================
@@ -729,6 +938,33 @@ final class OAuthClientRegistrationTest extends TestCase
             'refresh_token' => $refreshToken,
             'expires_in' => 3600,
         ]));
+    }
+
+    private function managedEntry(): AuthEntry
+    {
+        return new AuthEntry(
+            clientId: 'cid',
+            clientSecret: 'sec',
+            registrationAccessToken: 'rat',
+            accessToken: 'live-token',
+            refreshToken: 'rt',
+            expiresAt: time() + 3600,
+            tokenUrl: 'https://as/token',
+            registrationUrl: 'https://as/register',
+            registrationClientUri: 'https://as/register/cid',
+        );
+    }
+
+    /**
+     * @param list<Response|callable> $queue
+     * @param array<int, array<string, mixed>> $history
+     */
+    private function clientRecording(array $queue, array &$history): Client
+    {
+        $stack = HandlerStack::create(new MockHandler($queue));
+        $stack->push(Middleware::history($history));
+
+        return new Client(['handler' => $stack]);
     }
 
     /**

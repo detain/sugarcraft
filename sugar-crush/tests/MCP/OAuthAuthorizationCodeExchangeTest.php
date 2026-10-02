@@ -143,9 +143,9 @@ final class OAuthAuthorizationCodeExchangeTest extends TestCase
         self::assertSame([], $token['scopes']);
     }
 
-    public function testAMissingAccessTokenOrExpiryThrows(): void
+    public function testAMissingAccessTokenThrows(): void
     {
-        foreach (['{"access_token":"a"}', '{"expires_in":10}', '[]'] as $body) {
+        foreach (['{"expires_in":10}', '[]'] as $body) {
             $oauth = $this->registration([new Response(200, [], $body)]);
 
             $caught = null;
@@ -154,12 +154,27 @@ final class OAuthAuthorizationCodeExchangeTest extends TestCase
             } catch (\RuntimeException $e) {
                 $caught = $e;
             }
-            self::assertNotNull($caught, 'an entry that cannot say WHEN it dies must not be minted from body: ' . $body);
-            self::assertStringContainsString('access_token or expires_in', $caught->getMessage());
+            self::assertNotNull($caught, 'no entry may be minted without a token to send, body: ' . $body);
+            self::assertStringContainsString('missing access_token', $caught->getMessage());
         }
     }
 
-    public function testTheAuthCodeEntryShapeIsTheNineKeyRoster(): void
+    /**
+     * Audit MCP-8: RFC 6749 §5.1 makes `expires_in` RECOMMENDED, not
+     * required. The exchange used to throw on its absence, failing a login
+     * the server had granted; it is now an unknown expiry (null).
+     */
+    public function testAMissingExpiryIsAnUnknownExpiryNotAFailure(): void
+    {
+        $oauth = $this->registration([new Response(200, [], '{"access_token":"a"}')]);
+
+        $token = $oauth->exchangeAuthorizationCode('https://auth.invalid/token', 'cid', '', 'code', 'http://127.0.0.1:1/c', 'v');
+
+        self::assertSame('a', $token['accessToken']);
+        self::assertNull($token['expiresIn']);
+    }
+
+    public function testTheAuthCodeEntryShapeIsTheTenKeyRoster(): void
     {
         $entry = new AuthEntry(
             clientId: 'cid',
@@ -174,9 +189,10 @@ final class OAuthAuthorizationCodeExchangeTest extends TestCase
         );
 
         self::assertSame(
-            ['clientId', 'clientSecret', 'registrationAccessToken', 'accessToken', 'refreshToken', 'expiresAt', 'scopes', 'tokenUrl', 'registrationUrl'],
+            ['clientId', 'clientSecret', 'registrationAccessToken', 'accessToken', 'refreshToken', 'expiresAt', 'scopes', 'tokenUrl', 'registrationUrl', 'registrationClientUri'],
             array_keys($entry->toArray()),
-            'the on-disk shape is shared by `add` and `login`; a tenth key here means AuthEntry grew a field the legacy readers never saw',
+            'the on-disk shape is shared by `add` and `login`; an eleventh key here means AuthEntry grew a field the legacy readers never saw '
+            . '(the tenth, registrationClientUri for RFC 7592 updates, loads as \'\' from a row written before it existed)',
         );
     }
 
@@ -243,7 +259,7 @@ final class OAuthAuthorizationCodeExchangeTest extends TestCase
         self::assertSame('rt-old', $form['refresh_token']);
     }
 
-    public function testAnExpiredRefreshlessEntryWithoutARegistrationUrlStillThrowsHonestly(): void
+    public function testAnExpiredRefreshlessEntryThrowsHonestly(): void
     {
         $oauth = $this->registration([]);
 
@@ -262,7 +278,7 @@ final class OAuthAuthorizationCodeExchangeTest extends TestCase
         $oauth->clearCache();
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('expired with no refresh token');
+        $this->expectExceptionMessage('has expired and the server issued no refresh token');
 
         $oauth->getValidAuth('https://mcp.invalid/api', 'https://auth.invalid/token');
     }

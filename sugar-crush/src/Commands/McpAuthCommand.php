@@ -301,9 +301,10 @@ final class McpAuthCommand
                 registrationAccessToken: $registered['registrationAccessToken'],
                 accessToken: $token['accessToken'],
                 refreshToken: $token['refreshToken'],
-                expiresAt: time() + $token['expiresIn'],
+                expiresAt: \SugarCraft\Crush\MCP\OAuthClientRegistration::expiresAtFor($token['expiresIn']),
                 tokenUrl: $tokenUrl,
                 registrationUrl: $registrationUrl,
+                registrationClientUri: $registered['registrationClientUri'],
             );
 
             $oauth->saveAuth($serverUrl, $entry);

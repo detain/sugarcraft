@@ -66,7 +66,7 @@ final class OAuthClientRegistration
      *                                        today's out-of-band list byte-stable — the
      *                                        `add` path never had a redirect to declare
      *                                        and must not start advertising one.
-     * @return array{clientId: string, clientSecret: string, registrationAccessToken: string}
+     * @return array{clientId: string, clientSecret: string, registrationAccessToken: string, registrationClientUri: string}
      */
     public function registerClient(
         string $registrationUrl,
@@ -107,6 +107,14 @@ final class OAuthClientRegistration
             'clientId' => $clientId,
             'clientSecret' => $clientSecret ?? '',
             'registrationAccessToken' => $accessToken,
+            // RFC 7592 §3: the per-client management URL. It is the ONLY
+            // address a later read/update/delete of this registration may go
+            // to — the registration endpoint itself only creates clients — so
+            // it is carried onto the stored entry ('' when the server runs no
+            // management protocol, which {@see updateRegistration()} refuses).
+            'registrationClientUri' => \is_string($data['registration_client_uri'] ?? null)
+                ? $data['registration_client_uri']
+                : '',
         ];
     }
 
@@ -117,7 +125,8 @@ final class OAuthClientRegistration
      * @param string $clientId The client ID from registration
      * @param string $clientSecret The client secret from registration (may be empty)
      * @param array<string, string> $scopes Requested scopes
-     * @return array{accessToken: string, refreshToken: string, expiresIn: int}
+     * @return array{accessToken: string, refreshToken: string, expiresIn: int|null}
+     *         `expiresIn` is null when the server omitted `expires_in` — see {@see expiresAtFor()}.
      */
     public function fetchToken(
         string $tokenUrl,
@@ -144,17 +153,12 @@ final class OAuthClientRegistration
             'headers' => ['Accept' => 'application/json'],
         ]);
 
-        $accessToken = $data['access_token'] ?? null;
-        $expiresIn = $data['expires_in'] ?? null;
-
-        if ($accessToken === null || $expiresIn === null) {
-            throw new \RuntimeException('Token response missing access_token or expires_in');
-        }
+        [$accessToken, $expiresIn] = self::tokenFieldsOf($data, 'Token response');
 
         return [
             'accessToken' => $accessToken,
             'refreshToken' => $data['refresh_token'] ?? '',
-            'expiresIn' => (int) $expiresIn,
+            'expiresIn' => $expiresIn,
         ];
     }
 
@@ -165,7 +169,7 @@ final class OAuthClientRegistration
      * @param string $clientId The client ID
      * @param string $clientSecret The client secret
      * @param string $refreshToken The refresh token
-     * @return array{accessToken: string, refreshToken: string, expiresIn: int}
+     * @return array{accessToken: string, refreshToken: string, expiresIn: int|null}
      */
     public function refreshToken(
         string $tokenUrl,
@@ -189,17 +193,12 @@ final class OAuthClientRegistration
             'headers' => ['Accept' => 'application/json'],
         ]);
 
-        $accessToken = $data['access_token'] ?? null;
-        $expiresIn = $data['expires_in'] ?? null;
-
-        if ($accessToken === null || $expiresIn === null) {
-            throw new \RuntimeException('Refresh response missing access_token or expires_in');
-        }
+        [$accessToken, $expiresIn] = self::tokenFieldsOf($data, 'Refresh response');
 
         return [
             'accessToken' => $accessToken,
             'refreshToken' => $data['refresh_token'] ?? $refreshToken,
-            'expiresIn' => (int) $expiresIn,
+            'expiresIn' => $expiresIn,
         ];
     }
 
@@ -207,12 +206,14 @@ final class OAuthClientRegistration
      * E701: exchange an authorization code (plus the PKCE verifier that
      * produced the challenge the authorize URL carried) for tokens.
      *
-     * The response validation mirrors {@see fetchToken()} exactly — an entry
-     * that cannot say WHEN it dies is not an entry — and the returned
-     * `refreshToken` is `''` when the server omitted one, which is legal for
-     * authorization-code grants. The caller of a refresh-less entry serves
-     * the access token until it expires and then re-runs the browser login;
-     * {@see getValidAuth()}'s buffer-window arm honours that, rather than
+     * The response validation mirrors {@see fetchToken()} exactly: an
+     * `access_token` is required, `expires_in` is not (RFC 6749 §5.1 makes it
+     * RECOMMENDED, and a missing one comes back as a null `expiresIn` —
+     * unknown expiry — instead of failing a login the server granted). The
+     * returned `refreshToken` is `''` when the server omitted one, which is
+     * legal for authorization-code grants. The caller of a refresh-less entry
+     * serves the access token until it expires and then re-runs the browser
+     * login; {@see getValidAuth()} honours that in both arms, rather than
      * calling refresh with an empty token and failing deep in the wire.
      *
      * The secret rides the form body (client_secret_post). Registration
@@ -229,7 +230,7 @@ final class OAuthClientRegistration
      * @param string $code The authorization code from the callback
      * @param string $redirectUri The exact redirect_uri the authorize URL carried
      * @param string $codeVerifier The PKCE verifier whose S256 challenge was sent
-     * @return array{accessToken: string, refreshToken: string, expiresIn: int, scopes: list<string>}
+     * @return array{accessToken: string, refreshToken: string, expiresIn: int|null, scopes: list<string>}
      */
     public function exchangeAuthorizationCode(
         string $tokenUrl,
@@ -257,12 +258,7 @@ final class OAuthClientRegistration
             'headers' => ['Accept' => 'application/json'],
         ]);
 
-        $accessToken = $data['access_token'] ?? null;
-        $expiresIn = $data['expires_in'] ?? null;
-
-        if ($accessToken === null || $expiresIn === null) {
-            throw new \RuntimeException('Authorization-code response missing access_token or expires_in');
-        }
+        [$accessToken, $expiresIn] = self::tokenFieldsOf($data, 'Authorization-code response');
 
         $scope = $data['scope'] ?? '';
 
@@ -272,9 +268,50 @@ final class OAuthClientRegistration
             // "this entry cannot refresh", which getValidAuth() reads as a
             // guard rather than as a token to send.
             'refreshToken' => $data['refresh_token'] ?? '',
-            'expiresIn' => (int) $expiresIn,
+            'expiresIn' => $expiresIn,
             'scopes' => $scope === '' ? [] : explode(' ', (string) $scope),
         ];
+    }
+
+    /**
+     * The absolute expiry to store for a token response's `expiresIn`.
+     *
+     * Null in, null out: a server that omitted `expires_in` did not promise a
+     * lifetime, and inventing one would either refresh a token that is still
+     * good or keep sending one that is not. `time() + null` would silently
+     * store "expires now" instead, so every writer of an entry goes through
+     * here.
+     */
+    public static function expiresAtFor(?int $expiresIn, ?int $now = null): ?int
+    {
+        return $expiresIn === null ? null : ($now ?? time()) + $expiresIn;
+    }
+
+    /**
+     * The `access_token` and optional `expires_in` of a token-endpoint reply
+     * (RFC 6749 §5.1), shared by all three grants so they cannot drift apart.
+     *
+     * `access_token` is required and must be a non-empty string: it is sent as
+     * a bearer verbatim. `expires_in` is optional — absent or null yields null
+     * (unknown expiry) — but when present it must be numeric, because the old
+     * `(int)` cast turned a malformed value into "expires at epoch + 0".
+     *
+     * @param array<string, mixed> $data
+     * @return array{0: string, 1: int|null}
+     */
+    private static function tokenFieldsOf(array $data, string $what): array
+    {
+        $accessToken = $data['access_token'] ?? null;
+        if (!\is_string($accessToken) || $accessToken === '') {
+            throw new \RuntimeException("{$what} missing access_token");
+        }
+
+        $expiresIn = $data['expires_in'] ?? null;
+        if ($expiresIn !== null && !is_numeric($expiresIn)) {
+            throw new \RuntimeException("{$what} carries a non-numeric expires_in");
+        }
+
+        return [$accessToken, $expiresIn === null ? null : (int) $expiresIn];
     }
 
     /**
@@ -336,12 +373,22 @@ final class OAuthClientRegistration
     /**
      * Get an auth entry for a server, auto-refreshing if within the buffer window.
      *
+     * Nothing is ever written before a token exchange has SUCCEEDED: the store
+     * is changed only by {@see refreshAndSave()}, after the token endpoint
+     * answered with a usable token. A failed refresh throws and leaves the
+     * stored entry exactly as it was.
+     *
+     * An entry with no `expiresAt` (the server omitted `expires_in`) has an
+     * unknown lifetime and is served as-is: there is no deadline to refresh
+     * ahead of. Re-running login replaces it.
+     *
      * @param string $serverUrl The server URL
      * @param string $tokenUrl The token endpoint for refresh
-     * @param string|null $registrationUrl The registration endpoint for re-registration (required when refresh fails with empty refreshToken)
      * @return AuthEntry|null The valid auth entry, or null if none exists
+     * @throws \RuntimeException When the entry is expired and cannot be renewed
+     *                           without the user, or a refresh fails
      */
-    public function getValidAuth(string $serverUrl, string $tokenUrl, ?string $registrationUrl = null): ?AuthEntry
+    public function getValidAuth(string $serverUrl, string $tokenUrl): ?AuthEntry
     {
         $authData = $this->loadAuth();
         $entry = $authData[$serverUrl] ?? null;
@@ -352,37 +399,28 @@ final class OAuthClientRegistration
 
         if ($entry->isExpired()) {
             if ($entry->refreshToken === '') {
-                // Deadlock: expired entry with no refresh token — attempt re-registration
-                // per RFC 7591 §3.4 (update existing registration using registrationAccessToken).
-                if ($registrationUrl === null) {
-                    throw new \RuntimeException(
-                        "Auth entry for {$serverUrl} is expired with no refresh token, and no registrationUrl was provided. "
-                        . 'Delete the auth file to re-register from scratch.'
-                    );
-                }
-
-                $registered = $this->updateRegistration($registrationUrl, $entry->registrationAccessToken);
-                $now = time();
-                $newEntry = new AuthEntry(
-                    clientId: $registered['clientId'],
-                    clientSecret: $registered['clientSecret'],
-                    registrationAccessToken: $registered['registrationAccessToken'],
-                    accessToken: $registered['clientId'],
-                    refreshToken: '',
-                    expiresAt: null,
-                    scopes: $entry->scopes,
-                    tokenUrl: $entry->tokenUrl,
-                    registrationUrl: $entry->registrationUrl,
+                // Audit MCP-8: this arm used to "re-register" — a body-less PUT
+                // to the registration ENDPOINT (RFC 7592 updates go to the
+                // per-client registration_client_uri, with full metadata),
+                // then SAVE an entry whose access token was the client id with
+                // no expiry, then try a client_credentials grant that an
+                // authorization-code client (what `mcp auth login` makes) is
+                // normally refused. When that grant failed, the never-expiring
+                // bogus bearer stayed on disk and every later request sent it.
+                //
+                // There is no grant to guess here. Updating a registration
+                // never issues an access token, client_credentials belongs to
+                // a different client shape, and a fresh authorization code
+                // needs the human in the browser — which a request path must
+                // never launch (see the buffer-window arm below). So the honest
+                // answer is to stop, leave the stored entry untouched, and name
+                // the command that renews it.
+                throw new \RuntimeException(
+                    "The stored OAuth login for {$serverUrl} has expired and the server issued no refresh token, "
+                    . 'so it cannot be renewed automatically. '
+                    . "Re-run `sugarcrush mcp auth login {$serverUrl}` to sign in again "
+                    . "(or `sugarcrush mcp auth add {$serverUrl}` if it was registered that way)."
                 );
-                $this->saveAuth($serverUrl, $newEntry);
-
-                $token = $this->fetchToken(
-                    $tokenUrl,
-                    $newEntry->clientId,
-                    $newEntry->clientSecret,
-                    $entry->scopes,
-                );
-                return $this->refreshAndSave($serverUrl, $newEntry, $token);
             }
 
             $refreshed = $this->refreshToken(
@@ -405,10 +443,10 @@ final class OAuthClientRegistration
             // serve the unexpired entry as-is and let the existing
             // isExpired() arm — earlier in this method — own the eventual
             // expiry: an auth-code entry that expires without a refresh
-            // token lands on its re-registration path, whose honest throw
-            // when the server will not re-issue credentials is what tells
-            // the user to re-run login.
-            // That path is deliberately NOT widened to re-run the browser
+            // token lands on its throw, which is what tells the user to
+            // re-run login (audit MCP-8 replaced the re-registration
+            // guess that used to sit there).
+            // That arm is deliberately NOT widened to re-run the browser
             // flow: launching a human-in-the-loop prompt from a request
             // path is not something this class should ever do.
             if ($entry->refreshToken === '') {
@@ -432,8 +470,7 @@ final class OAuthClientRegistration
      * E695: the server-keyed read path for request-time attachment.
      *
      * Loads the stored entry for a server URL and hands it to
-     * {@see getValidAuth()} using the token/registration endpoints that entry
-     * PERSISTS — so a caller holding only the server URL (an
+     * {@see getValidAuth()} using the token endpoint that entry PERSISTS — so a caller holding only the server URL (an
      * {@see HttpMcpServer} composing its request headers) gets the refresh
      * behavior for free, and a rotated token is written back through
      * {@see refreshAndSave()}'s existing save path.
@@ -457,43 +494,92 @@ final class OAuthClientRegistration
             return $entry;
         }
 
-        return $this->getValidAuth(
-            $serverUrl,
-            $entry->tokenUrl,
-            $entry->registrationUrl !== '' ? $entry->registrationUrl : null,
-        );
+        return $this->getValidAuth($serverUrl, $entry->tokenUrl);
     }
 
     /**
-     * Update an existing client registration per RFC 7591 §3.4.
+     * Update this client's registration at the server (RFC 7592 §2.2).
      *
-     * @param string $registrationUrl The server's registration endpoint
-     * @param string $registrationAccessToken The token received during initial registration
-     * @return array{clientId: string, clientSecret: string, registrationAccessToken: string}
+     * The request goes to the per-client `registration_client_uri` captured at
+     * registration (never the registration endpoint, which only creates
+     * clients), authenticated with the registration access token, and carries
+     * the FULL client metadata: RFC 7592 treats every field the body omits as
+     * a request to delete it. `client_id` (and `client_secret`, when one was
+     * issued) are added from the stored entry.
+     *
+     * WHY this is no longer on the token path (audit MCP-8): an update
+     * re-describes the client, it never issues an access token, so it cannot
+     * revive an expired login — {@see getValidAuth()} asks for a new login
+     * instead. It stays a public operation for changing a registration (say,
+     * new redirect URIs), and it touches only the registration fields of the
+     * stored row: the tokens on it are carried through as they are on disk.
+     *
+     * @param string $serverUrl The server whose stored entry to update
+     * @param array<string, mixed> $clientMetadata The complete RFC 7591 client metadata
+     * @return AuthEntry The stored entry after the update
      */
-    private function updateRegistration(string $registrationUrl, string $registrationAccessToken): array
+    public function updateRegistration(string $serverUrl, array $clientMetadata): AuthEntry
     {
-        $data = $this->requestJson($registrationUrl, [
+        $entry = $this->loadAuth()[$serverUrl] ?? null;
+        if ($entry === null) {
+            throw new \RuntimeException("No stored registration for {$serverUrl}");
+        }
+
+        if ($entry->registrationClientUri === '' || $entry->registrationAccessToken === '') {
+            throw new \RuntimeException(
+                "The registration for {$serverUrl} carries no registration_client_uri and registration access token, "
+                . 'so the server offers no way to update it (RFC 7592). '
+                . "Re-run `sugarcrush mcp auth login {$serverUrl}` to register afresh."
+            );
+        }
+
+        $body = $clientMetadata;
+        $body['client_id'] = $entry->clientId;
+        if ($entry->clientSecret !== '') {
+            $body['client_secret'] = $entry->clientSecret;
+        }
+
+        $data = $this->requestJson($entry->registrationClientUri, [
             'method' => 'PUT',
+            'json' => $body,
             'headers' => [
-                'Authorization' => "Bearer {$registrationAccessToken}",
+                'Authorization' => "Bearer {$entry->registrationAccessToken}",
+                'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
             ],
         ]);
 
-        $clientId = $data['client_id'] ?? null;
-        $clientSecret = $data['client_secret'] ?? null;
-        $accessToken = $data['registration_access_token'] ?? $registrationAccessToken;
-
-        if ($clientId === null) {
-            throw new \RuntimeException('Client update response missing client_id');
+        // RFC 7592 §2.2: the server MUST NOT change the client id. A reply
+        // naming another client is not this registration, so nothing of it is
+        // stored.
+        if (($data['client_id'] ?? null) !== $entry->clientId) {
+            throw new \RuntimeException('Client update response does not name the registered client_id');
         }
 
-        return [
-            'clientId' => $clientId,
-            'clientSecret' => $clientSecret ?? '',
-            'registrationAccessToken' => $accessToken,
+        $changes = [
+            // The server MAY rotate the secret and the registration token.
+            'clientSecret' => \is_string($data['client_secret'] ?? null) ? $data['client_secret'] : $entry->clientSecret,
+            'registrationAccessToken' => \is_string($data['registration_access_token'] ?? null)
+                ? $data['registration_access_token']
+                : $entry->registrationAccessToken,
+            'registrationClientUri' => \is_string($data['registration_client_uri'] ?? null)
+                ? $data['registration_client_uri']
+                : $entry->registrationClientUri,
         ];
+
+        $updated = null;
+        $this->mutateAuthFile(static function (array $raw) use ($serverUrl, $changes, &$updated): array {
+            $row = $raw[$serverUrl] ?? null;
+            if (!\is_array($row)) {
+                throw new \RuntimeException("The stored registration for {$serverUrl} was removed during the update");
+            }
+
+            $raw[$serverUrl] = array_replace($row, $changes);
+            $updated = AuthEntry::fromArray($raw[$serverUrl]);
+            return $raw;
+        });
+
+        return $updated;
     }
 
     /**
@@ -508,10 +594,11 @@ final class OAuthClientRegistration
             registrationAccessToken: $entry->registrationAccessToken,
             accessToken: $refreshed['accessToken'],
             refreshToken: $refreshed['refreshToken'],
-            expiresAt: $now + $refreshed['expiresIn'],
+            expiresAt: self::expiresAtFor($refreshed['expiresIn'], $now),
             scopes: $entry->scopes,
             tokenUrl: $entry->tokenUrl,
             registrationUrl: $entry->registrationUrl,
+            registrationClientUri: $entry->registrationClientUri,
         );
 
         $this->saveAuth($serverUrl, $newEntry);

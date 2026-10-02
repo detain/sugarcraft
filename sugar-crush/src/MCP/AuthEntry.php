@@ -6,6 +6,14 @@ namespace SugarCraft\Crush\MCP;
 
 /**
  * Represents stored OAuth credentials for a single MCP server.
+ *
+ * A null `expiresAt` means the token's lifetime is UNKNOWN (the server
+ * omitted the optional `expires_in`), never "valid forever by design": it is
+ * served as-is because there is no deadline to refresh ahead of.
+ *
+ * `registrationClientUri` is the RFC 7592 per-client management URL. It came
+ * after the first nine keys, so a row written before it existed loads with
+ * `''` (no update possible) and nothing else changes.
  */
 final readonly class AuthEntry
 {
@@ -19,6 +27,7 @@ final readonly class AuthEntry
         public array $scopes = [],
         public string $tokenUrl = '',
         public string $registrationUrl = '',
+        public string $registrationClientUri = '',
     ) {}
 
     /**
@@ -36,6 +45,7 @@ final readonly class AuthEntry
             scopes: $data['scopes'] ?? [],
             tokenUrl: $data['tokenUrl'] ?? '',
             registrationUrl: $data['registrationUrl'] ?? '',
+            registrationClientUri: $data['registrationClientUri'] ?? '',
         );
     }
 
@@ -54,6 +64,7 @@ final readonly class AuthEntry
             'scopes' => $this->scopes,
             'tokenUrl' => $this->tokenUrl,
             'registrationUrl' => $this->registrationUrl,
+            'registrationClientUri' => $this->registrationClientUri,
         ];
     }
 

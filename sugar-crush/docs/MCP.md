@@ -501,9 +501,14 @@ verifier, and the entry is stored in exactly the shape `mcp auth add` writes
 The wait is bounded by 300 s; `--timeout` (as a verb operand after the `--`
 separator) changes the budget. It bounds a human leg, not a provider request,
 which is why it is a plain socket deadline. An entry that arrives without a
-refresh token is served as-is until it expires, and then re-registration
-takes over — if the server will not re-issue credentials, re-run
-`sugarcrush mcp auth login <server>`.
+refresh token is served as-is until it expires; after that, requests to the
+server fail with an error asking you to re-run
+`sugarcrush mcp auth login <server>`. Nothing is re-registered or written
+behind your back — the store only changes after a token exchange succeeds,
+so a failed refresh leaves the stored entry as it was. A token response
+without `expires_in` (the field is optional in OAuth 2.0) is stored with an
+unknown expiry and sent until you log in again: there is no deadline to
+refresh ahead of, and a server's 401 does not trigger a refresh yet.
 
 ## Serving MCP
 
