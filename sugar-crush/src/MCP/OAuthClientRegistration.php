@@ -419,7 +419,7 @@ final class OAuthClientRegistration
                     "The stored OAuth login for {$serverUrl} has expired and the server issued no refresh token, "
                     . 'so it cannot be renewed automatically. '
                     . "Re-run `sugarcrush mcp auth login {$serverUrl}` to sign in again "
-                    . "(or `sugarcrush mcp auth add {$serverUrl}` if it was registered that way)."
+                    . "(or `/mcp add {$serverUrl}` in the TUI if it was registered that way)."
                 );
             }
 
