@@ -17,7 +17,8 @@ namespace SugarCraft\Core\Util;
  *   - {@see controlChars()} — strips C0 controls (ESC included) and maps
  *     \n \r \t to spaces; the printable SGR parameter text is left behind.
  *   - {@see cellValue()}    — glyph-replacement + UTF-8 repair for data grids.
- *   - {@see untrusted()}    — full ANSI strip for plain-text module sinks.
+ *   - {@see untrusted()}    — full ANSI strip for plain-text module sinks,
+ *     C1 controls removed in both their raw 8-bit and UTF-8-encoded forms.
  *   - {@see untrustedForMarkedFrames()} — {@see untrusted()} plus the zone
  *     sentinel strip, for text destined for a frame that carries candy-mouse
  *     zone markup. The Private-Use codepoints it removes are the reason a
@@ -30,7 +31,8 @@ namespace SugarCraft\Core\Util;
  * two codepoints at the head, so the two marker vocabularies are disjoint by
  * construction. Those codepoints are
  * ordinary, well-formed 3-byte UTF-8, so {@see untrusted()} — whose vocabulary
- * is escapes, C0/C1 and DEL — passes hostile input carrying them straight
+ * is escapes, C0/C1 (raw or UTF-8-encoded) and DEL — passes hostile input
+ * carrying them straight
  * through. Text that reaches a zone-scanned frame therefore needs the sentinel
  * sweep of {@see stripZoneSentinels()} on top, or a model reply can forge zone
  * markup (attacker-chosen click targets) or break the zone parse outright.
@@ -117,8 +119,8 @@ final class Sanitize
      * widening this method — the gap matters most for 8-bit input, where a raw
      * `\x9b` survives this method as a fully functional CSI introducer:
      *   - {@see untrusted()} — removes whole escape sequences and the lone C1
-     *     controls inside {@see Ansi::strip()}, then the remaining C0 controls
-     *     and DEL. It is NOT single-line: TAB, LF and CR pass through by
+     *     controls inside {@see Ansi::strip()}, then the remaining C0 controls,
+     *     DEL and the UTF-8-encoded C1 codepoints. It is NOT single-line: TAB, LF and CR pass through by
      *     design, so a caller that needs one line must fold newlines itself.
      *     The policy for terminal-bound text from a process, socket, or user.
      *   - {@see cellValue()} — replaces C0, DEL and C1 with a visible stand-in
@@ -194,6 +196,16 @@ final class Sanitize
      * (\x9b CSI, \x90 DCS, \x9d OSC, \x9f APC …), and string-sequence
      * payloads (DCS/SOS/PM/APC, sixel and Kitty included).
      *
+     * C1 is removed in BOTH spellings: the lone raw byte (\x9b) and the
+     * well-formed UTF-8 encoding of the same codepoint U+0080–U+009F
+     * (\xC2\x9B). xterm and other UTF-8 terminals decode the latter to the
+     * C1 codepoint and then execute it, so `U+009B 2 J` clears the screen
+     * exactly like `ESC [ 2 J`. Only the introducer is dropped — the
+     * printable tail (`2J`) is inert text without it. Valid text is untouched:
+     * U+00A0 and up (\xC2\xA0…), and multi-byte characters whose
+     * continuation bytes merely fall in the 0x80–0x9F numeric range (→, 😀),
+     * all survive.
+     *
      * Use this on any string that originates from an external process,
      * network response, or user-controlled source before writing to the
      * terminal. Versus {@see controlChars()}: on 7-bit input both guarantee no
@@ -224,17 +236,28 @@ final class Sanitize
         // Ansi::strip() so the sanitizer and the width math cannot diverge.
         $stripped = Ansi::strip($s);
 
-        // Step 2: strip the remaining C0 control bytes and DEL.
+        // Step 2: strip the remaining C0 control bytes, DEL, and the
+        // UTF-8-encoded C1 codepoints U+0080-U+009F.
         // Preserved: TAB (0x09), LF (0x0a), CR (0x0d).
         // Dropped: NUL..BS (0x00-0x08), VT (0x0b), FF (0x0c),
-        //          SO..US (0x0e-0x1f), DEL (0x7f).
+        //          SO..US (0x0e-0x1f), DEL (0x7f), \xC2\x80-\xC2\x9F.
         //
-        // Byte-oriented on purpose (NO /u flag): the class matches only
-        // ASCII bytes, which can never occur inside a well-formed UTF-8
-        // multi-byte sequence, yet a /u pattern FAILS on invalid UTF-8 —
-        // and the old `?? $stripped` fallback then let every C0 control
-        // (BEL included) through. Fail-closed beats fallback-to-hostile.
-        return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', '', $stripped) ?? '';
+        // Ansi::strip() keeps \xC2\x9B because it is well-formed UTF-8 —
+        // correct for its width math, but the terminal decodes it to U+009B
+        // and runs it as CSI, so the sanitizer must drop it here.
+        //
+        // Byte-oriented on purpose (NO /u flag): a /u pattern FAILS on
+        // invalid UTF-8 — and the old `?? $stripped` fallback then let every
+        // C0 control (BEL included) through, so one malformed byte anywhere
+        // would also switch the C1 sweep off. Fail-closed beats
+        // fallback-to-hostile. The byte form is still exact: the ASCII class
+        // never occurs inside a multi-byte sequence, and \xC2 is only ever a
+        // lead byte, so `\xC2[\x80-\x9F]` cannot split a valid character.
+        // Nor can a removal splice a new C1 pair together: step 1 already
+        // deleted every 0x80-0x9F byte that is not a continuation of a
+        // well-formed run, and removing whole ASCII bytes or whole 2-byte
+        // characters never separates a continuation from its lead.
+        return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]|\xC2[\x80-\x9F]/', '', $stripped) ?? '';
     }
 
     /**

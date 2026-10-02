@@ -764,16 +764,31 @@ final class Renderer
     }
 
     /**
-     * Strip C0 control bytes (except tab / newline) and ESC from a
-     * source-derived string. This closes the ANSI-injection vector
-     * while preserving legitimate formatting whitespace.
+     * Strip C0 control bytes (except tab / newline), ESC, DEL and the
+     * UTF-8-encoded C1 controls U+0080–U+009F from a source-derived string.
+     * This closes the ANSI-injection vector while preserving legitimate
+     * formatting whitespace.
+     *
+     * The C1 sweep matters because a UTF-8 terminal such as xterm decodes
+     * `\xC2\x9B` to U+009B and executes it as CSI — markdown carrying
+     * `U+009B 2 J` would clear the screen without a single ESC byte (audit
+     * 15b-08). Only the introducer is removed; the inert tail stays visible.
+     *
+     * Byte-oriented, NO /u flag: a /u pattern fails (returns null) on any
+     * malformed UTF-8 in the document, which would turn the whole strip off.
+     * `\xC2` is only ever a lead byte, so the pair match cannot split a valid
+     * character — U+00A0 and up, and multi-byte characters whose continuation
+     * bytes fall in 0x80–0x9F (→, 😀), pass untouched.
      *
      * Mirrors charmbracelet/glamour TUI render invariant.
      */
     private static function stripControls(string $s): string
     {
-        // Remove C0 controls except \t (0x09) and \n (0x0a); also strip ESC (0x1b).
-        return preg_replace('/[\x00-\x08\x0b-\x1f\x7f]/', '', $s);
+        // Remove C0 controls except \t (0x09) and \n (0x0a); also strip ESC
+        // (0x1b), DEL (0x7f) and UTF-8 C1 (\xC2\x80-\xC2\x9F). A byte
+        // pattern cannot hit PCRE's UTF-8 failure path, but preg_replace is
+        // still typed ?string — fail closed to '' rather than return null.
+        return preg_replace('/[\x00-\x08\x0b-\x1f\x7f]|\xC2[\x80-\x9F]/', '', $s) ?? '';
     }
 
     private function renderText(string $literal): string

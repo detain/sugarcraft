@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Tests\Util;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\ImageOverlay;
 use SugarCraft\Core\Util\Sanitize;
@@ -14,7 +15,8 @@ use SugarCraft\Core\Util\Sanitize;
  * Every assertion pins the raw output bytes so the three policies stay
  * distinguishable: {@see Sanitize::controlChars()} (C0 strip, ESC dropped),
  * {@see Sanitize::cellValue()} (glyph replacement + UTF-8 repair), and
- * {@see Sanitize::untrusted()} (full ANSI strip + lone-C1 byte scan).
+ * {@see Sanitize::untrusted()} (full ANSI strip + lone-C1 byte scan + UTF-8 C1
+ * codepoint sweep).
  */
 final class SanitizeTest extends TestCase
 {
@@ -346,13 +348,73 @@ final class SanitizeTest extends TestCase
         $this->assertSame('a', Sanitize::untrusted("a\x9bb"));   // CSI
     }
 
-    public function testUntrustedPreservesValidUtf8IncludingC1CodePoints(): void
+    public function testUntrustedStripsUtf8EncodedC1CodePointsButKeepsValidText(): void
     {
-        // Unlike cellValue, untrusted only strips LONE C1 bytes: a well-formed
-        // U+0080 (\xC2\x80) and a 3-byte arrow (whose continuation bytes fall in
-        // the C1 numeric range) are both kept intact.
-        $this->assertSame("a\xC2\x80b", Sanitize::untrusted("a\xC2\x80b"));
+        // Audit 15b-08: a well-formed U+0080 (\xC2\x80) is still a C1 control —
+        // xterm decodes it to the codepoint and executes it — so untrusted()
+        // drops it like its raw 8-bit spelling. Valid text whose bytes merely
+        // overlap the C1 numeric range must survive: the 3-byte arrow (\x86
+        // continuation), U+00A0 NBSP (\xC2 lead, first non-C1 codepoint) and a
+        // 4-byte emoji (\x9F / \x98 continuations).
+        $this->assertSame('ab', Sanitize::untrusted("a\xC2\x80b"));
         $this->assertSame("a\xE2\x86\x92b", Sanitize::untrusted("a\xE2\x86\x92b"));
+        $this->assertSame("a\xC2\xA0b", Sanitize::untrusted("a\xC2\xA0b"));
+        $this->assertSame("a\xF0\x9F\x98\x80b", Sanitize::untrusted("a\xF0\x9F\x98\x80b"));
+        $this->assertSame(
+            "\xE2\x86\x92\xC2\xA0\xF0\x9F\x98\x80",
+            Sanitize::untrusted("\xE2\x86\x92\xC2\x9B\xC2\xA0\xC2\x9D\xF0\x9F\x98\x80"),
+        );
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function utf8C1CodePoints(): array
+    {
+        return [
+            'U+009B CSI' => ["\u{9b}"],
+            'U+009D OSC' => ["\u{9d}"],
+            'U+0090 DCS' => ["\u{90}"],
+            'U+0085 NEL' => ["\u{85}"],
+            'U+0080 PAD' => ["\u{80}"],
+            'U+009F APC' => ["\u{9f}"],
+        ];
+    }
+
+    #[DataProvider('utf8C1CodePoints')]
+    public function testUntrustedStripsUtf8EncodedC1Introducer(string $c1): void
+    {
+        // Only the introducer goes: without it the `2J` tail is inert text.
+        $this->assertSame(2, strlen($c1));
+        $this->assertSame('a2Jb', Sanitize::untrusted("a{$c1}2Jb"));
+    }
+
+    #[DataProvider('utf8C1CodePoints')]
+    public function testUntrustedForMarkedFramesStripsUtf8EncodedC1Introducer(string $c1): void
+    {
+        $this->assertSame('a2Jb', Sanitize::untrustedForMarkedFrames("a{$c1}2Jb"));
+    }
+
+    public function testUntrustedC1SweepSurvivesInvalidUtf8ElsewhereInTheString(): void
+    {
+        // A /u sweep would fail outright on the stray \xFF / truncated \xE2
+        // and hand the C1 codepoint back; the byte sweep must not.
+        $out = Sanitize::untrusted("\xFFa\u{9b}2J\xE2b\u{9d}0;x\u{9c}c");
+        $this->assertStringNotContainsString("\xC2\x9B", $out);
+        $this->assertStringNotContainsString("\xC2\x9D", $out);
+        $this->assertStringNotContainsString("\xC2\x9C", $out);
+        $this->assertSame("\xFFa2J\xE2b0;xc", $out);
+    }
+
+    public function testUntrustedC1SweepCannotSpliceANewC1Pair(): void
+    {
+        // A stray \xC2 lead in front of a removed C1 pair must not join a
+        // following byte into a fresh \xC2[\x80-\x9F] control.
+        $out = Sanitize::untrusted("\xC2\xC2\x9B\x9B2J");
+        $this->assertDoesNotMatchRegularExpression('/\xC2[\x80-\x9F]/', $out);
+        $out = Sanitize::untrusted("\xC2\x07\x9B2J");
+        $this->assertDoesNotMatchRegularExpression('/\xC2[\x80-\x9F]/', $out);
+        $this->assertSame($out, Sanitize::untrusted($out));
     }
 
     public function testUntrustedEmptyString(): void
