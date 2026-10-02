@@ -698,7 +698,7 @@ anything from a file and ahead of the permission gate:
 |---|---|---|
 | `ProtectFilesHook` | `PreToolUse` on `^(Bash\|Edit\|Write\|Read\|Grep\|Glob\|Lsp\|mcp__.*)$` | denies secret and policy files — see [below](#what-protect-files-covers) and [`PERMISSIONS.md`](PERMISSIONS.md#the-hooks-that-outrank-the-gate) |
 | `ConfirmRemoveHook` | `PreToolUse` | denies obvious destructive shell (`rm -rf`, `find … -delete`, …) |
-| `AuditHook` | `PostToolUse`, matcher `.*` | appends every call to whatever `AuditHook::defaultLogFile()` answers — a fixed leaf inside a per-user directory the hook creates `0700` and refuses to use if it is not its own |
+| `AuditHook` | `PostToolUse`, matcher `.*` | appends every call — and every refused or withheld one, see [below](#what-the-audit-log-records) — to whatever `AuditHook::defaultLogFile()` answers — a fixed leaf inside a per-user directory the hook creates `0700` and refuses to use if it is not its own |
 
 Two more exist and are **not** registered by default:
 
@@ -721,6 +721,43 @@ pattern runs against the raw command *and* its quote-removed words (the same
 so `rm '-rf' x`, `rm "-rf" x`, `find . '-delete'` and `dd 'of=/dev/sda'` are
 denied like their unquoted spellings. Before audit F-P1 the first three passed
 the whole built-in chain under the default `bypass-permissions` mode.
+
+### What the audit log records
+
+One line per record, in three shapes. The separator after the input says which
+one it is:
+
+```text
+[2026-10-02 09:14:03] <session> Bash {"command":"ls"} => README.md\nsrc
+[2026-10-02 09:14:05] <session> Read {"file_path":".env"} =! DENY hook: This hook prevents modification of files matching: …
+[2026-10-02 09:14:09] <session> Bash {"command":"env"} =! WITHHELD: output contains AWS key, blocked
+```
+
+- `=>` is a call that ran. The excerpt is the first 200 bytes of its output,
+  cut on a UTF-8 character boundary.
+- `=! DENY <kind>:` is a call the engine refused before it ran. That covers a
+  `PreToolUse` deny (including `protect-files` and a hook that timed out), a
+  permission-gate refusal, an ASK that was refused or that nobody could answer,
+  and arguments that cannot be encoded as JSON. `<kind>` is the denial kind's
+  token: `hook`, `refused` or `unanswered`. A refused call never reaches
+  `PostToolUse`, so the engine writes this line itself, through the registered
+  `audit` hook, from the gate's refusal arm. Both the sequential path and the
+  concurrent path gate there. Before audit F-H2, none of these left a record.
+- `=! WITHHELD:` is a call that ran but whose output a `PostToolUse` hook
+  refused (see the block rules above). The line keeps the hook's reason.
+
+Every field written into a line is escaped. That means the session, the tool
+name, the input, the excerpt and the reason. C0 controls, DEL, NEL, U+2028 and
+U+2029 are written as `\n`, `\r`, `\t`, `\xNN` or `\u{NNNN}`. Invalid UTF-8
+becomes U+FFFD. A newline in a web page or a command's output therefore cannot
+write a forged second record, and neither can a terminal escape. Backslashes
+are left as they are, so the JSON input stays readable. The escaping is
+therefore not reversible: it promises one record per line, not a decodable
+field.
+
+The input is capped at 4 KiB (`AuditHook::INPUT_CAP_BYTES`). Anything longer
+ends in ` [truncated: <n> bytes]`, so a `Write` no longer copies the whole file
+it wrote into a log that is never rotated.
 
 ### What `protect-files` covers
 

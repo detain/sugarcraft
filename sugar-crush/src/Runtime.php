@@ -42,6 +42,7 @@ use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Skills\SkillMatcher;
+use SugarCraft\Crush\Hooks\BuiltIn\AuditHook;
 use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookContext;
@@ -2252,6 +2253,14 @@ final class Runtime
         }
 
         if (!$hookResult->isAllowed() && !$hookResult->isModified()) {
+            // THE AUDIT TRAIL'S REFUSAL LEG (audit F-H2). A refused call never
+            // reaches PostToolUse, where AuditHook listens, so every hook DENY
+            // (ProtectFilesHook, a chain timeout), gate refusal and unanswered
+            // ASK used to leave no record. Here, in the one method both
+            // dispatch paths gate through — the concurrent path calls it in
+            // the parent, during phase 1 — is where the kind is still known.
+            $this->auditRefusal($context, $kind, $hookResult->message);
+
             return [null, $kind->reason($hookResult->message), $context, ''];
         }
 
@@ -2446,6 +2455,14 @@ final class Runtime
 
         if ($withheldReason !== null) {
             $result = self::withheld($result, $withheldReason);
+            // The reason otherwise lives only in what the model read: the
+            // chain returned at the refusing hook, so whether AuditHook's own
+            // `=>` line was written depends on registration order (audit F-H2).
+            try {
+                $this->auditHook()?->recordWithheld($context, $withheldReason);
+            } catch (\Throwable) {
+                // Best-effort, as on the refusal leg: see auditRefusal().
+            }
         }
 
         // KEPT ON THE WITHHELD ARM TOO: the pre-note was produced by PreToolUse
@@ -2767,6 +2784,37 @@ final class Runtime
     }
 
     /**
+     * The registered built-in {@see AuditHook}, or null when this chain has
+     * none (an embedder that never called `registerBuiltIns()`).
+     *
+     * Looked up rather than injected, the way {@see taskGrantMemoKey()} finds
+     * the permission gate: the audit leg is wherever the chain's own audit
+     * hook writes, so a refusal and a completed call land in the same log.
+     */
+    private function auditHook(): ?AuditHook
+    {
+        $hook = $this->hookManager->hook(HookEvent::PostToolUse->value, AuditHook::NAME);
+
+        return $hook instanceof AuditHook ? $hook : null;
+    }
+
+    /**
+     * Record a refused call in the audit log, best-effort.
+     *
+     * A failed audit write must never change a verdict or cost the turn — the
+     * call is refused either way — so anything the write throws is dropped
+     * here, as {@see AuditHook::append()} already drops a refused write.
+     */
+    private function auditRefusal(HookContext $context, DenialKind $kind, string $reason): void
+    {
+        try {
+            $this->auditHook()?->recordDenial($context, $kind, $reason);
+        } catch (\Throwable) {
+            // Dropped on purpose: the call is refused whether or not it was logged.
+        }
+    }
+
+    /**
      * The {@see HookContext} both dispatch paths gate on — or, when the
      * arguments cannot be written down as JSON at all, the DENIAL REASON for a
      * call no hook could have judged (audit F-H3).
@@ -2788,11 +2836,25 @@ final class Runtime
         try {
             $input = self::hookInput($toolCall->arguments());
         } catch (\JsonException $e) {
-            return DenialKind::Hook->reason(sprintf(
+            $detail = sprintf(
                 'the arguments of %s could not be encoded as JSON for the hook chain (%s), so no hook could judge them',
                 $tool->name(),
                 $e->getMessage(),
-            ));
+            );
+            // A refusal like any other, so it is audited like one (F-H2) —
+            // with a stand-in input, because the real one is what failed.
+            $this->auditRefusal(new HookContext(
+                sessionId: $app->sessionId ?? '',
+                toolName: $tool->name(),
+                toolArgs: [],
+                toolInput: '[arguments not encodable as JSON]',
+                toolOutput: '',
+                model: $app->model,
+                provider: $app->provider->name(),
+                projectRoot: self::projectRoot($app),
+            ), DenialKind::Hook, $detail);
+
+            return DenialKind::Hook->reason($detail);
         }
 
         return new HookContext(

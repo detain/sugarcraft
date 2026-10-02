@@ -77,10 +77,17 @@ final class AuditHookConcurrentAppendTest extends TestCase
      * would prove nothing. It is deliberately far smaller than the round-49
      * scratchpad generator's 8 x 200 — a suite test buys the INVARIANT, and
      * the load figure lives in the backlog entry with its generator.
+     *
+     * EXACTLY THE INPUT CAP, NO LONGER 9000 (audit F-H2). The hook now cuts
+     * the logged input at {@see AuditHook::INPUT_CAP_BYTES}, so a 9000-byte
+     * payload is no longer what lands on disk. At the cap the input is
+     * written whole and unmarked, and the record — prefix, 4096 payload
+     * bytes, ` => XXX\n` — is still past both `PIPE_BUF` and one page, which
+     * is the only property this size was chosen for.
      */
     private const WRITERS = 4;
     private const RECORDS = 25;
-    private const PAYLOAD_BYTES = 9000;
+    private const PAYLOAD_BYTES = AuditHook::INPUT_CAP_BYTES;
 
     /**
      * The two flag names, assembled from halves rather than spelled.

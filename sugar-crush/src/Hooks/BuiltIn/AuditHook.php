@@ -9,10 +9,24 @@ use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookInterface;
 use SugarCraft\Crush\Hooks\HookResult;
+use SugarCraft\Crush\Permissions\DenialKind;
 
 /**
  * One appended line per finished tool call: when, which session, which tool,
- * what it was given, and the first 200 bytes of what it produced.
+ * what it was given, and the first 200 bytes of what it produced — plus, since
+ * audit F-H2, one line per call the engine REFUSED ({@see recordDenial()}) and
+ * per output a PostToolUse hook WITHHELD ({@see recordWithheld()}).
+ *
+ * The three line shapes share one prefix, and the separator after the input
+ * says which record it is:
+ *
+ *     [Y-m-d H:i:s] <session> <tool> <input> => <output excerpt>
+ *     [Y-m-d H:i:s] <session> <tool> <input> =! DENY <kind>: <reason>
+ *     [Y-m-d H:i:s] <session> <tool> <input> =! WITHHELD: <reason>
+ *
+ * `<kind>` is {@see DenialKind::token()} (`hook`, `refused`, `unanswered`).
+ * Every interpolated field goes through {@see field()}, so a field cannot
+ * end the line early, and the input is capped at {@see INPUT_CAP_BYTES}.
  *
  * THE DEFAULT PATH IS THE PRODUCTION PATH, WHICH IS WHY IT GETS THIS MUCH
  * ATTENTION. {@see \SugarCraft\Crush\Hooks\HookManager::registerBuiltIns()}
@@ -37,6 +51,27 @@ use SugarCraft\Crush\Hooks\HookResult;
  */
 final class AuditHook implements HookInterface
 {
+    /**
+     * This hook's name in the `PostToolUse` chain — what
+     * {@see \SugarCraft\Crush\Runtime} looks it up by to record refusals that
+     * never reach the chain.
+     */
+    public const NAME = 'audit';
+
+    /**
+     * How much of a tool's output the `=>` record keeps.
+     */
+    public const OUTPUT_EXCERPT_BYTES = 200;
+
+    /**
+     * How much of a call's input any record keeps (audit F-H2). The input used
+     * to be logged whole, so every `Write` copied the entire file it wrote
+     * into a log that is never rotated. 4 KiB holds every ordinary command
+     * line and path set; what is cut is named with its full length, so the
+     * record still says how big the call was.
+     */
+    public const INPUT_CAP_BYTES = 4096;
+
     /**
      * Leaf-name stem of the per-user directory {@see defaultLogFile()} lives
      * in. The effective uid is appended to it.
@@ -277,7 +312,7 @@ final class AuditHook implements HookInterface
 
     public function name(): string
     {
-        return 'audit';
+        return self::NAME;
     }
 
     public function event(): HookEvent
@@ -292,18 +327,124 @@ final class AuditHook implements HookInterface
 
     public function execute(HookContext $context): HookResult
     {
-        $entry = sprintf(
-            "[%s] %s %s %s => %s\n",
-            date('Y-m-d H:i:s'),
-            $context->sessionId,
-            $context->toolName,
-            $context->toolInput,
-            substr($context->toolOutput, 0, 200)
-        );
-
-        $this->append($entry);
+        $this->append(self::line(
+            $context,
+            '=> ' . self::field(self::cut($context->toolOutput, self::OUTPUT_EXCERPT_BYTES)),
+        ));
 
         return HookResult::allow();
+    }
+
+    /**
+     * Record a call the engine refused before it ran, answering whether the
+     * line was written.
+     *
+     * WHY THIS IS A METHOD AND NOT AN EVENT. A refused call never reaches
+     * `PostToolUse` — {@see \SugarCraft\Crush\Runtime::gate()} returns before
+     * the tool runs — so `execute()` used to be blind to exactly the
+     * security-relevant events: a ProtectFilesHook denial, a gate refusal, an
+     * ASK nobody answered, a hook that timed out (audit F-H2). The Runtime
+     * calls this on its refusal arm instead. Best-effort like every write here
+     * ({@see append()}): a log line must not decide a call.
+     *
+     * $reason is the bare detail; the kind is written as its token, so the
+     * line does not repeat the `Hook denied:` prefix the model saw.
+     */
+    public function recordDenial(HookContext $context, DenialKind $kind, string $reason): bool
+    {
+        return $this->append(self::line($context, sprintf('=! DENY %s: %s', $kind->token(), self::field($reason))));
+    }
+
+    /**
+     * Record that a `PostToolUse` hook withheld a call's output from the model
+     * (audit F-H1), answering whether the line was written.
+     *
+     * The call RAN, so `execute()` has normally logged it already; this line
+     * keeps the refusing hook's reason, which otherwise only the model read.
+     */
+    public function recordWithheld(HookContext $context, string $reason): bool
+    {
+        return $this->append(self::line($context, '=! WITHHELD: ' . self::field($reason)));
+    }
+
+    /**
+     * The shared `[time] session tool input <tail>` record.
+     */
+    private static function line(HookContext $context, string $tail): string
+    {
+        return sprintf(
+            "[%s] %s %s %s %s\n",
+            date('Y-m-d H:i:s'),
+            self::field($context->sessionId),
+            self::field($context->toolName),
+            self::field(self::capInput($context->toolInput)),
+            $tail,
+        );
+    }
+
+    /**
+     * $input cut to {@see INPUT_CAP_BYTES}, with the original length named.
+     */
+    private static function capInput(string $input): string
+    {
+        $length = strlen($input);
+        if ($length <= self::INPUT_CAP_BYTES) {
+            return $input;
+        }
+
+        return self::cut($input, self::INPUT_CAP_BYTES) . sprintf(' [truncated: %d bytes]', $length);
+    }
+
+    /**
+     * At most $bytes of $text, never ending inside a UTF-8 sequence.
+     *
+     * `mb_strcut()` rather than `substr()`: a byte cut can split a multi-byte
+     * character, which {@see field()} would then show as U+FFFD — the record
+     * would claim the tool printed a byte it did not.
+     */
+    private static function cut(string $text, int $bytes): string
+    {
+        return strlen($text) <= $bytes ? $text : mb_strcut($text, 0, $bytes, 'UTF-8');
+    }
+
+    /**
+     * $value made safe to interpolate into one log line.
+     *
+     * LINE FORGING IS THE THREAT (audit F-H2). The output excerpt is bytes a
+     * web page or a command chose, and a raw newline in it let that content
+     * write a second, fabricated `[time] session Tool …` record. Every C0
+     * control, DEL and the Unicode line breaks (NEL, U+2028, U+2029) are
+     * therefore written as escapes (`\n`, `\r`, `\t`, `\xNN`, `\u{NNNN}`) —
+     * which also keeps a terminal escape out of an operator's `cat`. Invalid
+     * UTF-8 becomes U+FFFD so the line stays valid text.
+     *
+     * A BACKSLASH IS NOT ESCAPED, deliberately: the input is the call's JSON,
+     * full of `\"`, and doubling every one would make the most-read field
+     * unreadable. The cost is that the escape is not reversible — a literal
+     * `\n` in the output reads the same as an escaped newline. That is
+     * acceptable for an excerpt meant to be read; nothing parses it back, and
+     * what it guarantees is that one record is one line.
+     */
+    private static function field(string $value): string
+    {
+        $value = mb_scrub($value, 'UTF-8');
+
+        return (string) preg_replace_callback(
+            '/[\x00-\x1F\x7F]|\x{0085}|\x{2028}|\x{2029}/u',
+            static function (array $match): string {
+                $char = $match[0];
+
+                return match ($char) {
+                    "\n" => '\\n',
+                    "\r" => '\\r',
+                    "\t" => '\\t',
+                    default => strlen($char) === 1
+                        ? sprintf('\\x%02X', ord($char))
+                        : sprintf('\\u{%04X}', mb_ord($char, 'UTF-8')),
+                };
+            },
+            $value,
+        );
     }
 
     /**
