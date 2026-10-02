@@ -184,33 +184,67 @@ final class Bootstrap
      * of rows the user scrolls past, which buries the one that matters. That
      * is still worth a cap, for the clutter reason alone.
      *
-     * Most of the sources are bounded at one per launch: the skill-skip count,
-     * the untrusted `hooks.yaml`, the empty tool set, the project tier's tool
-     * removals, the two agent-preset degradations, the two provider fallbacks
-     * and — since E78 round 42 — {@see reportPrunedSessions()}'s retention
-     * SUMMARY: nine. (This paragraph said EIGHT and stopped at the provider
-     * fallbacks; the retention summary is a ninth bounded source, and it is
-     * bounded precisely because its per-session rows were deliberately left off
-     * this seam.) {@see reportProjectTierRefusals()} adds one per refused
-     * DIRECTORY, and its doc-block names eight feeding subsystems.
-     * {@see permissionRules()} adds one whole-key complaint. So 18 is the most a
-     * launch reached without a per-ENTRY fan-out when 24 was chosen, which
-     * cleared it with headroom while still refusing to let a config with fifty
-     * malformed rules become the transcript.
+     * SIZED AGAINST A ROSTER, NOT A RECOLLECTION (audit CLI-3). The cap exists
+     * for the per-ENTRY fan-outs — thirty malformed `permissionRules`, a long
+     * `enabledSkills` list — and must never be what hides a row from a source
+     * that is bounded on its own. It used to be argued in prose here ("18 is
+     * the most a launch reached … 24 cleared it with headroom"), and the prose
+     * fell behind: by wave 9 the bounded sources could raise 26 rows against a
+     * cap of 24, and a recount for this change found 31, because the
+     * narrowed-grant aggregate, the MCP rows and the `enabledSkills` shape row
+     * had never been counted at all. {@see LAUNCH_NOTICE_BOUNDED_SOURCES} is
+     * now the count, and
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeCapCensusTest}
+     * fails when a method that reaches the seam is missing from it or when its
+     * sum stops fitting under this cap — so the next source cannot spend the
+     * headroom silently.
      *
-     * THAT HEADROOM IS NOW SPENT, stated rather than hidden: later bounded
-     * sources — the command-skip row, {@see reportMemorySkips()}' two,
-     * {@see reportPromptBudgetDeferrals()}' two (audit R1) and
-     * {@see reportNonsenseLimits()}' two (audit R12) and
-     * {@see reportTuiErrorLogFallback()}'s one — take the theoretical worst
-     * case to 26. It is left at 24 because each of those rows needs its
-     * own distinct misconfiguration to fire, and a launch that does hit the
-     * cap loses nothing silently: the overflow row below counts it, and stderr
-     * carries every row. The overflow is COUNTED and reported as one
-     * trailing row — see {@see launchNotices()} — rather than dropped, because a
-     * silently truncated warning list is the defect this seam exists to end.
+     * 36 is that sum, 31, plus five rows of headroom. A launch that does hit
+     * the cap loses nothing silently: the overflow is COUNTED and reported as
+     * one trailing row — see {@see launchNotices()} — and stderr carries every
+     * row, because a silently truncated warning list is the defect this seam
+     * exists to end.
      */
-    private const LAUNCH_NOTICE_LIMIT = 24;
+    private const LAUNCH_NOTICE_LIMIT = 36;
+
+    /**
+     * Every method that raises launch notices onto the transcript seam, with
+     * the most rows its BOUNDED part can raise in one launch — the roster
+     * {@see LAUNCH_NOTICE_LIMIT} is sized against (audit CLI-3).
+     *
+     * Two entries also fan out per ENTRY of a user list, and only their
+     * bounded part is counted: `permissionRules` (one whole-key complaint,
+     * then one row per malformed rule) and `promptEnabledSkills` (one row for
+     * a value that is not a list, then one per bad or missing name). Those
+     * fan-outs are what the cap is for. `reportProjectTierRefusals` raises one
+     * row per refused path: it counts eight, one directory for each of the
+     * eight subsystems its doc-block names, and its fan-out is the command
+     * loader's one row per refused command FILE.
+     *
+     * Read by the census test only; nothing at runtime sums it.
+     *
+     * @var array<string, int>
+     */
+    private const LAUNCH_NOTICE_BOUNDED_SOURCES = [
+        'reportSkillSkips' => 1,
+        'reportCommandSkips' => 1,
+        'hookFiles' => 1,
+        'filterToolSet' => 1,
+        'reportProjectTierToolRemovals' => 1,
+        'agentPresets' => 1,
+        'foreignAgentPresets' => 1,
+        'backend' => 2,
+        'reportPrunedSessions' => 1,
+        'reportProjectTierRefusals' => 8,
+        'permissionRules' => 1,
+        'promptEnabledSkills' => 1,
+        'reportMemorySkips' => 2,
+        'reportPromptBudgetDeferrals' => 2,
+        'reportNonsenseLimits' => 2,
+        'reportTuiErrorLogFallback' => 1,
+        'drainNarrowedGrantWarnings' => 2,
+        'mcpClient' => 2,
+    ];
 
     /**
      * The most characters one launch notice may contribute to the transcript.
@@ -2656,7 +2690,7 @@ final class Bootstrap
         // ONE KNOWN UNDERSTATEMENT, named rather than engineered around: if the
         // launch had ALREADY overflowed {@see LAUNCH_NOTICE_LIMIT} before this
         // point, $chat carries an "and N more" row whose N does not grow to
-        // cover what the second scan then dropped. That needs a launch with 24+
+        // cover what the second scan then dropped. That needs a launch with 36+
         // distinct warnings before the shell is built, and the row still says
         // the full list is on stderr, where it is.
         $chat = $chat->withLaunchNotices(array_slice(self::launchNotices(), $noticesBeforeSecondScan));

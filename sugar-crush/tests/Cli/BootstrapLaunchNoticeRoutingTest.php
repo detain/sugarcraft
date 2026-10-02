@@ -555,21 +555,28 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
     }
 
     /**
-     * THE CAP, measured rather than restated. Thirty malformed rules is a real
-     * shape for a hand-edited config, and it is the per-ENTRY fan-out
+     * THE CAP, measured rather than restated. Six malformed rules past the cap
+     * is a real shape for a hand-edited config, and it is the per-ENTRY fan-out
      * {@see Bootstrap::LAUNCH_NOTICE_LIMIT} exists for: these rows are part of
      * the CONVERSATION, so an unbounded list is a per-token cost on every turn
      * for the whole session, not a scrolling nuisance.
      *
      * THE OVERFLOW IS SAID, NOT SWALLOWED. A bare truncation would be the same
      * silence the seam was built to end, so the tail row carries the count and
-     * names the channel that has the rest — and stderr really does have all
-     * thirty, which is the half that makes the tail row honest.
+     * names the channel that has the rest — and stderr really does have every
+     * one, which is the half that makes the tail row honest.
+     *
+     * The row counts are DERIVED from {@see Bootstrap::LAUNCH_NOTICE_LIMIT}
+     * (audit CLI-3 raised it from 24 to 36): what this pins is the shape — cap
+     * rows, then one overflow row counting the six — not a number that has to
+     * be re-typed here every time the cap moves.
      */
     public function testAFanOutOfNoticesIsCappedAndTheOverflowIsCounted(): void
     {
+        $limit = self::launchNoticeLimit();
+        $total = $limit + 6;
         $rules = [];
-        for ($i = 0; $i < 30; $i++) {
+        for ($i = 0; $i < $total; $i++) {
             $rules[] = ['pattern' => "Bogus{$i}", 'action' => 'nonsense'];
         }
         $this->writeUserConfig(['permissionRules' => $rules]);
@@ -578,23 +585,25 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             "\\SugarCraft\\Crush\\Cli\\Bootstrap::permissionGate();\n",
         );
 
-        self::assertCount(25, $notices, '24 notices plus one overflow row');
-        self::assertStringContainsString("permissionRules[23] ('Bogus23')", $notices[23]);
+        self::assertCount($limit + 1, $notices, 'the cap\'s worth of notices plus one overflow row');
+        $last = $limit - 1;
+        self::assertStringContainsString("permissionRules[{$last}] ('Bogus{$last}')", $notices[$last]);
         self::assertSame(
             sprintf(Bootstrap::LAUNCH_NOTICE_OVERFLOW_FORMAT, 6, 's'),
-            $notices[24],
+            $notices[$limit],
         );
 
         // …and not vacuously: the channel the tail row points at really does
-        // carry every one of the thirty, including the six the transcript
-        // could not fit.
-        self::assertSame(30, substr_count($stderr, 'rule skipped rather than coerced'));
-        self::assertStringContainsString("permissionRules[29] ('Bogus29')", $stderr);
+        // carry every one of them, including the six the transcript could not
+        // fit.
+        self::assertSame($total, substr_count($stderr, 'rule skipped rather than coerced'));
+        $final = $total - 1;
+        self::assertStringContainsString("permissionRules[{$final}] ('Bogus{$final}')", $stderr);
 
         // AND THROUGH A REAL chat(), which is the half that pins the plumbing
         // rather than the cap: {@see Bootstrap::chat()} has to read the
-        // ACCESSOR, because reading the raw list would hand the transcript 24
-        // rows with no indication that six more existed — a silent truncation
+        // ACCESSOR, because reading the raw list would hand the transcript a
+        // cap's worth of rows with no indication that six more existed — a silent truncation
         // inside the seam built to end silence. Measured without this: the
         // assertions above all still pass.
         [, $history] = $this->launch(
@@ -605,10 +614,10 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             . 'echo json_encode($rows);' . "\n",
         );
 
-        self::assertCount(25, $history);
+        self::assertCount($limit + 1, $history);
         self::assertStringContainsString(
             sprintf(Bootstrap::LAUNCH_NOTICE_OVERFLOW_FORMAT, 6, 's'),
-            $history[24],
+            $history[$limit],
         );
     }
 
@@ -700,8 +709,9 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
      */
     public function testTheAppShellDeltaSurvivesALaunchThatOverflowedBeforeTheShellWasBuilt(): void
     {
+        $limit = self::launchNoticeLimit();
         $rules = [];
-        for ($i = 0; $i < 30; $i++) {
+        for ($i = 0; $i < $limit + 6; $i++) {
             $rules[] = ['pattern' => "Bogus{$i}", 'action' => 'nonsense'];
         }
         $this->writeUserConfig(['permissionRules' => $rules]);
@@ -717,8 +727,8 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             $rows("\\SugarCraft\\Crush\\Cli\\Bootstrap::app({$root})->chat"),
         );
 
-        // 24 notices + exactly ONE overflow row, through both entry points.
-        self::assertCount(25, $viaChat, 'the cap holds through a bare chat()');
+        // The cap's notices + exactly ONE overflow row, through both entry points.
+        self::assertCount($limit + 1, $viaChat, 'the cap holds through a bare chat()');
         self::assertSame($viaChat, $viaApp, 'the shell must not re-append the overflow row');
 
         // Not vacuous: the row that would be duplicated is really present, and
@@ -984,5 +994,14 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         }
 
         @rmdir($dir);
+    }
+
+    /** {@see Bootstrap::LAUNCH_NOTICE_LIMIT}, which is private. */
+    private static function launchNoticeLimit(): int
+    {
+        $limit = (new \ReflectionClass(Bootstrap::class))->getConstant('LAUNCH_NOTICE_LIMIT');
+        self::assertIsInt($limit);
+
+        return $limit;
     }
 }

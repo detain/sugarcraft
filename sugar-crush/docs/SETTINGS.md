@@ -702,7 +702,7 @@ scrolls past, not what the model is billed for.) The
 transcript gets `retention removed 3 unnamed sessions untouched for 30+ days
 (ids on stderr)`; stderr gets that line and the ids.
 
-The transcript copy is capped — 24 rows and 400 characters per row, see
+The transcript copy is capped — 36 rows and 400 characters per row, see
 `Bootstrap::LAUNCH_NOTICE_LIMIT`. The stderr copy is never clipped and never
 capped, so an overflowed launch says so in the transcript and points at the
 channel that has the rest.
