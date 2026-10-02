@@ -5289,8 +5289,13 @@ final class Renderer
         $call = $request->toolCall;
         // Never wider than the terminal: a modal that overflows $cols would be
         // wrapped by the terminal itself, which breaks the one-line-per-row
-        // assumption render()'s viewport clipping is built on.
-        $inner = max(20, min(self::PERMISSION_MODAL_COLS, $chat->cols() - self::SHELL_CHROME_COLS));
+        // assumption render()'s viewport clipping is built on. The floor is 1,
+        // like the transcript's own content width: it was 20 (R4, the residual
+        // of audit 15b-09), so under 26 columns the box came out wider than
+        // the terminal and the overlay clip cut off its right border. Now the
+        // whole box fits from 7 columns up, where the bordered shell itself
+        // starts to fit.
+        $inner = max(1, min(self::PERMISSION_MODAL_COLS, $chat->cols() - self::SHELL_CHROME_COLS));
 
         $lines = [
             Style::new()->foreground($theme->userLabel)->bold()

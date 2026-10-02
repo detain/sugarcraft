@@ -69,7 +69,7 @@ use SugarCraft\Sprinkles\Table\Table;
  *
  * The pane the box must fit is not the terminal: {@see
  * \SugarCraft\Crush\Renderer::render()} wraps the transcript at
- * `max(20, $chat->cols() - Renderer::SHELL_CHROME_COLS)`, and
+ * `max(1, $chat->cols() - Renderer::SHELL_CHROME_COLS)`, and
  * {@see CHROME_COLS} is that same 6. A row wider than that is HARD-wrapped
  * mid-row by the Markdown pass, which shreds the box into fragments — which
  * is the whole reason the fit is derived from the wrap width rather than from
@@ -83,7 +83,7 @@ final class TranscriptTable
      * The same 6 as {@see \SugarCraft\Crush\Renderer}'s `SHELL_CHROME_COLS`
      * — border 1 each side plus `padding(0, 1)` — because the number this
      * class must fit inside is literally the `$width` `Renderer::render()`
-     * hands `renderHistory()`, which is `max(20, $chat->cols() - 6)`. Kept
+     * hands `renderHistory()`, which is `max(1, $chat->cols() - 6)`. Kept
      * here rather than reached for across the class boundary for the reason
      * `Chat::HELP_CHROME_COLS` gives: this side needs the number, not the
      * layout. {@see \SugarCraft\Crush\Tests\Commands\TranscriptTableTest}
@@ -94,13 +94,16 @@ final class TranscriptTable
     /**
      * The pane width a table built for `$chat` must fit inside.
      *
-     * Mirrors `Renderer::render()`'s own `max(20, cols() - SHELL_CHROME_COLS)`
+     * Mirrors `Renderer::render()`'s own `max(1, cols() - SHELL_CHROME_COLS)`
      * rather than approximating it, so "fits the pane" means the same thing on
-     * both sides of the `ob_start()` capture.
+     * both sides of the `ob_start()` capture. The floor used to be 20, a copy
+     * of the renderer's old floor that outlived it (audit 15b-09's residual,
+     * R4): under 26 columns the table was fitted to a pane wider than the
+     * one it is painted in.
      */
     public static function paneWidth(Chat $chat): int
     {
-        return max(20, $chat->cols() - self::CHROME_COLS);
+        return max(1, $chat->cols() - self::CHROME_COLS);
     }
 
     /**
@@ -138,12 +141,12 @@ final class TranscriptTable
      * rather than widening the table.
      *
      * When even the floors do not fit — a pane narrower than the floors plus
-     * borders, which `max(20, …)` makes reachable at any terminal under about
-     * 26 columns — the floors are returned unchanged. That is an over-wide
-     * box, deliberately: the alternative is clipping the headers into nonsense,
-     * and at that width every other box in the shell is over-wide too. It is
-     * the same call {@see \SugarCraft\Crush\Chat::handleHelpCommand()} makes with
-     * its own `max(20, …)` floor.
+     * borders, which a narrow terminal reaches easily — the floors are
+     * returned unchanged. That is an over-wide box, deliberately: the
+     * alternative is clipping the headers into nonsense. The pane's fitter
+     * wraps the over-wide rows, so nothing reaches the terminal wider than
+     * it. {@see \SugarCraft\Crush\Chat::handleHelpCommand()} makes the same
+     * call with its own `max(20, …)` floor.
      *
      * @param  array<string, int> $columns    header text => cell budget
      * @param  int                $paneWidth  cells the whole table may occupy

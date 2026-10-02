@@ -1529,8 +1529,10 @@ final class RendererTest extends TestCase
         string $prompt = 'Run rm -rf build/?',
         array $arguments = ['description' => 'Delete the build directory'],
         string $toolName = 'Bash',
+        int $cols = 80,
+        int $rows = 40,
     ): Chat {
-        [$blocked] = $this->sizedChat([Message::user('clean up')])->update(
+        [$blocked] = $this->sizedChat([Message::user('clean up')], $cols, $rows)->update(
             new \SugarCraft\Crush\PermissionRequestMsg(
                 Message::assistant(''),
                 new \SugarCraft\Crush\ToolCall($toolName, $arguments, 'call_1'),
@@ -1548,6 +1550,32 @@ final class RendererTest extends TestCase
      * options and no way to know a keypress was expected. Every assertion here
      * fails against that renderer.
      */
+    /**
+     * R4 (the residual of audit 15b-09): the permission modal's inner width
+     * was floored at 20, so under 26 columns the box was wider than the
+     * terminal and the overlay clip cut off its right border. A blocking
+     * prompt whose frame is broken reads as a rendering fault at exactly the
+     * moment the user has to read it. From 7 columns up, where the bordered
+     * shell itself fits, the whole box fits.
+     */
+    public function testThePermissionModalKeepsItsRightBorderOnANarrowTerminal(): void
+    {
+        foreach (range(7, 30) as $cols) {
+            // Tall, so the box (one wrapped cell per row at 7 columns) is not
+            // cut at the bottom, which is a height matter and not this one.
+            $rows = explode("\n", Ansi::strip(Renderer::render(
+                $this->chatAwaitingPermission(cols: $cols, rows: 100),
+            )));
+
+            foreach ($rows as $i => $row) {
+                $this->assertLessThanOrEqual($cols, Width::string($row), "cols {$cols}: row {$i} is wider than the terminal");
+            }
+            $bottom = array_values(array_filter($rows, static fn(string $row): bool => str_contains($row, '╰')));
+            $this->assertNotSame([], $bottom, "cols {$cols}: the modal's bottom border is missing");
+            $this->assertStringContainsString('╯', end($bottom), "cols {$cols}: the modal lost its right border");
+        }
+    }
+
     public function testPermissionPromptIsRenderedAsAModal(): void
     {
         $out = Renderer::render($this->chatAwaitingPermission());

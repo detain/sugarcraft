@@ -6,7 +6,9 @@ namespace SugarCraft\Crush\Tests\Commands;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\TranscriptTable;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * The layout invariants {@see TranscriptTable} exists to hold, pinned on
@@ -18,6 +20,7 @@ use SugarCraft\Crush\Commands\TranscriptTable;
  */
 final class TranscriptTableTest extends TestCase
 {
+    use HomeSandboxTrait;
     public function testCellLeavesTextThatFitsAlone(): void
     {
         $this->assertSame('read, write', TranscriptTable::cell('read, write', 13));
@@ -178,6 +181,30 @@ final class TranscriptTableTest extends TestCase
             'the transcript is wrapped at cols() - SHELL_CHROME_COLS, so a table that fits '
                 . 'cols() - CHROME_COLS only fits the pane while the two agree',
         );
+    }
+
+    /**
+     * R4 (the residual of audit 15b-09): the renderer's content width is
+     * `max(1, cols - SHELL_CHROME_COLS)` since that audit, but this copy kept
+     * the old floor of 20, so under 26 columns a table was fitted to a pane
+     * wider than the one it is painted in.
+     */
+    public function testPaneWidthIsTheRenderersContentWidthOnANarrowTerminal(): void
+    {
+        // Constructing a Chat walks the skill trees under HOME.
+        $home = $this->useHomeSandbox(sys_get_temp_dir() . '/transcript_table_home_' . uniqid('', true));
+        try {
+            foreach ([1, 7, 12, 24, 25, 26, 80] as $cols) {
+                $this->assertSame(
+                    max(1, $cols - TranscriptTable::CHROME_COLS),
+                    TranscriptTable::paneWidth(new Chat(history: [], rows: 24, cols: $cols)),
+                    "cols {$cols}",
+                );
+            }
+        } finally {
+            $this->restoreHomeSandbox();
+            @rmdir($home);
+        }
     }
 
     /** A table that already fits is returned untouched, not re-derived. */

@@ -61,12 +61,14 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
  *    columns got a 26-column frame. Since audit 15b-09 it is `max(1, cols - 6)`,
  *    and {@see testEvenBelowTheContentWidthFloorTheFrameIsHeldToTheFloor} holds
  *    a 20-column terminal to 20 columns.
- * 3. **Overlay rows** — `renderView()`'s choke point holds `$body`; a palette or
- *    permission prompt is composited over the finished frame by `Veil` at its
- *    own natural width, which is 54 columns and does not shrink. So an overlay
- *    overflows a terminal narrower than that, and this bundle does not widen
- *    itself to fix the overlay renderer. Pinned rather than exempted by
+ * 3. **Overlay rows** — `renderView()`'s choke point holds `$body`; a palette is
+ *    composited over the finished frame by `Veil` at its own natural width,
+ *    which is 54 columns and does not shrink. So it overflows a terminal
+ *    narrower than that, and this bundle does not widen itself to fix the
+ *    overlay renderer. Pinned rather than exempted by
  *    {@see testAnOverlayRowIsNeitherMistakenForTheStatusBarNorSilentlyUnmeasured()}.
+ *    The permission prompt does shrink, down to 7 columns (R4), pinned by
+ *    {@see \SugarCraft\Crush\Tests\RendererTest::testThePermissionModalKeepsItsRightBorderOnANarrowTerminal()}.
  *
  * Two more bounds worth stating plainly, because a reader is otherwise entitled
  * to read the headline as unconditional:
