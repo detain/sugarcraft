@@ -522,12 +522,28 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
             );
         }
 
+        // WHY some of those hits may be hidden (audit F-T5 residual, R5): a
+        // rule too costly to evaluate is resolved toward hiding, so the count
+        // above can include a hit the rule would not really have matched —
+        // and blames the project's rules for it. Read off $rules after the
+        // filter, because the ruleset records an undecidable rule only once a
+        // path has been tried against it.
+        $undecidable = $rules->undecidableNote();
+        if ($undecidable !== null) {
+            $content = self::separated($content);
+            $content .= $undecidable;
+        }
+
         // The `... [note]` lines above are now the ONLY thing outside the cap.
         // They are a bounded exemption: each is a single sentence whose length
         // is set by directory names drawn from
         // {@see IgnoreRules::DEFAULT_EXCLUDED_DIRS}, a fixed four-name list —
         // seeded with 2,000 gitignored directories carrying 180-byte names,
-        // the note measured 46 bytes.
+        // the note measured 46 bytes. The undecidable-rule note is the one
+        // whose text is repository content, and it is bounded by construction
+        // instead: {@see IgnoreRules::undecidableNote()} names at most
+        // UNDECIDABLE_NOTE_MAX_RULES rules and clips each pattern to
+        // UNDECIDABLE_NOTE_MAX_PATTERN_BYTES, counting the rest.
         //
         // THE NUDGE USED TO BE HERE TOO, AND CALLING IT "ONE SENTENCE SIZED BY
         // SKILL NAMES" UNDERSTATED IT.

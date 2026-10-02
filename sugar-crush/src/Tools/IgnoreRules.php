@@ -85,7 +85,8 @@ namespace SugarCraft\Crush\Tools;
  * matters, and over-hiding has an escape hatch (`include_ignored`). Each such
  * rule is recorded once on {@see undecidablePatterns()} rather than
  * `error_log()`ed, since stderr under a full-screen TUI is nowhere the user
- * reads.
+ * reads — and Glob and Grep append {@see undecidableNote()} to their result,
+ * so the model is told which rule hid what it may have expected to see.
  *
  * NOT `readonly` as a class: {@see $parsed} (parsed `.gitignore` files),
  * {@see $directoryVerdicts} (the verdict per ancestor directory) and
@@ -123,6 +124,12 @@ final class IgnoreRules
 
     /** DFA states one rule's automaton may intern before it is rebuilt. */
     private const AUTOMATON_STATE_CAP = 4096;
+
+    /** How many undecidable rules {@see undecidableNote()} names before it only counts. */
+    public const UNDECIDABLE_NOTE_MAX_RULES = 3;
+
+    /** How much of one undecidable pattern {@see undecidableNote()} quotes. */
+    public const UNDECIDABLE_NOTE_MAX_PATTERN_BYTES = 80;
 
     /** One literal byte; payload is the byte. */
     private const T_LITERAL = 0;
@@ -164,7 +171,12 @@ final class IgnoreRules
      * Rules no matcher could decide within {@see MATCH_BUDGET}, keyed so each
      * is recorded once however many paths it was tried against.
      *
-     * @var array<string, string>
+     * Kept as the (file, pattern) pair rather than the joined string
+     * {@see undecidablePatterns()} returns, so {@see undecidableNote()} can
+     * shorten the file to its root-relative form without splitting on a `: `
+     * that a path may itself contain.
+     *
+     * @var array<string, array{0: string, 1: string}>
      */
     private array $undecidable = [];
 
@@ -344,7 +356,60 @@ final class IgnoreRules
      */
     public function undecidablePatterns(): array
     {
-        return array_values($this->undecidable);
+        return array_map(
+            static fn (array $rule): string => $rule[0] . ': ' . $rule[1],
+            array_values($this->undecidable),
+        );
+    }
+
+    /**
+     * One `... [gitignore: ...]` line naming the rules {@see undecidablePatterns()}
+     * holds, for a tool to append to its result; null when there are none.
+     *
+     * WHY A TOOL HAS TO SAY THIS (audit F-T5 residual, R5). An undecidable rule
+     * is resolved toward HIDING, so a path it would not actually have matched
+     * can vanish from a Glob list or a Grep hit list. The tool's own
+     * `gitignored` count includes it, which tells the model SOMETHING was
+     * hidden but blames the project's rules for it — and the model has no
+     * reason to doubt a rule it cannot see. Naming the rule that could not be
+     * evaluated, and the argument that bypasses it, is the difference between
+     * "the file is not there" and "a pathological ignore line may be hiding
+     * it".
+     *
+     * BOUNDED, because the text is repository content: a hostile `.gitignore`
+     * is exactly where an undecidable rule comes from, and its lines are as
+     * long as its author likes (the repro's rule is 2,000+ bytes). At most
+     * {@see UNDECIDABLE_NOTE_MAX_RULES} rules are named, each pattern clipped
+     * to {@see UNDECIDABLE_NOTE_MAX_PATTERN_BYTES} on a UTF-8 boundary, with
+     * control bytes shown as `?` so a pattern cannot carry an escape sequence
+     * into the transcript. The rest are counted, not listed.
+     *
+     * No trailing newline: Grep's notes carry none and Glob adds its own.
+     */
+    public function undecidableNote(): ?string
+    {
+        $total = count($this->undecidable);
+        if ($total === 0) {
+            return null;
+        }
+
+        $named = [];
+        foreach (array_slice(array_values($this->undecidable), 0, self::UNDECIDABLE_NOTE_MAX_RULES) as [$file, $source]) {
+            $named[] = self::printable($this->relative($file) ?? $file, PHP_INT_MAX)
+                . ': ' . self::printable($source, self::UNDECIDABLE_NOTE_MAX_PATTERN_BYTES);
+        }
+        $rest = $total - count($named);
+
+        return sprintf(
+            '... [gitignore: %d ignore rule%s too costly to evaluate %s resolved toward hiding, so a path '
+            . '%s might not really match can be missing here: %s%s. Pass include_ignored: true to bypass .gitignore.]',
+            $total,
+            $total === 1 ? '' : 's',
+            $total === 1 ? 'was' : 'were',
+            $total === 1 ? 'it' : 'they',
+            implode('; ', $named),
+            $rest > 0 ? sprintf('; and %d more', $rest) : '',
+        );
     }
 
     /**
@@ -407,7 +472,7 @@ final class IgnoreRules
                 }
                 $matched = $this->matches($rule, $scoped);
                 if ($matched === null) {
-                    $this->undecidable[$file . "\0" . $rule['source']] ??= $file . ': ' . $rule['source'];
+                    $this->undecidable[$file . "\0" . $rule['source']] ??= [$file, $rule['source']];
                     // Fail CLOSED, which is direction-dependent: a hide rule
                     // is taken to apply, a negation is taken NOT to — either
                     // way the uncertain path stays hidden.
@@ -947,6 +1012,25 @@ final class IgnoreRules
      * ruleset has no jurisdiction over, and answering "not ignored" for it is
      * the only honest verdict.
      */
+    /**
+     * $text with control bytes shown as `?` and, past $maxBytes, cut on a
+     * UTF-8 boundary and marked with `…`.
+     */
+    private static function printable(string $text, int $maxBytes): string
+    {
+        $text = (string) preg_replace('/[\x00-\x1F\x7F]/', '?', $text);
+        if (strlen($text) <= $maxBytes) {
+            return $text;
+        }
+
+        $cut = $maxBytes;
+        while ($cut > 0 && (ord($text[$cut]) & 0xC0) === 0x80) {
+            $cut--;
+        }
+
+        return substr($text, 0, $cut) . '…';
+    }
+
     private function relative(string $absolutePath): ?string
     {
         $path = rtrim($absolutePath, '/');

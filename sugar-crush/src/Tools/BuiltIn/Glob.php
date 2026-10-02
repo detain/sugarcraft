@@ -634,6 +634,19 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
             );
         }
 
+        // WHY some of that may be hidden (audit F-T5 residual, R5): a rule too
+        // costly to evaluate is resolved toward hiding, so the count above can
+        // include a path the rule would not really have matched — and blames
+        // the project's rules for it. Read off $rules AFTER the walk, because
+        // the ruleset records an undecidable rule only once a path has been
+        // tried against it. Same bounded-note exemption as the lines around
+        // it; IgnoreRules::undecidableNote() caps it in rules and in bytes.
+        $undecidable = $rules->undecidableNote();
+        if ($undecidable !== null) {
+            $output = self::separated($output);
+            $output .= $undecidable . "\n";
+        }
+
         // A symlinked directory is where this monorepo's sibling libraries
         // live, so "not followed" is a genuinely surprising omission and the
         // note carries its own hatch: seeding the walk AT the link is bounded,
