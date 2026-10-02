@@ -55,7 +55,79 @@ final class HookContextFilesTest extends TestCase
         $this->assertDirectoryExists($dir);
         // The dedicated sub-directory is the first half of the sweep-safety proof:
         // glob('*/sc_runtime_tool_*') never descends into a nested directory.
-        $this->assertSame(sys_get_temp_dir() . '/' . HookContextFiles::DIR_NAME, $dir);
+        $this->assertSame(sys_get_temp_dir() . '/' . self::ownDirectoryName(), $dir);
+    }
+
+    /**
+     * THE NAME CARRIES THE UID IT WAS GIVEN, and the posix-less build gets a
+     * named shared scope rather than the bare stem. Driven through the private
+     * seam because no build this suite runs on lacks `posix_geteuid()`, so the
+     * `null` arm is otherwise unreachable — the same reason
+     * {@see \SugarCraft\Crush\Tests\Hooks\AuditHookTest} drives AuditHook's.
+     */
+    public function testTheDirectoryNameIsScopedToTheEffectiveUid(): void
+    {
+        $for = new \ReflectionMethod(HookContextFiles::class, 'directoryFor');
+
+        self::assertSame(
+            sys_get_temp_dir() . '/sc-hook-ctx-4242',
+            $for->invoke(null, 4242),
+            'the overflow directory no longer carries the uid it was given, so two users share one name again',
+        );
+        self::assertSame(sys_get_temp_dir() . '/sc-hook-ctx-noposix', $for->invoke(null, null));
+    }
+
+    /**
+     * AUDIT TMP-1: ANOTHER USER'S DIRECTORY AT THE OLD SHARED NAME NO LONGER
+     * DISABLES THIS USER'S RETENTION.
+     *
+     * Under one fixed `sc-hook-ctx` name the first user on the box to overflow a
+     * hook owned the directory, and every other user's overflow was refused as
+     * unsafe for as long as it stood. A process without root cannot create a
+     * directory another uid owns, so the squatter here is a `0755` directory —
+     * one the verification refuses just the same — at the unscoped name, in a
+     * sandbox the child adopts as its temp directory (`sys_get_temp_dir()` is
+     * cached per process, see the blocked-directory test below for why this
+     * runs in a child). Reverting the uid suffix makes the store pick the
+     * squatter again and the marker reads "could not be retained".
+     */
+    public function testADirectoryAnotherUserHoldsAtTheSharedNameDoesNotBlockThisUsersOverflow(): void
+    {
+        $root = $this->overflowSandboxRoot();
+        $squatter = $root . '/' . HookContextFiles::DIR_NAME;
+        self::assertTrue(mkdir($squatter, 0o700));
+        self::assertTrue(chmod($squatter, 0o755));
+
+        $program = <<<'PHP'
+            <?php
+            declare(strict_types=1);
+            require '%1$s';
+
+            $bounded = SugarCraft\Crush\Support\HookContextFiles::bound(str_repeat('Q', 20_000), 10_000);
+
+            fwrite(STDOUT, json_encode([
+                'tempRoot' => sys_get_temp_dir(),
+                'marker' => bin2hex(substr($bounded, -400)),
+            ]));
+            PHP;
+        $child = $this->runInSandboxedChild($root, $program);
+
+        self::assertSame(0, $child['status'], 'the child died: ' . $child['stderr']);
+        $report = json_decode($child['stdout'], true);
+        self::assertIsArray($report, 'the child reported nothing: ' . $child['stdout']);
+        self::assertSame($root, $report['tempRoot'], 'the child did not run under the sandbox, so this says nothing');
+
+        $marker = (string) hex2bin($report['marker']);
+        self::assertStringNotContainsString(
+            'could not be retained',
+            $marker,
+            'a directory somebody else holds at the shared name still disables this user\'s overflow retention',
+        );
+        $ours = $root . '/' . self::ownDirectoryName();
+        self::assertStringContainsString('retained at ' . $ours . '/ctx-', $marker);
+        self::assertSame(1, preg_match('/retained at (\S+)\]/', $marker, $m));
+        self::assertSame(20_000, filesize($m[1]), 'the retained file does not hold the whole overflow');
+        self::assertSame(['.', '..'], scandir($squatter), 'the overflow was written into the squatter\'s directory');
     }
 
     /**
@@ -350,7 +422,10 @@ final class HookContextFilesTest extends TestCase
     public function testABlockedDirectoryDegradesInTheBandAndWritesNothingThroughTheLink(): void
     {
         $root = $this->overflowSandboxRoot();
-        $planted = $root . '/' . HookContextFiles::DIR_NAME;
+        // The uid-scoped name, i.e. the one this process will really resolve:
+        // the per-user suffix ends contention, not planting, so the link a
+        // hostile user can still put there is the threat this test pins.
+        $planted = $root . '/' . self::ownDirectoryName();
         $whereTheLinkPoints = $root . '/victim';
 
         self::assertTrue(mkdir($whereTheLinkPoints, 0o700, true));
@@ -373,9 +448,6 @@ final class HookContextFilesTest extends TestCase
         // gains a sibling dependency the child will fatal on an undefined class and
         // the `$status === 0` assertion below fails loudly — the switch back to the
         // autoloader is then due, along with the roster rows it would owe.
-        $source = (new \ReflectionClass(HookContextFiles::class))->getFileName();
-        self::assertIsString($source, 'the class under test has no source file to hand the child');
-
         // THE REPORT TRAVELS AS HEX ON PURPOSE. The tail slice this test needs is
         // `substr($bounded, -180)` — BYTES — and a bounded string whose marker is
         // longer than the slice starts INSIDE the three-byte U+2026 the marker
@@ -395,26 +467,10 @@ final class HookContextFilesTest extends TestCase
                 'length' => strlen($bounded),
                 'marker' => bin2hex(substr($bounded, -180)),
                 'head' => bin2hex(substr($bounded, 0, 40)),
-                'retained' => glob(sys_get_temp_dir() . '/sc-hook-ctx' . '/*') ?: [],
+                'retained' => glob(sys_get_temp_dir() . '/sc-hook-ctx' . '*/*') ?: [],
             ]));
             PHP;
-        $script = $this->sandboxFile($root, 'probe');
-        file_put_contents($script, sprintf($program, $source));
-
-        $process = proc_open(
-            [PHP_BINARY, $script],
-            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
-            null,
-            ['TMPDIR' => $root, 'PATH' => (string) getenv('PATH')],
-        );
-        self::assertIsResource($process);
-
-        $stdout = (string) stream_get_contents($pipes[1]);
-        $stderr = (string) stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        $status = proc_close($process);
+        ['status' => $status, 'stdout' => $stdout, 'stderr' => $stderr] = $this->runInSandboxedChild($root, $program);
 
         // THE SECURITY CLAIM FIRST, ahead of anything the child had to say for
         // itself: whatever the marker reads, the refused store must not have put a
@@ -669,6 +725,52 @@ final class HookContextFilesTest extends TestCase
         $this->sandboxRoots[] = $root;
 
         return $root;
+    }
+
+    /**
+     * This effective uid's directory name under any temp root: what
+     * {@see HookContextFiles::dir()} resolves to, spelled independently of the
+     * private seam so a test reading it is not grading the seam against itself.
+     */
+    private static function ownDirectoryName(): string
+    {
+        return HookContextFiles::DIR_NAME . '-' . posix_geteuid();
+    }
+
+    /**
+     * Run $program (a `sprintf` template whose `%1$s` is the class under test's
+     * source file) in a child whose temp directory is $root.
+     *
+     * THE CHILD LOADS THE ONE FILE, NOT THE autoloader — see the reasoning in
+     * the blocked-directory test, which this helper's first caller was. `TMPDIR`
+     * is set in the CHILD's environment so its `sys_get_temp_dir()` cache warms
+     * with the sandbox.
+     *
+     * @return array{status: int, stdout: string, stderr: string}
+     */
+    private function runInSandboxedChild(string $root, string $program): array
+    {
+        $source = (new \ReflectionClass(HookContextFiles::class))->getFileName();
+        self::assertIsString($source, 'the class under test has no source file to hand the child');
+
+        $script = $this->sandboxFile($root, 'probe');
+        file_put_contents($script, sprintf($program, $source));
+
+        $process = proc_open(
+            [PHP_BINARY, $script],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            null,
+            ['TMPDIR' => $root, 'PATH' => (string) getenv('PATH')],
+        );
+        self::assertIsResource($process);
+
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return ['status' => proc_close($process), 'stdout' => $stdout, 'stderr' => $stderr];
     }
 
     /** A uniquely named writable file inside $root (the child's program text). */

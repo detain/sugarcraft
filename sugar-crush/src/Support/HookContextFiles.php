@@ -40,7 +40,7 @@ namespace SugarCraft\Crush\Support;
  *   - `sys_get_temp_dir() . '/sc_chat_tool_*'`
  *   - `sys_get_temp_dir() . '/crush-hook-payload-*'`
  * PHP `glob()` treats `*` as NOT crossing a `/` boundary, so a path that contains
- * the extra directory segment `'/sc-hook-ctx/'` can never be named by any of
+ * the extra directory segment `'/sc-hook-ctx-<euid>/'` can never be named by any of
  * those three patterns — the sweep cannot reach a file it does not glob,
  * irrespective of mtime/age. `ToolIpcFiles::discard()` unlinks only the exact
  * `$file` and `$file . '.partial'` it is handed, and every caller passes its own
@@ -51,10 +51,18 @@ namespace SugarCraft\Crush\Support;
  * `discard()`, or by the partial-suffix cleanup before its consumer reads it.
  * `PROCEED`, not `HALT` — a clean retained-lifetime boundary exists in-tree.
  *
- * THE DIRECTORY IS INSPECTED BEFORE ONE BYTE IS WRITTEN THROUGH IT. The name
- * `sys_get_temp_dir() . '/sc-hook-ctx'` sits inside a parent that every user on
- * the box may create entries in, so whoever gets there first decides where the
- * writes land: a pre-planted symlink of that name turns "retain the overflow
+ * THE DIRECTORY IS PER-USER. It sits inside a parent that every user on the box
+ * may create entries in, so its name carries the effective uid
+ * (`sys_get_temp_dir() . '/sc-hook-ctx-<euid>'`). Under the single fixed name it
+ * used to have, the first user whose hook overflowed created it `0700` as theirs,
+ * and the ownership check below then refused every other user's overflow for as
+ * long as that directory stood — a denial any local user could also cause on
+ * purpose with one `mkdir` (audit TMP-1). The suffix leaves nobody else's
+ * ordinary use contending for this user's name.
+ *
+ * AND IT IS INSPECTED BEFORE ONE BYTE IS WRITTEN THROUGH IT. The suffix ends the
+ * contention, not the planting: another user can still create the uid-suffixed
+ * name first, and a pre-planted symlink there turns "retain the overflow
  * privately" into "write this user's hook output wherever the link points, as
  * this user". `dir()` therefore refuses — it never quietly picks another place
  * to put the bytes — unless `lstat()` on the final path component says real
@@ -89,8 +97,9 @@ namespace SugarCraft\Crush\Support;
 final class HookContextFiles
 {
     /**
-     * The dedicated sub-directory these overflow files live in, under
-     * `sys_get_temp_dir()`. Kept distinct from the bare temp directory that
+     * The stem of the dedicated sub-directory these overflow files live in,
+     * under `sys_get_temp_dir()`; {@see directoryFor()} appends the effective
+     * uid. Kept distinct from the bare temp directory that
      * {@see ToolIpcFiles::sweep()} globs, which is exactly why the sweep cannot
      * see a file written here (see the class docblock proof).
      */
@@ -172,7 +181,25 @@ final class HookContextFiles
      */
     public static function dir(): string
     {
-        return self::verifiedDirectory(sys_get_temp_dir() . '/' . self::DIR_NAME);
+        return self::verifiedDirectory(
+            self::directoryFor(\function_exists('posix_geteuid') ? \posix_geteuid() : null),
+        );
+    }
+
+    /**
+     * {@see dir()}'s path for a given effective uid, or for a build with no
+     * `posix_geteuid()`.
+     *
+     * The same naming as {@see \SugarCraft\Crush\Hooks\BuiltIn\AuditHook}'s
+     * log directory, and a seam for the same reason: every build the suite runs
+     * on has the posix lookup, so with it inline the `null` arm would be
+     * reachable from no test. That arm is a shared `-noposix` scope, where
+     * {@see refusalReason()} skips the uid comparison and only the type and mode
+     * checks hold.
+     */
+    private static function directoryFor(?int $uid): string
+    {
+        return sys_get_temp_dir() . '/' . self::DIR_NAME . '-' . ($uid === null ? 'noposix' : (string) $uid);
     }
 
     /**

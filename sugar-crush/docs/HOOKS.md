@@ -617,15 +617,16 @@ At or under the cap the text passes through unchanged. Over it, what travels is
 the UTF-8-safe head plus a marker naming both figures and the file where the
 **complete** output was retained:
 
-- retained files live in a `sc-hook-ctx/` directory inside the system temp
-  directory — one file per overflow, created `0600`, filled and then renamed, so
-  a reader never sees a partial file;
+- retained files live in a `sc-hook-ctx-<euid>/` directory inside the system
+  temp directory — one directory per user, so the first user on a shared box
+  cannot lock everybody else out of retention — one file per overflow, created
+  `0600`, filled and then renamed, so a reader never sees a partial file;
 - they are **never auto-deleted**: a hook's output is treated as audit material
   and outlives the run that produced it;
 - they are deliberately outside the tool-IPC sweep. `ToolIpcFiles::sweep()`
   matches only its three bare-temp prefixes (`sc_runtime_tool_*`,
   `sc_chat_tool_*`, `crush-hook-payload-*`), and a glob `*` does not cross the
-  directory separator — so nothing under `sc-hook-ctx/` can be swept however
+  directory separator — so nothing under `sc-hook-ctx-<euid>/` can be swept however
   long the notes pile up;
 - if the temp directory will not take the file, the marker says the output
   *could not be retained* instead, and the bounded head still travels.

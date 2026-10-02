@@ -35,6 +35,16 @@ use SugarCraft\Crush\Usage;
  * Transcripts hold whatever the sub-agent read, so the directory is the
  * owner-only, re-verified one {@see HookContextFiles::verifiedDirectory()}
  * accepts, and each file is written `0600` and renamed into place.
+ *
+ * ONE DIRECTORY PER EFFECTIVE UID, because the store sits in a temp directory
+ * every user on the box shares. Under a single fixed name the first user to
+ * suspend a run created it `0700` as theirs, and every other user's `save()`
+ * was then refused by the ownership check for as long as that directory stood:
+ * their suspended runs could never be resumed, and a local user could arrange
+ * that on purpose with one `mkdir` (audit TMP-1). The uid suffix gives each
+ * user a name nobody else's ordinary use contends for; the verification still
+ * runs on that name, since another user can still PLANT it, and a planted one
+ * is refused rather than written through.
  */
 final class SuspendedDelegations
 {
@@ -44,6 +54,7 @@ final class SuspendedDelegations
     /** A suspension nobody resumed within a week is swept on the next save. */
     public const MAX_AGE_SECONDS = 7 * 86400;
 
+    /** The store directory's stem; {@see directoryFor()} appends whose it is. */
     private const DIR_NAME = 'sugarcrush-suspended-delegations';
 
     private const RESTORABLE_CLASSES = [
@@ -67,7 +78,22 @@ final class SuspendedDelegations
      */
     public static function new(): self
     {
-        return new self(sys_get_temp_dir() . '/' . self::DIR_NAME);
+        return new self(self::directoryFor(\function_exists('posix_geteuid') ? \posix_geteuid() : null));
+    }
+
+    /**
+     * {@see new()}'s directory for a given effective uid, or for a build with
+     * no `posix_geteuid()`.
+     *
+     * The same naming as {@see \SugarCraft\Crush\Hooks\BuiltIn\AuditHook}'s
+     * log directory, and a seam for the same reason: every build the suite runs
+     * on has the posix lookup, so with it inline the `null` arm (a shared
+     * `-noposix` scope, where only the mode and symlink checks hold) would be
+     * reachable from no test at all.
+     */
+    private static function directoryFor(?int $uid): string
+    {
+        return sys_get_temp_dir() . '/' . self::DIR_NAME . '-' . ($uid === null ? 'noposix' : (string) $uid);
     }
 
     /**

@@ -2391,7 +2391,7 @@ final class DocFigureProseDriftTest extends TestCase
         }
         self::assertSame(1, preg_match('/live in a `([^`]+)` directory inside the system temp/', $hooks, $ctxDir), 'the retained-overflow directory sentence moved');
         $dirName = (string) (new \ReflectionClassConstant(HookContextFiles::class, 'DIR_NAME'))->getValue();
-        self::assertSame($dirName . '/', $ctxDir[1], 'the page names a directory HookContextFiles no longer creates');
+        self::assertSame($dirName . '-<euid>/', $ctxDir[1], 'the page names a directory HookContextFiles no longer creates');
         foreach ($prefixes as $prefix) {
             self::assertFalse(str_starts_with($dirName, $prefix), 'the retained directory now shares a prefix with a swept temp family — nothing under it is safe from the sweep any more');
         }
