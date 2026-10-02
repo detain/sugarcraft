@@ -31,6 +31,15 @@ final class McpClient
      */
     private array $disabledServers = [];
 
+    /**
+     * Names of entries the admission check declined (audit MCP-5) in the last
+     * {@see startServers()} run — not started, and not a config error: the
+     * caller that supplied the check reports them.
+     *
+     * @var list<string>
+     */
+    private array $refusedServers = [];
+
     private Client $httpClient;
 
     /**
@@ -59,6 +68,12 @@ final class McpClient
         bool $unrestricted = false,
         array $denyPatterns = [],
         private readonly ?McpAuthStore $authStore = null,
+        // Audit MCP-5: asked of every entry AFTER it is canonicalised and
+        // BEFORE anything is built or spawned — `(string $name, mixed $type,
+        // array $entry): bool`. Evaluated on the bytes this client itself
+        // loaded, so there is no window between a check and the start in
+        // which `.mcp.json` could change. Null admits everything, as before.
+        private readonly ?\Closure $admit = null,
     ) {
         // Injectable so tests can supply a MockHandler-backed client; defaults to
         // a real client for production use.
@@ -118,6 +133,7 @@ final class McpClient
         $config = $this->loadConfig();
         $failures = [];
         $this->disabledServers = [];
+        $this->refusedServers = [];
 
         foreach ($config['mcpServers'] ?? [] as $name => $serverConfig) {
             $failure = $this->startServer($name, $serverConfig);
@@ -152,6 +168,17 @@ final class McpClient
         if ($disabled !== '') {
             throw new \RuntimeException($disabled);
         }
+    }
+
+    /**
+     * The entries the admission check refused in the last {@see startServers()}
+     * run (audit MCP-5).
+     *
+     * @return list<string>
+     */
+    public function refusedServers(): array
+    {
+        return $this->refusedServers;
     }
 
     /**
@@ -345,6 +372,11 @@ final class McpClient
             $entry = McpForeignTranslate::normalizeEntry($config);
             if ($entry === null) {
                 $this->disabledServers[] = $name;
+
+                return null;
+            }
+            if ($this->admit !== null && ($this->admit)($name, $type, $entry) !== true) {
+                $this->refusedServers[] = $name;
 
                 return null;
             }

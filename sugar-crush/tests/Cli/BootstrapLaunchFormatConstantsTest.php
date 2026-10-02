@@ -226,6 +226,11 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'PROJECT_TIER_REFUSAL_FORMAT' => ['method' => 'reportProjectTierRefusals', 'conversions' => 2],
         'MCP_PARTIAL_START_LOG_FORMAT' => ['method' => 'mcpClient', 'conversions' => 3],
         'MCP_PARTIAL_START_NOTICE_FORMAT' => ['method' => 'mcpClient', 'conversions' => 2],
+        // Audit MCP-5's refusal row and its two item shapes; read back by
+        // BootstrapMcpTrustPinsTest, quoted on no page.
+        'MCP_SERVER_REFUSED_NOTICE_FORMAT' => ['method' => 'mcpClient', 'conversions' => 2],
+        'MCP_SERVER_CHANGED_FORMAT' => ['method' => 'mcpClient', 'conversions' => 3],
+        'MCP_SERVER_ADDED_FORMAT' => ['method' => 'mcpClient', 'conversions' => 2],
         // Audit 15d-05's one-time legacy-binding row, read back by
         // BootstrapLaunchNoticeRoutingTest; quoted on no page.
         'MEMORY_LEGACY_BOUND_NOTICE_FORMAT' => ['method' => 'reportMemorySkips', 'conversions' => 5],
@@ -441,7 +446,9 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // adds one of its own and two would read as a typo.
         'reportProjectTierRefusals' => ["'.'"],
         // The two decision keys it reads; both messages are named now.
-        'mcpClient' => ["'path'", "'status'"],
+        // MCP-5 added the trust-record plumbing: the decision's canonicalRoot
+        // key, the path separator, the two pin keys and the item separator.
+        'mcpClient' => ["'path'", "'status'", "'canonicalRoot'", "'/'", "'fingerprint'", "'summary'", "'; '"],
         // Audit 15d-05's binding row: the plural pair and the is/are pick.
         'reportMemorySkips' => ["''", "'s'", "'is'", "'are'"],
         // The empty-inherited short circuit and the two tier words the ternary
@@ -744,7 +751,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $census = self::sprintfCensus(self::bootstrapSource());
 
         self::assertSame(
-            18,
+            21,
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );

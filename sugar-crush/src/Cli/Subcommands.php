@@ -588,13 +588,16 @@ final class Subcommands
         if ($verb === 'import') {
             return self::mcpImport($args);
         }
+        if ($verb === 'trust') {
+            return self::mcpTrust($args);
+        }
         if ($verb !== 'list') {
             return NonInteractive::failUsage(
                 $verb === null
                     ? 'sugarcrush: mcp: no action given'
                     : \sprintf('sugarcrush: mcp %s: unknown action', $verb),
                 $args->outputFormat,
-                'Usage: sugarcrush mcp list | sugarcrush mcp auth login <server> | sugarcrush mcp import claude|opencode <path>',
+                'Usage: sugarcrush mcp list | sugarcrush mcp trust | sugarcrush mcp auth login <server> | sugarcrush mcp import claude|opencode <path>',
             );
         }
 
@@ -712,6 +715,94 @@ final class Subcommands
                 $wirePrefix,
             );
         }
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * `sugarcrush mcp trust` — approve this project's `.mcp.json` as it is now
+     * (audit MCP-5): list the root under `trustedProjectMcp` if it is not
+     * already, and record each server's fingerprint, so the next launch starts
+     * exactly these entries and refuses any later change to them. Prints every
+     * server with how it compares to the previous record; starts nothing.
+     * {@see Bootstrap::trustProjectMcp()} does the work.
+     */
+    private static function mcpTrust(ParsedArgs $args): int
+    {
+        if (\count($args->subcommandArgs) > 1) {
+            return NonInteractive::failUsage(
+                \sprintf('sugarcrush mcp trust: unexpected operand %s', $args->subcommandArgs[1]),
+                $args->outputFormat,
+                'Usage: sugarcrush mcp trust (run it in the project, or pass the project directory first)',
+            );
+        }
+
+        $report = Bootstrap::trustProjectMcp($args->root);
+
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            if ($report['error'] !== null) {
+                self::emitDocument([
+                    'result' => null,
+                    'error' => ['type' => 'mcp-config', 'message' => $report['path'] . ' ' . $report['error']],
+                ]);
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+            self::emitDocument(['result' => $report]);
+
+            return $report['recorded'] || !\in_array($report['status'], [Bootstrap::MCP_UNTRUSTED, Bootstrap::MCP_TRUSTED], true)
+                ? NonInteractive::EXIT_OK
+                : NonInteractive::EXIT_FAILURE;
+        }
+
+        switch ($report['status']) {
+            case Bootstrap::MCP_ABSENT:
+                echo 'No ' . Bootstrap::MCP_CONFIG_FILENAME . " in this project (looked for {$report['path']}); nothing to trust.\n";
+
+                return NonInteractive::EXIT_OK;
+
+            case Bootstrap::MCP_OUTSIDE_TREE:
+                echo $report['path'] . " resolves outside the project tree and cannot be trusted.\n";
+
+                return NonInteractive::EXIT_OK;
+        }
+
+        // ONE stderr site for the three ways an approval can fail to land: the
+        // file could not be read, the grant could not be written, or the
+        // record could not be. Each leaves the launch refusing what it refused.
+        $failure = match (true) {
+            $report['error'] !== null && !$report['granted'] => $report['path'] . ' ' . $report['error'],
+            !$report['granted'] => 'mcp trust: could not add ' . $report['root'] . ' to "trustedProjectMcp" in '
+                . Bootstrap::userConfigPath() . '; nothing was recorded',
+            !$report['recorded'] => 'mcp trust: ' . (string) $report['error'],
+            default => null,
+        };
+
+        if ($failure === null || $report['granted']) {
+            echo 'Trusting the MCP servers in ' . $report['path'] . ":\n";
+            $width = 0;
+            foreach ([...array_column($report['servers'], 'name'), ...$report['removed'], ...$report['invalid']] as $name) {
+                $width = \max($width, \strlen($name));
+            }
+            foreach ($report['servers'] as $server) {
+                \printf("  %-{$width}s  %-9s  %s\n", $server['name'], $server['change'], $server['summary']);
+            }
+            foreach ($report['removed'] as $name) {
+                \printf("  %-{$width}s  %-9s\n", $name, 'removed');
+            }
+            foreach ($report['invalid'] as $name) {
+                \printf("  %-{$width}s  %-9s  (not recorded: the entry is malformed)\n", $name, 'invalid');
+            }
+        }
+
+        if ($failure !== null) {
+            \fwrite(\STDERR, 'sugarcrush: ' . $failure . "\n");
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        echo \count($report['servers']) . ' server' . (\count($report['servers']) === 1 ? '' : 's')
+            . ' recorded; the next launch starts these and refuses any later change to them.' . "\n";
 
         return NonInteractive::EXIT_OK;
     }
@@ -1078,7 +1169,7 @@ final class Subcommands
      */
     private const SUBCOMMAND_ACTIONS = [
         'session' => ['list', 'delete'],
-        'mcp' => ['list', 'auth', 'import'],
+        'mcp' => ['list', 'auth', 'import', 'trust'],
         'completion' => self::SHELLS,
     ];
 

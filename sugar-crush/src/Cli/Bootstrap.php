@@ -32,6 +32,7 @@ use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\LSP\LspClient;
 use SugarCraft\Crush\MCP\McpClient;
+use SugarCraft\Crush\MCP\McpTrustPins;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Memory\UnreadableNotes;
 use SugarCraft\Crush\Permissions\PermissionAction;
@@ -533,6 +534,22 @@ final class Bootstrap
     public const MCP_PARTIAL_START_NOTICE_FORMAT =
         'MCP tools from %s are incomplete: the server list could not be fully started (%s); '
         . 'this session has only the tools that did load';
+
+    /**
+     * Audit MCP-5's launch row: servers of a trusted `.mcp.json` that were NOT
+     * started because they differ from what the user trusted. `%s` the config
+     * path, `%s` the `; `-joined {@see MCP_SERVER_CHANGED_FORMAT} /
+     * {@see MCP_SERVER_ADDED_FORMAT} items.
+     */
+    public const MCP_SERVER_REFUSED_NOTICE_FORMAT =
+        'MCP servers in %s not started — they differ from what you trusted: %s. Review the file, then run '
+        . '"sugarcrush mcp trust" in the project to approve the current entries';
+
+    /** One refused item: `%s` the server name, `%s` the recorded summary, `%s` the current one. */
+    public const MCP_SERVER_CHANGED_FORMAT = '"%s" changed (was: %s; now: %s)';
+
+    /** One refused item: `%s` the server name, `%s` its summary. */
+    public const MCP_SERVER_ADDED_FORMAT = '"%s" is new (%s)';
 
     /**
      * The one-time launch row for audit 15d-05's legacy binding: unkeyed
@@ -6382,6 +6399,94 @@ final class Bootstrap
     }
 
     /**
+     * `sugarcrush mcp trust` — the user's explicit approval of a project's
+     * `.mcp.json` AS IT IS NOW (audit MCP-5): lists `trustedProjectMcp` for the
+     * canonical project root when it is not already there, and records every
+     * enabled server's fingerprint ({@see McpTrustPins}), replacing the root's
+     * previous record. Starts nothing.
+     *
+     * Each row says how the entry compares to what was recorded before —
+     * `new`, `changed` or `unchanged` — so the command doubles as the review
+     * the refusal notice asks for. Nothing is written for a config that is
+     * absent, outside the tree, unreadable or not JSON.
+     *
+     * @return array{status: string, path: string, root: string, servers: list<array{name: string, summary: string, change: string}>, removed: list<string>, invalid: list<string>, granted: bool, recorded: bool, error: string|null}
+     *
+     * @throws PermissionConfigException when the user config exists and is unusable
+     */
+    public static function trustProjectMcp(?string $root = null): array
+    {
+        $decision = self::mcpConfigDecision($root);
+        $trustRoot = $decision['canonicalRoot'] !== false ? $decision['canonicalRoot'] : $decision['root'];
+        $report = [
+            'status' => $decision['status'],
+            'path' => $decision['path'],
+            'root' => $trustRoot,
+            'servers' => [],
+            'removed' => [],
+            'invalid' => [],
+            'granted' => false,
+            'recorded' => false,
+            'error' => null,
+        ];
+
+        if (!\in_array($decision['status'], [self::MCP_UNTRUSTED, self::MCP_TRUSTED], true) || $decision['canonicalRoot'] === false) {
+            return $report;
+        }
+
+        $contents = @file_get_contents($decision['path']);
+        if (!is_string($contents)) {
+            return ['error' => 'could not be read'] + $report;
+        }
+        $data = json_decode($contents, true);
+        if (!is_array($data) || !is_array($data['mcpServers'] ?? null)) {
+            return ['error' => 'is not valid JSON with an "mcpServers" object'] + $report;
+        }
+
+        $current = McpTrustPins::pinsFor($data['mcpServers']);
+        $pins = McpTrustPins::load(self::trustedConfigDirPath() . '/' . McpTrustPins::FILENAME);
+        $before = $pins->forRoot($trustRoot) ?? [];
+
+        foreach ($current['pins'] as $name => $pin) {
+            $report['servers'][] = [
+                'name' => $name,
+                'summary' => $pin['summary'],
+                'change' => !isset($before[$name])
+                    ? 'new'
+                    : (hash_equals($before[$name]['fingerprint'], $pin['fingerprint']) ? 'unchanged' : 'changed'),
+            ];
+        }
+        $report['removed'] = array_values(array_diff(array_keys($before), array_keys($current['pins'])));
+        $report['invalid'] = $current['invalid'];
+
+        // The grant itself, through the one config writer — but only when it is
+        // missing, so a hand-curated list is not rewritten for nothing.
+        $isTrusted = static fn (): bool => \in_array($trustRoot, self::trustedProjectRoots(
+            self::permissionConfig(),
+            self::TRUSTED_PROJECT_MCP_CONFIG_KEY,
+            'no project MCP config was trusted',
+        ), true);
+        if (!$isTrusted()) {
+            $listed = self::permissionConfig()[self::TRUSTED_PROJECT_MCP_CONFIG_KEY] ?? [];
+            $listed = is_array($listed) ? array_values($listed) : [];
+            $listed[] = $trustRoot;
+            self::writeUserConfig([self::TRUSTED_PROJECT_MCP_CONFIG_KEY => $listed]);
+        }
+        $report['granted'] = $isTrusted();
+
+        if ($report['granted']) {
+            try {
+                $pins->withRoot($trustRoot, $current['pins'])->save();
+                $report['recorded'] = true;
+            } catch (\Throwable $e) {
+                $report['error'] = 'the trust record ' . $pins->path() . ' could not be written (' . $e->getMessage() . ')';
+            }
+        }
+
+        return $report;
+    }
+
+    /**
      * What THIS PROCESS has actually started, for the `/mcp` panel — reading
      * the {@see $mcpClients} memo, NEVER consulting {@see mcpClient()}.
      *
@@ -6667,6 +6772,37 @@ final class Bootstrap
             return null;
         }
 
+        // AUDIT MCP-5: the grant covers the servers the user trusted, not the
+        // root's every future `.mcp.json`. Each entry is checked against its
+        // recorded fingerprint ({@see McpTrustPins}) by the client itself, on
+        // the bytes it loaded, before anything is spawned. A root with no
+        // record yet is the launch the grant was just written for: what it
+        // starts is recorded, and from then on a changed or added server is
+        // refused until `sugarcrush mcp trust` approves it.
+        $trustRoot = (string) $decision['canonicalRoot'];
+        $pins = McpTrustPins::load(self::trustedConfigDirPath() . '/' . McpTrustPins::FILENAME);
+        $recorded = $pins->forRoot($trustRoot);
+        $admitted = [];
+        $refused = [];
+        $admit = static function (string $name, mixed $type, array $entry) use ($recorded, &$admitted, &$refused): bool {
+            $pin = McpTrustPins::pin($type, $entry);
+            $admitted[$name] = $pin;
+            if ($recorded === null) {
+                return true;
+            }
+
+            $was = $recorded[$name] ?? null;
+            if ($was !== null && hash_equals($was['fingerprint'], $pin['fingerprint'])) {
+                return true;
+            }
+
+            $refused[] = $was === null
+                ? sprintf(self::MCP_SERVER_ADDED_FORMAT, $name, $pin['summary'])
+                : sprintf(self::MCP_SERVER_CHANGED_FORMAT, $name, $was['summary'], $pin['summary']);
+
+            return false;
+        };
+
         $client = new McpClient(
             $path,
             // $unrestricted, and it is the opposite of what it looks like. The
@@ -6706,6 +6842,7 @@ final class Bootstrap
             // would be a clause with no truth behind it. Deny patterns belong to
             // the sub-agent path, which this bundle does not wire.
             unrestricted: true,
+            admit: $admit,
         );
 
         // Registered BEFORE start, and the order matters: startServers() adds
@@ -6722,6 +6859,9 @@ final class Bootstrap
             self::$mcpConfigDigests[$pid][$path] = $digest;
         }
         self::registerMcpShutdown();
+
+        /** @var list<string> $notices */
+        $notices = [];
 
         try {
             $client->startServers();
@@ -6849,11 +6989,37 @@ final class Bootstrap
             // in hand by the time the transcript is seeded. Measured end-to-end
             // by
             // {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest::testAPartlyStartedMcpConfigReachesTheTranscriptAndNotOnlyTheErrorLog()}.
-            self::warnPermissionConfigInTranscript(sprintf(
+            $notices[] = sprintf(
                 self::MCP_PARTIAL_START_NOTICE_FORMAT,
                 $path,
                 $e->getMessage(),
-            ));
+            );
+        }
+
+        // The first launch under a grant records what it started (MCP-5). A
+        // record that cannot be written costs nothing but the pin: the next
+        // launch records again, which is what this one did.
+        if ($recorded === null && $admitted !== []) {
+            try {
+                $pins->withRoot($trustRoot, $admitted)->save();
+            } catch (\Throwable) {
+            }
+        }
+
+        // The "re-prompt": a refused server is named with what changed and the
+        // one command that approves it. Both channels, like the partial-start
+        // row above, through the ONE seam call this method makes, so the
+        // census ({@see TRANSCRIPT_SEAM_CALL_SITES}) does not move.
+        if ($refused !== []) {
+            $notices[] = sprintf(
+                self::MCP_SERVER_REFUSED_NOTICE_FORMAT,
+                $path,
+                implode('; ', $refused),
+            );
+        }
+
+        foreach ($notices as $notice) {
+            self::warnPermissionConfigInTranscript($notice);
         }
 
         return $client;

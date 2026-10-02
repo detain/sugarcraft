@@ -219,6 +219,9 @@ final class ReadPathCensusTest extends TestCase
                 . 'reading. file_get_contents rather than hash_file on purpose — the latter spelling is '
                 . 'outside this census\'s sink vocabulary and would be an ungazed read on a '
                 . 'repository-chosen path',
+            'CONTAINED — trustProjectMcp() reading the decision-path `.mcp.json` for `sugarcrush mcp trust` '
+                . '(audit MCP-5): the same mcpConfigDecision() containment, reached only on the UNTRUSTED or '
+                . 'TRUSTED verdict; it is fingerprinted and printed, never executed',
         ],
         'Cli/Bootstrap.php|fopen' => [
             'SELF_LOCATED — acquireUserConfigLock(): the `.config.json.lock` sidecar beside the '
@@ -366,6 +369,11 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED_UPSTREAM:Cli/Bootstrap.php — `$root/.mcp.json`, bounded against the root '
                 . 'that named it before this class is constructed. Still a constructor argument, so an '
                 . 'EMBEDDER building one directly owns its own boundary; the launch path has one',
+        ],
+        'MCP/McpTrustPins.php|file_get_contents' => [
+            'CALLER_SUPPLIED — the trust record path (audit MCP-5); both callers in Cli/Bootstrap.php name '
+                . '`~/.sugar-crush/mcp-trust.json` through trustedConfigDirPath(). Hashes and summaries only, '
+                . 'never executed',
         ],
         'MCP/OAuthClientRegistration.php|file_get_contents' => [
             'SELF_LOCATED — `~/.local/share/sugar-crush/mcp-auth.json`, written by this class',

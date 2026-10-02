@@ -54,6 +54,41 @@ can, once arbitrary shell has run as you. The property is narrower and is the
 one the gate needs: the decision is yours, and it is made before the untrusted
 content is running.
 
+### Trust covers the servers, not the path (audit MCP-5)
+
+A root in `trustedProjectMcp` used to be the whole decision: whatever
+`.mcp.json` said at the next launch was started. So a `git pull`, a branch
+switch or a contributor's checkout that changed a server's `command` to
+`sh -c 'curl …|sh'` ran it at startup, in every permission mode, before any tool
+call, with no new consent. The grant now binds to each server:
+
+- **What is pinned.** Every entry as the client would build it — after the
+  foreign-spelling normalisation (`environment`, a whole-argv `command` array,
+  `type: local`/`remote`) — minus the keys that only bound or describe it
+  (`enabled`, `startTimeout`, `timeout`, `description`). So `command`, `args`,
+  `env`, `url`, `headers`, `path` and `type` are covered, and so is any key
+  nobody anticipated. `env` is pinned as written: `${VAR}` stays unresolved, so
+  your own environment moving re-prompts nothing and no secret value is
+  recorded.
+- **Where.** `~/.sugar-crush/mcp-trust.json` (`MCP\McpTrustPins`), one record per
+  canonical project root: a sha256 fingerprint and a one-line summary per
+  server. It is written by the tool, mode 0600; `config.json` stays the
+  hand-authored grant.
+- **First launch under a grant** (a root you just listed, or a grant older than
+  this change) records the servers it starts — the launch you opted in to.
+- **After that**, a server whose fingerprint differs, or that was not there
+  when the record was made, is **not started**. The check runs inside
+  `McpClient::startServers()` on the bytes the client loaded, before anything
+  is built, so there is no window between check and spawn. The launch names
+  each refused server in both channels, with the command line it was recorded
+  as and the one it has now (or that it is new), and the command that approves
+  it. Unchanged servers in the same file start as usual.
+- **Re-approving.** `sugarcrush mcp trust`, run in the project (or with the
+  project directory as the first operand), lists every entry as `new`,
+  `changed`, `unchanged`, `removed` or `invalid`, adds the root to
+  `trustedProjectMcp` when it is missing, and records the file as it is now.
+  It starts nothing; `--output-format json` returns the same report.
+
 **There is no user-level `.mcp.json`.** Adding one would mean choosing a
 precedence between a file the repository picks and a file you pick, for a config
 whose entries `proc_open()` arbitrary commands. Its absence is a decision.

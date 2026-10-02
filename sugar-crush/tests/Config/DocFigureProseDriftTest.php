@@ -3823,9 +3823,10 @@ final class DocFigureProseDriftTest extends TestCase
         $helpWords = array_values(array_unique($helpRows[1]));
         sort($helpWords);
         self::assertSame($commands, $helpWords, 'the help Subcommands block and ParsedArgs::SUBCOMMANDS diverged — the page quotes both agreeing');
-        // E710 grew the mcp row a second verb: session and mcp each hold two
-        // second words, completion one line of three shells — seven leaf rows.
-        self::assertSame(7, preg_match_all('/^  (doctor|models|session|mcp|completion)\b/m', $block), 'the block no longer carries the seven leaf rows the code dispatches (session and mcp hold their own second words)');
+        // E710 grew the mcp row a second verb and audit MCP-5 a third (`mcp
+        // trust`): session holds two second words, mcp three, completion one
+        // line of three shells — eight leaf rows.
+        self::assertSame(8, preg_match_all('/^  (doctor|models|session|mcp|completion)\b/m', $block), 'the block no longer carries the eight leaf rows the code dispatches (session and mcp hold their own second words)');
         foreach (['doctor', 'models', 'session list', 'session delete', 'mcp list', 'completion bash|zsh|fish'] as $row) {
             self::assertStringContainsString('  ' . $row, $block, "the help block lost the `{$row}` row the page's list quotes");
         }
@@ -3957,7 +3958,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString("if (\$action !== 'login') {", $subcommands, 'the verb gate stopped demanding login — an unknown action could reach the flow');
 
         $roster = (new \ReflectionClass(\SugarCraft\Crush\Cli\Subcommands::class))->getConstant('SUBCOMMAND_ACTIONS');
-        self::assertSame(['list', 'auth', 'import'], $roster['mcp'], 'the completion roster for mcp drifted from the verbs the gate implements');
+        self::assertSame(['list', 'auth', 'import', 'trust'], $roster['mcp'], 'the completion roster for mcp drifted from the verbs the gate implements');
 
         $authSource = self::sourceOf('Commands/McpAuthCommand.php');
         self::assertStringContainsString("'login' => \$this->printLoginGuidance(),", $authSource, 'the chat arm no longer routes login to guidance');

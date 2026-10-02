@@ -67,6 +67,11 @@ provider, an API key or a terminal):
                          starting any of them. Reports instead when the file
                          is absent, resolves outside the project tree, or is
                          present but the project root is not trusted.
+  mcp trust              Approve this project's .mcp.json as it is now: add
+                         the root to "trustedProjectMcp" and record each
+                         server's command, args and env, so a later change to
+                         any of them is refused at launch until re-approved.
+                         Starts nothing.
   mcp import claude|opencode <path>
                          Translate a foreign MCP config and print the
                          equivalent .mcp.json block to stdout. Prints only

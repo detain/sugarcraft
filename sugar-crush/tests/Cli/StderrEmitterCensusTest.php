@@ -52,14 +52,16 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  * project already had —
  * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushAutoloadGuardTest}'s
  * doc-block, "the real census of raw `fwrite(STDERR, …)` call sites across
- * `src/` and `bin/` is FOURTEEN" — is CORRECT, and this file asserts that it
+ * `src/` and `bin/` is FIFTEEN" — is CORRECT, and this file asserts that it
  * stays correct ({@see testTheInheritedCensusStillAgreesWithTheScan()}).
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — fourteen sites. The channel that census describes.
+ *  1. `fwrite(STDERR, …)` — fifteen sites. The channel that census describes.
  *     (E710: `Subcommands::mcpImportLine()` joined it — the import verb's
  *     notes and post-read failures, one funnel site, stderr-only by design.
+ *     Audit MCP-5: `Subcommands::mcpTrust()`'s one failure line, stderr-only
+ *     because the verb runs no session to carry a transcript row.
  *     Audit C2a: `bin/sugarcrush`'s TUI fatal-error line, the one notice left
  *     on the tty once PHP's own diagnostics go to the log file.)
  *  2. `STDERR` captured into a variable or property and written through later —
@@ -279,7 +281,7 @@ final class StderrEmitterCensusTest extends TestCase
         'bin/sugarcrush' => 2,
         'src/Cli/Bootstrap.php' => 2,
         'src/Cli/NonInteractive.php' => 7,
-        'src/Cli/Subcommands.php' => 3,
+        'src/Cli/Subcommands.php' => 4,
     ];
 
     /**
@@ -416,7 +418,7 @@ final class StderrEmitterCensusTest extends TestCase
         // read) — sixteen to twenty-two. Same stderr-only decision: malformed
         // CLI usage or an unreadable operand, session never existed, nothing
         // was written anywhere.
-        'src/Cli/Subcommands.php' => 22,
+        'src/Cli/Subcommands.php' => 23,
         'src/Commands/CommandLoader.php' => 1,
         'src/Context/RuleLoader.php' => 1,
         'src/Memory/ForeignMemoryImporter.php' => 1,
