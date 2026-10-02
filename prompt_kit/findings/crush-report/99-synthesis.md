@@ -96,12 +96,12 @@
 
     Kilo legacy (a `condense` tool with a user-approved preview) and Goose (agent-visible vs user-visible flags) supply the remaining pieces.
 
-11. **The code audit found about 136 new defects** (Part IX). 23 of them, including the one Critical and 17 of the 20 High items, are already fixed on master: MCP interoperability with official-SDK servers, fork-shared MCP connections, silent provider errors, invalid UTF-8, the permission bypasses, git MCP option injection and the repo-supplied terminal escapes. About 117 remain, including:
+11. **The code audit found about 136 new defects** (Part IX). 26 of them, including the one Critical and 18 of the 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes and unfenced repo skill descriptions. About 110 remain, including:
     - **The TUI re-renders the full history as markdown every frame.**
     - **Esc Esc leaves tool placeholders spinning, and raw CR reaches the terminal.**
     - **Killing a turn does not kill the commands it started.**
-    - **Sub-agent spend never reaches the parent or the spend cap,** and the in-process sub-agent path still swallows provider errors.
-    - **Permission gaps remain:** allow rules accept `$(…)`, WebFetch counts as read-only, and Bash inherits provider API keys.
+    - **Sub-agent spend never reaches the parent or the spend cap.**
+    - **Permission gaps remain:** WebFetch counts as read-only, Bash inherits provider API keys, and path deny rules miss respellings.
 
     About two thirds are reproduced with scripts. Fix the remaining High items first (IX.3, IX.4).
 
@@ -316,7 +316,7 @@ How the pieces connect:
 | # | Item | Effort | Sources |
 |---|---|---|---|
 | 4.1 | Honour preset `model`/`effort`/`permissionMode` (new `EngineBackend::withModel()`, per-sub-agent `PermissionGate`); per-call `model` arg; `subagentModel` default; **fail loudly** on unsupported preset fields (dsh) | S–M | 9 reports |
-| 4.2 | Argument-scoped **grant** rules for presets, plus hardening of the (already implemented) permission-rule matcher against `$()`, backticks, redirects and path respellings (Part IX: F-P5, F-J3), with a fail-closed POSIX shell splitter (`&& \|\| ; \|`, `$()`, backticks); deny on any segment, allow only if all segments match; route Task through `refuseCallOutsideGrant()` (dormant) | M | CC Zed Cline Kilo |
+| 4.2 | Argument-scoped **grant** rules for presets, reusing the permission-rule matcher (already argument-scoped, and since `c8fc573a5` fail-closed: the `ShellWords` splitter refuses `$()`, backticks, process substitution and non-inert redirects in allow rules, every segment must match, deny on any segment); harden it against path respellings (Part IX: F-J3); route Task through `refuseCallOutsideGrant()` (dormant) | M | CC Zed Cline Kilo |
 | 4.3 | **Background Task** (`background:true` / preset `background`): returns `{agent_id}` at once ("DO NOT sleep or poll"). Runs via `BackgroundSupervisor` or `AgentWorkerPool`. On settle, a user-role announce row (`[Subagent '<label>' completed] … status from the runtime outcome (ok/error/timeout), stats line: runtime, tokens, cost, resume id`) is appended, and a turn is auto-dispatched if idle or injected via steer if busy. An "Active subagents" block appears in each turn context. Wire `BackgroundSupervisor::reconnect()`. Also fixes `/bg` results never returning | M–L | Claw nano dsh Goose Kilo OC |
 | 4.4 | **Messaging tools** on the dormant `Mailbox`: `SendMessage{to, text, mode: steer\|followup\|note}` (steer a running child, wake an idle one, cold-resume a stored one via `SuspendedDelegations`), child→parent replies, `Subagents{list\|wait\|cancel}`, `InterruptAgent`; delivery at step boundaries through the 1.C seam; untrusted-peer framing | M–L | Claw dsh Kilo Goose nano |
 | 4.5 | **Shared board** for parallel children (Kilo): `BoardRead`/`BoardPost` with INFO/ASK/RESULT/HOLD/VETO, notice appended to the next tool result | M | Kilo |
@@ -499,7 +499,7 @@ Common gaps across the reports:
 The root issue is 1.C: asks cannot be answered.
 
 **Additional ideas:**
-- argument-scoped rules with a fail-closed shell splitter (Zed, CC, Cline);
+- argument-scoped rules with a fail-closed shell splitter (Zed, CC, Cline): sugar-crush's permission rules now have both (allow rules fail closed since `c8fc573a5`), but preset grants still match by name;
 - always-Ask on policy files (Zed);
 - inspectors where the strictest verdict wins, with security findings forcing Ask even in auto (Goose);
 - an LLM exec reviewer (OpenClaw, Goose adversary, dsh auto-review);
@@ -809,27 +809,27 @@ Five agents audited sugar-crush's own source for **new** defects, one per area. 
 
 **Totals at audit time: about 136 findings** — 1 Critical, 20 High, about 47 Medium, and the rest Low-Medium, Low or Info.
 
-**Since the audit, 23 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit), and 4 new remaining items were found while fixing them. **About 117 findings remain** — 0 Critical, 4 High (one of them latent), 3 Medium-High, about 45 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
+**Since the audit, 30 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 26 of the original findings, plus the 4 new items found while fixing them. **About 110 findings remain** — 0 Critical, 2 High, 3 Medium-High, about 42 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
 
 At audit time, about two thirds were **reproduced with a script**; the rest are verified by reading, and a few are marked *suspected*. Full write-ups are in Appendices Q–U; each finding has code excerpt, failure scenario, fix and a test that would catch it.
 
 | Appendix | Area | Findings | Critical / High |
 |---|---|---|---|
-| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 27 | 0 / 0 |
+| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 24 | 0 / 0 |
 | **R** (15b) | Chat state machine, TUI, rendering, commands | 21 | 0 / 2 |
-| **S** (15c) | Tools, permissions, hooks (security) | 24 | 0 / 0 |
-| **T** (15d) | Context assembly, memory, skills, config | 21 | 0 / 1 |
-| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 24 | 0 / 1 |
+| **S** (15c) | Tools, permissions, hooks (security) | 23 | 0 / 0 |
+| **T** (15d) | Context assembly, memory, skills, config | 20 | 0 / 0 |
+| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 22 | 0 / 0 |
 
 Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
 
 ## IX.1 Corrections to earlier parts
 
 - **Argument-scoped permission rules ARE implemented** (Appendix S, top callout; `PermissionRule::matches()` / `matchesShellSubject()`). `Bash(rm *)` deny denies, and `Bash(git *)` no longer grants all of Bash for **permission rules**.
-  - Part II #23 now says so; roadmap item 4.2 is partly out of date.
-  - `docs/PERMISSIONS.md` is now corrected: its stale "Pattern matching is name-only" section was rewritten in `d3d90fece` to describe argument-scoped rules as implemented, including the open F-P5 hole.
+  - Part II #23 now says so; roadmap item 4.2 now covers only preset grants and path respellings.
+  - `docs/PERMISSIONS.md` is now corrected: its stale "Pattern matching is name-only" section was rewritten in `d3d90fece` to describe argument-scoped rules as implemented, and since `c8fc573a5` it describes the fail-closed allow rules.
   - Sub-agent **preset grants** still match by name (`AgentManager::resolveGrantedTools`).
-  - The new matcher's real gaps are F-P5 (`$(…)`, backticks and redirects slip past allow rules) and F-J3 (path rules miss relative and absolute respellings and symlinks).
+  - The new matcher's remaining real gap is F-J3 (path rules miss relative and absolute respellings and symlinks). F-P5 (`$(…)`, backticks and redirects slipping past allow rules) was fixed in `c8fc573a5`.
 - **Two documentation statements are stale:** "rule `paths:` scoping not applied" (it is; 15d-19) and "only two keys re-applied per turn" (`maxOutputTokens` is too).
 - **The image-marker / mouse-zone collision from project memory is already fixed** (Appendix P). Agent-supplied text must still be PUA-stripped (15b-17).
 - **Workerman is not used anywhere in the monorepo** (Appendix O §3).
@@ -838,13 +838,8 @@ Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
 
 Several audits found the same root cause in different places. Fixing each theme once fixes them all.
 
-1. **Invalid UTF-8 (residue).** Tool results are now scrubbed in `Runtime::settle()` and prompt files at load time.
-   - The command backends (`CommandBackend`, `StreamingCommandBackend`) still encode history without `JSON_INVALID_UTF8_SUBSTITUTE`, so one bad byte in a Chat row fails every later turn on those backends (A22).
-   - **Fix:** add the flag, or route both through one shared encoder.
-2. **Fork-shared connections (residue).** MCP stdio and HTTP connections are now fork-safe.
-   - The LSP client got process-unique ids but no cross-process exchange lock. That lock must land before LSP is wired (B7).
-3. **Killing a turn does not kill its commands.** Esc Esc or the watchdog SIGKILLs only the PHP child. The `setsid`'d `bash` (and Task grandchildren) keep running (B2, F-E2). **Fix:** kill the process group(s) recorded by `ProcessContainment`, and reap Task children.
-4. **Terminal-injection and rendering hygiene.**
+1. **Killing a turn does not kill its commands.** Esc Esc or the watchdog SIGKILLs only the PHP child. The `setsid`'d `bash` (and Task grandchildren) keep running (B2, F-E2). **Fix:** kill the process group(s) recorded by `ProcessContainment`, and reap Task children.
+2. **Terminal-injection and rendering hygiene.**
    - Raw CR reaches the frame (15b-07).
    - UTF-8 C1 controls pass every sanitizer (15b-08).
    - The tab strip is neither clipped nor sanitized (15b-18).
@@ -852,47 +847,44 @@ Several audits found the same root cause in different places. Fixing each theme 
    - `error_log()` output paints over the TUI (C2).
    - The latent permission modal wraps by bytes and keeps CR, which **must be fixed before Wave 1.C ships** (15b-19).
    - **Fix:** one `Sanitize::forTerminal()` covering C0, C1, CR, ESC, OSC, PUA and grapheme-aware width, enforced at every render site (golden width tests), plus `error_log` routed to a file or the notice sink while the TUI owns the screen.
-5. **Repo-controlled content reaches the prompt without fencing or caps.**
-   - Skill descriptions are now escaped, one-line and capped, but the listing is still not fenced as its own section and carries no source badge (15d-02, partly fixed).
+3. **Repo-controlled content reaches the prompt without fencing or caps.**
    - A repo's skills shadow the user's own (15d-03).
    - CLAUDE.md, AGENTS.md and `@imports` have no size cap (15d-09, C3).
    - PromptFence misses tags that carry attributes, and chat-template control tokens aren't defanged (15d-10).
    - Repo memory is framed as "notes the user wrote" (15d-07).
    - Built-in skills ship SugarCraft-monorepo procedures to every project, including `git checkout -- . && git clean -fd` and `gh pr merge` (15d-21), the same problem as Part II #13.
-6. **Prompt assembly reads the user's git config and the filesystem nondeterministically.**
+4. **Prompt assembly reads the user's git config and the filesystem nondeterministically.**
    - `color.ui=always` puts escape codes in the prompt, and `diff.external` runs the user's diff tool every turn.
    - `git status` and `git diff` take `index.lock`, so the user's concurrent `git add` fails (15d-12).
    - No timeouts (15d-14); a subdirectory launch reports "not a git repo" (15d-13).
    - Caps are applied in readdir order (15d-17).
    - These also hurt cache stability (Part I #2).
    - **Fix:** `git -c color.ui=never --no-optional-locks`, `--no-ext-diff`, a timeout, `rev-parse --show-toplevel`, and sorted walks.
-7. **Errors are swallowed and turns "succeed".**
-   - `AgentManager::executeSubAgent()` swallows provider errors the way `Runtime` did before its fix: the sub-agent completes with empty output (AG-4, latent).
+5. **Errors are swallowed and turns "succeed".**
    - Tool calls are lost on `finish_reason=stop` (A4).
    - Malformed arguments run the tool with `[]` (A11).
    - Vertex 429/503 are never retried (A19).
-8. **The permission layer has holes in the default and stricter modes.**
+6. **The permission layer has holes in the default and stricter modes.**
    - Accept-edits mode allows `rm`, `mv` and `cp` (F-P4).
    - WebFetch counts as read-only, so it can exfiltrate data unprompted (F-P6).
    - Bash and hooks inherit provider API keys (F-E1).
    - A PostToolUse block is a no-op (F-H1).
    - Hook JSON escapes `/`, so grep-style deny hooks never fire (F-H3).
-9. **Unbounded or stalled work inside `update()`.**
+7. **Unbounded or stalled work inside `update()`.**
    - The full history is re-rendered as markdown every frame: 0.7 s per keystroke at 200 exchanges, 2.1 s per frame while streaming a 200 KB reply (15b-10).
    - UserPromptSubmit and SessionStart hooks run synchronously, freezing the UI for up to 60 s (15b-04).
    - Custom-command `` !`…` `` runs inside `update()` (15b-20).
    - `/branch` does one INSERT per message: a 4.3 s freeze at 800 messages (15b-21).
    - `AgentManager` never forgets sub-agents (AG-3).
-10. **Sessions and persistence integrity.**
+8. **Sessions and persistence integrity.**
     - `forkSession` copies dead tables, so the fork is empty and `--resume name` opens the parent. This is a root cause of "/fork ignores history" (SES-2).
     - No writer lock: two TUIs on one session clobber each other (SES-3).
     - UI-only command output is sent to the model as real turns (15b-03; relates to Part II #2 and the DCP `uiOnly` proposal).
-11. **MCP: remaining interoperability and trust gaps.**
-    - Empty maps nested inside a tool's own arguments still go on the wire as `[]` (MCP-9).
+9. **MCP: remaining interoperability and trust gaps.**
     - `claude-mcp` gives up after about 1 s (MCP-3).
     - OAuth discovery and storage bugs (MCP-6/7/8).
     - Trust is bound to the project path, not to `.mcp.json`'s content (MCP-5).
-12. **Cost accounting holes.**
+10. **Cost accounting holes.**
     - Task sub-agent spend never reaches the parent or the cap (B4).
     - Vertex is priced at $0 and Bedrock invents $0.01 (A15, A20).
     - OpenAI bills cached tokens at full rate (A14).
@@ -902,27 +894,21 @@ Several audits found the same root cause in different places. Fixing each theme 
 
 ## IX.3 Critical and High findings: fix first
 
-The Critical item and 17 of the 20 High items are fixed on master. These remain:
+The Critical item and 18 of the 20 High items are fixed on master, as is the latent High in the sub-agent path that was found while fixing them. These remain:
 
 | ID | Area | Finding | Repro |
 |---|---|---|---|
 | 15b-02 | Chat | After Esc Esc, "running" placeholders spin forever; later same-id results land on the old row | ✔ |
 | 15b-07 | TUI | Raw CR reaches the terminal (progress-bar output in Ctrl+O view overwrites panes) | ✔ |
-| 15d-02 | Skills/prompt | Repo skill descriptions reach the prompt in harness voice. Partly fixed (escaped, one-line, capped); still no fenced section and no source badge | ✔ |
-| AG-4 | Agents | `AgentManager::executeSubAgent()` swallows provider errors like `Runtime` did before A1's fix (latent: no `src/` caller today) | reading |
 
 ## IX.4 Where the audit fixes slot into the roadmap
 
-- **Before Wave 0, as an "audit hotfix" wave (mostly S):** most of this wave has landed on master (see the **Fixed since audit** list at the end of each of Appendices Q–U). What is left of it:
-  - the 15d-02 remainder (a fenced skills section and a source badge);
-  - AG-4 (the sub-agent error swallow);
-  - A22 (the command-backend UTF-8 flag);
-  - MCP-9 (nested empty maps).
+- **Before Wave 0, as an "audit hotfix" wave (mostly S):** this wave has landed on master in full (see the **Fixed since audit** list at the end of each of Appendices Q–U).
 - **With Wave 0:**
-  - process-group kill (theme 3);
-  - git env hardening (theme 6);
+  - process-group kill (theme 1);
+  - git env hardening (theme 4);
   - the SugarCraft-specific built-in skills (15d-21) alongside Part II #13;
-  - cost accounting (theme 12).
+  - cost accounting (theme 10).
 - **Before Wave 1.C ships:**
   - fix the permission modal's byte-wrap and CR handling (15b-19);
   - fix PostToolUse block semantics (F-H1);
@@ -938,4 +924,3 @@ The Critical item and 17 of the 20 High items are fixed on master. These remain:
   - session picker bugs B1–B3;
   - 15b-21 and 15b-22.
 - **With rendering work:** 15b-10 (cache rendered markdown per row, render only the visible window), 15b-04 and 15b-20 (move hooks and shell into `Cmd`).
-- **Before LSP is wired (Wave 3.F):** the LSP exchange lock (B7).

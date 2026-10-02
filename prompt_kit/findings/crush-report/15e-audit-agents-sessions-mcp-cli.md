@@ -34,14 +34,6 @@ Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/` (ea
 - **Fix:** `continue` on a null parse; only give up on EOF or the deadline. Optionally log the line into the stderr tail for diagnostics.
 - **Test:** a fake PHP MCP server that writes `"hello\n"` before every response; assert that start succeeds and tools are listed.
 
-### MCP-9 — Empty maps nested inside a tool's own arguments still go on the wire as `[]`
-- **Severity:** Medium (same class as the fixed MCP-1, one level down)
-- **Confidence:** Verified-by-reading
-- **Where:** `sugar-mcp/src/StdioMcpServer.php:503` and `sugar-crush/src/MCP/HttpMcpServer.php:199`: `'arguments' => $args === [] ? new \stdClass() : $args`. MCP-1's fix (`44ba1a20b`, `b80b267f1`) coerces only the top-level arguments object. A decoded `{"filter":{}}` reaches PHP as `['filter' => []]` and is re-encoded as `"filter":[]`.
-- **What happens:** a tool whose schema declares an object property (a filter, an options bag, a headers map) and receives it empty fails validation on official-SDK servers (`expected object, received array`), so the call errors although the model sent valid JSON.
-- **Fix:** keep the model's arguments as decoded objects end to end (`json_decode` without `assoc`, or `JSON_OBJECT_AS_ARRAY` off for the MCP path), or walk the arguments against the tool's `inputSchema` and turn each empty array whose schema type is `object` into `stdClass`.
-- **Test:** call a server-everything tool with a nested empty object argument and assert the wire bytes carry `{}` and the call succeeds.
-
 ---
 
 ## B. Sessions and persistence
@@ -133,14 +125,6 @@ Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/` (ea
 ---
 
 ## E. Forked sub-agents (workflows and Task fan-out)
-
-### AG-4 — `AgentManager::executeSubAgent()` swallows provider errors the way 15a A1 did: the sub-agent completes with empty output and no error
-- **Severity:** High (same class as 15a A1; latent today, because `executeSubAgent()` has no `src/` caller, per `Renderer.php:167` and the coverage note below)
-- **Confidence:** Verified-by-reading (found during the A1 fix)
-- **Where:** `src/Agents/AgentManager.php:678` onward. In the streaming loop (around `:816-834`), `$errorChunk = $response` is recorded and then only used to decide whether to retry. After the loop `$errorChunk->errorMessage` is never read and nothing is thrown, so the sub-agent settles as completed. A1's fix (`ea81820fb`) changed `Runtime` only.
-- **What happens:** a 401, a 400, a bad model id or an in-stream error on a sub-agent's provider ends that sub-agent with empty or partial output, reported as success. A workflow stage or caller built on it then works from nothing, with no error shown.
-- **Fix:** after the retry loop, if `$errorChunk !== null`, fail the sub-agent with `errorMessage` (or throw a `ProviderException`), exactly as A1's fix does in `Runtime`.
-- **Test:** `tests/Integration/ProviderRetryWiringTest.php` already drives `executeSubAgent()`. Add a case with a 401 `MockHandler` and assert the sub-agent fails and carries the provider's message.
 
 ### AG-2 — One preset file in the Claude Code `tools:` spelling disables every agent preset in every tier
 - **Severity:** Low-Medium
@@ -300,8 +284,6 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 
 | ID | Severity | Confidence | Title |
 |---|---|---|---|
-| **AG-4** | High (latent) | Verified-by-reading | `AgentManager::executeSubAgent()` swallows provider errors like 15a A1 did: empty output, reported as success |
-| **MCP-9** | Medium | Verified-by-reading | Empty maps nested inside a tool's arguments still go on the wire as `[]` (MCP-1 fixed only the top level) |
 | MCP-3 | Medium | Verified-by-repro | `ClaudeCodeMcpClient` gives up after ~1 s per call; initialize sent as a notification |
 | SES-2 | Medium | Verified-by-repro | `forkSession` copies dead tables (empty fork, no checkpoints, duplicate name; `--resume name` opens the parent) |
 | SES-3 | Medium | Verified-by-reading | No per-session writer lock; two TUIs clobber the transcript; checkpoint index and blob-intern races |
@@ -356,7 +338,7 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 - `src/LSP/*`: dormant per the baseline; no live caller.
 - `src/Share/*`: a known stub (Part II #35).
 - `src/Agents/WorktreeManager.php`, `PathJail.php`, `PathJailConfig.php`, `TeamManager.php`, `Mailbox.php`, `Team*.php`: nothing outside `src/Agents/` constructs them (`grep 'new Mailbox|new TeamManager|new PathJail'`), so they are dormant (baseline §2.6).
-- `AgentManager::executeSubAgent()` `:678-940`: no `src/` caller (also noted at `src/Renderer.php:166-167`). AG-4 was found in it later, during the 15a A1 fix.
+- `AgentManager::executeSubAgent()` `:678-940`: no `src/` caller (also noted at `src/Renderer.php:166-167`). AG-4 was found in it later, during the 15a A1 fix, and fixed in `48e9a3f65`.
 - `ForeignAgentPresetRegistry.php`: function list only.
 - `src/Events/*`: not reached.
 - `McpForeignTranslate.php`: used only by `mcp import`, which prints and writes nothing.
@@ -401,9 +383,11 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 
 These findings were fixed on master after the audit. Their sections and table rows were removed; the coverage and repro lists above still name them.
 
-- **MCP-1** stdio MCP sent `[]` for empty maps; official TS/Python SDK servers started with 0 tools — fixed on master in `44ba1a20b` (+ `b80b267f1` for `claude-mcp` tool arguments). Residual: nested empty maps (MCP-9).
+- **MCP-1** stdio MCP sent `[]` for empty maps; official TS/Python SDK servers started with 0 tools — fixed on master in `44ba1a20b` (+ `b80b267f1` for `claude-mcp` tool arguments). Residual: nested empty maps (MCP-9), fixed later in `f84a97364`.
 - **MCP-2** Streamable HTTP MCP: no `Accept`, no `Mcp-Session-Id`, no SSE — fixed on master in `72eaf4642`.
 - **GIT-1** Git MCP option injection (`gitShow --output=`) and an uncontained per-call `path` — fixed on master in `43fe9cd06`. Residual: checkout and reset cannot take `--end-of-options`.
 - **GIT-2** `execGit()` deadlock on more than 64 KiB of stderr; no timeout; env stripped — fixed on master in `4c341ef6a`. Residual: the git timeout cannot be configured from `.mcp.json`.
 - **SES-1** `/rewind` kept the undone prompt in history and in the input box — fixed on master in `abd65fd16`. Residual: checkpoints saved before the fix are restored by dropping a trailing user row that matches the restored draft.
 - **AG-1** Forked sub-agents shared the parent's MCP pipes, ids and keep-alive sockets — fixed on master in `ea6e178fd` (stdio: process-unique ids, locked exchanges, shared read buffer) and `2d96e2edb` (HTTP: pid-unique ids, fresh connection per process). Residual: parallel agents now serialise their calls to one stdio server, and a lock file per MCP server is left behind if the TUI is killed.
+- **AG-4** `AgentManager::executeSubAgent()` swallowed provider errors the way 15a A1 did — fixed on master in `48e9a3f65` (it throws `ProviderResponseException` after the retry loops; the sub-agent ends `STATUS_FAILED` carrying the provider text). `TaskTool::runOnEngine` and the workflow `EngineExecutor` were checked: they go through `EngineBackend`/`Runtime`, which A1 fixed, and are pinned by regression tests.
+- **MCP-9** Empty maps nested inside a tool's arguments went on the wire as `[]` — fixed on master in `f84a97364` (new sugar-mcp `ArgumentShape::conform()` walks the arguments against the tool's `inputSchema`; applied in sugar-mcp `StdioMcpServer`, crush `HttpMcpServer` and `ClaudeCodeMcpServer`).

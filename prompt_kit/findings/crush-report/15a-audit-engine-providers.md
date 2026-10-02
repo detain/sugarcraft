@@ -26,15 +26,6 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Fix:** at end of stream, if `$toolCallBuffer !== []` and was never emitted, flush it, whatever the finish reason was. Read `finish_reason` independently of `delta`.
 - **Test:** cover both repro bodies. Assert that one `Read` call with `{"path":"a.php"}` is yielded.
 
-### A5 — `data:` with no space after the colon is ignored
-- **Severity:** Low · **Confidence:** Verified-by-repro (case `no-space`)
-- **Where:** `SglangProvider.php:769`, `CustomProvider.php:291`.
-- **Code:** `if (str_starts_with($line, 'data: '))`
-- **Failure scenario:** the SSE spec allows `data:{...}`, and some OpenAI-compatible gateways emit it. Every chunk is then dropped and the reply is empty.
-- **Since A3 was fixed** (`9105a64ae`): a stream framed this way now ends with no finish signal, so it surfaces as a premature-end error instead of a silently empty reply. The chunks are still dropped.
-- **Fix:** strip the `data:` prefix and then `ltrim` a single optional space.
-- **Test:** a body using `data:{...}` should yield content.
-
 ### A7 — `formatToolCalls()` re-serialises every list argument as an object (`JSON_FORCE_OBJECT` applies recursively)
 - **Severity:** Medium · **Confidence:** Verified-by-repro (`repro_force_object.php`)
 - **Where:** `src/Providers/Concerns/ToolSchema.php:186`. This is used by the Sglang, Custom and OpenAI history formatters.
@@ -163,13 +154,6 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Fix:** fold `thoughtsTokenCount` into a reasoning or output bucket, add a `thinkingConfig.thinkingBudget` setting, and raise the default `maxOutputTokens` for 2.5 models (for example 32k), or omit it.
 - **Test:** `parseUsageMetadata(['promptTokenCount'=>10,'candidatesTokenCount'=>5,'thoughtsTokenCount'=>900], 'gemini-2.5-pro')` should account for the 900 tokens.
 
-### A22 — `CommandBackend` and `StreamingCommandBackend` still encode history without `JSON_INVALID_UTF8_SUBSTITUTE`
-- **Severity:** Medium · **Confidence:** Verified-by-reading (found while fixing A6)
-- **Where:** `src/Backend/CommandBackend.php:410-413` (`encodeHistory()`) and `src/Backend/StreamingCommandBackend.php:218-224` (`begin()`). Both call `json_encode(..., JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)`.
-- **Failure scenario:** this is the UTF-8 residue of A6/F-T1. The tool-result scrub (`f33cd55fd`) and the loader scrub (`218384747`) cover the engine path. These two backends encode Chat's own history rows, which neither scrub touches. One invalid byte in any row (for example a pasted Latin-1 snippet) makes `json_encode` return `false`, and every later turn on a command backend answers `_[error: failed to encode history]_`.
-- **Fix:** add `JSON_INVALID_UTF8_SUBSTITUTE` to both calls, or route both through one shared encoder.
-- **Test:** a history row containing `"caf\xe9"` should reach the command's stdin as valid UTF-8 with U+FFFD, on both backends.
-
 ---
 
 ## B. Engine fork protocol and process lifecycle
@@ -214,13 +198,6 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Failure scenario:** the child's socket is blocking and subject to PHP's `default_socket_timeout`. **Repro** (timeout 2s): the parent stalls for 4s, and both frames arrive intact. The parent stalls for 9s: `writeFrame` gives up after about 4s with a 4 MB `token` frame only partly written. It returns silently, the child then writes its `result` frame and exits 0, and the parent reads 1,059,776 bytes and decodes **zero frames**. The `result` frame is lost inside the remainder of the truncated frame's declared length. In production this takes a TUI event loop blocked for more than 60s while the child fills the socket buffer (about 200 KB). The turn then ends as "exited without a result" even though the child finished its work, and every streamed token after the cut is dropped.
 - **Fix:** on a short write, mark the stream dead and exit the child non-zero. On a bad header, call `teardown('frame stream corrupted')` instead of continuing.
 - **Test:** feed `drainFrames` a truncated frame followed by a valid frame, and assert that the stream is declared corrupt rather than silently producing nothing.
-
-### B7 — The LSP client has unique ids but no cross-process exchange lock (latent)
-- **Severity:** Low (latent: nothing connects an `LspConnection` today) · **Confidence:** Verified-by-reading
-- **Where:** `src/LSP/LspConnection.php`. `e6f6aee54` moved its ids onto the shared pid-tagged `RequestIdSequence`, the id half of the B1 fix. The MCP stdio transport also got a locked request/response exchange and a shared read buffer (`ea6e178fd`); LSP did not.
-- **Failure scenario:** once LSP is wired (synthesis Wave 3.F), forked turn children that share one connection can interleave writes and read each other's replies. The ids no longer collide, but a child can still consume and discard a line meant for a sibling.
-- **Fix:** before LSP is wired, give `LspConnection` the same per-connection exchange lock and shared read buffer the MCP stdio transport uses, or give each process its own connection.
-- **Test:** fork two children on one connection to a fake LSP server with random reply delays, and assert each gets its own result.
 
 ---
 
@@ -270,12 +247,10 @@ These are covered above: B2 (deadline kill orphans) and B4 (no usage channel on 
 | **A19** | Medium | repro | Vertex `ApiException` (429/503/500) never classified transient: no retry, then empty reply | TransientFailure.php:197-237, 405-422; VertexProvider.php:318, 404, 1384 |
 | **A20** | Medium | reading | Bedrock tables match only bare ids: real versioned/profile ids get an 8k window and an invented $0.01/1k | BedrockProvider.php:46, 146-169 |
 | **A21** | Medium | suspected | Gemini 2.5 default thinking: thought tokens missing from Usage and sharing the 4096 `maxOutputTokens` | VertexProvider.php:1459, 1770-1793 |
-| **A22** | Medium | reading | `CommandBackend`/`StreamingCommandBackend` encode history without `JSON_INVALID_UTF8_SUBSTITUTE` (UTF-8 residue of A6) | CommandBackend.php:410; StreamingCommandBackend.php:218 |
 | B2 | Medium | repro | Esc/watchdog SIGKILL leaves setsid'd Bash commands running | EngineBackend.php:1411-1414 |
 | B4 | Medium (High paid) | reading | Task sub-agent spend never reaches the parent, session total or cap | TaskTool.php:604-608; ToolResult.php; EngineBackend.php:890-941 |
 | **C2** | Medium | reading | `error_log()` diagnostics (notice sink, parsers, per-request `</parameter>` warning) paint over the TUI frame | RuntimeNoticeSink.php:366-369; SglangProvider.php:2409; Dsml/Minimax parsers |
 | A18 | (sharpens #27/#28) | suspected | Default SGLang `max_tokens` 4096 with effort `max` | SglangProvider.php:1030, 165 |
-| A5 | Low | repro | `data:` with no space ignored (now a premature-end error since A3's fix, not a silent empty reply) | SglangProvider.php:769; CustomProvider.php:291 |
 | A11 | Low | reading | Malformed argument JSON runs the tool with `[]`; model not told | CustomProvider.php:628; SglangProvider.php:2221 |
 | A14 | Low | reading | OpenAI bills cached tokens at full rate | OpenAIProvider.php:521-535 |
 | A16 | Low | repro (shape) | Bedrock: no same-role merge, blank text blocks | BedrockProvider.php:316-332 |
@@ -283,7 +258,6 @@ These are covered above: B2 (deadline kill orphans) and B4 (no usage channel on 
 | B3 | Low | repro | Socketpair fds leak into spawned processes and delay EOF | EngineBackend.php:1343-1370 |
 | B5 | Low | reading | Two withers drop the spend cap (latent) | EngineBackend.php:542, 575 |
 | B6 | Low | repro | Frame write times out mid-frame silently; the following `result` frame is swallowed | EngineBackend.php:1742-1796 |
-| **B7** | Low (latent) | reading | LSP client: unique ids since B1, but no cross-process exchange lock; needed before LSP is wired | LspConnection.php |
 | **C3** | Low | reading | Project instructions and `@imports` have no byte budget (rules have 64 KiB) | Runtime.php:3009-3041; InstructionFileLoader.php:841-871 |
 | C1 | Info | reading | `waitpid -1` never settles an exempt parallel job: latent, no SIGCHLD reaper exists | Runtime.php:2012, 2034 |
 
@@ -305,7 +279,7 @@ New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → V
 - Read outside scope, where a finding depended on it: `src/Agents/EngineExecutor.php`, `TaskTool.php:440-630`, `Tools/Concerns/CapturesProcessOutput.php`, `MCP/StdioMcpServer.php` with `sugar-mcp/src/StdioMcpServer.php`, `LSP/LspConnection.php` (id counter), `Context/InstructionFileLoader.php`, `Diagnostics/RuntimeNoticeSink.php`, `Cli/Bootstrap.php:6585-6627`, `Chat.php` (notice pump, 9240-9340), `candy-pty/src/SignalForwarder.php`, and `vendor/google/gax` (`ApiException`, `RestTransport`).
 
 **Leads from the checkpoint, and how each was resolved:**
-1. LSP fork hazard: **same flaw, latent.** `LspTool` is wired with a null client and nothing calls `LspConnection::connect()`. Folded into B1 (now fixed; the LSP exchange lock that remains is B7).
+1. LSP fork hazard: **same flaw, latent.** `LspTool` is wired with a null client and nothing calls `LspConnection::connect()`. Folded into B1 (now fixed; the LSP exchange lock that remained, B7, was fixed later in `d0f7cb6f6`).
 2. `ProviderException` exit code read as an HTTP status: **dropped.** `ProviderException` exposes `exitCode` as a property, not `getStatusCode()`, so `TransientFailure::statusCode()` returns null and a CLI failure is correctly non-transient. Following this lead turned up the real classification gap for Vertex `ApiException`, written up as **A19**.
 3. Vertex `defaultStreamer()` SSE parsing: **no new framing defect.** The streamer accepts `data:` without a space, CRLF via `trim`, and a trailing unterminated event. Errors arrive as `isError` chunks and so run into A1. The missing end-of-stream check was added to A3, and the classification gap is A19.
 4. Uncapped project instructions: **confirmed** as C3. The other half of the lead (`RuleLoader` re-reading disk every step) is a performance cost only and was not reported. `InstructionFileLoader::loadRoot()` is cached per session.
@@ -331,8 +305,11 @@ New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → V
 
 These findings were fixed on master after the audit. Their sections and table rows were removed.
 
-- **A1** Provider `isError` responses became silent empty replies — fixed on master in `ea81820fb`. Residual: `AgentManager::executeSubAgent()` swallows provider errors the same way (15e AG-4).
+- **A1** Provider `isError` responses became silent empty replies — fixed on master in `ea81820fb`. Residual: `AgentManager::executeSubAgent()` swallowed provider errors the same way (15e AG-4), fixed later in `48e9a3f65`.
 - **A2** SGLang/Custom in-stream `{"error":…}` events ignored — fixed on master in `4c22a9b7a`.
-- **A3** A stream that ends without a finish signal treated as complete — fixed on master in `9105a64ae`. A5 now surfaces through this path as a premature-end error.
-- **A6** One non-UTF-8 byte in tool output failed every later request — fixed on master in `f33cd55fd` (scrub at `Runtime::settle()`, shared with 15c F-T1). Residual: the two command backends (A22).
-- **B1** MCP ids reset per fork; a killed call shifted every later result — fixed on master in `ea6e178fd` (process-unique ids, locked exchanges, shared read buffer); LSP ids in `e6f6aee54`. Residual: the LSP exchange lock (B7); a lock file per MCP server is left behind if the TUI is killed.
+- **A3** A stream that ends without a finish signal treated as complete — fixed on master in `9105a64ae`. A5 (no-space `data:` framing) surfaced through this path as a premature-end error until it was fixed in `5781eb9f8`.
+- **A6** One non-UTF-8 byte in tool output failed every later request — fixed on master in `f33cd55fd` (scrub at `Runtime::settle()`, shared with 15c F-T1). Residual: the two command backends (A22), fixed later in `987c8d87f`.
+- **B1** MCP ids reset per fork; a killed call shifted every later result — fixed on master in `ea6e178fd` (process-unique ids, locked exchanges, shared read buffer); LSP ids in `e6f6aee54`. Residual: the LSP exchange lock (B7), fixed later in `d0f7cb6f6`; a lock file per MCP server is left behind if the TUI is killed.
+- **A5** `data:` with no space after the colon was ignored — fixed on master in `5781eb9f8` (new `Providers\SseData`, used by SglangProvider and CustomProvider; VertexProvider already accepted it). ClaudeCodeProvider's `data: ` check is A12's NDJSON framing fault, not this one.
+- **A22** `CommandBackend`/`StreamingCommandBackend` encoded history without `JSON_INVALID_UTF8_SUBSTITUTE` — fixed on master in `987c8d87f` (`CommandBackend::encodeHistory()` substitutes; `StreamingCommandBackend` reuses it).
+- **B7** The LSP client had unique ids but no cross-process exchange lock — fixed on master in `d0f7cb6f6` (per-process `LspExchangeLock` flock with bounded polling, `LspExchangeState` sidecar, shared readahead, recovery from a holder killed mid-read or mid-write, notifications journaled and replayed, server-to-client requests answered -32601, only the connecting process stops the server).
