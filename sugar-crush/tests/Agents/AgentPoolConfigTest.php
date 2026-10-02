@@ -31,8 +31,10 @@ final class AgentPoolConfigTest extends TestCase
 
     public function testDefaultMaxRetries(): void
     {
+        // 0 since the pool acts on it (audit WF-1(b)): a pool-wide retry
+        // re-runs agents that never asked for one.
         $config = new AgentPoolConfig();
-        $this->assertSame(2, $config->maxRetries);
+        $this->assertSame(0, $config->maxRetries);
     }
 
     public function testDefaultStopOnFirstFailure(): void

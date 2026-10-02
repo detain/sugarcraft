@@ -68,6 +68,7 @@ stages:                          # a LIST, never a map
     prompt: >
       Review the diff at {{scope}} …
     tools: [Read, Grep, Glob, Bash]
+    retries: 1                   # whole number >= 0; default 0
 
   - name: fix
     parallel: true
@@ -76,6 +77,7 @@ stages:                          # a LIST, never a map
         type: coder              # default: coder
         prompt: Apply the style findings from {{lint.output}} …
         tools: [Read, Edit, Grep]
+        retries: 0               # per agent in a parallel stage
 ```
 
 Defaults are `Workflow`'s own: `maxConcurrent: 5`, `timeout: 3600`,
@@ -106,14 +108,49 @@ cannot interrupt it; the executor then enforces the agent's own timeout itself
 way. `ProcessExecutor` kills its worker at that bound rather than at a fixed
 300 s of its own; `EngineExecutor` (a launch with a provider) stops the run at
 the first tool call or streamed chunk past it, so a single provider call or tool
-already running finishes first. The stage's shared budget still decides whether
-a step starts at all, but it cannot cut short a step already running there. A
-pool built with an injected `ExecutorInterface` gets whatever bound that
-executor applies.
+already running finishes first. The stage's shared budget reaches those runs the
+same way: when what is left of it is shorter than the agent's own timeout, the
+pool hands the executor the remainder (in whole seconds, rounded up) as the
+agent's timeout, so the step stops there and settles `timed_out` naming the
+budget. A pool built with an injected `ExecutorInterface` passes the same
+bound on, and gets whatever enforcement that executor applies.
 
 Cancelling a running agent (`AgentWorkerPool::cancel()` or `cancelAll()`) kills
 the same way a timeout does: the worker and every process it started, its Bash
 commands included, die with it, and the agent settles `stopped`.
+
+### `retries` re-runs a failed agent
+
+`retries: N` on a stage (or on one agent of a parallel stage), or `->retries(N)`
+on a PHP task, lets `AgentWorkerPool` run that agent up to N more times after an
+attempt that fails or times out. The default is 0: no retries.
+
+- **What is retried:** an attempt that settles `failed` or `timed_out`. Each
+  attempt gets its own timeout, counted from its own start. A `stopped` agent
+  (cancelled) is never retried.
+- **Within the stage's budget:** every attempt spends the same `config.timeout`
+  budget. Nothing is retried once the budget is spent, or once the run was
+  cancelled. A retry still waiting for a parallel slot when the budget runs out
+  never starts.
+- **One result per agent:** the stage sees the **last** attempt only, so a stage
+  whose agent fails once and then succeeds is a completed stage. That result's
+  tokens and cost add up every attempt, so the run's totals include what the
+  failed attempts spent. `AgentResult::$attempts` counts the attempts, and the
+  pause file keeps the count. When the last attempt fails, its error says why
+  there was no further attempt: `[failed on all 3 attempts]`, or `[not retried
+  after attempt 1 of 3: the time budget was spent]`.
+- **Fail-fast:** under `stopOnFirstFailure` only an agent's last attempt counts
+  as its failure. A failure that is about to be retried does not stop the
+  other agents in the stage.
+- **The live pane:** a retried agent's tile clears and starts again with the
+  new attempt.
+
+A retry runs the agent from scratch: it gets the same prompt again, on a tree
+that the failed attempt may already have edited. Give `retries` only to an
+agent that is safe to run twice. A reviewer or a test runner usually is; a
+fixer that edits files may apply a change twice. `AgentPoolConfig::$maxRetries`
+gives every agent of a pool at least that many retries. It defaults to 0, and
+the launch leaves it there.
 
 ### Everything malformed is refused, not coerced
 
@@ -128,6 +165,7 @@ of these rather than loading a workflow that quietly does less:
 - **two stages with the same name** — stage names are how `{{name.output}}`
   interpolates, so duplicates make every reference ambiguous.
 - `config:` not a map, or `maxConcurrent`/`timeout` not a positive integer.
+- `retries:` not a whole number of at least 0 (`retries: -1`, `retries: lots`).
 - `parallel: true` with `agents:` that is not a list.
 - any key present but of the wrong type. The check is `array_key_exists()`, not
   `isset()`, so `prompt: ~` is refused as the wrong shape rather than silently
@@ -364,20 +402,17 @@ return (new WorkflowBuilder())
 ```
 
 `TaskBuilder` carries `agent()`, `prompt()`, `tools()`, `timeout()`,
-`retries()`, `isolation()` and `name()`. `timeout`, `retries` and `isolation`
-have **no YAML spelling**. A YAML-declared task therefore carries none of them,
-and `WorkflowEngine` substitutes defaults when it builds the `SubAgent`:
+`retries()`, `isolation()` and `name()`. `timeout` and `isolation` have **no
+YAML spelling**, so a YAML-declared task never carries them; `retries` is the
+`retries:` key above. `WorkflowEngine` substitutes defaults for whatever a task
+leaves unset when it builds the `SubAgent`:
 `$task->timeout ?? config.timeout` seconds, `$task->retries ?? 0`,
 `$task->isolation ?? Isolation::None`. A task without its own `timeout()` is
 therefore bounded only by its stage's budget (`config.timeout`, default of 3600
 seconds); see [`timeout` is a per-stage wall-clock budget](#timeout-is-a-per-stage-wall-clock-budget).
 
-**`retries()` is recorded but not acted on.** The count reaches
-`SubAgent::$maxRetries` and nothing reads it: a task that fails or times out is
-never run again, and the stage fails on its first attempt. Re-running an agent
-that may already have edited files or spent tokens is a behavioural decision
-that has not been made, so the method is kept rather than given a meaning the
-engine does not have.
+`retries()` reaches `SubAgent::$maxRetries`, and the pool re-runs the agent as
+[`retries` re-runs a failed agent](#retries-re-runs-a-failed-agent) describes.
 
 `Workflow` itself is immutable; `withStatus()` returns a new instance.
 

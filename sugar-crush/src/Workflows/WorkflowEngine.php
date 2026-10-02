@@ -939,6 +939,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     'costUsd' => $ar->costUsd,
                     'startedAt' => $ar->startedAt?->format(\DateTimeInterface::ATOM),
                     'completedAt' => $ar->completedAt?->format(\DateTimeInterface::ATOM),
+                    'attempts' => $ar->attempts,
                 ],
                 $sr->agents,
             ),
@@ -977,6 +978,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 costUsd: is_numeric($agent['costUsd'] ?? null) ? (float) $agent['costUsd'] : 0.0,
                 startedAt: self::parseTime($agent['startedAt'] ?? null),
                 completedAt: self::parseTime($agent['completedAt'] ?? null),
+                // A pause file written before retries existed has no count:
+                // every agent then ran once.
+                attempts: is_int($agent['attempts'] ?? null) && $agent['attempts'] > 0 ? $agent['attempts'] : 1,
             );
         }
 
@@ -2012,6 +2016,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if ($workflow->stopOnFirstFailure) {
             $pool = $pool->withStopOnFirstFailure(true);
         }
+        // The retry floor is pool state the constructor cannot carry, like
+        // the two accessors above (audit WF-1(b)); each task's own `retries`
+        // rides on its SubAgent.
+        $pool = $pool->withMaxRetries($this->pool->maxRetries());
         // WF-1: the stage's budget bounds the whole fan-out, queue time
         // included — see stagePool() for why it is the remainder.
         $pool = $pool->withTimeBudget(self::remainingBudget($workflow->timeout, $stageClock));

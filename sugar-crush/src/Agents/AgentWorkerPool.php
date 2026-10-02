@@ -67,8 +67,10 @@ final class AgentWorkerPool
      * from here; they get only whatever bound their executor applies itself.
      * The default {@see ProcessExecutor} applies the agent's own
      * {@see SubAgent::$timeout} (audit WF-1-rem), so on a build without pcntl
-     * or after a failed fork the same per-agent bound still holds; the run's
-     * time budget does not reach an agent once it is running there.
+     * or after a failed fork the same per-agent bound still holds — and the
+     * run's time budget reaches it the same way: {@see executeInline()}
+     * hands the executor the budget's remainder as the agent's timeout when
+     * that is the tighter bound.
      *
      * hrtime, not time(): a wall clock stepped by NTP or by hand would fire a
      * deadline early or never.
@@ -91,6 +93,29 @@ final class AgentWorkerPool
 
     /** The current run's budget deadline (hrtime ns), fixed when executeAll() starts. */
     private ?int $runDeadlineNs = null;
+
+    /**
+     * Pool-wide retry floor, set by {@see withMaxRetries()} from
+     * {@see AgentPoolConfig::$maxRetries}: an agent is re-run up to the
+     * HIGHER of this and its own {@see SubAgent::$maxRetries}.
+     */
+    private int $maxRetries = 0;
+
+    /**
+     * @var array<string, array{attempts: int, tokens: int, cost: float, startedAt: ?\DateTimeImmutable, last: ?AgentResult, pending: bool}>
+     *      agent id => the current executeAll() run's attempts at it
+     *
+     * Audit WF-1(b): a failed or timed-out agent is re-queued instead of
+     * yielded while it has retries left. The attempts it spent are folded
+     * into the ONE result the run finally yields for it ({@see foldAttempts()}),
+     * because a failed attempt's tokens and cost were really spent and no
+     * caller ever sees that attempt's own result. `last` and `pending` cover
+     * a retry that is queued but never runs — the run was cancelled, a
+     * fail-fast stage stopped, or the time budget ran out while it waited for
+     * a slot: the last real attempt's result is what the run yields for it,
+     * so every dispatched agent still yields exactly one result.
+     */
+    private array $attemptLog = [];
 
     /** @var array<string, SubAgent> Queued agents */
     private array $queue = [];
@@ -315,6 +340,9 @@ final class AgentWorkerPool
         // on that).
         $this->deadlines = [];
         $this->runDeadlineNs = null;
+        // Per-run state, like the deadlines; the retry floor is configuration
+        // and carries over.
+        $this->attemptLog = [];
     }
 
     /**
@@ -455,9 +483,13 @@ final class AgentWorkerPool
         }
 
         $this->queue = [];
+        /** @var array<string, SubAgent> $runAgents every agent of this run, for re-queuing one that failed */
+        $runAgents = [];
         foreach ($agents as $agent) {
             $this->queue[$agent->id] = $agent;
+            $runAgents[$agent->id] = $agent;
         }
+        $this->attemptLog = [];
         $this->active = [];
         // Any pid still tracked at this point belongs to an abandoned run — a
         // caller that broke out of the previous generator left its children
@@ -496,6 +528,8 @@ final class AgentWorkerPool
                 }
 
                 if (isset($this->cancelled[$agent->id])) {
+                    // A queued retry dropped here keeps its pending entry, and
+                    // the loop's tail yields its last real attempt.
                     unset($this->cancelled[$agent->id]);
                     continue;
                 }
@@ -504,14 +538,19 @@ final class AgentWorkerPool
                 // (or before the run began). Starting it now would spend work
                 // the stage no longer has time for, so it settles TimedOut
                 // without running — on every dispatch path, not just the
-                // forking one, because nothing has started yet.
+                // forking one, because nothing has started yet. A queued
+                // RETRY settles on the attempt that did run instead: that
+                // failure is the agent's real outcome.
                 if ($this->runDeadlineNs !== null && hrtime(true) >= $this->runDeadlineNs) {
-                    $result = $this->budgetSpentResult($agent);
+                    $result = isset($this->attemptLog[$agent->id])
+                        ? $this->abandonRetry($agent->id, 'the time budget ran out while the retry waited for a slot')
+                        : $this->budgetSpentResult($agent);
                     yield $result;
                     $this->haltQueueAfter($result);
                     continue;
                 }
 
+                $this->beginAttempt($agent->id);
                 $this->active[$agent->id] = $agent;
 
                 // Build a per-agent request from the agent's task field so that
@@ -569,9 +608,31 @@ final class AgentWorkerPool
 
             $result = $this->extractResult($completedId);
             if ($result !== null) {
+                // Audit WF-1(b): a failure with retries left goes back on the
+                // queue instead of being yielded — and so does not stop a
+                // fail-fast batch either; only an agent's FINAL result does.
+                $agent = $runAgents[$completedId] ?? null;
+                $attempts = $this->attemptLog[$completedId]['attempts'] ?? 1;
+                if ($agent !== null && $this->retryAllowed($agent, $result, $attempts, $this->runDeadlineNs)) {
+                    $this->recordFailedAttempt($completedId, $result);
+                    $agent->output = '';
+                    $this->queue[$completedId] = $agent;
+                    continue;
+                }
+
+                $result = $this->settleAttempts($completedId, $result, $agent, $attempts);
                 yield $result;
 
                 $this->haltQueueAfter($result);
+            }
+        }
+
+        // Retries queued but never started: cancel() or cancelAll() dropped
+        // them, or a fail-fast stage emptied the queue. Each still owes its
+        // caller the one result it was dispatched for — its last attempt's.
+        foreach ($this->attemptLog as $agentId => $log) {
+            if ($log['pending']) {
+                yield $this->abandonRetry((string) $agentId, 'the run was stopped before the retry could start');
             }
         }
     }
@@ -596,6 +657,260 @@ final class AgentWorkerPool
     }
 
     /**
+     * How many times an agent may be re-run after a failed attempt: its own
+     * {@see SubAgent::$maxRetries} (a workflow task's `retries`) or the
+     * pool-wide floor, whichever is higher.
+     */
+    private function retriesFor(SubAgent $agent): int
+    {
+        return max(0, $agent->maxRetries, $this->maxRetries);
+    }
+
+    /**
+     * Whether an agent that has just made its $attempts-th attempt and
+     * produced $result runs again (audit WF-1(b)).
+     *
+     * Failed and TimedOut attempts are retried — an agent killed at its own
+     * timeout gets a fresh one each attempt — but a Stopped one is not: that
+     * is a cancellation, and re-running what the user stopped would undo the
+     * cancel. Nothing is retried once the run was cancelled or its time
+     * budget is spent: a retry started then would be killed, or never
+     * started, at once, and the attempt that really ran is the more useful
+     * result.
+     */
+    private function retryAllowed(SubAgent $agent, AgentResult $result, int $attempts, ?int $deadlineNs): bool
+    {
+        if (!$result->isFailure() || $result->status === AgentStatus::Stopped) {
+            return false;
+        }
+
+        if ($attempts > $this->retriesFor($agent) || $this->wasCancelledByUser) {
+            return false;
+        }
+
+        return $deadlineNs === null || hrtime(true) < $deadlineNs;
+    }
+
+    /**
+     * Why a FAILED final result was not retried, for its error message — or
+     * null when there is nothing to add: the agent succeeded, was cancelled,
+     * or never asked for retries (whose results stay exactly as they were).
+     */
+    private function notRetriedReason(SubAgent $agent, AgentResult $result, int $attempts, ?int $deadlineNs): ?string
+    {
+        $retries = $this->retriesFor($agent);
+        if (!$result->isFailure() || $result->status === AgentStatus::Stopped || $retries === 0) {
+            return null;
+        }
+
+        if ($attempts > $retries) {
+            return sprintf('failed on all %d attempts', $attempts);
+        }
+
+        if ($this->wasCancelledByUser) {
+            return sprintf('not retried after attempt %d of %d: the run was cancelled', $attempts, $retries + 1);
+        }
+
+        if ($deadlineNs !== null && hrtime(true) >= $deadlineNs) {
+            return sprintf('not retried after attempt %d of %d: the time budget was spent', $attempts, $retries + 1);
+        }
+
+        return null;
+    }
+
+    /** Count one dispatch of an agent in the current run's {@see $attemptLog}. */
+    private function beginAttempt(string $agentId): void
+    {
+        if (!isset($this->attemptLog[$agentId])) {
+            $this->attemptLog[$agentId] = [
+                'attempts' => 1,
+                'tokens' => 0,
+                'cost' => 0.0,
+                'startedAt' => null,
+                'last' => null,
+                'pending' => false,
+            ];
+
+            return;
+        }
+
+        $this->attemptLog[$agentId]['attempts']++;
+        $this->attemptLog[$agentId]['pending'] = false;
+    }
+
+    /**
+     * Remember a failed attempt that is about to be retried. The attempt
+     * before it (if any) moves into the running totals; this one is kept
+     * whole as `last`, in case the retry never runs ({@see abandonRetry()}).
+     */
+    private function recordFailedAttempt(string $agentId, AgentResult $result): void
+    {
+        $log = &$this->attemptLog[$agentId];
+        if ($log['last'] !== null) {
+            $log['tokens'] += $log['last']->tokensUsed;
+            $log['cost'] += $log['last']->costUsd;
+        }
+        $log['last'] = $result;
+        $log['startedAt'] ??= $result->startedAt;
+        $log['pending'] = true;
+    }
+
+    /** An agent's final result, carrying every earlier attempt's spend. */
+    private function settleAttempts(string $agentId, AgentResult $result, ?SubAgent $agent, int $attempts): AgentResult
+    {
+        $log = $this->attemptLog[$agentId] ?? null;
+        if ($log === null || $log['last'] === null) {
+            return $agent === null
+                ? $result
+                : self::foldAttempts($result, 1, 0, 0.0, null, $this->notRetriedReason($agent, $result, $attempts, $this->runDeadlineNs));
+        }
+
+        return self::foldAttempts(
+            $result,
+            $attempts,
+            $log['tokens'] + $log['last']->tokensUsed,
+            $log['cost'] + $log['last']->costUsd,
+            $log['startedAt'],
+            $agent === null ? null : $this->notRetriedReason($agent, $result, $attempts, $this->runDeadlineNs),
+        );
+    }
+
+    /**
+     * The result for an agent whose retry was queued but never started: its
+     * last real attempt, with the reason the retry did not happen.
+     */
+    private function abandonRetry(string $agentId, string $reason): AgentResult
+    {
+        $log = $this->attemptLog[$agentId];
+        $this->attemptLog[$agentId]['pending'] = false;
+        /** @var AgentResult $last recorded by recordFailedAttempt(), which is what made the entry pending */
+        $last = $log['last'];
+
+        return self::foldAttempts(
+            $last,
+            $log['attempts'],
+            $log['tokens'],
+            $log['cost'],
+            $log['startedAt'],
+            sprintf('not retried after attempt %d: %s', $log['attempts'], $reason),
+        );
+    }
+
+    /**
+     * $result with the spend of the attempts before it added in, its start
+     * moved back to the first attempt's, and $note appended to a failure's
+     * message. A single attempt with nothing to note is returned untouched,
+     * so an agent that was never retried yields exactly what it always did.
+     */
+    private static function foldAttempts(
+        AgentResult $result,
+        int $attempts,
+        int $priorTokens,
+        float $priorCost,
+        ?\DateTimeImmutable $firstStartedAt,
+        ?string $note,
+    ): AgentResult {
+        if ($attempts === 1 && $note === null) {
+            return $result;
+        }
+
+        $error = $result->error;
+        if ($note !== null) {
+            $error = new \RuntimeException(
+                ($error === null ? 'AgentWorkerPool: agent ' . $result->agentId . ' failed' : $error->getMessage())
+                . ' [' . $note . ']',
+            );
+        }
+
+        return new AgentResult(
+            agentId: $result->agentId,
+            status: $result->status,
+            output: $result->output,
+            error: $error,
+            tokensUsed: $result->tokensUsed + $priorTokens,
+            costUsd: $result->costUsd + $priorCost,
+            startedAt: $firstStartedAt ?? $result->startedAt,
+            completedAt: $result->completedAt,
+            attempts: $attempts,
+        );
+    }
+
+    /**
+     * Run one agent synchronously, inside the caller, bounded by the run's
+     * time budget as well as by its own timeout.
+     *
+     * The pool cannot interrupt an inline run, so it hands the bound to the
+     * executor instead: when the budget's remainder is tighter than the
+     * agent's own {@see SubAgent::$timeout}, the executor is given a copy of
+     * the agent carrying that remainder as its timeout, which every shipped
+     * executor enforces itself — {@see ProcessExecutor} kills its worker at
+     * it, {@see EngineExecutor} stops at the next progress event past it.
+     * Before this the budget only decided whether an inline agent started;
+     * once started it ran to its own timeout, however little of the stage's
+     * time was left. Whole seconds, rounded up, because that is the unit of
+     * SubAgent::$timeout. A TimedOut result that the budget caused says so,
+     * like the forking path's {@see expireWorker()}.
+     */
+    private function executeInline(ExecutorInterface $executor, SubAgent $agent, CompleteRequest $request, ?int $deadlineNs): AgentResult
+    {
+        if ($deadlineNs === null) {
+            return $executor->execute($agent, $request);
+        }
+
+        $remaining = ($deadlineNs - hrtime(true)) / 1_000_000_000;
+        if ($remaining <= 0) {
+            return $this->budgetSpentResult($agent);
+        }
+
+        $bound = max(1, (int) ceil($remaining));
+        if ($agent->timeout > 0 && $agent->timeout <= $bound) {
+            return $executor->execute($agent, $request);
+        }
+
+        $result = $executor->execute(self::withTimeout($agent, $bound), $request);
+        if ($result->status !== AgentStatus::TimedOut) {
+            return $result;
+        }
+
+        return new AgentResult(
+            agentId: $result->agentId,
+            status: AgentStatus::TimedOut,
+            output: $result->output,
+            error: new \RuntimeException(sprintf(
+                'AgentWorkerPool: agent %s ran past the %s s time budget it was dispatched under and was stopped.',
+                $agent->id,
+                self::formatSeconds((float) $this->timeBudgetSeconds),
+            )),
+            tokensUsed: $result->tokensUsed,
+            costUsd: $result->costUsd,
+            startedAt: $result->startedAt,
+            completedAt: $result->completedAt,
+        );
+    }
+
+    /**
+     * $agent with a different timeout and nothing else changed — every
+     * constructor argument is carried, so the executor sees the same agent.
+     * Only the executor reads the copy; results, live output and telemetry
+     * still go to the caller's SubAgent, matched by id.
+     */
+    private static function withTimeout(SubAgent $agent, int $timeout): SubAgent
+    {
+        return new SubAgent(
+            id: $agent->id,
+            agent: $agent->agent,
+            task: $agent->task,
+            createdAt: $agent->createdAt,
+            timeout: $timeout,
+            maxRetries: $agent->maxRetries,
+            isolation: $agent->isolation,
+            permissionGate: $agent->permissionGate,
+            teamId: $agent->teamId,
+            teammateId: $agent->teammateId,
+        );
+    }
+
+    /**
      * Execute a single agent and return its result.
      *
      * WITH A {@see $forkedExecutor} THIS FORKS, exactly as {@see executeAll()}
@@ -608,12 +923,17 @@ final class AgentWorkerPool
      * keeps the direct call it always made. The request is forwarded verbatim —
      * the per-agent rebuild in executeAll() yields the same user turn, tools
      * and system prompt a single-agent caller already put on it.
+     *
+     * Either way a failed agent is retried exactly as {@see executeAll()}
+     * retries one, and the result returned is its final attempt's, carrying
+     * the spend of every attempt (audit WF-1(b)).
      */
     public function executeOne(SubAgent $agent, CompleteRequest $request): AgentResult
     {
-        // A budget already spent refuses before any path runs — the direct
-        // call below could not be stopped once started, so this is the only
-        // point at which it can honour the bound at all.
+        // A budget already spent refuses before any path runs, so not even
+        // the executor's construction is paid for. A budget that remains
+        // bounds the run itself: the forking path kills at it, the inline
+        // path hands it to the executor ({@see executeInline()}).
         if ($this->timeBudgetSeconds !== null && $this->timeBudgetSeconds <= 0) {
             return $this->budgetSpentResult($agent);
         }
@@ -633,7 +953,33 @@ final class AgentWorkerPool
         }
 
         $executor = $this->executor ?? $this->createDefaultExecutor();
-        return $executor->execute($agent, $request);
+        // The budget is a remainder handed over by the caller, so this call is
+        // where its clock starts — for the first attempt and any retry alike.
+        $deadlineNs = $this->timeBudgetSeconds === null
+            ? null
+            : hrtime(true) + (int) round($this->timeBudgetSeconds * 1_000_000_000);
+
+        // The same retry rule executeAll() applies (audit WF-1(b)), inline:
+        // there is no queue to put the agent back on, so it is simply run again.
+        $log = ['attempts' => 0, 'tokens' => 0, 'cost' => 0.0, 'startedAt' => null];
+        while (true) {
+            $log['attempts']++;
+            $result = $this->executeInline($executor, $agent, $request, $deadlineNs);
+            if (!$this->retryAllowed($agent, $result, $log['attempts'], $deadlineNs)) {
+                return self::foldAttempts(
+                    $result,
+                    $log['attempts'],
+                    $log['tokens'],
+                    $log['cost'],
+                    $log['startedAt'],
+                    $this->notRetriedReason($agent, $result, $log['attempts'], $deadlineNs),
+                );
+            }
+
+            $log['tokens'] += $result->tokensUsed;
+            $log['cost'] += $result->costUsd;
+            $log['startedAt'] ??= $result->startedAt;
+        }
     }
 
     /**
@@ -738,7 +1084,10 @@ final class AgentWorkerPool
      * Each forked agent is killed — with every process it started — at the
      * EARLIER of its own {@see SubAgent::$timeout} and this budget, and an
      * agent still queued when the budget runs out settles TimedOut without
-     * starting. A budget of zero or less is already spent. Called by
+     * starting. An agent run inline (an injected executor, no pcntl, a
+     * failed fork) is handed the budget's remainder as its timeout when that
+     * is tighter than its own ({@see executeInline()}), so its executor stops
+     * it there. A budget of zero or less is already spent. Called by
      * {@see \SugarCraft\Crush\Workflows\WorkflowEngine} with what is left
      * of a stage's `config.timeout` (audit WF-1).
      *
@@ -751,6 +1100,39 @@ final class AgentWorkerPool
         $clone = clone $this;
         $clone->timeBudgetSeconds = $seconds;
         return $clone;
+    }
+
+    /**
+     * A pool that re-runs every failed or timed-out agent up to $retries
+     * times — or up to the agent's own {@see SubAgent::$maxRetries}, when
+     * that is higher (audit WF-1(b)). The pool-wide half of the retry rule:
+     * {@see AgentPoolConfig::$maxRetries} reaches a pool through here. 0 (the
+     * default) leaves each agent to its own count; a negative value is 0.
+     *
+     * A retried agent goes back on the queue (inline, on {@see executeOne()}'s
+     * direct path), each attempt gets its own timeout, and every attempt
+     * shares the run's time budget. A cancelled agent is never retried, and
+     * nothing is retried once the budget is spent. The run yields ONE result
+     * per agent, its final attempt's, with every attempt's tokens and cost
+     * folded in and {@see AgentResult::$attempts} counting them.
+     *
+     * A clone, like {@see withTimeBudget()}.
+     */
+    public function withMaxRetries(int $retries): self
+    {
+        $clone = clone $this;
+        $clone->maxRetries = max(0, $retries);
+        return $clone;
+    }
+
+    /**
+     * The pool-wide retry floor {@see withMaxRetries()} set. Public for the
+     * reason {@see workerProvider()} is: WorkflowEngine rebuilds a pool per
+     * parallel stage and must carry this across.
+     */
+    public function maxRetries(): int
+    {
+        return $this->maxRetries;
     }
 
     /**
@@ -848,7 +1230,7 @@ final class AgentWorkerPool
         // PHPUnit mocks do not survive pcntl_fork across process boundaries.
         // The agent stays in $this->active until waitForCompletion extracts its result.
         if ($this->customExecutor) {
-            $result = $executor->execute($agent, $request);
+            $result = $this->executeInline($executor, $agent, $request, $this->runDeadlineNs);
             $this->storeResult($agent->id, $result);
             // Do NOT unset from active here — waitForCompletion handles removal
             return;
@@ -857,7 +1239,7 @@ final class AgentWorkerPool
         // Using the default ProcessExecutor — fork for true parallelism
         if (!$this->pcntlForkAvailable()) {
             $this->warnSequentialFallback();
-            $result = $executor->execute($agent, $request);
+            $result = $this->executeInline($executor, $agent, $request, $this->runDeadlineNs);
             $this->storeResult($agent->id, $result);
             // Do NOT unset from active here — waitForCompletion's sync-result
             // check (hasResult()) handles removal, same as the customExecutor
@@ -873,7 +1255,7 @@ final class AgentWorkerPool
             // Fork failed — execute synchronously. Same reasoning as above:
             // leave the agent in $active for waitForCompletion() to reap.
             $this->warnForkFailed();
-            $result = $executor->execute($agent, $request);
+            $result = $this->executeInline($executor, $agent, $request, $this->runDeadlineNs);
             $this->storeResult($agent->id, $result);
             return;
         }

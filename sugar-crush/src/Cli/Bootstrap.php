@@ -1610,7 +1610,7 @@ final class Bootstrap
                 maxConcurrent: $poolConfig->maxConcurrent,
                 workerProvider: $poolConfig->workerProvider,
                 forkedExecutor: $poolConfig->workerProvider === null ? null : new \SugarCraft\Crush\Agents\EngineExecutor(),
-            ))->withStopOnFirstFailure($poolConfig->stopOnFirstFailure),
+            ))->withStopOnFirstFailure($poolConfig->stopOnFirstFailure)->withMaxRetries($poolConfig->maxRetries),
             model: $model,
             provider: $provider,
             permissionGate: $gate,
@@ -7379,7 +7379,7 @@ final class Bootstrap
             maxConcurrent: $config->maxConcurrent,
             executor: $executor,
             workerProvider: $config->workerProvider,
-        ))->withStopOnFirstFailure($config->stopOnFirstFailure);
+        ))->withStopOnFirstFailure($config->stopOnFirstFailure)->withMaxRetries($config->maxRetries);
     }
 
     /**

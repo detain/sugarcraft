@@ -2565,6 +2565,10 @@ final class AgentTest extends TestCase
                 'costUsd',
                 'startedAt',
                 'completedAt',
+                // Audit WF-1(b)'s retry count: how many runs produced this
+                // result, not what any of them wrote, so the P3.S6
+                // disposition below still stands.
+                'attempts',
             ],
             array_map(
                 static fn (\ReflectionParameter $parameter): string => $parameter->getName(),

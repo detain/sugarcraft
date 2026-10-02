@@ -12,6 +12,14 @@ namespace SugarCraft\Crush\Agents;
  */
 final class AgentResult
 {
+    /**
+     * @param int $attempts How many times the agent was run to produce this
+     *        result: 1 unless {@see AgentWorkerPool} retried it after a
+     *        failure ({@see SubAgent::$maxRetries}, audit WF-1(b)). A retried
+     *        agent yields ONE result, its last attempt's, and that result's
+     *        $tokensUsed/$costUsd/$startedAt cover every attempt — a failed
+     *        attempt's spend is real spend.
+     */
     public function __construct(
         public readonly string $agentId,
         public readonly AgentStatus $status,
@@ -21,6 +29,7 @@ final class AgentResult
         public readonly float $costUsd = 0.0,
         public readonly ?\DateTimeImmutable $startedAt = null,
         public readonly ?\DateTimeImmutable $completedAt = null,
+        public readonly int $attempts = 1,
     ) {}
 
     /**

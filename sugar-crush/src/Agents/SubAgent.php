@@ -58,9 +58,12 @@ final class SubAgent
      *                        earlier of this and its own bound, and
      *                        {@see EngineExecutor} stops the run at the next
      *                        progress event past it (audit WF-1-rem).
-     * @param int $maxRetries Carried for {@see toArray()} but NOT acted on:
-     *                        nothing re-runs a failed sub-agent (see
-     *                        {@see AgentPoolConfig::$maxRetries}).
+     * @param int $maxRetries How many times {@see AgentWorkerPool} re-runs
+     *                        this agent after a failed or timed-out attempt
+     *                        (never after a cancellation), within the run's
+     *                        time budget; the pool's own floor
+     *                        ({@see AgentPoolConfig::$maxRetries}) applies
+     *                        when it is higher (audit WF-1(b)).
      */
     public function __construct(
         public readonly string $id,

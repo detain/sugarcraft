@@ -7535,7 +7535,8 @@ final class Chat implements Model
                     maxConcurrent: $this->agentPoolConfig->maxConcurrent,
                     workerProvider: $this->agentPoolConfig->workerProvider,
                     forkedExecutor: new \SugarCraft\Crush\Agents\EngineExecutor($this->backend),
-                ))->withStopOnFirstFailure($this->agentPoolConfig->stopOnFirstFailure);
+                ))->withStopOnFirstFailure($this->agentPoolConfig->stopOnFirstFailure)
+                    ->withMaxRetries($this->agentPoolConfig->maxRetries);
             } else {
                 $executor = new \SugarCraft\Crush\Agents\ProcessExecutor(
                     timeoutSeconds: $this->agentPoolConfig->defaultTimeoutSeconds,
@@ -7545,7 +7546,8 @@ final class Chat implements Model
                     maxConcurrent: $this->agentPoolConfig->maxConcurrent,
                     executor: $executor,
                     workerProvider: $this->agentPoolConfig->workerProvider,
-                ))->withStopOnFirstFailure($this->agentPoolConfig->stopOnFirstFailure);
+                ))->withStopOnFirstFailure($this->agentPoolConfig->stopOnFirstFailure)
+                    ->withMaxRetries($this->agentPoolConfig->maxRetries);
             }
         }
 

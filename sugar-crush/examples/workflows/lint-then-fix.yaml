@@ -19,9 +19,14 @@
 #   - config.maxConcurrent bounds how many parallel-stage agents run at
 #     once; config.timeout is each stage's wall-clock budget in seconds. A
 #     stage that runs past it has its agent killed (with every process the
-#     agent started) and fails as timed out, which stops the run. Task-level
-#     timeout/retries have no YAML spelling, and retries are not enforced
-#     anywhere (see docs/WORKFLOWS.md).
+#     agent started) and fails as timed out, which stops the run. A task's
+#     own timeout has no YAML spelling.
+#   - "retries" (on a stage, or on one agent of a parallel stage) re-runs a
+#     failed or timed-out agent up to that many times, inside the same stage
+#     budget; the stage fails only if the last attempt does. Give it only to
+#     an agent that is safe to run twice: "lint" below only reviews, while the
+#     fixers edit files, so a second run could apply a finding twice. See
+#     docs/WORKFLOWS.md.
 
 name: lint-then-fix
 description: >
@@ -38,6 +43,7 @@ stages:
       number, and category (style, correctness, or simplification), one
       finding per line.
     tools: [Read, Grep, Glob, Bash]
+    retries: 1
 
   - name: fix
     parallel: true

@@ -998,9 +998,9 @@ final class WorkflowRegistry
      * each stage is a map with a non-empty string `name`, and no two stages
      * share one; `parallel` is a real boolean if present; `agent`/`prompt` (and
      * a parallel agent's `type`/`name`/`prompt`) are strings if present;
-     * `tools` is a list of strings; a parallel stage's `agents` is a list of
-     * maps; `config` is a map whose `maxConcurrent`/`timeout` are whole numbers
-     * >= 1.
+     * `tools` is a list of strings; `retries` (on a stage or a parallel agent)
+     * is a whole number >= 0; a parallel stage's `agents` is a list of maps;
+     * `config` is a map whose `maxConcurrent`/`timeout` are whole numbers >= 1.
      *
      * "Is a list" means `array_is_list()`. It used to mean `is_array()`, which
      * is a different claim: `stages: {a: {...}}`, `tools: {a: Read}` and a
@@ -1374,6 +1374,9 @@ final class WorkflowRegistry
                 if (array_key_exists('tools', $agent)) {
                     $b = $b->tools($this->requireToolList($agent['tools'], "{$where} agent #{$agentIndex}"));
                 }
+                if (array_key_exists('retries', $agent)) {
+                    $b = $b->retries($this->requireRetryCount($agent['retries'], "{$where} agent #{$agentIndex}"));
+                }
                 $builders[] = $b;
             }
             return $builders;
@@ -1389,7 +1392,43 @@ final class WorkflowRegistry
             $b = $b->tools($this->requireToolList($stage['tools'], $where));
         }
 
+        if (array_key_exists('retries', $stage)) {
+            $b = $b->retries($this->requireRetryCount($stage['retries'], $where));
+        }
+
         return $b;
+    }
+
+    /**
+     * A task's `retries:` — how many times a failed or timed-out agent is
+     * re-run (audit WF-1(b); {@see \SugarCraft\Crush\Agents\AgentWorkerPool::withMaxRetries()}).
+     *
+     * A whole number >= 0, with {@see requirePositiveInt()}'s acceptance of a
+     * quoted integer; 0 is legal and means what leaving the key out means.
+     * Refused rather than coerced for that method's reason: `retries: -1` or
+     * `retries: lots` read as 0 would be an author's retry silently not
+     * happening.
+     *
+     * @throws WorkflowLoadException When the value is not a whole number >= 0.
+     */
+    private function requireRetryCount(mixed $value, string $where): int
+    {
+        $int = null;
+        if (is_int($value)) {
+            $int = $value;
+        } elseif (is_string($value) && preg_match('/^-?\d+$/', trim($value)) === 1) {
+            $int = (int) trim($value);
+        }
+
+        if ($int === null) {
+            throw new WorkflowLoadException("{$where} \"retries\" must be a whole number, got " . get_debug_type($value));
+        }
+
+        if ($int < 0) {
+            throw new WorkflowLoadException("{$where} \"retries\" must be at least 0, got {$int}");
+        }
+
+        return $int;
     }
 
     /**
