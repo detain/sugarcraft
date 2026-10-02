@@ -1254,10 +1254,12 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**12,483 tests / 177,317 assertions, 0 failures, 1 skipped** — the whole of
+**13,133 tests / 180,827 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-15m30s. Measured 2026-09-30. The pane-docking feature re-pinned the figure in stages,
+15m03s. Measured 2026-10-01, after the audit hotfix wave (git MCP, permissions,
+context loading, provider errors, MCP transports, chat hooks and `/rewind`) added
+650 tests. Before that, 12,483/177,317 on 2026-09-30. The pane-docking feature re-pinned the figure in stages,
 one commit each — the five `Dock*` suites (`3c90855aa`), the drag-gesture test pair
 (`37c50e389`), the review-fix round (`b4a5a11e7`), the docking crash/resize fix
 lane, the menu-bar pane tabs with their click-toggle, dock-scoped focus cycle
