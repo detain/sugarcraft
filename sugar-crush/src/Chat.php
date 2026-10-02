@@ -33,6 +33,7 @@ use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\SessionPicker;
 use SugarCraft\Crush\Tui\TextSelection;
+use SugarCraft\Crush\Tui\Components\PaneLabel;
 use SugarCraft\Crush\Support\SystemClipboard;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Backend\ObservesReasoning;
@@ -8836,10 +8837,18 @@ final class Chat implements Model
             $lines[] = '';
             $lines[] = self::clip($category, $budget);
             foreach ($rows as $spec) {
-                $left = '  /' . $spec->name . ($spec->argumentHint !== null ? ' ' . $spec->argumentHint : '');
+                // One row per spec, measured on the bytes that will print: a
+                // command's text may come from a cloned repository's command
+                // file or any CommandSpec::new() caller, and an LF/CR or escape
+                // in it would break this column layout or reach the terminal
+                // (audit 15b-16, the "/" popup's sibling surface).
+                $specName = PaneLabel::of($spec->name);
+                $specHint = $spec->argumentHint !== null ? PaneLabel::of($spec->argumentHint) : '';
+                $specDescription = PaneLabel::of($spec->description);
+                $left = '  /' . $specName . ($specHint !== '' ? ' ' . $specHint : '');
                 $leftWidth = Width::string($left);
                 if ($leftWidth <= self::HELP_NAME_COLS - 2) {
-                    $lines[] = self::clip($left . str_repeat(' ', self::HELP_NAME_COLS - $leftWidth) . $spec->description, $budget);
+                    $lines[] = self::clip($left . str_repeat(' ', self::HELP_NAME_COLS - $leftWidth) . $specDescription, $budget);
                     continue;
                 }
 
@@ -8857,7 +8866,7 @@ final class Chat implements Model
                 // description column sized to it would leave the descriptions
                 // nowhere to go.
                 $lines[] = self::clip($left, $budget);
-                $lines[] = self::clip(str_repeat(' ', self::HELP_NAME_COLS) . $spec->description, $budget);
+                $lines[] = self::clip(str_repeat(' ', self::HELP_NAME_COLS) . $specDescription, $budget);
             }
         }
 

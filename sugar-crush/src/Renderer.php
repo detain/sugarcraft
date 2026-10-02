@@ -27,7 +27,6 @@ use SugarCraft\Veil\Position;
 use SugarCraft\Veil\Veil;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
-use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\KeyBindingRegistry;
 use SugarCraft\Crush\Permissions\PermissionPromptStage;
 use SugarCraft\Crush\Tui\AgentDisplayState;
@@ -36,6 +35,7 @@ use SugarCraft\Crush\Tui\AgentViewPane;
 use SugarCraft\Crush\Tui\DiffGutter;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\SessionPicker;
+use SugarCraft\Crush\Tui\Components\PaneLabel;
 
 /**
  * Pure view function for {@see Chat} — the renderer that actually paints
@@ -3923,7 +3923,18 @@ final class Renderer
                 ? Style::new()->foreground($theme->userLabel)->bold()
                 : Style::new()->foreground($theme->systemLabel)->faint();
 
-            $hint = self::fitSlashMenuHint($spec, $budget);
+            // Sanitized BEFORE any width is measured, so every clip below
+            // budgets the bytes that actually reach the terminal. CommandSpec::
+            // fromFile() already cleans a command file's text at load; this
+            // pass is defence in depth for every other way a spec is built
+            // (CommandSpec::new(), the bare constructor), because the popup is
+            // joined into the frame raw - an ESC/BEL/CR here goes straight to
+            // the wire (audit 15b-16).
+            $specName = self::slashMenuText($spec->name);
+            $description = self::slashMenuText($spec->description);
+            $argumentHint = $spec->argumentHint === null ? null : self::slashMenuText($spec->argumentHint);
+
+            $hint = self::fitSlashMenuHint($specName, $description, $argumentHint, $budget);
 
             // The name keeps its columns ahead of everything else, so this clip
             // only bites on a name wider than the whole budget - which the
@@ -3931,9 +3942,9 @@ final class Renderer
             // widest is `/websearch` at 10 columns with its slash, measured with
             // `Width::string()` over `CommandRegistry::all()`) but not for a
             // loaded custom command, whose name comes from a filename.
-            $plainName = self::clipToWidth($spec->name, max(1, $budget - 1));
+            $plainName = self::clipToWidth($specName, max(1, $budget - 1));
             $tail = self::clipToWidth(
-                ' — ' . $spec->description,
+                ' — ' . $description,
                 $budget - Width::string('/' . $plainName . $hint),
             );
 
@@ -3974,20 +3985,32 @@ final class Renderer
      * one-character stub is noise, and a row with no hint is exactly what every
      * row looked like before Phase 4.
      */
-    private static function fitSlashMenuHint(CommandSpec $spec, int $budget): string
+    private static function fitSlashMenuHint(string $name, string $description, ?string $hint, int $budget): string
     {
-        $hint = $spec->argumentHint;
-        if ($hint === null) {
+        if ($hint === null || $hint === '') {
             return '';
         }
 
-        $spent = Width::string('/' . $spec->name . ' — ' . $spec->description);
+        $spent = Width::string('/' . $name . ' — ' . $description);
         $room = $budget - $spent - 1;
         if ($room < self::SLASH_MENU_MIN_HINT_COLS) {
             return '';
         }
 
         return ' ' . self::clipToWidth($hint, $room);
+    }
+
+    /**
+     * One piece of a "/" popup row (name, description or hint) as a single
+     * control-free row: the marked-frame policy ({@see untrusted()}, which
+     * also drops zone sentinels a forged spec could use to claim clicks) and
+     * then {@see PaneLabel::of()}'s line-break flattening, since
+     * `untrusted()` deliberately keeps LF/CR and the popup budgets exactly
+     * one line per row.
+     */
+    private static function slashMenuText(string $raw): string
+    {
+        return PaneLabel::of(self::untrusted($raw));
     }
 
     /**

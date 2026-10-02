@@ -9,6 +9,7 @@ use SugarCraft\Crush\Palette\PaletteAction;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\Frontmatter;
 use SugarCraft\Crush\Support\ProcessContainment;
+use SugarCraft\Crush\Tui\Components\PaneLabel;
 
 /**
  * Metadata for one command, used by BOTH command surfaces - the "/" popup
@@ -302,9 +303,18 @@ final class CommandSpec
 
         return new self(
             name: $name,
-            description: self::stringField($meta, 'description', $path) ?? "Custom command: $name",
+            // Display text is sanitized HERE, at the file boundary, because a
+            // project-tier file arrives with every `git clone` and is loaded
+            // and LISTED with no trust step: typing "/" paints these two
+            // strings into the popup. Verbatim, a YAML `"\e]52;c;…\a"` wrote
+            // the clipboard and `"\e[2J"`/CR repainted the screen (audit
+            // 15b-16). PaneLabel::of() is the project's one-row untrusted-text
+            // boundary: escapes, C0/C1 controls and line breaks all go.
+            // The name needs no pass of its own - NAME_PATTERN above is ASCII
+            // alphanumerics, '_', '-' and '/' only.
+            description: self::displayField($meta, 'description', $path) ?? "Custom command: $name",
             category: 'Custom',
-            argumentHint: self::stringField($meta, 'argument-hint', $path),
+            argumentHint: self::displayField($meta, 'argument-hint', $path),
             template: $template,
             model: self::stringField($meta, 'model', $path),
             subtask: self::boolField($meta, 'subtask', $path),
@@ -874,6 +884,25 @@ final class CommandSpec
         }
 
         return (string)$value;
+    }
+
+    /**
+     * {@see stringField()} for a value the TUI renders on a single row: run
+     * through {@see PaneLabel::of()}, with a value that sanitizes to nothing
+     * treated as absent so the caller's own default applies instead of an
+     * empty popup cell.
+     *
+     * @param array<mixed> $meta
+     */
+    private static function displayField(array $meta, string $key, string $path): ?string
+    {
+        $value = self::stringField($meta, $key, $path);
+        if ($value === null) {
+            return null;
+        }
+        $clean = PaneLabel::of($value);
+
+        return $clean === '' ? null : $clean;
     }
 
     /** @param array<mixed> $meta */
