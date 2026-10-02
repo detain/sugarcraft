@@ -182,6 +182,14 @@ reply actually hits whatever ceiling is in force, the provider's stop verdict
 now reaches the transcript as a system notice instead of a silently truncated
 turn.
 
+Its value is a positive token count; a fraction truncates toward zero (`2047.9`
+asks for 2047), and zero, negatives or non-numbers mean unset. There is no
+upper bound — the model's own limit is the provider's to enforce, and its
+rejection is the honest answer — except that a value too large to be an integer
+at all (`1e19`, or an over-long numeric string) also means unset, because no
+request could carry it — cast anyway, it wraps to a negative `max_tokens` that
+fails every request.
+
 `modelPrices` is that argument mirrored on the price axis rather than the size
 axis. It declares rates — **USD per 1M tokens**, `{"<model>": {"input": 7.5,
 "output": 30}}` — for models the OpenAI-shaped provider has no built-in price
@@ -205,7 +213,11 @@ silently, and the notice points back at this key. It is user-tier only for the
 `maxOutputTokens` reason squared: the key multiplies billed calls, so raising it
 from a checked-out repository would spend the operator's credential on the
 project's behalf. Nonsense values (non-integer, zero, negative) resolve to the
-default, never clamp upward.
+default, never clamp upward. An integral float such as `8.0` is a whole number
+and counts; `1.5` does not. There is no upper bound, but the bound stops at
+what an integer can hold: a value too large to be one (`1e19`, or a numeric
+string such as `"99999999999999999999"`) resolves to the default as well,
+rather than being clamped to a ceiling the key deliberately does not have.
 
 Where a row names two methods, the first is the public entry point and the
 second is the method that does the read — cited because that is the one to

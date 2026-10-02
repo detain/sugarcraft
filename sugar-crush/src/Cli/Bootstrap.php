@@ -2944,9 +2944,26 @@ final class Bootstrap
      * {@see \SugarCraft\Crush\Backend\EngineBackend::maxOutputTokens()}
      * records for the token ceiling - nonsense answers null rather than
      * clamping, and no env hatch is worth a second authority over a money
-     * axis. Accepted: any finite positive numeric (JSON int or numeric
-     * string), truncated toward zero; no upper bound - the spend cap and
-     * the operator own that question.
+     * axis. Accepted: any positive WHOLE number, whether a JSON int, an
+     * integral float (`8.0`) or a numeric string (`"16"`); no upper bound -
+     * the spend cap and the operator own that question.
+     *
+     * A FRACTION IS NONSENSE, NOT A ROUNDING PROBLEM (audit 15d-16): a step
+     * is a provider call, there is no half of one, and docs/SETTINGS.md has
+     * always promised that a non-integer resolves to the default. This
+     * resolver used to truncate `1.5` to `1` instead - a ceiling LOWER than
+     * the shipped 8, chosen by nobody. The token ceiling still truncates;
+     * its doc-comment says why that axis differs.
+     *
+     * "NO UPPER BOUND" STOPS AT THE INT TYPE (audit 15d-16): a float at or
+     * past 2**63 - `1e19`, or a numeric string too long for an int, which
+     * `+ 0` turns into one - has no int to become, and `(int)` of it WRAPS
+     * (`(int) 1e19` is -8446744073709551616 on PHP 8.3) rather than
+     * saturating. Such a value answers null exactly as INF already does:
+     * clamping it to some named ceiling would be the guessed bound this key
+     * deliberately has none of, and the step-exhausted notice names this
+     * key, so a "no limit" spelled too large is discoverable at the first
+     * turn it matters.
      *
      * Read at BACKEND CONSTRUCTION, not per turn, and deliberately so:
      * TaskTool raises the ceiling for its OWN sub-agent turns via
@@ -2966,6 +2983,16 @@ final class Bootstrap
         }
 
         if (!is_int($raw) && !(is_float($raw) && is_finite($raw))) {
+            return null;
+        }
+
+        // Both float-only checks run BEFORE the cast, so a value is judged on
+        // its own magnitude and not on whatever an overflowing (int) made of
+        // it. (float) PHP_INT_MAX is exactly 2**63, the first float past the
+        // int range; an int $raw is in range by construction and must not be
+        // compared against it (int-vs-float comparison would reject
+        // PHP_INT_MAX itself).
+        if (is_float($raw) && ($raw >= (float) PHP_INT_MAX || $raw !== floor($raw))) {
             return null;
         }
 

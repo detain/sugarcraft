@@ -726,14 +726,50 @@ final class BootstrapLayeredSettingsTest extends TestCase
         yield 'a fraction under one' => [0.5];
         yield 'infinite' => [INF];
         yield 'not-a-number' => [NAN];
+        // Audit 15d-16: docs/SETTINGS.md promises a non-integer resolves to
+        // the default; the resolver used to truncate these to 1 and 12.
+        yield 'a fraction over one' => [1.5];
+        yield 'a fraction just under thirteen' => [12.9];
+        yield 'a fractional numeric string' => ['1.5'];
+        // Audit 15d-16: past the int range `(int)` WRAPS rather than
+        // saturating, so these used to become negative or garbage ceilings.
+        yield 'a "no limit" spelled 1e19' => [1e19];
+        yield '9.3e18, which (int) wraps negative' => [9.3e18];
+        yield 'exactly 2**63, the first float past PHP_INT_MAX' => [(float) PHP_INT_MAX];
+        yield 'a numeric string too long for an int' => ['99999999999999999999'];
+        yield 'an exponent string' => ['1e19'];
+        yield 'a huge negative' => [-1e19];
     }
 
     public function testUsableStepCeilingsResolveToIntegers(): void
     {
         self::assertSame(13, $this->resolveStepsFrom(['maxToolSteps' => 13]));
         self::assertSame(13, $this->resolveStepsFrom(['maxToolSteps' => '13']), 'a numeric string from a hand-edited file still counts');
-        self::assertSame(12, $this->resolveStepsFrom(['maxToolSteps' => 12.9]), 'truncation toward zero, same rule as the token ceiling');
         self::assertSame(1, $this->resolveStepsFrom(['maxToolSteps' => 1]), 'the smallest honoured ceiling is one step');
+    }
+
+    /**
+     * The guard beside audit 15d-16's refusals: whole numbers in every shape
+     * JSON or a hand edit can carry still resolve, up to the top of the int
+     * range — "no upper bound" is unchanged for every value an int can hold.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('wholeStepCeilings')]
+    public function testEveryWholeStepCeilingAnIntCanHoldStillResolves(mixed $value, int $expected): void
+    {
+        self::assertSame($expected, $this->resolveStepsFrom(['maxToolSteps' => $value]));
+    }
+
+    /** @return iterable<string, array{mixed, int}> */
+    public static function wholeStepCeilings(): iterable
+    {
+        yield 'an ordinary int' => [8, 8];
+        yield 'an ordinary numeric string' => ['16', 16];
+        yield 'an integral float' => [8.0, 8];
+        yield 'an integral float string' => ['8.0', 8];
+        yield 'a large but ordinary int' => [4096, 4096];
+        yield 'PHP_INT_MAX itself' => [PHP_INT_MAX, PHP_INT_MAX];
+        yield 'PHP_INT_MAX as a numeric string' => [(string) PHP_INT_MAX, PHP_INT_MAX];
+        yield 'the largest float below 2**63' => [9.2233720368547748e18, 9223372036854774784];
     }
 
     public function testThePersistedKeyRaisesTheEngineCeilingAndUnsetHandsTheEngineBackUntouched(): void

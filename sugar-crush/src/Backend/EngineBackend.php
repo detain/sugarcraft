@@ -1394,10 +1394,24 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * number, while an impossible ceiling needs no number at all. Accepted:
      * any finite positive numeric (a JSON int, or a numeric string from a
      * hand-edited file), truncated toward zero like the deadline parser,
-     * because a sub-token fraction is not a request parameter. There is no
-     * upper bound here: the maximum is model- and provider-specific, and the
-     * server's own rejection is the honest authority on it — clamping
-     * silently here would guess a ceiling this class cannot know.
+     * because a sub-token fraction is not a request parameter. (The step
+     * ceiling in `Bootstrap::resolvedMaxToolSteps()` refuses fractions
+     * instead, because docs/SETTINGS.md promises that for its key; nothing
+     * documents the opposite here, and `2047.9` asking for 2047 tokens is
+     * nearer the operator's intent than silently sending no override at all.)
+     * There is no upper bound here: the maximum is model- and
+     * provider-specific, and the server's own rejection is the honest
+     * authority on it — clamping silently here would guess a ceiling this
+     * class cannot know.
+     *
+     * "NO UPPER BOUND" STOPS AT THE INT TYPE (audit 15d-16): a float at or
+     * past 2**63 - `1e19`, or a numeric string too long for an int, which
+     * `+ 0` turns into one - has no int to become, and `(int)` of it WRAPS
+     * rather than saturating, so `1e19` used to put a NEGATIVE `max_tokens`
+     * on the wire and draw a provider 400 on every request. No server can be
+     * the authority on a value the request cannot even carry, so such a value
+     * answers null, exactly as INF already did, rather than being clamped to
+     * a ceiling this class would have to invent.
      *
      * @param ?array<string, mixed> $config the already-read user config;
      *                                      null reads it
@@ -1415,7 +1429,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             return null;
         }
 
-        if ($raw < 1) {
+        // Judged before the cast, on the value's own magnitude. (float)
+        // PHP_INT_MAX is exactly 2**63, the first float past the int range;
+        // an int $raw is in range by construction and must not be compared
+        // against it (int-vs-float comparison would reject PHP_INT_MAX).
+        if ($raw < 1 || (is_float($raw) && $raw >= (float) PHP_INT_MAX)) {
             return null;
         }
 

@@ -136,6 +136,56 @@ final class EngineBackendLengthStopTest extends TestCase
         $this->assertSame(10_000_000, $this->resolveFrom(['maxOutputTokens' => 10_000_000]));
     }
 
+    /**
+     * Audit 15d-16: "no upper bound" stops at the int type. A float at or past
+     * 2**63 has no int to become and `(int)` of it WRAPS, so `1e19` used to put
+     * a negative `max_tokens` on the wire and draw a 400 on every request. Such
+     * a value answers null, exactly as INF does — never a wrapped number, and
+     * never a ceiling clamped to by guesswork.
+     *
+     * @dataProvider unrepresentableCeilings
+     */
+    public function testACeilingTooLargeForAnIntAnswersNullRatherThanWrapping(mixed $value): void
+    {
+        $this->assertNull($this->resolveFrom(['maxOutputTokens' => $value]), var_export($value, true) . ' cannot be carried by any request, so the operator said nothing usable');
+    }
+
+    /** @return iterable<string, array{mixed}> */
+    public static function unrepresentableCeilings(): iterable
+    {
+        yield 'a "no limit" spelled 1e19' => [1e19];
+        yield '9.3e18, which (int) wraps negative' => [9.3e18];
+        yield 'exactly 2**63, the first float past PHP_INT_MAX' => [(float) PHP_INT_MAX];
+        yield 'a numeric string too long for an int' => ['99999999999999999999'];
+        yield 'an exponent string' => ['1e19'];
+        yield 'a huge negative' => [-1e19];
+    }
+
+    /**
+     * The guard beside the refusal: everything the int type CAN hold keeps the
+     * documented behaviour, including the very top of the range and the
+     * documented truncation of a fraction (this key truncates; the step
+     * ceiling, whose docs promise otherwise, refuses).
+     *
+     * @dataProvider representableCeilings
+     */
+    public function testEveryCeilingAnIntCanHoldStillResolves(mixed $value, int $expected): void
+    {
+        $this->assertSame($expected, $this->resolveFrom(['maxOutputTokens' => $value]));
+    }
+
+    /** @return iterable<string, array{mixed, int}> */
+    public static function representableCeilings(): iterable
+    {
+        yield 'an ordinary int' => [4096, 4096];
+        yield 'an ordinary numeric string' => ['16', 16];
+        yield 'an integral float' => [8.0, 8];
+        yield 'a fraction truncates toward zero' => [1.5, 1];
+        yield 'PHP_INT_MAX itself' => [PHP_INT_MAX, PHP_INT_MAX];
+        yield 'PHP_INT_MAX as a numeric string' => [(string) PHP_INT_MAX, PHP_INT_MAX];
+        yield 'the largest float below 2**63' => [9.2233720368547748e18, 9223372036854774784];
+    }
+
     // =========================================================================
     // …and the decision reaches the provider's request
     // =========================================================================
