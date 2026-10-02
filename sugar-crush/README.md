@@ -1268,14 +1268,16 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**13,663 tests / 184,048 assertions, 0 failures, 1 skipped** — the whole of
+**14,029 tests / 186,454 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-16m17s. Measured 2026-10-02, after audit wave w2 (cancelled tool placeholders,
-command-argument parsing, CR/C1 control sanitising, process-tree kills and frame
-socket hygiene, streamed tool-call flushing, OpenAI windows and cached cost,
-PromptFence attribute tags and skill shadowing) added 419 tests. Before that,
-13,244/181,861 earlier on 2026-10-02, after audit wave w1 added 111 tests;
+17m38s. Measured 2026-10-02, after audit wave w3 (UI-only rows off the model
+wire, script-weighted token estimate, memoized transcript rendering, bounded and
+config-isolated env-block git, PostToolUse withholding and audit-log refusals,
+the TUI error log and CLI positionals, gitignore backtracking bounds, Skill
+`$ARGUMENTS`, embeddings errors and the SGLang warning rate-limit) added 366
+tests. Before that, 13,663/184,048 earlier on 2026-10-02, after audit wave w2
+added 419 tests; 13,244/181,861 after audit wave w1 added 111 tests;
 13,133/180,827 on 2026-10-01, after the audit hotfix wave added 650 tests;
 12,483/177,317 on 2026-09-30. The pane-docking feature re-pinned the figure in stages,
 one commit each — the five `Dock*` suites (`3c90855aa`), the drag-gesture test pair
