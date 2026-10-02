@@ -14,7 +14,7 @@ final class ParsedCommand
 {
     /**
      * @param non-empty-string           $name  Lowercase command name without the leading /
-     * @param list<non-empty-string>     $args  Positional arguments, shell-quoted and split
+     * @param list<string>               $args  Positional arguments, shell-quoted and split (an empty quoted "" is kept as "")
      */
     public function __construct(
         public readonly string $name,
