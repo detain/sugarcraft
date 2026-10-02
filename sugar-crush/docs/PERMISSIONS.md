@@ -367,16 +367,23 @@ The gate is not a replacement for them. Even under `bypass-permissions`,
 
 | Pattern | Applies to |
 |---|---|
-| `.env` | `Read`, `Edit`, `Write`, `Bash` — reading it *is* the leak |
-| `.git/config`, `config/*.php` | all four |
-| `.sugar-crush/hooks.yaml`, `.sugar-crush/config.json`, `.sugar-crush/agents/` | **writes only** |
+| `.env`, `.env.*`, `.envrc` (not the `.env.example`/`.sample`/`.dist`/`.template`/`.tpl` templates) | `Read`, `Edit`, `Write`, `Bash`, `Grep`, `Glob`, `Lsp`, `mcp__*` — reading it *is* the leak; `Grep` also never opens these files itself, even with `include_ignored: true` |
+| `.git/config`, `config/*.php` | all of the above |
+| `.sugar-crush/hooks.yaml`, `.sugar-crush/config.json`, `.sugar-crush/agents/` | **writes only** (`Edit`, `Write`, `Bash`, `mcp__*`) |
+| `.git/hooks/`, `.git/info/` | **writes only** (`Edit`, `Write`, `Bash`, `mcp__*`) — a hook runs on your next `git commit`, outside any session (audit F-J4) |
+
+`Bash` commands are matched both as written and with quotes removed, so
+`cat ".env"` and `cat .env;true` are refused; see
+[`HOOKS.md`](HOOKS.md#what-protect-files-covers). Because one shell string does
+not say whether it reads or writes, `Bash` gets the write-only rows too:
+`cat .git/hooks/pre-commit` is refused where `Read` of it is not.
 
 `composer.json` and `composer.lock` are deliberately absent: they are committed
 project files, neither secrets nor policy, and guarding them (as this table once
 did) refused even `grep` of a manifest in a Bash command.
 
-The last group is policy rather than secrets, and a decision is changed by
-*writing* it — so reads are allowed (opening `.sugar-crush/agents/reviewer.md`
+The `.sugar-crush` group is policy rather than secrets, and a decision is
+changed by *writing* it — so reads are allowed (opening `.sugar-crush/agents/reviewer.md`
 is how you debug a preset) and writes are denied in every mode. That is not
 theoretical: in the shipped `bypass-permissions` default, an unprompted write to
 `trustedProjectHooks` followed by a provider switch was measured end-to-end as

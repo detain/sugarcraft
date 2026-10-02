@@ -175,7 +175,9 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
             . 'scope by filename glob (e.g. "*.php"). Finding nothing is a normal result, '
             . 'not an error; only grep itself failing is reported as one. Skips '
             . implode(', ', IgnoreRules::DEFAULT_EXCLUDED_DIRS)
-            . ' and anything the project\'s .gitignore excludes; pass include_ignored: true to search those too.';
+            . ' and anything the project\'s .gitignore excludes; pass include_ignored: true to search those too, '
+            . 'except that a walk never enters .git and never opens .env, .env.* or .envrc files (the '
+            . '.env.example-style templates included; Read those directly).';
 
         if ($this->rgAvailable) {
             $description .= ' `rg` is on PATH on this host, so when BRE escaping is the obstacle '
@@ -208,7 +210,7 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
             ],
             'include_ignored' => [
                 'type' => 'boolean',
-                'description' => 'Search files the project\'s .gitignore excludes, plus vendor/node_modules-style directories. Off by default; the result says when something was hidden.',
+                'description' => 'Search files the project\'s .gitignore excludes, plus vendor/node_modules-style directories. Off by default; the result says when something was hidden. Even when true, .git and .env/.env.*/.envrc files are never searched.',
             ],
         ],
         'required' => ['pattern', 'path', 'description'],

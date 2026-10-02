@@ -1397,9 +1397,12 @@ final class WorkflowEngineTest extends TestCase
 
     /**
      * `plan` refuses `Edit` but NOT `Bash`, and the asymmetry is deliberate
-     * rather than an oversight: what makes a Bash call a write under Plan is a
-     * redirection in its arguments ({@see PermissionGate}'s
-     * `isBashWriteCommand()`), and a declaration has no arguments. The class
+     * rather than an oversight: whether a Bash call may run under Plan is
+     * decided from its command line — {@see PermissionGate}'s
+     * `isPlanReadOnlyBash()` allows only a line made entirely of read-only
+     * commands and Denies the rest (audit F-P2) — and a declaration has no
+     * command line, so it is Allowed and each real call is judged when it
+     * arrives. The class
      * docblock used to summarise Plan as "all writes Deny", which is what made
      * this look like a bug rather than a boundary; the summary was corrected and
      * this test is what keeps the corrected version honest.
