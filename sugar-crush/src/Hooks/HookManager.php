@@ -277,6 +277,36 @@ final class HookManager
     }
 
     /**
+     * True when at least one enabled hook that would run for $event against
+     * $matchSubject executes OUT OF PROCESS ({@see BoundedHookInterface}, i.e. a
+     * {@see ScriptHook}) — the hooks whose run is a blocking `proc_open()` drain
+     * of up to {@see ScriptHook::DEFAULT_TIMEOUT_SECONDS}.
+     *
+     * WHY A QUERY RATHER THAN AN ASYNC TWIN OF {@see userPromptSubmit()}: the
+     * caller that needs it ({@see \SugarCraft\Crush\Chat}, audit 15b-04) runs
+     * the chain in a forked child so the TUI keeps painting while a script
+     * hook works, and a fork is only the right trade when something in the
+     * chain actually leaves the process. A chain of hand-written PHP hooks runs
+     * in-process exactly as before — forking it would run each hook in a copy
+     * of memory and silently drop whatever state it keeps — so the caller needs
+     * to ask first, and the answer belongs here beside the registry it reads.
+     *
+     * Read through {@see HookRegistry::findMatches()}, the same selection
+     * {@see HookRegistry::executeHooks()} runs, so "would fork" and "would run"
+     * cannot disagree about a disabled hook or a matcher.
+     */
+    public function runsOutOfProcess(HookEvent $event, string $matchSubject): bool
+    {
+        foreach ($this->registry->findMatches($event->value, $matchSubject) as $hook) {
+            if ($hook instanceof BoundedHookInterface) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Apply hooks to a tool call input.
      */
     public function applyPreHooks(

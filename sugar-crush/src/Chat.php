@@ -1183,6 +1183,36 @@ final class Chat implements Model
          */
         private readonly array $queuedPrompts = [],
         /**
+         * The submission whose turn-lifecycle hook chain is running in a forked
+         * child right now (audit 15b-04), or null when none is.
+         *
+         * WHY IT EXISTS: a {@see Hooks\ScriptHook} on `UserPromptSubmit` or
+         * `SessionStart` is a blocking `proc_open()` drain of up to 60 s, and it
+         * used to run inside {@see update()}, freezing the frame, Escape and
+         * Ctrl+C for as long as the script took. {@see pendTurnHooks()} now
+         * forks the chain from a Cmd and parks the submission HERE, with
+         * `inFlight` held so a second Enter queues ({@see enqueuePrompt()})
+         * rather than racing it, and {@see resumeTurnHooks()} re-enters
+         * {@see submit()} once the {@see TurnHooksResolvedMsg} lands.
+         *
+         * `draft`/`cursor` are the box exactly as Enter found it, so the re-entry
+         * hands {@see dispatchTurn()} the same `/rewind` draft capture the
+         * synchronous path did and a refusal can put the text back.
+         *
+         * @var ?array{text: string, draft: string, cursor: int}
+         */
+        private readonly ?array $pendingTurnHooks = null,
+        /**
+         * The verdicts a forked turn-hook chain returned, set ONLY for the length
+         * of the {@see submit()} re-entry {@see resumeTurnHooks()} runs, which
+         * {@see dispatchTurnHooks()} consumes instead of running the hooks a
+         * second time. Matched on `text`, and cleared again as soon as the
+         * re-entry returns, so it can never judge a later prompt.
+         *
+         * @var ?array{text: string, prompt: Hooks\HookResult, session: ?Hooks\HookResult, boxOccupied: bool}
+         */
+        private readonly ?array $resolvedTurnHooks = null,
+        /**
          * Discovers `*.md` commands under `~/.sugar-crush/commands` and
          * `<root>/.sugar-crush/commands` (crush_code.md Phase 2 item 4). Null —
          * the default — means no file-based commands at all, which is what every
@@ -1878,6 +1908,9 @@ final class Chat implements Model
 
             return [$this, null];
         }
+        if ($msg instanceof TurnHooksResolvedMsg) {
+            return $this->resumeTurnHooks($msg);
+        }
         if ($msg instanceof HistoryCompactedMsg) {
             // Accounted BEFORE the latch check, and for the same reason the
             // AssistantMsg arm accounts before its staleness guard: the
@@ -2156,6 +2189,16 @@ final class Chat implements Model
             $this->inFlightCancellation?->cancel();
 
             return [$this->mutate([
+                // A submission parked behind a forked turn-hook chain (audit
+                // 15b-04) is released with the turn it stood in for: the cancel
+                // above makes the chain's poll kill the child, the generation bump
+                // below strands any verdict already on its way, and the prompt —
+                // never echoed, so it would otherwise be gone — goes back into the
+                // box when the box is still empty.
+                ...($this->pendingTurnHooks !== null && trim($this->inputBuf) === ''
+                    ? ['inputBuf' => $this->pendingTurnHooks['draft']]
+                    : []),
+                'pendingTurnHooks' => null,
                 'inFlight' => false,
                 'inFlightCancellation' => null,
                 'lastEscapeAt' => null,
@@ -4694,6 +4737,18 @@ final class Chat implements Model
      * `RuntimeNoticeSink` is the strict stderr-only realization, deferred with its
      * reason rather than half-wired here.
      *
+     * OFF THE UPDATE PATH WHEN A HOOK LEAVES THE PROCESS (audit 15b-04). A
+     * {@see Hooks\ScriptHook} in either chain is a blocking `proc_open()` drain of
+     * up to 60 s, and running it here froze the TUI — no repaint, Escape or
+     * Ctrl+C — for the whole of it. Such a chain is forked from a Cmd instead
+     * ({@see pendTurnHooks()}): the second slot is then the PENDING pair rather
+     * than a refusal, both callers return it unchanged exactly as they return a
+     * refusal, and {@see resumeTurnHooks()} re-runs {@see submit()} when the
+     * verdicts land, which reaches this method again and consumes them from
+     * {@see $resolvedTurnHooks}. A chain of in-process PHP hooks still runs right
+     * here: it was never the blocking kind, and a fork would run it on a copy of
+     * memory and drop whatever state it keeps.
+     *
      * @return array{0: list<Message>, 1: ?array{0: self, 1: ?\Closure}}
      */
     private function dispatchTurnHooks(string $text): array
@@ -4702,27 +4757,80 @@ final class Chat implements Model
             return [[], null];
         }
 
-        $promptResult = $this->hooks->userPromptSubmit(
-            $this->turnHookContext(\SugarCraft\Crush\Hooks\HookEvent::UserPromptSubmit->value, $text, false),
-        );
+        // Each event is named ONCE, here: docs/HOOKS.md's events table cites this
+        // method as the dispatch site of both, and its drift guard counts the
+        // references.
+        $promptEvent = \SugarCraft\Crush\Hooks\HookEvent::UserPromptSubmit;
+        $sessionEvent = \SugarCraft\Crush\Hooks\HookEvent::SessionStart;
+
+        // THE RE-ENTRY (audit 15b-04): a chain that was forked off update() by
+        // {@see pendTurnHooks()} has already been judged, and {@see resumeTurnHooks()}
+        // runs submit() again with its verdicts stored here. Consumed instead of
+        // run, so a script hook fires exactly once per submission, and matched on
+        // the text so a verdict can only ever judge the prompt it was given.
+        $resolved = $this->resolvedTurnHooks;
+        if ($resolved !== null && $resolved['text'] === $text) {
+            $promptResult = $resolved['prompt'];
+        } else {
+            $resolved = null;
+
+            // OUT-OF-PROCESS HOOKS GO TO A FORKED CHILD; IN-PROCESS ONES STAY
+            // HERE. The question is asked before anything runs so a chain with a
+            // ScriptHook in it never starts on the TUI's own thread. The contexts
+            // are built HERE and handed down, so this method stays the one
+            // dispatch site docs/HOOKS.md's events table names for both.
+            $forkEvents = count($this->history) === 0
+                ? [$promptEvent, $sessionEvent]
+                : [$promptEvent];
+            if ($this->turnHooksMustFork($forkEvents)) {
+                return [[], $this->pendTurnHooks(
+                    $text,
+                    $this->turnHookContext($promptEvent->value, $text, false),
+                    count($this->history) === 0
+                        ? $this->turnHookContext($sessionEvent->value, $text, true)
+                        : null,
+                )];
+            }
+
+            $promptResult = $this->hooks->userPromptSubmit(
+                $this->turnHookContext($promptEvent->value, $text, false),
+            );
+        }
 
         $blocked = $this->turnHookRefusalReason($promptResult);
         if ($blocked !== null) {
             // HookEvent::discardsOnBlock(): the prompt is NOT submitted. The draft
-            // stays in the box exactly as the other refusals in submit() leave it.
+            // stays in the box exactly as the other refusals in submit() leave it
+            // — unless the user typed a NEW draft while a forked chain ran, in
+            // which case {@see resumeTurnHooks()} keeps theirs (losing typed text
+            // is the worse error) and the notice quotes the prompt instead of
+            // claiming it is still in the box.
+            $where = ($resolved['boxOccupied'] ?? false)
+                ? ' Your prompt (“' . self::quoteDraftForNotice($text) . '”) was not sent;'
+                    . ' the box keeps the draft you typed while the hook ran.'
+                : ' Your prompt was not sent and is still in the box.';
+
             return [[], [$this->mutate([
-                'history' => [...$this->history, Message::notice(
-                    $blocked . ' Your prompt was not sent and is still in the box.',
-                )],
+                'history' => [...$this->history, Message::notice($blocked . $where)],
             ]), null]];
         }
 
         $notes = [];
 
-        if (count($this->history) === 0) {
+        // On the re-entry the child already decided whether SessionStart fired:
+        // it read `count($this->history) === 0` at the moment the prompt was
+        // submitted, which is the moment the gate is defined against, so a
+        // notice that landed in history during the wait cannot un-fire it.
+        $sessionResult = null;
+        if ($resolved !== null) {
+            $sessionResult = $resolved['session'];
+        } elseif (count($this->history) === 0) {
             $sessionResult = $this->hooks->sessionStart(
-                $this->turnHookContext(\SugarCraft\Crush\Hooks\HookEvent::SessionStart->value, $text, true),
+                $this->turnHookContext($sessionEvent->value, $text, true),
             );
+        }
+
+        if ($sessionResult !== null) {
             $sessionBlocked = $this->turnHookRefusalReason($sessionResult);
 
             if ($sessionBlocked !== null) {
@@ -4738,6 +4846,314 @@ final class Chat implements Model
         }
 
         return [$notes, null];
+    }
+
+    /**
+     * Whether this submission's turn-hook chain has to leave the TUI's thread
+     * (audit 15b-04): a hook on one of $events runs out of process AND this
+     * build can fork. Without pcntl the chain runs synchronously here exactly as
+     * it did before, the same degradation {@see forkToolCalls()} takes.
+     *
+     * @param list<\SugarCraft\Crush\Hooks\HookEvent> $events
+     */
+    private function turnHooksMustFork(array $events): bool
+    {
+        if ($this->hooks === null
+            || !\function_exists('pcntl_fork')
+            || !\function_exists('pcntl_waitpid')
+        ) {
+            return false;
+        }
+
+        foreach ($events as $event) {
+            // The matcher subject for a turn-lifecycle event is the event name —
+            // see turnHookContext()'s `toolName` slot.
+            if ($this->hooks->runsOutOfProcess($event, $event->value)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Park $text behind a forked turn-hook chain and hand back the Cmd that runs
+     * it (audit 15b-04). $sessionContext is null when SessionStart does not fire
+     * for this submission (history was not empty when it was submitted).
+     *
+     * The model half is pure: `inFlight` is held with a fresh
+     * {@see CancellationToken} so the mid-turn policy applies unchanged — Enter
+     * queues, `/` commands are refused, double-Escape cancels — the generation is
+     * bumped so a verdict for an abandoned submission is recognisably stale, and
+     * the box is consumed the way {@see dispatchTurn()} consumes it, so the text
+     * cannot be queued a second time by the next Enter. The fork itself happens in
+     * the Cmd, never here.
+     *
+     * Built from `$this`, like every refusal: whatever submit() computed on the way
+     * here (a compaction rewrite, a breaker outcome) is dropped and recomputed by
+     * the re-entry, so the turn goes out against the state the user is looking at
+     * when the verdict lands.
+     *
+     * @return array{0: self, 1: \Closure}
+     */
+    private function pendTurnHooks(string $text, HookContext $promptContext, ?HookContext $sessionContext): array
+    {
+        $cancellation = new CancellationToken();
+        $generation = $this->generation + 1;
+
+        $next = $this->mutate([
+            'inFlight' => true,
+            'inFlightCancellation' => $cancellation,
+            'generation' => $generation,
+            'lastEscapeAt' => null,
+            'pendingTurnHooks' => [
+                'text' => $text,
+                'draft' => $this->inputBuf,
+                'cursor' => $this->inputCursorOffset(),
+            ],
+            'inputBuf' => '',
+        ]);
+
+        return [$next, self::forkTurnHooksCmd(
+            $this->hooks ?? throw new \LogicException('pendTurnHooks() needs a hook manager'),
+            $promptContext,
+            $sessionContext,
+            $generation,
+            $text,
+            $cancellation,
+        )];
+    }
+
+    /**
+     * Poll interval for a forked turn-hook child — the same 50 ms
+     * {@see waitForToolChildrenAsync()} polls tool children at.
+     */
+    private const TURN_HOOK_POLL_SECONDS = 0.05;
+
+    /**
+     * The Cmd that runs a turn's hook chain in a forked child and resolves with a
+     * {@see TurnHooksResolvedMsg} (audit 15b-04).
+     *
+     * FORK + WNOHANG POLL, the shape {@see forkToolCalls()} and
+     * {@see waitForToolChildrenAsync()} already use: the child runs the chain to
+     * completion (gate-first, as {@see dispatchTurnHooks()} documents —
+     * SessionStart only once UserPromptSubmit permitted) and writes both verdicts
+     * through {@see Support\ToolIpcFiles} (0600, atomic rename); the parent polls
+     * from a loop timer, so the frame keeps painting and the keyboard stays live
+     * for however long a script hook takes.
+     *
+     * A CHILD THAT REPORTS NOTHING FAILS CLOSED: a crashed or truncated payload
+     * becomes a DENY, because "the prompt gate could not answer" letting the
+     * prompt through is the same widening {@see HookResult::permitsExecution()}'s
+     * allow-list exists to prevent.
+     *
+     * CANCEL KILLS THE TREE. A double-Escape cancels $cancellation; the next poll
+     * takes the child and every process under it — the setsid'd hook script and
+     * whatever that script started — through
+     * {@see Support\ProcessContainment::killTree()}, reaps it on the bounded
+     * WNOHANG window {@see reapKilledToolChildren()} uses, and resolves null so
+     * nothing is dispatched.
+     *
+     * QUITTING DOES NOT WAIT FOR IT. Ctrl+C quits at once (it could not while
+     * the chain ran inside update()); the child runs out its chain — bounded by
+     * the chain budget for script hooks — and exits, and a payload nobody
+     * collects is a {@see Support\ToolIpcFiles::CHAT_PREFIX} file the next
+     * launch's sweep removes.
+     *
+     * Static, capturing only the manager and contexts, so the closure holds no
+     * Chat state that could go stale while it waits. No fork possible (pcntl_fork
+     * returning -1) runs the chain inline as the pre-15b-04 path did: blocking,
+     * but never wrong.
+     */
+    private static function forkTurnHooksCmd(
+        HookManager $hooks,
+        HookContext $promptContext,
+        ?HookContext $sessionContext,
+        int $generation,
+        string $text,
+        CancellationToken $cancellation,
+    ): \Closure {
+        $run = static function () use ($hooks, $promptContext, $sessionContext): array {
+            $prompt = $hooks->userPromptSubmit($promptContext);
+            $session = ($sessionContext !== null && $prompt->permitsExecution())
+                ? $hooks->sessionStart($sessionContext)
+                : null;
+
+            return [$prompt, $session];
+        };
+
+        return Cmd::promise(static function () use ($run, $generation, $text, $cancellation): PromiseInterface {
+            $deferred = new Deferred();
+
+            if ($cancellation->isCancelled()) {
+                $deferred->resolve(null);
+
+                return $deferred->promise();
+            }
+
+            $file = \SugarCraft\Crush\Support\ToolIpcFiles::reserve(
+                \SugarCraft\Crush\Support\ToolIpcFiles::CHAT_PREFIX,
+                'json',
+            );
+            $pid = pcntl_fork();
+
+            if ($pid === -1) {
+                [$prompt, $session] = $run();
+                $deferred->resolve(new TurnHooksResolvedMsg($generation, $text, $prompt, $session));
+
+                return $deferred->promise();
+            }
+
+            if ($pid === 0) {
+                [$prompt, $session] = $run();
+                $json = json_encode([
+                    'prompt' => self::turnHookResultToArray($prompt),
+                    'session' => $session === null ? null : self::turnHookResultToArray($session),
+                ], JSON_INVALID_UTF8_SUBSTITUTE);
+                \SugarCraft\Crush\Support\ToolIpcFiles::write($file, $json === false ? '' : $json);
+                \SugarCraft\Crush\Support\ForkedChild::exitNow(0);
+            }
+
+            $loop = Loop::get();
+            $settled = false;
+            $timer = null;
+            $timer = $loop->addPeriodicTimer(
+                self::TURN_HOOK_POLL_SECONDS,
+                static function () use ($pid, $file, $generation, $text, $cancellation, $loop, &$settled, &$timer, $deferred): void {
+                    if ($settled) {
+                        return;
+                    }
+
+                    if ($cancellation->isCancelled()) {
+                        $settled = true;
+                        $loop->cancelTimer($timer);
+                        \SugarCraft\Crush\Support\ProcessContainment::killTree($pid);
+                        self::reapKilledToolChildren([$pid]);
+                        \SugarCraft\Crush\Support\ToolIpcFiles::discard($file);
+                        $deferred->resolve(null);
+
+                        return;
+                    }
+
+                    $status = 0;
+                    if (pcntl_waitpid($pid, $status, WNOHANG) !== $pid) {
+                        return;
+                    }
+
+                    $settled = true;
+                    $loop->cancelTimer($timer);
+                    [$prompt, $session] = self::collectTurnHookResults($file);
+                    $deferred->resolve(new TurnHooksResolvedMsg($generation, $text, $prompt, $session));
+                },
+            );
+
+            return $deferred->promise();
+        });
+    }
+
+    /**
+     * @return array{action: string, message: string, modifiedInput: ?string, additionalContext: string}
+     */
+    private static function turnHookResultToArray(\SugarCraft\Crush\Hooks\HookResult $result): array
+    {
+        return [
+            'action' => $result->action,
+            'message' => $result->message,
+            'modifiedInput' => $result->modifiedInput,
+            'additionalContext' => $result->additionalContext,
+        ];
+    }
+
+    /**
+     * Read back what a turn-hook child wrote, discarding the payload either way.
+     * Anything unreadable is a DENY — see {@see forkTurnHooksCmd()}.
+     *
+     * @return array{0: \SugarCraft\Crush\Hooks\HookResult, 1: ?\SugarCraft\Crush\Hooks\HookResult}
+     */
+    private static function collectTurnHookResults(string $file): array
+    {
+        $data = self::takeIpcPayload($file);
+
+        $decoded = ($data !== false && $data !== '') ? json_decode($data, true) : null;
+        $prompt = \is_array($decoded) ? self::turnHookResultFromArray($decoded['prompt'] ?? null) : null;
+        if ($prompt === null) {
+            return [\SugarCraft\Crush\Hooks\HookResult::deny(
+                'the prompt hooks ended without reporting a verdict',
+            ), null];
+        }
+
+        return [$prompt, self::turnHookResultFromArray($decoded['session'] ?? null)];
+    }
+
+    private static function turnHookResultFromArray(mixed $row): ?\SugarCraft\Crush\Hooks\HookResult
+    {
+        if (!\is_array($row) || !\is_string($row['action'] ?? null)) {
+            return null;
+        }
+
+        return new \SugarCraft\Crush\Hooks\HookResult(
+            $row['action'],
+            \is_string($row['message'] ?? null) ? $row['message'] : '',
+            \is_string($row['modifiedInput'] ?? null) ? $row['modifiedInput'] : null,
+            \is_string($row['additionalContext'] ?? null) ? $row['additionalContext'] : '',
+        );
+    }
+
+    /**
+     * Re-enter {@see submit()} with a forked chain's verdicts (audit 15b-04).
+     *
+     * Dropped when it is stale: no submission is pending, or the generation moved
+     * (a double-Escape cancelled it), or it judged other text.
+     *
+     * Otherwise the box is seeded back with the draft Enter consumed — text and
+     * cursor, so {@see dispatchTurn()}'s `/rewind` capture is what the synchronous
+     * path recorded — and submit() runs again from the top against the CURRENT
+     * state, with {@see $resolvedTurnHooks} standing in for the hook run. Whatever
+     * the user typed during the wait is put back afterwards:
+     *  - the turn went out (or parked): dispatchTurn() blanked the box, and their
+     *    new draft replaces the blank;
+     *  - the prompt was refused: the refusal leaves the submitted text in the box,
+     *    which is kept when they typed nothing, and replaced by their draft when
+     *    they did (the notice then quotes the prompt — see dispatchTurnHooks()).
+     *
+     * A refusal ends the "turn" the pending state stood in for, so the prompts
+     * queued during the wait are released here, as at every other turn end.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function resumeTurnHooks(TurnHooksResolvedMsg $msg): array
+    {
+        $pending = $this->pendingTurnHooks;
+        if ($pending === null || $msg->generation !== $this->generation || $msg->text !== $pending['text']) {
+            return [$this, null];
+        }
+
+        $typedDraft = $this->input;
+        $boxOccupied = trim($this->inputBuf) !== '';
+
+        [$after, $cmd] = $this->mutate([
+            'inFlight' => false,
+            'inFlightCancellation' => null,
+            'pendingTurnHooks' => null,
+            'resolvedTurnHooks' => [
+                'text' => $msg->text,
+                'prompt' => $msg->prompt,
+                'session' => $msg->session,
+                'boxOccupied' => $boxOccupied,
+            ],
+            'inputBuf' => $pending['draft'],
+        ])->withInputCursor($pending['cursor'])->submit();
+
+        $after = $after->mutate(['resolvedTurnHooks' => null]);
+        if ($after->inFlight || $boxOccupied) {
+            $after = $after->mutate(['input' => $typedDraft]);
+        }
+
+        if ($after->inFlight) {
+            return [$after, $cmd];
+        }
+
+        return self::releaseQueuedPrompts([$after, $cmd]);
     }
 
     /**
@@ -4976,14 +5392,28 @@ final class Chat implements Model
      * above, or crashed) is reported as a timeout error rather than silently
      * dropped.
      */
-    private function collectToolResult(string $file, ToolCall $toolCall): ToolResult
+    /**
+     * Read one forked child's IPC payload and discard it, whether or not it was
+     * readable — shared by the tool fan-out ({@see collectToolResult()}) and the
+     * turn-hook fork ({@see collectTurnHookResults()}), which write through the
+     * same {@see \SugarCraft\Crush\Support\ToolIpcFiles} file shape.
+     *
+     * Unconditionally, and including the `.partial` sibling: the old "only
+     * unlink what we successfully read" left an empty or half-written payload
+     * behind forever, which is the same leak ToolIpcFiles::sweep() exists to mop
+     * up after a cancel.
+     */
+    private static function takeIpcPayload(string $file): string|false
     {
         $data = is_file($file) ? file_get_contents($file) : false;
-        // Unconditionally, and including the `.partial` sibling: the old
-        // "only unlink what we successfully read" left an empty or
-        // half-written payload behind forever, which is the same leak
-        // ToolIpcFiles::sweep() exists to mop up after a cancel.
         \SugarCraft\Crush\Support\ToolIpcFiles::discard($file);
+
+        return $data;
+    }
+
+    private function collectToolResult(string $file, ToolCall $toolCall): ToolResult
+    {
+        $data = self::takeIpcPayload($file);
 
         $decoded = ($data !== false && $data !== '') ? json_decode($data, true) : null;
         if (!is_array($decoded) || !is_array($decoded['result'] ?? null)) {
@@ -7036,6 +7466,8 @@ final class Chat implements Model
             // slate. Same reason 'tokenTracker' above is carried by identity.
             'consecutiveRefillCompactions' => $this->consecutiveRefillCompactions,
             'queuedPrompts' => $this->queuedPrompts,
+            'pendingTurnHooks' => $this->pendingTurnHooks,
+            'resolvedTurnHooks' => $this->resolvedTurnHooks,
             'commandLoader' => $this->commandLoader,
             // Carried, so the disk walk happens once per process rather than
             // once per keystroke — see the property's doc-block.
