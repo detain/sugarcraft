@@ -185,10 +185,14 @@ turn.
 `modelPrices` is that argument mirrored on the price axis rather than the size
 axis. It declares rates — **USD per 1M tokens**, `{"<model>": {"input": 7.5,
 "output": 30}}` — for models the OpenAI-shaped provider has no built-in price
-for, overriding or extending its table. Unset is not zero either: a model with
-no rate anywhere bills $0.00 as a disclosed **lower bound** — the turn earns a
-system notice naming it, and `/budget` marks the session total as under-counted
-— rather than the fabricated cent-per-thousand the old fallback invented. It is
+for, overriding or extending its table. An optional `"cached"` rate prices
+cache-hit prompt tokens (`prompt_tokens_details.cached_tokens`); an entry
+without one bills them at its own `input` rate, because a named model's entry
+replaces the built-in row and its cached discount together. Unset is not zero
+either: a model with no rate anywhere bills $0.00 as a disclosed **lower
+bound** — the turn earns a system notice naming it, and `/budget` marks the
+session total as under-counted — rather than the fabricated cent-per-thousand
+the old fallback invented. It is
 user-tier only because a checked-out repository that could supply this map
 could zero a rate and blind the spend cap on the operator's credential, which
 is the same money decision `maxOutputTokens` refuses to delegate.

@@ -35,12 +35,13 @@ final class ContextWindow
      *
      * It is NOT a conservative floor, and an earlier draft of this docblock
      * claimed it was. Measured over every `contextWindow()` in
-     * `src/Providers/`, 100,000 is LARGER than six provider/model pairs:
+     * `src/Providers/`, 100,000 is LARGER than five provider/model pairs:
      * {@see \SugarCraft\Crush\Providers\OpenAIProvider} reports 8,192 for
-     * `gpt-4` and for its `default` arm and 16,385 for `gpt-3.5-turbo`, and
+     * `gpt-4` and 16,385 for `gpt-3.5-turbo` (its unknown-model arm answers
+     * 0 since audit A13, landing on this fallback), and
      * {@see \SugarCraft\Crush\Providers\BedrockProvider} reports 8,192 for
      * both `meta.llama3-*` models and for its `default` arm. So on an unknown
-     * backend this errs toward compacting LATER than those six would, not
+     * backend this errs toward compacting LATER than those five would, not
      * earlier. That is the honest trade: guessing small would compact a
      * shelled-out command's session it has no reason to touch, and there is no
      * value that is simultaneously safe for a 8,192-token model and not

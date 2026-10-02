@@ -763,7 +763,7 @@ JSON;
         [$provider, $response] = $this->p4s2OpenAiCompleteWith($usageArray);
 
         $this->assertSame(2100, $response->tokensUsed, 'the wire total, exactly as before P4.S2');
-        $this->assertEqualsWithDelta(0.006, $response->costUsd, 0.0000001, 'pricing is (2000*0.0025 + 100*0.01)/1000 at the corrected gpt-4o table - cache-aware pricing is a REPORTED follow-up, not this step');
+        $this->assertEqualsWithDelta(0.00408, $response->costUsd, 0.0000001, 'cache-aware pricing (audit A14): (464 fresh*0.0025 + 1536 cached*0.00125 + 100*0.01)/1000 at the gpt-4o table - this pinned the full-rate 0.006 before the follow-up landed');
 
         $usage = $provider->parseUsage($usageArray);
         $this->assertSame(2100, $usage->totalTokens);
@@ -771,7 +771,7 @@ JSON;
         $this->assertSame(100, $usage->outputTokens);
         $this->assertSame(1536, $usage->cacheReadTokens);
         $this->assertNull($usage->cacheCreationTokens, 'OpenAI prompt caching has no separately-counted write - the field does not exist and must not be invented');
-        $this->assertEqualsWithDelta(0.006, $usage->costUsd, 0.0000001, 'the parsed Usage carries the SAME cost the response does - one source, no drift');
+        $this->assertEqualsWithDelta(0.00408, $usage->costUsd, 0.0000001, 'the parsed Usage carries the SAME cost the response does - one source, no drift');
     }
 
     public function testP4S2OpenAiWithoutPromptTokenDetailsReportsNoCache(): void
@@ -1455,11 +1455,10 @@ JSON;
         $this->assertNull($custom->cacheReadTokens, 'custom: same family, same refusal');
         $this->assertSame(25, $custom->totalTokens, 'custom: the int total survives the junk neighbours');
 
-        // OpenAIProvider: prompt/completion stay NUMERIC because this arm
-        // prices them with RAW wire arithmetic in calculateCost() - a
-        // non-numeric prompt crashes THERE regardless of usageInt
-        // (pre-existing, outside this seam, reported not touched). The junk
-        // sits where the helper actually reads it: a nested-array
+        // OpenAIProvider: calculateCost() reads its counts through usageInt
+        // too since audit A14 made it cache-aware (it now prices
+        // cached_tokens, so raw wire arithmetic would crash on the junk
+        // below). The junk sits where the helper reads it: a nested-array
         // cached_tokens the old cast counted as 1, and a string total.
         $openai = (new OpenAIProvider($this->createMock(ClientContract::class), 'gpt-4o'))
             ->parseUsage([

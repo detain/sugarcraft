@@ -63,11 +63,35 @@ final readonly class OpenAIProvider implements ProviderInterface
     ];
 
     /**
-     * @param array<string, array{input?: float|int, output?: float|int}> $modelPrices
+     * Audit A14: built-in USD-per-1K rates for CACHED prompt tokens
+     * (`prompt_tokens_details.cached_tokens`), from OpenAI's published
+     * cached-input column (per 1M: gpt-4o 1.25, gpt-4o-mini 0.075, gpt-4.1
+     * 0.50, gpt-4.1-mini 0.10).
+     *
+     * A PRICE_TABLE model missing here has no prompt caching (gpt-4-turbo,
+     * gpt-4, gpt-3.5-turbo), so its cached tokens bill at the full input rate
+     * — a discount is never guessed. Keyed separately rather than as a third
+     * PRICE_TABLE column so the two-direction row shape stays what
+     * {@see costPer1kTokens()} and its callers read.
+     *
+     * @var array<string, float>
+     */
+    private const CACHED_INPUT_TABLE = [
+        'gpt-4o' => 0.00125,
+        'gpt-4o-mini' => 0.000075,
+        'gpt-4.1' => 0.0005,
+        'gpt-4.1-mini' => 0.0001,
+    ];
+
+    /**
+     * @param array<string, array{input?: float|int, output?: float|int, cached?: float|int}> $modelPrices
      *        Operator-declared USD-per-1M rates from the user-tier
      *        `modelPrices` config key, overriding/extending {@see PRICE_TABLE}
      *        (per-1M because that is the unit every price sheet publishes in;
-     *        the divide to per-1K happens once in {@see costPer1kTokens()}).
+     *        the divide to per-1K happens once in {@see declaredRate()}). The
+     *        optional `cached` rate prices cache-hit prompt tokens; an entry
+     *        without it bills them at its own `input` rate (see
+     *        {@see cachedInputPer1k()}).
      */
     public function __construct(
         private ClientContract $client,
@@ -100,14 +124,26 @@ final readonly class OpenAIProvider implements ProviderInterface
         return false;
     }
 
+    /**
+     * Every {@see PRICE_TABLE} model is sized here (audit A13: gpt-4o-mini
+     * and the gpt-4.1 pair were priced but fell to an 8,192 default, so
+     * Chat's context tiers fired after a few messages on 128k / 1M models).
+     * An unknown model answers 0 — "unknown" per
+     * {@see ProviderInterface::contextWindow()} — so
+     * {@see \SugarCraft\Crush\Context\ContextWindow::resolve()} applies its
+     * one named fallback instead of this file guessing a denominator.
+     */
     public function contextWindow(): int
     {
         return match ($this->defaultModel) {
             'gpt-4o' => 128_000,
+            'gpt-4o-mini' => 128_000,
+            'gpt-4.1' => 1_047_576,
+            'gpt-4.1-mini' => 1_047_576,
             'gpt-4-turbo' => 128_000,
             'gpt-4' => 8_192,
             'gpt-3.5-turbo' => 16_385,
-            default => 8_192,
+            default => 0,
         };
     }
 
@@ -129,16 +165,7 @@ final readonly class OpenAIProvider implements ProviderInterface
         // which Usage::new() floors to a fake-free 0.0 with no unpriced
         // signal at all).
         if (array_key_exists($model, $this->modelPrices)) {
-            $entry = $this->modelPrices[$model];
-            $declared = is_array($entry) ? ($entry[$direction] ?? null) : null;
-            if (!is_numeric($declared)) {
-                return null;
-            }
-            $rate = ((float) $declared) / 1000; // config speaks USD-per-1M
-
-            // Zero is legal (a genuinely free model); sign-flipped or
-            // non-finite rates are not, and go the loud unpriced road.
-            return $rate >= 0.0 && is_finite($rate) ? $rate : null;
+            return $this->declaredRate($model, $direction);
         }
 
         $row = self::PRICE_TABLE[$model] ?? null;
@@ -147,6 +174,50 @@ final readonly class OpenAIProvider implements ProviderInterface
         }
 
         return $direction === 'input' ? $row[0] : $row[1];
+    }
+
+    /**
+     * One operator-declared rate, per-1K, for a model the operator NAMED in
+     * `modelPrices`; null when the declaration fails validation.
+     */
+    private function declaredRate(string $model, string $key): ?float
+    {
+        $entry = $this->modelPrices[$model];
+        $declared = is_array($entry) ? ($entry[$key] ?? null) : null;
+        if (!is_numeric($declared)) {
+            return null;
+        }
+        $rate = ((float) $declared) / 1000; // config speaks USD-per-1M
+
+        // Zero is legal (a genuinely free model); sign-flipped or
+        // non-finite rates are not, and go the loud unpriced road.
+        return $rate >= 0.0 && is_finite($rate) ? $rate : null;
+    }
+
+    /**
+     * USD per 1K CACHED prompt tokens, given the model's already-resolved
+     * input rate; null only when the operator declared a `cached` rate that
+     * fails validation (the same loud road as a broken input/output rate).
+     *
+     * With no published discount on file the answer is the full input rate:
+     * billing a cache hit like any other prompt token can only overstate,
+     * never invent a saving. An operator entry is authoritative for its model
+     * (review r90), so a named model WITHOUT a `cached` key does not borrow
+     * the built-in discount of the row it replaced — that discount was
+     * quoted against a different input rate.
+     */
+    private function cachedInputPer1k(string $model, float $inputRate): ?float
+    {
+        if (array_key_exists($model, $this->modelPrices)) {
+            $entry = $this->modelPrices[$model];
+            if (!is_array($entry) || !array_key_exists('cached', $entry)) {
+                return $inputRate;
+            }
+
+            return $this->declaredRate($model, 'cached');
+        }
+
+        return self::CACHED_INPUT_TABLE[$model] ?? $inputRate;
     }
 
     public function complete(CompleteRequest $request): CompleteResponse
@@ -405,13 +476,13 @@ final readonly class OpenAIProvider implements ProviderInterface
      * Cost: `costUsd` on the returned Usage is exactly
      * {@see calculateCost()}'s figure for `$pricingModel` (falling back to
      * this provider's default NAME only when the caller passes no request
-     * model) — the pricing table is deliberately NOT cache-aware yet (a cache
-     * read bills ~0.1x and a 5m write 1.25x the base input price per the
-     * §4.16 economics; repricing on the new buckets would silently change
-     * every paid turn's figure and is outside this step's Goal) — reported as
-     * the follow-up it is. When no rate is on file for the model, `costUsd`
-     * stays its honest lower bound 0.0 and {@see Usage::$unpricedModel}
-     * carries the name so the transcript notice and the spend-cap disclosure
+     * model), and that figure is CACHE-AWARE (audit A14): the cached part of
+     * `prompt_tokens` bills at the model's cached-input rate, the fresh
+     * remainder at the input rate — the same split the buckets below draw.
+     * OpenAI bills no cache write, so there is no write premium to add.
+     * When no rate is on file for the model, `costUsd` stays its honest
+     * lower bound 0.0 and {@see Usage::$unpricedModel} carries the name so
+     * the transcript notice and the spend-cap disclosure
      * can say WHICH zero it is — the fabricated $0.01/1k fallback this
      * replaces invented a bill the provider never sent.
      *
@@ -509,9 +580,24 @@ final readonly class OpenAIProvider implements ProviderInterface
 
     /**
      * The dollar figure for one usage document at one model's rates, or null
-     * when either side is unpriced — a half-known bill is not a bill: the
-     * completion side arriving free while the input side is unknown would
-     * understate every real call.
+     * when any rate the document needs is unpriced — a half-known bill is not
+     * a bill: the completion side arriving free while the input side is
+     * unknown would understate every real call.
+     *
+     * The figure is `(fresh × input + cached × cachedInput + completion ×
+     * output) / 1000`, where `cached` is
+     * `prompt_tokens_details.cached_tokens` and `fresh` the rest of
+     * `prompt_tokens` — the wire's prompt count INCLUDES the cached prefix,
+     * so billing all of it at the input rate (the pre-A14 formula)
+     * overstated long agentic sessions, whose prompts are mostly cache hits,
+     * by up to ~2x and tripped `/budget` caps early. Cached is capped at the
+     * prompt so a server over-reporting it cannot bill tokens never sent. A
+     * model with no cached rate on file bills cached at the full input rate
+     * ({@see cachedInputPer1k()}).
+     *
+     * Counts read through {@see usageInt()}, so a junk member (a nested
+     * array, a non-numeric string) prices as unreported rather than crashing
+     * the arithmetic.
      *
      * @param array<string, mixed> $usage
      * @param ?string              $model the model to price; null means the
@@ -528,9 +614,24 @@ final readonly class OpenAIProvider implements ProviderInterface
             return null;
         }
 
-        $promptTokens = $usage['prompt_tokens'] ?? 0;
-        $completionTokens = $usage['completion_tokens'] ?? 0;
+        $promptTokens = self::usageInt($usage['prompt_tokens'] ?? null) ?? 0;
+        $completionTokens = self::usageInt($usage['completion_tokens'] ?? null) ?? 0;
+        $details = $usage['prompt_tokens_details'] ?? null;
+        $cachedTokens = is_array($details) ? (self::usageInt($details['cached_tokens'] ?? null) ?? 0) : 0;
+        $cachedTokens = max(0, min($cachedTokens, $promptTokens));
 
-        return ($promptTokens * $input + $completionTokens * $output) / 1000;
+        // Only consult the cached rate when there is something to price at
+        // it: a broken operator `cached` declaration should not void a turn
+        // that had no cache hits, whose bill is fully known without it.
+        $cachedRate = $cachedTokens > 0 ? $this->cachedInputPer1k($model, $input) : $input;
+        if ($cachedRate === null) {
+            return null;
+        }
+
+        return (
+            ($promptTokens - $cachedTokens) * $input
+            + $cachedTokens * $cachedRate
+            + $completionTokens * $output
+        ) / 1000;
     }
 }

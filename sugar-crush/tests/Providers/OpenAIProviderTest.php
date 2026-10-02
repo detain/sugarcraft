@@ -157,12 +157,15 @@ final class OpenAIProviderTest extends TestCase
         $this->assertSame(16_385, $provider->contextWindow());
     }
 
-    public function testContextWindowForUnknownModelReturnsDefault(): void
+    public function testContextWindowForUnknownModelReturnsZeroForUnknown(): void
     {
         $client = $this->createMock(ClientContract::class);
         $provider = new OpenAIProvider($client, 'unknown-model');
 
-        $this->assertSame(8_192, $provider->contextWindow());
+        // Audit A13: this pinned an invented 8,192 default. 0 is the
+        // ProviderInterface "unknown" answer ContextWindow::resolve() maps
+        // to its one named fallback.
+        $this->assertSame(0, $provider->contextWindow());
     }
 
     // -------------------------------------------------------------------------
