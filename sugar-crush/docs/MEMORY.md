@@ -117,7 +117,8 @@ a note — so a missing note is visible to the model instead of silently absent.
 The person who wrote the note is told too, outside the prompt. At launch,
 `MemoryStore::unreadable()` reads every scope of both stores the session uses
 (`~/.sugar-crush/memory` and the repo's `.sugar-crush/memory`), and one aggregate
-row reaches the transcript and stderr, worded by `UnreadableNotes::notice()`:
+row reaches the transcript and stderr (a `-p` run, which has no transcript to
+show, prints it on stderr), worded by `UnreadableNotes::notice()`:
 
 ```text
 2 memory notes could not be read and were skipped (project: 1, user: 1); they are not in the prompt — `/memory list <scope>` names each file and why

@@ -166,6 +166,22 @@ final class BootstrapSkillSkipsTest extends TestCase
         $this->assertStringContainsString(SkillLoader::DEBUG_SKIPS_ENV, $stderr);
     }
 
+    /**
+     * THE MEMORY TWIN OF THE SAME `-p` SILENCE (audit R10). The one-shot
+     * backend reads both memory stores into its prompt, and a note it skipped
+     * as unreadable used to be reported only by {@see Bootstrap::chat()} — so
+     * the user of a `-p` run never learned a note they wrote was left out.
+     */
+    public function testAOneShotRunReportsUnreadableMemoryNotesToo(): void
+    {
+        mkdir($this->home . '/.sugar-crush/memory/user', 0700, true);
+        file_put_contents($this->home . '/.sugar-crush/memory/user/broken.md', "no frontmatter at all\n");
+
+        $stderr = $this->stderrOfAOneShotRun();
+
+        $this->assertStringContainsString('1 memory note could not be read', $stderr);
+    }
+
     /** ...and a clean tree is silent there too. */
     public function testACleanOneShotRunIsSilent(): void
     {

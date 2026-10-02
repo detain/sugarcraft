@@ -199,6 +199,11 @@ final class NonInteractive
             // when a backend was actually built here: a caller that supplied
             // one (the tests, a headless server) has scanned nothing.
             Bootstrap::reportSkillSkips();
+            // The memory twin of the same silence (audit R10): the backend's
+            // prompt reads both memory stores, and a note it skipped as
+            // unreadable — or legacy notes it just bound to this project —
+            // reached a `-p` user nowhere.
+            Bootstrap::reportMemorySkips($args->root);
             // And the other half of the same silence: a project skills
             // directory refused wholesale for resolving out of the checkout.
             Bootstrap::reportProjectTierRefusals();

@@ -4359,9 +4359,17 @@ final class Bootstrap
      * Construction time, beside {@see reportSkillSkips()} and for its reason.
      * A store that cannot be opened is no notice at all — the prompt route
      * degrades the same way ({@see memoryStoreOrNull()}).
+     *
+     * PUBLIC FOR THE `-p` PATH (audit 15d-02 residual R10), for the reason
+     * {@see reportSkillSkips()} is: {@see NonInteractive::run()} builds its
+     * backend without going through {@see chat()}, so a one-shot run fed the
+     * prompt from the same memory stores and told nobody a note had been left
+     * out. A null root is the cwd, as {@see backend()} resolves it, so the
+     * `-p` caller reads the project store its backend reads.
      */
-    private static function reportMemorySkips(?string $root): void
+    public static function reportMemorySkips(?string $root): void
     {
+        $root ??= getcwd() ?: null;
         $home = self::memoryStoreOrNull($root);
         $notices = [];
 
