@@ -396,6 +396,16 @@ CRUSH_TOOL_OUTPUT      CRUSH_MODEL       CRUSH_PROVIDER
 CRUSH_TOOL_INPUT_FILE  CRUSH_TOOL_OUTPUT_FILE
 ```
 
+`CRUSH_TOOL_INPUT` (and the file behind `CRUSH_TOOL_INPUT_FILE`) is the tool's
+arguments as JSON with **slashes and non-ASCII left unescaped** — a Read of
+`/etc/passwd` arrives as `{"file_path":"/etc/passwd"}`, not
+`{"file_path":"\/etc\/passwd"}` — so a plain `grep -qF /etc/passwd` or
+`grep -q 'rm -rf /'` guard matches what the model asked for. An invalid UTF-8
+byte is replaced with U+FFFD in the hook's copy. Arguments that cannot be
+encoded at all are **refused** with a `Hook denied:` reason before any hook
+runs; they are never handed to the chain as an empty `{}`, which a deny hook
+would read as nothing to refuse.
+
 #### The two `_FILE` variables, and why they exist
 
 **Linux caps one environment entry** at `MAX_ARG_STRLEN`, which is
@@ -710,7 +720,7 @@ include_ignored=true` all read the secret under the default
 | `Grep` | `path` (canonicalised) and `include` — not `pattern`, which is the text searched for |
 | `Glob` | `path` (canonicalised) and `pattern` — `**/.env*` is refused; a `**/*` listing that happens to include `.env` is not, because naming a file is not reading it |
 | `Lsp` | `path`, canonicalised |
-| `mcp__*` | every string leaf of the decoded arguments, at any depth (not the raw JSON, which spells `/` as `\/`) — so an MCP call whose free text merely mentions `.env` is refused too |
+| `mcp__*` | every string leaf of the decoded arguments, at any depth (not the raw JSON text) — so an MCP call whose free text merely mentions `.env` is refused too |
 
 `Read`, `Grep`, `Glob` and `Lsp` cannot write, so they skip the write-only
 policy patterns (`.sugar-crush/hooks.yaml` and friends, plus `.git/hooks/` and

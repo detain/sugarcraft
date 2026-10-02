@@ -1819,6 +1819,9 @@ final class Runtime
         }
 
         $context = $this->hookContext($toolCall, $tool, $app);
+        if (is_string($context)) {
+            return $this->failure($toolCall, $context, $onEvent);
+        }
 
         [$args, $denial, $context, $preContext] = $this->gate($toolCall, $context, $onPermissionRequest);
         if ($denial !== null) {
@@ -1944,6 +1947,26 @@ final class Runtime
             }
 
             $context = $this->hookContext($toolCall, $tool, $app);
+            if (is_string($context)) {
+                // The same refusal the sequential path gives, in the shape of
+                // the not-found job above: settled, never forked, released
+                // through failure() in provider order.
+                $jobs[] = [
+                    'call' => $toolCall,
+                    'tool' => $tool,
+                    'context' => null,
+                    'args' => [],
+                    'denied' => $context,
+                    'preContext' => '',
+                    'pid' => null,
+                    'file' => null,
+                    'result' => null,
+                    'settled' => true,
+                ];
+
+                continue;
+            }
+
             [$args, $denial, $context, $preContext] = $this->gate($toolCall, $context, $onPermissionRequest);
 
             $jobs[] = [
@@ -2706,19 +2729,68 @@ final class Runtime
     }
 
     /**
-     * The {@see HookContext} both dispatch paths gate on.
+     * The {@see HookContext} both dispatch paths gate on — or, when the
+     * arguments cannot be written down as JSON at all, the DENIAL REASON for a
+     * call no hook could have judged (audit F-H3).
+     *
+     * The string arm is a verdict, not a degraded context. This used to fall
+     * back to `'{}'`, which handed every PreToolUse guard an EMPTY argument
+     * map: a deny hook grepping `$CRUSH_TOOL_INPUT` for `/etc/passwd` found
+     * nothing to refuse and the call ran with its real arguments — the guard
+     * failing OPEN on exactly the input it never saw. Refusing is the only
+     * answer that keeps the hook chain the boundary it claims to be. The arm is
+     * not model-reachable (provider tool-call JSON that decoded into these
+     * arguments re-encodes; invalid UTF-8 is substituted below, and depth or
+     * INF/NAN cannot survive a `json_decode`), so it costs a legitimate call
+     * nothing and only closes the hole for embedders that build arguments by
+     * hand.
      */
-    private function hookContext(ToolCall $toolCall, Tool $tool, App $app): HookContext
+    private function hookContext(ToolCall $toolCall, Tool $tool, App $app): HookContext|string
     {
+        try {
+            $input = self::hookInput($toolCall->arguments());
+        } catch (\JsonException $e) {
+            return DenialKind::Hook->reason(sprintf(
+                'the arguments of %s could not be encoded as JSON for the hook chain (%s), so no hook could judge them',
+                $tool->name(),
+                $e->getMessage(),
+            ));
+        }
+
         return new HookContext(
             sessionId: $app->sessionId ?? '',
             toolName: $tool->name(),
             toolArgs: $toolCall->arguments(),
-            toolInput: json_encode($toolCall->arguments()) ?: '{}',
+            toolInput: $input,
             toolOutput: '',
             model: $app->model,
             provider: $app->provider->name(),
             projectRoot: self::projectRoot($app),
+        );
+    }
+
+    /**
+     * The JSON text a hook reads as `CRUSH_TOOL_INPUT` (and its `_FILE` twin).
+     *
+     * UNESCAPED SLASHES AND UNICODE, because the documented hook idiom is a
+     * shell `grep` over that variable, and PHP's default `\/` spelling made
+     * every path-shaped guard silently miss: `grep -qF /etc/passwd` never
+     * matched `{"file_path":"\/etc\/passwd"}`, nor `grep 'rm -rf /'` the
+     * command `rm -rf \/`, so the deny never fired (audit F-H3). Escaped
+     * non-ASCII has the same shape of miss for any guard written against the
+     * literal text. INVALID_UTF8_SUBSTITUTE so a stray byte costs U+FFFD in
+     * the hook's copy rather than the whole encoding; whatever still fails
+     * throws, and {@see hookContext()} turns that into a refusal.
+     *
+     * @param array<string, mixed> $arguments
+     *
+     * @throws \JsonException
+     */
+    private static function hookInput(array $arguments): string
+    {
+        return json_encode(
+            $arguments,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR,
         );
     }
 
