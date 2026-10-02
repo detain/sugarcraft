@@ -159,7 +159,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `parallelToolCalls` | `EngineBackend::complete()` | yes |
 | `parallelToolDeadlineSeconds` | `EngineBackend::complete()` | yes |
 | `maxOutputTokens` | `EngineBackend::complete()` | **no** |
-| `modelPrices` | `ProviderFactory::createOpenAI()` → `userTierModelPrices()` | **no** |
+| `modelPrices` | `ProviderFactory::createOpenAI()`, `createVertex()`, `createBedrock()` → `userTierModelPrices()` | **no** |
 | `statusLine` | `Bootstrap::chat()` → `StatusLineCommand::fromSettings()` | **no** |
 | `layout` | `Bootstrap::app()` → `App::$dock` via `DockLayout::fromArray()` | **no** |
 | `maxToolSteps` | `Bootstrap::backend()` → `resolvedMaxToolSteps()` | **no** |
@@ -199,11 +199,15 @@ fails every request.
 
 `modelPrices` is that argument mirrored on the price axis rather than the size
 axis. It declares rates — **USD per 1M tokens**, `{"<model>": {"input": 7.5,
-"output": 30}}` — for models the OpenAI-shaped provider has no built-in price
-for, overriding or extending its table. An optional `"cached"` rate prices
-cache-hit prompt tokens (`prompt_tokens_details.cached_tokens`); an entry
-without one bills them at its own `input` rate, because a named model's entry
-replaces the built-in row and its cached discount together. Unset is not zero
+"output": 30}}` — for models the `openai`, `vertex` or `bedrock` provider has
+no built-in price for, overriding or extending its table. (Vertex and Bedrock
+only started receiving it in audit A15; before that the unpriced-model notice
+told you to set a key those two never read.) On Vertex and Bedrock a key may
+be the raw model id or its normalised family — `claude-sonnet-4-6` covers
+`us.anthropic.claude-sonnet-4-6-v1:0` too. An optional `"cached"` rate prices
+cache-hit prompt tokens (`prompt_tokens_details.cached_tokens`) on the OpenAI
+wire; an entry without one bills them at its own `input` rate, because a named
+model's entry replaces the built-in row and its cached discount together. Unset is not zero
 either: a model with no rate anywhere bills $0.00 as a disclosed **lower
 bound** — the turn earns a system notice naming it, and `/budget` marks the
 session total as under-counted — rather than the fabricated cent-per-thousand

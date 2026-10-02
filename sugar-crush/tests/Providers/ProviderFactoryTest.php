@@ -18,6 +18,7 @@ use SugarCraft\Crush\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface;
 use SugarCraft\Crush\Providers\VertexProvider;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 
 /**
@@ -26,13 +27,31 @@ use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 final class ProviderFactoryTest extends TestCase
 {
     use SlicesDeclaredMethodsTrait;
+    use HomeSandboxTrait;
 
     private ProviderFactory $factory;
+
+    private string $sandboxHome = '';
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->factory = new ProviderFactory();
+
+        // The factory reads user-tier settings (`modelPrices`, `contextWindow`,
+        // `extraBody`, `thinkingBudget`) through Bootstrap::readUserConfig();
+        // an empty sandboxed home keeps the operator's real ~/.sugar-crush out
+        // of every result below.
+        $this->sandboxHome = sys_get_temp_dir() . '/provider_factory_home_' . uniqid('', true);
+        $this->useHomeSandbox($this->sandboxHome);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->restoreHomeSandbox();
+        @rmdir($this->sandboxHome);
+
+        parent::tearDown();
     }
 
     // -------------------------------------------------------------------------
@@ -163,7 +182,7 @@ final class ProviderFactoryTest extends TestCase
         $this->assertArrayHasKey('model', $config);
         $this->assertSame('bedrock', $config['type']);
         $this->assertSame('us-east-1', $config['region']);
-        $this->assertSame('anthropic.claude-sonnet-4-6', $config['model']);
+        $this->assertSame('us.anthropic.claude-sonnet-4-6', $config['model']);
     }
 
     public function testDefaultConfigVertexHasRequiredKeys(): void

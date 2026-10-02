@@ -75,7 +75,7 @@ final readonly class ProviderFactory
     private const TYPE_SCHEMAS = [
         'openai' => [
             'required' => ['apiKey'],
-            'optional' => ['organization', 'model'],
+            'optional' => ['organization', 'model', 'modelPrices'],
         ],
         'anthropic' => [
             'required' => ['apiKey'],
@@ -91,11 +91,11 @@ final readonly class ProviderFactory
         ],
         'bedrock' => [
             'required' => ['region'],
-            'optional' => ['model'],
+            'optional' => ['model', 'modelPrices'],
         ],
         'vertex' => [
             'required' => ['projectId'],
-            'optional' => ['location', 'model'],
+            'optional' => ['location', 'model', 'modelPrices'],
         ],
         'custom' => [
             'required' => ['name', 'baseUrl', 'model'],
@@ -433,7 +433,13 @@ final readonly class ProviderFactory
             'bedrock' => [
                 'type' => 'bedrock',
                 'region' => 'us-east-1',
-                'model' => 'anthropic.claude-sonnet-4-6',
+                // Sourced from the provider rather than repeated (audit A20):
+                // this literal still named the bare foundation-model id after
+                // the provider's own default moved to the inference-profile id
+                // that Claude 4.x on-demand throughput requires, so the one
+                // config a default `bedrock` launch actually reaches sent the
+                // shape AWS refuses.
+                'model' => BedrockProvider::DEFAULT_MODEL,
             ],
             'vertex' => [
                 'type' => 'vertex',
@@ -624,9 +630,25 @@ final readonly class ProviderFactory
         // `readUserConfig()` answers `mergedConfig(true)`, the project tier has
         // already been stripped from `modelPrices` inside that merge (it is
         // user-tier only), so this read cannot be poisoned by a checkout.
+        return new OpenAIProvider($client, $model, self::modelPricesFor($config));
+    }
+
+    /**
+     * The `modelPrices` a provider is built with: the provider block's own
+     * map when it carries one (the narrower statement), else the user-tier
+     * setting ({@see userTierModelPrices()}). One helper for the three
+     * providers with a price table - OpenAI, Vertex and Bedrock - because
+     * audit A15 found the second two never received the user's map at all,
+     * while Chat's unpriced-model notice told the user to set it.
+     *
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private static function modelPricesFor(array $config): array
+    {
         $prices = $config['modelPrices'] ?? self::userTierModelPrices();
 
-        return new OpenAIProvider($client, $model, is_array($prices) ? $prices : []);
+        return is_array($prices) ? $prices : [];
     }
 
     /**
@@ -1036,6 +1058,7 @@ final readonly class ProviderFactory
         return BedrockProvider::create(
             region: $config['region'],
             model: $config['model'] ?? null,
+            modelPrices: self::modelPricesFor($config),
         );
     }
 
@@ -1048,6 +1071,7 @@ final readonly class ProviderFactory
             projectId: $config['projectId'],
             location: $config['location'] ?? 'us-central1',
             model: $config['model'] ?? 'claude-3-sonnet@20240229',
+            modelPrices: self::modelPricesFor($config),
         );
     }
 

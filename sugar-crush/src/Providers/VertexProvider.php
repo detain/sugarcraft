@@ -241,10 +241,9 @@ final readonly class VertexProvider implements ProviderInterface
      *        {@see OpenAIProvider}'s `modelPrices` (per-1M because that is the
      *        unit price sheets publish in; divided to per-1K once in
      *        {@see declaredRate()}). Overrides/extends {@see PRICE_TABLE}.
-     *        NOT YET FED FROM CONFIG: `ProviderFactory::createVertex()` does
-     *        not pass the user-tier `modelPrices` map here today, so this
-     *        seam is reachable only by a caller that constructs the provider
-     *        itself - wiring it is a factory change outside this class.
+     *        Fed from config by {@see ProviderFactory::createVertex()}: the
+     *        provider block's own `modelPrices`, else the user-tier
+     *        `modelPrices` setting (audit A15).
      */
     public function __construct(
         private string $projectId,

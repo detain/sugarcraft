@@ -55,8 +55,12 @@ final readonly class BedrockProvider implements ProviderInterface
      * UNVERIFIED-live: no AWS credentials exist for this repo, so the refusal
      * of the bare id and the acceptance of this one rest on AWS's published
      * inference-profile documentation, not on a call.
+     *
+     * Public so {@see ProviderFactory::defaultConfig()} can source the
+     * `bedrock` default from here instead of repeating a literal: that copy
+     * still said the bare id after this one moved (audit A20, remaining half).
      */
-    private const DEFAULT_MODEL = 'us.anthropic.claude-sonnet-4-6';
+    public const DEFAULT_MODEL = 'us.anthropic.claude-sonnet-4-6';
 
     /**
      * Built-in USD-per-1K rates, keyed by the NORMALISED family id
@@ -186,10 +190,9 @@ final readonly class BedrockProvider implements ProviderInterface
      *        Operator-declared USD-per-1M rates, the same shape and rules as
      *        {@see OpenAIProvider}'s `modelPrices`, keyed by the raw model id
      *        or its normalised family; overrides/extends {@see PRICE_TABLE}.
-     *        NOT YET FED FROM CONFIG: `ProviderFactory::createBedrock()` does
-     *        not pass the user-tier `modelPrices` map here today, so this
-     *        seam is reachable only by a caller that constructs the provider
-     *        itself - wiring it is a factory change outside this class.
+     *        Fed from config by {@see ProviderFactory::createBedrock()}: the
+     *        provider block's own `modelPrices`, else the user-tier
+     *        `modelPrices` setting (audit A15).
      */
     public function __construct(
         private BedrockRuntimeClient $client,

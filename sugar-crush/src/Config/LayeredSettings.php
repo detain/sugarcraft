@@ -215,12 +215,13 @@ final class LayeredSettings
      *                 (E707); unset means the key is absent from the request and
      *                 each provider's own default applies.
      *  - `modelPrices`
-     *                 {@see \SugarCraft\Crush\Providers\OpenAIProvider}'s rate
-     *                 table — USD per 1M tokens per model (`{"input": …,
+     *                 the OpenAI, Vertex and Bedrock providers' rate tables —
+     *                 USD per 1M tokens per model (`{"input": …,
      *                 "output": …}`), read by
-     *                 {@see \SugarCraft\Crush\Providers\ProviderFactory::createOpenAI()}
-     *                 off this merged view and passed as the provider's price
-     *                 overrides. It is USER-TIER ONLY on the same money axis as
+     *                 {@see \SugarCraft\Crush\Providers\ProviderFactory::createOpenAI()},
+     *                 `createVertex()` and `createBedrock()` (the last two since
+     *                 audit A15) off this merged view and passed as each
+     *                 provider's price overrides. It is USER-TIER ONLY on the same money axis as
      *                 `maxOutputTokens`, mirrored: that key can raise what ONE
      *                 request bills, this one can lower what EVERY token bills —
      *                 a project-supplied map could zero a rate and silently blind
