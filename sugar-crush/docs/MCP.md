@@ -94,8 +94,8 @@ Four types, and they are the four `McpClient::startServer()` constructs:
 | `git` | `GitMcpServer` | `path` (omitted → this project) |
 | `claude-mcp` | `ClaudeCodeMcpServer` | none — the repository names nothing |
 
-Any other `type` — beyond the four above and the aliases below — fails that
-one entry with `Unknown MCP server type: …`. It costs only its own server:
+Any other `type` — beyond the four above and the aliases below — **throws**
+`Unknown MCP server type: …` for that one entry, and it costs only its own server:
 `McpClient::startServers()` attempts every entry whatever its position in the
 file, collects each failure, and throws one report after the loop naming the
 entries that failed. That throw is caught in `Bootstrap::mcpClient()`, reported
