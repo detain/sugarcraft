@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Providers;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\UserMessage;
@@ -41,6 +42,9 @@ final readonly class CustomProvider implements ProviderInterface
      * @var list<string>
      */
     private const TRUNCATED_FINISH_REASONS = ['length', 'abort'];
+
+    /** Bytes of a dropped call's raw arguments quoted in its warning. */
+    private const WARNING_EXCERPT_LIMIT = 200;
 
     public function __construct(
         private string $name,
@@ -284,6 +288,10 @@ final readonly class CustomProvider implements ProviderInterface
             $sawFinish = false;
             $sawDone = false;
 
+            // Audit 15a A4: the LAST non-null `finish_reason`, read after the
+            // loop to decide how leftover tool-call fragments are flushed.
+            $streamFinishReason = null;
+
             while (!$stream->eof()) {
                 $chunk = $stream->read(8192);
                 $buffer .= $chunk;
@@ -335,9 +343,23 @@ final readonly class CustomProvider implements ProviderInterface
                         // the reply was cut; when the closing frame also
                         // carries a delta, parseChunk() rides the flag on it.
                         $finishReason = $data['choices'][0]['finish_reason'] ?? null;
+                        $streamFinishReason = $finishReason ?? $streamFinishReason;
                         $hasDelta = isset($data['choices'][0]['delta']);
                         if ($hasDelta) {
                             yield $this->parseChunk($data, $toolCallBuffer);
+                        } elseif ($finishReason !== null && is_array($data['choices'][0] ?? null)) {
+                            // Audit 15a A4: a finish frame with `"delta":
+                            // null` (or none) must still run through
+                            // parseChunk(), because a `tool_calls` finish is
+                            // what drains the fragment buffer - skipping it
+                            // lost every streamed call on that shape. It
+                            // carries no text, so it is yielded only when it
+                            // assembled calls; a truncating end's flag still
+                            // rides the flag-only frame below.
+                            $finishChunk = $this->parseChunk($data, $toolCallBuffer);
+                            if ($finishChunk->toolCalls !== null) {
+                                yield $finishChunk;
+                            }
                         } elseif (!isset($data['choices'][0]) && is_array($data['usage'] ?? null)) {
                             // The include_usage terminal frame: usage present,
                             // choices empty. Captured, not yielded — the Sglang
@@ -383,6 +405,32 @@ final readonly class CustomProvider implements ProviderInterface
                 );
 
                 return;
+            }
+
+            // Audit 15a A4: fragments still buffered here were never emitted -
+            // the stream ended on `stop` (vLLM historically, some proxies and
+            // parser combinations end a tool-call stream that way), on a
+            // truncating reason, or on `[DONE]` with no finish frame at all.
+            // Flush them best-effort, riding BEFORE the usage carrier so the
+            // bill stays the stream's last event. `error` is the one end that
+            // does not flush: the server disowned its own generation.
+            if ($toolCallBuffer !== [] && $streamFinishReason !== 'error') {
+                $streamEndedTruncated = $streamFinishReason === null
+                    || in_array($streamFinishReason, self::TRUNCATED_FINISH_REASONS, true);
+                $flushed = self::flushBufferedToolCalls($toolCallBuffer, $streamEndedTruncated, $streamFinishReason);
+
+                if ($flushed !== null) {
+                    // Empty content: the fragments streamed as tool deltas,
+                    // not text. `truncated` states what the wire said, so a
+                    // clean `stop` end is not mistaken for a length stop.
+                    yield new CompleteResponse(
+                        content: '',
+                        toolCalls: $flushed,
+                        tokensUsed: 0,
+                        costUsd: 0.0,
+                        truncated: $streamEndedTruncated,
+                    );
+                }
             }
 
             if ($streamUsage !== null) {
@@ -618,7 +666,8 @@ final readonly class CustomProvider implements ProviderInterface
      */
     private function parseChunk(array $data, array &$toolCallBuffer = []): CompleteResponse
     {
-        $delta = $data['choices'][0]['delta'] ?? [];
+        // Audit 15a A4: `"delta": null` on a finish frame parses as empty.
+        $delta = is_array($data['choices'][0]['delta'] ?? null) ? $data['choices'][0]['delta'] : [];
         $finishReason = $data['choices'][0]['finish_reason'] ?? null;
 
         $toolCalls = $this->resolveStreamedToolCalls($delta, $finishReason, $toolCallBuffer);
@@ -659,6 +708,10 @@ final readonly class CustomProvider implements ProviderInterface
      * discarded here every time - `completeStream()` could never deliver a
      * tool call, only `complete()` (non-streaming) could.
      *
+     * On any other end the buffer is deliberately left intact here:
+     * {@see flushBufferedToolCalls()} drains it at the generator's terminal
+     * seam (audit 15a A4).
+     *
      * @param array<string, mixed> $delta
      * @param array<int, array{id?: ?string, name?: ?string, arguments?: string}> $toolCallBuffer
      * @return ?array<int, ToolCall>
@@ -688,5 +741,79 @@ final readonly class CustomProvider implements ProviderInterface
         $toolCallBuffer = [];
 
         return $toolCalls;
+    }
+
+    /**
+     * Audit 15a A4: drains tool-call fragments a stream left buffered because
+     * it never sent a `finish_reason: "tool_calls"` - it ended on `stop`, on
+     * a truncating reason, or on `[DONE]` alone.
+     *
+     * Decode-or-drop, never half-decoded: in none of these ends did the
+     * server declare the calls complete, so a payload that is not a complete
+     * JSON object may be a call that was never finished, and executing it is
+     * the silent-corruption failure the drop prevents. Each drop names itself
+     * through {@see RuntimeNoticeSink::warn()}. An EMPTY payload is a genuine
+     * zero-argument call on a clean end (every fragment the server meant to
+     * send arrived) and is emitted with `[]`; on a truncated end it is
+     * indistinguishable from an opener whose argument deltas were cut off,
+     * so it drops.
+     *
+     * @param array<int, array{id?: ?string, name?: ?string, arguments?: mixed}> $toolCallBuffer
+     * @return ?list<ToolCall> null when nothing survived, so no frame is yielded
+     */
+    private static function flushBufferedToolCalls(array $toolCallBuffer, bool $truncated, ?string $finishReason): ?array
+    {
+        $why = $truncated
+            ? 'the stream was truncated before its arguments completed'
+            : sprintf(
+                'the stream ended with finish_reason "%s" without declaring its tool calls complete',
+                (string) $finishReason,
+            );
+        $calls = [];
+
+        foreach ($toolCallBuffer as $tc) {
+            $name = (string) ($tc['name'] ?? '');
+            $raw = $tc['arguments'] ?? '';
+            $rawString = is_string($raw) ? $raw : '';
+
+            if (is_array($raw)) {
+                $arguments = $raw;
+            } elseif (trim($rawString) === '') {
+                if ($truncated) {
+                    RuntimeNoticeSink::warn(sprintf(
+                        'CustomProvider: tool call "%s" arguments never streamed (empty payload); '
+                        . 'the call is being DROPPED, not executed, because %s.',
+                        $name,
+                        $why,
+                    ));
+                    continue;
+                }
+                $arguments = [];
+            } else {
+                $decoded = json_decode($rawString, true);
+                if (!is_array($decoded)) {
+                    RuntimeNoticeSink::warn(sprintf(
+                        'CustomProvider: tool call "%s" arguments are not a complete JSON object (%s); '
+                        . 'the call is being DROPPED, not executed, because %s. Raw payload: %s',
+                        $name,
+                        json_last_error() === JSON_ERROR_NONE ? 'decoded to ' . get_debug_type($decoded) : json_last_error_msg(),
+                        $why,
+                        strlen($rawString) <= self::WARNING_EXCERPT_LIMIT
+                            ? $rawString
+                            : substr($rawString, 0, self::WARNING_EXCERPT_LIMIT) . ' [...]',
+                    ));
+                    continue;
+                }
+                $arguments = $decoded;
+            }
+
+            $calls[] = ToolCall::fromArray([
+                'id' => $tc['id'] ?? '',
+                'name' => $name,
+                'arguments' => $arguments,
+            ]);
+        }
+
+        return $calls === [] ? null : $calls;
     }
 }

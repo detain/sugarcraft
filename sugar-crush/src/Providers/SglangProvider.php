@@ -64,13 +64,15 @@ final readonly class SglangProvider implements ProviderInterface
      * §Q7 (qwen.md; E-32): the `finish_reason` values that mean "this
      * response was cut off", on both arms. E-32 measured `stop` and
      * `tool_calls` as the clean ends this deployment serves; `length` and
-     * `abort` are the truncating ends, and are the only strings that arm the
-     * buffered tool-call flush in {@see completeStream()} or set
-     * {@see CompleteResponse::$truncated} in {@see parseResponse()}.
-     * `error` is deliberately NOT in this set: it names Q8's error-body
-     * surfacing, whose shape work must land before any tool-call behaviour
-     * rides on it. A stream that closes with `[DONE]` but no `finish_reason`
-     * flushes too - that is the `null` arm at the call site, not a member of
+     * `abort` are the truncating ends, and are the only strings that mark
+     * the buffered tool-call flush frame in {@see completeStream()} as
+     * truncated or set {@see CompleteResponse::$truncated} in
+     * {@see parseResponse()}. Membership no longer decides WHETHER the
+     * stream flushes: since audit 15a A4 a clean `stop`-style end flushes
+     * its leftover fragments too, unflagged, and only `error` - deliberately
+     * NOT in this set, it names Q8's error-body surfacing - skips the flush.
+     * A stream that closes with `[DONE]` but no `finish_reason` counts as
+     * truncated - that is the `null` arm at the call site, not a member of
      * this list. A stream that dies before BOTH (hard cut) does not reach the
      * flush at all: it throws {@see ProviderStreamException::prematureEnd()}
      * (audit 15a A3).
@@ -802,7 +804,17 @@ final readonly class SglangProvider implements ProviderInterface
                         // the whole chain short-circuits to the previous
                         // value.
                         $streamFinishReason = $data['choices'][0]['finish_reason'] ?? $streamFinishReason;
-                        if ($data !== null && isset($data['choices'][0]['delta'])) {
+                        // Audit 15a A4: a finish frame may carry `"delta":
+                        // null` (or no delta at all). It still has to reach
+                        // parseChunk(), because a `tool_calls` finish is what
+                        // drains the fragment buffer through the normal
+                        // assembly path - skipping it used to lose every
+                        // streamed call on that shape.
+                        $hasDelta = $data !== null && isset($data['choices'][0]['delta']);
+                        $isBareFinish = !$hasDelta
+                            && is_array($data['choices'][0] ?? null)
+                            && isset($data['choices'][0]['finish_reason']);
+                        if ($hasDelta || $isBareFinish) {
                             $chunk = $this->parseChunk($data, $toolCallBuffer, $contentThinkingOn, $seenFirstContent);
 
                             $sawStructuredToolCalls = $sawStructuredToolCalls
@@ -824,8 +836,13 @@ final readonly class SglangProvider implements ProviderInterface
                             // recovery below is purely additive - it never
                             // withholds, delays or rewrites a content chunk,
                             // so the streamed-token UX is byte-for-byte what
-                            // it was.
-                            yield $chunk;
+                            // it was. A delta-less finish frame carries no
+                            // text, so it is yielded only when it assembled
+                            // calls - otherwise it would be a new, empty
+                            // chunk the stream never used to produce.
+                            if ($hasDelta || $chunk->toolCalls !== null) {
+                                yield $chunk;
+                            }
                         } elseif ($data !== null && !isset($data['choices'][0]) && is_array($data['usage'] ?? null)) {
                             // §Q6 (E-27's other half): the terminal
                             // zero-choice usage frame the `include_usage`
@@ -866,32 +883,48 @@ final readonly class SglangProvider implements ProviderInterface
                 throw ProviderStreamException::prematureEnd('SGLANG request failed: ');
             }
 
-            // §Q7 (E-32): E-32's silent-loss window. The structured path
-            // assembles only on `finish_reason: "tool_calls"`; when the turn
-            // is cut off (`length`/`abort`) - or the server closes with
-            // `[DONE]` but never sent a finish frame (`null`; a stream with
-            // neither threw above) - fragments that had already streamed
-            // used to be dropped here WITHOUT A TRACE. Flush them
-            // best-effort instead: args that decode to a complete JSON object
-            // are emitted, everything else is dropped with the existing
-            // malformed-arguments warning naming it (never half-decoded).
-            // `stop` and `tool_calls` ends keep their exact prior behaviour -
-            // the first never flushes by mandate (qwen.md §Q7(c): byte-
-            // unchanged), the second drains the buffer mid-stream, so the
-            // guard below is inert on it anyway. `error` is left silent here
-            // on purpose: that value belongs to Q8's error-body surfacing.
+            // §Q7 (E-32) + audit 15a A4: the silent-loss window. The
+            // structured path assembles only on `finish_reason: "tool_calls"`,
+            // so a buffer still holding fragments here was never emitted.
+            // Two kinds of end leave it that way:
+            //
+            // - TRUNCATED (§Q7): the turn was cut off (`length`/`abort`), or
+            //   the server closed with `[DONE]` but never sent a finish frame
+            //   (`null`; a stream with neither threw above).
+            // - CLEAN BUT UNDECLARED (A4): `stop` - or any other reason that
+            //   is neither truncating nor `tool_calls` - after tool-call
+            //   deltas. vLLM historically, and some SGLang tool_choice /
+            //   reasoning-parser combinations and proxies, end a tool-call
+            //   stream this way. qwen.md §Q7(c) used to pin `stop` as
+            //   byte-unchanged, i.e. the call stayed lost; A4 supersedes that,
+            //   because a model's tool request vanishing into an empty reply
+            //   is the worse failure.
+            //
+            // Both flush best-effort through the same decode-or-drop rule:
+            // args that decode to a complete JSON object are emitted,
+            // everything else is dropped with a warning naming it (never
+            // half-decoded) - on a clean end the server never said the call
+            // was finished, so an undecodable payload is no safer to run than
+            // a cut one. The flush is a no-op after a `tool_calls` end, which
+            // drains the buffer mid-stream. `error` is the one end that does
+            // NOT flush: the server is reporting that its own generation
+            // failed, so nothing it streamed is vouched for, and the error
+            // surface belongs to Q8/A2 rather than to tool execution.
             $streamEndedTruncated = $streamFinishReason === null
                 || in_array($streamFinishReason, self::TRUNCATED_FINISH_REASONS, true);
-            $truncatedFlush = $streamEndedTruncated && $toolCallBuffer !== []
-                ? self::flushTruncatedToolCalls($toolCallBuffer)
+            $flushedToolCalls = $toolCallBuffer !== [] && $streamFinishReason !== 'error'
+                ? self::flushTruncatedToolCalls(
+                    $toolCallBuffer,
+                    $streamEndedTruncated ? null : $streamFinishReason,
+                )
                 : null;
 
-            if ($truncatedFlush !== null) {
+            if ($flushedToolCalls !== null) {
                 // The structured path DID produce calls after all - which
                 // disarms recoverTextualToolCalls() below exactly as a
                 // mid-stream assembly would, so the flushed call and a text
-                // envelope parsed out of the same truncated turn can never
-                // both execute.
+                // envelope parsed out of the same turn can never both
+                // execute.
                 $sawStructuredToolCalls = true;
             }
 
@@ -917,14 +950,17 @@ final readonly class SglangProvider implements ProviderInterface
                 );
             }
 
-            if ($truncatedFlush !== null) {
-                // §Q7 flush frame: shaped exactly like the recovery frame
+            if ($flushedToolCalls !== null) {
+                // §Q7/A4 flush frame: shaped exactly like the recovery frame
                 // above - empty content (the fragments streamed as tool
                 // deltas, not text; repeating anything here would double the
                 // transcript), zero billing (usage arrives on the terminal
                 // chunk below, and `Usage::sum()` skips zero-chunks), and
-                // `truncated: true` so a consumer that learns to read the
-                // flag can tell a flushed call from a cleanly assembled one.
+                // `truncated` stating what the wire said: true after a cut
+                // end, so a consumer can tell a flushed call from a cleanly
+                // assembled one, and false after a clean `stop`-style end
+                // (A4) - that stream was not cut, and flagging it would arm
+                // the length-stop fold for a reply that ended normally.
                 // Riding BEFORE the §Q6 terminal usage chunk keeps the bill
                 // the stream's last event (that yield's docblock states the
                 // ordering rule) and mirrors wire order, where finish
@@ -932,10 +968,10 @@ final readonly class SglangProvider implements ProviderInterface
                 yield new CompleteResponse(
                     content: '',
                     reasoning: null,
-                    toolCalls: $truncatedFlush,
+                    toolCalls: $flushedToolCalls,
                     tokensUsed: 0,
                     costUsd: 0.0,
-                    truncated: true,
+                    truncated: $streamEndedTruncated,
                 );
             } elseif (in_array($streamFinishReason, self::TRUNCATED_FINISH_REASONS, true)) {
                 // E707 (round 81): the other half of the same truth. A
@@ -1738,7 +1774,7 @@ final readonly class SglangProvider implements ProviderInterface
 
         // §Q7 (E-32): `finish_reason` was read nowhere on the batch arm, so a
         // response the server itself declared cut off (`length`/`abort` - the
-        // TRUNCATED_FINISH_REASONS set, same list the stream flush guards on)
+        // TRUNCATED_FINISH_REASONS set, same list that flags the stream flush)
         // reached the tool layer indistinguishable from a clean one. The
         // parse is capture-only: no argument here changes shape (the batch
         // message arrives whole-or-absent, not fragmented), the flag just
@@ -1965,7 +2001,10 @@ final readonly class SglangProvider implements ProviderInterface
      */
     private function parseChunk(array $data, array &$toolCallBuffer = [], bool $thinkingOn = false, bool &$seenFirstContent = false): CompleteResponse
     {
-        $delta = $data['choices'][0]['delta'] ?? [];
+        // Audit 15a A4: a finish frame may say `"delta": null`; it is still
+        // parsed (its finish_reason drains the tool-call buffer), as an empty
+        // delta.
+        $delta = is_array($data['choices'][0]['delta'] ?? null) ? $data['choices'][0]['delta'] : [];
         $finishReason = $data['choices'][0]['finish_reason'] ?? null;
 
         $toolCalls = $this->resolveStreamedToolCalls($delta, $finishReason, $toolCallBuffer);
@@ -2071,12 +2110,13 @@ final readonly class SglangProvider implements ProviderInterface
      * discarded here every time - `completeStream()` could never deliver a
      * tool call, only `complete()` (non-streaming) could.
      *
-     * §Q7 note for the gate below: on a NON-`tool_calls` end the buffer is
-     * intentionally left intact here - abandoning it was E-32's silent-loss
-     * bug, and {@see flushTruncatedToolCalls()} is what now drains it at the
-     * generator's terminal seam. Do not "clean up" the buffer on other
-     * finish reasons: the flush guard and the clean `stop` promise of
-     * qwen.md §Q7(c) both read it exactly as this method leaves it.
+     * §Q7/A4 note for the gate below: on a NON-`tool_calls` end the buffer
+     * is intentionally left intact here - abandoning it was E-32's
+     * silent-loss bug (truncated ends) and audit 15a A4's (`stop`-labelled
+     * ends), and {@see flushTruncatedToolCalls()} is what now drains it at
+     * the generator's terminal seam for every end except `error`. Do not
+     * "clean up" the buffer on other finish reasons: the flush guard reads it
+     * exactly as this method leaves it.
      *
      * @param array<string, mixed> $delta
      * @param array<int, array{id?: ?string, name?: ?string, arguments?: string}> $toolCallBuffer
@@ -2119,9 +2159,22 @@ final readonly class SglangProvider implements ProviderInterface
     /**
      * §Q7 (qwen.md; E-32): the truncation twin of
      * {@see resolveStreamedToolCalls()}'s `tool_calls` assembly. Called by
-     * {@see completeStream()} once per stream, only when the end was
-     * truncated (see `TRUNCATED_FINISH_REASONS` for the exact set and why
-     * `stop`/`tool_calls`/`error` are not in it).
+     * {@see completeStream()} once per stream, whenever fragments are still
+     * buffered at the end - after a truncated end (see
+     * `TRUNCATED_FINISH_REASONS`) and, since audit 15a A4, after a clean end
+     * that never declared its calls (`stop` and the like; `$cleanEndReason`
+     * names it). Only `error` ends skip it - see the call site.
+     *
+     * A4 DOES NOT LOOSEN THE RULE BELOW for clean ends: the server finished
+     * the stream but never said the calls were complete, so an argument
+     * payload that does not decode is exactly as unsafe to execute as a cut
+     * one, and drops the same way. The one difference is the EMPTY payload:
+     * on a clean end every fragment the server meant to send arrived, so an
+     * opener with no argument deltas IS a zero-argument call - the reading
+     * {@see decodeToolArguments()} gives a blank payload on a `tool_calls`
+     * finish - and is emitted with `[]` rather than dropped. The warnings'
+     * fate clauses name the end that actually happened, so a clean end is
+     * never reported as a truncation.
      *
      * THE RULE, AND WHY IT DIFFERS FROM THE CLEAN-FINISH RULE: on a
      * `tool_calls` finish the server declares every call complete, so
@@ -2149,15 +2202,25 @@ final readonly class SglangProvider implements ProviderInterface
      * and are never consulted here or by the flush guard.
      *
      * @param array<int, array{id?: ?string, name?: ?string, arguments?: mixed}> $toolCallBuffer
+     * @param ?string $cleanEndReason null for a truncated end (the §Q7
+     *                                default); otherwise the clean
+     *                                `finish_reason` the stream closed with
      * @return ?list<ToolCall> null when NOTHING survived - every payload was
      *                         incomplete - so the caller yields no frame
      *                         (warnings already tell the story); an empty
      *                         array is not a possible return.
      */
-    private static function flushTruncatedToolCalls(array $toolCallBuffer): ?array
+    private static function flushTruncatedToolCalls(array $toolCallBuffer, ?string $cleanEndReason = null): ?array
     {
-        $droppedFate = 'the call is being DROPPED, not executed, because the stream '
-            . 'was truncated before its arguments completed';
+        $droppedFate = $cleanEndReason === null
+            ? 'the call is being DROPPED, not executed, because the stream '
+                . 'was truncated before its arguments completed'
+            : sprintf(
+                'the call is being DROPPED, not executed, because the stream ended '
+                    . 'with finish_reason "%s" without declaring its tool calls complete '
+                    . 'and these arguments are not a complete JSON object',
+                $cleanEndReason,
+            );
         $calls = [];
 
         foreach ($toolCallBuffer as $tc) {
@@ -2176,6 +2239,17 @@ final readonly class SglangProvider implements ProviderInterface
             }
 
             $rawString = is_string($raw) ? $raw : '';
+
+            if (trim($rawString) === '' && $cleanEndReason !== null) {
+                // A4: nothing was cut, so no argument delta is missing - this
+                // is a genuine zero-argument call (see the docblock).
+                $calls[] = ToolCall::fromArray([
+                    'id' => $tc['id'] ?? '',
+                    'name' => $name,
+                    'arguments' => [],
+                ]);
+                continue;
+            }
 
             if (trim($rawString) === '') {
                 // §Q7/E-32: deliberately NOT malformedArgumentsWarning() - that
@@ -2205,9 +2279,10 @@ final readonly class SglangProvider implements ProviderInterface
                 // stream said it is not, so the call goes.
                 RuntimeNoticeSink::warn(sprintf(
                     'SglangProvider: tool call "%s" arguments decoded to %s, not an object; '
-                    . 'dropping the truncated call instead of executing it. Raw payload: %s',
+                    . 'dropping the %s call instead of executing it. Raw payload: %s',
                     $name,
                     get_debug_type($decoded),
+                    $cleanEndReason === null ? 'truncated' : 'undeclared',
                     self::excerpt($rawString),
                 ));
                 continue;

@@ -612,13 +612,16 @@ final class SglangProviderTruncationGuardTest extends TestCase
     }
 
     /**
-     * §Q7(c) - `stop` is byte-unchanged everywhere, INCLUDING its silence:
-     * a clean stop end still leaves any (pathologically) buffered fragments
-     * unemitted and unwarned, exactly as they were before §Q7. This pin is
-     * deliberate, not oversight: qwen.md:204-209 mandates the stop arm stay
-     * as-is, so the one shape §Q7 does NOT rescue is pinned to stay lost.
+     * Audit 15a A4 supersedes qwen.md §Q7(c)'s "stop stays byte-unchanged"
+     * pin, which used to assert this shape yielded nothing and logged
+     * nothing - i.e. that the call stayed silently lost. A clean `stop` end
+     * now flushes its leftover fragments through the same decode-or-drop
+     * rule as a truncated end: these arguments (`{"path": `) never formed
+     * complete JSON, so the call is still NOT executed, but the drop now
+     * names itself - and the fate clause names the `stop` end rather than
+     * falsely claiming a truncation.
      */
-    public function testACleanStopEndWithBufferedFragmentsStillYieldsNothingUnchanged(): void
+    public function testACleanStopEndWithIncompleteBufferedArgumentsDropsTheCallWithAWarning(): void
     {
         $model = 'Qwen/Qwen3.8-Flash-Next';
         $sse = 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_x","type":"function","function":{"name":"list_dir","arguments":""}}]}}]}' . "\n"
@@ -636,7 +639,13 @@ final class SglangProviderTruncationGuardTest extends TestCase
         )));
 
         $this->assertCount(0, array_filter($chunks, static fn ($c) => $c->toolCalls !== null));
-        $this->assertSame('', $this->capturedLog());
+        $this->assertCount(0, array_filter($chunks, static fn ($c) => $c->truncated), 'a clean stop end is never flagged truncated');
+
+        $log = $this->capturedLog();
+        $this->assertStringContainsString('list_dir', $log, 'the dropped call names itself');
+        $this->assertStringContainsString('DROPPED, not executed', $log);
+        $this->assertStringContainsString('finish_reason "stop"', $log, 'the fate clause names the end that happened');
+        $this->assertStringNotContainsString('stream was truncated', $log, 'a clean end must not be reported as a cut stream');
     }
 
     /**

@@ -120,8 +120,8 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — NINETEEN
- *     of them, in FIVE files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — TWENTY-ONE
+ *     of them, in SIX files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -468,6 +468,12 @@ final class StderrEmitterCensusTest extends TestCase
         // Round 49, lane b (E345): the once-per-process notice for a refused audit
         // write. One call site behind a latch, so it is one row and stays one.
         'src/Hooks/BuiltIn/AuditHook.php' => 1,
+        // Audit 15a A4: the end-of-stream tool-call flush's two drop warnings
+        // (never-streamed payload on a truncated end; arguments that are not
+        // a complete JSON object). Each one is a call the model asked for that
+        // will NOT run - the routing rule's "failed to produce the call" arm,
+        // decided exactly like SglangProvider's Q7 flush warnings below.
+        'src/Providers/CustomProvider.php' => 2,
         // E192, round 48: the two argument-decode refusals, plus the three
         // tool-call flush warnings the Q7 truncation hardening added — a
         // dropped or half-decoded buffered argument is the data corruption
@@ -2708,7 +2714,7 @@ final class StderrEmitterCensusTest extends TestCase
                 'what' => 'channel 3, the number of files it spans',
             ],
             [
-                'anchor' => '/RuntimeNoticeSink::warn\(\)} — ([A-Z]+) of them, in [A-Z]+ files/',
+                'anchor' => '/RuntimeNoticeSink::warn\(\)} — ([A-Z-]+) of them, in [A-Z]+ files/',
                 'expected' => array_sum(self::RUNTIME_NOTICE_SITES),
                 'what' => 'channel 6, the RuntimeNoticeSink::warn() total',
             ],
