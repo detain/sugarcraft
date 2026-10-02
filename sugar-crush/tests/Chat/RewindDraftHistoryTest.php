@@ -44,11 +44,11 @@ use SugarCraft\Crush\Session\EnhancedSessionStore;
  */
 final class RewindDraftHistoryTest extends TestCase
 {
-    private const SESSION = 'rewind-session';
+    private const REWIND_SESSION = 'rewind-session';
 
-    private const PROMPT = 'fix the login bug';
+    private const REWIND_PROMPT = 'fix the login bug';
 
-    private const NOTE = 'SES1-HOOK-NOTE the login flow lives in src/Auth';
+    private const REWIND_NOTE = 'SES1-HOOK-NOTE the login flow lives in src/Auth';
 
     private const WINDOW = 88_000;
 
@@ -61,7 +61,7 @@ final class RewindDraftHistoryTest extends TestCase
         $this->dir = sys_get_temp_dir() . '/rewind_draft_history_' . uniqid('', true);
         mkdir($this->dir, 0755, true);
         $this->store = new EnhancedSessionStore($this->dir . '/sessions.db');
-        $this->store->createSession(self::SESSION, 'echo', 'echo');
+        $this->store->createSession(self::REWIND_SESSION, 'echo', 'echo');
     }
 
     protected function tearDown(): void
@@ -74,26 +74,26 @@ final class RewindDraftHistoryTest extends TestCase
 
     /**
      * THE REGRESSION. Pre-fix: the restored transcript was
-     * `[earlier pair, user PROMPT, user /rewind, assistant Rewound 1 …]` with
-     * PROMPT also in the box, and Enter dispatched a turn holding PROMPT twice.
+     * `[earlier pair, user REWIND_PROMPT, user /rewind, assistant Rewound 1 …]` with
+     * REWIND_PROMPT also in the box, and Enter dispatched a turn holding it twice.
      */
     public function testARewoundPromptGoesBackInTheBoxAndOutOfTheTranscript(): void
     {
         $main = $this->recordingBackend();
         $chat = $this->chat([Message::user('earlier question'), Message::assistant('earlier answer')], $main);
 
-        $settled = $this->sendAndSettle($chat, self::PROMPT, 'patched the login bug');
-        $this->assertSame(1, $this->countUserRows($settled->history, self::PROMPT), 'fixture: the turn committed the prompt once');
+        $settled = $this->sendAndSettle($chat, self::REWIND_PROMPT, 'patched the login bug');
+        $this->assertSame(1, $this->countUserRows($settled->history, self::REWIND_PROMPT), 'fixture: the turn committed the prompt once');
 
         [$rewound, $rewindCmd] = $this->type($settled, '/rewind')->update(new KeyMsg(KeyType::Enter, ''));
         $this->assertNull($rewindCmd);
 
         $this->assertSame(
             0,
-            $this->countUserRows($rewound->history, self::PROMPT),
+            $this->countUserRows($rewound->history, self::REWIND_PROMPT),
             'the undone prompt must not survive in the transcript — it is in the box instead',
         );
-        $this->assertSame(self::PROMPT, $rewound->inputBuf, 'the draft comes back for editing');
+        $this->assertSame(self::REWIND_PROMPT, $rewound->inputBuf, 'the draft comes back for editing');
         $this->assertSame(
             ['earlier question', 'earlier answer', '/rewind'],
             array_map(static fn(Message $m): string => $m->content, array_slice($rewound->history, 0, 3)),
@@ -109,21 +109,21 @@ final class RewindDraftHistoryTest extends TestCase
         $before = $main->calls();
         [$resent, $cmd] = $rewound->update(new KeyMsg(KeyType::Enter, ''));
         $this->assertInstanceOf(\Closure::class, $cmd, 'the restored draft dispatches a turn');
-        $this->assertSame(1, $this->countUserRows($resent->history, self::PROMPT), 'committed once');
+        $this->assertSame(1, $this->countUserRows($resent->history, self::REWIND_PROMPT), 'committed once');
         $this->runCmd($cmd);
         $this->assertSame($before + 1, $main->calls());
         $this->assertSame(
             1,
-            $this->countUserRows($main->lastHistory(), self::PROMPT),
+            $this->countUserRows($main->lastHistory(), self::REWIND_PROMPT),
             'the dispatched turn carries the prompt exactly once',
         );
         $wire = $main->lastHistory();
         $last = $wire[count($wire) - 1];
         $this->assertSame(Role::User, $last->role);
-        $this->assertSame(self::PROMPT, $last->content);
+        $this->assertSame(self::REWIND_PROMPT, $last->content);
         $previous = $wire[count($wire) - 2];
         $this->assertFalse(
-            $previous->role === Role::User && $previous->content === self::PROMPT,
+            $previous->role === Role::User && $previous->content === self::REWIND_PROMPT,
             'and never as two consecutive user rows',
         );
     }
@@ -135,35 +135,35 @@ final class RewindDraftHistoryTest extends TestCase
      */
     public function testAPreFixCheckpointStillEndingOnItsPromptHasThePromptDropped(): void
     {
-        $this->store->saveCheckpoint(self::SESSION, [
+        $this->store->saveCheckpoint(self::REWIND_SESSION, [
             'messages' => [
                 ['role' => 'user', 'content' => 'earlier question'],
                 ['role' => 'assistant', 'content' => 'earlier answer'],
-                ['role' => 'user', 'content' => self::PROMPT],
+                ['role' => 'user', 'content' => self::REWIND_PROMPT],
                 ['role' => 'system', 'content' => 'Heads up: this conversation has grown to ~70123 estimated tokens.'],
             ],
             // The pre-fix shape: the draft is the trailing prompt, no marker key.
-            'inputBuf' => self::PROMPT,
+            'inputBuf' => self::REWIND_PROMPT,
             'inputCursor' => 4,
-            'agentContext' => ['currentSessionId' => self::SESSION],
+            'agentContext' => ['currentSessionId' => self::REWIND_SESSION],
         ]);
 
         $chat = $this->chat([
             Message::user('earlier question'),
             Message::assistant('earlier answer'),
-            Message::user(self::PROMPT),
+            Message::user(self::REWIND_PROMPT),
             Message::assistant('patched the login bug'),
         ], $this->recordingBackend());
 
         [$rewound] = $this->type($this->clearDraft($chat), '/rewind')->update(new KeyMsg(KeyType::Enter, ''));
 
-        $this->assertSame(0, $this->countUserRows($rewound->history, self::PROMPT));
+        $this->assertSame(0, $this->countUserRows($rewound->history, self::REWIND_PROMPT));
         $this->assertSame(
             [Role::User, Role::Assistant, Role::User, Role::Assistant],
             array_map(static fn(Message $m): Role => $m->role, $rewound->history),
             'the earlier pair, then the /rewind echo and its answer — the reminder went with its prompt',
         );
-        $this->assertSame(self::PROMPT, $rewound->inputBuf);
+        $this->assertSame(self::REWIND_PROMPT, $rewound->inputBuf);
         $this->assertSame(4, $rewound->inputCursorOffset(), 'the caret still round-trips');
         $this->assertStringContainsString('Rewound 2 messages', $rewound->history[3]->content);
     }
@@ -218,21 +218,21 @@ final class RewindDraftHistoryTest extends TestCase
     public function testTheHeuristicTierCheckpointKeepsTheCompactionAndDropsTheSubmission(): void
     {
         $main = $this->recordingBackend();
-        $chat = $this->chat(self::compactablePairs(), $main, hookNote: self::NOTE);
+        $chat = $this->chat(self::compactablePairs(), $main, hookNote: self::REWIND_NOTE);
 
-        $settled = $this->sendAndSettle($chat, self::PROMPT, 'patched');
+        $settled = $this->sendAndSettle($chat, self::REWIND_PROMPT, 'patched');
         $this->assertSame(1, $this->countSaying($settled->history, 'Context reached the automatic-compaction tier'), 'fixture: the tier compacted');
 
         [$rewound] = $this->type($settled, '/rewind')->update(new KeyMsg(KeyType::Enter, ''));
 
-        $this->assertSame(0, $this->countUserRows($rewound->history, self::PROMPT));
-        $this->assertSame(0, $this->countSaying($rewound->history, self::NOTE), 'the hook note is regenerated on resend, so it goes');
+        $this->assertSame(0, $this->countUserRows($rewound->history, self::REWIND_PROMPT));
+        $this->assertSame(0, $this->countSaying($rewound->history, self::REWIND_NOTE), 'the hook note is regenerated on resend, so it goes');
         $this->assertSame(
             1,
             $this->countSaying($rewound->history, 'Context reached the automatic-compaction tier'),
             'the compaction stays, with its report',
         );
-        $this->assertSame(self::PROMPT, $rewound->inputBuf);
+        $this->assertSame(self::REWIND_PROMPT, $rewound->inputBuf);
         $this->assertMatchesRegularExpression('/Rewound [1-9]\d* messages/', $rewound->history[count($rewound->history) - 1]->content);
     }
 
@@ -246,11 +246,11 @@ final class RewindDraftHistoryTest extends TestCase
     public function testTheParkedRouteCheckpointsThePromptAsTheDraftAndNotInTheTranscript(): void
     {
         $main = $this->recordingBackend();
-        $chat = $this->chat(self::compactablePairs(), $main, $this->summarizer(), self::NOTE);
+        $chat = $this->chat(self::compactablePairs(), $main, $this->summarizer(), self::REWIND_NOTE);
 
         [$parked, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
         $this->assertTrue($parked->inFlight, 'fixture: the prompt parked');
-        $this->assertSame([], $this->store->listCheckpoints(self::SESSION), 'parking is not dispatching');
+        $this->assertSame([], $this->store->listCheckpoints(self::REWIND_SESSION), 'parking is not dispatching');
 
         $msg = $this->resolve($cmd);
         $this->assertInstanceOf(HistoryCompactedMsg::class, $msg);
@@ -259,13 +259,13 @@ final class RewindDraftHistoryTest extends TestCase
         [, $turnCmd] = $typing->update($msg);
         $this->assertNotNull($turnCmd, 'fixture: the landing dispatched');
 
-        $checkpoints = $this->store->listCheckpoints(self::SESSION);
+        $checkpoints = $this->store->listCheckpoints(self::REWIND_SESSION);
         $this->assertCount(1, $checkpoints);
         $state = $checkpoints[0]['state_data'];
-        $this->assertSame(self::PROMPT, $state['inputBuf'], 'the parked prompt is the draft rewind re-seeds');
+        $this->assertSame(self::REWIND_PROMPT, $state['inputBuf'], 'the parked prompt is the draft rewind re-seeds');
         $contents = array_map(static fn(array $m): string => (string) $m['content'], $state['messages']);
-        $this->assertNotContains(self::PROMPT, $contents, 'the echoed prompt is not in the pre-turn transcript');
-        $this->assertSame([], array_values(array_filter($contents, static fn(string $c): bool => str_contains($c, self::NOTE))), 'nor its hook note');
+        $this->assertNotContains(self::REWIND_PROMPT, $contents, 'the echoed prompt is not in the pre-turn transcript');
+        $this->assertSame([], array_values(array_filter($contents, static fn(string $c): bool => str_contains($c, self::REWIND_NOTE))), 'nor its hook note');
         $this->assertNotEmpty(
             array_filter($contents, static fn(string $c): bool => str_starts_with($c, 'Context reached the automatic-compaction tier at ~')),
             'the park notice stays: it describes the compaction the checkpoint keeps',
@@ -292,11 +292,11 @@ final class RewindDraftHistoryTest extends TestCase
 
         return new Chat(
             history: $history,
-            inputBuf: self::PROMPT,
+            inputBuf: self::REWIND_PROMPT,
             backend: $main,
             summaryBackend: $summarizer,
             sessionStore: $this->store,
-            currentSessionId: self::SESSION,
+            currentSessionId: self::REWIND_SESSION,
             // Named, so no title call is batched beside the turn and the Cmd a
             // dispatch returns is the completion alone.
             currentSessionName: 'rewind-test',

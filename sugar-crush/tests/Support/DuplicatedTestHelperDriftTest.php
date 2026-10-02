@@ -2594,6 +2594,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'SMALL_BYTES' => 'The small-write byte count the stdin-wedge pair shares.',
         'VARS' => 'The environment roster the wiring suites pin is one list duplicated per suite; it belongs in a provider, and until it moves this row says so out loud.',
         'WEDGE_BYTES' => 'The stdin-wedge pair wedges the same volume; the drain suite wedges less.',
+        'WINDOW' => 'The parked-compaction and rewind suites drive Chat through the same context-window size so both reach the same compaction threshold.',
         'STUBBORN_SERVER' =>
             'The two shutdown suites drive the same stubborn child stub verbatim; the fixture belongs behind a provider, and the row says so until it moves.',
     ];

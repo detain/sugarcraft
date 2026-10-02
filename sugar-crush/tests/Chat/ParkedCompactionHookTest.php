@@ -43,11 +43,11 @@ use SugarCraft\Crush\Role;
  */
 final class ParkedCompactionHookTest extends TestCase
 {
-    private const PROMPT = 'deploy with AWS_SECRET_ACCESS_KEY=AKIAFAKEFAKEFAKE';
+    private const PARKED_PROMPT = 'deploy with AWS_SECRET_ACCESS_KEY=AKIAFAKEFAKEFAKE';
 
-    private const NOTE = '15B01-PROMPT-NOTE this repository deploys through the staging gate';
+    private const PARKED_NOTE = '15B01-PROMPT-NOTE this repository deploys through the staging gate';
 
-    private const BLOCK_REASON = '15B01-BLOCK prompt contains a secret';
+    private const PARKED_BLOCK_REASON = '15B01-BLOCK prompt contains a secret';
 
     private const WINDOW = 88_000;
 
@@ -106,14 +106,14 @@ final class ParkedCompactionHookTest extends TestCase
     {
         $main = $this->mainBackend();
         $summarizer = $this->summarizer();
-        $chat = $this->chat(self::compactablePairs(), $main, $summarizer, HookResult::deny(self::BLOCK_REASON));
+        $chat = $this->chat(self::compactablePairs(), $main, $summarizer, HookResult::deny(self::PARKED_BLOCK_REASON));
         $before = count($chat->history);
 
         [$after, $cmd] = $this->submit($chat);
 
         $this->assertNull($cmd, 'no summarization Cmd leaves for a prompt the hook blocked');
         $this->assertCount(1, $this->fired, 'the hook judged the parked submission');
-        $this->assertSame(self::PROMPT, json_decode($this->fired[0]->toolInput, true)['prompt']);
+        $this->assertSame(self::PARKED_PROMPT, json_decode($this->fired[0]->toolInput, true)['prompt']);
         $this->assertSame(0, $summarizer->calls(), 'the summarizer was never asked');
         $this->assertSame(0, $main->calls(), 'and neither was the main model');
 
@@ -121,12 +121,12 @@ final class ParkedCompactionHookTest extends TestCase
         $last = $after->history[count($after->history) - 1];
         $this->assertSame(Role::System, $last->role);
         $this->assertStringStartsWith('Hook denied:', $last->content);
-        $this->assertStringContainsString(self::BLOCK_REASON, $last->content);
+        $this->assertStringContainsString(self::PARKED_BLOCK_REASON, $last->content);
         $this->assertSame(0, $this->countSaying($after->history, 'AKIAFAKE'), 'the secret is nowhere in the transcript');
 
         $this->assertFalse($after->inFlight, 'nothing is parked, so nothing holds the turn open');
         $this->assertNull($this->latchOf($after), 'and no summarization is outstanding');
-        $this->assertSame(self::PROMPT, $after->inputBuf, 'the draft stays in the box, as on the unparked route');
+        $this->assertSame(self::PARKED_PROMPT, $after->inputBuf, 'the draft stays in the box, as on the unparked route');
     }
 
     // =====================================================================
@@ -137,7 +137,7 @@ final class ParkedCompactionHookTest extends TestCase
     {
         $main = $this->mainBackend();
         $summarizer = $this->summarizer();
-        $chat = $this->chat(self::compactablePairs(), $main, $summarizer, HookResult::allow('', self::NOTE));
+        $chat = $this->chat(self::compactablePairs(), $main, $summarizer, HookResult::allow('', self::PARKED_NOTE));
 
         [$parked, $cmd] = $this->submit($chat);
 
@@ -147,10 +147,10 @@ final class ParkedCompactionHookTest extends TestCase
 
         // The note sits immediately ahead of the echoed prompt — the slot the
         // unparked route gives it.
-        $echoAt = $this->lastIndexOfUser($parked->history, self::PROMPT);
+        $echoAt = $this->lastIndexOfUser($parked->history, self::PARKED_PROMPT);
         $this->assertGreaterThan(0, $echoAt);
         $this->assertSame(Role::System, $parked->history[$echoAt - 1]->role);
-        $this->assertSame(self::NOTE, $parked->history[$echoAt - 1]->content);
+        $this->assertSame(self::PARKED_NOTE, $parked->history[$echoAt - 1]->content);
 
         $msg = $this->resolve($cmd);
         $this->assertInstanceOf(HistoryCompactedMsg::class, $msg);
@@ -162,12 +162,12 @@ final class ParkedCompactionHookTest extends TestCase
         $this->assertSame(1, $main->calls(), 'exactly one turn reached the main model');
 
         $wire = $main->lastHistory();
-        $promptAt = $this->lastIndexOfUser($wire, self::PROMPT);
+        $promptAt = $this->lastIndexOfUser($wire, self::PARKED_PROMPT);
         $this->assertGreaterThan(0, $promptAt, 'the prompt is in the dispatched turn');
-        $this->assertSame(self::NOTE, $wire[$promptAt - 1]->content, 'with the hook note immediately ahead of it');
+        $this->assertSame(self::PARKED_NOTE, $wire[$promptAt - 1]->content, 'with the hook note immediately ahead of it');
         $this->assertSame(Role::System, $wire[$promptAt - 1]->role);
-        $this->assertSame(1, $this->countSaying($wire, self::NOTE), 'carried once, not duplicated by the landing');
-        $this->assertSame(1, $this->countSaying($dispatched->history, self::NOTE));
+        $this->assertSame(1, $this->countSaying($wire, self::PARKED_NOTE), 'carried once, not duplicated by the landing');
+        $this->assertSame(1, $this->countSaying($dispatched->history, self::PARKED_NOTE));
     }
 
     // =====================================================================
@@ -182,7 +182,7 @@ final class ParkedCompactionHookTest extends TestCase
             [Message::user('hi'), Message::assistant('hello')],
             $main,
             $summarizer,
-            HookResult::allow('', self::NOTE),
+            HookResult::allow('', self::PARKED_NOTE),
         );
 
         [$turn, $cmd] = $this->submit($chat);
@@ -191,9 +191,9 @@ final class ParkedCompactionHookTest extends TestCase
         $this->assertCount(1, $this->fired);
         $this->assertSame(0, $summarizer->calls(), 'no tier, no summarization');
         $this->assertSame(Role::System, $turn->history[2]->role);
-        $this->assertSame(self::NOTE, $turn->history[2]->content);
+        $this->assertSame(self::PARKED_NOTE, $turn->history[2]->content);
         $this->assertSame(Role::User, $turn->history[3]->role);
-        $this->assertSame(self::PROMPT, $turn->history[3]->content);
+        $this->assertSame(self::PARKED_PROMPT, $turn->history[3]->content);
 
         $cmd();
         $this->assertCount(1, $this->fired);
@@ -203,7 +203,7 @@ final class ParkedCompactionHookTest extends TestCase
     public function testBelowTheTierABlockingHookStillRefuses(): void
     {
         $main = $this->mainBackend();
-        $chat = $this->chat([Message::user('hi'), Message::assistant('hello')], $main, $this->summarizer(), HookResult::deny(self::BLOCK_REASON));
+        $chat = $this->chat([Message::user('hi'), Message::assistant('hello')], $main, $this->summarizer(), HookResult::deny(self::PARKED_BLOCK_REASON));
 
         [$after, $cmd] = $this->submit($chat);
 
@@ -225,15 +225,15 @@ final class ParkedCompactionHookTest extends TestCase
     public function testTheHeuristicTierFiresTheHookExactlyOnce(): void
     {
         $main = $this->mainBackend();
-        $chat = $this->chat(self::compactablePairs(), $main, null, HookResult::allow('', self::NOTE));
+        $chat = $this->chat(self::compactablePairs(), $main, null, HookResult::allow('', self::PARKED_NOTE));
 
         [$turn, $cmd] = $this->submit($chat);
 
         $this->assertNotNull($cmd);
         $this->assertCount(1, $this->fired);
-        $promptAt = $this->lastIndexOfUser($turn->history, self::PROMPT);
-        $this->assertSame(self::NOTE, $turn->history[$promptAt - 1]->content);
-        $this->assertSame(1, $this->countSaying($turn->history, self::NOTE));
+        $promptAt = $this->lastIndexOfUser($turn->history, self::PARKED_PROMPT);
+        $this->assertSame(self::PARKED_NOTE, $turn->history[$promptAt - 1]->content);
+        $this->assertSame(1, $this->countSaying($turn->history, self::PARKED_NOTE));
     }
 
     /**
@@ -243,14 +243,14 @@ final class ParkedCompactionHookTest extends TestCase
     public function testTheSynchronousBlockingRefusalStillDoesNotFireTheHook(): void
     {
         $main = $this->mainBackend();
-        $chat = $this->chat(self::unshrinkablePairs(), $main, null, HookResult::allow('', self::NOTE));
+        $chat = $this->chat(self::unshrinkablePairs(), $main, null, HookResult::allow('', self::PARKED_NOTE));
 
         [$after, $cmd] = $this->submit($chat);
 
         $this->assertNull($cmd, 'the 95% tier refused the prompt');
         $this->assertSame(0, $main->calls());
         $this->assertCount(0, $this->fired, 'a refused, unsubmitted prompt is not shown to the hook');
-        $this->assertSame(0, $this->countSaying($after->history, self::NOTE));
+        $this->assertSame(0, $this->countSaying($after->history, self::PARKED_NOTE));
     }
 
     /**
@@ -261,7 +261,7 @@ final class ParkedCompactionHookTest extends TestCase
     public function testACancelledParkLeavesTheNoteBesideItsOwnPromptAndTheStaleLandingAddsNothing(): void
     {
         $main = $this->mainBackend();
-        $chat = $this->chat(self::compactablePairs(), $main, $this->summarizer(), HookResult::allow('', self::NOTE));
+        $chat = $this->chat(self::compactablePairs(), $main, $this->summarizer(), HookResult::allow('', self::PARKED_NOTE));
 
         [$parked, $cmd] = $this->submit($chat);
         [$armed] = $parked->update(new KeyMsg(KeyType::Escape, ''));
@@ -274,9 +274,9 @@ final class ParkedCompactionHookTest extends TestCase
         $this->assertSame(0, $main->calls());
         $this->assertCount(1, $this->fired, 'and the landing ran no hook');
         $this->assertSame(count($cancelled->history), count($after->history), 'nor wrote any row');
-        $this->assertSame(1, $this->countSaying($after->history, self::NOTE));
-        $echoAt = $this->lastIndexOfUser($after->history, self::PROMPT);
-        $this->assertSame(self::NOTE, $after->history[$echoAt - 1]->content);
+        $this->assertSame(1, $this->countSaying($after->history, self::PARKED_NOTE));
+        $echoAt = $this->lastIndexOfUser($after->history, self::PARKED_PROMPT);
+        $this->assertSame(self::PARKED_NOTE, $after->history[$echoAt - 1]->content);
     }
 
     // =====================================================================
@@ -291,7 +291,7 @@ final class ParkedCompactionHookTest extends TestCase
 
         return new Chat(
             history: $history,
-            inputBuf: self::PROMPT,
+            inputBuf: self::PARKED_PROMPT,
             backend: $main,
             summaryBackend: $summarizer,
             hooks: new HookManager($registry),
