@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use React\EventLoop\Loop;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Support\ProcessContainment;
 
@@ -186,6 +187,39 @@ final class AgentWorkerPool
      */
     private array $unreapedChildren = [];
 
+    /**
+     * @var array<int, bool> PIDs whose tree kill is running on the event loop
+     * ({@see ProcessContainment::killTreeAsync()}), each mapped to whether the
+     * pool still has to reap it once the kill settles (true for a released
+     * worker the bookkeeping no longer holds, false for one {@see cancel()}
+     * leaves in $activePids for {@see waitForCompletion()} to settle).
+     *
+     * WHILE A PID IS HERE NOTHING REAPS IT — not the poll, not the sweep. The
+     * async walk spans loop ticks and signals the pids it collected, and the
+     * root's pid is only safe to signal while it is this process's unreaped
+     * child: a zombie cannot be recycled, a reaped pid can.
+     */
+    private array $killsInFlight = [];
+
+    /**
+     * When the event loop last turned while this pool's run was suspended in
+     * {@see idle()} (hrtime ns), or null if it never has — the pool's answer
+     * to "is the loop driving me?". See {@see loopDriven()}.
+     */
+    private ?int $loopTickNs = null;
+
+    /** Whether {@see idle()}'s loop probe is queued and has not run yet. */
+    private bool $loopProbeArmed = false;
+
+    /**
+     * How recent {@see $loopTickNs} must be for a teardown to count as running
+     * on the loop. The TUI's workflow driver resumes the run every few
+     * milliseconds, so a live loop is always well inside this; a loop that has
+     * stopped (the TUI quit) falls out of it and the teardown goes back to the
+     * synchronous kill rather than arming timers nothing will fire.
+     */
+    private const LOOP_FRESH_NS = 1_000_000_000;
+
     /** True once the sequential-fallback warning has been logged for this pool instance. */
     private bool $sequentialFallbackWarned = false;
 
@@ -335,6 +369,12 @@ final class AgentWorkerPool
         $this->resultDirOwnerPid = (int) getmypid();
         $this->activePids = [];
         $this->unreapedChildren = [];
+        // The original's in-flight kills and its loop probe are the
+        // original's: the clone neither forked those children nor is it the
+        // run the loop has been driving.
+        $this->killsInFlight = [];
+        $this->loopTickNs = null;
+        $this->loopProbeArmed = false;
         // Deadlines belong to the children the original forked; the budget
         // itself is configuration and carries over (withTimeBudget() relies
         // on that).
@@ -391,7 +431,11 @@ final class AgentWorkerPool
         }
 
         try {
-            $this->releaseForkedWorkers();
+            // Never deferred to the loop here: a destructor can run after the
+            // loop is gone for good (PHP's shutdown), when a timer would never
+            // fire and a killTreeAsync() walk would have no shutdown sweep left
+            // to finish it — a SIGSTOPped tree, stranded.
+            $this->releaseForkedWorkers(mayDefer: false);
             $this->reapTerminatedWorkers();
         } catch (\Throwable) {
             // Swallowed deliberately — see above.
@@ -1052,7 +1096,10 @@ final class AgentWorkerPool
         // ...and then collect them. Nothing polls after cancelAll(), so a
         // signalled-but-unwaited child is a permanent zombie: one per worker,
         // in a TUI that lives for hours. Bounded (100ms total) so a child that
-        // is slow to die costs a deferred reap rather than a frozen caller.
+        // is slow to die costs a deferred reap rather than a frozen caller. A
+        // worker whose kill went to the loop is reaped by that kill's own
+        // chain instead (see terminatePid()), so on the loop this returns at
+        // once.
         $this->reapTerminatedWorkers();
     }
 
@@ -1388,6 +1435,13 @@ final class AgentWorkerPool
                 // string, under declare(strict_types=1). Cast once, here.
                 $agentId = (string) $agentId;
 
+                // cancel() is killing this worker on the loop: its walk still
+                // signals the root by pid, so the root is not reaped (and its
+                // deadline not re-fired) until that kill has settled.
+                if (isset($this->killsInFlight[$pid])) {
+                    continue;
+                }
+
                 $status = 0;
                 // waitpid on OUR pid rather than pcntl_wait() for any child:
                 // this pool runs inside a process that proc_open()s children of
@@ -1497,12 +1551,64 @@ final class AgentWorkerPool
     protected function idle(): void
     {
         if (\Fiber::getCurrent() !== null) {
+            $this->armLoopProbe();
             \Fiber::suspend();
 
             return;
         }
 
         usleep(self::WAIT_POLL_INTERVAL_USEC);
+    }
+
+    /**
+     * Queue one `futureTick()` that stamps {@see $loopTickNs} — run only if
+     * the event loop actually turns while this run is suspended.
+     *
+     * WHY A PROBE AND NOT `\Fiber::getCurrent()`. A Fiber says a CALLER is
+     * cooperatively scheduling the run; it does not say that caller is the
+     * event loop. The TUI's workflow Fiber is resumed from a loop timer
+     * ({@see \SugarCraft\Crush\Chat::driveWorkflowFiber()}), but a Fiber can
+     * equally be resumed by a plain `while` loop that never runs the event
+     * loop at all — and a teardown that armed killTreeAsync()'s timers there
+     * would wait for ticks that never come, leaving the worker SIGSTOPped and
+     * unreaped. The tick either runs or it does not, and that is exactly the
+     * question. One probe at a time; a WeakReference so a queued tick never
+     * keeps a dropped pool alive.
+     */
+    private function armLoopProbe(): void
+    {
+        if ($this->loopProbeArmed) {
+            return;
+        }
+        $this->loopProbeArmed = true;
+
+        $pool = \WeakReference::create($this);
+        Loop::get()->futureTick(static function () use ($pool): void {
+            $self = $pool->get();
+            if ($self === null) {
+                return;
+            }
+            $self->loopProbeArmed = false;
+            $self->loopTickNs = hrtime(true);
+        });
+    }
+
+    /**
+     * Whether a teardown right now runs on a live event loop — the TUI thread,
+     * where a synchronous tree kill freezes the frame, the keyboard and the
+     * stream (audit R3) — rather than in synchronous code (`bin/`, a plain
+     * `foreach` over executeAll(), a test) where nothing else is waiting.
+     *
+     * True when {@see armLoopProbe()}'s tick ran within {@see LOOP_FRESH_NS},
+     * in the process that owns this pool: covers both a teardown inside the
+     * loop-driven run itself (a deadline, a reused pool's reset) and one from
+     * an ordinary loop callback while that run is suspended (a cancel()).
+     */
+    private function loopDriven(): bool
+    {
+        return $this->loopTickNs !== null
+            && $this->resultDirOwnerPid === (int) getmypid()
+            && hrtime(true) - $this->loopTickNs <= self::LOOP_FRESH_NS;
     }
 
     /**
@@ -1553,7 +1659,10 @@ final class AgentWorkerPool
      *
      * killTree() does not reap, so the root is collected here over the same
      * bounded window a teardown uses; one that is somehow still not gone goes
-     * to the deferred sweep rather than blocking the poll.
+     * to the deferred sweep rather than blocking the poll. On a live event
+     * loop the walk and that reap run over loop ticks instead
+     * ({@see killOnLoop()}, audit R3): this runs inside the TUI's workflow
+     * Fiber, on the loop's thread.
      *
      * A child that wrote its result in the instant before the kill keeps it:
      * the work finished, and a decodable result is the only evidence of that.
@@ -1564,20 +1673,29 @@ final class AgentWorkerPool
         $agent = $this->active[$agentId] ?? null;
         unset($this->deadlines[$agentId], $this->activePids[$agentId], $this->active[$agentId]);
 
-        ProcessContainment::killTree($pid);
-
-        $status = 0;
-        $reaped = 0;
-        for ($attempt = 0; $attempt < self::REAP_ATTEMPTS; $attempt++) {
-            $reaped = pcntl_waitpid($pid, $status, WNOHANG);
-            if ($reaped !== 0) {
-                break;
-            }
-
-            usleep(self::REAP_POLL_MICROSECONDS);
-        }
-        if ($reaped === 0) {
+        if ($this->loopDriven()) {
+            // On the TUI's loop (audit R3): the walk and the reap run in loop
+            // ticks and the agent settles now. killTreeAsync() SIGSTOPs the
+            // root before it returns, so the result-file check below sees
+            // exactly what the synchronous kill would have let it see.
             $this->unreapedChildren[$pid] = true;
+            $this->killOnLoop($pid, 0.0, reapAfter: true);
+        } else {
+            ProcessContainment::killTree($pid);
+
+            $status = 0;
+            $reaped = 0;
+            for ($attempt = 0; $attempt < self::REAP_ATTEMPTS; $attempt++) {
+                $reaped = pcntl_waitpid($pid, $status, WNOHANG);
+                if ($reaped !== 0) {
+                    break;
+                }
+
+                usleep(self::REAP_POLL_MICROSECONDS);
+            }
+            if ($reaped === 0) {
+                $this->unreapedChildren[$pid] = true;
+            }
         }
 
         if (!$this->hasDecodableResult($agentId)) {
@@ -1665,7 +1783,8 @@ final class AgentWorkerPool
      * instead.) Without /proc or ext-posix's getpgrp, killTree() degrades to
      * the same SIGTERM-then-SIGKILL ladder against the root alone; without
      * ext-posix it does nothing, exactly like the guarded posix_kill() it
-     * replaces.
+     * replaces. On a live event loop the same kill runs over loop ticks
+     * instead of on the caller's thread ({@see terminatePid()}, audit R3).
      */
     private function terminateWorker(string $agentId): void
     {
@@ -1674,7 +1793,86 @@ final class AgentWorkerPool
             return;
         }
 
+        $this->terminatePid($pid, reapAfter: false);
+    }
+
+    /**
+     * {@see terminateWorker()}'s kill, on whichever thread it is safe to spend.
+     *
+     * ON THE EVENT LOOP (audit R3 residual) — the TUI process, where the
+     * workflow Fiber runs this pool and a cancel arrives from a key press —
+     * the synchronous killTree() held the loop for the whole freeze walk
+     * (~100 ms of /proc scans) plus up to {@see TERMINATE_GRACE_SECONDS} of
+     * usleep() polling for a member that ignores SIGTERM, plus escalate()'s
+     * own wait after the 9. So there it is {@see killOnLoop()}: the same walk,
+     * the same SIGTERM grace and the same 9, spread over loop ticks.
+     *
+     * OFF THE LOOP — `bin/`, a plain foreach over executeAll(), a destructor —
+     * it stays the synchronous killTree(): nothing else is waiting on the
+     * thread, and there may be no loop turning to finish an async walk.
+     *
+     * $reapAfter: whether the pool must reap the pid itself once the kill
+     * settles (a released worker), rather than leave it to
+     * {@see waitForCompletion()} (a cancel()led one still in $activePids). A
+     * pid whose loop kill is already running is not killed twice; it only
+     * picks up the reap.
+     */
+    private function terminatePid(int $pid, bool $reapAfter, bool $mayDefer = true): void
+    {
+        if (isset($this->killsInFlight[$pid])) {
+            $this->killsInFlight[$pid] = $this->killsInFlight[$pid] || $reapAfter;
+
+            return;
+        }
+
+        if ($mayDefer && $this->loopDriven()) {
+            $this->killOnLoop($pid, self::TERMINATE_GRACE_SECONDS, $reapAfter);
+
+            return;
+        }
+
         ProcessContainment::killTree($pid, self::TERMINATE_GRACE_SECONDS);
+    }
+
+    /**
+     * Kill $pid's tree on the event loop and, if asked, reap it there too:
+     * {@see ProcessContainment::killTreeAsync()}, then
+     * {@see ProcessContainment::reapAsync()} over the same bounded window
+     * {@see reapTerminatedWorkers()} spends in usleep(). A pid still not
+     * collected after that window stays in {@see $unreapedChildren} for the
+     * next sweep, exactly as a synchronous give-up does.
+     *
+     * The pid sits in {@see $killsInFlight} until the kill settles, which is
+     * what stops the poll and the sweep from reaping a root the walk is still
+     * signalling by pid. killTreeAsync() SIGSTOPs the root before it returns,
+     * so from the caller's next statement on the worker can neither fork nor
+     * write.
+     */
+    private function killOnLoop(int $pid, float $termGraceSeconds, bool $reapAfter): void
+    {
+        $this->killsInFlight[$pid] = $reapAfter;
+        $loop = Loop::get();
+
+        ProcessContainment::killTreeAsync($pid, $loop, $termGraceSeconds)->then(
+            function () use ($pid, $loop): void {
+                $reap = $this->killsInFlight[$pid] ?? false;
+                unset($this->killsInFlight[$pid]);
+                if (!$reap) {
+                    return;
+                }
+
+                ProcessContainment::reapAsync(
+                    [$pid],
+                    self::REAP_ATTEMPTS * self::REAP_POLL_MICROSECONDS / 1_000_000,
+                    self::REAP_POLL_MICROSECONDS / 1_000_000,
+                    $loop,
+                )->then(function (array $left) use ($pid): void {
+                    if ($left === []) {
+                        unset($this->unreapedChildren[$pid]);
+                    }
+                });
+            },
+        );
     }
 
     /**
@@ -1686,14 +1884,18 @@ final class AgentWorkerPool
      * the pool keeps of its children — so the signal and the hand-off have to
      * happen together or the children become unstoppable and unreapable in the
      * same statement.
+     *
+     * $mayDefer false forces the synchronous kill even on the loop — the
+     * destructor's spelling ({@see terminatePid()}).
      */
-    private function releaseForkedWorkers(): void
+    private function releaseForkedWorkers(bool $mayDefer = true): void
     {
-        foreach ($this->activePids as $agentId => $pid) {
-            // Numeric-string agent ids come back out of this foreach as int;
-            // terminateWorker() is typed string. See waitForCompletion().
-            $this->terminateWorker((string) $agentId);
+        // By pid, not by agent id: a numeric-string agent id comes back out of
+        // this foreach as int, and terminateWorker() is typed string (see
+        // waitForCompletion()).
+        foreach ($this->activePids as $pid) {
             $this->unreapedChildren[$pid] = true;
+            $this->terminatePid($pid, reapAfter: true, mayDefer: $mayDefer);
         }
 
         $this->activePids = [];
@@ -1713,7 +1915,10 @@ final class AgentWorkerPool
     {
         for ($attempt = 0; $attempt < self::REAP_ATTEMPTS; $attempt++) {
             $this->sweepUnreapedChildren();
-            if ($this->unreapedChildren === []) {
+            // A child whose kill is running on the loop is reaped by that
+            // kill's own chain (killOnLoop()); sleeping here for it would put
+            // back the very loop block the async kill exists to remove.
+            if (array_diff_key($this->unreapedChildren, $this->killsInFlight) === []) {
                 return;
             }
 
@@ -1738,6 +1943,10 @@ final class AgentWorkerPool
 
         $status = 0;
         foreach (array_keys($this->unreapedChildren) as $pid) {
+            // Its loop kill may still be signalling it by pid (killsInFlight).
+            if (isset($this->killsInFlight[$pid])) {
+                continue;
+            }
             // 0 means "still running, nothing reaped yet"; $pid means reaped;
             // -1 means unwaitable (already reaped, or never ours) — both of the
             // latter are terminal.

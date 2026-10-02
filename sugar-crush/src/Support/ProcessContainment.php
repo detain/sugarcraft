@@ -698,12 +698,24 @@ final class ProcessContainment
      * {@see finishPendingTreeKills()}), and every forked child here exits via
      * {@see ForkedChild::exitNow()}, which skips shutdown functions anyway.
      *
+     * $termGraceSeconds > 0 is killTree()'s SIGTERM-first ladder on the same
+     * terms (audit R3 residual: AgentWorkerPool's cancel, which asks a stage
+     * to wind down rather than shooting it): once the walk settles the frozen
+     * set gets 15 (and SIGCONT, so a stopped member can act on it), and a
+     * timer — not ProcessReaper::escalate()'s usleep() — polls until every
+     * member is gone or the grace is spent, when 9 goes to whatever is left.
+     * The promise resolves after that 9 (or as soon as the set is gone), so it
+     * still means "the tree has been dealt with". A shutdown that interrupts
+     * the grace finishes with 9 at once: a process that is exiting has no
+     * grace left to give.
+     *
      * Same degradations as killTree(): without /proc or ext-posix's getpgrp
-     * this is the direct `posix_kill($pid, 9)`, resolved at once.
+     * this is the direct `posix_kill($pid, 9)`, resolved at once — or, with a
+     * grace, the same 15-then-9 ladder against the root alone, on the timer.
      *
      * @return \React\Promise\PromiseInterface<null>
      */
-    public static function killTreeAsync(int $pid, ?\React\EventLoop\LoopInterface $loop = null): \React\Promise\PromiseInterface
+    public static function killTreeAsync(int $pid, ?\React\EventLoop\LoopInterface $loop = null, float $termGraceSeconds = 0.0): \React\Promise\PromiseInterface
     {
         if ($pid <= 0 || !\function_exists('posix_kill')) {
             return \React\Promise\resolve(null);
@@ -714,9 +726,20 @@ final class ProcessContainment
         }
 
         if (!\function_exists('posix_getpgrp') || !ProcessTree::available()) {
-            @\posix_kill($pid, 9);
+            if ($termGraceSeconds <= 0.0) {
+                @\posix_kill($pid, 9);
 
-            return \React\Promise\resolve(null);
+                return \React\Promise\resolve(null);
+            }
+
+            return self::graceThenKill(
+                static function (int $signal) use ($pid): void {
+                    @\posix_kill($pid, $signal);
+                },
+                [$pid],
+                $termGraceSeconds,
+                $loop ?? \React\EventLoop\Loop::get(),
+            );
         }
 
         $stop = \defined('SIGSTOP') ? \SIGSTOP : 19;
@@ -731,8 +754,11 @@ final class ProcessContainment
         $walk = ['members' => [$pid => true], 'stable' => 0, 'passes' => 0];
         $timer = null;
         $done = false;
+        // Set once the walk has settled and SIGTERM went out: the deliverer
+        // for the frozen set and the moment its grace runs out.
+        $grace = null;
 
-        $finish = static function () use (&$walk, &$timer, &$done, $pid, $self, $stop, $cont, $ownGroup, $loop): bool {
+        $finish = static function () use (&$walk, &$timer, &$done, &$grace, $pid, $self, $stop, $cont, $ownGroup, $loop): bool {
             if ($done) {
                 return false;
             }
@@ -742,6 +768,13 @@ final class ProcessContainment
                 $timer = null;
             }
             unset(self::$pendingTreeKills[$pid]);
+            if ($grace !== null) {
+                // In (or at the end of) the SIGTERM grace: the walk is done
+                // and the set is fixed, so only the 9 is left.
+                ($grace['deliver'])(9);
+
+                return true;
+            }
             // A walk cut short (the shutdown sweep) runs its remaining passes
             // here, to the same bound killTree() uses; one that already
             // settled or hit the bound goes straight to the kill.
@@ -761,7 +794,7 @@ final class ProcessContainment
 
         $timer = $loop->addPeriodicTimer(
             self::TREE_FREEZE_POLL_US / 1_000_000,
-            static function () use (&$walk, &$done, &$timer, $pid, $self, $stop, $finish, $deferred, $loop): void {
+            static function () use (&$walk, &$done, &$timer, &$grace, $pid, $self, $stop, $cont, $ownGroup, $termGraceSeconds, $finish, $deferred, $loop): void {
                 if ($done) {
                     return;
                 }
@@ -775,10 +808,121 @@ final class ProcessContainment
 
                     return;
                 }
+                if ($grace !== null) {
+                    $gone = true;
+                    foreach ($grace['members'] as $member) {
+                        if (self::alive($member)) {
+                            $gone = false;
+
+                            break;
+                        }
+                    }
+                    if ($gone) {
+                        // Every member acted on SIGTERM: nothing is left for
+                        // a 9, so settle without sending one (escalate()'s
+                        // early return).
+                        $done = true;
+                        $loop->cancelTimer($timer);
+                        $timer = null;
+                        unset(self::$pendingTreeKills[$pid]);
+                        $deferred->resolve(null);
+
+                        return;
+                    }
+                    if (\microtime(true) >= $grace['deadline'] && $finish()) {
+                        $deferred->resolve(null);
+                    }
+
+                    return;
+                }
                 if (!self::freezePass($walk, $pid, $self, $stop) && $walk['passes'] < self::TREE_FREEZE_MAX_PASSES) {
                     return;
                 }
+                if ($termGraceSeconds > 0.0) {
+                    $members = \array_keys($walk['members']);
+                    $grace = [
+                        'members' => $members,
+                        'deliver' => self::treeDeliverer($members, $ownGroup, $cont),
+                        'deadline' => \microtime(true) + $termGraceSeconds,
+                    ];
+                    ($grace['deliver'])(15);
+
+                    return;
+                }
                 if ($finish()) {
+                    $deferred->resolve(null);
+                }
+            },
+        );
+
+        return $deferred->promise();
+    }
+
+    /**
+     * The degraded (no /proc, or no getpgrp) grace ladder of
+     * {@see killTreeAsync()}: 15 now, poll on a timer until every pid is gone
+     * or the grace is spent, then 9. Registered with the shutdown sweep like
+     * a walk, so a loop that stops mid-grace still sends the 9.
+     *
+     * @param \Closure(int): void $deliver
+     * @param list<int> $pids
+     * @return \React\Promise\PromiseInterface<null>
+     */
+    private static function graceThenKill(\Closure $deliver, array $pids, float $graceSeconds, \React\EventLoop\LoopInterface $loop): \React\Promise\PromiseInterface
+    {
+        $deliver(15);
+        $deferred = new \React\Promise\Deferred();
+        $deadline = \microtime(true) + $graceSeconds;
+        $self = self::currentPid();
+        $key = $pids[0];
+        $timer = null;
+        $done = false;
+
+        $finish = static function (bool $kill) use (&$timer, &$done, $deliver, $key, $loop): bool {
+            if ($done) {
+                return false;
+            }
+            $done = true;
+            if ($timer !== null) {
+                $loop->cancelTimer($timer);
+                $timer = null;
+            }
+            unset(self::$pendingTreeKills[$key]);
+            if ($kill) {
+                $deliver(9);
+            }
+
+            return true;
+        };
+
+        self::armPendingTreeKillSweep();
+        self::$pendingTreeKills[$key] = static fn(): bool => $finish(true);
+
+        $timer = $loop->addPeriodicTimer(
+            self::TREE_FREEZE_POLL_US / 1_000_000,
+            static function () use (&$timer, &$done, $pids, $deadline, $self, $finish, $deferred, $loop): void {
+                if ($done) {
+                    return;
+                }
+                if ($self !== self::currentPid()) {
+                    if ($timer !== null) {
+                        $loop->cancelTimer($timer);
+                    }
+
+                    return;
+                }
+                $gone = true;
+                foreach ($pids as $pid) {
+                    if (self::alive($pid)) {
+                        $gone = false;
+
+                        break;
+                    }
+                }
+                if (!$gone && \microtime(true) < $deadline) {
+                    return;
+                }
+                if ($finish(!$gone)) {
                     $deferred->resolve(null);
                 }
             },
