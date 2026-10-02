@@ -500,7 +500,10 @@ final class StdioMcpServer implements McpServer
             // An argument-less call arrives as PHP `[]`, which would encode as a
             // JSON array; `arguments` is a JSON object in the schema and the SDK
             // servers reject the array form ("expected record, received array").
-            'arguments' => $args === [] ? new \stdClass() : $args,
+            // The same loss one level down (`{"filter":{}}` decoded assoc to
+            // `['filter' => []]`, audit MCP-9) is undone against the tool's
+            // own inputSchema — see ArgumentShape.
+            'arguments' => $args === [] ? new \stdClass() : ArgumentShape::conform($args, $this->inputSchemaOf($toolName)),
         ]);
 
         if ($response === null || !$response->resultSet) {
@@ -526,6 +529,23 @@ final class StdioMcpServer implements McpServer
         }
 
         return $response->result;
+    }
+
+    /**
+     * The inputSchema the tool advertised at start(), or `[]` for a name the
+     * table does not hold (ArgumentShape then converts nothing).
+     *
+     * @return array<array-key,mixed>
+     */
+    private function inputSchemaOf(string $toolName): array
+    {
+        foreach ($this->tools as $tool) {
+            if ($tool->name === $toolName) {
+                return $tool->inputSchema;
+            }
+        }
+
+        return [];
     }
 
     /**

@@ -20,6 +20,7 @@ composer require sugarcraft/sugar-mcp
 |---|---|
 | `McpMessage` | Immutable JSON-RPC 2.0 envelope — request / notification / success / error — with a null-preserving `result` sentinel |
 | `McpTool` | Tool definition value object with a well-typedness gate (`tryFromArray`) |
+| `ArgumentShape` | Restores `{}` vs `[]` in decoded tool-call arguments against the tool's `inputSchema` |
 | `McpServer` | Transport contract: `start` / `stop` / `listTools` / `callTool` |
 | `StdioMcpServer` | Child-process stdio transport: argv-array spawn, NDJSON framing, one-clock handshake deadline, tail-bounded stderr capture, `BoundedShutdown` teardown, `__destruct` orphan-proofing |
 | `McpRouter` | Deny-before-allow tool/server narrowing over raw config keys; empty allow-list means allow-all |
@@ -66,8 +67,18 @@ official TypeScript and Python SDK servers reject a JSON array in their place.
 PHP's `[]` encodes as an array, so `McpMessage::toJson()` emits empty `params`
 as `{}`, `initialize` sends `"capabilities":{}`, an argument-less `callTool()`
 sends `"arguments":{}`, and `tools/list` omits `params` entirely (as the
-reference TS client does). A nested empty map inside your own params must be
-spelled `new \stdClass()` to reach the wire as `{}`.
+reference TS client does).
+
+Tool arguments are shaped one level further: a model's `{"filter":{}}`
+decodes (assoc) to `['filter' => []]`, so `callTool()` walks the arguments
+against the tool's advertised `inputSchema` (`ArgumentShape::conform()`) and
+sends every empty array the schema types as an object — through nested
+`properties`, `additionalProperties`/`patternProperties` maps, array `items`,
+`anyOf`/`oneOf`/`allOf`, `["object","null"]` unions and local `$ref`s — as
+`{}`. An empty array the schema types as an array, or whose position the
+schema does not type, stays `[]`; a `\stdClass` you pass is kept as-is. A
+nested empty map inside your own `request()` params still has to be spelled
+`new \stdClass()`.
 
 ## Fork safety
 

@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\MCP;
 use GuzzleHttp\Client;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamInterface;
+use SugarCraft\Mcp\ArgumentShape;
 use SugarCraft\Mcp\RequestIdSequence;
 
 /**
@@ -195,14 +196,33 @@ final class HttpMcpServer implements McpServer
                 'name' => $toolName,
                 // An argument-less call arrives as PHP `[]`, which encodes as a
                 // JSON array; `arguments` is an object in the schema and the
-                // SDK servers reject the array form (audit MCP-1/MCP-2).
-                'arguments' => $args === [] ? new \stdClass() : $args,
+                // SDK servers reject the array form (audit MCP-1/MCP-2). Nested
+                // empty objects lost the same way are restored against the
+                // tool's inputSchema (audit MCP-9, {@see ArgumentShape}).
+                'arguments' => $args === [] ? new \stdClass() : ArgumentShape::conform($args, $this->inputSchemaOf($toolName)),
             ]);
 
             return $data !== null ? ($data['result'] ?? ['error' => 'Tool call failed']) : ['error' => 'Invalid response'];
         } catch (\Exception $e) {
             return ['error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * The inputSchema the tool advertised at start(), or `[]` for a name the
+     * table does not hold (ArgumentShape then converts nothing).
+     *
+     * @return array<array-key,mixed>
+     */
+    private function inputSchemaOf(string $toolName): array
+    {
+        foreach ($this->tools as $tool) {
+            if ($tool->name === $toolName) {
+                return $tool->inputSchema;
+            }
+        }
+
+        return [];
     }
 
     /**

@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\MCP;
 
 use SugarCraft\Crush\ClaudeCodeMcpClient;
 use SugarCraft\Crush\McpMessage;
+use SugarCraft\Mcp\ArgumentShape;
 
 /**
  * E699 — the `claude-mcp` transport: the repository ASKS, the operator's
@@ -227,7 +228,10 @@ final class ClaudeCodeMcpServer implements McpServer
      */
     public function callTool(string $toolName, array $args): array
     {
-        $response = $this->client->callTool($toolName, $args);
+        // The client coerces an empty top level to `{}` itself (MCP-1); the
+        // nested empty objects the assoc decode flattened to `[]` are restored
+        // here, where the start-time tool table holds the schema (audit MCP-9).
+        $response = $this->client->callTool($toolName, ArgumentShape::conform($args, $this->inputSchemaOf($toolName)));
 
         if ($response->error !== null || !$response->resultSet) {
             return ['error' => 'Tool call failed'];
@@ -245,6 +249,23 @@ final class ClaudeCodeMcpServer implements McpServer
         }
 
         return $response->result;
+    }
+
+    /**
+     * The inputSchema the tool advertised at start(), or `[]` for a name the
+     * cache does not hold (ArgumentShape then converts nothing).
+     *
+     * @return array<array-key,mixed>
+     */
+    private function inputSchemaOf(string $toolName): array
+    {
+        foreach ($this->tools as $tool) {
+            if ($tool->name === $toolName) {
+                return $tool->inputSchema;
+            }
+        }
+
+        return [];
     }
 
     /** E698 law, same as the stdio sibling: connected AND the child is running. */
