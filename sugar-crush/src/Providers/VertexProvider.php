@@ -1603,10 +1603,14 @@ final readonly class VertexProvider implements ProviderInterface
      *
      * TRANSPORT ERRORS DO NOT ARRIVE HERE. `:generateContent` reports them as
      * an HTTP status, which the vendored REST transport raises as an
-     * `ApiException`; that is caught by {@see complete()} and classified by
-     * {@see TransientFailure::isTransient()}. There is deliberately no
-     * `$data['error']` branch in this method, because on this protocol no such
-     * document reaches it.
+     * `ApiException` carrying only the gRPC code and status name; that is
+     * caught by {@see complete()} (and by {@see streamGemini()} on the stream
+     * arm) and classified by {@see TransientFailure::isTransient()}, which
+     * judges an ApiException by that gRPC status - a 429 `RESOURCE_EXHAUSTED`
+     * or 503 `UNAVAILABLE` retries, a 401 `UNAUTHENTICATED` does not (audit
+     * A19; before it, every ApiException fell through as permanent). There
+     * is deliberately no `$data['error']` branch in this method, because on
+     * this protocol no such document reaches it.
      *
      * KNOWN-INCOMPLETE SEAM - `thought` parts. Gemini 2.5 marks a reasoning
      * part with `"thought": true`. This method folds every part's text into

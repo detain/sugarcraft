@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Providers;
 
 use Aws\Exception\AwsException;
+use Google\ApiCore\ApiException;
 use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Exception\TransferException;
 use OpenAI\Exceptions\TransporterException;
@@ -200,6 +201,17 @@ final class TransientFailure
      * A recognised HTTP status is DEFINITIVE and stops the walk: once the
      * server has told us it was a 401, an inner transport exception saying
      * "connection reset" would be a lie about the same failure.
+     *
+     * Google's gax {@see ApiException} (audit A19) is the one SDK exception
+     * whose verdict is NOT an HTTP status. The vendored REST transport
+     * (`RestTransport`, `RestServerStreamingCall`) converts every Guzzle
+     * failure that HAS a response into one via
+     * `ApiException::createFromRequestException()`, which keeps only the
+     * gRPC code and status name - no `getStatusCode()`, no `previous` - so
+     * before this arm every Vertex 429 `RESOURCE_EXHAUSTED` and 503
+     * `UNAVAILABLE` fell off the end of the walk as permanent and was never
+     * retried. It is judged by {@see apiExceptionIsTransient()} and, like a
+     * status, stops the walk.
      */
     public static function isTransient(\Throwable $error): bool
     {
@@ -224,6 +236,12 @@ final class TransientFailure
             $status = self::statusCode($link);
             if ($status !== null) {
                 return self::statusIsTransient($status);
+            }
+
+            // `instanceof` never autoloads, so this costs nothing - and
+            // requires nothing - on an install without google/gax.
+            if ($link instanceof ApiException) {
+                return self::apiExceptionIsTransient($link);
             }
 
             if ($link instanceof NetworkExceptionInterface) {
@@ -433,6 +451,102 @@ final class TransientFailure
         }
 
         return null;
+    }
+
+    /**
+     * The gRPC status names that mean "try again" (audit A19).
+     *
+     * `RESOURCE_EXHAUSTED` is Vertex's quota 429 and `UNAVAILABLE` its
+     * overloaded 503 - the two routine failures on a shared project.
+     * `DEADLINE_EXCEEDED` is gax's mapping of a 504, `INTERNAL` of every
+     * other 5xx (including the bare 500), and `ABORTED` is gRPC's own
+     * "retry at a higher level" (gax maps a 409 to it). This mirrors
+     * {@see statusIsTransient()}: 5xx/408/429 there, their gRPC names here.
+     *
+     * `UNKNOWN` is deliberately ABSENT. gax never derives it from an HTTP
+     * status - a 5xx becomes `INTERNAL` - so it only appears when a server
+     * NAMES it, and "the server could not say what went wrong" is exactly
+     * the unclassified case the allow-list rule keeps permanent. Also
+     * absent, for the reasons statusIsTransient() gives for 4xx:
+     * `UNAUTHENTICATED`, `PERMISSION_DENIED`, `INVALID_ARGUMENT`,
+     * `NOT_FOUND`, `FAILED_PRECONDITION`, `OUT_OF_RANGE`, `UNIMPLEMENTED`,
+     * `ALREADY_EXISTS`, `CANCELLED`, `DATA_LOSS`.
+     */
+    public const TRANSIENT_GRPC_STATUSES = [
+        'RESOURCE_EXHAUSTED',
+        'UNAVAILABLE',
+        'DEADLINE_EXCEEDED',
+        'INTERNAL',
+        'ABORTED',
+    ];
+
+    /**
+     * The canonical gRPC code table (`google.rpc.Code`), so a status-less
+     * ApiException can still be judged by its numeric code without loading
+     * `Google\Rpc\Code` - kept local for the same reason {@see statusCode()}
+     * uses `method_exists()`: classifying one SDK's exception must not
+     * require another SDK to be installed.
+     */
+    private const GRPC_CODE_NAMES = [
+        0 => 'OK',
+        1 => 'CANCELLED',
+        2 => 'UNKNOWN',
+        3 => 'INVALID_ARGUMENT',
+        4 => 'DEADLINE_EXCEEDED',
+        5 => 'NOT_FOUND',
+        6 => 'ALREADY_EXISTS',
+        7 => 'PERMISSION_DENIED',
+        8 => 'RESOURCE_EXHAUSTED',
+        9 => 'FAILED_PRECONDITION',
+        10 => 'ABORTED',
+        11 => 'OUT_OF_RANGE',
+        12 => 'UNIMPLEMENTED',
+        13 => 'INTERNAL',
+        14 => 'UNAVAILABLE',
+        15 => 'DATA_LOSS',
+        16 => 'UNAUTHENTICATED',
+    ];
+
+    /**
+     * Whether a gax ApiException describes a transient failure.
+     *
+     * Three readings, most specific first, because gax builds the exception
+     * three ways:
+     *
+     *  1. A recognised status NAME (`getStatus()`) - every exception gax
+     *     builds from an error body or an RPC status carries one.
+     *  2. No recognised name: the numeric code. A gRPC code (0-16) maps
+     *     through {@see GRPC_CODE_NAMES}. An HTTP-range code (100-599) is
+     *     judged as the HTTP status it is: when an error body has no
+     *     `status` member, `createFromRequestException()` passes the Guzzle
+     *     exception's code - the HTTP status - straight through, paired with
+     *     `UNRECOGNIZED_STATUS`. The two ranges cannot collide.
+     *  3. Neither a name nor a code (status null/empty, code 0): the
+     *     exception says nothing the server decided, which is the shape of a
+     *     transport failure rather than a refusal - so it is treated like
+     *     the other network-error arms of {@see isTransient()}, transient.
+     *     Bounded by {@see MAX_ATTEMPTS} like every other retry.
+     *
+     * Anything else (gax's `UNRECOGNIZED_CODE` -1 for a 1xx/3xx) is
+     * unclassified, and the allow-list rule makes it permanent.
+     */
+    private static function apiExceptionIsTransient(ApiException $error): bool
+    {
+        $status = $error->getStatus();
+        if (is_string($status) && in_array($status, self::GRPC_CODE_NAMES, true)) {
+            return in_array($status, self::TRANSIENT_GRPC_STATUSES, true);
+        }
+
+        $code = $error->getCode();
+        if (isset(self::GRPC_CODE_NAMES[$code]) && $code !== 0) {
+            return in_array(self::GRPC_CODE_NAMES[$code], self::TRANSIENT_GRPC_STATUSES, true);
+        }
+
+        if ($code >= 100 && $code < 600) {
+            return self::statusIsTransient($code);
+        }
+
+        return $code === 0 && ($status === null || $status === '');
     }
 
     /**
