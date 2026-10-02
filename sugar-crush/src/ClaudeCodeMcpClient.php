@@ -447,7 +447,13 @@ final class ClaudeCodeMcpClient
         }
 
         $id = (string) ++$this->requestId;
-        $request = McpMessage::request($id, 'tools/call', ['name' => $name, 'arguments' => $params ?? []]);
+        // `arguments` is a JSON object in the schema; PHP's `[]` encodes as an
+        // array, which the SDK servers reject ("expected record, received
+        // array") — so an omitted or empty map must leave as `{}`.
+        $request = McpMessage::request($id, 'tools/call', [
+            'name' => $name,
+            'arguments' => $params === null || $params === [] ? new \stdClass() : $params,
+        ]);
 
         // ⚠️ THE WRITE MAY BLOCK FIFTEEN TIMES AS LONG AS THE READ BELOW WILL
         // WAIT, AND NOTHING RELATES THE TWO. `sendMessage()` inherits
