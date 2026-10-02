@@ -1085,12 +1085,17 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
             $checkpoints = $store->listCheckpoints('parked-session');
             $this->assertCount(1, $checkpoints, 'the dispatch auto-saves exactly one checkpoint');
 
+            // What it saved is the state BEFORE the parked prompt (audit SES-1):
+            // the prompt is the draft `/rewind` re-seeds, and NOT also a row of
+            // the transcript, which used to end on it — so a rewind left it in
+            // both places and Enter sent it twice.
             $saved = $store->getCheckpoint('parked-session', 0);
             $this->assertNotNull($saved);
-            $this->assertStringContainsString(
+            $this->assertSame('what changed in the router?', $saved['inputBuf']);
+            $this->assertNotContains(
                 'what changed in the router?',
-                json_encode($saved, JSON_THROW_ON_ERROR),
-                'and what it saved is the history the parked turn went out with',
+                array_map(static fn(array $m): string => (string) $m['content'], $saved['messages']),
+                'the parked prompt is the draft, not a transcript row',
             );
         } finally {
             foreach (glob($dir . '/*') ?: [] as $file) {

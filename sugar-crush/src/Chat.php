@@ -358,6 +358,23 @@ final class Chat implements Model
     private const DOUBLE_ESCAPE_WINDOW_SECONDS = 0.6;
 
     /**
+     * Checkpoint state key {@see dispatchTurn()} sets to true on every
+     * auto-save since audit SES-1, meaning "`messages` is the transcript from
+     * BEFORE the prompt". Its absence is how {@see handleRewindCommand()} tells
+     * an older checkpoint — whose `messages` end on the very prompt its draft
+     * re-seeds — from a current one, whose last user row may legitimately equal
+     * the draft (the same prompt sent twice in a row).
+     */
+    private const CHECKPOINT_PRE_TURN_KEY = 'messagesPrecedePrompt';
+
+    /**
+     * The fixed opening of the notice {@see scheduleParkedCompaction()} writes
+     * when it parks a turn — named once because
+     * {@see withoutParkedSubmission()} recognises the notice by it.
+     */
+    private const PARK_NOTICE_PREFIX = 'Context reached the automatic-compaction tier at ~';
+
+    /**
      * One-shot prompt for the background title call. Deliberately terse:
      * opencode's title agent sends barely more than "Generate a title for
      * this conversation" and a cheap model does worse, not better, with an
@@ -7480,13 +7497,28 @@ final class Chat implements Model
             return $turnHookRefusal;
         }
 
+        // THE STATE BEFORE THIS PROMPT, as `/rewind` restores it (audit SES-1),
+        // taken at the one point where the rewrite reports are in and nothing of
+        // the submission itself is yet: the compacted/rescued history PLUS the
+        // reports that describe that rewrite, and NOT the hook notes or the
+        // user's line. See {@see dispatchTurn()}'s $preTurnHistory for why the
+        // rewrite stays and the submission goes.
+        $preTurnHistory = [...$baseHistory, ...$newTurnMessages];
+
         foreach ($turnHookNotes as $note) {
             $newTurnMessages[] = $note;
         }
 
         $newTurnMessages[] = Message::user($text);
 
-        return $turnCarrier->dispatchTurn($baseHistory, $newTurnMessages, $tokenLimit);
+        return $turnCarrier->dispatchTurn(
+            $baseHistory,
+            $newTurnMessages,
+            $tokenLimit,
+            $preTurnHistory,
+            $this->inputBuf,
+            $this->inputCursorOffset(),
+        );
     }
 
     /**
@@ -7870,21 +7902,61 @@ final class Chat implements Model
      * answer to. That is a rewrite of $baseHistory, not an append — see
      * {@see withoutContextReminders()} for the pile-up it prevents, and for why
      * a fire-once latch and a render-from-state reminder were both rejected.
-     * The checkpoint written further down serialises `$next->history`, so it
-     * inherits the dedup with no second site to keep in step.
+     * The checkpoint written further down strips $preTurnHistory through the
+     * same {@see withoutContextReminders()}, so it carries no stale copy either.
      *
      * `$pendingCompactionId` is deliberately untouched. A `/compact`
      * summarization outstanding across a turn is a supported state (see
      * {@see HistoryCompactedMsg}), and on the parked route the landing
      * compaction has already released the latch before this is reached.
      *
+     * THE CHECKPOINT IS THE STATE BEFORE THE PROMPT, NOT AFTER IT (audit
+     * SES-1). It used to serialise `$next->history`, which ends with the user's
+     * line, beside a draft that IS that line — so `/rewind` put the prompt back
+     * in the box AND left it in the transcript: Enter sent it twice and the
+     * model saw two consecutive user rows. $preTurnHistory is what the caller
+     * says the transcript was before this submission, and "before" is chosen as:
+     *
+     *  - EVERY ROW THE SUBMISSION ITSELF ADDED IS OUT: the user's line, the
+     *    UserPromptSubmit hook notes written beside it, the 70% reminder. A
+     *    resend through the restored draft regenerates all three, so keeping
+     *    any of them would double it.
+     *  - THE COMPACTION THE SUBMISSION TRIGGERED STAYS IN, with the report rows
+     *    that describe it (the tier notice, the intra-exchange truncation
+     *    notice, the spend-cap notice; on the parked route the park notice and
+     *    the landing report). A rewrite is a fact about the transcript, not
+     *    about the prompt: it may have been a model summarisation already
+     *    billed, and restoring the pre-compaction transcript would put the
+     *    session straight back over the tier, so the resend re-parks and pays
+     *    again — and each rewind-and-resend would count as one more refill
+     *    against the thrash breaker. Nothing is lost by keeping it: the
+     *    PREVIOUS turn's checkpoint still holds the uncompacted transcript, so
+     *    `/rewind 2` reaches it. The reports travel with the rewrite because a
+     *    transcript of `[summary]` rows with the notice that explains them cut
+     *    away reads as corruption.
+     *
+     * The draft and caret come from the caller too, because only it knows them: on
+     * {@see submit()}'s route they are the pre-clear buffer, while on the parked
+     * route the buffer was consumed one update() earlier and the box now holds
+     * whatever the user has typed since.
+     *
      * @param list<Message> $baseHistory
      * @param list<Message> $newTurnMessages
      * @param int $tokenLimit PROVIDER-COUNTED window from {@see contextTokenLimit()}.
+     * @param list<Message> $preTurnHistory The transcript as it stood before this
+     *                                  submission, for the checkpoint only.
+     * @param string $preTurnDraft The draft `/rewind` re-seeds the box with.
+     * @param ?int $preTurnCursor The caret within it, or null for end-of-text.
      * @return array{0:Chat,1:?\Closure}
      */
-    private function dispatchTurn(array $baseHistory, array $newTurnMessages, int $tokenLimit): array
-    {
+    private function dispatchTurn(
+        array $baseHistory,
+        array $newTurnMessages,
+        int $tokenLimit,
+        array $preTurnHistory,
+        string $preTurnDraft,
+        ?int $preTurnCursor,
+    ): array {
         // Reminder-tier check (R21's ContextCompactor::shouldSendReminder(),
         // 70% of the token budget by default). Unlike the idle-compaction
         // prompt in submit() — which short-circuits the turn entirely and never
@@ -7980,23 +8052,29 @@ final class Chat implements Model
         // Auto-save checkpoint before processing prompt
         if ($this->sessionStore !== null && $this->currentSessionId !== null && method_exists($this->sessionStore, 'saveCheckpoint')) {
             $chatState = [
-                'messages' => $next->history,
-                // THE DRAFT IS READ FROM $this, NOT $next — the order is load-bearing.
-                // $next above already blanked inputBuf (submit consumed the prompt), so
-                // snapshotting $next->inputBuf stored '' on every turn and `/rewind`'s
-                // draft restore had nothing to restore (E681). $this->inputBuf is the
-                // pre-clear buffer: for a checkpoint taken at submit that is exactly the
-                // prompt this turn sent, which is what rewind re-seeds the box with.
-                'inputBuf' => $this->inputBuf,
+                // The state BEFORE the prompt (audit SES-1; see the docblock), so
+                // the restored transcript and the restored draft never hold the
+                // same line twice.
+                'messages' => self::withoutContextReminders($preTurnHistory),
+                // Marks this shape for {@see handleRewindCommand()}: a checkpoint
+                // WITHOUT the key predates SES-1 and still ends on the prompt its
+                // draft re-seeds, which the restore drops there instead.
+                self::CHECKPOINT_PRE_TURN_KEY => true,
+                // THE DRAFT IS THE CALLER'S, NOT $next's — $next above already
+                // blanked inputBuf (submit consumed the prompt), so snapshotting
+                // $next->inputBuf stored '' on every turn and `/rewind`'s draft
+                // restore had nothing to restore (E681). On submit()'s route the
+                // caller passes its pre-clear buffer: exactly the prompt this turn
+                // sent, which is what rewind re-seeds the box with.
+                'inputBuf' => $preTurnDraft,
                 // The cursor travels WITH the draft (E4): `inputCursorOffset()`'s
                 // flat codepoint form is exactly the shape the checkpoint state
                 // map needs — see its docblock — and without this key a restored
                 // draft always reseeds with the caret at the end, because
                 // mutate()'s two-write-routes rule rebuilds the `input` widget
                 // from a bare `inputBuf` and the rebuild lands at end-of-text.
-                // Read from $this beside 'inputBuf' for the same load-bearing
-                // reason: $next already blanked the draft.
-                'inputCursor' => $this->inputCursorOffset(),
+                // Null is the restore's end-of-text fallback: it re-applies an int only.
+                'inputCursor' => $preTurnCursor,
                 'inFlight' => false,
                 'agentContext' => [
                     'currentSessionId' => $this->currentSessionId,
@@ -11142,7 +11220,7 @@ final class Chat implements Model
             // 95% refusal is 423 characters and the idle advisory 391 - but it is
             // a new message and there is no reason for it to join them.
             'history' => [...$this->history, Message::system(sprintf(
-                'Context reached the automatic-compaction tier at ~%d estimated tokens of a '
+                self::PARK_NOTICE_PREFIX . '%d estimated tokens of a '
                 . '%d-token context window. Summarising %d earlier %s with the model first; '
                 . 'the turn goes out when they land.',
                 $tokenCount,
@@ -11747,7 +11825,18 @@ final class Chat implements Model
                 // ON but not written INTO: this attempt got its turn out by
                 // truncating the exchange that overflowed, so it is not the futile
                 // refill the run counts (ruling P8.S5-R6).
-                return $compacted->dispatchTurn($rescued['history'], [$rescued['notice']], $tokenLimit);
+                //
+                // The checkpoint's pre-turn state keeps the truncation notice for
+                // the reason the compaction report stays (see dispatchTurn()): it
+                // describes a rewrite of the history, not the prompt.
+                return $compacted->dispatchTurn(
+                    $rescued['history'],
+                    [$rescued['notice']],
+                    $tokenLimit,
+                    [...self::withoutParkedSubmission($rescued['history'], $msg->parkedSubmission), $rescued['notice']],
+                    $msg->parkedSubmission,
+                    null,
+                );
             }
 
             // '' rather than the prompt: the echo is already in history, and the
@@ -11777,8 +11866,71 @@ final class Chat implements Model
         // when it did not: the prompt goes out either way, so this exit never
         // extends (ruling P8.S5-R6, and submit()'s unrescued dispatch above takes
         // the same pair of answers).
+        //
+        // THE CHECKPOINT'S DRAFT IS THE PARKED PROMPT, not the box: parking
+        // consumed the draft one update() ago, so `$compacted->inputBuf` is
+        // whatever the user has typed while the summarization was out — before
+        // audit SES-1 that scratch text is what `/rewind` re-seeded, beside a
+        // transcript that still held the prompt. No caret: the one the user
+        // submitted from went with the consumed draft, so the restore lands at
+        // end-of-text.
         return $compacted->withCompactionOutcome($refilled, turnSent: true)
-            ->dispatchTurn($compacted->history, [], $tokenLimit);
+            ->dispatchTurn(
+                $compacted->history,
+                [],
+                $tokenLimit,
+                self::withoutParkedSubmission($compacted->history, $msg->parkedSubmission),
+                $msg->parkedSubmission,
+                null,
+            );
+    }
+
+    /**
+     * $history with the parked submission's own rows removed — the prompt
+     * {@see scheduleParkedCompaction()} echoed and the UserPromptSubmit notes it
+     * wrote immediately ahead of it — for the pre-turn checkpoint (audit SES-1;
+     * see {@see dispatchTurn()} for what "pre-turn" keeps and why).
+     *
+     * FOUND BY CONTENT AND BRACKETED BY THE PARK NOTICE, because nothing else
+     * survives the landing: compaction rebuilds the history, so neither indices
+     * nor instances taken at park time can be trusted, while the prompt is the
+     * newest exchange and is preserved verbatim. The prompt is the LAST user row
+     * carrying the parked text — nothing user-role can be appended while a turn
+     * is parked, the queue writes system notices. The notes are the system rows
+     * between it and the park notice, which were written in the same mutate as
+     * both; when that bracket cannot be found intact, only the prompt row goes,
+     * because a system row that cannot be proved to be a note might be anything
+     * else the transcript said (a cancel marker, an earlier report).
+     *
+     * The park notice and the landing report STAY: they describe the rewrite the
+     * checkpoint keeps.
+     *
+     * @param list<Message> $history
+     * @return list<Message>
+     */
+    private static function withoutParkedSubmission(array $history, string $prompt): array
+    {
+        $history = array_values($history);
+        $promptAt = null;
+        for ($i = count($history) - 1; $i >= 0; $i--) {
+            if ($history[$i]->role === Role::User && $history[$i]->content === $prompt) {
+                $promptAt = $i;
+                break;
+            }
+        }
+        if ($promptAt === null) {
+            return $history;
+        }
+
+        $from = $promptAt;
+        for ($i = $promptAt - 1; $i >= 0 && $history[$i]->role === Role::System; $i--) {
+            if (str_starts_with($history[$i]->content, self::PARK_NOTICE_PREFIX)) {
+                $from = $i + 1;
+                break;
+            }
+        }
+
+        return [...array_slice($history, 0, $from), ...array_slice($history, $promptAt + 1)];
     }
 
     /**
@@ -12455,7 +12607,23 @@ final class Chat implements Model
             // reseeds at end-of-text exactly as it always did.
             $inputCursor = $state['state_data']['inputCursor'] ?? $state['inputCursor'] ?? null;
 
-            // Build response
+            // AN OLDER CHECKPOINT STILL ENDS ON THE PROMPT ITS DRAFT RE-SEEDS (audit
+            // SES-1): before the save side learned to store the pre-turn
+            // transcript, every auto-save serialised the history WITH the user's
+            // line, so restoring one as-is leaves the prompt in the transcript and
+            // in the box at once — Enter sends it twice. Sessions saved before the
+            // fix still hold those, so the line is dropped here too. Only when the
+            // checkpoint lacks the pre-turn marker: in a current one a trailing
+            // user row equal to the draft is a real earlier turn (the same prompt
+            // sent twice), not this one.
+            $preTurnShape = ($state['state_data'][self::CHECKPOINT_PRE_TURN_KEY] ?? $state[self::CHECKPOINT_PRE_TURN_KEY] ?? false) === true;
+            if (!$preTurnShape && is_string($inputBuf)) {
+                $messages = self::withoutLegacyTrailingPrompt($messages, $inputBuf);
+            }
+
+            // Build response — counted AFTER the legacy trim, so "Rewound N" is
+            // the rows the restore really took away: the prompt, its reply and
+            // everything the turn added in between.
             $rewoundCount = count($this->history) - count($messages);
             $response = "Rewound {$rewoundCount} messages to checkpoint {$targetIndex}. Use /branch to save this state before continuing.";
 
@@ -12497,6 +12665,46 @@ final class Chat implements Model
         } catch (\Throwable $e) {
             return $this->sessionResponse($inputText, "Error during rewind: {$e->getMessage()}");
         }
+    }
+
+    /**
+     * A pre-SES-1 checkpoint's $messages with the prompt it was taken for cut
+     * off the end — see the call in {@see handleRewindCommand()}.
+     *
+     * That save serialised the dispatched history, whose tail on
+     * {@see submit()}'s route was `[...notes, user prompt, 70% reminder?]`, so
+     * the prompt is the last user row and only system rows can follow it. It
+     * is dropped together with those followers (the reminder is regenerated by
+     * the next dispatch) only when its content is exactly the restored draft
+     * — trimmed, the way submit() trims it — so a checkpoint that does not end
+     * on its own prompt (hand-saved, empty draft, a custom command whose
+     * expansion differs from what was typed) is restored untouched. Hook notes
+     * ahead of the line stay: nothing in an old checkpoint tells one apart
+     * from any other system row.
+     *
+     * @param list<Message> $messages
+     * @return list<Message>
+     */
+    private static function withoutLegacyTrailingPrompt(array $messages, string $draft): array
+    {
+        $prompt = trim($draft);
+        if ($prompt === '') {
+            return $messages;
+        }
+
+        $messages = array_values($messages);
+        for ($i = count($messages) - 1; $i >= 0; $i--) {
+            $message = $messages[$i];
+            if ($message->role === Role::System) {
+                continue;
+            }
+
+            return $message->role === Role::User && $message->content === $prompt
+                ? array_slice($messages, 0, $i)
+                : $messages;
+        }
+
+        return $messages;
     }
 
     /**
@@ -15443,8 +15651,8 @@ final class Chat implements Model
      * Rewriting `history` here is not a new class of operation: this class
      * already replaces the array wholesale for the tool-result splice, for
      * `/clear`, for every compaction tier and for `/rewind`. And because
-     * {@see dispatchTurn()} checkpoints `$next->history` itself, the persisted
-     * copy inherits the fix with no second serialisation site to keep in step.
+     * {@see dispatchTurn()} runs its checkpoint's pre-turn history through this
+     * same method, the persisted copy carries no stale reminder either.
      *
      * Only reminders still carried VERBATIM are matched, which is the intended
      * scope: a reminder that a compaction folded into a summary line is no
