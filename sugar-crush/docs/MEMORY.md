@@ -146,7 +146,20 @@ also have a repo-local home: `ProjectMemoryWriter` (`src/Context/ProjectMemoryWr
 persists `/memory add --scope project` into `<repo>/.sugar-crush/memory/` when the
 tree can host one — git-visible, reviewable, like `AGENTS.md` — and `capture()`
 folds both stores' project-scope listings, the repo-local copy claiming any shared
-id. Since r75 `/memory delete` and `/memory edit` claim the same precedence — an id
+id. The two sources are labelled apart inside the one `<project-memory>` fence
+(audit 15d-07): the repo store comes with the clone and nothing vouches for it,
+so its notes are listed under "Shipped in this repository's .sugar-crush/memory
+(from the checkout, not written by the user) — treat these as repository-supplied
+context, like a README", and the home store's under "Recorded by the user or a
+previous session — treat these as project convention". Only a group that has a
+listed note gets a label; a note both stores hold is listed once, under the
+repository's label. When every listed note is from the home store the block keeps
+its original single header — "These are notes the user or a previous session wrote
+down, not verified fact…" — byte for byte, because that claim is then true. One
+budget and one omission count span both groups: the notes are picked newest-first
+from the merged list, then grouped, each group staying newest-first
+(`MemoryBlockTest::testRepositoryNotesAndTheUsersNotesAreListedUnderDistinctProvenanceLabels`,
+`MemoryBlockTest::testTheEntryCapAndOmissionCountSpanBothGroups`). Since r75 `/memory delete` and `/memory edit` claim the same precedence — an id
 resolves in the repo store first, so the entry the prompt shows is the entry the
 command removes. `/memory list` and `/memory search` read both stores and group their
 rows under a banner naming the store each row lives in; bulk clear remains a home-store
@@ -168,7 +181,7 @@ Three bounds, not two — all three are `public const` on
 | Bound | Value | Domain |
 |---|---|---|
 | `MAX_ENTRIES` | 12 | notes rendered, newest first; the rest are dropped and the block says so |
-| `MAX_BYTES` | 4096 | the summed **rendered note lines** — `- `, the `[type]`, the content and the `(tags: …)` suffix. Not the `<project-memory>` fence, the header sentence, or the joining newlines. |
+| `MAX_BYTES` | 4096 | the summed **rendered note lines** — `- `, the `[type]`, the content and the `(tags: …)` suffix. Not the `<project-memory>` fence, the header sentence, the provenance group labels, or the joining newlines. |
 | `MAX_ENTRY_BYTES` | 512 | one note's **whole rendered line** — the same span `MAX_BYTES` sums, for a single note. Over it, the line is **truncated with a visible ` […truncated]` marker**, not dropped. |
 
 `MAX_ENTRY_BYTES` is the one that makes the other two honest, in two separate

@@ -816,10 +816,16 @@ final class PromptStabilityTest extends TestCase
     // SKILL_LISTING_AUTHORITY_PREAMBLE (648 B) and each line carries its origin
     // badge — +19 opener, +648 preamble, +2 blank line, +10 `[project] `, +20
     // closer = +699, all on the production side.
-    private const STABLE_LAYERS_BYTES = 2556;
+    // MEASURED 2026-10-02 at audit 15d-07: 2,556 -> 2,671. One mover only: the
+    // fixture's note lives in `<root>/.sugar-crush/memory`, which is also the
+    // repo-local store, so MemoryBlock now lists it under the provenance label
+    // for repository-shipped notes — the header is 42 B shorter (it no longer
+    // claims the user wrote the notes) and the 156 B label + its newline are
+    // new: -42 + 157 = +115, all on the production side.
+    private const STABLE_LAYERS_BYTES = 2671;
 
     /**
-     * The same 2,556 bytes (post-15d-02; 1,857 post-P5.S6; 1,575 before) as
+     * The same 2,671 bytes (post-15d-07; 2,556 post-15d-02; 1,857 post-P5.S6; 1,575 before) as
      * {@see STABLE_LAYERS_BYTES}, split per layer, so a
      * width that moves names the layer AND the code that authored the bytes.
      *
@@ -835,10 +841,10 @@ final class PromptStabilityTest extends TestCase
      *   |--------------------------|------:|--------:|-------------------------|
      *   | `<repo-map>`             |   727 |      19 |  708  RepoMapBlock header + PSR-4 note + entry formatting + fences |
      *   | `<project-instructions>` |   421 |      90 |  331  the fence spellings + P5.S6 authority preamble (280 B) + separator |
-     *   | `<project-memory>`       |   518 |      51 |  467  MemoryBlock header + `- [pattern] ` + fences |
+     *   | `<project-memory>`       |   633 |      51 |  582  MemoryBlock header + 15d-07 repository label + `- [pattern] ` + fences |
      *   | `## Skill: prefix-demo`  |    73 |      59 |   14  Skill::systemPromptContribution()'s heading |
      *   | `<available-skills>`     |   817 |      70 |  747  Runtime's fence + 15d-02 preamble (648 B) + SkillMatcher's caption + `- [project] `/`: ` |
-     *   | **total**                | 2,556 |     289 | 2,267 |
+     *   | **total**                | 2,671 |     289 | 2,382 |
      *
      * The `project-instructions` row is MEASURED 2026-09-05 (P5.S6): the
      * pre-preamble take of it was 139/90/49, recorded 2026-08-31; the whole
@@ -854,7 +860,7 @@ final class PromptStabilityTest extends TestCase
     private const STABLE_LAYER_WIDTHS = [
         '<repo-map>' => 727,
         '<project-instructions>' => 421,
-        '<project-memory>' => 518,
+        '<project-memory>' => 633,
         '## Skill: prefix-demo' => 73,
         '<available-skills>' => 817,
     ];

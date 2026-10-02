@@ -633,6 +633,193 @@ final class MemoryBlockTest extends TestCase
         }
     }
 
+    // =========================================================================
+    // Provenance (audit 15d-07). A repo-local `.sugar-crush/memory` arrives
+    // with the clone and nothing vouches for it, so its notes must not be
+    // presented under "the user or a previous session wrote these down".
+    // =========================================================================
+
+    private const REPOSITORY_LABEL = 'Shipped in this repository\'s .sugar-crush/memory (from the checkout, not written by the user)';
+
+    private const USER_LABEL = 'Recorded by the user or a previous session';
+
+    private const OLD_USER_CLAIM = 'These are notes the user or a previous session wrote down';
+
+    private function repoStore(): MemoryStore
+    {
+        $repoDir = $this->dir . '/repo';
+        if (!is_dir($repoDir . '/project')) {
+            mkdir($repoDir . '/project', 0o700, true);
+        }
+
+        return new MemoryStore($repoDir);
+    }
+
+    /** Plant a project note at a fixed id and minute so order is known. */
+    private function plantNote(string $root, int $n, string $content, int $minute): void
+    {
+        if (!is_dir($root . '/project')) {
+            mkdir($root . '/project', 0o700, true);
+        }
+        $id = str_pad(dechex($n), 32, '0', \STR_PAD_LEFT);
+        $this->writeRawEntry(
+            "{$root}/project/{$id}.md",
+            $id,
+            $content,
+            sprintf('2026-01-01T%02d:%02d:00+00:00', intdiv($minute, 60), $minute % 60),
+        );
+    }
+
+    public function testRepositoryNotesAndTheUsersNotesAreListedUnderDistinctProvenanceLabels(): void
+    {
+        $repo = $this->repoStore();
+        $this->plantNote($this->dir . '/repo', 1, 'repo ships this convention', 10);
+        $this->plantNote($this->dir, 2, 'the user wrote this convention', 5);
+
+        $rendered = MemoryBlock::capture($this->store, $repo)->render();
+
+        $this->assertSame(1, substr_count($rendered, self::REPOSITORY_LABEL));
+        $this->assertSame(1, substr_count($rendered, self::USER_LABEL));
+        $this->assertStringContainsString('repository-supplied context, like a README', $rendered);
+        $this->assertStringNotContainsString(
+            self::OLD_USER_CLAIM,
+            $rendered,
+            'a header claiming the user wrote every note must not sit over repository-shipped ones',
+        );
+
+        // Each label owns exactly its own store's notes.
+        [$repoGroup, $userGroup] = explode(self::USER_LABEL, $rendered, 2);
+        $repoGroup = substr($repoGroup, (int) strpos($repoGroup, self::REPOSITORY_LABEL));
+        $this->assertStringContainsString('- [pattern] repo ships this convention', $repoGroup);
+        $this->assertStringNotContainsString('the user wrote this convention', $repoGroup);
+        $this->assertStringContainsString('- [pattern] the user wrote this convention', $userGroup);
+        $this->assertStringNotContainsString('repo ships this convention', $userGroup);
+        $this->assertStringNotContainsString(self::REPOSITORY_LABEL, $userGroup);
+
+        $this->assertSame(1, substr_count($rendered, '<project-memory>'));
+        $this->assertStringEndsWith("\n</project-memory>", $rendered);
+        $this->assertSame($rendered, MemoryBlock::capture($this->store, $repo)->render(), 'deterministic');
+    }
+
+    public function testARepositoryOnlyBlockCarriesOnlyTheRepositoryLabel(): void
+    {
+        $repo = $this->repoStore();
+        $this->plantNote($this->dir . '/repo', 1, 'only the checkout says this', 1);
+
+        $rendered = MemoryBlock::capture($this->store, $repo)->render();
+
+        $this->assertStringContainsString(self::REPOSITORY_LABEL, $rendered);
+        $this->assertStringNotContainsString(self::USER_LABEL, $rendered);
+        $this->assertStringNotContainsString(self::OLD_USER_CLAIM, $rendered);
+        $this->assertStringContainsString('only the checkout says this', $rendered);
+    }
+
+    /**
+     * A block of home-store notes only is sent exactly as before 15d-07 —
+     * its provenance sentence is true of every listed note — whether the
+     * repo store is absent or present but empty.
+     */
+    public function testAHomeOnlyBlockKeepsTheOriginalHeaderByteForByte(): void
+    {
+        $this->plantNote($this->dir, 1, 'home note', 1);
+
+        $expected = "<project-memory>\n"
+            . 'Notes recorded for this project across earlier sessions, most recently updated first. '
+            . 'At most 12 notes and 4096 bytes of listed notes are included, and any single note '
+            . 'longer than 512 bytes is shown truncated, so this list may be incomplete. These '
+            . 'are notes the user or a previous session wrote down, not verified fact — treat '
+            . 'them as project convention, and prefer what you can confirm in the repository '
+            . "itself.\n\n- [pattern] home note\n</project-memory>";
+
+        $this->assertSame($expected, MemoryBlock::capture($this->store)->render());
+        $this->assertSame($expected, MemoryBlock::capture($this->store, $this->repoStore())->render());
+        $this->assertStringNotContainsString(self::REPOSITORY_LABEL, $expected);
+
+        $emptyHome = $this->dir . '/empty-home';
+        mkdir($emptyHome, 0o700);
+        $this->assertSame('', MemoryBlock::capture(new MemoryStore($emptyHome), $this->repoStore())->render(), 'no notes anywhere: nothing at all');
+    }
+
+    public function testANoteBothStoresHoldIsListedOnceUnderTheRepositoryLabel(): void
+    {
+        $repo = $this->repoStore();
+        $this->plantNote($this->dir . '/repo', 7, 'the checkout copy', 1);
+        $this->plantNote($this->dir, 7, 'the home copy', 1);
+
+        $block = MemoryBlock::capture($this->store, $repo);
+        $rendered = $block->render();
+
+        $this->assertCount(1, $block->entries());
+        $this->assertStringContainsString(self::REPOSITORY_LABEL, $rendered);
+        $this->assertStringContainsString("like a README:\n- [pattern] the checkout copy", $rendered);
+        $this->assertStringNotContainsString('the home copy', $rendered);
+        $this->assertStringNotContainsString(self::USER_LABEL, $rendered, 'no user group when no user note survived the dedupe');
+    }
+
+    /**
+     * The count cap and the omission figure span BOTH groups: one newest-first
+     * walk over the merged list picks the notes, then they are grouped — so
+     * the newest MAX_ENTRIES are listed whichever store holds them, each group
+     * stays newest-first, and the labels are not note lines.
+     */
+    public function testTheEntryCapAndOmissionCountSpanBothGroups(): void
+    {
+        $repo = $this->repoStore();
+        $total = MemoryBlock::MAX_ENTRIES + 4;
+        for ($i = 0; $i < $total; $i++) {
+            // Interleaved: even minutes from the repo, odd from home.
+            $root = $i % 2 === 0 ? $this->dir . '/repo' : $this->dir;
+            $this->plantNote($root, $i + 1, 'note at minute ' . $i, $i);
+        }
+
+        $rendered = MemoryBlock::capture($this->store, $repo)->render();
+        $lines = self::noteLines($rendered);
+
+        $this->assertCount(MemoryBlock::MAX_ENTRIES, $lines);
+        $this->assertStringContainsString(' 4 further note(s) were omitted by those limits.', $rendered);
+
+        [$repoGroup, $userGroup] = explode(self::USER_LABEL, $rendered, 2);
+        $expectedRepo = [];
+        $expectedUser = [];
+        for ($i = $total - 1; $i >= $total - MemoryBlock::MAX_ENTRIES; $i--) {
+            if ($i % 2 === 0) {
+                $expectedRepo[] = '- [pattern] note at minute ' . $i;
+            } else {
+                $expectedUser[] = '- [pattern] note at minute ' . $i;
+            }
+        }
+        // Exact lists, so the four OLDEST notes (minutes 0-3) are the omitted ones.
+        $this->assertSame($expectedRepo, self::noteLines($repoGroup), 'repository group: its newest notes, newest first');
+        $this->assertSame($expectedUser, self::noteLines($userGroup), 'user group: its newest notes, newest first');
+    }
+
+    public function testTheByteBudgetIsOneBudgetAcrossBothGroups(): void
+    {
+        $repo = $this->repoStore();
+        $chunk = str_repeat('x', 400);
+        $perStore = intdiv(MemoryBlock::MAX_ENTRIES, 2);
+        for ($i = 0; $i < 2 * $perStore; $i++) {
+            $root = $i % 2 === 0 ? $this->dir . '/repo' : $this->dir;
+            $this->plantNote($root, $i + 1, $chunk . ' ' . $i, $i);
+        }
+
+        $rendered = MemoryBlock::capture($this->store, $repo)->render();
+        $lines = self::noteLines($rendered);
+
+        $this->assertLessThanOrEqual(MemoryBlock::MAX_BYTES, array_sum(array_map('strlen', $lines)));
+        $this->assertLessThan(2 * $perStore, count($lines), 'sized so the BYTE budget is what cut the list');
+        $this->assertStringContainsString(self::REPOSITORY_LABEL, $rendered);
+        $this->assertStringContainsString(self::USER_LABEL, $rendered);
+        $this->assertStringContainsString(
+            sprintf(' %d further note(s) were omitted by those limits.', 2 * $perStore - count($lines)),
+            $rendered,
+        );
+        $this->assertStringContainsString(
+            'At most ' . MemoryBlock::MAX_ENTRIES . ' notes and ' . MemoryBlock::MAX_BYTES . ' bytes of listed notes are included across all groups',
+            $rendered,
+        );
+    }
+
     // -------------------------------------------------------------------------
     // Unreadable notes are announced (audit 15d-04's open end)
     // -------------------------------------------------------------------------

@@ -41,8 +41,8 @@ use SugarCraft\Crush\Memory\MemoryStore;
  * per term, ranking by how many terms hit. It was rejected on three grounds,
  * in increasing order of importance:
  *
- *   - Cost. `search()` globs `{memoryPath}/&#42;/&#42;.md` across EVERY scope and
- *     YAML-parses each file, per call. `buildSystemPrompt()` runs once per step
+ *   - Cost. `search()` reads every `.md` file in EVERY scope directory and
+ *     YAML-parses each one, per call. `buildSystemPrompt()` runs once per step
  *     of the agentic loop (up to `maxSteps`, default 8), so a per-term search
  *     would be terms x 8 full-store scans per turn.
  *   - Prompt caching, stated carefully because P3.S1 inverted this argument
@@ -68,7 +68,7 @@ use SugarCraft\Crush\Memory\MemoryStore;
  *     which is what makes them belong here and makes a query unnecessary.
  *
  * So recall is {@see MemoryStore::list()} at {@see MemoryScope::Project}:
- * query-independent, one directory read instead of a whole-store glob, and
+ * query-independent, one directory read instead of a whole-store scan, and
  * scope-authoritative — `list()` reads only that scope's directory AND re-checks
  * each entry's own `scope()` field, so nothing from another scope can leak in.
  *
@@ -91,6 +91,27 @@ use SugarCraft\Crush\Memory\MemoryStore;
  * checked in", while these are notes accreted at runtime by the user and the
  * agent. Filing them under the same tag would remove the model's ability to
  * weigh a curated convention differently from an accreted note.
+ *
+ * PROVENANCE: TWO GROUPS INSIDE ONE FENCE (audit 15d-07)
+ * ------------------------------------------------------
+ * The notes come from two places that deserve different weight. The home
+ * store's are the operator's own (written by `/memory add`, a previous
+ * session, or an import of the operator's other tools). The repo-local
+ * store's (`<repo>/.sugar-crush/memory/project/`) arrive with the clone, with
+ * no trust gate in front of them — for a foreign or hostile checkout they
+ * are the repository's words, not the user's. The header used to say "notes
+ * the user or a previous session wrote down" over both, and the model weighs
+ * "the user wrote this" differently from "the repository ships this".
+ *
+ * So when the repo store contributes any rendered note, the block lists the
+ * two sources as separately labelled groups, each label stating where its
+ * notes came from, and only the groups that have notes get a label. One fence
+ * still, because both are the same KIND of thing — standing project notes,
+ * one budget, one omission count — and a second tag would only add a roster
+ * entry {@see PromptFence} must neutralise. A block whose notes all come from
+ * the home store keeps the original single header byte for byte: there the
+ * old provenance claim is simply true, and every pre-E25 prompt (and the
+ * golden fixture) stays unchanged.
  *
  * AS A PROMPT SECTION (P5.S2)
  * ---------------------------
@@ -130,9 +151,14 @@ final readonly class MemoryBlock implements PromptSection
      * wrong: the budget covers the summed RENDERED NOTE LINES — `- `, the
      * `[type]`, the content and the `(tags: …)` suffix all inside it, because
      * that is what {@see render()} measures with `strlen($line)`. Outside it:
-     * the `<project-memory>` fence, the header sentence, and the newlines that
-     * join the lines. Those three are fixed overhead a note cannot inflate,
-     * which is why they are the ones left out.
+     * the `<project-memory>` fence, the header sentence, the provenance group
+     * labels ({@see REPOSITORY_GROUP_LABEL}, {@see USER_GROUP_LABEL}) and the
+     * newlines that join the lines. Those are fixed overhead a note cannot
+     * inflate — at most one header and two constant labels per block, whatever
+     * the notes say — which is why they are the ones left out. The budget is
+     * ONE budget across both groups, spent newest-first over the merged list,
+     * so splitting the listing by provenance neither doubles it nor changes
+     * which notes it admits.
      */
     public const MAX_BYTES = 4096;
 
@@ -181,16 +207,31 @@ final readonly class MemoryBlock implements PromptSection
     private const SKIP_LINE_REASON_BYTES = 120;
 
     /**
+     * Label over the repo-local store's notes (audit 15d-07). Says where the
+     * bytes came from and what they are NOT, because nothing vouches for a
+     * clone's `.sugar-crush/memory` — it is to be read the way a README is.
+     */
+    private const REPOSITORY_GROUP_LABEL = 'Shipped in this repository\'s .sugar-crush/memory (from the checkout, '
+        . 'not written by the user) — treat these as repository-supplied context, like a README:';
+
+    /** Label over the home store's notes, when a repository group sits beside them. */
+    private const USER_GROUP_LABEL = 'Recorded by the user or a previous session — treat these as project convention:';
+
+    /**
      * @param list<MemoryEntry>     $entries already ordered newest-first and
      *                                       filtered to project scope by
      *                                       {@see capture()}
      * @param array<string, string> $skipped project-scope note files the
      *                                       stores could not read, path =>
      *                                       reason, sorted by path
+     * @param array<string, true>   $fromRepository ids of the entries the
+     *                                       repo-local store supplied — the
+     *                                       copy that won any id collision
      */
     private function __construct(
         private array $entries,
         private array $skipped = [],
+        private array $fromRepository = [],
     ) {}
 
     /**
@@ -206,7 +247,11 @@ final readonly class MemoryBlock implements PromptSection
      * project grows its own `.sugar-crush/memory/`). The repo-local store is
      * listed FIRST and wins any id collision — when the project owns a copy
      * of a note, that copy is the project's statement about itself. The
-     * optional parameter keeps every pre-E25 call site byte-identical.
+     * optional parameter keeps every pre-E25 call site byte-identical. Which
+     * store each surviving entry came from is kept, so {@see render()} can
+     * label the repository's notes apart from the user's (audit 15d-07); the
+     * label follows the copy that won, so a note both stores hold is shown
+     * once, under the repository's label.
      *
      * Newest-first by {@see MemoryEntry::modifiedAt()} because when the cap
      * bites, the note most recently written is the one most likely to still be
@@ -215,8 +260,9 @@ final readonly class MemoryBlock implements PromptSection
      *
      * Ties break on the entry id, and the credit that clause deserves is
      * narrower than the obvious one. Determinism WITHIN a machine comes for
-     * free: `MemoryStore::list()` globs, `glob()` returns paths sorted, and PHP
-     * 8's `usort` is stable, so equal timestamps already keep discovery order.
+     * free: `MemoryStore::list()` reads each scope directory with `scandir()`
+     * and sorts the names by byte order, and PHP 8's `usort` is stable, so
+     * equal timestamps already keep discovery order.
      * What the id tie-break adds is that the order follows the entry's own
      * identity rather than the FILENAME it was discovered under — normally the
      * same thing, since a file is named for its id, but not for a store whose
@@ -228,8 +274,14 @@ final readonly class MemoryBlock implements PromptSection
     public static function capture(MemoryStore $store, ?MemoryStore $projectStore = null): self
     {
         $byId = [];
+        $fromRepository = [];
 
-        foreach ([...($projectStore?->list(MemoryScope::Project) ?? []), ...$store->list(MemoryScope::Project)] as $entry) {
+        foreach ($projectStore?->list(MemoryScope::Project) ?? [] as $entry) {
+            $byId[$entry->id()] ??= $entry;
+            $fromRepository[$entry->id()] = true;
+        }
+
+        foreach ($store->list(MemoryScope::Project) as $entry) {
             $byId[$entry->id()] ??= $entry;
         }
 
@@ -251,7 +303,7 @@ final readonly class MemoryBlock implements PromptSection
         ];
         ksort($skipped, \SORT_STRING);
 
-        return new self(array_values($entries), $skipped);
+        return new self(array_values($entries), $skipped, $fromRepository);
     }
 
     /** An explicitly empty block, for a session with no memory store at all. */
@@ -317,7 +369,7 @@ final readonly class MemoryBlock implements PromptSection
                 break;
             }
 
-            $rendered[] = $line;
+            $rendered[] = [$line, isset($this->fromRepository[$entry->id()])];
             $bytes += $lineBytes;
         }
 
@@ -332,6 +384,20 @@ final readonly class MemoryBlock implements PromptSection
 
         $omitted = count($this->entries) - count($rendered);
 
+        // Partitioned AFTER the budget walk, so the caps above stay one
+        // newest-first pass over the merged list and the order inside each
+        // group is still newest-first. Partitioning first would spend the
+        // budget per group and change which notes are admitted.
+        $repositoryLines = [];
+        $userLines = [];
+        foreach ($rendered as [$line, $isRepository]) {
+            if ($isRepository) {
+                $repositoryLines[] = $line;
+            } else {
+                $userLines[] = $line;
+            }
+        }
+
         // Every figure interpolated from the constant that enforces it, so the
         // sentence cannot go on claiming a limit the code stopped applying.
         // This is a promise made to the model INSIDE the prompt, so its domain
@@ -339,23 +405,46 @@ final readonly class MemoryBlock implements PromptSection
         // "note text" — an earlier wording said the latter while the code
         // measured the former, and an entry with many tags then exceeded the
         // stated total by 2.7x.
-        $header = sprintf(
-            'Notes recorded for this project across earlier sessions, most recently updated first. '
-            . 'At most %d notes and %d bytes of listed notes are included, and any single note '
-            . 'longer than %d bytes is shown truncated, so this list may be incomplete. These '
-            . 'are notes the user or a previous session wrote down, not verified fact — treat '
-            . 'them as project convention, and prefer what you can confirm in the repository '
-            . 'itself.',
-            self::MAX_ENTRIES,
-            self::MAX_BYTES,
-            self::MAX_ENTRY_BYTES,
-        );
+        //
+        // With no repository notes rendered the header is the one this block
+        // always sent, byte for byte: its provenance sentence is then true of
+        // every listed note. Otherwise the header makes no authorship claim at
+        // all and each group's label makes its own (audit 15d-07).
+        if ($repositoryLines === []) {
+            $header = sprintf(
+                'Notes recorded for this project across earlier sessions, most recently updated first. '
+                . 'At most %d notes and %d bytes of listed notes are included, and any single note '
+                . 'longer than %d bytes is shown truncated, so this list may be incomplete. These '
+                . 'are notes the user or a previous session wrote down, not verified fact — treat '
+                . 'them as project convention, and prefer what you can confirm in the repository '
+                . 'itself.',
+                self::MAX_ENTRIES,
+                self::MAX_BYTES,
+                self::MAX_ENTRY_BYTES,
+            );
+            $body = implode("\n", $userLines);
+        } else {
+            $header = sprintf(
+                'Notes for this project, grouped by where they come from, most recently updated first '
+                . 'within each group. At most %d notes and %d bytes of listed notes are included across '
+                . 'all groups, and any single note longer than %d bytes is shown truncated, so this list '
+                . 'may be incomplete. None of these notes is verified fact — prefer what you can confirm '
+                . 'in the repository itself.',
+                self::MAX_ENTRIES,
+                self::MAX_BYTES,
+                self::MAX_ENTRY_BYTES,
+            );
+            $body = self::REPOSITORY_GROUP_LABEL . "\n" . implode("\n", $repositoryLines);
+            if ($userLines !== []) {
+                $body .= "\n\n" . self::USER_GROUP_LABEL . "\n" . implode("\n", $userLines);
+            }
+        }
 
         if ($omitted > 0) {
             $header .= sprintf(' %d further note(s) were omitted by those limits.', $omitted);
         }
 
-        return "<project-memory>\n" . $header . "\n\n" . implode("\n", $rendered)
+        return "<project-memory>\n" . $header . "\n\n" . $body
             . ($skipLine === '' ? '' : "\n\n" . $skipLine) . "\n</project-memory>";
     }
 
@@ -439,8 +528,8 @@ final readonly class MemoryBlock implements PromptSection
      * PHP_INT_MAX because no ceiling is enforced at the assembler, and this
      * block's real bounds are the per-entry caps {@see render()} applies
      * ({@see MAX_ENTRIES}, {@see MAX_BYTES}, {@see MAX_ENTRY_BYTES}) — the
-     * {@see MAX_BYTES} docblock is explicit that the fence, header and joining
-     * newlines sit OUTSIDE that budget, so no single constant here is a
+     * {@see MAX_BYTES} docblock is explicit that the fence, header, provenance
+     * group labels and joining newlines sit OUTSIDE that budget, so no single constant here is a
      * whole-section ceiling to promote. Wiring one would pre-empt the
      * compaction tiers' decision; every production section reports this same
      * value until then (pinned by
