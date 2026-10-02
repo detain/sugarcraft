@@ -52,14 +52,16 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  * project already had —
  * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushAutoloadGuardTest}'s
  * doc-block, "the real census of raw `fwrite(STDERR, …)` call sites across
- * `src/` and `bin/` is THIRTEEN" — is CORRECT, and this file asserts that it
+ * `src/` and `bin/` is FOURTEEN" — is CORRECT, and this file asserts that it
  * stays correct ({@see testTheInheritedCensusStillAgreesWithTheScan()}).
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — thirteen sites. The channel that census describes.
+ *  1. `fwrite(STDERR, …)` — fourteen sites. The channel that census describes.
  *     (E710: `Subcommands::mcpImportLine()` joined it — the import verb's
- *     notes and post-read failures, one funnel site, stderr-only by design.)
+ *     notes and post-read failures, one funnel site, stderr-only by design.
+ *     Audit C2a: `bin/sugarcrush`'s TUI fatal-error line, the one notice left
+ *     on the tty once PHP's own diagnostics go to the log file.)
  *  2. `STDERR` captured into a variable or property and written through later —
  *     ONE site, {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt}, whose
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
@@ -274,7 +276,7 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const DIRECT_SITES = [
-        'bin/sugarcrush' => 1,
+        'bin/sugarcrush' => 2,
         'src/Cli/Bootstrap.php' => 2,
         'src/Cli/NonInteractive.php' => 7,
         'src/Cli/Subcommands.php' => 3,
@@ -381,7 +383,7 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const MESSAGE_SHAPES = [
-        'bin/sugarcrush' => 4,
+        'bin/sugarcrush' => 5,
         // The nine files below are E154's: each `error_log()` message they
         // retained now carries the prefix in its own literal instead of
         // arriving at fd 2 anonymous. Counts are per LITERAL (the shape arm

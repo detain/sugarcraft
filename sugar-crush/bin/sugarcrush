@@ -3,6 +3,15 @@
 
 declare(strict_types=1);
 
+// Audit CLI-1: PHP's own warnings and notices go to stderr, never to stdout.
+// With no php.ini loaded (the official php:*-cli images ship none) php-cli's
+// compiled-in display_errors is 1, which means STDOUT, so a single warning
+// landed in front of the `--output-format json` document and broke the
+// consumer's parse while the exit status still said success. It is the first
+// statement so the autoload guard below is covered too. log_errors is left as
+// the operator configured it.
+ini_set('display_errors', 'stderr');
+
 (static function () {
     foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
         $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
@@ -441,7 +450,30 @@ if ($resumeError !== null) {
 // Chat and arms the notice sink, so the forked turn child inherits it. TUI
 // path only: above this line, on the `-p` and subcommand paths, stderr is
 // the operator's channel. A null return leaves the ini as it was.
-TuiErrorLog::install(HomeDirectory::owned());
+$tuiErrorLog = TuiErrorLog::install(HomeDirectory::owned());
+
+// The same reasoning covers PHP's own warnings and notices: display_errors
+// (stderr since the top of this file) would paint them over the frame too.
+// With the redirect in force they are logged to that file and not displayed.
+// A fatal then needs one line on the terminal, or the session would just stop
+// with no visible reason. Without the redirect nothing changes: stderr is the
+// only place left for them. The callback runs in the TUI process only: forked
+// children leave through ForkedChild::exitNow(), which skips PHP's shutdown
+// sequence.
+if ($tuiErrorLog !== null) {
+    ini_set('log_errors', '1');
+    ini_set('display_errors', '0');
+    register_shutdown_function(static function () use ($tuiErrorLog): void {
+        $fatal = E_ERROR | E_PARSE | E_CORE_ERROR | E_COMPILE_ERROR | E_USER_ERROR | E_RECOVERABLE_ERROR;
+        $error = error_get_last();
+        if ($error !== null && ($error['type'] & $fatal) !== 0) {
+            // \r\n on both sides: a fatal skips Program's teardown, so the
+            // terminal can still be in raw mode, where \n does not return
+            // the carriage.
+            fwrite(STDERR, "\r\nsugarcrush: fatal error — details in {$tuiErrorLog}\r\n");
+        }
+    });
+}
 
 (new Program(Bootstrap::app($args->root), Chat::programOptions()))->run();
 

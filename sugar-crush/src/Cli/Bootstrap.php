@@ -8087,10 +8087,40 @@ final class Bootstrap
         return $owned . '/.sugar-crush';
     }
 
+    /**
+     * The throw IS the report (audit CLI-1). An unsilenced mkdir() warning
+     * goes wherever `display_errors` points, which is STDOUT on a php-cli with
+     * no php.ini, so it lands ahead of the `--output-format json` document.
+     * Every caller here either surfaces the exception or degrades on it, so the
+     * warning is caught here and its text goes into the message instead.
+     *
+     * A scoped handler rather than `@` + error_get_last(): when the host has
+     * an error handler of its own that returns true (PHPUnit's does), PHP
+     * never records the error for error_get_last(), and the reason would be
+     * lost.
+     */
     private static function ensureDir(string $dir): void
     {
-        if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
-            throw new \RuntimeException("Failed to create directory: {$dir}");
+        if (is_dir($dir)) {
+            return;
+        }
+
+        $reason = null;
+        set_error_handler(static function (int $errno, string $message) use (&$reason): bool {
+            $reason = $message;
+
+            return true;
+        });
+        try {
+            $made = mkdir($dir, 0700, true);
+        } finally {
+            restore_error_handler();
+        }
+
+        if (!$made && !is_dir($dir)) {
+            throw new \RuntimeException(
+                "Failed to create directory: {$dir}" . ($reason !== null ? " ({$reason})" : ''),
+            );
         }
     }
 }

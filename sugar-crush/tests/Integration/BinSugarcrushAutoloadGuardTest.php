@@ -26,7 +26,7 @@ use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is THIRTEEN:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is FOURTEEN:
  *
  *  - {@see \SugarCraft\Crush\Cli\NonInteractive}, seven —
  *    `run()` twice (a thrown backend error, and an answer that would not encode
@@ -43,7 +43,9 @@ use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
  *    `warnPermissionConfig()`, which IS the stderr channel the seam delegates
  *    to and so cannot be a migration target, and `reportPrunedSessions()`'s
  *    per-session id rows, which stay raw on purpose.
- *  - `bin/sugarcrush`, one — this branch.
+ *  - `bin/sugarcrush`, two — this branch, and the TUI's one-line fatal-error
+ *    notice (audit C2a), which names the log file PHP's own diagnostics were
+ *    redirected into, because on that path display_errors is off.
  *
  * THAT ENUMERATION IS ONE CHANNEL OF A LARGER CENSUS (E158, round 69). Raw
  * `fwrite(STDERR, …)` is only the emitter this branch happens to use. The
@@ -141,8 +143,8 @@ use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
  * `bin/sugarcrush` running in a checkout with NO `vendor/`, and its whole job
  * is to hit the autoload IIFE at the top of the file and `exit(2)` before any
  * class, autoloader or harness code exists. It cannot loop, because it is dead
- * inside that IIFE — the first statement after `declare(strict_types=1);`, and
- * the last one it reaches. And the independent variable across rows is its own
+ * inside that IIFE — the first statement after `declare(strict_types=1);` but
+ * for the display_errors ini_set() (audit CLI-1), and the last one it reaches. And the independent variable across rows is its own
  * `$argv`, which is fixed for the life of a process. One child could `exec()`
  * the copied binary seventeen times, but that is seventeen grandchildren and
  * exactly the same interpreter startups — the cost is irreducible because a
