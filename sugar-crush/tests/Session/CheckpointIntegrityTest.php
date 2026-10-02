@@ -9,6 +9,8 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\SessionMeta;
+use SugarCraft\Crush\Support\ForkedChild;
+use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 
 /**
  * Checkpoint and transcript writes: one transaction per save (audit 15b-21),
@@ -20,6 +22,8 @@ use SugarCraft\Crush\Session\SessionMeta;
  */
 final class CheckpointIntegrityTest extends TestCase
 {
+    use ReapsForkedChildrenTrait;
+
     private string $tempDir;
     private string $dbPath;
     private string $previousTimezone;
@@ -35,6 +39,9 @@ final class CheckpointIntegrityTest extends TestCase
 
     protected function tearDown(): void
     {
+        // Before the temp dir goes: a writer still alive after an aborted
+        // test must not outlive the database it is writing into.
+        $this->reapTrackedForkedChildren();
         date_default_timezone_set($this->previousTimezone);
         parent::tearDown();
         foreach (glob($this->tempDir . '/*') ?: [] as $file) {
@@ -102,8 +109,8 @@ final class CheckpointIntegrityTest extends TestCase
      * terminals. Index allocation was `MAX()+1` then `INSERT` in separate
      * autocommits, so both could take the same index. Each child opens its
      * own connection after the fork (a SQLite handle must never cross one) and
-     * leaves by SIGKILL so neither PHPUnit's shutdown nor an inherited
-     * destructor runs in it.
+     * leaves through ForkedChild::exitNow() (a SIGKILL on itself), so neither
+     * PHPUnit's shutdown nor an inherited destructor runs in it.
      */
     public function testTwoWritersNeverShareACheckpointIndex(): void
     {
@@ -118,7 +125,7 @@ final class CheckpointIntegrityTest extends TestCase
 
         $pids = [];
         for ($child = 0; $child < 2; $child++) {
-            $pid = pcntl_fork();
+            $pid = $this->forkTracked();
             if ($pid === -1) {
                 $this->fail('pcntl_fork failed');
             }
@@ -137,7 +144,7 @@ final class CheckpointIntegrityTest extends TestCase
                     $error = $e::class . ': ' . $e->getMessage();
                 }
                 file_put_contents($this->tempDir . "/child{$child}.done", $error);
-                posix_kill(getmypid(), \SIGKILL);
+                ForkedChild::exitNow(0);
             }
             $pids[] = $pid;
         }

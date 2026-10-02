@@ -29,8 +29,8 @@ use SugarCraft\Crush\Providers\VertexProvider;
  */
 final class VertexApiExceptionTransientTest extends TestCase
 {
-    private const ANTHROPIC_MODEL = 'claude-3-5-sonnet@20240620';
-    private const GEMINI_MODEL = 'gemini-1.5-pro-002';
+    private const TRANSIENT_CLAUDE_MODEL = 'claude-3-5-sonnet@20240620';
+    private const TRANSIENT_GEMINI_MODEL = 'gemini-1.5-pro-002';
 
     private static function fromHttp(int $code, ?string $status, bool $withErrorBody = true): ApiException
     {
@@ -133,15 +133,15 @@ final class VertexApiExceptionTransientTest extends TestCase
      */
     public static function models(): iterable
     {
-        yield 'anthropic' => [self::ANTHROPIC_MODEL];
-        yield 'gemini' => [self::GEMINI_MODEL];
+        yield 'anthropic' => [self::TRANSIENT_CLAUDE_MODEL];
+        yield 'gemini' => [self::TRANSIENT_GEMINI_MODEL];
     }
 
     #[DataProvider('models')]
     public function testCompleteMarksAQuotaApiExceptionTransient(string $model): void
     {
         $response = $this->throwingProvider($model, new ApiException('quota', 8, 'RESOURCE_EXHAUSTED'))
-            ->complete($this->request($model));
+            ->complete($this->completeRequestFor($model));
 
         $this->assertTrue($response->isError);
         $this->assertTrue($response->errorTransient);
@@ -152,7 +152,7 @@ final class VertexApiExceptionTransientTest extends TestCase
     public function testCompleteMarksAnAuthApiExceptionPermanent(string $model): void
     {
         $response = $this->throwingProvider($model, self::fromHttp(401, 'UNAUTHENTICATED'))
-            ->complete($this->request($model));
+            ->complete($this->completeRequestFor($model));
 
         $this->assertTrue($response->isError);
         $this->assertFalse($response->errorTransient);
@@ -178,7 +178,7 @@ final class VertexApiExceptionTransientTest extends TestCase
         $this->assertFalse($chunks[0]->errorTransient);
     }
 
-    private function request(string $model): CompleteRequest
+    private function completeRequestFor(string $model): CompleteRequest
     {
         return new CompleteRequest(model: $model, messages: [new UserMessage('Hi')]);
     }
@@ -205,7 +205,7 @@ final class VertexApiExceptionTransientTest extends TestCase
     private function streamChunks(string $model, \Throwable $error): array
     {
         return iterator_to_array(
-            $this->throwingProvider($model, $error)->completeStream($this->request($model)),
+            $this->throwingProvider($model, $error)->completeStream($this->completeRequestFor($model)),
             false,
         );
     }
