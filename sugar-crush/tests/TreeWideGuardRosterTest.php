@@ -592,6 +592,8 @@ final class TreeWideGuardRosterTest extends TestCase
         'Context/ImportResolverTest.php' => ['scandir($dir)'],
         // tearDown() empties the sys_get_temp_dir() scratch dir setUp() made.
         'Diagnostics/RuntimeNoticeSinkStderrTest.php' => ['glob($this->scratch.\'/*\')'],
+        // tearDown() removes the sys_get_temp_dir() home setUp() made.
+        'Diagnostics/TuiErrorLogTest.php' => ['scandir($path)'],
         'Integration/BinSugarcrushAutoloadGuardTest.php' => ['scandir($dir)'],
         'Integration/BinSugarcrushDispatchTest.php' => ['RecursiveDirectoryIterator($this->tempHome,\FilesystemIterator::SKIP_DOTS)'],
         // tearDown() removes the sys_get_temp_dir() HOME + project setUp() made.

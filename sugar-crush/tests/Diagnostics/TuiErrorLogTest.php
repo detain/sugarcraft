@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Diagnostics;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Diagnostics\TuiErrorLog;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * Audit C2a: the TUI's `error_log` redirect, driven against a scratch home.
@@ -18,6 +19,8 @@ use SugarCraft\Crush\Diagnostics\TuiErrorLog;
  */
 final class TuiErrorLogTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private string $home;
 
     private string|false $previousErrorLog;
@@ -38,6 +41,7 @@ final class TuiErrorLogTest extends TestCase
     {
         ini_set('error_log', $this->previousErrorLog === false ? '' : $this->previousErrorLog);
         umask($this->previousUmask);
+        $this->restoreHomeSandbox();
         $this->removeTree($this->home);
     }
 
@@ -292,14 +296,9 @@ final class TuiErrorLogTest extends TestCase
     #[DataProvider('described')]
     public function testDescribeDestinationNamesWhereTheFullTextWent(string|false $value, ?string $expected): void
     {
-        $previousHome = getenv('HOME');
-        putenv('HOME=/home/alice');
+        $this->useHomeSandbox('/home/alice', create: false);
 
-        try {
-            self::assertSame($expected, TuiErrorLog::describeDestination($value));
-        } finally {
-            putenv($previousHome === false ? 'HOME' : 'HOME=' . $previousHome);
-        }
+        self::assertSame($expected, TuiErrorLog::describeDestination($value));
     }
 
     /** @return array<string, array{string|false, string|null}> */

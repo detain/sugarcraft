@@ -397,7 +397,7 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * "EIGHT spellings remain by hand, in FOUR files" — plus the four the
+     * "EIGHT spellings remain by hand, in FOUR files" — plus the five the
      * inventory deliberately EXCLUDES, named here so the exclusion is a recorded
      * decision rather than a hole. `WorktreeManager`'s pair matches relative paths
      * against a glob directory; it is not a boundary compare. `SkillLoader`'s one
@@ -405,7 +405,9 @@ final class ContainedPathInventoryTest extends TestCase
      * loader already found by walking that very base; nothing is admitted or
      * refused on its answer. `Renderer`'s one (`restoreLiftedZones()`, audit
      * 15b-09) tells a zone CLOSE marker (`Sentinel::OPEN . '/'`) from an open one;
-     * it compares no path at all.
+     * it compares no path at all. `TuiErrorLog`'s one (`describeDestination()`,
+     * audit C4) only abbreviates the home to `~` in a notice's wording; nothing
+     * is admitted or refused on its answer.
      */
     public function testTheHandSpelledInventoryIncludingItsStatedExclusion(): void
     {
@@ -414,6 +416,7 @@ final class ContainedPathInventoryTest extends TestCase
         $this->assertSame(
             [
                 'Agents/WorktreeManager.php' => 2,
+                'Diagnostics/TuiErrorLog.php' => 1,
                 'Hooks/BuiltIn/BashEscapeDenyHook.php' => 1,
                 'Renderer.php' => 1,
                 'Skills/SkillLoader.php' => 1,
@@ -424,7 +427,7 @@ final class ContainedPathInventoryTest extends TestCase
             $counts,
         );
 
-        unset($counts['Agents/WorktreeManager.php'], $counts['Renderer.php'], $counts['Skills/SkillLoader.php']);
+        unset($counts['Agents/WorktreeManager.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Skills/SkillLoader.php']);
         $this->assertSame(8, array_sum($counts), 'containment spellings still by hand');
         $this->assertCount(4, $counts, 'files still holding one');
     }

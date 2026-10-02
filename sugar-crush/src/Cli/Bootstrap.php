@@ -4798,13 +4798,12 @@ final class Bootstrap
 
     /**
      * Whether an `error_log` destination keeps nothing — the null device
-     * `TuiErrorLog::install()` falls back to last. Spelled here rather than
-     * read from `TuiErrorLog` so this branch does not depend on that class's
-     * R16 API; the two spellings are the platform's own.
+     * `TuiErrorLog::install()` falls back to last. Delegates to
+     * {@see TuiErrorLog::isNullDevice()} so the spelling has one owner.
      */
     private static function discardsWhatIsWritten(string $destination): bool
     {
-        return $destination === (\PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null');
+        return TuiErrorLog::isNullDevice($destination);
     }
 
     /**

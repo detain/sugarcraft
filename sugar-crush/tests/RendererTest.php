@@ -1548,13 +1548,6 @@ final class RendererTest extends TestCase
     }
 
     /**
-     * The step-defining regression: before this half of §1 E2 landed, a Chat
-     * could park a turn on `pendingPermission()` and the renderer drew nothing
-     * at all - the user saw a frozen "thinking…" frame with no question, no
-     * options and no way to know a keypress was expected. Every assertion here
-     * fails against that renderer.
-     */
-    /**
      * R4 (the residual of audit 15b-09): the permission modal's inner width
      * was floored at 20, so under 26 columns the box was wider than the
      * terminal and the overlay clip cut off its right border. A blocking
@@ -1580,6 +1573,13 @@ final class RendererTest extends TestCase
         }
     }
 
+    /**
+     * The step-defining regression: before this half of §1 E2 landed, a Chat
+     * could park a turn on `pendingPermission()` and the renderer drew nothing
+     * at all - the user saw a frozen "thinking…" frame with no question, no
+     * options and no way to know a keypress was expected. Every assertion here
+     * fails against that renderer.
+     */
     public function testPermissionPromptIsRenderedAsAModal(): void
     {
         $out = Renderer::render($this->chatAwaitingPermission());

@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Diagnostics;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * The sink's own behaviour, backend by backend.
@@ -18,6 +19,8 @@ use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
  */
 final class RuntimeNoticeSinkTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     protected function setUp(): void
     {
         RuntimeNoticeSink::reset();
@@ -29,6 +32,7 @@ final class RuntimeNoticeSinkTest extends TestCase
         // warning another test's assertion, and — on the transport backend —
         // two fds per case across a suite this size is an fd table.
         RuntimeNoticeSink::reset();
+        $this->restoreHomeSandbox();
     }
 
     public function testAnEmptySinkHasNothingPendingAndDrainsToNothing(): void
@@ -671,9 +675,8 @@ final class RuntimeNoticeSinkTest extends TestCase
         $home = sys_get_temp_dir() . '/sc_c4_home_' . getmypid() . '_' . bin2hex(random_bytes(4));
         $log = $home . '/.sugar-crush/logs/sugarcrush.log';
         $previousLog = ini_get('error_log');
-        $previousHome = getenv('HOME');
         ini_set('error_log', $log);
-        putenv('HOME=' . $home);
+        $this->useHomeSandbox($home, create: false);
 
         try {
             self::assertTrue(RuntimeNoticeSink::arm(), 'this host could not create the transport');
@@ -682,7 +685,7 @@ final class RuntimeNoticeSinkTest extends TestCase
             $overflow = RuntimeNoticeSink::overflowNotice(2);
         } finally {
             ini_set('error_log', $previousLog === false ? '' : $previousLog);
-            putenv($previousHome === false ? 'HOME' : 'HOME=' . $previousHome);
+            $this->restoreHomeSandbox();
         }
 
         self::assertCount(1, $drained);
