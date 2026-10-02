@@ -51,6 +51,29 @@ final readonly class SglangProvider implements ProviderInterface
     private const WARNING_EXCERPT_LIMIT = 240;
 
     /**
+     * Upper bound on how many tool-call ids {@see $truncationRiskWarned}
+     * remembers. See {@see flagTruncationRiskInLatestToolResults()} for why
+     * the set is bounded and why forgetting the oldest id is harmless.
+     */
+    private const TRUNCATION_RISK_WARNED_CAP = 1024;
+
+    /**
+     * Audit C2(b): the tool-call ids (or, for an id-less result, a content
+     * key) the `</parameter>` truncation-risk warning has already been logged
+     * for, keyed by id in insertion order so the oldest entry is the first
+     * key. Values are unused (`true`).
+     *
+     * A mutable object behind a property assigned once in the constructor
+     * because this is a `final readonly class`: a readonly class cannot
+     * declare a static property, and a method-local `static` would be shared
+     * by EVERY instance - a test (or a rebuilt provider) reusing an id like
+     * `call_read` would then be silenced by another instance's history.
+     *
+     * @var \ArrayObject<string, true>
+     */
+    private \ArrayObject $truncationRiskWarned;
+
+    /**
      * §Q8 (E-56): longest server-authored error text kept when it is lifted
      * out of an error body for display. Measured SGLang bodies (E-40/E-10)
      * are one short sentence, so this only exists to stop a pathological
@@ -459,6 +482,8 @@ final readonly class SglangProvider implements ProviderInterface
         if ($this->reasoningEffort !== null) {
             self::validatedReasoningEffort($this->reasoningEffort, 'provider config');
         }
+
+        $this->truncationRiskWarned = new \ArrayObject();
     }
 
     public static function openAiCompatible(
@@ -2548,6 +2573,42 @@ final readonly class SglangProvider implements ProviderInterface
      * rest of the session. `error_log()` is unclipped, costs no tokens, and is
      * what a log trawl wants from a prediction.
      *
+     * RATE-LIMITED TO ONCE PER TOOL-CALL ID (audit C2(b)). The trailing-run
+     * rule above stops a result being re-flagged on LATER turns, but not on a
+     * re-issue of the SAME history: this runs from {@see buildParams()} on
+     * every request, and {@see \SugarCraft\Crush\Runtime}'s transient-failure
+     * retries (streaming and batch) and any other re-send of the same tail
+     * hand it the same trailing batch again. Each re-send re-logged the same
+     * ~500-byte line for the same tool call, and while `error_log()` is fd 2
+     * in the TUI, each copy painted over the frame. The prediction is about
+     * the CONTENT the model has absorbed, so saying it once per result is the
+     * whole signal; repeats add nothing.
+     *
+     * - Keyed on the tool-call id ALONE, not id+model: the same result
+     *   re-sent to a different request model is still the same cause, and
+     *   the first line already names the model it was addressed to. An
+     *   empty id falls back to a hash of the content, so an id-less result
+     *   is still logged once rather than on every request.
+     * - Remembered per provider INSTANCE ({@see $truncationRiskWarned}).
+     *   Measured by reading, not assumed: {@see
+     *   \SugarCraft\Crush\Backend\EngineBackend} holds one provider for the
+     *   session and every wither passes that same instance on; each turn's
+     *   {@see \SugarCraft\Crush\Runtime} is built around it, so the retries
+     *   above all reach this one object. A provider switch builds a new
+     *   provider, and so starts with an empty memory. Under
+     *   {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()} each
+     *   turn runs in a `pcntl_fork()` child, whose additions die with it -
+     *   which is enough, because a tool-call id only ever TRAILS within the
+     *   turn that produced it: the next turn's history ends in the user's new
+     *   prompt, so the result is no longer in the scanned run.
+     * - Bounded at {@see TRUNCATION_RISK_WARNED_CAP} entries, dropping the
+     *   oldest when full: a very long in-process session must not grow this
+     *   without limit, and forgetting a long-gone id risks at most one
+     *   repeated line if that exact batch ever trailed again.
+     *
+     * The DeepSeek-V4 return stays first, so a skipped model never consumes
+     * an id: the same result later sent to a warned model is still warned.
+     *
      * @param array<mixed> $messages
      * @param string       $model the request's model id, which decides whether
      *        this prediction is assertable at all - see above
@@ -2574,6 +2635,10 @@ final readonly class SglangProvider implements ProviderInterface
                 continue;
             }
 
+            if (!$this->firstTruncationRiskWarningFor($result)) {
+                continue;
+            }
+
             error_log(sprintf(
                 'sugarcrush: SglangProvider: tool result "%s" contains the literal "%s" (%d occurrence(s)) - '
                 . 'MiniMax-M2.x truncates tool-call arguments containing that substring, so any '
@@ -2587,6 +2652,37 @@ final readonly class SglangProvider implements ProviderInterface
                 $model,
             ));
         }
+    }
+
+    /**
+     * Records `$result` in {@see $truncationRiskWarned} and answers whether
+     * this is the first time - i.e. whether the warning should be logged. The
+     * key and the eviction policy are explained on
+     * {@see flagTruncationRiskInLatestToolResults()}.
+     */
+    private function firstTruncationRiskWarningFor(ToolResultMessage $result): bool
+    {
+        $id = $result->toolCallId();
+        $key = $id !== '' ? 'id:' . $id : 'content:' . hash('xxh128', $result->content());
+
+        if (isset($this->truncationRiskWarned[$key])) {
+            return false;
+        }
+
+        if (count($this->truncationRiskWarned) >= self::TRUNCATION_RISK_WARNED_CAP) {
+            // ArrayObject keeps insertion order, so the first key is the
+            // oldest remembered id. Read inside the loop, unset after it, so
+            // the set is never modified under a live iterator.
+            $oldest = null;
+            foreach ($this->truncationRiskWarned as $oldest => $_) {
+                break;
+            }
+            unset($this->truncationRiskWarned[$oldest]);
+        }
+
+        $this->truncationRiskWarned[$key] = true;
+
+        return true;
     }
 
     /**
