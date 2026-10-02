@@ -8,6 +8,8 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
+use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Hooks\HookResult;
 
 /**
@@ -37,7 +39,7 @@ final class ProtectFilesHookTest extends TestCase
     {
         $hook = new ProtectFilesHook();
 
-        $this->assertSame('^(Bash|Edit|Write|Read)$', $hook->matcher());
+        $this->assertSame('^(Bash|Edit|Write|Read|Grep|Glob|Lsp|mcp__.*)$', $hook->matcher());
     }
 
     // =========================================================================
@@ -338,15 +340,138 @@ final class ProtectFilesHookTest extends TestCase
         $this->assertTrue($result->isAllowed());
     }
 
+    /**
+     * `.env` glued to a word is not a `.env`. This test used to pin
+     * `ls /path/to/.env.backup` as ALLOWED — but a backup of the secret is the
+     * secret, and that "partial match" was the same boundary that let
+     * `cat .env;true` through (audit F-J2). What genuinely is a different name
+     * stays allowed, or `grep -rn process.env src` would be refused.
+     */
     public function testPartialPathMatchDoesNotTrigger(): void
     {
         $hook = new ProtectFilesHook();
-        // Should NOT match .env in middle of path, only exact .env at end
-        $context = $this->createContext('bash', 'ls /path/to/.env.backup');
 
-        $result = $hook->execute($context);
+        foreach ([
+            'grep -rn process.env.API_KEY src',
+            'cat foo.env.example',
+            'php dotenv.php',
+            'cat .environment',
+            'ls .env/bin',
+            'cp .env.example .env.dist',
+        ] as $command) {
+            $this->assertTrue($hook->execute($this->createContext('bash', $command))->isAllowed(), $command);
+        }
 
-        $this->assertTrue($result->isAllowed());
+        $this->assertTrue($hook->execute($this->createContext('bash', 'ls /path/to/.env.backup'))->isDenied());
+    }
+
+    // =========================================================================
+    // Audit F-J2 — every spelling, every reading tool, through the real chain
+    // =========================================================================
+
+    /**
+     * The full built-in chain, as the CLI registers it, so a verdict here is
+     * the verdict a session gets. Each DENY row passed the chain before the
+     * fix (the matcher never saw Grep/Glob/Lsp/MCP, and the `.env` regex wanted
+     * whitespace on both sides of the name); `Read .env` and `cat .env` are the
+     * two that were already refused, kept as the control.
+     *
+     * @param array<string, mixed> $args
+     * @dataProvider secretFileCalls
+     */
+    public function testTheChainRefusesEverySpellingOfASecretFile(string $tool, array $args): void
+    {
+        $this->assertTrue(
+            $this->chainVerdict($tool, $args)->isDenied(),
+            "{$tool} " . json_encode($args) . ' must not reach a secret file',
+        );
+    }
+
+    /** @return array<string, array{0: string, 1: array<string, mixed>}> */
+    public static function secretFileCalls(): array
+    {
+        return [
+            'Read .env (control)' => ['Read', ['file_path' => '.env']],
+            'cat .env (control)' => ['Bash', ['command' => 'cat .env']],
+            'separator after the name' => ['Bash', ['command' => 'cat .env;true']],
+            'pipe after the name' => ['Bash', ['command' => 'cat .env|x']],
+            'double-quoted' => ['Bash', ['command' => 'cat ".env"']],
+            'single-quoted' => ['Bash', ['command' => "cat '.env'"]],
+            'quotes inside the name' => ['Bash', ['command' => "cat .e''nv"]],
+            'input redirection' => ['Bash', ['command' => 'cat <.env']],
+            'dot-slash' => ['Bash', ['command' => 'cat ./.env']],
+            '.env.local' => ['Bash', ['command' => 'cat .env.local']],
+            '.env.production' => ['Read', ['file_path' => 'app/.env.production']],
+            'direnv .envrc' => ['Bash', ['command' => 'cat .envrc']],
+            'env-file flag' => ['Bash', ['command' => 'docker run --env-file=.env img']],
+            '.git/config' => ['Bash', ['command' => 'cat .git/config']],
+            '.git/config double-quoted' => ['Bash', ['command' => 'cat ".git/config"']],
+            '.git/config quote inside' => ['Bash', ['command' => "cat .git/'config'"]],
+            '.git/config redirected in' => ['Bash', ['command' => 'cat < .git/"config"']],
+            'Grep path=.env' => ['Grep', ['pattern' => '=', 'path' => '.env']],
+            'Grep include=.env.local' => ['Grep', ['pattern' => '=', 'path' => '.', 'include' => '.env.local']],
+            'lowercase grep' => ['grep', ['pattern' => '=', 'path' => '.env']],
+            'Glob for every .env' => ['Glob', ['pattern' => '**/.env*', 'path' => '.']],
+            'Lsp on .env' => ['Lsp', ['operation' => 'hover', 'path' => '.env']],
+            'MCP read' => ['mcp__fs__read_file', ['path' => '.env']],
+            'MCP nested list' => ['mcp__fs__read_multiple', ['paths' => ['src/a.php', '.git/config']]],
+            'MCP shell line' => ['mcp__shell__run', ['command' => 'cat ".env";true']],
+            'MCP write to policy' => ['mcp__fs__write_file', ['path' => '.sugar-crush/hooks.yaml', 'content' => 'x']],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $args
+     * @dataProvider ordinaryCalls
+     */
+    public function testTheChainStillAllowsOrdinaryWork(string $tool, array $args): void
+    {
+        $this->assertTrue(
+            $this->chainVerdict($tool, $args)->isAllowed(),
+            "{$tool} " . json_encode($args) . ' is ordinary work and must not be refused',
+        );
+    }
+
+    /** @return array<string, array{0: string, 1: array<string, mixed>}> */
+    public static function ordinaryCalls(): array
+    {
+        return [
+            'cat README.md' => ['Bash', ['command' => 'cat README.md']],
+            'the committed template' => ['Bash', ['command' => 'cat .env.example']],
+            'a staged template' => ['Read', ['file_path' => '.env.production.sample']],
+            'grep for env in src' => ['Bash', ['command' => 'grep -rn env src']],
+            'Grep the tree for env' => ['Grep', ['pattern' => 'env', 'path' => '.']],
+            'Grep for the TEXT .env' => ['Grep', ['pattern' => '.env', 'path' => 'src']],
+            'Glob php' => ['Glob', ['pattern' => '**/*.php', 'path' => '.']],
+            'Glob the templates' => ['Glob', ['pattern' => '**/.env.example', 'path' => '.']],
+            'Lsp on source' => ['Lsp', ['operation' => 'hover', 'path' => 'src/a.php']],
+            'MCP read of source' => ['mcp__fs__read_file', ['path' => 'src/a.php']],
+            'Grep may read a policy file' => ['Grep', ['pattern' => 'tools', 'path' => '.sugar-crush/agents']],
+            'WebFetch is not judged' => ['WebFetch', ['url' => 'https://example.com/docs/.env']],
+        ];
+    }
+
+    /**
+     * `json_encode()` writes `/` as `\/`, so the old fallback — matching the
+     * raw JSON `toolInput` — never saw `.git/config` in any non-Bash tool. The
+     * decoded leaves are what get matched now; this pins it at the hook level,
+     * where toolInput is exactly the escaped JSON a real call carries.
+     */
+    public function testAnMcpPathIsMatchedDecodedNotAsEscapedJson(): void
+    {
+        $args = ['uri' => 'file:///w/repo/.git/config'];
+        $this->assertStringContainsString('\\/', (string) json_encode($args));
+
+        $this->assertTrue((new ProtectFilesHook())->execute(new HookContext(
+            sessionId: 's',
+            toolName: 'mcp__fs__read',
+            toolArgs: $args,
+            toolInput: (string) json_encode($args),
+            toolOutput: '',
+            model: 'm',
+            provider: 'p',
+            projectRoot: '/w/repo',
+        ))->isDenied());
     }
 
     // =========================================================================
@@ -408,6 +533,24 @@ final class ProtectFilesHookTest extends TestCase
     // =========================================================================
     // Helper Methods
     // =========================================================================
+
+    /** @param array<string, mixed> $args */
+    private function chainVerdict(string $tool, array $args): HookResult
+    {
+        $manager = new HookManager(new HookRegistry());
+        $manager->registerBuiltIns();
+
+        return $manager->preToolUse(new HookContext(
+            sessionId: 'test-session-123',
+            toolName: $tool,
+            toolArgs: $args,
+            toolInput: (string) json_encode($args),
+            toolOutput: '',
+            model: 'test-model',
+            provider: 'test-provider',
+            projectRoot: '/tmp/test-project',
+        ));
+    }
 
     private function createContext(string $toolName, string $toolInput): HookContext
     {

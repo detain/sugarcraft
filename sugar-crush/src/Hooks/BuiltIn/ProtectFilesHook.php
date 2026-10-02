@@ -8,6 +8,7 @@ use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookInterface;
 use SugarCraft\Crush\Hooks\HookResult;
+use SugarCraft\Crush\Permissions\ShellWords;
 
 final readonly class ProtectFilesHook implements HookInterface
 {
@@ -44,9 +45,40 @@ final readonly class ProtectFilesHook implements HookInterface
      * wanted to abuse a manifest's `scripts` already holds Bash, so the deny
      * contained nothing while blocking the audit and dependency work the
      * agent is for.
+     *
+     * THE `.env` PATTERN USED TO BE `/(^|[\s\/])\.env(\s|$)/` (audit F-J2), and
+     * both of its boundaries were the bypass. Wanting whitespace or the end of
+     * the string AFTER the name let `cat .env;true`, `cat .env|x` and
+     * `cat .env>&2` through; wanting whitespace or `/` BEFORE it let
+     * `cat ".env"`, `cat '.env'`, `cat <.env` and `--env-file=.env` through;
+     * and `.env.local` / `.env.production` — where frameworks put the real
+     * credentials — were never covered at all. Both boundaries are now
+     * lookarounds over the same `[\w.-]` "this byte makes it a different name"
+     * class {@see self::WRITE_ONLY_PATTERNS} uses, so any punctuation a shell or
+     * a quote puts next to the name still matches. What the family covers, as a
+     * deliberate list rather than an accident of a regex:
+     *
+     *  - DENIED: `.env`, `.env.<anything>` (`.env.local`, `.env.production`,
+     *    `.env.bak`, `.env.swp` — a backup of the secret is the secret), and
+     *    `.envrc`. direnv's `.envrc` is the same thing under another name:
+     *    `export AWS_SECRET_ACCESS_KEY=…` is what people put in it, and it is
+     *    as often gitignored as `.env` is. A committed `.envrc` that only says
+     *    `use flake` costs a refused Read; a leaked one costs the key.
+     *  - ALLOWED: the committed templates `.env.example`, `.env.sample`,
+     *    `.env.dist`, `.env.template`, `.env.tpl` (and `.env.<stage>.example`,
+     *    `.envrc.example`). They exist precisely so they can be read and are
+     *    the first file an agent opens to learn what a project needs.
+     *  - NOT A `.env` AT ALL: a name where `.env` is glued to a word before it
+     *    (`foo.env.example`, `process.env.API_KEY`, `dotenv.php`), or followed
+     *    by more name (`.environment`, `.env_old`, `.env-local`) — the
+     *    lookbehind/lookahead are what keep `grep -rn process.env src` usable.
+     *    Nor a `.env/` DIRECTORY: `python -m venv .env` is a common spelling of
+     *    a virtualenv, and `.env/bin/python` holds no secret. `prod.env` is
+     *    deliberately out of scope for the same reason `process.env` is: the
+     *    name shape cannot tell them apart.
      */
     public const DEFAULT_PROTECTED_PATTERNS = [
-        '/(^|[\s\/])\.env(\s|$)/',
+        '/(?<![\w.-])\.env(?:rc)?(?![\w\/-])(?!(?:\.[\w-]+)*\.(?:example|sample|dist|template|tpl)(?![\w.-]))/',
         '/\.git\/config\b/',
         '/(^|\/)config\/[^\s]*\.php\b/',
         ...self::WRITE_ONLY_PATTERNS,
@@ -84,6 +116,12 @@ final readonly class ProtectFilesHook implements HookInterface
         '#(^|/)\.sugar-crush/(hooks\.yaml|config\.json)(?![\w.-])#',
         '#(^|/)\.sugar-crush/agents/#',
     ];
+
+    /**
+     * The matched tools that cannot write, and so are judged without
+     * {@see self::WRITE_ONLY_PATTERNS} — see {@see execute()}.
+     */
+    private const READ_ONLY_TOOLS = ['Read', 'Grep', 'Glob', 'Lsp'];
 
     /** @var list<string> */
     private array $protectedPatterns;
@@ -125,9 +163,32 @@ final readonly class ProtectFilesHook implements HookInterface
         return HookEvent::PreToolUse;
     }
 
+    /**
+     * EVERY TOOL THAT CAN PUT A FILE'S BYTES INTO THE TRANSCRIPT, not just the
+     * four that used to be listed (audit F-J2). The matcher was
+     * `^(Bash|Edit|Write|Read)$`, so `Grep pattern="=" path="."
+     * include_ignored=true` — classed read-only and allowed in every mode —
+     * printed `.env:1:DB_PASSWORD=…` without this hook ever being asked.
+     *
+     *  - `Grep`, `Lsp`: read file contents (Lsp's hover/definition answers
+     *    quote the file it was pointed at).
+     *  - `Glob`: lists names only, so a match is not a leak — it is judged so
+     *    that `Glob pattern=**\/.env*` is refused as a statement of intent, the
+     *    same way `Read .env` is, rather than answered with the paths a
+     *    follow-up call would need. Glob's OUTPUT is not screened: a `**\/*`
+     *    walk lists a `.env` among everything else, and naming a file is not
+     *    reading it.
+     *  - `mcp__*`: an MCP server's semantics are opaque here — a filesystem
+     *    server's `read_file {"path": ".env"}` is a Read by another name.
+     *
+     * Matched case-insensitively ({@see \SugarCraft\Crush\Hooks\HookConfig::pattern()}
+     * adds `i`), so `bash`/`grep` spellings are caught as before. WebFetch,
+     * Task and Skill are deliberately absent: their string arguments are URLs
+     * and prose, where `.env` is a word rather than a file this process opens.
+     */
     public function matcher(): string
     {
-        return '^(Bash|Edit|Write|Read)$';
+        return '^(Bash|Edit|Write|Read|Grep|Glob|Lsp|mcp__.*)$';
     }
 
     /**
@@ -155,22 +216,35 @@ final readonly class ProtectFilesHook implements HookInterface
      * which freezes the trust list for the process so a write that slips
      * through here still cannot take effect in the session that made it.
      *
-     * `Read` IS JUDGED AGAINST A SHORTER LIST — everything except
-     * {@see self::WRITE_ONLY_PATTERNS}, which is where the argument for that
-     * lives. `Bash` is not: one shell string does not say whether it is about
-     * to read the file or write it.
+     * WHAT "THE COMMAND" MEANS FOR A PATTERN (audit F-J2). Each pattern runs
+     * against the raw string AND what bash will actually hand the process — the
+     * quote-removed words and redirection targets from
+     * {@see \SugarCraft\Crush\Permissions\ShellWords}. The raw string alone
+     * let `cat .git/"config"` and `cat .e''nv` through, because the quotes sit
+     * inside the very name the pattern spells; the words alone would lose a
+     * name inside a substitution (`$(cat .env)` stays one word) or an
+     * unterminated parse. Matching both is the deny-side union: a spelling
+     * either form catches is refused. Still best-effort — `$HOME`, globs
+     * (`cat .en?`), variables and `cd` remain outside what any text match can
+     * see.
+     *
+     * `Read`, `Grep`, `Glob` AND `Lsp` ARE JUDGED AGAINST A SHORTER LIST —
+     * everything except {@see self::WRITE_ONLY_PATTERNS}, which is where the
+     * argument for that lives: none of the four can write. `Bash` is not: one
+     * shell string does not say whether it is about to read the file or write
+     * it. Neither is an `mcp__*` tool, for the same reason one level up — its
+     * name does not say what the server does with the path.
+     *
+     * WHICH ARGUMENTS ARE JUDGED, per tool — see {@see inputsFor()}.
      */
     public function execute(HookContext $context): HookResult
     {
         $toolName = ucfirst(strtolower($context->toolName));
-        $inputs = match ($toolName) {
-            'Bash' => [$context->toolArgs['command'] ?? ''],
-            'Edit', 'Write', 'Read' => self::pathSpellings($context->toolArgs['file_path'] ?? null),
-            default => [$context->toolInput],
-        };
+        $inputs = self::inputsFor($toolName, $context);
+        $readOnly = \in_array($toolName, self::READ_ONLY_TOOLS, true);
 
         foreach ($this->protectedPatterns as $pattern) {
-            if ($toolName === 'Read' && \in_array($pattern, self::WRITE_ONLY_PATTERNS, true)) {
+            if ($readOnly && \in_array($pattern, self::WRITE_ONLY_PATTERNS, true)) {
                 continue;
             }
 
@@ -184,6 +258,101 @@ final readonly class ProtectFilesHook implements HookInterface
         }
 
         return HookResult::allow();
+    }
+
+    /**
+     * The strings a pattern is matched against for one tool call.
+     *
+     *  - `Bash`: the raw `command` plus its {@see shellSpellings()}.
+     *  - `Edit`/`Write`/`Read`: `file_path`, as given and canonicalised.
+     *  - `Grep`: `path` (canonicalised) and `include` — `include=.env` narrows
+     *    the search to exactly the secret. NOT `pattern`: that is the TEXT being
+     *    searched for, and `Grep pattern=".env" path=src` (where does this code
+     *    load its env file?) is ordinary work. A directory `path` cannot be
+     *    screened here at all — `.` contains `.env` — which is why
+     *    {@see \SugarCraft\Crush\Tools\BuiltIn\Grep} itself never opens the
+     *    secret files; this half refuses the call that NAMES one.
+     *  - `Glob`: `path` (canonicalised) and `pattern`.
+     *  - `Lsp`: `path`, canonicalised.
+     *  - anything else (`mcp__*`): every string leaf of the DECODED arguments,
+     *    at any depth, plus the shell spellings of each. Not the raw JSON
+     *    `toolInput`: `json_encode()` escapes `/` as `\/`, so `.git/config`
+     *    arrives as `.git\/config` and the pattern never sees it. Every leaf
+     *    rather than a guessed list of path-ish keys, because one server's
+     *    `path` is another's `uri`, `target` or `command` — the cost is that an
+     *    MCP call whose free text merely names `.env` is refused too, which is
+     *    the fail-closed direction for a tool this hook cannot see inside.
+     *
+     * @return list<string>
+     */
+    private static function inputsFor(string $toolName, HookContext $context): array
+    {
+        $args = $context->toolArgs;
+
+        return match ($toolName) {
+            'Bash' => self::shellSpellings($args['command'] ?? ''),
+            'Edit', 'Write', 'Read' => self::pathSpellings($args['file_path'] ?? null),
+            'Grep' => [...self::pathSpellings($args['path'] ?? null), ...self::strings($args['include'] ?? null)],
+            'Glob' => [...self::pathSpellings($args['path'] ?? null), ...self::strings($args['pattern'] ?? null)],
+            'Lsp' => self::pathSpellings($args['path'] ?? null),
+            default => self::leafSpellings($args),
+        };
+    }
+
+    /**
+     * $command as written plus every quote-removed form bash would produce
+     * from it: the dequoted command text, each word on its own (so a `^`
+     * anchored custom pattern sees a word start), and each redirection target
+     * (which {@see \SugarCraft\Crush\Permissions\ShellWords::dequoted()} leaves
+     * out — `cat < ".git/config"` reads the file through one).
+     *
+     * @return list<string>
+     */
+    private static function shellSpellings(mixed $command): array
+    {
+        if (!\is_string($command) || $command === '') {
+            return [''];
+        }
+
+        $words = ShellWords::parse($command);
+        $spellings = [$command, $words->dequoted()];
+        foreach ($words->commands as $argv) {
+            foreach ($argv as $word) {
+                $spellings[] = $word;
+            }
+        }
+        foreach ($words->redirections as $redirection) {
+            if ($redirection['target'] !== null) {
+                $spellings[] = $redirection['target'];
+            }
+        }
+
+        return array_values(array_unique($spellings));
+    }
+
+    /**
+     * Every string leaf of $args, each with its shell spellings — an MCP
+     * server's `command` argument is a shell line as much as Bash's is.
+     *
+     * @param array<array-key, mixed> $args
+     * @return list<string>
+     */
+    private static function leafSpellings(array $args): array
+    {
+        $spellings = [];
+        array_walk_recursive($args, static function (mixed $leaf) use (&$spellings): void {
+            if (\is_string($leaf) && $leaf !== '') {
+                array_push($spellings, ...self::shellSpellings($leaf));
+            }
+        });
+
+        return $spellings === [] ? [''] : array_values(array_unique($spellings));
+    }
+
+    /** @return list<string> */
+    private static function strings(mixed $value): array
+    {
+        return \is_string($value) ? [$value] : [];
     }
 
     /**

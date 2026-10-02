@@ -299,9 +299,15 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         //     on the unrooted instance (a relative directory named `-R`); the
         //     rooted one already hands grep PathJail's absolute path.
         $cmd .= $rules->grepExcludeFlags();
+        // The model's --include goes BEFORE the secret excludes, and the order
+        // is load-bearing: GNU grep includes a file no --include/--exclude glob
+        // matches unless the FIRST such option is an --include, so an exclude
+        // placed first makes `include: "*.php"` search every file (measured on
+        // GNU grep 3.11: `b.txt` came back).
         if ($include !== '*') {
             $cmd .= ' --include=' . escapeshellarg($include);
         }
+        $cmd .= self::secretExcludeFlags($path);
         $cmd .= ' -e ' . escapeshellarg($pattern) . ' -- ' . escapeshellarg($path);
         // See Bash::execute() -- exec() leaks the child's stderr onto the
         // terminal underneath the TUI. grep exits 1 for "no matches", which
@@ -657,6 +663,54 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         }
 
         return $content;
+    }
+
+    /**
+     * Flags that keep grep from ever OPENING a secret file, whatever the
+     * ignore rules say (audit F-J2).
+     *
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook} refuses a
+     * Grep that NAMES `.env`, but it cannot screen a directory search: `path:
+     * "."` contains `.env`, and `grep -r` reads dotfiles. The only thing that
+     * kept `.env:1:DB_PASSWORD=…` out of the result was the `.gitignore` OUTPUT
+     * filter, which `include_ignored: true` switches off — and a repo that
+     * forgot to gitignore its `.env` never had even that. So the exclusion lives
+     * HERE, on the command line, independent of both:
+     *
+     *  - `--exclude=.env`, `--exclude=.envrc`, `--exclude=.env.*` — the same
+     *    family the hook denies. GNU grep applies `--exclude` to command-line
+     *    FILE operands as well as to the walk, so `path: ".env"` (PathJail
+     *    hands grep the realpath, so a symlink to `.env` arrives as `.env`)
+     *    searches nothing. THE COMMITTED TEMPLATES (`.env.example` and friends)
+     *    ARE NOT RE-INCLUDED, although the hook lets `Read` open them: a
+     *    re-including `--include=.env.example` is a no-op whitelist entry on GNU
+     *    grep but turns the whole search into "templates only" on BSD grep,
+     *    whose `--include` admits ONLY matching files. Fail-closed and
+     *    portable beats one fewer `Read`.
+     *  - `--exclude-dir=.git`, ALWAYS — IgnoreRules lists `.git` by default,
+     *    but `include_ignored: true` empties that list and naming a path inside
+     *    `.git` lifts it, and `.git/config` is where a remote URL carries its
+     *    token. A command-line directory named `.git` is skipped too.
+     *  - `--exclude=config` when the search root itself lies inside a `.git`
+     *    directory (`path: ".git/worktrees"`), because there the walk starts
+     *    below the directory `--exclude-dir` matches, and every file named
+     *    `config` under a git dir is a git config.
+     *
+     * Hits in the CONTENT of other files that merely mention a secret are not
+     * this method's business; only the files themselves are kept closed.
+     */
+    private static function secretExcludeFlags(string $searchRoot): string
+    {
+        $flags = ' --exclude=.env --exclude=.envrc --exclude=' . escapeshellarg('.env.*')
+            . ' --exclude-dir=.git';
+
+        $real = realpath($searchRoot);
+        $segments = explode('/', $real === false ? $searchRoot : $real);
+        if (\in_array('.git', $segments, true)) {
+            $flags .= ' --exclude=config';
+        }
+
+        return $flags;
     }
 
     /**

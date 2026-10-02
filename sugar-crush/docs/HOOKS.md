@@ -664,7 +664,7 @@ anything from a file and ahead of the permission gate:
 
 | Hook | Event | What it does |
 |---|---|---|
-| `ProtectFilesHook` | `PreToolUse` on `^(Bash\|Edit\|Write\|Read)$` | denies secret and policy files — see [`PERMISSIONS.md`](PERMISSIONS.md#the-hooks-that-outrank-the-gate) |
+| `ProtectFilesHook` | `PreToolUse` on `^(Bash\|Edit\|Write\|Read\|Grep\|Glob\|Lsp\|mcp__.*)$` | denies secret and policy files — see [below](#what-protect-files-covers) and [`PERMISSIONS.md`](PERMISSIONS.md#the-hooks-that-outrank-the-gate) |
 | `ConfirmRemoveHook` | `PreToolUse` | denies obvious destructive shell (`rm -rf`, `find … -delete`, …) |
 | `AuditHook` | `PostToolUse`, matcher `.*` | appends every call to whatever `AuditHook::defaultLogFile()` answers — a fixed leaf inside a per-user directory the hook creates `0700` and refuses to use if it is not its own |
 
@@ -689,6 +689,45 @@ pattern runs against the raw command *and* its quote-removed words (the same
 so `rm '-rf' x`, `rm "-rf" x`, `find . '-delete'` and `dd 'of=/dev/sda'` are
 denied like their unquoted spellings. Before audit F-P1 the first three passed
 the whole built-in chain under the default `bypass-permissions` mode.
+
+### What `protect-files` covers
+
+Before audit F-J2 the matcher was `^(Bash|Edit|Write|Read)$` and the `.env`
+pattern wanted whitespace on both sides of the name, so `cat .env;true`,
+`cat ".env"`, `.env.local` and — the easiest route — `Grep pattern="=" path="."
+include_ignored=true` all read the secret under the default
+`bypass-permissions` mode. Now:
+
+| Tool | Arguments judged |
+|---|---|
+| `Bash` | the raw `command` **and** its quote-removed words and redirection targets (`Permissions\ShellWords`), so `cat '.env'`, `cat .e''nv` and `cat < .git/"config"` are denied like their plain spellings |
+| `Read`, `Edit`, `Write` | `file_path`, as given and canonicalised (symlinks resolved) |
+| `Grep` | `path` (canonicalised) and `include` — not `pattern`, which is the text searched for |
+| `Glob` | `path` (canonicalised) and `pattern` — `**/.env*` is refused; a `**/*` listing that happens to include `.env` is not, because naming a file is not reading it |
+| `Lsp` | `path`, canonicalised |
+| `mcp__*` | every string leaf of the decoded arguments, at any depth (not the raw JSON, which spells `/` as `\/`) — so an MCP call whose free text merely mentions `.env` is refused too |
+
+`Read`, `Grep`, `Glob` and `Lsp` cannot write, so they skip the write-only
+policy patterns (`.sugar-crush/hooks.yaml` and friends); `Bash` and MCP tools
+get the full list.
+
+The secret-file family is a deliberate list: `.env`, `.env.<anything>`
+(`.env.local`, `.env.production`, `.env.bak`) and direnv's `.envrc` are
+denied; the committed templates `.env.example`, `.env.sample`, `.env.dist`,
+`.env.template`, `.env.tpl` (and `.env.<stage>.example`) are allowed; and a
+name where `.env` is glued to more name (`process.env.KEY`, `foo.env.example`,
+`.environment`) or a `.env/` virtualenv directory is not a `.env` at all.
+
+A hook cannot screen a *directory* search — `Grep path="."` contains `.env` —
+so `Grep` itself never opens one: it always passes `--exclude=.env
+--exclude=.envrc --exclude=.env.*` and `--exclude-dir=.git` (plus
+`--exclude=config` when searching inside a `.git` directory), even with
+`include_ignored: true`. That also skips the templates in a `Grep` walk; `Read`
+them directly.
+
+The `Bash` half stays best-effort: `$HOME` expansion, globs (`cat .en?`),
+variables and `cd` are outside what any text match sees. It is defence in depth,
+not a jail.
 
 ## Writing a hook in PHP
 
