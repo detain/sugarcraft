@@ -749,18 +749,6 @@
         "rating": 2,
         "tags": []
     },
-    "candy-files/candy-files-4-256-l-3.ansi": {
-        "name": "candy-files-4-256-l-3.ansi",
-        "category": "candy-files",
-        "resolution": "200x29",
-        "width": 200,
-        "height": 29,
-        "depth": "256",
-        "colors": 9,
-        "description": "Inode Railway panorama: smoke, tunnel, signal gantry, viaduct, terminus platform",
-        "rating": 1,
-        "tags": []
-    },
     "candy-files/candy-files-4-256-m-1.ansi": {
         "name": "candy-files-4-256-m-1.ansi",
         "category": "candy-files",
@@ -796,20 +784,6 @@
         "description": "compost garden beds: trash rows sprouting recovered/ with ladybug patrol",
         "rating": 2,
         "tags": []
-    },
-    "candy-files/candy-files-4-256-s-1.ansi": {
-        "name": "candy-files-4-256-s-1.ansi",
-        "category": "candy-files",
-        "resolution": "70x5",
-        "width": 70,
-        "height": 5,
-        "depth": "256",
-        "colors": 9,
-        "description": "symlink portal between ~/proj and /mnt/fast with lrwx permission caption",
-        "rating": 1,
-        "tags": [
-            "alignment-fix"
-        ]
     },
     "candy-files/candy-files-4-256-s-2.ansi": {
         "name": "candy-files-4-256-s-2.ansi",
@@ -883,18 +857,6 @@
         "colors": 53,
         "description": "symlink portal ring in a full hue wheel with gradient path labels",
         "rating": 2,
-        "tags": []
-    },
-    "candy-files/candy-files-4-tc-s-2.ansi": {
-        "name": "candy-files-4-tc-s-2.ansi",
-        "category": "candy-files",
-        "resolution": "66x11",
-        "width": 66,
-        "height": 11,
-        "depth": "truecolor",
-        "colors": 39,
-        "description": "dotfile club badge lit by a single candle's radial truecolor glow",
-        "rating": 1,
         "tags": []
     },
     "candy-files/candy-files-5-16-l-1.ansi": {
@@ -1195,30 +1157,6 @@
             "alignment-fix"
         ]
     },
-    "candy-files/candy-files-6-16-s-1.ansi": {
-        "name": "candy-files-6-16-s-1.ansi",
-        "category": "candy-files",
-        "resolution": "62x15",
-        "width": 62,
-        "height": 15,
-        "depth": "16",
-        "colors": 6,
-        "description": "Fire-escape egress plan: docs stairs down to tmp stage, chute into recycle bin",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-files/candy-files-6-16-s-2.ansi": {
-        "name": "candy-files-6-16-s-2.ansi",
-        "category": "candy-files",
-        "resolution": "54x14",
-        "width": 54,
-        "height": 14,
-        "depth": "16",
-        "colors": 7,
-        "description": "Comb-6 storage ledger: offset wax cells TX/PN/GZ/MP capped or open, queen row",
-        "rating": 1,
-        "tags": []
-    },
     "candy-files/candy-files-6-256-l-1.ansi": {
         "name": "candy-files-6-256-l-1.ansi",
         "category": "candy-files",
@@ -1286,18 +1224,6 @@
         "tags": [
             "alignment-fix"
         ]
-    },
-    "candy-files/candy-files-6-256-s-2.ansi": {
-        "name": "candy-files-6-256-s-2.ansi",
-        "category": "candy-files",
-        "resolution": "58x14",
-        "width": 58,
-        "height": 14,
-        "depth": "256",
-        "colors": 12,
-        "description": "Speleology survey tag CF6-04: passage sketch, sump, compass and scale",
-        "rating": 1,
-        "tags": []
     },
     "candy-files/candy-files-6-tc-l-1.ansi": {
         "name": "candy-files-6-tc-l-1.ansi",
@@ -1643,44 +1569,6 @@
             "alignment-fix"
         ]
     },
-    "candy-files/candy-files-8-16-m-2.ansi": {
-        "name": "candy-files-8-16-m-2.ansi",
-        "category": "candy-files",
-        "resolution": "90x19",
-        "width": 90,
-        "height": 19,
-        "depth": "16",
-        "colors": 7,
-        "description": "Tailor's pattern board: dress form with pieces cut from src/, lib/, tests/, vendor/",
-        "rating": 1,
-        "tags": [
-            "alignment-fix"
-        ]
-    },
-    "candy-files/candy-files-8-16-s-1.ansi": {
-        "name": "candy-files-8-16-s-1.ansi",
-        "category": "candy-files",
-        "resolution": "51x10",
-        "width": 51,
-        "height": 10,
-        "depth": "16",
-        "colors": 7,
-        "description": "Card-room hand: four suited cards as directory entries, ante the whole /",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-files/candy-files-8-16-s-2.ansi": {
-        "name": "candy-files-8-16-s-2.ansi",
-        "category": "candy-files",
-        "resolution": "52x10",
-        "width": 52,
-        "height": 10,
-        "depth": "16",
-        "colors": 7,
-        "description": "Spice counter shelf: three apothecary jars of .csv .log .png sold by the byte",
-        "rating": 1,
-        "tags": []
-    },
     "candy-files/candy-files-8-256-l-1.ansi": {
         "name": "candy-files-8-256-l-1.ansi",
         "category": "candy-files",
@@ -1739,18 +1627,6 @@
         "colors": 11,
         "description": "Baggage claim belt 04: roller bed and three suitcases tagged .bak .iso .psd",
         "rating": 2,
-        "tags": []
-    },
-    "candy-files/candy-files-8-256-s-2.ansi": {
-        "name": "candy-files-8-256-s-2.ansi",
-        "category": "candy-files",
-        "resolution": "50x7",
-        "width": 50,
-        "height": 7,
-        "depth": "256",
-        "colors": 6,
-        "description": "Affineur chalk sign: zip cheddar 12mo, tar comte 18mo, bz2 gruyere 24mo",
-        "rating": 1,
         "tags": []
     },
     "candy-files/candy-files-8-tc-l-1.ansi": {
@@ -1875,42 +1751,6 @@
         "rating": 2,
         "tags": []
     },
-    "candy-files/candy-files-9-16-s-1.ansi": {
-        "name": "candy-files-9-16-s-1.ansi",
-        "category": "candy-files",
-        "resolution": "54x12",
-        "width": 54,
-        "height": 12,
-        "depth": "16",
-        "colors": 6,
-        "description": "Egyptian granary tally board: six bushel silos per mount, reed numerals, scribe ledger",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-files/candy-files-9-16-s-2.ansi": {
-        "name": "candy-files-9-16-s-2.ansi",
-        "category": "candy-files",
-        "resolution": "58x14",
-        "width": 58,
-        "height": 14,
-        "depth": "16",
-        "colors": 6,
-        "description": "Canal lock sequence: three chamber basins filled to mount water-lines, cargo boat, sluice cog board",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-files/candy-files-9-256-l-1.ansi": {
-        "name": "candy-files-9-256-l-1.ansi",
-        "category": "candy-files",
-        "resolution": "180x32",
-        "width": 180,
-        "height": 32,
-        "depth": "256",
-        "colors": 19,
-        "description": "Philharmonic of tabs: five-line score with sections as panes, conductor podium, F-key cue sheet, curtain",
-        "rating": 1,
-        "tags": []
-    },
     "candy-files/candy-files-9-256-l-2.ansi": {
         "name": "candy-files-9-256-l-2.ansi",
         "category": "candy-files",
@@ -1945,18 +1785,6 @@
         "colors": 28,
         "description": "Bakery proofing rack: three shelves of rising loaves per dir, oven heat-gradient, temperature gauge",
         "rating": 2,
-        "tags": []
-    },
-    "candy-files/candy-files-9-256-s-1.ansi": {
-        "name": "candy-files-9-256-s-1.ansi",
-        "category": "candy-files",
-        "resolution": "66x13",
-        "width": 66,
-        "height": 13,
-        "depth": "256",
-        "colors": 17,
-        "description": "Printing telegraph: perforated delta tape of renames/adds/removes, Baudot spool, sprocket line",
-        "rating": 1,
         "tags": []
     },
     "candy-files/candy-files-9-256-s-2.ansi": {
@@ -2041,18 +1869,6 @@
         "colors": 73,
         "description": "Confectioner tempering slab: marble gloss gradient, tempered couverture pool with sheen, cocoa% ganache wells, thermometer",
         "rating": 2,
-        "tags": []
-    },
-    "candy-files/candy-files-10-16-l-1.ansi": {
-        "name": "candy-files-10-16-l-1.ansi",
-        "category": "candy-files",
-        "resolution": "160x30",
-        "width": 160,
-        "height": 30,
-        "depth": "16",
-        "colors": 7,
-        "description": "Camera-shop wall of lenses: sixteen framed primes with aperture circles plus a price ledger",
-        "rating": 1,
         "tags": []
     },
     "candy-files/candy-files-10-16-l-2.ansi": {
@@ -3073,30 +2889,6 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-4-16-s-1.ansi": {
-        "name": "candy-forms-4-16-s-1.ansi",
-        "category": "candy-forms",
-        "resolution": "51x13",
-        "width": 51,
-        "height": 13,
-        "depth": "16",
-        "colors": 7,
-        "description": "Placeholder dreamscape: an empty field asleep under a crescent moon",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-forms/candy-forms-4-16-s-2.ansi": {
-        "name": "candy-forms-4-16-s-2.ansi",
-        "category": "candy-forms",
-        "resolution": "53x11",
-        "width": 53,
-        "height": 11,
-        "depth": "16",
-        "colors": 7,
-        "description": "Validation border patrol mini-gate clearing and denying field values",
-        "rating": 1,
-        "tags": []
-    },
     "candy-forms/candy-forms-4-256-l-1.ansi": {
         "name": "candy-forms-4-256-l-1.ansi",
         "category": "candy-forms",
@@ -3155,18 +2947,6 @@
         "colors": 9,
         "description": "Password blacksmith mini-forge: glowing bar on anvil, heat-strength meter",
         "rating": 2,
-        "tags": []
-    },
-    "candy-forms/candy-forms-4-256-s-2.ansi": {
-        "name": "candy-forms-4-256-s-2.ansi",
-        "category": "candy-forms",
-        "resolution": "53x11",
-        "width": 53,
-        "height": 11,
-        "depth": "256",
-        "colors": 12,
-        "description": "Tab-key pinball mini-board: focus ball ricocheting between field bumpers",
-        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-4-tc-l-1.ansi": {
@@ -3313,30 +3093,6 @@
         "rating": 2,
         "tags": []
     },
-    "candy-forms/candy-forms-5-256-l-1.ansi": {
-        "name": "candy-forms-5-256-l-1.ansi",
-        "category": "candy-forms",
-        "resolution": "168x33",
-        "width": 168,
-        "height": 33,
-        "depth": "256",
-        "colors": 22,
-        "description": "grand theatre marquee, spotlights and six-option dropdown premiere",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-forms/candy-forms-5-256-l-2.ansi": {
-        "name": "candy-forms-5-256-l-2.ansi",
-        "category": "candy-forms",
-        "resolution": "160x31",
-        "width": 160,
-        "height": 31,
-        "depth": "256",
-        "colors": 25,
-        "description": "multiselect harvest panorama with sun, soil bands, crates and progress",
-        "rating": 1,
-        "tags": []
-    },
     "candy-forms/candy-forms-5-256-m-1.ansi": {
         "name": "candy-forms-5-256-m-1.ansi",
         "category": "candy-forms",
@@ -3433,18 +3189,6 @@
         "rating": 3,
         "tags": []
     },
-    "candy-forms/candy-forms-5-tc-s-1.ansi": {
-        "name": "candy-forms-5-tc-s-1.ansi",
-        "category": "candy-forms",
-        "resolution": "60x12",
-        "width": 60,
-        "height": 12,
-        "depth": "truecolor",
-        "colors": 18,
-        "description": "glowing brass combination dials ringed by hue-lit ticks",
-        "rating": 1,
-        "tags": []
-    },
     "candy-forms/candy-forms-5-tc-s-2.ansi": {
         "name": "candy-forms-5-tc-s-2.ansi",
         "category": "candy-forms",
@@ -3467,54 +3211,6 @@
         "colors": 7,
         "description": "marionette workshop: puppet rig holding field banners on validator strings",
         "rating": 2,
-        "tags": []
-    },
-    "candy-forms/candy-forms-6-16-l-2.ansi": {
-        "name": "candy-forms-6-16-l-2.ansi",
-        "category": "candy-forms",
-        "resolution": "150x29",
-        "width": 150,
-        "height": 29,
-        "depth": "16",
-        "colors": 7,
-        "description": "harvest grading line: checkbox apple crates, one-notch grade dial, barn gate",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-forms/candy-forms-6-16-m-1.ansi": {
-        "name": "candy-forms-6-16-m-1.ansi",
-        "category": "candy-forms",
-        "resolution": "86x18",
-        "width": 86,
-        "height": 18,
-        "depth": "16",
-        "colors": 7,
-        "description": "railway signal box: lever-bank toggles, route-dial radio, interlock table",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-forms/candy-forms-6-16-m-2.ansi": {
-        "name": "candy-forms-6-16-m-2.ansi",
-        "category": "candy-forms",
-        "resolution": "78x22",
-        "width": 78,
-        "height": 22,
-        "depth": "16",
-        "colors": 6,
-        "description": "beekeeper apiary: comb frames of token stems, swarm suggestion chips",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-forms/candy-forms-6-16-s-1.ansi": {
-        "name": "candy-forms-6-16-s-1.ansi",
-        "category": "candy-forms",
-        "resolution": "52x14",
-        "width": 52,
-        "height": 14,
-        "depth": "16",
-        "colors": 6,
-        "description": "bakery display case: donut radios, tart checkbox, jam slider, flavor picker",
-        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-6-16-s-2.ansi": {
@@ -3623,54 +3319,6 @@
         "colors": 58,
         "description": "abyssal anglerfish: lure as top suggestion, school of masked-dot fields",
         "rating": 2,
-        "tags": []
-    },
-    "candy-forms/candy-forms-6-tc-m-1.ansi": {
-        "name": "candy-forms-6-tc-m-1.ansi",
-        "category": "candy-forms",
-        "resolution": "88x22",
-        "width": 88,
-        "height": 22,
-        "depth": "truecolor",
-        "colors": 102,
-        "description": "lighthouse validators: gradient beam sweeping email wrecks off the reef",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-forms/candy-forms-6-tc-m-2.ansi": {
-        "name": "candy-forms-6-tc-m-2.ansi",
-        "category": "candy-forms",
-        "resolution": "86x25",
-        "width": 86,
-        "height": 25,
-        "depth": "truecolor",
-        "colors": 249,
-        "description": "aurora observatory: gradient curtains over dome and radio tuner arc",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-forms/candy-forms-6-tc-s-1.ansi": {
-        "name": "candy-forms-6-tc-s-1.ansi",
-        "category": "candy-forms",
-        "resolution": "54x13",
-        "width": 54,
-        "height": 13,
-        "depth": "truecolor",
-        "colors": 45,
-        "description": "wax seal stamp: radial crimson disc, CandyForms embossed, ribbon tails",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-forms/candy-forms-6-tc-s-2.ansi": {
-        "name": "candy-forms-6-tc-s-2.ansi",
-        "category": "candy-forms",
-        "resolution": "66x10",
-        "width": 66,
-        "height": 10,
-        "depth": "truecolor",
-        "colors": 43,
-        "description": "autocomplete ribbons: ghost caret and hue-spooled suggestion chips",
-        "rating": 0,
         "tags": []
     },
     "candy-forms/candy-forms-7-16-l-1.ansi": {
@@ -3817,18 +3465,6 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-7-tc-l-1.ansi": {
-        "name": "candy-forms-7-tc-l-1.ansi",
-        "category": "candy-forms",
-        "resolution": "143x28",
-        "width": 143,
-        "height": 28,
-        "depth": "truecolor",
-        "colors": 582,
-        "description": "greenhouse benches with hanging field-tags under lamps",
-        "rating": 0,
-        "tags": []
-    },
     "candy-forms/candy-forms-7-tc-l-2.ansi": {
         "name": "candy-forms-7-tc-l-2.ansi",
         "category": "candy-forms",
@@ -3851,18 +3487,6 @@
         "colors": 111,
         "description": "playhouse seat chart, three seats glowing",
         "rating": 3,
-        "tags": []
-    },
-    "candy-forms/candy-forms-7-tc-m-2.ansi": {
-        "name": "candy-forms-7-tc-m-2.ansi",
-        "category": "candy-forms",
-        "resolution": "73x18",
-        "width": 73,
-        "height": 18,
-        "depth": "truecolor",
-        "colors": 60,
-        "description": "ward clipboard with gradient vitals meters",
-        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-7-tc-s-1.ansi": {
@@ -3927,42 +3551,6 @@
         "colors": 7,
         "description": "bird feeder station: seed hopper and five finches numbered on queue perches",
         "rating": 2,
-        "tags": []
-    },
-    "candy-forms/candy-forms-8-16-m-2.ansi": {
-        "name": "candy-forms-8-16-m-2.ansi",
-        "category": "candy-forms",
-        "resolution": "76x21",
-        "width": 76,
-        "height": 21,
-        "depth": "16",
-        "colors": 7,
-        "description": "cheese-grading triage table: wheels stamped, score cards and a reject bin",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-forms/candy-forms-8-16-s-1.ansi": {
-        "name": "candy-forms-8-16-s-1.ansi",
-        "category": "candy-forms",
-        "resolution": "55x14",
-        "width": 55,
-        "height": 14,
-        "depth": "16",
-        "colors": 7,
-        "description": "hamster-wheel power plant sending volts down the field wires",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-forms/candy-forms-8-16-s-2.ansi": {
-        "name": "candy-forms-8-16-s-2.ansi",
-        "category": "candy-forms",
-        "resolution": "54x13",
-        "width": 54,
-        "height": 13,
-        "depth": "16",
-        "colors": 7,
-        "description": "barber's candy-stripe queue pole with ticket stubs and a trim chair",
-        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-8-256-l-1.ansi": {
@@ -4050,66 +3638,6 @@
         "tags": [
             "alignment-fix"
         ]
-    },
-    "candy-forms/candy-forms-8-tc-l-2.ansi": {
-        "name": "candy-forms-8-tc-l-2.ansi",
-        "category": "candy-forms",
-        "resolution": "142x28",
-        "width": 142,
-        "height": 28,
-        "depth": "truecolor",
-        "colors": 12,
-        "description": "pottery kiln firing ceramic form-tiles: checkbox, radio and slider shelves glowing",
-        "rating": 0,
-        "tags": []
-    },
-    "candy-forms/candy-forms-8-tc-m-1.ansi": {
-        "name": "candy-forms-8-tc-m-1.ansi",
-        "category": "candy-forms",
-        "resolution": "78x18",
-        "width": 78,
-        "height": 18,
-        "depth": "truecolor",
-        "colors": 7,
-        "description": "clockmaker bench: dial, meshed gears, loupe and a 12 ms escapement timing chart",
-        "rating": 0,
-        "tags": []
-    },
-    "candy-forms/candy-forms-8-tc-m-2.ansi": {
-        "name": "candy-forms-8-tc-m-2.ansi",
-        "category": "candy-forms",
-        "resolution": "79x18",
-        "width": 79,
-        "height": 18,
-        "depth": "truecolor",
-        "colors": 14,
-        "description": "vineyard trellis rows: grape clusters as radio groups, one filled berry per cluster",
-        "rating": 0,
-        "tags": []
-    },
-    "candy-forms/candy-forms-8-tc-s-1.ansi": {
-        "name": "candy-forms-8-tc-s-1.ansi",
-        "category": "candy-forms",
-        "resolution": "54x9",
-        "width": 54,
-        "height": 9,
-        "depth": "truecolor",
-        "colors": 11,
-        "description": "candy shop wall of flavour jars, each label ticked as its recipe passes",
-        "rating": 0,
-        "tags": []
-    },
-    "candy-forms/candy-forms-8-tc-s-2.ansi": {
-        "name": "candy-forms-8-tc-s-2.ansi",
-        "category": "candy-forms",
-        "resolution": "60x11",
-        "width": 60,
-        "height": 11,
-        "depth": "truecolor",
-        "colors": 7,
-        "description": "submarine porthole onto a teal reef: payload fish and a bubble regex stream",
-        "rating": 0,
-        "tags": []
     },
     "candy-forms/candy-forms-9-16-l-1.ansi": {
         "name": "candy-forms-9-16-l-1.ansi",
@@ -4255,78 +3783,6 @@
         "rating": null,
         "tags": []
     },
-    "candy-forms/candy-forms-9-tc-l-1.ansi": {
-        "name": "candy-forms-9-tc-l-1.ansi",
-        "category": "candy-forms",
-        "resolution": "180x32",
-        "width": 180,
-        "height": 32,
-        "depth": "truecolor",
-        "colors": 227,
-        "description": "airport scanner arch terminal C: walking silhouette through green beam, tray belt, contraband bin",
-        "rating": 0,
-        "tags": []
-    },
-    "candy-forms/candy-forms-9-tc-l-2.ansi": {
-        "name": "candy-forms-9-tc-l-2.ansi",
-        "category": "candy-forms",
-        "resolution": "172x31",
-        "width": 172,
-        "height": 31,
-        "depth": "truecolor",
-        "colors": 64,
-        "description": "bindery: five field signatures stitched on gold-and-red thread, nipping press, gilded spine",
-        "rating": 0,
-        "tags": []
-    },
-    "candy-forms/candy-forms-9-tc-m-1.ansi": {
-        "name": "candy-forms-9-tc-m-1.ansi",
-        "category": "candy-forms",
-        "resolution": "86x19",
-        "width": 86,
-        "height": 19,
-        "depth": "truecolor",
-        "colors": 67,
-        "description": "dyed warp loom: seven hues for seven fields over a woven CANDY FORMS cloth bolt",
-        "rating": 0,
-        "tags": []
-    },
-    "candy-forms/candy-forms-9-tc-m-2.ansi": {
-        "name": "candy-forms-9-tc-m-2.ansi",
-        "category": "candy-forms",
-        "resolution": "84x18",
-        "width": 84,
-        "height": 18,
-        "depth": "truecolor",
-        "colors": 94,
-        "description": "glassblower hot shop: molten gather rolled to a fielded pane on the marver, annealer debounce",
-        "rating": 0,
-        "tags": []
-    },
-    "candy-forms/candy-forms-9-tc-s-1.ansi": {
-        "name": "candy-forms-9-tc-s-1.ansi",
-        "category": "candy-forms",
-        "resolution": "60x8",
-        "width": 60,
-        "height": 8,
-        "depth": "truecolor",
-        "colors": 18,
-        "description": "glowing seismograph close-up: phosphor trace of accepted keys over dark drum paper",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-forms/candy-forms-9-tc-s-2.ansi": {
-        "name": "candy-forms-9-tc-s-2.ansi",
-        "category": "candy-forms",
-        "resolution": "62x11",
-        "width": 62,
-        "height": 11,
-        "depth": "truecolor",
-        "colors": 17,
-        "description": "confessional grille by candlelight: whispered email sin and absolution, wax-sealed docket",
-        "rating": 1,
-        "tags": []
-    },
     "candy-forms/candy-forms-10-16-l-1.ansi": {
         "name": "candy-forms-10-16-l-1.ansi",
         "category": "candy-forms",
@@ -4459,18 +3915,6 @@
         "colors": 23,
         "description": "Barista order ticket on the rail: size/milk/shots fields clipped under steam",
         "rating": 3,
-        "tags": []
-    },
-    "candy-forms/candy-forms-10-256-s-2.ansi": {
-        "name": "candy-forms-10-256-s-2.ansi",
-        "category": "candy-forms",
-        "resolution": "53x10",
-        "width": 53,
-        "height": 10,
-        "depth": "256",
-        "colors": 21,
-        "description": "Farrier's horseshoe nailboard: bronze shoe with ☑/☐ nails, forge-heat ramp below",
-        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-10-tc-l-1.ansi": {
@@ -5339,18 +4783,6 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-4-256-m-1.ansi": {
-        "name": "candy-layout-4-256-m-1.ansi",
-        "category": "candy-layout",
-        "resolution": "88x22",
-        "width": 88,
-        "height": 22,
-        "depth": "256",
-        "colors": 19,
-        "description": "candy city lots: four neon towers claim a 12x12 isometric grid",
-        "rating": 1,
-        "tags": []
-    },
     "candy-layout/candy-layout-4-256-m-2.ansi": {
         "name": "candy-layout-4-256-m-2.ansi",
         "category": "candy-layout",
@@ -5361,18 +4793,6 @@
         "colors": 6,
         "description": "origami fold sequence: four pastel panels collapse a viewport by halves",
         "rating": null,
-        "tags": []
-    },
-    "candy-layout/candy-layout-4-256-s-1.ansi": {
-        "name": "candy-layout-4-256-s-1.ansi",
-        "category": "candy-layout",
-        "resolution": "62x15",
-        "width": 62,
-        "height": 15,
-        "depth": "256",
-        "colors": 6,
-        "description": "tangram crane built from five constraint regions with per-piece labels",
-        "rating": 1,
         "tags": []
     },
     "candy-layout/candy-layout-4-256-s-2.ansi": {
@@ -5483,18 +4903,6 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-5-16-m-1.ansi": {
-        "name": "candy-layout-5-16-m-1.ansi",
-        "category": "candy-layout",
-        "resolution": "82x22",
-        "width": 82,
-        "height": 22,
-        "depth": "16",
-        "colors": 7,
-        "description": "five-level scaffold tower with braced decks beside a checklist pane",
-        "rating": 1,
-        "tags": []
-    },
     "candy-layout/candy-layout-5-16-m-2.ansi": {
         "name": "candy-layout-5-16-m-2.ansi",
         "category": "candy-layout",
@@ -5506,20 +4914,6 @@
         "description": "three-zone kitchen plan with pans on a percentage-divided counter",
         "rating": 2,
         "tags": []
-    },
-    "candy-layout/candy-layout-5-16-s-1.ansi": {
-        "name": "candy-layout-5-16-s-1.ansi",
-        "category": "candy-layout",
-        "resolution": "56x12",
-        "width": 56,
-        "height": 12,
-        "depth": "16",
-        "colors": 8,
-        "description": "mise-en-place skillet/board/pot panes with constraint tags",
-        "rating": 1,
-        "tags": [
-            "alignment-fix"
-        ]
     },
     "candy-layout/candy-layout-5-16-s-2.ansi": {
         "name": "candy-layout-5-16-s-2.ansi",
@@ -5953,54 +5347,6 @@
             "alignment-fix"
         ]
     },
-    "candy-layout/candy-layout-7-16-m-1.ansi": {
-        "name": "candy-layout-7-16-m-1.ansi",
-        "category": "candy-layout",
-        "resolution": "84x24",
-        "width": 84,
-        "height": 24,
-        "depth": "16",
-        "colors": 9,
-        "description": "Masonry guild coursing plan: running bond, alternating quoins, stepped voussoir arch, toothed lift end",
-        "rating": 0,
-        "tags": []
-    },
-    "candy-layout/candy-layout-7-16-m-2.ansi": {
-        "name": "candy-layout-7-16-m-2.ansi",
-        "category": "candy-layout",
-        "resolution": "80x22",
-        "width": 80,
-        "height": 22,
-        "depth": "16",
-        "colors": 10,
-        "description": "Campground loop layout: ellipse road, tent pads on spurs, fire ring datum, lake frontage",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-layout/candy-layout-7-16-s-1.ansi": {
-        "name": "candy-layout-7-16-s-1.ansi",
-        "category": "candy-layout",
-        "resolution": "56x12",
-        "width": 56,
-        "height": 12,
-        "depth": "16",
-        "colors": 7,
-        "description": "Print-shop composing stick: sorts, caps, leads and furniture set to the measure",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-layout/candy-layout-7-16-s-2.ansi": {
-        "name": "candy-layout-7-16-s-2.ansi",
-        "category": "candy-layout",
-        "resolution": "52x13",
-        "width": 52,
-        "height": 13,
-        "depth": "16",
-        "colors": 5,
-        "description": "Hive stack stamp: supers capped over a brood arc constrained to the frame centre",
-        "rating": 1,
-        "tags": []
-    },
     "candy-layout/candy-layout-7-256-l-1.ansi": {
         "name": "candy-layout-7-256-l-1.ansi",
         "category": "candy-layout",
@@ -6203,18 +5549,6 @@
         "colors": 9,
         "description": "Chain packing: a spread chain with equal gaps set over a flush packed chain",
         "rating": 2,
-        "tags": []
-    },
-    "candy-layout/candy-layout-8-16-s-1.ansi": {
-        "name": "candy-layout-8-16-s-1.ansi",
-        "category": "candy-layout",
-        "resolution": "58x12",
-        "width": 58,
-        "height": 12,
-        "depth": "16",
-        "colors": 8,
-        "description": "Anchor pad 3x3: nine TL..BR pins on a bordered container, centre highlighted",
-        "rating": 1,
         "tags": []
     },
     "candy-layout/candy-layout-8-16-s-2.ansi": {
@@ -6443,18 +5777,6 @@
         "colors": 6,
         "description": "Gardener's crop-rotation plot: nine raised beds on pebble paths with water butt and rotation legend",
         "rating": 2,
-        "tags": []
-    },
-    "candy-layout/candy-layout-9-16-s-2.ansi": {
-        "name": "candy-layout-9-16-s-2.ansi",
-        "category": "candy-layout",
-        "resolution": "54x12",
-        "width": 54,
-        "height": 12,
-        "depth": "16",
-        "colors": 7,
-        "description": "Chandler's dip bench: eight tallow tapers thickening from 2 to 9 dips on the dipping bar over the molten bath",
-        "rating": 1,
         "tags": []
     },
     "candy-layout/candy-layout-9-256-l-1.ansi": {
@@ -8253,18 +7575,6 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-7-16-s-2.ansi": {
-        "name": "candy-mines-7-16-s-2.ansi",
-        "category": "candy-mines",
-        "resolution": "61x6",
-        "width": 61,
-        "height": 6,
-        "depth": "16",
-        "colors": 8,
-        "description": "sushi conveyor census where plate digits count wasabi bombs",
-        "rating": 1,
-        "tags": []
-    },
     "candy-mines/candy-mines-7-256-l-1.ansi": {
         "name": "candy-mines-7-256-l-1.ansi",
         "category": "candy-mines",
@@ -8673,18 +7983,6 @@
         "rating": 2,
         "tags": []
     },
-    "candy-mines/candy-mines-9-16-s-1.ansi": {
-        "name": "candy-mines-9-16-s-1.ansi",
-        "category": "candy-mines",
-        "resolution": "60x13",
-        "width": 60,
-        "height": 13,
-        "depth": "16",
-        "colors": 5,
-        "description": "telecom route CS-9 maintenance sheet, segment cells counting repeater faults in adjoining spans",
-        "rating": 1,
-        "tags": []
-    },
     "candy-mines/candy-mines-9-16-s-2.ansi": {
         "name": "candy-mines-9-16-s-2.ansi",
         "category": "candy-mines",
@@ -9079,18 +8377,6 @@
         "colors": 11,
         "description": "lamp-lit indigo tessera wall with gold block-letter CANDY MOSAIC wordmark and cracks",
         "rating": 3,
-        "tags": []
-    },
-    "candy-mosaic/candy-mosaic-1-16-m-1.ansi": {
-        "name": "candy-mosaic-1-16-m-1.ansi",
-        "category": "candy-mosaic",
-        "resolution": "84x25",
-        "width": 84,
-        "height": 25,
-        "depth": "16",
-        "colors": 26,
-        "description": "brick kiln hall with arched fire mouth, tessera shelves and block-letter title band",
-        "rating": 1,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-1-16-m-2.ansi": {
@@ -9569,18 +8855,6 @@
         "colors": 6,
         "description": "SIXEL vs KITTY duel card: dual cyan/magenta wave bars under white title bar, italic 'probe decides' verdict",
         "rating": 3,
-        "tags": []
-    },
-    "candy-mosaic/candy-mosaic-3-16-s-2.ansi": {
-        "name": "candy-mosaic-3-16-s-2.ansi",
-        "category": "candy-mosaic",
-        "resolution": "52x16",
-        "width": 52,
-        "height": 16,
-        "depth": "16",
-        "colors": 6,
-        "description": "Passage-of-image stamp: dashed green frame, magenta diamond, gear and terminal box glyphs with PNG/GD/TTY labels",
-        "rating": 1,
         "tags": []
     },
     "candy-mosaic/candy-mosaic-3-256-l-1.ansi": {
@@ -11623,18 +10897,6 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-2-16-s-2.ansi": {
-        "name": "candy-palette-2-16-s-2.ansi",
-        "category": "candy-palette",
-        "resolution": "62x9",
-        "width": 62,
-        "height": 9,
-        "depth": "16",
-        "colors": 11,
-        "description": "Contrast duel: black/white fields, checkerboard and rainbow rule",
-        "rating": 1,
-        "tags": []
-    },
     "candy-palette/candy-palette-2-256-l-1.ansi": {
         "name": "candy-palette-2-256-l-1.ansi",
         "category": "candy-palette",
@@ -12045,30 +11307,6 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-4-16-s-1.ansi": {
-        "name": "candy-palette-4-16-s-1.ansi",
-        "category": "candy-palette",
-        "resolution": "56x10",
-        "width": 56,
-        "height": 10,
-        "depth": "16",
-        "colors": 7,
-        "description": "Dye vat 04 boiling strawberry syrup, steam wisps and a side drip in ANSI-16",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-palette/candy-palette-4-16-s-2.ansi": {
-        "name": "candy-palette-4-16-s-2.ansi",
-        "category": "candy-palette",
-        "resolution": "60x12",
-        "width": 60,
-        "height": 12,
-        "depth": "16",
-        "colors": 13,
-        "description": "Chameleon perched over an eight-chip ANSI swatch tray changing its skin",
-        "rating": 1,
-        "tags": []
-    },
     "candy-palette/candy-palette-4-256-l-1.ansi": {
         "name": "candy-palette-4-256-l-1.ansi",
         "category": "candy-palette",
@@ -12391,18 +11629,6 @@
         "colors": 14,
         "description": "Textile mill spool-dye line: six spools hung from an overhead rail dipping bath-by-bath red→magenta",
         "rating": 2,
-        "tags": []
-    },
-    "candy-palette/candy-palette-6-16-m-2.ansi": {
-        "name": "candy-palette-6-16-m-2.ansi",
-        "category": "candy-palette",
-        "resolution": "80x20",
-        "width": 80,
-        "height": 20,
-        "depth": "16",
-        "colors": 8,
-        "description": "Bird hide at dawn: seven hue-coded birds on a telegraph wire above the slit hut and ledger",
-        "rating": 1,
         "tags": []
     },
     "candy-palette/candy-palette-6-16-s-1.ansi": {
@@ -12825,30 +12051,6 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-8-16-m-2.ansi": {
-        "name": "candy-palette-8-16-m-2.ansi",
-        "category": "candy-palette",
-        "resolution": "80x20",
-        "width": 80,
-        "height": 20,
-        "depth": "16",
-        "colors": 10,
-        "description": "Coral mass spawn hue-synced: five colony forms, rising gametes, lunar clock",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-palette/candy-palette-8-16-s-1.ansi": {
-        "name": "candy-palette-8-16-s-1.ansi",
-        "category": "candy-palette",
-        "resolution": "56x12",
-        "width": 56,
-        "height": 12,
-        "depth": "16",
-        "colors": 7,
-        "description": "Doppler PPI scope: sweep arm, range rings, echo ladder on a 16-colour console readout",
-        "rating": 1,
-        "tags": []
-    },
     "candy-palette/candy-palette-8-16-s-2.ansi": {
         "name": "candy-palette-8-16-s-2.ansi",
         "category": "candy-palette",
@@ -13065,30 +12267,6 @@
         "rating": 2,
         "tags": []
     },
-    "candy-palette/candy-palette-9-16-s-2.ansi": {
-        "name": "candy-palette-9-16-s-2.ansi",
-        "category": "candy-palette",
-        "resolution": "56x10",
-        "width": 56,
-        "height": 10,
-        "depth": "16",
-        "colors": 11,
-        "description": "Bird-egg clutch tray: six cupped nests with porcelain-blue, cream and speckled shells",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-palette/candy-palette-9-16-s-3.ansi": {
-        "name": "candy-palette-9-16-s-3.ansi",
-        "category": "candy-palette",
-        "resolution": "54x9",
-        "width": 54,
-        "height": 9,
-        "depth": "16",
-        "colors": 8,
-        "description": "Mineral streak plate: five powder streaks dragged across an unglaazed white tile",
-        "rating": 1,
-        "tags": []
-    },
     "candy-palette/candy-palette-9-256-l-1.ansi": {
         "name": "candy-palette-9-256-l-1.ansi",
         "category": "candy-palette",
@@ -13245,18 +12423,6 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-10-16-l-2.ansi": {
-        "name": "candy-palette-10-16-l-2.ansi",
-        "category": "candy-palette",
-        "resolution": "168x34",
-        "width": 168,
-        "height": 34,
-        "depth": "16",
-        "colors": 9,
-        "description": "pigment cave gallery wall: ochre bison and deer figures over limestone strata",
-        "rating": 1,
-        "tags": []
-    },
     "candy-palette/candy-palette-10-16-m-1.ansi": {
         "name": "candy-palette-10-16-m-1.ansi",
         "category": "candy-palette",
@@ -13281,18 +12447,6 @@
         "rating": 3,
         "tags": []
     },
-    "candy-palette/candy-palette-10-16-s-1.ansi": {
-        "name": "candy-palette-10-16-s-1.ansi",
-        "category": "candy-palette",
-        "resolution": "60x15",
-        "width": 60,
-        "height": 15,
-        "depth": "16",
-        "colors": 11,
-        "description": "lichen-zoned granite boulder: radial thallus rings with a 5-zone sample key",
-        "rating": 1,
-        "tags": []
-    },
     "candy-palette/candy-palette-10-16-s-2.ansi": {
         "name": "candy-palette-10-16-s-2.ansi",
         "category": "candy-palette",
@@ -13303,18 +12457,6 @@
         "colors": 7,
         "description": "sea-glass tray sorted by depth: frosted chips surf-green to deep-indigo",
         "rating": 2,
-        "tags": []
-    },
-    "candy-palette/candy-palette-10-16-s-3.ansi": {
-        "name": "candy-palette-10-16-s-3.ansi",
-        "category": "candy-palette",
-        "resolution": "58x13",
-        "width": 58,
-        "height": 13,
-        "depth": "16",
-        "colors": 9,
-        "description": "cave chamber of hands: three ochre negative prints on rock strata",
-        "rating": 1,
         "tags": []
     },
     "candy-palette/candy-palette-10-256-l-1.ansi": {
@@ -14255,30 +13397,6 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-4-16-l-2.ansi": {
-        "name": "candy-query-4-16-l-2.ansi",
-        "category": "candy-query",
-        "resolution": "188x40",
-        "width": 188,
-        "height": 40,
-        "depth": "16",
-        "colors": 8,
-        "description": "great cache pantry: multi-tier shelves of TTL jars with hit-ratio bar",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-query/candy-query-4-16-m-1.ansi": {
-        "name": "candy-query-4-16-m-1.ansi",
-        "category": "candy-query",
-        "resolution": "88x24",
-        "width": 88,
-        "height": 24,
-        "depth": "16",
-        "colors": 11,
-        "description": "query optimizer chessboard with piece glyphs and cost histogram",
-        "rating": 1,
-        "tags": []
-    },
     "candy-query/candy-query-4-16-m-2.ansi": {
         "name": "candy-query-4-16-m-2.ansi",
         "category": "candy-query",
@@ -14289,30 +13407,6 @@
         "colors": 5,
         "description": "three-pane TUI browser: tables list, rows grid, syntax SQL editor",
         "rating": 2,
-        "tags": []
-    },
-    "candy-query/candy-query-4-16-s-1.ansi": {
-        "name": "candy-query-4-16-s-1.ansi",
-        "category": "candy-query",
-        "resolution": "66x16",
-        "width": 66,
-        "height": 16,
-        "depth": "16",
-        "colors": 10,
-        "description": "aquarium: cyan fish schools swim through a magenta WHERE net over coral",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-query/candy-query-4-16-s-2.ansi": {
-        "name": "candy-query-4-16-s-2.ansi",
-        "category": "candy-query",
-        "resolution": "62x16",
-        "width": 62,
-        "height": 16,
-        "depth": "16",
-        "colors": 9,
-        "description": "cache pantry: shelf jars keyed by TTL gauges under block CANDY",
-        "rating": 1,
         "tags": []
     },
     "candy-query/candy-query-4-256-l-1.ansi": {
@@ -14469,54 +13563,6 @@
         "colors": 7,
         "description": "plan anatomy poster: skeleton plan tree beside self-time organ chart",
         "rating": 2,
-        "tags": []
-    },
-    "candy-query/candy-query-5-16-l-2.ansi": {
-        "name": "candy-query-5-16-l-2.ansi",
-        "category": "candy-query",
-        "resolution": "140x31",
-        "width": 140,
-        "height": 31,
-        "depth": "16",
-        "colors": 9,
-        "description": "checkpoint time capsule: dirty pages on a conveyor, lsn capsule in a pit",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-query/candy-query-5-16-m-1.ansi": {
-        "name": "candy-query-5-16-m-1.ansi",
-        "category": "candy-query",
-        "resolution": "80x23",
-        "width": 80,
-        "height": 23,
-        "depth": "16",
-        "colors": 7,
-        "description": "planner tarot: hooded reader, crystal cost-ball and three omen cards",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-query/candy-query-5-16-m-2.ansi": {
-        "name": "candy-query-5-16-m-2.ansi",
-        "category": "candy-query",
-        "resolution": "78x25",
-        "width": 78,
-        "height": 25,
-        "depth": "16",
-        "colors": 10,
-        "description": "shared-buffers hotel: room board of cached pages, LRU clerk, 94% occupancy",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-query/candy-query-5-16-s-1.ansi": {
-        "name": "candy-query-5-16-s-1.ansi",
-        "category": "candy-query",
-        "resolution": "60x13",
-        "width": 60,
-        "height": 13,
-        "depth": "16",
-        "colors": 7,
-        "description": "plan relay race: four runners pass the SQL baton parse→plan→execute→fetch",
-        "rating": 1,
         "tags": []
     },
     "candy-query/candy-query-5-16-s-2.ansi": {
@@ -14699,18 +13745,6 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-6-16-m-1.ansi": {
-        "name": "candy-query-6-16-m-1.ansi",
-        "category": "candy-query",
-        "resolution": "84x22",
-        "width": 84,
-        "height": 22,
-        "depth": "16",
-        "colors": 6,
-        "description": "card catalogue of the public schema: twelve table drawers, one pulled index card",
-        "rating": 1,
-        "tags": []
-    },
     "candy-query/candy-query-6-16-m-2.ansi": {
         "name": "candy-query-6-16-m-2.ansi",
         "category": "candy-query",
@@ -14721,30 +13755,6 @@
         "colors": 6,
         "description": "metro ticket and legend: PK express, FK local and aggregate loop with station=table rules",
         "rating": 2,
-        "tags": []
-    },
-    "candy-query/candy-query-6-16-s-1.ansi": {
-        "name": "candy-query-6-16-s-1.ansi",
-        "category": "candy-query",
-        "resolution": "56x13",
-        "width": 56,
-        "height": 13,
-        "depth": "16",
-        "colors": 6,
-        "description": "deep-sea SELECT: charter boat hooks row id=42 with rod and line",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-query/candy-query-6-16-s-2.ansi": {
-        "name": "candy-query-6-16-s-2.ansi",
-        "category": "candy-query",
-        "resolution": "48x14",
-        "width": 48,
-        "height": 14,
-        "depth": "16",
-        "colors": 5,
-        "description": "transaction signal box: ROLLBACK red, BEGIN amber, COMMIT green over a two-lane predicate",
-        "rating": 1,
         "tags": []
     },
     "candy-query/candy-query-6-256-l-1.ansi": {
@@ -14889,78 +13899,6 @@
         "colors": 12,
         "description": "planner altitude: ANALYZE balloon rises on striped lifting-gas of fresh statistics",
         "rating": null,
-        "tags": []
-    },
-    "candy-query/candy-query-7-16-l-1.ansi": {
-        "name": "candy-query-7-16-l-1.ansi",
-        "category": "candy-query",
-        "resolution": "150x32",
-        "width": 150,
-        "height": 32,
-        "depth": "16",
-        "colors": 9,
-        "description": "clock-tower scheduler: carillon hands over a spinning gear queue",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-query/candy-query-7-16-l-2.ansi": {
-        "name": "candy-query-7-16-l-2.ansi",
-        "category": "candy-query",
-        "resolution": "156x30",
-        "width": 156,
-        "height": 30,
-        "depth": "16",
-        "colors": 7,
-        "description": "join loom: shuttles weave A and B on a shared-key warp",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-query/candy-query-7-16-m-1.ansi": {
-        "name": "candy-query-7-16-m-1.ansi",
-        "category": "candy-query",
-        "resolution": "82x22",
-        "width": 82,
-        "height": 22,
-        "depth": "16",
-        "colors": 7,
-        "description": "schema as sewer plan: manholes, FK branch-pipes into main collector",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-query/candy-query-7-16-m-2.ansi": {
-        "name": "candy-query-7-16-m-2.ansi",
-        "category": "candy-query",
-        "resolution": "84x20",
-        "width": 84,
-        "height": 20,
-        "depth": "16",
-        "colors": 7,
-        "description": "stored procedure as player piano: punched roll drives the keys",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-query/candy-query-7-16-s-1.ansi": {
-        "name": "candy-query-7-16-s-1.ansi",
-        "category": "candy-query",
-        "resolution": "58x16",
-        "width": 58,
-        "height": 16,
-        "depth": "16",
-        "colors": 6,
-        "description": "grain-silo complex: warehouse holds the harvest of fact rows under domed caps",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-query/candy-query-7-16-s-2.ansi": {
-        "name": "candy-query-7-16-s-2.ansi",
-        "category": "candy-query",
-        "resolution": "56x15",
-        "width": 56,
-        "height": 15,
-        "depth": "16",
-        "colors": 6,
-        "description": "marble teller row: three windows OPEN/OPEN/LOCK serve transaction requests",
-        "rating": 1,
         "tags": []
     },
     "candy-query/candy-query-7-256-l-1.ansi": {
@@ -15131,18 +14069,6 @@
         "rating": 2,
         "tags": []
     },
-    "candy-query/candy-query-8-16-m-1.ansi": {
-        "name": "candy-query-8-16-m-1.ansi",
-        "category": "candy-query",
-        "resolution": "90x25",
-        "width": 90,
-        "height": 25,
-        "depth": "16",
-        "colors": 8,
-        "description": "approach-control radar: RING-1/3 scope tracks in-flight queries as flight strips + landing table",
-        "rating": 1,
-        "tags": []
-    },
     "candy-query/candy-query-8-16-m-2.ansi": {
         "name": "candy-query-8-16-m-2.ansi",
         "category": "candy-query",
@@ -15153,18 +14079,6 @@
         "colors": 8,
         "description": "materialized-view press: base-table feed, inked GROUP BY plate, fresh print stack",
         "rating": 2,
-        "tags": []
-    },
-    "candy-query/candy-query-8-16-s-1.ansi": {
-        "name": "candy-query-8-16-s-1.ansi",
-        "category": "candy-query",
-        "resolution": "64x10",
-        "width": 64,
-        "height": 10,
-        "depth": "16",
-        "colors": 11,
-        "description": "partition router: hash spins incoming key 94103 into shard bins P0-P9",
-        "rating": 1,
         "tags": []
     },
     "candy-query/candy-query-8-16-s-2.ansi": {
@@ -15321,78 +14235,6 @@
         "colors": 7,
         "description": "latency barometer: needle at 46 ms, ▔ trend glass, cache dew-point, fair-plan weather",
         "rating": null,
-        "tags": []
-    },
-    "candy-query/candy-query-9-16-l-1.ansi": {
-        "name": "candy-query-9-16-l-1.ansi",
-        "category": "candy-query",
-        "resolution": "176x34",
-        "width": 176,
-        "height": 34,
-        "depth": "16",
-        "colors": 9,
-        "description": "air-traffic strip wall: three rails of pinned flight-progress strips",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-query/candy-query-9-16-l-2.ansi": {
-        "name": "candy-query-9-16-l-2.ansi",
-        "category": "candy-query",
-        "resolution": "168x30",
-        "width": 168,
-        "height": 30,
-        "depth": "16",
-        "colors": 9,
-        "description": "watchmaker's regulation bench: parts trays, rate table, 24h timing traces",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-query/candy-query-9-16-m-1.ansi": {
-        "name": "candy-query-9-16-m-1.ansi",
-        "category": "candy-query",
-        "resolution": "86x24",
-        "width": 86,
-        "height": 24,
-        "depth": "16",
-        "colors": 8,
-        "description": "census door-knock grid: five floors, forty units tallied by contact status",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-query/candy-query-9-16-m-2.ansi": {
-        "name": "candy-query-9-16-m-2.ansi",
-        "category": "candy-query",
-        "resolution": "88x22",
-        "width": 88,
-        "height": 22,
-        "depth": "16",
-        "colors": 8,
-        "description": "freight consolidation yard: gantry hoists a JOIN container over bay stacks",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-query/candy-query-9-16-s-1.ansi": {
-        "name": "candy-query-9-16-s-1.ansi",
-        "category": "candy-query",
-        "resolution": "64x12",
-        "width": 64,
-        "height": 12,
-        "depth": "16",
-        "colors": 8,
-        "description": "bird-banding registry: four numbered leg-band tags, recovery codes",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-query/candy-query-9-16-s-2.ansi": {
-        "name": "candy-query-9-16-s-2.ansi",
-        "category": "candy-query",
-        "resolution": "60x12",
-        "width": 60,
-        "height": 12,
-        "depth": "16",
-        "colors": 8,
-        "description": "tide-gauge station: graduated staff against MSL plate, flood/ebb notes",
-        "rating": 1,
         "tags": []
     },
     "candy-query/candy-query-9-256-l-1.ansi": {
@@ -16009,18 +14851,6 @@
         "rating": null,
         "tags": []
     },
-    "candy-sprinkles/candy-sprinkles-2-16-l-1.ansi": {
-        "name": "candy-sprinkles-2-16-l-1.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "126x30",
-        "width": 126,
-        "height": 30,
-        "depth": "16",
-        "colors": 15,
-        "description": "Three-tier 16-colour birthday cake with striped candles, sprinkle batter and a candy-tile CANDY SPRINKLES wordmark",
-        "rating": 1,
-        "tags": []
-    },
     "candy-sprinkles/candy-sprinkles-2-16-l-2.ansi": {
         "name": "candy-sprinkles-2-16-l-2.ansi",
         "category": "candy-sprinkles",
@@ -16031,18 +14861,6 @@
         "colors": 7,
         "description": "Border menagerie: six framed cards (rounded to block) with unique sprinkle textures over a spaced wordmark banner",
         "rating": 3,
-        "tags": []
-    },
-    "candy-sprinkles/candy-sprinkles-2-16-m-1.ansi": {
-        "name": "candy-sprinkles-2-16-m-1.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "80x20",
-        "width": 80,
-        "height": 20,
-        "depth": "16",
-        "colors": 7,
-        "description": "Style-combination garden: six flowers in distinct verb styles around a framed spaced wordmark",
-        "rating": 1,
         "tags": []
     },
     "candy-sprinkles/candy-sprinkles-2-16-m-2.ansi": {
@@ -16261,42 +15079,6 @@
         "rating": 3,
         "tags": []
     },
-    "candy-sprinkles/candy-sprinkles-3-16-m-2.ansi": {
-        "name": "candy-sprinkles-3-16-m-2.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "82x18",
-        "width": 82,
-        "height": 18,
-        "depth": "16",
-        "colors": 7,
-        "description": "Border cabinet: eight framed tiles, one per Border:: house, each in its own hue",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-sprinkles/candy-sprinkles-3-16-s-1.ansi": {
-        "name": "candy-sprinkles-3-16-s-1.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "52x10",
-        "width": 52,
-        "height": 10,
-        "depth": "16",
-        "colors": 7,
-        "description": "Letterpress specimen card: big glyph set in six ANSI coatings inside a double-rule plate",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-sprinkles/candy-sprinkles-3-16-s-2.ansi": {
-        "name": "candy-sprinkles-3-16-s-2.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "56x10",
-        "width": 56,
-        "height": 10,
-        "depth": "16",
-        "colors": 11,
-        "description": "Contrast ticket: five fg/bg swatch pairs with live WCAG ratios and PASS/FAIL verdicts",
-        "rating": 1,
-        "tags": []
-    },
     "candy-sprinkles/candy-sprinkles-3-256-l-1.ansi": {
         "name": "candy-sprinkles-3-256-l-1.ansi",
         "category": "candy-sprinkles",
@@ -16513,18 +15295,6 @@
         "rating": 3,
         "tags": []
     },
-    "candy-sprinkles/candy-sprinkles-4-16-s-1.ansi": {
-        "name": "candy-sprinkles-4-16-s-1.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "51x11",
-        "width": 51,
-        "height": 11,
-        "depth": "16",
-        "colors": 6,
-        "description": "Spring panel of the sprinkle-seasonal year — 16-colour mini card with flower confetti",
-        "rating": 1,
-        "tags": []
-    },
     "candy-sprinkles/candy-sprinkles-4-16-s-2.ansi": {
         "name": "candy-sprinkles-4-16-s-2.ansi",
         "category": "candy-sprinkles",
@@ -16717,30 +15487,6 @@
         "rating": 3,
         "tags": []
     },
-    "candy-sprinkles/candy-sprinkles-5-16-l-2.ansi": {
-        "name": "candy-sprinkles-5-16-l-2.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "166x36",
-        "width": 166,
-        "height": 36,
-        "depth": "16",
-        "colors": 7,
-        "description": "ice sculpture festival lit by basic-color spotlights",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-sprinkles/candy-sprinkles-5-16-m-1.ansi": {
-        "name": "candy-sprinkles-5-16-m-1.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "82x24",
-        "width": 82,
-        "height": 24,
-        "depth": "16",
-        "colors": 7,
-        "description": "hand-knit sweater with border-stitch textures and legend",
-        "rating": 1,
-        "tags": []
-    },
     "candy-sprinkles/candy-sprinkles-5-16-m-2.ansi": {
         "name": "candy-sprinkles-5-16-m-2.ansi",
         "category": "candy-sprinkles",
@@ -16751,18 +15497,6 @@
         "colors": 8,
         "description": "night-sky fireworks, one shell per border style",
         "rating": 2,
-        "tags": []
-    },
-    "candy-sprinkles/candy-sprinkles-5-16-s-1.ansi": {
-        "name": "candy-sprinkles-5-16-s-1.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "58x15",
-        "width": 58,
-        "height": 15,
-        "depth": "16",
-        "colors": 7,
-        "description": "wallpapering crew: pattern strips, ladder, paste bucket",
-        "rating": 1,
         "tags": []
     },
     "candy-sprinkles/candy-sprinkles-5-16-s-2.ansi": {
@@ -17137,78 +15871,6 @@
         "rating": null,
         "tags": []
     },
-    "candy-sprinkles/candy-sprinkles-7-16-l-1.ansi": {
-        "name": "candy-sprinkles-7-16-l-1.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "132x30",
-        "width": 132,
-        "height": 30,
-        "depth": "16",
-        "colors": 7,
-        "description": "Guild banners hanging in a faint stone vault",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-sprinkles/candy-sprinkles-7-16-l-2.ansi": {
-        "name": "candy-sprinkles-7-16-l-2.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "130x30",
-        "width": 130,
-        "height": 30,
-        "depth": "16",
-        "colors": 10,
-        "description": "Stage-wide ribbon with giant bow under spotlights and confetti",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-sprinkles/candy-sprinkles-7-16-m-1.ansi": {
-        "name": "candy-sprinkles-7-16-m-1.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "80x21",
-        "width": 80,
-        "height": 21,
-        "depth": "16",
-        "colors": 10,
-        "description": "Barber pole spiral above a black-and-white tile floor",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-sprinkles/candy-sprinkles-7-16-m-2.ansi": {
-        "name": "candy-sprinkles-7-16-m-2.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "78x20",
-        "width": 78,
-        "height": 20,
-        "depth": "16",
-        "colors": 8,
-        "description": "Maypole with six dancers and sagging braided ribbons",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-sprinkles/candy-sprinkles-7-16-s-1.ansi": {
-        "name": "candy-sprinkles-7-16-s-1.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "52x11",
-        "width": 52,
-        "height": 11,
-        "depth": "16",
-        "colors": 7,
-        "description": "Ribbon-cutting bow and scissors on a candy-striped ribbon",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-sprinkles/candy-sprinkles-7-16-s-2.ansi": {
-        "name": "candy-sprinkles-7-16-s-2.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "48x9",
-        "width": 48,
-        "height": 9,
-        "depth": "16",
-        "colors": 6,
-        "description": "Three pinwheels turning in a mint garden row",
-        "rating": 1,
-        "tags": []
-    },
     "candy-sprinkles/candy-sprinkles-7-256-l-1.ansi": {
         "name": "candy-sprinkles-7-256-l-1.ansi",
         "category": "candy-sprinkles",
@@ -17399,18 +16061,6 @@
         "colors": 8,
         "description": "Weathervane ridge: six rooftop vanes in six ANSI hues under a running east wind",
         "rating": 3,
-        "tags": []
-    },
-    "candy-sprinkles/candy-sprinkles-8-16-s-1.ansi": {
-        "name": "candy-sprinkles-8-16-s-1.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "58x12",
-        "width": 58,
-        "height": 12,
-        "depth": "16",
-        "colors": 10,
-        "description": "Soldering bench: masked board, colour-banded jumper placed, hot iron on the fillet",
-        "rating": 1,
         "tags": []
     },
     "candy-sprinkles/candy-sprinkles-8-16-s-2.ansi": {
@@ -17869,18 +16519,6 @@
         "rating": 3,
         "tags": []
     },
-    "candy-sprinkles/candy-sprinkles-10-16-s-2.ansi": {
-        "name": "candy-sprinkles-10-16-s-2.ansi",
-        "category": "candy-sprinkles",
-        "resolution": "58x14",
-        "width": 58,
-        "height": 14,
-        "depth": "16",
-        "colors": 8,
-        "description": "Noisemaker counter: five striped party blowers flared on a shelf with name tags",
-        "rating": 1,
-        "tags": []
-    },
     "candy-sprinkles/candy-sprinkles-10-256-l-1.ansi": {
         "name": "candy-sprinkles-10-256-l-1.ansi",
         "category": "candy-sprinkles",
@@ -18289,30 +16927,6 @@
         "rating": 2,
         "tags": []
     },
-    "candy-tetris/candy-tetris-2-16-s-1.ansi": {
-        "name": "candy-tetris-2-16-s-1.ansi",
-        "category": "candy-tetris",
-        "resolution": "58x11",
-        "width": 58,
-        "height": 11,
-        "depth": "16",
-        "colors": 7,
-        "description": "7-BAG hopper pouring seven candy tetromino tokens down a feed rail",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-2-16-s-2.ansi": {
-        "name": "candy-tetris-2-16-s-2.ansi",
-        "category": "candy-tetris",
-        "resolution": "60x12",
-        "width": 60,
-        "height": 12,
-        "depth": "16",
-        "colors": 6,
-        "description": "ghost-piece drop rail: solid T, dotted trail, faded I landing at floor",
-        "rating": 1,
-        "tags": []
-    },
     "candy-tetris/candy-tetris-2-256-l-1.ansi": {
         "name": "candy-tetris-2-256-l-1.ansi",
         "category": "candy-tetris",
@@ -18491,30 +17105,6 @@
         "colors": 6,
         "description": "dojo scroll: four-frame T-spin kata with corner law and strike scoring",
         "rating": 2,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-3-16-m-2.ansi": {
-        "name": "candy-tetris-3-16-m-2.ansi",
-        "category": "candy-tetris",
-        "resolution": "82x21",
-        "width": 82,
-        "height": 21,
-        "depth": "16",
-        "colors": 7,
-        "description": "garbage parcel waybill: four soiled rows air-freighted YOU to CPU well",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-3-16-s-1.ansi": {
-        "name": "candy-tetris-3-16-s-1.ansi",
-        "category": "candy-tetris",
-        "resolution": "54x12",
-        "width": 54,
-        "height": 12,
-        "depth": "16",
-        "colors": 6,
-        "description": "piece census ID card: TEE photographed, wanted for three-line wipeout",
-        "rating": 1,
         "tags": []
     },
     "candy-tetris/candy-tetris-3-16-s-2.ansi": {
@@ -18889,30 +17479,6 @@
         "rating": null,
         "tags": []
     },
-    "candy-tetris/candy-tetris-5-16-l-1.ansi": {
-        "name": "candy-tetris-5-16-l-1.ansi",
-        "category": "candy-tetris",
-        "resolution": "160x32",
-        "width": 160,
-        "height": 32,
-        "depth": "16",
-        "colors": 6,
-        "description": "grand quarry panorama: carved CANDY TETRIS cliff, trilithon, sled hauling the long I",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-5-16-l-2.ansi": {
-        "name": "candy-tetris-5-16-l-2.ansi",
-        "category": "candy-tetris",
-        "resolution": "150x30",
-        "width": 150,
-        "height": 30,
-        "depth": "16",
-        "colors": 8,
-        "description": "tapestry loom: weavers at the frame loom, cloth mid-row of CANDY TETRIS",
-        "rating": 1,
-        "tags": []
-    },
     "candy-tetris/candy-tetris-5-16-m-1.ansi": {
         "name": "candy-tetris-5-16-m-1.ansi",
         "category": "candy-tetris",
@@ -18923,42 +17489,6 @@
         "colors": 8,
         "description": "jazz quintet: five piece-shaped players on trumpet, tuba, bass, sax and keys",
         "rating": 2,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-5-16-m-2.ansi": {
-        "name": "candy-tetris-5-16-m-2.ansi",
-        "category": "candy-tetris",
-        "resolution": "80x21",
-        "width": 80,
-        "height": 21,
-        "depth": "16",
-        "colors": 8,
-        "description": "kaiten sushi: tetromino nigiri circling on the belt, itamae and order ticket",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-5-16-s-1.ansi": {
-        "name": "candy-tetris-5-16-s-1.ansi",
-        "category": "candy-tetris",
-        "resolution": "58x12",
-        "width": 58,
-        "height": 12,
-        "depth": "16",
-        "colors": 6,
-        "description": "quarry tally stone: chiselled monoliths over a shift-board reading CANDY TETRIS QUARRY",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-5-16-s-2.ansi": {
-        "name": "candy-tetris-5-16-s-2.ansi",
-        "category": "candy-tetris",
-        "resolution": "56x11",
-        "width": 56,
-        "height": 11,
-        "depth": "16",
-        "colors": 8,
-        "description": "bakery slice card: layered cake cut into I/S/Z/O portions under a scalloped awning",
-        "rating": 1,
         "tags": []
     },
     "candy-tetris/candy-tetris-5-256-l-1.ansi": {
@@ -19105,18 +17635,6 @@
         "rating": null,
         "tags": []
     },
-    "candy-tetris/candy-tetris-6-16-l-1.ansi": {
-        "name": "candy-tetris-6-16-l-1.ansi",
-        "category": "candy-tetris",
-        "resolution": "150x34",
-        "width": 150,
-        "height": 34,
-        "depth": "16",
-        "colors": 7,
-        "description": "surface analysis chart: isobars, occlusions and a T-shaped cloud shield",
-        "rating": 1,
-        "tags": []
-    },
     "candy-tetris/candy-tetris-6-16-l-2.ansi": {
         "name": "candy-tetris-6-16-l-2.ansi",
         "category": "candy-tetris",
@@ -19127,18 +17645,6 @@
         "colors": 9,
         "description": "endgame study board: tetromino men hold their footprints, mate in four",
         "rating": 2,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-6-16-m-1.ansi": {
-        "name": "candy-tetris-6-16-m-1.ansi",
-        "category": "candy-tetris",
-        "resolution": "84x23",
-        "width": 84,
-        "height": 23,
-        "depth": "16",
-        "colors": 10,
-        "description": "fishmonger stall top-view: O-sole, I-pike, T-turbot on ice with price tags",
-        "rating": 1,
         "tags": []
     },
     "candy-tetris/candy-tetris-6-16-m-2.ansi": {
@@ -19163,18 +17669,6 @@
         "colors": 7,
         "description": "station CT-7 three-channel seismogram strip with T/O/L/I/S quake bursts",
         "rating": 2,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-6-16-s-2.ansi": {
-        "name": "candy-tetris-6-16-s-2.ansi",
-        "category": "candy-tetris",
-        "resolution": "58x13",
-        "width": 58,
-        "height": 13,
-        "depth": "16",
-        "colors": 8,
-        "description": "removal men hauling O-crate and I-plank up a six-step staircase",
-        "rating": 1,
         "tags": []
     },
     "candy-tetris/candy-tetris-6-256-l-1.ansi": {
@@ -19321,30 +17815,6 @@
         "rating": null,
         "tags": []
     },
-    "candy-tetris/candy-tetris-7-16-l-1.ansi": {
-        "name": "candy-tetris-7-16-l-1.ansi",
-        "category": "candy-tetris",
-        "resolution": "168x38",
-        "width": 168,
-        "height": 38,
-        "depth": "16",
-        "colors": 12,
-        "description": "gothic rose and three lancets: the piece saints each holding one glass glyph",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-7-16-l-2.ansi": {
-        "name": "candy-tetris-7-16-l-2.ansi",
-        "category": "candy-tetris",
-        "resolution": "168x36",
-        "width": 168,
-        "height": 36,
-        "depth": "16",
-        "colors": 8,
-        "description": "cryosphere drift-ice chart: seven angular piece-shaped bergs and drift vectors",
-        "rating": 1,
-        "tags": []
-    },
     "candy-tetris/candy-tetris-7-16-m-1.ansi": {
         "name": "candy-tetris-7-16-m-1.ansi",
         "category": "candy-tetris",
@@ -19367,18 +17837,6 @@
         "colors": 8,
         "description": "piano rack with piece-shaped note clusters on five-line staves",
         "rating": 2,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-7-16-s-1.ansi": {
-        "name": "candy-tetris-7-16-s-1.ansi",
-        "category": "candy-tetris",
-        "resolution": "62x13",
-        "width": 62,
-        "height": 13,
-        "depth": "16",
-        "colors": 6,
-        "description": "brass riser manifold tag plate: I-header with five T-service drops",
-        "rating": 1,
         "tags": []
     },
     "candy-tetris/candy-tetris-7-16-s-2.ansi": {
@@ -19573,42 +18031,6 @@
         "rating": 2,
         "tags": []
     },
-    "candy-tetris/candy-tetris-8-16-m-2.ansi": {
-        "name": "candy-tetris-8-16-m-2.ansi",
-        "category": "candy-tetris",
-        "resolution": "86x24",
-        "width": 86,
-        "height": 24,
-        "depth": "16",
-        "colors": 6,
-        "description": "kaleidoscope chamber: three rings of pieces mirrored about a gilded centre cell",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-8-16-s-1.ansi": {
-        "name": "candy-tetris-8-16-s-1.ansi",
-        "category": "candy-tetris",
-        "resolution": "64x13",
-        "width": 64,
-        "height": 13,
-        "depth": "16",
-        "colors": 7,
-        "description": "zen karesansui: raked-sand ripples with tetromino stone islands in a bordered bed",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-8-16-s-2.ansi": {
-        "name": "candy-tetris-8-16-s-2.ansi",
-        "category": "candy-tetris",
-        "resolution": "66x12",
-        "width": 66,
-        "height": 12,
-        "depth": "16",
-        "colors": 5,
-        "description": "dusk murmuration: scattered bird-ticks with three tetromino skeins wheeling",
-        "rating": 1,
-        "tags": []
-    },
     "candy-tetris/candy-tetris-8-256-l-1.ansi": {
         "name": "candy-tetris-8-256-l-1.ansi",
         "category": "candy-tetris",
@@ -19753,18 +18175,6 @@
         "rating": null,
         "tags": []
     },
-    "candy-tetris/candy-tetris-9-16-l-1.ansi": {
-        "name": "candy-tetris-9-16-l-1.ansi",
-        "category": "candy-tetris",
-        "resolution": "166x34",
-        "width": 166,
-        "height": 34,
-        "depth": "16",
-        "colors": 7,
-        "description": "ropewalk shed: great wheel to comma, hemp strand strung with piece-shaped twister bobs, hanks curing",
-        "rating": 1,
-        "tags": []
-    },
     "candy-tetris/candy-tetris-9-16-l-2.ansi": {
         "name": "candy-tetris-9-16-l-2.ansi",
         "category": "candy-tetris",
@@ -19787,42 +18197,6 @@
         "colors": 7,
         "description": "highland caber toss: lashed four-log I caber leaving the stock, judge's marker up, crowd on the brae",
         "rating": 2,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-9-16-m-2.ansi": {
-        "name": "candy-tetris-9-16-m-2.ansi",
-        "category": "candy-tetris",
-        "resolution": "84x20",
-        "width": 84,
-        "height": 20,
-        "depth": "16",
-        "colors": 10,
-        "description": "patience parlour: Klondike of seven piece-suits fanned on green baize with dice and stock pile",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-9-16-s-1.ansi": {
-        "name": "candy-tetris-9-16-s-1.ansi",
-        "category": "candy-tetris",
-        "resolution": "60x13",
-        "width": 60,
-        "height": 13,
-        "depth": "16",
-        "colors": 8,
-        "description": "tool crib pegboard: five tools in chisel-I, square-O, file-T, saw-S, hammer-L outlines",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-9-16-s-2.ansi": {
-        "name": "candy-tetris-9-16-s-2.ansi",
-        "category": "candy-tetris",
-        "resolution": "58x12",
-        "width": 58,
-        "height": 12,
-        "depth": "16",
-        "colors": 10,
-        "description": "crag route board: piece-shaped holds on speckled wall, dotted route, climber mid-move over graded pads",
-        "rating": 1,
         "tags": []
     },
     "candy-tetris/candy-tetris-9-256-l-1.ansi": {
@@ -20041,42 +18415,6 @@
         "rating": 2,
         "tags": []
     },
-    "candy-tetris/candy-tetris-10-16-m-3.ansi": {
-        "name": "candy-tetris-10-16-m-3.ansi",
-        "category": "candy-tetris",
-        "resolution": "84x22",
-        "width": 84,
-        "height": 22,
-        "depth": "16",
-        "colors": 8,
-        "description": "marionette theatre proscenium: curtained stage, control bars, piece dragon and castle",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-10-16-s-1.ansi": {
-        "name": "candy-tetris-10-16-s-1.ansi",
-        "category": "candy-tetris",
-        "resolution": "62x12",
-        "width": 62,
-        "height": 12,
-        "depth": "16",
-        "colors": 7,
-        "description": "weathervane rooftop: I-bar vane + T rooster over a shingled roof, cardinals W/E",
-        "rating": 1,
-        "tags": []
-    },
-    "candy-tetris/candy-tetris-10-16-s-2.ansi": {
-        "name": "candy-tetris-10-16-s-2.ansi",
-        "category": "candy-tetris",
-        "resolution": "62x13",
-        "width": 62,
-        "height": 13,
-        "depth": "16",
-        "colors": 5,
-        "description": "piece mosaic plaza, top-view plan with O and T medallion beds and L/J planters",
-        "rating": 1,
-        "tags": []
-    },
     "candy-tetris/candy-tetris-10-256-l-1.ansi": {
         "name": "candy-tetris-10-256-l-1.ansi",
         "category": "candy-tetris",
@@ -20255,18 +18593,6 @@
         "colors": 10,
         "description": "Ballistic canopy: seven angle-distributed dotted arcs fanning from ◉ launch to a timed impact grid",
         "rating": 2,
-        "tags": []
-    },
-    "honey-bounce/honey-bounce-1-16-m-1.ansi": {
-        "name": "honey-bounce-1-16-m-1.ansi",
-        "category": "honey-bounce",
-        "resolution": "86x24",
-        "width": 86,
-        "height": 24,
-        "depth": "16",
-        "colors": 11,
-        "description": "Damped sine seascape: ∿ crests over a ▒ blue sea, sun glyph, wind streaks, HONEY-BOUNCE title",
-        "rating": 1,
         "tags": []
     },
     "honey-bounce/honey-bounce-1-16-m-2.ansi": {
@@ -20713,30 +19039,6 @@
         "rating": 2,
         "tags": []
     },
-    "honey-bounce/honey-bounce-3-16-s-1.ansi": {
-        "name": "honey-bounce-3-16-s-1.ansi",
-        "category": "honey-bounce",
-        "resolution": "56x12",
-        "width": 56,
-        "height": 12,
-        "depth": "16",
-        "colors": 6,
-        "description": "Trampoline warm-up: stick gymnast over a ═ bed, dotted flight arc, BOING! readout",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-bounce/honey-bounce-3-16-s-2.ansi": {
-        "name": "honey-bounce-3-16-s-2.ansi",
-        "category": "honey-bounce",
-        "resolution": "62x11",
-        "width": 62,
-        "height": 11,
-        "depth": "16",
-        "colors": 6,
-        "description": "Bed tension trio: same dropped ball over taut/tuned/slack nets with dotted rebound column",
-        "rating": 1,
-        "tags": []
-    },
     "honey-bounce/honey-bounce-3-16-s-3.ansi": {
         "name": "honey-bounce-3-16-s-3.ansi",
         "category": "honey-bounce",
@@ -20929,18 +19231,6 @@
         "rating": 3,
         "tags": []
     },
-    "honey-bounce/honey-bounce-4-16-m-1.ansi": {
-        "name": "honey-bounce-4-16-m-1.ansi",
-        "category": "honey-bounce",
-        "resolution": "82x21",
-        "width": 82,
-        "height": 21,
-        "depth": "16",
-        "colors": 7,
-        "description": "Wall-spring-mass-dashpot schematic with k,c,m labels over a block wordmark",
-        "rating": 1,
-        "tags": []
-    },
     "honey-bounce/honey-bounce-4-16-m-2.ansi": {
         "name": "honey-bounce-4-16-m-2.ansi",
         "category": "honey-bounce",
@@ -20963,18 +19253,6 @@
         "colors": 6,
         "description": "Honey-sphere Newton cradle, one ball lifted on a magenta string over a rail",
         "rating": 2,
-        "tags": []
-    },
-    "honey-bounce/honey-bounce-4-16-s-2.ansi": {
-        "name": "honey-bounce-4-16-s-2.ansi",
-        "category": "honey-bounce",
-        "resolution": "54x8",
-        "width": 54,
-        "height": 8,
-        "depth": "16",
-        "colors": 5,
-        "description": "White zero-axis with red damped step-response bursts and amber trigger arrows",
-        "rating": 1,
         "tags": []
     },
     "honey-bounce/honey-bounce-4-256-l-1.ansi": {
@@ -21613,66 +19891,6 @@
         "rating": 2,
         "tags": []
     },
-    "honey-bounce/honey-bounce-7-16-l-2.ansi": {
-        "name": "honey-bounce-7-16-l-2.ansi",
-        "category": "honey-bounce",
-        "resolution": "168x28",
-        "width": 168,
-        "height": 28,
-        "depth": "16",
-        "colors": 6,
-        "description": "archer's paradox long diagram, 20 flex frames down the target range",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-bounce/honey-bounce-7-16-m-1.ansi": {
-        "name": "honey-bounce-7-16-m-1.ansi",
-        "category": "honey-bounce",
-        "resolution": "86x18",
-        "width": 86,
-        "height": 18,
-        "depth": "16",
-        "colors": 7,
-        "description": "trampoline score sheet mid-routine, live deductions over a damped bed",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-bounce/honey-bounce-7-16-m-2.ansi": {
-        "name": "honey-bounce-7-16-m-2.ansi",
-        "category": "honey-bounce",
-        "resolution": "84x18",
-        "width": 84,
-        "height": 18,
-        "depth": "16",
-        "colors": 5,
-        "description": "archer's paradox shaft-flex frames with a damped string oscillation",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-bounce/honey-bounce-7-16-s-1.ansi": {
-        "name": "honey-bounce-7-16-s-1.ansi",
-        "category": "honey-bounce",
-        "resolution": "56x10",
-        "width": 56,
-        "height": 10,
-        "depth": "16",
-        "colors": 7,
-        "description": "popcorn kernel burst ledger: six sealed kernels' pop-energy ramp in a cinema",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-bounce/honey-bounce-7-16-s-2.ansi": {
-        "name": "honey-bounce-7-16-s-2.ansi",
-        "category": "honey-bounce",
-        "resolution": "50x6",
-        "width": 50,
-        "height": 6,
-        "depth": "16",
-        "colors": 7,
-        "description": "stone-skip decay strokes over a pond line, geometric height collapse to splash",
-        "rating": 1,
-        "tags": []
-    },
     "honey-bounce/honey-bounce-7-256-l-1.ansi": {
         "name": "honey-bounce-7-256-l-1.ansi",
         "category": "honey-bounce",
@@ -21829,30 +20047,6 @@
         "rating": 2,
         "tags": []
     },
-    "honey-bounce/honey-bounce-8-16-l-2.ansi": {
-        "name": "honey-bounce-8-16-l-2.ansi",
-        "category": "honey-bounce",
-        "resolution": "168x36",
-        "width": 168,
-        "height": 36,
-        "depth": "16",
-        "colors": 12,
-        "description": "horse gallop full footfall map, three strides, airborne phases",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-bounce/honey-bounce-8-16-m-1.ansi": {
-        "name": "honey-bounce-8-16-m-1.ansi",
-        "category": "honey-bounce",
-        "resolution": "84x22",
-        "width": 84,
-        "height": 22,
-        "depth": "16",
-        "colors": 13,
-        "description": "four-limb gallop gait diagram, stance blocks on time ruler",
-        "rating": 1,
-        "tags": []
-    },
     "honey-bounce/honey-bounce-8-16-m-2.ansi": {
         "name": "honey-bounce-8-16-m-2.ansi",
         "category": "honey-bounce",
@@ -21863,30 +20057,6 @@
         "colors": 11,
         "description": "torque balance beam on spring fulcrum, unequal masses tilting",
         "rating": 2,
-        "tags": []
-    },
-    "honey-bounce/honey-bounce-8-16-s-1.ansi": {
-        "name": "honey-bounce-8-16-s-1.ansi",
-        "category": "honey-bounce",
-        "resolution": "54x13",
-        "width": 54,
-        "height": 13,
-        "depth": "16",
-        "colors": 9,
-        "description": "lever escapement anchor gripping escape-wheel teeth, tick/tock beat marks",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-bounce/honey-bounce-8-16-s-2.ansi": {
-        "name": "honey-bounce-8-16-s-2.ansi",
-        "category": "honey-bounce",
-        "resolution": "54x13",
-        "width": 54,
-        "height": 13,
-        "depth": "16",
-        "colors": 8,
-        "description": "left-lead 4-beat gallop footfall strip, LH>RF>RH>LF over 32 ticks",
-        "rating": 1,
         "tags": []
     },
     "honey-bounce/honey-bounce-8-256-l-1.ansi": {
@@ -22249,18 +20419,6 @@
         "rating": null,
         "tags": []
     },
-    "honey-bounce/honey-bounce-10-16-l-1.ansi": {
-        "name": "honey-bounce-10-16-l-1.ansi",
-        "category": "honey-bounce",
-        "resolution": "160x34",
-        "width": 160,
-        "height": 34,
-        "depth": "16",
-        "colors": 7,
-        "description": "Bell-ringer's rope wheel in a tower: wheel + bell ghost-swing arcs and a change-ringing stroke-amplitude decay",
-        "rating": 1,
-        "tags": []
-    },
     "honey-bounce/honey-bounce-10-16-l-2.ansi": {
         "name": "honey-bounce-10-16-l-2.ansi",
         "category": "honey-bounce",
@@ -22501,18 +20659,6 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-1-16-m-2.ansi": {
-        "name": "honey-flap-1-16-m-2.ansi",
-        "category": "honey-flap",
-        "resolution": "76x20",
-        "width": 76,
-        "height": 20,
-        "depth": "16",
-        "colors": 15,
-        "description": "Night hive skyline: lit-window towers under a big moon, stacked HONEY and FLAP block title",
-        "rating": 1,
-        "tags": []
-    },
     "honey-flap/honey-flap-1-16-s-1.ansi": {
         "name": "honey-flap-1-16-s-1.ansi",
         "category": "honey-flap",
@@ -22523,18 +20669,6 @@
         "colors": 13,
         "description": "Small 16-color gate run: two green pipes, gold bee threading the gap, block logo on grass",
         "rating": 2,
-        "tags": []
-    },
-    "honey-flap/honey-flap-1-16-s-2.ansi": {
-        "name": "honey-flap-1-16-s-2.ansi",
-        "category": "honey-flap",
-        "resolution": "62x13",
-        "width": 62,
-        "height": 13,
-        "depth": "16",
-        "colors": 12,
-        "description": "Drifting honeycomb field with glowing full cells, bee glide, chunky multicolor block title",
-        "rating": 1,
         "tags": []
     },
     "honey-flap/honey-flap-1-256-l-1.ansi": {
@@ -23389,18 +21523,6 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-5-16-l-2.ansi": {
-        "name": "honey-flap-5-16-l-2.ansi",
-        "category": "honey-flap",
-        "resolution": "152x30",
-        "width": 152,
-        "height": 30,
-        "depth": "16",
-        "colors": 5,
-        "description": "Full broadsheet: HoneyFlap Herald front page, GATE CRACKDOWN, 3 text columns, comic, bar chart",
-        "rating": 1,
-        "tags": []
-    },
     "honey-flap/honey-flap-5-16-m-1.ansi": {
         "name": "honey-flap-5-16-m-1.ansi",
         "category": "honey-flap",
@@ -23411,42 +21533,6 @@
         "colors": 8,
         "description": "Aviary wire panel: diamond mesh wall, three hanging tube feeders, perch row, visiting bee",
         "rating": 2,
-        "tags": []
-    },
-    "honey-flap/honey-flap-5-16-m-2.ansi": {
-        "name": "honey-flap-5-16-m-2.ansi",
-        "category": "honey-flap",
-        "resolution": "82x20",
-        "width": 82,
-        "height": 20,
-        "depth": "16",
-        "colors": 8,
-        "description": "Waggle-dance decoder board: sun dial, figure-eight, 45-deg vector to flower, phase/waggle meters",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-flap/honey-flap-5-16-s-1.ansi": {
-        "name": "honey-flap-5-16-s-1.ansi",
-        "category": "honey-flap",
-        "resolution": "56x12",
-        "width": 56,
-        "height": 12,
-        "depth": "16",
-        "colors": 7,
-        "description": "Bee's-eye view up three converging sunflower stalks, canopy heads, dark soil wordmark band",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-flap/honey-flap-5-16-s-2.ansi": {
-        "name": "honey-flap-5-16-s-2.ansi",
-        "category": "honey-flap",
-        "resolution": "60x9",
-        "width": 60,
-        "height": 9,
-        "depth": "16",
-        "colors": 6,
-        "description": "Bee newspaper masthead strip: HoneyFlap Herald rules, GATE CRACKDOWN headline, wire ticker",
-        "rating": 1,
         "tags": []
     },
     "honey-flap/honey-flap-5-256-l-1.ansi": {
@@ -23593,42 +21679,6 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-6-16-l-1.ansi": {
-        "name": "honey-flap-6-16-l-1.ansi",
-        "category": "honey-flap",
-        "resolution": "152x34",
-        "width": 152,
-        "height": 34,
-        "depth": "16",
-        "colors": 9,
-        "description": "Airshow grand stand: hex trace flight path overhead, programme board, 13-row multi-coloured crowd, barricades",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-flap/honey-flap-6-16-l-2.ansi": {
-        "name": "honey-flap-6-16-l-2.ansi",
-        "category": "honey-flap",
-        "resolution": "135x29",
-        "width": 135,
-        "height": 29,
-        "depth": "16",
-        "colors": 6,
-        "description": "Flower telemetry grid map: coverage cells R1-R8/A-N, downlink table, bloom alert, histogram, relay notes",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-flap/honey-flap-6-16-m-1.ansi": {
-        "name": "honey-flap-6-16-m-1.ansi",
-        "category": "honey-flap",
-        "resolution": "77x22",
-        "width": 77,
-        "height": 22,
-        "depth": "16",
-        "colors": 8,
-        "description": "Winter comb lake panorama: snow peaks, pines, cabin, hex-cracked ice field, lone angler at hole 4",
-        "rating": 1,
-        "tags": []
-    },
     "honey-flap/honey-flap-6-16-m-2.ansi": {
         "name": "honey-flap-6-16-m-2.ansi",
         "category": "honey-flap",
@@ -23651,18 +21701,6 @@
         "colors": 7,
         "description": "Airshow flypast: loop-the-loop trace drawn between two brick smokestacks, striped bases",
         "rating": 2,
-        "tags": []
-    },
-    "honey-flap/honey-flap-6-16-s-2.ansi": {
-        "name": "honey-flap-6-16-s-2.ansi",
-        "category": "honey-flap",
-        "resolution": "46x10",
-        "width": 46,
-        "height": 10,
-        "depth": "16",
-        "colors": 7,
-        "description": "Drill sergeant's bootcamp scoreboard: three recruits' wing-beat bars, push-up tally, DISMISSED order",
-        "rating": 1,
         "tags": []
     },
     "honey-flap/honey-flap-6-256-l-1.ansi": {
@@ -23807,78 +21845,6 @@
         "colors": 12,
         "description": "Aerial refueling closeup: tanker nozzle, shimmering amber honey stream, drogue cone and receiver probe contact",
         "rating": null,
-        "tags": []
-    },
-    "honey-flap/honey-flap-7-16-l-1.ansi": {
-        "name": "honey-flap-7-16-l-1.ansi",
-        "category": "honey-flap",
-        "resolution": "168x32",
-        "width": 168,
-        "height": 32,
-        "depth": "16",
-        "colors": 8,
-        "description": "telegraph relay poles with sagging wires, morse sparks, rolling hills",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-flap/honey-flap-7-16-l-2.ansi": {
-        "name": "honey-flap-7-16-l-2.ansi",
-        "category": "honey-flap",
-        "resolution": "156x30",
-        "width": 156,
-        "height": 30,
-        "depth": "16",
-        "colors": 6,
-        "description": "archery range of ringed targets between posts, arrows in flight",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-flap/honey-flap-7-16-m-1.ansi": {
-        "name": "honey-flap-7-16-m-1.ansi",
-        "category": "honey-flap",
-        "resolution": "82x22",
-        "width": 82,
-        "height": 22,
-        "depth": "16",
-        "colors": 5,
-        "description": "train-track through a bamboo forest, segmented stalks, rail gaps",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-flap/honey-flap-7-16-m-2.ansi": {
-        "name": "honey-flap-7-16-m-2.ansi",
-        "category": "honey-flap",
-        "resolution": "84x21",
-        "width": 84,
-        "height": 21,
-        "depth": "16",
-        "colors": 7,
-        "description": "lighthouse bee casting a rotating beacon beam over a night strait",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-flap/honey-flap-7-16-s-1.ansi": {
-        "name": "honey-flap-7-16-s-1.ansi",
-        "category": "honey-flap",
-        "resolution": "60x13",
-        "width": 60,
-        "height": 13,
-        "depth": "16",
-        "colors": 5,
-        "description": "EVA tether at the honey space-station, ring habitat + starfield",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-flap/honey-flap-7-16-s-2.ansi": {
-        "name": "honey-flap-7-16-s-2.ansi",
-        "category": "honey-flap",
-        "resolution": "62x12",
-        "width": 62,
-        "height": 12,
-        "depth": "16",
-        "colors": 6,
-        "description": "diving bell bee over coral fans, bubbles, surface swell",
-        "rating": 1,
         "tags": []
     },
     "honey-flap/honey-flap-7-256-l-1.ansi": {
@@ -24037,30 +22003,6 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-8-16-l-2.ansi": {
-        "name": "honey-flap-8-16-l-2.ansi",
-        "category": "honey-flap",
-        "resolution": "168x42",
-        "width": 168,
-        "height": 42,
-        "depth": "16",
-        "colors": 6,
-        "description": "window washer's cradle traverse across a glass tower grid",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-flap/honey-flap-8-16-m-1.ansi": {
-        "name": "honey-flap-8-16-m-1.ansi",
-        "category": "honey-flap",
-        "resolution": "80x23",
-        "width": 80,
-        "height": 23,
-        "depth": "16",
-        "colors": 7,
-        "description": "fencer's piste with lit target gates and crossed foils",
-        "rating": 1,
-        "tags": []
-    },
     "honey-flap/honey-flap-8-16-m-2.ansi": {
         "name": "honey-flap-8-16-m-2.ansi",
         "category": "honey-flap",
@@ -24071,18 +22013,6 @@
         "colors": 7,
         "description": "sawmill cutting timber through spiked guide fences",
         "rating": 2,
-        "tags": []
-    },
-    "honey-flap/honey-flap-8-16-s-1.ansi": {
-        "name": "honey-flap-8-16-s-1.ansi",
-        "category": "honey-flap",
-        "resolution": "50x13",
-        "width": 50,
-        "height": 13,
-        "depth": "16",
-        "colors": 6,
-        "description": "bee barista pulling espresso shots between portafilter gates",
-        "rating": 1,
         "tags": []
     },
     "honey-flap/honey-flap-8-16-s-2.ansi": {
@@ -24241,18 +22171,6 @@
         "rating": null,
         "tags": []
     },
-    "honey-flap/honey-flap-9-16-l-1.ansi": {
-        "name": "honey-flap-9-16-l-1.ansi",
-        "category": "honey-flap",
-        "resolution": "150x36",
-        "width": 150,
-        "height": 36,
-        "depth": "16",
-        "colors": 11,
-        "description": "mail dolly rolling down a one-point hotel corridor",
-        "rating": 1,
-        "tags": []
-    },
     "honey-flap/honey-flap-9-16-l-2.ansi": {
         "name": "honey-flap-9-16-l-2.ansi",
         "category": "honey-flap",
@@ -24263,54 +22181,6 @@
         "colors": 8,
         "description": "autumn gust funneling leaf eddies through fence gaps",
         "rating": 2,
-        "tags": []
-    },
-    "honey-flap/honey-flap-9-16-m-1.ansi": {
-        "name": "honey-flap-9-16-m-1.ansi",
-        "category": "honey-flap",
-        "resolution": "84x22",
-        "width": 84,
-        "height": 22,
-        "depth": "16",
-        "colors": 7,
-        "description": "tightrope walker between two clock towers at night",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-flap/honey-flap-9-16-m-2.ansi": {
-        "name": "honey-flap-9-16-m-2.ansi",
-        "category": "honey-flap",
-        "resolution": "80x20",
-        "width": 80,
-        "height": 20,
-        "depth": "16",
-        "colors": 9,
-        "description": "heron striking through a reed gap, ringed water",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-flap/honey-flap-9-16-s-1.ansi": {
-        "name": "honey-flap-9-16-s-1.ansi",
-        "category": "honey-flap",
-        "resolution": "56x12",
-        "width": 56,
-        "height": 12,
-        "depth": "16",
-        "colors": 10,
-        "description": "bee touchdown on strider pond, stacked ripple rings",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-flap/honey-flap-9-16-s-2.ansi": {
-        "name": "honey-flap-9-16-s-2.ansi",
-        "category": "honey-flap",
-        "resolution": "50x10",
-        "width": 50,
-        "height": 10,
-        "depth": "16",
-        "colors": 7,
-        "description": "gale-blown striped windsock over hangar roof",
-        "rating": 1,
         "tags": []
     },
     "honey-flap/honey-flap-9-256-l-1.ansi": {
@@ -24469,42 +22339,6 @@
         "rating": 2,
         "tags": []
     },
-    "honey-flap/honey-flap-10-16-l-2.ansi": {
-        "name": "honey-flap-10-16-l-2.ansi",
-        "category": "honey-flap",
-        "resolution": "160x33",
-        "width": 160,
-        "height": 33,
-        "depth": "16",
-        "colors": 15,
-        "description": "monsoon market alley panorama: bunting, four awning stalls, flooded street",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-flap/honey-flap-10-16-l-3.ansi": {
-        "name": "honey-flap-10-16-l-3.ansi",
-        "category": "honey-flap",
-        "resolution": "170x34",
-        "width": 170,
-        "height": 34,
-        "depth": "16",
-        "colors": 10,
-        "description": "haystack fort barricade: crenellated bale wall, pennants, pollen balista, barn",
-        "rating": 1,
-        "tags": []
-    },
-    "honey-flap/honey-flap-10-16-m-1.ansi": {
-        "name": "honey-flap-10-16-m-1.ansi",
-        "category": "honey-flap",
-        "resolution": "78x20",
-        "width": 78,
-        "height": 20,
-        "depth": "16",
-        "colors": 10,
-        "description": "rain-swollen gutter fleet: paper boats between brick walls, manhole whirl",
-        "rating": 1,
-        "tags": []
-    },
     "honey-flap/honey-flap-10-16-m-2.ansi": {
         "name": "honey-flap-10-16-m-2.ansi",
         "category": "honey-flap",
@@ -24527,18 +22361,6 @@
         "colors": 8,
         "description": "foxglove bell-tower row: five purple spikes rung with gold bells, bumblebee pollination run",
         "rating": 2,
-        "tags": []
-    },
-    "honey-flap/honey-flap-10-16-s-2.ansi": {
-        "name": "honey-flap-10-16-s-2.ansi",
-        "category": "honey-flap",
-        "resolution": "60x11",
-        "width": 60,
-        "height": 11,
-        "depth": "16",
-        "colors": 10,
-        "description": "foghorn station on a gale-bitten cliff, sound rings rolling out to sea",
-        "rating": 1,
         "tags": []
     },
     "honey-flap/honey-flap-10-256-l-1.ansi": {
@@ -24731,18 +22553,6 @@
         "colors": 10,
         "description": "wide board: block-letter title, three month grids, year-select list, nav hints",
         "rating": 3,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-1-16-l-2.ansi": {
-        "name": "sugar-calendar-1-16-l-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "160x30",
-        "width": 160,
-        "height": 30,
-        "depth": "16",
-        "colors": 9,
-        "description": "vertical twelve-month loading board with block progress bars and percent",
-        "rating": 1,
         "tags": []
     },
     "sugar-calendar/sugar-calendar-1-16-m-1.ansi": {
@@ -24997,18 +22807,6 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-2-16-s-2.ansi": {
-        "name": "sugar-calendar-2-16-s-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "64x9",
-        "width": 64,
-        "height": 9,
-        "depth": "16",
-        "colors": 8,
-        "description": "four-season ticker strip under magenta wordmark bar",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-calendar/sugar-calendar-2-256-l-1.ansi": {
         "name": "sugar-calendar-2-256-l-1.ansi",
         "category": "sugar-calendar",
@@ -25177,66 +22975,6 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-3-16-m-1.ansi": {
-        "name": "sugar-calendar-3-16-m-1.ansi",
-        "category": "sugar-calendar",
-        "resolution": "76x23",
-        "width": 76,
-        "height": 23,
-        "depth": "16",
-        "colors": 6,
-        "description": "Tenth-anniversary greeting card: candles, three cake tiers and a sentimental strapline",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-3-16-m-2.ansi": {
-        "name": "sugar-calendar-3-16-m-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "78x18",
-        "width": 78,
-        "height": 18,
-        "depth": "16",
-        "colors": 8,
-        "description": "Deadline-pressure whiteboard: progress bars, tally marks and a panic countdown week",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-3-16-s-1.ansi": {
-        "name": "sugar-calendar-3-16-s-1.ansi",
-        "category": "sugar-calendar",
-        "resolution": "58x11",
-        "width": 58,
-        "height": 11,
-        "depth": "16",
-        "colors": 7,
-        "description": "Four-Year Club membership card for leap-day babies (FEB 29) with validity tagline",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-3-16-s-2.ansi": {
-        "name": "sugar-calendar-3-16-s-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "50x9",
-        "width": 50,
-        "height": 9,
-        "depth": "16",
-        "colors": 6,
-        "description": "Lunar ledger card: eight moon-phase cells waxing over waning with a today marker",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-3-16-s-3.ansi": {
-        "name": "sugar-calendar-3-16-s-3.ansi",
-        "category": "sugar-calendar",
-        "resolution": "65x13",
-        "width": 65,
-        "height": 13,
-        "depth": "16",
-        "colors": 7,
-        "description": "Weekly ration bar chart: seven weekday columns of block bars ranked by dread",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-calendar/sugar-calendar-3-256-l-1.ansi": {
         "name": "sugar-calendar-3-256-l-1.ansi",
         "category": "sugar-calendar",
@@ -25393,30 +23131,6 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-4-16-l-1.ansi": {
-        "name": "sugar-calendar-4-16-l-1.ansi",
-        "category": "sugar-calendar",
-        "resolution": "190x38",
-        "width": 190,
-        "height": 38,
-        "depth": "16",
-        "colors": 9,
-        "description": "full-year transit diagram: twelve colored month-lines over day-of-year tracks",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-4-16-l-2.ansi": {
-        "name": "sugar-calendar-4-16-l-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "160x36",
-        "width": 160,
-        "height": 36,
-        "depth": "16",
-        "colors": 10,
-        "description": "two-page desk flip-book: dim August leaf curling toward bright September",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-calendar/sugar-calendar-4-16-m-1.ansi": {
         "name": "sugar-calendar-4-16-m-1.ansi",
         "category": "sugar-calendar",
@@ -25451,30 +23165,6 @@
         "colors": 8,
         "description": "desk calendar card mid page-flip with curling shaded leaf",
         "rating": 2,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-4-16-s-2.ansi": {
-        "name": "sugar-calendar-4-16-s-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "56x10",
-        "width": 56,
-        "height": 10,
-        "depth": "16",
-        "colors": 7,
-        "description": "blocky T-minus-twelve release countdown badge in amber",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-4-16-s-3.ansi": {
-        "name": "sugar-calendar-4-16-s-3.ansi",
-        "category": "sugar-calendar",
-        "resolution": "64x10",
-        "width": 64,
-        "height": 10,
-        "depth": "16",
-        "colors": 7,
-        "description": "eight pixel moons across the lunar cycle with waxing arrows",
-        "rating": 1,
         "tags": []
     },
     "sugar-calendar/sugar-calendar-4-256-l-1.ansi": {
@@ -25633,18 +23323,6 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-5-16-l-2.ansi": {
-        "name": "sugar-calendar-5-16-l-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "150x29",
-        "width": 150,
-        "height": 29,
-        "depth": "16",
-        "colors": 8,
-        "description": "lighthouse keeper's log spread: beam-lit tower art beside twelve ruled monthly entries",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-calendar/sugar-calendar-5-16-m-1.ansi": {
         "name": "sugar-calendar-5-16-m-1.ansi",
         "category": "sugar-calendar",
@@ -25667,30 +23345,6 @@
         "colors": 5,
         "description": "postage-stamp sheet: twelve perforated month stamps with pictograms and day counts",
         "rating": 2,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-5-16-s-1.ansi": {
-        "name": "sugar-calendar-5-16-s-1.ansi",
-        "category": "sugar-calendar",
-        "resolution": "58x13",
-        "width": 58,
-        "height": 13,
-        "depth": "16",
-        "colors": 7,
-        "description": "prison-wall tally calendar: chalk day-bars with fifth-strike diagonals per month",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-5-16-s-2.ansi": {
-        "name": "sugar-calendar-5-16-s-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "58x12",
-        "width": 58,
-        "height": 12,
-        "depth": "16",
-        "colors": 6,
-        "description": "bakery cooling racks: two weeks of day-loaves with numbered shelf tags",
-        "rating": 1,
         "tags": []
     },
     "sugar-calendar/sugar-calendar-5-256-l-1.ansi": {
@@ -25837,78 +23491,6 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-6-16-l-1.ansi": {
-        "name": "sugar-calendar-6-16-l-1.ansi",
-        "category": "sugar-calendar",
-        "resolution": "150x34",
-        "width": 150,
-        "height": 34,
-        "depth": "16",
-        "colors": 8,
-        "description": "printed circuit board: twelve month-ICs soldered to a 365-day bus with pin legs, pads and traces",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-6-16-l-2.ansi": {
-        "name": "sugar-calendar-6-16-l-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "160x32",
-        "width": 160,
-        "height": 32,
-        "depth": "16",
-        "colors": 7,
-        "description": "knotted rope almanac: twelve hempen strands, week-knots and milestone hitches fraying at year-end",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-6-16-m-1.ansi": {
-        "name": "sugar-calendar-6-16-m-1.ansi",
-        "category": "sugar-calendar",
-        "resolution": "84x22",
-        "width": 84,
-        "height": 22,
-        "depth": "16",
-        "colors": 9,
-        "description": "pipe-organ console: twelve month-pipes over stop knobs, a manual keyboard of weeks, quarter pedals",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-6-16-m-2.ansi": {
-        "name": "sugar-calendar-6-16-m-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "86x21",
-        "width": 86,
-        "height": 21,
-        "depth": "16",
-        "colors": 7,
-        "description": "seismograph drum: May's 31 days traced as a waveform with red event quakes and a side read-out",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-6-16-s-1.ansi": {
-        "name": "sugar-calendar-6-16-s-1.ansi",
-        "category": "sugar-calendar",
-        "resolution": "56x12",
-        "width": 56,
-        "height": 12,
-        "depth": "16",
-        "colors": 6,
-        "description": "parking-garage day bays: ten numbered slots, booked cars in red, free in dim",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-6-16-s-2.ansi": {
-        "name": "sugar-calendar-6-16-s-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "60x10",
-        "width": 60,
-        "height": 10,
-        "depth": "16",
-        "colors": 7,
-        "description": "laundry wash-day rack: seven weekday hang-tags clipped on a line with cycle states",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-calendar/sugar-calendar-6-256-l-1.ansi": {
         "name": "sugar-calendar-6-256-l-1.ansi",
         "category": "sugar-calendar",
@@ -26053,42 +23635,6 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-7-16-l-1.ansi": {
-        "name": "sugar-calendar-7-16-l-1.ansi",
-        "category": "sugar-calendar",
-        "resolution": "158x36",
-        "width": 158,
-        "height": 36,
-        "depth": "16",
-        "colors": 7,
-        "description": "Wide butcher's delivery chalkboard, full week of cut tallies",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-7-16-l-2.ansi": {
-        "name": "sugar-calendar-7-16-l-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "158x36",
-        "width": 158,
-        "height": 36,
-        "depth": "16",
-        "colors": 9,
-        "description": "Wide monastery bell-hours board, all eight hours and bell",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-7-16-m-1.ansi": {
-        "name": "sugar-calendar-7-16-m-1.ansi",
-        "category": "sugar-calendar",
-        "resolution": "80x22",
-        "width": 80,
-        "height": 22,
-        "depth": "16",
-        "colors": 9,
-        "description": "Hospital med-round dose-time board with pill glyphs",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-calendar/sugar-calendar-7-16-m-2.ansi": {
         "name": "sugar-calendar-7-16-m-2.ansi",
         "category": "sugar-calendar",
@@ -26099,30 +23645,6 @@
         "colors": 9,
         "description": "School class-period bell-schedule grid by day and room",
         "rating": 2,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-7-16-s-1.ansi": {
-        "name": "sugar-calendar-7-16-s-1.ansi",
-        "category": "sugar-calendar",
-        "resolution": "54x13",
-        "width": 54,
-        "height": 13,
-        "depth": "16",
-        "colors": 9,
-        "description": "Seed-packet shed wall: pegboard of hanging seed packs with sow seasons",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-7-16-s-2.ansi": {
-        "name": "sugar-calendar-7-16-s-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "54x13",
-        "width": 54,
-        "height": 13,
-        "depth": "16",
-        "colors": 7,
-        "description": "Butcher's weekly delivery chalkboard of cuts and dates",
-        "rating": 1,
         "tags": []
     },
     "sugar-calendar/sugar-calendar-7-256-l-1.ansi": {
@@ -26269,54 +23791,6 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-8-16-l-1.ansi": {
-        "name": "sugar-calendar-8-16-l-1.ansi",
-        "category": "sugar-calendar",
-        "resolution": "154x29",
-        "width": 154,
-        "height": 29,
-        "depth": "16",
-        "colors": 8,
-        "description": "postmaster's dispatch rounds board — clock-face route spokes + beat status bars",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-8-16-l-2.ansi": {
-        "name": "sugar-calendar-8-16-l-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "161x28",
-        "width": 161,
-        "height": 28,
-        "depth": "16",
-        "colors": 9,
-        "description": "brewer's fermentation timeline — 10 casks with fill levels, gravities, day axis",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-8-16-m-1.ansi": {
-        "name": "sugar-calendar-8-16-m-1.ansi",
-        "category": "sugar-calendar",
-        "resolution": "78x21",
-        "width": 78,
-        "height": 21,
-        "depth": "16",
-        "colors": 11,
-        "description": "nurse's shift rotation pin-board — 8 staff × 7 days, colour-coded day/eve/night pins",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-8-16-m-2.ansi": {
-        "name": "sugar-calendar-8-16-m-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "82x20",
-        "width": 82,
-        "height": 20,
-        "depth": "16",
-        "colors": 8,
-        "description": "shepherd's lambing diary — ewe ear-mark ledger with weeks-out bars",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-calendar/sugar-calendar-8-16-s-1.ansi": {
         "name": "sugar-calendar-8-16-s-1.ansi",
         "category": "sugar-calendar",
@@ -26327,18 +23801,6 @@
         "colors": 7,
         "description": "gardener's almanac wheel — 12 month sectors with sow/tend/reap rings",
         "rating": 2,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-8-16-s-2.ansi": {
-        "name": "sugar-calendar-8-16-s-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "58x12",
-        "width": 58,
-        "height": 12,
-        "depth": "16",
-        "colors": 8,
-        "description": "fisherman's tide-table slate — HW/LW times, bar graph, flood/ebb on black slate",
-        "rating": 1,
         "tags": []
     },
     "sugar-calendar/sugar-calendar-8-256-l-1.ansi": {
@@ -26485,30 +23947,6 @@
         "rating": null,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-9-16-l-1.ansi": {
-        "name": "sugar-calendar-9-16-l-1.ansi",
-        "category": "sugar-calendar",
-        "resolution": "173x29",
-        "width": 173,
-        "height": 29,
-        "depth": "16",
-        "colors": 7,
-        "description": "Yearbook layout wall: twelve-section deadline rail with pinned page blocks and pull statuses",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-9-16-l-2.ansi": {
-        "name": "sugar-calendar-9-16-l-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "168x30",
-        "width": 168,
-        "height": 30,
-        "depth": "16",
-        "colors": 7,
-        "description": "Regatta season master chart: twelve dated meetings plotted as start-to-prize bars on an hour ruler",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-calendar/sugar-calendar-9-16-m-1.ansi": {
         "name": "sugar-calendar-9-16-m-1.ansi",
         "category": "sugar-calendar",
@@ -26543,18 +23981,6 @@
         "colors": 7,
         "description": "Stratigraphic dig ledger: six dated soil layers of trench IV with finds and lot codes",
         "rating": 2,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-9-16-s-2.ansi": {
-        "name": "sugar-calendar-9-16-s-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "62x11",
-        "width": 62,
-        "height": 11,
-        "depth": "16",
-        "colors": 11,
-        "description": "Regatta start-sequence signal card: hoist times and flag states for the June meeting",
-        "rating": 1,
         "tags": []
     },
     "sugar-calendar/sugar-calendar-9-256-l-1.ansi": {
@@ -26725,18 +24151,6 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-calendar/sugar-calendar-10-16-l-2.ansi": {
-        "name": "sugar-calendar-10-16-l-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "170x29",
-        "width": 170,
-        "height": 29,
-        "depth": "16",
-        "colors": 8,
-        "description": "Parliamentary session calendar: spring/summer/autumn sitting & recess panels",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-calendar/sugar-calendar-10-16-m-1.ansi": {
         "name": "sugar-calendar-10-16-m-1.ansi",
         "category": "sugar-calendar",
@@ -26747,42 +24161,6 @@
         "colors": 6,
         "description": "Turnpike toll-gate ledger: twelve month cart-count bars with peak flags",
         "rating": 3,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-10-16-m-2.ansi": {
-        "name": "sugar-calendar-10-16-m-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "86x19",
-        "width": 86,
-        "height": 19,
-        "depth": "16",
-        "colors": 6,
-        "description": "Canal lock passage schedule: three-flight panels of fill and transit",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-10-16-s-1.ansi": {
-        "name": "sugar-calendar-10-16-s-1.ansi",
-        "category": "sugar-calendar",
-        "resolution": "62x14",
-        "width": 62,
-        "height": 14,
-        "depth": "16",
-        "colors": 6,
-        "description": "Four legal court terms as sitting-day bars with long-vacation gaps",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-calendar/sugar-calendar-10-16-s-2.ansi": {
-        "name": "sugar-calendar-10-16-s-2.ansi",
-        "category": "sugar-calendar",
-        "resolution": "64x16",
-        "width": 64,
-        "height": 16,
-        "depth": "16",
-        "colors": 7,
-        "description": "Mint proof-set release emblem with brilliant/proof/bullion quarter bars",
-        "rating": 1,
         "tags": []
     },
     "sugar-calendar/sugar-calendar-10-256-l-1.ansi": {
@@ -27191,18 +24569,6 @@
         "colors": 7,
         "description": "Data landscape: bar-chart ridge under stars and block moon, banner wordmark, dotted gridlines and water reflection",
         "rating": 3,
-        "tags": []
-    },
-    "sugar-charts/sugar-charts-2-16-m-1.ansi": {
-        "name": "sugar-charts-2-16-m-1.ansi",
-        "category": "sugar-charts",
-        "resolution": "84x22",
-        "width": 84,
-        "height": 22,
-        "depth": "16",
-        "colors": 8,
-        "description": "Framed analytics terminal: dense braille traces, dotted time grid, legend box and status footer",
-        "rating": 1,
         "tags": []
     },
     "sugar-charts/sugar-charts-2-16-m-2.ansi": {
@@ -27625,18 +24991,6 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-charts/sugar-charts-4-16-m-1.ansi": {
-        "name": "sugar-charts-4-16-m-1.ansi",
-        "category": "sugar-charts",
-        "resolution": "84x22",
-        "width": 84,
-        "height": 22,
-        "depth": "16",
-        "colors": 5,
-        "description": "night-train window: ridge spark-lines, moon, telegraph poles",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-charts/sugar-charts-4-16-m-2.ansi": {
         "name": "sugar-charts-4-16-m-2.ansi",
         "category": "sugar-charts",
@@ -27647,18 +25001,6 @@
         "colors": 7,
         "description": "EEG ward: four braille-channel brainwave traces",
         "rating": 2,
-        "tags": []
-    },
-    "sugar-charts/sugar-charts-4-16-s-1.ansi": {
-        "name": "sugar-charts-4-16-s-1.ansi",
-        "category": "sugar-charts",
-        "resolution": "48x9",
-        "width": 48,
-        "height": 9,
-        "depth": "16",
-        "colors": 6,
-        "description": "EQ-16 FM dial spectrum bars with peak ticks",
-        "rating": 1,
         "tags": []
     },
     "sugar-charts/sugar-charts-4-16-s-2.ansi": {
@@ -27817,54 +25159,6 @@
         "rating": null,
         "tags": []
     },
-    "sugar-charts/sugar-charts-5-16-l-1.ansi": {
-        "name": "sugar-charts-5-16-l-1.ansi",
-        "category": "sugar-charts",
-        "resolution": "160x32",
-        "width": 160,
-        "height": 32,
-        "depth": "16",
-        "colors": 7,
-        "description": "alpine railway bore: mountain carries the hidden grade axis inside tunnel",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-charts/sugar-charts-5-16-l-2.ansi": {
-        "name": "sugar-charts-5-16-l-2.ansi",
-        "category": "sugar-charts",
-        "resolution": "159x28",
-        "width": 159,
-        "height": 28,
-        "depth": "16",
-        "colors": 7,
-        "description": "mine tipple yard: ore carts dump into daily tonnage pile-histogram",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-charts/sugar-charts-5-16-m-1.ansi": {
-        "name": "sugar-charts-5-16-m-1.ansi",
-        "category": "sugar-charts",
-        "resolution": "84x21",
-        "width": 84,
-        "height": 21,
-        "depth": "16",
-        "colors": 5,
-        "description": "apiary comb board: hex honey cells cured/capped/empty plus nectar-flow spark",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-charts/sugar-charts-5-16-m-2.ansi": {
-        "name": "sugar-charts-5-16-m-2.ansi",
-        "category": "sugar-charts",
-        "resolution": "85x18",
-        "width": 85,
-        "height": 18,
-        "depth": "16",
-        "colors": 6,
-        "description": "cascade stairs waterfall: floating revenue steps with tick dust grid",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-charts/sugar-charts-5-16-s-1.ansi": {
         "name": "sugar-charts-5-16-s-1.ansi",
         "category": "sugar-charts",
@@ -27875,18 +25169,6 @@
         "colors": 7,
         "description": "fish market stall: day-by-day catch bars with fish glyphs and tide footer",
         "rating": 3,
-        "tags": []
-    },
-    "sugar-charts/sugar-charts-5-16-s-2.ansi": {
-        "name": "sugar-charts-5-16-s-2.ansi",
-        "category": "sugar-charts",
-        "resolution": "50x9",
-        "width": 50,
-        "height": 9,
-        "depth": "16",
-        "colors": 5,
-        "description": "pizza wedge donut with crust/sauce/basil/olive topping legend",
-        "rating": 1,
         "tags": []
     },
     "sugar-charts/sugar-charts-5-256-l-1.ansi": {
@@ -28067,42 +25349,6 @@
         "colors": 7,
         "description": "altimeter descent tape: shrinking altitude bars through cirrus/altostratus/overcast bands with V/S strip",
         "rating": 3,
-        "tags": []
-    },
-    "sugar-charts/sugar-charts-6-16-m-2.ansi": {
-        "name": "sugar-charts-6-16-m-2.ansi",
-        "category": "sugar-charts",
-        "resolution": "87x18",
-        "width": 87,
-        "height": 18,
-        "depth": "16",
-        "colors": 6,
-        "description": "wind farm array output lines beneath turbine glyphs with curtailment and gearbox fault callouts",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-charts/sugar-charts-6-16-m-3.ansi": {
-        "name": "sugar-charts-6-16-m-3.ansi",
-        "category": "sugar-charts",
-        "resolution": "73x21",
-        "width": 73,
-        "height": 21,
-        "depth": "16",
-        "colors": 5,
-        "description": "archaeological stratigraphy column: six contexts in a section drawing with finds-count bar ladder",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-charts/sugar-charts-6-16-s-1.ansi": {
-        "name": "sugar-charts-6-16-s-1.ansi",
-        "category": "sugar-charts",
-        "resolution": "46x13",
-        "width": 46,
-        "height": 13,
-        "depth": "16",
-        "colors": 5,
-        "description": "hourglass drain timer: paired emptying/filling block bulbs with stream gauge and fall-rate spark",
-        "rating": 1,
         "tags": []
     },
     "sugar-charts/sugar-charts-6-16-s-2.ansi": {
@@ -28307,30 +25553,6 @@
         "colors": 7,
         "description": "60-year glacier mass-balance ledger with cumulative budget ribbon and decadal mean panel",
         "rating": 4,
-        "tags": []
-    },
-    "sugar-charts/sugar-charts-7-16-m-1.ansi": {
-        "name": "sugar-charts-7-16-m-1.ansi",
-        "category": "sugar-charts",
-        "resolution": "84x19",
-        "width": 84,
-        "height": 19,
-        "depth": "16",
-        "colors": 7,
-        "description": "apiary honey-yield ledger, 12 hives x 12 months glyph cells with flow and brood trend lines",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-charts/sugar-charts-7-16-m-2.ansi": {
-        "name": "sugar-charts-7-16-m-2.ansi",
-        "category": "sugar-charts",
-        "resolution": "78x22",
-        "width": 78,
-        "height": 22,
-        "depth": "16",
-        "colors": 7,
-        "description": "glacier annual net mass-balance diverging bar strip, accumulation above ablation below datum",
-        "rating": 1,
         "tags": []
     },
     "sugar-charts/sugar-charts-7-16-s-1.ansi": {
@@ -28559,18 +25781,6 @@
         "colors": 7,
         "description": "Stadium jumbotron drive chart with down, red-zone and possession bars",
         "rating": 2,
-        "tags": []
-    },
-    "sugar-charts/sugar-charts-8-16-s-2.ansi": {
-        "name": "sugar-charts-8-16-s-2.ansi",
-        "category": "sugar-charts",
-        "resolution": "62x10",
-        "width": 62,
-        "height": 10,
-        "depth": "16",
-        "colors": 7,
-        "description": "Bowling league scorecard with strike heat strip and frame boxes",
-        "rating": 1,
         "tags": []
     },
     "sugar-charts/sugar-charts-8-256-l-1.ansi": {
@@ -28969,18 +26179,6 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-charts/sugar-charts-10-16-m-2.ansi": {
-        "name": "sugar-charts-10-16-m-2.ansi",
-        "category": "sugar-charts",
-        "resolution": "82x19",
-        "width": 82,
-        "height": 19,
-        "depth": "16",
-        "colors": 14,
-        "description": "short-wave band allocation stacked service bars, ITU region 1 sketch",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-charts/sugar-charts-10-16-s-1.ansi": {
         "name": "sugar-charts-10-16-s-1.ansi",
         "category": "sugar-charts",
@@ -29003,18 +26201,6 @@
         "colors": 7,
         "description": "storm hyetograph mini, 15-min rainfall intensity columns on hour base",
         "rating": 2,
-        "tags": []
-    },
-    "sugar-charts/sugar-charts-10-16-s-3.ansi": {
-        "name": "sugar-charts-10-16-s-3.ansi",
-        "category": "sugar-charts",
-        "resolution": "46x7",
-        "width": 46,
-        "height": 7,
-        "depth": "16",
-        "colors": 10,
-        "description": "year-7 mock exam mini grid, band-tinted class mean cells",
-        "rating": 1,
         "tags": []
     },
     "sugar-charts/sugar-charts-10-256-l-1.ansi": {
@@ -30253,18 +27439,6 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-crush/sugar-crush-1-16-l-2.ansi": {
-        "name": "sugar-crush-1-16-l-2.ansi",
-        "category": "sugar-crush",
-        "resolution": "140x29",
-        "width": 140,
-        "height": 29,
-        "depth": "16",
-        "colors": 8,
-        "description": "engineering blueprint of the sugar-crusher on graph blue, dimensioned",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-crush/sugar-crush-1-16-m-1.ansi": {
         "name": "sugar-crush-1-16-m-1.ansi",
         "category": "sugar-crush",
@@ -30913,18 +28087,6 @@
             "alignment-fix"
         ]
     },
-    "sugar-crush/sugar-crush-4-16-l-2.ansi": {
-        "name": "sugar-crush-4-16-l-2.ansi",
-        "category": "sugar-crush",
-        "resolution": "150x31",
-        "width": 150,
-        "height": 31,
-        "depth": "16",
-        "colors": 7,
-        "description": "grand memory library: four shelf towers of colored spines, aisle signs, catalog, reading desk",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-crush/sugar-crush-4-16-m-1.ansi": {
         "name": "sugar-crush-4-16-m-1.ansi",
         "category": "sugar-crush",
@@ -31117,18 +28279,6 @@
         "colors": 9,
         "description": "merge dream diamond: three branches auto-merged at 03:12 under stars",
         "rating": null,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-5-16-l-1.ansi": {
-        "name": "sugar-crush-5-16-l-1.ansi",
-        "category": "sugar-crush",
-        "resolution": "142x28",
-        "width": 142,
-        "height": 28,
-        "depth": "16",
-        "colors": 7,
-        "description": "Three-cabinet replay arcade hall with marquees, plinths and floor crawl",
-        "rating": 1,
         "tags": []
     },
     "sugar-crush/sugar-crush-5-16-l-2.ansi": {
@@ -31389,30 +28539,6 @@
             "alignment-fix"
         ]
     },
-    "sugar-crush/sugar-crush-6-16-s-1.ansi": {
-        "name": "sugar-crush-6-16-s-1.ansi",
-        "category": "sugar-crush",
-        "resolution": "62x10",
-        "width": 62,
-        "height": 10,
-        "depth": "16",
-        "colors": 7,
-        "description": "Weather station forecast board: sun, cumulo-ctx, drizzle and a p99 squall line over SugarCrush",
-        "rating": 0,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-6-16-s-18.ansi": {
-        "name": "sugar-crush-6-16-s-18.ansi",
-        "category": "sugar-crush",
-        "resolution": "70x12",
-        "width": 70,
-        "height": 12,
-        "depth": "16",
-        "colors": 5,
-        "description": "Subagent circus ring: striped big top, act bill builder/reviewer/fixer and the CI ring of fire",
-        "rating": 0,
-        "tags": []
-    },
     "sugar-crush/sugar-crush-6-256-l-13.ansi": {
         "name": "sugar-crush-6-256-l-13.ansi",
         "category": "sugar-crush",
@@ -31555,78 +28681,6 @@
         "colors": 23,
         "description": "Truecolour windmill grinding raw tokens into sacks of fluent prose under a gradient sky",
         "rating": null,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-7-16-l-13.ansi": {
-        "name": "sugar-crush-7-16-l-13.ansi",
-        "category": "sugar-crush",
-        "resolution": "150x32",
-        "width": 150,
-        "height": 32,
-        "depth": "16",
-        "colors": 9,
-        "description": "Wide evidence wall of bisect cards, diffs and failing tests stitched by red string",
-        "rating": 0,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-7-16-l-14.ansi": {
-        "name": "sugar-crush-7-16-l-14.ansi",
-        "category": "sugar-crush",
-        "resolution": "160x30",
-        "width": 160,
-        "height": 30,
-        "depth": "16",
-        "colors": 10,
-        "description": "SugarCrush funhouse panorama: mode big-tops and a rollercoaster of streaming tokens",
-        "rating": 0,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-7-16-m-7.ansi": {
-        "name": "sugar-crush-7-16-m-7.ansi",
-        "category": "sugar-crush",
-        "resolution": "86x24",
-        "width": 86,
-        "height": 24,
-        "depth": "16",
-        "colors": 7,
-        "description": "Orchestral score: colour-staffed notes as plan/build/review/tool parts in one symphony",
-        "rating": 0,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-7-16-m-8.ansi": {
-        "name": "sugar-crush-7-16-m-8.ansi",
-        "category": "sugar-crush",
-        "resolution": "80x22",
-        "width": 80,
-        "height": 22,
-        "depth": "16",
-        "colors": 8,
-        "description": "Barometer dial reading context pressure beside a five-day SugarCrush forecast strip",
-        "rating": 0,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-7-16-s-1.ansi": {
-        "name": "sugar-crush-7-16-s-1.ansi",
-        "category": "sugar-crush",
-        "resolution": "58x14",
-        "width": 58,
-        "height": 14,
-        "depth": "16",
-        "colors": 7,
-        "description": "Deep-sea trawler hauling a glowing context-net of tokens up a dusk swell",
-        "rating": 0,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-7-16-s-2.ansi": {
-        "name": "sugar-crush-7-16-s-2.ansi",
-        "category": "sugar-crush",
-        "resolution": "60x15",
-        "width": 60,
-        "height": 15,
-        "depth": "16",
-        "colors": 9,
-        "description": "Detective corkboard: scattered log cards pinned and red-stringed to a regression",
-        "rating": 0,
         "tags": []
     },
     "sugar-crush/sugar-crush-7-256-l-15.ansi": {
@@ -31773,78 +28827,6 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-8-16-l-13.ansi": {
-        "name": "sugar-crush-8-16-l-13.ansi",
-        "category": "sugar-crush",
-        "resolution": "150x34",
-        "width": 150,
-        "height": 34,
-        "depth": "16",
-        "colors": 9,
-        "description": "Wide signal-box full board: block instruments, 36-lever frame, track diagram and train register",
-        "rating": 0,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-8-16-l-14.ansi": {
-        "name": "sugar-crush-8-16-l-14.ansi",
-        "category": "sugar-crush",
-        "resolution": "160x32",
-        "width": 160,
-        "height": 32,
-        "depth": "16",
-        "colors": 9,
-        "description": "Grand manual switchroom panorama, four jack-banks corded across to a row of operator desks",
-        "rating": 0,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-8-16-m-7.ansi": {
-        "name": "sugar-crush-8-16-m-7.ansi",
-        "category": "sugar-crush",
-        "resolution": "86x24",
-        "width": 86,
-        "height": 24,
-        "depth": "16",
-        "colors": 9,
-        "description": "Signal-box interlocking lever frame: 18 colour-coded levers, route-locking table and token cabinet",
-        "rating": 0,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-8-16-m-8.ansi": {
-        "name": "sugar-crush-8-16-m-8.ansi",
-        "category": "sugar-crush",
-        "resolution": "80x23",
-        "width": 80,
-        "height": 23,
-        "depth": "16",
-        "colors": 9,
-        "description": "Manual telephone exchange patch panel, A/B jackfields laced with cords, live calls lit amber",
-        "rating": 0,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-8-16-s-1.ansi": {
-        "name": "sugar-crush-8-16-s-1.ansi",
-        "category": "sugar-crush",
-        "resolution": "58x14",
-        "width": 58,
-        "height": 14,
-        "depth": "16",
-        "colors": 9,
-        "description": "Railway block-post token-block staff instrument: paired annex dials sealing one train per section",
-        "rating": 0,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-8-16-s-2.ansi": {
-        "name": "sugar-crush-8-16-s-2.ansi",
-        "category": "sugar-crush",
-        "resolution": "64x13",
-        "width": 64,
-        "height": 13,
-        "depth": "16",
-        "colors": 9,
-        "description": "Projection-booth changeover log, reel 01 to reel 02 handoff with cue marks and running frame counts",
-        "rating": 0,
-        "tags": []
-    },
     "sugar-crush/sugar-crush-8-256-l-15.ansi": {
         "name": "sugar-crush-8-256-l-15.ansi",
         "category": "sugar-crush",
@@ -31989,78 +28971,6 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-9-16-l-13.ansi": {
-        "name": "sugar-crush-9-16-l-13.ansi",
-        "category": "sugar-crush",
-        "resolution": "168x36",
-        "width": 168,
-        "height": 36,
-        "depth": "16",
-        "colors": 7,
-        "description": "Band sawmill: toothed circular blade bucks prompt.log into a stack of cut file planks",
-        "rating": 0,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-9-16-l-14.ansi": {
-        "name": "sugar-crush-9-16-l-14.ansi",
-        "category": "sugar-crush",
-        "resolution": "172x34",
-        "width": 172,
-        "height": 34,
-        "depth": "16",
-        "colors": 7,
-        "description": "Cloud-seeding aircraft sows a cumulus reservoir that rains working code onto a crop field",
-        "rating": 0,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-9-16-m-7.ansi": {
-        "name": "sugar-crush-9-16-m-7.ansi",
-        "category": "sugar-crush",
-        "resolution": "84x22",
-        "width": 84,
-        "height": 22,
-        "depth": "16",
-        "colors": 5,
-        "description": "Falconry of tasks: a teal falcon stoops from the gauntlet onto a tool-call reticle",
-        "rating": 0,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-9-16-m-8.ansi": {
-        "name": "sugar-crush-9-16-m-8.ansi",
-        "category": "sugar-crush",
-        "resolution": "84x22",
-        "width": 84,
-        "height": 22,
-        "depth": "16",
-        "colors": 7,
-        "description": "Hedge-labyrinth maze: hue-banded walls, breadcrumb solution from start to resolved-plan star",
-        "rating": 0,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-9-16-s-1.ansi": {
-        "name": "sugar-crush-9-16-s-1.ansi",
-        "category": "sugar-crush",
-        "resolution": "58x13",
-        "width": 58,
-        "height": 13,
-        "depth": "16",
-        "colors": 5,
-        "description": "Commit-fossil dig: stratified git-log wall, tool-brush sweeping, an ammonite HEAD emerging",
-        "rating": 0,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-9-16-s-2.ansi": {
-        "name": "sugar-crush-9-16-s-2.ansi",
-        "category": "sugar-crush",
-        "resolution": "60x12",
-        "width": 60,
-        "height": 12,
-        "depth": "16",
-        "colors": 7,
-        "description": "Task-cascade domino run, six coloured tiles toppling Read to Grep to Plan to Edit to Test to Ship",
-        "rating": 0,
-        "tags": []
-    },
     "sugar-crush/sugar-crush-9-256-l-15.ansi": {
         "name": "sugar-crush-9-256-l-15.ansi",
         "category": "sugar-crush",
@@ -32203,78 +29113,6 @@
         "colors": 31,
         "description": "Grist of prompts: hopper feeds a millstone grinding input into plan-token flour",
         "rating": null,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-10-16-l-1.ansi": {
-        "name": "sugar-crush-10-16-l-1.ansi",
-        "category": "sugar-crush",
-        "resolution": "168x34",
-        "width": 168,
-        "height": 34,
-        "depth": "16",
-        "colors": 6,
-        "description": "Wide pressure-lab cross-section: support vessel + tethers, telemetry readout, porthole with candy being crushed, chamber gauge, depth ladder to 850m",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-10-16-l-2.ansi": {
-        "name": "sugar-crush-10-16-l-2.ansi",
-        "category": "sugar-crush",
-        "resolution": "168x32",
-        "width": 168,
-        "height": 32,
-        "depth": "16",
-        "colors": 6,
-        "description": "Wide paper mill interior: feed rolls, seven-line printed diff on the press, take-up spool, floor bundles, roof trusses and steam",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-10-16-m-1.ansi": {
-        "name": "sugar-crush-10-16-m-1.ansi",
-        "category": "sugar-crush",
-        "resolution": "84x22",
-        "width": 84,
-        "height": 22,
-        "depth": "16",
-        "colors": 6,
-        "description": "Chess endgame study on hex board: candy pieces (kings/rook/lollipop queen/pawns) plus solution box — mate in 2 = commit the winning move",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-10-16-m-2.ansi": {
-        "name": "sugar-crush-10-16-m-2.ansi",
-        "category": "sugar-crush",
-        "resolution": "84x22",
-        "width": 84,
-        "height": 22,
-        "depth": "16",
-        "colors": 7,
-        "description": "Desert caravan at dusk: purple-to-orange sky, sun disc, dune ridges, token-camel silhouettes with crate packs and long shadows",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-10-16-s-1.ansi": {
-        "name": "sugar-crush-10-16-s-1.ansi",
-        "category": "sugar-crush",
-        "resolution": "66x13",
-        "width": 66,
-        "height": 13,
-        "depth": "16",
-        "colors": 7,
-        "description": "Film-noir desk at 3am: venetian-blind window striped light/dark slats, cyan frame, red streaming-token asides, monochrome mood",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-crush/sugar-crush-10-16-s-2.ansi": {
-        "name": "sugar-crush-10-16-s-2.ansi",
-        "category": "sugar-crush",
-        "resolution": "64x13",
-        "width": 64,
-        "height": 13,
-        "depth": "16",
-        "colors": 10,
-        "description": "Telegraph office in a blizzard: yellow header, amber tape with red morse ink, black pole silhouettes, white snow, green/red line lamps",
-        "rating": 1,
         "tags": []
     },
     "sugar-crush/sugar-crush-10-256-l-1.ansi": {
@@ -33133,18 +29971,6 @@
         "rating": 4,
         "tags": []
     },
-    "sugar-dash/sugar-dash-4-16-s-2.ansi": {
-        "name": "sugar-dash-4-16-s-2.ansi",
-        "category": "sugar-dash",
-        "resolution": "60x11",
-        "width": 60,
-        "height": 11,
-        "depth": "16",
-        "colors": 7,
-        "description": "train cab speedometer arc with km/h digits, brake and power bars",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-dash/sugar-dash-4-256-l-1.ansi": {
         "name": "sugar-dash-4-256-l-1.ansi",
         "category": "sugar-dash",
@@ -33383,18 +30209,6 @@
             "alignment-fix"
         ]
     },
-    "sugar-dash/sugar-dash-5-16-s-2.ansi": {
-        "name": "sugar-dash-5-16-s-2.ansi",
-        "category": "sugar-dash",
-        "resolution": "58x12",
-        "width": 58,
-        "height": 12,
-        "depth": "16",
-        "colors": 5,
-        "description": "power station emergency panel: chunky big-red STOP and DUMP buttons over a bus-arc note",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-dash/sugar-dash-5-256-l-1.ansi": {
         "name": "sugar-dash-5-256-l-1.ansi",
         "category": "sugar-dash",
@@ -33575,18 +30389,6 @@
         "colors": 7,
         "description": "fairground ride control booth: interlock matrix, queue meters, wind gust auto-hold rows",
         "rating": 3,
-        "tags": []
-    },
-    "sugar-dash/sugar-dash-6-16-m-2.ansi": {
-        "name": "sugar-dash-6-16-m-2.ansi",
-        "category": "sugar-dash",
-        "resolution": "84x19",
-        "width": 84,
-        "height": 19,
-        "depth": "16",
-        "colors": 9,
-        "description": "elevator bank dispatch panel: floor lamps, car mode table, call board and traffic sparkline",
-        "rating": 1,
         "tags": []
     },
     "sugar-dash/sugar-dash-6-16-s-1.ansi": {
@@ -36469,30 +33271,6 @@
         "rating": null,
         "tags": []
     },
-    "sugar-gallery/sugar-gallery-9-16-s-1.ansi": {
-        "name": "sugar-gallery-9-16-s-1.ansi",
-        "category": "sugar-gallery",
-        "resolution": "58x15",
-        "width": 58,
-        "height": 15,
-        "depth": "16",
-        "colors": 5,
-        "description": "hillside terrace trail — five stone risers with numbered viewpoint posts, zigzag path, walker, gull-flecked dusk ridge",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-gallery/sugar-gallery-9-16-s-2.ansi": {
-        "name": "sugar-gallery-9-16-s-2.ansi",
-        "category": "sugar-gallery",
-        "resolution": "64x15",
-        "width": 64,
-        "height": 15,
-        "depth": "16",
-        "colors": 6,
-        "description": "cabinet of curiosities — eighteen numbered drawer faces, one pulled out with a star curio, a specimen-leaf drawer",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-gallery/sugar-gallery-9-256-l-1.ansi": {
         "name": "sugar-gallery-9-256-l-1.ansi",
         "category": "sugar-gallery",
@@ -36875,18 +33653,6 @@
         "colors": 12,
         "description": "night collection round: skyline under stars, three pillar boxes, lamp posts and a SUGAR POST delivery van",
         "rating": 2,
-        "tags": []
-    },
-    "sugar-post/sugar-post-1-16-m-1.ansi": {
-        "name": "sugar-post-1-16-m-1.ansi",
-        "category": "sugar-post",
-        "resolution": "84x22",
-        "width": 84,
-        "height": 22,
-        "depth": "16",
-        "colors": 11,
-        "description": "clanking sorting-floor machine — hopper, gears, conveyor parcels, bins A/B/C under SUGAR POST MAIL CO banner",
-        "rating": 1,
         "tags": []
     },
     "sugar-post/sugar-post-1-16-m-2.ansi": {
@@ -37599,66 +34365,6 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-4-16-m-1.ansi": {
-        "name": "sugar-post-4-16-m-1.ansi",
-        "category": "sugar-post",
-        "resolution": "82x21",
-        "width": 82,
-        "height": 21,
-        "depth": "16",
-        "colors": 7,
-        "description": "telegraph office interior: poster, moonlit window, night clerk at the key, tape flooding the floor",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-4-16-m-2.ansi": {
-        "name": "sugar-post-4-16-m-2.ansi",
-        "category": "sugar-post",
-        "resolution": "84x22",
-        "width": 84,
-        "height": 22,
-        "depth": "16",
-        "colors": 7,
-        "description": "container port gantry crane hoisting a WEBHOOK box over the mv RETRY",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-4-16-m-3.ansi": {
-        "name": "sugar-post-4-16-m-3.ansi",
-        "category": "sugar-post",
-        "resolution": "78x18",
-        "width": 78,
-        "height": 18,
-        "depth": "16",
-        "colors": 7,
-        "description": "queue motorway: three backends as traffic lanes with stalled retry lane and ramp metering",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-4-16-s-1.ansi": {
-        "name": "sugar-post-4-16-s-1.ansi",
-        "category": "sugar-post",
-        "resolution": "58x10",
-        "width": 58,
-        "height": 10,
-        "depth": "16",
-        "colors": 6,
-        "description": "framed telegraph ticker banner: SUGAR POST in Morse and dot-dash tape with red key knob",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-4-16-s-2.ansi": {
-        "name": "sugar-post-4-16-s-2.ansi",
-        "category": "sugar-post",
-        "resolution": "56x9",
-        "width": 56,
-        "height": 9,
-        "depth": "16",
-        "colors": 5,
-        "description": "rate-limit tollbooth strip: 429 sign, striped barrier arm and queued packet-cars",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-post/sugar-post-4-256-l-1.ansi": {
         "name": "sugar-post-4-256-l-1.ansi",
         "category": "sugar-post",
@@ -37839,78 +34545,6 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-5-16-l-1.ansi": {
-        "name": "sugar-post-5-16-l-1.ansi",
-        "category": "sugar-post",
-        "resolution": "126x31",
-        "width": 126,
-        "height": 31,
-        "depth": "16",
-        "colors": 7,
-        "description": "full ballroom auction spectacle: three chandeliers, easel stamp, crowd, gavel",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-5-16-l-2.ansi": {
-        "name": "sugar-post-5-16-l-2.ansi",
-        "category": "sugar-post",
-        "resolution": "124x29",
-        "width": 124,
-        "height": 29,
-        "depth": "16",
-        "colors": 7,
-        "description": "cat post office interior: teller window, scales, cat queue, mouse customer",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-5-16-m-1.ansi": {
-        "name": "sugar-post-5-16-m-1.ansi",
-        "category": "sugar-post",
-        "resolution": "76x22",
-        "width": 76,
-        "height": 22,
-        "depth": "16",
-        "colors": 6,
-        "description": "grand hotel stamp auction: chandeliers, lot 7 framed penny rose, paddle crowd",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-5-16-m-2.ansi": {
-        "name": "sugar-post-5-16-m-2.ansi",
-        "category": "sugar-post",
-        "resolution": "74x21",
-        "width": 74,
-        "height": 21,
-        "depth": "16",
-        "colors": 5,
-        "description": "message-in-a-bottle email washing onto a moonlit beach, scroll inside",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-5-16-s-1.ansi": {
-        "name": "sugar-post-5-16-s-1.ansi",
-        "category": "sugar-post",
-        "resolution": "60x12",
-        "width": 60,
-        "height": 12,
-        "depth": "16",
-        "colors": 6,
-        "description": "cat-run pigeon post: meow-mail box, coop ledger, unpaid pigeons",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-5-16-s-2.ansi": {
-        "name": "sugar-post-5-16-s-2.ansi",
-        "category": "sugar-post",
-        "resolution": "63x12",
-        "width": 63,
-        "height": 12,
-        "depth": "16",
-        "colors": 6,
-        "description": "envelope hot-air balloons 'SUGAR POST CUP' heat 2, baskets of mail",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-post/sugar-post-5-256-l-1.ansi": {
         "name": "sugar-post-5-256-l-1.ansi",
         "category": "sugar-post",
@@ -38053,78 +34687,6 @@
         "colors": 113,
         "description": "postal routes drawn as glowing arcs over the curvature of night Earth",
         "rating": null,
-        "tags": []
-    },
-    "sugar-post/sugar-post-6-16-l-1.ansi": {
-        "name": "sugar-post-6-16-l-1.ansi",
-        "category": "sugar-post",
-        "resolution": "150x33",
-        "width": 150,
-        "height": 33,
-        "depth": "16",
-        "colors": 6,
-        "description": "seven-peak smoke relay panorama with carved ridge wordmark and log",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-6-16-l-2.ansi": {
-        "name": "sugar-post-6-16-l-2.ansi",
-        "category": "sugar-post",
-        "resolution": "158x35",
-        "width": 158,
-        "height": 35,
-        "depth": "16",
-        "colors": 6,
-        "description": "grand exchange hall: pigeon balcony, live quotation board, pit",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-6-16-m-1.ansi": {
-        "name": "sugar-post-6-16-m-1.ansi",
-        "category": "sugar-post",
-        "resolution": "82x22",
-        "width": 82,
-        "height": 22,
-        "depth": "16",
-        "colors": 6,
-        "description": "carrier-pigeon futures exchange: live quotes, trading pit, hawk alert",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-6-16-m-2.ansi": {
-        "name": "sugar-post-6-16-m-2.ansi",
-        "category": "sugar-post",
-        "resolution": "82x20",
-        "width": 82,
-        "height": 20,
-        "depth": "16",
-        "colors": 7,
-        "description": "mail blimp SP-1 moored to a lattice mast beside the airship shed",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-6-16-s-1.ansi": {
-        "name": "sugar-post-6-16-s-1.ansi",
-        "category": "sugar-post",
-        "resolution": "62x13",
-        "width": 62,
-        "height": 13,
-        "depth": "16",
-        "colors": 5,
-        "description": "smoke-signal mountain relay: three peaks, plumes, [@] hops downwind",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-6-16-s-2.ansi": {
-        "name": "sugar-post-6-16-s-2.ansi",
-        "category": "sugar-post",
-        "resolution": "58x13",
-        "width": 58,
-        "height": 13,
-        "depth": "16",
-        "colors": 6,
-        "description": "town-crier megaphone blasting proclamations onto the notice board",
-        "rating": 1,
         "tags": []
     },
     "sugar-post/sugar-post-6-256-l-1.ansi": {
@@ -38271,78 +34833,6 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-7-16-l-1.ansi": {
-        "name": "sugar-post-7-16-l-1.ansi",
-        "category": "sugar-post",
-        "resolution": "152x35",
-        "width": 152,
-        "height": 35,
-        "depth": "16",
-        "colors": 7,
-        "description": "grand postal museum panorama: five columned cases - pigeon, bottle, capsule, sack, flare",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-7-16-l-2.ansi": {
-        "name": "sugar-post-7-16-l-2.ansi",
-        "category": "sugar-post",
-        "resolution": "160x37",
-        "width": 160,
-        "height": 37,
-        "depth": "16",
-        "colors": 7,
-        "description": "alpine balloon mail route chart: three peaks, dashed flight line, manifest boards",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-7-16-m-1.ansi": {
-        "name": "sugar-post-7-16-m-1.ansi",
-        "category": "sugar-post",
-        "resolution": "86x22",
-        "width": 86,
-        "height": 22,
-        "depth": "16",
-        "colors": 7,
-        "description": "carrier-pigeon postal museum wing: three framed exhibits with brass plaques",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-7-16-m-2.ansi": {
-        "name": "sugar-post-7-16-m-2.ansi",
-        "category": "sugar-post",
-        "resolution": "84x20",
-        "width": 84,
-        "height": 20,
-        "depth": "16",
-        "colors": 6,
-        "description": "bottle-mail sorting room: stocked shelves, sea window, attendant on ladder",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-7-16-s-1.ansi": {
-        "name": "sugar-post-7-16-s-1.ansi",
-        "category": "sugar-post",
-        "resolution": "64x14",
-        "width": 64,
-        "height": 14,
-        "depth": "16",
-        "colors": 7,
-        "description": "bottle-post washroom attendant counting dried bottles on the tiled counter",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-7-16-s-2.ansi": {
-        "name": "sugar-post-7-16-s-2.ansi",
-        "category": "sugar-post",
-        "resolution": "60x12",
-        "width": 60,
-        "height": 12,
-        "depth": "16",
-        "colors": 6,
-        "description": "pneumatic post bicycle courier pedaling through rain, capsule inbound to inlet",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-post/sugar-post-7-256-l-1.ansi": {
         "name": "sugar-post-7-256-l-1.ansi",
         "category": "sugar-post",
@@ -38487,78 +34977,6 @@
         "rating": null,
         "tags": []
     },
-    "sugar-post/sugar-post-8-16-l-1.ansi": {
-        "name": "sugar-post-8-16-l-1.ansi",
-        "category": "sugar-post",
-        "resolution": "180x34",
-        "width": 180,
-        "height": 34,
-        "depth": "16",
-        "colors": 8,
-        "description": "mail-coach robbery: masked highwayman halts the stagecoach mid-route along the dotted line",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-8-16-l-2.ansi": {
-        "name": "sugar-post-8-16-l-2.ansi",
-        "category": "sugar-post",
-        "resolution": "184x36",
-        "width": 184,
-        "height": 36,
-        "depth": "16",
-        "colors": 11,
-        "description": "winged-horn mail van idling at the curb, parcels unloaded along route 4 pins",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-8-16-m-1.ansi": {
-        "name": "sugar-post-8-16-m-1.ansi",
-        "category": "sugar-post",
-        "resolution": "84x22",
-        "width": 84,
-        "height": 22,
-        "depth": "16",
-        "colors": 9,
-        "description": "post office box wall grid, one door flung open with a hanging keyring at the right",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-8-16-m-2.ansi": {
-        "name": "sugar-post-8-16-m-2.ansi",
-        "category": "sugar-post",
-        "resolution": "80x20",
-        "width": 80,
-        "height": 20,
-        "depth": "16",
-        "colors": 5,
-        "description": "double-ring cancellation datestamp 09 SEP 2026 trailing wavy kill lines",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-8-16-s-1.ansi": {
-        "name": "sugar-post-8-16-s-1.ansi",
-        "category": "sugar-post",
-        "resolution": "58x13",
-        "width": 58,
-        "height": 13,
-        "depth": "16",
-        "colors": 10,
-        "description": "rural collection mailbox with the red flag raised, an envelope queued into the open slot",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-8-16-s-2.ansi": {
-        "name": "sugar-post-8-16-s-2.ansi",
-        "category": "sugar-post",
-        "resolution": "66x14",
-        "width": 66,
-        "height": 14,
-        "depth": "16",
-        "colors": 7,
-        "description": "winged post horn crest: gold bugle with red bell flare, feathered wing and tassel on a starfield",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-post/sugar-post-8-256-l-1.ansi": {
         "name": "sugar-post-8-256-l-1.ansi",
         "category": "sugar-post",
@@ -38701,78 +35119,6 @@
         "colors": 10,
         "description": "DKIM hexagon sigil sealed over an envelope, b=hQ== verified green, glow ring in truecolor",
         "rating": null,
-        "tags": []
-    },
-    "sugar-post/sugar-post-9-16-l-1.ansi": {
-        "name": "sugar-post-9-16-l-1.ansi",
-        "category": "sugar-post",
-        "resolution": "150x32",
-        "width": 150,
-        "height": 32,
-        "depth": "16",
-        "colors": 8,
-        "description": "maritime mail ship dressed with signal flags strung mast to mast, funnel smoke, SUGAR POST hull, sea of tyldes",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-9-16-l-2.ansi": {
-        "name": "sugar-post-9-16-l-2.ansi",
-        "category": "sugar-post",
-        "resolution": "158x30",
-        "width": 158,
-        "height": 30,
-        "depth": "16",
-        "colors": 7,
-        "description": "homing-pigeon loft ledger wall: six named roost boxes over band cards and a printed handedicap form",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-9-16-m-1.ansi": {
-        "name": "sugar-post-9-16-m-1.ansi",
-        "category": "sugar-post",
-        "resolution": "84x22",
-        "width": 84,
-        "height": 22,
-        "depth": "16",
-        "colors": 7,
-        "description": "night letterpress composing stick: type blocks spelling TO: ALL HANDS, proof sheet and type case",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-9-16-m-2.ansi": {
-        "name": "sugar-post-9-16-m-2.ansi",
-        "category": "sugar-post",
-        "resolution": "82x20",
-        "width": 82,
-        "height": 20,
-        "depth": "16",
-        "colors": 8,
-        "description": "town notice-board with pinned LOST / MAIL ROUNDS / SugarPost hand-cart flyers on twin posts",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-9-16-s-1.ansi": {
-        "name": "sugar-post-9-16-s-1.ansi",
-        "category": "sugar-post",
-        "resolution": "64x15",
-        "width": 64,
-        "height": 15,
-        "depth": "16",
-        "colors": 7,
-        "description": "victorian mail-tram No.9 on snowy lane rails with clerestory sign and SugarPost wordmark, 16-colour",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-9-16-s-2.ansi": {
-        "name": "sugar-post-9-16-s-2.ansi",
-        "category": "sugar-post",
-        "resolution": "60x13",
-        "width": 60,
-        "height": 13,
-        "depth": "16",
-        "colors": 7,
-        "description": "alpine courier on snowshoes cresting the pass by pennanted waymarker, pines and dotted trail",
-        "rating": 1,
         "tags": []
     },
     "sugar-post/sugar-post-9-256-l-1.ansi": {
@@ -38931,18 +35277,6 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-post/sugar-post-10-16-l-2.ansi": {
-        "name": "sugar-post-10-16-l-2.ansi",
-        "category": "sugar-post",
-        "resolution": "150x31",
-        "width": 150,
-        "height": 31,
-        "depth": "16",
-        "colors": 7,
-        "description": "parcel chute house: four-floor brick cut-away feeding an external helix slide into the collection yard",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-post/sugar-post-10-16-m-1.ansi": {
         "name": "sugar-post-10-16-m-1.ansi",
         "category": "sugar-post",
@@ -38953,30 +35287,6 @@
         "colors": 7,
         "description": "post-office screen room: brass-railed annunciator with LED numbers, curtain, velvet rope, tiled floor",
         "rating": 2,
-        "tags": []
-    },
-    "sugar-post/sugar-post-10-16-m-2.ansi": {
-        "name": "sugar-post-10-16-m-2.ansi",
-        "category": "sugar-post",
-        "resolution": "80x20",
-        "width": 80,
-        "height": 20,
-        "depth": "16",
-        "colors": 7,
-        "description": "rubber cancel tray — four double-ring city cancels LONDON NEW YORK TOKYO BERLIN with kill-lines",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-post/sugar-post-10-16-s-1.ansi": {
-        "name": "sugar-post-10-16-s-1.ansi",
-        "category": "sugar-post",
-        "resolution": "50x13",
-        "width": 50,
-        "height": 13,
-        "depth": "16",
-        "colors": 5,
-        "description": "glass prize drum on a crank pedestal, confetti-folded entries inside, SUGARPOST nameplate and closing notice",
-        "rating": 1,
         "tags": []
     },
     "sugar-post/sugar-post-10-16-s-2.ansi": {
@@ -39651,18 +35961,6 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-3-16-s-2.ansi": {
-        "name": "sugar-spark-3-16-s-2.ansi",
-        "category": "sugar-spark",
-        "resolution": "56x13",
-        "width": 56,
-        "height": 13,
-        "depth": "16",
-        "colors": 5,
-        "description": "Spark plug cross-section with arcing electrode gap, SUGARSPARK ignition caption",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-spark/sugar-spark-3-256-l-1.ansi": {
         "name": "sugar-spark-3-256-l-1.ansi",
         "category": "sugar-spark",
@@ -39829,18 +36127,6 @@
         "colors": 7,
         "description": "SGR electrical substation: main bus feeding six breaker halls for basic, indexed and truecolour rails with hazard floor",
         "rating": 2,
-        "tags": []
-    },
-    "sugar-spark/sugar-spark-4-16-m-1.ansi": {
-        "name": "sugar-spark-4-16-m-1.ansi",
-        "category": "sugar-spark",
-        "resolution": "86x22",
-        "width": 86,
-        "height": 22,
-        "depth": "16",
-        "colors": 7,
-        "description": "blacksmith forge: bellows firebox of raw bytes, hammer striking ESC[1m on the anvil with 16-colour spark burst",
-        "rating": 1,
         "tags": []
     },
     "sugar-spark/sugar-spark-4-16-m-2.ansi": {
@@ -40071,30 +36357,6 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-5-16-s-1.ansi": {
-        "name": "sugar-spark-5-16-s-1.ansi",
-        "category": "sugar-spark",
-        "resolution": "58x12",
-        "width": 58,
-        "height": 12,
-        "depth": "16",
-        "colors": 5,
-        "description": "ESC monolith: a black slab on a dune plain, sun low, vertical ESC engraved, 16-colour desert light",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-spark/sugar-spark-5-16-s-2.ansi": {
-        "name": "sugar-spark-5-16-s-2.ansi",
-        "category": "sugar-spark",
-        "resolution": "60x11",
-        "width": 60,
-        "height": 11,
-        "depth": "16",
-        "colors": 7,
-        "description": "maritime signal hoist: four code flags (ESC/CSI/OSC/SGR) on a halyard above a cyan swell",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-spark/sugar-spark-5-256-l-1.ansi": {
         "name": "sugar-spark-5-256-l-1.ansi",
         "category": "sugar-spark",
@@ -40237,90 +36499,6 @@
         "colors": 8,
         "description": "logic-analyzer timing trace of the bytes E S C [ 3 1 m, one glowing channel per symbol",
         "rating": null,
-        "tags": []
-    },
-    "sugar-spark/sugar-spark-6-16-l-1.ansi": {
-        "name": "sugar-spark-6-16-l-1.ansi",
-        "category": "sugar-spark",
-        "resolution": "196x30",
-        "width": 196,
-        "height": 30,
-        "depth": "16",
-        "colors": 7,
-        "description": "stone aqueduct — escape stream riding nine piers over a river",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-spark/sugar-spark-6-16-l-2.ansi": {
-        "name": "sugar-spark-6-16-l-2.ansi",
-        "category": "sugar-spark",
-        "resolution": "172x34",
-        "width": 172,
-        "height": 34,
-        "depth": "16",
-        "colors": 5,
-        "description": "scaffold tower — attribute storeys rising under a yard crane",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-spark/sugar-spark-6-16-l-3.ansi": {
-        "name": "sugar-spark-6-16-l-3.ansi",
-        "category": "sugar-spark",
-        "resolution": "171x30",
-        "width": 171,
-        "height": 30,
-        "depth": "16",
-        "colors": 6,
-        "description": "semaphore line — hilltop flags spelling SugarSpark by arm",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-spark/sugar-spark-6-16-m-1.ansi": {
-        "name": "sugar-spark-6-16-m-1.ansi",
-        "category": "sugar-spark",
-        "resolution": "86x22",
-        "width": 86,
-        "height": 22,
-        "depth": "16",
-        "colors": 10,
-        "description": "CSI escape room — three players crack the SGR dial door",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-spark/sugar-spark-6-16-m-2.ansi": {
-        "name": "sugar-spark-6-16-m-2.ansi",
-        "category": "sugar-spark",
-        "resolution": "79x20",
-        "width": 79,
-        "height": 20,
-        "depth": "16",
-        "colors": 5,
-        "description": "bird migration — control-symbol squadrons over a ringing station",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-spark/sugar-spark-6-16-s-1.ansi": {
-        "name": "sugar-spark-6-16-s-1.ansi",
-        "category": "sugar-spark",
-        "resolution": "56x12",
-        "width": 56,
-        "height": 12,
-        "depth": "16",
-        "colors": 7,
-        "description": "pegboard tool wall — forged escape codes hung on labelled pegs",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-spark/sugar-spark-6-16-s-2.ansi": {
-        "name": "sugar-spark-6-16-s-2.ansi",
-        "category": "sugar-spark",
-        "resolution": "52x11",
-        "width": 52,
-        "height": 11,
-        "depth": "16",
-        "colors": 7,
-        "description": "domino triple — a row of SGR tiles toppling in strict order",
-        "rating": 1,
         "tags": []
     },
     "sugar-spark/sugar-spark-6-256-l-1.ansi": {
@@ -40503,42 +36681,6 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-7-16-m-1.ansi": {
-        "name": "sugar-spark-7-16-m-1.ansi",
-        "category": "sugar-spark",
-        "resolution": "86x22",
-        "width": 86,
-        "height": 22,
-        "depth": "16",
-        "colors": 6,
-        "description": "monochrome trench field — three chimneys with speckled plumes and shrimp",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-spark/sugar-spark-7-16-m-2.ansi": {
-        "name": "sugar-spark-7-16-m-2.ansi",
-        "category": "sugar-spark",
-        "resolution": "86x22",
-        "width": 86,
-        "height": 22,
-        "depth": "16",
-        "colors": 12,
-        "description": "payload room — hanging envelope, radiosonde bench with 8-LED channel bar",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-spark/sugar-spark-7-16-s-1.ansi": {
-        "name": "sugar-spark-7-16-s-1.ansi",
-        "category": "sugar-spark",
-        "resolution": "64x12",
-        "width": 64,
-        "height": 12,
-        "depth": "16",
-        "colors": 7,
-        "description": "codebreaker hut — 3-rotor CSI cipher desk, tape out, brass name plaque",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-spark/sugar-spark-7-16-s-2.ansi": {
         "name": "sugar-spark-7-16-s-2.ansi",
         "category": "sugar-spark",
@@ -40695,30 +36837,6 @@
         "rating": null,
         "tags": []
     },
-    "sugar-spark/sugar-spark-8-16-l-1.ansi": {
-        "name": "sugar-spark-8-16-l-1.ansi",
-        "category": "sugar-spark",
-        "resolution": "176x38",
-        "width": 176,
-        "height": 38,
-        "depth": "16",
-        "colors": 9,
-        "description": "organ facade hall — towers of graded pipes, foot-pitch = parameter legend",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-spark/sugar-spark-8-16-l-2.ansi": {
-        "name": "sugar-spark-8-16-l-2.ansi",
-        "category": "sugar-spark",
-        "resolution": "176x38",
-        "width": 176,
-        "height": 38,
-        "depth": "16",
-        "colors": 9,
-        "description": "telegraph gallery — morse charts, six keyed exhibits, rope barrier",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-spark/sugar-spark-8-16-m-1.ansi": {
         "name": "sugar-spark-8-16-m-1.ansi",
         "category": "sugar-spark",
@@ -40729,42 +36847,6 @@
         "colors": 9,
         "description": "parameter loom — coloured warp, shuttle mid-throw, woven SGR cloth",
         "rating": 2,
-        "tags": []
-    },
-    "sugar-spark/sugar-spark-8-16-m-2.ansi": {
-        "name": "sugar-spark-8-16-m-2.ansi",
-        "category": "sugar-spark",
-        "resolution": "86x22",
-        "width": 86,
-        "height": 22,
-        "depth": "16",
-        "colors": 6,
-        "description": "decompression profile — descent to 40 m, three stop flags, bubble trail",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-spark/sugar-spark-8-16-s-1.ansi": {
-        "name": "sugar-spark-8-16-s-1.ansi",
-        "category": "sugar-spark",
-        "resolution": "64x12",
-        "width": 64,
-        "height": 12,
-        "depth": "16",
-        "colors": 7,
-        "description": "glass harmonica mini — spindle of nested bowls ringing SGR notes",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-spark/sugar-spark-8-16-s-2.ansi": {
-        "name": "sugar-spark-8-16-s-2.ansi",
-        "category": "sugar-spark",
-        "resolution": "64x12",
-        "width": 64,
-        "height": 12,
-        "depth": "16",
-        "colors": 9,
-        "description": "telegraph key exhibit — ebonite base, tilted lever, brass museum plaque",
-        "rating": 1,
         "tags": []
     },
     "sugar-spark/sugar-spark-8-256-l-1.ansi": {
@@ -40971,18 +37053,6 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-9-16-s-2.ansi": {
-        "name": "sugar-spark-9-16-s-2.ansi",
-        "category": "sugar-spark",
-        "resolution": "66x12",
-        "width": 66,
-        "height": 12,
-        "depth": "16",
-        "colors": 8,
-        "description": "ski-judge scoring tower awarding style points per escape family",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-spark/sugar-spark-9-256-l-1.ansi": {
         "name": "sugar-spark-9-256-l-1.ansi",
         "category": "sugar-spark",
@@ -41175,30 +37245,6 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-spark/sugar-spark-10-16-s-1.ansi": {
-        "name": "sugar-spark-10-16-s-1.ansi",
-        "category": "sugar-spark",
-        "resolution": "60x14",
-        "width": 60,
-        "height": 14,
-        "depth": "16",
-        "colors": 6,
-        "description": "cobbler's bench - resoled CSI boot on a wooden last, hammer mid-swing, waxed thread from the spool",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-spark/sugar-spark-10-16-s-2.ansi": {
-        "name": "sugar-spark-10-16-s-2.ansi",
-        "category": "sugar-spark",
-        "resolution": "58x13",
-        "width": 58,
-        "height": 13,
-        "depth": "16",
-        "colors": 6,
-        "description": "moth-lure board - four pinned SGR sphinges under lamp-rays, tagged 31m/32m/33m/36m on a cork frame",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-spark/sugar-spark-10-256-l-1.ansi": {
         "name": "sugar-spark-10-256-l-1.ansi",
         "category": "sugar-spark",
@@ -41353,18 +37399,6 @@
         "colors": 14,
         "description": "border-family grandstand - block-letter title above five bordered mini-tables, markdown/hidden/scroll panels, pager rail",
         "rating": 3,
-        "tags": []
-    },
-    "sugar-table/sugar-table-1-16-l-2.ansi": {
-        "name": "sugar-table-1-16-l-2.ansi",
-        "category": "sugar-table",
-        "resolution": "144x36",
-        "width": 144,
-        "height": 36,
-        "depth": "16",
-        "colors": 19,
-        "description": "ruled-grid night skyline - lit window towers with neon marquee, weathervane antennas, one-way sort arrows on the street",
-        "rating": 1,
         "tags": []
     },
     "sugar-table/sugar-table-1-16-m-1.ansi": {
@@ -41809,18 +37843,6 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-table/sugar-table-3-16-m-1.ansi": {
-        "name": "sugar-table-3-16-m-1.ansi",
-        "category": "sugar-table",
-        "resolution": "84x22",
-        "width": 84,
-        "height": 22,
-        "depth": "16",
-        "colors": 7,
-        "description": "border-style fashion runway: six frames walk a converging catwalk to a crowd",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-table/sugar-table-3-16-m-2.ansi": {
         "name": "sugar-table-3-16-m-2.ansi",
         "category": "sugar-table",
@@ -42049,30 +38071,6 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-table/sugar-table-4-16-s-1.ansi": {
-        "name": "sugar-table-4-16-s-1.ansi",
-        "category": "sugar-table",
-        "resolution": "56x11",
-        "width": 56,
-        "height": 11,
-        "depth": "16",
-        "colors": 5,
-        "description": "market stall price board: striped awning, produce rows, crate codes",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-table/sugar-table-4-16-s-2.ansi": {
-        "name": "sugar-table-4-16-s-2.ansi",
-        "category": "sugar-table",
-        "resolution": "44x13",
-        "width": 44,
-        "height": 13,
-        "depth": "16",
-        "colors": 5,
-        "description": "punch-card archive slip: 8x20 hole grid, column digits, filing stamp",
-        "rating": 1,
-        "tags": []
-    },
     "sugar-table/sugar-table-4-256-l-1.ansi": {
         "name": "sugar-table-4-256-l-1.ansi",
         "category": "sugar-table",
@@ -42251,42 +38249,6 @@
         "colors": 6,
         "description": "Library card catalog: drawer fronts plus pulled index-card table",
         "rating": 2,
-        "tags": []
-    },
-    "sugar-table/sugar-table-5-16-m-2.ansi": {
-        "name": "sugar-table-5-16-m-2.ansi",
-        "category": "sugar-table",
-        "resolution": "81x18",
-        "width": 81,
-        "height": 18,
-        "depth": "16",
-        "colors": 6,
-        "description": "Greenhouse bench ledger: potted rows on timber shelves with labels",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-table/sugar-table-5-16-s-1.ansi": {
-        "name": "sugar-table-5-16-s-1.ansi",
-        "category": "sugar-table",
-        "resolution": "53x13",
-        "width": 53,
-        "height": 13,
-        "depth": "16",
-        "colors": 5,
-        "description": "Hotel floor plan: room cells with occupancy bars and suite stars",
-        "rating": 1,
-        "tags": []
-    },
-    "sugar-table/sugar-table-5-16-s-2.ansi": {
-        "name": "sugar-table-5-16-s-2.ansi",
-        "category": "sugar-table",
-        "resolution": "41x10",
-        "width": 41,
-        "height": 10,
-        "depth": "16",
-        "colors": 7,
-        "description": "Airport stand allocation flip-board: gate/flight/stand/status rows",
-        "rating": 1,
         "tags": []
     },
     "sugar-table/sugar-table-5-256-l-1.ansi": {
@@ -42671,18 +38633,6 @@
         "colors": 6,
         "description": "nuclear reactor core map: 22 assembly rows × 16 channels of burnup values",
         "rating": 2,
-        "tags": []
-    },
-    "sugar-table/sugar-table-7-16-l-2.ansi": {
-        "name": "sugar-table-7-16-l-2.ansi",
-        "category": "sugar-table",
-        "resolution": "127x32",
-        "width": 127,
-        "height": 32,
-        "depth": "16",
-        "colors": 5,
-        "description": "theater box-office seat map: 24 rows × 24 seats with sold/open/held/access states",
-        "rating": 1,
         "tags": []
     },
     "sugar-table/sugar-table-7-16-m-1.ansi": {
