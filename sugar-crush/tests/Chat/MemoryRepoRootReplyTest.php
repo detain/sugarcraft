@@ -57,7 +57,7 @@ final class MemoryRepoRootReplyTest extends TestCase
         ProjectRoot::forget();
         ini_set('error_log', $this->origErrorLog);
         $this->restoreHomeSandbox();
-        exec('rm -rf ' . escapeshellarg($this->tmp));
+        exec('rm -rf ' . escapeshellarg($this->tmp) . ' 2>&1', $rmOutput);
     }
 
     private function reply(string $draft, string $root): string
