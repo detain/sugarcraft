@@ -412,11 +412,15 @@ final class OAuthClientRegistrationTest extends TestCase
         $ocr->saveAuth('https://z/mcp', $this->storeEntry('Z1', time() - 10, 'rZ1'));
         $before = (string) file_get_contents($this->authFilePath);
 
+        // The throw is recorded and asserted AFTER the try: a fail() inside it
+        // would be a RuntimeException-shaped AssertionFailedError this catch eats.
+        $threw = false;
         try {
             $ocr->getValidAuth('https://z/mcp', 'https://as/token');
-            $this->fail('a refused refresh must surface');
         } catch (\RuntimeException) {
+            $threw = true;
         }
+        $this->assertTrue($threw, 'a refused refresh must surface');
 
         $this->assertSame($before, (string) file_get_contents($this->authFilePath));
     }
@@ -567,11 +571,15 @@ final class OAuthClientRegistrationTest extends TestCase
         $ocr->saveAuth('https://z/mcp', $this->managedEntry());
         $before = (string) file_get_contents($this->authFilePath);
 
+        // The throw is recorded and asserted AFTER the try: a fail() inside it
+        // would be a RuntimeException-shaped AssertionFailedError this catch eats.
+        $threw = false;
         try {
             $ocr->updateRegistration('https://z/mcp', ['client_name' => 'x']);
-            $this->fail('a reply for another client id must be refused');
         } catch (\RuntimeException) {
+            $threw = true;
         }
+        $this->assertTrue($threw, 'a reply for another client id must be refused');
 
         $this->assertSame($before, (string) file_get_contents($this->authFilePath));
     }
