@@ -561,4 +561,189 @@ final class OAuthClientRegistrationTest extends TestCase
         $this->assertSame($registrationUrl, $persisted[$serverUrl]->registrationUrl);
         $this->assertSame('at-add', $persisted[$serverUrl]->accessToken);
     }
+
+    // =========================================================================
+    // MCP-7: the store is shared between processes — locked merge, atomic write
+    // =========================================================================
+
+    /**
+     * The audit repro. A long-lived TUI has the store memoized with only Y; a
+     * second process (`sugarcrush mcp auth login x`) adds X; the TUI then
+     * refreshes Y. The refresh used to write back the TUI's cached map plus
+     * the new Y, erasing X.
+     */
+    public function testStaleCacheRefreshKeepsAnotherProcessesLogin(): void
+    {
+        $tui = new OAuthClientRegistration($this->clientAnswering([$this->tokenResponse('Y2', 'rY2')]), $this->authFilePath);
+        $tui->saveAuth('https://y/mcp', $this->storeEntry('Y1', time() + 30, 'rY1'));
+
+        $cli = new OAuthClientRegistration(null, $this->authFilePath);
+        $cli->saveAuth('https://x/mcp', $this->storeEntry('X1', time() + 3600));
+
+        $refreshed = $tui->getValidAuth('https://y/mcp', 'https://as/token');
+        $this->assertSame('Y2', $refreshed?->accessToken);
+
+        $this->assertSame(['https://y/mcp', 'https://x/mcp'], array_keys($this->onDisk()));
+        $this->assertSame('X1', $this->onDisk()['https://x/mcp']['accessToken']);
+        $this->assertSame('Y2', $this->onDisk()['https://y/mcp']['accessToken']);
+    }
+
+    /**
+     * The race the merge has to win on its own, independently of the read-side
+     * memo check: the other process's login lands WHILE the TUI's refresh
+     * request is on the wire — after the TUI read the entry, before it writes.
+     * Driven through validAuthFor(), the per-request path HttpMcpServer uses.
+     */
+    public function testLoginLandingDuringTheRefreshRoundTripSurvives(): void
+    {
+        $seed = new OAuthClientRegistration(null, $this->authFilePath);
+        $seed->saveAuth('https://y/mcp', $this->storeEntry('Y1', time() + 30, 'rY1'));
+
+        $tui = new OAuthClientRegistration($this->clientAnswering([
+            function (): Response {
+                (new OAuthClientRegistration(null, $this->authFilePath))
+                    ->saveAuth('https://x/mcp', $this->storeEntry('X1', time() + 3600));
+
+                return $this->tokenResponse('Y2', 'rY2');
+            },
+        ]), $this->authFilePath);
+
+        $this->assertSame('Y2', $tui->validAuthFor('https://y/mcp')?->accessToken);
+
+        $this->assertSame('X1', $this->onDisk()['https://x/mcp']['accessToken'] ?? null, 'the concurrent login was erased by the refresh write');
+        $this->assertSame('Y2', $this->onDisk()['https://y/mcp']['accessToken']);
+
+        // The memo is the merged disk state, not "the TUI's map plus its change".
+        $memo = $tui->loadAuth();
+        $this->assertSame(['https://y/mcp', 'https://x/mcp'], array_keys($memo));
+    }
+
+    public function testDeleteKeepsRowsAnotherProcessWrote(): void
+    {
+        $tui = new OAuthClientRegistration(null, $this->authFilePath);
+        $tui->saveAuth('https://y/mcp', $this->storeEntry('Y1', time() + 3600));
+        $tui->loadAuth();
+
+        (new OAuthClientRegistration(null, $this->authFilePath))
+            ->saveAuth('https://x/mcp', $this->storeEntry('X1', time() + 3600));
+
+        (new McpAuthStore($tui))->removeServer('https://y/mcp');
+
+        $this->assertSame(['https://x/mcp'], array_keys($this->onDisk()));
+    }
+
+    public function testLoadAuthSeesAWriteAnotherProcessPublished(): void
+    {
+        $tui = new OAuthClientRegistration(null, $this->authFilePath);
+        $tui->saveAuth('https://y/mcp', $this->storeEntry('Y1', time() + 3600));
+        $this->assertSame(['https://y/mcp'], array_keys($tui->loadAuth()));
+
+        (new OAuthClientRegistration(null, $this->authFilePath))
+            ->saveAuth('https://x/mcp', $this->storeEntry('X1', time() + 3600));
+
+        $this->assertSame(['https://y/mcp', 'https://x/mcp'], array_keys($tui->loadAuth()));
+    }
+
+    /**
+     * Untouched rows are carried through raw, so a field this build does not
+     * know (written by a newer one) survives this build's write.
+     */
+    public function testSaveCarriesOtherRowsThroughVerbatim(): void
+    {
+        file_put_contents($this->authFilePath, (string) json_encode([
+            'https://x/mcp' => ['clientId' => 'cx', 'accessToken' => 'X1', 'futureField' => 'kept'],
+        ]));
+
+        (new OAuthClientRegistration(null, $this->authFilePath))
+            ->saveAuth('https://y/mcp', $this->storeEntry('Y1', time() + 3600));
+
+        $this->assertSame(
+            ['clientId' => 'cx', 'accessToken' => 'X1', 'futureField' => 'kept'],
+            $this->onDisk()['https://x/mcp'],
+        );
+    }
+
+    /**
+     * A file that is not a JSON object used to become the merge base `[]`, so
+     * the next save silently replaced every credential in it. The write now
+     * refuses and leaves the bytes for the user to repair; the read stays
+     * forgiving.
+     */
+    public function testSaveRefusesToOverwriteAnUnparseableFile(): void
+    {
+        file_put_contents($this->authFilePath, '{"https://x/mcp": {"accessToken": "X1"');
+        $ocr = new OAuthClientRegistration(null, $this->authFilePath);
+
+        $this->assertSame([], $ocr->loadAuth());
+
+        try {
+            $ocr->saveAuth('https://y/mcp', $this->storeEntry('Y1', time() + 3600));
+            $this->fail('a save over an unparseable auth file must refuse');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString($this->authFilePath, $e->getMessage());
+        }
+
+        $this->assertSame('{"https://x/mcp": {"accessToken": "X1"', file_get_contents($this->authFilePath));
+    }
+
+    public function testDeleteOfAnAbsentServerWritesNothing(): void
+    {
+        (new OAuthClientRegistration(null, $this->authFilePath))->deleteAuth('https://never/mcp');
+
+        $this->assertFileDoesNotExist($this->authFilePath);
+    }
+
+    /**
+     * The published file is 0600 even under a permissive umask and even when
+     * it replaces a looser pre-existing file — the mode rides the temp inode
+     * through rename() instead of being chmod'ed after the bytes land. The lock
+     * sidecar is owner-only too.
+     */
+    public function testWritesPublish0600UnderAPermissiveUmask(): void
+    {
+        file_put_contents($this->authFilePath, '{}');
+        chmod($this->authFilePath, 0644);
+
+        $umask = umask(0);
+        try {
+            (new OAuthClientRegistration(null, $this->authFilePath))
+                ->saveAuth('https://y/mcp', $this->storeEntry('Y1', time() + 3600));
+        } finally {
+            umask($umask);
+        }
+
+        clearstatcache();
+        $this->assertSame(0600, fileperms($this->authFilePath) & 0777);
+        $this->assertSame(0600, fileperms($this->authFilePath . '.lock') & 0777);
+    }
+
+    private function storeEntry(string $token, ?int $expiresAt, string $refreshToken = ''): AuthEntry
+    {
+        return new AuthEntry('cid', '', 'rat', $token, $refreshToken, $expiresAt, [], 'https://as/token', 'https://as/register');
+    }
+
+    private function tokenResponse(string $accessToken, string $refreshToken): Response
+    {
+        return new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+            'access_token' => $accessToken,
+            'refresh_token' => $refreshToken,
+            'expires_in' => 3600,
+        ]));
+    }
+
+    /**
+     * @param list<Response|callable> $queue
+     */
+    private function clientAnswering(array $queue): Client
+    {
+        return new Client(['handler' => HandlerStack::create(new MockHandler($queue))]);
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function onDisk(): array
+    {
+        return json_decode((string) file_get_contents($this->authFilePath), true, 512, JSON_THROW_ON_ERROR);
+    }
 }

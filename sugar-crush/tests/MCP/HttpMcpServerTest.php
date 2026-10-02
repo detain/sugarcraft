@@ -619,6 +619,11 @@ final class HttpMcpServerTest extends TestCase
     {
         if ($this->e695AuthFile !== null && file_exists($this->e695AuthFile)) {
             unlink($this->e695AuthFile);
+            // Every store write takes an exclusive lock on this sidecar (MCP-7)
+            // and never unlinks it, so it is left beside the file.
+            if (file_exists($this->e695AuthFile . '.lock')) {
+                unlink($this->e695AuthFile . '.lock');
+            }
             rmdir(dirname($this->e695AuthFile));
         }
         $this->e695AuthFile = null;

@@ -6,6 +6,8 @@ namespace SugarCraft\Crush\MCP;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use SugarCraft\Core\Util\AtomicJsonFile;
+use SugarCraft\Crush\Support\TimedFileLock;
 
 /**
  * Handles OAuth 2.0 Dynamic Client Registration (RFC 7591) for MCP servers.
@@ -13,6 +15,16 @@ use GuzzleHttp\Exception\GuzzleException;
  * Registers sugar-crush with a remote MCP server on first connection,
  * receives credentials automatically, stores tokens at
  * ~/.local/share/sugar-crush/mcp-auth.json, and refreshes them ahead of expiry.
+ *
+ * THE FILE IS SHARED BETWEEN PROCESSES. A long-lived TUI refreshes tokens
+ * while `sugarcrush mcp auth login|remove` runs in another shell, so every
+ * write is a read-modify-write of ONE key under an exclusive lock on a
+ * sidecar (`<file>.lock`), re-reading the file fresh under that lock and
+ * publishing through a 0600 temp file + rename(). Writing back this object's
+ * cached map instead (audit MCP-7) erased every login another process had
+ * made since the cache was filled, and the old in-place, chmod-afterwards
+ * write could be observed torn (read back as "no credentials") and briefly
+ * world-readable.
  *
  * @see https://datatracker.ietf.org/doc/html/rfc7591
  */
@@ -24,6 +36,13 @@ final class OAuthClientRegistration
 
     /** @var array<string, AuthEntry>|null */
     private ?array $authCache = null;
+
+    /**
+     * Stat signature of the file {@see $authCache} was decoded from.
+     *
+     * @var list<int>|null
+     */
+    private ?array $authCacheSignature = null;
 
     private string $authFilePath;
 
@@ -261,50 +280,57 @@ final class OAuthClientRegistration
     /**
      * Persist auth data for a server to the auth file.
      *
+     * Only $serverUrl's row is replaced: the rest of the file is whatever is on
+     * disk under the lock, NOT this object's cache — see the class doc-block.
+     *
      * @param string $serverUrl The server's URL (used as key)
      * @param AuthEntry $entry The auth entry to persist
      */
     public function saveAuth(string $serverUrl, AuthEntry $entry): void
     {
-        $authData = $this->loadAuth();
-        $authData[$serverUrl] = $entry;
-        $this->writeAuthFile($authData);
+        $this->mutateAuthFile(static function (array $raw) use ($serverUrl, $entry): array {
+            $raw[$serverUrl] = $entry->toArray();
+            return $raw;
+        });
     }
 
     /**
      * Load all auth entries from the auth file.
      *
+     * Memoized, but only for as long as the file on disk is the one the memo
+     * was decoded from: a long-lived TUI must see a login or a token rotation
+     * another process published, or it keeps sending (and refreshing with) a
+     * token that process already replaced. Every write here publishes a new
+     * inode by rename(), so the stat compare is one syscall per call and the
+     * file is re-decoded only when it actually changed.
+     *
+     * A present-but-unparseable file reads as no credentials, as it always
+     * has: a broken file must cost a login, not the session. The WRITE path
+     * refuses that same file instead ({@see mutateAuthFile()}).
+     *
      * @return array<string, AuthEntry>
      */
     public function loadAuth(): array
     {
-        if ($this->authCache !== null) {
+        $signature = $this->fileSignature();
+        if ($signature === null) {
+            $this->authCache = null;
+            $this->authCacheSignature = null;
+            return [];
+        }
+
+        if ($this->authCache !== null && $signature === $this->authCacheSignature) {
             return $this->authCache;
         }
 
-        if (!file_exists($this->authFilePath)) {
+        $raw = $this->readRawAuth();
+        if ($raw === null) {
             return [];
         }
 
-        $content = file_get_contents($this->authFilePath);
-        if ($content === false || $content === '') {
-            return [];
-        }
-
-        $data = json_decode($content, true);
-        if (!is_array($data)) {
-            return [];
-        }
-
-        $authData = [];
-        foreach ($data as $url => $entry) {
-            if (is_array($entry)) {
-                $authData[$url] = AuthEntry::fromArray($entry);
-            }
-        }
-
-        $this->authCache = $authData;
-        return $authData;
+        $this->authCache = $this->decodeEntries($raw);
+        $this->authCacheSignature = $signature;
+        return $this->authCache;
     }
 
     /**
@@ -530,18 +556,27 @@ final class OAuthClientRegistration
     public function clearCache(): void
     {
         $this->authCache = null;
+        $this->authCacheSignature = null;
     }
 
     /**
      * Delete auth data for a specific server.
      *
+     * Same locked read-modify-write as {@see saveAuth()}: removing one server
+     * must not resurrect or erase anybody else's row.
+     *
      * @param string $serverUrl The server URL to remove
      */
     public function deleteAuth(string $serverUrl): void
     {
-        $authData = $this->loadAuth();
-        unset($authData[$serverUrl]);
-        $this->writeAuthFile($authData);
+        $this->mutateAuthFile(static function (array $raw) use ($serverUrl): ?array {
+            if (!\array_key_exists($serverUrl, $raw)) {
+                return null;
+            }
+
+            unset($raw[$serverUrl]);
+            return $raw;
+        });
     }
 
     private function defaultAuthFilePath(): string
@@ -551,26 +586,169 @@ final class OAuthClientRegistration
     }
 
     /**
-     * @param array<string, AuthEntry> $authData
+     * Apply $mutate to the auth file's CURRENT contents and publish the result.
+     *
+     * $mutate receives the decoded file read fresh under the exclusive sidecar
+     * lock and returns the full map to write, or null for "nothing changed".
+     * Rows it does not touch are carried through as raw arrays, never
+     * round-tripped through {@see AuthEntry}, so a field a newer build added
+     * survives an older build's write.
+     *
+     * A file that exists but does not decode as a JSON object is REFUSED here,
+     * where it used to be overwritten. The old answer was the read path's `[]`
+     * used as the merge base, which is not forgiveness but deletion: every
+     * credential the file held was gone the moment the write landed, and the
+     * user was never told. Refusing names the file, keeps its bytes for the
+     * user to repair or remove, and matches the config writer's doctrine
+     * (`Bootstrap::userConfigForMerge()`). Our own writes can no longer produce
+     * such a file — they are atomic — so it means a hand edit or another tool.
+     *
+     * @param callable(array<array-key, mixed>): (array<array-key, mixed>|null) $mutate
      */
-    private function writeAuthFile(array $authData): void
+    private function mutateAuthFile(callable $mutate): void
     {
-        $dir = dirname($this->authFilePath);
-        if (!is_dir($dir) && mkdir($dir, 0700, true) === false) {
+        $dir = \dirname($this->authFilePath);
+        // Race-safe: a concurrent writer may create it between the two checks.
+        if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
             throw new \RuntimeException("Failed to create auth directory: {$dir}");
         }
 
-        $serializable = [];
-        foreach ($authData as $url => $entry) {
-            $serializable[$url] = $entry->toArray();
+        $lock = $this->acquireAuthLock();
+
+        try {
+            $raw = $this->readRawAuth();
+            if ($raw === null) {
+                throw new \RuntimeException(
+                    "Refusing to rewrite {$this->authFilePath}: it exists but is not a readable JSON object "
+                    . 'of MCP credentials, and overwriting it would drop every entry it holds. '
+                    . 'Repair or remove the file, then retry.'
+                );
+            }
+
+            $next = $mutate($raw);
+            if ($next !== null) {
+                // withPermissions() chmods the temp inode BEFORE a payload byte
+                // is written, and rename() carries that mode onto the target, so
+                // the tokens are never on disk with looser bits than 0600 —
+                // the old write chmod'ed only after the bytes had landed.
+                AtomicJsonFile::new($this->authFilePath)->withPermissions(0600)->write($next);
+                $raw = $next;
+            }
+
+            // The memo becomes the merged on-disk state, never "our map plus
+            // our one change".
+            $this->authCache = $this->decodeEntries($raw);
+            $this->authCacheSignature = $this->fileSignature();
+        } finally {
+            TimedFileLock::release($lock);
+            fclose($lock);
+        }
+    }
+
+    /**
+     * Take the exclusive lock that serialises {@see mutateAuthFile()}.
+     *
+     * A SIDECAR, never the auth file itself: every write replaces the file's
+     * inode by rename(), so a lock held on it would guard a file no longer on
+     * disk while the next writer locked the new inode unopposed. The sidecar is
+     * never unlinked for the same reason. Created under umask 077 — it holds no
+     * bytes, but whoever can open it can hold it and stall this user's logins.
+     * Fails CLOSED: a write that went ahead without the lock is exactly the
+     * lost update the lock exists to prevent.
+     *
+     * @return resource
+     */
+    private function acquireAuthLock()
+    {
+        $lockPath = $this->authFilePath . '.lock';
+
+        $umask = umask(0077);
+        try {
+            $fp = @fopen($lockPath, 'c');
+        } finally {
+            umask($umask);
         }
 
-        $json = json_encode($serializable, JSON_PRETTY_PRINT);
-        if (file_put_contents($this->authFilePath, $json, LOCK_EX) === false) {
-            throw new \RuntimeException("Failed to write auth file: {$this->authFilePath}");
+        if ($fp === false) {
+            throw new \RuntimeException("Failed to open auth lock file: {$lockPath}");
         }
-        chmod($this->authFilePath, 0600);
 
-        $this->authCache = $authData;
+        try {
+            TimedFileLock::acquire($fp, \LOCK_EX, $lockPath);
+        } catch (\RuntimeException $e) {
+            fclose($fp);
+            throw $e;
+        }
+
+        return $fp;
+    }
+
+    /**
+     * The auth file decoded, `[]` when it is missing or empty (nothing to
+     * lose), or null when it exists but is not a JSON object.
+     *
+     * A non-empty top-level LIST is refused like any other non-object: this
+     * file is always keyed by server URL. `[]` itself is accepted because the
+     * old writer encoded an empty map that way.
+     *
+     * @return array<array-key, mixed>|null
+     */
+    private function readRawAuth(): ?array
+    {
+        clearstatcache(true, $this->authFilePath);
+        if (!file_exists($this->authFilePath)) {
+            return [];
+        }
+
+        $content = @file_get_contents($this->authFilePath);
+        if ($content === false) {
+            return null;
+        }
+
+        if (trim($content) === '') {
+            return [];
+        }
+
+        $data = json_decode($content, true);
+        if (!is_array($data) || ($data !== [] && array_is_list($data))) {
+            return null;
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param array<array-key, mixed> $raw
+     * @return array<string, AuthEntry>
+     */
+    private function decodeEntries(array $raw): array
+    {
+        $authData = [];
+        foreach ($raw as $url => $entry) {
+            if (is_array($entry)) {
+                $authData[(string) $url] = AuthEntry::fromArray($entry);
+            }
+        }
+
+        return $authData;
+    }
+
+    /**
+     * Identity of the file currently at the auth path, or null when none is.
+     *
+     * Device + inode change on every rename() publish (ours and AtomicJsonFile
+     * users'); size, mtime and ctime catch an in-place edit by another tool.
+     *
+     * @return list<int>|null
+     */
+    private function fileSignature(): ?array
+    {
+        clearstatcache(true, $this->authFilePath);
+        $stat = @stat($this->authFilePath);
+        if ($stat === false) {
+            return null;
+        }
+
+        return [$stat['dev'], $stat['ino'], $stat['size'], $stat['mtime'], $stat['ctime']];
     }
 }
