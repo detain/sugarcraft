@@ -195,6 +195,41 @@ Pause files live under `<workflowsPath>/.running/*.json` — anchored to the
 registry's directory rather than to `~`, so a registry pointed somewhere trusted
 does not pause into a directory nobody vetted.
 
+### Pause, resume, status
+
+`<id>` is the run ID `/workflow run` prints (`three-1a2b3c4d`) or the workflow
+name; both resolve to the same run.
+
+- **`pause` on a live run** writes the pause file at once and asks the run to
+  stop. The stage in flight finishes, and the next stage is not started. The
+  run's own report then says **paused**, with the `/workflow resume` line to
+  continue it. Two edge cases. If the in-flight stage fails, the run reports
+  **failed** and the pause still stands. If it was the last stage, the run
+  completed and the pause file is withdrawn. While the run's turn holds the
+  prompt, slash commands are refused, so a live pause is typed after
+  `Esc Esc` releases the turn (that does not stop the run).
+- **`pause` on a finished run** records it. For a **failed** run this is the
+  recovery path: pause, fix the cause, resume, and the resume re-runs the
+  stage that failed. Pausing a completed run is allowed too. Resuming it runs
+  nothing and reports completed.
+- **Only stages that succeeded count.** `stagesCompleted` and the recorded
+  stage results are the successful prefix of the run, never the failed stage.
+  The token and cost totals are the run's whole spend, including what a failed
+  attempt spent.
+- **`resume`** continues after the last successful stage and reports
+  **completed**, **failed** or **paused** to match the result. Like `run`, it
+  runs as a turn that does not block the TUI, and it can be paused itself.
+  Its result covers the whole run: the stage list, "Stages completed" and the
+  totals include the paused leg. The pause file is **consumed** when the
+  resumed run completes or fails, and a second `resume` is refused. To retry
+  a resume that failed again, `pause` it again first.
+- **`status`** reports a live run as `running` (or `paused` once a pause is
+  requested), then the pause file's status, then a finished run's final status
+  (`completed` / `failed`) for runs this session performed.
+
+Granularity is still one whole stage. A `parallel` stage that is still running
+when an interrupt lands is re-run from scratch on resume.
+
 `WorkflowEngine` is handed the launch's model, provider and `PermissionGate`.
 The gate is consulted **before** the first sub-agent is dispatched, on the
 *declarations*: `refuseDeniedTools()` walks each task's `tools:` list and refuses

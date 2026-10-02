@@ -10689,11 +10689,19 @@ final class Chat implements Model
      * it (that instance is replaced on the very next `update()`), and capturing
      * `$this` would pin a stale model for the length of the run.
      */
-    private static function describeWorkflowResult(string $workflowName, WorkflowResult $result): string
+    private static function describeWorkflowResult(string $workflowName, WorkflowResult $result, bool $resumed = false): string
     {
-        $response = $result->isFailure()
-            ? "**Workflow '{$workflowName}' failed**\n\n"
-            : "**Workflow '{$workflowName}' completed**\n\n";
+        // The heading is chosen from the status, never assumed. AUDIT WF-2:
+        // `/workflow resume` printed "resumed and completed" for every result,
+        // so a resumed run that FAILED again, or was paused again, read as a
+        // success; and a run paused while live reported "completed".
+        $outcome = match (true) {
+            $result->status === WorkflowStatus::Paused => 'paused',
+            $result->isFailure() => 'failed',
+            $result->isSuccess() => 'completed',
+            default => $result->status->value,
+        };
+        $response = "**Workflow '{$workflowName}' " . ($resumed ? "resumed and {$outcome}" : $outcome) . "**\n\n";
         $response .= "ID: `{$result->workflowId}`\n";
         $response .= "Status: {$result->status->value}\n";
         $response .= "Stages completed: " . self::countDispatchedStages($result) . "\n";
@@ -10708,6 +10716,10 @@ final class Chat implements Model
         $failure = $result->firstFailure();
         if ($failure !== null && ($failure->error ?? '') !== '') {
             $response .= "\n\nStage '{$failure->stageName}': {$failure->error}";
+        }
+
+        if ($result->status === WorkflowStatus::Paused) {
+            $response .= "\n\nContinue it with `/workflow resume {$result->workflowId}`.";
         }
 
         return $response;
@@ -10808,6 +10820,13 @@ final class Chat implements Model
     /**
      * Handle /workflow pause command.
      *
+     * A LIVE run is reachable here: its fiber is suspended between agent polls
+     * whenever this runs. Note the turn it occupies refuses slash commands
+     * ({@see refuseInFlightCommand()}), so the user reaches this mid-run after
+     * double-Escape releases the turn (which does not stop the run). The engine
+     * then stops the run before its next stage, and the run's own report, when
+     * {@see driveWorkflowFiber()} delivers it, says `paused` (AUDIT WF-2).
+     *
      * Pause (cooperative here, or via WorkflowEngine's real SIGINT/SIGTERM
      * handling on a genuine interrupt) captures whatever whole stages have
      * actually completed so far. Resume granularity stays per-whole-stage
@@ -10827,8 +10846,22 @@ final class Chat implements Model
         }
 
         try {
+            // Asked BEFORE pausing, because the two cases mean different things
+            // to the user: a finished run is paused at once, while a LIVE one
+            // (its fiber suspended between agent polls) finishes the stage in
+            // flight and stops before the next — its report lands later, as
+            // `paused`, through the run's own fiber.
+            try {
+                $live = $this->workflowEngine->getStatus($workflowId) === WorkflowStatus::Running;
+            } catch (\Throwable) {
+                $live = false;
+            }
+
             $this->workflowEngine->pause($workflowId);
-            $response = "Workflow `{$workflowId}` has been paused.";
+            $response = $live
+                ? "Pause requested for workflow `{$workflowId}`: the stage in flight finishes, then the run "
+                    . "stops before the next one. `/workflow resume {$workflowId}` continues it."
+                : "Workflow `{$workflowId}` has been paused.";
         } catch (WorkflowNotRunningException $e) {
             $response = "**Error:** {$e->getMessage()}";
         } catch (\Throwable $e) {
@@ -10841,6 +10874,14 @@ final class Chat implements Model
     /**
      * Handle /workflow resume command.
      *
+     * Driven exactly like {@see workflowRun()}: the resume goes into a `\Fiber`
+     * stepped by {@see driveWorkflowFiber()}, `inFlight` is set, and the report
+     * arrives as the reply when it settles. AUDIT WF-2: it used to run
+     * synchronously inside `update()`, so a resumed run froze the TUI for its
+     * whole length and — since nothing else could run while it did — could
+     * never be paused. It also printed "resumed and completed" whatever the
+     * result was; the heading now comes from {@see describeWorkflowResult()}.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function workflowResume(string $inputText, string $args): array
@@ -10851,23 +10892,28 @@ final class Chat implements Model
             return $this->workflowHelpResponse($inputText, "Usage: /workflow resume <workflowId>");
         }
 
-        try {
-            $result = $this->workflowEngine->resume($workflowId);
-            $response = "**Workflow '{$workflowId}' resumed and completed**\n\n";
-            $response .= "ID: `{$result->workflowId}`\n";
-            $response .= "Status: {$result->status->value}\n";
-            $response .= "Stages completed: " . self::countDispatchedStages($result) . "\n";
-            $response .= "Total tokens: {$result->totalTokens}\n";
-            $response .= "Total cost: \${$result->totalCost}";
-        } catch (WorkflowNotRunningException $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        } catch (WorkflowNotFoundException $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        }
+        $engine = $this->workflowEngine;
 
-        return $this->workflowResponse($inputText, $response);
+        // Static for the reason workflowRun()'s fiber is: it outlives this Chat.
+        $fiber = new \Fiber(static function () use ($engine, $workflowId): string {
+            try {
+                return self::describeWorkflowResult($workflowId, $engine->resume($workflowId), resumed: true);
+            } catch (\Throwable $e) {
+                // WorkflowNotRunningException (nothing paused under that id),
+                // WorkflowNotFoundException (the definition is gone) and the
+                // engine's interleaving refusal all read the same to the user.
+                return "**Error:** {$e->getMessage()}";
+            }
+        });
+
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly()],
+            'inputBuf' => '',
+            // A resumed run is a turn exactly as a fresh one is; see workflowRun().
+            'inFlight' => true,
+        ]);
+
+        return [$next, $next->driveWorkflowFiber($fiber)];
     }
 
     /**

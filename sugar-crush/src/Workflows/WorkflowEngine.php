@@ -216,6 +216,38 @@ final class WorkflowEngine implements WorkflowEngineInterface
     private array $liveRunOwners = [];
 
     /**
+     * Every run whose stage loop is executing right now, keyed by a per-engine
+     * sequence number, innermost (nested) last.
+     *
+     * AUDIT WF-2: {@see pause()} used to read only {@see $resultsByName}, which
+     * {@see rememberResult()} fills after `run()` RETURNS — so the only thing
+     * `/workflow pause <id>` could act on was a run that had already ended,
+     * and pausing a name with a live run snapshotted the PREVIOUS run of that
+     * name. A run is genuinely pausable while it is live: `Chat` drives it in
+     * a `\Fiber` that suspends inside {@see AgentWorkerPool::idle()} while the
+     * forked agents work, and `Chat::update()` runs in that gap. This map is
+     * what that call finds.
+     *
+     * - `key` / `workflowId` / `loadPath`: the run's pause identity — the same
+     *   three values {@see installInterruptHandlers()} closes over.
+     * - `snapshot`: builds a {@see WorkflowResult} from the loop's LIVE
+     *   context, stage results and totals (by reference, as the interrupt
+     *   handler does), so a pause records exactly the stages that have
+     *   finished.
+     * - `pauseRequested`: set by a live {@see pause()}; the stage loop reads it
+     *   before starting each stage and stops with {@see WorkflowStatus::Paused}.
+     *
+     * Interleaving is still refused by {@see $liveRunOwners}, so at most one
+     * chain of NESTED runs is ever in here.
+     *
+     * @var array<int, array{key: string, workflowId: string, loadPath: ?string, snapshot: \Closure(WorkflowStatus): WorkflowResult, pauseRequested: bool}>
+     */
+    private array $liveRuns = [];
+
+    /** Source of {@see $liveRuns} keys. */
+    private int $liveRunSequence = 0;
+
+    /**
      * @param string $model    The model every stage's agent runs on. A workflow
      *        stage names an agent TYPE ('reviewer', 'coder'), never a model, so
      *        the model has to come from the run — and until this parameter
@@ -451,20 +483,39 @@ final class WorkflowEngine implements WorkflowEngineInterface
     /**
      * Persist the current state of a workflow so it can be resumed later.
      *
-     * Looks up the workflow result stored by run() (keyed by workflow name/path)
-     * and writes a pause file to `~/.sugar-crush/workflows/.running/{$workflowId}.json`
-     * containing: stages completed, context, stage results, token/cost totals, and timing.
+     * Writes a pause file to `<workflowsPath>/.running/<name>.json` containing:
+     * the stages that SUCCEEDED, the context, their stage results, the
+     * token/cost totals, and timing. Three cases, one serializer
+     * ({@see writePauseFile()}) for all of them and for the SIGINT/SIGTERM
+     * handler:
      *
-     * Called two ways: cooperatively (e.g. from the /workflow pause command,
-     * after a run has already finished or been externally tracked), and by
-     * installInterruptHandlers() (R28) when a real SIGINT/SIGTERM lands
-     * mid-run — in that second case $workflowId is whatever completed
-     * stages exist at the moment the signal arrived, not a finished run.
-     * Either way this only ever persists whole StageResult entries: a
-     * 'parallel' stage that was still in-flight when interrupted is not
-     * present in $result->stageResults at all, so it is not reflected here
-     * and will be re-run from scratch on resume() — there is no
-     * partial-credit capture for an in-progress parallel sub-stage.
+     *  - A LIVE run ({@see $liveRuns}) — `/workflow pause` while `Chat`'s
+     *    workflow fiber is suspended between agent polls. The file is written
+     *    at once from the stages that have finished, and the run is asked to
+     *    stop: its stage loop checks before starting each stage, ends with
+     *    {@see WorkflowStatus::Paused}, and rewrites the file with the final
+     *    set. The stage in flight is NOT interrupted — it finishes, is
+     *    recorded, and the next one is not started. If that stage fails,
+     *    the run reports Failed and the file keeps the successful prefix, so
+     *    a resume re-runs the failed stage. If it was the LAST stage, the run
+     *    simply completed and the file is withdrawn: there is nothing left to
+     *    resume.
+     *  - A FINISHED run this engine remembers. A FAILED one is the recovery
+     *    path — pause, fix the cause, resume — and resume re-runs the stage
+     *    that failed. A COMPLETED one is still accepted (it records the run,
+     *    and resuming it runs nothing and reports completed).
+     *  - Neither: {@see WorkflowNotRunningException}.
+     *
+     * AUDIT WF-2: `stagesCompleted` used to be `count($result->stageResults)`,
+     * which for a failed run INCLUDES the stage that failed — so resume
+     * skipped it, fed an empty `{{b.output}}` downstream and reported success.
+     * Only the successful prefix is counted and persisted now (the loop fails
+     * fast, so successes are always a prefix).
+     *
+     * Granularity is still per whole stage: a 'parallel' stage still running
+     * when the pause lands is not in the file, and is re-run from scratch on
+     * resume — there is no partial-credit capture for an in-progress parallel
+     * sub-stage.
      *
      * EITHER IDENTIFIER WORKS: the workflow name/path {@see run()} was called
      * with, or the `<name>-<hash>` run ID the transcript printed for it. The
@@ -474,10 +525,19 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * @param string $workflowId The workflow name/path used when calling run(),
      *        or the run ID printed for that run.
-     * @throws WorkflowNotRunningException When no result is found for this workflowId.
+     * @throws WorkflowNotRunningException When no live or finished run is found for this workflowId.
      */
     public function pause(string $workflowId): void
     {
+        $token = $this->liveRunFor($workflowId);
+        if ($token !== null) {
+            $this->liveRuns[$token]['pauseRequested'] = true;
+            $frame = $this->liveRuns[$token];
+            $this->writePauseFile($frame['key'], ($frame['snapshot'])(WorkflowStatus::Paused), $frame['loadPath']);
+
+            return;
+        }
+
         $key = $this->runKeyFor($workflowId);
         if ($key === null) {
             throw new WorkflowNotRunningException(
@@ -485,41 +545,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             );
         }
 
-        $result = $this->resultsByName[$key];
-        $pauseFile = $this->getPauseFilePath($key);
-
-        $data = [
-            // The RUN's own ID, not the key this was stored under: it is what the
-            // transcript showed the user, and recording it is what lets a later
-            // process resolve that spelling back to this file. `workflowPath` is
-            // the loadable name, and the two are deliberately different fields —
-            // writing the same string into both is what made a pause file taken
-            // after a resume unloadable, since resume()'s identifier is an ID.
-            'workflowId' => $result->workflowId,
-            'workflowPath' => $this->loadPathsByKey[$key] ?? $key,
-            'status' => WorkflowStatus::Paused->value,
-            'stagesCompleted' => count($result->stageResults),
-            'context' => $result->context,
-            'stageResults' => array_map(
-                fn(StageResult $sr) => $this->serializeStageResult($sr),
-                $result->stageResults,
-            ),
-            'totalTokens' => $result->totalTokens,
-            'totalCost' => $result->totalCost,
-            'startedAt' => $result->startedAt->format(\DateTimeInterface::ATOM),
-            'pausedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
-        ];
-
-        // Audit M4: the pre-fix write ignored file_put_contents' return (a
-        // failed pause silently lost the run) and wrote the live path
-        // directly (a crash mid-write tore the file resume() needs).
-        // AtomicJsonFile both throws on any failure and publishes by rename;
-        // callers that must survive a lost pause — the signal handler does —
-        // already wrap this in their own catch. 0600: the file holds the
-        // workflow's accumulated context verbatim.
-        AtomicJsonFile::new($pauseFile)
-            ->withPermissions(0600)
-            ->write($data);
+        $this->writePauseFile($key, $this->resultsByName[$key], $this->loadPathsByKey[$key] ?? null);
     }
 
     /**
@@ -528,19 +554,35 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * Accepts either identifier, for the reason {@see pause()} does — the run ID
      * the transcript printed, or the workflow name.
      *
-     * WHAT THIS DELIBERATELY DOES NOT CHANGE: the resumed result is not written
-     * back into {@see $resultsByName}, so a cooperative {@see pause()} after a
-     * resume persists the state of the run that was resumed FROM. Remembering it
-     * instead would be worse, not better, until stage accounting across a resume
-     * is fixed: a resumed {@see WorkflowResult} carries only the stages this call
-     * ran, so its `count($result->stageResults)` is a RESUME-relative number, and
-     * writing that into `stagesCompleted` would tell the next resume to restart
-     * partway through. The two halves of that (an honest total across resumes, and
-     * the "Stages completed" line the UI prints from it) belong to the same
-     * separate fix and are not attempted here.
+     * THE RESUMED RESULT IS ABSOLUTE, not resume-relative. The paused run's
+     * successful stage results are deserialized and seed the resumed run, and
+     * its token/cost totals and start time carry over, so the returned
+     * {@see WorkflowResult} covers the whole run: its stage list, "Stages
+     * completed", and totals are what the run as a whole did (AUDIT WF-2: the
+     * paused half's tokens and cost used to vanish from the totals). Because
+     * it is absolute, it is also remembered ({@see rememberResult()}) under
+     * the pause file's name, so a later {@see pause()} or {@see getStatus()}
+     * of the resumed run answers for the resumed run rather than for the one
+     * it was resumed from.
+     *
+     * THE PAUSE FILE IS CONSUMED once the resumed run finishes — completed or
+     * failed. It used to be left behind, so `/workflow status` said `paused`
+     * forever and every further resume re-ran the tail. A resumed run that is
+     * itself paused leaves the fresh file its pause wrote; a second resume of
+     * a run that has finished throws {@see WorkflowNotRunningException} (pause
+     * the remembered result again to retry a failure). A resume that throws
+     * before finishing leaves the file untouched.
+     *
+     * How many stages to skip: the file's `stagesCompleted`, capped at the
+     * successful prefix of its recorded `stageResults` when it records any —
+     * a file written before WF-2 counted the failed stage too, and re-running
+     * a stage is recoverable where skipping it is not. A file that records no
+     * stage results (an older hand-written shape) is trusted for its count,
+     * and the skipped stages are represented by results rebuilt from the
+     * context's `<stage>.output` entries.
      *
      * @param string $workflowId The run ID or the workflow name.
-     * @return WorkflowResult The final result after the resumed workflow completes.
+     * @return WorkflowResult The final result after the resumed workflow completes, fails, or is paused again.
      * @throws WorkflowNotRunningException When no pause file exists for this workflow.
      * @throws WorkflowNotFoundException   When the workflow definition can no longer be loaded.
      */
@@ -565,6 +607,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         $workflow = $this->registry->load($workflowPath);
+        $context = is_array($data['context'] ?? null) ? $data['context'] : [];
+        [$stagesCompleted, $prior] = $this->priorProgress($data, $workflow, $context);
 
         // The pause file's OWN name is the pause identity, not the string the
         // user typed: a second interrupt during this resumed run must land on the
@@ -574,14 +618,89 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // which for a run ID is not a name load() can resolve.
         $pauseKey = basename($pauseFile, '.json');
 
-        return $this->runFromWorkflow(
+        $pauseRequested = false;
+        $result = $this->runFromWorkflow(
             $workflow,
-            $data['context'] ?? [],
-            $data['stagesCompleted'] ?? 0,
+            $context,
+            $stagesCompleted,
             is_string($data['workflowId'] ?? null) && $data['workflowId'] !== '' ? $data['workflowId'] : $workflowId,
             $pauseKey,
             $workflowPath,
+            $prior,
+            $pauseRequested,
         );
+        $this->rememberResult($pauseKey, $result, $workflowPath);
+
+        // A pause requested during this resume rewrote (or withdrew) the file
+        // itself, and that file is the newer truth. Otherwise the file is the
+        // one this call consumed.
+        if (!$pauseRequested && is_file($pauseFile) && !@unlink($pauseFile) && is_file($pauseFile)) {
+            throw new \RuntimeException(
+                "Workflow '{$workflowId}' finished ({$result->status->value}) but its pause file "
+                . "'{$pauseFile}' could not be removed, so it would still read as paused"
+            );
+        }
+
+        return $result;
+    }
+
+    /**
+     * How far a pause file's run got: the stage index to resume at, and the
+     * prior progress to seed the resumed run with. See {@see resume()} for the
+     * rules.
+     *
+     * @param array<string, mixed> $data    the decoded pause file
+     * @param array<string, mixed> $context the pause file's context
+     * @return array{0: int, 1: array{stageResults: list<StageResult>, totalTokens: int, totalCost: float, startedAt: \DateTimeImmutable}}
+     */
+    private function priorProgress(array $data, Workflow $workflow, array $context): array
+    {
+        $recorded = is_numeric($data['stagesCompleted'] ?? null) ? max(0, (int) $data['stagesCompleted']) : 0;
+        $rows = is_array($data['stageResults'] ?? null) ? array_values($data['stageResults']) : [];
+
+        $succeeded = [];
+        foreach ($rows as $row) {
+            $stage = is_array($row) ? $this->deserializeStageResult($row) : null;
+            if ($stage === null || !$stage->isSuccess()) {
+                break;
+            }
+            $succeeded[] = $stage;
+        }
+
+        $skip = $rows === [] ? $recorded : min($recorded, count($succeeded));
+        $skip = min($skip, count($workflow->stages));
+        $prior = array_slice($succeeded, 0, $skip);
+
+        // Stages the file counts but does not record: stand-ins built from the
+        // definition and the output the context kept, so the resumed result's
+        // stage list still has one entry per stage the run has done.
+        $stages = array_values($workflow->stages);
+        for ($i = count($prior); $i < $skip; $i++) {
+            $name = (string) ($stages[$i]['name'] ?? "stage-{$i}");
+            $output = $context[$name . '.output'] ?? null;
+            $prior[] = new StageResult(
+                stageName: $name,
+                status: WorkflowStatus::Completed,
+                output: is_string($output) ? $output : null,
+            );
+        }
+
+        $totalTokens = 0;
+        $totalCost = 0.0;
+        foreach ($prior as $stage) {
+            $totalTokens += $this->sumTokens($stage);
+            $totalCost += $this->sumCost($stage);
+        }
+
+        return [$skip, [
+            'stageResults' => $prior,
+            // The file's totals when it has them: they include what a failed
+            // attempt spent, which is real spend even though its stage result is
+            // not carried forward.
+            'totalTokens' => is_numeric($data['totalTokens'] ?? null) ? (int) $data['totalTokens'] : $totalTokens,
+            'totalCost' => is_numeric($data['totalCost'] ?? null) ? (float) $data['totalCost'] : $totalCost,
+            'startedAt' => self::parseTime($data['startedAt'] ?? null) ?? new \DateTimeImmutable(),
+        ]];
     }
 
     /**
@@ -595,21 +714,45 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
-     * Return the current status of a workflow from its persisted pause file.
+     * Return the current status of a workflow run.
      *
-     * Accepts either identifier, for the reason {@see pause()} does.
+     * Accepts either identifier, for the reason {@see pause()} does. Answered
+     * from, in order:
+     *
+     *  1. a LIVE run on this engine — {@see WorkflowStatus::Running}, or
+     *     {@see WorkflowStatus::Paused} once a pause has been requested. First,
+     *     because a live run is the newest truth: a resumed run's pause file
+     *     still reads `paused` while the resume is executing.
+     *  2. the pause file — its recorded status.
+     *  3. a finished run this engine remembers — its final status, so a run
+     *     that completed, failed, or finished a resume is no longer reported
+     *     as whatever it last was on disk.
+     *
+     * AUDIT WF-2: this used to read only the pause file, so a live run, and a
+     * finished one never paused, were "not found", while a resumed run that
+     * had finished still read `paused` from the file resume() left behind.
      *
      * @param string $workflowId The run ID or the workflow name.
-     * @return WorkflowStatus The status stored in the pause file.
-     * @throws WorkflowNotRunningException When no pause file exists for this workflow.
+     * @return WorkflowStatus
+     * @throws WorkflowNotRunningException When this engine has no live or remembered run and no pause file exists.
      */
     public function getStatus(string $workflowId): WorkflowStatus
     {
+        $token = $this->liveRunFor($workflowId);
+        if ($token !== null) {
+            return $this->liveRuns[$token]['pauseRequested'] ? WorkflowStatus::Paused : WorkflowStatus::Running;
+        }
+
         $pauseFile = $this->pauseFileFor($workflowId);
 
         if ($pauseFile === null) {
+            $key = $this->runKeyFor($workflowId);
+            if ($key !== null) {
+                return $this->resultsByName[$key]->status;
+            }
+
             throw new WorkflowNotRunningException(
-                "No pause file found for workflow '{$workflowId}'"
+                "No pause file found for workflow '{$workflowId}', and no run of it on this engine"
             );
         }
 
@@ -780,6 +923,150 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
+     * {@see serializeStageResult()}'s inverse, for seeding a resumed run. Null
+     * for a row too damaged to stand for a stage (no name, unknown status).
+     *
+     * @param array<string, mixed> $row
+     */
+    private function deserializeStageResult(array $row): ?StageResult
+    {
+        $status = is_string($row['status'] ?? null) ? WorkflowStatus::tryFrom($row['status']) : null;
+        if ($status === null || !is_string($row['stageName'] ?? null)) {
+            return null;
+        }
+
+        $agents = [];
+        foreach (is_array($row['agents'] ?? null) ? $row['agents'] : [] as $agent) {
+            $agentStatus = is_array($agent) && is_string($agent['status'] ?? null)
+                ? AgentStatus::tryFrom($agent['status'])
+                : null;
+            if ($agentStatus === null) {
+                continue;
+            }
+            $agents[] = new AgentResult(
+                agentId: (string) ($agent['agentId'] ?? ''),
+                status: $agentStatus,
+                output: is_string($agent['output'] ?? null) ? $agent['output'] : null,
+                error: is_string($agent['error'] ?? null) ? new \RuntimeException($agent['error']) : null,
+                tokensUsed: is_numeric($agent['tokensUsed'] ?? null) ? (int) $agent['tokensUsed'] : 0,
+                costUsd: is_numeric($agent['costUsd'] ?? null) ? (float) $agent['costUsd'] : 0.0,
+                startedAt: self::parseTime($agent['startedAt'] ?? null),
+                completedAt: self::parseTime($agent['completedAt'] ?? null),
+            );
+        }
+
+        return new StageResult(
+            stageName: $row['stageName'],
+            status: $status,
+            output: is_string($row['output'] ?? null) ? $row['output'] : null,
+            error: is_string($row['error'] ?? null) ? $row['error'] : null,
+            agents: $agents,
+            startedAt: self::parseTime($row['startedAt'] ?? null) ?? new \DateTimeImmutable(),
+            completedAt: self::parseTime($row['completedAt'] ?? null),
+        );
+    }
+
+    private static function parseTime(mixed $value): ?\DateTimeImmutable
+    {
+        if (!is_string($value) || $value === '') {
+            return null;
+        }
+
+        try {
+            return new \DateTimeImmutable($value);
+        } catch (\Exception) {
+            return null;
+        }
+    }
+
+    /**
+     * The stages a run has DONE — the successful prefix of its results.
+     *
+     * The loop fails fast, so successes are always a prefix and the first
+     * failure ends it; stopping at the first non-success also keeps a stage
+     * that is neither out of the count, since re-running a stage on resume is
+     * recoverable and skipping one is not.
+     *
+     * @return list<StageResult>
+     */
+    private static function completedStages(WorkflowResult $result): array
+    {
+        $done = [];
+        foreach ($result->stageResults as $stage) {
+            if (!$stage->isSuccess()) {
+                break;
+            }
+            $done[] = $stage;
+        }
+
+        return $done;
+    }
+
+    /**
+     * Write the pause file for $result under $key — the ONE serializer behind
+     * a live pause, a finished-run pause, the stage loop's own stop, and the
+     * SIGINT/SIGTERM handler, so the format cannot drift between them.
+     *
+     * Only the successful prefix is persisted ({@see completedStages()}), and
+     * `stagesCompleted` is its length, so a resume re-runs a stage that failed
+     * instead of skipping it (AUDIT WF-2). The totals are the run's whole
+     * spend, a failed attempt's included.
+     */
+    private function writePauseFile(string $key, WorkflowResult $result, ?string $loadPath): void
+    {
+        $completed = self::completedStages($result);
+
+        $data = [
+            // The RUN's own ID, not the key this was stored under: it is what the
+            // transcript showed the user, and recording it is what lets a later
+            // process resolve that spelling back to this file. `workflowPath` is
+            // the loadable name, and the two are deliberately different fields —
+            // writing the same string into both is what made a pause file taken
+            // after a resume unloadable, since resume()'s identifier is an ID.
+            'workflowId' => $result->workflowId,
+            'workflowPath' => $loadPath ?? $key,
+            'status' => WorkflowStatus::Paused->value,
+            'stagesCompleted' => count($completed),
+            'context' => $result->context,
+            'stageResults' => array_map(
+                fn(StageResult $sr) => $this->serializeStageResult($sr),
+                $completed,
+            ),
+            'totalTokens' => $result->totalTokens,
+            'totalCost' => $result->totalCost,
+            'startedAt' => $result->startedAt->format(\DateTimeInterface::ATOM),
+            'pausedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+        ];
+
+        // Audit M4: the pre-fix write ignored file_put_contents' return (a
+        // failed pause silently lost the run) and wrote the live path
+        // directly (a crash mid-write tore the file resume() needs).
+        // AtomicJsonFile both throws on any failure and publishes by rename;
+        // callers that must survive a lost pause — the signal handler does —
+        // already wrap this in their own catch. 0600: the file holds the
+        // workflow's accumulated context verbatim.
+        AtomicJsonFile::new($this->getPauseFilePath($key))
+            ->withPermissions(0600)
+            ->write($data);
+    }
+
+    /**
+     * The {@see $liveRuns} key of the live run an identifier names — its pause
+     * key (the name) or its run ID — innermost first, or null when none is
+     * live.
+     */
+    private function liveRunFor(string $identifier): ?int
+    {
+        foreach (array_reverse($this->liveRuns, true) as $token => $frame) {
+            if ($frame['key'] === $identifier || $frame['workflowId'] === $identifier) {
+                return $token;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Execute a Workflow value object with the given context.
      *
      * Stages are executed sequentially in definition order. For each stage:
@@ -806,6 +1093,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @param string|null      $loadPath           The registry name this workflow can be re-loaded from, recorded
      *                                              in the pause file so resume() has something load() resolves.
      *                                              Null for a runFromPhp() workflow, which has no registry name.
+     * @param array{stageResults?: list<StageResult>, totalTokens?: int, totalCost?: float, startedAt?: \DateTimeImmutable} $prior
+     *                                              A resumed run's progress before this call (see
+     *                                              priorProgress()), so the result is absolute. Empty for a fresh run.
+     * @param bool             $pauseRequested     Out: whether a pause() was requested while this run was live —
+     *                                              in which case the run rewrote or withdrew its own pause file.
      * @return WorkflowResult
      */
     private function runFromWorkflow(
@@ -815,6 +1107,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
         ?string $workflowIdOverride,
         ?string $pauseId = null,
         ?string $loadPath = null,
+        array $prior = [],
+        bool &$pauseRequested = false,
     ): WorkflowResult {
         // The concurrency gate sits HERE rather than inside
         // installInterruptHandlers(), even though the signal-handler stack is
@@ -833,6 +1127,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $workflowIdOverride,
                 $pauseId,
                 $loadPath,
+                $prior,
+                $pauseRequested,
             );
         } finally {
             // In a finally so a throwing run cannot strand its slot and wedge
@@ -874,19 +1170,25 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * above has admitted this run.
      *
      * @param array<string, mixed> $context
+     * @param array{stageResults?: list<StageResult>, totalTokens?: int, totalCost?: float, startedAt?: \DateTimeImmutable} $prior
      */
     private function runGuardedFromWorkflow(
         Workflow $workflow,
         array $context,
         int $currentStageIndex,
         ?string $workflowIdOverride,
-        ?string $pauseId = null,
-        ?string $loadPath = null,
+        ?string $pauseId,
+        ?string $loadPath,
+        array $prior,
+        bool &$pauseRequested,
     ): WorkflowResult {
-        $startedAt = new \DateTimeImmutable();
-        $stageResults = [];
-        $totalTokens = 0;
-        $totalCost = 0.0;
+        // A resumed run starts from the paused run's progress, so everything
+        // it reports — stage list, totals, start time — covers the whole run
+        // and a later pause of it records the right stage count (AUDIT WF-2).
+        $startedAt = $prior['startedAt'] ?? new \DateTimeImmutable();
+        $stageResults = $prior['stageResults'] ?? [];
+        $totalTokens = $prior['totalTokens'] ?? 0;
+        $totalCost = $prior['totalCost'] ?? 0.0;
 
         // Clone context so we don't mutate the caller's array
         $context = [...$context];
@@ -909,16 +1211,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
             return new WorkflowResult(
                 workflowId: $resolvedWorkflowId,
                 status: WorkflowStatus::Failed,
-                stageResults: [new StageResult(
+                stageResults: [...$stageResults, new StageResult(
                     stageName: $refusedStageName,
                     status: WorkflowStatus::Failed,
                     error: $refusalMessage,
-                    startedAt: $startedAt,
+                    startedAt: new \DateTimeImmutable(),
                     completedAt: new \DateTimeImmutable(),
                 )],
                 context: $context,
-                totalTokens: 0,
-                totalCost: 0.0,
+                totalTokens: $totalTokens,
+                totalCost: $totalCost,
                 startedAt: $startedAt,
                 completedAt: new \DateTimeImmutable(),
             );
@@ -935,11 +1237,56 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $totalCost,
         );
 
+        // The live state a pause() can see while this loop runs — by reference,
+        // exactly as the interrupt handler above captures it, so a snapshot holds
+        // the stages that have FINISHED and nothing that is still in flight.
+        // (A full closure, not `fn`: an arrow function captures by value.)
+        $snapshot = static function (WorkflowStatus $status) use (
+            $resolvedWorkflowId,
+            $startedAt,
+            &$context,
+            &$stageResults,
+            &$totalTokens,
+            &$totalCost,
+        ): WorkflowResult {
+            return new WorkflowResult(
+                workflowId: $resolvedWorkflowId,
+                status: $status,
+                stageResults: $stageResults,
+                context: $context,
+                totalTokens: $totalTokens,
+                totalCost: $totalCost,
+                startedAt: $startedAt,
+                completedAt: new \DateTimeImmutable(),
+            );
+        };
+        $liveToken = ++$this->liveRunSequence;
+
         try {
+            $this->liveRuns[$liveToken] = [
+                'key' => $interruptId,
+                'workflowId' => $resolvedWorkflowId,
+                'loadPath' => $loadPath,
+                'snapshot' => $snapshot,
+                'pauseRequested' => false,
+            ];
+
             foreach ($workflow->stages as $stageIndex => $stage) {
                 // Skip stages that were already completed (resume support)
                 if ($stageIndex < $currentStageIndex) {
                     continue;
+                }
+
+                // A live pause() landed while the previous stage was in flight
+                // (Chat's fiber was suspended in the pool): stop before starting
+                // this one, and rewrite the file pause() wrote with the stage
+                // that has finished since.
+                if ($this->liveRuns[$liveToken]['pauseRequested']) {
+                    $pauseRequested = true;
+                    $paused = $snapshot(WorkflowStatus::Paused);
+                    $this->writePauseFile($interruptId, $paused, $loadPath);
+
+                    return $paused;
                 }
 
                 $stageStartedAt = new \DateTimeImmutable();
@@ -1009,34 +1356,41 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
                 // Fail fast: stop processing on first stage failure
                 if ($stageResult->isFailure()) {
-                    return new WorkflowResult(
-                        workflowId: $resolvedWorkflowId,
-                        status: WorkflowStatus::Failed,
-                        stageResults: $stageResults,
-                        context: $context,
-                        totalTokens: $totalTokens,
-                        totalCost: $totalCost,
-                        startedAt: $startedAt,
-                        completedAt: new \DateTimeImmutable(),
-                    );
+                    $failed = $snapshot(WorkflowStatus::Failed);
+
+                    // The stage in flight when a pause was requested failed.
+                    // The run did fail, and says so; the user's pause still
+                    // stands, recording the successful prefix, so a resume
+                    // re-runs the stage that failed.
+                    if ($this->liveRuns[$liveToken]['pauseRequested']) {
+                        $pauseRequested = true;
+                        $this->writePauseFile($interruptId, $failed, $loadPath);
+                    }
+
+                    return $failed;
                 }
             }
+
+            // A pause requested during the LAST stage has nothing left to stop:
+            // the run completed. The file pause() wrote at request time is
+            // withdrawn, or status would report a paused run with nothing to
+            // resume and stages missing from it.
+            if ($this->liveRuns[$liveToken]['pauseRequested']) {
+                $pauseRequested = true;
+                $pauseFile = $this->getPauseFilePath($interruptId);
+                if (is_file($pauseFile)) {
+                    @unlink($pauseFile);
+                }
+            }
+
+            return $snapshot(WorkflowStatus::Completed);
         } finally {
+            unset($this->liveRuns[$liveToken]);
+
             if ($previousAsyncSignals !== null) {
                 $this->restoreInterruptHandlers($previousAsyncSignals);
             }
         }
-
-        return new WorkflowResult(
-            workflowId: $resolvedWorkflowId,
-            status: WorkflowStatus::Completed,
-            stageResults: $stageResults,
-            context: $context,
-            totalTokens: $totalTokens,
-            totalCost: $totalCost,
-            startedAt: $startedAt,
-            completedAt: new \DateTimeImmutable(),
-        );
     }
 
     /**
@@ -2203,9 +2557,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 completedAt: new \DateTimeImmutable(),
             );
 
-            // Reuse the exact same pause() path a cooperative pause would
-            // take, so the persisted file format never drifts between the
-            // two code paths — INCLUDING the identifier bookkeeping, which is
+            // Reuse the exact same serializer (writePauseFile()) a cooperative
+            // pause uses, so the persisted file format never drifts between
+            // the code paths — INCLUDING the identifier bookkeeping, which is
             // what the two sites used to disagree about: this one keyed the
             // result map by the run ID while run() keyed it by the name, so
             // whether `/workflow pause <id>` worked depended on how the run had
@@ -2213,7 +2567,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $this->rememberResult($interruptId, $partialResult, $loadPath);
 
             try {
-                $this->pause($interruptId);
+                $this->writePauseFile($interruptId, $partialResult, $loadPath);
             } catch (\Throwable) {
                 // Best-effort: still exit below even if pause() itself
                 // couldn't write (e.g. unwritable pause dir) — resuming
