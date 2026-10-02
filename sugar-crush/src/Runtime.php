@@ -428,6 +428,13 @@ final class Runtime
     private ?bool $writeSinceLastRender = null;
 
     /**
+     * The last build's deferred enabled-skill bodies — see {@see skillDeferrals()}.
+     *
+     * @var array<string, string>
+     */
+    private array $skillDeferrals = [];
+
+    /**
      * The built-in tool names a step may have written the working tree
      * through, as {@see isWriteCapableTool()} reads them.
      *
@@ -3625,69 +3632,13 @@ final class Runtime
         }
 
         if ($app->instructionLoader !== null) {
-            $loader = $app->instructionLoader;
+            // Audit 15d-09 / C3: priced by {@see planInstructionDocuments()}, the
+            // one definition of which documents inline and which defer — shared
+            // with the launch notice that tells the user what was left out
+            // (audit R1), so the two cannot disagree on a verdict.
+            $plan = self::planInstructionDocuments($app->instructionLoader);
 
-            // Audit 15d-09 / C3: the same budget-and-pointer design as the
-            // standing rules — one running budget per build in loader order, the
-            // pointer fence's worst case reserved up front so a deferred document
-            // can always name itself, and a document that does not fit rendered
-            // as one pointer line rather than clipped. loadDocuments() rather
-            // than loadRoot()/loadForced() because the pointer must NAME the file,
-            // and those two return bare strings.
-            $docRemaining = self::MAX_INSTRUCTION_BYTES - self::instructionDeferReserve();
-            $docDeferred = [];
-            $docOverflow = 0;
-
-            foreach ($loader->loadDocuments() as $document) {
-                $doc = $document['body'];
-
-                if ($doc !== null && trim($doc) === '') {
-                    continue;
-                }
-
-                // P5.S3: an instruction document is CONTENT — AGENTS.md
-                // travels with a cloned repository as surely as a commit
-                // subject does. Escape it before wrapping so a checked-in
-                // `</env>` cannot eject the prompt out of a later fence;
-                // the roster-wide rationale is in PromptFence, and this
-                // site carries the fourth production fence, which is
-                // constructed inline and therefore reaches the authority
-                // here rather than through any block's render().
-                // P5.S6: the authority preamble rides inside the fence,
-                // directly under the opener and split from the escaped
-                // body by a blank line — the same header-over-entries
-                // shape MemoryBlock gives its own notes, so the bytes
-                // that tell the model who authored the layer stay put
-                // whatever the document then tries to sound like.
-                $framed = $doc === null ? null : "<project-instructions>\n" . self::INSTRUCTIONS_AUTHORITY_PREAMBLE . "\n\n"
-                    . PromptFence::escape($doc) . "\n</project-instructions>";
-
-                // A null body is a document the loader would not read at all — it
-                // has already recorded why. Otherwise the decision is made here,
-                // on the framed bytes, and recorded on the loader so the refusal
-                // seam is the one place either verdict can be found.
-                if ($framed === null || strlen($framed) > self::MAX_INSTRUCTION_DOCUMENT_BYTES || strlen($framed) > $docRemaining) {
-                    if ($framed !== null) {
-                        $loader->recordDeferral($document['path'], strlen($framed) > self::MAX_INSTRUCTION_DOCUMENT_BYTES
-                            ? 'renders to ' . number_format(strlen($framed)) . ' framed prompt bytes, over the '
-                                . number_format(self::MAX_INSTRUCTION_DOCUMENT_BYTES) . '-byte per-document instruction budget; '
-                                . 'deferred to a pointer line'
-                            : 'renders to ' . number_format(strlen($framed)) . ' framed prompt bytes, more than the '
-                                . number_format(max(0, $docRemaining)) . ' left of the '
-                                . number_format(self::MAX_INSTRUCTION_BYTES) . '-byte combined instruction budget; '
-                                . 'deferred to a pointer line');
-                    }
-
-                    if (count($docDeferred) < self::MAX_INSTRUCTION_POINTERS) {
-                        $docDeferred[] = \SugarCraft\Crush\Context\InstructionFileLoader::pointer($document['path'], $document['bytes']);
-                    } else {
-                        ++$docOverflow;
-                    }
-
-                    continue;
-                }
-
-                $docRemaining -= strlen($framed);
+            foreach ($plan['inline'] as $framed) {
                 $sections[] = $this->section(
                     '<project-instructions>',
                     Stability::PerSession,
@@ -3695,15 +3646,15 @@ final class Runtime
                 );
             }
 
-            if ($docDeferred !== []) {
+            if ($plan['pointers'] !== []) {
                 $sections[] = $this->section(
                     '<project-instructions>',
                     Stability::PerSession,
                     self::standingDeferFence(
                         'project-instructions',
                         self::INSTRUCTIONS_AUTHORITY_PREAMBLE,
-                        $docDeferred,
-                        $docOverflow,
+                        $plan['pointers'],
+                        $plan['overflow'],
                         self::INSTRUCTION_DEFERRED_NOTE,
                     ),
                 );
@@ -3765,55 +3716,36 @@ final class Runtime
         // is scope-selected rather than searched, and for what it costs.
         $sections[] = $this->memorySnapshot($app);
 
-        // Audit 15d-09: enabled skill bodies were spliced whole, while
-        // CompactorConfig has carried a per-skill and a combined skill budget all
-        // along. Those are the figures spent here, in tokens as they are written,
-        // measured with TokenEstimate::ofText() — the estimator Chat's tiers use,
-        // which is ceil(bytes / 4) on ASCII and heavier on CJK and emoji, where a
-        // plain bytes-per-token conversion would admit three to six times the
-        // budget. The defaults are read because the App carries no compactor
-        // config; Chat's own instance is the only other reader of these fields.
-        //
-        // WHY NOT ContextCompactor::filterSkills(), the dormant consumer of the
-        // same two fields: it truncates an over-budget body with an ellipsis and
-        // then drops whole skills least-recently-invoked first, by a
-        // `lastInvokedAt` an enabled skill does not have — so it would hand the
-        // model half a skill's steps as if they were all of them, and silently
-        // lose the first-enabled skill. Both are the outcomes the instruction and
-        // rule budgets above refuse. It is left as it is, unwired, not removed.
-        $skillBudget = \SugarCraft\Crush\Context\CompactorConfig::new();
-        $skillTokensLeft = $skillBudget->skillBudgetCombined;
+        // Audit 15d-09: enabled skill bodies are held to CompactorConfig's
+        // per-skill and combined budgets — priced by {@see planEnabledSkills()},
+        // shared with the launch notice (audit R1). The budget is the App's own
+        // compactor config when it carries one, else the defaults (R1: the App
+        // carried none, so a configured budget could never reach this splice).
         $enabledSkillNames = [];
-        foreach ($app->enabledSkills as $skill) {
-            if ($skill instanceof \SugarCraft\Crush\Skills\Skill) {
-                $contribution = $skill->systemPromptContribution();
-                $tokens = \SugarCraft\Crush\Util\TokenEstimate::ofText($contribution);
+        $deferrals = [];
+        foreach (self::planEnabledSkills($app->enabledSkills, $app->compactorConfig ?? \SugarCraft\Crush\Context\CompactorConfig::new()) as $planned) {
+            $skill = $planned['skill'];
 
-                if ($tokens > $skillBudget->skillBudgetPerSkill || $tokens > $skillTokensLeft) {
-                    // Over budget: the body is not delivered and not clipped. Its
-                    // heading stays, so the skill still reads as enabled, and
-                    // the pointer under it says how to get the body; it is kept
-                    // out of the listing below like any enabled skill, because
-                    // the pointer already names it.
-                    $contribution = self::deferredSkillContribution($skill, $tokens, $skillBudget);
-                } else {
-                    $skillTokensLeft -= $tokens;
-                }
-
-                // The leading "\n\n" is load-bearing, not a doubling to strip:
-                // systemPromptContribution() already opens with its own "\n\n",
-                // and the pre-refactor append added a second on top, so a skill
-                // body lands under three blank lines (four newlines) — bytes the
-                // golden froze at P2.S2. A body that starts "\n\n" is exactly
-                // what assemblePrompt() refuses to re-separate.
-                $sections[] = $this->section(
-                    '',
-                    Stability::PerTurn,
-                    "\n\n" . $contribution,
-                );
-                $enabledSkillNames[] = $skill->name;
+            // RECORDED, not only rendered (audit R1): a deferred body used to
+            // exist nowhere but inside the prompt it was missing from.
+            if ($planned['deferral'] !== null) {
+                $deferrals[$skill->name] = $planned['deferral'];
             }
+
+            // The leading "\n\n" is load-bearing, not a doubling to strip:
+            // systemPromptContribution() already opens with its own "\n\n",
+            // and the pre-refactor append added a second on top, so a skill
+            // body lands under three blank lines (four newlines) — bytes the
+            // golden froze at P2.S2. A body that starts "\n\n" is exactly
+            // what assemblePrompt() refuses to re-separate.
+            $sections[] = $this->section(
+                '',
+                Stability::PerTurn,
+                "\n\n" . $planned['contribution'],
+            );
+            $enabledSkillNames[] = $skill->name;
         }
+        $this->skillDeferrals = $deferrals;
 
         // Level-1 metadata for every DISCOVERED skill (name + description
         // only), distinct from the full bodies the explicitly-enabled skills
@@ -3960,6 +3892,91 @@ final class Runtime
     }
 
     /**
+     * Which instruction documents one prompt build inlines and which it defers
+     * to a pointer line — audit 15d-09 / C3's budget, as one definition.
+     *
+     * The same budget-and-pointer design as the standing rules: one running
+     * budget per build in loader order, the pointer fence's worst case reserved
+     * up front so a deferred document can always name itself, and a document
+     * that does not fit rendered as one pointer line rather than clipped.
+     * loadDocuments() rather than loadRoot()/loadForced() because the pointer
+     * must NAME the file, and those two return bare strings.
+     *
+     * STATIC AND PUBLIC FOR THE LAUNCH NOTICE (audit R1): nothing drained the
+     * loader's {@see \SugarCraft\Crush\Context\InstructionFileLoader::refusedPaths()},
+     * so a CLAUDE.md the prompt left out reached the model as a pointer and
+     * the user as nothing. {@see \SugarCraft\Crush\Cli\Bootstrap::reportPromptBudgetDeferrals()}
+     * runs this at construction time against the launch's own loader, and the
+     * verdicts it then reports are the ones every build makes, because they are
+     * made here and only here. Every deferral is recorded on the loader, so its
+     * refusal map is the one place either kind of verdict can be found.
+     *
+     * @return array{inline: list<string>, pointers: list<string>, overflow: int}
+     *         the framed documents to inline in order, the pointer lines for the
+     *         deferral fence, and how many further deferrals the fence counts
+     */
+    public static function planInstructionDocuments(\SugarCraft\Crush\Context\InstructionFileLoader $loader): array
+    {
+        $docRemaining = self::MAX_INSTRUCTION_BYTES - self::instructionDeferReserve();
+        $inline = [];
+        $docDeferred = [];
+        $docOverflow = 0;
+
+        foreach ($loader->loadDocuments() as $document) {
+            $doc = $document['body'];
+
+            if ($doc !== null && trim($doc) === '') {
+                continue;
+            }
+
+            // P5.S3: an instruction document is CONTENT — AGENTS.md travels with
+            // a cloned repository as surely as a commit subject does. Escape it
+            // before wrapping so a checked-in `</env>` cannot eject the prompt
+            // out of a later fence; the roster-wide rationale is in PromptFence,
+            // and this site carries the fourth production fence, which is
+            // constructed inline and therefore reaches the authority here rather
+            // than through any block's render().
+            // P5.S6: the authority preamble rides inside the fence, directly
+            // under the opener and split from the escaped body by a blank line —
+            // the same header-over-entries shape MemoryBlock gives its own
+            // notes, so the bytes that tell the model who authored the layer
+            // stay put whatever the document then tries to sound like.
+            $framed = $doc === null ? null : "<project-instructions>\n" . self::INSTRUCTIONS_AUTHORITY_PREAMBLE . "\n\n"
+                . PromptFence::escape($doc) . "\n</project-instructions>";
+
+            // A null body is a document the loader would not read at all — it
+            // has already recorded why. Otherwise the decision is made here, on
+            // the framed bytes, and recorded on the loader so the refusal seam is
+            // the one place either verdict can be found.
+            if ($framed === null || strlen($framed) > self::MAX_INSTRUCTION_DOCUMENT_BYTES || strlen($framed) > $docRemaining) {
+                if ($framed !== null) {
+                    $loader->recordDeferral($document['path'], strlen($framed) > self::MAX_INSTRUCTION_DOCUMENT_BYTES
+                        ? 'renders to ' . number_format(strlen($framed)) . ' framed prompt bytes, over the '
+                            . number_format(self::MAX_INSTRUCTION_DOCUMENT_BYTES) . '-byte per-document instruction budget; '
+                            . 'deferred to a pointer line'
+                        : 'renders to ' . number_format(strlen($framed)) . ' framed prompt bytes, more than the '
+                            . number_format(max(0, $docRemaining)) . ' left of the '
+                            . number_format(self::MAX_INSTRUCTION_BYTES) . '-byte combined instruction budget; '
+                            . 'deferred to a pointer line');
+                }
+
+                if (count($docDeferred) < self::MAX_INSTRUCTION_POINTERS) {
+                    $docDeferred[] = \SugarCraft\Crush\Context\InstructionFileLoader::pointer($document['path'], $document['bytes']);
+                } else {
+                    ++$docOverflow;
+                }
+
+                continue;
+            }
+
+            $docRemaining -= strlen($framed);
+            $inline[] = $framed;
+        }
+
+        return ['inline' => $inline, 'pointers' => $docDeferred, 'overflow' => $docOverflow];
+    }
+
+    /**
      * The worst case of the instruction-document deferral fence, reserved out of
      * {@see self::MAX_INSTRUCTION_BYTES} before the first document is priced —
      * {@see self::standingDeferReserve()}'s argument and arithmetic for the one
@@ -3975,6 +3992,87 @@ final class Runtime
 
         return strlen("<project-instructions>\n") + strlen(self::INSTRUCTIONS_AUTHORITY_PREAMBLE)
             + strlen("\n\n") + $interior + strlen("\n</project-instructions>");
+    }
+
+    /**
+     * What each enabled skill contributes to one prompt build, in enabled
+     * order — its body, or, over budget, its heading and a pointer — and why a
+     * deferred one was deferred.
+     *
+     * Audit 15d-09: CompactorConfig has carried a per-skill and a combined skill
+     * budget all along. Those are the figures spent here, in tokens as they are
+     * written, measured with TokenEstimate::ofText() — the estimator Chat's
+     * tiers use, which is ceil(bytes / 4) on ASCII and heavier on CJK and emoji,
+     * where a plain bytes-per-token conversion would admit three to six times
+     * the budget. Over budget, the body is not delivered and not clipped: its
+     * heading stays, so the skill still reads as enabled, and the pointer under
+     * it says how to get the body; it is kept out of the listing like any
+     * enabled skill, because the pointer already names it.
+     *
+     * WHY NOT ContextCompactor::filterSkills(), the dormant consumer of the
+     * same two fields: it truncates an over-budget body with an ellipsis and
+     * then drops whole skills least-recently-invoked first, by a
+     * `lastInvokedAt` an enabled skill does not have — so it would hand the
+     * model half a skill's steps as if they were all of them, and silently lose
+     * the first-enabled skill. Both are the outcomes the instruction and rule
+     * budgets refuse. It is left as it is, unwired, not removed.
+     *
+     * STATIC AND PUBLIC FOR THE LAUNCH NOTICE (audit R1), for the reason
+     * {@see planInstructionDocuments()} is: one definition of the verdict, so
+     * the row that tells the user a skill body was left out cannot disagree
+     * with the prompt that left it out. Entries that are not a
+     * {@see \SugarCraft\Crush\Skills\Skill} are skipped, as the splice always
+     * skipped them.
+     *
+     * @param array<array-key, mixed> $enabledSkills
+     * @return list<array{skill: \SugarCraft\Crush\Skills\Skill, contribution: string, deferral: ?string}>
+     */
+    public static function planEnabledSkills(array $enabledSkills, \SugarCraft\Crush\Context\CompactorConfig $budget): array
+    {
+        $tokensLeft = $budget->skillBudgetCombined;
+        $plan = [];
+
+        foreach ($enabledSkills as $skill) {
+            if (!$skill instanceof \SugarCraft\Crush\Skills\Skill) {
+                continue;
+            }
+
+            $contribution = $skill->systemPromptContribution();
+            $tokens = \SugarCraft\Crush\Util\TokenEstimate::ofText($contribution);
+            $deferral = null;
+
+            if ($tokens > $budget->skillBudgetPerSkill || $tokens > $tokensLeft) {
+                $deferral = 'about ' . number_format($tokens) . ' tokens, over '
+                    . ($tokens > $budget->skillBudgetPerSkill
+                        ? 'the ' . number_format($budget->skillBudgetPerSkill) . '-token per-skill budget'
+                        : 'the ' . number_format(max(0, $tokensLeft)) . ' tokens left of the '
+                            . number_format($budget->skillBudgetCombined) . '-token combined skill budget');
+                $contribution = self::deferredSkillContribution($skill, $tokens, $budget);
+            } else {
+                $tokensLeft -= $tokens;
+            }
+
+            $plan[] = ['skill' => $skill, 'contribution' => $contribution, 'deferral' => $deferral];
+        }
+
+        return $plan;
+    }
+
+    /**
+     * The enabled skills whose bodies the most recent prompt build deferred
+     * for budget, keyed by skill name, mapped to why (audit R1).
+     *
+     * Before this, a deferral existed only as the pointer line inside the
+     * prompt it was missing from: nothing a caller, a doctor report or a test
+     * could ask. Current, not accumulated: a skill that fits on a later build
+     * leaves the map, because the question this answers is "what is the model
+     * not seeing", and that is per build.
+     *
+     * @return array<string, string>
+     */
+    public function skillDeferrals(): array
+    {
+        return $this->skillDeferrals;
     }
 
     /**

@@ -38,7 +38,8 @@ volatile `<env>` block last. Counted from the live method, there are eleven slot
    clipped: it becomes one `InstructionFileLoader::pointer()` line, naming the file and its size,
    in a deferral fence, and a `refusedPaths()` entry. An `@import` that would carry its document
    past that ceiling is replaced at its import site by an `import-deferred` note carrying the same
-   pointer line.
+   pointer line. The verdicts are made in one place, `Runtime::planInstructionDocuments()`, which
+   the launch also runs so one launch notice can name each file left out and why (audit R1).
 7. **Project-tier rules** — the same `project-instructions` fence and preamble as the documents,
    because the authorship claim is identical: bytes shipped inside the checkout. A
    `paths:`-scoped project rule is skipped here the same way.
@@ -49,7 +50,9 @@ volatile `<env>` block last. Counted from the live method, there are eleven slot
    `PromptFence::escape()`. Held to `CompactorConfig`'s `skillBudgetPerSkill` and
    `skillBudgetCombined` tokens, measured with `TokenEstimate::ofText()`: a body over either keeps
    its `## Skill:` heading and is replaced by one line saying how to load it (the Skill tool, or
-   Read on its file), never clipped.
+   Read on its file), never clipped. The budgets are the App's `compactorConfig` when it carries
+   one, else `CompactorConfig::new()`'s defaults; each build records its deferrals on
+   `Runtime::skillDeferrals()`, and the launch names them in one notice (audit R1).
 10. **Skill listing** — `SkillMatcher::listForPrompt()` names the remaining *discovered* skills at
     level-1 metadata (name and description), excluding those whose bodies the previous slot
     already carries. PerTurn. Fenced `available-skills` with the skill-listing preamble, because

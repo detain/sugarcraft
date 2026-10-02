@@ -218,7 +218,8 @@ ceiling is in force, the provider's stop verdict now reaches the transcript as
 a system notice instead of a silently truncated turn.
 
 Its value is a positive token count; a fraction truncates toward zero (`2047.9`
-asks for 2047), and zero, negatives or non-numbers mean unset. There is no
+asks for 2047), and zero, negatives or non-numbers mean unset — and say so: the
+launch raises one notice naming the value it ignored (audit R12). There is no
 upper bound — the model's own limit is the provider's to enforce, and its
 rejection is the honest answer — except that a value too large to be an integer
 at all (`1e19`, or an over-long numeric string) also means unset, because no
@@ -274,7 +275,8 @@ as a self-hosted SGLang server. It is user-tier only for the
 `maxOutputTokens` reason squared: the key multiplies billed calls, so raising it
 from a checked-out repository would spend the operator's credential on the
 project's behalf. Nonsense values (non-integer, zero, negative) resolve to the
-default, never clamp upward. An integral float such as `8.0` is a whole number
+default, never clamp upward, and the launch says so in one notice naming the
+value (audit R12); an absent key, `null` or `""` is unset, not nonsense. An integral float such as `8.0` is a whole number
 and counts; `1.5` does not. There is no upper bound, but the bound stops at
 what an integer can hold: a value too large to be one (`1e19`, or a numeric
 string such as `"99999999999999999999"`) resolves to the default as well,
@@ -628,14 +630,17 @@ ENDS — so the warning that your tools had been cut to `Bash` arrived after the
 So the same sentence is also seeded into the **transcript**, as a system row,
 before the first frame paints. That is the copy an interactive operator reads;
 the stderr copy is unchanged and is not going away. Note that the transcript
-copy is part of the conversation, so the model is told as well — which is the
-honest state of affairs, since the model is the party whose tools were taken.
+copy is a UI-only row: since audit 15b-03 a launch notice is never sent to the
+model, so a long list costs the transcript space, not tokens on every turn.
 
 The three warnings this paragraph used to name as still-stderr-only — an
 unusable provider, a skipped hook file, a rejected permission pattern — have
 since migrated through the same seam, along with the agent-preset degradations,
 the refused project directories, the skipped skill files, the skipped command
-files (E172), the unreadable memory notes and the empty tool set:
+files (E172), the unreadable memory notes, the instruction files and enabled
+skill bodies the system prompt leaves out for budget (audit R1), a nonsense
+`maxToolSteps` or `maxOutputTokens` (audit R12) and the empty tool set — the
+reports that can raise several rows share one call site:
 **twenty-three** call sites in total (`grep -c 'self::warnPermissionConfigInTranscript('
 src/Cli/Bootstrap.php`, which agrees with the token scan in
 `BootstrapTranscriptSeamCallSiteCensusTest` today; `grep` for the bare

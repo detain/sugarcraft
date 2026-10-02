@@ -26,6 +26,7 @@ use SugarCraft\Crush\Context\RuleLoader;
 use SugarCraft\Crush\Context\RulePathNudge;
 use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Crush\Diagnostics\TuiErrorLog;
 use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookConfig;
 use SugarCraft\Crush\Hooks\HookManager;
@@ -175,11 +176,13 @@ final class Bootstrap
      * The most launch notices one launch may seed a transcript with.
      *
      * A CAP ON A LIST THAT NOTHING ELSE BOUNDS. {@see $launchNotices} feeds
-     * {@see Chat::withLaunchNotices()}, which turns each entry into a
-     * {@see Role::System} row of the conversation — so the list is not merely
-     * rendered, it is SENT TO THE MODEL on the first turn and on every turn
-     * after it. That makes an unbounded list a per-token cost for the whole
-     * session, not a scrolling nuisance.
+     * {@see Chat::withLaunchNotices()}, which turns each entry into a UI-only
+     * {@see Role::System} row of the transcript. WHAT THIS SAID: that the list
+     * was SENT TO THE MODEL on every turn, making an unbounded list a per-token
+     * cost for the whole session. WHAT IS TRUE NOW: since audit 15b-03 a launch
+     * notice never reaches the model, so the cost is the transcript's — a wall
+     * of rows the user scrolls past, which buries the one that matters. That
+     * is still worth a cap, for the clutter reason alone.
      *
      * Most of the sources are bounded at one per launch: the skill-skip count,
      * the untrusted `hooks.yaml`, the empty tool set, the project tier's tool
@@ -191,9 +194,19 @@ final class Bootstrap
      * this seam.) {@see reportProjectTierRefusals()} adds one per refused
      * DIRECTORY, and its doc-block names eight feeding subsystems.
      * {@see permissionRules()} adds one whole-key complaint. So 18 is the most a
-     * launch reaches without a per-ENTRY fan-out, and 24 clears that with
-     * headroom while still refusing to let a config with fifty malformed rules
-     * become the transcript. The overflow is COUNTED and reported as one
+     * launch reached without a per-ENTRY fan-out when 24 was chosen, which
+     * cleared it with headroom while still refusing to let a config with fifty
+     * malformed rules become the transcript.
+     *
+     * THAT HEADROOM IS NOW SPENT, stated rather than hidden: later bounded
+     * sources — the command-skip row, {@see reportMemorySkips()}' two,
+     * {@see reportPromptBudgetDeferrals()}' two (audit R1) and
+     * {@see reportNonsenseLimits()}' two (audit R12) and
+     * {@see reportTuiErrorLogFallback()}'s one — take the theoretical worst
+     * case to 26. It is left at 24 because each of those rows needs its
+     * own distinct misconfiguration to fire, and a launch that does hit the
+     * cap loses nothing silently: the overflow row below counts it, and stderr
+     * carries every row. The overflow is COUNTED and reported as one
      * trailing row — see {@see launchNotices()} — rather than dropped, because a
      * silently truncated warning list is the defect this seam exists to end.
      */
@@ -220,6 +233,14 @@ final class Bootstrap
     /**
      * Appended to a clipped notice, and counted against
      * {@see LAUNCH_NOTICE_MAX_CHARS} so the row never exceeds it.
+     *
+     * "ON STDERR" IS TRUE HERE, unlike the runtime sink's suffix (which since
+     * audit C4 names the TUI error log): a launch row's full text is written by
+     * {@see warnPermissionConfig()} with `fwrite(STDERR, …)`, not `error_log()`,
+     * so `TuiErrorLog`'s redirect of the `error_log` ini never touches it, and
+     * it is written at construction time, before `Program` takes the terminal
+     * — it sits on the main screen under the alt screen and is there after the
+     * session exits.
      */
     private const LAUNCH_NOTICE_CLIP_SUFFIX = '… (clipped; full text on stderr)';
 
@@ -315,6 +336,66 @@ final class Bootstrap
      */
     public const SKILL_SKIP_NOTICE_FORMAT =
         '%d skill file%s %s not loaded (unreadable, or shadowed by a same-named skill); set %s=1 to list %s';
+
+    /**
+     * The aggregate row {@see reportPromptBudgetDeferrals()} raises for
+     * instruction files the system prompt leaves out (audit R1).
+     *
+     * `%d` the count, `%s` the noun plural, `%s` was/were, `%s` the
+     * `path (reason); …` list. The reasons are the loader's and the splice's
+     * own words ({@see InstructionFileLoader::refusedPaths()}), so the row
+     * says over WHICH budget, or that the file resolved out of the checkout,
+     * without a second vocabulary for the same verdicts.
+     */
+    public const INSTRUCTION_DEFERRAL_NOTICE_FORMAT =
+        '%d instruction file%s %s left out of the system prompt — %s';
+
+    /**
+     * The aggregate row {@see reportPromptBudgetDeferrals()} raises for enabled
+     * skills whose bodies are over the skill budget (audit R1).
+     *
+     * `%d` the count, `%s` the noun plural, `%s` is/are, `%s` its/their, `%s`
+     * the `name (reason); …` list.
+     */
+    public const SKILL_BUDGET_DEFERRAL_NOTICE_FORMAT =
+        '%d enabled skill%s %s over the skill budget, so only %s heading and a pointer reach the system prompt — %s';
+
+    /**
+     * The row {@see reportNonsenseLimits()} raises for a `maxToolSteps` or
+     * `maxOutputTokens` value its resolver will not use (audit R12).
+     *
+     * `%s` the key, `%s` the value as JSON, `%s` what the key takes, `%s` what
+     * happens instead — the last two are the per-key constants below, so one
+     * sentence shape serves both keys.
+     */
+    public const NONSENSE_LIMIT_NOTICE_FORMAT = '%s is %s, which is not %s; %s';
+
+    /** {@see NONSENSE_LIMIT_NOTICE_FORMAT}'s expectation for `maxToolSteps`. */
+    private const NONSENSE_STEPS_EXPECTED = 'a positive whole number';
+
+    /** ...and what a nonsense `maxToolSteps` leaves in force. */
+    private const NONSENSE_STEPS_CONSEQUENCE = 'the shipped per-turn step ceiling applies';
+
+    /** {@see NONSENSE_LIMIT_NOTICE_FORMAT}'s expectation for `maxOutputTokens`. */
+    private const NONSENSE_TOKENS_EXPECTED = 'a positive token count';
+
+    /** ...and what a nonsense `maxOutputTokens` leaves in force. */
+    private const NONSENSE_TOKENS_CONSEQUENCE = "no output ceiling is sent, so the provider's own default applies";
+
+    /**
+     * The row {@see reportTuiErrorLogFallback()} raises when the TUI's
+     * `error_log` redirect fell back from the home log to a private temp-dir
+     * log (audit R16 follow-up). `%s` the home log as the user spells it,
+     * `%s` the file this session's diagnostics went to instead.
+     */
+    public const TUI_ERROR_LOG_FALLBACK_NOTICE_FORMAT = "%s could not be written, so this session's diagnostics go to %s";
+
+    /**
+     * ...and when it fell all the way to the null device, where nothing is
+     * kept. `%s` the home log.
+     */
+    public const TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT =
+        "%s could not be written and no private log file could be prepared either, so this session's diagnostics are discarded";
 
     /**
      * The aggregate row {@see reportCommandSkips()} raises for unreadable
@@ -439,7 +520,7 @@ final class Bootstrap
      * indent and gain a full stop after an id list. Sending them through
      * {@see warnPermissionConfigInTranscript()} — the seam the SUMMARY takes —
      * would additionally seed one transcript row per deleted session, which is
-     * the per-entry fan-out into a list the model is re-sent every turn that
+     * the per-entry fan-out that buries the other launch notices and that
      * {@see LAUNCH_NOTICE_LIMIT} exists to refuse, and that `docs/SETTINGS.md`
      * names as the reason this half of the report did not migrate with the
      * other half.
@@ -681,6 +762,13 @@ final class Bootstrap
      * and then the provider default — see {@see useModel()}.
      */
     private static ?string $modelOverride = null;
+
+    /**
+     * Where `bin/sugarcrush`'s `TuiErrorLog::install()` sent `error_log()` for
+     * this TUI run, or null when it left the operator's own destination in
+     * place — see {@see useTuiErrorLog()}.
+     */
+    private static ?string $tuiErrorLog = null;
 
     /**
      * Which session a TUI launch opens — see {@see useSessionLaunch()}.
@@ -1186,6 +1274,9 @@ final class Bootstrap
         // {@see reportSkillSkips()} for why here and nowhere else.
         self::reportSkillSkips();
         self::reportMemorySkips($root);
+        self::reportPromptBudgetDeferrals($root, $skills);
+        self::reportNonsenseLimits();
+        self::reportTuiErrorLogFallback();
 
         // ONE gate for the whole launch, for the reason the registry above is
         // one: PermissionGate's Auto-mode circuit breaker is per-INSTANCE
@@ -2487,9 +2578,16 @@ final class Bootstrap
      * handing both the same instances would mean reshaping {@see backend()}'s
      * internals, which this step does not touch.
      */
-    public static function app(?string $root = null): App
+    public static function app(?string $root = null, ?string $tuiErrorLog = null): App
     {
         $root ??= getcwd() ?: null;
+
+        // Where `bin/sugarcrush`'s TuiErrorLog::install() sent error_log() —
+        // registered before chat() so its launch report can say when that is
+        // not the home log ({@see reportTuiErrorLogFallback()}). Passed here
+        // rather than registered by the binary, whose guard keeps every
+        // Bootstrap call out of the span between the redirect and Program.
+        self::useTuiErrorLog($tuiErrorLog);
 
         // Every entry point that resolves a root names it as THE project for
         // the settings layers, before anything below reads a config — see
@@ -3049,11 +3147,19 @@ final class Bootstrap
     private const MAX_TOOL_STEPS_CONFIG_KEY = 'maxToolSteps';
 
     /**
+     * The `settings.json` key E707 made configurable, as
+     * `EngineBackend::MAX_OUTPUT_TOKENS_CONFIG_KEY` spells it — named here for
+     * {@see reportNonsenseLimits()}, the launch's only reader of it.
+     */
+    private const MAX_OUTPUT_TOKENS_CONFIG_KEY = 'maxOutputTokens';
+
+    /**
      * The operator's per-turn provider-call ceiling, or null when no usable
      * one was configured - F2 (spawn-latency plan).
      *
      * NULL IS THE DEFAULT'S VOICE: with no resolved value the engine keeps
-     * the shipped `maxSteps = 8` byte-identically, exactly the contract
+     * its shipped `maxSteps` (1000 since WAVE_PLAN_2 §5; it was 8 when this
+     * was written) untouched, exactly the contract
      * {@see \SugarCraft\Crush\Backend\EngineBackend::maxOutputTokens()}
      * records for the token ceiling - nonsense answers null rather than
      * clamping, and no env hatch is worth a second authority over a money
@@ -3064,8 +3170,8 @@ final class Bootstrap
      * A FRACTION IS NONSENSE, NOT A ROUNDING PROBLEM (audit 15d-16): a step
      * is a provider call, there is no half of one, and docs/SETTINGS.md has
      * always promised that a non-integer resolves to the default. This
-     * resolver used to truncate `1.5` to `1` instead - a ceiling LOWER than
-     * the shipped 8, chosen by nobody. The token ceiling still truncates;
+     * resolver used to truncate `1.5` to `1` instead - a ceiling far LOWER
+     * than the shipped default, chosen by nobody. The token ceiling still truncates;
      * its doc-comment says why that axis differs.
      *
      * "NO UPPER BOUND" STOPS AT THE INT TYPE (audit 15d-16): a float at or
@@ -3076,7 +3182,9 @@ final class Bootstrap
      * clamping it to some named ceiling would be the guessed bound this key
      * deliberately has none of, and the step-exhausted notice names this
      * key, so a "no limit" spelled too large is discoverable at the first
-     * turn it matters.
+     * turn it matters — and, since audit R12, at launch: every value this
+     * answers null for while the key is set raises
+     * {@see reportNonsenseLimits()}' notice.
      *
      * Read at BACKEND CONSTRUCTION, not per turn, and deliberately so:
      * TaskTool raises the ceiling for its OWN sub-agent turns via
@@ -3434,6 +3542,22 @@ final class Bootstrap
     public static function useModel(?string $model): void
     {
         self::$modelOverride = ($model === null || $model === '') ? null : $model;
+    }
+
+    /**
+     * Register where the TUI's `error_log` redirect landed — {@see app()}
+     * passes on `TuiErrorLog::install()`'s answer from `bin/sugarcrush`.
+     *
+     * A REGISTRATION RATHER THAN A NOTICE RAISED IN THE BINARY because the
+     * launch-notice list is the LAUNCH's: {@see chat()} starts it empty, so a
+     * row seeded before the Chat was built would be wiped before anyone read
+     * it. {@see reportTuiErrorLogFallback()} reads this at construction time,
+     * beside the other launch reports. Null clears it, the
+     * clear-what-you-set convention {@see useModel()} documents.
+     */
+    public static function useTuiErrorLog(?string $destination): void
+    {
+        self::$tuiErrorLog = ($destination === null || $destination === '') ? null : $destination;
     }
 
     /**
@@ -4408,11 +4532,340 @@ final class Bootstrap
             $notices[] = UnreadableNotes::notice($new);
         }
 
-        // One seam call site for both rows, so the census
-        // ({@see TRANSCRIPT_SEAM_CALL_SITES}) does not move.
-        foreach ($notices as $notice) {
-            self::warnPermissionConfigInTranscript($notice);
+        // Through the shared row emitter, whose one seam call site serves every
+        // aggregate report that raises more than one row — so the census
+        // ({@see TRANSCRIPT_SEAM_CALL_SITES}) does not move per report.
+        self::warnLaunchRows($notices);
+    }
+
+    /**
+     * Put each row on both launch channels, through ONE seam call site.
+     *
+     * The reports that can raise several bounded rows from one call —
+     * {@see reportMemorySkips()}, {@see reportPromptBudgetDeferrals()},
+     * {@see reportNonsenseLimits()}, {@see reportTuiErrorLogFallback()} — share this rather than each spelling the
+     * seam call, so {@see TRANSCRIPT_SEAM_CALL_SITES} counts the seam's call
+     * sites and not the reports that reach it. What bounds the ROWS is
+     * {@see LAUNCH_NOTICE_LIMIT}'s argument, which names each of these
+     * reports as a source.
+     *
+     * @param list<string> $rows
+     */
+    private static function warnLaunchRows(array $rows): void
+    {
+        foreach ($rows as $row) {
+            self::warnPermissionConfigInTranscript($row);
         }
+    }
+
+    /**
+     * Tell the user, at launch, which instruction files and enabled skill
+     * bodies the system prompt leaves out (audit 15d-09 / C3 residual R1).
+     *
+     * Since C3 an instruction document over its budget — or one refused for
+     * resolving outside the checkout, or an `@import` that does not fit — is a
+     * pointer line in the prompt and an entry in
+     * {@see InstructionFileLoader::refusedPaths()}, and an enabled skill over
+     * the skill budget is its heading and a pointer. The MODEL is told; the
+     * user, who wrote the CLAUDE.md or enabled the skill and expects it obeyed,
+     * was told nothing, because nothing drained either record.
+     *
+     * THE VERDICTS ARE THE PROMPT'S OWN: the launch prices its loader through
+     * {@see \SugarCraft\Crush\Runtime::planInstructionDocuments()} and its
+     * enabled skills through {@see \SugarCraft\Crush\Runtime::planEnabledSkills()},
+     * the two methods every prompt build calls, against the same files the
+     * backend's loader reads. A launch-time pass rather than a drain of the
+     * backend's loader because a turn runs in a forked child, whose recorded
+     * deferrals never reach this process; the inputs are on disk, so the same
+     * pricing here reaches the same answer. The skill budget is the defaults,
+     * because no launch path configures a {@see \SugarCraft\Crush\App\App::$compactorConfig}.
+     *
+     * Files touched mid-session ({@see InstructionFileLoader::loadForPath()})
+     * are not covered: they arrive as the model reads paths, after the
+     * terminal is taken, and reach the model as pointers at the moment they
+     * matter. ONE ROW PER KIND whatever the count, for
+     * {@see LAUNCH_NOTICE_LIMIT}'s reason. Construction time, beside
+     * {@see reportSkillSkips()} and for its reason; public for the `-p` path
+     * for {@see reportMemorySkips()}'s.
+     */
+    public static function reportPromptBudgetDeferrals(?string $root, ?SkillRegistry $skills = null): void
+    {
+        $root ??= getcwd() ?: null;
+        $rows = [];
+
+        $documents = self::instructionDeferrals($root);
+        if ($documents !== []) {
+            $rows[] = sprintf(
+                self::INSTRUCTION_DEFERRAL_NOTICE_FORMAT,
+                \count($documents),
+                \count($documents) === 1 ? '' : 's',
+                \count($documents) === 1 ? 'was' : 'were',
+                self::deferralList($documents),
+            );
+        }
+
+        $skillBodies = self::skillBodyDeferrals($root, $skills);
+        if ($skillBodies !== []) {
+            $rows[] = sprintf(
+                self::SKILL_BUDGET_DEFERRAL_NOTICE_FORMAT,
+                \count($skillBodies),
+                \count($skillBodies) === 1 ? '' : 's',
+                \count($skillBodies) === 1 ? 'is' : 'are',
+                \count($skillBodies) === 1 ? 'its' : 'their',
+                self::deferralList($skillBodies),
+            );
+        }
+
+        self::warnLaunchRows($rows);
+    }
+
+    /**
+     * The launch loader's instruction refusals, priced as a prompt build
+     * prices them — see {@see reportPromptBudgetDeferrals()}.
+     *
+     * A root this launch cannot resolve, or a loader that throws, is no row
+     * at all: the prompt route degrades the same way, and a notice about a
+     * notice is not worth a failed launch.
+     *
+     * @return array<string, string> path as spelled => why it was left out
+     */
+    private static function instructionDeferrals(?string $root): array
+    {
+        if ($root === null) {
+            return [];
+        }
+
+        try {
+            $loader = self::instructionLoader($root);
+            \SugarCraft\Crush\Runtime::planInstructionDocuments($loader);
+            $refused = $loader->refusedPaths();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        // Named relative to the root when they are under it — `CLAUDE.md`, not
+        // the checkout's absolute path twice over — so the transcript row, which
+        // is clipped, spends its characters on the verdicts. A file outside the
+        // root (an ancestor's CLAUDE.md, an out-of-checkout target) keeps the
+        // full path, because there it IS the information.
+        $prefixes = array_unique([rtrim($root, '/') . '/', rtrim((string) realpath($root), '/') . '/']);
+        $named = [];
+        foreach ($refused as $path => $why) {
+            $path = (string) $path;
+            foreach ($prefixes as $prefix) {
+                if ($prefix !== '/' && str_starts_with($path, $prefix)) {
+                    $path = substr($path, \strlen($prefix));
+                    break;
+                }
+            }
+            $named[$path] = $why;
+        }
+
+        return $named;
+    }
+
+    /**
+     * The enabled skills whose bodies a prompt build defers for budget, keyed
+     * by name — see {@see reportPromptBudgetDeferrals()}.
+     *
+     * Read only when `enabledSkills` is configured at all: with the key
+     * absent no body is ever spliced, and the `-p` path would otherwise pay a
+     * second skill scan to learn nothing. {@see promptEnabledSkills()} is the
+     * backend's own resolution; its warnings are de-duplicated by the seam,
+     * so a launch that already raised them raises nothing new here.
+     *
+     * @return array<string, string> skill name => why its body was deferred
+     */
+    private static function skillBodyDeferrals(?string $root, ?SkillRegistry $skills): array
+    {
+        if ($root === null || !\array_key_exists('enabledSkills', self::readUserConfig())) {
+            return [];
+        }
+
+        try {
+            $skills ??= self::skillRegistry($root);
+            $deferred = [];
+            foreach (\SugarCraft\Crush\Runtime::planEnabledSkills(
+                self::promptEnabledSkills($skills),
+                \SugarCraft\Crush\Context\CompactorConfig::new(),
+            ) as $planned) {
+                if ($planned['deferral'] !== null) {
+                    $deferred[$planned['skill']->name] = $planned['deferral'];
+                }
+            }
+
+            return $deferred;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * `subject (reason); subject (reason)` — the detail field of the two
+     * deferral rows. Every entry, not a sample: the row is clipped at
+     * {@see LAUNCH_NOTICE_MAX_CHARS} on the transcript and printed whole on
+     * stderr, which is the split every other long launch row already takes.
+     *
+     * @param array<array-key, string> $entries subject => reason
+     */
+    private static function deferralList(array $entries): string
+    {
+        $items = [];
+        foreach ($entries as $subject => $reason) {
+            $items[] = $subject . ' (' . rtrim($reason, '.') . ')';
+        }
+
+        return implode('; ', $items);
+    }
+
+    /**
+     * Tell the user, at launch, that `maxToolSteps` or `maxOutputTokens` holds
+     * a value the resolvers will not use (audit 15d-16 residual R12).
+     *
+     * Both resolvers answer null for nonsense — a fraction of a step, zero, a
+     * negative, a non-number, a value too large for an integer — and null is
+     * the default's voice, so a typo silently became "no setting". That stays
+     * the behaviour: neither resolver clamps, and nothing here changes what
+     * they answer. What changes is that the operator hears about it, once,
+     * before the first turn — the per-turn `EngineBackend` read of
+     * `maxOutputTokens` has no channel that could say it.
+     *
+     * Unset is not nonsense: an absent key, JSON `null` and `""` (the shape a
+     * set-but-empty value arrives in, which this lib reads as unset
+     * everywhere) raise nothing. One row per bad key, so at most two.
+     */
+    public static function reportNonsenseLimits(): void
+    {
+        $config = self::readUserConfig();
+        $verdicts = [
+            self::MAX_TOOL_STEPS_CONFIG_KEY => [
+                self::resolvedMaxToolSteps($config),
+                self::NONSENSE_STEPS_EXPECTED,
+                self::NONSENSE_STEPS_CONSEQUENCE,
+            ],
+            self::MAX_OUTPUT_TOKENS_CONFIG_KEY => [
+                self::resolvedMaxOutputTokens($config),
+                self::NONSENSE_TOKENS_EXPECTED,
+                self::NONSENSE_TOKENS_CONSEQUENCE,
+            ],
+        ];
+
+        $rows = [];
+        foreach ($verdicts as $key => [$resolved, $expected, $consequence]) {
+            if ($resolved === null && self::isNonsenseSetting($config, $key)) {
+                $rows[] = sprintf(
+                    self::NONSENSE_LIMIT_NOTICE_FORMAT,
+                    $key,
+                    self::settingValueForNotice($config[$key]),
+                    $expected,
+                    $consequence,
+                );
+            }
+        }
+
+        self::warnLaunchRows($rows);
+    }
+
+    /**
+     * Tell the user when this TUI session's diagnostics are not going to the
+     * home log (audit R16 follow-up, raised by w9-diag-usage).
+     *
+     * Since R16 the redirect never leaves `error_log()` on the tty: it walks
+     * `~/.sugar-crush/logs/sugarcrush.log`, then a private temp-dir log, then
+     * the null device. The two fallbacks are silent by construction — the
+     * whole point is that nothing paints the frame — so the user who goes
+     * looking in the documented home log finds nothing, or (on the null
+     * device) finds that nothing was kept at all. One row says which.
+     *
+     * Nothing for a registration of null (the operator chose their own
+     * destination, which is theirs to know) or of the home log itself.
+     */
+    public static function reportTuiErrorLogFallback(): void
+    {
+        if (self::$tuiErrorLog === null) {
+            return;
+        }
+
+        $home = HomeDirectory::owned();
+        if ($home !== null && self::$tuiErrorLog === rtrim($home, '/') . '/' . TuiErrorLog::RELATIVE_PATH) {
+            return;
+        }
+
+        self::warnLaunchRows([self::discardsWhatIsWritten(self::$tuiErrorLog)
+            ? sprintf(self::TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT, '~/' . TuiErrorLog::RELATIVE_PATH)
+            : sprintf(self::TUI_ERROR_LOG_FALLBACK_NOTICE_FORMAT, '~/' . TuiErrorLog::RELATIVE_PATH, self::$tuiErrorLog)]);
+    }
+
+    /**
+     * Whether an `error_log` destination keeps nothing — the null device
+     * `TuiErrorLog::install()` falls back to last. Spelled here rather than
+     * read from `TuiErrorLog` so this branch does not depend on that class's
+     * R16 API; the two spellings are the platform's own.
+     */
+    private static function discardsWhatIsWritten(string $destination): bool
+    {
+        return $destination === (\PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null');
+    }
+
+    /**
+     * Whether $key is SET to something — the precondition for calling its
+     * value nonsense. See {@see reportNonsenseLimits()} for what counts as
+     * unset.
+     *
+     * @param array<string, mixed> $config
+     */
+    private static function isNonsenseSetting(array $config, string $key): bool
+    {
+        $raw = $config[$key] ?? null;
+
+        return $raw !== null && $raw !== '';
+    }
+
+    /**
+     * A setting's value as the operator would recognise it from their own
+     * file — its JSON spelling, so `"16x"` keeps its quotes and `1.0e+19`
+     * reads as the number it was — clipped, because a hand-edited file can
+     * hold a whole object under a numeric key.
+     */
+    private static function settingValueForNotice(mixed $raw): string
+    {
+        $json = json_encode($raw, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_PARTIAL_OUTPUT_ON_ERROR);
+        $json = $json === false ? get_debug_type($raw) : $json;
+
+        return mb_strlen($json, 'UTF-8') > 60 ? mb_substr($json, 0, 59, 'UTF-8') . '…' : $json;
+    }
+
+    /**
+     * The verdict {@see \SugarCraft\Crush\Backend\EngineBackend}'s private
+     * `maxOutputTokens()` resolver reaches, for {@see reportNonsenseLimits()}
+     * only — that resolver runs per TURN, inside the engine, where no launch
+     * channel exists, so the launch asks the same question here.
+     *
+     * A MIRROR, and a mirror can drift, so it is not trusted to stay one:
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest::testTheTokenVerdictMirrorsTheEngineResolver()}
+     * runs both over the same table of values, the engine's by reflection, and
+     * reds on any disagreement. Accepted: a finite positive number below 2**63,
+     * truncated toward zero — see the engine resolver for why.
+     *
+     * @param array<string, mixed> $config
+     */
+    private static function resolvedMaxOutputTokens(array $config): ?int
+    {
+        $raw = $config[self::MAX_OUTPUT_TOKENS_CONFIG_KEY] ?? null;
+
+        if (is_string($raw)) {
+            $raw = is_numeric($raw) ? $raw + 0 : null;
+        }
+
+        if (!is_int($raw) && !(is_float($raw) && is_finite($raw))) {
+            return null;
+        }
+
+        if ($raw < 1 || (is_float($raw) && $raw >= (float) PHP_INT_MAX)) {
+            return null;
+        }
+
+        return (int) $raw;
     }
 
     /**

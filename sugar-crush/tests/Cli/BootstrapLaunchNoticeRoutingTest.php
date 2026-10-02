@@ -306,6 +306,177 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
     }
 
     /**
+     * AUDIT R1: an instruction file the system prompt leaves out was a pointer
+     * line the MODEL saw and a `refusedPaths()` entry nothing drained, so the
+     * user who wrote the CLAUDE.md learned nothing. Both kinds of verdict are
+     * here — AGENTS.md is over the loader's read ceiling and never read, and
+     * CLAUDE.md is read but its escaped frame overruns the splice's
+     * per-document budget — and both land in ONE row in both channels, worded
+     * with the verdicts the prompt itself makes.
+     */
+    public function testInstructionFilesLeftOutOfThePromptReachBothChannelsAsOneRow(): void
+    {
+        file_put_contents($this->projectRoot . '/CLAUDE.md', "# Tags\n\n" . str_repeat('<env>', 12_000));
+        file_put_contents($this->projectRoot . '/AGENTS.md', str_repeat("Convention line for the fixture.\n", 2_200));
+
+        [$stderr, $notices] = $this->launch(
+            '\\SugarCraft\\Crush\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        self::assertCount(1, $notices);
+        self::assertStringStartsWith('2 instruction files were left out of the system prompt — ', $notices[0]);
+        self::assertSame(1, substr_count($stderr, '2 instruction files were left out of the system prompt'));
+        // Named relative to the root, so the clipped transcript row still
+        // reaches both verdicts.
+        self::assertStringContainsString('AGENTS.md (is 72,600 bytes, over the ', $notices[0]);
+        self::assertStringContainsString('; CLAUDE.md (renders to ', $notices[0]);
+        self::assertStringContainsString('per-document instruction budget', $stderr);
+        self::assertStringNotContainsString($this->projectRoot . '/CLAUDE.md', $stderr);
+    }
+
+    /**
+     * AUDIT R1, the skill half: an enabled skill whose body is over the skill
+     * budget reaches the prompt as its heading and a pointer, and that verdict
+     * used to be recorded nowhere. One row, naming the skill and the budget.
+     * Driven through the `-p` construction path's report directly, since the
+     * enabled skill is the user's own and needs no project at all.
+     */
+    public function testAnEnabledSkillOverTheSkillBudgetReachesBothChannels(): void
+    {
+        mkdir($this->configDir . '/skills/huge', 0o700, true);
+        file_put_contents(
+            $this->configDir . '/skills/huge/SKILL.md',
+            "---\nname: huge\ndescription: an oversized skill\n---\n" . str_repeat('Step of the oversized skill. ', 1_000),
+        );
+        $this->writeUserConfig(['enabledSkills' => ['huge']]);
+
+        [$stderr, $notices] = $this->launch(
+            '\\SugarCraft\\Crush\\Cli\\Bootstrap::reportPromptBudgetDeferrals(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        self::assertCount(1, $notices);
+        self::assertMatchesRegularExpression(
+            '/^1 enabled skill is over the skill budget, so only its heading and a pointer reach the system prompt'
+                . ' — huge \(about [\d,]+ tokens, over the 5,000-token per-skill budget\)$/u',
+            $notices[0],
+        );
+        self::assertSame(1, substr_count($stderr, '1 enabled skill is over the skill budget'));
+    }
+
+    /**
+     * AUDIT R12: a `maxToolSteps` or `maxOutputTokens` value the resolvers will
+     * not use resolves to the default — that stays — and the operator used to
+     * hear nothing about the typo. One row per bad key, value in its JSON
+     * spelling, through a real launch.
+     */
+    public function testNonsenseStepAndTokenCeilingsReachBothChannels(): void
+    {
+        $this->writeUserConfig(['maxToolSteps' => 1.5, 'maxOutputTokens' => 'lots']);
+
+        [$stderr, $notices] = $this->launch(
+            '\\SugarCraft\\Crush\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        self::assertSame(
+            [
+                'maxToolSteps is 1.5, which is not a positive whole number; the shipped per-turn step ceiling applies',
+                'maxOutputTokens is "lots", which is not a positive token count; '
+                    . "no output ceiling is sent, so the provider's own default applies",
+            ],
+            $notices,
+        );
+        self::assertSame(1, substr_count($stderr, 'maxToolSteps is 1.5'));
+        self::assertSame(1, substr_count($stderr, 'maxOutputTokens is "lots"'));
+    }
+
+    /**
+     * ...and a usable value, an unset one, or the set-but-empty `""` this lib
+     * reads as unset everywhere, says nothing — the notice is for values the
+     * resolver ignored, not for every key that is present.
+     */
+    public function testUsableOrUnsetCeilingsRaiseNoNotice(): void
+    {
+        $this->writeUserConfig(['maxToolSteps' => '16', 'maxOutputTokens' => '']);
+
+        [, $notices] = $this->launch(
+            "\\SugarCraft\\Crush\\Cli\\Bootstrap::reportNonsenseLimits();\n",
+        );
+
+        self::assertSame([], $notices);
+    }
+
+    /**
+     * The R16 follow-up: `TuiErrorLog::install()` falls back from the home log
+     * to a private temp-dir log and then to the null device, silently by
+     * design. The launch now says which — and says nothing when the home log
+     * was used or the operator kept their own destination. Registered before
+     * `chat()`, as `bin/sugarcrush` does, because `chat()` starts the launch's
+     * notice list empty.
+     */
+    public function testATuiErrorLogFallbackIsReportedAtLaunch(): void
+    {
+        $chat = '\\SugarCraft\\Crush\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n";
+        $register = static fn(?string $destination): string
+            => '\\SugarCraft\\Crush\\Cli\\Bootstrap::useTuiErrorLog(' . var_export($destination, true) . ");\n";
+
+        [$stderr, $notices] = $this->launch($register('/tmp/sugarcrush-1000/sugarcrush.log') . $chat);
+        $expected = sprintf(
+            Bootstrap::TUI_ERROR_LOG_FALLBACK_NOTICE_FORMAT,
+            '~/.sugar-crush/logs/sugarcrush.log',
+            '/tmp/sugarcrush-1000/sugarcrush.log',
+        );
+        self::assertSame([$expected], $notices);
+        self::assertSame(1, substr_count($stderr, $expected));
+
+        [, $notices] = $this->launch($register('/dev/null') . $chat);
+        self::assertSame(
+            [sprintf(Bootstrap::TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT, '~/.sugar-crush/logs/sugarcrush.log')],
+            $notices,
+        );
+
+        [, $notices] = $this->launch($register($this->home . '/.sugar-crush/logs/sugarcrush.log') . $chat);
+        self::assertSame([], $notices, 'the home log is where the docs send the user; nothing to say');
+
+        [, $notices] = $this->launch($register(null) . $chat);
+        self::assertSame([], $notices, "the operator's own destination is theirs to know");
+
+        // The production route: bin/sugarcrush hands install()'s answer to app().
+        [, $notices] = $this->launch(
+            '\\SugarCraft\\Crush\\Cli\\Bootstrap::app(' . var_export($this->projectRoot, true) . ", tuiErrorLog: '/dev/null');\n",
+        );
+        self::assertSame(
+            [sprintf(Bootstrap::TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT, '~/.sugar-crush/logs/sugarcrush.log')],
+            $notices,
+        );
+    }
+
+    /**
+     * {@see Bootstrap::reportNonsenseLimits()} judges `maxOutputTokens` with a
+     * mirror of `EngineBackend::maxOutputTokens()`, because that resolver runs
+     * per turn where no launch channel exists. A mirror can drift, so both are
+     * run here over the edge cases the two doc-blocks name, the engine's by
+     * reflection, and must answer alike.
+     */
+    public function testTheTokenVerdictMirrorsTheEngineResolver(): void
+    {
+        $engine = new \ReflectionMethod(\SugarCraft\Crush\Backend\EngineBackend::class, 'maxOutputTokens');
+        $mirror = new \ReflectionMethod(Bootstrap::class, 'resolvedMaxOutputTokens');
+
+        $values = [
+            null, '', 0, -1, 1, 2047, 2047.9, 0.5, '16', '16x', 'lots', true, false, [], [4096],
+            1e19, INF, -INF, NAN, PHP_INT_MAX, (float) PHP_INT_MAX, '99999999999999999999', ' 12', '1e3',
+        ];
+        foreach ($values as $value) {
+            $config = ['maxOutputTokens' => $value];
+            self::assertSame(
+                $engine->invoke(null, $config),
+                $mirror->invoke(null, $config),
+                'the launch verdict disagrees with the engine for ' . var_export($value, true),
+            );
+        }
+    }
+
+    /**
      * A command file the loader could not read is a `/command` the user typed
      * and did not get — the same class of loss as the skill row above, and
      * E172's drain half wired it with the same one-row shape for the same

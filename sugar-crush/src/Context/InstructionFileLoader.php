@@ -50,8 +50,8 @@ use SugarCraft\Crush\Support\HomeDirectory;
  * skipped rather than raised — this class's callers are tool results and it has
  * no channel to the user — but it is now RECORDED, and {@see refusedPaths()} is
  * the pull-based seam the other three repository-chosen tiers already expose.
- * See that method for the layout that motivated it and for what still does not
- * drain it.
+ * See that method for the layout that motivated it and for what drains it
+ * (a launch notice since audit R1).
  *
  * EVERY READ IS SIZE-BOUNDED TOO (audit 15d-09, C3). The four document reads
  * and the `@import` expansion were unbounded `file_get_contents()` calls whose
@@ -1032,10 +1032,16 @@ final class InstructionFileLoader
      * Growth is bounded by the number of DISTINCT paths a session touches:
      * duplicate keys overwrite, so a hot loop over one path adds one entry.
      *
-     * NOT drained by anything yet. {@see \SugarCraft\Crush\Cli\Bootstrap}'s
-     * collector is fed by the three tiers whose refusals are DIRECTORY-shaped
-     * and known at launch; these are file-shaped and arrive as the session
-     * touches paths, so surfacing them is a display decision this does not make.
+     * DRAINED AT LAUNCH since audit R1, by
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::reportPromptBudgetDeferrals()}:
+     * one aggregate row naming each root, ancestor, forced or imported file the
+     * prompt leaves out and why, after pricing a launch loader through
+     * {@see \SugarCraft\Crush\Runtime::planInstructionDocuments()} so the
+     * splice's budget verdicts are in the map too. Not through
+     * `Bootstrap`'s directory collector, which is fed by the tiers whose
+     * refusals are DIRECTORY-shaped; these are file-shaped. Entries
+     * {@see loadForPath()} adds mid-session are not surfaced to the user — they
+     * reach the model as pointers at the moment the path is touched.
      *
      * @return array<string, string> path as spelled => why it was not read
      */

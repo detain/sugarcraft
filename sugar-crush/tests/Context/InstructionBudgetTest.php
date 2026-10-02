@@ -293,4 +293,70 @@ final class InstructionBudgetTest extends TestCase
         self::assertStringContainsString("## Skill: s{$fit}\n\nSkill body deferred: budget", $prompt);
         self::assertStringContainsString('combined; not in this prompt). Load it with the Skill tool.', $prompt, 'no Read clause for a skill with no file');
     }
+
+    /**
+     * Audit R1: the App carried no compactor config, so the skill budgets were
+     * always {@see CompactorConfig::new()}'s whatever anyone configured. A body
+     * that fits the defaults with room to spare is deferred once the App's own
+     * config narrows the per-skill budget below it.
+     */
+    public function testTheAppsCompactorConfigSetsTheSkillBudget(): void
+    {
+        $this->fixture->addSkill(Skill::parse("---\ndescription: small\n---\nSMALLCANARY " . str_repeat('word ', 200) . "\n", 'small'));
+        $narrow = new CompactorConfig(skillBudgetPerSkill: 50);
+
+        self::assertStringContainsString('SMALLCANARY', $this->fixture->systemPrompt(), 'the defaults admit the body');
+
+        $prompt = $this->fixture->systemPrompt($this->fixture->app()->withCompactorConfig($narrow));
+
+        self::assertStringNotContainsString('SMALLCANARY', $prompt, "the App's own per-skill budget defers it");
+        self::assertStringContainsString('the skill budget is 50 per skill and', $prompt);
+    }
+
+    /**
+     * Audit R1: a deferred skill body existed only as the pointer inside the
+     * prompt it was missing from. The Runtime now records the last build's
+     * deferrals, and a build in which the skill fits again forgets it.
+     */
+    public function testTheRuntimeRecordsWhichSkillBodiesTheLastBuildDeferred(): void
+    {
+        $config = CompactorConfig::new();
+        $body = str_repeat('Step of the oversized skill. ', intdiv(($config->skillBudgetPerSkill + 500) * 4, 29) + 1);
+        $this->fixture->addSkill(Skill::parse("---\ndescription: huge\n---\n{$body}", 'huge'));
+        $app = $this->fixture->app();
+        $runtime = new Runtime($app->provider, new \SugarCraft\Crush\Hooks\HookManager(new \SugarCraft\Crush\Hooks\HookRegistry()));
+
+        $this->fixture->systemPrompt($app, $runtime);
+
+        self::assertSame(['huge'], array_keys($runtime->skillDeferrals()));
+        self::assertMatchesRegularExpression(
+            '/^about [\d,]+ tokens, over the 5,000-token per-skill budget$/',
+            $runtime->skillDeferrals()['huge'],
+        );
+
+        $this->fixture->systemPrompt($app->withCompactorConfig(new CompactorConfig(skillBudgetPerSkill: 1_000_000, skillBudgetCombined: 1_000_000)), $runtime);
+
+        self::assertSame([], $runtime->skillDeferrals(), 'a build in which the body fits leaves nothing recorded');
+    }
+
+    /**
+     * Audit R1: {@see Runtime::planInstructionDocuments()} is the splice's own
+     * verdict, public so the launch can report it. Run on a bare loader it
+     * records the same combined-budget deferral a prompt build records.
+     */
+    public function testTheInstructionPlanRecordsTheSameDeferralsAPromptBuildDoes(): void
+    {
+        $this->fixture->write('CLAUDE.md', self::document('FIRSTCANARY', 50_000));
+        $this->fixture->write('AGENTS.md', self::document('SECONDCANARY', 50_000));
+        $this->fixture->write('docs/forced.md', self::document('THIRDCANARY', 50_000));
+        $forced = $this->fixture->root() . '/docs/forced.md';
+
+        $loader = new InstructionFileLoader($this->fixture->root(), ['docs/forced.md']);
+        $plan = Runtime::planInstructionDocuments($loader);
+
+        self::assertCount(2, $plan['inline']);
+        self::assertSame([InstructionFileLoader::pointer($forced, (int) filesize($forced))], $plan['pointers']);
+        self::assertSame(0, $plan['overflow']);
+        self::assertStringContainsString('combined instruction budget', $loader->refusedPaths()[$forced] ?? '');
+    }
 }

@@ -26,6 +26,7 @@ use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\CommandRegistry;
+use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\RulesState;
@@ -212,6 +213,16 @@ final class App implements Model
          * by the CLI, so tests and embedders mutate freely without writing.
          */
         public readonly ?\Closure $onLayoutChange = null,
+        /**
+         * The skill budgets {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()}
+         * holds enabled skill bodies to (audit 15d-09 residual R1). Null is
+         * {@see CompactorConfig::new()}'s defaults — the figures every build
+         * used while the App had no field to carry any other, so an App that
+         * never sets one builds the byte-identical prompt it always did.
+         * Carried here for the reason {@see $instructionLoader} is: the
+         * Runtime reads the prompt's inputs off the App it is handed.
+         */
+        public readonly ?CompactorConfig $compactorConfig = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -498,6 +509,11 @@ final class App implements Model
     public function withOnLayoutChange(?\Closure $v): self
     {
         return $this->mutate(onLayoutChange: $v);
+    }
+
+    public function withCompactorConfig(?CompactorConfig $v): self
+    {
+        return $this->mutate(compactorConfig: $v);
     }
 
     /**
@@ -906,8 +922,23 @@ final class App implements Model
      * paragraph below it criticised a DIFFERENT mechanism for never being
      * reached. A fix that is mechanically right can still ship a false
      * sentence about what it accomplishes.
+     *
+     * ## THE FORK'S TIME BUDGET (audit AG-5)
+     *
+     * `$timeoutSeconds` becomes the SubAgent's `timeout`, which the pool has
+     * ENFORCED on its forking path since WF-1 (a): the worker and its whole
+     * process tree are killed when it expires. The SubAgent constructor's
+     * default is 300 seconds, and this path used to take it silently — so the
+     * day a caller wires this up, every fork-context skill would have been
+     * killed at five minutes whatever the configured pool timeout said. The
+     * default here is 0, no per-agent bound, because this method has no
+     * configuration of its own to read; a caller with an
+     * {@see \SugarCraft\Crush\Agents\AgentPoolConfig} passes its
+     * `defaultTimeoutSeconds`, as `Chat::executeAgents()`' process branch does.
+     *
+     * @param int $timeoutSeconds the fork's wall-clock bound; 0 or less is none
      */
-    public function dispatchSkill(Skill $skill, AgentWorkerPool $pool, string $task): ?AgentResult
+    public function dispatchSkill(Skill $skill, AgentWorkerPool $pool, string $task, int $timeoutSeconds = 0): ?AgentResult
     {
         if (!$this->availableSkills->isContextFork($skill->name)) {
             return null;
@@ -963,6 +994,7 @@ final class App implements Model
             id: uniqid('skill_fork_' . getmypid() . '_', true),
             agent: $agent,
             task: $task,
+            timeout: $timeoutSeconds,
         );
 
         $request = new CompleteRequest(
@@ -2254,6 +2286,7 @@ final class App implements Model
             rulesState: array_key_exists('rulesState', $changes) ? $changes['rulesState'] : $this->rulesState,
             dock: array_key_exists('dock', $changes) ? $changes['dock'] : $this->dock,
             onLayoutChange: array_key_exists('onLayoutChange', $changes) ? $changes['onLayoutChange'] : $this->onLayoutChange,
+            compactorConfig: array_key_exists('compactorConfig', $changes) ? $changes['compactorConfig'] : $this->compactorConfig,
         );
     }
 }

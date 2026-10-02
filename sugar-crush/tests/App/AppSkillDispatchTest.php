@@ -225,6 +225,37 @@ final class AppSkillDispatchTest extends TestCase
         $this->assertSame('sub-agent output', $result->output);
     }
 
+    /**
+     * Audit AG-5 (App half): the fork's SubAgent took the constructor's
+     * 300-second default, which the pool enforces since WF-1 (a) — so a wired
+     * dispatch would have killed every fork-context skill at five minutes
+     * whatever the configured timeout said. The budget is now the caller's,
+     * and with none given there is no per-agent bound at all.
+     */
+    public function testDispatchSkillGivesTheForkTheCallersBudgetOrNone(): void
+    {
+        $registry = new SkillRegistry();
+        $forkSkill = $this->skillFromYaml("description: Fork skill\ncontext: fork", 'fork-skill');
+        $registry->register(['fork-skill' => $forkSkill]);
+        $app = App::new($this->provider, 'test-model')->withAvailableSkills($registry);
+
+        $timeouts = [];
+        $executor = $this->createMock(ExecutorInterface::class);
+        $executor->method('execute')->willReturnCallback(
+            static function (SubAgent $agent) use (&$timeouts): AgentResult {
+                $timeouts[] = $agent->timeout;
+
+                return new AgentResult(agentId: $agent->id, status: AgentStatus::Completed, output: 'ok');
+            },
+        );
+        $pool = new AgentWorkerPool(maxConcurrent: 1, executor: $executor);
+
+        $app->dispatchSkill($forkSkill, $pool, 'no budget given');
+        $app->dispatchSkill($forkSkill, $pool, 'the configured budget', 1_800);
+
+        $this->assertSame([0, 1_800], $timeouts);
+    }
+
     public function testDispatchSkillReturnsNullForThreadContextSkill(): void
     {
         // Arrange - default context ("thread") must NOT be dispatched through

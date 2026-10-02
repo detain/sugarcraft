@@ -247,6 +247,15 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // precedent above covers exactly that shape.
         'NARROWED_GRANT_NOTICE_FORMAT' => ['method' => 'narrowedGrantNoticeRows', 'conversions' => 3],
         'NARROWED_GRANT_OVERFLOW_FORMAT' => ['method' => 'narrowedGrantNoticeRows', 'conversions' => 2],
+        // Audit R1's two prompt-budget rows and audit R12's nonsense-ceiling
+        // row, read back by BootstrapLaunchNoticeRoutingTest; quoted on no page.
+        'INSTRUCTION_DEFERRAL_NOTICE_FORMAT' => ['method' => 'reportPromptBudgetDeferrals', 'conversions' => 4],
+        'SKILL_BUDGET_DEFERRAL_NOTICE_FORMAT' => ['method' => 'reportPromptBudgetDeferrals', 'conversions' => 5],
+        'NONSENSE_LIMIT_NOTICE_FORMAT' => ['method' => 'reportNonsenseLimits', 'conversions' => 4],
+        // The R16 follow-up's two fallback-log rows: a temp-dir log, and the
+        // null device. Read back by BootstrapLaunchNoticeRoutingTest.
+        'TUI_ERROR_LOG_FALLBACK_NOTICE_FORMAT' => ['method' => 'reportTuiErrorLogFallback', 'conversions' => 2],
+        'TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT' => ['method' => 'reportTuiErrorLogFallback', 'conversions' => 1],
     ];
 
     /**
@@ -451,6 +460,15 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'mcpClient' => ["'path'", "'status'", "'canonicalRoot'", "'/'", "'fingerprint'", "'summary'", "'; '"],
         // Audit 15d-05's binding row: the plural pair and the is/are pick.
         'reportMemorySkips' => ["''", "'s'", "'is'", "'are'"],
+        // Audit R1's two rows: the plural pair, the was/were pick of the
+        // instruction row, and the is/are and its/their picks of the skill row.
+        'reportPromptBudgetDeferrals' => ["''", "'s'", "'was'", "'were'", "'is'", "'are'", "'its'", "'their'"],
+        // Audit R12: both sentences are named constants and both keys are, so
+        // the body holds no literal at all.
+        'reportNonsenseLimits' => [],
+        // The R16 follow-up: the path separator and the `~/` the home log is
+        // spelled with; both sentences are named constants.
+        'reportTuiErrorLogFallback' => ["'/'", "'~/'"],
         // The empty-inherited short circuit and the two tier words the ternary
         // picks between; the sentence itself is the named constant, so the only
         // literals in the body are the `''` guard and those two words.
@@ -751,7 +769,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $census = self::sprintfCensus(self::bootstrapSource());
 
         self::assertSame(
-            21,
+            26,
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );

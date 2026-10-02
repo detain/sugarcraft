@@ -204,6 +204,11 @@ final class NonInteractive
             // unreadable — or legacy notes it just bound to this project —
             // reached a `-p` user nowhere.
             Bootstrap::reportMemorySkips($args->root);
+            // Audit R1 and R12: what the prompt leaves out for budget, and a
+            // step or token ceiling the resolvers ignored as nonsense — both
+            // shape this run's answer and were reported to nobody.
+            Bootstrap::reportPromptBudgetDeferrals($args->root);
+            Bootstrap::reportNonsenseLimits();
             // And the other half of the same silence: a project skills
             // directory refused wholesale for resolving out of the checkout.
             Bootstrap::reportProjectTierRefusals();
