@@ -32,11 +32,42 @@ final class AgentManager
         PermissionMode::Default,
     ];
 
+    /**
+     * How many FINISHED (complete, failed, stopped) sub-agents this manager
+     * keeps once they have settled — audit AG-3.
+     *
+     * Without a cap the map only ever grew: every workflow stage and Task
+     * delegation stayed in it with its full final output (often tens of KB)
+     * for the life of the process, and {@see liveOutputs()} walks the whole
+     * map on every frame, so a TUI left open running a workflow an hour got
+     * both fatter and slower without bound. Nothing reads a finished row by
+     * id after its batch returns — callers take the {@see AgentResult}s
+     * {@see executeAll()} yields, and the Task tool holds its own SubAgent —
+     * so old rows only feed the dashboard's recent-history views
+     * ({@see liveOutput()}'s tail, the per-agent telemetry). 64 is far more
+     * history than either shows while bounding the worst case to a few MB.
+     * Pending and running rows are never counted or evicted: they are work
+     * the user is still waiting on.
+     */
+    public const int RETAINED_TERMINAL_SUB_AGENTS = 64;
+
     /** @var array<string, Agent> */
     private array $agents = [];
 
     /** @var array<string, SubAgent> */
     private array $subAgents = [];
+
+    /**
+     * Telemetry of sub-agents evicted by {@see pruneTerminalSubAgents()},
+     * keyed by agent name, so {@see tokensUsed()}, {@see costUsd()} and
+     * {@see elapsedSeconds()} keep reporting the whole session after the rows
+     * themselves are gone — the dashboard's cost column must not drop when an
+     * old run is forgotten. Four scalars per agent name, so it stays small
+     * however many runs pass through.
+     *
+     * @var array<string, array{tokens: int, cost: float, firstStart: ?int, lastEnd: ?int}>
+     */
+    private array $retiredTelemetry = [];
 
     /**
      * Ids inside {@see $subAgents} that are OBSERVED mirrors of a run living
@@ -346,6 +377,10 @@ final class AgentManager
         );
 
         $this->subAgents[$subAgent->id] = $subAgent;
+        // A Task run settles its SubAgent outside this manager, so the next
+        // launch is where its finished row gets counted against the cap. The
+        // row just added is pending and therefore never a candidate.
+        $this->pruneTerminalSubAgents();
 
         return $subAgent;
     }
@@ -518,7 +553,7 @@ final class AgentManager
      * status line wants: sub-agents run concurrently via
      * {@see AgentWorkerPool}, so summing them would report several minutes of
      * "elapsed" for an agent that has been busy for thirty seconds.
-     * Returns 0 when the agent has no started sub-agents.
+     * Returns 0 when the agent has no started sub-agents, retained or retired.
      */
     public function elapsedSeconds(string $agentName): int
     {
@@ -527,12 +562,10 @@ final class AgentManager
             fn(SubAgent $subAgent) => $subAgent->startedAt !== null,
         );
 
-        if ($started === []) {
-            return 0;
-        }
-
-        $earliest = null;
-        $latest = null;
+        // Evicted runs still bound the span: the earliest start usually
+        // belongs to a row the retention cap has already dropped.
+        $earliest = $this->retiredTelemetry[$agentName]['firstStart'] ?? null;
+        $latest = $this->retiredTelemetry[$agentName]['lastEnd'] ?? null;
         foreach ($started as $subAgent) {
             /** @var \DateTimeImmutable $startedAt */
             $startedAt = $subAgent->startedAt;
@@ -543,6 +576,10 @@ final class AgentManager
 
             $earliest = $earliest === null ? $begin : min($earliest, $begin);
             $latest = $latest === null ? $end : max($latest, $end);
+        }
+
+        if ($earliest === null) {
+            return 0;
         }
 
         return max(0, (int) $latest - (int) $earliest);
@@ -557,7 +594,7 @@ final class AgentManager
      */
     public function tokensUsed(string $agentName): int
     {
-        return array_sum(array_map(
+        return ($this->retiredTelemetry[$agentName]['tokens'] ?? 0) + array_sum(array_map(
             fn(SubAgent $subAgent) => $subAgent->tokensUsed,
             $this->subAgentsOf($agentName),
         ));
@@ -568,7 +605,7 @@ final class AgentManager
      */
     public function costUsd(string $agentName): float
     {
-        return array_sum(array_map(
+        return ($this->retiredTelemetry[$agentName]['cost'] ?? 0.0) + array_sum(array_map(
             fn(SubAgent $subAgent) => $subAgent->costUsd,
             $this->subAgentsOf($agentName),
         ));
@@ -1682,6 +1719,11 @@ final class AgentManager
             // A caller that abandons this generator mid-iteration leaves the
             // same wreckage, which is why this is a finally rather than a tail.
             $this->settleAbandoned($batch);
+            // Only now, with every result of this batch already yielded and
+            // mirrored, may its finished rows count against the cap: a batch
+            // larger than the cap still hands its caller every result, and
+            // drain() never finds its own row evicted mid-batch.
+            $this->pruneTerminalSubAgents();
         }
     }
 
@@ -1909,11 +1951,75 @@ final class AgentManager
     }
 
     /**
-     * Remove a completed subagent.
+     * Forget one sub-agent.
+     *
+     * An explicit removal forgets the row's telemetry too — the caller asked
+     * for it to be gone. The retention cap goes through
+     * {@see retireSubAgent()} instead, which folds the row's numbers into the
+     * per-agent roll-up first. A projected mirror's id is dropped from the
+     * mirror set as well, so {@see projectedSubAgentCount()} cannot count a
+     * row that no longer exists.
      */
     public function removeSubAgent(string $id): void
     {
-        unset($this->subAgents[$id]);
+        unset($this->subAgents[$id], $this->projectedSubAgentIds[$id]);
+    }
+
+    /**
+     * Evict the oldest finished sub-agents beyond
+     * {@see RETAINED_TERMINAL_SUB_AGENTS} (audit AG-3).
+     *
+     * Oldest means first-registered: the map keeps insertion order, and a
+     * row's position is fixed when it is created. Projected mirror rows are
+     * skipped — their lifetime is {@see clearProjectedSubAgents()}'s, which
+     * already clears them at every turn dispatch.
+     */
+    private function pruneTerminalSubAgents(): void
+    {
+        $terminal = [];
+        foreach ($this->subAgents as $id => $subAgent) {
+            if (isset($this->projectedSubAgentIds[$id])) {
+                continue;
+            }
+
+            if ($subAgent->isComplete() || $subAgent->isStopped()) {
+                $terminal[] = (string) $id;
+            }
+        }
+
+        $excess = count($terminal) - self::RETAINED_TERMINAL_SUB_AGENTS;
+        for ($i = 0; $i < $excess; $i++) {
+            $this->retireSubAgent($terminal[$i]);
+        }
+    }
+
+    /**
+     * Fold a finished sub-agent's telemetry into {@see $retiredTelemetry},
+     * then remove it, so the roll-ups read the same before and after.
+     */
+    private function retireSubAgent(string $id): void
+    {
+        $subAgent = $this->subAgents[$id] ?? null;
+        if ($subAgent === null) {
+            return;
+        }
+
+        $name = $subAgent->agent->name;
+        $ledger = $this->retiredTelemetry[$name] ?? ['tokens' => 0, 'cost' => 0.0, 'firstStart' => null, 'lastEnd' => null];
+        $ledger['tokens'] += $subAgent->tokensUsed;
+        $ledger['cost'] += $subAgent->costUsd;
+
+        if ($subAgent->startedAt !== null) {
+            $begin = $subAgent->startedAt->getTimestamp();
+            // A terminal row without completedAt would tick against now in
+            // elapsedSeconds(); retiring freezes it at the moment it left.
+            $end = $subAgent->completedAt?->getTimestamp() ?? time();
+            $ledger['firstStart'] = $ledger['firstStart'] === null ? $begin : min($ledger['firstStart'], $begin);
+            $ledger['lastEnd'] = $ledger['lastEnd'] === null ? $end : max($ledger['lastEnd'], $end);
+        }
+
+        $this->retiredTelemetry[$name] = $ledger;
+        $this->removeSubAgent($id);
     }
 
     // -------------------------------------------------------------------------
