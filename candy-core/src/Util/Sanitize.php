@@ -26,10 +26,14 @@ namespace SugarCraft\Core\Util;
  *   - {@see untrustedForDisplay()} — {@see untrusted()} plus carriage-return
  *     mapping (CRLF and lone CR → LF), for text painted into a row-addressed
  *     frame. A surviving CR returns the cursor to column 0 mid-row, which no
- *     line-oriented renderer can account for.
+ *     line-oriented renderer can account for. Bidi overrides and zero-width
+ *     characters additionally show as `<U+202E>`-style markers, so a row
+ *     cannot read reversed or hide a character ({@see untrusted()} keeps
+ *     them, for paste fidelity).
  *   - {@see visibleControls()} — the opposite stance: nothing is removed, every
  *     control is RENDERED as inert visible text (caret notation for C0 and DEL,
- *     `<U+0080>`…`<U+009F>` for C1) and invalid UTF-8 is repaired to U+FFFD.
+ *     `<U+0080>`…`<U+009F>` for C1, `<U+202E>`-style for bidi/zero-width
+ *     format characters) and invalid UTF-8 is repaired to U+FFFD.
  *     For a gate — a permission prompt, a confirmation — where the user must
  *     see exactly what they are approving, and a strip would hide part of it.
  *
@@ -268,7 +272,9 @@ final class Sanitize
      * {@see untrusted()} plus carriage-return mapping: every `\r\n` becomes
      * `\n`, and every remaining lone `\r` becomes `\n` too. The policy for
      * untrusted text painted into a frame that is laid out one logical line
-     * per terminal row.
+     * per terminal row. Invisible bidi overrides and zero-width characters are
+     * rendered as `<U+XXXX>` markers on top (audit 15b-28) — see
+     * {@see markInvisibleFormatting()} for which, and when.
      *
      * Why CR cannot simply survive there, as {@see untrusted()} lets it: CR is
      * not a character but a cursor motion. It returns the cursor to column 0
@@ -306,7 +312,92 @@ final class Sanitize
      */
     public static function untrustedForDisplay(string $s): string
     {
-        return str_replace(["\r\n", "\r"], "\n", self::untrusted($s));
+        return self::markInvisibleFormatting(
+            str_replace(["\r\n", "\r"], "\n", self::untrusted($s)),
+        );
+    }
+
+    /**
+     * Render the invisible bidi and zero-width format characters as visible
+     * `<U+XXXX>` markers — the display half of audit 15b-28, applied by
+     * {@see untrustedForDisplay()} (and, unconditionally, by
+     * {@see visibleControls()}).
+     *
+     * Why: none of these is a control byte, so every strip in this class lets
+     * them through, yet each changes what a row SAYS without showing itself.
+     * U+202E (RIGHT-TO-LEFT OVERRIDE) makes the terminal paint the rest of the
+     * line reversed — "Trojan Source": a tool row or command can read
+     * differently from what runs — and a zero-width space makes two different
+     * names or paths look identical. {@see untrusted()} itself keeps them, for
+     * paste fidelity; only the display policies mark them.
+     *
+     * Two tiers, because some of these have legitimate jobs in real text:
+     *   - Always marked: the embeddings/overrides U+202A–U+202E, the isolates
+     *     U+2066–U+2069, ZERO WIDTH SPACE U+200B, WORD JOINER U+2060 and
+     *     ZERO WIDTH NO-BREAK SPACE / BOM U+FEFF. Tool output has no honest
+     *     use for an invisible directional override.
+     *   - Marked only where they cannot be doing their job: ZWNJ U+200C,
+     *     ZWJ U+200D, LRM U+200E, RLM U+200F and ARABIC LETTER MARK U+061C.
+     *     ZWJ builds every family/profession emoji (👩‍💻), ZWNJ is ordinary
+     *     spelling in Persian and the Indic scripts, and RLM/ALM steer
+     *     neutrals inside RTL text — in each case right after a non-ASCII
+     *     character. So they survive there, and are marked at the start of the
+     *     text, after an ASCII character (the spoofing case: `pay\u{200D}pal`),
+     *     or after another such mark (a run of them is never spelling).
+     *     Residual, accepted: one joiner after a non-ASCII letter stays
+     *     invisible.
+     *
+     * Byte-oriented like the rest of the class (no `/u`): the conditional
+     * test is "is the preceding byte ASCII", which a stray malformed byte can
+     * only answer "no" — and the always-marked tier is a plain `strtr()`. If
+     * the regex itself ever fails, every joiner is marked rather than none.
+     * Each marker is printable ASCII and the rule looks only BACKWARD, so the
+     * result of a prefix is a prefix of the result — callers that sanitise a
+     * draft and its caret prefix in two passes still agree on the column.
+     */
+    public static function markInvisibleFormatting(string $s): string
+    {
+        if ($s === '') {
+            return '';
+        }
+        [$always, $joiners] = self::invisibleFormattingMaps();
+        $s = strtr($s, $always);
+
+        // The always-marked tier already became ASCII, so a joiner right
+        // after one now sits after `>` and is caught by the ASCII lookbehind.
+        $marked = preg_replace_callback(
+            '/(?:(?<![\x80-\xFF])|(?<=\xE2\x80[\x8C-\x8F]|\xD8\x9C))(?:\xE2\x80[\x8C-\x8F]|\xD8\x9C)/',
+            static fn (array $m): string => $joiners[$m[0]],
+            $s,
+        );
+
+        return $marked ?? strtr($s, $joiners);
+    }
+
+    /**
+     * The 15b-28 codepoints, UTF-8 spelling => `<U+XXXX>` marker, split into
+     * the always-marked tier and the conditional joiner tier. Built once.
+     *
+     * @return array{array<string, string>, array<string, string>}
+     */
+    private static function invisibleFormattingMaps(): array
+    {
+        static $maps = null;
+        if ($maps === null) {
+            $always = [0x200B, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E,
+                0x2060, 0x2066, 0x2067, 0x2068, 0x2069, 0xFEFF];
+            $joiners = [0x061C, 0x200C, 0x200D, 0x200E, 0x200F];
+            $toMap = static function (array $cps): array {
+                $map = [];
+                foreach ($cps as $cp) {
+                    $map[mb_chr($cp, 'UTF-8')] = \sprintf('<U+%04X>', $cp);
+                }
+                return $map;
+            };
+            $maps = [$toMap($always), $toMap($joiners)];
+        }
+
+        return $maps;
     }
 
     /**
@@ -330,6 +421,11 @@ final class Sanitize
      *     default), so multi-line text keeps its shape; the caller expands or
      *     wraps them. With `$preserveLayout` false they become `^I` / `^J` too
      *     and the result is guaranteed to be one row.
+     *   - The invisible bidi and zero-width format characters (U+202A–U+202E,
+     *     U+2066–U+2069, U+200B–U+200F, U+2060, U+FEFF, U+061C) become
+     *     `<U+202E>`-style markers too, unconditionally (audit 15b-28: a
+     *     right-to-left override makes a command read reversed). Unlike
+     *     {@see untrustedForDisplay()}, even a ZWJ inside an emoji is shown.
      *   - Everything else — every printable character, the Private Use Area,
      *     astral codepoints — passes through unchanged.
      *
@@ -399,6 +495,12 @@ final class Sanitize
             for ($cp = 0x80; $cp <= 0x9F; $cp++) {
                 $map["\xC2" . \chr($cp)] = \sprintf('<U+%04X>', $cp);
             }
+            // 15b-28: a gate shows the bidi/zero-width format characters
+            // too, in BOTH tiers and unconditionally — what the user approves
+            // must not read differently from what runs, and a joiner inside
+            // an emoji is still a byte the command carries.
+            [$always, $joiners] = self::invisibleFormattingMaps();
+            $map += $always + $joiners;
         }
 
         return $map;
