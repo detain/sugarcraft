@@ -963,6 +963,13 @@ final class PromptStabilityTest extends TestCase
      */
     private const GIT_SAID_MAX_BYTES = 2048;
 
+    /**
+     * The unstaged read {@see EnvironmentBlock} runs since audit 15d-12, minus
+     * its global options — the binary control probes with exactly this, so a
+     * host knob the env block is immune to cannot red the probe.
+     */
+    private const ENV_UNSTAGED_DIFF_ARGV = ['diff-files', '--shortstat', '--patch', '--no-ext-diff', '--no-textconv', '--no-color'];
+
     /** The fixture's PSR-4 source directory, as `RepoMapBlock` renders it. */
     private const FIXTURE_SOURCE_DIR = 'src/';
 
@@ -2046,14 +2053,21 @@ final class PromptStabilityTest extends TestCase
         //       roster in {@see dirtyRepoFixtureWithEveryStableLayer()} exists
         //       to record. The exit code is captured rather than asserted
         //       inline so the message can carry the actual N.
+        //
+        //       SINCE AUDIT 15d-12 THE PROBE IS THE PLUMBING PRODUCTION RUNS,
+        //       not porcelain `git diff`: the env block no longer honours
+        //       `diff.external`, so a porcelain probe would red on a host knob
+        //       that cannot reach the prompt - this guard's own wrong-domain
+        //       failure, re-created one layer down.
         $binaryDiffOutput = [];
-        $binaryDiffExit = self::git($binary->root(), ['diff', '--shortstat', '--patch'], $binaryDiffOutput);
+        $binaryDiffExit = self::git($binary->root(), self::ENV_UNSTAGED_DIFF_ARGV, $binaryDiffOutput);
         $this->assertSame(
             0,
             $binaryDiffExit,
-            'git diff failed, exit ' . $binaryDiffExit . ' - the binary-diff control fixture cannot produce a '
-                . 'diff at all, so nothing below this line is a statement about the scanner. MEASURED cause: a '
-                . '`diff.external` naming a command that cannot exec, anywhere in the config precedence chain. '
+            'git diff-files failed, exit ' . $binaryDiffExit . ' - the binary-diff control fixture cannot produce '
+                . 'a diff at all, so nothing below this line is a statement about the scanner. MEASURED cause '
+                . 'before audit 15d-12: a `diff.external` naming a command that cannot exec; the plumbing read '
+                . 'is immune to that, so look for an invalid value of a key diff-files reads (boundary (b)). '
                 . 'git said: ' . self::gitSaid($binaryDiffOutput),
         );
 
@@ -2078,11 +2092,11 @@ final class PromptStabilityTest extends TestCase
             0,
             substr_count(implode("\n", $binaryDiffOutput), 'Binary files '),
             'git itself rendered no `Binary files ` line in the binary-diff control fixture, so nothing below '
-                . 'this line is a statement about the scanner. MEASURED causes, BOTH of which leave `git diff` '
-                . 'at exit 0 so the guard above cannot see them: a `diff.external` / `GIT_EXTERNAL_DIFF` that '
-                . 'succeeds and prints nothing, which keeps the shortstat line and drops the patch body; and a '
-                . '`core.excludesFile` naming `Alpha.php`, which is in force before the fixture\'s own '
-                . '`git add -A` so the file is never tracked and git prints nothing at all. git said: '
+                . 'this line is a statement about the scanner. MEASURED cause, at exit 0 so the guard above '
+                . 'cannot see it: a `core.excludesFile` naming `Alpha.php`, which is in force before the '
+                . 'fixture\'s own `git add -A` so the file is never tracked and git prints nothing at all. (A '
+                . '`diff.external` / `GIT_EXTERNAL_DIFF` that prints nothing was the other, before audit 15d-12 '
+                . 'moved this read to `diff-files --no-ext-diff`.) git said: '
                 . self::gitSaid($binaryDiffOutput),
         );
 
@@ -2093,63 +2107,66 @@ final class PromptStabilityTest extends TestCase
                 . 'stopped honouring $GIT_DIR/info/attributes or the rendering changed. The scanner is dead',
         );
 
-        //    C. Raw ANSI, from a real `color.diff=always`.
+        //    C. Raw ANSI, from a real `color.diff=always` - REWRITTEN BY AUDIT
+        //       15d-12, as this control's own message said it would have to be.
+        //       It used to require escapes IN THE PROMPT, as proof the scanner
+        //       was alive; the env block now passes `--no-color` (and reads
+        //       the diffs through plumbing that never colours), so the same
+        //       fixture must now render ZERO. Liveness moves to git's side:
+        //       the scanner must find escapes in what plain `git log` prints
+        //       for this fixture, or the zero proves nothing. `log` and not
+        //       `diff` is the probe because it is the read production still
+        //       runs as porcelain, and because a host `diff.external` cannot
+        //       empty it.
         $coloured = $this->dirtyRepoFixtureWithEveryStableLayer();
         $this->assertSame(0, self::git($coloured->root(), ['config', 'color.diff', 'always']));
         $this->assertSame(0, self::git($coloured->root(), ['config', 'color.ui', 'always']));
         $colouredPrompt = $coloured->systemPrompt();
 
-        //       THE CONTROL'S OWN SUBPROCESS, BEFORE ITS LIVENESS — the same
-        //       repair control B carries two blocks up, for the same reason,
-        //       and the previous cycle judged this control safe because control
-        //       B's guard "intercepts first". MEASURED, it does not, for the
-        //       COLOUR family: `GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=color.diff
-        //       GIT_CONFIG_VALUE_0=never GIT_CONFIG_KEY_1=color.ui
-        //       GIT_CONFIG_VALUE_1=never` takes this control to ZERO escapes
-        //       while control B stays fully green — its `git diff` exits 0 and
-        //       `Binary files ` still renders — and the liveness assertion below
-        //       then reds ALONE, naming two causes, NEITHER of which happened.
-        //       The environment outranks every config file (boundary (a) in
-        //       {@see dirtyRepoFixtureWithEveryStableLayer()}), so the
-        //       repo-local `color.diff=always` written just above is not enough
-        //       to make this control fire. Both halves are asserted: the exit
-        //       code, because a `diff.external` that cannot exec breaks this
-        //       fixture exactly as it breaks control B's, and then git's OWN
-        //       escape bytes, because that is the half a colour override kills
-        //       while leaving the exit code at 0. The escape half has a SECOND
-        //       cause and the message below names it: MEASURED, a global
-        //       `[diff] external = /bin/true` also takes this probe to exit 0
-        //       with ZERO escapes, because there is no patch body left to
-        //       colour. Control B's `Binary files ` guard reds first under that
-        //       knob today, but ordering is not a licence to name one cause -
-        //       that is the argument this control's own repair rests on.
+        //       THE CONTROL'S OWN SUBPROCESS, BEFORE ITS VERDICT, for control
+        //       B's reason: MEASURED, `GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=
+        //       color.diff GIT_CONFIG_VALUE_0=never GIT_CONFIG_KEY_1=color.ui
+        //       GIT_CONFIG_VALUE_1=never` in the environment outranks the
+        //       repo-local `always` above (boundary (a) in
+        //       {@see dirtyRepoFixtureWithEveryStableLayer()}), and git then
+        //       colours nothing - which would make the zero below vacuous.
         $colourProbe = [];
-        $colourExit = self::git($coloured->root(), ['diff', '--shortstat', '--patch'], $colourProbe);
+        $colourExit = self::git($coloured->root(), ['log', '--oneline', '-5'], $colourProbe);
         $this->assertSame(
             0,
             $colourExit,
-            'git diff failed, exit ' . $colourExit . ' - the coloured control fixture cannot produce a diff at '
-                . 'all, so nothing below this line is a statement about the scanner. git said: '
+            'git log failed, exit ' . $colourExit . ' - the coloured control fixture cannot produce a log at '
+                . 'all, so nothing below this line is a statement about colour. git said: '
                 . self::gitSaid($colourProbe),
         );
         $this->assertGreaterThan(
             0,
             substr_count(implode("\n", $colourProbe), "\x1b"),
-            'git itself emitted no escape bytes in the coloured control fixture, so nothing below this line is a '
-                . 'statement about the scanner. MEASURED causes, BOTH at exit 0: a colour setting the repo-local '
-                . '`color.diff=always` cannot outrank - GIT_CONFIG_COUNT / GIT_CONFIG_PARAMETERS in the '
-                . 'environment beats every config file; or a `diff.external` / `GIT_EXTERNAL_DIFF` that succeeds '
-                . 'and prints nothing, which leaves exit 0 with no patch body to colour - MEASURED on git 2.43.0, '
-                . 'a global `[diff] external = /bin/true` takes THIS probe to ZERO escape bytes while the repo '
-                . 'keeps `color.diff=always`. git said: ' . self::gitSaid($colourProbe),
+            'the escape-byte scanner found no escapes in what plain `git log` prints for a fixture with '
+                . '`color.diff=always`. Either the scanner is dead, or a colour setting the repo-local `always` '
+                . 'cannot outrank - GIT_CONFIG_COUNT / GIT_CONFIG_PARAMETERS in the environment beats every '
+                . 'config file - switched git\'s colour off, and the zero-escape assertion below proves nothing. '
+                . 'git said: ' . self::gitSaid($colourProbe),
         );
 
-        $this->assertGreaterThan(
+        $this->assertSame(
             0,
             substr_count($colouredPrompt, "\x1b"),
-            'the escape-byte scanner found no escapes in a fixture with `color.diff=always`. Either the scanner '
-                . 'is dead, or EnvironmentBlock started passing `--no-color` - which would be the fix for '
-                . 'worklog escalation 2 and makes this control, not the absence assertion, the thing to rewrite',
+            'a fixture with `color.diff=always` and `color.ui=always` put raw ANSI escapes into the system '
+                . 'prompt: an EnvironmentBlock git read lost its `--no-color`, or a new read was added without '
+                . 'it (audit 15d-12). `-c color.ui=false` alone is NOT enough - the per-command slot outranks it',
+        );
+        //       ...and the zero is not an emptied section: the coloured
+        //       fixture still renders the log subject and the patch.
+        $this->assertSame(
+            1,
+            preg_match('/\nRecent commits:\n[0-9a-f]{7} fixture: initial import\n/', $colouredPrompt),
+            'the coloured control rendered no plain `<sha> fixture: initial import` log line',
+        );
+        $this->assertStringContainsString(
+            "\n@@ -2,4 +2,4 @@\n",
+            $colouredPrompt,
+            'the coloured control rendered no unstaged patch, so its zero escape bytes are an empty section',
         );
 
         // 1. No field degraded to a placeholder. The scan is on the PREFIX
@@ -2187,8 +2204,9 @@ final class PromptStabilityTest extends TestCase
         $this->assertSame(
             0,
             substr_count($prompt, "\x1b"),
-            'a raw ANSI escape byte reached the system prompt. `color.ui=always` or `color.diff=always` on a host '
-                . 'whose pins were bypassed puts 21 of them there (worklog escalation 2)',
+            'a raw ANSI escape byte reached the system prompt. Before audit 15d-12, `color.ui=always` or '
+                . '`color.diff=always` on a host whose pins were bypassed put 21 of them there (worklog '
+                . 'escalation 2); control C above now pins that the env block itself emits none',
         );
 
         // 4. The branch read. `color.branch.current=true` empties this.
@@ -2244,19 +2262,20 @@ final class PromptStabilityTest extends TestCase
             'the diff index line is not two 7-hex blobs, so core.abbrev is not 7 for this subprocess',
         );
 
-        // 8. THE EXACT CONTROL COUNTS, LAST. These are the figures the worklog
-        //    escalations quote and they are worth pinning, but they are pinned
-        //    HERE rather than beside the controls because neither is a fact
-        //    about a scanner: one is the number of git FIELDS `<env>` renders
-        //    and the other is a function of the WIDTH of the diff git colours.
-        //    At the end, nothing they red can hide an assertion above them.
+        // 8. THE EXACT CONTROL COUNT, LAST. It is the figure worklog
+        //    escalation 3 quotes and worth pinning, but it is pinned HERE
+        //    rather than beside its control because it is not a fact about a
+        //    scanner: it is the number of git FIELDS `<env>` renders. At the
+        //    end, nothing it reds can hide an assertion above it. (Its sibling,
+        //    the 21 escape bytes of the coloured control, went with audit
+        //    15d-12: that control now pins zero, above.)
         //
-        //    They are also this file's only equality pins on a figure GIT
+        //    It is also this file's only equality pin on a figure GIT
         //    produces rather than this repository, and {@see MIN_STABLE_PREFIX_BYTES}
         //    argues the opposite policy for host-dependent figures. The
-        //    exception is argued rather than taken quietly: both are read off a
-        //    fixture whose git config is fully pinned; both moved in this
-        //    session only when a hazard moved them; and a red on a different git
+        //    exception is argued rather than taken quietly: it is read off a
+        //    fixture whose git config is fully pinned; it moved in this
+        //    session only when a hazard moved it; and a red on a different git
         //    version is cheap, because it names this line and this line says so.
         $this->assertSame(
             4,
@@ -2266,17 +2285,6 @@ final class PromptStabilityTest extends TestCase
                 . 'staged diff, unstaged diff, of which four degrade to the placeholder and the branch read '
                 . 'renders EMPTY instead (worklog escalation 3) - and not a fact about the scanner. A step that '
                 . 'adds or removes a git field re-measures this',
-        );
-        $this->assertSame(
-            21,
-            substr_count($colouredPrompt, "\x1b"),
-            'the coloured control renders ' . substr_count($colouredPrompt, "\x1b") . ' escape bytes, not the '
-                . '21 MEASURED for worklog escalation 2. Three things move this and none of them is the '
-                . 'scanner: the diff CONTEXT WIDTH (MEASURED, GIT_DIFF_OPTS=-u10 makes it 22), a field that '
-                . 'stopped rendering (MEASURED, `log.date=true` IN THE ENVIRONMENT - GIT_CONFIG_COUNT - makes '
-                . 'it 19; the same key in a global config FILE leaves it at 21, because this fixture pins '
-                . '`log.date default` repo-locally and a file loses to that pin while the environment does '
-                . 'not - boundary (a)), and a different git version colouring differently',
         );
     }
 
@@ -2699,6 +2707,10 @@ final class PromptStabilityTest extends TestCase
         //                                   OUTRANK `color.ui`, so pinning `color.ui`
         //                                   alone does NOT cover the colour hazard it
         //                                   appears to name. Both are pinned.
+        //                                   Both rows are history since audit
+        //                                   15d-12: the env block passes
+        //                                   `--no-color`, and control C pins
+        //                                   that `always` now renders zero.
         //   `diff.suppressBlankEmpty=true`  prompt 4,844 -> 4,842 B
         //   `status.showUntrackedFiles=no`  moves nothing on the two-render
         //                                   measurement (MEASURED 4,844/4,670,
@@ -2944,7 +2956,10 @@ final class PromptStabilityTest extends TestCase
         //     that second guard quoting git's ` 1 file changed, 0 insertions(+),
         //     0 deletions(-)`, and `/bin/false` still reds at the exit-code
         //     guard quoting `fatal: external diff died` — both still
-        //     `Failures: 3`.
+        //     `Failures: 3`. BOTH DOMAINS ARE HISTORY since audit 15d-12: the
+        //     env block's diffs are `diff-files` / `diff-index --no-ext-diff`,
+        //     which no `diff.external` reaches, and control B probes with the
+        //     same plumbing. EnvironmentBlockGitConfigIsolationTest pins it.
         //   - `core.bigFileThreshold=1` USED TO belong on that line and no
         //     longer does. MEASURED at this commit it moves NOTHING —
         //     4,844/4,670, byte-for-byte the clean figures — because the

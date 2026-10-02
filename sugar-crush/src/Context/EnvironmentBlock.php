@@ -405,6 +405,45 @@ final readonly class EnvironmentBlock implements PromptSection
     private const GIT_TIMEOUT_SECONDS = 2.0;
 
     /**
+     * Global options on every git read here (audit 15d-12): the block is a
+     * reading of the REPOSITORY, and the user's git config must not change
+     * what that reading is, run programs, or take the index lock.
+     *
+     * `--no-optional-locks`: without it `git status` takes `.git/index.lock`
+     * to write back its refreshed stat cache, so a `git add` the user runs
+     * in another terminal while a prompt is assembled fails with "Unable to
+     * create index.lock". The `-c` pins outrank every config file and the
+     * GIT_CONFIG_COUNT environment, so the bytes do not move with the host:
+     * `core.quotepath=false` prints a non-ASCII path as itself rather than
+     * as octal escapes the model would have to decode. `color.ui=false` is
+     * a backstop only — a per-command `color.diff=always` OUTRANKS it
+     * (measured: `log` still colours under `-c color.ui=false`), which is
+     * why the reads that can colour also carry `--no-color`.
+     */
+    private const GIT_GLOBAL_OPTIONS = ['--no-pager', '--no-optional-locks', '-c', 'color.ui=false', '-c', 'core.quotepath=false'];
+
+    /**
+     * The same lock rule as an environment variable, for anything git runs
+     * on our behalf that does not inherit the `--no-optional-locks` flag.
+     * Scoped to these reads rather than set in ProcessContainment::env(): an
+     * agent's own `git status` through Bash is the user's command, and
+     * keeping its index refresh is its business.
+     */
+    private const GIT_ENV = ['GIT_OPTIONAL_LOCKS' => '0'];
+
+    /**
+     * Flags on both diff reads. The diffs are PLUMBING (`diff-index`,
+     * `diff-files`), not `git diff`, because porcelain `git diff` refreshes
+     * and rewrites the index whenever it finds a stat-dirty file, and it
+     * takes the lock to do so even with GIT_OPTIONAL_LOCKS=0 (measured, git
+     * 2.43). The plumbing also ignores `diff.external`, `diff.noprefix`,
+     * `diff.context` and colour config; `--no-ext-diff` and `--no-textconv`
+     * are kept anyway so a `GIT_EXTERNAL_DIFF` or a textconv driver can never
+     * run a user program — a GUI diff tool popping a window — every turn.
+     */
+    private const DIFF_FLAGS = ['--shortstat', '--patch', '--no-ext-diff', '--no-textconv', '--no-color'];
+
+    /**
      * The honest caption for what the git section below it is — and is not.
      *
      * Upstream both label this block a snapshot: crush heads it
@@ -1009,7 +1048,9 @@ final readonly class EnvironmentBlock implements PromptSection
             self::BRANCH_MAX_BYTES,
         );
         $status = $this->gitField(['status', '--porcelain'], self::SUMMARY_MAX_BYTES, $timedOut);
-        $log = $this->gitField(['log', '--oneline', '-5'], self::SUMMARY_MAX_BYTES, $timedOut);
+        // `--no-show-signature`: a `log.showSignature=true` would run gpg on
+        // every listed commit, every turn, and splice its output in.
+        $log = $this->gitField(['log', '--oneline', '--no-color', '--no-show-signature', '-5'], self::SUMMARY_MAX_BYTES, $timedOut);
 
         // The caption goes FIRST: it is a claim about every line below it, the
         // branch line included. See GIT_STATE_CAVEAT for why the claim is the
@@ -1023,9 +1064,21 @@ final readonly class EnvironmentBlock implements PromptSection
         // emitting). Withholding them also withholds their two subprocesses,
         // which is the expensive half of the five: the worst case measured in
         // the class docblock spent 373 of its 399 ms inside `git diff`.
+        //
+        // The labels name the PORCELAIN command a reader would type to see
+        // the same section; what runs is its lock-free plumbing equivalent
+        // (see DIFF_FLAGS), whose patch is byte-identical under default config.
         if ($this->writeSinceLastRender) {
-            $section .= "\n\n" . $this->gitDiffSection('Staged changes (git diff --cached, index vs HEAD)', '--cached', $timedOut)
-                . "\n\n" . $this->gitDiffSection('Unstaged changes (git diff, working tree vs index)', null, $timedOut);
+            $section .= "\n\n" . $this->gitDiffSection(
+                'Staged changes (git diff --cached, index vs HEAD)',
+                ['diff-index', '--cached', '-M', ...self::DIFF_FLAGS, 'HEAD'],
+                $timedOut,
+            )
+                . "\n\n" . $this->gitDiffSection(
+                    'Unstaged changes (git diff, working tree vs index)',
+                    ['diff-files', ...self::DIFF_FLAGS],
+                    $timedOut,
+                );
         }
 
         return $section;
@@ -1057,10 +1110,10 @@ final readonly class EnvironmentBlock implements PromptSection
      */
     private function gitBranch(bool &$timedOut): string
     {
-        $command = 'git -C ' . escapeshellarg($this->cwd) . ' branch --show-current';
+        $argv = ['branch', '--show-current'];
 
         if (\function_exists('proc_open')) {
-            $captured = $this->runCaptured($command, null, null, self::GIT_TIMEOUT_SECONDS);
+            $captured = $this->runGit($argv, null);
             if ($captured['timedOut']) {
                 $timedOut = true;
 
@@ -1070,9 +1123,44 @@ final readonly class EnvironmentBlock implements PromptSection
             return trim($captured['stdout']);
         }
 
-        return \function_exists('shell_exec')
-            ? trim((string) shell_exec($command . ' 2>/dev/null'))
-            : 'unavailable (shell_exec is disabled on this build)';
+        if (!\function_exists('shell_exec')) {
+            return 'unavailable (shell_exec is disabled on this build)';
+        }
+
+        $env = '';
+        foreach (self::GIT_ENV as $name => $value) {
+            $env .= $name . '=' . escapeshellarg($value) . ' ';
+        }
+
+        return trim((string) shell_exec($env . $this->gitCommand($argv) . ' 2>/dev/null'));
+    }
+
+    /**
+     * The shell command for one git read: {@see GIT_GLOBAL_OPTIONS}, the
+     * captured cwd, then $argv — every word escaped on its own.
+     *
+     * @param list<string> $argv
+     */
+    private function gitCommand(array $argv): string
+    {
+        $command = 'git';
+        foreach ([...self::GIT_GLOBAL_OPTIONS, '-C', $this->cwd, ...$argv] as $word) {
+            $command .= ' ' . escapeshellarg($word);
+        }
+
+        return $command;
+    }
+
+    /**
+     * One bounded git read with {@see GIT_ENV}; callers have already checked
+     * that proc_open exists.
+     *
+     * @param list<string> $argv
+     * @return array{stdout: string, stderr: string, exitCode: int, truncatedBytes: int, stdoutDropped: int, stderrDropped: int, stdoutMidLine: bool, stderrMidLine: bool, timedOut: bool}
+     */
+    private function runGit(array $argv, ?int $maxBytes): array
+    {
+        return $this->runCaptured($this->gitCommand($argv), null, $maxBytes, self::GIT_TIMEOUT_SECONDS, self::GIT_ENV);
     }
 
     /**
@@ -1100,12 +1188,7 @@ final readonly class EnvironmentBlock implements PromptSection
             return self::gitTimeoutReason();
         }
 
-        $command = 'git -C ' . escapeshellarg($this->cwd);
-        foreach ($argv as $arg) {
-            $command .= ' ' . escapeshellarg($arg);
-        }
-
-        $captured = $this->runCaptured($command, null, $maxBytes, self::GIT_TIMEOUT_SECONDS);
+        $captured = $this->runGit($argv, $maxBytes);
 
         if ($captured['timedOut']) {
             $timedOut = true;
@@ -1150,7 +1233,17 @@ final readonly class EnvironmentBlock implements PromptSection
      * before launching sits only in STAGED. `git diff HEAD` would show the union
      * in one block and lose exactly that distinction, and a model told only "the
      * diff" then reports work it did not do (or misses work it did). The label
-     * names the literal command so the reader can reproduce the section.
+     * names the porcelain command a reader types to reproduce the section; the
+     * read itself is `diff-index --cached -M HEAD` / `diff-files`, which print
+     * the same patch without touching the index (see {@see DIFF_FLAGS}).
+     *
+     * THE ONE PLACE THE PLUMBING DIFFERS, accepted: with no index refresh, a
+     * STAT-DIRTY file (mtime moved, content not) that git treats as BINARY is
+     * counted in the shortstat line although no patch body follows — measured
+     * ` 2 files changed, 0 insertions(+), 0 deletions(-)` over one real binary
+     * change. A stat-dirty TEXT file is compared by content and dropped from
+     * both. Porcelain avoids the miscount only by rewriting the index, which
+     * is the write this read exists not to make.
      *
      * WHY THE SHORTSTAT LEADS. `--shortstat --patch` emits one summary line
      * ("N files changed, X insertions(+), Y deletions(-)") ahead of the patch.
@@ -1169,11 +1262,11 @@ final readonly class EnvironmentBlock implements PromptSection
      * git's own explanation and would land in the prompt as prose, so the exit
      * code is what is reported instead.
      *
-     * @param string      $label    Human label naming the exact command, for the model
-     * @param string|null $selector `--cached` for the staged view, null for unstaged
-     * @param bool        $timedOut this render's expiry flag — see {@see gitField()}
+     * @param string       $label    Human label naming the porcelain command that shows the same thing
+     * @param list<string> $argv     The plumbing read; a trailing `HEAD` gets the unborn-branch fallback
+     * @param bool         $timedOut this render's expiry flag — see {@see gitField()}
      */
-    private function gitDiffSection(string $label, ?string $selector, bool &$timedOut): string
+    private function gitDiffSection(string $label, array $argv, bool &$timedOut): string
     {
         if (!\function_exists('proc_open')) {
             return $label . ': ' . self::NO_PROCESS_REASON;
@@ -1183,18 +1276,26 @@ final readonly class EnvironmentBlock implements PromptSection
             return $label . ': ' . self::gitTimeoutReason();
         }
 
-        $command = 'git -C ' . escapeshellarg($this->cwd) . ' diff --shortstat --patch'
-            . ($selector === null ? '' : ' ' . escapeshellarg($selector));
-
         // $maxBytes bounds what is RETAINED, not what is read: git is drained to
         // completion (so it is never SIGPIPE'd and its exit code stays
         // meaningful) while memory stays bounded whatever the working tree holds.
         // A `git diff` over an accidentally-unignored vendor tree is hundreds of
         // megabytes, and shell_exec() would materialise all of it before any cap
         // could apply.
-        $captured = $this->runCaptured($command, null, self::DIFF_MAX_BYTES, self::GIT_TIMEOUT_SECONDS);
+        $captured = $this->runGit($argv, self::DIFF_MAX_BYTES);
 
-        if ($captured['timedOut']) {
+        // `diff-index HEAD` fails on an unborn branch, where `git diff --cached`
+        // compared against the empty tree. Probed only after a failure, so the
+        // common render keeps its five subprocesses.
+        if (!$captured['timedOut'] && $captured['exitCode'] !== 0 && end($argv) === 'HEAD') {
+            $emptyTree = $this->emptyTreeIfHeadIsUnborn($timedOut);
+            if ($emptyTree !== null) {
+                $argv[\count($argv) - 1] = $emptyTree;
+                $captured = $this->runGit($argv, self::DIFF_MAX_BYTES);
+            }
+        }
+
+        if ($timedOut || $captured['timedOut']) {
             $timedOut = true;
 
             return $label . ': ' . self::gitTimeoutReason();
@@ -1220,5 +1321,41 @@ final readonly class EnvironmentBlock implements PromptSection
             $captured['stdoutDropped'],
             $captured['stdoutMidLine'],
         );
+    }
+
+    /**
+     * The empty tree's object id when HEAD is unborn (a repository with no
+     * commit yet, or an orphan branch), null otherwise.
+     *
+     * `rev-parse --verify --quiet HEAD` exits 1 for an unborn HEAD and 128
+     * for a broken repository; only the first may fall back, because diffing
+     * a broken repository's index against the empty tree would present every
+     * tracked file as newly staged. The id comes from `hash-object` (stdin is
+     * already closed, so it hashes nothing) rather than a literal, because a
+     * SHA-256 repository's empty tree is a different id.
+     *
+     * @param bool $timedOut this render's expiry flag — see {@see gitField()}
+     */
+    private function emptyTreeIfHeadIsUnborn(bool &$timedOut): ?string
+    {
+        $head = $this->runGit(['rev-parse', '--verify', '--quiet', 'HEAD'], 256);
+        if ($head['timedOut']) {
+            $timedOut = true;
+
+            return null;
+        }
+        if ($head['exitCode'] !== 1) {
+            return null;
+        }
+
+        $tree = $this->runGit(['hash-object', '-t', 'tree', '--stdin'], 256);
+        if ($tree['timedOut']) {
+            $timedOut = true;
+
+            return null;
+        }
+        $id = trim($tree['stdout']);
+
+        return $tree['exitCode'] === 0 && preg_match('/\A[0-9a-f]{40}(?:[0-9a-f]{24})?\z/', $id) === 1 ? $id : null;
     }
 }

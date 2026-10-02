@@ -128,6 +128,12 @@ trait CapturesProcessOutput
      * deadline. `timedOut` is the discriminator to read — an exit code of
      * 124 can also be a command's own answer.
      *
+     * $envOverrides is handed to {@see ProcessContainment::env()} and wins
+     * over the inherited environment; the default `[]` is the historical
+     * environment. EnvironmentBlock passes `GIT_OPTIONAL_LOCKS=0` this way
+     * (audit 15d-12) so the lock rule stays scoped to its own git reads.
+     *
+     * @param array<string, string> $envOverrides
      * @return array{
      *     stdout: string,
      *     stderr: string,
@@ -140,7 +146,7 @@ trait CapturesProcessOutput
      *     timedOut: bool,
      * }
      */
-    private function runCaptured(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $timeoutSeconds = null): array
+    private function runCaptured(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $timeoutSeconds = null, array $envOverrides = []): array
     {
         $descriptors = [
             0 => ['pipe', 'r'],
@@ -160,7 +166,7 @@ trait CapturesProcessOutput
         // paths: detach is the half that needs a binary, fail-fast env needs
         // none.
         $spawnSpec = ProcessContainment::spawnSpec($command);
-        $env = ProcessContainment::env();
+        $env = ProcessContainment::env($envOverrides);
         $process = @proc_open($spawnSpec, $descriptors, $pipes, $cwd, $env);
         if (!is_resource($process)) {
             return [
