@@ -33,7 +33,7 @@ use SugarCraft\Crush\Support\ProcessTree;
 final class AgentWorkerPoolCancelTreeTest extends TestCase
 {
     /** A worker that is still asleep when the test ends was never killed. */
-    private const WORKER_SLEEP_SECONDS = 10;
+    private const CANCEL_FIXTURE_SLEEP_SECONDS = 10;
 
     private string $markerDir;
 
@@ -68,7 +68,7 @@ final class AgentWorkerPoolCancelTreeTest extends TestCase
 
         $pool = new AgentWorkerPool(forkedExecutor: $this->sleepingExecutor());
         $results = [];
-        $fiber = $this->drive($pool, [$this->subAgent('doomed')], $results);
+        $fiber = $this->drive($pool, [$this->sleeperAgent('doomed')], $results);
 
         $this->resumeUntil($fiber, fn (): bool => $this->recorded('doomed'));
         [$child, $grandchild] = $this->pidsFor('doomed');
@@ -96,7 +96,7 @@ final class AgentWorkerPoolCancelTreeTest extends TestCase
 
         $pool = new AgentWorkerPool(maxConcurrent: 2, forkedExecutor: $this->sleepingExecutor());
         $results = [];
-        $fiber = $this->drive($pool, [$this->subAgent('one'), $this->subAgent('two')], $results);
+        $fiber = $this->drive($pool, [$this->sleeperAgent('one'), $this->sleeperAgent('two')], $results);
 
         $this->resumeUntil($fiber, fn (): bool => $this->recorded('one') && $this->recorded('two'));
         $pids = [...$this->pidsFor('one'), ...$this->pidsFor('two')];
@@ -125,7 +125,7 @@ final class AgentWorkerPoolCancelTreeTest extends TestCase
         // The fallback warns once on stderr; keep it out of the test output.
         $previousLog = ini_set('error_log', $this->markerDir . '/fallback.log');
         try {
-            $results = iterator_to_array($pool->executeAll([$this->subAgent('inline', timeout: 1)], $this->request()), false);
+            $results = iterator_to_array($pool->executeAll([$this->sleeperAgent('inline', timeout: 1)], $this->request()), false);
         } finally {
             ini_set('error_log', $previousLog === false ? '' : $previousLog);
             @unlink($this->markerDir . '/fallback.log');
@@ -175,7 +175,7 @@ final class AgentWorkerPoolCancelTreeTest extends TestCase
      */
     private function sleepingExecutor(): ExecutorInterface
     {
-        return new class ($this->markerDir, self::WORKER_SLEEP_SECONDS) implements ExecutorInterface {
+        return new class ($this->markerDir, self::CANCEL_FIXTURE_SLEEP_SECONDS) implements ExecutorInterface {
             public function __construct(
                 private readonly string $markerDir,
                 private readonly int $sleepSeconds,
@@ -190,7 +190,7 @@ final class AgentWorkerPoolCancelTreeTest extends TestCase
             {
                 $process = proc_open(
                     ['setsid', 'sleep', (string) $this->sleepSeconds],
-                    [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+                    [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['pipe', 'w']],
                     $pipes,
                 );
                 $pids = getmypid() . (\is_resource($process) ? ' ' . proc_get_status($process)['pid'] : '');
@@ -214,7 +214,7 @@ final class AgentWorkerPoolCancelTreeTest extends TestCase
         };
     }
 
-    private function subAgent(string $id, int $timeout = 0): SubAgent
+    private function sleeperAgent(string $id, int $timeout = 0): SubAgent
     {
         return new SubAgent(
             id: $id,
