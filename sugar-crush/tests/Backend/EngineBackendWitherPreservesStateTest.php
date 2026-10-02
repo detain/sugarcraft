@@ -102,10 +102,11 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 ['siblingSpend'],
             ],
             // Registers onto a CLONE of the manager (audit F-J5), so it owns
-            // hookManager; it owns hooksDisabled too (re-asserted false).
+            // hookManager; it owns hooksDisabled too (re-asserted false), and
+            // tools, whose path-resolving members it re-jails to the worktree.
             'withWorktreeRoot' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withWorktreeRoot('/wt'),
-                ['hookManager', 'hooksDisabled'],
+                ['hookManager', 'hooksDisabled', 'tools'],
             ],
         ];
     }
@@ -156,8 +157,12 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
         $this->assertNull($s['spendCapUsd']);
         $this->assertSame(0.0, $s['sessionSpendAtStartUsd']);
 
+        // With hooks off, the worktree still re-jails the tools (audit F-J5)
+        // but registers no hook: the opt-out is kept, not re-armed.
         $disabled = $base->withoutHooks();
-        $this->assertSame($disabled, $disabled->withWorktreeRoot('/wt'));
+        $s = $this->state($disabled->withWorktreeRoot('/wt'));
+        $this->assertNull($s['hookManager']);
+        $this->assertTrue($s['hooksDisabled']);
 
         $s = $this->state(EngineBackend::new($this->provider(), 'm')->withWorktreeRoot('/wt'));
         $this->assertInstanceOf(HookManager::class, $s['hookManager']);

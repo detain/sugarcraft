@@ -13,6 +13,8 @@ use SugarCraft\Crush\Tools\Concerns\BuildsUnifiedDiff;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\PathJail;
 use SugarCraft\Crush\Tools\PromptGuidance;
+use SugarCraft\Crush\Tools\AcceptsWorktreeJail;
+use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 
@@ -39,9 +41,10 @@ use SugarCraft\Crush\Tools\ToolResult;
  * Omitting the interface makes this tool a barrier, executed alone in provider
  * order, which is the correct and safe default.
  */
-final readonly class Write implements Tool, PromptGuidance
+final readonly class Write implements Tool, AcceptsWorktreeJail, PromptGuidance
 {
     use BuildsUnifiedDiff;
+    use RebindsWorktreeJail;
     use TruncatesOutput;
 
     /**

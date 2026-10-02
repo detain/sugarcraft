@@ -8,6 +8,8 @@ use SugarCraft\Crush\LSP\LspClient;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Tools\PathJail;
+use SugarCraft\Crush\Tools\AcceptsWorktreeJail;
+use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 
@@ -50,8 +52,9 @@ use SugarCraft\Crush\Tools\ToolResult;
  * {@see \SugarCraft\Crush\Tools\CarriesSessionState} AND by giving each child its
  * own connection; neither is in scope here.
  */
-final readonly class LspTool implements Tool
+final readonly class LspTool implements Tool, AcceptsWorktreeJail
 {
+    use RebindsWorktreeJail;
     use TruncatesOutput;
 
     /**

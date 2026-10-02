@@ -12,12 +12,15 @@ use SugarCraft\Crush\Tools\CarriesSessionState;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\PromptGuidance;
+use SugarCraft\Crush\Tools\AcceptsWorktreeJail;
+use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\PathJail;
 
-final readonly class Read implements Tool, ParallelSafe, CarriesSessionState, PromptGuidance
+final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, CarriesSessionState, PromptGuidance
 {
+    use RebindsWorktreeJail;
     use TruncatesOutput;
 
     private const DEFAULT_MAX_BYTES = 1024 * 1024;

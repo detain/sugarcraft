@@ -9,6 +9,8 @@ use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\PromptGuidance;
+use SugarCraft\Crush\Tools\AcceptsWorktreeJail;
+use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 
@@ -31,9 +33,10 @@ use SugarCraft\Crush\Tools\ToolResult;
  * {@see \SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook}, a heuristic
  * PreToolUse hook that denies commands referencing paths outside `$root`.
  */
-final readonly class Bash implements Tool, PromptGuidance
+final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance
 {
     use CapturesProcessOutput;
+    use RebindsWorktreeJail;
     use TruncatesOutput;
 
     /**

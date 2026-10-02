@@ -12,14 +12,17 @@ use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\IgnoreRules;
 use SugarCraft\Crush\Tools\ParallelSafe;
+use SugarCraft\Crush\Tools\AcceptsWorktreeJail;
+use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Tools\PathJail;
 
-final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
+final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, CarriesSessionState
 {
     use CapturesProcessOutput;
+    use RebindsWorktreeJail;
     use TruncatesOutput;
 
     /**

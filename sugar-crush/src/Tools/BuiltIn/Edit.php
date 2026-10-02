@@ -11,16 +11,19 @@ use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Support\AtomicFileWriter;
 use SugarCraft\Crush\Tools\Concerns\BuildsUnifiedDiff;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
+use SugarCraft\Crush\Tools\AcceptsWorktreeJail;
+use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\PathJail;
 
-final readonly class Edit implements Tool
+final readonly class Edit implements Tool, AcceptsWorktreeJail
 {
     // The unified-diff builder below used to live here; it moved out verbatim
     // so {@see Write} could produce the SAME diff for a new file (a write whose
     // "before" side is empty) instead of growing a second implementation.
     use BuildsUnifiedDiff;
+    use RebindsWorktreeJail;
     use TruncatesOutput;
 
     private const DEFAULT_MAX_BYTES = 1024 * 1024;

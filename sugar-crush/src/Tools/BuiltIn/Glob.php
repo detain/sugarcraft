@@ -11,13 +11,16 @@ use SugarCraft\Crush\Tools\CarriesSessionState;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\IgnoreRules;
 use SugarCraft\Crush\Tools\ParallelSafe;
+use SugarCraft\Crush\Tools\AcceptsWorktreeJail;
+use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Tools\PathJail;
 
-final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
+final readonly class Glob implements Tool, AcceptsWorktreeJail, ParallelSafe, CarriesSessionState
 {
+    use RebindsWorktreeJail;
     use TruncatesOutput;
 
     /**

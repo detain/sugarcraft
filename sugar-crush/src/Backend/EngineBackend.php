@@ -8,6 +8,8 @@ use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
+use SugarCraft\Crush\Agents\PathJailConfig;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Backend;
@@ -38,6 +40,7 @@ use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\SiblingSpendLedger;
+use SugarCraft\Crush\Tools\AcceptsWorktreeJail;
 use SugarCraft\Crush\Tools\DelegatesToEngine;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -697,9 +700,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * block and its {@see \SugarCraft\Crush\Hooks\HookContext}s name the same
      * directory the tools {@see withTools()} received are jailed to.
      *
-     * Separate from {@see withWorktreeRoot()} on purpose: that one registers
-     * a Bash-escape guard and says nothing about what the model is told,
-     * while this one is purely the reported/gated root.
+     * Separate from {@see withWorktreeRoot()} on purpose: that one re-jails
+     * the tools and registers a Bash-escape guard and says nothing about what
+     * the model is told, while this one is purely the reported/gated root.
      */
     public function withRoot(?string $root): self
     {
@@ -776,19 +779,29 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     }
 
     /**
-     * Register BashEscapeDenyHook with the given worktree root to prevent Bash
-     * commands from referencing paths outside the worktree.
+     * Confine this backend to a sub-agent's git worktree: every path-resolving
+     * tool is re-jailed to `$worktreeRoot`, and BashEscapeDenyHook is
+     * registered so Bash commands that name paths outside it are refused.
      *
-     * This wires the heuristic PreToolUse hook so that Bash commands are
-     * checked before execution. Without this, Bash is confined only by the
-     * `cd $worktreeRoot` prefix which does NOT prevent escape via `cd /` or
-     * `..` traversal within the command string itself.
+     * THE TOOLS (audit F-J5). Glob, Grep, Lsp, Read, Edit, Write and Bash each
+     * take an optional {@see AgentPathJail}, but the tool list this backend
+     * holds was built once, on the main checkout's root, so a jail that only
+     * reached the Bash HOOK left every one of them answering from — and
+     * writing to — the main checkout: a sub-agent's Grep found stale or
+     * foreign files, and its Edit then targeted paths its own tree lacks.
+     * Each {@see AcceptsWorktreeJail} tool is now swapped for a copy confined
+     * to the worktree; any other tool (Task, WebFetch, an MCP bridge) resolves
+     * no workspace path and is kept as it is. This half applies even when the
+     * hooks are disabled: containment of a tool's own path resolution is not a
+     * hook, and `withoutHooks()` is not a request to search the wrong tree.
      *
-     * The returned backend owns a CLONE of the hook manager (audit F-J5): the
-     * worktree-scoped guard belongs to the sub-agent's backend only, and
-     * registering on the shared instance in place gave the parent's chain the
-     * sub-agent's root as a deny boundary too — a `with*()` that mutated its
-     * receiver.
+     * THE HOOK. Without it Bash is confined only by the `cd $worktreeRoot`
+     * prefix, which does NOT prevent escape via `cd /` or `..` traversal
+     * within the command string itself. The returned backend owns a CLONE of
+     * the hook manager (audit F-J5): the worktree-scoped guard belongs to the
+     * sub-agent's backend only, and registering on the shared instance in
+     * place gave the parent's chain the sub-agent's root as a deny boundary
+     * too — a `with*()` that mutated its receiver.
      *
      * Not wired in production yet: it waits on worktree isolation (crush_report
      * Part II #23), which is what will give a sub-agent a root of its own.
@@ -797,17 +810,27 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withWorktreeRoot(string $worktreeRoot): self
     {
-        if ($this->hooksDisabled) {
-            return $this;
+        $jail = new AgentPathJail($worktreeRoot, new PathJailConfig());
+        $changes = [
+            'tools' => array_map(
+                static fn(mixed $tool): mixed => $tool instanceof AcceptsWorktreeJail
+                    ? $tool->withWorktreeJail($jail)
+                    : $tool,
+                $this->tools,
+            ),
+        ];
+
+        if (!$this->hooksDisabled) {
+            $manager = $this->hookManager !== null
+                ? clone $this->hookManager
+                : new HookManager(new HookRegistry());
+            $manager->registerBuiltIns();
+            $manager->register(new BashEscapeDenyHook($worktreeRoot));
+            $changes['hookManager'] = $manager;
+            $changes['hooksDisabled'] = false;
         }
 
-        $manager = $this->hookManager !== null
-            ? clone $this->hookManager
-            : new HookManager(new HookRegistry());
-        $manager->registerBuiltIns();
-        $manager->register(new BashEscapeDenyHook($worktreeRoot));
-
-        return $this->mutate(['hookManager' => $manager, 'hooksDisabled' => false]);
+        return $this->mutate($changes);
     }
 
     /**
