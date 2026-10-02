@@ -37,6 +37,7 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Code:** `'extra_body' => ['separate_reasoning' => true],`
 - **Failure scenario:** `extra_body` belongs to the OpenAI Python SDK, which merges it into the body before sending. Sent raw, it is an unknown top-level field. Strict OpenAI-compatible servers (api.openai.com answers "Unrecognized request argument supplied: extra_body", and so do several hosted gateways) return 400 on every request. (Before the A1 fix that 400 became a silent empty reply; it now surfaces as an error.) Servers that ignore unknown fields never see `separate_reasoning` either.
 - **Fix:** send `'separate_reasoning' => true` at the top level, and only for providers known to accept it, or make it a config flag.
+- **Partly fixed on master in `4f8869c63`.** `complete()` and `completeStream()` no longer send `extra_body`, and by default the body carries no `separate_reasoning` at all (SGLang never read the nested form, so nothing changes there). A server that wants extra top-level fields can opt in through a new last constructor parameter, `array $extraBody = []`, also passed through `openAiCompatible()`; one helper merges it into both bodies, and the constructor refuses the key `extra_body`, keys the provider writes itself, and keys that are not non-empty strings. **Remaining:** no config key feeds `extraBody` yet. Adding one needs plumbing through `ProviderFactory`, a `docs/SETTINGS.md` row, and the `TrustKeyDocumentationDriftTest` roster.
 - **Test:** capture the outgoing body with history middleware. Assert that it has no `extra_body` key.
 
 ### A11 — Malformed tool-call argument JSON runs the tool with `[]`, and the model is never told why
@@ -84,13 +85,6 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Failure scenario:** **Repro:** `[User, User, Assistant(''), User]` is sent unchanged as `user, user, assistant{text:""}, user`. Nothing merges the two user turns, and the blank text block goes out as-is. Two everyday paths produce `user, user`. One is a turn that failed: Bedrock *throws* on errors, so the user row gets no assistant reply. The other is `HistorySanitizer` (`HistorySanitizer.php:115-118`) dropping an empty assistant reply. Because the whole history is replayed, every later request in that Bedrock session sends the same invalid shape.
 - **Fix:** merge adjacent same-role messages into one content array, and skip empty text blocks, as Vertex does.
 - **Test:** a history of `[User a, Assistant '', User b]` should produce strictly alternating roles with no empty `text`.
-
-### A17 — `embeddings()` swallows transport errors and returns an empty list
-- **Severity:** Low · **Confidence:** Verified-by-reading
-- **Where:** `SglangProvider.php:967-969`, `CustomProvider.php:378-380`.
-- **Failure scenario:** any consumer that does semantic search sees "no embeddings" instead of an outage, so it degrades silently.
-- **Fix:** rethrow as `ProviderException`.
-- **Test:** a 500 from the mock should cause `embeddings()` to throw.
 
 ### A18 — New evidence for known #27/#28: the default provider sends `max_tokens: 4096` with DeepSeek-V4 `reasoning_effort: max`
 - **Severity:** (sharpens known High/Medium items) · **Confidence:** Suspected — verification pending. Measure `usage.reasoning_tokens` and `finish_reason` on the live SGLang server for a few agentic prompts at effort `max`.
@@ -163,23 +157,19 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 
 These are covered above: B4 (no usage channel on tool results). B2 (deadline kill orphans) was fixed in `c54372b2a`.
 
-### C2 — Engine-side diagnostics go to `error_log()`, which in the TUI is the terminal itself: they paint raw text over the alt-screen frame
-- **Severity:** Medium · **Confidence:** Verified-by-reading. The destination was checked on this machine: `php -r 'error_log("probe-line");'` with the stock ini (`error_log` unset, `log_errors=1`) writes `probe-line` to fd 2. There was no live TUI capture.
-- **Where:**
-  - `src/Diagnostics/RuntimeNoticeSink.php:366-369`: `warn()` **always** calls `error_log($message)` before queueing the in-transcript notice.
-  - `src/Providers/SglangProvider.php:1014` → `:2387-2422`: `flagTruncationRiskInLatestToolResults()` calls `error_log()` on **every request** whose latest tool-result batch contains `</parameter>`, for every non-DeepSeek-V4 model (MiniMax, Qwen and others).
-  - Direct `error_log()` calls in `DsmlToolCallParser.php` (`:242`, `:320`, `:354`, `:365`, `:385`, `:467`, `:486`) and `MinimaxXmlFallbackToolCallParser.php` (`:145`, `:224`, `:234`).
-  - Nothing redirects fd 2. There is no `ini_set('error_log', …)` and no stderr re-open anywhere in `src/` or `bin/`. The forked turn child (`EngineBackend.php:1349-1360`) inherits the TUI's stderr unchanged.
-- **Failure scenario:** in the interactive TUI, stdout and stderr are the same tty. A parser warning, a worktree warning or the per-request `</parameter>` heuristic arrives mid-turn from the forked child as an unframed `PHP …`/`sugarcrush: …` line. It is written at whatever cursor position the renderer left. The diff renderer assumes it owns every cell, so the line stays (or tears the layout) until a full repaint. `Chat.php:14543-14548` already describes this ("`error_log()`, i.e. fd 2, i.e. a frame the renderer believes it owns"), but `RuntimeNoticeSink::warn()` still double-writes to it. The `</parameter>` heuristic is the noisiest case: once a session has Read any file containing that string (any XML or PHP tool-schema code, this repo included), every later request writes a ~500-byte line to the screen until a non-matching tool batch follows.
-- **Fix:** at TUI start (`Bootstrap` before `Program::run`), point `error_log` at a session log file (for example `~/.sugar-crush/logs/<session>.log`, mode 0600). Have `RuntimeNoticeSink::warn()` skip `error_log()` while the sink is armed with a transport. Rate-limit the `</parameter>` warning to once per tool-call id.
-- **Test:** an integration test runs `bin/sugarcrush` under a PTY (candy-pty) with a scripted provider that triggers a DSML warning, and asserts no `sugarcrush:` bytes appear outside the rendered frame. A unit test asserts that `RuntimeNoticeSink::warn()` writes nothing to `php://stderr` while armed.
-
 ### C3 — Project instructions (`CLAUDE.md`/`AGENTS.md` + every `@import`) have no byte budget, while rules have 64 KiB
 - **Severity:** Low · **Confidence:** Verified-by-reading
 - **Where:** `src/Runtime.php:3009-3041` adds every `loadRoot()`/`loadForced()` document in full. Compare `:2963-2999` and `:3050+`, where user and project rules share `MAX_STANDING_RULE_BYTES = 65_536` (`:161`) with pointer deferral. `src/Context/InstructionFileLoader.php:841-871` expands `@imports` through `ImportResolver` with a depth cap but no size cap. Ancestor `CLAUDE.md`/`AGENTS.md` files (`:401-461`) are added on top.
 - **Failure scenario:** a checked-in `CLAUDE.md` that writes `@docs/ARCHITECTURE.md` or `@README.md`, or a parent-directory `AGENTS.md`, puts hundreds of KB into **every** request's system prompt, with no notice. Known #21 says the token estimate ignores the system prompt, so Chat's tiers never see the cost. On a 128k or 200k window this overflows on every request. On this monorepo, the root `CLAUDE.md` with its two imports is already 25,110 B (`InstructionFileLoader.php:176`).
 - **Fix:** charge instruction documents against the same per-build budget (or their own, for example 64 KiB). When a document doesn't fit, defer it to a pointer line the way rules are deferred, and report the overflow as a runtime notice.
 - **Test:** a fixture repo whose `CLAUDE.md` imports a 200 KB file should produce a system prompt under the budget, containing a pointer to the deferred import.
+
+### C4 — The notice sink's clip and overflow strings, and TROUBLESHOOTING.md, still send the user to stderr for the full text
+- **Severity:** Low (docs and UI wording) · **Confidence:** Verified-by-reading (found while fixing C2 in wave 3)
+- **Where:** `src/Diagnostics/RuntimeNoticeSink.php:202` (`CLIP_SUFFIX = '… (clipped; full text on stderr)'`) and `:267` (`OVERFLOW_FORMAT = '… and %d more runtime notice%s this session; see stderr for the full text.'`); `docs/TROUBLESHOOTING.md:85-91`, `:135` and `:326-328`.
+- **Detail:** since C2's fix (`9a827f4e3`), the TUI points `error_log` at `~/.sugar-crush/logs/sugarcrush.log` (new `Diagnostics\TuiErrorLog`), so in the TUI the full text of a clipped or overflowed notice is in that log file, not on stderr. The transcript row still tells the user to look at stderr, where nothing is written, and TROUBLESHOOTING.md still describes stray stderr lines inside the frame as the expected failure. The wording is still right for `-p` and the other non-TUI entry points, where the destination stays stderr.
+- **Fix:** make both strings name the actual destination (for example, a `%s` filled from `TuiErrorLog`'s path when it is armed, else "stderr"), and update the TROUBLESHOOTING.md passages to describe the log file.
+- **Test:** a TUI-armed sink's clipped notice names the log path; an unarmed one still says stderr.
 
 ---
 
@@ -189,7 +179,7 @@ These are covered above: B4 (no usage channel on tool results). B2 (deadline kil
 |---|---|---|---|---|
 | A8 | Medium | repro | Recovered DSML/XML markup stays in content (painted, then sent twice) | SglangProvider.php:785-871 |
 | A9 | Medium | repro | MiniMax fallback makes JSON-looking strings into arrays (Write of composer.json breaks) | MinimaxXmlFallbackToolCallParser.php:278-297 |
-| A10 | Medium | reading | `CustomProvider` sends a literal `extra_body` key | CustomProvider.php:172, 240 |
+| A10 | Medium | reading | `CustomProvider` sends a literal `extra_body` key. Partly fixed (`4f8869c63`: no literal key; opt-in constructor `array $extraBody`); remaining: no config key feeds `extraBody` | CustomProvider.php:172, 240 |
 | A12 | Medium | repro+reading | claude-code streaming cannot work (no `--verbose`, wrong framing, argv > 128 KiB) | ClaudeCodeProvider.php:99-310 |
 | A13 | Medium | reading | OpenAI window is 8k for gpt-4o-mini/4.1. Partly fixed (`58d25cb3b`: ids sized, unknown → 0); remaining: no context-window config override | OpenAIProvider.php:103-112 |
 | A15 | Medium | reading | Vertex priced at $0 (spend cap inert); Bedrock invents $0.01 | VertexProvider.php:278; BedrockProvider.php:158 |
@@ -197,16 +187,15 @@ These are covered above: B4 (no usage channel on tool results). B2 (deadline kil
 | **A20** | Medium | reading | Bedrock tables match only bare ids: real versioned/profile ids get an 8k window and an invented $0.01/1k | BedrockProvider.php:46, 146-169 |
 | **A21** | Medium | suspected | Gemini 2.5 default thinking: thought tokens missing from Usage and sharing the 4096 `maxOutputTokens` | VertexProvider.php:1459, 1770-1793 |
 | B4 | Medium (High paid) | reading | Task sub-agent spend never reaches the parent, session total or cap | TaskTool.php:604-608; ToolResult.php; EngineBackend.php:890-941 |
-| **C2** | Medium | reading | `error_log()` diagnostics (notice sink, parsers, per-request `</parameter>` warning) paint over the TUI frame | RuntimeNoticeSink.php:366-369; SglangProvider.php:2409; Dsml/Minimax parsers |
 | A18 | (sharpens #27/#28) | suspected | Default SGLang `max_tokens` 4096 with effort `max` | SglangProvider.php:1030, 165 |
 | **A23** | Low-Med | reading | Replayed tool-call arguments send a nested empty map (`{"opts":{}}`) as `[]` (residual of A7) | ToolSchema.php:195-196 |
 | A11 | Low | reading | Malformed argument JSON runs the tool with `[]`; model not told | CustomProvider.php:628; SglangProvider.php:2221 |
 | A16 | Low | repro (shape) | Bedrock: no same-role merge, blank text blocks | BedrockProvider.php:316-332 |
-| A17 | Low | reading | `embeddings()` swallows errors | SglangProvider.php:967; CustomProvider.php:378 |
 | B5 | Low | reading | Two withers drop the spend cap (latent) | EngineBackend.php:542, 575 |
 | **C3** | Low | reading | Project instructions and `@imports` have no byte budget (rules have 64 KiB) | Runtime.php:3009-3041; InstructionFileLoader.php:841-871 |
+| **C4** | Low (docs) | reading | Notice-sink clip/overflow strings and TROUBLESHOOTING.md still say "full text on stderr"; in the TUI it is in the log file (residual of C2) | RuntimeNoticeSink.php:202, 267; TROUBLESHOOTING.md:85-91, 135, 326 |
 
-New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A13 (fix aligned with the `contextWindow()` contract). Items sharpened in that pass and since fixed are listed under **Fixed since audit**. Found while fixing A7 in wave 2: **A23**.
+New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A13 (fix aligned with the `contextWindow()` contract). Items sharpened in that pass and since fixed are listed under **Fixed since audit**. Found while fixing A7 in wave 2: **A23**. Found while fixing C2 in wave 3: **C4**.
 
 ---
 
@@ -265,3 +254,5 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **B3** Both ends of the frame socketpair leaked into every process the turn spawned — fixed on master in `53da0a291` (the child closes the parent's end first; new `ProcessContainment::closeOnExec()` sets `FD_CLOEXEC` via FFI `fcntl` on both ends; `completeAsync` also polls the turn pid with `WNOHANG`, so a dead turn is noticed without waiting for EOF).
 - **B6** The frame writer gave up silently mid-frame and the reader resynced without teardown — fixed on master in `ee2e59b08` (the child's end carries a year-long write timeout and a failed write ends the child with `exitNow(1)`; `drainFrames()` reports corruption, and `completeAsync` delivers the frames decoded before it, then tears the turn down with "Provider worker frame stream corrupted").
 - **C1** `waitpid -1` never settled an exempt parallel job — fixed on master in `c10717d8c` (both wait sites go through `parallelJobHasExited()`, which treats any non-zero answer as gone; the payload file is still read, so the real result arrives).
+- **A17** `embeddings()` swallowed transport errors and returned an empty list — fixed on master in `106ea5253` (both providers throw `\RuntimeException` with the provider's own error text and the Guzzle exception as `previous`, so `TransientFailure` still classifies 5xx, 429 and connect failures as transient and 400 as permanent; a 2xx body that is not JSON, has no `data` list, or has an item without an `embedding` also throws; `data: []` still returns an empty result).
+- **C2** Engine-side `error_log()` diagnostics painted over the TUI frame — fixed on master in `9a827f4e3` + `520298b79` + `0c2bbd0a7` (new `Diagnostics\TuiErrorLog` points `error_log` at `~/.sugar-crush/logs/sugarcrush.log`, directory 0700 and file 0600, refusing a symlinked file, rotating one generation past 5 MiB and keeping an operator's own destination; `bin/sugarcrush` arms it on the TUI path just before `Program::run`; `RuntimeNoticeSink::warn()` skips `error_log()` while armed with a transport and the destination is still stderr) and `080fac09d` (the SGLang `</parameter>` truncation-risk warning is logged once per tool-call id per provider instance, an empty id keyed by a content hash, at most 1024 entries). Residual: if the log cannot be set up, the parsers' direct `error_log()` calls can still reach the tty; the notice-sink strings and TROUBLESHOOTING.md still say "full text on stderr" (C4).

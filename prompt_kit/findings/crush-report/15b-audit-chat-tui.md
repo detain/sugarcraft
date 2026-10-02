@@ -47,6 +47,9 @@ Confidence labels:
   - The session titler's `$userTurns !== 1` check (`:9020-9026`) counts command echoes, so a session whose first input was `/permissions` is never titled.
 - **Fix:** Add a `uiOnly` / `agentVisible=false` flag on `Message` (synthesis 1.B) and set it on every notice and command-echo producer above. Filter in `toTypedMessages()` and in the titler and suggestion prompts. Keep notices ordered after the settled answer, or render them in a separate notice stream.
 - **Test:** Drive `/help` → prompt through a recording backend. Assert that the backend history contains only the user prompt.
+- **Partly fixed on master in `2a3a8f91c`.** New `Message::$uiOnly` (with `withUiOnly()`, `Message::notice()` and `Message::agentVisible()`) round-trips through `jsonSerialize()`/`fromArray()` and survives every wither, checkpoint revival and the compaction rebuild, and is never put on the wire. Every command echo and output, `/help`, the queued, refusal and hook-blocked notices, launch, runtime and background notices, palette rows, status notices and backend error strings are flagged. The filter runs at Chat's turn dispatch, in the titler (which now counts agent-visible user turns), the suggester, `EngineBackend::toTypedMessages()` and `CommandBackend::encodeHistory()` (shared by `StreamingCommandBackend`); the token estimate skips UI-only rows. Left visible on purpose: `/websearch` results (known #22), hook `additionalContext`, the 70% reminder, and the permission-refusal note (the model's only record of the refusal). **Remaining:**
+  - the compaction summary's input is not filtered, because filtering only one side breaks the exchange-key alignment;
+  - notice order is unchanged: notices still render, interleaved, between a prompt and its answer in the transcript (they are off the wire).
 
 ### 15b-04 — A synchronous UserPromptSubmit / SessionStart hook chain runs inside `update()`
 - **Severity:** Medium · **Confidence:** Verified-by-reading
@@ -80,22 +83,6 @@ Confidence labels:
 - **Fix:** `Width::truncate($bar, $cols)` (ANSI-aware) at `:1907`. Drop or shorten `$processing` segments in priority order. Clamp `contentWidth` to `max(1, cols-6)`.
 - **Test:** For cols in {20, 30, 40}, assert every frame row satisfies `Width::string($row) <= $cols`.
 
-### 15b-10 — Every frame re-renders the whole history through CandyShine; keystroke latency grows linearly with the session
-- **Severity:** Medium-High · **Confidence:** Verified-by-repro (`r7_perf.php`, `r7b.php`)
-- **Where:** `Renderer::renderView()` → `renderHistory()` at `src/Renderer.php:2947-2985` builds `new Markdown(...)` and renders **every** message on every frame. Only afterwards does it slice to the visible rows (`array_slice($contentLines, $sliceStart, $available)`). There is no per-message cache. `renderStreamingTurn()` also re-parses the whole partial reply on every token batch.
-- **Measured** (120×40, one user + one markdown answer + one tool row per exchange):
-  - 50 exchanges: **179 ms/frame**
-  - 200 exchanges: **706 ms/frame**
-  - 800 exchanges: **2.95 s/frame**
-  - Breakdown at 100 rows each: user-only 35 ms, tool rows 41 ms, **assistant markdown 331 ms**.
-- **Streaming partial** (`r13_stream_cost.php`, lead 6 confirmed): `renderStreamingTurn()` re-parses the whole unbounded `streamingText` on every pump. A 20 KB partial takes **213 ms/frame**, 100 KB **1.04 s/frame** and 200 KB **2.14 s/frame**, even with no history. One long answer (a large file written as prose, or a long plan) is enough to stall the loop for the rest of that answer.
-- Each keystroke, token batch and tick re-renders, so in a long agentic session typing lags by close to a second and the event loop stalls, delaying tool-event pumping and watchdogs.
-- **Fix:**
-  - Memoize rendered blocks per `(message identity/hash, width, theme, expanded-state)`. A static LRU keyed on `spl_object_id` + content hash works.
-  - Render only from the bottom up until the visible rows plus the scroll offset are filled.
-  - Cache the streaming partial's settled-paragraph prefix.
-- **Test:** A performance guard: 300 markdown exchanges must render in under 50 ms after the first frame, or the markdown renderer must be called at most N times on an unchanged second frame (count it with a spy theme or renderer).
-
 ### 15b-26 — candy-core `Width::wrap()` never terminates when a 2-cell cluster meets a 1-column budget
 - **Severity:** Medium (a hang) · **Confidence:** Verified-by-repro (`timeout 5 php -r '… Width::wrap("文", 1) …'` is killed at the deadline)
 - **Where:** `candy-core/src/Util/Width.php:295` (`wrap()`). Its hard-break loop cuts long tokens between grapheme clusters, but a cluster wider than the whole budget (a CJK character or a wide emoji at `$max = 1`) is never emitted, so the loop never advances.
@@ -117,19 +104,23 @@ Confidence labels:
 - **Fix:** remove 0x80–0x9F bytes that are not part of a well-formed UTF-8 sequence, the way `Sanitize::untrusted()` step 1 does. A plain byte-class strip would corrupt valid multi-byte characters, whose continuation bytes fall in that range.
 - **Test:** CandyShine renders `"a\x9B2Jb"` without the `\x9B` byte, and still renders `→` and `👍` intact.
 
-## C. Commands and parsing
+### 15b-30 — candy-shine `Renderer::stream()` breaks its "equals `render()`" law when the text has link reference definitions
+- **Severity:** Low · **Confidence:** Verified-by-repro (found while fixing 15b-10 in wave 3; re-checked with `Renderer::plain()`: `stream()` gives `See [x][a].…`, `render()` gives the resolved hyperlink)
+- **Where:** `candy-shine/src/Renderer.php:261` (`stream()`). It renders each closed section on its own, so a reference-style link (`[text][foo]`) in one section and its definition (`[foo]: https://…`) in another never meet.
+- **Failure scenario:** a streamed answer that uses reference links renders the link as literal `[text][foo]` text (the definition itself is consumed, unresolved) until the answer settles and is rendered whole, so the transcript reflows at the end of the turn. Any other `stream()` consumer gets output that differs from `render()` of the same text. sugar-crush works around it (`05f86a2a9`) by rendering any partial that contains a link reference definition whole, which gives up the incremental speed-up for those answers.
+- **Fix:** collect link reference definitions across sections (a pre-scan of the whole text, or re-rendering the sections that used an undefined reference once a definition arrives), or make `SectionScanner` refuse to split a text containing one.
+- **Test:** `implode('', iterator_to_array(stream([$t])))` equals `render($t)` for `$t = "See [x][a].\n\n# H\n\n[a]: https://e.x\n"`; then drop the sugar-crush workaround and keep its memo test green.
 
-### 15b-12 — Session titling falls back to the main, tool-armed backend when there is no toolless title backend
-- **Severity:** Medium · **Confidence:** Verified-by-reading
-- **Where:** `src/Chat.php:9029` `$backend = $next->titleBackend ?? $next->backend;`. `Bootstrap::titleBackend()` → `toollessBackend()` returns null:
-  - when `selectedProviderName()` is null, which is always the case on the `SUGARCRUSH_BACKEND_CMD[_STREAM]` tier (`Bootstrap.php:7626`);
-  - when the provider default has no model;
-  - when construction throws.
-- **Scenario:**
-  - With `SUGARCRUSH_BACKEND_CMD` pointing at an agentic CLI, the first prompt is sent **twice**: once as the turn and once as the "title" job, with `[system: TITLE_PROMPT] + history`. An agentic backend can act on the request twice (side effects, double billing).
-  - With an `EngineBackend` fallback, the title job runs a full tool-enabled turn in a fork under the default bypass mode.
-- **Fix:** When `titleBackend` is null, skip titling (prompt suggestions already work this way), or use a backend that is guaranteed toolless.
-- **Test:** A Chat with `backend: RecBackend`, `titleBackend: null` and a session store. Submit the first prompt. Assert the backend is called exactly once.
+### 15b-31 — candy-shine `SectionScanner::finish()` drops the closed section when the unterminated last line is a heading; no boundary is found after a closing fence
+- **Severity:** Low · **Confidence:** Verified-by-repro (found while fixing 15b-10 in wave 3; re-checked: `stream(["Intro\n\n# F"])` gives `["# F"]`, `render()` gives both)
+- **Where:** `candy-shine/src/Render/SectionScanner.php:64` (`finish()`), and its section-boundary rule.
+- **Failure scenario:**
+  - `stream(["Intro\n\n# F"])` yields only the heading: the closed "Intro" section is thrown away when the last line has no newline and is a heading. sugar-crush works around it (`05f86a2a9`) by cutting the tail by byte offset instead of trusting `finish()`.
+  - A heading right after a closing code fence, with no blank line between, is never treated as a boundary, so a long partial in that shape has no closed sections and re-renders whole every frame. This is the residual of 15b-10: `r13_stream_cost.php` (headings straight after fences) went only from 207/2526 ms to 112/1120 ms per frame at 20K/200K, while partials with a blank line before each heading went from 2197 ms to 81 ms at 200K.
+- **Fix:** make `finish()` emit the pending closed section before the trailing heading, and widen the boundary rule to a heading that follows a closing fence (and other unambiguous block starts), so long partials without blank-line headings also stream incrementally.
+- **Test:** `stream(["Intro\n\n# F"])` yields both sections; `r13_stream_cost.php` at 200K renders in under 100 ms per frame.
+
+## C. Commands and parsing
 
 ### 15b-24 — `/pane:x`, `/layout:x` and `/mcp:x` colon spellings are not handled
 - **Severity:** Low · **Confidence:** Verified-by-reading (found while fixing 15b-22)
@@ -153,6 +144,9 @@ Confidence labels:
 - **Effect:** CJK text runs at roughly 1-1.5 tokens per character. Even fully calibrated, the 70/85/95% tiers fire far too late for CJK users, which leads to provider overflow errors. This is separate from known #21, which concerns the system prompt and tool schemas.
 - **Fix:** Count bytes/3, or weight by script (wide characters ≈1 token). A tokenizer-backed estimate would be better.
 - **Test:** 10k CJK characters must estimate to at least 8k.
+- **Partly fixed on master in `8341a37c1`** (Chat side). New `src/Util/TokenEstimate.php` is a script-weighted proxy: ASCII and Latin ¼ token (the old figure), other alphabets ½, CJK, kana, Hangul and symbols 1, astral and emoji 2, and bytes/3 for invalid UTF-8; 10k CJK characters now estimate 10,010 (was 2,510). Chat's 85% and 95% tiers and the status bar use it. **Remaining:**
+  - `src/Context/ContextCompactor.php:1194` still counts `mb_strlen / 4`, so the 70% reminder still fires late for CJK;
+  - stale "chars/4" comments remain in `Renderer.php` (`:2169`, `:2356`), `Usage.php` (`:17`, `:335`), `Backend/ReportsContextWindow.php:52` and `Util/TokenTracker.php:47`.
 
 ### 15b-14 — sugar-crush has no i18n: every user-facing string is hard-coded
 - **Severity:** Low (convention gap) · **Confidence:** Verified-by-reading
@@ -163,6 +157,15 @@ Confidence labels:
 - **Severity:** Low · **Confidence:** Verified-by-reading
 - **Where:** `Message::attachFile()` / `attachImage()` at `src/Message.php:241,261` have no callers. `EngineBackend::toTypedMessages()` drops `attachments`, and `Chat.php:15822` only copies them.
 - **Fix:** Per the "wire, don't delete" rule, add `@file` / paste-image attachment in the input box and map it to `UserMessage::withAttachment()` in `toTypedMessages()`.
+
+### 15b-32 — Stale comments: launch notices "re-sent every turn", and Doctor's old mosaic idiom
+- **Severity:** Info (comments) · **Confidence:** Verified-by-reading (found during wave 3)
+- **Where:**
+  - `src/Cli/Bootstrap.php:412` and `src/Session/SessionStore.php:555` justify keeping per-entry launch rows out of the transcript because each would be "a list the model is re-sent every turn".
+  - `src/Tools/Concerns/DetectsCapabilities.php:38` cites `Doctor::execute()`'s `self::$mosaic ??=` as the house idiom for a lazy capability probe.
+- **Detail:** since 15b-03's fix (`2a3a8f91c`), launch notices are `uiOnly` rows and never reach the model, so the token-cost half of those two rationales is no longer true (the transcript-clutter half still is). Since F-T6's fix (`977179c1e`), Doctor reads the boot-time `ToolResult::mosaic()` probe and no longer has a `??=` probe, so the docblock points readers at code that does not exist.
+- **Fix:** reword the two rationales to the transcript-clutter reason, and point the `DetectsCapabilities` docblock at `ToolResult::mosaic()` (and the boot-time warm-up).
+- **Test:** none needed beyond review.
 
 ## E. Repository-supplied and model-supplied text in overlays and panes
 
@@ -246,16 +249,14 @@ Confidence labels:
 
 | ID | Sev | Conf | Title |
 |---|---|---|---|
-| 15b-03 | Med-High | Repro | Command output, mid-turn notices and background/runtime notices go to the model as real turns |
-| 15b-10 | Med-High | Repro | Full-history markdown re-render every frame: 0.7 s/keystroke at 200 exchanges; 2.1 s/frame for a 200 KB streaming partial |
+| 15b-03 | Med-High | Repro | Command output, mid-turn notices and background/runtime notices go to the model as real turns. Partly fixed (`2a3a8f91c`: `Message::$uiOnly`, filtered at every wire encoder); remaining: compaction input unfiltered, notices still interleave between a prompt and its answer |
 | 15b-04 | Medium | Reading | UserPromptSubmit/SessionStart hooks run synchronously inside update() (up to 60 s freeze) |
 | 15b-05 | Medium | Repro | Menu and shell commands erase the draft, then claim "draft still in the box" |
 | 15b-09 | Medium/Low | Repro | Status bar not clipped to cols; content width (and every overlay) floored at 20+chrome |
-| 15b-12 | Medium | Reading | Title job falls back to the main tool-armed or command backend (first prompt sent twice) |
 | 15b-20 | Medium | Repro | Custom-command `` !`…` `` blocks update() up to 10 s; timed-out grandchildren survive |
 | 15b-21 | Medium | Repro | `/branch` re-interns every message with one autocommitted INSERT each: 4.3 s freeze at 800 messages |
 | 15b-26 | Medium | Repro | candy-core `Width::wrap()` loops forever when a 2-cell cluster meets a 1-column budget (latent in sugar-crush; reachable via candy-shell pager, sugar-table) |
-| 15b-13 | Low-Med | Reading | Token proxy chars/4 underestimates CJK 3-6× |
+| 15b-13 | Low-Med | Reading | Token proxy chars/4 underestimates CJK 3-6×. Partly fixed (`8341a37c1`: script-weighted `TokenEstimate` for Chat's estimate, 85/95% tiers, status bar); remaining: `ContextCompactor` still chars/4 (70% reminder late for CJK), stale comments |
 | 15b-17 | Low-Med | Repro | U+E002+n in model or tool text paints a copy of on-screen image n where the text chooses; Nerd Font glyphs blanked |
 | 15b-18 | Low-Med | Repro | Session tab strip unclipped (383 cells at 80 cols, standalone root) and unsanitized |
 | 15b-14 | Low | Reading | No i18n in sugar-crush |
@@ -265,6 +266,9 @@ Confidence labels:
 | 15b-27 | Low (latent) | Reading | `describeToolCall()` shows an empty value for an invalid-UTF-8 argument |
 | 15b-28 | Low | Reading | Bidi overrides and zero-width characters pass every sanitizer |
 | 15b-29 | Low | Reading | candy-shine `stripControls()` keeps lone raw 0x80–0x9F bytes |
+| 15b-30 | Low | Repro | candy-shine `stream()` ≠ `render()` when the text has link reference definitions (sugar-crush renders such partials whole) |
+| 15b-31 | Low | Repro | candy-shine `SectionScanner::finish()` drops the closed section before a trailing heading; no boundary after a closing fence (residual of 15b-10) |
+| 15b-32 | Info | Reading | Stale comments: launch notices "re-sent every turn" (Bootstrap, SessionStore); DetectsCapabilities cites Doctor's removed `??=` probe |
 
 **Checked and dropped:**
 - **Documented and intentional:** `/HELP`, `/clear all`, `/exit now` and unknown `/foo` fall through to the model (`docs/COMMANDS.md` "Two guards…"). The held queue after Esc Esc goes out after the next prompt (`InFlightInputQueueTest::testAQueueHeldThroughACancelGoesOutOnTheNextSettle`).
@@ -354,3 +358,5 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **15b-19** The latent permission modal wrapped by bytes and kept CR — fixed on master in `e4fd37010` (new candy-core `Sanitize::visibleControls()` renders every control byte visibly in caret or `<U+…>` notation; CR maps to LF, zone sentinels are spelled out, and the text wraps by cells with `Width::wrap()`). Found while fixing it: `Width::wrap()` hangs at a 1-column budget (15b-26), and an invalid-UTF-8 argument is described as empty (15b-27).
 - **15b-22** `/rewind help` (any non-numeric argument) performed a rewind, and `/name:arg` reached handlers with a literal `:` — fixed on master in `0d094ff25` (`/rewind` accepts only an empty or `ctype_digit` count ≥ 1; the raw-text handlers take `Chat::commandArgument()`, which drops one space or `:` separator). Residual: `/pane`, `/layout` and `/mcp` still split the whole draft on whitespace (documented in `docs/COMMANDS.md`; 15b-24), and the command table's `/rewind` *Takes* column still shows `—` (15b-25).
 - **15b-23** Positional `$N` splitting: an apostrophe swallowed the rest of the line and `""` shifted the arguments — fixed on master in `0147c5f7a` + `1173b2ada` (a quote opens a span only at a token start, an unterminated quote stays literal, and an empty quoted span yields an empty token). Residual: `/model ""` now answers "Could not switch to provider ''" instead of opening the palette, because the user typed an explicit empty name.
+- **15b-10** Every frame re-rendered the whole history through CandyShine — fixed on master in `05f86a2a9` (exact memos in `src/Renderer.php`: settled CandyShine bodies in an LRU per width and content hash, scoped to one theme object; incremental streaming through CandyShine's `SectionScanner`, re-rendering only the open tail; per-row SGR transitions in `balanceSgr()`; the line count of collapsed tool bodies; the tool-zone dedup is a keyed lookup and labels are styled once per frame; 529 frames of a differential corpus are byte-identical to the old Renderer). At 120×40: 50/200/800 exchanges 182/698/2949 → 15/52/211 ms per frame, 300 warm markdown exchanges 965 → 38 ms (target was under 50), a 200K streaming partial 2197 → 81 ms. Residual: `r13_stream_cost.php` as written (headings straight after a closing fence) is only partly faster, 207/2526 → 112/1120 ms at 20K/200K, because `SectionScanner` finds no boundary there (15b-31); the memo works around two candy-shine bugs (15b-30, 15b-31).
+- **15b-12** Session titling fell back to the main, tool-armed backend — fixed on master in `37ff6d54f` (titling is skipped when `titleBackend` is null, the same gate prompt suggestions use; no other `?? backend` fallback exists).

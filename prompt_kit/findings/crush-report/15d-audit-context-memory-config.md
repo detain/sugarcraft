@@ -106,25 +106,6 @@ This report is final. What was read, what was only skimmed, and how each open le
 
 ## D. Environment block (git)
 
-### 15d-12 — `git log` and `git diff` honour user git config: `color.ui=always` puts ANSI escapes in the prompt, and `diff.external` runs the user's diff tool every turn
-- **Severity:** Medium · **Confidence:** Verified by repro (`r4.php`, with `GIT_CONFIG_GLOBAL=gitcfg`)
-- **Where:** `src/Context/EnvironmentBlock.php:993-994` (`gitField(['log','--oneline','-5'])`), `:1108-1109` (`git diff --shortstat --patch`), `:979-980` (`shell_exec` branch); `src/Support/ProcessContainment.php:79-84` sets `GIT_TERMINAL_PROMPT`/`GIT_PAGER` but not `GIT_OPTIONAL_LOCKS`
-- **Failure scenario:**
-  - With `[color] ui = always`, the env block contains `\e[33m5a20d53\e[m first commit`.
-  - With `[diff] external = difft` (a common setup) or `opendiff`/`meld`, the "Unstaged changes" section contains the external tool's output, `EXTERNAL-DIFF-TOOL f /tmp/git-blob-…`, instead of a patch. A GUI diff tool would pop up windows on every turn.
-  - **The user's own git commands fail while a prompt is being assembled (Verified by repro, `r14.php` + `lockrepo/`, git 2.43.0).** In a 3,000-file repo with a dirty stat cache, a loop of `git add f1` alongside a loop of `EnvironmentBlock::render()` failed 23 to 72 times in 6 to 8 s with `fatal: Unable to create '…/index.lock': File exists. Another git process seems to be running`. The baseline with no render failed 0 times. Isolating each command shows two lock takers:
-    - `git status --porcelain` (`:993`) takes the lock (26 failures in 5 s). With `GIT_OPTIONAL_LOCKS=0` it takes none (0 failures).
-    - `git diff --shortstat --patch` (`:1108`) **also** takes it, and `GIT_OPTIONAL_LOCKS=0` does **not** stop it (34 failures with the variable set). Porcelain `git diff` refreshes and writes the index whenever it can. The plumbing `git diff-files` took no lock (0 failures).
-
-    So the obvious fix (`GIT_OPTIONAL_LOCKS=0`) is only half a fix. In the TUI this happens on every turn while the user is committing in another terminal.
-- **Already known inside the project, not fixed:** `tests/Providers/PromptStabilityTest.php:2089-2160` builds a `color.diff=always`/`color.ui=always` fixture and **asserts escape bytes do reach the prompt** (a scanner liveness control). Its failure message calls this "worklog escalation 2" and names `--no-color` as "the fix … which makes this control, not the absence assertion, the thing to rewrite". The fix below must rewrite that control in the same change. The test's stable fixture hides the defect by neutralising host git config through the environment. A real launch does not.
-- **Fix:**
-  - Prefix every invocation with `git --no-pager --no-optional-locks -c color.ui=false -c core.quotepath=false`.
-  - Use `log --no-color --no-show-signature`.
-  - Replace porcelain `git diff` with plumbing that never writes the index: `git diff-files -p --stat` for unstaged and `git diff-index --cached -p HEAD` for staged, each with `--no-ext-diff --no-textconv --no-color`.
-  - Add `GIT_OPTIONAL_LOCKS=0` to the env as a backstop.
-- **Test:** An `EnvironmentBlockTest` with a fixture `GIT_CONFIG_GLOBAL` setting `color.ui=always` and `diff.external`. Assert no `\x1b` and no external-tool output. Add a lock test: hold `.git/index.lock` open (create it) across `render()`, then assert `render()` neither deletes nor needs it, and that a `git status`/`git diff` refresh inside `render()` leaves the index file's mtime unchanged.
-
 ### 15d-13 — Launching from a repository subdirectory reports "Is directory a git repo: No" and drops all git state
 - **Severity:** Medium-Low · **Confidence:** Verified by repro (`gitrepo/sub`)
 - **Where:** `src/Context/EnvironmentBlock.php:929-932`; root = `getcwd()` (`Bootstrap.php:2374`)
@@ -135,13 +116,7 @@ This report is final. What was read, what was only skimmed, and how each open le
 - **Failure scenario:** Running `cd repo/src && sugarcrush` renders `Is directory a git repo: No` with no branch, status or diff, although `git rev-parse --show-toplevel` succeeds. `InstructionFileLoader::ancestorRoot()` explicitly supports subdirectory launch, so the two layers contradict each other in the same prompt. Project settings, skills, rules and memory are also looked up at the subdirectory (`<cwd>/.sugar-crush`), so the trusted repo's `.sugar-crush/settings.json` is silently ignored there. (That last part is Verified by reading.)
 - **Fix:** Resolve `git rev-parse --show-toplevel` once (with a timeout), use it for `isGitRepo()`, and report "Working directory: …/src (repo root: …)". Decide and document whether `.sugar-crush/*` lookups walk up to the repo root.
 - **Test:** `EnvironmentBlockTest::testASubdirectoryOfARepoIsReportedAsInsideTheRepo`.
-
-### 15d-14 — The git subprocesses in prompt assembly have no time bound
-- **Severity:** Medium-Low · **Confidence:** Verified by reading
-- **Where:** `src/Tools/Concerns/CapturesProcessOutput.php:127-200` (`runCaptured()` loops until EOF with no deadline); `EnvironmentBlock.php:979-980` (`shell_exec`, no bound)
-- **Detail:** `EnvironmentBlock::render()` runs five git commands on every build, synchronously, before the request is sent. On a huge or network-mounted repo, or with a slow `core.fsmonitor` hook, the turn stalls for as long as git takes. Combined with the 120 s parent watchdog (known item #7), a slow `git status` can kill the turn before the provider is called. Known items #2 and #7 cover volatility and the Bash timeout, not this.
-- **Fix:** Add a deadline parameter to `runCaptured()` with SIGTERM/SIGKILL of the group (the `StatusLineCommand` pattern), around 2 s per git call. Render `unavailable (git timed out after 2s)`.
-- **Test:** A PATH-shimmed `git` that sleeps 30 s; assert `render()` returns in under 3 s with the timeout text.
+- **Partly fixed on master in `119bc86d2`** (part (a), git state). When `<cwd>/.git` is absent, the block runs a bounded `git rev-parse --show-toplevel` (memoised per block and copied by the wither) and renders `Working directory: <cwd> (repo root: <root>)` with the full git section; the root is escaped and capped, and a timeout renders `unavailable (…)`. A launch at the repo root sends the same bytes and makes the same number of calls as before. **Remaining:** (b) `.sugar-crush/*` lookups (project settings, skills, rules, memory) still resolve at the subdirectory, not the repo root; whether they walk up is a deferred decision (wave plan §3 #14).
 
 ---
 
@@ -170,7 +145,7 @@ This report is final. What was read, what was only skimmed, and how each open le
 
 ## F. Lower-priority observations (Verified by reading; nondeterminism and caps)
 
-- **15d-17 (Low):** `RuleLoader::loadFromDirectory()` (`:534-614`) and `RepoMapBlock::phpFileDirectories()` (`:898-924`) both apply their count caps (`MAX_FILES = 64`, `MAX_SOURCE_FILES = 20000`) in `RecursiveDirectoryIterator` order, which is readdir order and differs across filesystems. Past the cap, *which* rules load and which directories are counted differs between machines and clones, even though the survivors are `ksort`ed. `RepoMapBlock` also counts only `.php` files towards the cap, so a PSR-4 root of `""` over a tree of millions of non-PHP files is walked in full at every capture. **Fix:** collect paths, `sort()`, then cap; count every visited entry against a visit budget.
+Its only entry, 15d-17, was fixed in wave 3; see **Fixed since audit**.
 
 ---
 
@@ -245,11 +220,9 @@ This report is final. What was read, what was only skimmed, and how each open le
 | 15d-03 | Medium | Repro | Project `.sugar-crush/skills` shadows the user's own skills and built-ins silently; contradicts SKILLS.md. Partly fixed (`9105feb48`: every shadowing reported in `skipped()`); remaining: precedence order (deferred), foreign-convention shadowing still silent, skip-notice wording | `SkillLoader.php:721-739` |
 | 15d-05 | Medium | Repro | Home-store `project` notes are global → injected into every repo's prompt | `MemoryBlock.php:213-229`, `Chat.php:12534` |
 | 15d-09 | Medium | Repro | No size cap on CLAUDE.md/AGENTS.md/forced/imports (3 MB inlined); skill budgets inert | `Runtime.php:3009-3040` |
-| 15d-12 | Medium | Repro | Env git calls honour `color.ui=always` and `diff.external`; `status` and `diff` take `index.lock` and make the user's concurrent `git add` fail (env var alone does not fix `diff`) | `EnvironmentBlock.php:993-1117` |
 | 15d-20 | Med-Low | Repro | A `paths:` rule added or edited mid-session is never delivered (splice skips it; nudge built once at boot); stale bodies, double presentation | `Bootstrap.php:6863`, `Runtime.php:2950-2970` |
 | 15d-06 | Med-Low | Repro | Claude memory import slug ignores `.` (and probably `_`/space) → imports nothing | `ForeignMemoryImporter.php:302-307` |
-| 15d-13 | Med-Low | Repro | Subdirectory launch: "not a git repo", git state dropped; `.sugar-crush/*` not found | `EnvironmentBlock.php:929-932` |
-| 15d-14 | Med-Low | Reading | Git subprocesses in prompt assembly are unbounded in time | `CapturesProcessOutput.php:127-200` |
+| 15d-13 | Med-Low | Repro | Subdirectory launch: "not a git repo", git state dropped; `.sugar-crush/*` not found. Partly fixed (`119bc86d2`: `rev-parse --show-toplevel`, "repo root:" line, git section); remaining: (b) `.sugar-crush/*` walk-up (deferred decision) | `EnvironmentBlock.php:929-932` |
 | 15d-15 | Med-Low | Repro | `writeUserConfig()` breaks symlinked config (stale policy); unlocked read-merge-write; overwrites an unparsable file | `Bootstrap.php:3608-3680` |
 | 15d-22 | Low-Med | Repro | Glob metacharacters in the checkout path drop forced instructions and every repo memory note, silently | `InstructionFileLoader.php:509`, `MemoryStore.php:118-284` |
 | 15d-23 | Low | Repro | Memory id shown from frontmatter, looked up by filename → unaddressable notes; repo `MEMORY.md` rewritten with a timestamp on every change | `MemoryStore.php:188-340`, `Chat.php:12894` |
@@ -258,7 +231,6 @@ This report is final. What was read, what was only skimmed, and how each open le
 | 15d-07 | Low | Reading | Repo-shipped memory framed as "notes the user wrote" | `MemoryBlock.php:300-306` |
 | 15d-11 | Low | Reading | Doc says `@~/` imports resolve; containment always blocks them | `ImportResolver.php:104`, `MEMORY.md:231` |
 | 15d-16 | Low | Repro | `(int)` of a huge float wraps negative for `maxToolSteps`/`maxOutputTokens` | `Bootstrap.php:2945`, `EngineBackend.php:1251` |
-| 15d-17 | Low | Reading | Count caps applied in readdir order → machine-dependent subsets; repo-map walk unbounded for non-PHP files | `RuleLoader.php:534-614`, `RepoMapBlock.php:898-924` |
 | 15d-25 | Low (docs) | Reading | MEMORY.md ("touches nothing else") and PROMPT_ENGINEERING.md don't describe the `<\|` / `<｜` control-token defang | `MEMORY.md:199`, `PROMPT_ENGINEERING.md:103` |
 | 15d-26 | Low (docs) | Reading | `CHANGELOG.md` still lists the four moved skills as built-ins | `CHANGELOG.md:389-395` |
 
@@ -340,3 +312,6 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **15d-10** PromptFence let attribute-bearing roster tags through and did nothing about chat-template control tokens — fixed on master in `161d60881` (the roster pattern is a lookahead on the `<` alone, so attribute lists, split lists and unterminated openers are matched; the same rewrite defangs `<|` and `<｜` openers, listed in `PromptFence::CONTROL_TOKEN_PIPES`). The special-token half was never confirmed live (the tokenizer probe stays unrun). Residual: the docs do not describe the defang (15d-25).
 - **15d-21** The built-in skills shipped SugarCraft-monorepo procedures to every project — fixed on master in `cadba57fd` + `d70017a2f` (the four monorepo skills moved to `<repo root>/.sugar-crush/skills/`, the project tier, so they load only in this monorepo; `worktree-workflow`'s dirty-tree step now stops and reports instead of discarding; `docs/SKILLS.md` and `README.md` list eight built-ins; `BuiltInSkillsTest` scans both trees for discard-work commands, walking directories instead of globbing). Residual: `CHANGELOG.md` still lists them as built-ins (15d-26).
 - **15d-18** `skillKeyFor()` broke on a trailing slash or a foreign path spelling — fixed on master in `0f971f954` (the base is `rtrim`med, a leftover leading `/` is trimmed, and a path not spelled under the base is keyed through both realpaths, then by the skill's own name).
+- **15d-17** Count caps were applied in readdir order, and the repo-map walk was unbounded for non-PHP files — fixed on master in `7e2e08492` (`RuleLoader` and `RepoMapBlock` walk each directory with `scandir()` + `sort()` and cap after sorting; a visit budget counts every entry, `MAX_WALK_ENTRIES = 4096` for rules and 100,000 for the repo map, and a cut is recorded).
+- **15d-14** The git subprocesses in prompt assembly had no time bound — fixed on master in `6e2df9a26` (`runCaptured()` gains an optional 4th `?float $timeoutSeconds`, default null so Bash and Grep are unchanged; on expiry the group gets SIGTERM then SIGKILL, the result carries `timedOut` and exit 124; the env block bounds each git read at 2 s, renders `unavailable (git timed out after 2s)`, and one timeout skips the rest of the git section; the branch read is bounded through `runCaptured()` too, keeping the `shell_exec` fallback).
+- **15d-12** Env-block git calls honoured the user's git config and took `index.lock` — fixed on master in `da6674686` (every call runs as `git --no-pager --no-optional-locks -c color.ui=false -c core.quotepath=false`; `log` adds `--no-color --no-show-signature`; diffs use the plumbing `diff-index --cached` and `diff-files` with `--no-ext-diff --no-textconv --no-color`, so the index is never written; an unborn HEAD diffs against the empty tree; `GIT_OPTIONAL_LOCKS=0` is set through a new optional 5th `runCaptured()` parameter, `array $envOverrides`; `PromptStabilityTest`'s colour control is rewritten so its fixture must yield zero escapes). Residual: a stat-dirty binary file still counts in the shortstat, and with no stat refresh a heavily stat-dirty tree renders slower (about 0.5 s per 3,000 files) until the user's own git refreshes the index.

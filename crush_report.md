@@ -96,13 +96,13 @@
 
     Kilo legacy (a `condense` tool with a user-approved preview) and Goose (agent-visible vs user-visible flags) supply the remaining pieces.
 
-11. **The code audit found about 136 new defects** (Part IX). 44 of them, including the one Critical and all 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes, unfenced repo skill descriptions, Esc Esc tool placeholders that never healed, raw CR and C1 controls reaching the terminal, a turn kill that left its commands running, streamed tool calls dropped on `stop`, and built-in skills that told every project to `git clean -fd`. Wave 2 found 10 more, smaller defects while fixing these. About 102 remain, including:
-    - **The TUI re-renders the full history as markdown every frame.**
-    - **UI-only command output and notices are sent to the model as real turns.**
+11. **The code audit found about 136 new defects** (Part IX). 59 of them, including the one Critical and all 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes, unfenced repo skill descriptions, Esc Esc tool placeholders that never healed, raw CR and C1 controls reaching the terminal, a turn kill that left its commands running, streamed tool calls dropped on `stop`, built-in skills that told every project to `git clean -fd`, the full-history markdown re-render on every frame, `error_log()` output painted over the TUI, env-block git calls that honoured the user's git config and took `index.lock`, PostToolUse blocks that did nothing, hook input that defeated grep-style deny hooks, and a hostile `.gitignore` that stalled Glob for minutes. Waves 2 and 3 found 15 more, smaller defects while fixing these. About 92 remain, including:
+    - **Hooks and custom-command shell blocks still run synchronously inside `update()`**, freezing the TUI for up to 60 s and 10 s.
+    - **UI-only rows are now off the wire, but the compaction summary still reads them.**
     - **Sub-agent spend never reaches the parent or the spend cap.**
     - **Permission gaps remain:** WebFetch counts as read-only, Bash inherits provider API keys, and path deny rules miss respellings.
 
-    About two thirds are reproduced with scripts. No High item remains; fix the three Medium-High items next (IX.3, IX.4).
+    About two thirds are reproduced with scripts. No High item remains; finish the two Medium-High items, both partly fixed, next (IX.3, IX.4).
 
 12. **The features you asked for are designed and slotted into the roadmap** (Part VIII):
     - a schema-driven settings editor, built entirely from SugarCraft libraries already in the dependency tree;
@@ -808,17 +808,17 @@ Five agents audited sugar-crush's own source for **new** defects, one per area. 
 
 **Totals at audit time: about 136 findings** — 1 Critical, 20 High, about 47 Medium, and the rest Low-Medium, Low or Info.
 
-**Since the audit, 48 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 44 of the original findings, plus the 4 new items found while fixing them in wave 1. Wave 2 found 10 more while fixing its items; they are open. **About 102 findings remain** — 0 Critical, 0 High, 3 Medium-High (one of them, F-E2, partly fixed), about 36 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
+**Since the audit, 63 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 59 of the original findings, plus the 4 new items found while fixing them in wave 1. Waves 2 and 3 found 15 more while fixing their items (10 in wave 2, 5 in wave 3); they are open. **About 92 findings remain** — 0 Critical, 0 High, 2 Medium-High (15b-03 and F-E2, both partly fixed), about 31 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
 
 At audit time, about two thirds were **reproduced with a script**; the rest are verified by reading, and a few are marked *suspected*. Full write-ups are in Appendices Q–U; each finding has code excerpt, failure scenario, fix and a test that would catch it.
 
 | Appendix | Area | Findings | Critical / High |
 |---|---|---|---|
-| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 18 | 0 / 0 |
-| **R** (15b) | Chat state machine, TUI, rendering, commands | 19 | 0 / 0 |
-| **S** (15c) | Tools, permissions, hooks (security) | 24 | 0 / 0 |
-| **T** (15d) | Context assembly, memory, skills, config | 19 | 0 / 0 |
-| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 22 | 0 / 0 |
+| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 17 | 0 / 0 |
+| **R** (15b) | Chat state machine, TUI, rendering, commands | 20 | 0 / 0 |
+| **S** (15c) | Tools, permissions, hooks (security) | 18 | 0 / 0 |
+| **T** (15d) | Context assembly, memory, skills, config | 16 | 0 / 0 |
+| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 21 | 0 / 0 |
 
 Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
 
@@ -840,24 +840,19 @@ Several audits found the same root cause in different places. Fixing each theme 
 1. **Killing a turn does not kill all of its commands (residue).** Turn teardown and the parallel deadline now kill the whole process tree (`ProcessContainment::killTree()`, `c54372b2a`), so the `setsid`'d `bash` and parallel Task sub-agents die with the turn.
    - The remaining kill sites still signal one pid: the dormant Chat site, `AgentWorkerPool` and `EngineExecutor` (F-E2, partly fixed).
    - **Fix:** route them through `killTree()` too.
-2. **Terminal-injection and rendering hygiene.** CR, UTF-8 C1 controls and the permission modal's byte wrap are fixed (`Sanitize::untrustedForDisplay()`, the C1 sweep, `Sanitize::visibleControls()`). What remains:
+2. **Terminal-injection and rendering hygiene.** CR, UTF-8 C1 controls, the permission modal's byte wrap and `error_log()` output over the frame are fixed (`Sanitize::untrustedForDisplay()`, the C1 sweep, `Sanitize::visibleControls()`, and `TuiErrorLog`, which sends the TUI's `error_log` to `~/.sugar-crush/logs/sugarcrush.log`). What remains:
    - The tab strip is neither clipped nor sanitized (15b-18).
    - A forged image marker repaints images (15b-17).
-   - `error_log()` output paints over the TUI (C2).
    - Bidi overrides and zero-width characters pass every sanitizer (15b-28); candy-shine keeps lone raw C1 bytes (15b-29).
    - candy-core `Width::wrap()` hangs when a 2-cell cluster meets a 1-column budget (15b-26).
-   - **Fix:** extend the display policies to bidi and zero-width codepoints and PUA, enforce them at every render site (golden width tests), make `Width::wrap()` always consume a cluster, and route `error_log` to a file or the notice sink while the TUI owns the screen.
+   - **Fix:** extend the display policies to bidi and zero-width codepoints and PUA, enforce them at every render site (golden width tests), and make `Width::wrap()` always consume a cluster. The notice sink's clip and overflow strings still send the user to stderr for the full text, which in the TUI is now the log file (C4).
 3. **Repo-controlled content reaches the prompt without fencing or caps.**
    - A repo's skills shadow the user's own (15d-03; every shadowing is now reported, the precedence decision is open).
    - CLAUDE.md, AGENTS.md and `@imports` have no size cap (15d-09, C3).
    - Repo memory is framed as "notes the user wrote" (15d-07).
-4. **Prompt assembly reads the user's git config and the filesystem nondeterministically.**
-   - `color.ui=always` puts escape codes in the prompt, and `diff.external` runs the user's diff tool every turn.
-   - `git status` and `git diff` take `index.lock`, so the user's concurrent `git add` fails (15d-12).
-   - No timeouts (15d-14); a subdirectory launch reports "not a git repo" (15d-13).
-   - Caps are applied in readdir order (15d-17).
-   - These also hurt cache stability (Part I #2).
-   - **Fix:** `git -c color.ui=never --no-optional-locks`, `--no-ext-diff`, a timeout, `rev-parse --show-toplevel`, and sorted walks.
+4. **Prompt assembly read the user's git config and the filesystem nondeterministically (mostly fixed).** The env block's git calls now run with `--no-optional-locks -c color.ui=false`, diff through plumbing with `--no-ext-diff`, never write the index, and are bounded at 2 s each; a subdirectory launch reports the repo root and its git state; rule and repo-map walks sort before capping (15d-12, 15d-14, 15d-13 (a), 15d-17).
+   - What remains: `.sugar-crush/*` lookups still resolve at the launch subdirectory, not the repo root (15d-13 (b), a deferred decision).
+   - The env block is still re-rendered inside the system message, which hurts cache stability (Part I #2, Part II #2).
 5. **Errors are swallowed and turns "succeed".**
    - Malformed arguments run the tool with `[]` (A11).
    - Vertex 429/503 are never retried (A19).
@@ -865,10 +860,8 @@ Several audits found the same root cause in different places. Fixing each theme 
    - Accept-edits mode allows `rm`, `mv` and `cp` (F-P4).
    - WebFetch counts as read-only, so it can exfiltrate data unprompted (F-P6).
    - Bash and hooks inherit provider API keys (F-E1).
-   - A PostToolUse block is a no-op (F-H1).
-   - Hook JSON escapes `/`, so grep-style deny hooks never fire (F-H3).
 7. **Unbounded or stalled work inside `update()`.**
-   - The full history is re-rendered as markdown every frame: 0.7 s per keystroke at 200 exchanges, 2.1 s per frame while streaming a 200 KB reply (15b-10).
+   - A long streaming reply whose headings follow a closing code fence still re-renders whole on every frame, because candy-shine's `SectionScanner` finds no boundary there (15b-31, the residual of the fixed 15b-10).
    - UserPromptSubmit and SessionStart hooks run synchronously, freezing the UI for up to 60 s (15b-04).
    - Custom-command `` !`…` `` runs inside `update()` (15b-20).
    - `/branch` does one INSERT per message: a 4.3 s freeze at 800 messages (15b-21).
@@ -876,7 +869,7 @@ Several audits found the same root cause in different places. Fixing each theme 
 8. **Sessions and persistence integrity.**
     - `forkSession` copies dead tables, so the fork is empty and `--resume name` opens the parent. This is a root cause of "/fork ignores history" (SES-2).
     - No writer lock: two TUIs on one session clobber each other (SES-3).
-    - UI-only command output is sent to the model as real turns (15b-03; relates to Part II #2 and the DCP `uiOnly` proposal).
+    - UI-only command output and notices are kept off the wire by `Message::$uiOnly`, but the compaction summary still reads them, and notices still interleave between a prompt and its answer (15b-03, partly fixed; relates to Part II #2 and the DCP `uiOnly` proposal).
 9. **MCP: remaining interoperability and trust gaps.**
     - `claude-mcp` gives up after about 1 s (MCP-3).
     - OAuth discovery and storage bugs (MCP-6/7/8).
@@ -890,12 +883,11 @@ Several audits found the same root cause in different places. Fixing each theme 
 
 ## IX.3 Critical and High findings: fix first
 
-The Critical item and all 20 High items are fixed on master, as is the latent High in the sub-agent path that was found while fixing them. No Critical or High finding remains. The three Medium-High items come next:
+The Critical item and all 20 High items are fixed on master, as is the latent High in the sub-agent path that was found while fixing them. No Critical or High finding remains. The two Medium-High items, both partly fixed, come next:
 
 | ID | Area | Finding | Repro |
 |---|---|---|---|
-| 15b-03 | Chat | Command output, mid-turn notices and background/runtime notices go to the model as real turns | ✔ |
-| 15b-10 | TUI | Full-history markdown re-render every frame: 0.7 s per keystroke at 200 exchanges | ✔ |
+| 15b-03 | Chat | Command output and notices went to the model as real turns. Partly fixed (`2a3a8f91c`: `Message::$uiOnly`, filtered at every wire encoder); remaining: compaction input, notice order | ✔ |
 | F-E2 | Tools | Kill sites that signal one pid. Partly fixed (`c54372b2a`); remaining: dormant Chat site, `AgentWorkerPool`, `EngineExecutor` | ✔ |
 
 ## IX.4 Where the audit fixes slot into the roadmap
@@ -903,23 +895,21 @@ The Critical item and all 20 High items are fixed on master, as is the latent Hi
 - **Before Wave 0, as an "audit hotfix" wave (mostly S):** this wave has landed on master in full (see the **Fixed since audit** list at the end of each of Appendices Q–U).
 - **With Wave 0:**
   - the remaining process-tree kill sites (theme 1, F-E2);
-  - git env hardening (theme 4);
   - cost accounting (theme 10).
 - **Before Wave 1.C ships:**
   - fix the permission modal's empty value for an invalid-UTF-8 argument (15b-27), and bidi overrides in the text it shows (15b-28);
-  - fix PostToolUse block semantics (F-H1);
-  - fix the hook JSON escaping (F-H3).
+  - port the PostToolUse withhold and the hook-input encoding fixes (F-H1, F-H3, both fixed on the live Runtime path) to their dormant Chat-path mirrors, `Chat::applyPostToolUse()` and the bare `json_encode` calls.
 
   The approval UI will otherwise display or route untrusted text wrongly.
 - **With Wave 1.B:**
-  - `uiOnly` rows (15b-03);
+  - the rest of 15b-03 (the compaction input and notice order; the `uiOnly` flag itself has landed);
   - stable unique ids (also needed by A8, the markup duplication).
 - **With the sessions phase (VIII.4 A):**
   - SES-2 (fork copies dead tables);
   - SES-3 (writer lease; the server design's `session_leases` table covers it);
   - session picker bugs B1–B3;
   - 15b-21.
-- **With rendering work:** 15b-10 (cache rendered markdown per row, render only the visible window), 15b-04 and 15b-20 (move hooks and shell into `Cmd`).
+- **With rendering work:** 15b-30 and 15b-31 (candy-shine streaming fixes, so sugar-crush can drop its workarounds; 15b-10's memoization has landed), 15b-04 and 15b-20 (move hooks and shell into `Cmd`).
 
 
 ---
@@ -19618,6 +19608,7 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Code:** `'extra_body' => ['separate_reasoning' => true],`
 - **Failure scenario:** `extra_body` belongs to the OpenAI Python SDK, which merges it into the body before sending. Sent raw, it is an unknown top-level field. Strict OpenAI-compatible servers (api.openai.com answers "Unrecognized request argument supplied: extra_body", and so do several hosted gateways) return 400 on every request. (Before the A1 fix that 400 became a silent empty reply; it now surfaces as an error.) Servers that ignore unknown fields never see `separate_reasoning` either.
 - **Fix:** send `'separate_reasoning' => true` at the top level, and only for providers known to accept it, or make it a config flag.
+- **Partly fixed on master in `4f8869c63`.** `complete()` and `completeStream()` no longer send `extra_body`, and by default the body carries no `separate_reasoning` at all (SGLang never read the nested form, so nothing changes there). A server that wants extra top-level fields can opt in through a new last constructor parameter, `array $extraBody = []`, also passed through `openAiCompatible()`; one helper merges it into both bodies, and the constructor refuses the key `extra_body`, keys the provider writes itself, and keys that are not non-empty strings. **Remaining:** no config key feeds `extraBody` yet. Adding one needs plumbing through `ProviderFactory`, a `docs/SETTINGS.md` row, and the `TrustKeyDocumentationDriftTest` roster.
 - **Test:** capture the outgoing body with history middleware. Assert that it has no `extra_body` key.
 
 #### A11 — Malformed tool-call argument JSON runs the tool with `[]`, and the model is never told why
@@ -19665,13 +19656,6 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Failure scenario:** **Repro:** `[User, User, Assistant(''), User]` is sent unchanged as `user, user, assistant{text:""}, user`. Nothing merges the two user turns, and the blank text block goes out as-is. Two everyday paths produce `user, user`. One is a turn that failed: Bedrock *throws* on errors, so the user row gets no assistant reply. The other is `HistorySanitizer` (`HistorySanitizer.php:115-118`) dropping an empty assistant reply. Because the whole history is replayed, every later request in that Bedrock session sends the same invalid shape.
 - **Fix:** merge adjacent same-role messages into one content array, and skip empty text blocks, as Vertex does.
 - **Test:** a history of `[User a, Assistant '', User b]` should produce strictly alternating roles with no empty `text`.
-
-#### A17 — `embeddings()` swallows transport errors and returns an empty list
-- **Severity:** Low · **Confidence:** Verified-by-reading
-- **Where:** `SglangProvider.php:967-969`, `CustomProvider.php:378-380`.
-- **Failure scenario:** any consumer that does semantic search sees "no embeddings" instead of an outage, so it degrades silently.
-- **Fix:** rethrow as `ProviderException`.
-- **Test:** a 500 from the mock should cause `embeddings()` to throw.
 
 #### A18 — New evidence for known #27/#28: the default provider sends `max_tokens: 4096` with DeepSeek-V4 `reasoning_effort: max`
 - **Severity:** (sharpens known High/Medium items) · **Confidence:** Suspected — verification pending. Measure `usage.reasoning_tokens` and `finish_reason` on the live SGLang server for a few agentic prompts at effort `max`.
@@ -19744,23 +19728,19 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 
 These are covered above: B4 (no usage channel on tool results). B2 (deadline kill orphans) was fixed in `c54372b2a`.
 
-#### C2 — Engine-side diagnostics go to `error_log()`, which in the TUI is the terminal itself: they paint raw text over the alt-screen frame
-- **Severity:** Medium · **Confidence:** Verified-by-reading. The destination was checked on this machine: `php -r 'error_log("probe-line");'` with the stock ini (`error_log` unset, `log_errors=1`) writes `probe-line` to fd 2. There was no live TUI capture.
-- **Where:**
-  - `src/Diagnostics/RuntimeNoticeSink.php:366-369`: `warn()` **always** calls `error_log($message)` before queueing the in-transcript notice.
-  - `src/Providers/SglangProvider.php:1014` → `:2387-2422`: `flagTruncationRiskInLatestToolResults()` calls `error_log()` on **every request** whose latest tool-result batch contains `</parameter>`, for every non-DeepSeek-V4 model (MiniMax, Qwen and others).
-  - Direct `error_log()` calls in `DsmlToolCallParser.php` (`:242`, `:320`, `:354`, `:365`, `:385`, `:467`, `:486`) and `MinimaxXmlFallbackToolCallParser.php` (`:145`, `:224`, `:234`).
-  - Nothing redirects fd 2. There is no `ini_set('error_log', …)` and no stderr re-open anywhere in `src/` or `bin/`. The forked turn child (`EngineBackend.php:1349-1360`) inherits the TUI's stderr unchanged.
-- **Failure scenario:** in the interactive TUI, stdout and stderr are the same tty. A parser warning, a worktree warning or the per-request `</parameter>` heuristic arrives mid-turn from the forked child as an unframed `PHP …`/`sugarcrush: …` line. It is written at whatever cursor position the renderer left. The diff renderer assumes it owns every cell, so the line stays (or tears the layout) until a full repaint. `Chat.php:14543-14548` already describes this ("`error_log()`, i.e. fd 2, i.e. a frame the renderer believes it owns"), but `RuntimeNoticeSink::warn()` still double-writes to it. The `</parameter>` heuristic is the noisiest case: once a session has Read any file containing that string (any XML or PHP tool-schema code, this repo included), every later request writes a ~500-byte line to the screen until a non-matching tool batch follows.
-- **Fix:** at TUI start (`Bootstrap` before `Program::run`), point `error_log` at a session log file (for example `~/.sugar-crush/logs/<session>.log`, mode 0600). Have `RuntimeNoticeSink::warn()` skip `error_log()` while the sink is armed with a transport. Rate-limit the `</parameter>` warning to once per tool-call id.
-- **Test:** an integration test runs `bin/sugarcrush` under a PTY (candy-pty) with a scripted provider that triggers a DSML warning, and asserts no `sugarcrush:` bytes appear outside the rendered frame. A unit test asserts that `RuntimeNoticeSink::warn()` writes nothing to `php://stderr` while armed.
-
 #### C3 — Project instructions (`CLAUDE.md`/`AGENTS.md` + every `@import`) have no byte budget, while rules have 64 KiB
 - **Severity:** Low · **Confidence:** Verified-by-reading
 - **Where:** `src/Runtime.php:3009-3041` adds every `loadRoot()`/`loadForced()` document in full. Compare `:2963-2999` and `:3050+`, where user and project rules share `MAX_STANDING_RULE_BYTES = 65_536` (`:161`) with pointer deferral. `src/Context/InstructionFileLoader.php:841-871` expands `@imports` through `ImportResolver` with a depth cap but no size cap. Ancestor `CLAUDE.md`/`AGENTS.md` files (`:401-461`) are added on top.
 - **Failure scenario:** a checked-in `CLAUDE.md` that writes `@docs/ARCHITECTURE.md` or `@README.md`, or a parent-directory `AGENTS.md`, puts hundreds of KB into **every** request's system prompt, with no notice. Known #21 says the token estimate ignores the system prompt, so Chat's tiers never see the cost. On a 128k or 200k window this overflows on every request. On this monorepo, the root `CLAUDE.md` with its two imports is already 25,110 B (`InstructionFileLoader.php:176`).
 - **Fix:** charge instruction documents against the same per-build budget (or their own, for example 64 KiB). When a document doesn't fit, defer it to a pointer line the way rules are deferred, and report the overflow as a runtime notice.
 - **Test:** a fixture repo whose `CLAUDE.md` imports a 200 KB file should produce a system prompt under the budget, containing a pointer to the deferred import.
+
+#### C4 — The notice sink's clip and overflow strings, and TROUBLESHOOTING.md, still send the user to stderr for the full text
+- **Severity:** Low (docs and UI wording) · **Confidence:** Verified-by-reading (found while fixing C2 in wave 3)
+- **Where:** `src/Diagnostics/RuntimeNoticeSink.php:202` (`CLIP_SUFFIX = '… (clipped; full text on stderr)'`) and `:267` (`OVERFLOW_FORMAT = '… and %d more runtime notice%s this session; see stderr for the full text.'`); `docs/TROUBLESHOOTING.md:85-91`, `:135` and `:326-328`.
+- **Detail:** since C2's fix (`9a827f4e3`), the TUI points `error_log` at `~/.sugar-crush/logs/sugarcrush.log` (new `Diagnostics\TuiErrorLog`), so in the TUI the full text of a clipped or overflowed notice is in that log file, not on stderr. The transcript row still tells the user to look at stderr, where nothing is written, and TROUBLESHOOTING.md still describes stray stderr lines inside the frame as the expected failure. The wording is still right for `-p` and the other non-TUI entry points, where the destination stays stderr.
+- **Fix:** make both strings name the actual destination (for example, a `%s` filled from `TuiErrorLog`'s path when it is armed, else "stderr"), and update the TROUBLESHOOTING.md passages to describe the log file.
+- **Test:** a TUI-armed sink's clipped notice names the log path; an unarmed one still says stderr.
 
 ---
 
@@ -19770,7 +19750,7 @@ These are covered above: B4 (no usage channel on tool results). B2 (deadline kil
 |---|---|---|---|---|
 | A8 | Medium | repro | Recovered DSML/XML markup stays in content (painted, then sent twice) | SglangProvider.php:785-871 |
 | A9 | Medium | repro | MiniMax fallback makes JSON-looking strings into arrays (Write of composer.json breaks) | MinimaxXmlFallbackToolCallParser.php:278-297 |
-| A10 | Medium | reading | `CustomProvider` sends a literal `extra_body` key | CustomProvider.php:172, 240 |
+| A10 | Medium | reading | `CustomProvider` sends a literal `extra_body` key. Partly fixed (`4f8869c63`: no literal key; opt-in constructor `array $extraBody`); remaining: no config key feeds `extraBody` | CustomProvider.php:172, 240 |
 | A12 | Medium | repro+reading | claude-code streaming cannot work (no `--verbose`, wrong framing, argv > 128 KiB) | ClaudeCodeProvider.php:99-310 |
 | A13 | Medium | reading | OpenAI window is 8k for gpt-4o-mini/4.1. Partly fixed (`58d25cb3b`: ids sized, unknown → 0); remaining: no context-window config override | OpenAIProvider.php:103-112 |
 | A15 | Medium | reading | Vertex priced at $0 (spend cap inert); Bedrock invents $0.01 | VertexProvider.php:278; BedrockProvider.php:158 |
@@ -19778,16 +19758,15 @@ These are covered above: B4 (no usage channel on tool results). B2 (deadline kil
 | **A20** | Medium | reading | Bedrock tables match only bare ids: real versioned/profile ids get an 8k window and an invented $0.01/1k | BedrockProvider.php:46, 146-169 |
 | **A21** | Medium | suspected | Gemini 2.5 default thinking: thought tokens missing from Usage and sharing the 4096 `maxOutputTokens` | VertexProvider.php:1459, 1770-1793 |
 | B4 | Medium (High paid) | reading | Task sub-agent spend never reaches the parent, session total or cap | TaskTool.php:604-608; ToolResult.php; EngineBackend.php:890-941 |
-| **C2** | Medium | reading | `error_log()` diagnostics (notice sink, parsers, per-request `</parameter>` warning) paint over the TUI frame | RuntimeNoticeSink.php:366-369; SglangProvider.php:2409; Dsml/Minimax parsers |
 | A18 | (sharpens #27/#28) | suspected | Default SGLang `max_tokens` 4096 with effort `max` | SglangProvider.php:1030, 165 |
 | **A23** | Low-Med | reading | Replayed tool-call arguments send a nested empty map (`{"opts":{}}`) as `[]` (residual of A7) | ToolSchema.php:195-196 |
 | A11 | Low | reading | Malformed argument JSON runs the tool with `[]`; model not told | CustomProvider.php:628; SglangProvider.php:2221 |
 | A16 | Low | repro (shape) | Bedrock: no same-role merge, blank text blocks | BedrockProvider.php:316-332 |
-| A17 | Low | reading | `embeddings()` swallows errors | SglangProvider.php:967; CustomProvider.php:378 |
 | B5 | Low | reading | Two withers drop the spend cap (latent) | EngineBackend.php:542, 575 |
 | **C3** | Low | reading | Project instructions and `@imports` have no byte budget (rules have 64 KiB) | Runtime.php:3009-3041; InstructionFileLoader.php:841-871 |
+| **C4** | Low (docs) | reading | Notice-sink clip/overflow strings and TROUBLESHOOTING.md still say "full text on stderr"; in the TUI it is in the log file (residual of C2) | RuntimeNoticeSink.php:202, 267; TROUBLESHOOTING.md:85-91, 135, 326 |
 
-New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A13 (fix aligned with the `contextWindow()` contract). Items sharpened in that pass and since fixed are listed under **Fixed since audit**. Found while fixing A7 in wave 2: **A23**.
+New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A13 (fix aligned with the `contextWindow()` contract). Items sharpened in that pass and since fixed are listed under **Fixed since audit**. Found while fixing A7 in wave 2: **A23**. Found while fixing C2 in wave 3: **C4**.
 
 ---
 
@@ -19846,6 +19825,8 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **B3** Both ends of the frame socketpair leaked into every process the turn spawned — fixed on master in `53da0a291` (the child closes the parent's end first; new `ProcessContainment::closeOnExec()` sets `FD_CLOEXEC` via FFI `fcntl` on both ends; `completeAsync` also polls the turn pid with `WNOHANG`, so a dead turn is noticed without waiting for EOF).
 - **B6** The frame writer gave up silently mid-frame and the reader resynced without teardown — fixed on master in `ee2e59b08` (the child's end carries a year-long write timeout and a failed write ends the child with `exitNow(1)`; `drainFrames()` reports corruption, and `completeAsync` delivers the frames decoded before it, then tears the turn down with "Provider worker frame stream corrupted").
 - **C1** `waitpid -1` never settled an exempt parallel job — fixed on master in `c10717d8c` (both wait sites go through `parallelJobHasExited()`, which treats any non-zero answer as gone; the payload file is still read, so the real result arrives).
+- **A17** `embeddings()` swallowed transport errors and returned an empty list — fixed on master in `106ea5253` (both providers throw `\RuntimeException` with the provider's own error text and the Guzzle exception as `previous`, so `TransientFailure` still classifies 5xx, 429 and connect failures as transient and 400 as permanent; a 2xx body that is not JSON, has no `data` list, or has an item without an `embedding` also throws; `data: []` still returns an empty result).
+- **C2** Engine-side `error_log()` diagnostics painted over the TUI frame — fixed on master in `9a827f4e3` + `520298b79` + `0c2bbd0a7` (new `Diagnostics\TuiErrorLog` points `error_log` at `~/.sugar-crush/logs/sugarcrush.log`, directory 0700 and file 0600, refusing a symlinked file, rotating one generation past 5 MiB and keeping an operator's own destination; `bin/sugarcrush` arms it on the TUI path just before `Program::run`; `RuntimeNoticeSink::warn()` skips `error_log()` while armed with a transport and the destination is still stderr) and `080fac09d` (the SGLang `</parameter>` truncation-risk warning is logged once per tool-call id per provider instance, an empty id keyed by a content hash, at most 1024 entries). Residual: if the log cannot be set up, the parsers' direct `error_log()` calls can still reach the tty; the notice-sink strings and TROUBLESHOOTING.md still say "full text on stderr" (C4).
 
 
 ---
@@ -19905,6 +19886,9 @@ Confidence labels:
   - The session titler's `$userTurns !== 1` check (`:9020-9026`) counts command echoes, so a session whose first input was `/permissions` is never titled.
 - **Fix:** Add a `uiOnly` / `agentVisible=false` flag on `Message` (synthesis 1.B) and set it on every notice and command-echo producer above. Filter in `toTypedMessages()` and in the titler and suggestion prompts. Keep notices ordered after the settled answer, or render them in a separate notice stream.
 - **Test:** Drive `/help` → prompt through a recording backend. Assert that the backend history contains only the user prompt.
+- **Partly fixed on master in `2a3a8f91c`.** New `Message::$uiOnly` (with `withUiOnly()`, `Message::notice()` and `Message::agentVisible()`) round-trips through `jsonSerialize()`/`fromArray()` and survives every wither, checkpoint revival and the compaction rebuild, and is never put on the wire. Every command echo and output, `/help`, the queued, refusal and hook-blocked notices, launch, runtime and background notices, palette rows, status notices and backend error strings are flagged. The filter runs at Chat's turn dispatch, in the titler (which now counts agent-visible user turns), the suggester, `EngineBackend::toTypedMessages()` and `CommandBackend::encodeHistory()` (shared by `StreamingCommandBackend`); the token estimate skips UI-only rows. Left visible on purpose: `/websearch` results (known #22), hook `additionalContext`, the 70% reminder, and the permission-refusal note (the model's only record of the refusal). **Remaining:**
+  - the compaction summary's input is not filtered, because filtering only one side breaks the exchange-key alignment;
+  - notice order is unchanged: notices still render, interleaved, between a prompt and its answer in the transcript (they are off the wire).
 
 #### 15b-04 — A synchronous UserPromptSubmit / SessionStart hook chain runs inside `update()`
 - **Severity:** Medium · **Confidence:** Verified-by-reading
@@ -19938,22 +19922,6 @@ Confidence labels:
 - **Fix:** `Width::truncate($bar, $cols)` (ANSI-aware) at `:1907`. Drop or shorten `$processing` segments in priority order. Clamp `contentWidth` to `max(1, cols-6)`.
 - **Test:** For cols in {20, 30, 40}, assert every frame row satisfies `Width::string($row) <= $cols`.
 
-#### 15b-10 — Every frame re-renders the whole history through CandyShine; keystroke latency grows linearly with the session
-- **Severity:** Medium-High · **Confidence:** Verified-by-repro (`r7_perf.php`, `r7b.php`)
-- **Where:** `Renderer::renderView()` → `renderHistory()` at `src/Renderer.php:2947-2985` builds `new Markdown(...)` and renders **every** message on every frame. Only afterwards does it slice to the visible rows (`array_slice($contentLines, $sliceStart, $available)`). There is no per-message cache. `renderStreamingTurn()` also re-parses the whole partial reply on every token batch.
-- **Measured** (120×40, one user + one markdown answer + one tool row per exchange):
-  - 50 exchanges: **179 ms/frame**
-  - 200 exchanges: **706 ms/frame**
-  - 800 exchanges: **2.95 s/frame**
-  - Breakdown at 100 rows each: user-only 35 ms, tool rows 41 ms, **assistant markdown 331 ms**.
-- **Streaming partial** (`r13_stream_cost.php`, lead 6 confirmed): `renderStreamingTurn()` re-parses the whole unbounded `streamingText` on every pump. A 20 KB partial takes **213 ms/frame**, 100 KB **1.04 s/frame** and 200 KB **2.14 s/frame**, even with no history. One long answer (a large file written as prose, or a long plan) is enough to stall the loop for the rest of that answer.
-- Each keystroke, token batch and tick re-renders, so in a long agentic session typing lags by close to a second and the event loop stalls, delaying tool-event pumping and watchdogs.
-- **Fix:**
-  - Memoize rendered blocks per `(message identity/hash, width, theme, expanded-state)`. A static LRU keyed on `spl_object_id` + content hash works.
-  - Render only from the bottom up until the visible rows plus the scroll offset are filled.
-  - Cache the streaming partial's settled-paragraph prefix.
-- **Test:** A performance guard: 300 markdown exchanges must render in under 50 ms after the first frame, or the markdown renderer must be called at most N times on an unchanged second frame (count it with a spy theme or renderer).
-
 #### 15b-26 — candy-core `Width::wrap()` never terminates when a 2-cell cluster meets a 1-column budget
 - **Severity:** Medium (a hang) · **Confidence:** Verified-by-repro (`timeout 5 php -r '… Width::wrap("文", 1) …'` is killed at the deadline)
 - **Where:** `candy-core/src/Util/Width.php:295` (`wrap()`). Its hard-break loop cuts long tokens between grapheme clusters, but a cluster wider than the whole budget (a CJK character or a wide emoji at `$max = 1`) is never emitted, so the loop never advances.
@@ -19975,19 +19943,23 @@ Confidence labels:
 - **Fix:** remove 0x80–0x9F bytes that are not part of a well-formed UTF-8 sequence, the way `Sanitize::untrusted()` step 1 does. A plain byte-class strip would corrupt valid multi-byte characters, whose continuation bytes fall in that range.
 - **Test:** CandyShine renders `"a\x9B2Jb"` without the `\x9B` byte, and still renders `→` and `👍` intact.
 
-### C. Commands and parsing
+#### 15b-30 — candy-shine `Renderer::stream()` breaks its "equals `render()`" law when the text has link reference definitions
+- **Severity:** Low · **Confidence:** Verified-by-repro (found while fixing 15b-10 in wave 3; re-checked with `Renderer::plain()`: `stream()` gives `See [x][a].…`, `render()` gives the resolved hyperlink)
+- **Where:** `candy-shine/src/Renderer.php:261` (`stream()`). It renders each closed section on its own, so a reference-style link (`[text][foo]`) in one section and its definition (`[foo]: https://…`) in another never meet.
+- **Failure scenario:** a streamed answer that uses reference links renders the link as literal `[text][foo]` text (the definition itself is consumed, unresolved) until the answer settles and is rendered whole, so the transcript reflows at the end of the turn. Any other `stream()` consumer gets output that differs from `render()` of the same text. sugar-crush works around it (`05f86a2a9`) by rendering any partial that contains a link reference definition whole, which gives up the incremental speed-up for those answers.
+- **Fix:** collect link reference definitions across sections (a pre-scan of the whole text, or re-rendering the sections that used an undefined reference once a definition arrives), or make `SectionScanner` refuse to split a text containing one.
+- **Test:** `implode('', iterator_to_array(stream([$t])))` equals `render($t)` for `$t = "See [x][a].\n\n# H\n\n[a]: https://e.x\n"`; then drop the sugar-crush workaround and keep its memo test green.
 
-#### 15b-12 — Session titling falls back to the main, tool-armed backend when there is no toolless title backend
-- **Severity:** Medium · **Confidence:** Verified-by-reading
-- **Where:** `src/Chat.php:9029` `$backend = $next->titleBackend ?? $next->backend;`. `Bootstrap::titleBackend()` → `toollessBackend()` returns null:
-  - when `selectedProviderName()` is null, which is always the case on the `SUGARCRUSH_BACKEND_CMD[_STREAM]` tier (`Bootstrap.php:7626`);
-  - when the provider default has no model;
-  - when construction throws.
-- **Scenario:**
-  - With `SUGARCRUSH_BACKEND_CMD` pointing at an agentic CLI, the first prompt is sent **twice**: once as the turn and once as the "title" job, with `[system: TITLE_PROMPT] + history`. An agentic backend can act on the request twice (side effects, double billing).
-  - With an `EngineBackend` fallback, the title job runs a full tool-enabled turn in a fork under the default bypass mode.
-- **Fix:** When `titleBackend` is null, skip titling (prompt suggestions already work this way), or use a backend that is guaranteed toolless.
-- **Test:** A Chat with `backend: RecBackend`, `titleBackend: null` and a session store. Submit the first prompt. Assert the backend is called exactly once.
+#### 15b-31 — candy-shine `SectionScanner::finish()` drops the closed section when the unterminated last line is a heading; no boundary is found after a closing fence
+- **Severity:** Low · **Confidence:** Verified-by-repro (found while fixing 15b-10 in wave 3; re-checked: `stream(["Intro\n\n# F"])` gives `["# F"]`, `render()` gives both)
+- **Where:** `candy-shine/src/Render/SectionScanner.php:64` (`finish()`), and its section-boundary rule.
+- **Failure scenario:**
+  - `stream(["Intro\n\n# F"])` yields only the heading: the closed "Intro" section is thrown away when the last line has no newline and is a heading. sugar-crush works around it (`05f86a2a9`) by cutting the tail by byte offset instead of trusting `finish()`.
+  - A heading right after a closing code fence, with no blank line between, is never treated as a boundary, so a long partial in that shape has no closed sections and re-renders whole every frame. This is the residual of 15b-10: `r13_stream_cost.php` (headings straight after fences) went only from 207/2526 ms to 112/1120 ms per frame at 20K/200K, while partials with a blank line before each heading went from 2197 ms to 81 ms at 200K.
+- **Fix:** make `finish()` emit the pending closed section before the trailing heading, and widen the boundary rule to a heading that follows a closing fence (and other unambiguous block starts), so long partials without blank-line headings also stream incrementally.
+- **Test:** `stream(["Intro\n\n# F"])` yields both sections; `r13_stream_cost.php` at 200K renders in under 100 ms per frame.
+
+### C. Commands and parsing
 
 #### 15b-24 — `/pane:x`, `/layout:x` and `/mcp:x` colon spellings are not handled
 - **Severity:** Low · **Confidence:** Verified-by-reading (found while fixing 15b-22)
@@ -20011,6 +19983,9 @@ Confidence labels:
 - **Effect:** CJK text runs at roughly 1-1.5 tokens per character. Even fully calibrated, the 70/85/95% tiers fire far too late for CJK users, which leads to provider overflow errors. This is separate from known #21, which concerns the system prompt and tool schemas.
 - **Fix:** Count bytes/3, or weight by script (wide characters ≈1 token). A tokenizer-backed estimate would be better.
 - **Test:** 10k CJK characters must estimate to at least 8k.
+- **Partly fixed on master in `8341a37c1`** (Chat side). New `src/Util/TokenEstimate.php` is a script-weighted proxy: ASCII and Latin ¼ token (the old figure), other alphabets ½, CJK, kana, Hangul and symbols 1, astral and emoji 2, and bytes/3 for invalid UTF-8; 10k CJK characters now estimate 10,010 (was 2,510). Chat's 85% and 95% tiers and the status bar use it. **Remaining:**
+  - `src/Context/ContextCompactor.php:1194` still counts `mb_strlen / 4`, so the 70% reminder still fires late for CJK;
+  - stale "chars/4" comments remain in `Renderer.php` (`:2169`, `:2356`), `Usage.php` (`:17`, `:335`), `Backend/ReportsContextWindow.php:52` and `Util/TokenTracker.php:47`.
 
 #### 15b-14 — sugar-crush has no i18n: every user-facing string is hard-coded
 - **Severity:** Low (convention gap) · **Confidence:** Verified-by-reading
@@ -20021,6 +19996,15 @@ Confidence labels:
 - **Severity:** Low · **Confidence:** Verified-by-reading
 - **Where:** `Message::attachFile()` / `attachImage()` at `src/Message.php:241,261` have no callers. `EngineBackend::toTypedMessages()` drops `attachments`, and `Chat.php:15822` only copies them.
 - **Fix:** Per the "wire, don't delete" rule, add `@file` / paste-image attachment in the input box and map it to `UserMessage::withAttachment()` in `toTypedMessages()`.
+
+#### 15b-32 — Stale comments: launch notices "re-sent every turn", and Doctor's old mosaic idiom
+- **Severity:** Info (comments) · **Confidence:** Verified-by-reading (found during wave 3)
+- **Where:**
+  - `src/Cli/Bootstrap.php:412` and `src/Session/SessionStore.php:555` justify keeping per-entry launch rows out of the transcript because each would be "a list the model is re-sent every turn".
+  - `src/Tools/Concerns/DetectsCapabilities.php:38` cites `Doctor::execute()`'s `self::$mosaic ??=` as the house idiom for a lazy capability probe.
+- **Detail:** since 15b-03's fix (`2a3a8f91c`), launch notices are `uiOnly` rows and never reach the model, so the token-cost half of those two rationales is no longer true (the transcript-clutter half still is). Since F-T6's fix (`977179c1e`), Doctor reads the boot-time `ToolResult::mosaic()` probe and no longer has a `??=` probe, so the docblock points readers at code that does not exist.
+- **Fix:** reword the two rationales to the transcript-clutter reason, and point the `DetectsCapabilities` docblock at `ToolResult::mosaic()` (and the boot-time warm-up).
+- **Test:** none needed beyond review.
 
 ### E. Repository-supplied and model-supplied text in overlays and panes
 
@@ -20104,16 +20088,14 @@ Confidence labels:
 
 | ID | Sev | Conf | Title |
 |---|---|---|---|
-| 15b-03 | Med-High | Repro | Command output, mid-turn notices and background/runtime notices go to the model as real turns |
-| 15b-10 | Med-High | Repro | Full-history markdown re-render every frame: 0.7 s/keystroke at 200 exchanges; 2.1 s/frame for a 200 KB streaming partial |
+| 15b-03 | Med-High | Repro | Command output, mid-turn notices and background/runtime notices go to the model as real turns. Partly fixed (`2a3a8f91c`: `Message::$uiOnly`, filtered at every wire encoder); remaining: compaction input unfiltered, notices still interleave between a prompt and its answer |
 | 15b-04 | Medium | Reading | UserPromptSubmit/SessionStart hooks run synchronously inside update() (up to 60 s freeze) |
 | 15b-05 | Medium | Repro | Menu and shell commands erase the draft, then claim "draft still in the box" |
 | 15b-09 | Medium/Low | Repro | Status bar not clipped to cols; content width (and every overlay) floored at 20+chrome |
-| 15b-12 | Medium | Reading | Title job falls back to the main tool-armed or command backend (first prompt sent twice) |
 | 15b-20 | Medium | Repro | Custom-command `` !`…` `` blocks update() up to 10 s; timed-out grandchildren survive |
 | 15b-21 | Medium | Repro | `/branch` re-interns every message with one autocommitted INSERT each: 4.3 s freeze at 800 messages |
 | 15b-26 | Medium | Repro | candy-core `Width::wrap()` loops forever when a 2-cell cluster meets a 1-column budget (latent in sugar-crush; reachable via candy-shell pager, sugar-table) |
-| 15b-13 | Low-Med | Reading | Token proxy chars/4 underestimates CJK 3-6× |
+| 15b-13 | Low-Med | Reading | Token proxy chars/4 underestimates CJK 3-6×. Partly fixed (`8341a37c1`: script-weighted `TokenEstimate` for Chat's estimate, 85/95% tiers, status bar); remaining: `ContextCompactor` still chars/4 (70% reminder late for CJK), stale comments |
 | 15b-17 | Low-Med | Repro | U+E002+n in model or tool text paints a copy of on-screen image n where the text chooses; Nerd Font glyphs blanked |
 | 15b-18 | Low-Med | Repro | Session tab strip unclipped (383 cells at 80 cols, standalone root) and unsanitized |
 | 15b-14 | Low | Reading | No i18n in sugar-crush |
@@ -20123,6 +20105,9 @@ Confidence labels:
 | 15b-27 | Low (latent) | Reading | `describeToolCall()` shows an empty value for an invalid-UTF-8 argument |
 | 15b-28 | Low | Reading | Bidi overrides and zero-width characters pass every sanitizer |
 | 15b-29 | Low | Reading | candy-shine `stripControls()` keeps lone raw 0x80–0x9F bytes |
+| 15b-30 | Low | Repro | candy-shine `stream()` ≠ `render()` when the text has link reference definitions (sugar-crush renders such partials whole) |
+| 15b-31 | Low | Repro | candy-shine `SectionScanner::finish()` drops the closed section before a trailing heading; no boundary after a closing fence (residual of 15b-10) |
+| 15b-32 | Info | Reading | Stale comments: launch notices "re-sent every turn" (Bootstrap, SessionStore); DetectsCapabilities cites Doctor's removed `??=` probe |
 
 **Checked and dropped:**
 - **Documented and intentional:** `/HELP`, `/clear all`, `/exit now` and unknown `/foo` fall through to the model (`docs/COMMANDS.md` "Two guards…"). The held queue after Esc Esc goes out after the next prompt (`InFlightInputQueueTest::testAQueueHeldThroughACancelGoesOutOnTheNextSettle`).
@@ -20212,6 +20197,8 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **15b-19** The latent permission modal wrapped by bytes and kept CR — fixed on master in `e4fd37010` (new candy-core `Sanitize::visibleControls()` renders every control byte visibly in caret or `<U+…>` notation; CR maps to LF, zone sentinels are spelled out, and the text wraps by cells with `Width::wrap()`). Found while fixing it: `Width::wrap()` hangs at a 1-column budget (15b-26), and an invalid-UTF-8 argument is described as empty (15b-27).
 - **15b-22** `/rewind help` (any non-numeric argument) performed a rewind, and `/name:arg` reached handlers with a literal `:` — fixed on master in `0d094ff25` (`/rewind` accepts only an empty or `ctype_digit` count ≥ 1; the raw-text handlers take `Chat::commandArgument()`, which drops one space or `:` separator). Residual: `/pane`, `/layout` and `/mcp` still split the whole draft on whitespace (documented in `docs/COMMANDS.md`; 15b-24), and the command table's `/rewind` *Takes* column still shows `—` (15b-25).
 - **15b-23** Positional `$N` splitting: an apostrophe swallowed the rest of the line and `""` shifted the arguments — fixed on master in `0147c5f7a` + `1173b2ada` (a quote opens a span only at a token start, an unterminated quote stays literal, and an empty quoted span yields an empty token). Residual: `/model ""` now answers "Could not switch to provider ''" instead of opening the palette, because the user typed an explicit empty name.
+- **15b-10** Every frame re-rendered the whole history through CandyShine — fixed on master in `05f86a2a9` (exact memos in `src/Renderer.php`: settled CandyShine bodies in an LRU per width and content hash, scoped to one theme object; incremental streaming through CandyShine's `SectionScanner`, re-rendering only the open tail; per-row SGR transitions in `balanceSgr()`; the line count of collapsed tool bodies; the tool-zone dedup is a keyed lookup and labels are styled once per frame; 529 frames of a differential corpus are byte-identical to the old Renderer). At 120×40: 50/200/800 exchanges 182/698/2949 → 15/52/211 ms per frame, 300 warm markdown exchanges 965 → 38 ms (target was under 50), a 200K streaming partial 2197 → 81 ms. Residual: `r13_stream_cost.php` as written (headings straight after a closing fence) is only partly faster, 207/2526 → 112/1120 ms at 20K/200K, because `SectionScanner` finds no boundary there (15b-31); the memo works around two candy-shine bugs (15b-30, 15b-31).
+- **15b-12** Session titling fell back to the main, tool-armed backend — fixed on master in `37ff6d54f` (titling is skipped when `titleBackend` is null, the same gate prompt suggestions use; no other `?? backend` fallback exists).
 
 
 ---
@@ -20228,7 +20215,7 @@ Scope: `src/Tools/` (built-ins, Concerns, PathJail, IgnoreRules, McpToolBridge),
 Checkout: master @ `05db616f3`, PHP 8.3.6 CLI, `memory_limit=-1`.
 Repro scripts: `/home/sites/crush-research-repos/_audit-scratch/15c/rNN_*.php`. Every repro runs against `.../15c/root` and never against the real repo.
 
-Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings at audit time: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low. Eight have since been fixed on master (see **Fixed since audit** at the end), so 23 remain: 1 Med-High (F-E2, partly fixed), 9 Medium, 3 Low-Medium, 10 Low. One more was found during wave 2 (F-E4, Info), so 24 are open.
+Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings at audit time: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low. Fifteen have since been fixed on master (see **Fixed since audit** at the end), so 16 remain: 1 Med-High (F-E2, partly fixed), 7 Medium, 1 Low-Medium, 7 Low. One more was found during wave 2 (F-E4, Info) and one during wave 3 (F-E5, Low), so 18 are open.
 
 > **Correction to the known list. Read this first.** Argument-scoped permission rules **are implemented**, in `PermissionRule::matches()` / `matchesShellSubject()`. `Bash(rm *)` deny now **denies**, and `Bash(git *)` allow no longer grants all of Bash (`r11_rules.php`). Two sources described older code: synthesis Part II row #23 ("`Bash(git *)` grants all of Bash") and `docs/PERMISSIONS.md` §"Pattern matching is name-only — measured" (which said `Bash(rm *)` "never matched → Allow"). Both are now corrected; the PERMISSIONS.md section was rewritten in `d3d90fece` to describe argument-scoped matching, and since `c8fc573a5` it describes the fail-closed allow rules that closed F-P5. The real defects in the new matcher were narrower. F-P5 (`$(…)`, backticks and redirection slipping past an allow rule) is now fixed. F-J3 covers path rules missing respellings and is still open.
 
@@ -20259,26 +20246,6 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 - **Also affected:** Edit (`Edit.php:150-158`: a `file_exists()` check and then `file_get_contents()`) and Write `overwrite:true` (`Write.php:178-188`: `is_file()` is false for a FIFO, so Write instead opens the FIFO for writing with `file_put_contents` and blocks until a reader appears).
 - **Fix:** `if (!is_file($path)) return error('not a regular file')` after resolve, in Read and Edit. In Write, refuse when `file_exists($path) && !is_file($path)`.
 - **Test:** `posix_mkfifo("$root/p")`, then Read, Edit and Write `p`. Assert an error from each inside 1 s.
-
-#### F-T5 — A hostile `.gitignore` makes Glob spend about 70 ms per file (2,000 files → 139 s), killing the turn; backtrack errors fail open
-- **Severity:** Medium. **Confidence:** Verified-by-repro (`r16_gitignore_redos.php`).
-- **Where:** `src/Tools/IgnoreRules.php:454` `compile()` turns each `**` into `.*` and each `*` into `[^/]*`, with no limit on how many there are. `:289-304` `verdict()` runs **every** rule of **every** applicable `.gitignore` against **every** path prefix of **every** walked file. `:300` treats a `preg_match()` error as "no match": `if (preg_match($rule['regex'], $scoped) === 1)`. The consumers are `Glob.php:711` and `:782` (one `ignores()` per walked entry) and `Grep.php:723` (only on hits).
-- **Excerpt:**
-  ```php
-  $out .= '.*';                                   // compile(): every `**`
-  ...
-  if (preg_match($rule['regex'], $scoped) === 1) { // verdict(): false (error) == no match
-  ```
-- **Repro:** A `.gitignore` of 20 identical lines `**a**a**a**a**a**a**a**a**a**a**a**a**a**a**c` (about 900 bytes), and 2,000 empty files named `c` + 40×`a` + N. A single `ignores()` call took 0.094 s and ended with `Backtrack limit exhausted`. **`Glob '**/*'` took 138.97 s.** Grep over the same tree took 0.03 s, because it filters only grep's hits. A cloned repository supplies both the `.gitignore` and the files, so the model's first Glob in that repo runs past the 120 s turn deadline (known #7 covers the deadline; this is a new way to reach it, and Glob, unlike Bash, is not the model's choice to make slow). PCRE's backtrack limit makes each match fail instead of hang. That keeps the cost bounded per call, but the result is a **fail-open verdict**: a rule that errors is treated as not matching, so a negation (`!keep.me`) or a hide rule quietly stops applying. Ignore rules are not a security boundary, but before the F-J2 fix the `.env` guard relied on them in practice.
-- **Fix:** Collapse runs of `*`/`**` while compiling (`**a**a` has the same meaning as a single wildcard sequence, and git's own `wildmatch` is linear). Use possessive or atomic groups (`(?>.*)` is wrong for globs, so use a hand-written glob matcher like git's), or cap the number of wildcards per line (git has an implicit cap). Treat `preg_match() === false` as **match** for hide rules (fail closed) and log the rule once. Cache verdicts per directory prefix so that N files do not re-test the same parent N times.
-- **Test:** The repro as a PHPUnit test with a time budget: Glob over 2,000 files under the hostile `.gitignore` must finish in under 2 s. Add a unit test showing that a rule which hits the backtrack limit still hides its target.
-
-#### F-T6 — The `doctor` tool probes the terminal from inside the turn fork, competing with the TUI for stdin and stdout
-- **Severity:** Low. **Confidence:** Verified-by-reading.
-- **Where:** `src/Tools/BuiltIn/Doctor.php:89` `self::$mosaic ??= Mosaic::auto()`. The tool is registered for the model at `Cli/Bootstrap.php:6898`. `candy-mosaic/src/Detect.php:137` writes the DA1 query to `STDOUT` and reads the reply from stdin with a timeout. `:403` sends XTWINOPS. Every exit path calls `drainStdin(50, …)`. Doctor keeps its **own** static rather than reusing `ToolResult::mosaic()`, which the parent already probed at boot (`ToolResult.php:311-327`).
-- **Failure:** The engine runs each turn in a forked child (see F-E2), which inherits the TUI's tty file descriptors. When the model calls `doctor` (its description invites it "before attaching an image"), the child writes escape queries into the TUI's output mid-frame, and then drains up to the probe timeout plus 50 ms of stdin. Keystrokes typed during that window go to the child and are lost. The terminal's DA1 or size reply can instead reach the parent's input parser and show up as garbage input. No security impact; this is a correctness and UX defect.
-- **Fix:** Have Doctor read the boot-time probe (`ToolResult::mosaic()`), which was inherited across the fork, and never touch the tty from a tool. If a re-probe is ever needed, it belongs in the parent's event loop.
-- **Test:** Run `Doctor::execute()` with `Detect::setProbeStdin()` pointing at a stream that fails the test if it is read. Assert the result reports the cached protocol.
 
 #### F-T7 — Edit and Write rewrite files in place, so a kill mid-write leaves a truncated file
 - **Severity:** Low. **Confidence:** Verified-by-reading.
@@ -20389,44 +20356,18 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 - **Fix:** rewrite both paragraphs to describe `killTree()` and the close-on-exec frame socket, keeping the no-`/proc` fallback caveat and the "a ParallelSafe tool must terminate on its own" rule.
 - **Test:** none needed beyond review. A doc-drift assertion could pin that the docblock names `killTree`.
 
-#### F-E3 — Bash's `cd ROOT && CMD` runs any later `;`-separated commands in the wrong directory when `cd` fails
-- **Severity:** Low. **Confidence:** Verified-by-reading.
-- **Where:** `Bash.php` execute: `"cd " . escapeshellarg($cwd) . " && " . $command`. `&&` binds tighter than `;`, so `cd X && a; b` parses as `(cd X && a); b`.
-- **Failure:** If the root or worktree is gone (a removed worktree, a renamed directory), `b` runs in the PHP process cwd, which can be the main checkout rather than the isolated worktree.
-- **Fix:** `cd X || exit 1; ` + command, or pass `$cwd` to `proc_open` instead of a `cd` prefix.
-- **Test:** Root deleted after construction. Bash `true; pwd` → assert a non-zero exit and no pwd output.
+#### F-E5 — `ProcessContainment::interactiveSpawnCommand()` has the same `cd X && cmd` prefix F-E3 fixed in Bash
+- **Severity:** Low (latent) · **Confidence:** Verified-by-reading (found while fixing F-E3 in wave 3)
+- **Where:** `src/Support/ProcessContainment.php:327-332`: `$script = ($cwd === null || $cwd === '' ? '' : 'cd ' . escapeshellarg($cwd) . ' && ') . $command;`, then `['/bin/sh', '-c', $script]`. Its caller is `CapturesProcessOutput::runCapturedInteractive()` (`:393`).
+- **Failure scenario:** `&&` binds tighter than `;`, so with a `$cwd` that no longer exists, `cd X && a; b` runs `b` in the PHP process's cwd, which can be the main checkout rather than an isolated worktree. Bash is not affected: it passes a null `$cwd` and carries its own `cd ROOT || exit 1` prefix since F-E3's fix (`750ffdd13`). Today no production caller passes a `$cwd`, so this is latent until one does.
+- **Fix:** use the same `cd X || exit 1` + newline prefix as Bash, ideally from one shared helper so the two cannot drift again.
+- **Test:** `interactiveSpawnCommand('true; pwd', '/nonexistent')` run through `/bin/sh` exits non-zero and prints no directory.
 
 ---
 
 ### E. Hooks and audit
 
-#### F-H1 — A PostToolUse "block" or deny is a silent no-op: tool output still reaches the model and the reason is dropped
-- **Severity:** Medium. **Confidence:** Verified-by-repro (`r12_post_block.php`) plus reading of the consumers.
-- **Where:** `Runtime::settle()` (`src/Runtime.php` ~2322) and `Chat::applyPostToolUse()` (`src/Chat.php:4420-4437`) read **only** `$hookResult->additionalContext`. `continueOnBlock` exists only in the dormant `HookDispatcher`.
-- **Repro:** A secret-scanner PostToolUse hook that exits 2 on `AKIA…` gives `action=deny message='output contains AWS key, blocked' additionalContext=''`. The consumers discard everything except `additionalContext`, so the raw output, including the key, goes to the model, and nobody sees the block reason.
-- **Docs contradiction:** HOOKS.md says PostToolUse block "surfaces through `continueOnBlock`". No live path does that. HOOKS.md also contradicts itself: the timeout section (around line 655) says that on PostToolUse "that verdict is discarded by both consumers". That sentence is accurate. The `continueOnBlock` sentence is not.
-- **Chat path:** `Chat::applyPostToolUse()` behaves the same way, but it is dormant on `bin/sugarcrush` (see F-P9, Reachability).
-- **Fix:** On a PostToolUse deny, replace the model-visible content with `[output withheld by hook <name>: <reason>]`, matching the Claude Code semantics users will copy, or at minimum annotate and surface it to the user. Wire `continueOnBlock` or delete the claim from the docs.
-- **Test:** The repro hook through `Runtime::run()` with a stub Bash returning `AKIA…`. Assert the ToolResultMessage content does not contain `AKIA` and does contain the reason.
-
-#### F-H2 — The audit log records only completed calls; hook and gate denials are never logged, and output is unsanitised
-- **Severity:** Low-Medium. **Confidence:** Verified-by-reading.
-- **Where:** `src/Hooks/BuiltIn/AuditHook.php`: `event(): PostToolUse`, and `execute()` writes `substr($context->toolOutput, 0, 200)` raw.
-- **Failure:** (1) Refused calls never reach PostToolUse (`Runtime::gate()` returns early), so the security-relevant events (ProtectFilesHook denials, gate denials, hook timeouts) leave no audit trail. (2) Raw newlines in the first 200 bytes of attacker-influenced output (WebFetch, Bash) let a page forge extra `[timestamp] session Tool …` lines. (3) `toolInput` is unbounded: every `Write` logs the full file content, with no rotation.
-- **Fix:** Register a PreToolUse audit leg, or log from `Runtime::gate()` on refusal with the DenialKind. Encode the output excerpt with `json_encode`/`addcslashes`. Cap the input at around 4 KiB.
-- **Test:** A ProtectFilesHook denial produces an audit line containing `DENY`. Output containing `"\n[2026-"` is logged on one line.
-
-#### F-H3 — Hooks receive `CRUSH_TOOL_INPUT` with `\/`-escaped slashes, so naive path or command greps never match
-- **Severity:** Low-Medium. **Confidence:** Verified-by-repro (`r18_hook_slash.php`).
-- **Where:** `src/Runtime.php:2568` `hookContext()`: `toolInput: json_encode($toolCall->arguments()) ?: '{}'`, with no `JSON_UNESCAPED_SLASHES`/`UNICODE`. `Chat.php:4282` (dormant) has the same code. `CRUSH_TOOL_INPUT_FILE` carries the same bytes. Separately, on encode failure the hook sees `{}` instead of the arguments: a fail-open input for a deny hook.
-- **Repro:** A deny hook `printf %s "$CRUSH_TOOL_INPUT" | grep -qF "/etc/passwd" && exit 2` with `Read file_path=/etc/passwd` sees `{"file_path":"\/etc\/passwd"}` and **allows**. Any hook that greps for a path or for `rm -rf /` silently never fires. Every path argument contains a `/`, so this defeats the most natural shell-hook style. jq-based hooks are unaffected. The `{}` arm is **not** reachable by the model: provider tool-call JSON cannot carry invalid UTF-8 (a lone `\ud800` escape fails `json_decode`). It remains a latent fail-open for embedders that build arguments themselves.
-- **Failure:** A user deny hook `grep -q 'rm -rf /' <<<"$CRUSH_TOOL_INPUT"` never fires, because the input reads `rm -rf \/`.
-- **Fix:** `JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE`. Never fall back to `'{}'` (deny instead).
-- **Test:** A ScriptHook `grep -q '/etc/passwd'` on a Read of `/etc/passwd` gives exit 1 (deny).
-
-#### F-H4 — SkillTool's `args` parameter is advertised in the schema and silently dropped
-- **Severity:** Low. **Confidence:** Verified-by-reading (`src/Tools/BuiltIn/SkillTool.php` schema declares `args`; `execute()` never reads it; there is no `$ARGUMENTS` substitution anywhere in `src/Skills` or `src/Tools`).
-- **Fix:** Implement substitution or remove the property. Tests should pin one or the other.
+All four findings here (F-H1 to F-H4) were fixed in wave 3; see **Fixed since audit**.
 
 ---
 
@@ -20457,26 +20398,20 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 | F-E2 | Med-High | Repro | Cancel or deadline SIGKILLs the PHP child only; setsid'd bash keeps running; Task sub-agents cascade. Partly fixed (`c54372b2a`: tree kill at turn teardown and parallel deadline); remaining: dormant Chat site, `AgentWorkerPool` and `EngineExecutor` kill sites |
 | F-T2 | Medium | Repro | Edit ignores `$maxBytes`; 35 MB file → 650 MB peak |
 | F-T3 | Medium | Reading | WebFetch 2 MiB raw result (32× Bash cap) |
-| F-T5 | Medium | Repro | Hostile `.gitignore` → Glob 139 s over 2,000 files (turn killed); backtrack errors fail open |
 | F-J3 | Medium | Repro | Path deny rules miss relative/absolute respellings and symlinks |
 | F-P3 | Medium | Repro | auto mode classifies Bash only; classifier `\|` regex bugs |
 | F-P4 | Medium | Repro | accept-edits: Edit/Write Ask but `rm`/`mv`/`cp` Allow |
 | F-P6 | Medium | Reading | WebFetch "read-only" → unprompted exfiltration in default/plan/dont-ask |
 | F-E1 | Medium | Repro | Bash and hooks inherit provider API keys; HOOKS.md env table wrong |
-| F-H1 | Medium | Repro | PostToolUse block is a no-op; output delivered, reason dropped |
-| F-H2 | Low-Med | Reading | Audit log misses all denials; log-line forging; unbounded input |
-| F-H3 | Low-Med | Repro | Hook input JSON escapes `/`, so grep-style deny hooks never fire; encode failure gives `{}` |
 | F-P8 | Low-Med | Repro | Tool output starting `Permission denied:` is reported as a refusal although the command ran |
 | F-T4 | Low | Repro (primitive) | Read/Edit/Write block forever on a FIFO |
-| F-T6 | Low | Reading | `doctor` probes the tty from the turn fork, stealing stdin from the TUI |
 | F-T7 | Low | Reading | Edit/Write truncate in place; a kill or ENOSPC mid-write leaves a truncated file |
 | F-J5 | Low | Repro | BashEscapeDenyHook unwired, bypassable, false-positive on `/dev/null`; mutates the shared manager; Glob/Grep/Lsp take no worktree jail |
 | F-P7 | Low | Reading | Task grant memo silences user-hook asks |
 | F-P9 | Low (dormant) | Reading | Chat-path "Always" grant keyed by tool name overrides any hook ask |
-| F-E3 | Low | Reading | `cd X && a; b` runs `b` outside the root when cd fails |
-| F-H4 | Low | Reading | SkillTool `args` silently dropped |
 | F-W2 | Low | Repro | WebFetch returns 3xx/4xx/5xx bodies as success; relative `Location:` ends the chain |
 | F-W3 | Low | Reading | WebSearch: cleartext default, unchecked redirects (blind SSRF), unbounded read |
+| F-E5 | Low (latent) | Reading | `interactiveSpawnCommand()` keeps the `cd X && cmd` prefix F-E3 fixed in Bash (no production caller passes a cwd yet) |
 | F-E4 | Info (doc) | Reading | `ParallelSafe` docblock still describes the orphan-deadline and inherited-socket hazards fixed by B2 and B3 |
 
 ---
@@ -20535,6 +20470,13 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **F-P2** Plan mode allowed `>f`, `2> f`, `sed -i`, `rm`, `git push --force` — fixed on master in `d3d90fece` (plan Bash is now an allow-list of read-only commands, fail closed; the same commit rewrote the stale PERMISSIONS.md matching section).
 - **F-W1** WebFetch SSRF blocklist missed 100.64/10, 198.18/15, NAT64 and 6to4 — fixed on master in `0594e0e17`.
 - **F-P5** Argument-scoped allow rules accepted `$(…)`, backticks and redirects — fixed on master in `c8fc573a5` (the Allow arm is fail-closed via `ShellWords`: it refuses incomplete lines, `$(`, backticks, `<(`/`>(`, `${…}`/`$[…]` and non-inert redirection, and every unquoted-operator segment must match; Deny and Ask also match quote-removed and per-command readings, so `true; 'rm' -rf x` hits `Deny Bash(rm *)`; PERMISSIONS.md now describes the fail-closed allow rules). Still open and separate: F-J3 (path respellings). Allow matching is still per rule (`Allow git *` + `Allow grep *` does not grant `git log | grep x`); that is documented, not a bug.
+- **F-T5** A hostile `.gitignore` made Glob spend about 70 ms per file, and backtrack errors failed open — fixed on master in `bae0297ce` (`IgnoreRules` builds patterns as tokens; PCRE is kept for safe shapes, and every other pattern, and any PCRE error, goes to a cached DFA that never backtracks; an undecidable rule fails closed, so a hide applies and a negation does not re-include; verdicts are cached per directory). The repro Glob over 2,000 files went from 139 s to 0.34 s. Residual: `IgnoreRules::undecidablePatterns()` is not surfaced to the model by Glob or Grep; nothing reads it yet.
+- **F-T6** The `doctor` tool probed the terminal from inside the turn fork — fixed on master in `977179c1e` (Doctor reads the boot-time `ToolResult::mosaic()` probe and never touches the tty). Residual: `Bootstrap::backend()` does not warm `ToolResult::mosaic()`, so headless runs still probe lazily from the tool (harmless with no TUI); the `DetectsCapabilities` docblock still cites Doctor's old `self::$mosaic ??=` idiom (15b-32).
+- **F-E3** Bash's `cd ROOT && CMD` ran later `;`-separated commands in the wrong directory when `cd` failed — fixed on master in `750ffdd13` (the prefix is `cd ROOT || exit 1` plus a newline, so a missing root runs nothing; `proc_open`'s `cwd` was rejected because on PHP 8.3.6 a missing cwd only warns and returns false). Still open nearby: `ProcessContainment::interactiveSpawnCommand()` keeps the old prefix (F-E5).
+- **F-H1** A PostToolUse block or deny was a silent no-op — fixed on master in `19f25de74` (in `Runtime::settle()`, any PostToolUse verdict that does not permit the call — deny or exit 2, timeout, ask, unknown action — replaces what the model and the UI see with `[output withheld by PostToolUse hook: <reason>] The call ran; its output is not shown.`; image and diff are stripped, `isError` is kept as the tool set it, the refusing hook's own `additionalContext` is dropped; HOOKS.md's `continueOnBlock` claim and the "discarded by both consumers" sentence are corrected). Residual: the text names no hook, because `HookResult` does not carry which hook refused; a hook that throws is still only an annotation; the dormant `Chat::applyPostToolUse()` mirror is unchanged (scheduled for w7-gate-prov).
+- **F-H2** The audit log recorded only completed calls, could be forged and logged unbounded input — fixed on master in `fd3b9e861` (new `AuditHook::recordDenial()` and `recordWithheld()`; Runtime logs from `gate()`'s refusal arm — hook deny, gate deny, refused or unanswered ask, PreToolUse timeout — and from the F-H3 encode refusal and the F-H1 withheld arm, as `=! DENY <hook|refused|unanswered>: <reason>` and `=! WITHHELD: <reason>`; every field is control-character escaped, the 200-byte excerpt is cut on a UTF-8 boundary, and input is capped at 4 KiB with a `[truncated: N bytes]` marker; HOOKS.md gains "What the audit log records"). Residual: built-ins run first, so a withheld call usually also gets the ordinary `=>` line, whose excerpt may still hold the secret (the log is in a 0700 per-user directory).
+- **F-H3** Hook input JSON escaped `/`, and an encode failure gave hooks `{}` — fixed on master in `fa74a16be` (encoded with `JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR`; arguments that cannot be encoded are refused as `Hook denied:` before any hook runs, on both the sequential and concurrent paths; HOOKS.md states the encoding). Residual: the dormant `Chat.php` mirrors (bare `json_encode` at about `:4386` and `:4569`) are unchanged (w7-gate-prov).
+- **F-H4** SkillTool's `args` was advertised and silently dropped — fixed on master in `299e945d0` (`$ARGUMENTS` in the skill body is substituted from `args`, or `ARGUMENTS: <args>` is appended when the body has no placeholder; a non-string name or `args` returns a tool error instead of a `TypeError`; `docs/SKILLS.md` "Invoking a skill" updated).
 
 
 ---
@@ -20653,25 +20595,6 @@ This report is final. What was read, what was only skimmed, and how each open le
 
 ### D. Environment block (git)
 
-#### 15d-12 — `git log` and `git diff` honour user git config: `color.ui=always` puts ANSI escapes in the prompt, and `diff.external` runs the user's diff tool every turn
-- **Severity:** Medium · **Confidence:** Verified by repro (`r4.php`, with `GIT_CONFIG_GLOBAL=gitcfg`)
-- **Where:** `src/Context/EnvironmentBlock.php:993-994` (`gitField(['log','--oneline','-5'])`), `:1108-1109` (`git diff --shortstat --patch`), `:979-980` (`shell_exec` branch); `src/Support/ProcessContainment.php:79-84` sets `GIT_TERMINAL_PROMPT`/`GIT_PAGER` but not `GIT_OPTIONAL_LOCKS`
-- **Failure scenario:**
-  - With `[color] ui = always`, the env block contains `\e[33m5a20d53\e[m first commit`.
-  - With `[diff] external = difft` (a common setup) or `opendiff`/`meld`, the "Unstaged changes" section contains the external tool's output, `EXTERNAL-DIFF-TOOL f /tmp/git-blob-…`, instead of a patch. A GUI diff tool would pop up windows on every turn.
-  - **The user's own git commands fail while a prompt is being assembled (Verified by repro, `r14.php` + `lockrepo/`, git 2.43.0).** In a 3,000-file repo with a dirty stat cache, a loop of `git add f1` alongside a loop of `EnvironmentBlock::render()` failed 23 to 72 times in 6 to 8 s with `fatal: Unable to create '…/index.lock': File exists. Another git process seems to be running`. The baseline with no render failed 0 times. Isolating each command shows two lock takers:
-    - `git status --porcelain` (`:993`) takes the lock (26 failures in 5 s). With `GIT_OPTIONAL_LOCKS=0` it takes none (0 failures).
-    - `git diff --shortstat --patch` (`:1108`) **also** takes it, and `GIT_OPTIONAL_LOCKS=0` does **not** stop it (34 failures with the variable set). Porcelain `git diff` refreshes and writes the index whenever it can. The plumbing `git diff-files` took no lock (0 failures).
-
-    So the obvious fix (`GIT_OPTIONAL_LOCKS=0`) is only half a fix. In the TUI this happens on every turn while the user is committing in another terminal.
-- **Already known inside the project, not fixed:** `tests/Providers/PromptStabilityTest.php:2089-2160` builds a `color.diff=always`/`color.ui=always` fixture and **asserts escape bytes do reach the prompt** (a scanner liveness control). Its failure message calls this "worklog escalation 2" and names `--no-color` as "the fix … which makes this control, not the absence assertion, the thing to rewrite". The fix below must rewrite that control in the same change. The test's stable fixture hides the defect by neutralising host git config through the environment. A real launch does not.
-- **Fix:**
-  - Prefix every invocation with `git --no-pager --no-optional-locks -c color.ui=false -c core.quotepath=false`.
-  - Use `log --no-color --no-show-signature`.
-  - Replace porcelain `git diff` with plumbing that never writes the index: `git diff-files -p --stat` for unstaged and `git diff-index --cached -p HEAD` for staged, each with `--no-ext-diff --no-textconv --no-color`.
-  - Add `GIT_OPTIONAL_LOCKS=0` to the env as a backstop.
-- **Test:** An `EnvironmentBlockTest` with a fixture `GIT_CONFIG_GLOBAL` setting `color.ui=always` and `diff.external`. Assert no `\x1b` and no external-tool output. Add a lock test: hold `.git/index.lock` open (create it) across `render()`, then assert `render()` neither deletes nor needs it, and that a `git status`/`git diff` refresh inside `render()` leaves the index file's mtime unchanged.
-
 #### 15d-13 — Launching from a repository subdirectory reports "Is directory a git repo: No" and drops all git state
 - **Severity:** Medium-Low · **Confidence:** Verified by repro (`gitrepo/sub`)
 - **Where:** `src/Context/EnvironmentBlock.php:929-932`; root = `getcwd()` (`Bootstrap.php:2374`)
@@ -20682,13 +20605,7 @@ This report is final. What was read, what was only skimmed, and how each open le
 - **Failure scenario:** Running `cd repo/src && sugarcrush` renders `Is directory a git repo: No` with no branch, status or diff, although `git rev-parse --show-toplevel` succeeds. `InstructionFileLoader::ancestorRoot()` explicitly supports subdirectory launch, so the two layers contradict each other in the same prompt. Project settings, skills, rules and memory are also looked up at the subdirectory (`<cwd>/.sugar-crush`), so the trusted repo's `.sugar-crush/settings.json` is silently ignored there. (That last part is Verified by reading.)
 - **Fix:** Resolve `git rev-parse --show-toplevel` once (with a timeout), use it for `isGitRepo()`, and report "Working directory: …/src (repo root: …)". Decide and document whether `.sugar-crush/*` lookups walk up to the repo root.
 - **Test:** `EnvironmentBlockTest::testASubdirectoryOfARepoIsReportedAsInsideTheRepo`.
-
-#### 15d-14 — The git subprocesses in prompt assembly have no time bound
-- **Severity:** Medium-Low · **Confidence:** Verified by reading
-- **Where:** `src/Tools/Concerns/CapturesProcessOutput.php:127-200` (`runCaptured()` loops until EOF with no deadline); `EnvironmentBlock.php:979-980` (`shell_exec`, no bound)
-- **Detail:** `EnvironmentBlock::render()` runs five git commands on every build, synchronously, before the request is sent. On a huge or network-mounted repo, or with a slow `core.fsmonitor` hook, the turn stalls for as long as git takes. Combined with the 120 s parent watchdog (known item #7), a slow `git status` can kill the turn before the provider is called. Known items #2 and #7 cover volatility and the Bash timeout, not this.
-- **Fix:** Add a deadline parameter to `runCaptured()` with SIGTERM/SIGKILL of the group (the `StatusLineCommand` pattern), around 2 s per git call. Render `unavailable (git timed out after 2s)`.
-- **Test:** A PATH-shimmed `git` that sleeps 30 s; assert `render()` returns in under 3 s with the timeout text.
+- **Partly fixed on master in `119bc86d2`** (part (a), git state). When `<cwd>/.git` is absent, the block runs a bounded `git rev-parse --show-toplevel` (memoised per block and copied by the wither) and renders `Working directory: <cwd> (repo root: <root>)` with the full git section; the root is escaped and capped, and a timeout renders `unavailable (…)`. A launch at the repo root sends the same bytes and makes the same number of calls as before. **Remaining:** (b) `.sugar-crush/*` lookups (project settings, skills, rules, memory) still resolve at the subdirectory, not the repo root; whether they walk up is a deferred decision (wave plan §3 #14).
 
 ---
 
@@ -20717,7 +20634,7 @@ This report is final. What was read, what was only skimmed, and how each open le
 
 ### F. Lower-priority observations (Verified by reading; nondeterminism and caps)
 
-- **15d-17 (Low):** `RuleLoader::loadFromDirectory()` (`:534-614`) and `RepoMapBlock::phpFileDirectories()` (`:898-924`) both apply their count caps (`MAX_FILES = 64`, `MAX_SOURCE_FILES = 20000`) in `RecursiveDirectoryIterator` order, which is readdir order and differs across filesystems. Past the cap, *which* rules load and which directories are counted differs between machines and clones, even though the survivors are `ksort`ed. `RepoMapBlock` also counts only `.php` files towards the cap, so a PSR-4 root of `""` over a tree of millions of non-PHP files is walked in full at every capture. **Fix:** collect paths, `sort()`, then cap; count every visited entry against a visit budget.
+Its only entry, 15d-17, was fixed in wave 3; see **Fixed since audit**.
 
 ---
 
@@ -20792,11 +20709,9 @@ This report is final. What was read, what was only skimmed, and how each open le
 | 15d-03 | Medium | Repro | Project `.sugar-crush/skills` shadows the user's own skills and built-ins silently; contradicts SKILLS.md. Partly fixed (`9105feb48`: every shadowing reported in `skipped()`); remaining: precedence order (deferred), foreign-convention shadowing still silent, skip-notice wording | `SkillLoader.php:721-739` |
 | 15d-05 | Medium | Repro | Home-store `project` notes are global → injected into every repo's prompt | `MemoryBlock.php:213-229`, `Chat.php:12534` |
 | 15d-09 | Medium | Repro | No size cap on CLAUDE.md/AGENTS.md/forced/imports (3 MB inlined); skill budgets inert | `Runtime.php:3009-3040` |
-| 15d-12 | Medium | Repro | Env git calls honour `color.ui=always` and `diff.external`; `status` and `diff` take `index.lock` and make the user's concurrent `git add` fail (env var alone does not fix `diff`) | `EnvironmentBlock.php:993-1117` |
 | 15d-20 | Med-Low | Repro | A `paths:` rule added or edited mid-session is never delivered (splice skips it; nudge built once at boot); stale bodies, double presentation | `Bootstrap.php:6863`, `Runtime.php:2950-2970` |
 | 15d-06 | Med-Low | Repro | Claude memory import slug ignores `.` (and probably `_`/space) → imports nothing | `ForeignMemoryImporter.php:302-307` |
-| 15d-13 | Med-Low | Repro | Subdirectory launch: "not a git repo", git state dropped; `.sugar-crush/*` not found | `EnvironmentBlock.php:929-932` |
-| 15d-14 | Med-Low | Reading | Git subprocesses in prompt assembly are unbounded in time | `CapturesProcessOutput.php:127-200` |
+| 15d-13 | Med-Low | Repro | Subdirectory launch: "not a git repo", git state dropped; `.sugar-crush/*` not found. Partly fixed (`119bc86d2`: `rev-parse --show-toplevel`, "repo root:" line, git section); remaining: (b) `.sugar-crush/*` walk-up (deferred decision) | `EnvironmentBlock.php:929-932` |
 | 15d-15 | Med-Low | Repro | `writeUserConfig()` breaks symlinked config (stale policy); unlocked read-merge-write; overwrites an unparsable file | `Bootstrap.php:3608-3680` |
 | 15d-22 | Low-Med | Repro | Glob metacharacters in the checkout path drop forced instructions and every repo memory note, silently | `InstructionFileLoader.php:509`, `MemoryStore.php:118-284` |
 | 15d-23 | Low | Repro | Memory id shown from frontmatter, looked up by filename → unaddressable notes; repo `MEMORY.md` rewritten with a timestamp on every change | `MemoryStore.php:188-340`, `Chat.php:12894` |
@@ -20805,7 +20720,6 @@ This report is final. What was read, what was only skimmed, and how each open le
 | 15d-07 | Low | Reading | Repo-shipped memory framed as "notes the user wrote" | `MemoryBlock.php:300-306` |
 | 15d-11 | Low | Reading | Doc says `@~/` imports resolve; containment always blocks them | `ImportResolver.php:104`, `MEMORY.md:231` |
 | 15d-16 | Low | Repro | `(int)` of a huge float wraps negative for `maxToolSteps`/`maxOutputTokens` | `Bootstrap.php:2945`, `EngineBackend.php:1251` |
-| 15d-17 | Low | Reading | Count caps applied in readdir order → machine-dependent subsets; repo-map walk unbounded for non-PHP files | `RuleLoader.php:534-614`, `RepoMapBlock.php:898-924` |
 | 15d-25 | Low (docs) | Reading | MEMORY.md ("touches nothing else") and PROMPT_ENGINEERING.md don't describe the `<\|` / `<｜` control-token defang | `MEMORY.md:199`, `PROMPT_ENGINEERING.md:103` |
 | 15d-26 | Low (docs) | Reading | `CHANGELOG.md` still lists the four moved skills as built-ins | `CHANGELOG.md:389-395` |
 
@@ -20887,6 +20801,9 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **15d-10** PromptFence let attribute-bearing roster tags through and did nothing about chat-template control tokens — fixed on master in `161d60881` (the roster pattern is a lookahead on the `<` alone, so attribute lists, split lists and unterminated openers are matched; the same rewrite defangs `<|` and `<｜` openers, listed in `PromptFence::CONTROL_TOKEN_PIPES`). The special-token half was never confirmed live (the tokenizer probe stays unrun). Residual: the docs do not describe the defang (15d-25).
 - **15d-21** The built-in skills shipped SugarCraft-monorepo procedures to every project — fixed on master in `cadba57fd` + `d70017a2f` (the four monorepo skills moved to `<repo root>/.sugar-crush/skills/`, the project tier, so they load only in this monorepo; `worktree-workflow`'s dirty-tree step now stops and reports instead of discarding; `docs/SKILLS.md` and `README.md` list eight built-ins; `BuiltInSkillsTest` scans both trees for discard-work commands, walking directories instead of globbing). Residual: `CHANGELOG.md` still lists them as built-ins (15d-26).
 - **15d-18** `skillKeyFor()` broke on a trailing slash or a foreign path spelling — fixed on master in `0f971f954` (the base is `rtrim`med, a leftover leading `/` is trimmed, and a path not spelled under the base is keyed through both realpaths, then by the skill's own name).
+- **15d-17** Count caps were applied in readdir order, and the repo-map walk was unbounded for non-PHP files — fixed on master in `7e2e08492` (`RuleLoader` and `RepoMapBlock` walk each directory with `scandir()` + `sort()` and cap after sorting; a visit budget counts every entry, `MAX_WALK_ENTRIES = 4096` for rules and 100,000 for the repo map, and a cut is recorded).
+- **15d-14** The git subprocesses in prompt assembly had no time bound — fixed on master in `6e2df9a26` (`runCaptured()` gains an optional 4th `?float $timeoutSeconds`, default null so Bash and Grep are unchanged; on expiry the group gets SIGTERM then SIGKILL, the result carries `timedOut` and exit 124; the env block bounds each git read at 2 s, renders `unavailable (git timed out after 2s)`, and one timeout skips the rest of the git section; the branch read is bounded through `runCaptured()` too, keeping the `shell_exec` fallback).
+- **15d-12** Env-block git calls honoured the user's git config and took `index.lock` — fixed on master in `da6674686` (every call runs as `git --no-pager --no-optional-locks -c color.ui=false -c core.quotepath=false`; `log` adds `--no-color --no-show-signature`; diffs use the plumbing `diff-index --cached` and `diff-files` with `--no-ext-diff --no-textconv --no-color`, so the index is never written; an unborn HEAD diffs against the empty tree; `GIT_OPTIONAL_LOCKS=0` is set through a new optional 5th `runCaptured()` parameter, `array $envOverrides`; `PromptStabilityTest`'s colour control is rewritten so its fixture must yield zero escapes). Residual: a stat-dirty binary file still counts in the shortstat, and with no stat refresh a heavily stat-dirty tree renders slower (about 0.5 s per 3,000 files) until the user's own git refreshes the index.
 
 
 ---
@@ -21011,15 +20928,7 @@ Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/` (ea
 
 ### D. CLI / headless
 
-#### CLI-1 — Headless JSON stdout is not protected from PHP diagnostics: `bin/sugarcrush` never routes `display_errors` to stderr
-- **Severity:** Low
-- **Confidence:** Verified-by-repro
-- **Where:** `bin/sugarcrush` (no `ini_set('display_errors', 'stderr')` and no `set_error_handler` anywhere in `bin/` or `src/Cli/`). The concrete emitter is the unsilenced `mkdir()` in `Bootstrap::ensureDir()` `src/Cli/Bootstrap.php:8036-8040`.
-- **Code:** `if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) { throw … }`
-- **Repro (`cli_warn.sh`):** with `~/.sugar-crush` mode 0500 and `display_errors=1`, `sugarcrush -p "say hi" --output-format json` exits 0, but stdout begins `\nWarning: mkdir(): Permission denied in …/Bootstrap.php on line 8038` before `{"result":…}`. `display_errors=1` is php-cli's compiled-in default when no php.ini is loaded (`php -n -r 'var_dump(ini_get("display_errors"));'` prints `"1"`). That is the normal case in the official `php:*-cli` Docker images, which ship without a php.ini. On this box the distro ini sets it Off, which is why the first pass saw nothing.
-- **Scenario:** `sugarcrush -p … --output-format json | jq` in CI or a container. Any warning on the run (this `mkdir`, a vendor deprecation, a stream warning) is printed before the document, and the consumer's JSON parse fails even though the exit status says success.
-- **Fix:** add `ini_set('display_errors', 'stderr');` at the top of `bin/sugarcrush` (keep `log_errors`). Separately, make `ensureDir()` use `@mkdir` and report through its own exception, as its `throw` already intends.
-- **Test:** run `bin/sugarcrush` with `-d display_errors=1` against a read-only scratch `~/.sugar-crush`; assert stdout is exactly one valid JSON line.
+Its only finding, CLI-1, was fixed in wave 3; see **Fixed since audit**.
 
 ---
 
@@ -21166,6 +21075,7 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 - **Repro (`argv.php`):** `sugarcrush fix the login bug` and `sugarcrush src` both parse to `root=NULL prompt=NULL`, no `usageError` and no unknown flags. The TUI starts in the cwd. `-p hi -- extra` drops `extra`. `--root --model x` takes `--model` as the root (the only value-taking flag without the `looksLikeFlag` guard that `--config`/`--model`/`--permission-mode` have).
 - **Fix:** treat a positional that `is_dir()` as the root. Refuse (exit 2) any other leftover positional, with a hint about `-p "<prompt>"`. Alternatively, follow Claude Code and use leftover words as the TUI's initial prompt. Give `--root` the same flag-shaped-value guard as its siblings.
 - **Test:** table cases (`src`, `fix the bug`, `--root --model x`) asserting root resolution or a usage error.
+- **Partly fixed on master in `b899773a6`** (part (a)). `ArgvParser::parse()` stays pure and keeps leftovers in the new `ParsedArgs::$positionals`; the new `ArgvParser::resolveOperands()` makes a bare positional that is an existing directory the root, and any other leftover, two roots, or a directory plus `--root` exits 2 with a `-p "<prompt>"` / quote-the-prompt hint. `--root` refuses a flag-shaped or missing value. Help, README and the `bin/sugarcrush` raw-argv scan are updated. **Remaining:** (b) using the leftover words as the TUI's initial prompt, the Claude Code behaviour, is not built; it is a deferred decision (wave plan §3 #15), and `ParsedArgs::$positionals` is kept so it can be added later.
 
 #### DOC-1 — Smaller doc/code drift found while cross-checking
 - **Severity:** Low
@@ -21197,12 +21107,11 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 | MCP-6 | Low-Med | Verified-by-repro | `mcp auth login` discovery breaks on path-bearing server URLs; registration URL not overridable |
 | MCP-7 | Low-Med | Verified-by-repro | OAuth store stale-cache write-back erases another process's credentials; non-atomic write |
 | MCP-8 | Low-Med | Verified-by-repro | Failed re-registration persists `client_id` as a never-expiring bearer token |
-| CLI-2 | Low-Med | Verified-by-repro | `sugarcrush <dir>` ignores bare directory names; non-path positionals silently dropped |
+| CLI-2 | Low-Med | Verified-by-repro | `sugarcrush <dir>` ignores bare directory names; non-path positionals silently dropped. Partly fixed (`b899773a6`: existing-dir positional is the root, other leftovers exit 2 with a `-p` hint); remaining: (b) leftovers as the TUI's initial prompt (deferred decision) |
 | SES-4 | Low | Verified-by-repro | Checkpoint blobs GC'd only on /rewind; orphans accumulate |
 | SES-5 | Low | Verified-by-reading | Mixed local/UTC timestamps |
 | SES-6 | Low | Verified-by-reading | `getMessages` ordering tiebreak |
 | BG-2 | Low | Verified-by-reading | Background IPC directories never cleaned |
-| CLI-1 | Low | Verified-by-repro | `display_errors` not routed to stderr; a `mkdir()` warning precedes the headless JSON document |
 | AG-3 | Low | Verified-by-reading | `AgentManager` never forgets sub-agents; unbounded growth plus a per-frame scan |
 | DOC-1 | Low | Verified-by-reading | Doc drift: TROUBLESHOOTING startup ordering, plus doc halves of WF-1/WF-3 |
 
@@ -21290,3 +21199,4 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **AG-1** Forked sub-agents shared the parent's MCP pipes, ids and keep-alive sockets — fixed on master in `ea6e178fd` (stdio: process-unique ids, locked exchanges, shared read buffer) and `2d96e2edb` (HTTP: pid-unique ids, fresh connection per process). Residual: parallel agents now serialise their calls to one stdio server, and a lock file per MCP server is left behind if the TUI is killed.
 - **AG-4** `AgentManager::executeSubAgent()` swallowed provider errors the way 15a A1 did — fixed on master in `48e9a3f65` (it throws `ProviderResponseException` after the retry loops; the sub-agent ends `STATUS_FAILED` carrying the provider text). `TaskTool::runOnEngine` and the workflow `EngineExecutor` were checked: they go through `EngineBackend`/`Runtime`, which A1 fixed, and are pinned by regression tests.
 - **MCP-9** Empty maps nested inside a tool's arguments went on the wire as `[]` — fixed on master in `f84a97364` (new sugar-mcp `ArgumentShape::conform()` walks the arguments against the tool's `inputSchema`; applied in sugar-mcp `StdioMcpServer`, crush `HttpMcpServer` and `ClaudeCodeMcpServer`).
+- **CLI-1** Headless JSON stdout was not protected from PHP diagnostics — fixed on master in `0c2bbd0a7` (`display_errors=stderr` is the first statement of `bin/sugarcrush`; `Bootstrap::ensureDir()` reports the `mkdir` reason in its own exception through a handler scoped to the call, because `@` plus `error_get_last()` loses it under a host handler; on the TUI with the 15a C2 log file in place, `display_errors` is 0 and a fatal prints one "details in <log>" line to stderr).

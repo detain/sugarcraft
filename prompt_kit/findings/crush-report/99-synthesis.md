@@ -96,13 +96,13 @@
 
     Kilo legacy (a `condense` tool with a user-approved preview) and Goose (agent-visible vs user-visible flags) supply the remaining pieces.
 
-11. **The code audit found about 136 new defects** (Part IX). 44 of them, including the one Critical and all 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes, unfenced repo skill descriptions, Esc Esc tool placeholders that never healed, raw CR and C1 controls reaching the terminal, a turn kill that left its commands running, streamed tool calls dropped on `stop`, and built-in skills that told every project to `git clean -fd`. Wave 2 found 10 more, smaller defects while fixing these. About 102 remain, including:
-    - **The TUI re-renders the full history as markdown every frame.**
-    - **UI-only command output and notices are sent to the model as real turns.**
+11. **The code audit found about 136 new defects** (Part IX). 59 of them, including the one Critical and all 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes, unfenced repo skill descriptions, Esc Esc tool placeholders that never healed, raw CR and C1 controls reaching the terminal, a turn kill that left its commands running, streamed tool calls dropped on `stop`, built-in skills that told every project to `git clean -fd`, the full-history markdown re-render on every frame, `error_log()` output painted over the TUI, env-block git calls that honoured the user's git config and took `index.lock`, PostToolUse blocks that did nothing, hook input that defeated grep-style deny hooks, and a hostile `.gitignore` that stalled Glob for minutes. Waves 2 and 3 found 15 more, smaller defects while fixing these. About 92 remain, including:
+    - **Hooks and custom-command shell blocks still run synchronously inside `update()`**, freezing the TUI for up to 60 s and 10 s.
+    - **UI-only rows are now off the wire, but the compaction summary still reads them.**
     - **Sub-agent spend never reaches the parent or the spend cap.**
     - **Permission gaps remain:** WebFetch counts as read-only, Bash inherits provider API keys, and path deny rules miss respellings.
 
-    About two thirds are reproduced with scripts. No High item remains; fix the three Medium-High items next (IX.3, IX.4).
+    About two thirds are reproduced with scripts. No High item remains; finish the two Medium-High items, both partly fixed, next (IX.3, IX.4).
 
 12. **The features you asked for are designed and slotted into the roadmap** (Part VIII):
     - a schema-driven settings editor, built entirely from SugarCraft libraries already in the dependency tree;
@@ -808,17 +808,17 @@ Five agents audited sugar-crush's own source for **new** defects, one per area. 
 
 **Totals at audit time: about 136 findings** — 1 Critical, 20 High, about 47 Medium, and the rest Low-Medium, Low or Info.
 
-**Since the audit, 48 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 44 of the original findings, plus the 4 new items found while fixing them in wave 1. Wave 2 found 10 more while fixing its items; they are open. **About 102 findings remain** — 0 Critical, 0 High, 3 Medium-High (one of them, F-E2, partly fixed), about 36 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
+**Since the audit, 63 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 59 of the original findings, plus the 4 new items found while fixing them in wave 1. Waves 2 and 3 found 15 more while fixing their items (10 in wave 2, 5 in wave 3); they are open. **About 92 findings remain** — 0 Critical, 0 High, 2 Medium-High (15b-03 and F-E2, both partly fixed), about 31 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
 
 At audit time, about two thirds were **reproduced with a script**; the rest are verified by reading, and a few are marked *suspected*. Full write-ups are in Appendices Q–U; each finding has code excerpt, failure scenario, fix and a test that would catch it.
 
 | Appendix | Area | Findings | Critical / High |
 |---|---|---|---|
-| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 18 | 0 / 0 |
-| **R** (15b) | Chat state machine, TUI, rendering, commands | 19 | 0 / 0 |
-| **S** (15c) | Tools, permissions, hooks (security) | 24 | 0 / 0 |
-| **T** (15d) | Context assembly, memory, skills, config | 19 | 0 / 0 |
-| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 22 | 0 / 0 |
+| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 17 | 0 / 0 |
+| **R** (15b) | Chat state machine, TUI, rendering, commands | 20 | 0 / 0 |
+| **S** (15c) | Tools, permissions, hooks (security) | 18 | 0 / 0 |
+| **T** (15d) | Context assembly, memory, skills, config | 16 | 0 / 0 |
+| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 21 | 0 / 0 |
 
 Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
 
@@ -840,24 +840,19 @@ Several audits found the same root cause in different places. Fixing each theme 
 1. **Killing a turn does not kill all of its commands (residue).** Turn teardown and the parallel deadline now kill the whole process tree (`ProcessContainment::killTree()`, `c54372b2a`), so the `setsid`'d `bash` and parallel Task sub-agents die with the turn.
    - The remaining kill sites still signal one pid: the dormant Chat site, `AgentWorkerPool` and `EngineExecutor` (F-E2, partly fixed).
    - **Fix:** route them through `killTree()` too.
-2. **Terminal-injection and rendering hygiene.** CR, UTF-8 C1 controls and the permission modal's byte wrap are fixed (`Sanitize::untrustedForDisplay()`, the C1 sweep, `Sanitize::visibleControls()`). What remains:
+2. **Terminal-injection and rendering hygiene.** CR, UTF-8 C1 controls, the permission modal's byte wrap and `error_log()` output over the frame are fixed (`Sanitize::untrustedForDisplay()`, the C1 sweep, `Sanitize::visibleControls()`, and `TuiErrorLog`, which sends the TUI's `error_log` to `~/.sugar-crush/logs/sugarcrush.log`). What remains:
    - The tab strip is neither clipped nor sanitized (15b-18).
    - A forged image marker repaints images (15b-17).
-   - `error_log()` output paints over the TUI (C2).
    - Bidi overrides and zero-width characters pass every sanitizer (15b-28); candy-shine keeps lone raw C1 bytes (15b-29).
    - candy-core `Width::wrap()` hangs when a 2-cell cluster meets a 1-column budget (15b-26).
-   - **Fix:** extend the display policies to bidi and zero-width codepoints and PUA, enforce them at every render site (golden width tests), make `Width::wrap()` always consume a cluster, and route `error_log` to a file or the notice sink while the TUI owns the screen.
+   - **Fix:** extend the display policies to bidi and zero-width codepoints and PUA, enforce them at every render site (golden width tests), and make `Width::wrap()` always consume a cluster. The notice sink's clip and overflow strings still send the user to stderr for the full text, which in the TUI is now the log file (C4).
 3. **Repo-controlled content reaches the prompt without fencing or caps.**
    - A repo's skills shadow the user's own (15d-03; every shadowing is now reported, the precedence decision is open).
    - CLAUDE.md, AGENTS.md and `@imports` have no size cap (15d-09, C3).
    - Repo memory is framed as "notes the user wrote" (15d-07).
-4. **Prompt assembly reads the user's git config and the filesystem nondeterministically.**
-   - `color.ui=always` puts escape codes in the prompt, and `diff.external` runs the user's diff tool every turn.
-   - `git status` and `git diff` take `index.lock`, so the user's concurrent `git add` fails (15d-12).
-   - No timeouts (15d-14); a subdirectory launch reports "not a git repo" (15d-13).
-   - Caps are applied in readdir order (15d-17).
-   - These also hurt cache stability (Part I #2).
-   - **Fix:** `git -c color.ui=never --no-optional-locks`, `--no-ext-diff`, a timeout, `rev-parse --show-toplevel`, and sorted walks.
+4. **Prompt assembly read the user's git config and the filesystem nondeterministically (mostly fixed).** The env block's git calls now run with `--no-optional-locks -c color.ui=false`, diff through plumbing with `--no-ext-diff`, never write the index, and are bounded at 2 s each; a subdirectory launch reports the repo root and its git state; rule and repo-map walks sort before capping (15d-12, 15d-14, 15d-13 (a), 15d-17).
+   - What remains: `.sugar-crush/*` lookups still resolve at the launch subdirectory, not the repo root (15d-13 (b), a deferred decision).
+   - The env block is still re-rendered inside the system message, which hurts cache stability (Part I #2, Part II #2).
 5. **Errors are swallowed and turns "succeed".**
    - Malformed arguments run the tool with `[]` (A11).
    - Vertex 429/503 are never retried (A19).
@@ -865,10 +860,8 @@ Several audits found the same root cause in different places. Fixing each theme 
    - Accept-edits mode allows `rm`, `mv` and `cp` (F-P4).
    - WebFetch counts as read-only, so it can exfiltrate data unprompted (F-P6).
    - Bash and hooks inherit provider API keys (F-E1).
-   - A PostToolUse block is a no-op (F-H1).
-   - Hook JSON escapes `/`, so grep-style deny hooks never fire (F-H3).
 7. **Unbounded or stalled work inside `update()`.**
-   - The full history is re-rendered as markdown every frame: 0.7 s per keystroke at 200 exchanges, 2.1 s per frame while streaming a 200 KB reply (15b-10).
+   - A long streaming reply whose headings follow a closing code fence still re-renders whole on every frame, because candy-shine's `SectionScanner` finds no boundary there (15b-31, the residual of the fixed 15b-10).
    - UserPromptSubmit and SessionStart hooks run synchronously, freezing the UI for up to 60 s (15b-04).
    - Custom-command `` !`…` `` runs inside `update()` (15b-20).
    - `/branch` does one INSERT per message: a 4.3 s freeze at 800 messages (15b-21).
@@ -876,7 +869,7 @@ Several audits found the same root cause in different places. Fixing each theme 
 8. **Sessions and persistence integrity.**
     - `forkSession` copies dead tables, so the fork is empty and `--resume name` opens the parent. This is a root cause of "/fork ignores history" (SES-2).
     - No writer lock: two TUIs on one session clobber each other (SES-3).
-    - UI-only command output is sent to the model as real turns (15b-03; relates to Part II #2 and the DCP `uiOnly` proposal).
+    - UI-only command output and notices are kept off the wire by `Message::$uiOnly`, but the compaction summary still reads them, and notices still interleave between a prompt and its answer (15b-03, partly fixed; relates to Part II #2 and the DCP `uiOnly` proposal).
 9. **MCP: remaining interoperability and trust gaps.**
     - `claude-mcp` gives up after about 1 s (MCP-3).
     - OAuth discovery and storage bugs (MCP-6/7/8).
@@ -890,12 +883,11 @@ Several audits found the same root cause in different places. Fixing each theme 
 
 ## IX.3 Critical and High findings: fix first
 
-The Critical item and all 20 High items are fixed on master, as is the latent High in the sub-agent path that was found while fixing them. No Critical or High finding remains. The three Medium-High items come next:
+The Critical item and all 20 High items are fixed on master, as is the latent High in the sub-agent path that was found while fixing them. No Critical or High finding remains. The two Medium-High items, both partly fixed, come next:
 
 | ID | Area | Finding | Repro |
 |---|---|---|---|
-| 15b-03 | Chat | Command output, mid-turn notices and background/runtime notices go to the model as real turns | ✔ |
-| 15b-10 | TUI | Full-history markdown re-render every frame: 0.7 s per keystroke at 200 exchanges | ✔ |
+| 15b-03 | Chat | Command output and notices went to the model as real turns. Partly fixed (`2a3a8f91c`: `Message::$uiOnly`, filtered at every wire encoder); remaining: compaction input, notice order | ✔ |
 | F-E2 | Tools | Kill sites that signal one pid. Partly fixed (`c54372b2a`); remaining: dormant Chat site, `AgentWorkerPool`, `EngineExecutor` | ✔ |
 
 ## IX.4 Where the audit fixes slot into the roadmap
@@ -903,20 +895,18 @@ The Critical item and all 20 High items are fixed on master, as is the latent Hi
 - **Before Wave 0, as an "audit hotfix" wave (mostly S):** this wave has landed on master in full (see the **Fixed since audit** list at the end of each of Appendices Q–U).
 - **With Wave 0:**
   - the remaining process-tree kill sites (theme 1, F-E2);
-  - git env hardening (theme 4);
   - cost accounting (theme 10).
 - **Before Wave 1.C ships:**
   - fix the permission modal's empty value for an invalid-UTF-8 argument (15b-27), and bidi overrides in the text it shows (15b-28);
-  - fix PostToolUse block semantics (F-H1);
-  - fix the hook JSON escaping (F-H3).
+  - port the PostToolUse withhold and the hook-input encoding fixes (F-H1, F-H3, both fixed on the live Runtime path) to their dormant Chat-path mirrors, `Chat::applyPostToolUse()` and the bare `json_encode` calls.
 
   The approval UI will otherwise display or route untrusted text wrongly.
 - **With Wave 1.B:**
-  - `uiOnly` rows (15b-03);
+  - the rest of 15b-03 (the compaction input and notice order; the `uiOnly` flag itself has landed);
   - stable unique ids (also needed by A8, the markup duplication).
 - **With the sessions phase (VIII.4 A):**
   - SES-2 (fork copies dead tables);
   - SES-3 (writer lease; the server design's `session_leases` table covers it);
   - session picker bugs B1–B3;
   - 15b-21.
-- **With rendering work:** 15b-10 (cache rendered markdown per row, render only the visible window), 15b-04 and 15b-20 (move hooks and shell into `Cmd`).
+- **With rendering work:** 15b-30 and 15b-31 (candy-shine streaming fixes, so sugar-crush can drop its workarounds; 15b-10's memoization has landed), 15b-04 and 15b-20 (move hooks and shell into `Cmd`).

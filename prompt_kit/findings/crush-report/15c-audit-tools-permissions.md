@@ -4,7 +4,7 @@ Scope: `src/Tools/` (built-ins, Concerns, PathJail, IgnoreRules, McpToolBridge),
 Checkout: master @ `05db616f3`, PHP 8.3.6 CLI, `memory_limit=-1`.
 Repro scripts: `/home/sites/crush-research-repos/_audit-scratch/15c/rNN_*.php`. Every repro runs against `.../15c/root` and never against the real repo.
 
-Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings at audit time: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low. Eight have since been fixed on master (see **Fixed since audit** at the end), so 23 remain: 1 Med-High (F-E2, partly fixed), 9 Medium, 3 Low-Medium, 10 Low. One more was found during wave 2 (F-E4, Info), so 24 are open.
+Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings at audit time: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low. Fifteen have since been fixed on master (see **Fixed since audit** at the end), so 16 remain: 1 Med-High (F-E2, partly fixed), 7 Medium, 1 Low-Medium, 7 Low. One more was found during wave 2 (F-E4, Info) and one during wave 3 (F-E5, Low), so 18 are open.
 
 > **Correction to the known list. Read this first.** Argument-scoped permission rules **are implemented**, in `PermissionRule::matches()` / `matchesShellSubject()`. `Bash(rm *)` deny now **denies**, and `Bash(git *)` allow no longer grants all of Bash (`r11_rules.php`). Two sources described older code: synthesis Part II row #23 ("`Bash(git *)` grants all of Bash") and `docs/PERMISSIONS.md` §"Pattern matching is name-only — measured" (which said `Bash(rm *)` "never matched → Allow"). Both are now corrected; the PERMISSIONS.md section was rewritten in `d3d90fece` to describe argument-scoped matching, and since `c8fc573a5` it describes the fail-closed allow rules that closed F-P5. The real defects in the new matcher were narrower. F-P5 (`$(…)`, backticks and redirection slipping past an allow rule) is now fixed. F-J3 covers path rules missing respellings and is still open.
 
@@ -35,26 +35,6 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 - **Also affected:** Edit (`Edit.php:150-158`: a `file_exists()` check and then `file_get_contents()`) and Write `overwrite:true` (`Write.php:178-188`: `is_file()` is false for a FIFO, so Write instead opens the FIFO for writing with `file_put_contents` and blocks until a reader appears).
 - **Fix:** `if (!is_file($path)) return error('not a regular file')` after resolve, in Read and Edit. In Write, refuse when `file_exists($path) && !is_file($path)`.
 - **Test:** `posix_mkfifo("$root/p")`, then Read, Edit and Write `p`. Assert an error from each inside 1 s.
-
-### F-T5 — A hostile `.gitignore` makes Glob spend about 70 ms per file (2,000 files → 139 s), killing the turn; backtrack errors fail open
-- **Severity:** Medium. **Confidence:** Verified-by-repro (`r16_gitignore_redos.php`).
-- **Where:** `src/Tools/IgnoreRules.php:454` `compile()` turns each `**` into `.*` and each `*` into `[^/]*`, with no limit on how many there are. `:289-304` `verdict()` runs **every** rule of **every** applicable `.gitignore` against **every** path prefix of **every** walked file. `:300` treats a `preg_match()` error as "no match": `if (preg_match($rule['regex'], $scoped) === 1)`. The consumers are `Glob.php:711` and `:782` (one `ignores()` per walked entry) and `Grep.php:723` (only on hits).
-- **Excerpt:**
-  ```php
-  $out .= '.*';                                   // compile(): every `**`
-  ...
-  if (preg_match($rule['regex'], $scoped) === 1) { // verdict(): false (error) == no match
-  ```
-- **Repro:** A `.gitignore` of 20 identical lines `**a**a**a**a**a**a**a**a**a**a**a**a**a**a**c` (about 900 bytes), and 2,000 empty files named `c` + 40×`a` + N. A single `ignores()` call took 0.094 s and ended with `Backtrack limit exhausted`. **`Glob '**/*'` took 138.97 s.** Grep over the same tree took 0.03 s, because it filters only grep's hits. A cloned repository supplies both the `.gitignore` and the files, so the model's first Glob in that repo runs past the 120 s turn deadline (known #7 covers the deadline; this is a new way to reach it, and Glob, unlike Bash, is not the model's choice to make slow). PCRE's backtrack limit makes each match fail instead of hang. That keeps the cost bounded per call, but the result is a **fail-open verdict**: a rule that errors is treated as not matching, so a negation (`!keep.me`) or a hide rule quietly stops applying. Ignore rules are not a security boundary, but before the F-J2 fix the `.env` guard relied on them in practice.
-- **Fix:** Collapse runs of `*`/`**` while compiling (`**a**a` has the same meaning as a single wildcard sequence, and git's own `wildmatch` is linear). Use possessive or atomic groups (`(?>.*)` is wrong for globs, so use a hand-written glob matcher like git's), or cap the number of wildcards per line (git has an implicit cap). Treat `preg_match() === false` as **match** for hide rules (fail closed) and log the rule once. Cache verdicts per directory prefix so that N files do not re-test the same parent N times.
-- **Test:** The repro as a PHPUnit test with a time budget: Glob over 2,000 files under the hostile `.gitignore` must finish in under 2 s. Add a unit test showing that a rule which hits the backtrack limit still hides its target.
-
-### F-T6 — The `doctor` tool probes the terminal from inside the turn fork, competing with the TUI for stdin and stdout
-- **Severity:** Low. **Confidence:** Verified-by-reading.
-- **Where:** `src/Tools/BuiltIn/Doctor.php:89` `self::$mosaic ??= Mosaic::auto()`. The tool is registered for the model at `Cli/Bootstrap.php:6898`. `candy-mosaic/src/Detect.php:137` writes the DA1 query to `STDOUT` and reads the reply from stdin with a timeout. `:403` sends XTWINOPS. Every exit path calls `drainStdin(50, …)`. Doctor keeps its **own** static rather than reusing `ToolResult::mosaic()`, which the parent already probed at boot (`ToolResult.php:311-327`).
-- **Failure:** The engine runs each turn in a forked child (see F-E2), which inherits the TUI's tty file descriptors. When the model calls `doctor` (its description invites it "before attaching an image"), the child writes escape queries into the TUI's output mid-frame, and then drains up to the probe timeout plus 50 ms of stdin. Keystrokes typed during that window go to the child and are lost. The terminal's DA1 or size reply can instead reach the parent's input parser and show up as garbage input. No security impact; this is a correctness and UX defect.
-- **Fix:** Have Doctor read the boot-time probe (`ToolResult::mosaic()`), which was inherited across the fork, and never touch the tty from a tool. If a re-probe is ever needed, it belongs in the parent's event loop.
-- **Test:** Run `Doctor::execute()` with `Detect::setProbeStdin()` pointing at a stream that fails the test if it is read. Assert the result reports the cached protocol.
 
 ### F-T7 — Edit and Write rewrite files in place, so a kill mid-write leaves a truncated file
 - **Severity:** Low. **Confidence:** Verified-by-reading.
@@ -165,44 +145,18 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 - **Fix:** rewrite both paragraphs to describe `killTree()` and the close-on-exec frame socket, keeping the no-`/proc` fallback caveat and the "a ParallelSafe tool must terminate on its own" rule.
 - **Test:** none needed beyond review. A doc-drift assertion could pin that the docblock names `killTree`.
 
-### F-E3 — Bash's `cd ROOT && CMD` runs any later `;`-separated commands in the wrong directory when `cd` fails
-- **Severity:** Low. **Confidence:** Verified-by-reading.
-- **Where:** `Bash.php` execute: `"cd " . escapeshellarg($cwd) . " && " . $command`. `&&` binds tighter than `;`, so `cd X && a; b` parses as `(cd X && a); b`.
-- **Failure:** If the root or worktree is gone (a removed worktree, a renamed directory), `b` runs in the PHP process cwd, which can be the main checkout rather than the isolated worktree.
-- **Fix:** `cd X || exit 1; ` + command, or pass `$cwd` to `proc_open` instead of a `cd` prefix.
-- **Test:** Root deleted after construction. Bash `true; pwd` → assert a non-zero exit and no pwd output.
+### F-E5 — `ProcessContainment::interactiveSpawnCommand()` has the same `cd X && cmd` prefix F-E3 fixed in Bash
+- **Severity:** Low (latent) · **Confidence:** Verified-by-reading (found while fixing F-E3 in wave 3)
+- **Where:** `src/Support/ProcessContainment.php:327-332`: `$script = ($cwd === null || $cwd === '' ? '' : 'cd ' . escapeshellarg($cwd) . ' && ') . $command;`, then `['/bin/sh', '-c', $script]`. Its caller is `CapturesProcessOutput::runCapturedInteractive()` (`:393`).
+- **Failure scenario:** `&&` binds tighter than `;`, so with a `$cwd` that no longer exists, `cd X && a; b` runs `b` in the PHP process's cwd, which can be the main checkout rather than an isolated worktree. Bash is not affected: it passes a null `$cwd` and carries its own `cd ROOT || exit 1` prefix since F-E3's fix (`750ffdd13`). Today no production caller passes a `$cwd`, so this is latent until one does.
+- **Fix:** use the same `cd X || exit 1` + newline prefix as Bash, ideally from one shared helper so the two cannot drift again.
+- **Test:** `interactiveSpawnCommand('true; pwd', '/nonexistent')` run through `/bin/sh` exits non-zero and prints no directory.
 
 ---
 
 ## E. Hooks and audit
 
-### F-H1 — A PostToolUse "block" or deny is a silent no-op: tool output still reaches the model and the reason is dropped
-- **Severity:** Medium. **Confidence:** Verified-by-repro (`r12_post_block.php`) plus reading of the consumers.
-- **Where:** `Runtime::settle()` (`src/Runtime.php` ~2322) and `Chat::applyPostToolUse()` (`src/Chat.php:4420-4437`) read **only** `$hookResult->additionalContext`. `continueOnBlock` exists only in the dormant `HookDispatcher`.
-- **Repro:** A secret-scanner PostToolUse hook that exits 2 on `AKIA…` gives `action=deny message='output contains AWS key, blocked' additionalContext=''`. The consumers discard everything except `additionalContext`, so the raw output, including the key, goes to the model, and nobody sees the block reason.
-- **Docs contradiction:** HOOKS.md says PostToolUse block "surfaces through `continueOnBlock`". No live path does that. HOOKS.md also contradicts itself: the timeout section (around line 655) says that on PostToolUse "that verdict is discarded by both consumers". That sentence is accurate. The `continueOnBlock` sentence is not.
-- **Chat path:** `Chat::applyPostToolUse()` behaves the same way, but it is dormant on `bin/sugarcrush` (see F-P9, Reachability).
-- **Fix:** On a PostToolUse deny, replace the model-visible content with `[output withheld by hook <name>: <reason>]`, matching the Claude Code semantics users will copy, or at minimum annotate and surface it to the user. Wire `continueOnBlock` or delete the claim from the docs.
-- **Test:** The repro hook through `Runtime::run()` with a stub Bash returning `AKIA…`. Assert the ToolResultMessage content does not contain `AKIA` and does contain the reason.
-
-### F-H2 — The audit log records only completed calls; hook and gate denials are never logged, and output is unsanitised
-- **Severity:** Low-Medium. **Confidence:** Verified-by-reading.
-- **Where:** `src/Hooks/BuiltIn/AuditHook.php`: `event(): PostToolUse`, and `execute()` writes `substr($context->toolOutput, 0, 200)` raw.
-- **Failure:** (1) Refused calls never reach PostToolUse (`Runtime::gate()` returns early), so the security-relevant events (ProtectFilesHook denials, gate denials, hook timeouts) leave no audit trail. (2) Raw newlines in the first 200 bytes of attacker-influenced output (WebFetch, Bash) let a page forge extra `[timestamp] session Tool …` lines. (3) `toolInput` is unbounded: every `Write` logs the full file content, with no rotation.
-- **Fix:** Register a PreToolUse audit leg, or log from `Runtime::gate()` on refusal with the DenialKind. Encode the output excerpt with `json_encode`/`addcslashes`. Cap the input at around 4 KiB.
-- **Test:** A ProtectFilesHook denial produces an audit line containing `DENY`. Output containing `"\n[2026-"` is logged on one line.
-
-### F-H3 — Hooks receive `CRUSH_TOOL_INPUT` with `\/`-escaped slashes, so naive path or command greps never match
-- **Severity:** Low-Medium. **Confidence:** Verified-by-repro (`r18_hook_slash.php`).
-- **Where:** `src/Runtime.php:2568` `hookContext()`: `toolInput: json_encode($toolCall->arguments()) ?: '{}'`, with no `JSON_UNESCAPED_SLASHES`/`UNICODE`. `Chat.php:4282` (dormant) has the same code. `CRUSH_TOOL_INPUT_FILE` carries the same bytes. Separately, on encode failure the hook sees `{}` instead of the arguments: a fail-open input for a deny hook.
-- **Repro:** A deny hook `printf %s "$CRUSH_TOOL_INPUT" | grep -qF "/etc/passwd" && exit 2` with `Read file_path=/etc/passwd` sees `{"file_path":"\/etc\/passwd"}` and **allows**. Any hook that greps for a path or for `rm -rf /` silently never fires. Every path argument contains a `/`, so this defeats the most natural shell-hook style. jq-based hooks are unaffected. The `{}` arm is **not** reachable by the model: provider tool-call JSON cannot carry invalid UTF-8 (a lone `\ud800` escape fails `json_decode`). It remains a latent fail-open for embedders that build arguments themselves.
-- **Failure:** A user deny hook `grep -q 'rm -rf /' <<<"$CRUSH_TOOL_INPUT"` never fires, because the input reads `rm -rf \/`.
-- **Fix:** `JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE`. Never fall back to `'{}'` (deny instead).
-- **Test:** A ScriptHook `grep -q '/etc/passwd'` on a Read of `/etc/passwd` gives exit 1 (deny).
-
-### F-H4 — SkillTool's `args` parameter is advertised in the schema and silently dropped
-- **Severity:** Low. **Confidence:** Verified-by-reading (`src/Tools/BuiltIn/SkillTool.php` schema declares `args`; `execute()` never reads it; there is no `$ARGUMENTS` substitution anywhere in `src/Skills` or `src/Tools`).
-- **Fix:** Implement substitution or remove the property. Tests should pin one or the other.
+All four findings here (F-H1 to F-H4) were fixed in wave 3; see **Fixed since audit**.
 
 ---
 
@@ -233,26 +187,20 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 | F-E2 | Med-High | Repro | Cancel or deadline SIGKILLs the PHP child only; setsid'd bash keeps running; Task sub-agents cascade. Partly fixed (`c54372b2a`: tree kill at turn teardown and parallel deadline); remaining: dormant Chat site, `AgentWorkerPool` and `EngineExecutor` kill sites |
 | F-T2 | Medium | Repro | Edit ignores `$maxBytes`; 35 MB file → 650 MB peak |
 | F-T3 | Medium | Reading | WebFetch 2 MiB raw result (32× Bash cap) |
-| F-T5 | Medium | Repro | Hostile `.gitignore` → Glob 139 s over 2,000 files (turn killed); backtrack errors fail open |
 | F-J3 | Medium | Repro | Path deny rules miss relative/absolute respellings and symlinks |
 | F-P3 | Medium | Repro | auto mode classifies Bash only; classifier `\|` regex bugs |
 | F-P4 | Medium | Repro | accept-edits: Edit/Write Ask but `rm`/`mv`/`cp` Allow |
 | F-P6 | Medium | Reading | WebFetch "read-only" → unprompted exfiltration in default/plan/dont-ask |
 | F-E1 | Medium | Repro | Bash and hooks inherit provider API keys; HOOKS.md env table wrong |
-| F-H1 | Medium | Repro | PostToolUse block is a no-op; output delivered, reason dropped |
-| F-H2 | Low-Med | Reading | Audit log misses all denials; log-line forging; unbounded input |
-| F-H3 | Low-Med | Repro | Hook input JSON escapes `/`, so grep-style deny hooks never fire; encode failure gives `{}` |
 | F-P8 | Low-Med | Repro | Tool output starting `Permission denied:` is reported as a refusal although the command ran |
 | F-T4 | Low | Repro (primitive) | Read/Edit/Write block forever on a FIFO |
-| F-T6 | Low | Reading | `doctor` probes the tty from the turn fork, stealing stdin from the TUI |
 | F-T7 | Low | Reading | Edit/Write truncate in place; a kill or ENOSPC mid-write leaves a truncated file |
 | F-J5 | Low | Repro | BashEscapeDenyHook unwired, bypassable, false-positive on `/dev/null`; mutates the shared manager; Glob/Grep/Lsp take no worktree jail |
 | F-P7 | Low | Reading | Task grant memo silences user-hook asks |
 | F-P9 | Low (dormant) | Reading | Chat-path "Always" grant keyed by tool name overrides any hook ask |
-| F-E3 | Low | Reading | `cd X && a; b` runs `b` outside the root when cd fails |
-| F-H4 | Low | Reading | SkillTool `args` silently dropped |
 | F-W2 | Low | Repro | WebFetch returns 3xx/4xx/5xx bodies as success; relative `Location:` ends the chain |
 | F-W3 | Low | Reading | WebSearch: cleartext default, unchecked redirects (blind SSRF), unbounded read |
+| F-E5 | Low (latent) | Reading | `interactiveSpawnCommand()` keeps the `cd X && cmd` prefix F-E3 fixed in Bash (no production caller passes a cwd yet) |
 | F-E4 | Info (doc) | Reading | `ParallelSafe` docblock still describes the orphan-deadline and inherited-socket hazards fixed by B2 and B3 |
 
 ---
@@ -311,3 +259,10 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **F-P2** Plan mode allowed `>f`, `2> f`, `sed -i`, `rm`, `git push --force` — fixed on master in `d3d90fece` (plan Bash is now an allow-list of read-only commands, fail closed; the same commit rewrote the stale PERMISSIONS.md matching section).
 - **F-W1** WebFetch SSRF blocklist missed 100.64/10, 198.18/15, NAT64 and 6to4 — fixed on master in `0594e0e17`.
 - **F-P5** Argument-scoped allow rules accepted `$(…)`, backticks and redirects — fixed on master in `c8fc573a5` (the Allow arm is fail-closed via `ShellWords`: it refuses incomplete lines, `$(`, backticks, `<(`/`>(`, `${…}`/`$[…]` and non-inert redirection, and every unquoted-operator segment must match; Deny and Ask also match quote-removed and per-command readings, so `true; 'rm' -rf x` hits `Deny Bash(rm *)`; PERMISSIONS.md now describes the fail-closed allow rules). Still open and separate: F-J3 (path respellings). Allow matching is still per rule (`Allow git *` + `Allow grep *` does not grant `git log | grep x`); that is documented, not a bug.
+- **F-T5** A hostile `.gitignore` made Glob spend about 70 ms per file, and backtrack errors failed open — fixed on master in `bae0297ce` (`IgnoreRules` builds patterns as tokens; PCRE is kept for safe shapes, and every other pattern, and any PCRE error, goes to a cached DFA that never backtracks; an undecidable rule fails closed, so a hide applies and a negation does not re-include; verdicts are cached per directory). The repro Glob over 2,000 files went from 139 s to 0.34 s. Residual: `IgnoreRules::undecidablePatterns()` is not surfaced to the model by Glob or Grep; nothing reads it yet.
+- **F-T6** The `doctor` tool probed the terminal from inside the turn fork — fixed on master in `977179c1e` (Doctor reads the boot-time `ToolResult::mosaic()` probe and never touches the tty). Residual: `Bootstrap::backend()` does not warm `ToolResult::mosaic()`, so headless runs still probe lazily from the tool (harmless with no TUI); the `DetectsCapabilities` docblock still cites Doctor's old `self::$mosaic ??=` idiom (15b-32).
+- **F-E3** Bash's `cd ROOT && CMD` ran later `;`-separated commands in the wrong directory when `cd` failed — fixed on master in `750ffdd13` (the prefix is `cd ROOT || exit 1` plus a newline, so a missing root runs nothing; `proc_open`'s `cwd` was rejected because on PHP 8.3.6 a missing cwd only warns and returns false). Still open nearby: `ProcessContainment::interactiveSpawnCommand()` keeps the old prefix (F-E5).
+- **F-H1** A PostToolUse block or deny was a silent no-op — fixed on master in `19f25de74` (in `Runtime::settle()`, any PostToolUse verdict that does not permit the call — deny or exit 2, timeout, ask, unknown action — replaces what the model and the UI see with `[output withheld by PostToolUse hook: <reason>] The call ran; its output is not shown.`; image and diff are stripped, `isError` is kept as the tool set it, the refusing hook's own `additionalContext` is dropped; HOOKS.md's `continueOnBlock` claim and the "discarded by both consumers" sentence are corrected). Residual: the text names no hook, because `HookResult` does not carry which hook refused; a hook that throws is still only an annotation; the dormant `Chat::applyPostToolUse()` mirror is unchanged (scheduled for w7-gate-prov).
+- **F-H2** The audit log recorded only completed calls, could be forged and logged unbounded input — fixed on master in `fd3b9e861` (new `AuditHook::recordDenial()` and `recordWithheld()`; Runtime logs from `gate()`'s refusal arm — hook deny, gate deny, refused or unanswered ask, PreToolUse timeout — and from the F-H3 encode refusal and the F-H1 withheld arm, as `=! DENY <hook|refused|unanswered>: <reason>` and `=! WITHHELD: <reason>`; every field is control-character escaped, the 200-byte excerpt is cut on a UTF-8 boundary, and input is capped at 4 KiB with a `[truncated: N bytes]` marker; HOOKS.md gains "What the audit log records"). Residual: built-ins run first, so a withheld call usually also gets the ordinary `=>` line, whose excerpt may still hold the secret (the log is in a 0700 per-user directory).
+- **F-H3** Hook input JSON escaped `/`, and an encode failure gave hooks `{}` — fixed on master in `fa74a16be` (encoded with `JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR`; arguments that cannot be encoded are refused as `Hook denied:` before any hook runs, on both the sequential and concurrent paths; HOOKS.md states the encoding). Residual: the dormant `Chat.php` mirrors (bare `json_encode` at about `:4386` and `:4569`) are unchanged (w7-gate-prov).
+- **F-H4** SkillTool's `args` was advertised and silently dropped — fixed on master in `299e945d0` (`$ARGUMENTS` in the skill body is substituted from `args`, or `ARGUMENTS: <args>` is appended when the body has no placeholder; a non-string name or `args` returns a tool error instead of a `TypeError`; `docs/SKILLS.md` "Invoking a skill" updated).

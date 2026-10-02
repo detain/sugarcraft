@@ -112,15 +112,7 @@ Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/` (ea
 
 ## D. CLI / headless
 
-### CLI-1 — Headless JSON stdout is not protected from PHP diagnostics: `bin/sugarcrush` never routes `display_errors` to stderr
-- **Severity:** Low
-- **Confidence:** Verified-by-repro
-- **Where:** `bin/sugarcrush` (no `ini_set('display_errors', 'stderr')` and no `set_error_handler` anywhere in `bin/` or `src/Cli/`). The concrete emitter is the unsilenced `mkdir()` in `Bootstrap::ensureDir()` `src/Cli/Bootstrap.php:8036-8040`.
-- **Code:** `if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) { throw … }`
-- **Repro (`cli_warn.sh`):** with `~/.sugar-crush` mode 0500 and `display_errors=1`, `sugarcrush -p "say hi" --output-format json` exits 0, but stdout begins `\nWarning: mkdir(): Permission denied in …/Bootstrap.php on line 8038` before `{"result":…}`. `display_errors=1` is php-cli's compiled-in default when no php.ini is loaded (`php -n -r 'var_dump(ini_get("display_errors"));'` prints `"1"`). That is the normal case in the official `php:*-cli` Docker images, which ship without a php.ini. On this box the distro ini sets it Off, which is why the first pass saw nothing.
-- **Scenario:** `sugarcrush -p … --output-format json | jq` in CI or a container. Any warning on the run (this `mkdir`, a vendor deprecation, a stream warning) is printed before the document, and the consumer's JSON parse fails even though the exit status says success.
-- **Fix:** add `ini_set('display_errors', 'stderr');` at the top of `bin/sugarcrush` (keep `log_errors`). Separately, make `ensureDir()` use `@mkdir` and report through its own exception, as its `throw` already intends.
-- **Test:** run `bin/sugarcrush` with `-d display_errors=1` against a read-only scratch `~/.sugar-crush`; assert stdout is exactly one valid JSON line.
+Its only finding, CLI-1, was fixed in wave 3; see **Fixed since audit**.
 
 ---
 
@@ -267,6 +259,7 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 - **Repro (`argv.php`):** `sugarcrush fix the login bug` and `sugarcrush src` both parse to `root=NULL prompt=NULL`, no `usageError` and no unknown flags. The TUI starts in the cwd. `-p hi -- extra` drops `extra`. `--root --model x` takes `--model` as the root (the only value-taking flag without the `looksLikeFlag` guard that `--config`/`--model`/`--permission-mode` have).
 - **Fix:** treat a positional that `is_dir()` as the root. Refuse (exit 2) any other leftover positional, with a hint about `-p "<prompt>"`. Alternatively, follow Claude Code and use leftover words as the TUI's initial prompt. Give `--root` the same flag-shaped-value guard as its siblings.
 - **Test:** table cases (`src`, `fix the bug`, `--root --model x`) asserting root resolution or a usage error.
+- **Partly fixed on master in `b899773a6`** (part (a)). `ArgvParser::parse()` stays pure and keeps leftovers in the new `ParsedArgs::$positionals`; the new `ArgvParser::resolveOperands()` makes a bare positional that is an existing directory the root, and any other leftover, two roots, or a directory plus `--root` exits 2 with a `-p "<prompt>"` / quote-the-prompt hint. `--root` refuses a flag-shaped or missing value. Help, README and the `bin/sugarcrush` raw-argv scan are updated. **Remaining:** (b) using the leftover words as the TUI's initial prompt, the Claude Code behaviour, is not built; it is a deferred decision (wave plan §3 #15), and `ParsedArgs::$positionals` is kept so it can be added later.
 
 ### DOC-1 — Smaller doc/code drift found while cross-checking
 - **Severity:** Low
@@ -298,12 +291,11 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 | MCP-6 | Low-Med | Verified-by-repro | `mcp auth login` discovery breaks on path-bearing server URLs; registration URL not overridable |
 | MCP-7 | Low-Med | Verified-by-repro | OAuth store stale-cache write-back erases another process's credentials; non-atomic write |
 | MCP-8 | Low-Med | Verified-by-repro | Failed re-registration persists `client_id` as a never-expiring bearer token |
-| CLI-2 | Low-Med | Verified-by-repro | `sugarcrush <dir>` ignores bare directory names; non-path positionals silently dropped |
+| CLI-2 | Low-Med | Verified-by-repro | `sugarcrush <dir>` ignores bare directory names; non-path positionals silently dropped. Partly fixed (`b899773a6`: existing-dir positional is the root, other leftovers exit 2 with a `-p` hint); remaining: (b) leftovers as the TUI's initial prompt (deferred decision) |
 | SES-4 | Low | Verified-by-repro | Checkpoint blobs GC'd only on /rewind; orphans accumulate |
 | SES-5 | Low | Verified-by-reading | Mixed local/UTC timestamps |
 | SES-6 | Low | Verified-by-reading | `getMessages` ordering tiebreak |
 | BG-2 | Low | Verified-by-reading | Background IPC directories never cleaned |
-| CLI-1 | Low | Verified-by-repro | `display_errors` not routed to stderr; a `mkdir()` warning precedes the headless JSON document |
 | AG-3 | Low | Verified-by-reading | `AgentManager` never forgets sub-agents; unbounded growth plus a per-frame scan |
 | DOC-1 | Low | Verified-by-reading | Doc drift: TROUBLESHOOTING startup ordering, plus doc halves of WF-1/WF-3 |
 
@@ -391,3 +383,4 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **AG-1** Forked sub-agents shared the parent's MCP pipes, ids and keep-alive sockets — fixed on master in `ea6e178fd` (stdio: process-unique ids, locked exchanges, shared read buffer) and `2d96e2edb` (HTTP: pid-unique ids, fresh connection per process). Residual: parallel agents now serialise their calls to one stdio server, and a lock file per MCP server is left behind if the TUI is killed.
 - **AG-4** `AgentManager::executeSubAgent()` swallowed provider errors the way 15a A1 did — fixed on master in `48e9a3f65` (it throws `ProviderResponseException` after the retry loops; the sub-agent ends `STATUS_FAILED` carrying the provider text). `TaskTool::runOnEngine` and the workflow `EngineExecutor` were checked: they go through `EngineBackend`/`Runtime`, which A1 fixed, and are pinned by regression tests.
 - **MCP-9** Empty maps nested inside a tool's arguments went on the wire as `[]` — fixed on master in `f84a97364` (new sugar-mcp `ArgumentShape::conform()` walks the arguments against the tool's `inputSchema`; applied in sugar-mcp `StdioMcpServer`, crush `HttpMcpServer` and `ClaudeCodeMcpServer`).
+- **CLI-1** Headless JSON stdout was not protected from PHP diagnostics — fixed on master in `0c2bbd0a7` (`display_errors=stderr` is the first statement of `bin/sugarcrush`; `Bootstrap::ensureDir()` reports the `mkdir` reason in its own exception through a handler scoped to the call, because `@` plus `error_get_last()` loses it under a host handler; on the TUI with the 15a C2 log file in place, `display_errors` is 0 and a fatal prints one "details in <log>" line to stderr).
