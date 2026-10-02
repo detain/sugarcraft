@@ -74,11 +74,36 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
     public function complete(CompleteRequest $request): CompleteResponse
     {
         $prompt = $this->buildPrompt($request->messages);
+        $spill = $this->invocation->spillSystemPrompt($request->systemPrompt);
 
+        try {
+            // The prompt is the stdin payload, never an argv string - see
+            // ClaudeCodeInvocation's class docblock (audit 15a A12).
+            $output = $this->invocation->execute(
+                $this->invocation->printModeArgs($this->options('json', $request, $spill)),
+                stdin: $prompt,
+            );
+        } finally {
+            if ($spill !== null) {
+                @unlink($spill);
+            }
+        }
+
+        return $this->parseJsonResponse($output);
+    }
+
+    /**
+     * The printModeArgs() options both paths share.
+     *
+     * @return array<string, mixed>
+     */
+    private function options(string $format, CompleteRequest $request, ?string $systemPromptFile): array
+    {
         $options = [
-            'format' => 'json',
+            'format' => $format,
             'bare' => true,
             'systemPrompt' => $request->systemPrompt,
+            'systemPromptFile' => $systemPromptFile,
         ];
 
         if ($request->tools !== null) {
@@ -86,11 +111,7 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
             $options['allowedTools'] = implode(',', $toolNames);
         }
 
-        $output = $this->invocation->execute(
-            $this->invocation->printModeArgs($prompt, $options)
-        );
-
-        return $this->parseJsonResponse($output);
+        return $options;
     }
 
     /**
@@ -100,26 +121,11 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
     {
         $prompt = $this->buildPrompt($request->messages);
 
-        $options = [
-            'format' => 'stream-json',
-            'bare' => true,
-            'systemPrompt' => $request->systemPrompt,
-        ];
-
-        if ($request->tools !== null) {
-            $toolNames = array_map(fn($t) => $t->name(), $request->tools);
-            $options['allowedTools'] = implode(',', $toolNames);
-        }
-
-        $args = $this->invocation->printModeArgs($prompt, $options);
-
-        // Open process directly - cannot use yield inside a closure passed to execute()
-        $cmd = array_merge([$this->invocation->claudePath()], $this->invocation->baseArgs(), $args);
-
         // E672: the wrapper-fronts-spawn pre-check, twin of
         // ClaudeCodeInvocation::execute() — under `setsid` a bogus claudePath
         // starts the WRAPPER fine and the exec failure would surface only as
-        // exit 127 inside the stream, not as this site's typed throw.
+        // exit 127 inside the stream, not as this site's typed throw. Ahead of
+        // the spill below, so a failed start leaves no temp file behind.
         $claudeBinary = $this->invocation->claudePath();
         if (ProcessContainment::detachedSpawnBinary() !== ''
             && !(str_contains($claudeBinary, '/')
@@ -129,6 +135,16 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
             // E27(a): typed throw, exit code null = the child never spawned.
             throw new ProviderException('Failed to start Claude Code process');
         }
+
+        // Audit 15a A12: `stream-json` with `--verbose` and
+        // `--include-partial-messages` (printModeArgs() adds both), the prompt
+        // on stdin, and an oversized system prompt spilled to a file - each
+        // the fix for one of the three ways this path failed every turn.
+        $spill = $this->invocation->spillSystemPrompt($request->systemPrompt);
+        $args = $this->invocation->printModeArgs($this->options('stream-json', $request, $spill));
+
+        // Open process directly - cannot use yield inside a closure passed to execute()
+        $cmd = array_merge([$this->invocation->claudePath()], $this->invocation->baseArgs(), $args);
 
         // E672/E674: choke-point spec + env; the three auth keys ride as
         // overrides (see ClaudeCodeInvocation for the same routing).
@@ -149,19 +165,27 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
         );
 
         if (!is_resource($process)) {
+            if ($spill !== null) {
+                @unlink($spill);
+            }
+
             // E27(a): typed throw, exit code null = the child never spawned.
             throw new ProviderException('Failed to start Claude Code process');
         }
 
-        fclose($pipes[0]);
-
-        // NON-BLOCKING ON BOTH PIPES, so neither can wedge the other. See the
-        // `try` body for the deadlock this closes.
+        // NON-BLOCKING ON ALL THREE PIPES, so none can wedge another. See the
+        // `try` body for the deadlock this closes. Stdin joins them because
+        // the prompt now rides it and can be far larger than one pipe buffer:
+        // a blocking write of all of it would stall while the child fills its
+        // stdout, which this side would not yet be reading.
+        stream_set_blocking($pipes[0], false);
         stream_set_blocking($pipes[1], false);
         stream_set_blocking($pipes[2], false);
 
+        $pending = ClaudeCodeInvocation::feedStdin($pipes[0], $prompt);
         $buffer = '';
         $errors = '';
+        $resultError = null;
         $open = [1 => $pipes[1], 2 => $pipes[2]];
 
         try {
@@ -183,7 +207,7 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
             // liveness of the pipes, not duration.
             while ($open !== []) {
                 $read = array_values($open);
-                $write = [];
+                $write = $pending !== '' ? [$pipes[0]] : [];
                 $except = [];
 
                 // `@`, because a signal arriving mid-select (a SIGCHLD, a
@@ -227,6 +251,10 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
                     continue;
                 }
 
+                if ($write !== []) {
+                    $pending = ClaudeCodeInvocation::feedStdin($pipes[0], $pending);
+                }
+
                 foreach ($open as $fd => $pipe) {
                     if (!in_array($pipe, $read, true)) {
                         continue;
@@ -251,18 +279,32 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
 
                     $buffer .= $chunk;
 
+                    // NDJSON, ONE JSON OBJECT PER LINE (audit 15a A12). This
+                    // used to accept only `data: `-prefixed lines, the SSE
+                    // framing of the HTTP API underneath; the CLI's
+                    // stream-json prints bare objects, so every line was
+                    // dropped and each turn streamed an empty reply.
                     while (($pos = strpos($buffer, "\n")) !== false) {
                         $line = substr($buffer, 0, $pos);
                         $buffer = substr($buffer, $pos + 1);
 
-                        if (str_starts_with($line, 'data: ')) {
-                            $data = json_decode(substr($line, 6), true);
-                            if ($data !== null) {
-                                yield $this->parseChunk($data);
-                            }
+                        $chunk = $this->parseLine($line);
+                        if ($chunk !== null) {
+                            $resultError = $chunk->isError ? $chunk->errorMessage : $resultError;
+
+                            yield $chunk;
                         }
                     }
                 }
+            }
+
+            // A final object the child wrote without a closing newline is
+            // still a whole object: the pipe hit EOF, nothing more is coming.
+            $chunk = $this->parseLine($buffer);
+            if ($chunk !== null) {
+                $resultError = $chunk->isError ? $chunk->errorMessage : $resultError;
+
+                yield $chunk;
             }
         } finally {
             // A `finally` IN A GENERATOR, and it is load-bearing. A consumer that
@@ -284,6 +326,12 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
             }
 
             $exitCode = ProcessReaper::terminateAndClose($process, ProcessContainment::groupId($process));
+
+            // After the reap, never before: the child reads the file at
+            // startup, but nothing says when that is.
+            if ($spill !== null) {
+                @unlink($spill);
+            }
         }
 
         if ($exitCode !== 0 && $exitCode !== -1 && $exitCode !== null) {
@@ -305,8 +353,75 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
             // non-zero exit usually is not) is deliberately NOT taken here -
             // it belongs to TransientFailure's allow-list, and the open half is
             // pinned as a recorded decision in TransientFailureTest.
-            throw new ProviderException("Claude Code exited with code $exitCode: $errors", exitCode: $exitCode);
+            $reason = ClaudeCodeInvocation::exitReason($errors, $resultError);
+
+            throw new ProviderException("Claude Code exited with code $exitCode: $reason", exitCode: $exitCode);
         }
+    }
+
+    /**
+     * One stream-json line as a chunk, or null for a line that carries nothing
+     * for this consumer.
+     *
+     * - `stream_event`: the relayed Anthropic event ({@see parseChunk()}),
+     *   which is where token deltas arrive under `--include-partial-messages`.
+     * - `result`: the run's final record - its cost and token figures, and
+     *   `is_error` for a failed run (exit status aside, a run can end in an
+     *   error result; it is surfaced as an error chunk, the way Runtime reads
+     *   a provider-reported failure).
+     * - everything else - `system` (init, status, retries), and the whole
+     *   `assistant`/`user` messages - is skipped. The `assistant` message
+     *   repeats text the partial deltas already delivered, so yielding it too
+     *   would print every reply twice.
+     */
+    private function parseLine(string $line): ?CompleteResponse
+    {
+        $data = json_decode($line, true);
+        if (!is_array($data)) {
+            return null;
+        }
+
+        return match ($data['type'] ?? null) {
+            'stream_event' => $this->parseChunk($data),
+            'result' => $this->parseResult($data),
+            default => null,
+        };
+    }
+
+    /**
+     * The final `result` line: the run's totals, and its error when it failed.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function parseResult(array $data): CompleteResponse
+    {
+        $isError = ($data['is_error'] ?? false) === true;
+
+        return new CompleteResponse(
+            content: '',
+            reasoning: null,
+            toolCalls: null,
+            tokensUsed: self::totalTokens($data['usage'] ?? null),
+            costUsd: (float) ($data['total_cost_usd'] ?? 0.0),
+            isError: $isError,
+            errorMessage: ClaudeCodeInvocation::resultErrorOf($data),
+            truncated: ($data['stop_reason'] ?? null) === 'max_tokens',
+        );
+    }
+
+    /**
+     * Total tokens from a CLI `usage` document's `total_tokens`, or 0.
+     *
+     * KNOWN GAP, deliberately not closed here: the measured CLI (2.1.287)
+     * prints no `total_tokens`, only the Anthropic buckets (`input_tokens`,
+     * `output_tokens`, `cache_*_input_tokens`), so a real run reports 0
+     * tokens; its `total_cost_usd` is still read. Reading the buckets makes
+     * this a split-usage provider, which {@see \SugarCraft\Crush\Usage}'s
+     * docblock and its source-derived census in UsageTest have to move with.
+     */
+    private static function totalTokens(mixed $usage): int
+    {
+        return is_array($usage) && isset($usage['total_tokens']) ? (int) $usage['total_tokens'] : 0;
     }
 
     /**
@@ -386,11 +501,12 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
         }
 
         // No `usage:` carrier on purpose (E17 audit): this shell-out wire
-        // reports exactly two money numbers - `usage.total_tokens` and
+        // is read for exactly two money numbers - `usage.total_tokens` and
         // `total_cost_usd` - and no split to lose. A Usage built here would
         // carry five unreported buckets beside the same total, and Runtime's
         // fold would project it back to precisely the object the fallback
-        // already makes. The projections below stay the whole truth.
+        // already makes. The projections below stay the whole truth. (See
+        // {@see totalTokens()} for why the measured CLI's total reads 0.)
         //
         // E707: `stop_reason` rides this envelope only on CLI builds that
         // surface it; when the key is absent the flag stays false - the
@@ -399,7 +515,7 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
             content: $data['result'] ?? $data['content'] ?? '',
             reasoning: $data['reasoning'] ?? null,
             toolCalls: $this->parseToolCalls($data['tool_calls'] ?? []),
-            tokensUsed: $data['usage']['total_tokens'] ?? 0,
+            tokensUsed: self::totalTokens($data['usage'] ?? null),
             costUsd: $data['total_cost_usd'] ?? 0.0,
             truncated: ($data['stop_reason'] ?? null) === 'max_tokens',
         );
@@ -414,6 +530,18 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
             return new CompleteResponse(
                 content: $data['event']['delta']['text'] ?? '',
                 reasoning: null,
+                toolCalls: null,
+                tokensUsed: 0,
+                costUsd: 0.0,
+            );
+        }
+
+        // Extended thinking streams as its own delta type; it is reasoning,
+        // not reply text, so it must not land in the transcript's content.
+        if (isset($data['event']['delta']['type']) && $data['event']['delta']['type'] === 'thinking_delta') {
+            return new CompleteResponse(
+                content: '',
+                reasoning: (string) ($data['event']['delta']['thinking'] ?? ''),
                 toolCalls: null,
                 tokensUsed: 0,
                 costUsd: 0.0,

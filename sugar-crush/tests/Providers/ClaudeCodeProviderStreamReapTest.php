@@ -230,7 +230,7 @@ final class ClaudeCodeProviderStreamReapTest extends TestCase
             <?php
             pcntl_alarm(15);
             fwrite(STDERR, str_repeat('E', 200000));
-            fwrite(STDOUT, "data: " . json_encode(['event' => ['delta' => ['type' => 'text_delta', 'text' => 'hi']]]) . "\n");
+            fwrite(STDOUT, json_encode(['type' => 'stream_event', 'event' => ['delta' => ['type' => 'text_delta', 'text' => 'hi']]]) . "\n");
             exit(0);
             PHP);
 
@@ -262,7 +262,7 @@ final class ClaudeCodeProviderStreamReapTest extends TestCase
             <?php
             pcntl_alarm(30);
             file_put_contents('%PID_FILE%', (string) getmypid());
-            fwrite(STDOUT, "data: " . json_encode(['event' => ['delta' => ['type' => 'text_delta', 'text' => 'first']]]) . "\n");
+            fwrite(STDOUT, json_encode(['type' => 'stream_event', 'event' => ['delta' => ['type' => 'text_delta', 'text' => 'first']]]) . "\n");
             $deadline = microtime(true) + 25.0;
             while (microtime(true) < $deadline) {
                 usleep(20000);
@@ -299,7 +299,7 @@ final class ClaudeCodeProviderStreamReapTest extends TestCase
             <?php
             pcntl_alarm(15);
             foreach (['alpha', 'beta', 'gamma'] as $word) {
-                fwrite(STDOUT, "data: " . json_encode(['event' => ['delta' => ['type' => 'text_delta', 'text' => $word]]]) . "\n");
+                fwrite(STDOUT, json_encode(['type' => 'stream_event', 'event' => ['delta' => ['type' => 'text_delta', 'text' => $word]]]) . "\n");
             }
             exit(0);
             PHP);

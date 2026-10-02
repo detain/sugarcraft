@@ -43,7 +43,7 @@ final class ClaudeCodeInvocationThrowTest extends TestCase
      *
      * `claudePath` becomes argv[0] of an ARGV-form proc_open(), so the stub
      * needs a `#!` header — the kernel, not a shell, resolves the interpreter,
-     * and the extra `--output-format json ...` argv the invocation appends is
+     * and the extra `-p --output-format ...` argv the invocation appends is
      * simply ignored by a script that never reads its arguments.
      */
     private function invocationOver(string $source): ClaudeCodeInvocation

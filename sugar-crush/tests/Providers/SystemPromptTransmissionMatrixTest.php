@@ -1131,7 +1131,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
     {
         $invocation = new ClaudeCodeInvocation();
 
-        $completeArgs = $invocation->printModeArgs('Hi', [
+        $completeArgs = $invocation->printModeArgs([
             'format' => 'json',
             'bare' => true,
             'systemPrompt' => self::SENTINEL,
@@ -1141,7 +1141,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         $this->assertSame(self::SENTINEL, $completeArgs[$completeFlag + 1]);
         $this->assertSame(1, substr_count(implode(' ', $completeArgs), self::SENTINEL));
 
-        $streamArgs = $invocation->printModeArgs('Hi', [
+        $streamArgs = $invocation->printModeArgs([
             'format' => 'stream-json',
             'bare' => true,
             'systemPrompt' => self::SENTINEL,
@@ -1161,7 +1161,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         // `!== null`-only polarity as OpenAI/Bedrock, by a different idiom.)
         $invocation = new ClaudeCodeInvocation();
 
-        $args = $invocation->printModeArgs('Hi', [
+        $args = $invocation->printModeArgs([
             'format' => 'json',
             'bare' => true,
             'systemPrompt' => null,

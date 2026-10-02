@@ -118,9 +118,11 @@ final class ClaudeCodeProviderTest extends TestCase
         $invocation = new ClaudeCodeInvocation();
         $args = $invocation->baseArgs();
 
+        // Audit 15a A12: the format has one owner, printModeArgs(); baseArgs()
+        // used to add `--output-format json` too, so a stream spawn carried it twice.
         $this->assertIsArray($args);
-        $this->assertContains('--output-format', $args);
-        $this->assertContains('json', $args);
+        $this->assertNotContains('--output-format', $args);
+        $this->assertSame([], $args);
     }
 
     public function testClaudeCodeInvocationBaseArgsWithSessionIdIncludesResume(): void
@@ -146,13 +148,7 @@ final class ClaudeCodeProviderTest extends TestCase
         $invocation = new ClaudeCodeInvocation(sessionId: 'my-session-id');
         $args = $invocation->baseArgs();
 
-        // --output-format json should come first
-        $this->assertSame('--output-format', $args[0]);
-        $this->assertSame('json', $args[1]);
-        // --resume and sessionId should follow
-        $resumeIndex = array_search('--resume', $args);
-        $this->assertNotFalse($resumeIndex);
-        $this->assertSame('my-session-id', $args[$resumeIndex + 1]);
+        $this->assertSame(['--resume', 'my-session-id'], $args);
     }
 
     // =========================================================================
@@ -162,19 +158,16 @@ final class ClaudeCodeProviderTest extends TestCase
     public function testClaudeCodeInvocationPrintModeArgsBuildsCorrectArgsForBasicPrompt(): void
     {
         $invocation = new ClaudeCodeInvocation();
-        $args = $invocation->printModeArgs('Hello, world!');
+        $args = $invocation->printModeArgs();
 
-        $this->assertIsArray($args);
-        $this->assertContains('-p', $args);
-        $this->assertContains('Hello, world!', $args);
-        $this->assertContains('--output-format', $args);
-        $this->assertContains('json', $args);
+        // The prompt is no longer an argv string (audit 15a A12): it rides stdin.
+        $this->assertSame(['-p', '--output-format', 'json'], $args);
     }
 
     public function testClaudeCodeInvocationPrintModeArgsIncludesBareWhenOptionSet(): void
     {
         $invocation = new ClaudeCodeInvocation();
-        $args = $invocation->printModeArgs('Test prompt', ['bare' => true]);
+        $args = $invocation->printModeArgs(['bare' => true]);
 
         $this->assertContains('--bare', $args);
     }
@@ -182,7 +175,7 @@ final class ClaudeCodeProviderTest extends TestCase
     public function testClaudeCodeInvocationPrintModeArgsDoesNotIncludeBareWhenNotSet(): void
     {
         $invocation = new ClaudeCodeInvocation();
-        $args = $invocation->printModeArgs('Test prompt');
+        $args = $invocation->printModeArgs();
 
         $this->assertNotContains('--bare', $args);
     }
@@ -190,7 +183,7 @@ final class ClaudeCodeProviderTest extends TestCase
     public function testClaudeCodeInvocationPrintModeArgsIncludesAllowedToolsWhenOptionSet(): void
     {
         $invocation = new ClaudeCodeInvocation();
-        $args = $invocation->printModeArgs('Test prompt', ['allowedTools' => 'Read,Write,Edit']);
+        $args = $invocation->printModeArgs(['allowedTools' => 'Read,Write,Edit']);
 
         $this->assertContains('--allowedTools', $args);
         $this->assertContains('Read,Write,Edit', $args);
@@ -199,7 +192,7 @@ final class ClaudeCodeProviderTest extends TestCase
     public function testClaudeCodeInvocationPrintModeArgsDoesNotIncludeAllowedToolsWhenNotSet(): void
     {
         $invocation = new ClaudeCodeInvocation();
-        $args = $invocation->printModeArgs('Test prompt');
+        $args = $invocation->printModeArgs();
 
         $this->assertNotContains('--allowedTools', $args);
     }
@@ -207,7 +200,7 @@ final class ClaudeCodeProviderTest extends TestCase
     public function testClaudeCodeInvocationPrintModeArgsWithContinueOption(): void
     {
         $invocation = new ClaudeCodeInvocation();
-        $args = $invocation->printModeArgs('Continue my work', ['continue' => true]);
+        $args = $invocation->printModeArgs(['continue' => true]);
 
         $this->assertContains('--continue', $args);
     }
@@ -215,7 +208,7 @@ final class ClaudeCodeProviderTest extends TestCase
     public function testClaudeCodeInvocationPrintModeArgsWithSystemPromptOption(): void
     {
         $invocation = new ClaudeCodeInvocation();
-        $args = $invocation->printModeArgs('Prompt', ['systemPrompt' => 'You are helpful']);
+        $args = $invocation->printModeArgs(['systemPrompt' => 'You are helpful']);
 
         $this->assertContains('--system-prompt', $args);
         $this->assertContains('You are helpful', $args);
@@ -224,7 +217,7 @@ final class ClaudeCodeProviderTest extends TestCase
     public function testClaudeCodeInvocationPrintModeArgsWithMaxBudgetUsdOption(): void
     {
         $invocation = new ClaudeCodeInvocation();
-        $args = $invocation->printModeArgs('Prompt', ['maxBudgetUsd' => 5.50]);
+        $args = $invocation->printModeArgs(['maxBudgetUsd' => 5.50]);
 
         $this->assertContains('--max-budget-usd', $args);
         $this->assertContains('5.5', $args);
@@ -233,7 +226,7 @@ final class ClaudeCodeProviderTest extends TestCase
     public function testClaudeCodeInvocationPrintModeArgsWithMaxTurnsOption(): void
     {
         $invocation = new ClaudeCodeInvocation();
-        $args = $invocation->printModeArgs('Prompt', ['maxTurns' => 10]);
+        $args = $invocation->printModeArgs(['maxTurns' => 10]);
 
         $this->assertContains('--max-turns', $args);
         $this->assertContains('10', $args);
@@ -242,7 +235,7 @@ final class ClaudeCodeProviderTest extends TestCase
     public function testClaudeCodeInvocationPrintModeArgsWithPermissionModeOption(): void
     {
         $invocation = new ClaudeCodeInvocation();
-        $args = $invocation->printModeArgs('Prompt', ['permissionMode' => 'bypassPermissions']);
+        $args = $invocation->printModeArgs(['permissionMode' => 'bypassPermissions']);
 
         $this->assertContains('--permission-mode', $args);
         $this->assertContains('bypassPermissions', $args);
@@ -251,7 +244,7 @@ final class ClaudeCodeProviderTest extends TestCase
     public function testClaudeCodeInvocationPrintModeArgsWithCustomFormat(): void
     {
         $invocation = new ClaudeCodeInvocation();
-        $args = $invocation->printModeArgs('Prompt', ['format' => 'stream-json']);
+        $args = $invocation->printModeArgs(['format' => 'stream-json']);
 
         // Find the index of --output-format and check the value after it
         $formatIndex = array_search('--output-format', $args);
@@ -262,7 +255,7 @@ final class ClaudeCodeProviderTest extends TestCase
     public function testClaudeCodeInvocationPrintModeArgsWithMultipleOptions(): void
     {
         $invocation = new ClaudeCodeInvocation();
-        $args = $invocation->printModeArgs('Complex prompt', [
+        $args = $invocation->printModeArgs([
             'bare' => true,
             'allowedTools' => 'Read,Write',
             'systemPrompt' => 'Be concise',
@@ -270,7 +263,7 @@ final class ClaudeCodeProviderTest extends TestCase
         ]);
 
         $this->assertContains('-p', $args);
-        $this->assertContains('Complex prompt', $args);
+        $this->assertNotContains('Complex prompt', $args);
         $this->assertContains('--bare', $args);
         $this->assertContains('--allowedTools', $args);
         $this->assertContains('Read,Write', $args);
