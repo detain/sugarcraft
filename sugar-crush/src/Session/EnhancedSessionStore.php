@@ -71,9 +71,146 @@ final class EnhancedSessionStore
         $this->sessionStore->renameSession($id, $name);
     }
 
+    /**
+     * Fork $id into a new session that carries its whole conversation:
+     * transcript, checkpoints, the blobs both reference, and its meta.
+     *
+     * Delegating straight to {@see SessionStore::forkSession()} copied only
+     * the legacy `messages`/`tool_calls` tables, which nothing writes any
+     * more, so every fork started EMPTY (audit SES-2): `/fork` handed its
+     * background session an id with no stored history, and `/rewind` on a
+     * `/branch` said "No checkpoints available". It also made the first save
+     * under the new id re-intern every message one INSERT at a time, the
+     * multi-second `/branch` freeze of audit 15b-21; with the blobs copied
+     * here that save finds every message already on disk.
+     *
+     * One transaction for the lot, so a fork is never visible half-copied.
+     */
     public function forkSession(string $id): string
     {
-        return $this->sessionStore->forkSession($id);
+        return $this->writeTransaction(function () use ($id): string {
+            $newId = $this->sessionStore->forkSession($id);
+            $this->copySessionState($id, $newId);
+
+            return $newId;
+        });
+    }
+
+    /**
+     * Copy every enhanced-table row of $fromId onto $toId.
+     *
+     * Blobs are keyed by session (`UNIQUE(session_id, hash)`), so the fork
+     * gets its own copies under new ids — sharing the parent's rows would let
+     * the parent's blob GC, or deleting the parent, delete messages the fork's
+     * checkpoints still name. Every copied envelope is therefore rewritten to
+     * the new ids; see {@see remapEnvelope()}.
+     */
+    private function copySessionState(string $fromId, string $toId): void
+    {
+        $this->pdo->prepare('
+            INSERT INTO checkpoint_blobs (session_id, hash, payload)
+            SELECT ?, hash, payload FROM checkpoint_blobs WHERE session_id = ? ORDER BY id
+        ')->execute([$toId, $fromId]);
+
+        $stmt = $this->pdo->prepare('
+            SELECT o.id AS old_id, n.id AS new_id
+            FROM checkpoint_blobs o
+            JOIN checkpoint_blobs n ON n.session_id = ? AND n.hash = o.hash
+            WHERE o.session_id = ?
+        ');
+        $stmt->execute([$toId, $fromId]);
+        /** @var array<int, int> $idMap */
+        $idMap = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $idMap[(int) $row['old_id']] = (int) $row['new_id'];
+        }
+
+        $stmt = $this->pdo->prepare('
+            SELECT "index", state_data, created_at FROM checkpoints WHERE session_id = ? ORDER BY "index" ASC
+        ');
+        $stmt->execute([$fromId]);
+        $insert = $this->pdo->prepare('
+            INSERT INTO checkpoints (session_id, "index", state_data, created_at) VALUES (?, ?, ?, ?)
+        ');
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            // Index and created_at are kept: the branch's `/rewind` steps back
+            // through the same turns, taken when they were taken.
+            $insert->execute([
+                $toId,
+                (int) $row['index'],
+                $this->remapEnvelope((string) $row['state_data'], $idMap),
+                $row['created_at'],
+            ]);
+        }
+
+        $stmt = $this->pdo->prepare('SELECT state_data FROM session_transcripts WHERE session_id = ?');
+        $stmt->execute([$fromId]);
+        $transcript = $stmt->fetchColumn();
+        $stmt->closeCursor();
+        if (\is_string($transcript)) {
+            $this->pdo->prepare('
+                INSERT INTO session_transcripts (session_id, state_data, updated_at) VALUES (?, ?, ?)
+            ')->execute([$toId, $this->remapEnvelope($transcript, $idMap), gmdate('Y-m-d H:i:s')]);
+        }
+
+        // last_activity is the fork's, not the parent's: it was used just now.
+        $this->pdo->prepare('
+            INSERT INTO session_meta (session_id, summary, tasks, modified_files, agent_states, last_activity)
+            SELECT ?, summary, tasks, modified_files, agent_states, ? FROM session_meta WHERE session_id = ?
+        ')->execute([$toId, gmdate('Y-m-d H:i:s'), $fromId]);
+    }
+
+    /**
+     * $stateData with its envelope's blob ids translated through $idMap.
+     *
+     * Decoded to `stdClass`, not to arrays, so an empty JSON object in the
+     * saved state re-encodes as `{}` rather than collapsing to `[]`; with the
+     * same flags {@see encodeJson()} wrote it with, every byte outside the id
+     * list round-trips unchanged. An inline (pre-envelope) row has no ids and
+     * is copied verbatim. An id with no row in the parent — an already
+     * unreadable checkpoint — maps to 0, which stays unreadable in the fork
+     * instead of borrowing a row that is not the fork's.
+     *
+     * @param array<int, int> $idMap parent blob id => fork blob id
+     */
+    private function remapEnvelope(string $stateData, array $idMap): string
+    {
+        $decoded = json_decode($stateData, false);
+        if (
+            !$decoded instanceof \stdClass
+            || ($decoded->{self::CHECKPOINT_ENVELOPE_VERSION} ?? null) !== 1
+            || !\is_array($decoded->{self::CHECKPOINT_ENVELOPE_MESSAGES} ?? null)
+        ) {
+            return $stateData;
+        }
+
+        $decoded->{self::CHECKPOINT_ENVELOPE_MESSAGES} = array_map(
+            static fn (mixed $id): int => $idMap[(int) $id] ?? 0,
+            $decoded->{self::CHECKPOINT_ENVELOPE_MESSAGES},
+        );
+
+        return self::encodeJson($decoded);
+    }
+
+    /**
+     * {@see SessionStore::immediateTransaction()}, plus the one piece of
+     * in-memory state a rollback has to undo: {@see internMessages()} records
+     * blob ids in {@see $blobIds} as it inserts them, and a rolled-back
+     * insert would leave those ids cached with no row behind them — the next
+     * save would then write an envelope naming blobs that do not exist.
+     *
+     * @template T
+     * @param \Closure(): T $work
+     * @return T
+     */
+    private function writeTransaction(\Closure $work): mixed
+    {
+        try {
+            return $this->sessionStore->immediateTransaction($work);
+        } catch (\Throwable $e) {
+            $this->blobIds = [];
+            throw $e;
+        }
     }
 
     public function updateSession(string $id): void
@@ -169,11 +306,7 @@ final class EnhancedSessionStore
             )
         ');
 
-        // Index for efficient checkpoint lookup by session and index
-        $this->pdo->exec('
-            CREATE INDEX IF NOT EXISTS idx_checkpoints_session_index
-            ON checkpoints(session_id, "index" DESC)
-        ');
+        $this->migrateCheckpointIndexUnique();
 
         // Content-addressed message bodies shared by every checkpoint of a
         // session — see saveCheckpoint() for why checkpoints stopped storing
@@ -209,6 +342,73 @@ final class EnhancedSessionStore
     }
 
     /**
+     * Make `(session_id, "index")` unique on checkpoints, repairing any
+     * duplicates an existing database already holds. Idempotent: it runs on
+     * every construction and does nothing once the index exists.
+     *
+     * Index allocation was `SELECT MAX("index")+1` then `INSERT` with nothing
+     * tying the two together, so two processes saving into one session could
+     * both take the same index (audit SES-3). With duplicates,
+     * `getCheckpoint()` returned whichever row SQLite met first and
+     * `restoreCheckpoint()`'s `"index" >= ?` deleted both. The allocation is
+     * now inside `BEGIN IMMEDIATE` ({@see saveCheckpoint()}); this index is
+     * the schema-level guarantee behind it.
+     *
+     * Duplicates are renumbered, not deleted — each is a real snapshot of
+     * some turn. Within a session rows are walked in `("index", id)` order and
+     * each takes `max(its index, previous + 1)`, which keeps every index that
+     * did not collide and shifts only colliding rows and the ones after them.
+     * `/rewind` addresses checkpoints by their order (N steps back), never by
+     * an absolute index, so the shift is invisible to it.
+     *
+     * The unique index replaces the old non-unique
+     * `idx_checkpoints_session_index (session_id, "index" DESC)`: it covers
+     * the same columns, SQLite scans it backwards for the DESC lookups, and
+     * keeping both would maintain two identical B-trees on every insert.
+     */
+    private function migrateCheckpointIndexUnique(): void
+    {
+        $exists = $this->pdo->query("
+            SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_checkpoints_session_index_unique'
+        ");
+        $done = $exists->fetchColumn() !== false;
+        $exists->closeCursor();
+        if ($done) {
+            return;
+        }
+
+        $this->sessionStore->immediateTransaction(function (): void {
+            $dupes = $this->pdo->query('
+                SELECT DISTINCT session_id FROM (
+                    SELECT session_id FROM checkpoints GROUP BY session_id, "index" HAVING COUNT(*) > 1
+                )
+            ')->fetchAll(PDO::FETCH_COLUMN);
+
+            $rows = $this->pdo->prepare('
+                SELECT id, "index" FROM checkpoints WHERE session_id = ? ORDER BY "index" ASC, id ASC
+            ');
+            $renumber = $this->pdo->prepare('UPDATE checkpoints SET "index" = ? WHERE id = ?');
+            foreach ($dupes as $sessionId) {
+                $rows->execute([(string) $sessionId]);
+                $prev = null;
+                foreach ($rows->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $index = $prev === null ? (int) $row['index'] : max((int) $row['index'], $prev + 1);
+                    if ($index !== (int) $row['index']) {
+                        $renumber->execute([$index, (int) $row['id']]);
+                    }
+                    $prev = $index;
+                }
+            }
+
+            $this->pdo->exec('
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_checkpoints_session_index_unique
+                ON checkpoints(session_id, "index")
+            ');
+            $this->pdo->exec('DROP INDEX IF EXISTS idx_checkpoints_session_index');
+        });
+    }
+
+    /**
      * Get enhanced metadata for a session.
      */
     public function getSessionMeta(string $sessionId): ?SessionMeta
@@ -229,12 +429,21 @@ final class EnhancedSessionStore
             tasks: json_decode($row['tasks'], true) ?: [],
             modifiedFiles: json_decode($row['modified_files'], true) ?: [],
             agentStates: json_decode($row['agent_states'], true) ?: [],
-            lastActivity: new \DateTimeImmutable($row['last_activity']),
+            // Stored as UTC (see saveSessionMeta()); read back as UTC and
+            // shown in the process's zone, so the instant survives the trip.
+            lastActivity: (new \DateTimeImmutable((string) $row['last_activity'], new \DateTimeZone('UTC')))
+                ->setTimezone(new \DateTimeZone(date_default_timezone_get())),
         );
     }
 
     /**
      * Save enhanced metadata for a session.
+     *
+     * `last_activity` is written in UTC whatever zone the caller's DateTime
+     * carries. It used to be formatted in that zone, while the column's
+     * DEFAULT and every other timestamp in the database is UTC, so
+     * {@see listSessionsWithMeta()}'s `COALESCE(last_activity, updated_at)`
+     * ordered rows from two clocks an offset apart (audit SES-5).
      */
     public function saveSessionMeta(SessionMeta $meta): void
     {
@@ -249,7 +458,7 @@ final class EnhancedSessionStore
             json_encode($meta->tasks),
             json_encode($meta->modifiedFiles),
             json_encode($meta->agentStates),
-            $meta->lastActivity->format('Y-m-d H:i:s'),
+            $meta->lastActivity->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
         ]);
     }
 
@@ -468,6 +677,20 @@ final class EnhancedSessionStore
      */
     public function saveCheckpoint(string $sessionId, array $chatState): int
     {
+        // Allocation, insert and prune in one IMMEDIATE transaction: the
+        // write lock is held from the MAX() read to the INSERT, so a second
+        // writer cannot take the same index (audit SES-3), and the blob
+        // interning inside costs one commit, not one per message (15b-21).
+        return $this->writeTransaction(fn (): int => $this->insertCheckpoint($sessionId, $chatState));
+    }
+
+    /**
+     * @param array<string, mixed> $chatState
+     *
+     * @throws \JsonException
+     */
+    private function insertCheckpoint(string $sessionId, array $chatState): int
+    {
         // Get the next index for this session
         $stmt = $this->pdo->prepare('
             SELECT COALESCE(MAX("index"), -1) + 1 FROM checkpoints WHERE session_id = ?
@@ -492,7 +715,9 @@ final class EnhancedSessionStore
             $sessionId,
             $nextIndex,
             $this->encodeCheckpoint($sessionId, $chatState),
-            (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+            // UTC like every other timestamp in the database; this was the
+            // process's local time (audit SES-5).
+            gmdate('Y-m-d H:i:s'),
         ]);
 
         // Enforce the 100 checkpoint limit: delete oldest checkpoints if over limit
@@ -746,8 +971,8 @@ final class EnhancedSessionStore
      *
      * The cache maps a body hash to a `checkpoint_blobs.id`, and those ids are
      * only stable while nothing deletes blobs. `collectCheckpointBlobs()`
-     * clears the map on the instance that ran the GC, but two sugar-crush
-     * terminals resume the SAME session — `Bootstrap::seedSession()` takes
+     * drops the ids it deleted from the map on the instance that ran the GC,
+     * but two sugar-crush terminals resume the SAME session — `Bootstrap::seedSession()` takes
      * `listSessions(1)[0]`, the globally most recent row — so a `/rewind` in
      * one process silently invalidated the other's cache. That process then
      * wrote envelopes naming deleted ids, and `decodeCheckpoint()` (correctly)
@@ -769,11 +994,13 @@ final class EnhancedSessionStore
      * and a second live terminal pays one batched `lookupBlobIds()` per turn,
      * the same order as the envelope that turn writes anyway.
      *
-     * A blob deleted between this check and the INSERT below is still
-     * possible in principle; SQLite serialises the two writers, so the loser
-     * re-interns on its next turn instead of staying wrong forever, and a
-     * checkpoint that cannot be read is refused rather than silently
-     * truncated.
+     * Every caller now runs inside the save's `BEGIN IMMEDIATE`
+     * ({@see writeTransaction()}), so this check and the INSERTs after it
+     * happen under one write lock: another connection's GC can no longer
+     * delete a blob between the check and the envelope that names it (the
+     * interning race folded into audit SES-3). Should that invariant ever be
+     * broken, a checkpoint that cannot be read is still refused rather than
+     * silently truncated.
      */
     private function forgetInternedBlobsIfStale(): void
     {
@@ -871,21 +1098,30 @@ final class EnhancedSessionStore
      */
     public function saveTranscript(string $sessionId, array $messages): void
     {
-        if ($this->sessionStore->getSession($sessionId) === null) {
-            $this->sessionStore->createSession($sessionId, 'sugarcrush', 'unknown');
-        }
+        // One transaction for the whole save. Without it every blob INSERT
+        // internMessages() issued autocommitted — one WAL commit and fsync
+        // per new message — and a first save of a long history (a resumed
+        // legacy session, or the first save under a /branch id) froze the
+        // TUI for seconds inside update(): 5.5 s for 800 messages (audit
+        // 15b-21). It also makes the save atomic: a failure part-way leaves
+        // the previous transcript and no stray blobs.
+        $this->writeTransaction(function () use ($sessionId, $messages): void {
+            if ($this->sessionStore->getSession($sessionId) === null) {
+                $this->sessionStore->createSession($sessionId, 'sugarcrush', 'unknown');
+            }
 
-        $stmt = $this->pdo->prepare('
-            INSERT OR REPLACE INTO session_transcripts (session_id, state_data, updated_at)
-            VALUES (?, ?, ?)
-        ');
-        $stmt->execute([
-            $sessionId,
-            $this->encodeCheckpoint($sessionId, ['messages' => array_values($messages)]),
-            gmdate('Y-m-d H:i:s'),
-        ]);
+            $stmt = $this->pdo->prepare('
+                INSERT OR REPLACE INTO session_transcripts (session_id, state_data, updated_at)
+                VALUES (?, ?, ?)
+            ');
+            $stmt->execute([
+                $sessionId,
+                $this->encodeCheckpoint($sessionId, ['messages' => array_values($messages)]),
+                gmdate('Y-m-d H:i:s'),
+            ]);
 
-        $this->sessionStore->updateSession($sessionId);
+            $this->sessionStore->updateSession($sessionId);
+        });
     }
 
     /**
@@ -1045,27 +1281,27 @@ final class EnhancedSessionStore
      */
     public function restoreCheckpoint(string $sessionId, int $index): ?array
     {
-        // First verify the checkpoint exists
-        $state = $this->getCheckpoint($sessionId, $index);
-        if ($state === null) {
-            return null;
-        }
+        // Read, delete and collect under one write lock, so another writer
+        // cannot add a checkpoint between the read and the delete.
+        return $this->writeTransaction(function () use ($sessionId, $index): ?array {
+            // First verify the checkpoint exists
+            $state = $this->getCheckpoint($sessionId, $index);
+            if ($state === null) {
+                return null;
+            }
 
-        // Delete all checkpoints with index >= the restored index (they are now invalid)
-        $deleteStmt = $this->pdo->prepare('
-            DELETE FROM checkpoints WHERE session_id = ? AND "index" >= ?
-        ');
-        $deleteStmt->execute([$sessionId, $index]);
+            // Delete all checkpoints with index >= the restored index (they are now invalid)
+            $deleteStmt = $this->pdo->prepare('
+                DELETE FROM checkpoints WHERE session_id = ? AND "index" >= ?
+            ');
+            $deleteStmt->execute([$sessionId, $index]);
 
-        // A rewind is the one moment a user explicitly discards state, so it
-        // is also where the messages that state referenced stop being worth
-        // keeping. Deliberately NOT done from pruneOldCheckpoints(): that runs
-        // on the turn path once a session passes the retention limit, and
-        // blob storage is O(total distinct messages) with or without it, so
-        // paying a scan every turn would buy nothing.
-        $this->collectCheckpointBlobs($sessionId);
+            // A rewind explicitly discards state, so the messages only that
+            // state referenced stop being worth keeping.
+            $this->collectCheckpointBlobs($sessionId);
 
-        return $state;
+            return $state;
+        });
     }
 
     /**
@@ -1107,9 +1343,19 @@ final class EnhancedSessionStore
                 ->execute([$sessionId]);
         }
 
-        // Ids this instance had interned may have just been deleted. Other
-        // instances see it through forgetInternedBlobsIfStale().
-        $this->forgetInternedBlobs($sessionId);
+        // Ids this instance had interned may have just been deleted, so drop
+        // exactly those from the cache and keep the rest. Forgetting the
+        // whole session instead would make the next save re-look-up every
+        // hash in the history, and since pruneOldCheckpoints() now collects
+        // on every turn past the retention limit, that cold lookup would
+        // become the steady state. Other instances see the delete through
+        // forgetInternedBlobsIfStale().
+        if (isset($this->blobIds[$sessionId])) {
+            $this->blobIds[$sessionId] = array_filter(
+                $this->blobIds[$sessionId],
+                static fn (int $id): bool => isset($live[$id]),
+            );
+        }
     }
 
     /**
@@ -1138,5 +1384,17 @@ final class EnhancedSessionStore
             )
         ');
         $deleteStmt->execute([$sessionId, $sessionId, $deleteCount]);
+
+        // The pruned checkpoints may have been the last reference to some
+        // blobs. This used to be left to /rewind alone, on the theory that
+        // blob storage is O(distinct messages) either way — but history is
+        // not append-only: /compact replaces it wholesale and a tool
+        // placeholder is replaced in place, so the bodies that fall out of
+        // history are referenced only by checkpoints this prune deletes. A
+        // session that never rewound kept them forever: 29 orphans out of 150
+        // blobs in the audit's repro, each up to a 1 MiB tool result (audit
+        // SES-4). The scan reads this session's ≤ MAX_CHECKPOINTS_PER_SESSION
+        // envelopes plus its transcript, inside the save's transaction.
+        $this->collectCheckpointBlobs($sessionId);
     }
 }

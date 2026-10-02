@@ -187,11 +187,25 @@ final class SessionStore
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 
+    /**
+     * The session carrying $name, or null.
+     *
+     * Names are not unique in the schema, and databases written before
+     * {@see forkSession()} stopped copying the parent's name verbatim already
+     * hold duplicates (audit SES-2). Without an ORDER BY SQLite returned
+     * whichever row its plan met first — in practice the PARENT — so
+     * `--resume my-work` reopened the conversation the user had branched away
+     * from. The most recently used row is the one a user typing the name
+     * means; rowid breaks the one-second `updated_at` tie deterministically.
+     */
     public function getSessionByName(string $name): ?array
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM sessions WHERE name = ?');
+        $stmt = $this->pdo->prepare('SELECT * FROM sessions WHERE name = ? ORDER BY updated_at DESC, rowid DESC LIMIT 1');
         $stmt->execute([$name]);
-        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $stmt->closeCursor();
+
+        return $row ?: null;
     }
 
     public function renameSession(string $id, string $name): void
@@ -203,11 +217,26 @@ final class SessionStore
 
     /**
      * Fork a session by copying it with a new ID.
-     * The new session gets a fresh timestamp but preserves all other data.
+     *
+     * The new session gets fresh timestamps and keeps provider, model and
+     * system prompt. It does NOT keep the parent's name verbatim: two rows
+     * sharing a name made `--resume <name>` ambiguous, and since named
+     * sessions are exempt from {@see pruneSessions()} the duplicate could
+     * never age out either (audit SES-2). A named parent yields
+     * "<name> (branch)", then "<name> (branch 2)", … — see {@see branchName()}.
+     *
+     * This copies only this class's tables. The conversation itself lives in
+     * {@see EnhancedSessionStore}'s transcript/checkpoint tables, which that
+     * class's forkSession() copies inside the same transaction as this call.
      *
      * @return string The new session ID
      */
     public function forkSession(string $id): string
+    {
+        return $this->immediateTransaction(fn (): string => $this->forkSessionRows($id));
+    }
+
+    private function forkSessionRows(string $id): string
     {
         $session = $this->getSession($id);
         if ($session === null) {
@@ -226,7 +255,7 @@ final class SessionStore
             $session['provider'],
             $session['model'],
             $session['system_prompt'],
-            $session['name'],
+            $this->branchName($session['name'] === null ? null : (string) $session['name']),
         ]);
         $this->sessionWriteSeq++;
 
@@ -276,6 +305,77 @@ final class SessionStore
         }
 
         return $newId;
+    }
+
+    /**
+     * The name a fork of a session called $name gets: null for an unnamed
+     * parent, otherwise the first free "<base> (branch)", "<base> (branch 2)",
+     * … where <base> is $name with any branch suffix stripped, so branching a
+     * branch reads "my-work (branch 2)" rather than nesting suffixes.
+     */
+    private function branchName(?string $name): ?string
+    {
+        if ($name === null || $name === '') {
+            return null;
+        }
+
+        $base = preg_replace('/ \(branch(?: \d+)?\)$/', '', $name) ?? $name;
+        $taken = $this->pdo->prepare('SELECT 1 FROM sessions WHERE name = ? LIMIT 1');
+        for ($n = 1; ; $n++) {
+            $candidate = $n === 1 ? "{$base} (branch)" : "{$base} (branch {$n})";
+            $taken->execute([$candidate]);
+            $exists = $taken->fetchColumn() !== false;
+            $taken->closeCursor();
+            if (!$exists) {
+                return $candidate;
+            }
+        }
+    }
+
+    /**
+     * Run $work inside one `BEGIN IMMEDIATE` transaction on this connection,
+     * or directly when one is already open (the outer caller owns it).
+     *
+     * IMMEDIATE rather than PDO's deferred `BEGIN`: every caller reads and
+     * then writes (allocate a checkpoint index, then insert it; look a blob
+     * up, then insert it). A deferred transaction takes the write lock only at
+     * the first write, so two processes could both read the same
+     * `MAX("index")` before either wrote it (audit SES-3), and the loser of a
+     * read→write upgrade gets SQLITE_BUSY without the busy handler being
+     * consulted. IMMEDIATE takes the write lock up front and waits on the
+     * connection's busy timeout instead.
+     *
+     * It is also what makes a save cost one commit — one WAL fsync — instead
+     * of one per autocommitted INSERT (audit 15b-21).
+     *
+     * @internal shared with {@see EnhancedSessionStore}, which writes its own
+     *           tables through {@see getPdo()} and needs the same transaction
+     *           to span a {@see forkSession()} call.
+     *
+     * @template T
+     * @param \Closure(): T $work
+     * @return T
+     */
+    public function immediateTransaction(\Closure $work): mixed
+    {
+        if ($this->pdo->inTransaction()) {
+            return $work();
+        }
+
+        $this->pdo->exec('BEGIN IMMEDIATE');
+        try {
+            $result = $work();
+            $this->pdo->exec('COMMIT');
+        } catch (\Throwable $e) {
+            // A failed COMMIT can leave SQLite having already rolled back on
+            // its own; guard so the original error is the one that surfaces.
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->exec('ROLLBACK');
+            }
+            throw $e;
+        }
+
+        return $result;
     }
 
     public function updateSession(string $id): void
@@ -395,8 +495,11 @@ final class SessionStore
      */
     public function getMessages(string $sessionId): array
     {
+        // `created_at` has one-second resolution, so messages added in the
+        // same second — every row a forkSession() copies — tie on it; the
+        // AUTOINCREMENT id is insertion order and breaks the tie (audit SES-6).
         $stmt = $this->pdo->prepare('
-            SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC
+            SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC, id ASC
         ');
         $stmt->execute([$sessionId]);
         $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);

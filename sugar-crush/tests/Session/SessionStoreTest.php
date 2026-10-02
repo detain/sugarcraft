@@ -687,7 +687,9 @@ final class SessionStoreTest extends TestCase
         $this->assertSame('provider', $forked['provider']);
         $this->assertSame('model', $forked['model']);
         $this->assertSame('system prompt', $forked['system_prompt']);
-        $this->assertSame('Original Name', $forked['name']);
+        // Not the parent's name verbatim: a duplicate made `--resume <name>`
+        // ambiguous (audit SES-2).
+        $this->assertSame('Original Name (branch)', $forked['name']);
     }
 
     public function testForkSessionCopiesMessages(): void
