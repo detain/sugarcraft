@@ -33,19 +33,7 @@ This report is final. What was read, what was only skimmed, and how each open le
 
 ## B. Memory store
 
-### 15d-05 — `project` scope in the home store is global, so "project" notes leak into every other project's system prompt
-- **Severity:** Medium · **Confidence:** Verified by repro (`r10.php`)
-- **Where:** `src/Context/MemoryBlock.php:213-229` (reads `$store->list(MemoryScope::Project)` from the home store with no project key); `src/Cli/Bootstrap.php:7863-7868` (`memoryStore()` = `~/.sugar-crush/memory`, one directory for all projects); `src/Chat.php:12534-12537` (falls back to the home store)
-- **Code:**
-  ```php
-  foreach ([...($projectStore?->list(MemoryScope::Project) ?? []), ...$store->list(MemoryScope::Project)] as $entry) {
-  // Chat: ProjectMemoryWriter::createForRoot($root)?->write($content) ?? $this->memoryStore->add($content, $scope)
-  ```
-- **Failure scenario:** `/memory add --scope project "projA: deploy with kubectl apply -f prod/…"` runs while the repo cannot host `.sugar-crush/memory` (read-only checkout, `.sugar-crush` symlinked out, or root `''`). It also applies to any note written before E25. The note lands in `~/.sugar-crush/memory/project/`, and from then on it is rendered into the `<project-memory>` block of **every** repository, under a header that says "Notes recorded for this project". `r10.php` shows a note written "in projA" rendered for an unrelated `projB`. The `/memory add` reply says only "scope: project", not that the note went to the global store.
-
-  Known item #14 covers which scopes are injected. It does not cover the fact that the injected scope is not project-keyed.
-- **Fix:** Key home-store project entries by canonical root, either with a `<hash(realpath root)>` sub-directory or a `root:` frontmatter field that `capture()` filters on. Say so in the `/memory add` reply when the fallback happens, and migrate unkeyed legacy entries into a quarantine scope.
-- **Test:** `MemoryPromptWiringTest::testAHomeStoreProjectNoteFromAnotherRootDoesNotReachThisPrompt`.
+Its only open finding, 15d-05, was fixed in wave 8B; see **Fixed since audit**.
 
 ---
 
@@ -57,17 +45,7 @@ Its only open finding, 15d-25, was fixed in wave 8A; see **Fixed since audit**.
 
 ## D. Environment block (git)
 
-### 15d-13 — Launching from a repository subdirectory reports "Is directory a git repo: No" and drops all git state
-- **Severity:** Medium-Low · **Confidence:** Verified by repro (`gitrepo/sub`)
-- **Where:** `src/Context/EnvironmentBlock.php:929-932`; root = `getcwd()` (`Bootstrap.php:2374`)
-- **Code:**
-  ```php
-  return file_exists($this->cwd . '/.git');
-  ```
-- **Failure scenario:** Running `cd repo/src && sugarcrush` renders `Is directory a git repo: No` with no branch, status or diff, although `git rev-parse --show-toplevel` succeeds. `InstructionFileLoader::ancestorRoot()` explicitly supports subdirectory launch, so the two layers contradict each other in the same prompt. Project settings, skills, rules and memory are also looked up at the subdirectory (`<cwd>/.sugar-crush`), so the trusted repo's `.sugar-crush/settings.json` is silently ignored there. (That last part is Verified by reading.)
-- **Fix:** Resolve `git rev-parse --show-toplevel` once (with a timeout), use it for `isGitRepo()`, and report "Working directory: …/src (repo root: …)". Decide and document whether `.sugar-crush/*` lookups walk up to the repo root.
-- **Test:** `EnvironmentBlockTest::testASubdirectoryOfARepoIsReportedAsInsideTheRepo`.
-- **Partly fixed on master in `119bc86d2`** (part (a), git state). When `<cwd>/.git` is absent, the block runs a bounded `git rev-parse --show-toplevel` (memoised per block and copied by the wither) and renders `Working directory: <cwd> (repo root: <root>)` with the full git section; the root is escaped and capped, and a timeout renders `unavailable (…)`. A launch at the repo root sends the same bytes and makes the same number of calls as before. **Remaining:** (b) `.sugar-crush/*` lookups (project settings, skills, rules, memory) still resolve at the subdirectory, not the repo root; whether they walk up is a deferred decision (wave plan §3 #14).
+Its only open finding, 15d-13, was fixed in waves 1 and 8B; see **Fixed since audit**.
 
 ---
 
@@ -85,12 +63,7 @@ Its only entry, 15d-17, was fixed in wave 3; see **Fixed since audit**.
 
 ## G. Findings from the resumed pass
 
-### 15d-24 — A trusted project can choose the model for every title, prompt suggestion and compaction on the operator's credential; an unpriced choice bills as $0 against the spend cap
-- **Severity:** Low (needs `trustedProjectSettings`) · **Confidence:** Verified by reading (key reachability); the $0 accounting is the documented unpriced-model behaviour
-- **Where:** `src/Config/LayeredSettings.php:584-592` (`titleModel`, `summaryModel` in `PROJECT_TIER_KEYS`); `src/Cli/Bootstrap.php:7773-7796` (`toollessBackend()` reads `readUserConfig()[$modelConfigKey]`, which is project-merged); `src/Providers/OpenAIProvider.php:56-62`, `:521-535` (price table; unknown model → `null` → $0 lower bound)
-- **Failure scenario:** A trusted repository's `.sugar-crush/settings.json` sets `{"titleModel": "o1-pro", "summaryModel": "o1-pro"}` (or any current model missing from the 7-entry price table). Every turn's prompt suggestion (one call on the title backend per turn, `docs/ENVIRONMENT.md:47`), every session title and every `/compact` summary now runs on that model with the operator's key. Each is billed $0.00 as an "under-counted" lower bound, so `SUGARCRUSH_MAX_COST` never trips on them. `LayeredSettings` (`:324-325`) justifies the project tier for these keys with "cost is bounded by that choice [of provider]", but within one OpenAI provider the spread is more than 100×. The same file (`:226`) refuses `modelPrices` to projects precisely because a project "could zero a rate and silently blind the spend cap"; an unpriced model choice reaches the same result.
-- **Fix:** Make `titleModel`/`summaryModel` user-tier only (remove them from `PROJECT_TIER_KEYS` and update the SETTINGS.md table, which `TrustKeyDocumentationDriftTest` pins). Alternatively, accept a project value only when the provider has a price for it, and never above the main model's rate.
-- **Test:** `LayeredSettingsTest::testAProjectCannotChooseTheTitleOrSummaryModel` (or the priced-and-not-dearer variant).
+Its only open finding, 15d-24, was fixed in wave 8B; see **Fixed since audit**.
 
 ---
 
@@ -99,9 +72,6 @@ Its only entry, 15d-17, was fixed in wave 3; see **Fixed since audit**.
 | ID | Sev | Conf | Title | Location |
 |---|---|---|---|---|
 | 15d-03 | Medium | Repro | Project `.sugar-crush/skills` shadows the user's own skills and built-ins silently; contradicts SKILLS.md. Partly fixed (`9105feb48`: every shadowing reported in `skipped()`; `9e69d6c9e`: built-in < project < user, decided by tier first; foreign-convention shadowing reported); remaining: skip-notice wording | `Bootstrap.php:304-305` |
-| 15d-05 | Medium | Repro | Home-store `project` notes are global → injected into every repo's prompt | `MemoryBlock.php:213-229`, `Chat.php:12534` |
-| 15d-13 | Med-Low | Repro | Subdirectory launch: "not a git repo", git state dropped; `.sugar-crush/*` not found. Partly fixed (`119bc86d2`: `rev-parse --show-toplevel`, "repo root:" line, git section); remaining: (b) `.sugar-crush/*` walk-up (deferred decision) | `EnvironmentBlock.php:929-932` |
-| 15d-24 | Low | Reading | Trusted project picks `titleModel`/`summaryModel` on the operator's key; unpriced → $0 → spend cap blind | `LayeredSettings.php:584-592`, `Bootstrap.php:7773-7796` |
 
 ---
 
@@ -197,3 +167,6 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **15d-25** MEMORY.md and PROMPT_ENGINEERING.md did not describe PromptFence's chat-template-token defang — fixed on master in `e4f278ca5` (both pages describe the `<|` / `<｜` defang and the attribute-bearing and unterminated tag match, with worked examples; the new `MemoryDocumentationDriftTest` replays each page's examples through the live `PromptFence`, requires every `CONTROL_TOKEN_PIPES` glyph to be named, and pins the new ENVIRONMENT.md "Claude Code variables" table against the importer's `*_ENV` constants).
 - **15d-26** `CHANGELOG.md` still listed the four moved skills as built-ins — fixed on master in `9e69d6c9e` (a new subsection, "Skills — precedence, bounded reads, the moved monorepo skills (2026-10)", corrects the record; the historical entry is unchanged).
 - **15d-27** `SkillLoader` read skill files with no size limit — fixed on master in `9e69d6c9e` (the new `Skills/SkillFileReader` handles every skill read — `Skill::fromFile`, the manifest head, the body and assets: it stats first and refuses files over 1 MiB, reads at most the ceiling plus one byte, and the manifest stage reads only the first 64 KiB and refuses frontmatter that does not close inside it; a refused skill is not listed and is recorded in `skipped()`; a 50 MB sparse `SKILL.md` loads with a peak memory rise under 8 MB).
+- **15d-05** Home-store `project` notes were global, so they reached every repository's prompt — fixed on master in `0484a28c3` (`MemoryStore::forProject()` and `projectKeyFor()` keep the home store's `project` scope at `project/<slug>-<sha256[0:16] of the canonical root>/`, and list, search, get, the index, the skip map and the unreadable scan see only that directory; `Bootstrap::memoryStore($root)` builds the keyed store from the `ProjectRoot` answer, so Chat's `memoryStore->add()` fallback is keyed without a Chat edit; unkeyed legacy notes are moved, never overwriting, into the first keyed store that touches the scope, and a `.bound-legacy` record makes the next interactive launch show `MEMORY_LEGACY_BOUND_NOTICE_FORMAT` once). Residual (Chat edits, w9-chat-cmds): the `/memory add` reply still does not say when a note falls back to the home store, and the `/memory import` sentinel (`Chat.php` ~14368) is still written under the cwd rather than `ProjectRoot::resolve()`.
+- **15d-13** A subdirectory launch reported "Is directory a git repo: No", dropped the git state and missed `.sugar-crush/*` — part (a) fixed in `119bc86d2` (a bounded `git rev-parse --show-toplevel`, the "repo root:" line and the full git section) and part (b) in `f2c1f0445` (wave 8B: the new `Support\ProjectRoot` resolves the root for `.sugar-crush/*` and `.mcp.json` lookups — the launch directory when it holds `.sugar-crush/`, `.mcp.json` or `.git`; otherwise, inside a work tree, the nearest directory up to the work-tree root holding `.sugar-crush/` or `.mcp.json`, else the work-tree root; outside a work tree, or for a work tree at or above `$HOME`, the launch directory — and it is wired into the settings layer and its trust, command-shell trust, workflows, agent presets, `hooks.yaml`, the `.mcp.json` decision, CommandLoader, SkillLoader, SkillDiscovery, RuleLoader and ProjectMemoryWriter; tools, hooks and spawned sessions still run in the launch directory, and `docs/SETTINGS.md` documents the rule). Not walked up, because they are not `.sugar-crush/*`: foreign `.claude` and `.opencode` skills and agents, InstructionFileLoader (it already walks) and `WorktreeConfig`. Behaviour change: trust entries must name the repository root.
+- **15d-24** A trusted project could choose the title and summary model on the operator's credential — fixed on master in `7ec5a7a58` (`titleModel` and `summaryModel` left `PROJECT_TIER_KEYS`; the LayeredSettings docblocks retract the "cost is bounded by that choice" argument and say why; the SETTINGS.md tier column and the README refusal list name them).

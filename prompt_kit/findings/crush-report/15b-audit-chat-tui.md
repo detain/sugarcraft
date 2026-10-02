@@ -15,42 +15,6 @@ Confidence labels:
 
 ## A. Turn state machine and queue
 
-### 15b-03 — UI-only rows go to the model: command output, mid-turn notices, background and runtime notices
-- **Severity:** Medium-High · **Confidence:** Verified-by-repro (`r1_wire.php`)
-- This is new evidence for known #22, which names only `/websearch`, and for #2: SGLang hoists System rows into message 0.
-- **Where:**
-  - `EngineBackend::toTypedMessages()` at `src/Backend/EngineBackend.php:2071-2083` maps **every** history row to a wire message. There is no ui-only filter.
-  - Producers:
-    - The `*Response()` helpers at `src/Chat.php:9489, 10354, 12011, 12051, 12464, 16005`, and others, each push `Message::user($inputText), Message::assistant($response)`.
-    - `/help` pushes an assistant row.
-    - `enqueuePrompt()` at `:7533` and `refuseInFlightCommand()`.
-    - `pumpBackgroundSessions()` and `pumpRuntimeNotices()` at `:14609`. These carry git stderr and model-authored tool names from `MinimaxXmlFallbackToolCallParser` warnings.
-    - `handlePaletteNewSession()` at `:14182` seeds a new session with an assistant message.
-    - The backend error path at `:9402`, `Message::assistant('_[error: …]_')`, becomes the assistant's own words.
-- **Repro:** This sequence: `/help`, `/permissions`, prompt 1, mid-turn `/budget` (refused), mid-turn prompt 2 (queued). The wire for prompt 2 is:
-  ```
-  0 assistant "Slash commands (25): …"            ← /help output, as if the model said it
-  1 user      "/permissions"
-  2 assistant "No permission gate is attached …"
-  3 user      "first question"
-  4 system    "/budget is a command, and commands do not run while a turn is in flight …"
-  5 system    "Queued (1 waiting) — sent as soon as this turn finishes: second question"
-  6 assistant "answer one"
-  7 user      "second question"
-  ```
-  Mid-turn notices are also written **between** a user turn and its answer (rows 4-5).
-- **Impact:**
-  - Wastes tokens.
-  - On SGLang, every notice is hoisted into the system prompt, so the cache prefix breaks on every notice.
-  - The model is told it said things it did not say, such as error strings and `/help` text.
-  - A transcript can start with an assistant row, which strict providers reject.
-  - The session titler's `$userTurns !== 1` check (`:9020-9026`) counts command echoes, so a session whose first input was `/permissions` is never titled.
-- **Fix:** Add a `uiOnly` / `agentVisible=false` flag on `Message` (synthesis 1.B) and set it on every notice and command-echo producer above. Filter in `toTypedMessages()` and in the titler and suggestion prompts. Keep notices ordered after the settled answer, or render them in a separate notice stream.
-- **Test:** Drive `/help` → prompt through a recording backend. Assert that the backend history contains only the user prompt.
-- **Partly fixed on master in `2a3a8f91c`.** New `Message::$uiOnly` (with `withUiOnly()`, `Message::notice()` and `Message::agentVisible()`) round-trips through `jsonSerialize()`/`fromArray()` and survives every wither, checkpoint revival and the compaction rebuild, and is never put on the wire. Every command echo and output, `/help`, the queued, refusal and hook-blocked notices, launch, runtime and background notices, palette rows, status notices and backend error strings are flagged. The filter runs at Chat's turn dispatch, in the titler (which now counts agent-visible user turns), the suggester, `EngineBackend::toTypedMessages()` and `CommandBackend::encodeHistory()` (shared by `StreamingCommandBackend`); the token estimate skips UI-only rows. Left visible on purpose: `/websearch` results (known #22), hook `additionalContext`, the 70% reminder, and the permission-refusal note (the model's only record of the refusal). **Remaining:**
-  - the compaction summary's input is not filtered, because filtering only one side breaks the exchange-key alignment;
-  - notice order is unchanged: notices still render, interleaved, between a prompt and its answer in the transcript (they are off the wire).
-
 ### 15b-34 — Ctrl+A still runs `/agents` by typing it into the input box: an idle draft is wiped, and the mid-turn refusal says the draft is still in the box
 - **Severity:** Low · **Confidence:** Verified-by-reading (found while fixing 15b-05 in wave 6)
 - **Where:** `src/Chat.php:2491-2492`: the Ctrl+A arm is `$this->withInputBuf('/agents')->submit()`. Mid-turn it is routed (`:8742`) to `refuseInFlightCommand()` (`:8541`), whose notice ends "Your draft is still in the box: press Enter again once the turn finishes".
@@ -102,9 +66,7 @@ Confidence labels:
 - **Effect:** CJK text runs at roughly 1-1.5 tokens per character. Even fully calibrated, the 70/85/95% tiers fire far too late for CJK users, which leads to provider overflow errors. This is separate from known #21, which concerns the system prompt and tool schemas.
 - **Fix:** Count bytes/3, or weight by script (wide characters ≈1 token). A tokenizer-backed estimate would be better.
 - **Test:** 10k CJK characters must estimate to at least 8k.
-- **Partly fixed on master in `8341a37c1`** (Chat side). New `src/Util/TokenEstimate.php` is a script-weighted proxy: ASCII and Latin ¼ token (the old figure), other alphabets ½, CJK, kana, Hangul and symbols 1, astral and emoji 2, and bytes/3 for invalid UTF-8; 10k CJK characters now estimate 10,010 (was 2,510). Chat's 85% and 95% tiers and the status bar use it. **Remaining:**
-  - `src/Context/ContextCompactor.php:1194` still counts `mb_strlen / 4`, so the 70% reminder still fires late for CJK;
-  - stale "chars/4" comments remain in `Renderer.php` (`:2169`, `:2356`), `Usage.php` (`:17`, `:335`), `Backend/ReportsContextWindow.php:52` and `Util/TokenTracker.php:47`.
+- **Partly fixed on master in `8341a37c1`** (Chat side). New `src/Util/TokenEstimate.php` is a script-weighted proxy: ASCII and Latin ¼ token (the old figure), other alphabets ½, CJK, kana, Hangul and symbols 1, astral and emoji 2, and bytes/3 for invalid UTF-8; 10k CJK characters now estimate 10,010 (was 2,510). Chat's 85% and 95% tiers and the status bar use it. The compactor half is fixed since in `eb8d3b2a5` (wave 8B): `ContextCompactor::countTokens()` uses `TokenEstimate::ofText()` plus 10 per message (ASCII figures are unchanged), so the 70% reminder fires on time for CJK; the intra-exchange rescue's share is held in tokens with the character budget as the hard cap; and the stale chars/4 comments in `Renderer.php`, `ReportsContextWindow.php`, `TokenTracker.php`, `TokenEstimate.php` and about 12 Chat docblocks are corrected. **Remaining:** the chars/4 comments in `src/Usage.php` (`:17`, `:335`) (w9-diag-usage).
 
 ### 15b-14 — sugar-crush has no i18n: every user-facing string is hard-coded
 - **Severity:** Low (convention gap) · **Confidence:** Verified-by-reading
@@ -147,8 +109,6 @@ Both findings here (15b-20, 15b-21) were fixed in wave 4; see **Fixed since audi
 
 | ID | Sev | Conf | Title |
 |---|---|---|---|
-| 15b-03 | Med-High | Repro | Command output, mid-turn notices and background/runtime notices go to the model as real turns. Partly fixed (`2a3a8f91c`: `Message::$uiOnly`, filtered at every wire encoder); remaining: compaction input unfiltered, notices still interleave between a prompt and its answer |
-| 15b-13 | Low-Med | Reading | Token proxy chars/4 underestimates CJK 3-6×. Partly fixed (`8341a37c1`: script-weighted `TokenEstimate` for Chat's estimate, 85/95% tiers, status bar); remaining: `ContextCompactor` still chars/4 (70% reminder late for CJK), stale comments |
 | 15b-34 | Low | Reading | Ctrl+A still types `/agents` into the box: an idle draft is wiped; the mid-turn refusal says the draft is still in the box (residual of 15b-05) |
 | 15b-14 | Low | Reading | No i18n in sugar-crush |
 | 15b-15 | Low | Reading | Attachments dormant and dropped on the wire |
@@ -158,6 +118,7 @@ Both findings here (15b-20, 15b-21) were fixed in wave 4; see **Fixed since audi
 | 15b-31 | Low | Repro | candy-shine `SectionScanner::finish()` drops the closed section before a trailing heading; no boundary after a closing fence (residual of 15b-10) |
 | 15b-32 | Info | Reading | Stale comments: launch notices "re-sent every turn" (Bootstrap, SessionStore); DetectsCapabilities cites Doctor's removed `??=` probe; candy-core Sanitize/View and ChatPane still describe the one-codepoint image marker (since wave 7) |
 | 15b-33 | Info | Reading | `/fork` docblock (`Chat.php:13269`) still names `SessionStore::forkSession()` as the transcript copy (stale since SES-2) |
+| 15b-13 | Info (was Low-Med) | Reading | Token proxy chars/4 underestimated CJK 3-6×. Partly fixed (`8341a37c1`: script-weighted `TokenEstimate` for Chat's estimate, 85/95% tiers, status bar; `eb8d3b2a5`: the compactor counts the same way, stale comments corrected); remaining: the `Usage.php` chars/4 comments |
 
 **Checked and dropped:**
 - **Documented and intentional:** `/HELP`, `/clear all`, `/exit now` and unknown `/foo` fall through to the model (`docs/COMMANDS.md` "Two guards…"). The held queue after Esc Esc goes out after the next prompt (`InFlightInputQueueTest::testAQueueHeldThroughACancelGoesOutOnTheNextSettle`).
@@ -260,3 +221,4 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **15b-28** Bidi overrides and zero-width characters passed every sanitizer — fixed on master in `531a0941f` + `dd4e4aa05` + `e3f6756ac` (new public `Sanitize::markInvisibleFormatting()` marks U+202A–202E, U+2066–2069, U+200B, U+2060 and U+FEFF always, and ZWNJ, ZWJ, LRM, RLM and ALM only at the start, after ASCII or after another such mark, so emoji ZWJ sequences, Persian and Indic ZWNJ and RTL marks still work; `untrustedForDisplay()` applies it and `visibleControls()` marks all of them; candy-shine `stripControls()` applies it too, covering assistant markdown and code blocks). `untrusted()` and `untrustedForMarkedFrames()` are unchanged for paste fidelity. Behaviour change: display policies now emit `<U+XXXX>` markers for these codepoints, a leading BOM included.
 - **15b-29** candy-shine `stripControls()` kept lone raw 0x80–0x9F bytes — fixed on master in `dd4e4aa05` (lone C1 bytes outside well-formed UTF-8 are removed before the C0 sweep, so no `\xC2\x9B` pair can be spliced together). On master `render("a\x9B2Jb")` actually threw CommonMark's `UnexpectedEncodingException`; with sanitising on (the default), `render()` and `renderSection()` now also scrub before the parse, removing lone C1 and repairing other malformed UTF-8 to U+FFFD, and `stream() === render()` still holds.
 - **15b-27** The permission modal showed an empty value for an argument that was not valid UTF-8 — fixed on master in `a0f07cd5a` (`Message::describeToolCall()` encodes with `JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE`, falls back to `visibleControls()` and never to `''`, and re-escapes C1 and bidi/zero-width characters so the label stays inert; a non-string `0` is no longer dropped by `?:`). The headless prompt got the same treatment in `e1acd6f0f` (15e lead 6, R17).
+- **15b-03** Command output, mid-turn notices and background and runtime notices went to the model as real turns — fixed on master in `2a3a8f91c` (`Message::$uiOnly`, filtered at every wire encoder, in the titler and in the suggester), `5d2aaae34` (wave 8B: every compaction call site reads agent-visible rows only through `compactionWire()`, on both sides of the exchange-key alignment; `messagesFromWire()` and `intraExchangeTruncation()` put the UI-only rows back through `withUiOnlyRowsRestored()`, in place from the first preserved row on and verbatim ahead of the summary for the condensed region; the 95% refusal's "each further attempt drops the oldest" is made explicit by `Chat::blockedAttempts()` and `ContextCompactor::withRecentPreserveReducedBy()`, because with the filter it would otherwise have been a wedge only `/clear` escaped) and `6fddd0d3a` (N1: notices stay inline, by decision, and a UI-only `Role::System` row renders as `notice: …` in the dim `systemLabel` colour plus italic). Left visible on purpose: `/websearch` results (known #22), hook `additionalContext`, the 70% reminder and the permission-refusal note. Behaviour change: UI-only rows are no longer condensed by compaction, and a session blocked at 95% gets out on the second retry, or with `/compact` and one retry (before, the first retry escaped by accident).
