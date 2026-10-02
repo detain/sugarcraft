@@ -45,7 +45,7 @@ final class PathJailTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // jailPath() - prepends worktree for relative paths
+    // jailPath() - the contained canonical path, or an exception
     // -------------------------------------------------------------------------
 
     public function testJailPathRelativePath(): void
@@ -56,20 +56,26 @@ final class PathJailTest extends TestCase
         $this->assertSame($this->worktreePath . '/src/Agents/Thing.php', $result);
     }
 
-    public function testJailPathRelativePathWithDots(): void
+    /**
+     * Audit F-J5: jailPath() used to hand back `<root>/../foo.txt` and
+     * `/etc/passwd` unchanged — a name promising containment over an
+     * unchecked join. It now refuses both.
+     */
+    public function testJailPathRefusesADotDotEscape(): void
     {
         $jail = new PathJail($this->worktreePath, new PathJailConfig());
 
-        $result = $jail->jailPath('../foo.txt');
-        $this->assertSame($this->worktreePath . '/../foo.txt', $result);
+        $this->expectException(\InvalidArgumentException::class);
+        $jail->jailPath('../foo.txt');
     }
 
-    public function testJailPathAbsolutePathUnchanged(): void
+    public function testJailPathRefusesAnAbsolutePathOutsideTheWorktree(): void
     {
         $jail = new PathJail($this->worktreePath, new PathJailConfig());
 
-        $result = $jail->jailPath('/etc/passwd');
-        $this->assertSame('/etc/passwd', $result);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('/etc/passwd');
+        $jail->jailPath('/etc/passwd');
     }
 
     public function testJailPathEmptyPath(): void
@@ -202,14 +208,14 @@ final class PathJailTest extends TestCase
         $this->assertInstanceOf(PathJailConfig::class, $jail->config());
     }
 
-    public function testExpandPathIsTheHonestNameForJailPath(): void
+    public function testExpandPathIsTheUncheckedJoin(): void
     {
         $jail = new PathJail($this->worktreePath, new PathJailConfig());
 
         $this->assertSame($this->worktreePath . '/a.txt', $jail->expandPath('a.txt'));
         $this->assertSame('/etc/passwd', $jail->expandPath('/etc/passwd'));
         $this->assertSame($this->worktreePath, $jail->expandPath(''));
-        $this->assertSame($jail->expandPath('../x'), $jail->jailPath('../x'));
+        $this->assertSame($this->worktreePath . '/../x', $jail->expandPath('../x'));
     }
 
     public function testResolveSettlesContainmentInASingleCall(): void

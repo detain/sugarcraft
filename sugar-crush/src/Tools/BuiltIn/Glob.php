@@ -13,6 +13,7 @@ use SugarCraft\Crush\Tools\IgnoreRules;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Tools\PathJail;
 
 final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
@@ -76,7 +77,24 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         // cap tests construct these tools with positional arguments and a
         // mid-signature insert silently re-types them.
         private ?RulePathNudge $ruleNudge = null,
+        // Audit F-J5: LAST for the same positional-argument reason.
+        private ?AgentPathJail $worktreeJail = null,
     ) {}
+
+    /**
+     * The directory this instance is confined to: the injected sub-agent
+     * worktree when there is one, else the workspace root.
+     *
+     * Audit F-J5: Bash, Read, Edit and Write took an {@see AgentPathJail} and
+     * this tool did not, so once `isolation: worktree` runs, a sub-agent's
+     * Glob would list files from the MAIN checkout: stale or foreign files, then
+     * Edits to paths its own tree lacks. Same precedence as {@see Bash}'s
+     * `cd` target.
+     */
+    private function jailRoot(): ?string
+    {
+        return $this->worktreeJail?->root() ?? $this->root;
+    }
 
     /**
      * Walking the tree mutates nothing a sibling call could observe. The
@@ -270,8 +288,9 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
             );
         }
 
-        if ($this->root !== null) {
-            $resolved = PathJail::resolveDir($this->root, $path);
+        $jailRoot = $this->jailRoot();
+        if ($jailRoot !== null) {
+            $resolved = PathJail::resolveDir($jailRoot, $path);
             if ($resolved === null) {
                 return new ToolResult(
                     toolCallId: $args['id'] ?? '',
@@ -357,7 +376,7 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
         // been told to trust, and silently climbing out of the directory the
         // caller named to pick up a stranger's rules is worse than missing
         // them.
-        $rules = IgnoreRules::new($this->root ?? $baseDir)
+        $rules = IgnoreRules::new($this->jailRoot() ?? $baseDir)
             ->withGitignore(!self::flag($args['include_ignored'] ?? null));
 
         // Pointing `path` INSIDE an ignored directory is a deliberate request
@@ -885,11 +904,12 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
      */
     private function withinRoot(array $files): array
     {
-        if ($this->root === null) {
+        $jailRoot = $this->jailRoot();
+        if ($jailRoot === null) {
             return $files;
         }
 
-        $rootReal = realpath($this->root);
+        $rootReal = realpath($jailRoot);
         if ($rootReal === false) {
             return [];
         }

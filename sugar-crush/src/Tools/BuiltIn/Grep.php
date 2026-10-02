@@ -14,6 +14,7 @@ use SugarCraft\Crush\Tools\IgnoreRules;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Tools\PathJail;
 
 final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
@@ -45,7 +46,24 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         // cap tests construct these tools with positional arguments and a
         // mid-signature insert silently re-types them.
         private ?RulePathNudge $ruleNudge = null,
+        // Audit F-J5: LAST for the same positional-argument reason.
+        private ?AgentPathJail $worktreeJail = null,
     ) {}
+
+    /**
+     * The directory this instance is confined to: the injected sub-agent
+     * worktree when there is one, else the workspace root.
+     *
+     * Audit F-J5: Bash, Read, Edit and Write took an {@see AgentPathJail} and
+     * this tool did not, so once `isolation: worktree` runs, a sub-agent's
+     * Grep would search the MAIN checkout: stale or foreign files, then
+     * Edits to paths its own tree lacks. Same precedence as {@see Bash}'s
+     * `cd` target.
+     */
+    private function jailRoot(): ?string
+    {
+        return $this->worktreeJail?->root() ?? $this->root;
+    }
 
     /**
      * Still concurrency-safe, but NOT for the reason this docblock used to
@@ -193,7 +211,7 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         // Only a rooted instance is contained, so only a rooted instance says
         // so — the unrooted one (a test, an embedder) genuinely accepts any
         // readable directory.
-        $pathScope = $this->root !== null ? ' Must be inside the workspace root.' : '';
+        $pathScope = $this->jailRoot() !== null ? ' Must be inside the workspace root.' : '';
 
         return [
         'type' => 'object',
@@ -257,8 +275,9 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
             );
         }
 
-        if ($this->root !== null) {
-            $resolved = PathJail::resolveDir($this->root, $path);
+        $jailRoot = $this->jailRoot();
+        if ($jailRoot !== null) {
+            $resolved = PathJail::resolveDir($jailRoot, $path);
             if ($resolved === null) {
                 return new ToolResult(
                     toolCallId: $args['id'] ?? '',
@@ -727,12 +746,12 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
     private function rulesFor(string $searchRoot, bool $includeIgnored): IgnoreRules
     {
         if ($includeIgnored) {
-            return IgnoreRules::new($this->root ?? $searchRoot)
+            return IgnoreRules::new($this->jailRoot() ?? $searchRoot)
                 ->withGitignore(false)
                 ->withExcludedDirs([]);
         }
 
-        $rules = IgnoreRules::new($this->root ?? $searchRoot)
+        $rules = IgnoreRules::new($this->jailRoot() ?? $searchRoot)
             ->withoutExcludedDirs(explode('/', $searchRoot));
 
         return $rules->ignores($searchRoot, true) ? $rules->withGitignore(false) : $rules;

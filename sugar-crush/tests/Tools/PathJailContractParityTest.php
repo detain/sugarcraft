@@ -97,16 +97,26 @@ final class PathJailContractParityTest extends TestCase
         $this->assertSame($this->root, $this->bound->root());
     }
 
-    public function testJailPathIsAnAliasOfTheHonestlyNamedExpandPath(): void
+    /**
+     * Audit F-J5: `jailPath()` was an alias of the unchecked `expandPath()`,
+     * so it returned `/etc/passwd` for `/etc/passwd`. It now proves
+     * containment or throws.
+     */
+    public function testJailPathEnforcesTheJailItsNamePromises(): void
     {
-        // jailPath() reads like it enforces the jail; expandPath() does not.
-        // The rename is the P8.14 fix, the alias is why no caller broke.
-        foreach (['', '/etc/passwd', '../foo.txt', 'src/A.php'] as $path) {
-            $this->assertSame(
-                $this->bound->expandPath($path),
-                $this->bound->jailPath($path),
-                "alias diverged for '{$path}'",
-            );
+        $rootReal = (string) realpath($this->root);
+
+        $this->assertSame($rootReal, $this->bound->jailPath(''));
+        $this->assertSame($rootReal . '/sub/here.txt', $this->bound->jailPath('sub/here.txt'));
+        $this->assertSame($rootReal . '/x/y/z/new.txt', $this->bound->jailPath('x/y/z/new.txt'), 'a file about to be created');
+
+        foreach (['/etc/passwd', '../foo.txt', 'evil/passwd', '../rootevil/stolen.txt'] as $escape) {
+            try {
+                $this->bound->jailPath($escape);
+                $this->fail("jailPath() let '{$escape}' out of the jail");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString($escape, $e->getMessage());
+            }
         }
     }
 

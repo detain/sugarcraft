@@ -456,6 +456,35 @@ final class LspToolTest extends TestCase
     }
 
     /**
+     * Audit F-J5: with a sub-agent's worktree jail injected, a file in the
+     * main checkout is outside the boundary even though it is inside `$root`.
+     */
+    public function testAWorktreeJailNarrowsTheBoundaryBelowTheRoot(): void
+    {
+        $worktree = $this->root . '/wt_' . bin2hex(random_bytes(4));
+        mkdir($worktree);
+        $mainFile = $this->root . '/MainOnly_' . bin2hex(random_bytes(4)) . '.php';
+        file_put_contents($mainFile, '<?php');
+        file_put_contents($worktree . '/Here.php', '<?php');
+        $jail = new \SugarCraft\Crush\Agents\PathJail($worktree, new \SugarCraft\Crush\Agents\PathJailConfig());
+
+        try {
+            $tool = new LspTool($this->clientFor(), $this->root, worktreeJail: $jail);
+
+            $refused = $tool->execute(['operation' => 'references', 'path' => $mainFile]);
+            $this->assertTrue($refused->isError());
+            $this->assertStringContainsString('outside workspace root', $refused->content());
+
+            $inside = $tool->execute(['operation' => 'references', 'path' => 'Here.php']);
+            $this->assertStringNotContainsString('outside workspace root', $inside->content());
+        } finally {
+            @unlink($worktree . '/Here.php');
+            @rmdir($worktree);
+            @unlink($mainFile);
+        }
+    }
+
+    /**
      * `PathJail::resolve()` accepts a MISSING file whose parent exists, so
      * containment alone would forward `sub/Ghost.php` to the server — and every
      * LSP query for a URI the server never opened comes back empty, which is the

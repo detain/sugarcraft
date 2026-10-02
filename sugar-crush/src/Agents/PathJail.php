@@ -21,7 +21,8 @@ use SugarCraft\Crush\Tools\PathJailInterface;
  *
  * Prefer {@see resolve()}/{@see resolveForCreate()}/{@see resolveDir()}: one
  * call, and a non-null result is already proven to be inside the worktree.
- * {@see expandPath()} (formerly `jailPath()`) only joins — it proves nothing.
+ * {@see expandPath()} only joins — it proves nothing; {@see jailPath()}, its
+ * former alias, now enforces the jail its name promises.
  *
  * @see https://github.com/sugarcraft/sugar-crush/blob/master/crush_code_plan.md#path-isolation-layer
  */
@@ -77,23 +78,40 @@ final class PathJail implements PathJailInterface
     }
 
     /**
-     * Historical name for {@see expandPath()}, retained for existing callers.
+     * The historical name, now doing what it says: the canonical path of
+     * $path inside the worktree, or an exception.
      *
-     * `jailPath()` reads like it enforces the jail; it does not, which is the
-     * footgun crush_code.md P8.14 flagged. The behaviour is unchanged — only
-     * the honest name is new. Every in-tree call site has since migrated
-     * (Read/Edit/Write to {@see resolve()}/{@see resolveForCreate()}, Bash to
-     * {@see root()}), so this survives purely as a compatibility alias for
-     * out-of-tree callers; it is deliberately NOT deleted, because deleting it
-     * would break them for a rename that gains them nothing.
+     * It used to be an alias of {@see expandPath()}, which returns an
+     * absolute path unchanged and leaves `..` intact — so `jailPath('/etc/passwd')`
+     * answered `/etc/passwd`, a name promising containment the method never
+     * provided (crush_code.md P8.14, audit F-J5). No in-tree caller is left
+     * (Read/Edit/Write moved to {@see resolve()}/{@see resolveForCreate()},
+     * Bash to {@see root()}), so the next consumer is an out-of-tree one, and
+     * the one thing it must not get is the old unchecked join under a name
+     * that reads as a check. It is kept rather than deleted so such a caller
+     * fails loudly instead of fatally.
      *
-     * @deprecated Use {@see expandPath()} for the unchecked join, or better,
-     *             {@see resolve()}/{@see resolveForCreate()}/{@see resolveDir()},
-     *             which prove containment and return a canonical path in one call.
+     * Judged by {@see resolveForCreate()}: a path that does not exist yet is
+     * accepted when its nearest existing ancestor is inside the worktree, as
+     * the old join accepted any path; `''` means the worktree root itself.
+     *
+     * @throws \InvalidArgumentException when $path resolves outside the
+     *         worktree (absolute elsewhere, `..` past the root, a symlink out)
+     *
+     * @deprecated Use {@see resolve()}/{@see resolveForCreate()}/{@see resolveDir()},
+     *             which answer null instead of throwing, or {@see expandPath()}
+     *             for the unchecked join.
      */
     public function jailPath(string $path): string
     {
-        return $this->expandPath($path);
+        $resolved = $this->resolveForCreate($path === '' ? '.' : $path);
+        if ($resolved === null) {
+            throw new \InvalidArgumentException(
+                "Path is outside the agent worktree {$this->agentWorktreePath}: {$path}",
+            );
+        }
+
+        return $resolved;
     }
 
     /**

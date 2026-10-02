@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\LSP\LspClient;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
+use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Tools\PathJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -106,7 +107,24 @@ final readonly class LspTool implements Tool
         private ?LspClient $client = null,
         private ?string $root = null,
         private int $maxOutputBytes = self::DEFAULT_MAX_OUTPUT_BYTES,
+        // Audit F-J5: LAST, so positional callers keep their meaning.
+        private ?AgentPathJail $worktreeJail = null,
     ) {}
+
+    /**
+     * The directory this instance is confined to: the injected sub-agent
+     * worktree when there is one, else the workspace root.
+     *
+     * Audit F-J5: Bash, Read, Edit and Write took an {@see AgentPathJail} and
+     * this tool did not, so once `isolation: worktree` runs, a sub-agent's
+     * Lsp would resolve paths against the MAIN checkout: stale or foreign files, then
+     * Edits to paths its own tree lacks. Same precedence as {@see Bash}'s
+     * `cd` target.
+     */
+    private function jailRoot(): ?string
+    {
+        return $this->worktreeJail?->root() ?? $this->root;
+    }
 
     public function name(): string
     {
@@ -144,7 +162,7 @@ final readonly class LspTool implements Tool
     {
         // Only a rooted instance is contained, so only a rooted instance says so
         // — same rule as Grep::inputSchema().
-        $pathScope = $this->root !== null ? ' Must be inside the workspace root.' : '';
+        $pathScope = $this->jailRoot() !== null ? ' Must be inside the workspace root.' : '';
 
         return [
             'type' => 'object',
@@ -262,8 +280,9 @@ final readonly class LspTool implements Tool
             ));
         }
 
-        if ($this->root !== null) {
-            $resolved = PathJail::resolve($this->root, $path);
+        $jailRoot = $this->jailRoot();
+        if ($jailRoot !== null) {
+            $resolved = PathJail::resolve($jailRoot, $path);
             if ($resolved === null) {
                 return self::error($id, 'Error: path outside workspace root');
             }
