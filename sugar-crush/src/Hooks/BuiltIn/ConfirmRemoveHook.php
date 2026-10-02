@@ -8,28 +8,45 @@ use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookInterface;
 use SugarCraft\Crush\Hooks\HookResult;
+use SugarCraft\Crush\Permissions\ShellWords;
 
 /**
  * Best-effort guard-rail against the common destructive shell commands.
  *
  * IMPORTANT: this is a HEURISTIC, not a security boundary. Regex cannot see
  * through shell indirection — `x=rf; rm -$x`, aliases, `$(echo rm) -rf`,
- * base64-decoded payloads, or quoting tricks all evade it. It exists to catch
+ * `bash -c`/`eval`, base64-decoded payloads all evade it. It exists to catch
  * the obvious footguns (a model literally emitting `rm -rf`), not to sandbox a
  * hostile command. For real containment, run the tool in a jail/VM.
+ *
+ * QUOTING IS NOT ONE OF THOSE EVASIONS ANY MORE. The patterns used to run
+ * against the raw command only, and they want whitespace directly before the
+ * flag, so `rm '-rf' x`, `rm "-rf" x` and `find . '-delete'` — byte-identical
+ * argv to the unquoted spelling once bash removes the quotes — passed (audit
+ * F-P1, measured through the full built-in chain under the shipped
+ * `bypass-permissions` default). Each pattern now also runs against
+ * {@see ShellWords::dequoted()}: the quote-removed words, one simple command
+ * per line. When the line does not parse (an unterminated quote) the second
+ * candidate is the raw text with every quote and backslash deleted instead —
+ * cruder, but a deny list must not get NARROWER on input it cannot read. The
+ * raw text is always checked too, so nothing denied before is allowed now.
  */
 final readonly class ConfirmRemoveHook implements HookInterface
 {
     /**
-     * Destructive-command patterns, each matched against the raw Bash command.
-     * Deliberately conservative — see the class docblock on why this can only
-     * be a heuristic.
+     * Destructive-command patterns, each matched against the raw Bash command
+     * AND its quote-removed form (see the class docblock). Deliberately
+     * conservative — see the class docblock on why this can only be a
+     * heuristic.
      */
     private const DANGEROUS_PATTERNS = [
         // rm with short-form recursive/force flags (-r, -f, -rf, -rfv, ...).
         '/\brm\b[^\n]*\s-[a-z]*[rf]/i',
-        // rm with GNU long-form flags: --recursive / --force.
-        '/\brm\b[^\n]*\s--(recursive|force)\b/i',
+        // rm with GNU long-form flags: --recursive / --force, and the
+        // unambiguous abbreviations GNU getopt accepts for them (`--rec`,
+        // `--forc`) — the step-0 breaker in PermissionGate counts those, and
+        // this hook is documented as refusing everything that breaker does.
+        '/\brm\b[^\n]*\s--(?:r(?:e(?:c(?:u(?:r(?:s(?:i(?:ve?)?)?)?)?)?)?)?|f(?:o(?:r(?:ce?)?)?)?)(?!\w)/i',
         // find ... -delete wipes every matched entry.
         '/\bfind\b[^\n]*\s-delete\b/i',
         // shred overwrites files irrecoverably.
@@ -56,9 +73,18 @@ final readonly class ConfirmRemoveHook implements HookInterface
     public function execute(HookContext $context): HookResult
     {
         $command = $context->toolArgs['command'] ?? '';
+        if (!is_string($command)) {
+            $command = '';
+        }
+
+        $parsed = ShellWords::parse($command);
+        $candidates = [
+            $command,
+            $parsed->complete ? $parsed->dequoted() : str_replace(["'", '"', '\\'], '', $command),
+        ];
 
         foreach (self::DANGEROUS_PATTERNS as $pattern) {
-            if (preg_match($pattern, $command)) {
+            if (preg_grep($pattern, $candidates) !== []) {
                 return HookResult::deny(
                     'This hook prevents recursive/force rm and other destructive '
                     . 'commands (find -delete, shred, dd of=). It is a best-effort '

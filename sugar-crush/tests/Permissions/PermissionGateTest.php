@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Permissions;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Permissions\PermissionAction;
 use SugarCraft\Crush\Permissions\PermissionDecision;
@@ -596,6 +597,100 @@ final class PermissionGateTest extends TestCase
         $this->assertNotSame(
             PermissionDecision::Deny,
             $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => "echo hi\nrm -rf ./build"])),
+        );
+    }
+
+    /**
+     * AUDIT F-P1: THE BREAKER JUDGED RAW TEXT, BASH RUNS QUOTE-REMOVED WORDS.
+     * Measured under `bypass-permissions` before the fix, every one of these
+     * was ALLOWED by step 0: a quoted flag was taken for the target, only the
+     * first target was looked at, and the target was compared literally with
+     * `/` and `~`. `rm '-rf' ~` deletes `$HOME`, and GNU `--preserve-root`
+     * protects only `/`.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function quoteAwareRmRfCases(): iterable
+    {
+        yield 'single-quoted flag, home' => ["rm '-rf' ~"];
+        yield 'double-quoted flag, root' => ['rm "-rf" /'];
+        yield 'single-quoted flag, root' => ["rm '-rf' /"];
+        yield 'ANSI-C quoted flag' => ["rm \$'-rf' /"];
+        yield 'flag split by quotes' => ["rm -'r'f /"];
+        yield 'second target is root' => ['rm -rf ./x /'];
+        yield 'root glob' => ['rm -rf /*'];
+        yield 'double slash' => ['rm -rf //'];
+        yield 'root dot' => ['rm -rf /.'];
+        yield 'climbs back to root' => ['rm -rf /tmp/..'];
+        yield 'home with slash' => ['rm -rf ~/'];
+        yield 'home dot' => ['rm -rf ~/.'];
+        yield 'home glob' => ['rm -rf ~/*'];
+        yield 'HOME variable' => ['rm -rf $HOME'];
+        yield 'braced HOME variable' => ['rm -rf ${HOME}'];
+        yield 'quoted HOME variable' => ['rm -rf "$HOME"'];
+        yield 'HOME variable with slash' => ['rm -rf $HOME/'];
+        yield 'flags after the operand (GNU permutes)' => ['rm ~ -rf'];
+        yield 'long-option abbreviations' => ['rm --rec --forc /'];
+        // After `--`, `-f` is an operand to bash; the breaker still counts it
+        // as a flag, as the pre-tokeniser breaker did — a deny list that must
+        // never shrink. Over-denying this oddity costs nothing.
+        yield 'flag-looking word after --' => ['rm -r -- -f /'];
+        yield 'operand after --' => ['rm -rf -- /'];
+        yield 'absolute rm path' => ['/bin/rm -rf /'];
+        yield 'usr bin rm' => ['/usr/bin/rm -rf ~'];
+        yield 'backslash-escaped rm' => ['\\rm -rf /'];
+        yield 'sudo with an option argument' => ['sudo -u root rm -rf /'];
+        yield 'env assignment prefix' => ['env FOO=1 rm -rf ~'];
+        yield 'bare assignment prefix' => ['FOO=1 rm -rf ~'];
+        yield 'timeout wrapper' => ['timeout 5 rm -rf /'];
+        yield 'subshell' => ['(rm -rf /)'];
+        yield 'redirect does not hide the target' => ['rm -rf / 2>/dev/null'];
+        // Unterminated quote: the tokeniser cannot parse it, so the raw-token
+        // pass has to carry the verdict.
+        yield 'unparseable line' => ["rm '-rf' / 'oops"];
+    }
+
+    #[DataProvider('quoteAwareRmRfCases')]
+    public function testRmRfCircuitBreakerSeesTheWordsBashWillRun(string $command): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+
+        $this->assertSame(
+            PermissionDecision::Deny,
+            $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => $command])),
+            json_encode($command) . ' removes root or home once bash removes the quotes',
+        );
+    }
+
+    /**
+     * The controls: still about `rm` recursive+force on root or home, nothing
+     * wider. These must stay Allow under `bypass-permissions` (ConfirmRemoveHook
+     * is a separate layer and still refuses `rm -rf` on its own).
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function rmRfBreakerControlCases(): iterable
+    {
+        yield 'build dir' => ['rm -rf ./build'];
+        yield 'single file' => ['rm ./x'];
+        yield 'quoted tilde echoed' => ["echo '~'"];
+        yield 'tmp subdir' => ['rm -rf /tmp/foo'];
+        yield 'home subdir' => ['rm -rf ~/project/build'];
+        yield 'HOME subdir' => ['rm -rf "$HOME/.cache/x"'];
+        yield 'recursive only' => ['rm -r /tmp/foo /var/tmp/bar'];
+        yield 'rm word as an argument' => ['echo rm -rf /'];
+        yield 'quoted command text' => ["git commit -m 'rm -rf / is denied'"];
+        yield 'relative dotdot' => ['rm -rf ./a/../..'];
+    }
+
+    #[DataProvider('rmRfBreakerControlCases')]
+    public function testRmRfCircuitBreakerLeavesOtherCommandsAlone(string $command): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+
+        $this->assertSame(
+            PermissionDecision::Allow,
+            $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => $command])),
         );
     }
 

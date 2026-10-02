@@ -493,29 +493,62 @@ final class PermissionGate
     /**
      * Detect the `rm -rf /` or `rm -rf ~` circuit-breaker pattern (R3).
      *
-     * Deliberately tolerant of evasion via flag reordering (`-fr`), flag splitting
-     * (`-r -f`), long-form flags (`--recursive --force`), `--no-preserve-root`
-     * riding along, and the target being wrapped in matching quotes (`"/"`, `'~'`)
-     * — a quoted path is a routine shell habit, not an unusual evasion, and the
-     * literal token comparison must see through it. Case-insensitive; handles
-     * prefixes like `sudo`. Command chains are checked segment-by-segment, and
-     * the separator class is `[;&|\r\n]+` rather than `[;&|]+`: a NEWLINE
-     * separates two commands exactly as `;` does, and while it lacked one this
-     * breaker — the mode-independent one, the one nothing can switch off —
-     * allowed `echo hi\nrm -rf /` under `bypass-permissions` while denying
-     * `echo hi && rm -rf /`. Measured, not reasoned.
+     * JUDGED ON THE WORDS BASH WILL PRODUCE, NOT ON THE RAW TEXT. Until audit
+     * F-P1 this split the raw string on whitespace, treated only a raw
+     * `-`-prefixed token as a flag and only the FIRST non-flag token as the
+     * target, and compared that target literally against `/` and `~`. bash
+     * removes quotes before `rm` sees its argv, so `rm '-rf' ~` (the flag read
+     * as the target, which was not `/`), `rm -rf ./x /` (second target never
+     * looked at), `rm -rf /*`, `rm -rf ~/` and `rm -rf $HOME` were all ALLOWED
+     * under `bypass-permissions` — measured — and the first deletes `$HOME`,
+     * which GNU `--preserve-root` does not protect. Each command line is now
+     * tokenised by {@see ShellWords} (quote removal, escapes, `$'…'`, every
+     * control operator, redirections pulled out of the operand list), and:
+     *
+     * - the command word is recognised by basename, case-insensitively, behind
+     *   leading `NAME=value` assignments and the wrapper commands in
+     *   {@see RM_PREFIX_COMMANDS} (with their option arguments): `/bin/rm`,
+     *   `\rm`, `sudo -u root rm`, `env X=1 rm`, `timeout 5 rm`;
+     * - flags are read after quote removal and ANYWHERE in the argv, since GNU
+     *   getopt permutes (`rm ~ -rf` is `rm -rf ~`), and an unambiguous GNU
+     *   long-option abbreviation counts (`--rec`, `--forc`);
+     * - `--` ends options, so every later word is an OPERAND — a `-`-prefixed
+     *   word after it is checked as a target AND, deliberately, still counted
+     *   toward the flags, because the pre-tokeniser breaker counted it and this
+     *   is a deny list that must never shrink (`rm -r -- -f /`);
+     * - EVERY operand is checked, normalised by {@see isRootOrHomeOperand()}:
+     *   `/`, `//`, `/.`, `/*`, `/tmp/..`, `~`, `~/`, `~/.`, `~user`, `$HOME`,
+     *   `${HOME}`, `"$HOME"`, `$HOME/` all count.
+     *
+     * The old RAW-token pass is kept as well — every segment of the raw line,
+     * split on `[;&|()\r\n]`, whitespace-split, one layer of matching quotes
+     * stripped per token, judged by the same rules — and its verdict is OR-ed
+     * in. That is what makes an unparseable line (an unterminated quote) still
+     * refusable, and it guarantees this breaker never denies LESS than the
+     * version it replaced: the tokenised pass honours `#` comments and skips
+     * here-doc bodies, which a raw-text deny list never did.
+     *
+     * Command chains are checked command-by-command, and a NEWLINE separates
+     * two commands exactly as `;` does — while the raw split lacked `\n` this
+     * breaker allowed `echo hi\nrm -rf /` under `bypass-permissions` while
+     * denying `echo hi && rm -rf /`. Measured, not reasoned.
      *
      * BE CLEAR ABOUT WHAT THIS IS NOT. Mode-independence makes it unswitchable,
-     * not unevadable: it reads `arguments['command']` and tokenises it, so it is
-     * shell-text matching with the same ceiling {@see PermissionRule}'s
-     * "HONEST LIMITS" block documents — `/bin/rm -rf /`, `$(echo rm) -rf /` and
-     * `bash -c 'rm -rf /'` are all past it. It is a guard rail against an
-     * accident, and calling it a containment boundary (as a first draft of that
-     * block did) would be exactly the overclaim that block exists to refuse.
+     * not unevadable: it reads `arguments['command']` and performs no
+     * expansion, so it is shell-text matching with the same ceiling
+     * {@see PermissionRule}'s "HONEST LIMITS" block documents —
+     * `$(echo rm) -rf /`, `x=-rf; rm $x /`, `bash -c 'rm -rf /'`, `eval`,
+     * aliases and `find / -delete` are all past it. It is a guard rail against
+     * an accident, and calling it a containment boundary (as a first draft of
+     * that block did) would be exactly the overclaim that block exists to
+     * refuse.
      *
      * Matches: rm -rf /, rm -fr /, rm -r -f /, rm --recursive --force /,
-     * rm -rf --no-preserve-root /, rm -rf "/", rm -rf '/', rm -rf ~,
-     * sudo rm -rf /, SUDO RM -RF ~
+     * rm --rec --forc /, rm -rf --no-preserve-root /, rm -rf "/", rm -rf '/',
+     * rm -rf ~, rm '-rf' ~, rm "-rf" /, rm $'-rf' /, rm ~ -rf, rm -rf ./x /,
+     * rm -rf /*, rm -rf //, rm -rf /., rm -rf ~/, rm -rf $HOME, rm -rf ${HOME},
+     * rm -rf "$HOME"/, rm -r -- -f /, sudo rm -rf /, SUDO RM -RF ~,
+     * sudo -u root rm -rf /, /bin/rm -rf /, \rm -rf /, (rm -rf /)
      */
     private function isRmRfRootOrHome(ToolCall $call): bool
     {
@@ -529,8 +562,18 @@ final class PermissionGate
             return false;
         }
 
-        foreach (preg_split('/[;&|\r\n]+/', $args['command']) as $segment) {
-            if ($this->segmentIsRmRfRootOrHome($segment)) {
+        foreach (ShellWords::parse($args['command'])->commands as $words) {
+            if ($this->wordsAreRmRfRootOrHome($words)) {
+                return true;
+            }
+        }
+
+        foreach (preg_split('/[;&|()\r\n]+/', $args['command']) ?: [] as $segment) {
+            $tokens = array_map(
+                $this->stripMatchingQuotes(...),
+                preg_split('/\s+/', trim($segment), -1, PREG_SPLIT_NO_EMPTY) ?: [],
+            );
+            if ($this->wordsAreRmRfRootOrHome($tokens)) {
                 return true;
             }
         }
@@ -539,87 +582,171 @@ final class PermissionGate
     }
 
     /**
-     * Tokenize a single shell command segment and ask: is this an `rm` invocation
-     * that combines recursive + force flags (in any spelling/order/split) against
-     * a `/` or `~` target?
+     * Wrapper commands that run their argument as a command, mapped to their
+     * short options that consume the NEXT word (so `sudo -u root rm` skips
+     * `root` rather than taking it for the command). The `int` is how many
+     * positional words precede the wrapped command (`timeout 5 rm`). A best
+     * effort, not a grammar of each tool: an unlisted option that takes an
+     * argument leaves that argument as the "command word", which fails to match
+     * `rm` — i.e. errs toward the old, narrower breaker, never toward a crash.
+     *
+     * @var array<string, array{0: string, 1: int}>
      */
-    private function segmentIsRmRfRootOrHome(string $segment): bool
+    private const RM_PREFIX_COMMANDS = [
+        'sudo' => ['ugCDhprtUT', 0],
+        'doas' => ['uC', 0],
+        'env' => ['uCS', 0],
+        'command' => ['', 0],
+        'builtin' => ['', 0],
+        'exec' => ['a', 0],
+        'nohup' => ['', 0],
+        'time' => ['fo', 0],
+        'nice' => ['n', 0],
+        'ionice' => ['cnp', 0],
+        'stdbuf' => ['ioe', 0],
+        'timeout' => ['sk', 1],
+        '{' => ['', 0],
+        '!' => ['', 0],
+    ];
+
+    /**
+     * Is this one simple command (quote-removed words) an `rm` that combines
+     * recursive + force flags, in any spelling/order/split, against at least
+     * one root-or-home operand?
+     *
+     * @param list<string> $words
+     */
+    private function wordsAreRmRfRootOrHome(array $words): bool
     {
-        $tokens = array_values(array_filter(
-            preg_split('/\s+/', trim($segment)) ?: [],
-            static fn (string $t): bool => $t !== '',
-        ));
-        if ($tokens === []) {
-            return false;
-        }
-
+        $count = count($words);
         $i = 0;
-        $count = count($tokens);
 
-        // Skip leading prefixes like `sudo` (case-insensitive).
-        while ($i < $count && strtolower($tokens[$i]) === 'sudo') {
+        while ($i < $count) {
+            $word = $words[$i];
+            if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*=/', $word) === 1) {
+                ++$i; // `FOO=bar rm …` — an assignment prefix
+                continue;
+            }
+            $name = strtolower(basename(ltrim($word, '\\')));
+            if (!isset(self::RM_PREFIX_COMMANDS[$name])) {
+                break;
+            }
+            [$optionsWithArgument, $positionals] = self::RM_PREFIX_COMMANDS[$name];
             ++$i;
+            while ($i < $count && str_starts_with($words[$i], '-') && $words[$i] !== '-') {
+                $option = $words[$i++];
+                if ($option === '--') {
+                    break;
+                }
+                if (strlen($option) === 2 && $optionsWithArgument !== '' && str_contains($optionsWithArgument, $option[1])) {
+                    ++$i;
+                }
+            }
+            while ($positionals-- > 0 && $i < $count) {
+                ++$i;
+            }
         }
 
-        if ($i >= $count || strtolower($tokens[$i]) !== 'rm') {
+        if ($i >= $count || strtolower(basename(ltrim($words[$i], '\\'))) !== 'rm') {
             return false;
         }
-        ++$i;
 
         $recursive = false;
         $force = false;
-        $target = null;
+        $endOfOptions = false;
+        $operands = [];
 
-        for (; $i < $count; ++$i) {
-            $token = $tokens[$i];
-            $lower = strtolower($token);
+        for (++$i; $i < $count; ++$i) {
+            $word = $words[$i];
 
-            if ($lower === '--recursive') {
-                $recursive = true;
+            if (!$endOfOptions && $word === '--') {
+                $endOfOptions = true;
                 continue;
             }
-            if ($lower === '--force') {
-                $force = true;
-                continue;
-            }
-            if ($lower === '--no-preserve-root' || $lower === '--') {
-                // Modifier flags that don't affect the recursive/force determination.
-                continue;
-            }
-            if (str_starts_with($token, '--')) {
-                // Unrecognized long flag — ignore, don't treat as the target.
-                continue;
-            }
-            if ($token !== '-' && str_starts_with($token, '-')) {
-                // Short flag cluster, e.g. -rf, -fr, -r, -f, -Rf (case-insensitive).
-                $flags = strtolower(substr($token, 1));
-                if (str_contains($flags, 'r')) {
-                    $recursive = true;
+
+            if ($word !== '-' && str_starts_with($word, '-')) {
+                $lower = strtolower($word);
+                if (str_starts_with($lower, '--')) {
+                    // GNU accepts any unambiguous prefix: `--rec`, `--forc`.
+                    if (strlen($lower) >= 3 && str_starts_with('--recursive', $lower)) {
+                        $recursive = true;
+                    } elseif (strlen($lower) >= 3 && str_starts_with('--force', $lower)) {
+                        $force = true;
+                    }
+                } else {
+                    // Short flag cluster, e.g. -rf, -fr, -r, -f, -Rf (case-insensitive).
+                    $flags = substr($lower, 1);
+                    $recursive = $recursive || str_contains($flags, 'r');
+                    $force = $force || str_contains($flags, 'f');
                 }
-                if (str_contains($flags, 'f')) {
-                    $force = true;
+                if (!$endOfOptions) {
+                    continue;
                 }
-                continue;
             }
 
-            // First non-flag token is the target path.
-            $target = $token;
-            break;
+            $operands[] = $word;
         }
 
-        if (!$recursive || !$force || $target === null) {
+        if (!$recursive || !$force) {
             return false;
         }
 
-        $target = $this->stripMatchingQuotes($target);
+        foreach ($operands as $operand) {
+            if ($this->isRootOrHomeOperand($operand)) {
+                return true;
+            }
+        }
 
-        return $target === '/' || $target === '~';
+        return false;
+    }
+
+    /**
+     * Does this (unexpanded) operand name the filesystem root or a home
+     * directory — or everything directly inside one?
+     *
+     * Anchored at `/` or at a home spelling (`~`, `~user`, `$HOME`, `${HOME}`),
+     * then walked segment by segment: empty and `.` segments vanish (`//`,
+     * `/.`, `~/`), `..` climbs (and climbing above the anchor is no safer than
+     * the anchor — `~/..` is every home), and a FINAL segment made only of glob
+     * characters (`*`, `.*`, `?*`) names the anchor's whole contents, so it
+     * counts as the anchor. A relative operand is never root-or-home here:
+     * `./x/../..` depends on the cwd, which is the jails' question, not this
+     * breaker's.
+     */
+    private function isRootOrHomeOperand(string $operand): bool
+    {
+        if (preg_match('/^(?:~[A-Za-z0-9._-]*|\$HOME|\$\{HOME\})(?=\/|$)/i', $operand, $match) === 1) {
+            $rest = substr($operand, strlen($match[0]));
+        } elseif (str_starts_with($operand, '/')) {
+            $rest = $operand;
+        } else {
+            return false;
+        }
+
+        $segments = explode('/', $rest);
+        $last = count($segments) - 1;
+        $depth = 0;
+        foreach ($segments as $index => $segment) {
+            if ($segment === '' || $segment === '.') {
+                continue;
+            }
+            if ($segment === '..') {
+                $depth = max(0, $depth - 1);
+                continue;
+            }
+            if ($index === $last && $depth === 0 && preg_match('/^[*?.]*[*?][*?.]*$/', $segment) === 1) {
+                continue;
+            }
+            ++$depth;
+        }
+
+        return $depth === 0;
     }
 
     /**
      * Strip a single pair of matching surrounding quotes (`"/"` -> `/`, `'~'` -> `~`)
-     * so a quoted target can't evade the literal token comparison — a quoted path is
-     * a routine shell habit, not an unusual evasion.
+     * for the RAW-token pass of {@see isRmRfRootOrHome()} — the pass that has to
+     * say something about a line {@see ShellWords} could not parse.
      */
     private function stripMatchingQuotes(string $token): string
     {

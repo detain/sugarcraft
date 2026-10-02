@@ -683,6 +683,13 @@ command substitution, symlinks and here-docs all evade them. They catch the
 obvious footgun — a model literally emitting `rm -rf` — not a hostile command.
 For real containment, run the process in a jail or container.
 
+Quoting is **not** among those evasions for `ConfirmRemoveHook` any more: each
+pattern runs against the raw command *and* its quote-removed words (the same
+`Permissions\ShellWords` tokeniser the permission gate's step-0 breaker uses),
+so `rm '-rf' x`, `rm "-rf" x`, `find . '-delete'` and `dd 'of=/dev/sda'` are
+denied like their unquoted spellings. Before audit F-P1 the first three passed
+the whole built-in chain under the default `bypass-permissions` mode.
+
 ## Writing a hook in PHP
 
 Implement `SugarCraft\Crush\Hooks\HookInterface` (`name()`, `event()`,

@@ -1,0 +1,524 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Crush\Permissions;
+
+/**
+ * A quote-aware split of a shell command line into simple commands and words —
+ * the shape bash itself sees AFTER quote removal and BEFORE any expansion.
+ *
+ * WHY THIS EXISTS. Every deny-list over shell text in this package used to
+ * match the RAW string, and bash strips quotes before `rm` ever sees its argv:
+ * `rm '-rf' ~` is byte-for-byte `rm -rf ~` to the process, yet a matcher that
+ * only treats a raw `-`-prefixed token as a flag (the step-0 breaker in
+ * {@see PermissionGate}) or wants `\s-` directly before the flag
+ * ({@see \SugarCraft\Crush\Hooks\BuiltIn\ConfirmRemoveHook}) let it through.
+ * Audit F-P1 measured both. The fix is to judge the words bash will produce,
+ * which needs a tokeniser rather than another regex.
+ *
+ * What it does:
+ * - quote removal for `'…'`, `"…"` (with the four backslash escapes bash
+ *   honours inside double quotes), `$'…'` (ANSI-C, escapes decoded) and `$"…"`;
+ * - unquoted backslash escapes (`\rm` → `rm`) and `\<newline>` continuation;
+ * - splitting into simple commands on every unquoted control operator — `;`,
+ *   `;;`, `&`, `&&`, `|`, `|&`, `||`, newline/CR, and the subshell parentheses
+ *   `(` / `)` — recorded in {@see $operators};
+ * - pulling redirections OUT of the word list (`2>/dev/null` is not an operand
+ *   of `rm`) and recording each with its operator, optional fd and target in
+ *   {@see $redirections}; here-doc bodies are skipped, not parsed as commands;
+ * - recording every command / process substitution (`$(`, backtick, `<(`,
+ *   `>(`) in {@see $substitutions}, its raw text kept inside the word it sits in;
+ * - `#` comments at the start of a word.
+ *
+ * What it deliberately does NOT do: any expansion. `~`, `$HOME`, `${HOME}`,
+ * globs and substitutions stay literal in the words, because the deciding
+ * callers must not depend on the gate's own environment (and executing a
+ * substitution to see what it yields is out of the question). A consumer that
+ * cares about a substitution must look at {@see $substitutions} and decide —
+ * for a fail-closed ALLOW check (plan mode's "read-only Bash") the only sound
+ * answer to a substitution or an incomplete parse is "not provably safe".
+ *
+ * {@see $complete} is FALSE when the line is not something bash would run as
+ * written: an unterminated quote, substitution or here-doc, a trailing lone
+ * backslash, or a redirection operator with no target. The words are still
+ * returned as a best effort; callers that deny on a match should keep their
+ * raw-text fallback for that case, callers that allow on a match must not.
+ *
+ * Reserved words (`if`, `then`, `{`, `!`, `do` …) are NOT interpreted: they
+ * come back as ordinary words at the head of a command. That is the honest
+ * extent of a tokeniser that is not a shell grammar.
+ *
+ * {@see PermissionGate::tokenizeSingleCommand()} is a different tool for a
+ * different question — it REFUSES any metacharacter because its caller GRANTS
+ * on a match; this class SPLITS on them because its callers deny on a match.
+ */
+final readonly class ShellWords
+{
+    /**
+     * @param list<list<string>> $commands Each simple command's words after
+     *        quote removal, with redirections removed. A command consisting only
+     *        of redirections (`> f`) is present as an empty list so the indices
+     *        in {@see $redirections} stay meaningful.
+     * @param list<array{command: int, fd: ?string, op: string, target: ?string}> $redirections
+     *        Every redirection, keyed to the index of the command it belongs to.
+     *        `fd` is the explicit descriptor (`2` in `2>f`), `target` the
+     *        quote-removed word after the operator (the delimiter for `<<`).
+     * @param list<string> $substitutions The opener of every substitution in
+     *        source order: `$(`, `` ` ``, `<(` or `>(`.
+     * @param list<string> $operators Every control operator in source order.
+     * @param bool $complete See the class docblock.
+     */
+    private function __construct(
+        public array $commands,
+        public array $redirections,
+        public array $substitutions,
+        public array $operators,
+        public bool $complete,
+    ) {
+    }
+
+    /**
+     * Tokenise `$line`. Never throws; malformed input yields `complete: false`.
+     */
+    public static function parse(string $line): self
+    {
+        $length = strlen($line);
+        $commands = [];
+        $redirections = [];
+        $substitutions = [];
+        $operators = [];
+        $complete = true;
+
+        $words = [];
+        $hasRedirect = false;
+        $current = '';
+        $inWord = false;
+        // Whether any byte of $current came from quoting/escaping — a quoted
+        // `'2'>f` is a word followed by `>f`, never an fd number.
+        $quoted = false;
+        /** @var ?int $pendingRedirect index into $redirections awaiting a target */
+        $pendingRedirect = null;
+        /** @var list<array{delimiter: string, stripTabs: bool}> $pendingHeredocs */
+        $pendingHeredocs = [];
+
+        $endWord = static function () use (&$words, &$current, &$inWord, &$quoted, &$pendingRedirect, &$redirections, &$pendingHeredocs): void {
+            if (!$inWord) {
+                return;
+            }
+            if ($pendingRedirect !== null) {
+                $redirections[$pendingRedirect]['target'] = $current;
+                $op = $redirections[$pendingRedirect]['op'];
+                if ($op === '<<' || $op === '<<-') {
+                    $pendingHeredocs[] = ['delimiter' => $current, 'stripTabs' => $op === '<<-'];
+                }
+                $pendingRedirect = null;
+            } else {
+                $words[] = $current;
+            }
+            $current = '';
+            $inWord = false;
+            $quoted = false;
+        };
+        $endCommand = static function () use (&$words, &$hasRedirect, &$commands, &$pendingRedirect, &$complete, $endWord): void {
+            $endWord();
+            if ($pendingRedirect !== null) {
+                // `echo >; ls` — bash: syntax error near unexpected token.
+                $complete = false;
+                $pendingRedirect = null;
+            }
+            if ($words !== [] || $hasRedirect) {
+                $commands[] = $words;
+            }
+            $words = [];
+            $hasRedirect = false;
+        };
+
+        for ($i = 0; $i < $length; ++$i) {
+            $char = $line[$i];
+            $next = $line[$i + 1] ?? '';
+
+            if ($char === '\\') {
+                if ($i + 1 >= $length) {
+                    // A trailing backslash asks bash for another line.
+                    $complete = false;
+                    continue;
+                }
+                ++$i;
+                if ($next === "\n") {
+                    continue; // line continuation
+                }
+                $current .= $next;
+                $inWord = true;
+                $quoted = true;
+                continue;
+            }
+
+            if ($char === "'") {
+                $close = strpos($line, "'", $i + 1);
+                if ($close === false) {
+                    $complete = false;
+                    $close = $length;
+                }
+                $current .= substr($line, $i + 1, $close - $i - 1);
+                $i = $close;
+                $inWord = true;
+                $quoted = true;
+                continue;
+            }
+
+            if ($char === '"') {
+                $current .= self::readDoubleQuoted($line, $i, $substitutions, $complete);
+                $inWord = true;
+                $quoted = true;
+                continue;
+            }
+
+            if ($char === '$') {
+                if ($next === "'") {
+                    $current .= self::readAnsiC($line, $i, $complete);
+                    $inWord = true;
+                    $quoted = true;
+                    continue;
+                }
+                if ($next === '"') {
+                    ++$i; // `$"…"` is a translatable "…"
+                    $current .= self::readDoubleQuoted($line, $i, $substitutions, $complete);
+                    $inWord = true;
+                    $quoted = true;
+                    continue;
+                }
+                if ($next === '(' || $next === '{') {
+                    if ($next === '(') {
+                        $substitutions[] = '$(';
+                    }
+                    $start = $i;
+                    ++$i;
+                    if (!self::skipBalanced($line, $i)) {
+                        $complete = false;
+                    }
+                    $current .= substr($line, $start, $i - $start + 1);
+                    $inWord = true;
+                    continue;
+                }
+                $current .= '$';
+                $inWord = true;
+                continue;
+            }
+
+            if ($char === '`') {
+                $substitutions[] = '`';
+                $start = $i;
+                if (!self::skipBacktick($line, $i)) {
+                    $complete = false;
+                }
+                $current .= substr($line, $start, $i - $start + 1);
+                $inWord = true;
+                continue;
+            }
+
+            if (($char === '<' || $char === '>') && $next === '(') {
+                $substitutions[] = $char . '(';
+                $start = $i;
+                ++$i;
+                if (!self::skipBalanced($line, $i)) {
+                    $complete = false;
+                }
+                $current .= substr($line, $start, $i - $start + 1);
+                $inWord = true;
+                continue;
+            }
+
+            if ($char === '<' || $char === '>' || ($char === '&' && $next === '>')) {
+                $fd = null;
+                if ($inWord && !$quoted && $current !== '' && ctype_digit($current) && $pendingRedirect === null) {
+                    $fd = $current;
+                    $current = '';
+                    $inWord = false;
+                } else {
+                    $endWord();
+                }
+                if ($pendingRedirect !== null) {
+                    $complete = false; // `> >f`
+                }
+                $op = self::readRedirectOperator($line, $i);
+                $redirections[] = ['command' => count($commands), 'fd' => $fd, 'op' => $op, 'target' => null];
+                $hasRedirect = true;
+                $pendingRedirect = count($redirections) - 1;
+                continue;
+            }
+
+            if ($char === ';' || $char === '&' || $char === '|' || $char === '(' || $char === ')'
+                || $char === "\n" || $char === "\r"
+            ) {
+                $op = $char;
+                if (($char === ';' && $next === ';') || ($char === '&' && $next === '&')
+                    || ($char === '|' && ($next === '|' || $next === '&'))
+                ) {
+                    $op .= $next;
+                    ++$i;
+                }
+                $endCommand();
+                $operators[] = $op;
+                if ($char === "\n" && $pendingHeredocs !== []) {
+                    if (!self::skipHeredocBodies($line, $i, $pendingHeredocs)) {
+                        $complete = false;
+                    }
+                    $pendingHeredocs = [];
+                }
+                continue;
+            }
+
+            if ($char === ' ' || $char === "\t") {
+                $endWord();
+                continue;
+            }
+
+            if ($char === '#' && !$inWord) {
+                $eol = strpos($line, "\n", $i);
+                $i = ($eol === false ? $length : $eol) - 1;
+                continue;
+            }
+
+            $current .= $char;
+            $inWord = true;
+        }
+
+        $endCommand();
+        if ($pendingHeredocs !== []) {
+            // `cat <<EOF` with no body line at all.
+            $complete = false;
+        }
+
+        return new self($commands, $redirections, $substitutions, $operators, $complete);
+    }
+
+    /**
+     * `$i` sits on the opening `"`; leaves it on the closing one (or past the
+     * end). Inside double quotes a backslash only escapes `$`, backtick, `"`,
+     * `\` and newline — any other backslash is a literal byte, as in bash.
+     *
+     * @param list<string> $substitutions
+     */
+    private static function readDoubleQuoted(string $line, int &$i, array &$substitutions, bool &$complete): string
+    {
+        $length = strlen($line);
+        $out = '';
+        for (++$i; $i < $length; ++$i) {
+            $char = $line[$i];
+            if ($char === '"') {
+                return $out;
+            }
+            if ($char === '\\' && $i + 1 < $length) {
+                $next = $line[$i + 1];
+                if ($next === "\n") {
+                    ++$i;
+                    continue;
+                }
+                if (str_contains('$`"\\', $next)) {
+                    $out .= $next;
+                    ++$i;
+                    continue;
+                }
+                $out .= $char;
+                continue;
+            }
+            if ($char === '$' && (($line[$i + 1] ?? '') === '(' || ($line[$i + 1] ?? '') === '{')) {
+                if ($line[$i + 1] === '(') {
+                    $substitutions[] = '$(';
+                }
+                $start = $i;
+                ++$i;
+                if (!self::skipBalanced($line, $i)) {
+                    $complete = false;
+                }
+                $out .= substr($line, $start, $i - $start + 1);
+                continue;
+            }
+            if ($char === '`') {
+                $substitutions[] = '`';
+                $start = $i;
+                if (!self::skipBacktick($line, $i)) {
+                    $complete = false;
+                }
+                $out .= substr($line, $start, $i - $start + 1);
+                continue;
+            }
+            $out .= $char;
+        }
+
+        $complete = false;
+
+        return $out;
+    }
+
+    /**
+     * `$i` sits on the `$` of `$'…'`; leaves it on the closing `'`. The C
+     * escapes are decoded because bash decodes them: `rm $'\x2drf' /` hands rm
+     * a literal `-rf`.
+     */
+    private static function readAnsiC(string $line, int &$i, bool &$complete): string
+    {
+        $length = strlen($line);
+        $raw = '';
+        for ($i += 2; $i < $length; ++$i) {
+            $char = $line[$i];
+            if ($char === '\\' && $i + 1 < $length) {
+                $raw .= $char . $line[++$i];
+                continue;
+            }
+            if ($char === "'") {
+                return stripcslashes($raw);
+            }
+            $raw .= $char;
+        }
+
+        $complete = false;
+
+        return stripcslashes($raw);
+    }
+
+    /**
+     * `$i` sits on an opening `(` or `{`; advance it to the matching closer,
+     * skipping quoted spans and escapes. Returns false (with `$i` at the last
+     * byte) when the closer never comes.
+     */
+    private static function skipBalanced(string $line, int &$i): bool
+    {
+        $length = strlen($line);
+        $open = $line[$i];
+        $close = $open === '(' ? ')' : '}';
+        $depth = 0;
+        for (; $i < $length; ++$i) {
+            $char = $line[$i];
+            if ($char === '\\') {
+                ++$i;
+                continue;
+            }
+            if ($char === "'") {
+                $end = strpos($line, "'", $i + 1);
+                if ($end === false) {
+                    break;
+                }
+                $i = $end;
+                continue;
+            }
+            if ($char === '"') {
+                for (++$i; $i < $length && $line[$i] !== '"'; ++$i) {
+                    if ($line[$i] === '\\') {
+                        ++$i;
+                    }
+                }
+                continue;
+            }
+            if ($char === $open) {
+                ++$depth;
+            } elseif ($char === $close && --$depth === 0) {
+                return true;
+            }
+        }
+        $i = $length - 1;
+
+        return false;
+    }
+
+    /**
+     * `$i` sits on an opening backtick; advance it to the closing one.
+     */
+    private static function skipBacktick(string $line, int &$i): bool
+    {
+        $length = strlen($line);
+        for (++$i; $i < $length; ++$i) {
+            if ($line[$i] === '\\') {
+                ++$i;
+                continue;
+            }
+            if ($line[$i] === '`') {
+                return true;
+            }
+        }
+        $i = $length - 1;
+
+        return false;
+    }
+
+    /**
+     * `$i` sits on the first byte of a redirection operator (`<`, `>` or the
+     * `&` of `&>`); returns the operator and leaves `$i` on its last byte.
+     */
+    private static function readRedirectOperator(string $line, int &$i): string
+    {
+        foreach (['&>>', '&>', '<<<', '<<-', '<<', '<>', '<&', '>>', '>|', '>&', '<', '>'] as $op) {
+            if (substr_compare($line, $op, $i, strlen($op)) === 0) {
+                $i += strlen($op) - 1;
+
+                return $op;
+            }
+        }
+
+        return $line[$i]; // unreachable: the caller only enters on `<`, `>` or `&>`
+    }
+
+    /**
+     * `$i` sits on the newline that ends a line carrying here-doc operators;
+     * skip each body in order through its delimiter line, leaving `$i` on the
+     * newline that ends the last delimiter (or the last byte). A body is data
+     * for the command's stdin, not commands — parsing it as commands would
+     * make every deny-list fire on the text of a heredoc.
+     *
+     * @param list<array{delimiter: string, stripTabs: bool}> $heredocs
+     */
+    private static function skipHeredocBodies(string $line, int &$i, array $heredocs): bool
+    {
+        $length = strlen($line);
+        foreach ($heredocs as $heredoc) {
+            while (true) {
+                if ($i + 1 >= $length) {
+                    $i = $length - 1;
+
+                    return false;
+                }
+                $start = $i + 1;
+                $eol = strpos($line, "\n", $start);
+                $end = $eol === false ? $length : $eol;
+                $text = rtrim(substr($line, $start, $end - $start), "\r");
+                if ($heredoc['stripTabs']) {
+                    $text = ltrim($text, "\t");
+                }
+                $i = $eol === false ? $length - 1 : $eol;
+                if ($text === $heredoc['delimiter']) {
+                    break;
+                }
+                if ($eol === false) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    public function hasSubstitution(): bool
+    {
+        return $this->substitutions !== [];
+    }
+
+    public function hasRedirection(): bool
+    {
+        return $this->redirections !== [];
+    }
+
+    /**
+     * The commands with redirections removed, each re-joined with single
+     * spaces and one command per line — quote-free text for the regex
+     * heuristics that predate this class and are still written against a
+     * flat string.
+     */
+    public function dequoted(): string
+    {
+        return implode("\n", array_map(
+            static fn (array $words): string => implode(' ', $words),
+            $this->commands,
+        ));
+    }
+}

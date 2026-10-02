@@ -120,7 +120,11 @@ final class PermissionGateScopedWriteTest extends TestCase
             'backtick substitution'    => ['mkdir `id`'],
             'substitution in dquotes'  => ['mkdir "$(cat /etc/hostname)"'],
             'backtick in dquotes'      => ['mkdir "`id`"'],
-            'variable expansion'       => ['rm -rf $HOME'],
+            // `$TARGET`, not `$HOME`: since audit F-P1 the rm -rf circuit
+            // breaker normalises `$HOME` to the home directory and DENIES
+            // `rm -rf $HOME` before mode dispatch, so that spelling no longer
+            // reaches the `$` metacharacter refusal this case is pinning.
+            'variable expansion'       => ['rm -rf $TARGET'],
             // NOTE: this one cannot isolate a single character — `<`, `(` and
             // `)` are all in the set, so removing any one still leaves the
             // others to reject it. It pins the shape, not a specific

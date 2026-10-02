@@ -46,8 +46,22 @@ more broadly. What it buys is a gate that is reachable and configurable.
 
 Step 0 runs **before** rules and before the mode, so no `allow` rule and no
 mode — `bypass-permissions` included — can talk the gate into a self-destruct.
-It is tolerant of flag reordering (`-fr`), flag splitting (`-r -f`), long forms
-(`--recursive --force`), `--no-preserve-root` riding along, and a quoted target.
+It judges the words bash will actually run, not the raw text: the command line
+is tokenised with quote removal (`Permissions\ShellWords`), so a quoted flag
+(`rm '-rf' ~`, `rm "-rf" /`, `rm $'-rf' /`) is a flag. It is tolerant of flag
+reordering (`-fr`), flag splitting (`-r -f`), flags after the operand
+(`rm ~ -rf`), long forms and their GNU abbreviations (`--recursive --force`,
+`--rec --forc`), `--no-preserve-root` riding along, `--`, an `rm` spelled
+`/bin/rm` or `\rm` or behind `sudo`/`env`/`timeout`/an assignment, and a
+subshell or any control operator around it. It checks **every** operand, and
+normalises each: `/`, `//`, `/.`, `/*`, `~`, `~/`, `~/.`, `~/*`, `$HOME`,
+`${HOME}`, `"$HOME"` and `$HOME/` all count as root-or-home. A line the
+tokeniser cannot parse (an unterminated quote) is still judged on its raw
+tokens. What it cannot see is anything that needs the shell to *expand*
+first — `$(echo rm) -rf /`, `x=-rf; rm $x /`, `bash -c '…'`, `eval`, aliases,
+`find / -delete` — so it remains a guard rail, not a containment boundary.
+(Before audit F-P1 the quoted-flag spellings, a second target, `/*`, `~/` and
+`$HOME` were all **allowed** under `bypass-permissions`.)
 
 Two name classes drive the evaluators:
 
