@@ -182,13 +182,33 @@ final class ProcessTreeKillTest extends TestCase
      */
     private function awaitMarker(string $marker): array
     {
-        $deadline = \microtime(true) + 5.0;
+        $pids = self::awaitRunning($marker, 5.0);
+        // The `sleep` process itself, plus every shell that names it.
+        \array_push($this->strays, ...$pids);
+
+        return $pids;
+    }
+
+    /**
+     * @return list<int> survivors after the budget
+     */
+    private function awaitGone(string $marker, float $budget): array
+    {
+        return self::survivingAfter($marker, $budget);
+    }
+
+    /**
+     * Polls until a live process names $marker, or $budget runs out.
+     * Shared with {@see ProcessTreeKillAsyncTest} (one copy, not two).
+     *
+     * @return list<int> the matching pids, empty on timeout
+     */
+    public static function awaitRunning(string $marker, float $budget): array
+    {
+        $deadline = \microtime(true) + $budget;
         do {
             $pids = self::pidsRunning($marker);
             if ($pids !== []) {
-                // The `sleep` process itself, plus every shell that names it.
-                \array_push($this->strays, ...$pids);
-
                 return $pids;
             }
             \usleep(20_000);
@@ -198,9 +218,12 @@ final class ProcessTreeKillTest extends TestCase
     }
 
     /**
+     * Polls until no live process names $marker, or $budget runs out.
+     * Shared with the R3 async-kill suites (one copy, not three).
+     *
      * @return list<int> survivors after the budget
      */
-    private function awaitGone(string $marker, float $budget): array
+    public static function survivingAfter(string $marker, float $budget): array
     {
         $deadline = \microtime(true) + $budget;
         do {

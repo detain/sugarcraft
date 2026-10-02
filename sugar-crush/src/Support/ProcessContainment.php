@@ -536,10 +536,12 @@ final class ProcessContainment
     }
 
     /**
-     * Upper bound on {@see killTree()}'s freeze walk: passes × poll is a
-     * ~250 ms ceiling on how long a teardown may sit on the caller's thread
-     * (the TUI's event loop, for the Escape-Escape path) while a tree that
-     * will not hold still is chased. A quiet tree settles in two passes.
+     * Upper bound on {@see killTree()}'s freeze walk: passes × poll (plus one
+     * /proc snapshot per pass) is how long a teardown may sit on the caller's
+     * thread while a tree that will not hold still is chased. A quiet tree
+     * settles in two or three passes. {@see killTreeAsync()} shares the bound but
+     * spends it one pass per loop tick, which is why the TUI's Escape-Escape
+     * paths use that spelling (audit R3).
      */
     private const TREE_FREEZE_MAX_PASSES = 50;
 
@@ -548,9 +550,11 @@ final class ProcessContainment
     /**
      * KILL $pid AND EVERYTHING IT STARTED — the public group-kill entry point
      * for any site that tears down a forked child of this package (audit
-     * B2/F-E2: EngineBackend's turn teardown, Runtime's parallel deadline; the
-     * dormant Chat kill site and the custom-command `!` runner are meant to
-     * call this too).
+     * B2/F-E2: Runtime's parallel deadline, AgentWorkerPool, the custom-command
+     * `!` runner). A site that runs inside an event-loop callback —
+     * EngineBackend's turn teardown and Chat's cancel sites — calls
+     * {@see killTreeAsync()} instead, which runs this same sequence one loop
+     * tick per pass (audit R3).
      *
      * WHY `posix_kill($pid, 9)` WAS NOT ENOUGH. Every command a tool runs is
      * `setsid -w`-wrapped ({@see spawnSpec()}), so it leads its OWN session and
@@ -631,32 +635,7 @@ final class ProcessContainment
         $ownGroup = \posix_getpgrp();
 
         $members = self::freezeTree($pid, $self, $stop);
-
-        $groups = [];
-        foreach ($members as $member) {
-            $stat = ProcessTree::stat($member);
-            if ($stat !== null && $stat['pgid'] > 1 && $stat['pgid'] !== $ownGroup) {
-                $groups[$stat['pgid']] = true;
-            }
-        }
-        $groups = \array_keys($groups);
-
-        $deliver = static function (int $signal) use ($groups, $members, $cont): void {
-            foreach ($groups as $group) {
-                @\posix_kill(-$group, $signal);
-            }
-            foreach ($members as $member) {
-                @\posix_kill($member, $signal);
-            }
-            if ($signal !== 9) {
-                foreach ($groups as $group) {
-                    @\posix_kill(-$group, $cont);
-                }
-                foreach ($members as $member) {
-                    @\posix_kill($member, $cont);
-                }
-            }
-        };
+        $deliver = self::treeDeliverer($members, $ownGroup, $cont);
 
         if ($termGraceSeconds <= 0.0) {
             $deliver(9);
@@ -680,6 +659,283 @@ final class ProcessContainment
     }
 
     /**
+     * {@see killTree()} WITHOUT HOLDING THE CALLER'S THREAD — the spelling for
+     * a teardown that runs inside an event-loop callback (audit R3: the
+     * Escape-Escape cancel of an engine turn, a Chat tool fan-out or a
+     * forked hook chain). Resolves once signal 9 has gone out to the whole
+     * tree; like killTree() it never reaps.
+     *
+     * WHERE THE ~110 ms WENT. MEASURED on this host (1,155 processes in
+     * /proc): one {@see ProcessTree::snapshot()} costs ~33 ms, a quiet tree
+     * needs three of them to settle (a pass that finds the children, then two
+     * clean passes), plus the 5 ms polls between them — ~90-100 ms inside
+     * killTree() and ~5 ms in the caller's reap. Every millisecond of it was
+     * spent on the TUI's loop thread, so Escape froze the spinner, the
+     * keyboard and the stream it had just cancelled. The bounded REAP was the
+     * small half; the freeze walk was the big one.
+     *
+     * WHAT MOVES AND WHAT DOES NOT. The freeze, the walk and the kill are the
+     * same code killTree() runs ({@see freezePass()}, {@see treeDeliverer()}),
+     * in the same order and to the same bound: the root is SIGSTOPped HERE,
+     * synchronously, so from this call on it cannot fork and its children stay
+     * its children; then each walk pass runs in its own loop tick, the waits
+     * between passes are a timer instead of usleep(), and the kill goes out in
+     * the tick the walk settles in. The loop now blocks for at most one pass
+     * (one snapshot) at a time instead of for the whole walk.
+     *
+     * WHY THIS IS SAFE TO SPREAD OVER TICKS. Nothing about the walk relied on
+     * being uninterrupted: it already re-scans until two consecutive passes
+     * find nothing new, precisely because a scan is not atomic, and a stopped
+     * member cannot fork while the loop runs something else. The root is the
+     * caller's unreaped child at every call site (EngineBackend's turn child,
+     * Chat's tool and hook forks), so its pid cannot be recycled while the
+     * walk runs. What a deferred kill DOES add is a way to never happen: a loop
+     * that stops (Ctrl+C right after Escape) would leave a SIGSTOPped tree
+     * behind forever. So every walk in flight is registered, and a shutdown
+     * function owned by the registering pid finishes it synchronously — the
+     * exact killTree() sequence — before this process exits. A fork of this
+     * process inherits the registry but never acts on it (the owner check in
+     * {@see finishPendingTreeKills()}), and every forked child here exits via
+     * {@see ForkedChild::exitNow()}, which skips shutdown functions anyway.
+     *
+     * Same degradations as killTree(): without /proc or ext-posix's getpgrp
+     * this is the direct `posix_kill($pid, 9)`, resolved at once.
+     *
+     * @return \React\Promise\PromiseInterface<null>
+     */
+    public static function killTreeAsync(int $pid, ?\React\EventLoop\LoopInterface $loop = null): \React\Promise\PromiseInterface
+    {
+        if ($pid <= 0 || !\function_exists('posix_kill')) {
+            return \React\Promise\resolve(null);
+        }
+        $self = \function_exists('posix_getpid') ? \posix_getpid() : \getmypid();
+        if ($pid === $self) {
+            return \React\Promise\resolve(null);
+        }
+
+        if (!\function_exists('posix_getpgrp') || !ProcessTree::available()) {
+            @\posix_kill($pid, 9);
+
+            return \React\Promise\resolve(null);
+        }
+
+        $stop = \defined('SIGSTOP') ? \SIGSTOP : 19;
+        $cont = \defined('SIGCONT') ? \SIGCONT : 18;
+        $ownGroup = \posix_getpgrp();
+        $loop ??= \React\EventLoop\Loop::get();
+        $deferred = new \React\Promise\Deferred();
+
+        // Step 1 starts NOW, not on the first tick: the root stops forking
+        // the moment the caller asked for the kill.
+        @\posix_kill($pid, $stop);
+        $walk = ['members' => [$pid => true], 'stable' => 0, 'passes' => 0];
+        $timer = null;
+        $done = false;
+
+        $finish = static function () use (&$walk, &$timer, &$done, $pid, $self, $stop, $cont, $ownGroup, $loop): bool {
+            if ($done) {
+                return false;
+            }
+            $done = true;
+            if ($timer !== null) {
+                $loop->cancelTimer($timer);
+                $timer = null;
+            }
+            unset(self::$pendingTreeKills[$pid]);
+            // A walk cut short (the shutdown sweep) runs its remaining passes
+            // here, to the same bound killTree() uses; one that already
+            // settled or hit the bound goes straight to the kill.
+            while ($walk['stable'] < 2 && $walk['passes'] < self::TREE_FREEZE_MAX_PASSES) {
+                if (self::freezePass($walk, $pid, $self, $stop)) {
+                    break;
+                }
+                \usleep(self::TREE_FREEZE_POLL_US);
+            }
+            self::treeDeliverer(\array_keys($walk['members']), $ownGroup, $cont)(9);
+
+            return true;
+        };
+
+        self::armPendingTreeKillSweep();
+        self::$pendingTreeKills[$pid] = $finish;
+
+        $timer = $loop->addPeriodicTimer(
+            self::TREE_FREEZE_POLL_US / 1_000_000,
+            static function () use (&$walk, &$done, &$timer, $pid, $self, $stop, $finish, $deferred, $loop): void {
+                if ($done) {
+                    return;
+                }
+                // An inherited copy of this timer in a fork that runs a loop
+                // must not walk (or kill) on the parent's behalf, nor keep
+                // that fork's loop alive.
+                if ($self !== self::currentPid()) {
+                    if ($timer !== null) {
+                        $loop->cancelTimer($timer);
+                    }
+
+                    return;
+                }
+                if (!self::freezePass($walk, $pid, $self, $stop) && $walk['passes'] < self::TREE_FREEZE_MAX_PASSES) {
+                    return;
+                }
+                if ($finish()) {
+                    $deferred->resolve(null);
+                }
+            },
+        );
+
+        return $deferred->promise();
+    }
+
+    /**
+     * Collect already-signalled children of this process on a loop timer
+     * instead of a usleep() loop: one WNOHANG pass now, then one every
+     * $pollSeconds until every pid is collected or $budgetSeconds is spent.
+     * Resolves with the pids it could NOT collect (empty when all were), so
+     * a caller with a straggler list can keep them for a later sweep.
+     *
+     * The async twin of the bounded WNOHANG windows the kill sites used
+     * after {@see killTree()} (EngineBackend::reapChild(),
+     * Chat::reapKilledToolChildren()): same budget, same "-1 is terminal"
+     * rule, but the loop turns between polls (audit R3). Never a blanket
+     * `pcntl_waitpid(-1, ...)` — other owners in this process wait on their
+     * own pids and branch on the answer.
+     *
+     * @param list<int> $pids
+     * @return \React\Promise\PromiseInterface<list<int>>
+     */
+    public static function reapAsync(array $pids, float $budgetSeconds, float $pollSeconds = 0.005, ?\React\EventLoop\LoopInterface $loop = null): \React\Promise\PromiseInterface
+    {
+        if (!\function_exists('pcntl_waitpid')) {
+            return \React\Promise\resolve(\array_values($pids));
+        }
+
+        $poll = static function (array $pending): array {
+            $status = 0;
+            foreach ($pending as $slot => $pid) {
+                if (\pcntl_waitpid($pid, $status, \WNOHANG) !== 0) {
+                    unset($pending[$slot]);
+                }
+            }
+
+            return $pending;
+        };
+
+        $pending = $poll(\array_values($pids));
+        if ($pending === [] || $budgetSeconds <= 0.0) {
+            return \React\Promise\resolve(\array_values($pending));
+        }
+
+        $loop ??= \React\EventLoop\Loop::get();
+        $deferred = new \React\Promise\Deferred();
+        $deadline = \microtime(true) + $budgetSeconds;
+        $timer = null;
+        $timer = $loop->addPeriodicTimer(
+            \max(0.001, $pollSeconds),
+            static function () use (&$pending, &$timer, $poll, $deadline, $loop, $deferred): void {
+                $pending = $poll($pending);
+                if ($pending !== [] && \microtime(true) < $deadline) {
+                    return;
+                }
+                $loop->cancelTimer($timer);
+                $deferred->resolve(\array_values($pending));
+            },
+        );
+
+        return $deferred->promise();
+    }
+
+    /**
+     * Walks {@see killTreeAsync()} has started and not yet finished, keyed by
+     * root pid; each value finishes its walk synchronously and kills.
+     *
+     * @var array<int, \Closure(): bool>
+     */
+    private static array $pendingTreeKills = [];
+
+    /** The pid that registered {@see $pendingTreeKills}' shutdown sweep. */
+    private static ?int $pendingTreeKillOwner = null;
+
+    private static function currentPid(): int
+    {
+        return \function_exists('posix_getpid') ? \posix_getpid() : (int) \getmypid();
+    }
+
+    /**
+     * Register the shutdown sweep once per process that starts an async kill.
+     * A fork inherits the flag but not the registration's meaning: the owner
+     * is re-stamped when a forked process starts a walk of its own.
+     */
+    private static function armPendingTreeKillSweep(): void
+    {
+        $me = self::currentPid();
+        if (self::$pendingTreeKillOwner === $me) {
+            return;
+        }
+        // A fork that starts its own walk drops the parent's: those trees are
+        // the parent's to finish, and it still will.
+        self::$pendingTreeKills = [];
+        self::$pendingTreeKillOwner = $me;
+        \register_shutdown_function(static function (): void {
+            self::finishPendingTreeKills();
+        });
+    }
+
+    /**
+     * Finish every {@see killTreeAsync()} walk still in flight, synchronously
+     * — the shutdown backstop, so a loop that stopped mid-walk cannot leave a
+     * SIGSTOPped tree behind. Only in the process that started them.
+     */
+    private static function finishPendingTreeKills(): void
+    {
+        if (self::$pendingTreeKillOwner !== self::currentPid()) {
+            return;
+        }
+        foreach (self::$pendingTreeKills as $finish) {
+            $finish();
+        }
+        self::$pendingTreeKills = [];
+    }
+
+    /**
+     * Steps 2 and 3 of {@see killTree()}: the signal sender for a frozen
+     * member set — every member's process group (never the caller's own, and
+     * never pgid 0/1), then every member pid, with SIGCONT after any signal
+     * other than 9 so a stopped process can act on it.
+     *
+     * @param list<int> $members
+     * @return \Closure(int): void
+     */
+    private static function treeDeliverer(array $members, int $ownGroup, int $cont): \Closure
+    {
+        $groups = [];
+        foreach ($members as $member) {
+            $stat = ProcessTree::stat($member);
+            if ($stat !== null && $stat['pgid'] > 1 && $stat['pgid'] !== $ownGroup) {
+                $groups[$stat['pgid']] = true;
+            }
+        }
+        $groups = \array_keys($groups);
+
+        return static function (int $signal) use ($groups, $members, $cont): void {
+            foreach ($groups as $group) {
+                @\posix_kill(-$group, $signal);
+            }
+            foreach ($members as $member) {
+                @\posix_kill($member, $signal);
+            }
+            if ($signal !== 9) {
+                foreach ($groups as $group) {
+                    @\posix_kill(-$group, $cont);
+                }
+                foreach ($members as $member) {
+                    @\posix_kill($member, $cont);
+                }
+            }
+        };
+    }
+
+    /**
      * Step 1 of {@see killTree()}: stop $root and every descendant until the
      * set holds still, returning root + descendants (never $self).
      *
@@ -688,47 +944,62 @@ final class ProcessContainment
     private static function freezeTree(int $root, int $self, int $stop): array
     {
         @\posix_kill($root, $stop);
-        $members = [$root => true];
-        $stablePasses = 0;
+        $walk = ['members' => [$root => true], 'stable' => 0, 'passes' => 0];
 
-        for ($pass = 0; $pass < self::TREE_FREEZE_MAX_PASSES; $pass++) {
-            $snapshot = ProcessTree::snapshot() ?? [];
-            $grew = false;
-            foreach (ProcessTree::descendants($root, $snapshot) as $descendant) {
-                if ($descendant === $self || isset($members[$descendant])) {
-                    continue;
-                }
-                @\posix_kill($descendant, $stop);
-                $members[$descendant] = true;
-                $grew = true;
-            }
-
-            $allHeld = true;
-            foreach (\array_keys($members) as $member) {
-                $state = $snapshot[$member]['state'] ?? 'X';
-                // T stopped, t tracing-stop, Z zombie, X dead/absent: none of
-                // these can fork again.
-                if (!\in_array($state, ['T', 't', 'Z', 'X'], true)) {
-                    $allHeld = false;
-
-                    break;
-                }
-            }
-
-            // TWO clean passes, not one: a scan is not atomic, so a member
-            // that forked after the directory listing and stopped before its
-            // own stat was read looks "held" with a child the listing missed.
-            // A second pass that starts after everything was seen stopped
-            // cannot miss anything — nothing in the set can fork any more.
-            $stablePasses = (!$grew && $allHeld) ? $stablePasses + 1 : 0;
-            if ($stablePasses >= 2) {
+        while ($walk['passes'] < self::TREE_FREEZE_MAX_PASSES) {
+            if (self::freezePass($walk, $root, $self, $stop)) {
                 break;
             }
 
             \usleep(self::TREE_FREEZE_POLL_US);
         }
 
-        return \array_keys($members);
+        return \array_keys($walk['members']);
+    }
+
+    /**
+     * ONE pass of the freeze walk, shared by {@see freezeTree()} (back to
+     * back, usleep between) and {@see killTreeAsync()} (one per loop tick):
+     * scan, SIGSTOP every descendant not yet seen, and report whether the set
+     * has now held still for two consecutive passes. Counts itself in
+     * $walk['passes'] so both callers share the one bound.
+     *
+     * @param array{members: array<int, true>, stable: int, passes: int} $walk
+     */
+    private static function freezePass(array &$walk, int $root, int $self, int $stop): bool
+    {
+        $walk['passes']++;
+        $snapshot = ProcessTree::snapshot() ?? [];
+        $grew = false;
+        foreach (ProcessTree::descendants($root, $snapshot) as $descendant) {
+            if ($descendant === $self || isset($walk['members'][$descendant])) {
+                continue;
+            }
+            @\posix_kill($descendant, $stop);
+            $walk['members'][$descendant] = true;
+            $grew = true;
+        }
+
+        $allHeld = true;
+        foreach (\array_keys($walk['members']) as $member) {
+            $state = $snapshot[$member]['state'] ?? 'X';
+            // T stopped, t tracing-stop, Z zombie, X dead/absent: none of
+            // these can fork again.
+            if (!\in_array($state, ['T', 't', 'Z', 'X'], true)) {
+                $allHeld = false;
+
+                break;
+            }
+        }
+
+        // TWO clean passes, not one: a scan is not atomic, so a member
+        // that forked after the directory listing and stopped before its
+        // own stat was read looks "held" with a child the listing missed.
+        // A second pass that starts after everything was seen stopped
+        // cannot miss anything — nothing in the set can fork any more.
+        $walk['stable'] = (!$grew && $allHeld) ? $walk['stable'] + 1 : 0;
+
+        return $walk['stable'] >= 2;
     }
 
     /**

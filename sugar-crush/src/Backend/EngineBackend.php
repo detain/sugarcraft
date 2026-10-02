@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Backend;
 
 use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\App\App;
@@ -1810,11 +1811,23 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             // B2/F-E2: the whole tree, not just the turn child. The child's
             // Bash runs are setsid'd into their own groups and a parallel Task
             // sub-agent is a fork below it; a SIGKILL of $pid alone left all
-            // of them running for nobody. killTree() falls back to exactly
-            // that direct kill where /proc or ext-posix is missing.
-            ProcessContainment::killTree($pid);
-            self::reapChild($pid);
-            $deferred->reject(new \RuntimeException($rejectMessage));
+            // of them running for nobody. killTreeAsync() falls back to
+            // exactly that direct kill where /proc or ext-posix is missing.
+            //
+            // R3: on the loop, not on it. This closure runs inside a loop
+            // callback (the cancel poll, the idle timer, a corrupt frame), and
+            // the synchronous killTree() + reapChild() pair held that callback
+            // ~110 ms - MEASURED, almost all of it the /proc walk - so the
+            // Escape that cancelled a turn froze the frame it was cancelling.
+            // The root is SIGSTOPped before this returns; the walk, the kill
+            // and the bounded reap then take a loop tick each, and the turn
+            // settles only after all three, so "settled" still means "tree
+            // signalled and child reaped" (or handed to the straggler sweep).
+            ProcessContainment::killTreeAsync($pid, $loop)
+                ->then(static fn(): PromiseInterface => self::reapChildAsync($pid, $loop))
+                ->then(static function () use ($deferred, $rejectMessage): void {
+                    $deferred->reject(new \RuntimeException($rejectMessage));
+                });
         };
 
         // The success path: the child delivered its result frame, hung up,
@@ -2065,6 +2078,29 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             }
             usleep(self::REAP_POLL_MICROSECONDS);
         }
+    }
+
+    /**
+     * {@see reapChild()} on the loop (audit R3): the same {@see REAP_ATTEMPTS}
+     * x {@see REAP_POLL_MICROSECONDS} window and the same give-up rule - a
+     * child that outlives it stays in self::$unreapedChildren for
+     * {@see sweepUnreapedChildren()} - but the polls are a timer, so the
+     * cancel teardown that runs it never holds the loop thread.
+     *
+     * @return PromiseInterface<null>
+     */
+    private static function reapChildAsync(int $pid, LoopInterface $loop): PromiseInterface
+    {
+        return ProcessContainment::reapAsync(
+            [$pid],
+            self::REAP_ATTEMPTS * self::REAP_POLL_MICROSECONDS / 1_000_000,
+            self::REAP_POLL_MICROSECONDS / 1_000_000,
+            $loop,
+        )->then(static function (array $unreaped) use ($pid): void {
+            if ($unreaped === []) {
+                unset(self::$unreapedChildren[$pid]);
+            }
+        });
     }
 
     /**

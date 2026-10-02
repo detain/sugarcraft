@@ -99,7 +99,7 @@ final class EngineBackendReapTest extends TestCase
      *
      * @dataProvider settlePaths
      */
-    public function testEverySettlePathReapsBeforeItSettles(string $closure, string $settleCall): void
+    public function testEverySettlePathReapsBeforeItSettles(string $closure, string $settleCall, string $reapCall): void
     {
         $source = self::methodSource(new \ReflectionMethod(EngineBackend::class, 'completeAsync'));
 
@@ -110,20 +110,24 @@ final class EngineBackendReapTest extends TestCase
         $this->assertIsInt($settleAt, $closure . ' no longer settles via ' . $settleCall);
 
         $this->assertStringContainsString(
-            'self::reapChild(',
+            $reapCall,
             substr($source, $closureStart, $settleAt - $closureStart),
             $closure . '() settles the promise without reaping the child first',
         );
     }
 
     /**
-     * @return array<string, array{0: string, 1: string}>
+     * The cancel/timeout path reaps through reapChildAsync() since audit R3:
+     * the kill and the reap run on loop timers, and the reject sits in the
+     * promise chain AFTER the reap, so the ordering this pins still holds.
+     *
+     * @return array<string, array{0: string, 1: string, 2: string}>
      */
     public static function settlePaths(): array
     {
         return [
-            'cancel/timeout' => ['$teardown', '$deferred->reject('],
-            'success' => ['$finalize', '$this->settleFromResultFrame('],
+            'cancel/timeout' => ['$teardown', '$deferred->reject(', 'self::reapChildAsync('],
+            'success' => ['$finalize', '$this->settleFromResultFrame(', 'self::reapChild('],
         ];
     }
 
@@ -168,11 +172,28 @@ final class EngineBackendReapTest extends TestCase
         // which owns the posix guard and — where /proc or ext-posix is missing
         // — degrades to exactly the old direct kill. The property survives;
         // its spelling moved into the helper, so both halves are pinned.
-        $this->assertStringContainsString('ProcessContainment::killTree($pid)', $source);
+        //
+        // Audit R3 moved it once more, onto the loop: killTreeAsync() runs
+        // the same freeze/walk/kill in loop ticks, and carries the same posix
+        // guard and the same direct-kill fallback.
+        $this->assertStringContainsString('ProcessContainment::killTreeAsync($pid, $loop)', $source);
 
-        $helper = self::methodSource(new \ReflectionMethod(\SugarCraft\Crush\Support\ProcessContainment::class, 'killTree'));
+        $helper = self::methodSource(new \ReflectionMethod(\SugarCraft\Crush\Support\ProcessContainment::class, 'killTreeAsync'));
         $this->assertStringContainsString("function_exists('posix_kill')", $helper);
         $this->assertStringContainsString('posix_kill($pid, 9)', $helper, 'the no-/proc fallback is still a direct kill of the root');
+    }
+
+    /**
+     * Audit R3: the async reap keeps reapChild()'s window — same attempts x
+     * poll budget, same hand-off of a give-up to the straggler sweep.
+     */
+    public function testTheAsyncReapKeepsTheBoundedWindowAndTheStragglerHandOff(): void
+    {
+        $source = self::methodSource(new \ReflectionMethod(EngineBackend::class, 'reapChildAsync'));
+
+        $this->assertStringContainsString('self::REAP_ATTEMPTS * self::REAP_POLL_MICROSECONDS', $source);
+        $this->assertStringContainsString('unset(self::$unreapedChildren[$pid])', $source);
+        $this->assertStringNotContainsString('usleep(', $source, 'the async reap must not sleep on the loop thread');
     }
 
     // -------------------------------------------------------------------------

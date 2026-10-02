@@ -624,6 +624,10 @@ final class TreeWideGuardRosterTest extends TestCase
         // sys_get_temp_dir fixture dir — bounded, test-made.
         'Support/AtomicFileWriterTest.php' => ['scandir($this->dir)'],
         'Support/FixtureLifetimeCensusTest.php' => ['RecursiveDirectoryIterator($root)', "glob(\$dir.'/*.php')"],
+        // Names the package root only to hand its driver script the vendor
+        // autoloader; tearDown() empties the sys_get_temp_dir() fixture dir
+        // setUp() made (audit R3).
+        'Support/ProcessTreeKillAsyncTest.php' => ['glob($this->dir.\'/*\')'],
         'Tools/PtyShimAutoloadResolutionTest.php' => ['RecursiveDirectoryIterator($path,\FilesystemIterator::SKIP_DOTS)'],
         'Workflows/WorkflowRegistryTest.php' => ['scandir($dir)'],
         // tearDown() removes the sys_get_temp_dir() HOME sandbox setUp() made.

@@ -5227,9 +5227,9 @@ final class Chat implements Model
      * CANCEL KILLS THE TREE. A double-Escape cancels $cancellation; the next poll
      * takes the child and every process under it — the setsid'd hook script and
      * whatever that script started — through
-     * {@see Support\ProcessContainment::killTree()}, reaps it on the bounded
-     * WNOHANG window {@see reapKilledToolChildren()} uses, and resolves null so
-     * nothing is dispatched.
+     * {@see Support\ProcessContainment::killTreeAsync()}, reaps it on the
+     * bounded WNOHANG window {@see reapKilledToolChildren()} uses (as loop
+     * timers, audit R3), and resolves null so nothing is dispatched.
      *
      * QUITTING DOES NOT WAIT FOR IT. Ctrl+C quits at once (it could not while
      * the chain ran inside update()); the child runs out its chain — bounded by
@@ -5298,9 +5298,10 @@ final class Chat implements Model
      *   payload file to $collect once the child has been reaped.
      * - CANCEL KILLS THE TREE: once $cancellation fires, the next poll takes the
      *   child and everything under it — a setsid'd hook script or `bash -c`, and
-     *   whatever that started — through {@see Support\ProcessContainment::killTree()},
-     *   reaps it on {@see reapKilledToolChildren()}'s bounded window, discards
-     *   the payload and resolves null, so nothing is dispatched.
+     *   whatever that started — through {@see Support\ProcessContainment::killTreeAsync()},
+     *   reaps it on {@see reapKilledToolChildren()}'s bounded window (both on
+     *   the loop, audit R3), discards the payload and resolves null, so
+     *   nothing is dispatched.
      * - A failed fork (-1) runs $inline here, blocking but never wrong — the
      *   pre-fix behaviour, as {@see forkToolCalls()} degrades.
      *
@@ -5354,10 +5355,21 @@ final class Chat implements Model
                     if ($cancellation->isCancelled()) {
                         $settled = true;
                         $loop->cancelTimer($timer);
-                        \SugarCraft\Crush\Support\ProcessContainment::killTree($pid);
-                        self::reapKilledToolChildren([$pid]);
-                        \SugarCraft\Crush\Support\ToolIpcFiles::discard($file);
-                        $deferred->resolve(null);
+                        // Audit R3: the tree kill and the bounded reap run on
+                        // the loop (each pass its own tick), so Escape no
+                        // longer freezes the frame for the ~110 ms walk. The
+                        // command still resolves only after both.
+                        \SugarCraft\Crush\Support\ProcessContainment::killTreeAsync($pid, $loop)
+                            ->then(static fn(): PromiseInterface => \SugarCraft\Crush\Support\ProcessContainment::reapAsync(
+                                [$pid],
+                                self::REAP_BUDGET_SECONDS,
+                                self::REAP_POLL_MICROSECONDS / 1_000_000,
+                                $loop,
+                            ))
+                            ->then(static function () use ($file, $deferred): void {
+                                \SugarCraft\Crush\Support\ToolIpcFiles::discard($file);
+                                $deferred->resolve(null);
+                            });
 
                         return;
                     }
@@ -5861,17 +5873,32 @@ final class Chat implements Model
             // anyway. killTree() freezes the tree, signals every member's
             // group and pid, degrades to the old single-pid kill without
             // /proc, and leaves the root for the reap below.
+            //
+            // Audit R3: killTreeAsync(), so each tree's /proc walk takes its
+            // own loop ticks instead of ~110 ms of the render thread per
+            // child, and the shared reap budget is a timer too. All trees are
+            // walked concurrently and the batch settles once every one is
+            // signalled and the shared window has collected what it can.
+            $settled = true;
+            $loop->cancelTimer($timer);
+
             $stragglers = [];
+            $kills = [];
             foreach ($pendingIndexes as $index => $_) {
-                \SugarCraft\Crush\Support\ProcessContainment::killTree($jobs[$index]['pid']);
+                $kills[] = \SugarCraft\Crush\Support\ProcessContainment::killTreeAsync($jobs[$index]['pid'], $loop);
                 $stragglers[] = $jobs[$index]['pid'];
             }
 
-            self::reapKilledToolChildren($stragglers);
-
-            $settled = true;
-            $loop->cancelTimer($timer);
-            $deferred->resolve(array_map($collect, $jobs));
+            \React\Promise\all($kills)
+                ->then(static fn(): PromiseInterface => \SugarCraft\Crush\Support\ProcessContainment::reapAsync(
+                    $stragglers,
+                    self::REAP_BUDGET_SECONDS,
+                    self::REAP_POLL_MICROSECONDS / 1_000_000,
+                    $loop,
+                ))
+                ->then(static function () use ($deferred, $collect, $jobs): void {
+                    $deferred->resolve(array_map($collect, $jobs));
+                });
         });
 
         return $deferred->promise();
@@ -5926,6 +5953,13 @@ final class Chat implements Model
      * cancelled its own timer on the way out. A pid still unreaped when the
      * window closes is left as a zombie deliberately — a slot in the process
      * table, against a blocked loop being a dead terminal.
+     *
+     * THE LIVE SITES REAP ON THE LOOP NOW (audit R3): both cancel branches
+     * hand their pids to {@see \SugarCraft\Crush\Support\ProcessContainment::reapAsync()}
+     * with this same per-site budget and poll, after
+     * {@see \SugarCraft\Crush\Support\ProcessContainment::killTreeAsync()}.
+     * This synchronous spelling is the reference the budget tests pin, and
+     * the one to use from a site that is not inside a loop callback.
      *
      * @param list<int> $pids
      */
