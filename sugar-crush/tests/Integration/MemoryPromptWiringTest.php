@@ -410,6 +410,9 @@ final class MemoryPromptWiringTest extends TestCase
             'withRoot' => fn(EngineBackend $b): EngineBackend => $b->withRoot($this->dir),
             'withWorktreeRoot' => fn(EngineBackend $b): EngineBackend => $b->withWorktreeRoot($this->dir),
             'withMaxSteps' => fn(EngineBackend $b): EngineBackend => $b->withMaxSteps(2),
+            'withCompactorConfig' => fn(EngineBackend $b): EngineBackend => $b->withCompactorConfig(
+                new \SugarCraft\Crush\Context\CompactorConfig(skillBudgetPerSkill: 7),
+            ),
             'withPermissionGate' => fn(EngineBackend $b): EngineBackend => $b->withPermissionGate(
                 new PermissionGate(PermissionMode::Default),
             ),

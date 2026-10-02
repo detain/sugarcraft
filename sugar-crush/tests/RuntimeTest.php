@@ -8111,7 +8111,7 @@ DOC;
         // one file, and the trait file is the one carrying the primitive the
         // verdict reads.
         $this->assertSame(
-            ['Grep.php', 'CapturesProcessOutput.php', 'TruncatesOutput.php'],
+            ['Grep.php', 'CapturesProcessOutput.php', 'RebindsWorktreeJail.php', 'TruncatesOutput.php'],
             $tools['Grep'],
             'the walk stopped following traits - the verdict is back to reading declaring files only',
         );
