@@ -221,6 +221,20 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         $path = $args['path'] ?? '';
         $include = $args['include'] ?? '*';
 
+        // Every one of these becomes a grep argv token below, and a JSON array
+        // or number here is a model's malformed call, not a search: under
+        // strict_types escapeshellarg() would throw a TypeError out of
+        // execute() instead of answering it.
+        foreach (['pattern' => $pattern, 'path' => $path, 'include' => $include] as $name => $value) {
+            if (!is_string($value)) {
+                return new ToolResult(
+                    toolCallId: $args['id'] ?? '',
+                    content: "Error: $name must be a string",
+                    isError: true,
+                );
+            }
+        }
+
         if ($pattern === '') {
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
@@ -267,11 +281,28 @@ final readonly class Grep implements Tool, ParallelSafe, CarriesSessionState
         // IgnoreRules::halts() documents for Glob. -R follows every link it
         // meets, and this monorepo's path-repo symlinks make that a
         // non-terminating walk rather than a slow one.
+        //
+        // Every model-supplied value reaches grep in a form its option parser
+        // cannot read as an option (audit F-J1). escapeshellarg() stops SHELL
+        // injection only; it does nothing about OPTION injection, and a bare
+        // pattern operand that begins with `-` is parsed by grep as flags.
+        // `-ReSECRET` was `-R` (dereference every symlink — the hatch above,
+        // reopened by the model, walking `innocent_link -> ../outside` and out
+        // of the PathJail) plus `-e SECRET`; `-f FILE`, `--devices=read`,
+        // `--dereference-recursive` were reachable the same way. So:
+        //   - the pattern travels as the ARGUMENT of `-e`, never as an
+        //     operand — `-e -foo` searches for the text `-foo`;
+        //   - `--include=<glob>` and IgnoreRules' `--exclude-dir=<dir>` are
+        //     single-token `--opt=value` forms, so a value starting with `-`
+        //     is the option's value, not a new option;
+        //   - `--` ends option parsing before the path operand, which matters
+        //     on the unrooted instance (a relative directory named `-R`); the
+        //     rooted one already hands grep PathJail's absolute path.
         $cmd .= $rules->grepExcludeFlags();
         if ($include !== '*') {
             $cmd .= ' --include=' . escapeshellarg($include);
         }
-        $cmd .= ' ' . escapeshellarg($pattern) . ' ' . escapeshellarg($path);
+        $cmd .= ' -e ' . escapeshellarg($pattern) . ' -- ' . escapeshellarg($path);
         // See Bash::execute() -- exec() leaks the child's stderr onto the
         // terminal underneath the TUI. grep exits 1 for "no matches", which
         // is a normal outcome rather than an error.
