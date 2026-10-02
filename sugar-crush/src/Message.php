@@ -251,14 +251,61 @@ final class Message implements \JsonSerializable
 
         $parts = [];
         foreach ($call->arguments as $key => $value) {
-            $rendered = is_string($value) ? $value : (json_encode($value) ?: '');
+            if (is_string($value)) {
+                $rendered = $value;
+            } else {
+                // Compared with false, not `?:` — `0` encodes to "0", which
+                // `?:` would have thrown away as falsy.
+                $encoded = json_encode($value, self::ARGUMENT_JSON_FLAGS | JSON_PARTIAL_OUTPUT_ON_ERROR);
+                $rendered = $encoded === false ? get_debug_type($value) : $encoded;
+            }
             if (mb_strlen($rendered) > self::DESCRIPTION_MAX) {
                 $rendered = mb_substr($rendered, 0, self::DESCRIPTION_MAX) . '…';
             }
-            $parts[] = is_int($key) ? $rendered : "{$key}: " . json_encode($rendered);
+            $parts[] = is_int($key) ? $rendered : "{$key}: " . self::encodeArgument($rendered);
         }
 
         return $call->name . '(' . implode(', ', $parts) . ')';
+    }
+
+    /**
+     * Readable unicode, and invalid UTF-8 substituted with U+FFFD instead of
+     * failing the whole encode (audit 15b-27).
+     */
+    private const ARGUMENT_JSON_FLAGS = JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE;
+
+    /**
+     * One argument value as a JSON string literal for the one-liner.
+     *
+     * Audit 15b-27: this used to be a bare `json_encode()`, which returns
+     * `false` on a single invalid byte (a Latin-1 `caf\xe9` in a Bash
+     * command) — and `false` concatenates as '', so the call was described as
+     * `Bash(command: )` and a permission prompt built from it asked the user to
+     * approve a command it did not show. `JSON_INVALID_UTF8_SUBSTITUTE` keeps
+     * every valid byte and marks the bad ones with U+FFFD; should the encode
+     * still fail, the value is shown through
+     * {@see \SugarCraft\Core\Util\Sanitize::visibleControls()} rather than
+     * blanked.
+     *
+     * `JSON_UNESCAPED_UNICODE` makes a CJK or accented command readable, but
+     * it would also emit the C1 controls (U+0080–U+009F) and the invisible
+     * bidi/zero-width format characters raw, where the old escaped output
+     * spelled them `\u009b` / `\u202e`. Those are re-escaped here, so the
+     * label stays valid JSON and carries nothing a terminal would execute or
+     * silently reorder, whichever sink paints it.
+     */
+    private static function encodeArgument(string $value): string
+    {
+        $json = json_encode($value, self::ARGUMENT_JSON_FLAGS);
+        if ($json === false) {
+            return '"' . \SugarCraft\Core\Util\Sanitize::visibleControls($value, false) . '"';
+        }
+
+        return preg_replace_callback(
+            '/\xC2[\x80-\x9F]|\xD8\x9C|\xE2\x80[\x8B-\x8F\xAA-\xAE]|\xE2\x81[\xA0\xA6-\xA9]|\xEF\xBB\xBF/',
+            static fn (array $m): string => sprintf('\\u%04x', mb_ord($m[0], 'UTF-8')),
+            $json,
+        ) ?? $json;
     }
 
     /**
