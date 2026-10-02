@@ -590,7 +590,8 @@ final class SkillLoader
      * Load skills from multiple sources.
      *
      * Priority order: built-in < user < project (later sources override
-     * earlier). Foreign (.claude/.opencode) skills are merged one layer up, in
+     * earlier), and every override is recorded in {@see skipped()} under the
+     * losing file's path ({@see mergeTier()}). Foreign (.claude/.opencode) skills are merged one layer up, in
      * {@see SkillManager::loadAll()}, where a {@see SkillSource} tag has
      * somewhere to live -- see {@see loadAllManifests()} for the full argument
      * and for why a native name wins the collision.
@@ -600,17 +601,16 @@ final class SkillLoader
     public function loadAll(string $projectRoot = '.'): array
     {
         // Built-in first (lowest priority)
-        $builtin = self::originated($this->loadBuiltInSkills(), SkillOrigin::BuiltIn);
+        $skills = self::originated($this->loadBuiltInSkills(), SkillOrigin::BuiltIn);
 
         // User skills override builtins
-        $user = self::originated($this->loadUserSkills(), SkillOrigin::User);
-        $skills = array_merge($builtin, $user);
+        $skills = $this->mergeTier($skills, self::originated($this->loadUserSkills(), SkillOrigin::User));
 
         // Project skills override both
-        $project = self::originated($this->loadProjectSkills($projectRoot), SkillOrigin::Project);
-        $skills = array_merge($skills, $project);
-
-        return $skills;
+        return $this->mergeTier(
+            $skills,
+            self::originated($this->loadProjectSkills($projectRoot), SkillOrigin::Project),
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -713,7 +713,8 @@ final class SkillLoader
     /**
      * Stage-1 equivalent of loadAll(): discovers every skill across the same
      * sources and priority order (built-in < user < project, later
-     * overrides earlier) but loads only each one's manifest, not its body.
+     * overrides earlier, each override recorded in {@see skipped()} by
+     * {@see mergeTier()}) but loads only each one's manifest, not its body.
      *
      * Fixes the defect described in crush_feat.md section 7.E3: every
      * ReactPHP-loop session used to pay the full I/O + YAML-parse cost of
@@ -753,7 +754,7 @@ final class SkillLoader
 
         // User skills override builtins
         // Same $ownedBy widening the eager walk gets — see {@see loadUserSkills()}.
-        $manifests = array_merge($manifests, self::originatedManifests(
+        $manifests = $this->mergeTier($manifests, self::originatedManifests(
             $this->loadManifestsFromDirectory($this->userSkillsDir(), self::homeDir()),
             SkillOrigin::User,
         ));
@@ -761,15 +762,145 @@ final class SkillLoader
         // Project skills override everything else — and are the one tier whose
         // directory a repository picked the location of, so the root is passed
         // as the anchor it must resolve inside ({@see loadProjectSkills()}).
-        $manifests = array_merge(
+        return $this->mergeTier(
             $manifests,
             self::originatedManifests(
                 $this->loadManifestsFromDirectory($this->projectSkillsDir($projectRoot), null, $projectRoot),
                 SkillOrigin::Project,
             ),
         );
+    }
 
-        return $manifests;
+    /**
+     * Lay one tier's skills over the tiers already merged — later wins, the
+     * order {@see loadAll()} and {@see loadAllManifests()} document — and
+     * record every name the later tier takes over.
+     *
+     * THE SHADOWING WAS SILENT, which is audit 15d-03: a cloned repository's
+     * `.sugar-crush/skills/deploy` replaced the user's `~/.sugar-crush/skills/
+     * deploy` (or a built-in such as `security-audit`) and {@see skipped()}
+     * stayed empty, so nothing short of reading the registry told anyone their
+     * own skill was no longer the one being listed. WHO wins is deliberately
+     * unchanged here — the precedence order is an open decision — this only
+     * makes each loss visible, through the same {@see skipped()} record (and
+     * `SUGARCRUSH_DEBUG_SKILLS=1` stderr line) an unreadable file gets.
+     *
+     * One helper for both walks so the eager and manifest-only merges cannot
+     * drift apart on what they report; {@see SkillManager::loadAll()} reports
+     * its foreign-vs-native merge through {@see recordShadowing()} for the same
+     * reason.
+     *
+     * @template T of Skill|array<string, mixed>
+     * @param array<array-key, T> $merged   the earlier tiers, already merged
+     * @param array<array-key, T> $incoming the tier that outranks them
+     * @return array<array-key, T>
+     */
+    private function mergeTier(array $merged, array $incoming): array
+    {
+        foreach ($incoming as $name => $winner) {
+            if (isset($merged[$name])) {
+                [$loserPath, $loserTier] = self::provenanceOf($merged[$name]);
+                [$winnerPath, $winnerTier] = self::provenanceOf($winner);
+                $this->recordShadowing((string) $name, $loserPath, $loserTier, $winnerPath, $winnerTier);
+            }
+
+            $merged[$name] = $winner;
+        }
+
+        return $merged;
+    }
+
+    /**
+     * Record that the skill at $loserPath was not loaded because another
+     * skill of the same name took its place — the shared wording for every
+     * merge that can shadow one ({@see mergeTier()},
+     * {@see SkillManager::loadAll()}).
+     *
+     * Keyed by the LOSER's path, because that is the file whose content the
+     * user expected and is not getting; the reason names the winner so the
+     * reader knows which file to look at instead.
+     *
+     * @param string $loserTier  the tier badge of the skill that lost, e.g.
+     *        `user` or `user, foreign: claude` ({@see SkillOrigin::badge()})
+     * @param string $winnerTier the same for the skill that won
+     *
+     * @internal
+     */
+    public function recordShadowing(
+        string $name,
+        string $loserPath,
+        string $loserTier,
+        string $winnerPath,
+        string $winnerTier,
+    ): void {
+        // A loser that IS the winner's file, or a byte-identical copy of it,
+        // costs the user nothing: the content they expected is the content
+        // loaded. That is the common case on a machine that syncs one skill
+        // into several tools' trees (skillshare links the same SKILL.md into
+        // `~/.claude/skills` and `~/.config/opencode/skills`), and reporting
+        // each of those would bury the shadowing that matters — a repository
+        // replacing a skill with a different one — in a launch notice full of
+        // duplicates.
+        if (self::sameSkillFile($loserPath, $winnerPath)) {
+            return;
+        }
+
+        $this->recordSkip($loserPath, sprintf(
+            // Tiers in brackets, as the system-prompt listing badges them, so a
+            // two-part badge (`user, foreign: claude`) still reads as one unit.
+            "shadowed by [%s] skill %s (same name '%s'); this [%s] skill was not loaded",
+            $winnerTier,
+            $winnerPath,
+            $name,
+            $loserTier,
+        ));
+    }
+
+    /**
+     * Whether two SKILL.md paths are the same file or carry the same bytes.
+     * Only reached on a name collision, so the read is paid per collision,
+     * never per skill.
+     */
+    private static function sameSkillFile(string $a, string $b): bool
+    {
+        if (!is_file($a) || !is_file($b)) {
+            return false;
+        }
+
+        $realA = realpath($a);
+        if ($realA !== false && $realA === realpath($b)) {
+            return true;
+        }
+
+        if (filesize($a) !== filesize($b)) {
+            return false;
+        }
+
+        $hashA = @hash_file('sha256', $a);
+
+        return $hashA !== false && $hashA === @hash_file('sha256', $b);
+    }
+
+    /**
+     * Where a merged skill came from and which tier it is, for the shadowing
+     * notice — a {@see Skill} carries both on itself, a Stage-1 manifest in its
+     * `sourcePath` / `origin` fields (stamped by {@see originatedManifests()}).
+     *
+     * @param Skill|array<string, mixed> $entry
+     * @return array{0: string, 1: string}
+     */
+    private static function provenanceOf(Skill|array $entry): array
+    {
+        if ($entry instanceof Skill) {
+            return [$entry->sourcePath, $entry->origin->badge($entry->source)];
+        }
+
+        $origin = $entry['origin'] ?? SkillOrigin::Project;
+
+        return [
+            (string) ($entry['sourcePath'] ?? $entry['name'] ?? '?'),
+            $origin instanceof SkillOrigin ? $origin->badge(SkillSource::Native) : SkillOrigin::Project->value,
+        ];
     }
 
     /**

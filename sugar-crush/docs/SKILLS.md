@@ -22,8 +22,9 @@ moving.
 **four** foreign ones. The three are the three calls
 `SkillLoader::loadAllManifests()` makes —
 `builtInSkillsDir()`, `userSkillsDir()`, `projectSkillsDir()` — and they are
-merged lowest-priority-first with `array_merge`, so a later tier's skill with
-the same name replaces an earlier one:
+merged lowest-priority-first by `mergeTier()`, so a later tier's skill with
+the same name replaces an earlier one (and the replaced one is reported — see
+below):
 
 | Tier | Directory | Notes |
 |---|---|---|
@@ -57,6 +58,16 @@ side: a project's foreign skill arrived with somebody's repository.
 Between the two foreign conventions, opencode wins over Claude. That pair has
 no principled winner; what matters is that the order is fixed in
 `SkillManager::loadAll()` rather than decided by scan order.
+
+**Every shadowing is reported.** Whichever tier wins, the skill that lost is
+not dropped silently: each one a later tier (or a native skill, or opencode
+over Claude) replaces is recorded in `SkillLoader::skipped()` /
+`SkillManager::skipped()` under the losing file's path, with a reason naming
+the winner — `shadowed by [project] skill <path> (same name 'deploy'); this
+[user] skill was not loaded`. It is counted in the launch notice and listed by
+`SUGARCRUSH_DEBUG_SKILLS=1`, like an unreadable file. A loser that is the
+winner's own file or a byte-identical copy of it (one skill synced into several
+tools' trees) loses nothing and is not reported.
 
 ### The listing badges every skill with its tier
 

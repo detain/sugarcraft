@@ -548,6 +548,206 @@ SKILL;
         }
     }
 
+    // =========================================================================
+    // loadAll() - every shadowing is REPORTED (audit 15d-03, part a)
+    //
+    // Which tier wins is an open decision and is pinned here exactly as it is
+    // today (built-in < user < project, foreign < native); what changed is that
+    // the loser is no longer dropped silently — it lands in skipped() under its
+    // own path, with a reason naming the file that took its name.
+    // =========================================================================
+
+    public function testAProjectSkillShadowingAUserSkillIsReportedInSkipped(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.sugar-crush/skills/deploy', 'The copy I wrote');
+        $this->writeSkill($projectRoot . '/.sugar-crush/skills/deploy', 'The copy the repo shipped');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $skill = $this->registry->get('deploy');
+            $this->assertNotNull($skill);
+            $this->assertSame('The copy the repo shipped', $skill->description, 'the precedence order is unchanged');
+
+            $this->assertShadowed(
+                $this->sandboxHome . '/.sugar-crush/skills/deploy/SKILL.md',
+                'project',
+                $projectRoot . '/.sugar-crush/skills/deploy/SKILL.md',
+                'deploy',
+                'user',
+            );
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testAProjectSkillShadowingABuiltInIsReportedInSkipped(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($projectRoot . '/.sugar-crush/skills/security-audit', 'A repository security audit');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertSame('A repository security audit', $this->registry->get('security-audit')?->description);
+            $this->assertShadowed(
+                self::builtInSkillFile('security-audit'),
+                'project',
+                $projectRoot . '/.sugar-crush/skills/security-audit/SKILL.md',
+                'security-audit',
+                'built-in',
+            );
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testAUserSkillShadowingABuiltInIsReportedInSkipped(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.sugar-crush/skills/security-audit', 'My own security audit');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertSame('My own security audit', $this->registry->get('security-audit')?->description);
+            $this->assertShadowed(
+                self::builtInSkillFile('security-audit'),
+                'user',
+                $this->sandboxHome . '/.sugar-crush/skills/security-audit/SKILL.md',
+                'security-audit',
+                'built-in',
+            );
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testANativeSkillShadowingAForeignOneIsReportedInSkipped(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.claude/skills/db-query', 'The Claude Code copy');
+        $this->writeSkill($projectRoot . '/.sugar-crush/skills/db-query', 'The native copy');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $skill = $this->registry->get('db-query');
+            $this->assertNotNull($skill);
+            $this->assertSame(SkillSource::Native, $skill->source, 'native still wins the collision');
+            $this->assertShadowed(
+                $this->sandboxHome . '/.claude/skills/db-query/SKILL.md',
+                'project',
+                $projectRoot . '/.sugar-crush/skills/db-query/SKILL.md',
+                'db-query',
+                'user, foreign: claude',
+            );
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testOpencodeShadowingClaudeAcrossTheForeignTreesIsReportedInSkipped(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.claude/skills/db-query', 'The Claude copy');
+        $this->writeSkill($this->sandboxHome . '/.config/opencode/skills/db-query', 'The opencode copy');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertSame(SkillSource::Opencode, $this->registry->get('db-query')?->source);
+            $this->assertShadowed(
+                $this->sandboxHome . '/.claude/skills/db-query/SKILL.md',
+                'user, foreign: opencode',
+                $this->sandboxHome . '/.config/opencode/skills/db-query/SKILL.md',
+                'db-query',
+                'user, foreign: claude',
+            );
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * The control: distinct names in every tier shadow nothing, so a normal
+     * launch's skipped() — and the launch notice built off it — stays empty.
+     */
+    public function testSkillsWithNoNameCollisionLeaveSkippedEmpty(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.sugar-crush/skills/user-only', 'A user skill');
+        $this->writeSkill($this->sandboxHome . '/.claude/skills/claude-only', 'A Claude Code skill');
+        $this->writeSkill($projectRoot . '/.sugar-crush/skills/project-only', 'A project skill');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertNotNull($this->registry->get('user-only'));
+            $this->assertNotNull($this->registry->get('claude-only'));
+            $this->assertNotNull($this->registry->get('project-only'));
+            $this->assertSame([], $this->manager->skipped());
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * A collision that loses nothing is not a shadowing worth a notice: the
+     * same SKILL.md synced into two tools' trees (skillshare's layout) loads
+     * the content the user expected whichever copy wins.
+     */
+    public function testAByteIdenticalCopyIsNotReportedAsShadowed(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.claude/skills/db-query', 'One shared copy');
+        $this->writeSkill($this->sandboxHome . '/.config/opencode/skills/db-query', 'One shared copy');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertSame(SkillSource::Opencode, $this->registry->get('db-query')?->source);
+            $this->assertSame([], $this->manager->skipped());
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * The loser's path is the skipped() key — its spelling is whichever the
+     * walk recorded (Stage-1 manifests carry a realpath, eager/foreign Skills
+     * the walked path), so the key is looked up under both.
+     */
+    private function assertShadowed(
+        string $loserFile,
+        string $winnerTier,
+        string $winnerFile,
+        string $name,
+        string $loserTier,
+    ): void {
+        $skipped = $this->manager->skipped();
+        $key = array_key_exists($loserFile, $skipped) ? $loserFile : (string) realpath($loserFile);
+        $this->assertArrayHasKey($key, $skipped, 'the shadowed skill must be reported, not dropped silently');
+
+        $reason = $skipped[$key];
+        $this->assertStringContainsString("shadowed by [{$winnerTier}] skill ", $reason);
+        $this->assertTrue(
+            str_contains($reason, $winnerFile) || str_contains($reason, (string) realpath($winnerFile)),
+            "the reason must name the winning file; got: {$reason}",
+        );
+        $this->assertStringContainsString("same name '{$name}'", $reason);
+        $this->assertStringContainsString("this [{$loserTier}] skill was not loaded", $reason);
+    }
+
+    private static function builtInSkillFile(string $name): string
+    {
+        $path = realpath(dirname(__DIR__, 2) . "/src/Skills/BuiltIn/{$name}/SKILL.md");
+        self::assertNotFalse($path, "built-in skill {$name} must exist for this test to mean anything");
+
+        return $path;
+    }
+
     /**
      * THE END-TO-END ESCAPE, at the layer a real launch enters through. A
      * cloned repository carrying `.claude/skills/escape -> $HOME` had

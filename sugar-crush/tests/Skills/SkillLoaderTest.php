@@ -308,6 +308,38 @@ SKILL;
         $this->assertSame('Project override skill', $result['override-skill']->description);
     }
 
+    /**
+     * Audit 15d-03 (a): the eager merge reports a shadowing exactly as the
+     * manifest merge does — one helper behind both — and still lets the
+     * project tier win (the order itself is an open decision, pinned as-is).
+     */
+    public function testLoadAllReportsAProjectSkillShadowingAUserSkill(): void
+    {
+        $userFile = $this->tempDir . '/home/.sugar-crush/skills/deploy/SKILL.md';
+        $projectRoot = $this->tempDir . '/shadow-project';
+        $projectFile = $projectRoot . '/.sugar-crush/skills/deploy/SKILL.md';
+        foreach ([$userFile => 'User deploy', $projectFile => 'Project deploy'] as $file => $description) {
+            mkdir(dirname($file), 0777, true);
+            file_put_contents($file, "---\ndescription: {$description}\n---\nBody");
+        }
+
+        foreach (['eager' => 'loadAll', 'manifest' => 'loadAllManifests'] as $walk => $method) {
+            $loader = new SkillLoader(reportSkips: false);
+            $result = $loader->{$method}($projectRoot);
+
+            $winner = $result['deploy'];
+            $this->assertSame('Project deploy', is_array($winner) ? $winner['description'] : $winner->description, $walk);
+
+            $skipped = $loader->skipped();
+            $key = array_key_exists($userFile, $skipped) ? $userFile : (string) realpath($userFile);
+            $this->assertArrayHasKey($key, $skipped, "{$walk}: the shadowed user skill must be reported");
+            $this->assertStringContainsString('shadowed by [project] skill', $skipped[$key], $walk);
+            $this->assertStringContainsString("same name 'deploy'", $skipped[$key], $walk);
+            $this->assertStringContainsString('this [user] skill was not loaded', $skipped[$key], $walk);
+            $this->assertCount(1, $skipped, "{$walk}: nothing else shadows anything");
+        }
+    }
+
     public function testLoadAllEmptyProject(): void
     {
         // Arrange

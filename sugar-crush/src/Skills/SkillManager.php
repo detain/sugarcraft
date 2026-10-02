@@ -77,6 +77,9 @@ final class SkillManager
      * Between the two foreign trees the fixed call order below decides it
      * (opencode over Claude); that pair has no principled winner, so what
      * matters is that it is deterministic rather than dependent on scan order.
+     * Either way the loser is not dropped silently: every replaced foreign
+     * skill lands in {@see skipped()} naming the skill that took its name,
+     * as the native tiers' own shadowings do (audit 15d-03).
      * That property is only true because {@see SkillLoader} follows symlinked
      * skill directories — while it did not, half of a tree could be invisible
      * and the winner of a cross-tree collision was decided by which layout the
@@ -91,8 +94,23 @@ final class SkillManager
      */
     public function loadAll(string $projectRoot = '.'): void
     {
-        $this->registry->register($this->foreign->discoverClaude($projectRoot));
-        $this->registry->register($this->foreign->discoverOpencode($projectRoot));
+        // Every foreign skill registered so far, by name, so each later
+        // registration that replaces one is RECORDED rather than silent (audit
+        // 15d-03): the registry is last-write-wins and keeps no trace of what a
+        // write displaced. Keyed exactly as the registry keys — by the skill's
+        // own name, with PHP's integer-string coercion applying identically to
+        // both arrays — so a hit here is a hit there.
+        /** @var array<array-key, Skill> $foreign */
+        $foreign = [];
+        foreach ([$this->foreign->discoverClaude($projectRoot), $this->foreign->discoverOpencode($projectRoot)] as $tree) {
+            foreach ($tree as $skill) {
+                if (isset($foreign[$skill->name])) {
+                    $this->recordShadowing($skill->name, $foreign[$skill->name], $skill->sourcePath, self::tierOf($skill));
+                }
+                $foreign[$skill->name] = $skill;
+            }
+            $this->registry->register($tree);
+        }
 
         foreach ($this->loader->loadAllManifests($projectRoot) as $manifest) {
             // The backstop for audit 15d-01: loadSkillManifest() now types every
@@ -108,8 +126,36 @@ final class SkillManager
                     (string) ($manifest['sourcePath'] ?? $manifest['name'] ?? '?'),
                     $e->getMessage(),
                 );
+                // A manifest that failed to register displaced nothing, so it
+                // has no shadowing to report.
+                continue;
+            }
+
+            if (isset($foreign[$manifest['name']])) {
+                $origin = $manifest['origin'] ?? SkillOrigin::Project;
+                $this->recordShadowing(
+                    (string) $manifest['name'],
+                    $foreign[$manifest['name']],
+                    (string) $manifest['sourcePath'],
+                    $origin->badge(SkillSource::Native),
+                );
             }
         }
+    }
+
+    /**
+     * Report a foreign skill that a later registration replaced, through the
+     * loader's one shadowing record ({@see SkillLoader::recordShadowing()}) so
+     * it reaches {@see skipped()} alongside the native tiers' own.
+     */
+    private function recordShadowing(string $name, Skill $loser, string $winnerPath, string $winnerTier): void
+    {
+        $this->loader->recordShadowing($name, $loser->sourcePath, self::tierOf($loser), $winnerPath, $winnerTier);
+    }
+
+    private static function tierOf(Skill $skill): string
+    {
+        return $skill->origin->badge($skill->source);
     }
 
     /**

@@ -3005,7 +3005,10 @@ final class DocFigureProseDriftTest extends TestCase
             $native[1],
             'loadAllManifests() changed its native tier order or arity — the page names these three calls in this order',
         );
-        self::assertSame(2, preg_match_all('/array_merge\(/', $loaderBody), 'the three tiers are no longer joined by exactly two array_merge calls — the "merged lowest-priority-first with array_merge" sentence describes a different shape');
+        // mergeTier(), not array_merge(), since audit 15d-03 (a): the same
+        // later-wins merge, but one that records each shadowed skill.
+        self::assertSame(2, preg_match_all('/\$this->mergeTier\(/', $loaderBody), 'the three tiers are no longer joined by exactly two mergeTier() calls — the "merged lowest-priority-first by mergeTier()" sentence describes a different shape');
+        self::assertStringContainsString('merged lowest-priority-first by `mergeTier()`', $skills, 'the page no longer names the merge the pin above counts');
         self::assertSame(
             1,
             preg_match('/The three are the three calls `SkillLoader::loadAllManifests\(\)` makes/', $skills),
