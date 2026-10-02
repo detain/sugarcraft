@@ -22,6 +22,7 @@ use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CompleteResponse;
+use SugarCraft\Crush\Providers\ProviderResponseException;
 use SugarCraft\Crush\Providers\TransientFailure;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
@@ -1309,9 +1310,15 @@ final class Runtime
      * and it does not set `$emitted` - so this is a reachable case, not a
      * theoretical one.
      *
-     * On exhaustion nothing about the outcome changes: the last throw
-     * propagates, or the accumulated (possibly error-bearing) stream is yielded
-     * onward. Only the number of attempts is new.
+     * On exhaustion the last throw propagates. An attempt that ended holding
+     * an error chunk - not transient, emitted-then-failed, or the final
+     * attempt - throws {@see ProviderResponseException} with the provider's
+     * own error text AFTER the loop (audit 15a A1). It used to be yielded
+     * onward as an ordinary assistant message, which for Custom/Vertex meant
+     * a blank (or silently truncated) reply and an error message nobody read.
+     * The throw sits after the loop, not inside it, so the retry decision and
+     * the `$emitted` latch above are untouched: an error chunk on an attempt
+     * that IS retried never reaches it.
      */
     private function runStreaming(CompleteRequest $request, App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null, ?callable $onProgress = null): \Generator
     {
@@ -1320,6 +1327,7 @@ final class Runtime
         $reasoning = null;
         /** @var list<?Usage> $usages */
         $usages = [];
+        $errorChunk = null;
 
         for ($attempt = 1; $attempt <= TransientFailure::MAX_ATTEMPTS; $attempt++) {
             $lastAttempt = $attempt === TransientFailure::MAX_ATTEMPTS;
@@ -1412,10 +1420,10 @@ final class Runtime
                     // the ceiling verdict, the turn is marked (E707, round 81).
                     $lengthStopped = $lengthStopped || $response->truncated;
 
-                    // Folded in above BEFORE being noted as a failure, so that
-                    // when it is not retried the accumulated result is
-                    // byte-identical to what this loop produced before the
-                    // retry existed.
+                    // Folded in above BEFORE being noted as a failure, so the
+                    // chunk's usage and length-stop are accounted exactly as
+                    // any other chunk's; what happens to the failure itself is
+                    // decided after the loop (audit 15a A1).
                     if ($response->isError) {
                         $errorChunk = $response;
                     }
@@ -1442,6 +1450,16 @@ final class Runtime
             }
 
             TransientFailure::backoff($attempt);
+        }
+
+        // Audit 15a A1: the loop above only breaks with an error chunk in hand
+        // when it will not (or may not) retry it, so this is the turn's final
+        // answer and it is a failure. Yielding it as an AssistantMessage made
+        // a 401 or a blocked prompt look like an empty reply; throwing lets
+        // EngineBackend surface the provider's own text. It never classifies
+        // transient, so an outer retry loop does not re-run it.
+        if ($errorChunk !== null) {
+            throw ProviderResponseException::fromResponse($errorChunk);
         }
 
         // Summed across chunks, not taken from the last one. Measured:
@@ -1484,10 +1502,12 @@ final class Runtime
      * A retry layer that checked only one of the two would silently not cover
      * half the providers in this library.
      *
-     * On exhaustion the behaviour is exactly what it was before this retry
-     * existed: the final throw propagates, or the final error response is
-     * yielded onward as an assistant message. Retrying is added; the terminal
-     * outcome is unchanged.
+     * On exhaustion the final throw propagates. A final `isError` response -
+     * not transient, or still failing on the last attempt - throws
+     * {@see ProviderResponseException} carrying the provider's error text
+     * (audit 15a A1); it used to be yielded onward as an assistant message
+     * whose content was `''`, so the user saw a blank reply instead of, say,
+     * "Incorrect API key".
      */
     private function runBatch(CompleteRequest $request, App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null, ?callable $onProgress = null): \Generator
     {
@@ -1512,6 +1532,12 @@ final class Runtime
             }
 
             TransientFailure::backoff($attempt);
+        }
+
+        // Audit 15a A1: see the matching throw in runStreaming(). Checked
+        // before $onToken so a failed call paints nothing.
+        if ($response->isError) {
+            throw ProviderResponseException::fromResponse($response);
         }
 
         // One delta carrying the whole reply. A non-streaming provider has no

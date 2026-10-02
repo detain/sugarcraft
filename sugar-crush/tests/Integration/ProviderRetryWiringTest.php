@@ -23,6 +23,7 @@ use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\EmbeddingsRequest;
 use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Providers\ProviderResponseException;
 use SugarCraft\Crush\Providers\TransientFailure;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\SkillRegistry;
@@ -200,6 +201,11 @@ final class ProviderRetryWiringTest extends TestCase
         $this->assertSame('recovered', $messages[0]->content());
     }
 
+    /**
+     * Not retried, and - audit 15a A1 - not swallowed either: this used to
+     * assert the turn ended as a '' assistant reply, which is exactly how a
+     * 401 reached the user as a blank message.
+     */
     public function testABatchUnclassifiedErrorResponseIsNotRetried(): void
     {
         // errorTransient left null - the allow-list rule reaching the wiring.
@@ -212,10 +218,43 @@ final class ProviderRetryWiringTest extends TestCase
             ScriptedAttempt::batch('never reached'),
         ], streams: false);
 
-        $messages = iterator_to_array(self::runtime($provider)->run(self::app($provider)));
+        try {
+            iterator_to_array(self::runtime($provider)->run(self::app($provider)));
+            $this->fail('a final error response must surface, not become an empty reply');
+        } catch (ProviderResponseException $e) {
+            $this->assertSame('who knows', $e->getMessage());
+            $this->assertFalse(TransientFailure::isTransient($e), 'an outer loop must not retry it again');
+        }
 
         $this->assertSame(1, $provider->attempts());
-        $this->assertSame('', $messages[0]->content(), 'and the pre-retry outcome is unchanged');
+    }
+
+    /**
+     * Retried up to the cap, and when the last attempt still fails the
+     * provider's text surfaces instead of an empty reply (audit 15a A1).
+     */
+    public function testAnExhaustedBatchTransientErrorResponseThrowsItsMessage(): void
+    {
+        $script = [];
+        for ($i = 0; $i < TransientFailure::MAX_ATTEMPTS; $i++) {
+            $script[] = ScriptedAttempt::response(new CompleteResponse(
+                content: '',
+                isError: true,
+                errorMessage: 'overloaded #' . ($i + 1),
+                errorTransient: true,
+            ));
+        }
+        $provider = new ScriptedProvider($script, streams: false);
+
+        try {
+            iterator_to_array(self::runtime($provider)->run(self::app($provider)));
+            $this->fail('an exhausted error-response sequence must surface');
+        } catch (ProviderResponseException $e) {
+            $this->assertSame('overloaded #' . TransientFailure::MAX_ATTEMPTS, $e->getMessage(), 'the LAST failure is reported');
+            $this->assertFalse(TransientFailure::isTransient($e));
+        }
+
+        $this->assertSame(TransientFailure::MAX_ATTEMPTS, $provider->attempts());
     }
 
     // -------------------------------------------------------------------------
@@ -291,15 +330,19 @@ final class ProviderRetryWiringTest extends TestCase
             $seen[] = $delta;
         };
 
-        $messages = iterator_to_array(self::runtime($provider)->run(self::app($provider), null, null, $sink));
+        // Audit 15a A1: the error chunk now surfaces as a throw - the same
+        // terminal outcome the throw channel's twin above has - instead of
+        // the partial 'Hello' passing for a finished reply.
+        try {
+            iterator_to_array(self::runtime($provider)->run(self::app($provider), null, null, $sink));
+            $this->fail('a mid-stream error chunk after visible text must surface');
+        } catch (ProviderResponseException $e) {
+            $this->assertSame('overloaded', $e->getMessage());
+            $this->assertFalse(TransientFailure::isTransient($e), 'the emitted bytes forbid a retry at ANY layer');
+        }
 
         $this->assertSame(1, $provider->attempts(), 'no retry once bytes have been emitted, whichever channel failed');
         $this->assertSame(['Hel', 'lo'], $seen, 'and the user saw the partial reply exactly once');
-        $this->assertSame(
-            'Hello',
-            $messages[0]->content(),
-            'HelloHello world would mean the transcript carried the reply twice as well',
-        );
     }
 
     /**
@@ -447,10 +490,11 @@ final class ProviderRetryWiringTest extends TestCase
         $this->assertEqualsWithDelta(0.005, $usage->costUsd, 1.0e-9);
     }
 
-    public function testAnUnclassifiedStreamErrorChunkLeavesTheOutcomeUnchanged(): void
+    public function testAnUnclassifiedStreamErrorChunkSurfacesInsteadOfAPartialReply(): void
     {
-        // Vertex's SSE `error` event for a non-transient type: not retried, and
-        // the accumulated message is byte-identical to the pre-retry behaviour.
+        // Vertex's SSE `error` event for a non-transient type: not retried,
+        // and - audit 15a A1 - no longer passed off as a finished 'half '
+        // reply: the provider's text is thrown.
         $provider = new ScriptedProvider([
             ScriptedAttempt::responses([
                 new CompleteResponse(content: 'half ', tokensUsed: 5),
@@ -464,10 +508,58 @@ final class ProviderRetryWiringTest extends TestCase
             ScriptedAttempt::chunks(['never reached']),
         ]);
 
-        $messages = iterator_to_array(self::runtime($provider)->run(self::app($provider)));
+        try {
+            iterator_to_array(self::runtime($provider)->run(self::app($provider)));
+            $this->fail('a non-transient error chunk must surface');
+        } catch (ProviderResponseException $e) {
+            $this->assertSame('invalid request', $e->getMessage());
+            $this->assertFalse(TransientFailure::isTransient($e));
+        }
 
         $this->assertSame(1, $provider->attempts());
-        $this->assertSame('half ', $messages[0]->content());
+    }
+
+    /**
+     * Sinkless stream, transient error chunk on every attempt: retried to the
+     * cap, then the last chunk's text is thrown (audit 15a A1).
+     */
+    public function testAnExhaustedStreamOfTransientErrorChunksThrowsItsMessage(): void
+    {
+        $script = [];
+        for ($i = 0; $i < TransientFailure::MAX_ATTEMPTS; $i++) {
+            $script[] = ScriptedAttempt::response(new CompleteResponse(
+                content: '',
+                isError: true,
+                errorMessage: 'overloaded #' . ($i + 1),
+                errorTransient: true,
+            ));
+        }
+        $provider = new ScriptedProvider($script);
+
+        try {
+            iterator_to_array(self::runtime($provider)->run(self::app($provider)));
+            $this->fail('an exhausted error-chunk sequence must surface');
+        } catch (ProviderResponseException $e) {
+            $this->assertSame('overloaded #' . TransientFailure::MAX_ATTEMPTS, $e->getMessage());
+        }
+
+        $this->assertSame(TransientFailure::MAX_ATTEMPTS, $provider->attempts());
+    }
+
+    /**
+     * A provider that flags an error without any text still surfaces - with
+     * the fallback wording rather than an empty exception message.
+     */
+    public function testAnErrorResponseWithoutAMessageUsesTheFallbackText(): void
+    {
+        $provider = new ScriptedProvider([
+            ScriptedAttempt::response(new CompleteResponse(content: '', isError: true)),
+        ], streams: false);
+
+        $this->expectException(ProviderResponseException::class);
+        $this->expectExceptionMessage(ProviderResponseException::FALLBACK_MESSAGE);
+
+        iterator_to_array(self::runtime($provider)->run(self::app($provider)));
     }
 
     // -------------------------------------------------------------------------
