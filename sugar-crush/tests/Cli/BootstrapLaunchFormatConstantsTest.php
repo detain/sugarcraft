@@ -216,6 +216,10 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'SKILL_SKIP_NOTICE_FORMAT' => ['method' => 'reportSkillSkips', 'conversions' => 5],
         // E172's command twin, byte-for-byte in shape — see the constant's doc-block.
         'COMMAND_SKIP_NOTICE_FORMAT' => ['method' => 'reportCommandSkips', 'conversions' => 5],
+        // Audit AG-2's skipped-preset row, read back by
+        // AgentPresetSkipMalformedFileTest. Quoted on no page, so no
+        // PAGE_QUOTES row — the PROMPT_ATTRIBUTION precedent below.
+        'AGENT_PRESET_SKIP_NOTICE_FORMAT' => ['method' => 'agentPresets', 'conversions' => 3],
         'LAUNCH_NOTICE_OVERFLOW_FORMAT' => ['method' => 'launchNotices', 'conversions' => 2],
         'SESSION_RETENTION_SUMMARY_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 3],
         'SESSION_RETENTION_DETAIL_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 4],
@@ -443,6 +447,18 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // join separators and the encoding argument. Both sentences it emits
         // are named constants, so nothing in the body is a format.
         'narrowedGrantNoticeRows' => ["''", "'s'", "'was'", "'were'", "': '", "'; '", "'UTF-8'"],
+        // Audit AG-2's skipped-preset row, in body order: the `path: ` prefix
+        // the registry's reason opens with (stripped so the path prints once
+        // per row), the two pieces of the interpolated `path (reason)` row,
+        // the plural pair and the row separator — the sentence itself is the
+        // named constant. The last two pieces are the walk-failure degradation
+        // sentence, which PREDATES this method owning a constant and has no
+        // second-party reader; it is classified here rather than promoted so
+        // the AG-2 change does not also rename a message nothing reads.
+        'agentPresets' => [
+            "': '", ' (', ')', "''", "'s'", "'; '",
+            'agent presets unavailable (', '); continuing with the built-in agents',
+        ],
     ];
 
     public function testEveryNamedFormatIsReferencedByTheMethodThatEmitsIt(): void
@@ -723,7 +739,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $census = self::sprintfCensus(self::bootstrapSource());
 
         self::assertSame(
-            16,
+            17,
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );

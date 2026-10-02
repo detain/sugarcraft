@@ -324,6 +324,22 @@ final class Bootstrap
         '%d command file%s could not be read and %s skipped; set %s=1 to list %s';
 
     /**
+     * The one row {@see agentPresets()} raises for preset files
+     * {@see \SugarCraft\Crush\Agents\AgentPresetRegistry::list()} skipped
+     * (audit AG-2): `%d` the count, `%s` the noun plural, `%s` the
+     * `path (reason)` rows joined by `; `.
+     *
+     * NAMES THE PATHS, unlike its skill and command siblings above, which
+     * count and point at a debug variable: a launch carries a handful of
+     * presets, not a directory of them, and the file is what the user has to
+     * open to get the agent back. One row however many, so the seam is not
+     * crowded. PROMOTED BECAUSE A SECOND PARTY READS IT (E164):
+     * {@see \SugarCraft\Crush\Tests\Agents\AgentPresetSkipMalformedFileTest::testALaunchKeepsTheGoodPresetAndNoticesTheSkippedFileByPath()}
+     * reproduces the rendered span through this constant.
+     */
+    public const AGENT_PRESET_SKIP_NOTICE_FORMAT = 'skipped %d agent preset file%s: %s';
+
+    /**
      * The tail row {@see launchNotices()} synthesises when this launch raised
      * more warnings than {@see LAUNCH_NOTICE_LIMIT} could seat.
      *
@@ -2196,13 +2212,16 @@ final class Bootstrap
      * Resolved off {@see configDirPath()}, never {@see configDir()}: listing
      * agents is a read, and a read must not be what creates ~/.sugar-crush.
      *
-     * A malformed preset degrades to "no presets this launch" with a warning
-     * on stderr rather than an exception. {@see AgentPresetRegistry::list()}
-     * throws on the first file with missing or invalid frontmatter, and these
-     * files are hand-authored — letting that escape would make one bad `.md`
-     * in a repo enough to stop `bin/sugarcrush` from starting at all, which is
-     * a far worse failure than losing the roster's optional half. stderr is
-     * where this class already reports provider fallbacks and pruned sessions.
+     * A malformed preset costs THAT preset, not the roster: these files are
+     * hand-authored, and {@see AgentPresetRegistry::list()} skips a file it
+     * cannot parse and names it in
+     * {@see AgentPresetRegistry::skippedFiles()}, which this method reports as
+     * one launch notice. It used to throw on the first bad file, and this
+     * method degraded that to "no presets this launch" — so one `.md` in
+     * Claude Code's `tools: Read, Grep` spelling erased every preset in every
+     * tier (audit AG-2). A failure of the walk ITSELF still degrades to the
+     * built-in agents with a warning rather than escaping: letting it escape
+     * would stop `bin/sugarcrush` from starting at all.
      *
      * The project half is ANCHORED to $root, and that is a containment boundary
      * rather than a tidiness rule: `<root>/.sugar-crush/agents` is a path the
@@ -2243,28 +2262,56 @@ final class Bootstrap
             anchors: $anchors,
         );
 
+        // ONE seam call for both outcomes, so this method still counts once in
+        // {@see TRANSCRIPT_SEAM_CALL_SITES}: list() now skips a malformed file
+        // instead of throwing (audit AG-2), and the skips are the notice that
+        // used to be this degradation's.
+        $notice = null;
+
         try {
             $presets = $registry->list();
+
+            // The skipped preset files, NAMED: a launch has a handful of
+            // presets rather than a directory of twenty commands, and "which
+            // agent did I lose" is answered by the path alone. One row, so a
+            // tier full of Claude-Code-dialect leftovers still cannot crowd
+            // the seam (E172's argument, scaled down).
+            $skipped = $registry->skippedFiles();
+            if ($skipped !== []) {
+                $rows = [];
+                foreach ($skipped as $path => $why) {
+                    // The registry's reason usually opens with the path too;
+                    // once per row is enough.
+                    $why = str_starts_with($why, $path . ': ') ? substr($why, \strlen($path) + 2) : $why;
+                    $rows[] = "{$path} ({$why})";
+                }
+
+                $notice = sprintf(
+                    self::AGENT_PRESET_SKIP_NOTICE_FORMAT,
+                    \count($skipped),
+                    \count($skipped) === 1 ? '' : 's',
+                    implode('; ', $rows),
+                );
+            }
         } catch (\Throwable $e) {
             // The native sibling of the foreign-preset degradation above, and
             // routed for the same reason: the roster the user configured is not
-            // the roster they got.
-            self::warnPermissionConfigInTranscript(
-                "agent presets unavailable ({$e->getMessage()}); continuing with the built-in agents",
-            );
+            // the roster they got. A malformed FILE no longer lands here (see
+            // above); what is left is a failure of the walk itself.
+            $notice = "agent presets unavailable ({$e->getMessage()}); continuing with the built-in agents";
+            $presets = [];
+        }
 
-            // Collected on the throwing path TOO: list() records its refusals
-            // before it parses anything, so a launch that both refused a
-            // directory and then tripped over a malformed preset elsewhere must
-            // not lose the refusal to the degradation.
-            self::$projectTierRefusals = [...self::$projectTierRefusals, ...$registry->refusedDirectories()];
-
-            return [];
+        if ($notice !== null) {
+            self::warnPermissionConfigInTranscript($notice);
         }
 
         // The agents third of the project-tier refusal, joining the workflow
         // registry's and the skill loader's in one collector — see
-        // {@see projectTierRefusals()}.
+        // {@see projectTierRefusals()}. Collected on the throwing path TOO:
+        // list() records its refusals before it parses anything, so a launch
+        // that both refused a directory and then failed must not lose the
+        // refusal to the degradation.
         self::$projectTierRefusals = [...self::$projectTierRefusals, ...$registry->refusedDirectories()];
 
         return $presets;

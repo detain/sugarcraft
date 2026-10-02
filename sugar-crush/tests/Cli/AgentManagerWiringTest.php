@@ -323,11 +323,11 @@ final class AgentManagerWiringTest extends TestCase
 
     /**
      * A hand-authored preset with broken frontmatter must not be able to stop
-     * the binary from starting. `AgentPresetRegistry::list()` throws on the
-     * first unparseable file, and these files are hand-written — before this
-     * wiring that exception had no way to reach a launch, and after it, one bad
-     * `.md` in a repo would otherwise be enough to make `bin/sugarcrush`
-     * unusable there.
+     * the binary from starting. `AgentPresetRegistry::list()` used to throw on
+     * the first unparseable file; it now skips that file and names it in
+     * `skippedFiles()` (audit AG-2 — see AgentPresetSkipMalformedFileTest), so
+     * the broken preset is absent while the launch and the built-in roster
+     * survive either way.
      */
     public function testAMalformedPresetDegradesToTheBuiltInsInsteadOfKillingTheLaunch(): void
     {
@@ -339,7 +339,14 @@ final class AgentManagerWiringTest extends TestCase
         $this->assertNotNull($manager->get('coder'), 'the built-in roster must survive a malformed preset');
         $this->assertNull($manager->get('broken'));
 
-        $this->assertSame([], Bootstrap::agentPresets(self::$brokenRepo));
+        // The USER tier survives the project tier's broken file. This line
+        // asserted `[]` while one bad `.md` anywhere emptied every tier — the
+        // AG-2 defect itself, pinned as the expected answer.
+        $this->assertNotNull($manager->get('house-style'), "the user's own presets must survive a broken project file");
+        $presets = Bootstrap::agentPresets(self::$brokenRepo);
+        ksort($presets);
+        $this->assertSame(['house-style', 'shared'], array_keys($presets));
+        $this->assertSame('The user copy', $presets['shared']->description);
     }
 
     /**

@@ -50,6 +50,14 @@ final class AgentPresetRegistry
      */
     private array $refusedDirectories = [];
 
+    /**
+     * Preset files the most recent {@see list()} could not turn into a preset,
+     * path as globbed => why — see {@see skippedFiles()}.
+     *
+     * @var array<string, string>
+     */
+    private array $skippedFiles = [];
+
     /** @var list<string> */
     private readonly array $searchPaths;
 
@@ -183,6 +191,7 @@ final class AgentPresetRegistry
     public function list(): array
     {
         $presets = [];
+        $this->skippedFiles = [];
 
         foreach ($this->readableSearchPaths() as $path) {
             if (!is_dir($path)) {
@@ -197,13 +206,62 @@ final class AgentPresetRegistry
 
                 $name = basename($file, '.md');
                 // First search path takes precedence on name conflicts
-                if (!isset($presets[$name])) {
+                if (isset($presets[$name])) {
+                    continue;
+                }
+
+                // ONE FILE, ONE VERDICT. This parse used to be bare, so the
+                // first malformed `.md` in ANY tier threw out of list() and
+                // took every preset in every tier with it — Bootstrap's
+                // degradation then registered none at all. Measured (audit
+                // AG-2): a tier holding a valid `good.md` and a `reviewer.md`
+                // with Claude Code's `tools: Read, Grep, Glob` returned a
+                // TypeError instead of `good`. The bad file is now recorded
+                // in skippedFiles() and the walk continues.
+                //
+                // A skipped file does not claim its name, so a same-named
+                // preset in a LOWER tier still loads: the skipped file is not
+                // a preset, and the lower-tier one is the only definition of
+                // that name this registry can actually honour.
+                //
+                // The catch is the three failure families a hand-authored file
+                // produces — unreadable/no frontmatter and YAML parse errors
+                // (\RuntimeException, Symfony's ParseException among them), a
+                // field of the wrong shape (\InvalidArgumentException, from
+                // arrayToPreset()), and a typed-constructor mismatch arrayToPreset()
+                // did not anticipate (\TypeError) — and deliberately not \Throwable,
+                // so a genuine programming error still surfaces.
+                try {
                     $presets[$name] = $this->parsePresetFile($file);
+                } catch (\RuntimeException | \InvalidArgumentException | \TypeError $e) {
+                    $this->skippedFiles[$file] = $e->getMessage();
                 }
             }
         }
 
         return $presets;
+    }
+
+    /**
+     * Preset files the most recent {@see list()} skipped because they could
+     * not be parsed into a preset, path as globbed => why.
+     *
+     * The per-file sibling of {@see refusedDirectories()}, and the seam that
+     * keeps the isolation in {@see list()} from becoming silence: a skipped
+     * file is an agent the author wrote and will not get, and a shorter roster
+     * cannot say which one or why. The same `path => reason` shape as
+     * {@see \SugarCraft\Crush\Commands\CommandLoader::skippedFiles()}.
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresets()} reports it.
+     *
+     * Recomputed by every {@see list()} call rather than accumulated, like
+     * {@see refusedDirectories()}. {@see load()} does not touch it: a caller
+     * naming one preset gets that file's failure as an exception instead.
+     *
+     * @return array<string, string> preset file path => why it was skipped
+     */
+    public function skippedFiles(): array
+    {
+        return $this->skippedFiles;
     }
 
     /**
@@ -389,22 +447,117 @@ final class AgentPresetRegistry
     private function arrayToPreset(array $data, string $filePath, string $body = ''): AgentPreset
     {
         return new AgentPreset(
-            name: $data['name'] ?? basename($filePath, '.md'),
-            description: $data['description'] ?? '',
-            tools: $data['tools'] ?? [],
-            disallowedTools: $data['disallowedTools'] ?? [],
-            model: $data['model'] ?? 'inherit',
-            permissionMode: $this->parsePermissionMode($data['permissionMode'] ?? 'default'),
+            name: self::stringField($data, 'name', $filePath) ?? basename($filePath, '.md'),
+            description: self::stringField($data, 'description', $filePath) ?? '',
+            tools: self::nameList($data, 'tools', $filePath),
+            disallowedTools: self::nameList($data, 'disallowedTools', $filePath),
+            model: self::stringField($data, 'model', $filePath) ?? 'inherit',
+            permissionMode: $this->parsePermissionMode(self::stringField($data, 'permissionMode', $filePath) ?? 'default'),
             maxTurns: isset($data['maxTurns']) ? (int) $data['maxTurns'] : null,
-            skills: $data['skills'] ?? [],
-            mcpServers: $data['mcpServers'] ?? [],
-            memory: $this->parseMemoryScope($data['memory'] ?? 'user'),
+            skills: self::nameList($data, 'skills', $filePath),
+            mcpServers: self::nameList($data, 'mcpServers', $filePath),
+            memory: $this->parseMemoryScope(self::stringField($data, 'memory', $filePath) ?? 'user'),
             background: (bool) ($data['background'] ?? false),
-            effort: $this->parseEffort($data['effort'] ?? 'medium'),
-            isolation: $this->parseIsolation($data['isolation'] ?? null),
-            color: $data['color'] ?? null,
+            effort: $this->parseEffort(self::stringField($data, 'effort', $filePath) ?? 'medium'),
+            isolation: $this->parseIsolation(self::stringField($data, 'isolation', $filePath)),
+            color: self::stringField($data, 'color', $filePath),
             initialPrompt: self::resolveInitialPrompt($data['initialPrompt'] ?? null, $body),
         );
+    }
+
+    /**
+     * A list-of-names field (`tools`, `disallowedTools`, `skills`,
+     * `mcpServers`), accepted in either spelling a preset author writes.
+     *
+     * THE COMMA STRING IS CLAUDE CODE'S SPELLING (`tools: Read, Grep, Glob`),
+     * and the one a preset copied from `.claude/agents` arrives in. It used to
+     * reach AgentPreset's `array` parameter raw and throw a TypeError — which,
+     * before {@see list()} isolated each file, emptied the whole roster (audit
+     * AG-2). It is split the way
+     * {@see ForeignAgentPresetRegistry::toolList()} splits that dialect: on
+     * commas, each entry trimmed, empties dropped. That method is private and
+     * also rewrites Claude's `Bash(git:*)` prefix form, a translation that
+     * belongs at the FOREIGN import boundary and not on a native file, so the
+     * split is restated here rather than shared.
+     *
+     * A YAML list must hold strings. A number or a nested map inside it is not
+     * a name any consumer can match — {@see \SugarCraft\Crush\MCP\McpRouter::serverAllowed()}
+     * already throws on one at call time — so it is refused here, where the
+     * failure can name the file and cost only that file.
+     *
+     * @param array<string, mixed> $data
+     * @return list<string>
+     * @throws \InvalidArgumentException when the value is neither a string nor a list of strings
+     */
+    private static function nameList(array $data, string $key, string $filePath): array
+    {
+        $value = $data[$key] ?? null;
+        if ($value === null) {
+            return [];
+        }
+
+        if (is_string($value)) {
+            $names = [];
+            foreach (explode(',', $value) as $item) {
+                $item = trim($item);
+                if ($item !== '') {
+                    $names[] = $item;
+                }
+            }
+
+            return $names;
+        }
+
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                if (!is_string($item)) {
+                    throw new \InvalidArgumentException(sprintf(
+                        '%s: `%s:` must be a list of names or a comma-separated string; it holds a %s entry',
+                        $filePath,
+                        $key,
+                        get_debug_type($item),
+                    ));
+                }
+            }
+
+            return array_values($value);
+        }
+
+        throw new \InvalidArgumentException(sprintf(
+            '%s: `%s:` must be a list of names or a comma-separated string, %s given',
+            $filePath,
+            $key,
+            get_debug_type($value),
+        ));
+    }
+
+    /**
+     * A scalar-string field, or null when the key is absent.
+     *
+     * REFUSED RATHER THAN CAST when YAML typed it as anything else. `name: 123`
+     * and `permissionMode: 5` used to hit AgentPreset's typed constructor (or
+     * the string-typed enum parsers) as an int and throw a TypeError naming
+     * neither the file nor the field; a cast would instead accept
+     * `permissionMode: true` as the string "1" and fall silently to the
+     * default mode. The message names both, and {@see list()} turns it into
+     * a one-file skip.
+     *
+     * @param array<string, mixed> $data
+     * @throws \InvalidArgumentException when the value is present and not a string
+     */
+    private static function stringField(array $data, string $key, string $filePath): ?string
+    {
+        $value = $data[$key] ?? null;
+        if ($value === null || is_string($value)) {
+            return $value;
+        }
+
+        throw new \InvalidArgumentException(sprintf(
+            '%s: `%s:` must be a string, %s given (quote it if it is meant literally)',
+            $filePath,
+            $key,
+            get_debug_type($value),
+        ));
     }
 
     /**

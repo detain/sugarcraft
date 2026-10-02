@@ -141,8 +141,18 @@ initialPrompt: |                # optional; the body is used when absent
 The markdown body is the preset's prompt when no `initialPrompt:` is declared.
 ```
 
-A file with no frontmatter block is refused
-(`AgentPresetRegistry::parsePresetFile()`).
+`tools`, `disallowedTools`, `skills` and `mcpServers` take either a YAML list
+or Claude Code's comma-separated string — `tools: Read, Grep, Glob` reads as
+`[Read, Grep, Glob]`, so a preset copied out of `.claude/agents` loads as
+written. A scalar field (`name`, `description`, `model`, `permissionMode`, …)
+must be a string: `name: 123` is refused rather than cast — quote it.
+
+A file with no frontmatter block, or a field of the wrong shape, is refused
+(`AgentPresetRegistry::parsePresetFile()`) — and refused **alone**:
+`AgentPresetRegistry::list()` skips that one file, names it in
+`skippedFiles()`, and every other preset in every tier still loads. The launch
+reports the skipped paths and reasons in one notice. (One malformed file used to
+throw out of `list()` and leave the session with no presets at all.)
 
 **The body is the prompt.** That is where Claude Code and opencode both put a
 subagent's prompt, so a `reviewer.md` written to either convention used to
