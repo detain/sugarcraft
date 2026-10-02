@@ -44,6 +44,14 @@ final readonly class Write implements Tool, PromptGuidance
     use TruncatesOutput;
 
     /**
+     * Largest previous file an overwrite reads back to diff against (audit
+     * F-T2). Overwriting does not need the old bytes -- they are read only to
+     * build the preview -- so past this the write still happens and only the
+     * diff is skipped. Same figure as Edit's and Read's default read cap.
+     */
+    private const DEFAULT_MAX_DIFF_BYTES = 1024 * 1024;
+
+    /**
      * $skillNudge/$instructionLoader mirror {@see Edit}'s wiring: writing into a
      * directory a skill scopes itself to, or one carrying a nested
      * CLAUDE.md/AGENTS.md, surfaces that context once, exactly as touching the
@@ -55,6 +63,7 @@ final readonly class Write implements Tool, PromptGuidance
         private ?InstructionFileLoader $instructionLoader = null,
         private ?SkillPathNudge $skillNudge = null,
         private ?RulePathNudge $ruleNudge = null,
+        private int $maxDiffBytes = self::DEFAULT_MAX_DIFF_BYTES,
     ) {}
 
     public function name(): string
@@ -194,13 +203,32 @@ final readonly class Write implements Tool, PromptGuidance
             );
         }
 
+        // The previous contents are read only to diff against, so a file over
+        // $maxDiffBytes is not read at all: the overwrite goes ahead and the
+        // result says why it has no diff. Reading it in full used to cost the
+        // file's size again on top of $content, and the line-array diff then
+        // multiplied both (audit F-T2). The bounded read catches a file that
+        // grew past the cap between the stat and the open.
         $previous = '';
+        $previousTooLarge = null;
         if ($exists) {
-            $read = file_get_contents($path);
-            if ($read === false) {
-                return $this->error($args, "Error reading file: $path");
+            $size = filesize($path);
+            if ($size !== false && $size > $this->maxDiffBytes) {
+                $previousTooLarge = $size;
+            } else {
+                // One byte past the cap is enough to tell "over" from "at" it; null
+                // (no bound) only for a cap so large that +1 would overflow.
+                $limit = $this->maxDiffBytes < PHP_INT_MAX ? $this->maxDiffBytes + 1 : null;
+                $read = file_get_contents($path, false, null, 0, $limit);
+                if ($read === false) {
+                    return $this->error($args, "Error reading file: $path");
+                }
+                if (strlen($read) > $this->maxDiffBytes) {
+                    $previousTooLarge = strlen($read);
+                } else {
+                    $previous = $read;
+                }
             }
-            $previous = $read;
         }
 
         // Creating the parent directories here rather than making the model
@@ -221,11 +249,21 @@ final readonly class Write implements Tool, PromptGuidance
         // Same contract as Edit: the diff rides its own ToolResult field so a
         // renderer hands it straight to DiffViewer. For a new file the old side
         // is empty, which `diff -u` renders as an `@@ -0,0 +1,N @@` hunk.
-        $diff = $content !== $previous
-            ? self::unifiedDiff($path, $previous, $content)
-            : '';
+        $preview = $previousTooLarge === null && $content !== $previous
+            ? self::diffPreview($path, $previous, $content)
+            : ['diff' => '', 'added' => 0, 'removed' => 0, 'omitted' => false];
+        $diff = $preview['diff'];
 
         $message = ($exists ? 'File overwritten: ' : 'File created: ') . $path;
+        if ($previousTooLarge !== null) {
+            $message .= sprintf(
+                ' (previous %s bytes not diffed: over the %s-byte diff bound)',
+                number_format($previousTooLarge),
+                number_format($this->maxDiffBytes),
+            );
+        } elseif ($preview['omitted']) {
+            $message .= self::omittedDiffNote($preview);
+        }
         // Bounded by the standalone default rather than by a fraction of a
         // cap, because this tool has no output cap to take a fraction OF: its
         // result is one line ("File updated: <path>"), so nothing here was

@@ -168,7 +168,25 @@ final readonly class Edit implements Tool
             );
         }
 
-        $content = file_get_contents($path);
+        // $maxBytes is enforced BEFORE the read (audit F-T2). It used to be
+        // declared and never consulted, and the edit path holds the file
+        // several times over (the bytes, the replaced copy, the diff), so a
+        // multi-GB log or dump reached the OOM killer -- the CLI runs with
+        // memory_limit=-1 -- rather than an error. filesize() names the real
+        // size in the refusal; the bounded read below catches a file that grew
+        // between the stat and the open.
+        $size = filesize($path);
+        if ($size !== false && $size > $this->maxBytes) {
+            return $this->tooLarge($args, $path, $size);
+        }
+
+        // One byte past the cap is enough to tell "over" from "at" it; null
+        // (no bound) only for a cap so large that +1 would overflow.
+        $limit = $this->maxBytes < PHP_INT_MAX ? $this->maxBytes + 1 : null;
+        $content = file_get_contents($path, false, null, 0, $limit);
+        if ($content !== false && strlen($content) > $this->maxBytes) {
+            return $this->tooLarge($args, $path, strlen($content));
+        }
         if ($content === false) {
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
@@ -225,11 +243,13 @@ final readonly class Edit implements Tool
         // shows a real before/after diff, never just a bare confirmation string.
         // It rides its own ToolResult field rather than being concatenated into
         // the summary, so a renderer can hand it straight to DiffViewer.
-        $diff = $newContent !== $originalContent
-            ? self::unifiedDiff($path, $originalContent, $newContent)
-            : '';
+        $preview = $newContent !== $originalContent
+            ? self::diffPreview($path, $originalContent, $newContent)
+            : ['diff' => '', 'added' => 0, 'removed' => 0, 'omitted' => false];
+        $diff = $preview['diff'];
 
-        $message = "File updated: $path" . self::changeSummary($diff);
+        $message = "File updated: $path"
+            . ($preview['omitted'] ? self::omittedDiffNote($preview) : self::changeSummary($diff));
         // Bounded by the standalone default rather than by a fraction of a
         // cap, because this tool has no output cap to take a fraction OF: its
         // result is one line ("File updated: <path>"), so nothing here was
@@ -276,6 +296,27 @@ final readonly class Edit implements Tool
             content: $message,
             isError: false,
             diff: $diff === '' ? null : $diff,
+        );
+    }
+
+    /**
+     * The refusal for a file over $maxBytes. It names the cap and the file's
+     * size so the model can tell "too big for Edit" from a transient failure,
+     * and says the file was not touched, matching the other refusals.
+     *
+     * @param array<string, mixed> $args
+     */
+    private function tooLarge(array $args, string $path, int $size): ToolResult
+    {
+        return new ToolResult(
+            toolCallId: $args['id'] ?? '',
+            content: sprintf(
+                'Error: file too large to edit: %s is %s bytes, over the %s-byte Edit limit (maxBytes); file left unchanged',
+                $path,
+                number_format($size),
+                number_format($this->maxBytes),
+            ),
+            isError: true,
         );
     }
 
