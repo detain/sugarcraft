@@ -812,7 +812,7 @@ final class Renderer
      * in a code block would otherwise paint the rest of the line reversed
      * ("Trojan Source"), and a zero-width space would make two different
      * identifiers look the same. Joiners that are doing their job (the ZWJ
-     * inside 👩‍💻) survive.
+     * inside 👩 + U+200D + 💻) survive.
      *
      * Byte-oriented, NO /u flag: a /u pattern fails (returns null) on any
      * malformed UTF-8 in the document, which would turn the whole strip off.

@@ -338,7 +338,7 @@ final class Sanitize
      *     use for an invisible directional override.
      *   - Marked only where they cannot be doing their job: ZWNJ U+200C,
      *     ZWJ U+200D, LRM U+200E, RLM U+200F and ARABIC LETTER MARK U+061C.
-     *     ZWJ builds every family/profession emoji (👩‍💻), ZWNJ is ordinary
+     *     ZWJ builds every family/profession emoji (👩 + U+200D + 💻), ZWNJ is ordinary
      *     spelling in Persian and the Indic scripts, and RLM/ALM steer
      *     neutrals inside RTL text — in each case right after a non-ASCII
      *     character. So they survive there, and are marked at the start of the
