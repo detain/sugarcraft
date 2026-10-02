@@ -68,6 +68,7 @@ sugarcrush -p "audit this" --output-format json # machine-readable envelope
 sugarcrush --output-format json run "audit this" # `run` works after flags too
 sugarcrush doctor                               # check the install (see Subcommands)
 sugarcrush --root /path/to/project              # set the project root explicitly
+sugarcrush src                                  # an existing directory as the only argument is the root too
 sugarcrush --config ~/policies/crush.json       # read settings/permissions from this file
 sugarcrush --model gpt-5 -p "audit this"        # pick the model (not the provider)
 sugarcrush --permission-mode plan -p "audit this" # pick the permission mode for this run
@@ -110,10 +111,20 @@ way.
 
 Both flags apply to the TUI and to `-p`/`run` alike.
 
-`--root` also accepts the first positional argument that looks like a path, so
-`sugarcrush ../other-project` works. It is what the Bash/Read/Edit/Glob tools
+The project root can also be given as a bare argument: one that looks like a
+path (`sugarcrush ../other-project`, `./app`, `/srv/app`) or names an existing
+directory (`sugarcrush src`). It is what the Bash/Read/Edit/Glob tools
 are jailed to and where `CLAUDE.md`/`AGENTS.md` and `.sugar-crush/skills` are
 looked for.
+
+Any other bare argument is a usage error (exit 2), never silently dropped:
+`sugarcrush fix the login bug` refuses and points at `-p "<prompt>"`, a word
+left after the prompt (`-p hi extra`, `-p hi -- extra`) asks you to quote the
+whole prompt, and a second directory — another bare one, or one beside
+`--root` — is refused rather than letting one of them win. `--root` itself
+needs a value that is not an option: `--root --model x` is a usage error rather
+than a root named `--model` (use `--root=<dir>` for a directory whose name
+begins with `-`). Subcommand operands (`session delete <id>`) are not affected.
 
 ### Sessions: new, continue, resume
 
@@ -365,7 +376,7 @@ The same three exit codes govern every subcommand below.
 | --- | --- |
 | `0` | the prompt ran and produced an answer, or the subcommand answered |
 | `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, or a trusted `.mcp.json` could not be parsed — retrying may help. `error.type`: `backend`, `encoding`, `mcp-config`, `not-found` |
-| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, an `--output-format` value that is neither `text` nor `json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.sugar-crush/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$SUGARCRUSH_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help. `error.type`: `usage`, `provider_configuration`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
+| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, a bare argument that names no existing directory (or a second project directory), an `--output-format` value that is neither `text` nor `json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.sugar-crush/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$SUGARCRUSH_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help. `error.type`: `usage`, `provider_configuration`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
 
 `2` covers "no prompt given" (`sugarcrush -p`, `sugarcrush run`) deliberately:
 the invocation is malformed, no backend is ever selected, and a CI gate that

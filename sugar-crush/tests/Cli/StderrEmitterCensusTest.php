@@ -398,7 +398,11 @@ final class StderrEmitterCensusTest extends TestCase
         // --resume target errors. All four are pre-launch usage errors printed
         // by NonInteractive::failUsage() at exit 2 — stderr alone, because no
         // session exists yet for a transcript row to land in.
-        'src/Cli/ArgvParser.php' => 16,
+        // Audit CLI-2 took sixteen to twenty-one, same decision: the two
+        // strict `--root` value errors (list ended, option given) and
+        // resolveOperands()'s three leftover-operand refusals (second project
+        // root, word after the prompt, stray word), all pre-launch exit 2.
+        'src/Cli/ArgvParser.php' => 21,
         'src/Cli/Bootstrap.php' => 6,
         'src/Cli/HeadlessPermissionPrompt.php' => 4,
         'src/Cli/NonInteractive.php' => 7,

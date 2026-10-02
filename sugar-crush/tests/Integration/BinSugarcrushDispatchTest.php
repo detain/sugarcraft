@@ -246,6 +246,11 @@ final class BinSugarcrushDispatchTest extends TestCase
             'unrecognized flag' => [['--bogus', '--output-format', 'json'], 'unrecognized option'],
             'bad --root'        => [['--root', '/no/such/dir', '--output-format', 'json'], 'no such directory'],
             'no prompt given'   => [['--output-format', 'json', 'run'], 'no prompt given'],
+            // Audit CLI-2: a prompt typed without -p used to open the TUI in
+            // the cwd, and a word after the prompt was dropped.
+            'leftover operands' => [['no-such-word-a', 'no-such-word-b', '--output-format', 'json'], 'unexpected arguments: no-such-word-a, no-such-word-b'],
+            'word after --'     => [['--output-format', 'json', '-p', 'hi', '--', 'no-such-word'], 'unexpected argument after the prompt: no-such-word'],
+            '--root handed a flag' => [['--root', '--output-format', 'json'], '--root expects a directory'],
         ];
     }
 
@@ -281,6 +286,34 @@ final class BinSugarcrushDispatchTest extends TestCase
             $this->assertSame(self::EXIT_USAGE, $result['status']);
             $this->assertSame('', $result['stdout'], \implode(' ', $args) . ' wrote to stdout');
         }
+    }
+
+    /**
+     * Audit CLI-2, the refusing half at the binary: exit 2, the hint on
+     * stderr, nothing on stdout, and never the TUI.
+     */
+    public function testALeftoverOperandIsAUsageErrorAtTheBinary(): void
+    {
+        $result = $this->runBin(['no-such-word-a', 'no-such-word-b'], []);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertSame('', $result['stdout']);
+        $this->assertStringContainsString('unexpected arguments: no-such-word-a, no-such-word-b', $result['stderr']);
+        $this->assertStringContainsString('-p "<prompt>"', $result['stderr']);
+    }
+
+    /**
+     * Audit CLI-2, the accepting half at the binary: a bare operand naming an
+     * existing directory is the root the run uses. `mcp list` is the probe
+     * because it answers without a TTY and names the path it looked in.
+     * runBin()'s cwd is the package root, where `docs/` exists.
+     */
+    public function testABareDirectoryOperandIsTheRootTheBinaryUses(): void
+    {
+        $result = $this->runBin(['docs', 'mcp', 'list'], []);
+
+        $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertStringContainsString('/docs/' . Bootstrap::MCP_CONFIG_FILENAME, $result['stdout']);
     }
 
     /**

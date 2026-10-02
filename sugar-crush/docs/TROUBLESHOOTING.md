@@ -24,7 +24,9 @@ Three, and the distinction is load-bearing:
 | `2` | **nothing was attempted and a retry cannot help** — a usage error or an unusable config |
 
 Exit 2 causes, all reported through `NonInteractive::failUsage()`: an
-unrecognised flag; `-p`/`--prompt` handed a flag instead of text; `--root`
+unrecognised flag; `-p`/`--prompt` handed a flag instead of text; a bare
+argument that names no existing directory (a prompt needs `-p`), or a second
+project directory; `--root`
 naming no directory; `--config` naming no readable file; an unusable permission
 policy; an unusable explicitly-selected provider; an unusable hook file; a
 missing `vendor/autoload.php`.

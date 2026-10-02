@@ -56,7 +56,8 @@ own throws, so an unreadable `config.json` becomes a reported line rather than
 taking the report down.
 
 The pre-flight order is: autoload → `--help` → `--version` → usage errors →
-unknown flags → `--root` validation → `--config` validation →
+unknown flags → leftover operands (a bare directory becomes the root, anything
+else is refused) → `--root` validation → `--config` validation →
 `Bootstrap::useConfigPath()` → subcommands → `-p` one-shot → the TUI. Each
 placement is load-bearing: `--config` must be validated *and registered* before
 `doctor` runs, or `sugarcrush --config x.json doctor` would report the policy

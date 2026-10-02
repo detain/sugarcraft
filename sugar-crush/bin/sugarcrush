@@ -135,8 +135,8 @@ ini_set('display_errors', 'stderr');
     // parser rejects `--output-format JSON` as unsupported, so treating it as
     // json here would make the broken checkout MORE permissive than the working
     // one); and the value-taking flags consume their token, in the two flavours
-    // ArgvParser gives them — `--root` and `--output-format` take the next token
-    // unconditionally, while `-p`, `--prompt`, `--config`, `--model`,
+    // ArgvParser gives them — `--output-format` takes the next token
+    // unconditionally, while `-p`, `--prompt`, `--root`, `--config`, `--model`,
     // `--permission-mode` and `--resume` refuse a flag-shaped one and leave it
     // for the loop.
     //
@@ -153,15 +153,14 @@ ini_set('display_errors', 'stderr');
     // scan and through ArgvParser::parse() and compares the two decisions.
     $rawArgv = $GLOBALS['argv'] ?? [];
     $format = 'text';
-    // ArgvParser's `--root` branch is `$root = $argv[++$i]` with no test on the
-    // value, so `--root --output-format json` makes `--output-format` the ROOT.
-    // `--output-format` itself is the other lenient one and is handled above by
-    // the branch that reads it.
-    $lenientValueFlags = ['--root'];
     // The strict set: ArgvParser refuses a flag-shaped value for each of these
     // (its looksLikeFlag() is "longer than one character and begins with -")
     // and leaves the token unconsumed for the next iteration to judge.
-    $strictValueFlags = ['-p', '--prompt', '--config', '--model', '--permission-mode', '--resume'];
+    // `--root` joined it in audit CLI-2; until then it was the one lenient
+    // flag besides `--output-format`, and `--root --output-format json` made
+    // `--output-format` the ROOT on both sides. `--output-format` is now the
+    // only lenient one, handled by the branch that reads it.
+    $strictValueFlags = ['-p', '--prompt', '--root', '--config', '--model', '--permission-mode', '--resume'];
     for ($i = 1, $n = count($rawArgv); $i < $n; $i++) {
         $arg = $rawArgv[$i];
         if (!is_string($arg)) {
@@ -174,8 +173,6 @@ ini_set('display_errors', 'stderr');
             $format = substr($arg, 16); // length of "--output-format="
         } elseif ($arg === '--output-format') {
             $format = $rawArgv[++$i] ?? $format;
-        } elseif (in_array($arg, $lenientValueFlags, true)) {
-            ++$i;
         } elseif (in_array($arg, $strictValueFlags, true)) {
             $next = $rawArgv[$i + 1] ?? null;
             if (!is_string($next) || strlen($next) <= 1 || $next[0] !== '-') {
@@ -319,6 +316,24 @@ if ($args->unknownFlags !== []) {
     ));
 }
 
+// Audit CLI-2: a bare operand nothing claimed. One that names an existing
+// directory becomes the root (`sugarcrush src`, like `sugarcrush ./src`);
+// anything else — `sugarcrush fix the login bug`, a word after `-p "…"`, a
+// second directory — used to be dropped without a word, so the TUI opened in
+// the cwd with that project's trust, .mcp.json and presets. Now exit 2. After
+// the unknown-flag check, because an unknown flag meant to take a value
+// (`--sesion foo`) leaves the value behind as an operand, and the flag is the
+// mistake to report. Before the --root check, which then validates whichever
+// root was chosen. See ArgvParser::resolveOperands().
+$args = ArgvParser::resolveOperands($args);
+if ($args->usageError !== null) {
+    exit(NonInteractive::failUsage(
+        $args->usageError,
+        $args->outputFormat,
+        $args->usageHint,
+    ));
+}
+
 // A --root that names no directory is a usage error too, and for a sharper
 // reason than a typo: the root becomes App::$root, then every HookContext's
 // projectRoot, then the proc_open() cwd of every ScriptHook. Checked before
@@ -371,7 +386,7 @@ Bootstrap::useSessionLaunch($args->continueSession, $args->resumeRequested, $arg
 // install that may be broken, so it must not require the thing it is
 // diagnosing.
 //
-// AFTER the four pre-flight checks above rather than before them, and each
+// AFTER the five pre-flight checks above rather than before them, and each
 // placement is load-bearing: an unknown flag beside a subcommand is still a
 // usage error, and `--config` must already be validated AND registered by
 // Bootstrap::useConfigPath() above, or `sugarcrush --config x.json doctor`

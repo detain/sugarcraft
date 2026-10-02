@@ -352,7 +352,10 @@ final class BinSugarcrushAutoloadGuardTest extends TestCase
         yield 'wrong case' => ['--output-format JSON -p hi'];
         yield 'the flag with no value' => ['--output-format'];
         yield 'after the POSIX end-of-options separator' => ['-- --output-format=json -p hi'];
-        yield 'swallowed by --root' => ['--root --output-format json -p hi'];
+        // Was `--root --output-format json -p hi` until audit CLI-2 made
+        // `--root` refuse a flag-shaped value; `--output-format` is now the one
+        // flag that still swallows the token after it.
+        yield 'swallowed by --output-format' => ['--output-format --output-format json'];
         yield 'after -- with a subcommand open' => ['session delete -- --output-format=json'];
     }
 
@@ -467,9 +470,12 @@ final class BinSugarcrushAutoloadGuardTest extends TestCase
         // end-of-options separator, and past it the parser routes every token to
         // operands.
         yield 'after the end-of-options separator' => [['--', '--output-format=json', '-p', 'hi']];
-        // REGRESSION ROW 2 (measured diverging): `--root` takes `$argv[++$i]`
-        // with no test on the value, so it eats the flag itself.
-        yield 'swallowed by --root' => [['--root', '--output-format', 'json', '-p', 'hi']];
+        // REGRESSION ROW 2 (measured diverging): `--root` used to take
+        // `$argv[++$i]` with no test on the value and eat the flag itself.
+        // Since audit CLI-2 it refuses a flag-shaped value like its siblings,
+        // so the format IS read -- on both sides.
+        yield 'a flag-shaped value --root refuses' => [['--root', '--output-format', 'json', '-p', 'hi']];
+        yield 'swallowed by --output-format' => [['--output-format', '--output-format', 'json']];
         // REGRESSION ROW 3 (measured diverging): the same separator with a
         // subcommand open, where the tokens go to the subcommand's operands.
         yield 'after the separator with a subcommand open' => [

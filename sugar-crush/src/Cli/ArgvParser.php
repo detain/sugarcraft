@@ -79,7 +79,11 @@ final class ArgvParser
      * Positional arguments (those not consumed by any flag) are collected.
      * If a positional argument looks like a path (starts with / or . or
      * contains a path separator), it is assigned to root. The first such
-     * positional wins; subsequent ones are discarded.
+     * positional wins. Every other positional -- a bare word, a second path --
+     * is carried in {@see ParsedArgs::$positionals}, NOT discarded:
+     * {@see self::resolveOperands()} makes an existing directory among them
+     * the root and refuses the rest (audit CLI-2). That half needs is_dir(),
+     * which is why it is not done here.
      *
      * `promptRequested` records whether the user asked for one-shot mode at
      * all (`-p` / `--prompt` / `--prompt=` / `run`), independently of whether
@@ -301,9 +305,32 @@ final class ArgvParser
             }
 
             // --root <value>
+            //
+            // STRICT, like --config/--model/--permission-mode below (audit
+            // CLI-2). It used to take `$argv[++$i]` unconditionally, so
+            // `--root --model x` made the root the literal string "--model",
+            // left `x` as a stray operand, and reported "--root --model: no
+            // such directory" -- blaming the wrong token -- while a bare
+            // trailing `--root` silently meant "the cwd" on an invocation that
+            // explicitly asked for another directory. The =-form stays the
+            // escape hatch for a directory whose name begins with "-".
             if ($arg === '--root') {
-                $root = $argv[++$i] ?? null;
-                ++$i;
+                $next = $argv[$i + 1] ?? null;
+                if ($next === null || self::looksLikeFlag($next)) {
+                    if ($usageError === null) {
+                        $usageError = $next === null
+                            ? 'sugarcrush: --root expects a directory, but the argument list ended'
+                            : \sprintf(
+                                'sugarcrush: --root expects a directory, but the next argument is the option %s',
+                                $next,
+                            );
+                        $usageHint = self::ROOT_VALUE_HINT;
+                    }
+                    ++$i; // leave a flag-shaped $next for the loop to judge
+                    continue;
+                }
+                $root = $next;
+                $i += 2;
                 continue;
             }
 
@@ -334,9 +361,8 @@ final class ArgvParser
             //     --prompt/run branches above already refuse, applied to the
             //     option that takes a path instead of a prompt.
             //
-            // Unlike `--root`, absence here is not a legitimate default: a null
-            // root means "use the cwd", while a null config after the operator
-            // typed `--config` means the flag did nothing.
+            // `--root` gets the same treatment now (audit CLI-2): a null root
+            // means "use the cwd" only when the flag was never typed.
             if ($arg === '--config') {
                 $next = $argv[$i + 1] ?? null;
                 if ($next === null || self::looksLikeFlag($next)) {
@@ -378,8 +404,8 @@ final class ArgvParser
 
             // --model <value>
             //
-            // STRICT rather than lenient (--root/--output-format swallow
-            // whatever follows, including nothing): a model name is never
+            // STRICT rather than lenient (--output-format swallows whatever
+            // follows, including nothing): a model name is never
             // flag-shaped, so `--model -p "hi"` is a typo in which the bare
             // form ate the next OPTION, and silently starting on the provider
             // default while dropping -p is worse than refusing. Same treatment
@@ -581,17 +607,113 @@ final class ArgvParser
             $usageHint = 'Drop -p to continue the conversation in the TUI.';
         }
 
-        // Assign first positional that looks like a path to root
+        // Assign first positional that looks like a path to root. The one it
+        // claims leaves the list; the rest stay for resolveOperands().
         if ($root === null) {
-            foreach ($positional as $pos) {
+            foreach ($positional as $index => $pos) {
                 if (self::looksLikePath($pos)) {
                     $root = $pos;
+                    unset($positional[$index]);
                     break;
                 }
             }
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested);
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional));
+    }
+
+    /**
+     * The filesystem half of operand handling (audit CLI-2): turn a bare
+     * operand that names an existing directory into the root, and refuse
+     * every operand left after that.
+     *
+     * Kept OUT of {@see parse()} for the reason {@see rootError()} is: parse()
+     * stays a pure argv->value-object transform. `bin/sugarcrush` calls this
+     * right after the unknown-flag check -- AFTER it, because an unknown flag
+     * that was meant to take a value (`--sesion foo`) leaves that value behind
+     * as a stray operand, and the flag is the real mistake -- and reports the
+     * returned {@see ParsedArgs::$usageError} through
+     * {@see NonInteractive::failUsage()}, so `--output-format json` still gets
+     * its error document. Returned unchanged when `$args->usageError` is
+     * already set: the parser's message is the earlier, sharper one.
+     *
+     * The rules, in order:
+     *
+     *  - `sugarcrush src` with `src/` present: `src` becomes the root, exactly
+     *    as `sugarcrush ./src` always did. Only when nothing claimed the root
+     *    yet; the FIRST directory operand wins, mirroring parse()'s
+     *    first-path-shaped rule. It applies to `-p`/`run` and subcommand runs
+     *    too, because a path-shaped operand already did.
+     *  - Anything left is a usage error, never dropped. That includes a
+     *    second directory, and a directory beside `--root`: two operands both
+     *    naming the project root cannot both win, and quietly letting one of
+     *    them do so is the silent drop this closes. `--root` USED to win over
+     *    a path-shaped operand without a word; it is now an error instead.
+     *  - Subcommand operands never reach here; parse() routes them to
+     *    {@see ParsedArgs::$subcommandArgs}.
+     *
+     * The other reading -- leftover words as the TUI's first prompt, as Claude
+     * Code does -- is not implemented. {@see ParsedArgs::$positionals} keeps
+     * the words, so that reading could replace the final refusal below
+     * without touching the parser.
+     */
+    public static function resolveOperands(ParsedArgs $args): ParsedArgs
+    {
+        if ($args->usageError !== null || $args->positionals === []) {
+            return $args;
+        }
+
+        $leftover = $args->positionals;
+        if ($args->root === null) {
+            foreach ($leftover as $index => $operand) {
+                if ($operand !== '' && \is_dir($operand)) {
+                    unset($leftover[$index]);
+                    $args = $args->withRoot($operand, \array_values($leftover));
+                    break;
+                }
+            }
+            $leftover = $args->positionals;
+            if ($leftover === []) {
+                return $args;
+            }
+        }
+
+        if ($args->root !== null) {
+            $rootLike = \array_values(\array_filter(
+                $leftover,
+                static fn (string $operand): bool => self::looksLikePath($operand)
+                    || ($operand !== '' && \is_dir($operand)),
+            ));
+            if ($rootLike !== []) {
+                $one = \count($rootLike) === 1;
+
+                return $args->withUsageError(
+                    \sprintf(
+                        'sugarcrush: the project root is already %s, but the argument%s %s also name%s one',
+                        $args->root,
+                        $one ? '' : 's',
+                        self::listOperands($rootLike),
+                        $one ? 's' : '',
+                    ),
+                    'Name the project directory once: as a bare argument or with --root <dir>, not both.',
+                );
+            }
+        }
+
+        $listed = self::listOperands($leftover);
+        $plural = \count($leftover) === 1 ? '' : 's';
+
+        if ($args->promptRequested) {
+            return $args->withUsageError(
+                \sprintf('sugarcrush: unexpected argument%s after the prompt: %s', $plural, $listed),
+                'Quote the whole prompt as one argument: -p "<prompt>".',
+            );
+        }
+
+        return $args->withUsageError(
+            \sprintf('sugarcrush: unexpected argument%s: %s', $plural, $listed),
+            'To run a one-shot prompt, use -p "<prompt>". A bare argument is accepted only when it names an existing directory, which becomes the project root.',
+        );
     }
 
     /**
@@ -683,6 +805,20 @@ final class ArgvParser
     }
 
     /**
+     * The operands as one readable list; an empty one is shown as '' so the
+     * message does not end in a bare separator.
+     *
+     * @param list<string> $operands
+     */
+    private static function listOperands(array $operands): string
+    {
+        return \implode(', ', \array_map(
+            static fn (string $operand): string => $operand === '' ? "''" : $operand,
+            $operands,
+        ));
+    }
+
+    /**
      * Heuristic: does this string look like a filesystem path?
      */
     private static function looksLikePath(string $s): bool
@@ -725,6 +861,8 @@ final class ArgvParser
      * what {@see ParsedArgs::$usageHint} was introduced to stop.
      */
     private const CONFIG_VALUE_HINT = 'Write it as --config=<file> if the path begins with "-"; it may not be omitted.';
+
+    private const ROOT_VALUE_HINT = 'Write it as --root=<dir> if the directory begins with "-"; it may not be omitted.';
 
     private const MODEL_VALUE_HINT = 'Write it as --model=<name> if the model name begins with "-"; it may not be omitted.';
 

@@ -40,7 +40,8 @@ SugarCrush — AI coding assistant for the terminal.
 
 Usage:
   sugarcrush                       Start the interactive TUI (default)
-  sugarcrush <dir>                 Start the TUI rooted at <dir>
+  sugarcrush <dir>                 Start the TUI rooted at <dir>, which must
+                                   exist; any other bare argument is refused
   sugarcrush -c                    Continue the most recent session
   sugarcrush --resume [<id>]       Resume a stored session (picker if no id)
   sugarcrush -p <prompt>           Run a single prompt and exit (one-shot)
@@ -80,8 +81,10 @@ Options:
       --output-format <format>
                          Output format: "text" (default) or "json"
       --root <dir>       Use <dir> as the project root instead of the current
-                         directory. Also accepts --root=<dir>, and wins over a
-                         path-shaped positional argument.
+                         directory. Also accepts --root=<dir> (the form to use
+                         when <dir> begins with "-"); it may not be omitted.
+                         Naming a root here AND as a positional argument is
+                         refused rather than one silently winning.
       --config <file>    Read settings, permissions and trusted hook roots from
                          <file> instead of ~/.sugar-crush/config.json. Also
                          accepts --config=<file>. Must already exist, be
@@ -233,8 +236,10 @@ Exit codes (one-shot mode and every subcommand):
                          .mcp.json that is trusted could not be parsed)
   2                      Usage or configuration error, nothing was attempted
                          and a retry will not help: no prompt given, an
-                         unrecognized flag, a --root naming no directory, a
-                         missing composer autoload.php, or a selected provider
+                         unrecognized flag, a bare argument that names no
+                         existing directory (a prompt needs -p), a --root
+                         naming no directory, a missing composer
+                         autoload.php, or a selected provider
                          that cannot be constructed — either
                          $SUGARCRUSH_PROVIDER or the provider persisted in
                          ~/.sugar-crush/config.json by Ctrl+P "Switch model".

@@ -84,6 +84,14 @@ final readonly class ParsedArgs
      *   {@see Subcommands::dispatch()} before Program is ever constructed.
      * @param list<string> $subcommandArgs The verb's own operands in the order
      *   given (`['delete', '<id>']`), NOT validated here.
+     * @param list<string> $positionals Every bare operand of the invocation
+     *   itself (not a subcommand's) that nothing claimed, in the order given:
+     *   not a flag's value, not `run`'s prompt, and not the path-shaped
+     *   operand {@see ArgvParser::parse()} made the root. Carried rather than
+     *   dropped (audit CLI-2) so {@see ArgvParser::resolveOperands()} can do
+     *   the filesystem half -- an existing directory becomes the root -- and
+     *   refuse what is left, instead of `sugarcrush fix the login bug`
+     *   silently opening the TUI in the cwd.
      */
     private function __construct(
         public bool $help,
@@ -110,7 +118,31 @@ final readonly class ParsedArgs
         public ?string $resumeSession = null,
         /** Whether `--resume` appeared at all, with or without a value. */
         public bool $resumeRequested = false,
+        public array $positionals = [],
     ) {
+    }
+
+    /**
+     * A copy whose root is $root and whose unclaimed operands are
+     * $positionals -- the result of {@see ArgvParser::resolveOperands()}
+     * turning a bare directory operand into the root.
+     *
+     * @param list<string> $positionals
+     */
+    public function withRoot(string $root, array $positionals): self
+    {
+        return new self($this->help, $this->prompt, $root, $this->outputFormat, $this->unknownFlags, $this->promptRequested, $this->version, $this->usageError, $this->usageHint, $this->configPath, $this->subcommand, $this->subcommandArgs, $this->model, $this->permissionMode, $this->continueSession, $this->resumeSession, $this->resumeRequested, $positionals);
+    }
+
+    /**
+     * A copy carrying a usage error raised after parsing -- the leftover
+     * operand refusal in {@see ArgvParser::resolveOperands()} -- so the
+     * binary reports it through the same `usageError`/`usageHint` pair the
+     * parser's own errors use.
+     */
+    public function withUsageError(string $usageError, string $usageHint): self
+    {
+        return new self($this->help, $this->prompt, $this->root, $this->outputFormat, $this->unknownFlags, $this->promptRequested, $this->version, $usageError, $usageHint, $this->configPath, $this->subcommand, $this->subcommandArgs, $this->model, $this->permissionMode, $this->continueSession, $this->resumeSession, $this->resumeRequested, $this->positionals);
     }
 
     /**
@@ -118,6 +150,7 @@ final readonly class ParsedArgs
      *
      * @param list<string> $unknownFlags
      * @param list<string> $subcommandArgs
+     * @param list<string> $positionals
      *
      * @internal
      */
@@ -139,7 +172,8 @@ final readonly class ParsedArgs
         bool $continueSession = false,
         ?string $resumeSession = null,
         bool $resumeRequested = false,
+        array $positionals = [],
     ): self {
-        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested);
+        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals);
     }
 }
