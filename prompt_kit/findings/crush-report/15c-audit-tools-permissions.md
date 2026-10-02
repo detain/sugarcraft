@@ -4,7 +4,7 @@ Scope: `src/Tools/` (built-ins, Concerns, PathJail, IgnoreRules, McpToolBridge),
 Checkout: master @ `05db616f3`, PHP 8.3.6 CLI, `memory_limit=-1`.
 Repro scripts: `/home/sites/crush-research-repos/_audit-scratch/15c/rNN_*.php`. Every repro runs against `.../15c/root` and never against the real repo.
 
-Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings at audit time: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low. Eighteen have since been fixed on master (see **Fixed since audit** at the end), so 13 remain: 1 Med-High (F-E2, partly fixed), 6 Medium, 1 Low-Medium, 5 Low. One more was found during wave 2 (F-E4, Info) and one during wave 3 (F-E5, Low), so 15 are open.
+Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings at audit time: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low. Twenty have since been fixed on master (see **Fixed since audit** at the end), so 11 remain: 1 Med-High (F-E2, partly fixed), 5 Medium, 1 Low-Medium, 4 Low. One more was found during wave 2 (F-E4, Info) and one during wave 3 (F-E5, Low), so 13 are open.
 
 > **Correction to the known list. Read this first.** Argument-scoped permission rules **are implemented**, in `PermissionRule::matches()` / `matchesShellSubject()`. `Bash(rm *)` deny now **denies**, and `Bash(git *)` allow no longer grants all of Bash (`r11_rules.php`). Two sources described older code: synthesis Part II row #23 ("`Bash(git *)` grants all of Bash") and `docs/PERMISSIONS.md` §"Pattern matching is name-only — measured" (which said `Bash(rm *)` "never matched → Allow"). Both are now corrected; the PERMISSIONS.md section was rewritten in `d3d90fece` to describe argument-scoped matching, and since `c8fc573a5` it describes the fail-closed allow rules that closed F-P5. The real defects in the new matcher were narrower. F-P5 (`$(…)`, backticks and redirection slipping past an allow rule) is now fixed. F-J3 covers path rules missing respellings; it is partly fixed (`3b7d2fd33`, the live hook chain), and the callers that pass no root are still open.
 
@@ -14,12 +14,7 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 
 ## A. Tool output and encoding
 
-### F-T3 — WebFetch returns up to 2 MiB raw into context, 32× Bash's cap
-- **Severity:** Medium. **Confidence:** Verified-by-reading.
-- **Where:** `WebFetch.php` `MAX_RESPONSE_SIZE = 2 * 1024 * 1024`, against `TruncatesOutput::DEFAULT_MAX_OUTPUT_BYTES = 65536` for Bash/Grep/Glob.
-- **Failure:** One fetch of a large HTML page puts about 2 MiB of raw markup, roughly 0.5-0.7M tokens, into one tool result. That overflows most context windows, and there is no in-turn compaction (known #5), so the turn fails. This is distinct from known #11 (MCP *uncapped*): WebFetch has a cap, it is just about 30× too large, and it sits outside the shared `TruncatesOutput` budget.
-- **Fix:** Route WebFetch through `TruncatesOutput` with the 64 KiB default (or a configurable one), and add a "fetched N bytes, showing first M" marker.
-- **Test:** Stub a 1 MiB body. Assert `strlen(content) <= 65536 + marker`.
+Every finding here (F-T1 to F-T7) has been fixed, the last (F-T3) in wave 6; see **Fixed since audit**.
 
 ---
 
@@ -143,21 +138,13 @@ All four findings here (F-H1 to F-H4) were fixed in wave 3; see **Fixed since au
 
 ## F. WebFetch / WebSearch
 
-### F-W2 — WebFetch returns 3xx/4xx/5xx bodies as successful results; a relative `Location:` silently ends the redirect chain
-- **Severity:** Low. **Confidence:** Verified-by-repro (`r15_redirect.php` with a loopback `php -S` fixture via the constructor seams).
-- **Where:** `WebFetch.php:204-213`. The status code is computed but used only to decide whether to follow a redirect. `:214-218` returns `isError: false` with the body no matter what the status was. `redirectTarget()` (`:344-375`) handles only absolute `http(s)://` and `/`-rooted locations. Any other relative form (`next`, `../x`, `?page=2`) returns `null`, which is treated as "final".
-- **Repro:** `302 Location: next` → `isError=false content="3xx body for /rel"`. A `302 → /loop` chain, after `MAX_REDIRECTS` (3) hops, → `isError=false content="3xx body for /loop"`. A 404 or 500 error page is likewise returned as if it were the document. No status code appears anywhere in the content.
-- **Failure:** The model treats an error page, a login redirect stub or a "Moved" page as the real document, then summarises or acts on it. The cause is a common relative redirect (RFC 7231 allows relative references), which is a reliability defect more than a security one. It also hides the case of an exhausted redirect chain.
-- **Fix:** Resolve relative `Location` against the current URL (RFC 3986 §5.2). Prefix the content with `HTTP <code>` and set `isError` for codes ≥ 400 and for 3xx after `MAX_REDIRECTS`.
-- **Test:** The repro's two routes plus a 404 route: assert the resolved follow for `Location: next` and `isError` for the other two.
-- **Lead 3 dropped:** CR/LF in a WebFetch URL cannot reach the request line. `parse_url()` replaces control characters in every component with `_` (measured: `/a\r\nX-Injected: 1` → `/a__X-Injected: 1`), and `Location:` values arrive already split into lines by the wrapper. A space in the path does reach the request line unencoded, but at worst that produces a malformed request to the attacker's own host.
-
 ### F-W3 — WebSearch: cleartext default endpoint, redirects followed with no address re-check, and the whole body is read before the 5 MB cap applies
 - **Severity:** Low. **Confidence:** Verified-by-reading.
 - **Where:** `src/Tools/BuiltIn/WebSearch.php:52` default endpoint `http://skynet2.interserver.net:8080/search`. `:247-258` `fetch()` is a bare `file_get_contents($url, …)`, which follows up to 20 redirects (PHP's default) and buffers the full body. `:174` checks `MAX_RESPONSE_SIZE` only afterwards. `targetsBlockedAddress()` checks the **configured endpoint's** first `gethostbyname()` answer, once, and its list lacks even WebFetch's `0.0.0.0/8`.
 - **Overlap with known #35:** #35 records that the default endpoint is a private host. The parts that are new: (1) the transport is **plain HTTP**, so every model-composed query, which often quotes code, file names or error text from the user's repo, crosses the network in cleartext to a third-party host, unprompted under the default `bypass-permissions`. (2) A compromised or hijacked endpoint (which plain HTTP makes easy) can 30x-redirect the tool to `169.254.169.254` or any internal address, because nothing re-checks redirect targets the way WebFetch's pinned loop does. That makes a mostly blind SSRF primitive: a GET with side effects. The response reaches the model only if it parses as JSON with SearXNG's keys. Otherwise the tool reports "invalid JSON", which still leaks whether the internal endpoint answered. (3) It can also stream an unbounded body into memory (`memory_limit=-1`).
 - **Fix:** Default to `https://` (or to no endpoint, failing loudly per #37). Set `'max_redirects' => 0` / `follow_location => 0` and refuse 3xx. Read through a bounded loop like `WebFetch::transferPinned()`, and reuse WebFetch's resolver, blocklist and pinning for the endpoint.
 - **Test:** A `WebSearch` subclass overriding `fetch()` is the existing seam. Add a constructor test that the default endpoint is https, and a stream-level test (loopback fixture) that a 302 is refused.
+- **Partly fixed on master in `9c28ac0e8`** (part (a)). Redirects are off: any 3xx is an `isError` refusal naming the code and a bounded, control-stripped `Location`. The body is read in 64 KiB chunks and abandoned past 5 MB. The endpoint is vetted with WebFetch's resolver and blocklist (every DNS answer must pass), the socket dials the vetted IP with Host and SNI set to the hostname, and an endpoint with no host is refused. **Remaining:** (b) the cleartext `http://` default endpoint (`WebSearch.php:64`), a deferred decision.
 
 ---
 
@@ -166,7 +153,6 @@ All four findings here (F-H1 to F-H4) were fixed in wave 3; see **Fixed since au
 | ID | Sev | Conf | Title |
 |---|---|---|---|
 | F-E2 | Med-High | Repro | Cancel or deadline SIGKILLs the PHP child only; setsid'd bash keeps running; Task sub-agents cascade. Partly fixed (`c54372b2a`: tree kill at turn teardown and parallel deadline); remaining: dormant Chat site, `AgentWorkerPool` and `EngineExecutor` kill sites |
-| F-T3 | Medium | Reading | WebFetch 2 MiB raw result (32× Bash cap) |
 | F-J3 | Medium | Repro | Path deny rules miss relative/absolute respellings and symlinks. Partly fixed (`3b7d2fd33`: the live hook chain passes the root; deny/ask match raw, root-anchored, resolved and symlinked-root spellings, allow must match plain and resolved); remaining: `AgentManager`, Chat and `refuses()` pass no root (lexical only) |
 | F-P3 | Medium | Repro | auto mode classifies Bash only; classifier `\|` regex bugs. Partly fixed (`b2c2058c5`: regexes escaped, upload/POST and `+refspec` rows, same-kind FP/FN fixes, fail closed on PCRE error); remaining: (b) classify Write/Edit/WebFetch/`mcp__*` (deferred decision) |
 | F-P4 | Medium | Repro | accept-edits: Edit/Write Ask but `rm`/`mv`/`cp` Allow |
@@ -176,8 +162,7 @@ All four findings here (F-H1 to F-H4) were fixed in wave 3; see **Fixed since au
 | F-J5 | Low | Repro | BashEscapeDenyHook unwired, bypassable, false-positive on `/dev/null`; mutates the shared manager; Glob/Grep/Lsp take no worktree jail. Partly fixed (`586dceec3`, `53b066202`: the hook judges shell words, `/dev/null` and executables allowed, `withWorktreeRoot()` clones the manager, Glob/Grep/Lsp take an optional worktree jail, `Agents\PathJail::jailPath()` enforces containment); remaining: production wiring waits on worktree isolation (Part II #23) |
 | F-P7 | Low | Reading | Task grant memo silences user-hook asks |
 | F-P9 | Low (dormant) | Reading | Chat-path "Always" grant keyed by tool name overrides any hook ask |
-| F-W2 | Low | Repro | WebFetch returns 3xx/4xx/5xx bodies as success; relative `Location:` ends the chain |
-| F-W3 | Low | Reading | WebSearch: cleartext default, unchecked redirects (blind SSRF), unbounded read |
+| F-W3 | Low | Reading | WebSearch: cleartext default, unchecked redirects (blind SSRF), unbounded read. Partly fixed (`9c28ac0e8`: 3xx refused, bounded 64 KiB-chunk read abandoned past 5 MB, endpoint vetted with WebFetch's resolver and blocklist and dialled by the vetted IP); remaining: (b) cleartext `http://` default endpoint (deferred decision) |
 | F-E5 | Low (latent) | Reading | `interactiveSpawnCommand()` keeps the `cd X && cmd` prefix F-E3 fixed in Bash (no production caller passes a cwd yet) |
 | F-E4 | Info (doc) | Reading | `ParallelSafe` docblock still describes the orphan-deadline and inherited-socket hazards fixed by B2 and B3 |
 
@@ -199,7 +184,7 @@ All four findings here (F-H1 to F-H4) were fixed in wave 3; see **Fixed since au
 **Leads from the checkpoint, and how each was resolved:**
 1. Provider test expecting `/Malformed UTF-8/`: **resolved**. It pins the throw for caller-supplied `jsonSchema` only. The F-T1 fix note was updated to repair at `settle()` and drop the provider-wide backstop.
 2. WebFetch relative `Location` / 3xx returned as success: **confirmed** as F-W2 (repro).
-3. CR/LF in the WebFetch URL: **dropped**. `parse_url()` replaces control characters with `_` (measured). See F-W2.
+3. CR/LF in the WebFetch URL: **dropped**. `parse_url()` replaces control characters in every component with `_` (measured: `/a\r\nX-Injected: 1` → `/a__X-Injected: 1`), and `Location:` values arrive already split into lines by the wrapper. A space in the path reaches the request line unencoded, but at worst that is a malformed request to the attacker's own host.
 4. gitignore ReDoS / fail-open: **confirmed** as F-T5 (repro: 139 s).
 5. `Chat::gateToolCall()` parity: **resolved**. That path is unreachable from `bin/sugarcrush` (no `registerTool()` caller). F-H1 and F-H3 apply there too, but dormant. It adds F-P9.
 6. Task orphan cascade: **confirmed by reading**, folded into F-E2.
@@ -247,3 +232,5 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **F-T4** Read, Edit and Write blocked forever on a FIFO (or device) inside the root — fixed on master in `c339b3682` (all three return `Error: not a regular file` for a FIFO, socket or device instead of blocking in open(2); a symlink to a regular file still works and a dangling link behaves as before; Edit also refuses a directory).
 - **F-T2** Edit ignored its own `$maxBytes`, so a large file cost about 18× its size in RAM — fixed on master in `139864c7d` (Edit checks `$maxBytes` with `filesize()` before it reads and caps the read at maxBytes+1 bytes, so a file that grows after the check is refused too; `BuildsUnifiedDiff` trims the common prefix and suffix on the raw strings and splits only the changed middle plus 3 context lines, byte-identical to the old diff; a changed region over 20k lines or 4 MiB gets a "+N -M lines; diff preview omitted" summary; Write gains a trailing optional `maxDiffBytes`, default 1 MiB, and does not read a previous file bigger than that, overwriting it without a diff). Measured on a 36 MB file: before, the edit succeeded at 651 MB peak; after, it is refused at 10 MB peak, and with the cap raised it succeeds at 79 MB. Behaviour change: Edit now refuses files over 1 MiB, the existing `DEFAULT_MAX_BYTES` that was never enforced (Bootstrap passes no override).
 - **F-T7** Edit and Write rewrote files in place, so a kill mid-write left a truncated file — fixed on master in `103a497a5` (new `AtomicFileWriter::replace()` writes a temp file beside the target and renames it over the target, copying the mode before writing, trying to copy uid/gid, and calling fsync; a symlink is resolved and its target replaced, so the link survives; a hard link (nlink > 1), or a directory where no temp can be created or renamed, falls back to an in-place write that writes first and truncates after, so the file is never empty; a non-writable file is still refused; Edit and Write take a trailing optional `?\Closure $writeSeam`, null in production). Residual: ACLs and xattrs are not copied, and a real SIGKILL can leave an orphan `.<name>.tmp.<hex>` file. Follow-up: the `tests/RuntimeTest.php` docblock near line 6757 still quotes the write scanner's old known answers (`Edit.php` reports `file_put_contents`); the controls themselves moved to `Support/AtomicFileWriter.php`.
+- **F-T3** WebFetch returned up to 2 MiB raw into context, 32× Bash's cap — fixed on master in `a8209382c` (the result goes through `TruncatesOutput` with a 64 KiB default, set by a new trailing constructor parameter `$maxOutputBytes`, and ends with the shared "[truncated: N of M bytes omitted]" marker; the wire read is still bounded at 2 MiB). Residual: the default is spelled `WebFetch::MAX_OUTPUT_BYTES` (pinned equal to `DEFAULT_MAX_OUTPUT_BYTES` by a test) rather than the trait constant, pending a `TruncatesOutput` docblock edit that names WebFetch in `TruncatesOutputNudgeMarginDocTest`'s census.
+- **F-W2** WebFetch returned 3xx/4xx/5xx bodies as successful results, and a relative `Location:` silently ended the redirect chain — fixed on master in `a8209382c` (`Location` is resolved per RFC 3986 §5.2 and every hop re-runs the full guard chain; a non-2xx result gets an `HTTP <code>` first line; `isError` is set for codes of 400 and above, for a 3xx with no usable `Location`, after more than 3 hops, and when there is no status line).

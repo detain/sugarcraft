@@ -96,7 +96,7 @@
 
     Kilo legacy (a `condense` tool with a user-approved preview) and Goose (agent-visible vs user-visible flags) supply the remaining pieces.
 
-11. **The code audit found about 136 new defects** (Part IX). 83 of them, including the one Critical and all 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes, unfenced repo skill descriptions, Esc Esc tool placeholders that never healed, raw CR and C1 controls reaching the terminal, a turn kill that left its commands running, streamed tool calls dropped on `stop`, built-in skills that told every project to `git clean -fd`, the full-history markdown re-render on every frame, `error_log()` output painted over the TUI, env-block git calls that honoured the user's git config and took `index.lock`, PostToolUse blocks that did nothing, hook input that defeated grep-style deny hooks, a hostile `.gitignore` that stalled Glob for minutes, prompt hooks and custom-command shell blocks that froze the TUI inside `update()`, forks that carried no conversation, the multi-second `/branch` freeze, Vertex quota errors that were never retried, `claude-mcp` calls that gave up after one second, a stray stdout line that aborted MCP requests, workflow pause and resume that skipped the failed stage, uncapped `CLAUDE.md`/`AGENTS.md` and `@imports`, Edit and Write that read huge files whole and truncated files in place, file tools that hung on a FIFO, mid-session path rules that never reached the agent, and a status bar and session tab strip wider than the terminal. Waves 2 to 5 found 21 more, smaller defects while fixing these. About 74 remain, including:
+11. **The code audit found about 136 new defects** (Part IX). 98 of them, including the one Critical and all 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes, unfenced repo skill descriptions, Esc Esc tool placeholders that never healed, raw CR and C1 controls reaching the terminal, a turn kill that left its commands running, streamed tool calls dropped on `stop`, built-in skills that told every project to `git clean -fd`, the full-history markdown re-render on every frame, `error_log()` output painted over the TUI, env-block git calls that honoured the user's git config and took `index.lock`, PostToolUse blocks that did nothing, hook input that defeated grep-style deny hooks, a hostile `.gitignore` that stalled Glob for minutes, prompt hooks and custom-command shell blocks that froze the TUI inside `update()`, forks that carried no conversation, the multi-second `/branch` freeze, Vertex quota errors that were never retried, `claude-mcp` calls that gave up after one second, a stray stdout line that aborted MCP requests, workflow pause and resume that skipped the failed stage, uncapped `CLAUDE.md`/`AGENTS.md` and `@imports`, Edit and Write that read huge files whole and truncated files in place, file tools that hung on a FIFO, mid-session path rules that never reached the agent, a status bar and session tab strip wider than the terminal, recovered tool-call markup left in the reply and sent twice, MiniMax parameters turned into arrays, malformed tool arguments that ran the tool with `[]`, a `claude-code` provider that could not stream, menu commands that erased the draft, background sessions nothing could stop and IPC directories left in `/tmp`, a symlinked `config.json` replaced on the first write, glob metacharacters in the checkout path that hid every repo memory note, a Claude memory import that imported nothing, repo memory framed as the user's own notes, and WebFetch results that were 32× the Bash cap or reported error pages as success. Waves 2 to 6 found 23 more, smaller defects while fixing these. About 61 remain, including:
     - **UI-only rows are now off the wire, but the compaction summary still reads them.**
     - **Sub-agent spend now reaches the parent and the spend cap, but parallel sibling Tasks cannot see each other's spend**, and the user's `modelPrices` setting never reaches Vertex or Bedrock.
     - **Two TUIs on one session still overwrite each other's transcript** (the writer lock is a deferred decision).
@@ -808,17 +808,17 @@ Five agents audited sugar-crush's own source for **new** defects, one per area. 
 
 **Totals at audit time: about 136 findings** — 1 Critical, 20 High, about 47 Medium, and the rest Low-Medium, Low or Info.
 
-**Since the audit, 87 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 83 of the original findings, plus the 4 new items found while fixing them in wave 1. Waves 2 to 5 found 21 more while fixing their items (10 in wave 2, 5 in wave 3, 3 in wave 4, 3 in wave 5); they are open. **About 74 findings remain** — 0 Critical, 0 High, 2 Medium-High (15b-03 and F-E2, both partly fixed), about 21 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
+**Since the audit, 102 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 98 of the original findings, plus the 4 new items found while fixing them in wave 1. Waves 2 to 6 found 23 more while fixing their items (10 in wave 2, 5 in wave 3, 3 in wave 4, 3 in wave 5, 2 in wave 6); they are open. **About 61 findings remain** — 0 Critical, 0 High, 2 Medium-High (15b-03 and F-E2, both partly fixed), about 16 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
 
 At audit time, about two thirds were **reproduced with a script**; the rest are verified by reading, and a few are marked *suspected*. Full write-ups are in Appendices Q–U; each finding has code excerpt, failure scenario, fix and a test that would catch it.
 
 | Appendix | Area | Findings | Critical / High |
 |---|---|---|---|
-| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 14 | 0 / 0 |
+| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 11 | 0 / 0 |
 | **R** (15b) | Chat state machine, TUI, rendering, commands | 16 | 0 / 0 |
-| **S** (15c) | Tools, permissions, hooks (security) | 15 | 0 / 0 |
-| **T** (15d) | Context assembly, memory, skills, config | 14 | 0 / 0 |
-| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 15 | 0 / 0 |
+| **S** (15c) | Tools, permissions, hooks (security) | 13 | 0 / 0 |
+| **T** (15d) | Context assembly, memory, skills, config | 8 | 0 / 0 |
+| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 13 | 0 / 0 |
 
 Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
 
@@ -848,12 +848,10 @@ Several audits found the same root cause in different places. Fixing each theme 
 3. **Repo-controlled content reaches the prompt without fencing or caps.**
    - A repo's skills shadow the user's own (15d-03; every shadowing is now reported, the precedence decision is open).
    - Instruction documents, `@imports` and enabled skill bodies now have byte budgets, but `SkillLoader` still reads skill files with no size limit (15d-27).
-   - Repo memory is framed as "notes the user wrote" (15d-07).
 4. **Prompt assembly read the user's git config and the filesystem nondeterministically (mostly fixed).** The env block's git calls now run with `--no-optional-locks -c color.ui=false`, diff through plumbing with `--no-ext-diff`, never write the index, and are bounded at 2 s each; a subdirectory launch reports the repo root and its git state; rule and repo-map walks sort before capping (15d-12, 15d-14, 15d-13 (a), 15d-17).
    - What remains: `.sugar-crush/*` lookups still resolve at the launch subdirectory, not the repo root (15d-13 (b), a deferred decision).
    - The env block is still re-rendered inside the system message, which hurts cache stability (Part I #2, Part II #2).
-5. **Errors are swallowed and turns "succeed".**
-   - Malformed arguments run the tool with `[]` (A11).
+5. **Errors are swallowed and turns "succeed" (fixed).** The last open case, malformed tool-call arguments that ran the tool with `[]`, now gets an error result and the tool does not run (`16b9d6750`).
 6. **The permission layer has holes in the default and stricter modes.**
    - Accept-edits mode allows `rm`, `mv` and `cp` (F-P4).
    - WebFetch counts as read-only, so it can exfiltrate data unprompted (F-P6).
@@ -875,6 +873,7 @@ Several audits found the same root cause in different places. Fixing each theme 
     - Vertex and Bedrock now have list-price tables and flag unknown models unpriced, but `ProviderFactory` never hands them the user's `modelPrices`, cache tokens are unpriced there, and the default Bedrock config still sends a bare model id (A15, A20, both partly fixed).
     - The OpenAI context window has no config override (A13, partly fixed: the 8k sizes are corrected, and cached tokens are now billed at the cached rate).
     - A trusted project can choose title and summary models billed to the user's key (15d-24).
+    - `claude-code` turns report 0 total tokens, because the CLI's `result` line carries only the bucket counts and no `total_tokens` (A25; cost is still read).
     - Together these mean the spend cap is unreliable on every provider except priced ones.
 
 ## IX.3 Critical and High findings: fix first
@@ -891,7 +890,8 @@ The Critical item and all 20 High items are fixed on master, as is the latent Hi
 - **Before Wave 0, as an "audit hotfix" wave (mostly S):** this wave has landed on master in full (see the **Fixed since audit** list at the end of each of Appendices Q–U).
 - **With Wave 0:**
   - the remaining process-tree kill sites (theme 1, F-E2);
-  - cost accounting (theme 10).
+  - cost accounting (theme 10);
+  - route Chat's Ctrl+A `/agents` arm through `Chat::runCommand()`, as the menu commands now are, so it stops wiping an idle draft (15b-34).
 - **Before Wave 1.C ships:**
   - fix the permission modal's empty value for an invalid-UTF-8 argument (15b-27), and bidi overrides in the text it shows (15b-28);
   - port the PostToolUse withhold and the hook-input encoding fixes (F-H1, F-H3, both fixed on the live Runtime path) to their dormant Chat-path mirrors, `Chat::applyPostToolUse()` and the bare `json_encode` calls.
@@ -899,7 +899,7 @@ The Critical item and all 20 High items are fixed on master, as is the latent Hi
   The approval UI will otherwise display or route untrusted text wrongly.
 - **With Wave 1.B:**
   - the rest of 15b-03 (the compaction input and notice order; the `uiOnly` flag itself has landed);
-  - stable unique ids (also needed by A8, the markup duplication).
+  - stable unique ids.
 - **With Wave 4 (sub-agents and orchestration):** let `/workflow pause` and `/workflow status` through the in-flight command refusal, so a live run can be paused from the TUI without Esc Esc (WF-4); wire `BashEscapeDenyHook` and the Glob/Grep/Lsp worktree jails, which now work but have no production caller, together with worktree isolation (F-J5, partly fixed; Part II #23).
 - **With the sessions phase (VIII.4 A):**
   - SES-3 (b) (writer lease; the server design's `session_leases` table covers it);
@@ -19578,25 +19578,6 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 
 ### A. Providers: error handling, SSE parsing, wire format
 
-#### A8 — When textual (DSML or MiniMax-XML) tool calls are recovered, the markup stays in the assistant content: it is painted to the UI and replayed alongside the structured call
-- **Severity:** Medium · **Confidence:** Verified-by-repro (`repro_parsers.php`, second half)
-- **Where:** `src/Providers/SglangProvider.php:785-802` (content is streamed and accumulated) and `:851-871` (calls are recovered afterwards, but the already-yielded content is never retracted). Also `Runtime.php:1365` (`$buffer .= $response->content`).
-- **Failure scenario:** this happens when the server runs without `--tool-call-parser` (the fallback path these parsers exist for). The streamed text `"Let me read it.\n\n<｜DSML｜tool_calls>…</｜DSML｜tool_calls>"` is shown verbatim in the TUI. It also becomes `AssistantMessage::content` and the recovered `tool_calls` are attached as well. On the next request, `formatMessages()` sends the DSML text and the structured `tool_calls`, which the chat template renders as DSML a second time. The model sees every call twice in its own history.
-- **Fix:** after recovery, remove the envelope span from the assistant content. The parser could return the cleaned content, with Runtime replacing `$buffer` when a final chunk carries a "content override". Optionally, hold back display of text that follows an envelope prefix.
-- **Test:** stream DSML content with `DsmlToolCallParser`. Assert that the final `AssistantMessage::content()` does not contain `｜DSML｜`, and that exactly one call reaches the wire on the next request.
-
-#### A9 — The MiniMax XML fallback turns any JSON-looking parameter value into a PHP array, regardless of the tool schema
-- **Severity:** Medium · **Confidence:** Verified-by-repro (`repro_parsers.php`, first line)
-- **Where:** `src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php:278-297`.
-- **Code:**
-  ```php
-  $decoded = json_decode($trimmed, true);
-  return json_last_error() === JSON_ERROR_NONE && is_array($decoded) ? $decoded : $value;
-  ```
-- **Failure scenario:** `<invoke name="Write"><parameter name="path">composer.json</parameter><parameter name="content">{"name":"acme/x",...}</parameter>` gives a `content` of type `array` (repro). Writing or editing any JSON file (composer.json, package.json, a .json fixture) through this parser either fails or writes the wrong value. `DsmlToolCallParser` avoids this because the model declares `string="true"`.
-- **Fix:** pass the tool schema (name → `inputSchema()['properties'][param]['type']`) into the parser, and decode only when the declared type is `object` or `array`. Without a schema, keep the value as a string.
-- **Test:** parse the repro content. Assert that `content` is a string equal to the raw JSON text.
-
 #### A10 — `CustomProvider` sends a literal top-level `extra_body` key on the wire
 - **Severity:** Medium · **Confidence:** Verified-by-reading. Server rejection was not reproduced, because that needs a live strict endpoint.
 - **Where:** `src/Providers/CustomProvider.php:172` and `:240`.
@@ -19605,29 +19586,6 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Fix:** send `'separate_reasoning' => true` at the top level, and only for providers known to accept it, or make it a config flag.
 - **Partly fixed on master in `4f8869c63`.** `complete()` and `completeStream()` no longer send `extra_body`, and by default the body carries no `separate_reasoning` at all (SGLang never read the nested form, so nothing changes there). A server that wants extra top-level fields can opt in through a new last constructor parameter, `array $extraBody = []`, also passed through `openAiCompatible()`; one helper merges it into both bodies, and the constructor refuses the key `extra_body`, keys the provider writes itself, and keys that are not non-empty strings. **Remaining:** no config key feeds `extraBody` yet. Adding one needs plumbing through `ProviderFactory`, a `docs/SETTINGS.md` row, and the `TrustKeyDocumentationDriftTest` roster.
 - **Test:** capture the outgoing body with history middleware. Assert that it has no `extra_body` key.
-
-#### A11 — Malformed tool-call argument JSON runs the tool with `[]`, and the model is never told why
-- **Severity:** Low · **Confidence:** Verified-by-reading
-- **Where:** `CustomProvider.php:449-451` and `:628` (`json_decode(...) ?? []`, with no warning at all), `SglangProvider.php:2221-2260` (warns the UI through `RuntimeNoticeSink` but still returns `[]`).
-- **Failure scenario:** truncated or invalid JSON arguments mean the tool runs with no arguments. The model gets a misleading "missing parameter" error from the tool instead of "your arguments were not valid JSON". That invites a repeat loop (which also connects to known #10).
-- **Fix:** return a synthetic error `ToolResultMessage` such as "arguments were not valid JSON: <excerpt>" without calling the tool.
-- **Test:** a stream with `arguments: '{"path": "a'` should produce an error tool result that names the JSON problem, and the tool's `execute()` should not be called.
-
-#### A12 — The `claude-code` provider's streaming path (the only one Runtime uses, since `supportsStreaming()` is true) cannot work
-- **Severity:** Medium (non-default provider; it is completely broken) · **Confidence:** Verified-by-repro for the argument error; Verified-by-reading for the framing and argv-size problems.
-- **Where:** `src/Providers/ClaudeCodeProvider.php:99-310`, `src/Providers/ClaudeCodeInvocation.php:40-98`.
-- **Code:**
-  ```php
-  $cmd = array_merge([$this->invocation->claudePath()], $this->invocation->baseArgs() /* --output-format json */, $args /* -p <prompt> --output-format stream-json --bare ... */);
-  ...
-  if (str_starts_with($line, 'data: ')) { ... yield $this->parseChunk($data); }
-  ```
-- **Failure scenario (three independent faults):**
-  1. **Repro:** with the CLI pointed at a dead local base URL, `claude --output-format json -p hi --output-format stream-json --bare --system-prompt x` exits 1 with "Error: When using --print, --output-format=stream-json requires --verbose". Every turn fails.
-  2. Even with `--verbose`, stream-json is NDJSON with no `data: ` prefix, so every line is dropped and the reply is empty. Token deltas also need `--include-partial-messages`.
-  3. The whole transcript and the system prompt are passed as single argv strings. Linux `MAX_ARG_STRLEN` is 128 KiB per argument, so `exec` fails with E2BIG once the history passes about 128 KiB.
-- **Fix:** add `--verbose --include-partial-messages`, drop the duplicate `--output-format`, parse raw JSON lines (`type: stream_event`), and pass the prompt on stdin (`-p` with input from stdin) instead of argv.
-- **Test:** use a fake `claude` script that prints NDJSON `stream_event` lines and assert that deltas are yielded. Add a test asserting the argv contains `--verbose` exactly when the format is `stream-json`.
 
 #### A13 — `OpenAIProvider::contextWindow()` returns 8,192 for models it can price (gpt-4o-mini, gpt-4.1, gpt-4.1-mini)
 - **Severity:** Medium · **Confidence:** Verified-by-reading
@@ -19686,6 +19644,13 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Fix:** reword the comment to say the cost is 0.0 because the fixture reports zero tokens.
 - **Test:** none needed beyond review.
 
+#### A25 — `claude-code` turns report 0 total tokens
+- **Severity:** Low · **Confidence:** Verified-by-reading (found while fixing A12 in wave 6)
+- **Where:** `src/Providers/ClaudeCodeProvider.php:422-425` (`totalTokens()` reads only `usage.total_tokens`), used by `parseResult()` at `:404` and `:518`; `src/Usage.php:55-67` (the docblock that says ClaudeCodeProvider reads `usage.total_tokens` or reports 0).
+- **Detail:** since A12's fix (`46cf9c71b`), the stream path works and the CLI's final `result` line is parsed. The real CLI's `usage` document has no `total_tokens`, only the Anthropic buckets (`input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`), so every `claude-code` turn reports 0 tokens. Its `total_cost_usd` is still read, so cost and the spend cap are right; the token tracker, `/cost` token figures and Chat's context calibration see nothing. The gap is documented on `totalTokens()` and deliberately left open, because summing the buckets makes this a split-usage provider and trips `UsageTest`'s source-derived split census.
+- **Fix:** sum the buckets (or carry the split the way the other providers parse it) and move the `Usage` docblock and `UsageTest`'s census with it.
+- **Test:** a `result` line with `usage: {input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100}` and no `total_tokens` gives a non-zero token count.
+
 ---
 
 ### B. Engine fork protocol and process lifecycle
@@ -19726,10 +19691,7 @@ These are covered above: B4 (no usage channel on tool results; partly fixed in `
 
 | ID | Severity | Confidence | Title | Location |
 |---|---|---|---|---|
-| A8 | Medium | repro | Recovered DSML/XML markup stays in content (painted, then sent twice) | SglangProvider.php:785-871 |
-| A9 | Medium | repro | MiniMax fallback makes JSON-looking strings into arrays (Write of composer.json breaks) | MinimaxXmlFallbackToolCallParser.php:278-297 |
 | A10 | Medium | reading | `CustomProvider` sends a literal `extra_body` key. Partly fixed (`4f8869c63`: no literal key; opt-in constructor `array $extraBody`); remaining: no config key feeds `extraBody` | CustomProvider.php:172, 240 |
-| A12 | Medium | repro+reading | claude-code streaming cannot work (no `--verbose`, wrong framing, argv > 128 KiB) | ClaudeCodeProvider.php:99-310 |
 | A13 | Medium | reading | OpenAI window is 8k for gpt-4o-mini/4.1. Partly fixed (`58d25cb3b`: ids sized, unknown → 0); remaining: no context-window config override | OpenAIProvider.php:103-112 |
 | A15 | Medium | reading | Vertex priced at $0 (spend cap inert); Bedrock invents $0.01. Partly fixed (`587a30d68`, `c9772c065`: list-price tables, unknown → $0 flagged unpriced, `modelPrices` ctor param); remaining: `ProviderFactory` does not pass the user's `modelPrices` to Vertex/Bedrock, cache tokens unpriced | VertexProvider.php; BedrockProvider.php; ProviderFactory.php:980, 991 |
 | **A20** | Medium | reading | Bedrock tables match only bare ids: real versioned/profile ids get an 8k window and an invented $0.01/1k. Partly fixed (`c9772c065`: ids normalised, unknown → window 0 + unpriced, profile-id `DEFAULT_MODEL`); remaining: the factory's default config still sends the bare id, `modelPrices` plumbing (A15) | BedrockProvider.php; ProviderFactory.php:436 |
@@ -19737,11 +19699,11 @@ These are covered above: B4 (no usage channel on tool results; partly fixed in `
 | B4 | Medium (High paid) | reading | Task sub-agent spend never reaches the parent, session total or cap. Partly fixed (`badb3353e`: usage on `ToolResult`, folded per settled result, parent spend probe in the Task engine); remaining: parallel siblings blind to each other (overshoot ≤ one step), crashed tool child reports nothing, Chat's E17 `totalTokens` fallback inflated | TaskTool.php; ToolResult.php; Runtime.php; Chat.php:16240 |
 | A18 | (sharpens #27/#28) | suspected | Default SGLang `max_tokens` 4096 with effort `max` | SglangProvider.php:1030, 165 |
 | **A23** | Low-Med | reading | Replayed tool-call arguments send a nested empty map (`{"opts":{}}`) as `[]` (residual of A7) | ToolSchema.php:195-196 |
-| A11 | Low | reading | Malformed argument JSON runs the tool with `[]`; model not told | CustomProvider.php:628; SglangProvider.php:2221 |
 | **C4** | Low (docs) | reading | Notice-sink clip/overflow strings and TROUBLESHOOTING.md still say "full text on stderr"; in the TUI it is in the log file (residual of C2) | RuntimeNoticeSink.php:202, 267; TROUBLESHOOTING.md:85-91, 135, 326 |
+| **A25** | Low | reading | `claude-code` turns report 0 total tokens: the CLI's `result` line has only the bucket counts, no `total_tokens` (residual of A12) | ClaudeCodeProvider.php:422-425; Usage.php:55-67 |
 | **A24** | Info (test comment) | reading | `UsageWiringTest` comment still calls Vertex's rate table "a placeholder 0.0" (stale since A15) | tests/Integration/UsageWiringTest.php:1012-1014 |
 
-New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A13 (fix aligned with the `contextWindow()` contract). Items sharpened in that pass and since fixed are listed under **Fixed since audit**. Found while fixing A7 in wave 2: **A23**. Found while fixing C2 in wave 3: **C4**. Found while fixing A15 in wave 4: **A24**.
+New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A13 (fix aligned with the `contextWindow()` contract). Items sharpened in that pass and since fixed are listed under **Fixed since audit**. Found while fixing A7 in wave 2: **A23**. Found while fixing C2 in wave 3: **C4**. Found while fixing A15 in wave 4: **A24**. Found while fixing A12 in wave 6: **A25**.
 
 ---
 
@@ -19790,7 +19752,7 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **A3** A stream that ends without a finish signal treated as complete — fixed on master in `9105a64ae`. A5 (no-space `data:` framing) surfaced through this path as a premature-end error until it was fixed in `5781eb9f8`.
 - **A6** One non-UTF-8 byte in tool output failed every later request — fixed on master in `f33cd55fd` (scrub at `Runtime::settle()`, shared with 15c F-T1). Residual: the two command backends (A22), fixed later in `987c8d87f`.
 - **B1** MCP ids reset per fork; a killed call shifted every later result — fixed on master in `ea6e178fd` (process-unique ids, locked exchanges, shared read buffer); LSP ids in `e6f6aee54`. Residual: the LSP exchange lock (B7), fixed later in `d0f7cb6f6`; a lock file per MCP server is left behind if the TUI is killed.
-- **A5** `data:` with no space after the colon was ignored — fixed on master in `5781eb9f8` (new `Providers\SseData`, used by SglangProvider and CustomProvider; VertexProvider already accepted it). ClaudeCodeProvider's `data: ` check is A12's NDJSON framing fault, not this one.
+- **A5** `data:` with no space after the colon was ignored — fixed on master in `5781eb9f8` (new `Providers\SseData`, used by SglangProvider and CustomProvider; VertexProvider already accepted it). ClaudeCodeProvider's `data: ` check was A12's NDJSON framing fault, not this one (A12 is fixed since).
 - **A22** `CommandBackend`/`StreamingCommandBackend` encoded history without `JSON_INVALID_UTF8_SUBSTITUTE` — fixed on master in `987c8d87f` (`CommandBackend::encodeHistory()` substitutes; `StreamingCommandBackend` reuses it).
 - **B7** The LSP client had unique ids but no cross-process exchange lock — fixed on master in `d0f7cb6f6` (per-process `LspExchangeLock` flock with bounded polling, `LspExchangeState` sidecar, shared readahead, recovery from a holder killed mid-read or mid-write, notifications journaled and replayed, server-to-client requests answered -32601, only the connecting process stops the server).
 - **A4** Streamed tool calls were dropped on `finish_reason=stop` or `delta:null` — fixed on master in `90dc99dfc` (a null-delta finish frame is parsed with an empty delta; at end of stream a still-buffered call is flushed whatever the finish reason, with the decode-or-drop rule of the truncated flush; `CustomProvider` gains `flushBufferedToolCalls()`). Residual: the `error` finish reason deliberately does not flush (the server disowned its generation).
@@ -19806,6 +19768,10 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **A19** Vertex `ApiException` 429/503 were never classified transient, so they got no retry — fixed on master in `a26489378` (`TransientFailure::isTransient()` judges a Vertex `ApiException` by its gRPC status, so `RESOURCE_EXHAUSTED` (429) and `UNAVAILABLE` (503) retry and `UNAUTHENTICATED` (401) does not, falling back to the numeric code; the `VertexProvider` docblock that claimed this already worked is corrected).
 - **A16** Bedrock did not merge consecutive same-role turns and sent blank text blocks — fixed on master in `9c706ed39` (a new `conversationTurns()` step, used by both `converse` and `converseStream`, merges adjacent same-role turns and drops blank text blocks).
 - **C3** Project instructions (`CLAUDE.md`/`AGENTS.md` + every `@import`) had no byte budget, while rules had 64 KiB — fixed on master in `dd8be915d` (with 15d 15d-09: `Runtime::systemPromptSections()` prices instruction documents in framed, escaped bytes against 64 KiB per document and 128 KiB combined, kept apart from the rule budget; a document that does not fit becomes a pointer line in a `<project-instructions>` deferral fence and is recorded in `InstructionFileLoader::refusedPaths()`; every document and `@import` read is stat-checked first and bounded at 60 KiB, and an import that does not fit what is left of its document's ceiling gets an `import-deferred` pointer at its import site; enabled skill bodies are held to `CompactorConfig`'s per-skill and combined budgets, measured with `TokenEstimate`; a prompt under budget is byte-identical). Residual: there is no user-visible notice for a deferred instruction file yet, because nothing drains `refusedPaths()`; skill budgets use the `CompactorConfig` defaults, because App carries no compactor config; `SkillLoader` still reads skill files uncapped (15d-27).
+- **A9** The MiniMax XML fallback turned any JSON-looking parameter value into a PHP array, regardless of the tool schema — fixed on master in `df3663220` (the parser coerces parameters by the tool schema through new `ToolParameterTypes` and `ToolSchemaAware`, so a JSON-looking value for a string-typed parameter stays a string).
+- **A11** Malformed tool-call argument JSON ran the tool with `[]`, and the model was never told why — fixed on master in `16b9d6750` (the Custom, Sglang and OpenAiArray parsers stamp the call through new `ToolCall::argumentsError()`, and Runtime refuses such a call with an error result on both the sequential and the concurrent arms instead of running the tool).
+- **A8** When textual (DSML or MiniMax-XML) tool calls were recovered, the markup stayed in the assistant content, painted to the UI and replayed alongside the structured call — fixed on master in `57f806a6a` (provider side, with Runtime unchanged: a new `EnvelopeAware` capability, an `EnvelopeHoldBack` stream split and `TextualRecovery`; `SglangProvider::completeStream()` holds text back from the first byte that could start a marker, cuts recovered envelopes and releases anything else verbatim, and a structured `tool_calls` chunk releases held text; the batch `parseResponse()` cuts too; the default openai parser holds nothing). The repro now yields the content "Let me read it." plus one call.
+- **A12** The `claude-code` provider's streaming path could not work — fixed on master in `46cf9c71b` (`--verbose --include-partial-messages` are added for stream-json only; NDJSON lines are parsed, taking `stream_event` text and thinking deltas plus the `result` line and skipping `system` and whole `assistant` lines; the prompt goes on stdin, fed non-blocking in the select loop; a system prompt over 64 KiB is spilled to a 0600 temp file passed with `--system-prompt-file` and deleted after reap; a failed run's reason comes from the `result` line; `execute()` shares the select loop, which removes its stderr deadlock). API change: `ClaudeCodeInvocation::printModeArgs(array $options)` no longer takes the prompt. Residual: a real run reports 0 total tokens, because the CLI's `result` line has no `usage.total_tokens` (A25).
 
 
 ---
@@ -19869,16 +19835,12 @@ Confidence labels:
   - the compaction summary's input is not filtered, because filtering only one side breaks the exchange-key alignment;
   - notice order is unchanged: notices still render, interleaved, between a prompt and its answer in the transcript (they are off the wire).
 
-#### 15b-05 — Menu-bar and shell commands erase the user's draft, then mid-turn refuse with "Your draft is still in the box"
-- **Severity:** Medium · **Confidence:** Verified-by-repro (`r8_menu_draft.php`)
-- **Where:** `App::runRegistryCommand()` at `src/App/App.php:1775-1799`, together with `clearInputKeys()` at `:1817-1826`. It feeds synthetic Backspace and Delete keys, then types `/name` + Enter. Callers:
-  - `dispatchMenuSelection()`, which runs every menu-bar item;
-  - `NewSessionCmd` (Ctrl+N);
-  - `ProviderSelectCmd`.
-- **Code:** `...array_fill(0, $before, new KeyMsg(KeyType::Backspace)), ...array_fill(0, $after, new KeyMsg(KeyType::Delete))`
-- **Repro:** A turn is in flight and the draft is `my carefully composed follow-up draft`. Selecting menu Model → Switch model leaves the draft as `"/model"`, and the notice reads "…Your draft is still in the box…". The original draft is gone. When idle, the draft is also silently destroyed.
-- **Fix:** Route menu and shell commands through a Chat entry point that runs a command without touching `input`, such as `Chat::runCommand(string)`, or stash and restore the draft the way `releaseQueuedPrompts()` does. Refuse mid-turn **before** clearing.
-- **Test:** App + in-flight Chat + draft. Send `consumeShellCmd(new MenuSelectedMsg('Model','Switch model'))`. Assert that `chat->inputBuf` is unchanged.
+#### 15b-34 — Ctrl+A still runs `/agents` by typing it into the input box: an idle draft is wiped, and the mid-turn refusal says the draft is still in the box
+- **Severity:** Low · **Confidence:** Verified-by-reading (found while fixing 15b-05 in wave 6)
+- **Where:** `src/Chat.php:2491-2492`: the Ctrl+A arm is `$this->withInputBuf('/agents')->submit()`. Mid-turn it is routed (`:8742`) to `refuseInFlightCommand()` (`:8541`), whose notice ends "Your draft is still in the box: press Enter again once the turn finishes".
+- **Detail:** since 15b-05's fix (`ecca2b606`, `c1e836427`), menu-bar rows, Ctrl+N and the provider picker go through `Chat::runCommand()` / `Chat::runPaletteAction()` and never touch the draft. Ctrl+A was not moved: when idle it replaces whatever the user had typed with `/agents` and submits it, so the draft is lost. Mid-turn the draft is not moved, but the refusal names `/agents` and tells the user to press Enter again later, which would send the draft, not `/agents`.
+- **Fix:** make the Ctrl+A arm call `runCommand('/agents')`, which leaves the draft alone and refuses mid-turn with wording that fits a command the user did not type.
+- **Test:** an idle Chat with a draft; Ctrl+A opens the agents view and `inputBuf` is unchanged. Mid-turn, Ctrl+A's notice does not say the draft holds `/agents`.
 
 ### B. Terminal injection and frame geometry
 
@@ -20011,10 +19973,10 @@ Both findings here (15b-20, 15b-21) were fixed in wave 4; see **Fixed since audi
 | ID | Sev | Conf | Title |
 |---|---|---|---|
 | 15b-03 | Med-High | Repro | Command output, mid-turn notices and background/runtime notices go to the model as real turns. Partly fixed (`2a3a8f91c`: `Message::$uiOnly`, filtered at every wire encoder); remaining: compaction input unfiltered, notices still interleave between a prompt and its answer |
-| 15b-05 | Medium | Repro | Menu and shell commands erase the draft, then claim "draft still in the box" |
 | 15b-26 | Medium | Repro | candy-core `Width::wrap()` loops forever when a 2-cell cluster meets a 1-column budget (latent in sugar-crush; reachable via candy-shell pager, sugar-table) |
 | 15b-13 | Low-Med | Reading | Token proxy chars/4 underestimates CJK 3-6×. Partly fixed (`8341a37c1`: script-weighted `TokenEstimate` for Chat's estimate, 85/95% tiers, status bar); remaining: `ContextCompactor` still chars/4 (70% reminder late for CJK), stale comments |
 | 15b-17 | Low-Med | Repro | U+E002+n in model or tool text paints a copy of on-screen image n where the text chooses; Nerd Font glyphs blanked |
+| 15b-34 | Low | Reading | Ctrl+A still types `/agents` into the box: an idle draft is wiped; the mid-turn refusal says the draft is still in the box (residual of 15b-05) |
 | 15b-14 | Low | Reading | No i18n in sugar-crush |
 | 15b-15 | Low | Reading | Attachments dormant and dropped on the wire |
 | 15b-24 | Low | Reading | `/pane:x`, `/layout:x`, `/mcp:x` colon spellings not handled (documented) |
@@ -20122,6 +20084,7 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **15b-21** `/branch` and any first save of a long history froze the TUI for seconds, one autocommitted INSERT per message — fixed on master in `698a1efff` (with 15e SES-2: save, checkpoint and restore each run in one `BEGIN IMMEDIATE` transaction, and a fork copies the blobs, so the first save on a `/branch` re-interns nothing). Measured at 800 messages: first save 6519 → 233 ms, first save on a branch 5996 → 17 ms; the fork itself takes about 470 ms (the fsync of the copied blobs). Residual: persistence still runs synchronously from `Chat::update()` (`persistTranscript()`); moving it to a debounced `Cmd` is not done.
 - **15b-09** The chat status bar was never clipped to the terminal width, and the content width (with every overlay) was floored at 20 plus chrome — fixed on master in `66d0651ac` (the status-bar hint shortens step by step, keeping the "Ctrl+P menu" click zone longest; a `fitStatusBar()` backstop strips zone markers before it cuts, so a cut never splits one; the content-width floor is `max(1, cols-6)`, the image box and diff box floors drop to 1, and the slash popup is capped at the terminal width; at 6 columns or fewer `clipFrameToCols()` cuts the bordered shell, with every `Width::wrap` budget kept at 2 or more for 15b-26). The new width test exposed a second bug, fixed in the same commit: Veil counted zone markers as screen cells, so rows under an overlay were split at the wrong column and overflowed; zones are now lifted out before compositing and put back afterwards. Measured: `r3b` last row 54 → 38 cells at 40 columns and 54 → 29 at 30; `r3_width` at 25 columns 45 over-wide rows → 0; `r17_overlay_width` 21 over-wide cases → 0. Residual: `src/Commands/TranscriptTable.php` still copies the old `max(20, cols-6)` floor (nothing overflows, because the pane fitter wraps its output); the permission modal's inner width is still floored at 20, so below 26 columns it loses its right border (it does not overflow).
 - **15b-18** The session tab strip was neither width-clipped nor sanitized — fixed on master in `01cae6d21` (each name goes through `Sanitize::untrustedForDisplay()` and `PaneLabel::safe()`, which removes escapes and control bytes, folds CR/LF/TAB to a space and drops Private-Use characters, and an empty name falls back to the cleaned id; names are capped at 20 cells with an ellipsis, the current tab is always shown, tabs that do not fit collapse into `… +N`, only visible tabs get click zones, and the strip stays one row). Measured at 80 columns: 8 long names 383 → 73 cells; a hostile name 402 → 69 cells with no OSC 52, `\e[2J` or CR; hosted App at 100 columns 433 → 100 cells.
+- **15b-05** Menu-bar and shell commands erased the user's draft, then mid-turn refused with "Your draft is still in the box" — fixed on master in `ecca2b606` + `c1e836427` (new `Chat::runCommand()` and `Chat::runPaletteAction()` run a command without touching the draft, and `App::runRegistryCommand()` uses them instead of feeding synthetic Backspace, Delete and Enter keys). Still open nearby: Chat's own Ctrl+A arm still types `/agents` into the box (15b-34).
 
 
 ---
@@ -20138,7 +20101,7 @@ Scope: `src/Tools/` (built-ins, Concerns, PathJail, IgnoreRules, McpToolBridge),
 Checkout: master @ `05db616f3`, PHP 8.3.6 CLI, `memory_limit=-1`.
 Repro scripts: `/home/sites/crush-research-repos/_audit-scratch/15c/rNN_*.php`. Every repro runs against `.../15c/root` and never against the real repo.
 
-Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings at audit time: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low. Eighteen have since been fixed on master (see **Fixed since audit** at the end), so 13 remain: 1 Med-High (F-E2, partly fixed), 6 Medium, 1 Low-Medium, 5 Low. One more was found during wave 2 (F-E4, Info) and one during wave 3 (F-E5, Low), so 15 are open.
+Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings at audit time: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low. Twenty have since been fixed on master (see **Fixed since audit** at the end), so 11 remain: 1 Med-High (F-E2, partly fixed), 5 Medium, 1 Low-Medium, 4 Low. One more was found during wave 2 (F-E4, Info) and one during wave 3 (F-E5, Low), so 13 are open.
 
 > **Correction to the known list. Read this first.** Argument-scoped permission rules **are implemented**, in `PermissionRule::matches()` / `matchesShellSubject()`. `Bash(rm *)` deny now **denies**, and `Bash(git *)` allow no longer grants all of Bash (`r11_rules.php`). Two sources described older code: synthesis Part II row #23 ("`Bash(git *)` grants all of Bash") and `docs/PERMISSIONS.md` §"Pattern matching is name-only — measured" (which said `Bash(rm *)` "never matched → Allow"). Both are now corrected; the PERMISSIONS.md section was rewritten in `d3d90fece` to describe argument-scoped matching, and since `c8fc573a5` it describes the fail-closed allow rules that closed F-P5. The real defects in the new matcher were narrower. F-P5 (`$(…)`, backticks and redirection slipping past an allow rule) is now fixed. F-J3 covers path rules missing respellings; it is partly fixed (`3b7d2fd33`, the live hook chain), and the callers that pass no root are still open.
 
@@ -20148,12 +20111,7 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 
 ### A. Tool output and encoding
 
-#### F-T3 — WebFetch returns up to 2 MiB raw into context, 32× Bash's cap
-- **Severity:** Medium. **Confidence:** Verified-by-reading.
-- **Where:** `WebFetch.php` `MAX_RESPONSE_SIZE = 2 * 1024 * 1024`, against `TruncatesOutput::DEFAULT_MAX_OUTPUT_BYTES = 65536` for Bash/Grep/Glob.
-- **Failure:** One fetch of a large HTML page puts about 2 MiB of raw markup, roughly 0.5-0.7M tokens, into one tool result. That overflows most context windows, and there is no in-turn compaction (known #5), so the turn fails. This is distinct from known #11 (MCP *uncapped*): WebFetch has a cap, it is just about 30× too large, and it sits outside the shared `TruncatesOutput` budget.
-- **Fix:** Route WebFetch through `TruncatesOutput` with the 64 KiB default (or a configurable one), and add a "fetched N bytes, showing first M" marker.
-- **Test:** Stub a 1 MiB body. Assert `strlen(content) <= 65536 + marker`.
+Every finding here (F-T1 to F-T7) has been fixed, the last (F-T3) in wave 6; see **Fixed since audit**.
 
 ---
 
@@ -20277,21 +20235,13 @@ All four findings here (F-H1 to F-H4) were fixed in wave 3; see **Fixed since au
 
 ### F. WebFetch / WebSearch
 
-#### F-W2 — WebFetch returns 3xx/4xx/5xx bodies as successful results; a relative `Location:` silently ends the redirect chain
-- **Severity:** Low. **Confidence:** Verified-by-repro (`r15_redirect.php` with a loopback `php -S` fixture via the constructor seams).
-- **Where:** `WebFetch.php:204-213`. The status code is computed but used only to decide whether to follow a redirect. `:214-218` returns `isError: false` with the body no matter what the status was. `redirectTarget()` (`:344-375`) handles only absolute `http(s)://` and `/`-rooted locations. Any other relative form (`next`, `../x`, `?page=2`) returns `null`, which is treated as "final".
-- **Repro:** `302 Location: next` → `isError=false content="3xx body for /rel"`. A `302 → /loop` chain, after `MAX_REDIRECTS` (3) hops, → `isError=false content="3xx body for /loop"`. A 404 or 500 error page is likewise returned as if it were the document. No status code appears anywhere in the content.
-- **Failure:** The model treats an error page, a login redirect stub or a "Moved" page as the real document, then summarises or acts on it. The cause is a common relative redirect (RFC 7231 allows relative references), which is a reliability defect more than a security one. It also hides the case of an exhausted redirect chain.
-- **Fix:** Resolve relative `Location` against the current URL (RFC 3986 §5.2). Prefix the content with `HTTP <code>` and set `isError` for codes ≥ 400 and for 3xx after `MAX_REDIRECTS`.
-- **Test:** The repro's two routes plus a 404 route: assert the resolved follow for `Location: next` and `isError` for the other two.
-- **Lead 3 dropped:** CR/LF in a WebFetch URL cannot reach the request line. `parse_url()` replaces control characters in every component with `_` (measured: `/a\r\nX-Injected: 1` → `/a__X-Injected: 1`), and `Location:` values arrive already split into lines by the wrapper. A space in the path does reach the request line unencoded, but at worst that produces a malformed request to the attacker's own host.
-
 #### F-W3 — WebSearch: cleartext default endpoint, redirects followed with no address re-check, and the whole body is read before the 5 MB cap applies
 - **Severity:** Low. **Confidence:** Verified-by-reading.
 - **Where:** `src/Tools/BuiltIn/WebSearch.php:52` default endpoint `http://skynet2.interserver.net:8080/search`. `:247-258` `fetch()` is a bare `file_get_contents($url, …)`, which follows up to 20 redirects (PHP's default) and buffers the full body. `:174` checks `MAX_RESPONSE_SIZE` only afterwards. `targetsBlockedAddress()` checks the **configured endpoint's** first `gethostbyname()` answer, once, and its list lacks even WebFetch's `0.0.0.0/8`.
 - **Overlap with known #35:** #35 records that the default endpoint is a private host. The parts that are new: (1) the transport is **plain HTTP**, so every model-composed query, which often quotes code, file names or error text from the user's repo, crosses the network in cleartext to a third-party host, unprompted under the default `bypass-permissions`. (2) A compromised or hijacked endpoint (which plain HTTP makes easy) can 30x-redirect the tool to `169.254.169.254` or any internal address, because nothing re-checks redirect targets the way WebFetch's pinned loop does. That makes a mostly blind SSRF primitive: a GET with side effects. The response reaches the model only if it parses as JSON with SearXNG's keys. Otherwise the tool reports "invalid JSON", which still leaks whether the internal endpoint answered. (3) It can also stream an unbounded body into memory (`memory_limit=-1`).
 - **Fix:** Default to `https://` (or to no endpoint, failing loudly per #37). Set `'max_redirects' => 0` / `follow_location => 0` and refuse 3xx. Read through a bounded loop like `WebFetch::transferPinned()`, and reuse WebFetch's resolver, blocklist and pinning for the endpoint.
 - **Test:** A `WebSearch` subclass overriding `fetch()` is the existing seam. Add a constructor test that the default endpoint is https, and a stream-level test (loopback fixture) that a 302 is refused.
+- **Partly fixed on master in `9c28ac0e8`** (part (a)). Redirects are off: any 3xx is an `isError` refusal naming the code and a bounded, control-stripped `Location`. The body is read in 64 KiB chunks and abandoned past 5 MB. The endpoint is vetted with WebFetch's resolver and blocklist (every DNS answer must pass), the socket dials the vetted IP with Host and SNI set to the hostname, and an endpoint with no host is refused. **Remaining:** (b) the cleartext `http://` default endpoint (`WebSearch.php:64`), a deferred decision.
 
 ---
 
@@ -20300,7 +20250,6 @@ All four findings here (F-H1 to F-H4) were fixed in wave 3; see **Fixed since au
 | ID | Sev | Conf | Title |
 |---|---|---|---|
 | F-E2 | Med-High | Repro | Cancel or deadline SIGKILLs the PHP child only; setsid'd bash keeps running; Task sub-agents cascade. Partly fixed (`c54372b2a`: tree kill at turn teardown and parallel deadline); remaining: dormant Chat site, `AgentWorkerPool` and `EngineExecutor` kill sites |
-| F-T3 | Medium | Reading | WebFetch 2 MiB raw result (32× Bash cap) |
 | F-J3 | Medium | Repro | Path deny rules miss relative/absolute respellings and symlinks. Partly fixed (`3b7d2fd33`: the live hook chain passes the root; deny/ask match raw, root-anchored, resolved and symlinked-root spellings, allow must match plain and resolved); remaining: `AgentManager`, Chat and `refuses()` pass no root (lexical only) |
 | F-P3 | Medium | Repro | auto mode classifies Bash only; classifier `\|` regex bugs. Partly fixed (`b2c2058c5`: regexes escaped, upload/POST and `+refspec` rows, same-kind FP/FN fixes, fail closed on PCRE error); remaining: (b) classify Write/Edit/WebFetch/`mcp__*` (deferred decision) |
 | F-P4 | Medium | Repro | accept-edits: Edit/Write Ask but `rm`/`mv`/`cp` Allow |
@@ -20310,8 +20259,7 @@ All four findings here (F-H1 to F-H4) were fixed in wave 3; see **Fixed since au
 | F-J5 | Low | Repro | BashEscapeDenyHook unwired, bypassable, false-positive on `/dev/null`; mutates the shared manager; Glob/Grep/Lsp take no worktree jail. Partly fixed (`586dceec3`, `53b066202`: the hook judges shell words, `/dev/null` and executables allowed, `withWorktreeRoot()` clones the manager, Glob/Grep/Lsp take an optional worktree jail, `Agents\PathJail::jailPath()` enforces containment); remaining: production wiring waits on worktree isolation (Part II #23) |
 | F-P7 | Low | Reading | Task grant memo silences user-hook asks |
 | F-P9 | Low (dormant) | Reading | Chat-path "Always" grant keyed by tool name overrides any hook ask |
-| F-W2 | Low | Repro | WebFetch returns 3xx/4xx/5xx bodies as success; relative `Location:` ends the chain |
-| F-W3 | Low | Reading | WebSearch: cleartext default, unchecked redirects (blind SSRF), unbounded read |
+| F-W3 | Low | Reading | WebSearch: cleartext default, unchecked redirects (blind SSRF), unbounded read. Partly fixed (`9c28ac0e8`: 3xx refused, bounded 64 KiB-chunk read abandoned past 5 MB, endpoint vetted with WebFetch's resolver and blocklist and dialled by the vetted IP); remaining: (b) cleartext `http://` default endpoint (deferred decision) |
 | F-E5 | Low (latent) | Reading | `interactiveSpawnCommand()` keeps the `cd X && cmd` prefix F-E3 fixed in Bash (no production caller passes a cwd yet) |
 | F-E4 | Info (doc) | Reading | `ParallelSafe` docblock still describes the orphan-deadline and inherited-socket hazards fixed by B2 and B3 |
 
@@ -20333,7 +20281,7 @@ All four findings here (F-H1 to F-H4) were fixed in wave 3; see **Fixed since au
 **Leads from the checkpoint, and how each was resolved:**
 1. Provider test expecting `/Malformed UTF-8/`: **resolved**. It pins the throw for caller-supplied `jsonSchema` only. The F-T1 fix note was updated to repair at `settle()` and drop the provider-wide backstop.
 2. WebFetch relative `Location` / 3xx returned as success: **confirmed** as F-W2 (repro).
-3. CR/LF in the WebFetch URL: **dropped**. `parse_url()` replaces control characters with `_` (measured). See F-W2.
+3. CR/LF in the WebFetch URL: **dropped**. `parse_url()` replaces control characters in every component with `_` (measured: `/a\r\nX-Injected: 1` → `/a__X-Injected: 1`), and `Location:` values arrive already split into lines by the wrapper. A space in the path reaches the request line unencoded, but at worst that is a malformed request to the attacker's own host.
 4. gitignore ReDoS / fail-open: **confirmed** as F-T5 (repro: 139 s).
 5. `Chat::gateToolCall()` parity: **resolved**. That path is unreachable from `bin/sugarcrush` (no `registerTool()` caller). F-H1 and F-H3 apply there too, but dormant. It adds F-P9.
 6. Task orphan cascade: **confirmed by reading**, folded into F-E2.
@@ -20381,6 +20329,8 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **F-T4** Read, Edit and Write blocked forever on a FIFO (or device) inside the root — fixed on master in `c339b3682` (all three return `Error: not a regular file` for a FIFO, socket or device instead of blocking in open(2); a symlink to a regular file still works and a dangling link behaves as before; Edit also refuses a directory).
 - **F-T2** Edit ignored its own `$maxBytes`, so a large file cost about 18× its size in RAM — fixed on master in `139864c7d` (Edit checks `$maxBytes` with `filesize()` before it reads and caps the read at maxBytes+1 bytes, so a file that grows after the check is refused too; `BuildsUnifiedDiff` trims the common prefix and suffix on the raw strings and splits only the changed middle plus 3 context lines, byte-identical to the old diff; a changed region over 20k lines or 4 MiB gets a "+N -M lines; diff preview omitted" summary; Write gains a trailing optional `maxDiffBytes`, default 1 MiB, and does not read a previous file bigger than that, overwriting it without a diff). Measured on a 36 MB file: before, the edit succeeded at 651 MB peak; after, it is refused at 10 MB peak, and with the cap raised it succeeds at 79 MB. Behaviour change: Edit now refuses files over 1 MiB, the existing `DEFAULT_MAX_BYTES` that was never enforced (Bootstrap passes no override).
 - **F-T7** Edit and Write rewrote files in place, so a kill mid-write left a truncated file — fixed on master in `103a497a5` (new `AtomicFileWriter::replace()` writes a temp file beside the target and renames it over the target, copying the mode before writing, trying to copy uid/gid, and calling fsync; a symlink is resolved and its target replaced, so the link survives; a hard link (nlink > 1), or a directory where no temp can be created or renamed, falls back to an in-place write that writes first and truncates after, so the file is never empty; a non-writable file is still refused; Edit and Write take a trailing optional `?\Closure $writeSeam`, null in production). Residual: ACLs and xattrs are not copied, and a real SIGKILL can leave an orphan `.<name>.tmp.<hex>` file. Follow-up: the `tests/RuntimeTest.php` docblock near line 6757 still quotes the write scanner's old known answers (`Edit.php` reports `file_put_contents`); the controls themselves moved to `Support/AtomicFileWriter.php`.
+- **F-T3** WebFetch returned up to 2 MiB raw into context, 32× Bash's cap — fixed on master in `a8209382c` (the result goes through `TruncatesOutput` with a 64 KiB default, set by a new trailing constructor parameter `$maxOutputBytes`, and ends with the shared "[truncated: N of M bytes omitted]" marker; the wire read is still bounded at 2 MiB). Residual: the default is spelled `WebFetch::MAX_OUTPUT_BYTES` (pinned equal to `DEFAULT_MAX_OUTPUT_BYTES` by a test) rather than the trait constant, pending a `TruncatesOutput` docblock edit that names WebFetch in `TruncatesOutputNudgeMarginDocTest`'s census.
+- **F-W2** WebFetch returned 3xx/4xx/5xx bodies as successful results, and a relative `Location:` silently ended the redirect chain — fixed on master in `a8209382c` (`Location` is resolved per RFC 3986 §5.2 and every hop re-runs the full guard chain; a non-2xx result gets an `HTTP <code>` first line; `isError` is set for codes of 400 and above, for a 3xx with no usable `Location`, after more than 3 hops, and when there is no status line).
 
 
 ---
@@ -20457,24 +20407,6 @@ This report is final. What was read, what was only skimmed, and how each open le
 - **Fix:** Key home-store project entries by canonical root, either with a `<hash(realpath root)>` sub-directory or a `root:` frontmatter field that `capture()` filters on. Say so in the `/memory add` reply when the fallback happens, and migrate unkeyed legacy entries into a quarantine scope.
 - **Test:** `MemoryPromptWiringTest::testAHomeStoreProjectNoteFromAnotherRootDoesNotReachThisPrompt`.
 
-#### 15d-06 — `/memory import claude` builds the Claude Code project slug wrongly and imports nothing for any path containing `.` (and probably `_` and spaces)
-- **Severity:** Medium-Low · **Confidence:** Verified by repro (`r8.php`), plus on-disk evidence from the real `~/.claude/projects`
-- **Where:** `src/Memory/ForeignMemoryImporter.php:302-307`
-- **Code:**
-  ```php
-  return '-' . ltrim(str_replace('/', '-', $path), '-');
-  ```
-- **Failure scenario:** Claude Code replaces every non-alphanumeric character with `-`. On this machine `/home/sites/webhooks.interserver.net` is stored as `~/.claude/projects/-home-sites-webhooks-interserver-net/memory`, and `/home/sites/phlix/phlix-server/.claude/worktrees/…` as `…-phlix-server--claude-worktrees-…`. sugar-crush looks for `-home-sites-webhooks.interserver.net`, finds nothing, and reports "Nothing imported — no readable `claude` memory files were found". In `r8.php` the fixture's correctly slugged entry was ignored, and a decoy at the dotted slug was imported instead.
-- **Fix:** `'-' . ltrim(preg_replace('/[^A-Za-z0-9]/', '-', $path), '-')` (check the leading-dash handling against Claude Code). Also try the old spelling for backward compatibility.
-- **Test:** `ForeignMemoryImporterTest::testSlugMatchesClaudeCodeForDottedAndUnderscoredPaths`.
-
-#### 15d-07 — Repo-shipped memory is presented as the user's own notes
-- **Severity:** Low · **Confidence:** Verified by reading
-- **Where:** `src/Context/MemoryBlock.php:300-306`; `docs/MEMORY.md` ("git-visible, reviewable, like AGENTS.md")
-- **Detail:** `<repo>/.sugar-crush/memory/project/*.md` comes from the clone, with no trust gate, yet the block header says "These are notes the user or a previous session wrote down". The escape is correct, but the provenance claim is wrong for a hostile or simply foreign checkout, and the model weighs "the user wrote this" differently from "the repository ships this".
-- **Fix:** Render repo-store and home-store notes under separate headers ("shipped in this repository" vs "recorded by you"), or require `trustedProjectSettings` before reading the repo store.
-- **Test:** Assert that the header wording differs by store.
-
 ---
 
 ### C. Instruction files and prompt-wide encoding/size
@@ -20485,13 +20417,6 @@ This report is final. What was read, what was only skimmed, and how each open le
 - **Detail:** since 15d-10's fix (`161d60881`), `PromptFence::escape()` also rewrites the `<` of chat-template control-token openers, `<|` and `<｜` (fullwidth U+FF5C) with an optional `/`, so `<|im_start|>` and `<｜User｜>` reach the prompt as `&lt;|im_start|>` and `&lt;｜User｜>`. It also matches roster tags that carry attributes. MEMORY.md's "touches nothing else" is now false, and PROMPT_ENGINEERING.md's fence rules list only the roster tags. A user who sees `&lt;|` in a memory note's prompt rendering has no documentation explaining why.
 - **Fix:** add the control-token defang (and the attribute-bearing tag match) to both passages.
 - **Test:** a doc-drift assertion that both pages name the `<|` / `<｜` defang, alongside `PromptFence::CONTROL_TOKEN_PIPES`.
-
-#### 15d-11 — MEMORY.md says `@~/…` imports resolve against home; in practice every one is refused
-- **Severity:** Low · **Confidence:** Verified by reading
-- **Where:** `src/Context/ImportResolver.php:104-105` resolves `~/` via `getenv('HOME')`, but every caller passes the containment gate `InstructionFileLoader.php:848` (`ContainedPath::within($realPath, $boundary)` against the repo root). `docs/MEMORY.md:231`: "`~/...` resolves against the home directory".
-- **Detail:** `@~/my-conventions.md` in a project CLAUDE.md always renders `<import-blocked reason="outside-repo-root">`. The documented feature cannot be reached unless the repo *is* `$HOME`. Separately, `getenv('HOME')` is used instead of `HomeDirectory::owned()`, unlike every other home read.
-- **Fix:** Either document that `~/` imports are always blocked, or allow imports under `HomeDirectory::owned()` for user-tier files only.
-- **Test:** A doc-drift test that renders `@~/x.md` and asserts the documented outcome.
 
 ---
 
@@ -20513,24 +20438,7 @@ This report is final. What was read, what was only skimmed, and how each open le
 
 ### E. Configuration and trust
 
-#### 15d-15 — `writeUserConfig()` replaces a symlinked `config.json` with a regular file; later edits to the real file (permission rules) silently stop applying
-- **Severity:** Medium-Low · **Confidence:** Verified by repro (`cfg7/`)
-- **Where:** `src/Cli/Bootstrap.php:3608-3680` (`tempnam` in `dirname(userConfigPath())`, then `rename($temp, userConfigPath())`)
-- **Failure scenario:** A dotfiles setup has `~/.sugar-crush/config.json -> ~/dotfiles/sugar-crush/config.json`. The first `/theme` or Ctrl+P provider switch replaces the link with a 0600 regular file. The dotfiles copy is now stale. The user later tightens `permissionMode` or `permissionRules` in the dotfiles repo (or syncs from another machine), and the live policy no longer changes. There is no warning. `requirePrivatePolicyFile()` follows symlinks, so symlinked configs are otherwise fully supported.
-
-  Related, Low: the read-merge-write has no lock, so two concurrent sessions persisting different keys lose one update. And a `config.json` that became invalid mid-session (an editor save) is read as `[]` by `rawUserConfig()` and overwritten with only the patch.
-- **Fix:**
-  - Resolve the target with `realpath()` (when it is a link whose target is home-owned and not world-writable) and write the temp file beside the target.
-  - Refuse to persist when `json_decode` of the existing file fails, rather than treating it as `{}`.
-  - Wrap the read-merge-write in `TimedFileLock`.
-- **Test:** `BootstrapConfigPathOverrideTest::testWriteUserConfigPreservesASymlinkedConfig` and `::testWriteUserConfigRefusesToOverwriteAnUnparsableConfig`.
-
-#### 15d-16 — Huge numeric values for `maxToolSteps` and `maxOutputTokens` wrap negative through `(int)` casts
-- **Severity:** Low · **Confidence:** Verified by repro (PHP 8.3.6: `(int) 9.3e18 === -9146744073709551616`)
-- **Where:** `src/Cli/Bootstrap.php:2945-2958`; `src/Backend/EngineBackend.php:1251-1269`
-- **Detail:** `$raw >= 1 ? (int) $raw : null` accepts `9.3e18` and returns a negative int. `maxOutputTokens` then sends a negative `max_tokens` (provider 400 on every request), and `maxToolSteps` becomes negative. These are user-tier only, so the risk is an odd but plausible "no limit" value such as `1e19`.
-- **Fix:** Clamp to a documented ceiling (for example `min($raw, 1_000_000)`) before the cast, and refuse non-integral floats with a notice.
-- **Test:** A data provider covering `1e19`, `9.3e18` and `1.5`.
+Both findings here (15d-15, 15d-16) were fixed in wave 6; see **Fixed since audit**.
 
 ---
 
@@ -20542,17 +20450,6 @@ Its only entry, 15d-17, was fixed in wave 3; see **Fixed since audit**.
 
 ### G. Findings from the resumed pass
 
-#### 15d-22 — A checkout path containing `[`, `*` or `?` silently drops forced instructions and every repository memory note
-- **Severity:** Low-Medium · **Confidence:** Verified by repro (`r18.php` + `br[1]/`)
-- **Where:** `src/Context/InstructionFileLoader.php:508-509` (`glob($this->repoRoot . '/' . $pattern)`); `src/Memory/MemoryStore.php:118`, `:163`, `:198`, `:231`, `:259`, `:284` (`glob($this->memoryPath . …)` / `glob($dir . '/*.md')`)
-- **Failure scenario:** The repository lives at `…/br[1]/` (bracketed names are common for client folders, for example `~/work/[acme]/site`, and for copies such as `proj[1]`). PHP `glob()` treats `[1]` as a character class, so:
-  - **Forced instructions:** `instructions: ["docs/*.md"]` loads 0 files, and `refusedPaths()` stays empty.
-  - **Repo memory:** `ProjectMemoryWriter::createForRoot()->write('repo note')` succeeds and the file is on disk, but `list('project')` returns 0 entries. `/memory add --scope project` reports success, then the note never reaches `<project-memory>`, `/memory list` never shows it, and `/memory delete <id>` / `edit` say "not found" because `get()` globs too.
-
-  A class such as `[acme]` can also match a *different* sibling directory (`…/a/site`). Containment then refuses the forced-instruction matches, but the memory store would read and write under the wrong tree. No warning is emitted on any of these paths. The same applies to the home store when `$HOME` contains a metacharacter (rare).
-- **Fix:** Never pass a filesystem path through `glob()` unescaped. Escape the fixed prefix (`addcslashes($prefix, '\\*?[')`) and glob only the user-supplied pattern part, or replace the fixed-directory listings in `MemoryStore` with `scandir()`/`FilesystemIterator` plus a suffix check. For `get()/update()/delete()`, build the path directly as `scopeDirectory($s) . '/' . $id . '.md'` for each scope instead of globbing.
-- **Test:** `MemoryStoreTest::testARootContainingGlobMetacharactersListsItsNotes` and `InstructionFileLoaderTest::testForcedInstructionsLoadUnderABracketedRoot` (temp dir named `x[1]`).
-
 #### 15d-23 — Repository memory notes can become unaddressable: the frontmatter `id` is displayed, the filename is what `/memory edit|delete` looks up; every write also rewrites a git-tracked `MEMORY.md` with a timestamp
 - **Severity:** Low · **Confidence:** Verified by repro (`r13.php` + `mem13/`)
 - **Where:** `src/Memory/MemoryStore.php:188-273` (`get/update/delete` glob `*/<id>.md` and require `^[0-9a-f]{32}$`); `:506-535` (`parseEntry()` takes `id` from the frontmatter); `src/Chat.php:12894-12906` (the listing prints `$entry->id()`); `MemoryStore::generateIndex()` `:308-340`
@@ -20563,6 +20460,7 @@ Its only entry, 15d-17, was fixed in wave 3; see **Fixed since audit**.
   Separately, every `add/update/delete` calls `generateIndex()`, which rewrites `<repo>/.sugar-crush/memory/project/MEMORY.md` with a fresh `Loaded at: <timestamp>` line (`r13.php` lists it beside the notes). In the git-visible repo store, every note change therefore produces a diff in a second file whose only change is the timestamp, and two branches that each add a note conflict on it.
 - **Fix:** Treat the filename stem as the id. `parseEntry()` should take `id` from `basename($file, '.md')` and warn when the frontmatter disagrees. Accept any `[A-Za-z0-9._-]{1,64}` stem in `get/update/delete`. Drop the timestamp from the index, and do not write the index in the repo store at all (it is derivable).
 - **Test:** `MemoryStoreTest::testACopiedNoteFileIsListedAndDeletableUnderItsOwnFilename`, `::testAHandAuthoredReadableIdIsDeletable`, and `::testGenerateIndexIsByteStableWhenNotesAreUnchanged`.
+- **Partly fixed on master in `18206b703`.** A note's id is its filename stem: the frontmatter `id:` is never read, stems are validated as safe, and a file with a bad stem is reported through `skipped()`. The index carries no timestamp, is byte-stable, and is not rewritten when nothing changed. **Remaining:** the repo store still writes the git-visible `MEMORY.md` index (the fix asked for it not to be written there at all), so two branches that each add a note can still conflict on it.
 
 #### 15d-24 — A trusted project can choose the model for every title, prompt suggestion and compaction on the operator's credential; an unpriced choice bills as $0 against the spend cap
 - **Severity:** Low (needs `trustedProjectSettings`) · **Confidence:** Verified by reading (key reachability); the $0 accounting is the documented unpriced-model behaviour
@@ -20579,15 +20477,9 @@ Its only entry, 15d-17, was fixed in wave 3; see **Fixed since audit**.
 |---|---|---|---|---|
 | 15d-03 | Medium | Repro | Project `.sugar-crush/skills` shadows the user's own skills and built-ins silently; contradicts SKILLS.md. Partly fixed (`9105feb48`: every shadowing reported in `skipped()`); remaining: precedence order (deferred), foreign-convention shadowing still silent, skip-notice wording | `SkillLoader.php:721-739` |
 | 15d-05 | Medium | Repro | Home-store `project` notes are global → injected into every repo's prompt | `MemoryBlock.php:213-229`, `Chat.php:12534` |
-| 15d-06 | Med-Low | Repro | Claude memory import slug ignores `.` (and probably `_`/space) → imports nothing | `ForeignMemoryImporter.php:302-307` |
 | 15d-13 | Med-Low | Repro | Subdirectory launch: "not a git repo", git state dropped; `.sugar-crush/*` not found. Partly fixed (`119bc86d2`: `rev-parse --show-toplevel`, "repo root:" line, git section); remaining: (b) `.sugar-crush/*` walk-up (deferred decision) | `EnvironmentBlock.php:929-932` |
-| 15d-15 | Med-Low | Repro | `writeUserConfig()` breaks symlinked config (stale policy); unlocked read-merge-write; overwrites an unparsable file | `Bootstrap.php:3608-3680` |
-| 15d-22 | Low-Med | Repro | Glob metacharacters in the checkout path drop forced instructions and every repo memory note, silently | `InstructionFileLoader.php:509`, `MemoryStore.php:118-284` |
-| 15d-23 | Low | Repro | Memory id shown from frontmatter, looked up by filename → unaddressable notes; repo `MEMORY.md` rewritten with a timestamp on every change | `MemoryStore.php:188-340`, `Chat.php:12894` |
+| 15d-23 | Low | Repro | Memory id shown from frontmatter, looked up by filename → unaddressable notes; repo `MEMORY.md` rewritten with a timestamp on every change. Partly fixed (`18206b703`: id is the filename stem, index byte-stable with no timestamp and skipped when unchanged); remaining: the repo store still writes the git-visible `MEMORY.md` index, so two branches that each add a note can conflict on it | `MemoryStore.php:188-340`, `Chat.php:12894` |
 | 15d-24 | Low | Reading | Trusted project picks `titleModel`/`summaryModel` on the operator's key; unpriced → $0 → spend cap blind | `LayeredSettings.php:584-592`, `Bootstrap.php:7773-7796` |
-| 15d-07 | Low | Reading | Repo-shipped memory framed as "notes the user wrote" | `MemoryBlock.php:300-306` |
-| 15d-11 | Low | Reading | Doc says `@~/` imports resolve; containment always blocks them | `ImportResolver.php:104`, `MEMORY.md:231` |
-| 15d-16 | Low | Repro | `(int)` of a huge float wraps negative for `maxToolSteps`/`maxOutputTokens` | `Bootstrap.php:2945`, `EngineBackend.php:1251` |
 | 15d-27 | Low | Reading | `SkillLoader` reads `SKILL.md` and asset files uncapped (the 15d-09 budgets cap only what enters the prompt) | `SkillLoader.php:682, 977, 1042` |
 | 15d-25 | Low (docs) | Reading | MEMORY.md ("touches nothing else") and PROMPT_ENGINEERING.md don't describe the `<\|` / `<｜` control-token defang | `MEMORY.md:199`, `PROMPT_ENGINEERING.md:103` |
 | 15d-26 | Low (docs) | Reading | `CHANGELOG.md` still lists the four moved skills as built-ins | `CHANGELOG.md:389-395` |
@@ -20676,6 +20568,12 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **15d-20** A `paths:`-scoped rule added or edited mid-session was never delivered: the splice skipped it and the boot-time nudge never learned of it — fixed on master in `d1157349b` (`RulePathNudge::fromLoader()` re-walks the rules on each consult; the announced ledger holds a digest of each rule's body, so a rule added mid-session is delivered, an edited rule is re-announced with its current body, and a rule whose `paths:` is removed is no longer nudged; Bootstrap changes only the construction line).
 - **15d-09** CLAUDE.md, AGENTS.md and forced instruction files had no size cap (a 3 MB file went into every request whole), and enabled skill bodies were uncapped — fixed on master in `dd8be915d` (with 15a C3: instruction documents are priced in framed, escaped bytes against 64 KiB per document and 128 KiB combined; a document or `@import` that does not fit becomes a pointer line and is recorded in `InstructionFileLoader::refusedPaths()`; every document read is stat-checked and bounded at 60 KiB; enabled skill bodies are held to `CompactorConfig`'s per-skill and combined budgets via `TokenEstimate`; a prompt under budget is byte-identical; `ContextCompactor::filterSkills()` is left dormant). Residual: there is no user-visible notice for a deferred instruction file yet, because nothing drains `refusedPaths()`; skill deferrals appear only in the prompt and are recorded nowhere; skill budgets use the `CompactorConfig` defaults, because App carries no compactor config; `SkillLoader` still reads skill files uncapped (15d-27).
 - **15d-19** Stale, unpinned doc statements: rule `paths:` scoping "not applied", and "only two keys" re-applied per turn — fixed on master in `232013284` (`docs/PROMPT_ENGINEERING.md`, `docs/SKILLS.md` and `docs/SETTINGS.md` corrected; SETTINGS.md now names three re-applied keys, adding `maxOutputTokens`; a fourth stale claim, the `<system-reminder>` emitter list, is fixed too; each is pinned by a derived assertion in `DocFigureProseDriftTest`).
+- **15d-15** `writeUserConfig()` replaced a symlinked `config.json` with a regular file, ran an unlocked read-merge-write and overwrote an unparsable config — fixed on master in `66f2f760a` (it writes through a symlinked config to its regular, policy-checked target, and writes nothing for a dangling or unsafe link; it refuses to persist over an unparsable or non-object config through a new `userConfigForMerge()`, where a missing or empty file counts as `{}`; and the read-merge-write runs under a 5 s `TimedFileLock` on a `.<name>.lock` sidecar, skipping the write on timeout).
+- **15d-16** Huge numeric values for `maxToolSteps` and `maxOutputTokens` wrapped negative through `(int)` casts — fixed on master in `987caa2cf` (values at or above 2**63 resolve to null, the default, instead of wrapping negative; `maxToolSteps` refuses non-integral values such as 1.5, while 8.0 is accepted; `maxOutputTokens` keeps its documented truncation; `docs/SETTINGS.md` updated). Residual: there is no user notice for a nonsense value (neither key raises one for any bad value, and the per-turn `EngineBackend` read cannot show one); no ceiling constant was added.
+- **15d-22** A checkout path containing `[`, `*` or `?` silently dropped forced instructions and every repository memory note — fixed on master in `98ec1dd66` (the checkout root is glob-escaped in `InstructionFileLoader::loadForced()`, and every `MemoryStore` glob is replaced by one sorted `scandir()` helper).
+- **15d-06** `/memory import claude` built the Claude Code project slug wrongly and imported nothing for any path containing `.` — fixed on master in `f26a4733b` (`claudeProjectSlug()` reproduces Claude Code's algorithm, turning every non-alphanumeric character into `-` and cutting a slug over 200 characters with a hash suffix, and falls back to the legacy `/`-only spelling; the importer lists with `scandir()`). Residual: `CLAUDE_CODE_PROJECT_DIR_NAME` and `CLAUDE_CONFIG_DIR` are not consulted.
+- **15d-07** Repo-shipped memory was presented as the user's own notes — fixed on master in `6a609f594` (`MemoryBlock` lists repo-store and home-store notes under separate provenance labels inside one `<project-memory>` fence; the cap, byte budget and omission count stay one newest-first walk; a home-only block is byte-identical to before; `docs/MEMORY.md` updated).
+- **15d-11** MEMORY.md said `@~/…` imports resolve against home, while in practice every one was refused — fixed on master in `a4dc54c9d` (`ImportResolver` resolves `~` through `HomeDirectory::owned()`, so there is no more `/x.md` when `HOME` is unset and no world-writable home; with no owned home the reference is left as written; `docs/MEMORY.md` now says a `~/` import is blocked as `outside-repo-root` unless the home directory is inside the checkout).
 
 
 ---
@@ -20717,20 +20615,6 @@ Both findings here (MCP-3, MCP-4) were fixed in wave 5; see **Fixed since audit*
 ---
 
 ### C. Background sessions and daemons
-
-#### BG-1 — Nothing can stop a background session: the daemon's `STOP` command has no sender, so `/bg` tasks run up to 3600 s (and keep running after the TUI exits)
-- **Severity:** Low-Medium (new relative to #30, which covers results not returning)
-- **Confidence:** Verified-by-reading
-- **Where:** `src/Sessions/BackgroundSessionRunner.php:656-661` handles `STOP`. `grep -rn 'STOP' src` finds no client that sends it, and `BackgroundSupervisor` has no stop/cancel/kill method (`src/Sessions/BackgroundSupervisor.php`, whole file). The daemon is `setsid` double-forked (`:462-469`), so quitting the TUI does not reach it.
-- **Impact:** a mistaken `/bg rm -rf …`-class task, or a runaway token-spending task, cannot be cancelled from the product. It runs with whatever permission mode the daemon resolved (the default is bypass) for up to an hour.
-- **Fix:** add `BackgroundSupervisor::stopSession($id)`, which connects, sends `AUTH`, sends `STOP`, and falls back to signalling the recorded pid after verifying start time. Wire `/bg stop <id>` and the agents pane `s` action to it.
-- **Test:** spawn with a fake backend that sleeps, call `stopSession`, and assert the `[session:task:stopped]` record and process exit.
-
-#### BG-2 — Per-launch IPC directories under `/tmp` are never removed
-- **Severity:** Low
-- **Confidence:** Verified-by-reading
-- **Where:** `BackgroundSupervisor::ensurePrivateIpcDir` `:606-637` creates `/tmp/sugar_crush_bg_<uid>_<random>`. The runner unlinks only the socket (`BackgroundSessionRunner.php:797`). The `.buffer`, `.buffer.log` and `.token` files and the directory itself remain after completion, and `ToolIpcFiles::sweep` does not glob this prefix.
-- **Fix:** have the supervisor delete the session's files after `reapFinishedDaemon()` has absorbed the buffer, and sweep stale `sugar_crush_bg_<uid>_*` directories at boot.
 
 #### TMP-1 — Fixed, non-per-user `/tmp` directory names: the first user on a shared host permanently disables Task resume (and hook-overflow retention) for every other user
 - **Severity:** Low-Medium (availability on multi-user hosts; the security side is already handled by refusing)
@@ -20884,7 +20768,6 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 |---|---|---|---|
 | SES-3 | Medium | Verified-by-reading | No per-session writer lock; two TUIs clobber the transcript; checkpoint index and blob-intern races. Partly fixed (`698a1efff`: `UNIQUE(session_id,"index")`, IMMEDIATE allocation, duplicate-renumbering migration; closes the index and blob-intern races); remaining: (b) writer lock and second-TUI behaviour (deferred decision) |
 | WF-1 | Medium | Verified-by-reading | Workflow/task `timeout` and `retries` are never enforced; stages have no wall-clock bound. Partly fixed (`4fa805970`: per-agent deadline with `killTree()`, `withTimeBudget()`, `Workflow::$timeout` reaches every stage); remaining: (b) retries (deferred decision), synchronous dispatch paths uninterruptible, cancel path SIGTERMs the root only |
-| BG-1 | Low-Med | Verified-by-reading | Background sessions cannot be stopped (STOP has no sender) |
 | TMP-1 | Low-Med | Verified-by-reading | Fixed shared `/tmp` directory names; the first user disables Task resume for others |
 | WF-4 | Low-Med | Verified-by-reading | While a workflow runs, Chat refuses every slash command, so a live `/workflow pause` or `/workflow status` only gets through after Esc Esc (residual of WF-2) |
 | AG-2 | Low-Med | Verified-by-repro | One Claude-style preset (`tools: Read, Grep`) disables all presets in every tier |
@@ -20893,7 +20776,6 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 | MCP-7 | Low-Med | Verified-by-repro | OAuth store stale-cache write-back erases another process's credentials; non-atomic write |
 | MCP-8 | Low-Med | Verified-by-repro | Failed re-registration persists `client_id` as a never-expiring bearer token |
 | CLI-2 | Low-Med | Verified-by-repro | `sugarcrush <dir>` ignores bare directory names; non-path positionals silently dropped. Partly fixed (`b899773a6`: existing-dir positional is the root, other leftovers exit 2 with a `-p` hint); remaining: (b) leftovers as the TUI's initial prompt (deferred decision) |
-| BG-2 | Low | Verified-by-reading | Background IPC directories never cleaned |
 | AG-3 | Low | Verified-by-reading | `AgentManager` never forgets sub-agents; unbounded growth plus a per-frame scan |
 | DOC-2 | Low (docs) | Verified-by-reading | `docs/MCP.md:97-100` still says an unknown `type` makes startup "ordering-dependent" (the DOC-1 item 1 claim, fixed in TROUBLESHOOTING only); owner w7-mcp-oauth |
 | AG-5 | Low (dormant) | Verified-by-reading | Dormant `Chat::executeAgents()` fork path and `App::dispatchSkill()` run SubAgents with the default 300 s timeout, which WF-1 (a) now enforces |
@@ -20942,7 +20824,7 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 5. *Daemon inherits the TUI's fds*: **mechanism confirmed, not filed.** `fdleak.php` shows PHP `proc_open` passes every non-CLOEXEC `fopen`/socket fd to the child (SQLite's fd is CLOEXEC and was not inherited). The `/bg` daemon therefore holds copies of TUI sockets and pipes, including the `RuntimeNoticeSink` socketpair and MCP stdio pipes. I could not show user-visible harm: the TUI's `stopMcpServers()` still terminates servers explicitly on exit. The same class was filed in 15a (B3) for the turn fork's frame socket, and fixed there in `53da0a291` (close-on-exec on both ends); the `/bg` daemon's inherited fds are untouched by that fix.
 6. *ESC injection through `HeadlessPermissionPrompt::question()`*: **dropped.** Arguments go through `json_encode`, which always escapes C0 controls (ESC becomes `\u001b`). The built-in Ask message is `"Allow {$toolName} to run? …"` (`PermissionGateHook.php:137-139`), and tool names are registry names (MCP names are sanitised to `[A-Za-z0-9_-]`). A ScriptHook's ask text is operator-authored. Residual, untested: `JSON_UNESCAPED_UNICODE` emits UTF-8 C1 controls (U+009B) raw, and some terminals honour them.
 7. *`--resume ''` / prefix match* (`Bootstrap::findSession` `:3150-3162`): **dropped.** `--resume ''` and `--resume=` become "no target", which opens the picker (`ArgvParser.php:497-518`). Prefix matching requires a unique match, and an ambiguous prefix reports "no stored session" (wording only). Name resolution's non-determinism is already in SES-2.
-8. *Daemon permission mode*: **dropped (by design).** `BackgroundSessionRunner::backend()` `:580-611` passes `consolePermissionPrompt=true`. With stdin `/dev/null`, every Ask is refused with the full refusal text written to the daemon's log (`BackgroundSupervisor.php:254-258` routes stderr to `<ipc>.buffer.log`). The permission mode is whatever the config resolves, which defaults to bypass (Part II #1). The stop gap is BG-1.
+8. *Daemon permission mode*: **dropped (by design).** `BackgroundSessionRunner::backend()` `:580-611` passes `consolePermissionPrompt=true`. With stdin `/dev/null`, every Ask is refused with the full refusal text written to the daemon's log (`BackgroundSupervisor.php:254-258` routes stderr to `<ipc>.buffer.log`). The permission mode is whatever the config resolves, which defaults to bypass (Part II #1). The stop gap was BG-1 (fixed since in `0214944fc`; since BG-2's fix a settled session's `.buffer.log` is deleted).
 
 **CLI-1:** confirmed. It was Suspected and is now Verified-by-repro.
 
@@ -20992,3 +20874,5 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **WF-2** `/workflow pause` could not pause a running workflow, resuming a failed run skipped the failed stage and reported success, and the pause file was never cleared — fixed on master in `efdfe79f8` (one pause-file writer saves only the stages that succeeded; a live run can be paused: the file is written at once, the current stage finishes, and the run returns `Paused` before the next one; resume restores the earlier successful stages, tokens, cost and start time, re-runs the failed stage and deletes the pause file, and a second resume throws `WorkflowNotRunningException`; `getStatus()` checks a live run, then the pause file, then a finished run the engine remembers; Chat's `/workflow resume` runs in a Fiber through `driveWorkflowFiber()`, so it no longer freezes the TUI, and its reply says completed, failed or paused). Pausing a completed run is still allowed: resuming it runs nothing and deletes the file. Still open nearby: the TUI refuses `/workflow pause` while the run is in flight (WF-4).
 - **WF-3** `{{agent.results}}` never resolved for a parallel agent, and a run-context key equal to an agent type crashed the stage — fixed on master in `98821a7a2` (results live under a reserved `$context['@results']` key and every stage type writes them, named by the task name, else the stage name, `<stage>_<n>` for a parallel agent (1-based), the step name for a pipeline step, and `<stage>_verifier` for a verifier; parallel results are matched to their agents by SubAgent id, since they come back in completion order; context keys starting with `@` are refused with `InvalidArgumentException`, so the `coder=x` crash is gone, and tokens from agents that ran are kept on a failed stage). Behaviour change: the agent-type alias is gone, so `{{coder.results}}` resolves only for a task named `coder` (nothing in the repository used it).
 - **DOC-1** Smaller doc/code drift: TROUBLESHOOTING's startup-ordering advice and the doc halves of WF-1 and WF-3 — fixed on master in three commits: item 2 (WF-1's timeout and retries semantics in `docs/WORKFLOWS.md` and `examples/workflows/lint-then-fix.yaml`) in `4fa805970` (wave 4); item 1 in `bc5c3dd3b` (the ordering paragraph in `docs/TROUBLESHOOTING.md` is rewritten: every entry is attempted, and the error line names the entries that failed; pinned by the new `McpStartupOrderingDocDriftTest`); item 3 in `98821a7a2` (with WF-3: the Interpolation table in `docs/WORKFLOWS.md` is rewritten, with new sections on how results are named and on pause, resume and status). Item 4 had resolved itself earlier. Residual: `docs/MCP.md:97-100` still makes the same stale "ordering-dependent … never reached" claim (DOC-2, owned by w7-mcp-oauth).
+- **BG-1** Nothing could stop a background session, because the daemon's `STOP` command had no sender — fixed on master in `0214944fc` (new `/bg stop <id>`: `BackgroundSupervisor::stopSession()` tries the authenticated `STOP`, then SIGTERM, then a tree kill, sending each signal only after re-checking the pid's `/proc` start time; the daemon traps SIGTERM; a stopped session settles as `Stopped`; `docs/COMMANDS.md` documents the command).
+- **BG-2** Per-launch IPC directories under `/tmp` were never removed — fixed on master in `2c12e9c9a` + `f7a6ac85b` (a settled session releases its `.sock`, `.buffer`, `.buffer.log` and `.token`, and the private directory when the last one settles, only inside the supervisor's own directory; `BackgroundSupervisor::sweepStaleIpcDirs()`, run from `ToolIpcFiles::sweepOnce()` at boot, removes stale IPC directories: older than 86400 s, with the exact minted name, owned by the user, holding only files and sockets). Behaviour change: a settled session's `.buffer.log` (the daemon's stderr) is deleted too, so a failed `/bg` task no longer leaves that log behind. Residual: the `/bg` tests in `tests/ChatTest.php` never tick, so each full run still leaves about two `sugar_crush_bg_*` directories in `/tmp` (the startup sweep removes them later).

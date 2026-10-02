@@ -12,25 +12,6 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 
 ## A. Providers: error handling, SSE parsing, wire format
 
-### A8 — When textual (DSML or MiniMax-XML) tool calls are recovered, the markup stays in the assistant content: it is painted to the UI and replayed alongside the structured call
-- **Severity:** Medium · **Confidence:** Verified-by-repro (`repro_parsers.php`, second half)
-- **Where:** `src/Providers/SglangProvider.php:785-802` (content is streamed and accumulated) and `:851-871` (calls are recovered afterwards, but the already-yielded content is never retracted). Also `Runtime.php:1365` (`$buffer .= $response->content`).
-- **Failure scenario:** this happens when the server runs without `--tool-call-parser` (the fallback path these parsers exist for). The streamed text `"Let me read it.\n\n<｜DSML｜tool_calls>…</｜DSML｜tool_calls>"` is shown verbatim in the TUI. It also becomes `AssistantMessage::content` and the recovered `tool_calls` are attached as well. On the next request, `formatMessages()` sends the DSML text and the structured `tool_calls`, which the chat template renders as DSML a second time. The model sees every call twice in its own history.
-- **Fix:** after recovery, remove the envelope span from the assistant content. The parser could return the cleaned content, with Runtime replacing `$buffer` when a final chunk carries a "content override". Optionally, hold back display of text that follows an envelope prefix.
-- **Test:** stream DSML content with `DsmlToolCallParser`. Assert that the final `AssistantMessage::content()` does not contain `｜DSML｜`, and that exactly one call reaches the wire on the next request.
-
-### A9 — The MiniMax XML fallback turns any JSON-looking parameter value into a PHP array, regardless of the tool schema
-- **Severity:** Medium · **Confidence:** Verified-by-repro (`repro_parsers.php`, first line)
-- **Where:** `src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php:278-297`.
-- **Code:**
-  ```php
-  $decoded = json_decode($trimmed, true);
-  return json_last_error() === JSON_ERROR_NONE && is_array($decoded) ? $decoded : $value;
-  ```
-- **Failure scenario:** `<invoke name="Write"><parameter name="path">composer.json</parameter><parameter name="content">{"name":"acme/x",...}</parameter>` gives a `content` of type `array` (repro). Writing or editing any JSON file (composer.json, package.json, a .json fixture) through this parser either fails or writes the wrong value. `DsmlToolCallParser` avoids this because the model declares `string="true"`.
-- **Fix:** pass the tool schema (name → `inputSchema()['properties'][param]['type']`) into the parser, and decode only when the declared type is `object` or `array`. Without a schema, keep the value as a string.
-- **Test:** parse the repro content. Assert that `content` is a string equal to the raw JSON text.
-
 ### A10 — `CustomProvider` sends a literal top-level `extra_body` key on the wire
 - **Severity:** Medium · **Confidence:** Verified-by-reading. Server rejection was not reproduced, because that needs a live strict endpoint.
 - **Where:** `src/Providers/CustomProvider.php:172` and `:240`.
@@ -39,29 +20,6 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Fix:** send `'separate_reasoning' => true` at the top level, and only for providers known to accept it, or make it a config flag.
 - **Partly fixed on master in `4f8869c63`.** `complete()` and `completeStream()` no longer send `extra_body`, and by default the body carries no `separate_reasoning` at all (SGLang never read the nested form, so nothing changes there). A server that wants extra top-level fields can opt in through a new last constructor parameter, `array $extraBody = []`, also passed through `openAiCompatible()`; one helper merges it into both bodies, and the constructor refuses the key `extra_body`, keys the provider writes itself, and keys that are not non-empty strings. **Remaining:** no config key feeds `extraBody` yet. Adding one needs plumbing through `ProviderFactory`, a `docs/SETTINGS.md` row, and the `TrustKeyDocumentationDriftTest` roster.
 - **Test:** capture the outgoing body with history middleware. Assert that it has no `extra_body` key.
-
-### A11 — Malformed tool-call argument JSON runs the tool with `[]`, and the model is never told why
-- **Severity:** Low · **Confidence:** Verified-by-reading
-- **Where:** `CustomProvider.php:449-451` and `:628` (`json_decode(...) ?? []`, with no warning at all), `SglangProvider.php:2221-2260` (warns the UI through `RuntimeNoticeSink` but still returns `[]`).
-- **Failure scenario:** truncated or invalid JSON arguments mean the tool runs with no arguments. The model gets a misleading "missing parameter" error from the tool instead of "your arguments were not valid JSON". That invites a repeat loop (which also connects to known #10).
-- **Fix:** return a synthetic error `ToolResultMessage` such as "arguments were not valid JSON: <excerpt>" without calling the tool.
-- **Test:** a stream with `arguments: '{"path": "a'` should produce an error tool result that names the JSON problem, and the tool's `execute()` should not be called.
-
-### A12 — The `claude-code` provider's streaming path (the only one Runtime uses, since `supportsStreaming()` is true) cannot work
-- **Severity:** Medium (non-default provider; it is completely broken) · **Confidence:** Verified-by-repro for the argument error; Verified-by-reading for the framing and argv-size problems.
-- **Where:** `src/Providers/ClaudeCodeProvider.php:99-310`, `src/Providers/ClaudeCodeInvocation.php:40-98`.
-- **Code:**
-  ```php
-  $cmd = array_merge([$this->invocation->claudePath()], $this->invocation->baseArgs() /* --output-format json */, $args /* -p <prompt> --output-format stream-json --bare ... */);
-  ...
-  if (str_starts_with($line, 'data: ')) { ... yield $this->parseChunk($data); }
-  ```
-- **Failure scenario (three independent faults):**
-  1. **Repro:** with the CLI pointed at a dead local base URL, `claude --output-format json -p hi --output-format stream-json --bare --system-prompt x` exits 1 with "Error: When using --print, --output-format=stream-json requires --verbose". Every turn fails.
-  2. Even with `--verbose`, stream-json is NDJSON with no `data: ` prefix, so every line is dropped and the reply is empty. Token deltas also need `--include-partial-messages`.
-  3. The whole transcript and the system prompt are passed as single argv strings. Linux `MAX_ARG_STRLEN` is 128 KiB per argument, so `exec` fails with E2BIG once the history passes about 128 KiB.
-- **Fix:** add `--verbose --include-partial-messages`, drop the duplicate `--output-format`, parse raw JSON lines (`type: stream_event`), and pass the prompt on stdin (`-p` with input from stdin) instead of argv.
-- **Test:** use a fake `claude` script that prints NDJSON `stream_event` lines and assert that deltas are yielded. Add a test asserting the argv contains `--verbose` exactly when the format is `stream-json`.
 
 ### A13 — `OpenAIProvider::contextWindow()` returns 8,192 for models it can price (gpt-4o-mini, gpt-4.1, gpt-4.1-mini)
 - **Severity:** Medium · **Confidence:** Verified-by-reading
@@ -120,6 +78,13 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Fix:** reword the comment to say the cost is 0.0 because the fixture reports zero tokens.
 - **Test:** none needed beyond review.
 
+### A25 — `claude-code` turns report 0 total tokens
+- **Severity:** Low · **Confidence:** Verified-by-reading (found while fixing A12 in wave 6)
+- **Where:** `src/Providers/ClaudeCodeProvider.php:422-425` (`totalTokens()` reads only `usage.total_tokens`), used by `parseResult()` at `:404` and `:518`; `src/Usage.php:55-67` (the docblock that says ClaudeCodeProvider reads `usage.total_tokens` or reports 0).
+- **Detail:** since A12's fix (`46cf9c71b`), the stream path works and the CLI's final `result` line is parsed. The real CLI's `usage` document has no `total_tokens`, only the Anthropic buckets (`input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`), so every `claude-code` turn reports 0 tokens. Its `total_cost_usd` is still read, so cost and the spend cap are right; the token tracker, `/cost` token figures and Chat's context calibration see nothing. The gap is documented on `totalTokens()` and deliberately left open, because summing the buckets makes this a split-usage provider and trips `UsageTest`'s source-derived split census.
+- **Fix:** sum the buckets (or carry the split the way the other providers parse it) and move the `Usage` docblock and `UsageTest`'s census with it.
+- **Test:** a `result` line with `usage: {input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100}` and no `total_tokens` gives a non-zero token count.
+
 ---
 
 ## B. Engine fork protocol and process lifecycle
@@ -160,10 +125,7 @@ These are covered above: B4 (no usage channel on tool results; partly fixed in `
 
 | ID | Severity | Confidence | Title | Location |
 |---|---|---|---|---|
-| A8 | Medium | repro | Recovered DSML/XML markup stays in content (painted, then sent twice) | SglangProvider.php:785-871 |
-| A9 | Medium | repro | MiniMax fallback makes JSON-looking strings into arrays (Write of composer.json breaks) | MinimaxXmlFallbackToolCallParser.php:278-297 |
 | A10 | Medium | reading | `CustomProvider` sends a literal `extra_body` key. Partly fixed (`4f8869c63`: no literal key; opt-in constructor `array $extraBody`); remaining: no config key feeds `extraBody` | CustomProvider.php:172, 240 |
-| A12 | Medium | repro+reading | claude-code streaming cannot work (no `--verbose`, wrong framing, argv > 128 KiB) | ClaudeCodeProvider.php:99-310 |
 | A13 | Medium | reading | OpenAI window is 8k for gpt-4o-mini/4.1. Partly fixed (`58d25cb3b`: ids sized, unknown → 0); remaining: no context-window config override | OpenAIProvider.php:103-112 |
 | A15 | Medium | reading | Vertex priced at $0 (spend cap inert); Bedrock invents $0.01. Partly fixed (`587a30d68`, `c9772c065`: list-price tables, unknown → $0 flagged unpriced, `modelPrices` ctor param); remaining: `ProviderFactory` does not pass the user's `modelPrices` to Vertex/Bedrock, cache tokens unpriced | VertexProvider.php; BedrockProvider.php; ProviderFactory.php:980, 991 |
 | **A20** | Medium | reading | Bedrock tables match only bare ids: real versioned/profile ids get an 8k window and an invented $0.01/1k. Partly fixed (`c9772c065`: ids normalised, unknown → window 0 + unpriced, profile-id `DEFAULT_MODEL`); remaining: the factory's default config still sends the bare id, `modelPrices` plumbing (A15) | BedrockProvider.php; ProviderFactory.php:436 |
@@ -171,11 +133,11 @@ These are covered above: B4 (no usage channel on tool results; partly fixed in `
 | B4 | Medium (High paid) | reading | Task sub-agent spend never reaches the parent, session total or cap. Partly fixed (`badb3353e`: usage on `ToolResult`, folded per settled result, parent spend probe in the Task engine); remaining: parallel siblings blind to each other (overshoot ≤ one step), crashed tool child reports nothing, Chat's E17 `totalTokens` fallback inflated | TaskTool.php; ToolResult.php; Runtime.php; Chat.php:16240 |
 | A18 | (sharpens #27/#28) | suspected | Default SGLang `max_tokens` 4096 with effort `max` | SglangProvider.php:1030, 165 |
 | **A23** | Low-Med | reading | Replayed tool-call arguments send a nested empty map (`{"opts":{}}`) as `[]` (residual of A7) | ToolSchema.php:195-196 |
-| A11 | Low | reading | Malformed argument JSON runs the tool with `[]`; model not told | CustomProvider.php:628; SglangProvider.php:2221 |
 | **C4** | Low (docs) | reading | Notice-sink clip/overflow strings and TROUBLESHOOTING.md still say "full text on stderr"; in the TUI it is in the log file (residual of C2) | RuntimeNoticeSink.php:202, 267; TROUBLESHOOTING.md:85-91, 135, 326 |
+| **A25** | Low | reading | `claude-code` turns report 0 total tokens: the CLI's `result` line has only the bucket counts, no `total_tokens` (residual of A12) | ClaudeCodeProvider.php:422-425; Usage.php:55-67 |
 | **A24** | Info (test comment) | reading | `UsageWiringTest` comment still calls Vertex's rate table "a placeholder 0.0" (stale since A15) | tests/Integration/UsageWiringTest.php:1012-1014 |
 
-New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A13 (fix aligned with the `contextWindow()` contract). Items sharpened in that pass and since fixed are listed under **Fixed since audit**. Found while fixing A7 in wave 2: **A23**. Found while fixing C2 in wave 3: **C4**. Found while fixing A15 in wave 4: **A24**.
+New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A13 (fix aligned with the `contextWindow()` contract). Items sharpened in that pass and since fixed are listed under **Fixed since audit**. Found while fixing A7 in wave 2: **A23**. Found while fixing C2 in wave 3: **C4**. Found while fixing A15 in wave 4: **A24**. Found while fixing A12 in wave 6: **A25**.
 
 ---
 
@@ -224,7 +186,7 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **A3** A stream that ends without a finish signal treated as complete — fixed on master in `9105a64ae`. A5 (no-space `data:` framing) surfaced through this path as a premature-end error until it was fixed in `5781eb9f8`.
 - **A6** One non-UTF-8 byte in tool output failed every later request — fixed on master in `f33cd55fd` (scrub at `Runtime::settle()`, shared with 15c F-T1). Residual: the two command backends (A22), fixed later in `987c8d87f`.
 - **B1** MCP ids reset per fork; a killed call shifted every later result — fixed on master in `ea6e178fd` (process-unique ids, locked exchanges, shared read buffer); LSP ids in `e6f6aee54`. Residual: the LSP exchange lock (B7), fixed later in `d0f7cb6f6`; a lock file per MCP server is left behind if the TUI is killed.
-- **A5** `data:` with no space after the colon was ignored — fixed on master in `5781eb9f8` (new `Providers\SseData`, used by SglangProvider and CustomProvider; VertexProvider already accepted it). ClaudeCodeProvider's `data: ` check is A12's NDJSON framing fault, not this one.
+- **A5** `data:` with no space after the colon was ignored — fixed on master in `5781eb9f8` (new `Providers\SseData`, used by SglangProvider and CustomProvider; VertexProvider already accepted it). ClaudeCodeProvider's `data: ` check was A12's NDJSON framing fault, not this one (A12 is fixed since).
 - **A22** `CommandBackend`/`StreamingCommandBackend` encoded history without `JSON_INVALID_UTF8_SUBSTITUTE` — fixed on master in `987c8d87f` (`CommandBackend::encodeHistory()` substitutes; `StreamingCommandBackend` reuses it).
 - **B7** The LSP client had unique ids but no cross-process exchange lock — fixed on master in `d0f7cb6f6` (per-process `LspExchangeLock` flock with bounded polling, `LspExchangeState` sidecar, shared readahead, recovery from a holder killed mid-read or mid-write, notifications journaled and replayed, server-to-client requests answered -32601, only the connecting process stops the server).
 - **A4** Streamed tool calls were dropped on `finish_reason=stop` or `delta:null` — fixed on master in `90dc99dfc` (a null-delta finish frame is parsed with an empty delta; at end of stream a still-buffered call is flushed whatever the finish reason, with the decode-or-drop rule of the truncated flush; `CustomProvider` gains `flushBufferedToolCalls()`). Residual: the `error` finish reason deliberately does not flush (the server disowned its generation).
@@ -240,3 +202,7 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **A19** Vertex `ApiException` 429/503 were never classified transient, so they got no retry — fixed on master in `a26489378` (`TransientFailure::isTransient()` judges a Vertex `ApiException` by its gRPC status, so `RESOURCE_EXHAUSTED` (429) and `UNAVAILABLE` (503) retry and `UNAUTHENTICATED` (401) does not, falling back to the numeric code; the `VertexProvider` docblock that claimed this already worked is corrected).
 - **A16** Bedrock did not merge consecutive same-role turns and sent blank text blocks — fixed on master in `9c706ed39` (a new `conversationTurns()` step, used by both `converse` and `converseStream`, merges adjacent same-role turns and drops blank text blocks).
 - **C3** Project instructions (`CLAUDE.md`/`AGENTS.md` + every `@import`) had no byte budget, while rules had 64 KiB — fixed on master in `dd8be915d` (with 15d 15d-09: `Runtime::systemPromptSections()` prices instruction documents in framed, escaped bytes against 64 KiB per document and 128 KiB combined, kept apart from the rule budget; a document that does not fit becomes a pointer line in a `<project-instructions>` deferral fence and is recorded in `InstructionFileLoader::refusedPaths()`; every document and `@import` read is stat-checked first and bounded at 60 KiB, and an import that does not fit what is left of its document's ceiling gets an `import-deferred` pointer at its import site; enabled skill bodies are held to `CompactorConfig`'s per-skill and combined budgets, measured with `TokenEstimate`; a prompt under budget is byte-identical). Residual: there is no user-visible notice for a deferred instruction file yet, because nothing drains `refusedPaths()`; skill budgets use the `CompactorConfig` defaults, because App carries no compactor config; `SkillLoader` still reads skill files uncapped (15d-27).
+- **A9** The MiniMax XML fallback turned any JSON-looking parameter value into a PHP array, regardless of the tool schema — fixed on master in `df3663220` (the parser coerces parameters by the tool schema through new `ToolParameterTypes` and `ToolSchemaAware`, so a JSON-looking value for a string-typed parameter stays a string).
+- **A11** Malformed tool-call argument JSON ran the tool with `[]`, and the model was never told why — fixed on master in `16b9d6750` (the Custom, Sglang and OpenAiArray parsers stamp the call through new `ToolCall::argumentsError()`, and Runtime refuses such a call with an error result on both the sequential and the concurrent arms instead of running the tool).
+- **A8** When textual (DSML or MiniMax-XML) tool calls were recovered, the markup stayed in the assistant content, painted to the UI and replayed alongside the structured call — fixed on master in `57f806a6a` (provider side, with Runtime unchanged: a new `EnvelopeAware` capability, an `EnvelopeHoldBack` stream split and `TextualRecovery`; `SglangProvider::completeStream()` holds text back from the first byte that could start a marker, cuts recovered envelopes and releases anything else verbatim, and a structured `tool_calls` chunk releases held text; the batch `parseResponse()` cuts too; the default openai parser holds nothing). The repro now yields the content "Let me read it." plus one call.
+- **A12** The `claude-code` provider's streaming path could not work — fixed on master in `46cf9c71b` (`--verbose --include-partial-messages` are added for stream-json only; NDJSON lines are parsed, taking `stream_event` text and thinking deltas plus the `result` line and skipping `system` and whole `assistant` lines; the prompt goes on stdin, fed non-blocking in the select loop; a system prompt over 64 KiB is spilled to a 0600 temp file passed with `--system-prompt-file` and deleted after reap; a failed run's reason comes from the `result` line; `execute()` shares the select loop, which removes its stderr deadlock). API change: `ClaudeCodeInvocation::printModeArgs(array $options)` no longer takes the prompt. Residual: a real run reports 0 total tokens, because the CLI's `result` line has no `usage.total_tokens` (A25).

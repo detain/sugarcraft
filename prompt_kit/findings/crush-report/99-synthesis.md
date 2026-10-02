@@ -96,7 +96,7 @@
 
     Kilo legacy (a `condense` tool with a user-approved preview) and Goose (agent-visible vs user-visible flags) supply the remaining pieces.
 
-11. **The code audit found about 136 new defects** (Part IX). 83 of them, including the one Critical and all 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes, unfenced repo skill descriptions, Esc Esc tool placeholders that never healed, raw CR and C1 controls reaching the terminal, a turn kill that left its commands running, streamed tool calls dropped on `stop`, built-in skills that told every project to `git clean -fd`, the full-history markdown re-render on every frame, `error_log()` output painted over the TUI, env-block git calls that honoured the user's git config and took `index.lock`, PostToolUse blocks that did nothing, hook input that defeated grep-style deny hooks, a hostile `.gitignore` that stalled Glob for minutes, prompt hooks and custom-command shell blocks that froze the TUI inside `update()`, forks that carried no conversation, the multi-second `/branch` freeze, Vertex quota errors that were never retried, `claude-mcp` calls that gave up after one second, a stray stdout line that aborted MCP requests, workflow pause and resume that skipped the failed stage, uncapped `CLAUDE.md`/`AGENTS.md` and `@imports`, Edit and Write that read huge files whole and truncated files in place, file tools that hung on a FIFO, mid-session path rules that never reached the agent, and a status bar and session tab strip wider than the terminal. Waves 2 to 5 found 21 more, smaller defects while fixing these. About 74 remain, including:
+11. **The code audit found about 136 new defects** (Part IX). 98 of them, including the one Critical and all 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes, unfenced repo skill descriptions, Esc Esc tool placeholders that never healed, raw CR and C1 controls reaching the terminal, a turn kill that left its commands running, streamed tool calls dropped on `stop`, built-in skills that told every project to `git clean -fd`, the full-history markdown re-render on every frame, `error_log()` output painted over the TUI, env-block git calls that honoured the user's git config and took `index.lock`, PostToolUse blocks that did nothing, hook input that defeated grep-style deny hooks, a hostile `.gitignore` that stalled Glob for minutes, prompt hooks and custom-command shell blocks that froze the TUI inside `update()`, forks that carried no conversation, the multi-second `/branch` freeze, Vertex quota errors that were never retried, `claude-mcp` calls that gave up after one second, a stray stdout line that aborted MCP requests, workflow pause and resume that skipped the failed stage, uncapped `CLAUDE.md`/`AGENTS.md` and `@imports`, Edit and Write that read huge files whole and truncated files in place, file tools that hung on a FIFO, mid-session path rules that never reached the agent, a status bar and session tab strip wider than the terminal, recovered tool-call markup left in the reply and sent twice, MiniMax parameters turned into arrays, malformed tool arguments that ran the tool with `[]`, a `claude-code` provider that could not stream, menu commands that erased the draft, background sessions nothing could stop and IPC directories left in `/tmp`, a symlinked `config.json` replaced on the first write, glob metacharacters in the checkout path that hid every repo memory note, a Claude memory import that imported nothing, repo memory framed as the user's own notes, and WebFetch results that were 32× the Bash cap or reported error pages as success. Waves 2 to 6 found 23 more, smaller defects while fixing these. About 61 remain, including:
     - **UI-only rows are now off the wire, but the compaction summary still reads them.**
     - **Sub-agent spend now reaches the parent and the spend cap, but parallel sibling Tasks cannot see each other's spend**, and the user's `modelPrices` setting never reaches Vertex or Bedrock.
     - **Two TUIs on one session still overwrite each other's transcript** (the writer lock is a deferred decision).
@@ -808,17 +808,17 @@ Five agents audited sugar-crush's own source for **new** defects, one per area. 
 
 **Totals at audit time: about 136 findings** — 1 Critical, 20 High, about 47 Medium, and the rest Low-Medium, Low or Info.
 
-**Since the audit, 87 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 83 of the original findings, plus the 4 new items found while fixing them in wave 1. Waves 2 to 5 found 21 more while fixing their items (10 in wave 2, 5 in wave 3, 3 in wave 4, 3 in wave 5); they are open. **About 74 findings remain** — 0 Critical, 0 High, 2 Medium-High (15b-03 and F-E2, both partly fixed), about 21 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
+**Since the audit, 102 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 98 of the original findings, plus the 4 new items found while fixing them in wave 1. Waves 2 to 6 found 23 more while fixing their items (10 in wave 2, 5 in wave 3, 3 in wave 4, 3 in wave 5, 2 in wave 6); they are open. **About 61 findings remain** — 0 Critical, 0 High, 2 Medium-High (15b-03 and F-E2, both partly fixed), about 16 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
 
 At audit time, about two thirds were **reproduced with a script**; the rest are verified by reading, and a few are marked *suspected*. Full write-ups are in Appendices Q–U; each finding has code excerpt, failure scenario, fix and a test that would catch it.
 
 | Appendix | Area | Findings | Critical / High |
 |---|---|---|---|
-| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 14 | 0 / 0 |
+| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 11 | 0 / 0 |
 | **R** (15b) | Chat state machine, TUI, rendering, commands | 16 | 0 / 0 |
-| **S** (15c) | Tools, permissions, hooks (security) | 15 | 0 / 0 |
-| **T** (15d) | Context assembly, memory, skills, config | 14 | 0 / 0 |
-| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 15 | 0 / 0 |
+| **S** (15c) | Tools, permissions, hooks (security) | 13 | 0 / 0 |
+| **T** (15d) | Context assembly, memory, skills, config | 8 | 0 / 0 |
+| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 13 | 0 / 0 |
 
 Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
 
@@ -848,12 +848,10 @@ Several audits found the same root cause in different places. Fixing each theme 
 3. **Repo-controlled content reaches the prompt without fencing or caps.**
    - A repo's skills shadow the user's own (15d-03; every shadowing is now reported, the precedence decision is open).
    - Instruction documents, `@imports` and enabled skill bodies now have byte budgets, but `SkillLoader` still reads skill files with no size limit (15d-27).
-   - Repo memory is framed as "notes the user wrote" (15d-07).
 4. **Prompt assembly read the user's git config and the filesystem nondeterministically (mostly fixed).** The env block's git calls now run with `--no-optional-locks -c color.ui=false`, diff through plumbing with `--no-ext-diff`, never write the index, and are bounded at 2 s each; a subdirectory launch reports the repo root and its git state; rule and repo-map walks sort before capping (15d-12, 15d-14, 15d-13 (a), 15d-17).
    - What remains: `.sugar-crush/*` lookups still resolve at the launch subdirectory, not the repo root (15d-13 (b), a deferred decision).
    - The env block is still re-rendered inside the system message, which hurts cache stability (Part I #2, Part II #2).
-5. **Errors are swallowed and turns "succeed".**
-   - Malformed arguments run the tool with `[]` (A11).
+5. **Errors are swallowed and turns "succeed" (fixed).** The last open case, malformed tool-call arguments that ran the tool with `[]`, now gets an error result and the tool does not run (`16b9d6750`).
 6. **The permission layer has holes in the default and stricter modes.**
    - Accept-edits mode allows `rm`, `mv` and `cp` (F-P4).
    - WebFetch counts as read-only, so it can exfiltrate data unprompted (F-P6).
@@ -875,6 +873,7 @@ Several audits found the same root cause in different places. Fixing each theme 
     - Vertex and Bedrock now have list-price tables and flag unknown models unpriced, but `ProviderFactory` never hands them the user's `modelPrices`, cache tokens are unpriced there, and the default Bedrock config still sends a bare model id (A15, A20, both partly fixed).
     - The OpenAI context window has no config override (A13, partly fixed: the 8k sizes are corrected, and cached tokens are now billed at the cached rate).
     - A trusted project can choose title and summary models billed to the user's key (15d-24).
+    - `claude-code` turns report 0 total tokens, because the CLI's `result` line carries only the bucket counts and no `total_tokens` (A25; cost is still read).
     - Together these mean the spend cap is unreliable on every provider except priced ones.
 
 ## IX.3 Critical and High findings: fix first
@@ -891,7 +890,8 @@ The Critical item and all 20 High items are fixed on master, as is the latent Hi
 - **Before Wave 0, as an "audit hotfix" wave (mostly S):** this wave has landed on master in full (see the **Fixed since audit** list at the end of each of Appendices Q–U).
 - **With Wave 0:**
   - the remaining process-tree kill sites (theme 1, F-E2);
-  - cost accounting (theme 10).
+  - cost accounting (theme 10);
+  - route Chat's Ctrl+A `/agents` arm through `Chat::runCommand()`, as the menu commands now are, so it stops wiping an idle draft (15b-34).
 - **Before Wave 1.C ships:**
   - fix the permission modal's empty value for an invalid-UTF-8 argument (15b-27), and bidi overrides in the text it shows (15b-28);
   - port the PostToolUse withhold and the hook-input encoding fixes (F-H1, F-H3, both fixed on the live Runtime path) to their dormant Chat-path mirrors, `Chat::applyPostToolUse()` and the bare `json_encode` calls.
@@ -899,7 +899,7 @@ The Critical item and all 20 High items are fixed on master, as is the latent Hi
   The approval UI will otherwise display or route untrusted text wrongly.
 - **With Wave 1.B:**
   - the rest of 15b-03 (the compaction input and notice order; the `uiOnly` flag itself has landed);
-  - stable unique ids (also needed by A8, the markup duplication).
+  - stable unique ids.
 - **With Wave 4 (sub-agents and orchestration):** let `/workflow pause` and `/workflow status` through the in-flight command refusal, so a live run can be paused from the TUI without Esc Esc (WF-4); wire `BashEscapeDenyHook` and the Glob/Grep/Lsp worktree jails, which now work but have no production caller, together with worktree isolation (F-J5, partly fixed; Part II #23).
 - **With the sessions phase (VIII.4 A):**
   - SES-3 (b) (writer lease; the server design's `session_leases` table covers it);

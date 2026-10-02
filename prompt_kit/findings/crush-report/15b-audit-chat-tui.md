@@ -51,16 +51,12 @@ Confidence labels:
   - the compaction summary's input is not filtered, because filtering only one side breaks the exchange-key alignment;
   - notice order is unchanged: notices still render, interleaved, between a prompt and its answer in the transcript (they are off the wire).
 
-### 15b-05 — Menu-bar and shell commands erase the user's draft, then mid-turn refuse with "Your draft is still in the box"
-- **Severity:** Medium · **Confidence:** Verified-by-repro (`r8_menu_draft.php`)
-- **Where:** `App::runRegistryCommand()` at `src/App/App.php:1775-1799`, together with `clearInputKeys()` at `:1817-1826`. It feeds synthetic Backspace and Delete keys, then types `/name` + Enter. Callers:
-  - `dispatchMenuSelection()`, which runs every menu-bar item;
-  - `NewSessionCmd` (Ctrl+N);
-  - `ProviderSelectCmd`.
-- **Code:** `...array_fill(0, $before, new KeyMsg(KeyType::Backspace)), ...array_fill(0, $after, new KeyMsg(KeyType::Delete))`
-- **Repro:** A turn is in flight and the draft is `my carefully composed follow-up draft`. Selecting menu Model → Switch model leaves the draft as `"/model"`, and the notice reads "…Your draft is still in the box…". The original draft is gone. When idle, the draft is also silently destroyed.
-- **Fix:** Route menu and shell commands through a Chat entry point that runs a command without touching `input`, such as `Chat::runCommand(string)`, or stash and restore the draft the way `releaseQueuedPrompts()` does. Refuse mid-turn **before** clearing.
-- **Test:** App + in-flight Chat + draft. Send `consumeShellCmd(new MenuSelectedMsg('Model','Switch model'))`. Assert that `chat->inputBuf` is unchanged.
+### 15b-34 — Ctrl+A still runs `/agents` by typing it into the input box: an idle draft is wiped, and the mid-turn refusal says the draft is still in the box
+- **Severity:** Low · **Confidence:** Verified-by-reading (found while fixing 15b-05 in wave 6)
+- **Where:** `src/Chat.php:2491-2492`: the Ctrl+A arm is `$this->withInputBuf('/agents')->submit()`. Mid-turn it is routed (`:8742`) to `refuseInFlightCommand()` (`:8541`), whose notice ends "Your draft is still in the box: press Enter again once the turn finishes".
+- **Detail:** since 15b-05's fix (`ecca2b606`, `c1e836427`), menu-bar rows, Ctrl+N and the provider picker go through `Chat::runCommand()` / `Chat::runPaletteAction()` and never touch the draft. Ctrl+A was not moved: when idle it replaces whatever the user had typed with `/agents` and submits it, so the draft is lost. Mid-turn the draft is not moved, but the refusal names `/agents` and tells the user to press Enter again later, which would send the draft, not `/agents`.
+- **Fix:** make the Ctrl+A arm call `runCommand('/agents')`, which leaves the draft alone and refuses mid-turn with wording that fits a command the user did not type.
+- **Test:** an idle Chat with a draft; Ctrl+A opens the agents view and `inputBuf` is unchanged. Mid-turn, Ctrl+A's notice does not say the draft holds `/agents`.
 
 ## B. Terminal injection and frame geometry
 
@@ -193,10 +189,10 @@ Both findings here (15b-20, 15b-21) were fixed in wave 4; see **Fixed since audi
 | ID | Sev | Conf | Title |
 |---|---|---|---|
 | 15b-03 | Med-High | Repro | Command output, mid-turn notices and background/runtime notices go to the model as real turns. Partly fixed (`2a3a8f91c`: `Message::$uiOnly`, filtered at every wire encoder); remaining: compaction input unfiltered, notices still interleave between a prompt and its answer |
-| 15b-05 | Medium | Repro | Menu and shell commands erase the draft, then claim "draft still in the box" |
 | 15b-26 | Medium | Repro | candy-core `Width::wrap()` loops forever when a 2-cell cluster meets a 1-column budget (latent in sugar-crush; reachable via candy-shell pager, sugar-table) |
 | 15b-13 | Low-Med | Reading | Token proxy chars/4 underestimates CJK 3-6×. Partly fixed (`8341a37c1`: script-weighted `TokenEstimate` for Chat's estimate, 85/95% tiers, status bar); remaining: `ContextCompactor` still chars/4 (70% reminder late for CJK), stale comments |
 | 15b-17 | Low-Med | Repro | U+E002+n in model or tool text paints a copy of on-screen image n where the text chooses; Nerd Font glyphs blanked |
+| 15b-34 | Low | Reading | Ctrl+A still types `/agents` into the box: an idle draft is wiped; the mid-turn refusal says the draft is still in the box (residual of 15b-05) |
 | 15b-14 | Low | Reading | No i18n in sugar-crush |
 | 15b-15 | Low | Reading | Attachments dormant and dropped on the wire |
 | 15b-24 | Low | Reading | `/pane:x`, `/layout:x`, `/mcp:x` colon spellings not handled (documented) |
@@ -304,3 +300,4 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **15b-21** `/branch` and any first save of a long history froze the TUI for seconds, one autocommitted INSERT per message — fixed on master in `698a1efff` (with 15e SES-2: save, checkpoint and restore each run in one `BEGIN IMMEDIATE` transaction, and a fork copies the blobs, so the first save on a `/branch` re-interns nothing). Measured at 800 messages: first save 6519 → 233 ms, first save on a branch 5996 → 17 ms; the fork itself takes about 470 ms (the fsync of the copied blobs). Residual: persistence still runs synchronously from `Chat::update()` (`persistTranscript()`); moving it to a debounced `Cmd` is not done.
 - **15b-09** The chat status bar was never clipped to the terminal width, and the content width (with every overlay) was floored at 20 plus chrome — fixed on master in `66d0651ac` (the status-bar hint shortens step by step, keeping the "Ctrl+P menu" click zone longest; a `fitStatusBar()` backstop strips zone markers before it cuts, so a cut never splits one; the content-width floor is `max(1, cols-6)`, the image box and diff box floors drop to 1, and the slash popup is capped at the terminal width; at 6 columns or fewer `clipFrameToCols()` cuts the bordered shell, with every `Width::wrap` budget kept at 2 or more for 15b-26). The new width test exposed a second bug, fixed in the same commit: Veil counted zone markers as screen cells, so rows under an overlay were split at the wrong column and overflowed; zones are now lifted out before compositing and put back afterwards. Measured: `r3b` last row 54 → 38 cells at 40 columns and 54 → 29 at 30; `r3_width` at 25 columns 45 over-wide rows → 0; `r17_overlay_width` 21 over-wide cases → 0. Residual: `src/Commands/TranscriptTable.php` still copies the old `max(20, cols-6)` floor (nothing overflows, because the pane fitter wraps its output); the permission modal's inner width is still floored at 20, so below 26 columns it loses its right border (it does not overflow).
 - **15b-18** The session tab strip was neither width-clipped nor sanitized — fixed on master in `01cae6d21` (each name goes through `Sanitize::untrustedForDisplay()` and `PaneLabel::safe()`, which removes escapes and control bytes, folds CR/LF/TAB to a space and drops Private-Use characters, and an empty name falls back to the cleaned id; names are capped at 20 cells with an ellipsis, the current tab is always shown, tabs that do not fit collapse into `… +N`, only visible tabs get click zones, and the strip stays one row). Measured at 80 columns: 8 long names 383 → 73 cells; a hostile name 402 → 69 cells with no OSC 52, `\e[2J` or CR; hosted App at 100 columns 433 → 100 cells.
+- **15b-05** Menu-bar and shell commands erased the user's draft, then mid-turn refused with "Your draft is still in the box" — fixed on master in `ecca2b606` + `c1e836427` (new `Chat::runCommand()` and `Chat::runPaletteAction()` run a command without touching the draft, and `App::runRegistryCommand()` uses them instead of feeding synthetic Backspace, Delete and Enter keys). Still open nearby: Chat's own Ctrl+A arm still types `/agents` into the box (15b-34).

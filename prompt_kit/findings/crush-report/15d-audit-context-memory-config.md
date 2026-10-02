@@ -64,24 +64,6 @@ This report is final. What was read, what was only skimmed, and how each open le
 - **Fix:** Key home-store project entries by canonical root, either with a `<hash(realpath root)>` sub-directory or a `root:` frontmatter field that `capture()` filters on. Say so in the `/memory add` reply when the fallback happens, and migrate unkeyed legacy entries into a quarantine scope.
 - **Test:** `MemoryPromptWiringTest::testAHomeStoreProjectNoteFromAnotherRootDoesNotReachThisPrompt`.
 
-### 15d-06 — `/memory import claude` builds the Claude Code project slug wrongly and imports nothing for any path containing `.` (and probably `_` and spaces)
-- **Severity:** Medium-Low · **Confidence:** Verified by repro (`r8.php`), plus on-disk evidence from the real `~/.claude/projects`
-- **Where:** `src/Memory/ForeignMemoryImporter.php:302-307`
-- **Code:**
-  ```php
-  return '-' . ltrim(str_replace('/', '-', $path), '-');
-  ```
-- **Failure scenario:** Claude Code replaces every non-alphanumeric character with `-`. On this machine `/home/sites/webhooks.interserver.net` is stored as `~/.claude/projects/-home-sites-webhooks-interserver-net/memory`, and `/home/sites/phlix/phlix-server/.claude/worktrees/…` as `…-phlix-server--claude-worktrees-…`. sugar-crush looks for `-home-sites-webhooks.interserver.net`, finds nothing, and reports "Nothing imported — no readable `claude` memory files were found". In `r8.php` the fixture's correctly slugged entry was ignored, and a decoy at the dotted slug was imported instead.
-- **Fix:** `'-' . ltrim(preg_replace('/[^A-Za-z0-9]/', '-', $path), '-')` (check the leading-dash handling against Claude Code). Also try the old spelling for backward compatibility.
-- **Test:** `ForeignMemoryImporterTest::testSlugMatchesClaudeCodeForDottedAndUnderscoredPaths`.
-
-### 15d-07 — Repo-shipped memory is presented as the user's own notes
-- **Severity:** Low · **Confidence:** Verified by reading
-- **Where:** `src/Context/MemoryBlock.php:300-306`; `docs/MEMORY.md` ("git-visible, reviewable, like AGENTS.md")
-- **Detail:** `<repo>/.sugar-crush/memory/project/*.md` comes from the clone, with no trust gate, yet the block header says "These are notes the user or a previous session wrote down". The escape is correct, but the provenance claim is wrong for a hostile or simply foreign checkout, and the model weighs "the user wrote this" differently from "the repository ships this".
-- **Fix:** Render repo-store and home-store notes under separate headers ("shipped in this repository" vs "recorded by you"), or require `trustedProjectSettings` before reading the repo store.
-- **Test:** Assert that the header wording differs by store.
-
 ---
 
 ## C. Instruction files and prompt-wide encoding/size
@@ -92,13 +74,6 @@ This report is final. What was read, what was only skimmed, and how each open le
 - **Detail:** since 15d-10's fix (`161d60881`), `PromptFence::escape()` also rewrites the `<` of chat-template control-token openers, `<|` and `<｜` (fullwidth U+FF5C) with an optional `/`, so `<|im_start|>` and `<｜User｜>` reach the prompt as `&lt;|im_start|>` and `&lt;｜User｜>`. It also matches roster tags that carry attributes. MEMORY.md's "touches nothing else" is now false, and PROMPT_ENGINEERING.md's fence rules list only the roster tags. A user who sees `&lt;|` in a memory note's prompt rendering has no documentation explaining why.
 - **Fix:** add the control-token defang (and the attribute-bearing tag match) to both passages.
 - **Test:** a doc-drift assertion that both pages name the `<|` / `<｜` defang, alongside `PromptFence::CONTROL_TOKEN_PIPES`.
-
-### 15d-11 — MEMORY.md says `@~/…` imports resolve against home; in practice every one is refused
-- **Severity:** Low · **Confidence:** Verified by reading
-- **Where:** `src/Context/ImportResolver.php:104-105` resolves `~/` via `getenv('HOME')`, but every caller passes the containment gate `InstructionFileLoader.php:848` (`ContainedPath::within($realPath, $boundary)` against the repo root). `docs/MEMORY.md:231`: "`~/...` resolves against the home directory".
-- **Detail:** `@~/my-conventions.md` in a project CLAUDE.md always renders `<import-blocked reason="outside-repo-root">`. The documented feature cannot be reached unless the repo *is* `$HOME`. Separately, `getenv('HOME')` is used instead of `HomeDirectory::owned()`, unlike every other home read.
-- **Fix:** Either document that `~/` imports are always blocked, or allow imports under `HomeDirectory::owned()` for user-tier files only.
-- **Test:** A doc-drift test that renders `@~/x.md` and asserts the documented outcome.
 
 ---
 
@@ -120,24 +95,7 @@ This report is final. What was read, what was only skimmed, and how each open le
 
 ## E. Configuration and trust
 
-### 15d-15 — `writeUserConfig()` replaces a symlinked `config.json` with a regular file; later edits to the real file (permission rules) silently stop applying
-- **Severity:** Medium-Low · **Confidence:** Verified by repro (`cfg7/`)
-- **Where:** `src/Cli/Bootstrap.php:3608-3680` (`tempnam` in `dirname(userConfigPath())`, then `rename($temp, userConfigPath())`)
-- **Failure scenario:** A dotfiles setup has `~/.sugar-crush/config.json -> ~/dotfiles/sugar-crush/config.json`. The first `/theme` or Ctrl+P provider switch replaces the link with a 0600 regular file. The dotfiles copy is now stale. The user later tightens `permissionMode` or `permissionRules` in the dotfiles repo (or syncs from another machine), and the live policy no longer changes. There is no warning. `requirePrivatePolicyFile()` follows symlinks, so symlinked configs are otherwise fully supported.
-
-  Related, Low: the read-merge-write has no lock, so two concurrent sessions persisting different keys lose one update. And a `config.json` that became invalid mid-session (an editor save) is read as `[]` by `rawUserConfig()` and overwritten with only the patch.
-- **Fix:**
-  - Resolve the target with `realpath()` (when it is a link whose target is home-owned and not world-writable) and write the temp file beside the target.
-  - Refuse to persist when `json_decode` of the existing file fails, rather than treating it as `{}`.
-  - Wrap the read-merge-write in `TimedFileLock`.
-- **Test:** `BootstrapConfigPathOverrideTest::testWriteUserConfigPreservesASymlinkedConfig` and `::testWriteUserConfigRefusesToOverwriteAnUnparsableConfig`.
-
-### 15d-16 — Huge numeric values for `maxToolSteps` and `maxOutputTokens` wrap negative through `(int)` casts
-- **Severity:** Low · **Confidence:** Verified by repro (PHP 8.3.6: `(int) 9.3e18 === -9146744073709551616`)
-- **Where:** `src/Cli/Bootstrap.php:2945-2958`; `src/Backend/EngineBackend.php:1251-1269`
-- **Detail:** `$raw >= 1 ? (int) $raw : null` accepts `9.3e18` and returns a negative int. `maxOutputTokens` then sends a negative `max_tokens` (provider 400 on every request), and `maxToolSteps` becomes negative. These are user-tier only, so the risk is an odd but plausible "no limit" value such as `1e19`.
-- **Fix:** Clamp to a documented ceiling (for example `min($raw, 1_000_000)`) before the cast, and refuse non-integral floats with a notice.
-- **Test:** A data provider covering `1e19`, `9.3e18` and `1.5`.
+Both findings here (15d-15, 15d-16) were fixed in wave 6; see **Fixed since audit**.
 
 ---
 
@@ -149,17 +107,6 @@ Its only entry, 15d-17, was fixed in wave 3; see **Fixed since audit**.
 
 ## G. Findings from the resumed pass
 
-### 15d-22 — A checkout path containing `[`, `*` or `?` silently drops forced instructions and every repository memory note
-- **Severity:** Low-Medium · **Confidence:** Verified by repro (`r18.php` + `br[1]/`)
-- **Where:** `src/Context/InstructionFileLoader.php:508-509` (`glob($this->repoRoot . '/' . $pattern)`); `src/Memory/MemoryStore.php:118`, `:163`, `:198`, `:231`, `:259`, `:284` (`glob($this->memoryPath . …)` / `glob($dir . '/*.md')`)
-- **Failure scenario:** The repository lives at `…/br[1]/` (bracketed names are common for client folders, for example `~/work/[acme]/site`, and for copies such as `proj[1]`). PHP `glob()` treats `[1]` as a character class, so:
-  - **Forced instructions:** `instructions: ["docs/*.md"]` loads 0 files, and `refusedPaths()` stays empty.
-  - **Repo memory:** `ProjectMemoryWriter::createForRoot()->write('repo note')` succeeds and the file is on disk, but `list('project')` returns 0 entries. `/memory add --scope project` reports success, then the note never reaches `<project-memory>`, `/memory list` never shows it, and `/memory delete <id>` / `edit` say "not found" because `get()` globs too.
-
-  A class such as `[acme]` can also match a *different* sibling directory (`…/a/site`). Containment then refuses the forced-instruction matches, but the memory store would read and write under the wrong tree. No warning is emitted on any of these paths. The same applies to the home store when `$HOME` contains a metacharacter (rare).
-- **Fix:** Never pass a filesystem path through `glob()` unescaped. Escape the fixed prefix (`addcslashes($prefix, '\\*?[')`) and glob only the user-supplied pattern part, or replace the fixed-directory listings in `MemoryStore` with `scandir()`/`FilesystemIterator` plus a suffix check. For `get()/update()/delete()`, build the path directly as `scopeDirectory($s) . '/' . $id . '.md'` for each scope instead of globbing.
-- **Test:** `MemoryStoreTest::testARootContainingGlobMetacharactersListsItsNotes` and `InstructionFileLoaderTest::testForcedInstructionsLoadUnderABracketedRoot` (temp dir named `x[1]`).
-
 ### 15d-23 — Repository memory notes can become unaddressable: the frontmatter `id` is displayed, the filename is what `/memory edit|delete` looks up; every write also rewrites a git-tracked `MEMORY.md` with a timestamp
 - **Severity:** Low · **Confidence:** Verified by repro (`r13.php` + `mem13/`)
 - **Where:** `src/Memory/MemoryStore.php:188-273` (`get/update/delete` glob `*/<id>.md` and require `^[0-9a-f]{32}$`); `:506-535` (`parseEntry()` takes `id` from the frontmatter); `src/Chat.php:12894-12906` (the listing prints `$entry->id()`); `MemoryStore::generateIndex()` `:308-340`
@@ -170,6 +117,7 @@ Its only entry, 15d-17, was fixed in wave 3; see **Fixed since audit**.
   Separately, every `add/update/delete` calls `generateIndex()`, which rewrites `<repo>/.sugar-crush/memory/project/MEMORY.md` with a fresh `Loaded at: <timestamp>` line (`r13.php` lists it beside the notes). In the git-visible repo store, every note change therefore produces a diff in a second file whose only change is the timestamp, and two branches that each add a note conflict on it.
 - **Fix:** Treat the filename stem as the id. `parseEntry()` should take `id` from `basename($file, '.md')` and warn when the frontmatter disagrees. Accept any `[A-Za-z0-9._-]{1,64}` stem in `get/update/delete`. Drop the timestamp from the index, and do not write the index in the repo store at all (it is derivable).
 - **Test:** `MemoryStoreTest::testACopiedNoteFileIsListedAndDeletableUnderItsOwnFilename`, `::testAHandAuthoredReadableIdIsDeletable`, and `::testGenerateIndexIsByteStableWhenNotesAreUnchanged`.
+- **Partly fixed on master in `18206b703`.** A note's id is its filename stem: the frontmatter `id:` is never read, stems are validated as safe, and a file with a bad stem is reported through `skipped()`. The index carries no timestamp, is byte-stable, and is not rewritten when nothing changed. **Remaining:** the repo store still writes the git-visible `MEMORY.md` index (the fix asked for it not to be written there at all), so two branches that each add a note can still conflict on it.
 
 ### 15d-24 — A trusted project can choose the model for every title, prompt suggestion and compaction on the operator's credential; an unpriced choice bills as $0 against the spend cap
 - **Severity:** Low (needs `trustedProjectSettings`) · **Confidence:** Verified by reading (key reachability); the $0 accounting is the documented unpriced-model behaviour
@@ -186,15 +134,9 @@ Its only entry, 15d-17, was fixed in wave 3; see **Fixed since audit**.
 |---|---|---|---|---|
 | 15d-03 | Medium | Repro | Project `.sugar-crush/skills` shadows the user's own skills and built-ins silently; contradicts SKILLS.md. Partly fixed (`9105feb48`: every shadowing reported in `skipped()`); remaining: precedence order (deferred), foreign-convention shadowing still silent, skip-notice wording | `SkillLoader.php:721-739` |
 | 15d-05 | Medium | Repro | Home-store `project` notes are global → injected into every repo's prompt | `MemoryBlock.php:213-229`, `Chat.php:12534` |
-| 15d-06 | Med-Low | Repro | Claude memory import slug ignores `.` (and probably `_`/space) → imports nothing | `ForeignMemoryImporter.php:302-307` |
 | 15d-13 | Med-Low | Repro | Subdirectory launch: "not a git repo", git state dropped; `.sugar-crush/*` not found. Partly fixed (`119bc86d2`: `rev-parse --show-toplevel`, "repo root:" line, git section); remaining: (b) `.sugar-crush/*` walk-up (deferred decision) | `EnvironmentBlock.php:929-932` |
-| 15d-15 | Med-Low | Repro | `writeUserConfig()` breaks symlinked config (stale policy); unlocked read-merge-write; overwrites an unparsable file | `Bootstrap.php:3608-3680` |
-| 15d-22 | Low-Med | Repro | Glob metacharacters in the checkout path drop forced instructions and every repo memory note, silently | `InstructionFileLoader.php:509`, `MemoryStore.php:118-284` |
-| 15d-23 | Low | Repro | Memory id shown from frontmatter, looked up by filename → unaddressable notes; repo `MEMORY.md` rewritten with a timestamp on every change | `MemoryStore.php:188-340`, `Chat.php:12894` |
+| 15d-23 | Low | Repro | Memory id shown from frontmatter, looked up by filename → unaddressable notes; repo `MEMORY.md` rewritten with a timestamp on every change. Partly fixed (`18206b703`: id is the filename stem, index byte-stable with no timestamp and skipped when unchanged); remaining: the repo store still writes the git-visible `MEMORY.md` index, so two branches that each add a note can conflict on it | `MemoryStore.php:188-340`, `Chat.php:12894` |
 | 15d-24 | Low | Reading | Trusted project picks `titleModel`/`summaryModel` on the operator's key; unpriced → $0 → spend cap blind | `LayeredSettings.php:584-592`, `Bootstrap.php:7773-7796` |
-| 15d-07 | Low | Reading | Repo-shipped memory framed as "notes the user wrote" | `MemoryBlock.php:300-306` |
-| 15d-11 | Low | Reading | Doc says `@~/` imports resolve; containment always blocks them | `ImportResolver.php:104`, `MEMORY.md:231` |
-| 15d-16 | Low | Repro | `(int)` of a huge float wraps negative for `maxToolSteps`/`maxOutputTokens` | `Bootstrap.php:2945`, `EngineBackend.php:1251` |
 | 15d-27 | Low | Reading | `SkillLoader` reads `SKILL.md` and asset files uncapped (the 15d-09 budgets cap only what enters the prompt) | `SkillLoader.php:682, 977, 1042` |
 | 15d-25 | Low (docs) | Reading | MEMORY.md ("touches nothing else") and PROMPT_ENGINEERING.md don't describe the `<\|` / `<｜` control-token defang | `MEMORY.md:199`, `PROMPT_ENGINEERING.md:103` |
 | 15d-26 | Low (docs) | Reading | `CHANGELOG.md` still lists the four moved skills as built-ins | `CHANGELOG.md:389-395` |
@@ -283,3 +225,9 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **15d-20** A `paths:`-scoped rule added or edited mid-session was never delivered: the splice skipped it and the boot-time nudge never learned of it — fixed on master in `d1157349b` (`RulePathNudge::fromLoader()` re-walks the rules on each consult; the announced ledger holds a digest of each rule's body, so a rule added mid-session is delivered, an edited rule is re-announced with its current body, and a rule whose `paths:` is removed is no longer nudged; Bootstrap changes only the construction line).
 - **15d-09** CLAUDE.md, AGENTS.md and forced instruction files had no size cap (a 3 MB file went into every request whole), and enabled skill bodies were uncapped — fixed on master in `dd8be915d` (with 15a C3: instruction documents are priced in framed, escaped bytes against 64 KiB per document and 128 KiB combined; a document or `@import` that does not fit becomes a pointer line and is recorded in `InstructionFileLoader::refusedPaths()`; every document read is stat-checked and bounded at 60 KiB; enabled skill bodies are held to `CompactorConfig`'s per-skill and combined budgets via `TokenEstimate`; a prompt under budget is byte-identical; `ContextCompactor::filterSkills()` is left dormant). Residual: there is no user-visible notice for a deferred instruction file yet, because nothing drains `refusedPaths()`; skill deferrals appear only in the prompt and are recorded nowhere; skill budgets use the `CompactorConfig` defaults, because App carries no compactor config; `SkillLoader` still reads skill files uncapped (15d-27).
 - **15d-19** Stale, unpinned doc statements: rule `paths:` scoping "not applied", and "only two keys" re-applied per turn — fixed on master in `232013284` (`docs/PROMPT_ENGINEERING.md`, `docs/SKILLS.md` and `docs/SETTINGS.md` corrected; SETTINGS.md now names three re-applied keys, adding `maxOutputTokens`; a fourth stale claim, the `<system-reminder>` emitter list, is fixed too; each is pinned by a derived assertion in `DocFigureProseDriftTest`).
+- **15d-15** `writeUserConfig()` replaced a symlinked `config.json` with a regular file, ran an unlocked read-merge-write and overwrote an unparsable config — fixed on master in `66f2f760a` (it writes through a symlinked config to its regular, policy-checked target, and writes nothing for a dangling or unsafe link; it refuses to persist over an unparsable or non-object config through a new `userConfigForMerge()`, where a missing or empty file counts as `{}`; and the read-merge-write runs under a 5 s `TimedFileLock` on a `.<name>.lock` sidecar, skipping the write on timeout).
+- **15d-16** Huge numeric values for `maxToolSteps` and `maxOutputTokens` wrapped negative through `(int)` casts — fixed on master in `987caa2cf` (values at or above 2**63 resolve to null, the default, instead of wrapping negative; `maxToolSteps` refuses non-integral values such as 1.5, while 8.0 is accepted; `maxOutputTokens` keeps its documented truncation; `docs/SETTINGS.md` updated). Residual: there is no user notice for a nonsense value (neither key raises one for any bad value, and the per-turn `EngineBackend` read cannot show one); no ceiling constant was added.
+- **15d-22** A checkout path containing `[`, `*` or `?` silently dropped forced instructions and every repository memory note — fixed on master in `98ec1dd66` (the checkout root is glob-escaped in `InstructionFileLoader::loadForced()`, and every `MemoryStore` glob is replaced by one sorted `scandir()` helper).
+- **15d-06** `/memory import claude` built the Claude Code project slug wrongly and imported nothing for any path containing `.` — fixed on master in `f26a4733b` (`claudeProjectSlug()` reproduces Claude Code's algorithm, turning every non-alphanumeric character into `-` and cutting a slug over 200 characters with a hash suffix, and falls back to the legacy `/`-only spelling; the importer lists with `scandir()`). Residual: `CLAUDE_CODE_PROJECT_DIR_NAME` and `CLAUDE_CONFIG_DIR` are not consulted.
+- **15d-07** Repo-shipped memory was presented as the user's own notes — fixed on master in `6a609f594` (`MemoryBlock` lists repo-store and home-store notes under separate provenance labels inside one `<project-memory>` fence; the cap, byte budget and omission count stay one newest-first walk; a home-only block is byte-identical to before; `docs/MEMORY.md` updated).
+- **15d-11** MEMORY.md said `@~/…` imports resolve against home, while in practice every one was refused — fixed on master in `a4dc54c9d` (`ImportResolver` resolves `~` through `HomeDirectory::owned()`, so there is no more `/x.md` when `HOME` is unset and no world-writable home; with no owned home the reference is left as written; `docs/MEMORY.md` now says a `~/` import is blocked as `outside-repo-root` unless the home directory is inside the checkout).
