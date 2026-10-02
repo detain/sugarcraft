@@ -188,6 +188,34 @@ final class ClaudeCodeStreamJsonTest extends TestCase
         $this->assertFalse($last->isError);
     }
 
+    /**
+     * Audit A25: the real CLI's `result` line carries only the Anthropic
+     * buckets, no `total_tokens`, and every turn used to report 0 tokens.
+     * The total is now all four buckets (cache sides included — Claude Code
+     * caches most of the prompt), carried with the split, on BOTH paths.
+     */
+    public function testARealCliUsageDocumentWithOnlyBucketsReportsItsTokens(): void
+    {
+        putenv('FAKE_CLAUDE_MODE=buckets');
+
+        $chunks = $this->stream();
+        $streamed = end($chunks);
+        $batch = $this->provider()->complete($this->request('hi'));
+
+        foreach (['stream' => $streamed, 'batch' => $batch] as $path => $response) {
+            $this->assertInstanceOf(CompleteResponse::class, $response);
+            $this->assertSame(135, $response->tokensUsed, "{$path}: input + output + both cache sides");
+            $this->assertSame(0.0123, $response->costUsd, $path);
+            $this->assertNotNull($response->usage, "{$path}: the split must be carried, not only projected");
+            $this->assertSame(135, $response->usage->totalTokens, "{$path}: carrier total must equal the projection");
+            $this->assertSame(10, $response->usage->inputTokens, $path);
+            $this->assertSame(5, $response->usage->outputTokens, $path);
+            $this->assertSame(100, $response->usage->cacheReadTokens, $path);
+            $this->assertSame(20, $response->usage->cacheCreationTokens, $path);
+            $this->assertSame(130, $response->promptTokens(), "{$path}: cacheRead + cacheCreation + input");
+        }
+    }
+
     public function testThinkingDeltasAreReasoningNotContent(): void
     {
         putenv('FAKE_CLAUDE_MODE=thinking');
@@ -333,9 +361,15 @@ final class ClaudeCodeStreamJsonTest extends TestCase
         file_put_contents("$log/system.txt", (string) $system);
         $result = ['type' => 'result', 'subtype' => 'success', 'is_error' => false, 'result' => 'Hello',
             'total_cost_usd' => 0.0123, 'stop_reason' => 'end_turn',
-            // `total_tokens` is what the provider reads; CLI 2.1.287 itself
-            // prints only the buckets (see ClaudeCodeProvider::totalTokens()).
+            // An explicit `total_tokens` still wins; CLI 2.1.287 itself prints
+            // only the buckets (the 'buckets' mode below, audit A25).
             'usage' => ['total_tokens' => 20]];
+        if ($mode === 'buckets') {
+            // The real CLI's usage document (2.1.287): Anthropic buckets, no
+            // `total_tokens` - audit A25.
+            $result['usage'] = ['input_tokens' => 10, 'output_tokens' => 5,
+                'cache_read_input_tokens' => 100, 'cache_creation_input_tokens' => 20];
+        }
         if ($mode === 'error') {
             $result = array_merge($result, ['is_error' => true, 'result' => 'API Error: Connection refused', 'total_cost_usd' => 0]);
         }

@@ -14,7 +14,9 @@ namespace SugarCraft\Crush;
  *
  * Read the unit before using this. Everything the status bar's *context*
  * readout shows ({@see Chat::contextTokens()}, {@see Renderer::contextIndicator()})
- * is a chars/4 ESTIMATE and is deliberately printed with a leading `~`. The
+ * is an ESTIMATE — script-weighted per codepoint by {@see Util\TokenEstimate}
+ * (¼ token for ASCII, so chars/4 there, up to 1-2 for CJK and emoji; audit
+ * 15b-13) — and is deliberately printed with a leading `~`. The
  * numbers here are the provider's own count, arriving on
  * {@see Providers\CompleteResponse::$tokensUsed} / `$costUsd`. The two are
  * different units measuring different things: an estimate of what was SENT
@@ -49,7 +51,7 @@ namespace SugarCraft\Crush;
  * live TURN: providers parse the buckets, but `CompleteResponse` carries a
  * single `$tokensUsed` and nothing else, so what arrives across it is a total.
  *
- * FIVE of the seven providers know the split — read the count with its
+ * SIX of the seven providers know the split — read the count with its
  * domain, because stale literals of it are what drifted before.
  * {@see Providers\BedrockProvider} reads `usage.inputTokens` /
  * `usage.outputTokens`, {@see Providers\VertexProvider} reads
@@ -59,12 +61,16 @@ namespace SugarCraft\Crush;
  * `calculateCost()`, and — since prompt_plan.md P4.S2 routed its family read
  * through the parse seam — {@see Providers\SglangProvider} reads
  * `usage.prompt_tokens` / `usage.completion_tokens`, the same pair
- * {@see Providers\CustomProvider} reads. All five now PARSE the split into
- * the buckets above; none yet CARRIES it, because every one still reports
- * `tokensUsed` as one number. The
- * remaining two ({@see Providers\ClaudeCodeProvider},
- * {@see Providers\EchoProvider}) never had a split to lose: they read
- * `usage.total_tokens` or report 0.
+ * {@see Providers\CustomProvider} reads. Since audit A25
+ * {@see Providers\ClaudeCodeProvider} reads the CLI's Anthropic-shaped
+ * `usage.input_tokens` / `usage.output_tokens` and both cache sides too, and
+ * totals all four, because the measured CLI prints no `total_tokens` and a
+ * total-only read reported every real turn as 0. All six now PARSE the split
+ * into the buckets above and hand it whole to
+ * {@see Providers\CompleteResponse::$usage}, which `Runtime`'s fold prefers;
+ * `tokensUsed` stays beside it as the one-number projection. The
+ * remaining one ({@see Providers\EchoProvider}) never had a split to lose: it
+ * reports 0.
  *
  * That collapse happens at the provider's `CompleteResponse` boundary on every
  * UNARY path — and on Bedrock's and OpenAI's streaming paths too. Vertex's
@@ -366,8 +372,9 @@ final readonly class Usage
      * does not "fix" them.
      *
      * 1. `outputTokens` is NOT in here. This is the count of what was SENT and
-     *    billed as prompt — what the 95% context tier must stop estimating with
-     *    chars/4 — and what the model wrote is not part of what was sent.
+     *    billed as prompt — what the 95% context tier must stop estimating
+     *    from text length ({@see Util\TokenEstimate}'s script-weighted proxy)
+     *    — and what the model wrote is not part of what was sent.
      *    {@see $totalTokens} remains the provider's own billable total and is a
      *    different figure measured over a different span; this accessor derives
      *    nothing from it and it derives nothing from this accessor.

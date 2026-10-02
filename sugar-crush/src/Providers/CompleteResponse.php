@@ -111,8 +111,9 @@ final readonly class CompleteResponse
          * the projection whenever a carrier measures nothing — so an empty
          * usage document and no document at all still answer identically.
          * Null remains ordinary where no split exists: stream deltas (which
-         * carry no usage), the flat-wire ClaudeCodeProvider, EchoProvider,
-         * and error arms. A null still means "the split was not carried",
+         * carry no usage), EchoProvider, and error arms. (ClaudeCodeProvider
+         * left this list with audit A25: its CLI's usage document is the
+         * Anthropic bucket split, now parsed and carried.) A null still means "the split was not carried",
          * never "the split is zero" — see the
          * Usage docblock's "Zero is not the same as unknown".
          *

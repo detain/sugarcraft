@@ -12,6 +12,7 @@ use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\ProcessReaper;
 use SugarCraft\Crush\Tools\ToolCall;
+use SugarCraft\Crush\Usage;
 
 final readonly class ClaudeCodeProvider implements ProviderInterface
 {
@@ -396,32 +397,70 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
     private function parseResult(array $data): CompleteResponse
     {
         $isError = ($data['is_error'] ?? false) === true;
+        $costUsd = (float) ($data['total_cost_usd'] ?? 0.0);
+        $usage = self::parseUsage($data['usage'] ?? null, $costUsd);
 
         return new CompleteResponse(
             content: '',
             reasoning: null,
             toolCalls: null,
-            tokensUsed: self::totalTokens($data['usage'] ?? null),
-            costUsd: (float) ($data['total_cost_usd'] ?? 0.0),
+            tokensUsed: $usage?->totalTokens ?? 0,
+            costUsd: $costUsd,
             isError: $isError,
             errorMessage: ClaudeCodeInvocation::resultErrorOf($data),
             truncated: ($data['stop_reason'] ?? null) === 'max_tokens',
+            usage: $usage,
         );
     }
 
     /**
-     * Total tokens from a CLI `usage` document's `total_tokens`, or 0.
+     * The CLI's `usage` document as a {@see Usage}, buckets and all, or null
+     * when it reported nothing measurable.
      *
-     * KNOWN GAP, deliberately not closed here: the measured CLI (2.1.287)
-     * prints no `total_tokens`, only the Anthropic buckets (`input_tokens`,
-     * `output_tokens`, `cache_*_input_tokens`), so a real run reports 0
-     * tokens; its `total_cost_usd` is still read. Reading the buckets makes
-     * this a split-usage provider, which {@see \SugarCraft\Crush\Usage}'s
-     * docblock and its source-derived census in UsageTest have to move with.
+     * AUDIT A25. WHAT THIS USED TO DO: read `usage.total_tokens` and nothing
+     * else, documented as a known gap — the measured CLI (2.1.287) prints no
+     * `total_tokens`, only the Anthropic buckets (`input_tokens`,
+     * `output_tokens`, `cache_read_input_tokens`,
+     * `cache_creation_input_tokens`), so every real turn reported 0 tokens and
+     * the token tracker, `/cost`'s token figures and Chat's context
+     * calibration saw nothing (the cost, from `total_cost_usd`, was right).
+     *
+     * THE TOTAL IS ALL FOUR BUCKETS, cache sides included. Claude Code caches
+     * aggressively, so a real turn is typically a handful of `input_tokens`
+     * beside tens of thousands of `cache_read_input_tokens`; `input + output`
+     * alone would report a 20k-token conversation as a few dozen tokens. This
+     * is {@see Usage::promptTokens()}' identity (`cacheRead + cacheCreation +
+     * input`) plus the output. An explicit `total_tokens` — the shape older
+     * builds and the tests' fake CLI print — still wins when present.
+     *
+     * The carrier's total and cost equal the `tokensUsed`/`costUsd`
+     * projections, which is what {@see \SugarCraft\Crush\Runtime}'s fold
+     * requires of every carrier.
      */
-    private static function totalTokens(mixed $usage): int
+    private static function parseUsage(mixed $usage, float $costUsd): ?Usage
     {
-        return is_array($usage) && isset($usage['total_tokens']) ? (int) $usage['total_tokens'] : 0;
+        if (!is_array($usage)) {
+            return Usage::reported(0, $costUsd);
+        }
+
+        $input = self::usageInt($usage['input_tokens'] ?? null);
+        $output = self::usageInt($usage['output_tokens'] ?? null);
+        $cacheRead = self::usageInt($usage['cache_read_input_tokens'] ?? null);
+        $cacheCreation = self::usageInt($usage['cache_creation_input_tokens'] ?? null);
+        $total = self::usageInt($usage['total_tokens'] ?? null)
+            ?? ($input ?? 0) + ($output ?? 0) + ($cacheRead ?? 0) + ($cacheCreation ?? 0);
+
+        return Usage::reported($total, $costUsd, $input, $output, $cacheRead, $cacheCreation);
+    }
+
+    /**
+     * One usage number as reported: absent, JSON null or non-numeric stays
+     * `null` (unreported — never a measured zero), the same rule the other
+     * providers' parse seams apply.
+     */
+    private static function usageInt(mixed $value): ?int
+    {
+        return $value === null || !is_numeric($value) ? null : (int) $value;
     }
 
     /**
@@ -500,24 +539,25 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
             );
         }
 
-        // No `usage:` carrier on purpose (E17 audit): this shell-out wire
-        // is read for exactly two money numbers - `usage.total_tokens` and
-        // `total_cost_usd` - and no split to lose. A Usage built here would
-        // carry five unreported buckets beside the same total, and Runtime's
-        // fold would project it back to precisely the object the fallback
-        // already makes. The projections below stay the whole truth. (See
-        // {@see totalTokens()} for why the measured CLI's total reads 0.)
+        // The `usage:` carrier rides here too since audit A25: the CLI's
+        // usage document is the Anthropic bucket split, so this wire is a
+        // split-reading one like the API providers (see {@see parseUsage()},
+        // which also explains why the measured CLI's total used to read 0).
         //
         // E707: `stop_reason` rides this envelope only on CLI builds that
         // surface it; when the key is absent the flag stays false - the
         // honest "the wire did not say", never a count-derived guess.
+        $costUsd = (float) ($data['total_cost_usd'] ?? 0.0);
+        $usage = self::parseUsage($data['usage'] ?? null, $costUsd);
+
         return new CompleteResponse(
             content: $data['result'] ?? $data['content'] ?? '',
             reasoning: $data['reasoning'] ?? null,
             toolCalls: $this->parseToolCalls($data['tool_calls'] ?? []),
-            tokensUsed: self::totalTokens($data['usage'] ?? null),
-            costUsd: $data['total_cost_usd'] ?? 0.0,
+            tokensUsed: $usage?->totalTokens ?? 0,
+            costUsd: $costUsd,
             truncated: ($data['stop_reason'] ?? null) === 'max_tokens',
+            usage: $usage,
         );
     }
 

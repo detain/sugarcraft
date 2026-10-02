@@ -33,10 +33,12 @@ use SugarCraft\Crush\Usage;
  * carrier on the returned response, and is it the document the parse made?
  * The two projections are re-pinned beside it, byte-equal to the carrier's
  * own total and cost, because the fold's fallback promise is that no
- * existing figure moves. Flat-wire providers (ClaudeCode, Echo) keep the
- * carrier null on purpose — the decision is commented at their sites and
- * their behavior is pinned at the fold (RuntimeUsageFoldTest's projection
- * arms), so nothing here fabricates a split they never received.
+ * existing figure moves. The flat-wire Echo provider keeps the carrier null
+ * on purpose — the decision is commented at its site and its behavior is
+ * pinned at the fold (RuntimeUsageFoldTest's projection arms), so nothing
+ * here fabricates a split it never received. ClaudeCode left that group with
+ * audit A25 (its CLI usage document IS the Anthropic split); its carrier is
+ * pinned against the fake CLI in ClaudeCodeStreamJsonTest.
  */
 final class ProviderUsageCarriersTest extends TestCase
 {
