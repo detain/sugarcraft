@@ -881,7 +881,10 @@ JSON;
             messages: [new UserMessage('hi')],
         ));
         $this->assertSame(1500, $response->tokensUsed, 'the preserved input+output expression, NOT the wire 2500');
-        $this->assertEqualsWithDelta(0.0081, $response->costUsd, 0.0000001, '(1200*0.003 + 300*0.015)/1000 - pricing left exactly as before');
+        // Audit A15 (cache half): the cache sides are priced now, at
+        // sonnet 4.6's read 0.30 / write 3.75 per 1M - they used to be left
+        // out, which this line pinned as "pricing left exactly as before".
+        $this->assertEqualsWithDelta((1200 * 0.003 + 300 * 0.015 + 8000 * 0.0003 + 1234 * 0.00375) / 1000, $response->costUsd, 0.0000001, 'input + output + cache read + cache write, each at its own rate');
 
         $usage = $provider->parseUsage($usageArray, 'anthropic.claude-sonnet-4-6');
         $this->assertSame(1200, $usage->inputTokens, 'Bedrock follows the Anthropic convention - inputTokens is the fresh side, no subtraction');
@@ -927,7 +930,8 @@ JSON;
         $this->assertSame('Hello', $content);
         $this->assertSame(1, $usageEvents, 'usage lands exactly once, on the terminal metadata event');
         $this->assertSame(1500, $tokens, 'the same preserved input+output expression on the stream arm');
-        $this->assertEqualsWithDelta(0.0081, $cost, 0.0000001);
+        // Audit A15 (cache half): the same priced cache sides as the unary arm.
+        $this->assertEqualsWithDelta((1200 * 0.003 + 300 * 0.015 + 8000 * 0.0003 + 1200 * 0.00375) / 1000, $cost, 0.0000001);
     }
 
     public function testP4S2BedrockWithoutCacheMembersDecodesThemUnreported(): void
@@ -1083,15 +1087,15 @@ JSON;
         $this->assertSame(500, $parsed->cacheCreationTokens);
     }
 
-    public function testP4S2VertexAnthropicAllCachedMessageStartStillDropsLikeAlways(): void
+    public function testP4S2VertexAnthropicAllCachedMessageStartIsBilled(): void
     {
-        // Recorded honestly: `message_start` with input_tokens 0 and a
-        // positive cache read - every prompt token served from cache - still
-        // yields NO usage event, exactly as an input-less start did before
-        // this step existed. Changing that gate changes P1.S5-pinned
-        // emission semantics, and with CompleteResponse carrying no Usage
-        // yet, the event would bill zero tokens anyway. The case is pinned
-        // so the day the carrier widens, this test names the gate to revisit.
+        // This case used to be pinned the other way round - an all-cached
+        // `message_start` (input_tokens 0, a positive cache read) yielded NO
+        // usage event - with the note that the day the carrier widened, this
+        // test named the gate to revisit. Audit A15 (cache half) revisited it:
+        // the carrier has long carried Usage, the provider now marks cache
+        // breakpoints so an all-cached start is an everyday event, and the
+        // cache read is priced. Dropping it lost a real bill and its buckets.
         $provider = $this->p4s2VertexStreamerWith([
             ['type' => 'message_start', 'message' => ['usage' => [
                 'input_tokens' => 0,
@@ -1107,20 +1111,22 @@ JSON;
             messages: [new UserMessage('hi')],
         )));
 
-        // TOTAL-CHUNK discipline (review-5 finding 6): the filter below cannot
-        // see a start-sourced tokensUsed-0 chunk - inverting the drop-gate to
-        // always-emit leaves the BILLING count at exactly 1 while the stream
-        // carries a phantom. The wire yields exactly TWO chunks: the text
-        // delta, then the message_delta's usage response. Kill experiment
-        // (fix-6, measured): `inputTokens === null || inputTokens === 0` ->
-        // `false` in parseAnthropicChunk reddens the assertCount(2) with a
-        // third chunk.
-        $this->assertCount(2, $chunks, 'the all-cached message_start emits NOTHING at all - not even an invisible zero-bill chunk');
-        $this->assertSame(['x', ''], array_map(static fn (CompleteResponse $c): string => $c->content, $chunks), 'wire order with the phantom excluded: text delta first, then the message_delta response (empty content by construction)');
+        // TOTAL-CHUNK discipline (review-5 finding 6): exactly three chunks,
+        // in wire order - the start's usage response, the text delta, the
+        // message_delta's usage response.
+        $this->assertCount(3, $chunks, 'the all-cached message_start now emits its usage response');
+        $this->assertSame(['', 'x', ''], array_map(static fn (CompleteResponse $c): string => $c->content, $chunks));
+
+        $start = $chunks[0];
+        $this->assertSame(0, $start->tokensUsed, 'tokensUsed keeps its input-only contract; the cache rides on the buckets');
+        $this->assertSame(9000, $start->usage?->cacheReadTokens);
+        // claude-3-sonnet never offered caching and has no cache row, so a
+        // reported read bills at its own input rate (0.003/1K).
+        $this->assertEqualsWithDelta(9000 * 0.003 / 1000, $start->costUsd, 1e-12);
 
         $usageChunks = array_values(array_filter($chunks, static fn (CompleteResponse $c): bool => $c->tokensUsed !== 0));
         $this->assertCount(1, $usageChunks);
-        $this->assertSame(3, $usageChunks[0]->tokensUsed, 'only the message_delta bills; the zero-input start is dropped as it always was');
+        $this->assertSame(3, $usageChunks[0]->tokensUsed, 'the message_delta still bills only its own output side');
     }
 
     public function testP4S2VertexAnthropicDropGatesEmitNoPhantomChunksForZeroSides(): void
@@ -1131,14 +1137,16 @@ JSON;
         // every existing test, because each watched the stream through a
         // `tokensUsed !== 0` filter - an emitted zero chunk is invisible
         // there. This stream arms BOTH gates' drop branches with the values
-        // they name (a cache-only start counting input 0; a delta counting
+        // they name (a start counting input 0 AND both cache buckets 0 - since
+        // audit A15 a cache bucket alone keeps a start alive; a delta counting
         // output 0 - provider-bug shapes, which fix-2's doctrine says a
         // fixture may model). Honest behaviour: BOTH documents are dropped
         // WHOLE, so the stream yields exactly one chunk, the text delta.
         $provider = $this->p4s2VertexStreamerWith([
             ['type' => 'message_start', 'message' => ['usage' => [
                 'input_tokens' => 0,
-                'cache_read_input_tokens' => 5000,
+                'cache_read_input_tokens' => 0,
+                'cache_creation_input_tokens' => 0,
             ]]],
             ['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'x']],
             ['type' => 'message_delta', 'usage' => ['output_tokens' => 0]],
@@ -1158,19 +1166,21 @@ JSON;
     public function testP4S2VertexAnthropicDropGatesEmitNoPhantomChunksForNullSides(): void
     {
         // review-5 finding 6, NULL half of both drop-gates: usage documents
-        // that ABSENT the side each event bills (a start reporting only
-        // cache, a delta with no usage members). Dropping on null is the
-        // `=== null` clause; the twin of the zero-side test above. Here
-        // always-emit cannot even build a chunk - CompleteResponse::$tokensUsed
-        // is a non-nullable int, so the `new` TypeError falls into
-        // completeStream()'s transport catch and resurfaces as an ERROR
-        // chunk: the isError pin below is what reddens that shape (and the
-        // half-gate weakenings `=== 0`-only land the same way; `=== null`-only
-        // is killed by the zero-side test). The three gates' surviving
-        // contract, exact: the stream carries ONLY the text delta.
+        // that ABSENT the side each event bills (a start reporting no
+        // input-side member at all - since audit A15 a reported cache bucket
+        // is an input side - and a delta with no usage members). Dropping on null is the
+        // `=== null` clause; the twin of the zero-side test above. An
+        // always-emit start gate lands a second chunk here (the start reads
+        // each null bucket as 0 since audit A15, so it builds rather than
+        // TypeErrors); an always-emit delta gate still cannot build one -
+        // CompleteResponse::$tokensUsed is a non-nullable int, so the `new`
+        // TypeError falls into completeStream()'s transport catch and
+        // resurfaces as an ERROR chunk, which the isError pin below reddens.
+        // The gates' surviving contract, exact: the stream carries ONLY the
+        // text delta.
         $provider = $this->p4s2VertexStreamerWith([
             ['type' => 'message_start', 'message' => ['usage' => [
-                'cache_read_input_tokens' => 5000,
+                'output_tokens' => 1,
             ]]],
             ['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'x']],
             ['type' => 'message_delta', 'usage' => []],

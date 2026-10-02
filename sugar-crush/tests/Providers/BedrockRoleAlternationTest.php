@@ -23,6 +23,8 @@ use SugarCraft\Crush\Providers\CompleteRequest;
  * unchanged as `user, user, assistant{text:""}, user`. Both request paths now
  * merge same-role neighbours and drop blank blocks; asserted on the params
  * the real runtime client serialises, for converse() AND converseStream().
+ * Built with `promptCache: false`: the turn shapes are the subject here, and
+ * the cache point appended to the last turn is BedrockPromptCacheTest's.
  */
 final class BedrockRoleAlternationTest extends TestCase
 {
@@ -114,7 +116,7 @@ final class BedrockRoleAlternationTest extends TestCase
     {
         $mock = new MockHandler();
         $mock->append($this->reply($stream));
-        $provider = new BedrockProvider($this->client($mock));
+        $provider = new BedrockProvider($this->client($mock), promptCache: false);
 
         $this->send($provider, $stream, [
             new UserMessage('u1'),
@@ -169,7 +171,7 @@ final class BedrockRoleAlternationTest extends TestCase
         $mock = new MockHandler();
         $mock->append($this->reply($stream));
 
-        $this->send(new BedrockProvider($this->client($mock)), $stream, $history, null);
+        $this->send(new BedrockProvider($this->client($mock), promptCache: false), $stream, $history, null);
 
         $this->assertSame($stream ? 'ConverseStream' : 'Converse', $mock->getLastCommand()->getName());
 

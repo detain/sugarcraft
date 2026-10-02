@@ -443,7 +443,7 @@ final class TrustKeyDocumentationDriftTest extends TestCase
         // figure can never again be prose nothing reads.
         self::assertSame(
             1,
-            preg_match('/^\s*(?:\*\*)?([a-z]+)(?:\*\*)? keys are layered/', $sentence, $w),
+            preg_match('/^\s*(?:\*\*)?([a-z]+(?:-[a-z]+)?)(?:\*\*)? keys are layered/', $sentence, $w),
             'README.md\'s "Only these … keys are layered" roster must spell its count in words — '
                 . 'this guard derives that word from count(LAYERED_KEYS), so a digit or a '
                 . 'missing numeral leaves the figure unpinned',
@@ -525,7 +525,7 @@ final class TrustKeyDocumentationDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/Even for a trusted project, (?:\*\*)?([a-z]+)(?:\*\*)? keys are/', $unit, $m),
+            preg_match('/Even for a trusted project, (?:\*\*)?([a-z]+(?:-[a-z]+)?)(?:\*\*)? keys are/', $unit, $m),
             'README.md\'s refusal enumeration must spell its count in words after "Even for a trusted project, " — '
                 . 'this guard derives that word from count(userTierOnlyKeys())',
         );

@@ -5374,7 +5374,8 @@ final class DocFigureProseDriftTest extends TestCase
 
     /**
      * E686 tranche-11 (AO): the fence-tag roster, the breakpoint budget pair,
-     * the "nothing consults CacheBreakpoints" census, the six-item
+     * the "who consults CacheBreakpoints" census (was "nothing", until audit
+     * A15 armed it on vertex), the six-item
      * prohibition register and the five-subprocess cost claim all divide
      * their sources. The prohibition count stays internal (this page's own
      * list); the §9.12 bullet census in the plan document keeps its dated
@@ -5401,15 +5402,26 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame($max - 1, $withAutomatic, 'BUDGET_WITH_AUTOMATIC is no longer the explicit budget minus one, which the same paragraph states');
         self::assertStringContainsString('explicit budget minus one', $flat, 'the minus-one framing the constant pair is pinned to has been reworded away');
 
+        // Audit A15: the page now says WHERE the class is armed - Claude on
+        // vertex constructs it, and the provider factory consults its
+        // environment switch. The census divides the same source the old
+        // not-armed census did, so a new consumer (or a lost one) reds here
+        // until the paragraph names it.
+        $consumers = [];
         foreach (self::srcTexts() as $relative => $text) {
             if ($relative === 'src/Providers/CacheBreakpoints.php') {
                 continue;
             }
             $bare = (string) preg_replace('#(/\*.*?\*/|//[^\n]*)#s', '', $text);
-            self::assertStringNotContainsString('CacheBreakpoints', $bare, "the page stakes its not-armed paragraph on no src/ file consulting CacheBreakpoints — {$relative} now does");
+            if (str_contains($bare, 'CacheBreakpoints')) {
+                $consumers[] = $relative;
+            }
         }
+        sort($consumers);
+        self::assertSame(['src/Providers/ProviderFactory.php', 'src/Providers/VertexProvider.php'], $consumers, 'the armed-on-one-wire paragraph names VertexProvider as the one caller and ProviderFactory as the switch reader — the src/ census moved');
+        self::assertStringContainsString('It is armed on one wire: Claude on `vertex`', $flat, 'the armed paragraph was reworded away from the census pinned above');
         $bin = (string) file_get_contents($root . '/bin/sugarcrush');
-        self::assertStringNotContainsString('CacheBreakpoints', (string) preg_replace('~(/\*.*?\*/|//[^\n]*|^\s*\#[^\n]*)~s', '', $bin), 'bin/sugarcrush now consults CacheBreakpoints — the unwired claim is dead prose');
+        self::assertStringNotContainsString('CacheBreakpoints', (string) preg_replace('~(/\*.*?\*/|//[^\n]*|^\s*\#[^\n]*)~s', '', $bin), 'bin/sugarcrush now consults CacheBreakpoints — the page names only the provider wiring');
 
         self::assertSame(1, preg_match('/§9\.12 enumerates (\w+) standing prohibitions/', $flat, $regWord), 'the register sentence no longer spells the prohibition count');
         $registerStart = strpos($raw, '## The "do not do this" register');
@@ -5918,7 +5930,7 @@ final class DocFigureProseDriftTest extends TestCase
             'eighteen' => 18, 'nineteen' => 19, 'twenty' => 20, 'twenty-one' => 21, 'twenty-two' => 22,
         ];
 
-        self::assertSame(1, preg_match('/`LayeredSettings::LAYERED_KEYS` is exactly these ([a-z]+)/', $settings, $tableCount), 'the "exactly these (word)" sentence under the layered table is gone');
+        self::assertSame(1, preg_match('/`LayeredSettings::LAYERED_KEYS` is exactly these ([a-z]+(?:-[a-z]+)?)/', $settings, $tableCount), 'the "exactly these (word)" sentence under the layered table is gone');
         self::assertSame(
             count($keys),
             $wordNumbers[$tableCount[1]] ?? -1,
@@ -5927,7 +5939,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/only ([a-z]+) of the ([a-z]+) layered keys have an\s+env override \((.*?)\)\.\s*(.*?)\s+have none\./s', $settings, $envSplit),
+            preg_match('/only ([a-z]+(?:-[a-z]+)?) of the ([a-z]+(?:-[a-z]+)?) layered keys have an\s+env override \((.*?)\)\.\s*(.*?)\s+have none\./s', $settings, $envSplit),
             'the See-also env-split sentence in docs/SETTINGS.md was reworded out from under this arm',
         );
 

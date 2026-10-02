@@ -291,6 +291,14 @@ final class LayeredSettings
      *                 `ProviderFactory::createVertex()`. Thinking tokens bill as
      *                 output, so this is `maxOutputTokens`'s argument on the
      *                 reasoning half of the reply: USER-TIER ONLY.
+     *  - `promptCache`
+     *                 whether the `vertex` (Anthropic arm) and `bedrock`
+     *                 providers mark prompt-cache breakpoints (audit A15), read
+     *                 by `ProviderFactory::createVertex()` / `createBedrock()`;
+     *                 on unless `false`, and `SUGARCRUSH_DISABLE_PROMPT_CACHE`
+     *                 outranks it. USER-TIER ONLY on the money axis: switching
+     *                 caching off makes every request bill its whole prompt at
+     *                 the full input rate, a bill a checkout may not choose.
      *
      * `statusLine` IS THE ONLY KEY HERE WHOSE VALUE IS A COMMAND, and that is
      * why it is user-tier only ({@see PROJECT_TIER_KEYS} does not list it).
@@ -420,6 +428,7 @@ final class LayeredSettings
         'contextWindow',
         'extraBody',
         'thinkingBudget',
+        'promptCache',
     ];
 
     /**
@@ -647,8 +656,8 @@ final class LayeredSettings
      * third list that agrees with neither. Today it is `provider`,
      * `titleModel`, `summaryModel`, `instructions`, `disabledRules`,
      * `maxOutputTokens`, `modelPrices`, `allowedTools`, `statusLine`, `layout`,
-     * `maxToolSteps`, `secretEnvAllowlist`, `contextWindow`, `extraBody` and
-     * `thinkingBudget`, in
+     * `maxToolSteps`, `secretEnvAllowlist`, `contextWindow`, `extraBody`,
+     * `thinkingBudget` and `promptCache`, in
      * {@see LAYERED_KEYS} order — named rather than numbered
      * here, because the
      * ordinals this sentence used to carry went stale the moment a fifth key

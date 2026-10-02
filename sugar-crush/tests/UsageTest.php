@@ -810,7 +810,9 @@ final class UsageTest extends TestCase
      * (`$inputTokens + $outputTokens,`), which the emit then reads back as
      * `tokensUsed: $usage->totalTokens`; its Anthropic STREAM still emits the
      * two halves as separate `CompleteResponse`s, now
-     * `tokensUsed: $usage->inputTokens` (message_start) and
+     * `tokensUsed: $input` (message_start - the input side read as
+     * `$usage->inputTokens ?? 0` since audit A15 lets an all-cached start
+     * through) and
      * `tokensUsed: $usage->outputTokens` (message_delta), which is why
      * `Runtime` sums across chunks instead of reading the last one. The pinned
      * FACTS survived the step unchanged; only the texts the locators searched
@@ -835,8 +837,8 @@ final class UsageTest extends TestCase
         );
         $this->assertSame(
             1,
-            preg_match_all('/tokensUsed: \$usage->inputTokens,/', $source),
-            'the stream still emits input tokens on their own, exactly once (message_start)',
+            preg_match_all('/tokensUsed: \$input,/', $source),
+            'the stream still emits input tokens on their own, exactly once (message_start; `$input` is `$usage->inputTokens ?? 0` since audit A15 let an all-cached start through)',
         );
         $this->assertSame(
             1,

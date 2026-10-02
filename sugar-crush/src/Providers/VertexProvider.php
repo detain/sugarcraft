@@ -232,6 +232,71 @@ final readonly class VertexProvider implements ProviderInterface
     ];
 
     /**
+     * Built-in USD-per-1K CACHE rates, keyed by the same normalised family as
+     * {@see PRICE_TABLE} => [read, write] (audit A15, the cache half).
+     *
+     * Claude: Anthropic's published multipliers on the family's own input
+     * rate - a cache READ (`cache_read_input_tokens`) bills at 0.1x, a cache
+     * WRITE (`cache_creation_input_tokens`, the default 5-minute TTL this
+     * class asks for) at 1.25x. Claude 3 Haiku is the one family whose
+     * published pair is not the multiplier ($0.03 / $0.30 per 1M on a $0.25
+     * input), so its row carries those figures. Claude 3 Sonnet has no row:
+     * it never offered prompt caching, and {@see NO_PROMPT_CACHE_FAMILIES}
+     * keeps breakpoints off it.
+     *
+     * Gemini: the cached-input column of Google's sheet - 0.1x input on the
+     * 2.5 family, 0.25x on 2.0 Flash. The write side is null because the
+     * protocol reports no write count (implicit caching is free to write;
+     * explicit caching bills STORAGE by the hour, which no per-request usage
+     * document can carry). 2.0 Flash-Lite publishes no cached rate.
+     *
+     * A family with no row here bills its cache tokens at its own INPUT rate
+     * ({@see cacheCostPer1kTokens()}): never a discount nobody published, and
+     * never unpriced when the input rate is known.
+     *
+     * @var array<string, array{0: float, 1: ?float}>
+     */
+    private const CACHE_PRICE_TABLE = [
+        'claude-fable-5-1' => [0.001, 0.0125],
+        'claude-fable-5' => [0.001, 0.0125],
+        'claude-opus-5-5' => [0.0004, 0.005],
+        'claude-opus-5' => [0.0005, 0.00625],
+        'claude-opus-4-8' => [0.0005, 0.00625],
+        'claude-opus-4-7' => [0.0005, 0.00625],
+        'claude-opus-4-6' => [0.0005, 0.00625],
+        'claude-opus-4-5' => [0.0005, 0.00625],
+        'claude-opus-4-1' => [0.0015, 0.01875],
+        'claude-opus-4' => [0.0015, 0.01875],
+        'claude-3-opus' => [0.0015, 0.01875],
+        'claude-sonnet-5-5' => [0.0002, 0.0025],
+        'claude-sonnet-5' => [0.0002, 0.0025],
+        'claude-sonnet-4-6' => [0.0003, 0.00375],
+        'claude-sonnet-4-5' => [0.0003, 0.00375],
+        'claude-sonnet-4' => [0.0003, 0.00375],
+        'claude-3-7-sonnet' => [0.0003, 0.00375],
+        'claude-3-5-sonnet' => [0.0003, 0.00375],
+        'claude-haiku-4-5' => [0.0001, 0.00125],
+        'claude-3-5-haiku' => [0.00008, 0.001],
+        'claude-3-haiku' => [0.00003, 0.0003],
+        'gemini-2.5-pro' => [0.000125, null],
+        'gemini-2.5-flash' => [0.00003, null],
+        'gemini-2.5-flash-lite' => [0.00001, null],
+        'gemini-2.0-flash' => [0.0000375, null],
+    ];
+
+    /**
+     * Anthropic families on Vertex that never offered prompt caching, so a
+     * `cache_control` mark is not sent to them (an unsupported model's answer
+     * to one is not something this repo can measure without credentials, and
+     * the safe reading of "unknown" is not to ask). Claude 3 Sonnet - which
+     * is still this provider's factory default id - is the one retired family
+     * Vertex served without it.
+     *
+     * @var list<string>
+     */
+    private const NO_PROMPT_CACHE_FAMILIES = ['claude-3-sonnet'];
+
+    /**
      * @param (callable(string, string, array<string, mixed>): array<string, mixed>)|null $predictor
      *        Unary network seam; when null a real Vertex AI call is wired in.
      * @param (callable(string, string, array<string, mixed>): iterable<int, array<string, mixed>>)|null $streamer
@@ -252,6 +317,14 @@ final readonly class VertexProvider implements ProviderInterface
      *        `thinkingConfig`, leaving the model's own default. Sent on the
      *        Gemini arm only - the Anthropic arm's extended thinking is a
      *        different request shape this class does not build.
+     * @param bool $promptCache Audit A15: whether the Anthropic arm marks
+     *        prompt-cache breakpoints ({@see CacheBreakpoints}: the system
+     *        prompt, the last tool and the conversation tail). From the
+     *        `promptCache` setting and `SUGARCRUSH_DISABLE_PROMPT_CACHE`
+     *        ({@see ProviderFactory::createVertex()}); on by default. Gemini
+     *        needs no marks - its 2.5 family caches implicitly - so the flag
+     *        does not touch that arm, and the cached tokens it reports are
+     *        priced either way.
      *
      * @throws \InvalidArgumentException when $thinkingBudget is below -1
      */
@@ -263,6 +336,7 @@ final readonly class VertexProvider implements ProviderInterface
         ?callable $streamer = null,
         private array $modelPrices = [],
         private ?int $thinkingBudget = null,
+        private bool $promptCache = true,
     ) {
         if ($thinkingBudget !== null && $thinkingBudget < -1) {
             throw new \InvalidArgumentException(sprintf(
@@ -286,6 +360,7 @@ final readonly class VertexProvider implements ProviderInterface
      * @param (callable(string, string, array<string, mixed>): iterable<int, array<string, mixed>>)|null $streamer
      * @param array<string, array{input?: float|int, output?: float|int}> $modelPrices see {@see __construct()}
      * @param int|null $thinkingBudget see {@see __construct()}
+     * @param bool $promptCache see {@see __construct()}
      */
     public static function create(
         string $projectId,
@@ -295,8 +370,19 @@ final readonly class VertexProvider implements ProviderInterface
         ?callable $streamer = null,
         array $modelPrices = [],
         ?int $thinkingBudget = null,
+        bool $promptCache = true,
     ): self {
-        return new self($projectId, $location, $model, $predictor, $streamer, $modelPrices, $thinkingBudget);
+        return new self($projectId, $location, $model, $predictor, $streamer, $modelPrices, $thinkingBudget, $promptCache);
+    }
+
+    /**
+     * Whether this provider was built to mark prompt-cache breakpoints (the
+     * `promptCache` setting). Whether a given request carries them also
+     * depends on its model - see {@see marksPromptCache()}.
+     */
+    public function promptCache(): bool
+    {
+        return $this->promptCache;
     }
 
     public function name(): string
@@ -448,6 +534,60 @@ final readonly class VertexProvider implements ProviderInterface
         $rate = ((float) $declared) / 1000; // config speaks USD-per-1M
 
         return $rate >= 0.0 && is_finite($rate) ? $rate : null;
+    }
+
+    /**
+     * USD per 1K CACHE tokens for `$model` (audit A15, the cache half): `read`
+     * prices `cache_read_input_tokens` / Gemini's `cachedContentTokenCount`,
+     * `write` prices `cache_creation_input_tokens`. Null only when the rate it
+     * resolves to is unknown or fails validation - the same loud unpriced road
+     * as {@see costPer1kTokens()}.
+     *
+     * Lookup order mirrors costPer1kTokens(): an operator entry (raw id, then
+     * family) is authoritative - its `cached` / `cacheWrite` rate when it
+     * declares one, else its own `input` rate, because a named model's entry
+     * replaces the built-in row and its cache discount together (exactly
+     * {@see OpenAIProvider}'s `cached` rule). Then the built-in
+     * {@see CACHE_PRICE_TABLE} row; then the family's input rate. Billing a
+     * cache token at the input rate when no cache rate is on file overstates a
+     * read and understates a write, which is the honest cost of not inventing
+     * a figure; an operator who needs the exact one declares it.
+     *
+     * @param 'read'|'write' $kind
+     */
+    public function cacheCostPer1kTokens(string $model, string $kind): ?float
+    {
+        $declaredKey = $kind === 'read' ? 'cached' : 'cacheWrite';
+
+        foreach ([$model, self::pricingFamily($model)] as $key) {
+            if (!array_key_exists($key, $this->modelPrices)) {
+                continue;
+            }
+
+            $entry = $this->modelPrices[$key];
+
+            return is_array($entry) && array_key_exists($declaredKey, $entry)
+                ? $this->declaredRate($key, $declaredKey)
+                : $this->declaredRate($key, 'input');
+        }
+
+        $row = self::CACHE_PRICE_TABLE[self::pricingFamily($model)] ?? null;
+        $rate = $row === null ? null : ($kind === 'read' ? $row[0] : $row[1]);
+
+        return $rate ?? $this->costPer1kTokens($model, 'input');
+    }
+
+    /**
+     * Does a request for `$model` carry prompt-cache breakpoints? Only on the
+     * Anthropic arm (the one wire here that spells `cache_control`), only
+     * with the `promptCache` setting on, and never for a family in
+     * {@see NO_PROMPT_CACHE_FAMILIES}.
+     */
+    public function marksPromptCache(string $model): bool
+    {
+        return $this->promptCache
+            && $this->isAnthropicModel($model)
+            && !in_array(self::pricingFamily($model), self::NO_PROMPT_CACHE_FAMILIES, true);
     }
 
     public function complete(CompleteRequest $request): CompleteResponse
@@ -766,10 +906,57 @@ final readonly class VertexProvider implements ProviderInterface
             $body['tools'] = $this->formatAnthropicTools($request->tools);
         }
 
+        if ($this->marksPromptCache($this->modelId($request))) {
+            $body = $this->withCacheBreakpoints($body);
+        }
+
         if ($stream) {
             // `streamRawPredict` still needs the body to opt into SSE; without
             // it Vertex answers with one buffered document.
             $body['stream'] = true;
+        }
+
+        return $body;
+    }
+
+    /**
+     * Marks the body's prompt-cache breakpoints through {@see CacheBreakpoints}
+     * (audit A15) - the system prompt, the last tool and the conversation
+     * tail, re-derived from scratch on every request, which is every step of
+     * an agentic turn.
+     *
+     * CacheBreakpoints reads system as a `role: system` turn inside
+     * `messages`, while this wire carries it as the top-level `system` field
+     * (a system turn in `messages` is a 400). So the system blocks ride in as
+     * the first turn and are lifted back out afterwards - the hazard the
+     * class records (its mark would be lost on the joined-string arm) is
+     * closed by always handing it, and taking back, the BLOCK form: a string
+     * system becomes one text block, the same bytes.
+     *
+     * @param array<string, mixed> $body
+     * @return array<string, mixed>
+     */
+    private function withCacheBreakpoints(array $body): array
+    {
+        $system = $body['system'] ?? null;
+        $systemBlocks = is_string($system) ? [['type' => 'text', 'text' => $system]] : $system;
+
+        $turns = $body['messages'];
+        if (is_array($systemBlocks) && $systemBlocks !== []) {
+            array_unshift($turns, ['role' => 'system', 'content' => $systemBlocks]);
+        }
+
+        $marked = (new CacheBreakpoints())->apply($turns, $body['tools'] ?? []);
+        $messages = array_values($marked['messages']);
+
+        if (is_array($systemBlocks) && $systemBlocks !== []) {
+            $body['system'] = array_shift($messages)['content'];
+        }
+
+        $body['messages'] = $messages;
+
+        if (isset($body['tools'])) {
+            $body['tools'] = array_values($marked['tools']);
         }
 
         return $body;
@@ -1164,7 +1351,11 @@ final readonly class VertexProvider implements ProviderInterface
      * The unary `tokensUsed` stays `input + output`, exactly as before:
      * whether Anthropic's own view of a turn's billable total includes cache
      * tokens is a pricing-visible question outside this step's Goal,
-     * REPORTED, not changed.
+     * REPORTED, not changed. The DOLLAR figure does include them (audit A15,
+     * the cache half): since this class marks breakpoints, most of a long
+     * agentic prompt arrives as cache reads, and a cost that priced only
+     * `input_tokens` would bill the turn for the few tokens after the last
+     * breakpoint. Reads and writes are priced at {@see cacheCostPer1kTokens()}.
      *
      * @param array<string, mixed> $usage the native usage document; non-array
      *                                    arrives as `[]` via the call sites
@@ -1173,11 +1364,13 @@ final readonly class VertexProvider implements ProviderInterface
     {
         $inputTokens = self::usageInt($usage['input_tokens'] ?? null) ?? 0;
         $outputTokens = self::usageInt($usage['output_tokens'] ?? null) ?? 0;
+        $cacheRead = self::usageInt($usage['cache_read_input_tokens'] ?? null);
+        $cacheCreation = self::usageInt($usage['cache_creation_input_tokens'] ?? null);
 
         // Audit A15: an unknown model bills the 0.0 lower bound WITH its name
         // on the carrier, so the transcript notice and the spend-cap
         // disclosure can tell "unpriced" from "free".
-        $cost = $this->cost($model, $inputTokens, $outputTokens);
+        $cost = $this->cost($model, $inputTokens, $outputTokens, $cacheRead ?? 0, $cacheCreation ?? 0);
 
         return Usage::new(
             // The exact expression this replaces: the sum of the two sides
@@ -1186,8 +1379,8 @@ final readonly class VertexProvider implements ProviderInterface
             $cost ?? 0.0,
             self::usageInt($usage['input_tokens'] ?? null),
             self::usageInt($usage['output_tokens'] ?? null),
-            self::usageInt($usage['cache_read_input_tokens'] ?? null),
-            self::usageInt($usage['cache_creation_input_tokens'] ?? null),
+            $cacheRead,
+            $cacheCreation,
             unpricedModel: $cost === null ? $model : null,
         );
     }
@@ -1367,12 +1560,13 @@ final readonly class VertexProvider implements ProviderInterface
         // Since the E17 fold the buckets ride the wire too - each event's
         // carrier document names ONLY its own side's tokens, never the whole
         // parsed document (see ACCOUNTING OWNERSHIP below), so the summed
-        // turn still cannot double-bill. One consequence of keeping the
-        // gates, recorded honestly because it is subtle: a `message_start`
-        // whose EVERYTHING was a cache hit (input_tokens 0 with a positive
-        // cache_read) still drops here exactly as it dropped before this
-        // method read cache at all; changing the gate would alter
-        // P1.S5-pinned emission semantics and remains a reported follow-up.
+        // turn still cannot double-bill. The `message_start` gate counts the
+        // cache buckets as input-side tokens (audit A15, the cache half):
+        // once this class marked breakpoints, a start whose whole prompt was
+        // a cache hit - `input_tokens` 0 beside a positive cache read - is a
+        // real, billed event, and the old input-only gate dropped it, cost
+        // and buckets together. A start with nothing on any input-side
+        // bucket still yields nothing, as before.
         //
         // ACCOUNTING OWNERSHIP, split on purpose (review-2): the PARSE owns
         // the document - the Usage parseAnthropicUsage() returns prices the
@@ -1400,18 +1594,22 @@ final readonly class VertexProvider implements ProviderInterface
                 $model,
             );
 
-            if ($usage->inputTokens === null || $usage->inputTokens === 0) {
+            $input = $usage->inputTokens ?? 0;
+            $cacheRead = $usage->cacheReadTokens ?? 0;
+            $cacheCreation = $usage->cacheCreationTokens ?? 0;
+
+            if ($input === 0 && $cacheRead === 0 && $cacheCreation === 0) {
                 return null;
             }
 
-            $startCost = $this->cost($model, $usage->inputTokens, 0);
+            $startCost = $this->cost($model, $input, 0, $cacheRead, $cacheCreation);
 
             return new CompleteResponse(
                 content: '',
-                tokensUsed: $usage->inputTokens,
+                tokensUsed: $input,
                 costUsd: $startCost ?? 0.0,
                 usage: Usage::new(
-                    $usage->inputTokens,
+                    $input,
                     $startCost ?? 0.0,
                     $usage->inputTokens,
                     null,
@@ -1521,22 +1719,37 @@ final readonly class VertexProvider implements ProviderInterface
      * {@see Usage::$unpricedModel} - the accounting itself stays at the 0.0
      * lower bound.
      *
-     * Cache tokens are NOT priced here, and that is a known gap rather than an
-     * oversight: Anthropic bills cache reads and writes at their own rates,
-     * but this class sends no `cache_control` breakpoints
-     * ({@see CacheBreakpoints} has no caller), so on this provider those
-     * buckets are absent or zero today. Whoever wires breakpoints prices them.
+     * Cache tokens are priced at their own rates (audit A15, the cache half;
+     * {@see cacheCostPer1kTokens()}): `$cacheReadTokens` and
+     * `$cacheWriteTokens` are DISJOINT from `$inputTokens` on every caller -
+     * Anthropic's `input_tokens` counts only what follows the last
+     * breakpoint, and the Gemini arm subtracts its cached subset before
+     * calling. They used to be left out: harmless while this class sent no
+     * breakpoints, wrong once it does, since a cached agentic prompt is
+     * mostly reads.
      */
-    private function cost(string $model, int $inputTokens, int $outputTokens): ?float
-    {
+    private function cost(
+        string $model,
+        int $inputTokens,
+        int $outputTokens,
+        int $cacheReadTokens = 0,
+        int $cacheWriteTokens = 0,
+    ): ?float {
         $total = 0.0;
 
-        foreach (['input' => $inputTokens, 'output' => $outputTokens] as $direction => $tokens) {
+        $sides = [
+            [$inputTokens, fn (): ?float => $this->costPer1kTokens($model, 'input')],
+            [$outputTokens, fn (): ?float => $this->costPer1kTokens($model, 'output')],
+            [$cacheReadTokens, fn (): ?float => $this->cacheCostPer1kTokens($model, 'read')],
+            [$cacheWriteTokens, fn (): ?float => $this->cacheCostPer1kTokens($model, 'write')],
+        ];
+
+        foreach ($sides as [$tokens, $rateOf]) {
             if ($tokens <= 0) {
                 continue;
             }
 
-            $rate = $this->costPer1kTokens($model, $direction);
+            $rate = $rateOf();
             if ($rate === null) {
                 return null;
             }
@@ -2091,8 +2304,15 @@ final readonly class VertexProvider implements ProviderInterface
         $output = $candidates + max(0, $thoughtsRaw ?? 0);
 
         // Audit A15: unknown Gemini families bill the 0.0 lower bound with
-        // their name carried, never a silent zero.
-        $cost = $this->cost($model, $prompt, $output);
+        // their name carried, never a silent zero. The cached subset of the
+        // prompt bills at the cache-read rate and the rest at the input rate
+        // (the cache half of A15): `cachedContentTokenCount` is INSIDE
+        // `promptTokenCount`, so pricing the whole prompt at the input rate
+        // charged every implicit-cache hit Gemini 2.5 reports at ten times
+        // its price. Capped at the prompt so an over-report bills nothing
+        // that was never sent.
+        $cachedBilled = max(0, min($cached ?? 0, $prompt));
+        $cost = $this->cost($model, $prompt - $cachedBilled, $output, $cachedBilled);
 
         return Usage::new(
             $prompt + $output,

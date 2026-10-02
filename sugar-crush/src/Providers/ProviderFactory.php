@@ -91,11 +91,11 @@ final readonly class ProviderFactory
         ],
         'bedrock' => [
             'required' => ['region'],
-            'optional' => ['model', 'modelPrices'],
+            'optional' => ['model', 'modelPrices', 'promptCache'],
         ],
         'vertex' => [
             'required' => ['projectId'],
-            'optional' => ['location', 'model', 'modelPrices', 'thinkingBudget'],
+            'optional' => ['location', 'model', 'modelPrices', 'thinkingBudget', 'promptCache'],
         ],
         'custom' => [
             'required' => ['name', 'baseUrl', 'model'],
@@ -764,7 +764,7 @@ final readonly class ProviderFactory
      * ({@see \SugarCraft\Crush\Cli\Bootstrap::readUserConfig()}), or null.
      *
      * The provider-shaping keys read here - `modelPrices`, `contextWindow`,
-     * `extraBody`, `thinkingBudget` - are all USER-TIER ONLY in
+     * `extraBody`, `thinkingBudget`, `promptCache` - are all USER-TIER ONLY in
      * {@see \SugarCraft\Crush\Config\LayeredSettings}, so the project tier has
      * already been stripped from them inside that merge and a checkout cannot
      * reach this read.
@@ -1172,7 +1172,51 @@ final readonly class ProviderFactory
             region: $config['region'],
             model: $config['model'] ?? null,
             modelPrices: self::modelPricesFor($config),
+            // Audit A15: Converse cache points after the system prompt and
+            // the conversation, unless the operator turned them off.
+            promptCache: self::promptCacheEnabled($config),
         );
+    }
+
+    /**
+     * Whether a provider built from `$config` marks prompt-cache breakpoints
+     * (audit A15): on unless something turns it off.
+     *
+     * `SUGARCRUSH_DISABLE_PROMPT_CACHE` wins - the environment outranks
+     * settings for every flag of this shape, and it is the one switch that
+     * reaches a provider whose config the operator cannot edit. Then the
+     * provider block's own `promptCache`, then the user-tier `promptCache`
+     * setting. A value that is not a recognisable boolean (`true`/`false`,
+     * `1`/`0`, or those spelled as strings - what a `${VAR}` placeholder in a
+     * provider block resolves to) leaves the default on: a malformed setting
+     * costs the setting, never the launch, and "on" is the cheaper reading.
+     *
+     * User-tier only: caching off raises what every request bills, so it is
+     * a money decision a checked-out repository may not make.
+     *
+     * @param array<string, mixed> $config
+     */
+    private static function promptCacheEnabled(array $config): bool
+    {
+        if (CacheBreakpoints::disabledFromEnvironment()) {
+            return false;
+        }
+
+        // `null` and `''` (an unset `${VAR}` placeholder) in the provider
+        // block say nothing, so the user tier still answers.
+        $value = $config['promptCache'] ?? '';
+        if ($value === '') {
+            $value = self::userTierSetting('promptCache');
+        }
+
+        if (is_string($value)) {
+            $value = strtolower(trim($value));
+        }
+
+        return match ($value) {
+            false, 0, 'false', '0' => false,
+            default => true,
+        };
     }
 
     /**
@@ -1190,6 +1234,9 @@ final readonly class ProviderFactory
             thinkingBudget: self::configuredThinkingBudget(
                 $config['thinkingBudget'] ?? self::userTierSetting('thinkingBudget'),
             ),
+            // Audit A15: `cache_control` breakpoints on the Anthropic arm
+            // (system, last tool, conversation tail), unless turned off.
+            promptCache: self::promptCacheEnabled($config),
         );
     }
 

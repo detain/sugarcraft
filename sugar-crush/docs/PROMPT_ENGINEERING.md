@@ -194,7 +194,7 @@ defang-only entry by
 Deleting a roster entry or an escape call reddens those tests; prose here never substitutes for
 them.
 
-## Cache breakpoints — the contract, and the fact that it is not armed
+## Cache breakpoints — the contract, and where it is armed
 
 `CacheBreakpoints` implements the Anthropic prompt-cache mark plan: applied **wipe-then-reapply**
 on every step of an agentic turn (upstream measured that without the wipe each step *adds* its
@@ -206,23 +206,24 @@ but they consume slots from the same cap: `CacheBreakpoints::BUDGET_WITH_AUTOMAT
 explicit budget minus one. Input already breaching the cap on foreign marks throws rather than
 returning a doomed request.
 
-**None of this is wired.** There is no production caller: no file under `src/` or `bin/` other
-than the class itself constructs or consults `CacheBreakpoints`; its only callers are its tests.
-That is the adjudicated intended state of its step (§1.10 of the plan: shipping a class unwired is
-an outcome here; deleting or stubbing it is not), and the contract above should be read as a
-not-yet-armed seam, not as live behaviour. Two consequences ride with it:
+**It is armed on one wire: Claude on `vertex`** (audit A15). `VertexProvider` hands every
+Anthropic-shaped request body to `apply()` just before it is sent, which is every step of a turn.
+The system prompt rides in as a leading `role: system` turn **in block form** and is lifted back
+into the top-level `system` field afterwards, so the mark survives — the hazard this page used to
+record (the string arm discards in-messages system rows) is closed by never using the string arm
+for a marked request. `bedrock` places its own Converse `cachePoint` blocks rather than calling
+the class, because Converse spells a breakpoint as a separate block, not a `cache_control` field.
+No other provider marks anything: `openai` and `sglang` cache server-side without marks.
 
-- The kill switch `SUGARCRUSH_DISABLE_PROMPT_CACHE` is tabulated **dormant by design** in
-  `docs/ENVIRONMENT.md`: unset, empty and the literal `0` read as enabled, any other text disables;
-  the only reader is `CacheBreakpoints::disabledFromEnvironment()`, static by design so a consumer
-  consults it once at construction and `apply()` itself stays environment-free. A disabled
-  instance still runs every input-derived duty — the shape throws, the ephemeral wipe, the
-  over-cap breach — and then adds zero *new* ephemeral breakpoints; "disabled" honestly means no
-  new marks, not caching off for mechanisms this class does not own.
-- `CacheBreakpoints::observeCacheHealth()` is a live channel that is not yet live: the unary
-  response path routes no cache fields into it, and widening `CompleteResponse` belongs to the
-  wiring step. When wiring lands there is also a recorded hazard: the last-system mark must travel
-  through the `systemBlocks` block form, because the string arm discards in-messages system rows.
+- The switches: the user-tier `promptCache` setting (on unless `false`) and
+  `SUGARCRUSH_DISABLE_PROMPT_CACHE`, which outranks it, are read once when `ProviderFactory`
+  builds the provider. Off means `apply()` is not called at all, so the body is byte-identical to
+  an unmarked one. `CacheBreakpoints::disabledFromEnvironment()` stays the only reader of the
+  variable, static so `apply()` itself stays environment-free.
+- Models that never offered caching (Claude 3 Sonnet on Vertex) are not marked.
+- `CacheBreakpoints::observeCacheHealth()` is still a channel nothing feeds: its consumer would
+  sit in the turn loop, which this wiring did not touch. The cache buckets it would read do reach
+  `Usage` on both arms, and are priced (see `modelPrices` in `SETTINGS.md`).
 
 ## Session affinity — dormant-id state
 

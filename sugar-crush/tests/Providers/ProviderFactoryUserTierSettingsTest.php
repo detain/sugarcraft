@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Providers;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Providers\BedrockProvider;
+use SugarCraft\Crush\Providers\CacheBreakpoints;
 use SugarCraft\Crush\Providers\ProviderFactory;
 use SugarCraft\Crush\Providers\VertexProvider;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
@@ -27,9 +29,15 @@ final class ProviderFactoryUserTierSettingsTest extends TestCase
     private string $tmpDir = '';
     private string $configDir = '';
 
+    /** The prompt-cache kill switch as the run found it; cleared per test. */
+    private string|false $promptCacheEnv = false;
+
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->promptCacheEnv = getenv(CacheBreakpoints::DISABLE_ENV);
+        putenv(CacheBreakpoints::DISABLE_ENV);
 
         $this->tmpDir = sys_get_temp_dir() . '/provider_user_tier_' . uniqid('', true);
         $home = $this->tmpDir . '/home';
@@ -43,6 +51,9 @@ final class ProviderFactoryUserTierSettingsTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->promptCacheEnv === false
+            ? putenv(CacheBreakpoints::DISABLE_ENV)
+            : putenv(CacheBreakpoints::DISABLE_ENV . '=' . $this->promptCacheEnv);
         Bootstrap::useProjectRootForSettings(null);
         Bootstrap::useConfigPath(null);
         $this->restoreHomeSandbox();
@@ -191,6 +202,7 @@ final class ProviderFactoryUserTierSettingsTest extends TestCase
             'contextWindow' => 5_000_000,
             'thinkingBudget' => 30_000,
             'extraBody' => ['n' => 50],
+            'promptCache' => false,
             'theme' => 'from-project',
         ]));
         Bootstrap::useProjectRootForSettings($canonical);
@@ -201,6 +213,7 @@ final class ProviderFactoryUserTierSettingsTest extends TestCase
         self::assertSame(0, $this->openAi('gpt-5-made-up')->contextWindow());
         self::assertNull($this->privateValue($this->vertex(), 'thinkingBudget'));
         self::assertSame([], $this->privateValue($this->custom(), 'extraBody'));
+        self::assertTrue($this->vertex()->promptCache());
     }
 
     // -------------------------------------------------------------------------
@@ -268,8 +281,84 @@ final class ProviderFactoryUserTierSettingsTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // A15 (cache half): promptCache reaches Vertex and Bedrock
+    // -------------------------------------------------------------------------
+
+    public function testPromptCacheIsOnByDefaultForVertexAndBedrock(): void
+    {
+        self::assertTrue($this->vertex()->promptCache());
+        self::assertTrue($this->bedrock()->promptCache());
+    }
+
+    public function testTheUserTierCanTurnPromptCacheOff(): void
+    {
+        $this->writeUserConfig(['promptCache' => false]);
+
+        self::assertFalse($this->vertex()->promptCache());
+        self::assertFalse($this->bedrock()->promptCache());
+    }
+
+    public function testAProviderBlockPromptCacheOutranksTheUserTier(): void
+    {
+        $this->writeUserConfig(['promptCache' => false]);
+
+        $provider = (new ProviderFactory())->create(['type' => 'bedrock', 'region' => 'us-east-1', 'promptCache' => true]);
+        self::assertInstanceOf(BedrockProvider::class, $provider);
+        self::assertTrue($provider->promptCache());
+
+        // An unset `${VAR}` placeholder resolves to '' and says nothing.
+        $placeholder = (new ProviderFactory())->create(['type' => 'bedrock', 'region' => 'us-east-1', 'promptCache' => '']);
+        self::assertInstanceOf(BedrockProvider::class, $placeholder);
+        self::assertFalse($placeholder->promptCache());
+    }
+
+    public function testTheEnvironmentSwitchOutranksEverySetting(): void
+    {
+        $this->writeUserConfig(['promptCache' => true]);
+        putenv(CacheBreakpoints::DISABLE_ENV . '=1');
+
+        $vertex = (new ProviderFactory())->create(['type' => 'vertex', 'projectId' => 'p', 'promptCache' => true]);
+        self::assertInstanceOf(VertexProvider::class, $vertex);
+        self::assertFalse($vertex->promptCache());
+        self::assertFalse($this->bedrock()->promptCache());
+
+        // `0` is the repo's spelling of "not set".
+        putenv(CacheBreakpoints::DISABLE_ENV . '=0');
+        self::assertTrue($this->bedrock()->promptCache());
+    }
+
+    /** @return iterable<string, array{mixed, bool}> */
+    public static function promptCacheValues(): iterable
+    {
+        yield 'false' => [false, false];
+        yield 'zero' => [0, false];
+        yield 'string false' => [' FALSE ', false];
+        yield 'string zero' => ['0', false];
+        yield 'true' => [true, true];
+        yield 'string true' => ['true', true];
+        yield 'nonsense keeps the default' => [['x'], true];
+        yield 'null keeps the default' => [null, true];
+    }
+
+    #[DataProvider('promptCacheValues')]
+    public function testPromptCacheValueReading(mixed $value, bool $expected): void
+    {
+        $this->writeUserConfig(['promptCache' => $value]);
+
+        self::assertSame($expected, $this->bedrock()->promptCache());
+    }
+
+    // -------------------------------------------------------------------------
     // Fixtures
     // -------------------------------------------------------------------------
+
+    private function bedrock(): BedrockProvider
+    {
+        $provider = (new ProviderFactory())->create(['type' => 'bedrock', 'region' => 'us-east-1']);
+        self::assertInstanceOf(BedrockProvider::class, $provider);
+
+        return $provider;
+    }
 
     private function openAi(string $model): \SugarCraft\Crush\Providers\OpenAIProvider
     {

@@ -486,7 +486,7 @@ final class BedrockProviderTest extends TestCase
             'usage' => ['inputTokens' => 10, 'outputTokens' => 5],
         ]));
 
-        $provider = new BedrockProvider($this->offlineRuntimeClient($mock), 'us-east-1', 'anthropic.claude-sonnet-4-6');
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock), 'us-east-1', 'anthropic.claude-sonnet-4-6', promptCache: false);
 
         $response = $provider->complete(new CompleteRequest(
             model: 'anthropic.claude-sonnet-4-6',
@@ -658,7 +658,10 @@ final class BedrockProviderTest extends TestCase
     // history SystemMessage would sit on the wire as a same-role neighbour
     // of a real user turn - the consecutive-user shape backlog E19 measured.
     // These tests assert the BUILT PAYLOAD directly, through the real SDK
-    // serialisation pipeline (offlineRuntimeClient + MockHandler).
+    // serialisation pipeline (offlineRuntimeClient + MockHandler). They pin
+    // the system/messages SHAPES, so they build with `promptCache: false`;
+    // the cache points that ride on those shapes are pinned on their own by
+    // BedrockPromptCacheTest.
     // -------------------------------------------------------------------------
 
     public function testCompleteHoistsHistorySystemMessagesIntoTheSystemArray(): void
@@ -666,7 +669,7 @@ final class BedrockProviderTest extends TestCase
         $mock = new MockHandler();
         $mock->append(new Result(['output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'ok']]]]]));
 
-        $provider = new BedrockProvider($this->offlineRuntimeClient($mock));
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock), promptCache: false);
         $provider->complete(new CompleteRequest(
             model: 'anthropic.claude-sonnet-4-6',
             messages: [new SystemMessage('notice: verify the change'), new UserMessage('hi')],
@@ -689,7 +692,7 @@ final class BedrockProviderTest extends TestCase
         $mock = new MockHandler();
         $mock->append(new Result(['stream' => new \ArrayIterator([])]));
 
-        $provider = new BedrockProvider($this->offlineRuntimeClient($mock));
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock), promptCache: false);
         iterator_to_array($provider->completeStream(new CompleteRequest(
             model: 'anthropic.claude-sonnet-4-6',
             messages: [new SystemMessage('notice: verify the change'), new UserMessage('hi')],
@@ -712,7 +715,7 @@ final class BedrockProviderTest extends TestCase
         $mock = new MockHandler();
         $mock->append(new Result(['output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'ok']]]]]));
 
-        $provider = new BedrockProvider($this->offlineRuntimeClient($mock));
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock), promptCache: false);
         $provider->complete(new CompleteRequest(
             model: 'anthropic.claude-sonnet-4-6',
             messages: [new SystemMessage('notice: verify the change'), new UserMessage('hi')],
@@ -734,7 +737,7 @@ final class BedrockProviderTest extends TestCase
         $mock = new MockHandler();
         $mock->append(new Result(['output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'ok']]]]]));
 
-        $provider = new BedrockProvider($this->offlineRuntimeClient($mock));
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock), promptCache: false);
         $provider->complete(new CompleteRequest(
             model: 'anthropic.claude-sonnet-4-6',
             messages: [new UserMessage('hi')],
@@ -753,7 +756,7 @@ final class BedrockProviderTest extends TestCase
         $mock = new MockHandler();
         $mock->append(new Result(['stream' => new \ArrayIterator([])]));
 
-        $provider = new BedrockProvider($this->offlineRuntimeClient($mock));
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock), promptCache: false);
         iterator_to_array($provider->completeStream(new CompleteRequest(
             model: 'anthropic.claude-sonnet-4-6',
             messages: [new UserMessage('hi')],
@@ -772,7 +775,7 @@ final class BedrockProviderTest extends TestCase
         $mock = new MockHandler();
         $mock->append(new Result(['output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'ok']]]]]));
 
-        $provider = new BedrockProvider($this->offlineRuntimeClient($mock));
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock), promptCache: false);
         $provider->complete(new CompleteRequest(
             model: 'anthropic.claude-sonnet-4-6',
             messages: [

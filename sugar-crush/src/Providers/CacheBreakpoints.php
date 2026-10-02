@@ -110,25 +110,28 @@ use SugarCraft\Crush\Usage;
  * SystemMessage rows from `messages` — a mark attached to an in-messages system
  * row is silently discarded on the string arm.
  *
- * WHAT THIS TYPE IS FOR TODAY (P10.S2). It ships WITHOUT a production caller
- * by orchestration adjudication — the exact P6.S1 Triggers precedent
- * (prompt_resume.md §3 item 11): per §1.10, shipping the class unwired is the
- * intended state of this step, not a leftover to tidy, and deleting or
- * stubbing it is not an available outcome. The consumer contract: the provider
- * body builder calls `apply()` on every step, immediately before serialising
- * `tools`/`system`/`messages` into an Anthropic-shaped body, once P10.S3's
- * kill switch (`SUGARCRUSH_DISABLE_PROMPT_CACHE`) and the licensing decision
- * on wiring prompt caching land. A successful return guarantees total marks
- * (`tools` + `messages`, ephemeral and preserved-automatic alike) at or below
- * self::MAX_BREAKPOINTS; an input already breaching the cap on foreign marks
- * throws rather than returning a doomed request. Until then nothing in `src/`
- * constructs it; its only callers are its own tests — the record §16.1 asks
- * for.
+ * WHERE IT IS WIRED (audit A15). Its one production caller is
+ * {@see VertexProvider}'s Anthropic arm, which calls `apply()` on every
+ * request body it builds - every step of an agentic turn - when the
+ * `promptCache` setting is on and the model offers caching. That caller
+ * closes the system-prompt hazard recorded above by always handing the system
+ * in as a leading block-form `role: system` turn and lifting it back into the
+ * top-level `system` field afterwards. {@see BedrockProvider} does not call
+ * this class: Converse spells a breakpoint as a separate `cachePoint` block,
+ * not a `cache_control` field, and places its own. A successful return
+ * guarantees total marks (`tools` + `messages`, ephemeral and
+ * preserved-automatic alike) at or below self::MAX_BREAKPOINTS; an input
+ * already breaching the cap on foreign marks throws rather than returning a
+ * doomed request (the caller turns that into an error response, never a
+ * request).
  *
  * THE KILL SWITCH (P10.S3). self::DISABLE_ENV names the presence flag and
  * {@see CacheBreakpoints::disabledFromEnvironment()} is its only reader,
  * static by design: consumers consult it when constructing, and apply() itself
- * stays environment-free (see DETERMINISM above). `new CacheBreakpoints(false)`
+ * stays environment-free (see DETERMINISM above). Its consumer is
+ * `ProviderFactory::promptCacheEnabled()`, which builds the vertex and bedrock
+ * providers with breakpoints off when it is set; a provider built that way
+ * never calls apply() at all. `new CacheBreakpoints(false)`
  * — what the switch reduces to — still runs every input-derived duty in
  * apply(): shape validation throws, the ephemeral wipe lands, and the F-1
  * over-cap breach on preserved foreign marks still fires, because that story
@@ -139,14 +142,12 @@ use SugarCraft\Crush\Usage;
  * off for every mechanism in the request".
  *
  * LIVE CHANNEL, NOT YET LIVE (P10.S3). {@see CacheBreakpoints::observeCacheHealth()}
- * has no production feeder at this tree: `CompleteResponse` carries no cache
- * fields — providers parse {@see Usage} from the wire, but the unary response
- * path routes only `tokensUsed` and `costUsd`, and Runtime rebuilds from
- * those. Widening `CompleteResponse` is the wiring/E17 step's job, and live
- * surfacing of the sub-minimum diagnostic ships with it. Until then the
- * method's contract is exercised by tests and by any consumer that already
- * holds a Usage carrying buckets of its own. No channel is invented here; the
- * ENVIRONMENT.md row for the kill switch says the same thing plainly.
+ * has no production feeder at this tree. The cache buckets it reads do reach
+ * {@see Usage} on every provider response now (`CompleteResponse::$usage`,
+ * E17), but the consumer that would hand each one in belongs in the turn
+ * loop, which the A15 wiring did not touch. Until then the method's contract
+ * is exercised by tests and by any consumer that already holds a Usage
+ * carrying buckets of its own. No channel is invented here.
  */
 final class CacheBreakpoints
 {

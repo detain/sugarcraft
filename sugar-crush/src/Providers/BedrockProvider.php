@@ -114,6 +114,82 @@ final readonly class BedrockProvider implements ProviderInterface
     ];
 
     /**
+     * Built-in USD-per-1K CACHE rates by normalised family => [read, write]
+     * (audit A15, the cache half): `cacheReadInputTokens` bills at the read
+     * rate, `cacheWriteInputTokens` at the write rate.
+     *
+     * Every row is Anthropic's published multiplier on the family's own
+     * {@see PRICE_TABLE} input rate - 0.1x for a read, 1.25x for a write at
+     * the default 5-minute TTL, which is the only TTL this class asks for
+     * (its cache points carry no `ttl`). The rows cover exactly the families
+     * {@see marksPromptCache()} sends cache points to; the same partner-price
+     * approximation as PRICE_TABLE applies. A family with no row bills its
+     * cache tokens at its own input rate ({@see cacheCostPer1kTokens()}).
+     *
+     * @var array<string, array{0: float, 1: float}>
+     */
+    private const CACHE_PRICE_TABLE = [
+        'anthropic.claude-fable-5-1' => [0.001, 0.0125],
+        'anthropic.claude-fable-5' => [0.001, 0.0125],
+        'anthropic.claude-opus-5-5' => [0.0004, 0.005],
+        'anthropic.claude-opus-5' => [0.0005, 0.00625],
+        'anthropic.claude-opus-4-8' => [0.0005, 0.00625],
+        'anthropic.claude-opus-4-7' => [0.0005, 0.00625],
+        'anthropic.claude-opus-4-6' => [0.0005, 0.00625],
+        'anthropic.claude-opus-4-5' => [0.0005, 0.00625],
+        'anthropic.claude-opus-4-1' => [0.0015, 0.01875],
+        'anthropic.claude-opus-4' => [0.0015, 0.01875],
+        'anthropic.claude-sonnet-5-5' => [0.0002, 0.0025],
+        'anthropic.claude-sonnet-5' => [0.0002, 0.0025],
+        'anthropic.claude-sonnet-4-6' => [0.0003, 0.00375],
+        'anthropic.claude-sonnet-4-5' => [0.0003, 0.00375],
+        'anthropic.claude-sonnet-4' => [0.0003, 0.00375],
+        'anthropic.claude-3-7-sonnet' => [0.0003, 0.00375],
+        'anthropic.claude-haiku-4-5' => [0.0001, 0.00125],
+        'anthropic.claude-3-5-haiku' => [0.00008, 0.001],
+    ];
+
+    /**
+     * Claude families Bedrock serves WITHOUT prompt caching. Converse answers
+     * a `cachePoint` sent to a model that does not support it with a
+     * ValidationException - the whole request fails, not just the cache - so
+     * the rule is "every Claude family except these", which keeps a Claude
+     * released after this list cached, while the retired ones Bedrock never
+     * enabled caching for stay unmarked. (Claude 3.5 Sonnet's v2 had caching
+     * only as a preview; its family cannot be told from v1, so both stay off.)
+     *
+     * @var list<string>
+     */
+    private const NO_PROMPT_CACHE_CLAUDE = [
+        'anthropic.claude',
+        'anthropic.claude-instant',
+        'anthropic.claude-3-haiku',
+        'anthropic.claude-3-sonnet',
+        'anthropic.claude-3-opus',
+        'anthropic.claude-3-5-sonnet',
+    ];
+
+    /**
+     * The non-Claude families Bedrock documents prompt caching for (Amazon
+     * Nova's text models; on Nova a cache point is accepted in `system` and
+     * `messages`, which are the only two places this class puts one).
+     *
+     * @var list<string>
+     */
+    private const PROMPT_CACHE_NOVA = [
+        'amazon.nova-micro',
+        'amazon.nova-lite',
+        'amazon.nova-pro',
+        'amazon.nova-premier',
+    ];
+
+    /**
+     * Converse's cache-point content block. The same block marks a cache
+     * boundary in `system` and in a message's `content`.
+     */
+    private const CACHE_POINT = ['cachePoint' => ['type' => 'default']];
+
+    /**
      * Context windows by normalised family id. Unknown answers 0 - the
      * "unknown" of {@see ProviderInterface::contextWindow()}, so
      * {@see \SugarCraft\Crush\Context\ContextWindow::resolve()} applies its
@@ -193,19 +269,31 @@ final readonly class BedrockProvider implements ProviderInterface
      *        Fed from config by {@see ProviderFactory::createBedrock()}: the
      *        provider block's own `modelPrices`, else the user-tier
      *        `modelPrices` setting (audit A15).
+     * @param bool $promptCache Audit A15: whether requests carry Converse
+     *        cache points - one closing the `system` block list and one
+     *        closing the last message - for a model that supports them
+     *        ({@see marksPromptCache()}). From the `promptCache` setting and
+     *        `SUGARCRUSH_DISABLE_PROMPT_CACHE`
+     *        ({@see ProviderFactory::createBedrock()}); on by default.
      */
     public function __construct(
         private BedrockRuntimeClient $client,
         private string $region = self::REGION_US,
         private string $defaultModel = self::DEFAULT_MODEL,
         private array $modelPrices = [],
+        private bool $promptCache = true,
     ) {}
 
     /**
      * @param array<string, array{input?: float|int, output?: float|int}> $modelPrices see {@see __construct()}
+     * @param bool $promptCache see {@see __construct()}
      */
-    public static function create(string $region = self::REGION_US, ?string $model = null, array $modelPrices = []): self
-    {
+    public static function create(
+        string $region = self::REGION_US,
+        ?string $model = null,
+        array $modelPrices = [],
+        bool $promptCache = true,
+    ): self {
         $region = self::resolveRegion($region);
 
         // Credentials are deliberately left to the SDK's default provider
@@ -224,7 +312,40 @@ final readonly class BedrockProvider implements ProviderInterface
             'http' => ['connect_timeout' => self::connectTimeoutSeconds()],
         ]);
 
-        return new self($client, $region, $model ?? self::DEFAULT_MODEL, $modelPrices);
+        return new self($client, $region, $model ?? self::DEFAULT_MODEL, $modelPrices, $promptCache);
+    }
+
+    /**
+     * Whether this provider was built to send cache points (the
+     * `promptCache` setting). A given request carries them only when its
+     * model supports them too - see {@see marksPromptCache()}.
+     */
+    public function promptCache(): bool
+    {
+        return $this->promptCache;
+    }
+
+    /**
+     * Does a request for `$model` carry Converse cache points? The setting
+     * must be on and the model's family must support prompt caching: an
+     * unsupported model answers a cache point with a ValidationException, so
+     * an id this class cannot place (an application-inference-profile ARN, a
+     * model newer than {@see PROMPT_CACHE_NOVA}) is sent without one.
+     */
+    public function marksPromptCache(string $model): bool
+    {
+        if (!$this->promptCache) {
+            return false;
+        }
+
+        $family = self::family($model);
+
+        if (in_array($family, self::PROMPT_CACHE_NOVA, true)) {
+            return true;
+        }
+
+        return str_starts_with($family, 'anthropic.claude')
+            && !in_array($family, self::NO_PROMPT_CACHE_CLAUDE, true);
     }
 
     public function name(): string
@@ -361,6 +482,42 @@ final readonly class BedrockProvider implements ProviderInterface
         return $rate >= 0.0 && is_finite($rate) ? $rate : null;
     }
 
+    /**
+     * USD per 1K CACHE tokens (audit A15, the cache half): `read` prices
+     * `cacheReadInputTokens`, `write` prices `cacheWriteInputTokens`. Null
+     * only when the rate it resolves to is unknown or fails validation.
+     *
+     * Same rule as {@see VertexProvider::cacheCostPer1kTokens()}: an operator
+     * entry (raw id, then family) is authoritative - its `cached` /
+     * `cacheWrite` rate when declared, else its own `input` rate - then the
+     * built-in {@see CACHE_PRICE_TABLE} row, then the family's input rate.
+     *
+     * @param 'read'|'write' $kind
+     */
+    public function cacheCostPer1kTokens(string $model, string $kind): ?float
+    {
+        $declaredKey = $kind === 'read' ? 'cached' : 'cacheWrite';
+
+        foreach ([$model, self::family($model)] as $key) {
+            if (!array_key_exists($key, $this->modelPrices)) {
+                continue;
+            }
+
+            $entry = $this->modelPrices[$key];
+
+            return is_array($entry) && array_key_exists($declaredKey, $entry)
+                ? $this->declaredRate($key, $declaredKey)
+                : $this->declaredRate($key, 'input');
+        }
+
+        $row = self::CACHE_PRICE_TABLE[self::family($model)] ?? null;
+        if ($row !== null) {
+            return $kind === 'read' ? $row[0] : $row[1];
+        }
+
+        return $this->costPer1kTokens($model, 'input');
+    }
+
     public function complete(CompleteRequest $request): CompleteResponse
     {
         $model = $this->modelId($request);
@@ -379,6 +536,8 @@ final readonly class BedrockProvider implements ProviderInterface
         if ($inference !== []) {
             $params['inferenceConfig'] = $inference;
         }
+
+        $params = $this->withCachePoints($params, $model);
 
         try {
             // Converse-shaped params (messages/system/inferenceConfig) require
@@ -433,6 +592,8 @@ final readonly class BedrockProvider implements ProviderInterface
             $params['system'] = $system;
         }
 
+        $params = $this->withCachePoints($params, $model);
+
         try {
             // ConverseStream emits an event stream of typed events; each text
             // token arrives as a contentBlockDelta event (not the legacy
@@ -467,6 +628,43 @@ final readonly class BedrockProvider implements ProviderInterface
     private function modelId(CompleteRequest $request): string
     {
         return $request->model !== '' ? $request->model : $this->defaultModel;
+    }
+
+    /**
+     * Adds Converse cache points (audit A15): one closing the `system` block
+     * list, so the system prompt is cached, and one closing the last
+     * message, so the conversation so far is the prefix the next request
+     * reads back. Both request paths call this on the params they are about
+     * to send, so they cannot disagree.
+     *
+     * No tools cache point: this class sends no `toolConfig` (it reports no
+     * function calling), so there is no tool list to close. With tools absent
+     * the system point already ends the whole static prefix.
+     *
+     * Two points of Converse's four, so nothing here can cross the cap. A
+     * prefix shorter than the model's minimum cacheable length is simply not
+     * cached - the request still succeeds - which is why the points need no
+     * size check.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function withCachePoints(array $params, string $model): array
+    {
+        if (!$this->marksPromptCache($model)) {
+            return $params;
+        }
+
+        if (($params['system'] ?? []) !== []) {
+            $params['system'][] = self::CACHE_POINT;
+        }
+
+        $last = array_key_last($params['messages']);
+        if ($last !== null) {
+            $params['messages'][$last]['content'][] = self::CACHE_POINT;
+        }
+
+        return $params;
     }
 
     /**
@@ -724,10 +922,14 @@ final readonly class BedrockProvider implements ProviderInterface
     {
         $inputTokens = self::usageInt($usage['inputTokens'] ?? null) ?? 0;
         $outputTokens = self::usageInt($usage['outputTokens'] ?? null) ?? 0;
+        $cacheRead = self::usageInt($usage['cacheReadInputTokens'] ?? null);
+        $cacheWrite = self::usageInt($usage['cacheWriteInputTokens'] ?? null);
 
         // Audit A15: an unpriced model bills the 0.0 lower bound with its
-        // name carried, never an invented rate and never a silent zero.
-        $cost = $this->cost($model, $inputTokens, $outputTokens);
+        // name carried, never an invented rate and never a silent zero. The
+        // cache buckets are priced at their own rates - they are disjoint
+        // from `inputTokens` on this wire (see the convention note above).
+        $cost = $this->cost($model, $inputTokens, $outputTokens, $cacheRead ?? 0, $cacheWrite ?? 0);
 
         return Usage::new(
             // The exact expression this replaces: the sum of the two sides
@@ -736,8 +938,8 @@ final readonly class BedrockProvider implements ProviderInterface
             $cost ?? 0.0,
             self::usageInt($usage['inputTokens'] ?? null),
             self::usageInt($usage['outputTokens'] ?? null),
-            self::usageInt($usage['cacheReadInputTokens'] ?? null),
-            self::usageInt($usage['cacheWriteInputTokens'] ?? null),
+            $cacheRead,
+            $cacheWrite,
             unpricedModel: $cost === null ? $model : null,
         );
     }
@@ -817,19 +1019,33 @@ final readonly class BedrockProvider implements ProviderInterface
      * ConverseStream event before `metadata`) never turns unpriced over
      * tokens it never carried. Null rather than 0.0 so the caller can set
      * {@see Usage::$unpricedModel}; the accounting stays at the 0.0 lower
-     * bound. Cache read/write tokens are not priced here: this class sends
-     * no cache points, so those buckets are absent or zero today.
+     * bound. Cache reads and writes are priced at their own rates
+     * ({@see cacheCostPer1kTokens()}; audit A15, the cache half) - they used
+     * to be left out, harmless while this class sent no cache points and an
+     * under-count once it does.
      */
-    private function cost(string $model, int $inputTokens, int $outputTokens): ?float
-    {
+    private function cost(
+        string $model,
+        int $inputTokens,
+        int $outputTokens,
+        int $cacheReadTokens = 0,
+        int $cacheWriteTokens = 0,
+    ): ?float {
         $total = 0.0;
 
-        foreach (['input' => $inputTokens, 'output' => $outputTokens] as $direction => $tokens) {
+        $sides = [
+            [$inputTokens, fn (): ?float => $this->costPer1kTokens($model, 'input')],
+            [$outputTokens, fn (): ?float => $this->costPer1kTokens($model, 'output')],
+            [$cacheReadTokens, fn (): ?float => $this->cacheCostPer1kTokens($model, 'read')],
+            [$cacheWriteTokens, fn (): ?float => $this->cacheCostPer1kTokens($model, 'write')],
+        ];
+
+        foreach ($sides as [$tokens, $rateOf]) {
             if ($tokens <= 0) {
                 continue;
             }
 
-            $rate = $this->costPer1kTokens($model, $direction);
+            $rate = $rateOf();
             if ($rate === null) {
                 return null;
             }

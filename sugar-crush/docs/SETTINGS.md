@@ -190,9 +190,10 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `contextWindow` | `ProviderFactory::createOpenAI()` → `OpenAIProvider::contextWindow()` | **no** |
 | `extraBody` | `ProviderFactory::createCustom()` → `CustomProvider` | **no** |
 | `thinkingBudget` | `ProviderFactory::createVertex()` → `VertexProvider` | **no** |
+| `promptCache` | `ProviderFactory::createVertex()`, `createBedrock()` → `promptCacheEnabled()` | **no** |
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these twenty, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these twenty-one, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. A key nothing reads is worse than
@@ -236,7 +237,14 @@ be the raw model id or its normalised family — `claude-sonnet-4-6` covers
 `us.anthropic.claude-sonnet-4-6-v1:0` too. An optional `"cached"` rate prices
 cache-hit prompt tokens (`prompt_tokens_details.cached_tokens`) on the OpenAI
 wire; an entry without one bills them at its own `input` rate, because a named
-model's entry replaces the built-in row and its cached discount together. Unset is not zero
+model's entry replaces the built-in row and its cached discount together. On
+Vertex and Bedrock the same `"cached"` rate prices cache reads
+(`cache_read_input_tokens`, `cacheReadInputTokens`, Gemini's
+`cachedContentTokenCount`) and a `"cacheWrite"` rate prices cache writes
+(`cache_creation_input_tokens`, `cacheWriteInputTokens`); either one left out
+bills at the entry's own `input` rate, for the same reason. Without an entry,
+the built-in tables carry the published cache rates (Claude: reads at 0.1× and
+writes at 1.25× the input rate; Gemini 2.5: reads at 0.1×). Unset is not zero
 either: a model with no rate anywhere bills $0.00 as a disclosed **lower
 bound** — the turn earns a system notice naming it, and `/budget` marks the
 session total as under-counted — rather than the fabricated cent-per-thousand
@@ -302,10 +310,10 @@ repository read every credential in your shell back through one `env` call.
 See [`HOOKS.md`](HOOKS.md#environment-handed-to-the-script) for what a hook
 sees.
 
-Three keys shape a provider rather than a session, and all three are read
+Four keys shape a provider rather than a session, and all four are read
 once, when the provider is built. A provider's own block in
 `.sugar-crush/config.dev.json` may carry the same key, and there it wins,
-because it is the narrower statement. All three are user-tier only, for the
+because it is the narrower statement. All four are user-tier only, for the
 same money reason as `maxOutputTokens`.
 
 - **`contextWindow`** sizes the `openai` provider's context window, the number
@@ -335,6 +343,22 @@ same money reason as `maxOutputTokens`.
   could end at the ceiling with almost no answer. With no `maxOutputTokens` the
   model's own maximum applies (65,535 on Gemini 2.5). Neither change has been
   checked against a live Gemini endpoint yet.
+- **`promptCache`** turns prompt-cache breakpoints on the `vertex` and
+  `bedrock` providers on or off (audit A15). It is on unless set to `false`.
+  On Vertex's Claude models the request marks `cache_control` on the system
+  prompt, the last tool and the end of the conversation, re-derived on every
+  step of a turn and never more than the API's limit of four. On Bedrock,
+  Converse `cachePoint` blocks close the system prompt and the conversation
+  (no tools are sent there). Models that never offered caching (Claude 3
+  Sonnet on Vertex, the Claude 3 family and 3.5 Sonnet on Bedrock, and any
+  Bedrock model outside the Claude and Amazon Nova text families) are sent no
+  marks, because Bedrock fails the whole request on an unsupported one. Gemini
+  needs none: Gemini 2.5 caches on its own, and its cached tokens are priced
+  either way. `SUGARCRUSH_DISABLE_PROMPT_CACHE` turns the marks off whatever
+  this key says. A project may not set it, because caching off makes every
+  request bill its whole prompt at the full input rate. Reads and writes are
+  priced at the cache rates described under `modelPrices` above. None of this
+  has been checked against a live Vertex or Bedrock endpoint.
 
 Where a row names two methods, the first is the public entry point and the
 second is the method that does the read — cited because that is the one to
@@ -816,9 +840,9 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   all four `trustedProject*` grants.
 - [`MEMORY.md`](MEMORY.md) — the rest of the `~/.sugar-crush/` layout.
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
-  this stack. They do not cover it: only five of the twenty layered keys have an
+  this stack. They do not cover it: only six of the twenty-one layered keys have an
   env override (`provider`, `titleModel`, `summaryModel`, `parallelToolCalls`,
-  `parallelToolDeadlineSeconds`). `theme`, `instructions`, `disabledSkills`,
+  `parallelToolDeadlineSeconds`, `promptCache`). `theme`, `instructions`, `disabledSkills`,
   `disabledRules`, `allowedTools`, `disabledTools`, `maxOutputTokens`,
   `modelPrices`, `statusLine`, `layout`, `maxToolSteps`, `secretEnvAllowlist`,
   `contextWindow`, `extraBody` and `thinkingBudget` have none.
