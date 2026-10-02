@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Providers\ReportsServedModel;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer;
 use SugarCraft\Sprinkles\Bar\Segment;
@@ -408,6 +409,23 @@ final class RendererTest extends TestCase
 
         $this->assertSame($legacy, self::statusBar($app));
         $this->assertStringNotContainsString('ignored', self::statusBar($app));
+    }
+
+    /**
+     * Audit 15b-35: a provider that talks to a model other than its configured
+     * id — SGLang's default id adopting the served model — is labelled with
+     * the model requests actually go to, not the static default.
+     */
+    public function testStatusBarNamesTheServedModelOverTheConfiguredId(): void
+    {
+        $served = $this->createMockForIntersectionOfInterfaces([ProviderInterface::class, ReportsServedModel::class]);
+        $served->method('name')->willReturn('sglang');
+        $served->method('servedModel')->willReturn('Qwen/Qwen3.8-Served');
+
+        $bar = self::statusBar(App::new($served, 'static-default-id'));
+
+        $this->assertStringContainsString('Qwen/Qwen3.8-Served', $bar);
+        $this->assertStringNotContainsString('static-default-id', $bar);
     }
 
     /**

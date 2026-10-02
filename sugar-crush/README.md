@@ -1185,7 +1185,9 @@ configured model to contradict. Only when the server cannot be asked does it
 fall back to `Qwen/Qwen3.8-Flash-Next-FP8`, the model skynet2 serves as of
 2026-10-02 (it served `deepseek-ai/DeepSeek-V4-Flash-0731` before that, and the
 default still named it — so every default launch asked for a model the server
-no longer had). A model you do name is sent as named.
+no longer had). A model you do name is sent as named. Once the served name is
+known — read by the TUI process itself, or reported back by the first turn —
+the Settings pane's `Model` row shows it instead of the fallback id.
 
 The DeepSeek-V4 family also gets `temperature = 1.0` plus `top_p = 0.95` when
 the request offers tools / `1.0` when it does not — the model card's own figures

@@ -13,6 +13,8 @@ use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Providers\ReportsServedModel;
 use SugarCraft\Crush\Renderer as LiveRenderer;
 use SugarCraft\Crush\Tui\Components\ChatPane;
 use SugarCraft\Crush\Tui\Components\InputPane;
@@ -1421,6 +1423,29 @@ final class Renderer
     }
 
     /**
+     * The model id the TUI labels show — this status bar's model segment and
+     * the Settings pane's `Model` row — preferring the model requests ACTUALLY
+     * go to over the configured id the App was built with (audit 15b-35).
+     *
+     * An SGLang provider built on its default id adopts the server's served
+     * model (audit A26), so {@see App::$model} — the static default — named a
+     * model nothing was sent to. The hosted Chat's backend is asked first,
+     * because it is the instance whose provider does the talking: it learns
+     * the served name from its own discovery or from the forked turn child's
+     * result frame ({@see EngineBackend::servedModel()}). The App's own
+     * provider is the fallback for a shell with no Chat. Neither ask performs
+     * I/O, so this is safe on every frame.
+     */
+    public static function modelLabel(App $a): string
+    {
+        $backend = $a->chat?->backend();
+        $served = $backend instanceof EngineBackend ? $backend->servedModel() : null;
+        $served ??= $a->provider instanceof ReportsServedModel ? $a->provider->servedModel() : null;
+
+        return $served ?? $a->model;
+    }
+
+    /**
      * The live bottom status bar.
      *
      * Delegates segment joining, the `' | '` separator and the leading-space
@@ -1445,7 +1470,7 @@ final class Renderer
         $theme = $a->theme();
         $segments = [
             Segment::of($a->provider->name(), Style::new()->foreground($theme->shellSuccess)),
-            Segment::of($a->model, Style::new()->foreground($theme->shellWarning)),
+            Segment::of(self::modelLabel($a), Style::new()->foreground($theme->shellWarning)),
             Segment::of('[Tab] Switch Pane'),
         ];
 

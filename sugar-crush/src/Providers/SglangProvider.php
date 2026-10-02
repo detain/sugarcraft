@@ -30,7 +30,7 @@ use SugarCraft\Crush\Providers\Concerns\ToolSchema;
 use SugarCraft\Crush\Usage;
 use SugarCraft\Crush\Util\TokenEstimate;
 
-final readonly class SglangProvider implements ProviderInterface
+final readonly class SglangProvider implements ProviderInterface, ReportsServedModel
 {
     use ToolSchema;
 
@@ -94,7 +94,9 @@ final readonly class SglangProvider implements ProviderInterface
      * Audit 15a A18: the once-per-provider memo for {@see serverInfo()} -
      * key `loaded` once the loader has run (success OR failure, so a dead
      * server is asked once, not on every frame), key `info` holding the
-     * {@see SglangServerInfo} or null. An object behind a once-assigned
+     * {@see SglangServerInfo} or null, and key `reportedServedModel` holding
+     * a served name a forked turn child reported ({@see noteServedModel()},
+     * audit 15b-35). An object behind a once-assigned
      * property for the same `final readonly class` reason as
      * {@see $truncationRiskWarned}.
      *
@@ -818,6 +820,49 @@ final readonly class SglangProvider implements ProviderInterface
     private function adoptsServedModel(): bool
     {
         return $this->serverInfoLoader !== null && $this->model === self::DEFAULT_MODEL;
+    }
+
+    /**
+     * Audit 15b-35: the served model this provider adopts, for the TUI's
+     * labels - read from what {@see serverInfo()} has ALREADY memoised (the
+     * parent's first frame normally loads it, via {@see contextWindow()}),
+     * else from what a forked turn child reported ({@see noteServedModel()}).
+     * Never runs the loader: see {@see ReportsServedModel::servedModel()}.
+     *
+     * A name discovered here wins over a reported one, because it is this
+     * process's own reading of the server; the reported one only fills the
+     * gap a parent that never (or unsuccessfully) asked would otherwise show.
+     */
+    public function servedModel(): ?string
+    {
+        if (!$this->adoptsServedModel()) {
+            return null;
+        }
+
+        $info = $this->serverInfoMemo['info'] ?? null;
+        $discovered = $info instanceof SglangServerInfo ? $info->servedModelName : null;
+        if (is_string($discovered) && $discovered !== '') {
+            return $discovered;
+        }
+
+        $reported = $this->serverInfoMemo['reportedServedModel'] ?? null;
+
+        return is_string($reported) && $reported !== '' ? $reported : null;
+    }
+
+    /**
+     * Audit 15b-35: remember the served name a forked turn child discovered,
+     * so the parent's labels can show it. Kept apart from the `info` memo on
+     * purpose: it is a label fact, and it neither marks discovery as done nor
+     * changes what {@see addressedToServedModel()} sends.
+     */
+    public function noteServedModel(string $servedModel): void
+    {
+        if ($servedModel === '' || !$this->adoptsServedModel()) {
+            return;
+        }
+
+        $this->serverInfoMemo['reportedServedModel'] = $servedModel;
     }
 
     /**

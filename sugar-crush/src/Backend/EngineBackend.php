@@ -37,6 +37,7 @@ use SugarCraft\Crush\Usage;
 use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Providers\ReportsServedModel;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Support\ProcessContainment;
@@ -541,6 +542,22 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     public function withTools(array $tools): self
     {
         return $this->mutate(['tools' => $tools]);
+    }
+
+    /**
+     * The model this backend's requests actually go to, when its provider
+     * talks to one other than {@see $model} and has learned which (audit
+     * 15b-35) - the SGLang server's served model on a default-id launch.
+     * Null otherwise, and for any provider that cannot say.
+     *
+     * The parent learns it in one of two ways: the provider's own discovery
+     * (the first frame's {@see contextWindow()} normally runs it in this
+     * process), or the forked turn child reporting it on its result frame
+     * ({@see settleFromResultFrame()}). Never performs I/O.
+     */
+    public function servedModel(): ?string
+    {
+        return $this->provider instanceof ReportsServedModel ? $this->provider->servedModel() : null;
     }
 
     /**
@@ -2319,6 +2336,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         } catch (\Throwable $e) {
             $payload = ['kind' => 'result', 'ok' => false, 'error' => $e->getMessage()];
         }
+        // Audit 15b-35: the served model this child's provider discovered
+        // while it ran the turn, on success AND failure (a failed turn still
+        // asked the server who it serves). Plain ?string on the frame rule;
+        // the parent hands it to its own provider, whose copy of the memo
+        // never saw this child's discovery.
+        $payload['servedModel'] = $this->servedModel();
 
         self::writeFrame($childSocket, $payload);
         fclose($childSocket);
@@ -2455,6 +2478,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             $deferred->reject(new \RuntimeException('Provider worker process exited without a result'));
 
             return;
+        }
+
+        // Audit 15b-35: learned before the verdict, so a failed turn's
+        // discovery still reaches the labels. The provider object is shared
+        // by every clone of this backend, the hosted Chat's included.
+        $servedModel = $data['servedModel'] ?? null;
+        if (is_string($servedModel) && $this->provider instanceof ReportsServedModel) {
+            $this->provider->noteServedModel($servedModel);
         }
 
         if (($data['ok'] ?? false) !== true) {

@@ -266,4 +266,66 @@ final class SglangProviderServedModelTest extends TestCase
 
         self::assertInstanceOf(OpenAiArrayToolCallParser::class, $parser);
     }
+
+    // -------------------------------------------------------------------------
+    // Audit 15b-35: the served name, for the TUI's labels
+    // -------------------------------------------------------------------------
+
+    /** A label renders every frame, so asking must never run the loader. */
+    public function testServedModelNeverProbesTheServer(): void
+    {
+        $calls = 0;
+        $provider = $this->provider(SglangProvider::DEFAULT_MODEL, static function () use (&$calls): SglangServerInfo {
+            ++$calls;
+
+            return self::servingDeepSeek();
+        });
+
+        self::assertNull($provider->servedModel(), 'nothing learned yet');
+        self::assertSame(0, $calls);
+    }
+
+    public function testServedModelIsTheAdoptedNameOnceDiscovered(): void
+    {
+        $provider = $this->provider(SglangProvider::DEFAULT_MODEL, static fn (): SglangServerInfo => self::servingDeepSeek());
+
+        self::withErrorLogDiscarded(static fn () => $provider->contextWindow(), 'sc_15b35_');
+
+        self::assertSame(self::DEEPSEEK_V4_5_FLASH, $provider->servedModel());
+    }
+
+    /** A named model is sent as named, so there is no other model to report. */
+    public function testANamedModelReportsNoServedModel(): void
+    {
+        $provider = $this->provider('Qwen/Qwen3.8-Flash-Next', static fn (): SglangServerInfo => self::servingDeepSeek());
+
+        self::withErrorLogDiscarded(static fn () => $provider->contextWindow(), 'sc_15b35_');
+        $provider->noteServedModel(self::DEEPSEEK_V4_5_FLASH);
+
+        self::assertNull($provider->servedModel());
+    }
+
+    /** The forked child's report fills the gap the parent never asked about. */
+    public function testAReportedNameFillsTheGapAndDiscoveryWins(): void
+    {
+        $provider = $this->provider(SglangProvider::DEFAULT_MODEL, static fn (): SglangServerInfo => self::skynet2());
+
+        $provider->noteServedModel('');
+        self::assertNull($provider->servedModel(), 'an empty report is not a name');
+
+        $provider->noteServedModel(self::DEEPSEEK_V4_5_FLASH);
+        self::assertSame(self::DEEPSEEK_V4_5_FLASH, $provider->servedModel());
+
+        self::withErrorLogDiscarded(static fn () => $provider->contextWindow(), 'sc_15b35_');
+        self::assertSame(self::skynet2()->servedModelName, $provider->servedModel(), "this process's own reading of the server wins");
+    }
+
+    /** No discovery armed: the provider adopts nothing, whatever it is told. */
+    public function testAProviderWithoutDiscoveryAdoptsNothing(): void
+    {
+        $provider = $this->provider(SglangProvider::DEFAULT_MODEL);
+        $provider->noteServedModel(self::DEEPSEEK_V4_5_FLASH);
+
+        self::assertNull($provider->servedModel());
+    }
 }

@@ -83,7 +83,9 @@ final class SettingsPane
 
         return [
             ['Provider', $a->provider->name()],
-            ['Model', $a->model],
+            // The served model when the provider talks to one other than
+            // the configured id (audit 15b-35); see Renderer::modelLabel().
+            ['Model', \SugarCraft\Crush\Tui\Renderer::modelLabel($a)],
             ['Theme', $chat?->theme()->name ?? self::UNKNOWN],
             ['Root', $root === false ? self::UNKNOWN : $root],
             ['Session', $a->sessionId ?? $chat?->currentSessionId() ?? self::UNKNOWN],

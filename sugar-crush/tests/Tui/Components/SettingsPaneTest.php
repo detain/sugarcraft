@@ -9,7 +9,9 @@ use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Providers\ReportsServedModel;
 use SugarCraft\Crush\Tui\Components\SettingsPane;
 use SugarCraft\Crush\Tui\Components\SkillsPane;
 use SugarCraft\Crush\Tui\Pane;
@@ -72,6 +74,29 @@ final class SettingsPaneTest extends TestCase
 
         $this->assertSame('sglang', $rows['Provider']);
         $this->assertSame('MiniMax-M2.7', $rows['Model']);
+    }
+
+    /**
+     * Audit 15b-35: the hosted Chat's backend is the instance whose provider
+     * talks to the server, and the one a forked turn reports the served model
+     * to, so its answer is the one the Model row shows.
+     */
+    public function testTheModelRowShowsTheServedModelTheHostedBackendLearned(): void
+    {
+        $served = $this->createMockForIntersectionOfInterfaces([ProviderInterface::class, ReportsServedModel::class]);
+        $served->method('servedModel')->willReturn('Qwen/Qwen3.8-Served');
+        $chat = (new Chat())->withBackend(EngineBackend::new($served, 'static-default-id'));
+
+        $this->assertSame('Qwen/Qwen3.8-Served', $this->map($this->app()->withChat($chat))['Model']);
+    }
+
+    public function testTheModelRowKeepsTheConfiguredIdWhenNothingWasServedElsewhere(): void
+    {
+        $quiet = $this->createMockForIntersectionOfInterfaces([ProviderInterface::class, ReportsServedModel::class]);
+        $quiet->method('servedModel')->willReturn(null);
+        $chat = (new Chat())->withBackend(EngineBackend::new($quiet, 'static-default-id'));
+
+        $this->assertSame('MiniMax-M2.7', $this->map($this->app()->withChat($chat))['Model']);
     }
 
     public function testRootFallsBackToTheProcessWorkingDirectoryForAnUnrootedApp(): void
