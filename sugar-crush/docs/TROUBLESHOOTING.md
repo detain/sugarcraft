@@ -134,10 +134,11 @@ Four answers, matching `Bootstrap::mcpConfigDecision()`:
   server failed to start. `mcp list` cannot tell you that: it contains no
   `proc_open()` by design, so `enabled` reflects the config and not liveness.
 
-If an `error_log` line says the config **could not be fully started**, one entry
-has an unknown `type`. That throw is ordering-dependent: servers listed *before*
-the bad entry are up, servers listed *after* it were never reached. Move or fix
-the bad entry.
+If an `error_log` line says the config **could not be fully started**, at least
+one entry could not be built (an unknown `type`, such as `sse`, or a malformed
+entry). It does not matter where that entry sits in the file: every entry is
+attempted, and the line names each one that could not be built. Every other
+server is up. Fix or remove the named entries; moving them changes nothing.
 
 Bridged tool names are `mcp__<server>__<tool>`. Under `plan` mode every `mcp__*`
 name is denied as a write tool, which is the one mode where a bridge and `Bash`
