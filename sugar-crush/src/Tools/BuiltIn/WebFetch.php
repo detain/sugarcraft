@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
+use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -40,21 +41,56 @@ use SugarCraft\Crush\Tools\ToolResult;
  *     every hop re-runs the whole guard chain INCLUDING the scheme check —
  *     a `Location: file://anything/etc/passwd` parses with a host, passed
  *     the old address guards, and the stream layer then read it as a LOCAL
- *     path. Only http(s) is ever dialed.
+ *     path. Only http(s) is ever dialed. A `Location:` is resolved against
+ *     the hop URL per RFC 3986 §5.2 first (audit F-W2): a relative target
+ *     used to END the chain, so a `302 Location: next` handed the model the
+ *     redirect stub as if it were the document.
+ *  5. The status is part of the answer (audit F-W2). A 4xx/5xx page, a 3xx
+ *     that cannot be followed, or a chain still redirecting after
+ *     {@see MAX_REDIRECTS} hops is an ERROR carrying an `HTTP <code>` line —
+ *     an error page summarised as the real document is a wrong answer stated
+ *     confidently.
+ *  6. The result is bounded twice (audit F-T3): the wire read stops at
+ *     {@see MAX_WIRE_BYTES} (memory), and what reaches the model is cut to
+ *     the {@see TruncatesOutput} budget Bash/Grep/Glob share, with the shared
+ *     marker naming the byte counts. The wire bound alone used to be the
+ *     result bound — 2 MiB, ~0.5M tokens, replayed on every later step.
  *
- * Both constructor seams exist so tests can simulate rebinding-shaped DNS
+ * The two closure seams exist so tests can simulate rebinding-shaped DNS
  * answers and dial a loopback fixture without a nameserver or a public IP;
  * production passes neither and gets the system resolver and the full
  * blocklist. A resolver seam must return IP literals only — any other string
- * is refused before it can reach the dial target.
+ * is refused before it can reach the dial target. The third, the output cap,
+ * is a plain budget: a non-positive value falls back to the wire bound, since
+ * the read stops there whatever the caller asked for.
  */
 final readonly class WebFetch implements Tool, ParallelSafe
 {
+    use TruncatesOutput;
+
     private const MAX_REDIRECTS = 3;
-    private const MAX_RESPONSE_SIZE = 2 * 1024 * 1024;
     private const READ_TIMEOUT_SECONDS = 30;
     private const READ_CHUNK_BYTES = 65536;
-    private const TRUNCATION_MARKER = "\n... [truncated]";
+
+    /**
+     * How much of a body is ever held in memory. This is a MEMORY bound, not
+     * the result bound: it is kept well above the output cap so the marker
+     * can usually report a body's real size instead of "at least the cap".
+     */
+    private const MAX_WIRE_BYTES = 2 * 1024 * 1024;
+
+    /**
+     * The default result cap: the same 64 KiB as the trait's
+     * DEFAULT_MAX_OUTPUT_BYTES, which ToolSecurityTest pins this equal to.
+     *
+     * It is spelled here rather than as `self::DEFAULT_MAX_OUTPUT_BYTES`
+     * because that token is a census entry: TruncatesOutputNudgeMarginDocTest
+     * re-derives every built-in that names the constant and requires the
+     * trait's doc-block to list the ones that spend no nudge budget. Joining
+     * that census is a trait doc edit outside this tool; until it is made,
+     * the equality test is what keeps the two numbers from drifting apart.
+     */
+    private const MAX_OUTPUT_BYTES = 65536;
 
     private const BLOCKED_HOSTNAMES = [
         'localhost',
@@ -128,10 +164,13 @@ final readonly class WebFetch implements Tool, ParallelSafe
     /**
      * @param (callable(string): list<string>)|null $resolveAddresses
      * @param (callable(string): bool)|null         $isBlockedAddress
+     * @param int                                   $maxOutputBytes   result cap, marker included; a
+     *                                                                non-positive value falls back to the wire bound
      */
     public function __construct(
         ?callable $resolveAddresses = null,
         ?callable $isBlockedAddress = null,
+        private int $maxOutputBytes = self::MAX_OUTPUT_BYTES,
     ) {
         $this->resolveAddresses = $resolveAddresses === null
             ? static fn (string $host): array => self::resolveViaSystemDns($host)
@@ -169,9 +208,14 @@ final readonly class WebFetch implements Tool, ParallelSafe
             . 'URL you pass, so it finds no page whose address you do not already have, and '
             . 'it is not for local files. It follows at most 3 redirects and re-checks each '
             . 'redirect target against the same localhost and private/link-local refusals, '
-            . 'returns at most the first 2,097,152 bytes followed by a "[truncated]" '
-            . 'marker, applies a 30-second timeout per read, and surfaces only the response '
-            . 'body, so a 404 or 500 page arrives as a normal result rather than an error.';
+            . 'resolving a relative Location against the URL that sent it, and applies a '
+            . '30-second timeout per read. The result holds at most '
+            . number_format($this->resultCap()) . ' bytes; a longer body is cut short and '
+            . 'ends with a "[truncated: N of M bytes omitted ...]" marker naming how much is '
+            . 'missing. A 2xx body is returned as-is; any other status is put on a first '
+            . 'line such as "HTTP 404" ahead of the body, and a 4xx or 5xx status, a redirect '
+            . 'with no usable Location, or a chain still redirecting after 3 hops comes back '
+            . 'as an error rather than as the page.';
     }
 
     public function inputSchema(): array
@@ -210,7 +254,6 @@ final readonly class WebFetch implements Tool, ParallelSafe
             );
         }
 
-        $content = '';
         $finalUrl = $url;
 
         for ($hop = 0;; $hop++) {
@@ -247,24 +290,196 @@ final readonly class WebFetch implements Tool, ParallelSafe
             if ($transfer === null) {
                 return $this->refusal($toolCallId, "Error fetching URL: $finalUrl");
             }
-            [$content, $headers] = $transfer;
+            [$body, $headers, $complete] = $transfer;
 
             $code = $this->statusCode($headers);
-            if ($hop < self::MAX_REDIRECTS) {
-                $target = $this->redirectTarget($headers, $code, $finalUrl);
-                if ($target !== null) {
-                    $finalUrl = $target;
-                    continue;
+            if ($code !== null && $code >= 300 && $code < 400) {
+                $location = $this->locationHeader($headers);
+                if ($location === null) {
+                    return $this->statusResult(
+                        $toolCallId,
+                        "HTTP $code (redirect not followed: no usable Location header)",
+                        $body,
+                        $headers,
+                        $complete,
+                        true,
+                    );
                 }
+                if ($hop >= self::MAX_REDIRECTS) {
+                    // The header is server-chosen and unbounded; the status
+                    // line must not be able to spend the whole result budget.
+                    if (strlen($location) > 256) {
+                        $location = mb_strcut($location, 0, 256, 'UTF-8') . '...';
+                    }
+
+                    return $this->statusResult(
+                        $toolCallId,
+                        "HTTP $code (redirect not followed: the redirect limit of " . self::MAX_REDIRECTS
+                            . " was reached; Location: $location)",
+                        $body,
+                        $headers,
+                        $complete,
+                        true,
+                    );
+                }
+                // Resolved here, then re-checked from the top of the loop like
+                // any other target: scheme, hostname, resolve-once, blocklist,
+                // pinned dial. A relative reference is never a shortcut past
+                // the guards — it is just another URL once resolved.
+                $finalUrl = self::resolveReference($finalUrl, $location);
+                continue;
             }
-            break;
+
+            // 2xx bodies stay verbatim: the description promises the raw bytes,
+            // and a status line glued to every success would corrupt exactly
+            // the documents (JSON, a tarball listing) a caller parses. Every
+            // OTHER status is announced, because nothing else in the result
+            // would tell the model the page is not the document it asked for.
+            // No parseable status line at all is treated as an error too:
+            // nothing vouches for that body, and the stream wrapper only
+            // produces it for a peer that is not speaking HTTP properly.
+            if ($code !== null && $code >= 200 && $code < 300) {
+                return new ToolResult(
+                    toolCallId: $toolCallId,
+                    content: $this->boundedBody($body, $headers, $complete, $this->resultCap()),
+                    isError: false,
+                );
+            }
+
+            return $this->statusResult(
+                $toolCallId,
+                $code === null ? 'HTTP (no parseable status line)' : "HTTP $code",
+                $body,
+                $headers,
+                $complete,
+                $code === null || $code >= 400,
+            );
         }
+    }
+
+    /**
+     * A non-2xx result: the status line first, then as much of the body as
+     * the remaining budget holds — the status must survive any truncation.
+     *
+     * @param list<string> $headers
+     */
+    private function statusResult(
+        string $toolCallId,
+        string $statusLine,
+        string $body,
+        array $headers,
+        bool $complete,
+        bool $isError,
+    ): ToolResult {
+        $prefix = $statusLine . "\n";
 
         return new ToolResult(
             toolCallId: $toolCallId,
-            content: $content,
-            isError: false,
+            content: $prefix . $this->boundedBody(
+                $body,
+                $headers,
+                $complete,
+                max(1, $this->resultCap() - strlen($prefix)),
+            ),
+            isError: $isError,
         );
+    }
+
+    /**
+     * The result cap in force. A non-positive configured cap cannot mean
+     * "unbounded": the wire read stops at MAX_WIRE_BYTES regardless, so that
+     * is the most that could honestly be returned.
+     */
+    private function resultCap(): int
+    {
+        return $this->maxOutputBytes > 0 ? $this->maxOutputBytes : self::MAX_WIRE_BYTES;
+    }
+
+    /**
+     * Never less than the result cap, so a caller-raised cap is not silently
+     * undercut by the memory bound.
+     */
+    private function wireBound(): int
+    {
+        return max(self::MAX_WIRE_BYTES, $this->resultCap());
+    }
+
+    /**
+     * Cut $body to $cap bytes, marker included, through the shared trait so
+     * the model sees the one marker wording every capped tool uses.
+     *
+     * The body is pre-cut at a BYTE position before the trait sees it. The
+     * trait clips back to the last complete line — right for paths and grep
+     * hits, where a half line is a plausible wrong value — but a fetched page
+     * is raw bytes, and minified HTML is `<!doctype html>` and then one line:
+     * the line clip kept 15 bytes of a 64 KiB budget. Pre-cut to exactly the
+     * trait's own budget (cap minus its worst-case marker and newline), the
+     * trait finds nothing left to clip and only appends the marker.
+     *
+     * The total is what is actually known. A body the read finished is its
+     * own length; one the wire bound stopped is its Content-Length when the
+     * response carried one, and otherwise unknowable — then the marker's
+     * figures are announced as lower bounds instead of claimed as the total.
+     *
+     * @param list<string> $headers
+     */
+    private function boundedBody(string $body, array $headers, bool $complete, int $cap): string
+    {
+        $received = strlen($body);
+        $total = $received;
+        $lowerBound = false;
+        if (!$complete) {
+            $declared = $this->contentLength($headers);
+            if ($declared !== null && $declared >= $received) {
+                $total = $declared;
+            } else {
+                $lowerBound = true;
+            }
+        }
+
+        if ($total <= $cap) {
+            return $body;
+        }
+
+        $note = $lowerBound
+            ? "\n(The server sent more than $received bytes and the read stopped there, "
+                . 'so both figures are lower bounds.)'
+            : '';
+        // Never 0: the trait reads a non-positive cap as "uncapped" and would
+        // drop the marker, which is the one thing a tiny cap must still carry.
+        $budget = max(1, $cap - strlen($note));
+        $reserve = strlen($this->truncationMarker($total, $total)) + 1;
+        $kept = mb_strcut($body, 0, max(0, $budget - $reserve), 'UTF-8');
+
+        return $this->truncateOutput($kept, $budget, $total - strlen($kept)) . $note;
+    }
+
+    /**
+     * A single, unambiguous Content-Length — or null. Ignored beside a
+     * Transfer-Encoding (RFC 9112 §6.3: the encoding wins), and when repeated
+     * with different values, since then neither is a true count.
+     *
+     * @param list<string> $headers
+     */
+    private function contentLength(array $headers): ?int
+    {
+        $values = [];
+        foreach ($headers as $header) {
+            $lower = strtolower($header);
+            if (str_starts_with($lower, 'transfer-encoding:')) {
+                return null;
+            }
+            if (str_starts_with($lower, 'content-length:')) {
+                $values[] = trim(substr($header, 15));
+            }
+        }
+
+        $values = array_values(array_unique($values));
+        if (count($values) !== 1 || preg_match('/^\d{1,15}$/', $values[0]) !== 1) {
+            return null;
+        }
+
+        return (int) $values[0];
     }
 
     /**
@@ -312,11 +527,13 @@ final readonly class WebFetch implements Tool, ParallelSafe
      * guard rather than the bracketed literal in the dial URL.
      *
      * The body is read through a bounded loop so a hostile server cannot make
-     * the wrapper buffer more than one chunk past the cap before it stops.
+     * the wrapper buffer more than one chunk past the wire bound before it
+     * stops. `complete` is false only when that bound stopped the read with
+     * the stream still open — the one case where the body's size is unknown.
      *
      * @param array<string,mixed> $parsed parse_url() of the hop URL
      *
-     * @return array{0: string, 1: list<string>}|null body + response headers, null on failure
+     * @return array{0: string, 1: list<string>, 2: bool}|null body, response headers, complete; null on failure
      */
     private function transferPinned(string $scheme, string $host, array $parsed, string $address): ?array
     {
@@ -354,21 +571,19 @@ final readonly class WebFetch implements Tool, ParallelSafe
         // fopen() populates the magic response-header variable in this scope.
         $headers = $http_response_header ?? [];
 
+        $wireBound = $this->wireBound();
         $body = '';
-        while (!feof($stream) && strlen($body) <= self::MAX_RESPONSE_SIZE) {
+        while (!feof($stream) && strlen($body) <= $wireBound) {
             $chunk = fread($stream, self::READ_CHUNK_BYTES);
             if ($chunk === false || $chunk === '') {
                 break;
             }
             $body .= $chunk;
         }
+        $complete = strlen($body) <= $wireBound || feof($stream);
         fclose($stream);
 
-        if (strlen($body) > self::MAX_RESPONSE_SIZE) {
-            $body = substr($body, 0, self::MAX_RESPONSE_SIZE) . self::TRUNCATION_MARKER;
-        }
-
-        return [$body, array_values(is_array($headers) ? $headers : [])];
+        return [$body, array_values(is_array($headers) ? $headers : []), $complete];
     }
 
     /**
@@ -383,40 +598,120 @@ final readonly class WebFetch implements Tool, ParallelSafe
     }
 
     /**
-     * The absolute target of a 3xx hop, or null to treat this response as
-     * final. Only http(s) is ever returned; a `Location:` naming another
-     * scheme — `file://anything/etc/passwd` read the local disk under the
-     * pre-wave code — ends the chain instead of being dialed.
+     * The first `Location:` value, or null when there is none or it is empty.
+     * An empty reference resolves to the hop URL itself (RFC 3986 §5.2.2), so
+     * following it could only repeat the same response.
      *
      * @param list<string> $headers
      */
-    private function redirectTarget(array $headers, ?int $code, string $originalUrl): ?string
+    private function locationHeader(array $headers): ?string
     {
-        if ($code === null || $code < 300 || $code >= 400) {
-            return null;
-        }
-
         foreach ($headers as $header) {
-            if (!str_starts_with(strtolower($header), 'location:')) {
-                continue;
-            }
-            $location = trim(substr($header, 9));
-            $lower = strtolower($location);
+            if (str_starts_with(strtolower($header), 'location:')) {
+                $location = trim(substr($header, 9));
 
-            if (str_starts_with($lower, 'http://') || str_starts_with($lower, 'https://')) {
-                return $location;
+                return $location === '' ? null : $location;
             }
-            if (str_starts_with($location, '/')) {
-                $parsed = parse_url($originalUrl);
-                if ($parsed !== false && isset($parsed['scheme'], $parsed['host'])) {
-                    $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
-                    return $parsed['scheme'] . '://' . $parsed['host'] . $port . $location;
-                }
-            }
-            return null;
         }
 
         return null;
+    }
+
+    /**
+     * Resolve $reference against the absolute $base, per RFC 3986 §5.2.2
+     * (strict parser), with §5.2.4 dot-segment removal. The fragment is
+     * dropped: it is never sent to a server, so it cannot change what a hop
+     * fetches.
+     *
+     * The result is NOT vetted here. Whatever scheme or authority it names —
+     * `file:x`, `//169.254.169.254/` — faces the caller's per-hop guard chain
+     * exactly like an absolute Location, which is what keeps resolution from
+     * becoming a way around it.
+     */
+    private static function resolveReference(string $base, string $reference): string
+    {
+        $r = self::splitReference($reference);
+        $b = self::splitReference($base);
+
+        $scheme = $r['scheme'] ?? $b['scheme'];
+        if ($r['scheme'] !== null || $r['authority'] !== null) {
+            $authority = $r['authority'];
+            $path = self::removeDotSegments($r['path']);
+            $query = $r['query'];
+        } else {
+            $authority = $b['authority'];
+            $query = $r['query'];
+            if ($r['path'] === '') {
+                $path = $b['path'];
+                $query ??= $b['query'];
+            } elseif (str_starts_with($r['path'], '/')) {
+                $path = self::removeDotSegments($r['path']);
+            } elseif ($b['authority'] !== null && $b['path'] === '') {
+                // §5.2.3 merge: an authority with an empty path is "/".
+                $path = self::removeDotSegments('/' . $r['path']);
+            } else {
+                $slash = strrpos($b['path'], '/');
+                $directory = $slash === false ? '' : substr($b['path'], 0, $slash + 1);
+                $path = self::removeDotSegments($directory . $r['path']);
+            }
+        }
+
+        return ($scheme !== null ? $scheme . ':' : '')
+            . ($authority !== null ? '//' . $authority : '')
+            . $path
+            . ($query !== null ? '?' . $query : '');
+    }
+
+    /**
+     * RFC 3986 Appendix B's component regex. parse_url() is not used because
+     * it is not a reference parser: it reads `g:h`-style and `//`-relative
+     * input by its own rules, and it cannot tell an absent query from an
+     * empty one — which §5.2.2 distinguishes.
+     *
+     * @return array{scheme: ?string, authority: ?string, path: string, query: ?string}
+     */
+    private static function splitReference(string $reference): array
+    {
+        preg_match('~^(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?~', $reference, $m, PREG_UNMATCHED_AS_NULL);
+
+        return [
+            'scheme' => $m[1] ?? null,
+            'authority' => $m[2] ?? null,
+            'path' => (string) ($m[3] ?? ''),
+            'query' => $m[4] ?? null,
+        ];
+    }
+
+    /**
+     * RFC 3986 §5.2.4, the loop exactly as specified.
+     */
+    private static function removeDotSegments(string $input): string
+    {
+        $output = '';
+        while ($input !== '') {
+            if (str_starts_with($input, '../')) {
+                $input = substr($input, 3);
+            } elseif (str_starts_with($input, './')) {
+                $input = substr($input, 2);
+            } elseif (str_starts_with($input, '/./')) {
+                $input = substr($input, 2);
+            } elseif ($input === '/.') {
+                $input = '/';
+            } elseif (str_starts_with($input, '/../') || $input === '/..') {
+                $input = '/' . substr($input, $input === '/..' ? 3 : 4);
+                $cut = strrpos($output, '/');
+                $output = $cut === false ? '' : substr($output, 0, $cut);
+            } elseif ($input === '.' || $input === '..') {
+                $input = '';
+            } else {
+                $next = strpos($input, '/', 1);
+                $segment = $next === false ? $input : substr($input, 0, $next);
+                $output .= $segment;
+                $input = $next === false ? '' : substr($input, $next);
+            }
+        }
+
+        return $output;
     }
 
     /**
