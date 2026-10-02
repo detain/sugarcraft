@@ -99,6 +99,13 @@ process that started it — one server shared by the whole process tree:
 - only the starting process stops the server; `stop()`/destruct in a child
   closes that child's handles only. A child checks liveness with
   `posix_kill($pid, 0)` (it cannot `waitpid` a sibling's child).
+- the lock file's name records its owner
+  (`sugar-mcp-lock-<pid-namespace>-<pid>-<random>`). An owner that is killed
+  before it stops its server leaves the file behind, so every new connection
+  first removes the files whose owner pid is gone in this pid namespace and
+  whose `flock` nobody holds (`ExchangeLock::sweepStale()`). Files of live
+  owners, of other pid namespaces, and pre-existing `tempnam()`-named files
+  are left alone.
 
 stderr is not locked — it is diagnostics only.
 

@@ -34,6 +34,14 @@ namespace SugarCraft\Mcp;
  *    of its response. A process-private buffer would strand them — the next
  *    exchange may run in another process, which would then start reading in
  *    the middle of a line.
+ *
+ * A KILLED OWNER LEAVES ITS FILE BEHIND (audit R14, residual of AG-1/B1):
+ * {@see destroy()} runs only when the server is stopped, so a TUI that is
+ * SIGKILLed, OOM-killed or loses its terminal leaves one file per server in
+ * the temp dir, forever. The file name therefore records who owns it —
+ * `sugar-mcp-lock-<pid-namespace>-<owner-pid>-<random>` — and every
+ * {@see create()} first sweeps the files whose owner is gone
+ * ({@see sweepStale()}).
  */
 final class ExchangeLock
 {
@@ -43,6 +51,12 @@ final class ExchangeLock
 
     /** Poll slice while another process holds the lock. */
     private const POLL_MICROSECONDS = 2000;
+
+    /** Every lock file's name starts with this; {@see sweepStale()} reads no other. */
+    public const FILE_PREFIX = 'sugar-mcp-lock-';
+
+    /** The errno kill(pid, 0) reports for a pid no process has. */
+    private const ERRNO_ESRCH = 3;
 
     /** @var resource|null this process' own handle, never an inherited one */
     private $handle = null;
@@ -56,22 +70,154 @@ final class ExchangeLock
     ) {}
 
     /**
-     * Create the lock file for a connection the CURRENT process owns.
+     * Create the lock file for a connection the CURRENT process owns, after
+     * sweeping the files dead owners left in the same directory.
+     *
+     * @param string|null $dir where the file goes (null → the system temp dir;
+     *        tests pass a private one)
      *
      * @throws \RuntimeException when no temp file can be created — a shared
      *         connection without exclusion is the defect this class closes, so
      *         it is refused rather than silently run unlocked
      */
-    public static function create(string $label): self
+    public static function create(string $label, ?string $dir = null): self
     {
-        $path = @tempnam(sys_get_temp_dir(), 'sugar-mcp-lock-');
-        if ($path === false || @file_put_contents($path, self::PHASE_CLEAN) === false) {
+        $dir ??= sys_get_temp_dir();
+        $pid = (int) getmypid();
+
+        // Boot sweep: the files of owners that died without destroy().
+        self::sweepStale($dir);
+
+        // tempnam() cannot carry the owner in the name, so the file is made
+        // the way tempnam() makes one — exclusive create ('x'), mode 0600,
+        // retried on the (vanishingly rare) random-suffix collision.
+        $path = null;
+        for ($attempt = 0; $attempt < 8 && $path === null; $attempt++) {
+            $candidate = rtrim($dir, '/') . '/' . self::FILE_PREFIX . self::pidNamespace() . '-' . $pid . '-' . bin2hex(random_bytes(6));
+            $handle = @fopen($candidate, 'x');
+            if ($handle === false) {
+                continue;
+            }
+
+            @chmod($candidate, 0600);
+            $written = @fwrite($handle, self::PHASE_CLEAN) === 1;
+            fclose($handle);
+            if (!$written) {
+                @unlink($candidate);
+                break;
+            }
+
+            $path = $candidate;
+        }
+
+        if ($path === null) {
             throw new \RuntimeException(
-                "MCP server {$label}: cannot create the exchange lock file in " . sys_get_temp_dir()
+                "MCP server {$label}: cannot create the exchange lock file in " . $dir
             );
         }
 
-        return new self($path, (int) getmypid());
+        return new self($path, $pid);
+    }
+
+    /**
+     * Remove the lock files in $dir whose owner process no longer exists.
+     *
+     * A file is removed only when ALL of these hold, so a lock somebody can
+     * still use is never taken away:
+     *  - its name is this class' current shape. Pre-R14 names (`tempnam()`'s
+     *    `sugar-mcp-lock-XXXXXX`) say nothing about their owner and are left;
+     *  - it was made in THIS pid namespace. A pid read from another namespace
+     *    (a container sharing /tmp) names a different process, or none — a
+     *    live owner there would look dead from here;
+     *  - its owner pid is gone: kill(pid, 0) fails with ESRCH. EPERM means a
+     *    live process of another user. A reused pid keeps the file — a leak,
+     *    never a wrong removal — and so does a host without the posix
+     *    extension, which cannot tell;
+     *  - nobody holds its flock right now. A forked child of the dead owner
+     *    may still be mid-exchange on the server the owner started; it is
+     *    left alone, and the file goes on a later sweep. A child that already
+     *    opened the file keeps its handle after the unlink (fds outlive
+     *    names); one that opens it only afterwards fails its exchange, the
+     *    same answer a stopped server gives.
+     *
+     * Best-effort by design: a file another sweeper removed first, or one
+     * that cannot be opened, is skipped and never throws — the sweep must
+     * never be the reason a server fails to start.
+     *
+     * @return int how many files were removed
+     */
+    public static function sweepStale(?string $dir = null): int
+    {
+        $dir ??= sys_get_temp_dir();
+        $paths = @glob(rtrim($dir, '/') . '/' . self::FILE_PREFIX . '*', GLOB_NOSORT);
+        if ($paths === false || $paths === []) {
+            return 0;
+        }
+
+        $namespace = self::pidNamespace();
+        $self = (int) getmypid();
+        $removed = 0;
+
+        foreach ($paths as $path) {
+            if (preg_match('/^' . preg_quote(self::FILE_PREFIX, '/') . '(\d+)-(\d+)-[0-9a-f]+$/', basename($path), $m) !== 1) {
+                continue;
+            }
+
+            $owner = (int) $m[2];
+            if ($m[1] !== $namespace || $owner <= 0 || $owner === $self || !self::processIsGone($owner)) {
+                continue;
+            }
+
+            $handle = @fopen($path, 'r+');
+            if ($handle === false) {
+                continue;
+            }
+
+            $wouldBlock = 0;
+            if (flock($handle, LOCK_EX | LOCK_NB, $wouldBlock)) {
+                // Unlinked while held, so no child can be half-way into an
+                // exchange on it at the moment the name goes.
+                if (@unlink($path)) {
+                    $removed++;
+                }
+                flock($handle, LOCK_UN);
+            }
+            fclose($handle);
+        }
+
+        return $removed;
+    }
+
+    /**
+     * Whether no process with this pid exists — the one answer that makes a
+     * lock file safe to remove. Anything uncertain answers false.
+     */
+    private static function processIsGone(int $pid): bool
+    {
+        if (function_exists('posix_kill') && function_exists('posix_get_last_error')) {
+            if (@posix_kill($pid, 0)) {
+                return false;
+            }
+
+            // ESRCH alone means "no such process"; EPERM is a live process
+            // of another user, and any other errno is not an answer.
+            return posix_get_last_error() === self::ERRNO_ESRCH;
+        }
+
+        // Without posix, /proc can still say "absent" on Linux; elsewhere
+        // nothing can, and the file is kept.
+        return is_dir('/proc/self') && !file_exists("/proc/{$pid}");
+    }
+
+    /**
+     * The inode of this process' pid namespace (Linux), or '0' where there is
+     * no such notion — pids are then compared host-wide, as they are.
+     */
+    private static function pidNamespace(): string
+    {
+        $link = @readlink('/proc/self/ns/pid');
+
+        return is_string($link) && preg_match('/\[(\d+)\]/', $link, $m) === 1 ? $m[1] : '0';
     }
 
     /**
