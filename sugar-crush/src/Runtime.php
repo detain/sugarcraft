@@ -1906,8 +1906,9 @@ final class Runtime
         //
         // Scope, precisely: everything from here to the yield in
         // executeToolCalls() is contained — the tool body, the PostToolUse
-        // hook chain, and the ToolFinished emit — each degrading to an
-        // annotated result for THIS call. What is NOT contained is anything
+        // hook chain, and the ToolFinished emit — each degrading to a result
+        // for THIS call (annotated, or for a failed PostToolUse hook withheld:
+        // see settle(), audit R6). What is NOT contained is anything
         // before it (the PreToolUse chain and settleAsk, which decide whether
         // the call happens at all and so have nothing to degrade to) and the
         // yield itself (a consumer throwing back into the generator is the
@@ -2544,11 +2545,11 @@ final class Runtime
      * `annotate()` is not called and the result stays byte-identical.
      *
      * A `PostToolUse` verdict that does not permit (a DENY from exit 1/2, a
-     * timed-out hook, an ASK nobody can answer after the fact) WITHHOLDS the
-     * output (audit F-H1): the model and the UI get
-     * `[output withheld by PostToolUse hook: <reason>]` instead of the bytes
-     * the hook objected to — see {@see self::withheld()}. The bytes then read
-     * `withheld\n\npre`.
+     * timed-out hook, an ASK nobody can answer after the fact, a hook that
+     * threw) WITHHOLDS the output (audit F-H1, R6): the model and the UI get
+     * `[output withheld by PostToolUse hook "<name>": <reason>]` instead of
+     * the bytes the hook objected to — see {@see self::withheld()}. The bytes
+     * then read `withheld\n\npre`.
      */
     private function settle(
         ToolCall $toolCall,
@@ -2557,12 +2558,17 @@ final class Runtime
         ?callable $onEvent,
         string $preContext = '',
     ): ToolResultMessage {
-        // Post-hook observes the tool output. HookRegistry::executeHooks()
-        // calls $hook->execute() bare, so a ScriptHook whose script is
-        // missing, or a PHP hook with a bug, throws straight through — and
-        // a hook is OBSERVABILITY, not the answer. The tool already ran
-        // and its output is valid, so the failure is reported alongside
-        // that output rather than replacing it or discarding the turn.
+        // Post-hook observes the tool output. A hook that THROWS used to be
+        // reported next to that output as a mere annotation — "a hook is
+        // observability, not the answer" — which stopped being true when a
+        // refusal here started withholding (audit F-H1): a crashed hook has
+        // vetted nothing, the secret scanner queued behind it never ran, and
+        // the model read every byte (audit R6). The chain now reports a throw
+        // as a DENY naming the hook ({@see HookManager::postToolUse()}), so it
+        // withholds through the arm below like any refusal. The catch stays
+        // for a throw from the registry itself, and fails closed the same way:
+        // the turn still survives — the tool ran and the batch goes on — but
+        // what the model reads is the withheld text, not the unvetted output.
         //
         // The post verdict is CAPTURED first and appended after $preContext,
         // which keeps two orders independent: the hook still observes the RAW
@@ -2570,6 +2576,7 @@ final class Runtime
         // stdout), and the model-visible bytes land as `result\n\npre\n\npost`.
         $postNote = '';
         $withheldReason = null;
+        $withheldBy = null;
         try {
             $hookResult = $this->hookManager->postToolUse($context->withToolOutput($result->content()));
 
@@ -2586,6 +2593,9 @@ final class Runtime
             // recognise all fail CLOSED, the same doctrine the PRE gate keeps.
             if (!$hookResult->permitsExecution()) {
                 $withheldReason = $hookResult->message;
+                // The registry's own record of WHO refused (audit R6), never
+                // the hook's say-so: see {@see HookResult::$refusedBy}.
+                $withheldBy = $hookResult->refusingHook();
             }
 
             // Read ONLY on the permitting arm: a blocking verdict's own note is
@@ -2604,20 +2614,19 @@ final class Runtime
                 $postNote = $hookResult->additionalContext;
             }
         } catch (\Throwable $e) {
-            $postNote = sprintf(
-                '[PostToolUse hook failed: %s: %s]',
-                $e::class,
-                $e->getMessage(),
-            );
+            // No hook to name: whatever threw did so outside any one hook's
+            // execute(), which the chain would have reported as a refusal.
+            $withheldReason = HookResult::failureReason($e);
         }
 
         if ($withheldReason !== null) {
-            $result = self::withheld($result, $withheldReason);
-            // The reason otherwise lives only in what the model read: the
-            // chain returned at the refusing hook, so whether AuditHook's own
-            // `=>` line was written depends on registration order (audit F-H2).
+            $result = self::withheld($result, $withheldReason, $withheldBy);
+            // This is the call's ONLY audit record: the chain returned at the
+            // refusing hook, and the audit hook runs last (audit R7, see
+            // {@see \SugarCraft\Crush\Hooks\HookRegistry::findMatches()}), so
+            // no `=>` line copied an excerpt of the output withheld here.
             try {
-                $this->auditHook()?->recordWithheld($context, $withheldReason);
+                $this->auditHook()?->recordWithheld($context, $withheldReason, $withheldBy);
             } catch (\Throwable) {
                 // Best-effort, as on the refusal leg: see auditRefusal().
             }
@@ -3321,12 +3330,15 @@ final class Runtime
      * The result a refusing `PostToolUse` chain leaves in place of the output
      * it objected to (audit F-H1).
      *
-     * NO HOOK NAME, because the settled verdict does not carry one —
-     * {@see \SugarCraft\Crush\Hooks\HookRegistry::executeHooks()} returns the
-     * blocking {@see HookResult} as is — and a guessed name would be a lie on
-     * the line someone reads when deciding which hook to fix. The reason is
-     * the hook's own message (a script hook's error stream, descriptor 2);
-     * an empty one says so rather than leaving a bare colon.
+     * THE HOOK IS NAMED (audit R6) from the registry's stamp on the verdict
+     * ({@see HookResult::refusingHook()}), never guessed: a refusal no single
+     * hook owns — a chain out of clock, a rewrite ping-pong, a throw from
+     * outside any hook — reads "the PostToolUse hook chain" instead, because
+     * a guessed name would be a lie on the line someone reads when deciding
+     * which hook to fix. The reason is the hook's own message (a script
+     * hook's error stream, descriptor 2); an empty one says so rather than
+     * leaving a bare colon. The text itself is {@see HookResult::withheldNotice()},
+     * shared with the Chat path.
      *
      * THE IMAGE AND DIFF ARE DROPPED WITH THE TEXT. Both are renderings of the
      * same output: a diff of an edit that wrote a key carries that key, a
@@ -3343,16 +3355,11 @@ final class Runtime
      * delegated run SAID does not un-spend what it cost, and dropping it here
      * would let a PostToolUse hook take a Task's dollars off the spend cap.
      */
-    private static function withheld(ToolResult $result, string $reason): ToolResult
+    private static function withheld(ToolResult $result, string $reason, ?string $hook = null): ToolResult
     {
-        $reason = trim($reason);
-
         return new ToolResult(
             toolCallId: $result->toolCallId(),
-            content: sprintf(
-                '[output withheld by PostToolUse hook: %s] The call ran; its output is not shown.',
-                $reason === '' ? 'no reason given' : $reason,
-            ),
+            content: HookResult::withheldNotice($hook, $reason),
             isError: $result->isError(),
             durationMs: $result->durationMs(),
             usage: $result->usage(),

@@ -4775,6 +4775,7 @@ final class Chat implements Model
     ): ToolResult {
         $postNote = '';
         $withheldReason = null;
+        $withheldBy = null;
         if ($context !== null && $this->hooks !== null) {
             // R-1: the Chat path's live consumer of a permitting hook's
             // `additionalContext` — the same field Runtime::settle() appends on
@@ -4797,21 +4798,36 @@ final class Chat implements Model
                 // Runtime::settle() reads it.
                 if (!$hookResult->permitsExecution()) {
                     $withheldReason = $hookResult->message;
+                    $withheldBy = $hookResult->refusingHook();
                 } else {
                     // Read ONLY on the permitting arm: a blocking verdict's
                     // note was written while reading the output it refused.
                     $postNote = $hookResult->additionalContext;
                 }
             } catch (\Throwable $e) {
-                // As Runtime::settle(): the call has already run, so a hook
-                // that throws is reported to the model rather than unwinding
-                // the whole batch's collection out of the event loop.
-                $postNote = sprintf('[PostToolUse hook failed: %s: %s]', $e::class, $e->getMessage());
+                // As Runtime::settle() (audit R6): a hook's own throw already
+                // arrives as a refusal naming it; anything that still escapes
+                // the chain has vetted nothing either, so it withholds rather
+                // than unwinding the batch's collection out of the event loop.
+                $withheldReason = \SugarCraft\Crush\Hooks\HookResult::failureReason($e);
             }
         }
 
         if ($withheldReason !== null) {
-            $result = self::withheld($result, $withheldReason);
+            $result = self::withheld($result, $withheldReason, $withheldBy);
+            // As Runtime::settle(): the call's only audit record, since the
+            // audit hook runs last and the chain returned before it (R7).
+            try {
+                $audit = $this->hooks?->hook(
+                    \SugarCraft\Crush\Hooks\HookEvent::PostToolUse->value,
+                    \SugarCraft\Crush\Hooks\BuiltIn\AuditHook::NAME,
+                );
+                if ($audit instanceof \SugarCraft\Crush\Hooks\BuiltIn\AuditHook && $context !== null) {
+                    $audit->recordWithheld($context, $withheldReason, $withheldBy);
+                }
+            } catch (\Throwable) {
+                // Best-effort: a log line must not decide what the model reads.
+            }
         }
 
         // Kept on the withheld arm too: the pre-note came from PreToolUse
@@ -4833,13 +4849,9 @@ final class Chat implements Model
      * the text lands in whichever slot the tool's own outcome used. No denial
      * kind: nothing refused the CALL, which is what that field records.
      */
-    private static function withheld(ToolResult $result, string $reason): ToolResult
+    private static function withheld(ToolResult $result, string $reason, ?string $hook = null): ToolResult
     {
-        $reason = trim($reason);
-        $text = sprintf(
-            '[output withheld by PostToolUse hook: %s] The call ran; its output is not shown.',
-            $reason === '' ? 'no reason given' : $reason,
-        );
+        $text = \SugarCraft\Crush\Hooks\HookResult::withheldNotice($hook, $reason);
 
         return new ToolResult(
             $result->name,

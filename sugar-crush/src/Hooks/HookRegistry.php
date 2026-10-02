@@ -117,13 +117,31 @@ final class HookRegistry
     }
 
     /**
-     * Find matching hooks for a tool call.
+     * Find matching hooks for a tool call, in the order they run.
+     *
+     * Registration order, with ONE exception: the built-in
+     * {@see BuiltIn\AuditHook} always runs AFTER every other matching hook of
+     * its event (audit R7). It records what a call produced, and a record
+     * written before the rest of the chain has judged that output is a record
+     * of output the chain may yet refuse. `registerBuiltIns()` runs ahead of
+     * every hook file, so in registration order the audit line — with its
+     * 200-byte excerpt — was written BEFORE a user's secret scanner withheld
+     * the very bytes it had just copied into the log. Running last, it is
+     * reached only when the whole chain permitted the output; a chain that
+     * refuses (or throws) returns before it, and the Runtime writes the
+     * `=! WITHHELD` record instead, which carries the reason and no excerpt.
+     *
+     * Decided here, at dispatch, rather than by moving the hook at
+     * registration, so no registration order — an embedder registering its
+     * own PostToolUse hook after `registerBuiltIns()`, or one before it — can
+     * put the excerpt ahead of a refusal again.
      *
      * @return array<HookInterface>
      */
     public function findMatches(string $event, string $toolName): array
     {
         $matches = [];
+        $last = [];
 
         foreach ($this->getForEvent($event) as $hook) {
             if ($this->isDisabled($hook->name())) {
@@ -131,11 +149,15 @@ final class HookRegistry
             }
 
             if ($this->matcherMatches($hook->matcher(), $toolName)) {
-                $matches[] = $hook;
+                if ($hook instanceof BuiltIn\AuditHook) {
+                    $last[] = $hook;
+                } else {
+                    $matches[] = $hook;
+                }
             }
         }
 
-        return $matches;
+        return [...$matches, ...$last];
     }
 
     /**
@@ -321,8 +343,15 @@ final class HookRegistry
      * expired hook: the guards still queued behind the expiry have said nothing,
      * and "allow" would skip them invisibly. It costs the model one retry and
      * names the budget it exceeded.
+     *
+     * A HOOK THAT THROWS propagates out of this method — unless the caller
+     * passes $failClosedOnThrow, in which case it is the refusal it amounts
+     * to: a DENY whose message names the exception and whose
+     * {@see HookResult::$refusedBy} names the hook (audit R6). Only
+     * {@see HookManager::postToolUse()} asks for that; see the note in
+     * {@see scan()}.
      */
-    public function executeHooks(string $event, HookContext $context): HookResult
+    public function executeHooks(string $event, HookContext $context, bool $failClosedOnThrow = false): HookResult
     {
         $modified = null;
         $passes = 0;
@@ -365,6 +394,7 @@ final class HookRegistry
                 $spend,
                 $armedAt,
                 $askers,
+                $failClosedOnThrow,
             );
 
             if ($collected !== '') {
@@ -707,6 +737,9 @@ final class HookRegistry
      *        ASK (every one, not only the first — the first is the question
      *        put, but each is a question a remembered approval must not
      *        silently answer; see {@see HookResult::$askedBy}).
+     * @param bool $failClosedOnThrow when true, a hook that throws becomes a
+     *        DENY stamped with its name instead of propagating — see the note
+     *        at the call; {@see executeHooks()} passes it through
      *
      * @return array{0: ?HookResult, 1: ?HookResult, 2: ?HookResult, 3: string} [the
      *     result that blocks the call outright — a DENY, or the pass's first
@@ -725,6 +758,7 @@ final class HookRegistry
         array &$spend = [],
         float $armedAt = 0.0,
         array &$askers = [],
+        bool $failClosedOnThrow = false,
     ): array {
         $pendingAsk = null;
         $pendingModify = null;
@@ -774,7 +808,27 @@ final class HookRegistry
             }
 
             $startedAt = microtime(true);
-            $result = $hook->execute($context);
+
+            try {
+                $result = $hook->execute($context);
+            } catch (\Throwable $e) {
+                if (!$failClosedOnThrow) {
+                    throw $e;
+                }
+
+                // A HOOK THAT THROWS HAS VETTED NOTHING (audit R6), and every
+                // hook queued behind it — the secret scanner a user put after
+                // a buggy formatter — never ran at all. Where the caller has
+                // asked for it ({@see HookManager::postToolUse()}: the call
+                // already ran, so there is nothing to unwind and only what the
+                // model READS is left to decide) the throw is therefore the
+                // refusal it amounts to, stamped below with the name of the
+                // hook that threw. Every other event keeps propagating it: a
+                // PreToolUse throw stops the turn before the call can happen,
+                // and a lifecycle caller owns what its own failure means.
+                $result = HookResult::deny(HookResult::failureReason($e));
+            }
+
             // LEDGERED UNCONDITIONALLY, before any early return: a hook that
             // denies still spent the clock, and on a rewriting chain the pass
             // that spends the budget is often not the pass that hits the wall.
@@ -785,7 +839,11 @@ final class HookRegistry
             ];
 
             if (!$result->isAsk() && !$result->permitsExecution()) {
-                return [$result, null, null, ''];
+                // STAMPED WITH WHO REFUSED (audit R6), from the hook this loop
+                // actually ran — overwriting whatever the result carried — so
+                // the text that replaces withheld output can name the hook to
+                // fix without trusting a hook to name itself.
+                return [$result->withRefusedBy($hook->name()), null, null, ''];
             }
 
             // COLLECT the model-visible context from EVERY non-blocking result —

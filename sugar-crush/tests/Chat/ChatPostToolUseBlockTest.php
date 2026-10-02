@@ -48,7 +48,7 @@ final class ChatPostToolUseBlockTest extends TestCase
         $this->assertStringNotContainsString(self::SECRET, $result->result . (string) $result->error);
         $this->assertNull($result->error, 'the call succeeded; the withheld text lands where its output would have');
         $this->assertSame(
-            '[output withheld by PostToolUse hook: AWS key in output] The call ran; its output is not shown.',
+            '[output withheld by PostToolUse hook "secret-scan": AWS key in output] The call ran; its output is not shown.',
             $result->result,
         );
         $this->assertNull($result->denial, 'nothing refused the CALL; it ran');
@@ -63,7 +63,7 @@ final class ChatPostToolUseBlockTest extends TestCase
         );
 
         $this->assertStringNotContainsString(self::SECRET, $result->result);
-        $this->assertStringStartsWith('[output withheld by PostToolUse hook: secret found]', $result->result);
+        $this->assertStringStartsWith('[output withheld by PostToolUse hook "scan": secret found]', $result->result);
     }
 
     /** An empty reason still reads as a sentence. */
@@ -75,7 +75,7 @@ final class ChatPostToolUseBlockTest extends TestCase
         );
 
         $this->assertSame(
-            '[output withheld by PostToolUse hook: no reason given] The call ran; its output is not shown.',
+            '[output withheld by PostToolUse hook "scan": no reason given] The call ran; its output is not shown.',
             $result->result,
         );
     }
@@ -103,7 +103,7 @@ final class ChatPostToolUseBlockTest extends TestCase
         $this->assertStringContainsString(self::SECRET, $seen[0], 'the hook must see the error text to judge it');
         $this->assertSame('', $result->result);
         $this->assertSame(
-            '[output withheld by PostToolUse hook: key in stderr] The call ran; its output is not shown.',
+            '[output withheld by PostToolUse hook "scan": key in stderr] The call ran; its output is not shown.',
             $result->error,
         );
     }
@@ -116,7 +116,7 @@ final class ChatPostToolUseBlockTest extends TestCase
             $this->postHook('scan', static fn(): HookResult => HookResult::ask('show this?')),
         );
 
-        $this->assertStringStartsWith('[output withheld by PostToolUse hook: show this?]', $result->result);
+        $this->assertStringStartsWith('[output withheld by PostToolUse hook "scan": show this?]', $result->result);
     }
 
     /** The control: a permitting hook's note is still appended, output intact. */
@@ -130,8 +130,12 @@ final class ChatPostToolUseBlockTest extends TestCase
         $this->assertSame("out\n\nchecked", $result->result);
     }
 
-    /** A hook that throws is reported to the model, as Runtime::settle() does, not thrown through the loop. */
-    public function testAThrowingHookIsAnAnnotation(): void
+    /**
+     * A hook that throws has vetted nothing (audit R6), so it withholds the
+     * output — naming itself — as Runtime::settle() does, rather than being
+     * thrown through the loop or merely noted next to the output.
+     */
+    public function testAThrowingHookWithholdsTheOutputAndIsNamed(): void
     {
         $result = $this->runOne(
             static fn(): string => 'out',
@@ -140,7 +144,11 @@ final class ChatPostToolUseBlockTest extends TestCase
             }),
         );
 
-        $this->assertSame("out\n\n[PostToolUse hook failed: LogicException: scanner crashed]", $result->result);
+        $this->assertSame(
+            '[output withheld by PostToolUse hook "broken": hook failed: LogicException: scanner crashed]'
+            . ' The call ran; its output is not shown.',
+            $result->result,
+        );
     }
 
     // ---- fixtures ----------------------------------------------------------

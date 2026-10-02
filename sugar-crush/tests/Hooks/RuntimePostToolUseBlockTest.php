@@ -59,7 +59,7 @@ final class RuntimePostToolUseBlockTest extends TestCase
         $this->assertCount(1, $results);
         foreach ([$results[0]->content(), $finished[0]->result->content()] as $content) {
             $this->assertStringNotContainsString('AKIA', $content);
-            $this->assertStringContainsString('[output withheld by PostToolUse hook: output contains AWS key, blocked]', $content);
+            $this->assertStringContainsString('[output withheld by PostToolUse hook "secret-scan": output contains AWS key, blocked]', $content);
         }
         $this->assertSame('call_env', $results[0]->toolCallId());
         $this->assertFalse($results[0]->isError(), 'the call ran; withholding its output is not a tool failure');
@@ -90,7 +90,7 @@ final class RuntimePostToolUseBlockTest extends TestCase
         $this->assertFalse($results[0]->hasImage());
         $this->assertNull($results[0]->imageBytes());
         $this->assertSame(
-            '[output withheld by PostToolUse hook: diff carries a key] The call ran; its output is not shown.',
+            '[output withheld by PostToolUse hook "verdict": diff carries a key] The call ran; its output is not shown.',
             $results[0]->content(),
         );
     }
@@ -106,7 +106,7 @@ final class RuntimePostToolUseBlockTest extends TestCase
         [$results] = $this->run1([new ToolCall('call_q', 'Bash', ['command' => 'x'])], self::bashTool(self::SECRET));
 
         $this->assertStringNotContainsString('AKIA', $results[0]->content());
-        $this->assertStringContainsString('[output withheld by PostToolUse hook: no reason given]', $results[0]->content());
+        $this->assertStringContainsString('[output withheld by PostToolUse hook "verdict": no reason given]', $results[0]->content());
     }
 
     /**

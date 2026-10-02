@@ -192,16 +192,28 @@ the action has already happened:
 - `PostToolUse` — too late to stop, so it **withholds the output** instead:
   on both tool paths (`Runtime::settle()`, and `Chat::applyPostToolUse()` on
   the dormant Chat path) the model and the UI get
-  `[output withheld by PostToolUse hook: <stderr>] The call ran; its output is
-  not shown.` in place of the tool's output. The image and diff are dropped
-  with it, `isError` keeps whatever the tool reported, and a permitting hook's
-  note from earlier in the same chain is discarded with the verdict. A
+  `[output withheld by PostToolUse hook "<name>": <stderr>] The call ran; its
+  output is not shown.` in place of the tool's output. The image and diff are
+  dropped with it, `isError` keeps whatever the tool reported, and a permitting
+  hook's note from earlier in the same chain is discarded with the verdict. A
   PreToolUse note is kept, because it was written before the output existed.
   Every verdict that does not permit counts: exit 1 or 2, any other non-zero
   exit, a timeout, an exit-3 ask (there is nobody to ask after the call ran).
-  A hook that *throws* is still only noted next to the output. On the Chat path
-  a failed call's withheld text stays in its error slot, and the hook is shown
-  the error text, as `Runtime` shows it `ToolResult::content()`.
+  A hook that *throws* counts too (audit R6): it has vetted nothing, and the
+  hooks queued behind it never run, so its reason reads
+  `hook failed: <exception class>: <message>`. Only `PostToolUse` contains a
+  throw this way; a `PreToolUse` hook that throws still ends the turn before
+  the call can run. On the Chat path a failed call's withheld text stays in its
+  error slot, and the hook is shown the error text, as `Runtime` shows it
+  `ToolResult::content()`.
+
+  `<name>` is the hook that refused, as the registry recorded it while running
+  the chain — never what the hook's own result claims (`HookResult::$refusedBy`,
+  or the first asker for an ask). It is the entry's `name:`, which defaults to
+  its whole `command`, so it is clipped to 60 characters with control
+  characters blanked. A refusal no single hook owns — a chain that ran out of
+  its time budget, or kept rewriting — reads `[output withheld by the
+  PostToolUse hook chain: <reason>]` instead of guessing a name.
 - `SubagentStop`, `TaskCompleted` — too late to stop; surfaces through
   `continueOnBlock` on the `HookDispatcher`, which `src/` never builds (see
   above).
@@ -733,7 +745,12 @@ reading. The dormant Chat path (`Chat::applyPostToolUse()`) does the same.
 ## The built-in hooks
 
 `HookManager::registerBuiltIns()` registers three unconditionally, ahead of
-anything from a file and ahead of the permission gate:
+anything from a file and ahead of the permission gate. Registration order is
+the order a chain runs in, with one exception: `AuditHook` always runs **after
+every other `PostToolUse` hook**, whatever order they were registered in
+(`HookRegistry::findMatches()`, audit R7). It records what a call produced, so
+it runs only once the rest of the chain has permitted that output — see
+[below](#what-the-audit-log-records).
 
 | Hook | Event | What it does |
 |---|---|---|
@@ -790,7 +807,7 @@ one it is:
 ```text
 [2026-10-02 09:14:03] <session> Bash {"command":"ls"} => README.md\nsrc
 [2026-10-02 09:14:05] <session> Read {"file_path":".env"} =! DENY hook: This hook prevents modification of files matching: …
-[2026-10-02 09:14:09] <session> Bash {"command":"env"} =! WITHHELD: output contains AWS key, blocked
+[2026-10-02 09:14:09] <session> Bash {"command":"env"} =! WITHHELD "secret-scan": output contains AWS key, blocked
 ```
 
 - `=>` is a call that ran. The excerpt is the first 200 bytes of its output,
@@ -803,8 +820,14 @@ one it is:
   `PostToolUse`, so the engine writes this line itself, through the registered
   `audit` hook, from the gate's refusal arm. Both the sequential path and the
   concurrent path gate there. Before audit F-H2, none of these left a record.
-- `=! WITHHELD:` is a call that ran but whose output a `PostToolUse` hook
-  refused (see the block rules above). The line keeps the hook's reason.
+- `=! WITHHELD "<hook>":` is a call that ran but whose output a `PostToolUse`
+  hook refused, or a hook in that chain threw (see the block rules above). The
+  line keeps the hook's name and reason; it reads `=! WITHHELD:` when no single
+  hook owns the refusal. It is the call's **only** record: the audit hook runs
+  last in the chain, and a refusal returns before reaching it, so no `=>` line
+  holds an excerpt of the output that was withheld. Before audit R7 the audit
+  hook ran first — `registerBuiltIns()` is called ahead of every hook file — and
+  wrote 200 bytes of the very output a secret scanner then refused.
 
 Every field written into a line is escaped. That means the session, the tool
 name, the input, the excerpt and the reason. C0 controls, DEL, NEL, U+2028 and

@@ -117,7 +117,7 @@ final class ToolResultUsageTest extends TestCase
         $usage = self::billed();
         $withheld = self::runtimeStatic('withheld', new ToolResult('c1', 'AKIA-secret', usage: $usage), 'secret scanner');
 
-        $this->assertStringContainsString('output withheld by PostToolUse hook', $withheld->content());
+        $this->assertStringContainsString('[output withheld by ', $withheld->content());
         $this->assertStringNotContainsString('AKIA', $withheld->content());
         $this->assertSame($usage, $withheld->usage(), 'withholding the text does not un-spend the run');
     }

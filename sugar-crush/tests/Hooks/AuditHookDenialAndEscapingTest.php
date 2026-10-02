@@ -112,7 +112,7 @@ final class AuditHookDenialAndEscapingTest extends TestCase
 
         $lines = $this->lines();
         $this->assertCount(1, $lines);
-        $this->assertStringContainsString('=! WITHHELD: contains a key', $lines[0]);
+        $this->assertStringContainsString('=! WITHHELD "verdict": contains a key', $lines[0]);
         $this->assertStringNotContainsString('AKIA', $lines[0]);
     }
 

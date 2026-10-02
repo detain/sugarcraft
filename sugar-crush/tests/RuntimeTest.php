@@ -1407,14 +1407,17 @@ final class RuntimeTest extends TestCase
 
     /**
      * Containing only `$tool->execute()` left the turn just as easy to lose:
-     * HookRegistry::executeHooks() calls `$hook->execute($context)` bare, so a
-     * ScriptHook whose script is missing (or any PHP hook with a bug) threw
+     * a ScriptHook whose script is missing (or any PHP hook with a bug) threw
      * straight out of this generator and hit the same
      * EngineBackend::runCompleteInChild() boundary — discarding every other
-     * tool result and all assistant content, because an OBSERVER failed after
-     * the work was already done.
+     * tool result and all assistant content.
+     *
+     * The call keeps its own result message, but since audit R6 that message
+     * is the WITHHELD text, naming the hook: a crashed hook has vetted nothing,
+     * and the hooks behind it never ran, so the output is not shown — the same
+     * fail-closed answer a timed-out hook gets.
      */
-    public function testAThrowingPostToolUseHookDoesNotCostTheToolResult(): void
+    public function testAThrowingPostToolUseHookWithholdsTheOutputButKeepsTheCall(): void
     {
         $this->hookRegistry->register($this->throwingPostHook(new \RuntimeException('hook script missing')));
 
@@ -1429,12 +1432,12 @@ final class RuntimeTest extends TestCase
 
         $this->assertCount(1, $results);
         $this->assertSame('call_hook', $results[0]->toolCallId());
-        $this->assertStringContainsString('the real answer', $results[0]->content());
-        $this->assertStringContainsString('PostToolUse hook failed', $results[0]->content());
-        $this->assertStringContainsString('hook script missing', $results[0]->content());
+        $this->assertStringNotContainsString('the real answer', $results[0]->content());
+        $this->assertStringContainsString('output withheld by PostToolUse hook "throwing-post"', $results[0]->content());
+        $this->assertStringContainsString('hook failed: RuntimeException: hook script missing', $results[0]->content());
         $this->assertFalse(
             $results[0]->isError(),
-            'the tool succeeded — a broken observer must not tell the model to retry it',
+            'the tool succeeded — a broken hook must not tell the model to retry it',
         );
     }
 
@@ -1454,8 +1457,9 @@ final class RuntimeTest extends TestCase
         ], $app]));
 
         $this->assertCount(2, $results);
-        $this->assertStringContainsString('first ok', $results[0]->content());
-        $this->assertStringContainsString('second ok', $results[1]->content());
+        $this->assertSame(['call_1', 'call_2'], array_map(static fn ($r) => $r->toolCallId(), $results));
+        $this->assertStringContainsString('boom in hook', $results[0]->content());
+        $this->assertStringContainsString('boom in hook', $results[1]->content());
     }
 
     /** run() must not lose the assistant content either. */
@@ -1476,14 +1480,14 @@ final class RuntimeTest extends TestCase
 
         $this->assertCount(2, $results);
         $this->assertSame('assistant text that must survive', $results[0]->content());
-        $this->assertStringContainsString('the real answer', $results[1]->content());
+        $this->assertStringContainsString('output withheld by PostToolUse hook "throwing-post"', $results[1]->content());
     }
 
     /**
-     * The hook note has to reach the ToolFinished event as well, or a renderer
-     * shows a clean result while the model is told a hook fell over.
+     * The withheld text has to reach the ToolFinished event as well, or a
+     * renderer shows the output the model was kept from.
      */
-    public function testAThrowingPostToolUseHookIsAnnotatedOntoTheEventToo(): void
+    public function testAThrowingPostToolUseHookWithholdsOnTheEventToo(): void
     {
         $this->hookRegistry->register($this->throwingPostHook(new \RuntimeException('boom in hook')));
 
@@ -1502,7 +1506,8 @@ final class RuntimeTest extends TestCase
             [ToolStarted::class, ToolFinished::class],
             array_map(static fn ($e) => $e::class, $events),
         );
-        $this->assertStringContainsString('PostToolUse hook failed', $events[1]->result->content());
+        $this->assertStringContainsString('output withheld by PostToolUse hook "throwing-post"', $events[1]->result->content());
+        $this->assertStringNotContainsString('the real answer', $events[1]->result->content());
     }
 
     /**
@@ -1533,8 +1538,11 @@ final class RuntimeTest extends TestCase
         $this->assertStringContainsString('also fine', $results[1]->content());
     }
 
-    /** A tool that ALSO threw keeps its own error, with the hook note added. */
-    public function testAThrowingToolAndAThrowingHookBothSurfaceOnTheSameResult(): void
+    /**
+     * A tool that ALSO threw keeps its error flag; its error text is output
+     * like any other, and the broken hook vetted none of it, so it is withheld.
+     */
+    public function testAThrowingToolAndAThrowingHookKeepTheErrorFlagAndWithhold(): void
     {
         $this->hookRegistry->register($this->throwingPostHook(new \RuntimeException('boom in hook')));
 
@@ -1548,8 +1556,8 @@ final class RuntimeTest extends TestCase
         ]));
 
         $this->assertTrue($results[0]->isError(), 'the tool failure keeps the error flag');
-        $this->assertStringContainsString('exploded', $results[0]->content());
-        $this->assertStringContainsString('PostToolUse hook failed', $results[0]->content());
+        $this->assertStringContainsString('output withheld by PostToolUse hook "throwing-post"', $results[0]->content());
+        $this->assertStringContainsString('boom in hook', $results[0]->content());
     }
 
     /**
@@ -1624,12 +1632,12 @@ final class RuntimeTest extends TestCase
     }
 
     /**
-     * The end-to-end version: a diff- and image-bearing result annotated by a
-     * real failing PostToolUse hook still reaches the renderer with its
-     * payloads. Those fields are what EngineBackend draws, so losing them
-     * turns a rendered diff into plain text.
+     * The end-to-end version: a failing PostToolUse hook withholds a diff- and
+     * image-bearing result WHOLE (audit R6). Both are renderings of the output
+     * the broken hook never vetted, so they go with the text; the timing and
+     * the success flag are facts about the call, and stay.
      */
-    public function testADiffAndImageBearingResultSurvivesAFailingPostToolUseHook(): void
+    public function testAFailingPostToolUseHookWithholdsTheDiffAndImageToo(): void
     {
         $this->hookRegistry->register($this->throwingPostHook(new \RuntimeException('hook script missing')));
 
@@ -1658,16 +1666,13 @@ final class RuntimeTest extends TestCase
         ]));
 
         $delivered = $events[1]->result;
-        $this->assertStringContainsString('PostToolUse hook failed', $delivered->content());
-        $this->assertStringContainsString('edited x.php', $delivered->content());
-        $this->assertTrue($delivered->hasDiff());
-        $this->assertSame("--- a/x.php\n+++ b/x.php\n", $delivered->diff());
-        $this->assertTrue($delivered->hasImage());
-        $this->assertSame('RAW-PNG-BYTES', $delivered->imageBytes());
-        $this->assertSame('/tmp/shot.png', $delivered->imagePath());
-        $this->assertSame('kitty', $delivered->imageProtocol());
+        $this->assertStringContainsString('output withheld by PostToolUse hook "throwing-post"', $delivered->content());
+        $this->assertStringNotContainsString('edited x.php', $delivered->content());
+        $this->assertFalse($delivered->hasDiff());
+        $this->assertFalse($delivered->hasImage());
+        $this->assertNull($delivered->imageBytes());
         $this->assertSame(17, $delivered->durationMs());
-        $this->assertFalse($delivered->isError(), 'a broken observer must not flag the tool as failed');
+        $this->assertFalse($delivered->isError(), 'a broken hook must not flag the tool as failed');
     }
 
     private function throwingPostHook(\Throwable $throwable): HookInterface

@@ -22,9 +22,20 @@ use SugarCraft\Crush\Permissions\DenialKind;
  *
  *     [Y-m-d H:i:s] <session> <tool> <input> => <output excerpt>
  *     [Y-m-d H:i:s] <session> <tool> <input> =! DENY <kind>: <reason>
- *     [Y-m-d H:i:s] <session> <tool> <input> =! WITHHELD: <reason>
+ *     [Y-m-d H:i:s] <session> <tool> <input> =! WITHHELD "<hook>": <reason>
  *
- * `<kind>` is {@see DenialKind::token()} (`hook`, `refused`, `unanswered`).
+ * `<kind>` is {@see DenialKind::token()} (`hook`, `refused`, `unanswered`);
+ * `<hook>` is the name of the `PostToolUse` hook that withheld the output, and
+ * is absent (`=! WITHHELD: <reason>`) when no single hook did.
+ *
+ * ONE RECORD PER CALL THAT RAN, and never the excerpt of a withheld one (audit
+ * R7). The registry runs this hook LAST in its chain
+ * ({@see \SugarCraft\Crush\Hooks\HookRegistry::findMatches()}), so
+ * {@see execute()} writes its `=>` line only once every other hook has
+ * permitted the output. A chain that withholds returns before reaching it, and
+ * the Runtime writes the `=! WITHHELD` line instead. Run first, as the
+ * registration order used to put it, it copied 200 bytes of the very output a
+ * secret scanner behind it was about to refuse.
  * Every interpolated field goes through {@see field()}, so a field cannot
  * end the line early, and the input is capped at {@see INPUT_CAP_BYTES}.
  *
@@ -359,12 +370,17 @@ final class AuditHook implements HookInterface
      * Record that a `PostToolUse` hook withheld a call's output from the model
      * (audit F-H1), answering whether the line was written.
      *
-     * The call RAN, so `execute()` has normally logged it already; this line
-     * keeps the refusing hook's reason, which otherwise only the model read.
+     * The call RAN, and this is its ONLY record: the chain returned at the
+     * refusing hook, before reaching this one (see the class note, audit R7),
+     * so no `=>` line holds an excerpt of what was withheld. It keeps the
+     * reason — which otherwise only the model read — and, when one hook owns
+     * the refusal, that hook's name ({@see HookResult::refusingHook()}).
      */
-    public function recordWithheld(HookContext $context, string $reason): bool
+    public function recordWithheld(HookContext $context, string $reason, ?string $hook = null): bool
     {
-        return $this->append(self::line($context, '=! WITHHELD: ' . self::field($reason)));
+        $tag = $hook === null ? '=! WITHHELD: ' : '=! WITHHELD "' . self::field($hook) . '": ';
+
+        return $this->append(self::line($context, $tag . self::field($reason)));
     }
 
     /**

@@ -67,6 +67,11 @@ final readonly class HookResult
      */
     public const MAX_ADDITIONAL_CONTEXT_BYTES = 10000;
 
+    /**
+     * How much of a hook's name {@see self::withheldNotice()} shows.
+     */
+    public const MAX_NAMED_HOOK_CHARS = 60;
+
     public function __construct(
         public string $action,
         public string $message,
@@ -93,6 +98,26 @@ final readonly class HookResult
          * @var list<string>
          */
         public array $askedBy = [],
+        /**
+         * The name of the hook whose result REFUSED in the chain this verdict
+         * settles (audit R6), or null when no single hook did.
+         *
+         * Stamped by {@see HookRegistry::executeHooks()} on the DENY (or
+         * unrecognised action) it returns, from the hook it actually ran —
+         * never taken from a hook's own result, which the registry
+         * overwrites, so a hook cannot pass its refusal off as another's.
+         * Null on every permitting verdict, on an ASK (whose askers are
+         * {@see self::$askedBy}), and on a refusal the REGISTRY made itself:
+         * a chain that ran out of clock or kept rewriting has no single hook
+         * to blame, and a guessed name would be a lie on the line someone
+         * reads when deciding which hook to fix.
+         *
+         * WHY IT EXISTS: a `PostToolUse` refusal withholds output the model
+         * never sees again, and before this field the text that replaced it
+         * ({@see self::withheldNotice()}) could not say which of several
+         * configured hooks did it. Read through {@see self::refusingHook()}.
+         */
+        public ?string $refusedBy = null,
     ) {}
 
     public static function allow(string $message = '', string $additionalContext = ''): self
@@ -212,7 +237,14 @@ final readonly class HookResult
             return $this;
         }
 
-        return new self($this->action, $this->message, $this->modifiedInput, $context, $this->askedBy);
+        return new self(
+            $this->action,
+            $this->message,
+            $this->modifiedInput,
+            $context,
+            $this->askedBy,
+            $this->refusedBy,
+        );
     }
 
     /**
@@ -231,7 +263,101 @@ final readonly class HookResult
             $this->modifiedInput,
             $this->additionalContext,
             array_values(array_unique($names)),
+            $this->refusedBy,
         );
+    }
+
+    /**
+     * A copy whose {@see self::$refusedBy} IS $name.
+     *
+     * Only {@see HookRegistry::executeHooks()} should call this, on the
+     * refusal it returns, with the name of the hook that produced it; see the
+     * property's note.
+     */
+    public function withRefusedBy(?string $name): self
+    {
+        if ($name === $this->refusedBy) {
+            return $this;
+        }
+
+        return new self(
+            $this->action,
+            $this->message,
+            $this->modifiedInput,
+            $this->additionalContext,
+            $this->askedBy,
+            $name,
+        );
+    }
+
+    /**
+     * The hook that kept this verdict from permitting the call, or null when
+     * it permits or no single hook is known to have refused.
+     *
+     * A refusal names its {@see self::$refusedBy}; an ASK names the hook whose
+     * question it carries — the FIRST asker, since that is the question the
+     * chain put ({@see HookRegistry::scan()} keeps the first ASK). Never read
+     * on a permitting verdict, so a hand-built ALLOW carrying either field
+     * names nothing.
+     */
+    public function refusingHook(): ?string
+    {
+        if ($this->permitsExecution()) {
+            return null;
+        }
+
+        return $this->isAsk() ? ($this->askedBy[0] ?? null) : $this->refusedBy;
+    }
+
+    /**
+     * The text that replaces a tool's output when a `PostToolUse` chain does
+     * not permit it (audit F-H1, R6): one sentence both tool paths —
+     * {@see \SugarCraft\Crush\Runtime::settle()} and
+     * {@see \SugarCraft\Crush\Chat::applyPostToolUse()} — use, so a
+     * transcript reads the same whichever pipeline ran the call.
+     *
+     *     [output withheld by PostToolUse hook "<name>": <reason>] The call ran; its output is not shown.
+     *     [output withheld by the PostToolUse hook chain: <reason>] The call ran; its output is not shown.
+     *
+     * The second shape is for a refusal no single hook owns (see
+     * {@see self::$refusedBy}) and for a chain that threw before it could
+     * name anyone. The hook name comes from configuration — a YAML entry
+     * without `name:` is named after its whole `command` — so it is clipped
+     * to {@see self::MAX_NAMED_HOOK_CHARS} and has its control characters
+     * replaced: it is model-visible text, and a command line is the likeliest
+     * place for a token to have been pasted.
+     */
+    public static function withheldNotice(?string $hook, string $reason): string
+    {
+        $reason = trim($reason);
+        $by = $hook === null
+            ? 'the PostToolUse hook chain'
+            : 'PostToolUse hook "' . self::clipHookName($hook) . '"';
+
+        return sprintf(
+            '[output withheld by %s: %s] The call ran; its output is not shown.',
+            $by,
+            $reason === '' ? 'no reason given' : $reason,
+        );
+    }
+
+    /**
+     * The reason {@see self::withheldNotice()} gives when the chain THREW
+     * instead of answering (audit R6): a crashed hook has vetted nothing, so
+     * the output it was reading is withheld exactly as a refusal's is.
+     */
+    public static function failureReason(\Throwable $e): string
+    {
+        return sprintf('hook failed: %s: %s', $e::class, $e->getMessage());
+    }
+
+    private static function clipHookName(string $name): string
+    {
+        $name = (string) preg_replace('/[\x00-\x1F\x7F]/', ' ', mb_scrub($name, 'UTF-8'));
+
+        return mb_strlen($name) <= self::MAX_NAMED_HOOK_CHARS
+            ? $name
+            : mb_substr($name, 0, self::MAX_NAMED_HOOK_CHARS) . '…';
     }
 
     /**

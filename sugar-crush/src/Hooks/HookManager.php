@@ -225,10 +225,22 @@ final class HookManager
 
     /**
      * Post-tool-use hook execution.
+     *
+     * FAIL-CLOSED ON A THROW (audit R6). The call has already run, so a hook
+     * that throws cannot unwind anything — but it has vetted nothing, and the
+     * hooks queued behind it never ran. It is reported as a DENY naming the
+     * hook that threw, which both tool paths turn into withheld output, exactly
+     * as they treat a hook that timed out. It used to escape to the caller,
+     * which noted it next to the output and showed the model every byte the
+     * rest of the chain would have judged.
+     *
+     * The audit hook runs LAST in this chain (audit R7, see
+     * {@see HookRegistry::findMatches()}), so a refusal or a throw reaches the
+     * caller before it has logged an excerpt of the refused output.
      */
     public function postToolUse(HookContext $context): HookResult
     {
-        return $this->registry->executeHooks(HookEvent::PostToolUse->value, $context);
+        return $this->registry->executeHooks(HookEvent::PostToolUse->value, $context, failClosedOnThrow: true);
     }
 
     /**
