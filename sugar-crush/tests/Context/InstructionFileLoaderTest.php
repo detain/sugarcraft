@@ -137,6 +137,31 @@ final class InstructionFileLoaderTest extends TestCase
         $this->assertSame([], $contents);
     }
 
+    public function testForcedInstructionsLoadUnderABracketedRoot(): void
+    {
+        // Audit 15d-22: the checkout path was handed to glob() as part of the
+        // pattern, so `x[1]` was the character class `[1]`. It matched
+        // nothing of its own tree and, worse, matched the sibling `x1` -- whose
+        // file containment then refused. Net effect: zero forced instructions
+        // and no warning. Only the configured pattern may be a pattern.
+        $root = $this->tempDir . '/x[1]';
+        $sibling = $this->tempDir . '/x1';
+        mkdir($root . '/docs', 0777, true);
+        mkdir($sibling . '/docs', 0777, true);
+        $this->touch($root . '/docs/style.md', '# BRACKETED ROOT STYLE');
+        $this->touch($root . '/docs/testing.md', '# BRACKETED ROOT TESTING');
+        $this->touch($sibling . '/docs/other.md', '# SIBLING TREE');
+
+        $loader = new InstructionFileLoader($root, ['docs/*.md']);
+        $contents = $loader->loadForced();
+
+        $this->assertCount(2, $contents);
+        $this->assertStringContainsString('BRACKETED ROOT STYLE', $contents[0]);
+        $this->assertStringContainsString('BRACKETED ROOT TESTING', $contents[1]);
+        $this->assertStringNotContainsString('SIBLING TREE', implode("\n", $contents));
+        $this->assertSame([], $loader->refusedPaths(), 'the sibling tree is never matched, so nothing is refused');
+    }
+
     // ─── memoization ───────────────────────────────────────────────
 
     public function testLoadRootIsMemoizedForTheLifetimeOfTheLoader(): void

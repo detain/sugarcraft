@@ -755,7 +755,15 @@ final class InstructionFileLoader
                 continue;
             }
 
-            $fullPattern = $this->repoRoot . '/' . $pattern;
+            // Only the configured pattern is a pattern; the checkout path is
+            // literal. Unescaped, a root such as `~/work/[acme]/site` turns
+            // `[acme]` into a character class and every forced instruction
+            // silently matched nothing — or matched a sibling tree that
+            // containment then refused (audit 15d-22). glob() honours
+            // backslash escapes, so the four characters it treats as special
+            // without GLOB_BRACE are escaped (a `]` is only special after an
+            // unescaped `[`). Matches come back with the real, unescaped path.
+            $fullPattern = addcslashes($this->repoRoot, '\\*?[') . '/' . $pattern;
             $matches = glob($fullPattern);
 
             if ($matches === false || $matches === []) {

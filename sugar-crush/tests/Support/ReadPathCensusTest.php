@@ -369,14 +369,13 @@ final class ReadPathCensusTest extends TestCase
         'Memory/ForeignMemoryImporter.php|glob' => [
             'NAMES_ONLY — enumeration inside a directory both compares already accepted',
         ],
-        'Memory/MemoryStore.php|glob' => [
-            'SELF_LOCATED — the store\'s own scope directories, listed',
-            'SELF_LOCATED — one scope\'s entries',
-            'SELF_LOCATED — a lookup by id',
-            'SELF_LOCATED — the same lookup before an update',
-            'SELF_LOCATED — the same lookup before a delete',
-            'SELF_LOCATED — a scope re-index',
-            'SELF_LOCATED — every scope\'s entries, read for the unreadable-notes report',
+        // Seven glob() sites until audit 15d-22: the store's own path went in
+        // as part of the pattern, so a `[`/`*`/`?` in a checkout path listed
+        // nothing (or a sibling tree). Every listing and id lookup now goes
+        // through the one scandir() in directoryNames(); lookups build the path.
+        'Memory/MemoryStore.php|scandir' => [
+            'SELF_LOCATED — the names inside the store\'s own directory or one of its scope '
+                . 'directories, for every listing and id lookup',
         ],
         'Memory/MemoryStore.php|file_get_contents' => [
             'SELF_LOCATED — a scope index this store wrote',

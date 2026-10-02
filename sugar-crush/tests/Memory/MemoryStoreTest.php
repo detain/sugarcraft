@@ -793,6 +793,61 @@ final class MemoryStoreTest extends TestCase
         $this->assertSame([], $store->skipped());
     }
 
+    /**
+     * Audit 15d-22: the store globbed its own location, so a root such as
+     * `~/work/[acme]/site` read `[acme]` as a character class. A note was
+     * written to disk and then never found again by list(), get(), update(),
+     * delete() or unreadable() -- and the class also matched the sibling
+     * `x1` here, so the store answered with ANOTHER tree's notes. Both
+     * directions are pinned: every operation sees its own note and never the
+     * decoy.
+     */
+    public function testARootContainingGlobMetacharactersListsItsNotes(): void
+    {
+        $root = $this->tempDir . '/x[1]';
+        $decoyRoot = $this->tempDir . '/x1';
+        mkdir($root, 0o700, true);
+        mkdir($decoyRoot, 0o700, true);
+        $decoyId = (new MemoryStore($decoyRoot))->add('DECOY sibling note', 'project');
+
+        $store = new MemoryStore($root);
+        $id = $store->add('Bracketed root note', 'project');
+        $this->assertFileExists($root . '/project/' . $id . '.md');
+
+        $listed = $store->list('project');
+        $this->assertCount(1, $listed);
+        $this->assertSame($id, $listed[0]->id());
+        $this->assertNotNull($store->loadIndex('project'), 'the index is generated from the same listing');
+        $this->assertStringContainsString($id, (string) $store->loadIndex('project'));
+
+        $this->assertSame([$id], array_map(static fn(MemoryEntry $e): string => $e->id(), $store->search('note')));
+        $this->assertNull($store->get($decoyId), 'get() must not reach the sibling tree');
+
+        $entry = $store->get($id);
+        $this->assertNotNull($entry);
+        $this->assertSame('Bracketed root note', $entry->content());
+
+        // A scope move must find and remove the old copy, which it locates
+        // the same way get() does.
+        $store->update($id, $entry->withContent('Moved note')->withScope('user'));
+        $this->assertFileDoesNotExist($root . '/project/' . $id . '.md');
+        $this->assertSame([], $store->list('project'));
+        $this->assertSame('Moved note', $store->get($id)?->content());
+
+        file_put_contents($root . '/user/broken.md', "no frontmatter\n");
+        $this->assertSame([$root . '/user/broken.md'], array_keys($store->unreadable()));
+
+        $store->delete($id);
+        $this->assertNull($store->get($id));
+        $this->assertFileDoesNotExist($root . '/user/' . $id . '.md');
+
+        $store->clear('user');
+        $this->assertFileDoesNotExist($root . '/user/broken.md');
+        $this->assertSame([], $store->unreadable());
+
+        $this->assertFileExists($decoyRoot . '/project/' . $decoyId . '.md', 'the sibling tree is never touched');
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {

@@ -52,8 +52,17 @@ use Symfony\Component\Yaml\Yaml;
  * scope so the enum can be adopted without a coordinated rename of Chat.php's
  * vocabulary.
  *
- * search() and get() take no scope argument, so they glob across every scope
+ * search() and get() take no scope argument, so they look in every scope
  * subdirectory instead of a single one.
+ *
+ * No path this store builds ever reaches `glob()` (audit 15d-22). A glob
+ * pattern cannot hold a literal path: a checkout at `~/work/[acme]/site` turns
+ * `[acme]` into a character class, so the store listed nothing under its own
+ * root -- every repo note written, then never found -- or, worse, listed a
+ * sibling tree (`~/work/a/site`) that the class happened to match. The
+ * directories are read with scandir() ({@see scopeDirectories()},
+ * {@see noteFiles()}) and a note is addressed by building its path
+ * ({@see findNoteFile()}), so the store's own location is never interpreted.
  */
 final class MemoryStore
 {
@@ -139,13 +148,8 @@ final class MemoryStore
     public function search(string $query): array
     {
         $results = [];
-        $files = glob($this->memoryPath . '/*/*.md');
 
-        if ($files === false) {
-            return [];
-        }
-
-        foreach ($files as $file) {
+        foreach ($this->allNoteFiles() as $file) {
             $entry = $this->readEntry($file);
             if ($entry === null) {
                 continue;
@@ -184,13 +188,8 @@ final class MemoryStore
         $scope = $this->normalizeScope($scope);
         $results = [];
         $dir = $this->scopeDirectory($scope, false);
-        $files = is_dir($dir) ? glob($dir . '/*.md') : [];
 
-        if ($files === false) {
-            return [];
-        }
-
-        foreach ($files as $file) {
+        foreach ($this->noteFiles($dir) as $file) {
             $entry = $this->readEntry($file);
             if ($entry !== null && $entry->scope() === $scope) {
                 $results[] = $entry;
@@ -203,8 +202,8 @@ final class MemoryStore
     /**
      * Retrieve a single memory entry by its ID.
      *
-     * Ids don't carry their scope, so this globs across every scope
-     * subdirectory to find the matching file.
+     * Ids don't carry their scope, so this looks in every scope
+     * subdirectory for the matching file.
      *
      * @param string $id The UUID of the entry.
      * @return MemoryEntry|null The entry, or null if not found.
@@ -219,12 +218,9 @@ final class MemoryStore
             return null;
         }
 
-        $matches = glob($this->memoryPath . '/*/' . $id . '.md');
-        if ($matches === false || $matches === []) {
-            return null;
-        }
+        $file = $this->findNoteFile($id);
 
-        return $this->readEntry($matches[0]);
+        return $file === null ? null : $this->readEntry($file);
     }
 
     /**
@@ -252,8 +248,7 @@ final class MemoryStore
             throw new \InvalidArgumentException('Invalid memory entry id format');
         }
 
-        $existingMatches = glob($this->memoryPath . '/*/' . $id . '.md');
-        $oldFile = ($existingMatches !== false && $existingMatches !== []) ? $existingMatches[0] : null;
+        $oldFile = $this->findNoteFile($id);
         $oldScope = $oldFile !== null ? $this->readEntry($oldFile)?->scope() : null;
 
         $this->writeEntry($id, $entry);
@@ -280,8 +275,7 @@ final class MemoryStore
             throw new \InvalidArgumentException('Invalid memory entry id format');
         }
 
-        $matches = glob($this->memoryPath . '/*/' . $id . '.md');
-        $file = ($matches !== false && $matches !== []) ? $matches[0] : null;
+        $file = $this->findNoteFile($id);
         $scope = 'user';
 
         if ($file !== null) {
@@ -307,13 +301,8 @@ final class MemoryStore
     {
         $scope = $this->normalizeScope($scope);
         $dir = $this->scopeDirectory($scope, false);
-        $files = is_dir($dir) ? glob($dir . '/*.md') : [];
 
-        if ($files === false) {
-            $files = [];
-        }
-
-        foreach ($files as $file) {
+        foreach ($this->noteFiles($dir) as $file) {
             unlink($file);
             unset($this->skipped[$file]);
         }
@@ -508,6 +497,110 @@ final class MemoryStore
     }
 
     /**
+     * Every scope subdirectory of memoryPath, sorted by path.
+     *
+     * Replaces the directory-level `*` of the old memoryPath globs (audit
+     * 15d-22) and keeps its shape: a name with a leading dot is
+     * not a scope (glob's `*` never matched one), and the order is the byte
+     * order glob() returned under PHP's default C collation, so the first
+     * match for an id is the one it always was.
+     *
+     * @return list<string>
+     */
+    private function scopeDirectories(): array
+    {
+        $dirs = [];
+        foreach (self::directoryNames($this->memoryPath) as $name) {
+            $dir = $this->memoryPath . '/' . $name;
+            if (is_dir($dir)) {
+                $dirs[] = $dir;
+            }
+        }
+
+        return $dirs;
+    }
+
+    /**
+     * The `*.md` files directly inside $dir, sorted by path -- the old
+     * `glob($dir . '/*.md')` without interpreting $dir as a pattern.
+     *
+     * A dot-file is left out as glob left it out, which also keeps
+     * {@see AtomicFileWriter}'s in-flight `.<name>.tmp.<hex>` siblings out of
+     * every listing. The index file is included, as it was; readEntry() is
+     * what declines it.
+     *
+     * @return list<string>
+     */
+    private function noteFiles(string $dir): array
+    {
+        $files = [];
+        foreach (self::directoryNames($dir) as $name) {
+            if (str_ends_with($name, '.md')) {
+                $files[] = $dir . '/' . $name;
+            }
+        }
+
+        return $files;
+    }
+
+    /**
+     * Every scope's note files, sorted by full path as the old two-level
+     * glob sorted them.
+     *
+     * @return list<string>
+     */
+    private function allNoteFiles(): array
+    {
+        $files = [];
+        foreach ($this->scopeDirectories() as $dir) {
+            array_push($files, ...$this->noteFiles($dir));
+        }
+        sort($files, \SORT_STRING);
+
+        return $files;
+    }
+
+    /**
+     * The file holding note $id, looked for in each scope directory by its
+     * built path rather than by globbing `<id>.md` under every scope (audit
+     * 15d-22). The caller has already validated $id, so it is a plain file
+     * name. First match in path order, as glob()'s `$matches[0]` was.
+     */
+    private function findNoteFile(string $id): ?string
+    {
+        foreach ($this->scopeDirectories() as $dir) {
+            $file = $dir . '/' . $id . '.md';
+            if (file_exists($file)) {
+                return $file;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The non-dot entry names of $dir in byte order; empty when $dir is
+     * missing or unreadable, which is what glob() reported for either.
+     *
+     * @return list<string>
+     */
+    private static function directoryNames(string $dir): array
+    {
+        $names = is_dir($dir) ? @scandir($dir, \SCANDIR_SORT_NONE) : false;
+        if ($names === false) {
+            return [];
+        }
+
+        $names = array_values(array_filter(
+            $names,
+            static fn(string $name): bool => $name !== '' && $name[0] !== '.',
+        ));
+        sort($names, \SORT_STRING);
+
+        return $names;
+    }
+
+    /**
      * The files skipped as unreadable memory notes since this store was built,
      * keyed by path, each with the reason it was refused.
      *
@@ -546,7 +639,7 @@ final class MemoryStore
      * and the prompt lists the project scope alone, so a broken user- or
      * agent-scope note was reported to nobody until the user happened to list
      * that scope. This is the read a launch notice needs to say "some of your
-     * notes are being ignored" at all (audit 15d-04 follow-up). Same glob as
+     * notes are being ignored" at all (audit 15d-04 follow-up). Same listing as
      * {@see search()}, so it sees exactly the files the store itself can.
      *
      * A path that has vanished since an earlier read is forgotten here rather
@@ -556,8 +649,7 @@ final class MemoryStore
      */
     public function unreadable(): array
     {
-        $files = glob($this->memoryPath . '/*/*.md');
-        $files = $files === false ? [] : $files;
+        $files = $this->allNoteFiles();
 
         foreach ($files as $file) {
             $this->readEntry($file);
@@ -586,7 +678,7 @@ final class MemoryStore
      */
     private function readEntry(string $file): ?MemoryEntry
     {
-        // The per-scope index shares the `*.md` glob with the notes but is
+        // The per-scope index shares the `*.md` listing with the notes but is
         // generated output, not a note -- never a skip worth reporting.
         if (basename($file) === self::MEMORY_INDEX_FILENAME) {
             return null;
