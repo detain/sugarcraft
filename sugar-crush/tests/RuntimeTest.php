@@ -1843,7 +1843,11 @@ final class RuntimeTest extends TestCase
     {
         $nonSkill = 'not a skill object';
 
+        // Rooted at an empty temp dir, not the cwd: the <env> block embeds the
+        // root's live `git diff`, so an uncommitted edit anywhere in the
+        // checkout that mentions a skill heading would red the negative below.
         $app = App::new($this->provider, 'gpt-4')
+            ->withRoot($this->makeTempRepo())
             ->withEnabledSkills([$nonSkill]);
 
         $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
@@ -4095,9 +4099,9 @@ DOC;
      * {@see testEveryToolOnTheReadOnlyListCallsNoWritePrimitiveInItsOwnSource()}.
      *
      * DELIBERATELY NOT `PermissionGate::isReadOnlyTool()`'s list, which is
-     * missing `WebSearch`, `Skill` and `doctor`. That gate's own doc-block
+     * missing `WebFetch`, `WebSearch`, `Skill` and `doctor`. That gate's own doc-block
      * says the divergence is "A DECISION, NOT A CENSUS" and gives the reason:
-     * those three each reach something outside this process, so leaving them
+     * those four each reach something outside this process, so leaving them
      * to Ask costs a prompt while listing them would spend a judgement that
      * class cannot make. "Did the working tree move" and "may this call be
      * denied without asking" are different questions and the answers differ,

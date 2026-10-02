@@ -264,10 +264,12 @@ final class SkillDiscoveryTest extends TestCase
     {
         $discovery = new SkillDiscovery();
 
-        $result = $discovery->discoverAll([]);
+        // An explicit project root: the default '.' is the runner's cwd, so the
+        // answer would depend on which directory and which earlier test left
+        // the process where it is.
+        $result = $discovery->discoverAll([], $this->tempDir . '/no-project');
 
-        $this->assertIsArray($result);
-        // Only built-in skills that exist in the real project would be returned
+        $this->assertSame([], $result);
     }
 
     public function testDiscoverAllCombinesAllThreeSources(): void
@@ -374,10 +376,13 @@ final class SkillDiscoveryTest extends TestCase
     {
         $discovery = new SkillDiscovery();
 
-        $result = $discovery->discoverAll([]);
+        $projectRoot = $this->tempDir . '/empty-libs-project';
+        mkdir($projectRoot . '/.sugar-crush/skills/project-only', 0777, true);
+        file_put_contents($projectRoot . '/.sugar-crush/skills/project-only/SKILL.md', "---\ndescription: Project\n---\n");
 
-        $this->assertIsArray($result);
-        // Should return project + user skills, no lib skills since none provided
+        $result = $discovery->discoverAll([], $projectRoot);
+
+        $this->assertSame(['project-only'], array_keys($result), 'no lib paths: only the project tier (the sandbox HOME is empty)');
     }
 
     // -------------------------------------------------------------------------
