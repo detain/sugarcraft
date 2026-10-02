@@ -350,12 +350,17 @@ final class VertexProviderTest extends TestCase
         $this->assertSame(200_000, $this->providerWithPredictor()->contextWindow());
     }
 
-    public function testCostPer1kTokensReturnsZero(): void
+    /**
+     * Audit A15: this used to pin the placeholder `0.0` for every model - the
+     * very value that made paid Claude turns read as free and kept the spend
+     * cap inert. The full pricing contract lives in VertexPricingTest.
+     */
+    public function testCostPer1kTokensPricesKnownClaudeFamilies(): void
     {
         $provider = $this->providerWithPredictor();
 
-        $this->assertSame(0.0, $provider->costPer1kTokens(self::ANTHROPIC_MODEL, 'input'));
-        $this->assertSame(0.0, $provider->costPer1kTokens('claude-3-opus@20240229', 'output'));
+        $this->assertEqualsWithDelta(0.003, $provider->costPer1kTokens(self::ANTHROPIC_MODEL, 'input'), 1e-12);
+        $this->assertEqualsWithDelta(0.075, $provider->costPer1kTokens('claude-3-opus@20240229', 'output'), 1e-12);
     }
 
     // -------------------------------------------------------------------------

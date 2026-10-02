@@ -175,10 +175,76 @@ final readonly class VertexProvider implements ProviderInterface
     private \Closure $streamer;
 
     /**
+     * Built-in USD-per-1K list rates, keyed by normalised model FAMILY
+     * ({@see pricingFamily()}) => [input, output] (audit A15).
+     *
+     * WHY A TABLE AND NOT 0.0: `costPer1kTokens()` used to answer a flat
+     * `0.0` "placeholder" for every model, so a paid Claude turn reported a
+     * confident `$0.0000` with no {@see Usage::$unpricedModel} beside it - the
+     * "free" reading of zero, not the "unknown" one - and neither the
+     * EngineBackend mid-turn spend cap nor Chat's pre-flight cap could ever
+     * trip on this provider. A family missing here is now UNPRICED (null), the
+     * loud lower bound, never guessed.
+     *
+     * The figures are the publishers' GLOBAL-endpoint list rates as of the
+     * October 2026 audit (Anthropic's per-model list price, which Vertex
+     * charges on its global endpoint; Google's Gemini rates for prompts up
+     * to 200k tokens). They are an APPROXIMATION in two known directions:
+     * Vertex regional endpoints can carry a premium over the global rate, and
+     * a Gemini prompt over 200k tokens bills a higher tier. Both under-state,
+     * which is the safe side for a lower-bound readout; an operator who needs
+     * the exact figure declares it in `$modelPrices`.
+     *
+     * Retired families (Claude 2, PaLM, Gemini 1.x) and anything newer than
+     * this table (`gemini-3*`, …) are deliberately absent: unpriced, not
+     * priced at a neighbour's rate.
+     *
+     * @var array<string, array{0: float, 1: float}>
+     */
+    private const PRICE_TABLE = [
+        'claude-fable-5-1' => [0.01, 0.05],
+        'claude-fable-5' => [0.01, 0.05],
+        'claude-opus-5-5' => [0.004, 0.02],
+        'claude-opus-5' => [0.005, 0.025],
+        'claude-opus-4-8' => [0.005, 0.025],
+        'claude-opus-4-7' => [0.005, 0.025],
+        'claude-opus-4-6' => [0.005, 0.025],
+        'claude-opus-4-5' => [0.005, 0.025],
+        'claude-opus-4-1' => [0.015, 0.075],
+        'claude-opus-4' => [0.015, 0.075],
+        'claude-3-opus' => [0.015, 0.075],
+        'claude-sonnet-5-5' => [0.002, 0.01],
+        'claude-sonnet-5' => [0.002, 0.01],
+        'claude-sonnet-4-6' => [0.003, 0.015],
+        'claude-sonnet-4-5' => [0.003, 0.015],
+        'claude-sonnet-4' => [0.003, 0.015],
+        'claude-3-7-sonnet' => [0.003, 0.015],
+        'claude-3-5-sonnet' => [0.003, 0.015],
+        'claude-3-sonnet' => [0.003, 0.015],
+        'claude-haiku-4-5' => [0.001, 0.005],
+        'claude-3-5-haiku' => [0.0008, 0.004],
+        'claude-3-haiku' => [0.00025, 0.00125],
+        'gemini-2.5-pro' => [0.00125, 0.01],
+        'gemini-2.5-flash' => [0.0003, 0.0025],
+        'gemini-2.5-flash-lite' => [0.0001, 0.0004],
+        'gemini-2.0-flash' => [0.00015, 0.0006],
+        'gemini-2.0-flash-lite' => [0.000075, 0.0003],
+    ];
+
+    /**
      * @param (callable(string, string, array<string, mixed>): array<string, mixed>)|null $predictor
      *        Unary network seam; when null a real Vertex AI call is wired in.
      * @param (callable(string, string, array<string, mixed>): iterable<int, array<string, mixed>>)|null $streamer
      *        Streaming network seam; when null a real `streamRawPredict` call is wired in.
+     * @param array<string, array{input?: float|int, output?: float|int}> $modelPrices
+     *        Operator-declared USD-per-1M rates, the same shape and rules as
+     *        {@see OpenAIProvider}'s `modelPrices` (per-1M because that is the
+     *        unit price sheets publish in; divided to per-1K once in
+     *        {@see declaredRate()}). Overrides/extends {@see PRICE_TABLE}.
+     *        NOT YET FED FROM CONFIG: `ProviderFactory::createVertex()` does
+     *        not pass the user-tier `modelPrices` map here today, so this
+     *        seam is reachable only by a caller that constructs the provider
+     *        itself - wiring it is a factory change outside this class.
      */
     public function __construct(
         private string $projectId,
@@ -186,6 +252,7 @@ final readonly class VertexProvider implements ProviderInterface
         private string $defaultModel,
         ?callable $predictor = null,
         ?callable $streamer = null,
+        private array $modelPrices = [],
     ) {
         $this->predictor = $predictor !== null
             ? \Closure::fromCallable($predictor)
@@ -199,6 +266,7 @@ final readonly class VertexProvider implements ProviderInterface
     /**
      * @param (callable(string, string, array<string, mixed>): array<string, mixed>)|null $predictor
      * @param (callable(string, string, array<string, mixed>): iterable<int, array<string, mixed>>)|null $streamer
+     * @param array<string, array{input?: float|int, output?: float|int}> $modelPrices see {@see __construct()}
      */
     public static function create(
         string $projectId,
@@ -206,8 +274,9 @@ final readonly class VertexProvider implements ProviderInterface
         string $model = 'claude-3-sonnet@20240229',
         ?callable $predictor = null,
         ?callable $streamer = null,
+        array $modelPrices = [],
     ): self {
-        return new self($projectId, $location, $model, $predictor, $streamer);
+        return new self($projectId, $location, $model, $predictor, $streamer, $modelPrices);
     }
 
     public function name(): string
@@ -275,10 +344,90 @@ final readonly class VertexProvider implements ProviderInterface
         return 200_000;
     }
 
-    public function costPer1kTokens(string $model, string $direction): float
+    /**
+     * @return null|float USD per 1K tokens, or null when neither the operator
+     *         `$modelPrices` map nor {@see PRICE_TABLE} names a rate for the
+     *         model - the loud-unknown answer {@see ProviderInterface} asks
+     *         for (audit A15: this used to be a flat placeholder `0.0`).
+     *
+     * Lookup order: the operator's entry for the RAW id, then the operator's
+     * entry for the normalised family, then the built-in family row. Once
+     * the operator NAMES a model (either spelling) that entry is
+     * authoritative, exactly as in {@see OpenAIProvider::costPer1kTokens()}:
+     * a rate that fails validation answers unpriced rather than falling back
+     * to the shipped row it overrode.
+     */
+    public function costPer1kTokens(string $model, string $direction): ?float
     {
-        // Vertex pricing varies by model and region - return 0 as placeholder
-        return 0.0;
+        if (array_key_exists($model, $this->modelPrices)) {
+            return $this->declaredRate($model, $direction);
+        }
+
+        $family = self::pricingFamily($model);
+        if (array_key_exists($family, $this->modelPrices)) {
+            return $this->declaredRate($family, $direction);
+        }
+
+        $row = self::PRICE_TABLE[$family] ?? null;
+        if ($row === null) {
+            return null;
+        }
+
+        return $direction === 'input' ? $row[0] : $row[1];
+    }
+
+    /**
+     * The price-table key a Vertex model id belongs to.
+     *
+     * Vertex ids carry release decorations the family does not:
+     * `claude-sonnet-4-5@20250929`, `claude-3-5-sonnet-v2@20241022`,
+     * `claude-opus-4-0`, `gemini-2.5-flash-001`, and a configured id may even
+     * be a resource path. Each decoration is stripped ONCE, in a fixed order
+     * (path, `@version`, `-vN[:M]`, `-YYYYMMDD`, a three-digit Gemini
+     * revision, the `-0` alias), and the remainder must then EQUAL a table
+     * key. Exact equality, not a prefix match, is the point: a prefix rule
+     * would price an unknown `claude-sonnet-4-7` at the `claude-sonnet-4`
+     * row, which is a guess presented as a measurement.
+     */
+    private static function pricingFamily(string $model): string
+    {
+        $id = strtolower(trim($model));
+
+        $slash = strrpos($id, '/');
+        if ($slash !== false) {
+            $id = substr($id, $slash + 1);
+        }
+
+        $at = strpos($id, '@');
+        if ($at !== false) {
+            $id = substr($id, 0, $at);
+        }
+
+        foreach (['/-v\d+(?::\d+)?$/', '/-\d{8}$/', '/-\d{3}$/', '/-0$/'] as $decoration) {
+            $id = (string) preg_replace($decoration, '', $id);
+        }
+
+        return $id;
+    }
+
+    /**
+     * One operator-declared rate, per-1K, for a model the operator NAMED in
+     * `$modelPrices`; null when the declaration fails validation. Same rule
+     * as {@see OpenAIProvider}'s: zero is legal (a genuinely free model),
+     * sign-flipped or non-finite rates go the loud unpriced road rather than
+     * being floored by {@see Usage} into a fake-free 0.0.
+     */
+    private function declaredRate(string $key, string $direction): ?float
+    {
+        $entry = $this->modelPrices[$key];
+        $declared = is_array($entry) ? ($entry[$direction] ?? null) : null;
+        if (!is_numeric($declared)) {
+            return null;
+        }
+
+        $rate = ((float) $declared) / 1000; // config speaks USD-per-1M
+
+        return $rate >= 0.0 && is_finite($rate) ? $rate : null;
     }
 
     public function complete(CompleteRequest $request): CompleteResponse
@@ -1005,15 +1154,21 @@ final readonly class VertexProvider implements ProviderInterface
         $inputTokens = self::usageInt($usage['input_tokens'] ?? null) ?? 0;
         $outputTokens = self::usageInt($usage['output_tokens'] ?? null) ?? 0;
 
+        // Audit A15: an unknown model bills the 0.0 lower bound WITH its name
+        // on the carrier, so the transcript notice and the spend-cap
+        // disclosure can tell "unpriced" from "free".
+        $cost = $this->cost($model, $inputTokens, $outputTokens);
+
         return Usage::new(
             // The exact expression this replaces: the sum of the two sides
             // each defaulted to 0 (see the tokensUsed paragraph above).
             $inputTokens + $outputTokens,
-            $this->cost($model, $inputTokens, $outputTokens),
+            $cost ?? 0.0,
             self::usageInt($usage['input_tokens'] ?? null),
             self::usageInt($usage['output_tokens'] ?? null),
             self::usageInt($usage['cache_read_input_tokens'] ?? null),
             self::usageInt($usage['cache_creation_input_tokens'] ?? null),
+            unpricedModel: $cost === null ? $model : null,
         );
     }
 
@@ -1211,10 +1366,11 @@ final readonly class VertexProvider implements ProviderInterface
         // progresses (UNVERIFIED-documented; this repo ships no Anthropic SDK
         // to check against), and a cumulative `message_delta` can carry
         // input - a both-sided document handed to a whole-document price
-        // would bill the same side twice across the summed turn. Today the
-        // per-side split is unobservable through cost - Vertex's
-        // costPer1kTokens() is a placeholder `return 0.0` - so the P4.S2
-        // tests pin the tokensUsed side of it. The E17 carriers make the
+        // would bill the same side twice across the summed turn. Since audit
+        // A15 priced this provider the split is observable through cost too
+        // (VertexPricingTest pins each event's per-side dollar figure and its
+        // unpriced signal); before that, costPer1kTokens() was a placeholder
+        // `return 0.0` and only the tokensUsed side could be pinned. The E17 carriers make the
         // same ownership visible beside the cost: the start carrier reports
         // only the input-side buckets, the delta carrier only the output
         // side, whatever extra fields a stray document may have carried.
@@ -1233,14 +1389,15 @@ final readonly class VertexProvider implements ProviderInterface
             return new CompleteResponse(
                 content: '',
                 tokensUsed: $usage->inputTokens,
-                costUsd: $startCost,
+                costUsd: $startCost ?? 0.0,
                 usage: Usage::new(
                     $usage->inputTokens,
-                    $startCost,
+                    $startCost ?? 0.0,
                     $usage->inputTokens,
                     null,
                     $usage->cacheReadTokens,
                     $usage->cacheCreationTokens,
+                    unpricedModel: $startCost === null ? $model : null,
                 ),
             );
         }
@@ -1271,8 +1428,14 @@ final readonly class VertexProvider implements ProviderInterface
             return new CompleteResponse(
                 content: '',
                 tokensUsed: $usage->outputTokens,
-                costUsd: $deltaCost,
-                usage: Usage::new($usage->outputTokens, $deltaCost, null, $usage->outputTokens),
+                costUsd: $deltaCost ?? 0.0,
+                usage: Usage::new(
+                    $usage->outputTokens,
+                    $deltaCost ?? 0.0,
+                    null,
+                    $usage->outputTokens,
+                    unpricedModel: $deltaCost === null ? $model : null,
+                ),
                 truncated: $truncated,
             );
         }
@@ -1326,10 +1489,42 @@ final readonly class VertexProvider implements ProviderInterface
         return strlen($value) <= $limit ? $value : substr($value, 0, $limit) . '…';
     }
 
-    private function cost(string $model, int $inputTokens, int $outputTokens): float
+    /**
+     * USD for one priced side or both, or null when a side that BILLED tokens
+     * has no rate on file (audit A15).
+     *
+     * A side with no tokens needs no rate: the streaming Anthropic arm prices
+     * `message_start` as `cost($model, $in, 0)` and `message_delta` as
+     * `cost($model, 0, $out)`, and a model with only one declared direction
+     * must not turn the other event unpriced over tokens it never carried.
+     * Null rather than 0.0 so every caller can set
+     * {@see Usage::$unpricedModel} - the accounting itself stays at the 0.0
+     * lower bound.
+     *
+     * Cache tokens are NOT priced here, and that is a known gap rather than an
+     * oversight: Anthropic bills cache reads and writes at their own rates,
+     * but this class sends no `cache_control` breakpoints
+     * ({@see CacheBreakpoints} has no caller), so on this provider those
+     * buckets are absent or zero today. Whoever wires breakpoints prices them.
+     */
+    private function cost(string $model, int $inputTokens, int $outputTokens): ?float
     {
-        return ($inputTokens * $this->costPer1kTokens($model, 'input')
-            + $outputTokens * $this->costPer1kTokens($model, 'output')) / 1000;
+        $total = 0.0;
+
+        foreach (['input' => $inputTokens, 'output' => $outputTokens] as $direction => $tokens) {
+            if ($tokens <= 0) {
+                continue;
+            }
+
+            $rate = $this->costPer1kTokens($model, $direction);
+            if ($rate === null) {
+                return null;
+            }
+
+            $total += $tokens * $rate;
+        }
+
+        return $total / 1000;
     }
 
     // -------------------------------------------------------------------------
@@ -1834,9 +2029,13 @@ final readonly class VertexProvider implements ProviderInterface
         $prompt = $promptRaw ?? 0;
         $candidates = $candidatesRaw ?? 0;
 
+        // Audit A15: unknown Gemini families bill the 0.0 lower bound with
+        // their name carried, never a silent zero.
+        $cost = $this->cost($model, $prompt, $candidates);
+
         return Usage::new(
             $prompt + $candidates,
-            $this->cost($model, $prompt, $candidates),
+            $cost ?? 0.0,
             // Unreported prompt stays unreported even when cached is known -
             // the difference would be a guess, and Usage's contract is that
             // a bucket holds only what the provider said or derived from
@@ -1845,6 +2044,7 @@ final readonly class VertexProvider implements ProviderInterface
             $candidatesRaw,
             $cached,
             null, // no cache-creation field on this protocol - never invented
+            unpricedModel: $cost === null ? $model : null,
         );
     }
 
