@@ -65,6 +65,13 @@ final class ForeignMemoryImporter
     private const INDEX_FILENAME = 'MEMORY.md';
 
     /**
+     * Longest project slug Claude Code writes verbatim; a longer one is cut to
+     * this many characters and suffixed with a hash of the path — see
+     * {@see claudeProjectSlug()}.
+     */
+    private const CLAUDE_SLUG_MAX_LENGTH = 200;
+
+    /**
      * Directories and entries the most recent import declined to read, path as
      * spelled => why — see {@see refusedDirectories()}.
      *
@@ -99,10 +106,11 @@ final class ForeignMemoryImporter
      * Import Claude Code's per-project auto-memory entries.
      *
      * Claude Code stores them at `<claudeHome>/projects/<slug>/memory/*.md`
-     * where <slug> is the absolute project path with every `/` replaced by `-`
-     * (so `/home/sites/sugarcraft` becomes `-home-sites-sugarcraft`). Each
-     * entry carries YAML frontmatter; a file without frontmatter is not one of
-     * Claude Code's entries and is skipped rather than imported as a blob.
+     * where <slug> is the absolute project path with every character that is
+     * not an ASCII letter or digit replaced by `-` — see
+     * {@see claudeProjectSlug()}. Each entry carries YAML frontmatter; a file
+     * without frontmatter is not one of Claude Code's entries and is skipped
+     * rather than imported as a blob.
      *
      * THE USER TIER GOES THROUGH {@see HomeDirectory::owned()}, not
      * {@see HomeDirectory::path()}, and this was the last reader in the package
@@ -152,7 +160,7 @@ final class ForeignMemoryImporter
             $claudeHome = $owned . '/.claude';
         }
 
-        $dir = rtrim($claudeHome, '/') . '/projects/' . $this->claudeProjectSlug($projectRoot) . '/memory';
+        $dir = $this->claudeMemoryDirectory($claudeHome, $projectRoot);
 
         $imported = 0;
 
@@ -264,27 +272,43 @@ final class ForeignMemoryImporter
     }
 
     /**
-     * Every `*.md` in $dir that still RESOLVES inside it, or an empty list when
-     * the directory is absent (a user who has never run the foreign tool is the
-     * common case, not an error) or unreadable (glob() returns false).
+     * Every `*.md` in $dir that still RESOLVES inside it, in byte order, or an
+     * empty list when the directory is absent (a user who has never run the
+     * foreign tool is the common case, not an error) or unreadable.
+     *
+     * The names come from scandir(), not `glob($dir . '/*.md')`: a glob
+     * pattern cannot hold a literal path, so a checkout or home under
+     * `~/work/[acme]/` turned `[acme]` into a character class and the import
+     * listed nothing — or a sibling directory the class happened to match
+     * (the MemoryStore half of this was audit 15d-22). What glob's `*.md`
+     * gave is kept: dot-files are skipped and the list is byte-order sorted.
      *
      * The per-ENTRY containment is the second of the two boundaries
      * {@see importOpencode()} describes, and it applies to BOTH importers rather
-     * than only the anchored one: `glob()` does not resolve symlinks, so
-     * `memory/notes.md -> ~/.ssh/id_ed25519` is one committed line that would
-     * otherwise land in the memory store under a `source:` tag naming the
-     * project. Refusals are named through {@see refusedDirectories()}.
+     * than only the anchored one: a directory listing does not resolve
+     * symlinks, so `memory/notes.md -> ~/.ssh/id_ed25519` is one committed line
+     * that would otherwise land in the memory store under a `source:` tag
+     * naming the project. Refusals are named through {@see refusedDirectories()}.
      *
      * @return list<string>
      */
     private function markdownFiles(string $dir): array
     {
-        if (!is_dir($dir)) {
+        $names = is_dir($dir) ? @scandir($dir, \SCANDIR_SORT_NONE) : false;
+        if ($names === false) {
             return [];
         }
 
+        $names = array_values(array_filter(
+            $names,
+            static fn(string $name): bool => $name !== '' && $name[0] !== '.' && str_ends_with($name, '.md'),
+        ));
+        sort($names, \SORT_STRING);
+
+        $dir = rtrim($dir, '/');
         $files = [];
-        foreach (glob(rtrim($dir, '/') . '/*.md') ?: [] as $file) {
+        foreach ($names as $name) {
+            $file = $dir . '/' . $name;
             if (!ContainedPath::within($file, $dir)) {
                 $this->refusedDirectories[$file] = sprintf(
                     'resolves outside %s, the directory it was listed from, so it is not a memory entry that '
@@ -302,18 +326,134 @@ final class ForeignMemoryImporter
     }
 
     /**
-     * Claude Code's project-directory slug: the absolute path with `/` turned
-     * into `-`, keeping the leading separator so `/home/x` becomes `-home-x`.
+     * The Claude Code memory directory for $projectRoot under $claudeHome.
+     *
+     * Claude Code's own spelling ({@see claudeProjectSlug()}) is tried first.
+     * Until audit 15d-06 this class spelled the slug by replacing only `/`, so
+     * `/srv/web.site` was looked up as `-srv-web.site` while Claude Code wrote
+     * `-srv-web-site`; that older spelling is still tried when the correct
+     * one holds no memory directory, so a tree someone arranged by hand to
+     * suit the old lookup keeps importing. It is a fallback and never a second
+     * source: one directory is read per import, and a path whose two
+     * spellings coincide (no `.`, `_`, space, …) is simply one directory.
+     */
+    private function claudeMemoryDirectory(string $claudeHome, string $projectRoot): string
+    {
+        $projects = rtrim($claudeHome, '/') . '/projects/';
+        $dir = $projects . self::claudeProjectSlug($projectRoot) . '/memory';
+        if (is_dir($dir)) {
+            return $dir;
+        }
+
+        $legacy = $projects . self::legacyClaudeProjectSlug($projectRoot) . '/memory';
+
+        return $legacy !== $dir && is_dir($legacy) ? $legacy : $dir;
+    }
+
+    /**
+     * Claude Code's project-directory slug, as Claude Code 2.1.287 computes
+     * it (read out of its bundle): every UTF-16 code unit of the path that is
+     * not `[A-Za-z0-9]` becomes `-`, with no collapsing and no trimming. So
+     * the leading `/` survives as a leading `-`, and `/x/.claude/y` gives
+     * `-x--claude-y`. This host's real `~/.claude/projects/` confirms both:
+     * `/home/sites/webhooks.interserver.net` is
+     * `-home-sites-webhooks-interserver-net`, and a worktree under
+     * `phlix-server/.claude/worktrees/` is `-…-phlix-server--claude-worktrees-…`.
+     * Replacing only `/` (the spelling before audit 15d-06) missed every
+     * project whose path held a `.`, `_`, space or non-ASCII character.
+     *
+     * Code UNITS, not bytes or code points, because that is what a JavaScript
+     * regex replaces: `é` is one `-`, but a character outside the Basic
+     * Multilingual Plane is a surrogate pair and becomes `--`. A path that is
+     * not valid UTF-8 is dashed byte by byte — how Claude Code's runtime
+     * decodes such a path was not verified, so that case may not match.
+     *
+     * A slug longer than {@see CLAUDE_SLUG_MAX_LENGTH} is cut there and
+     * suffixed with `-` plus the base-36 absolute value of the path's 32-bit
+     * Java-style string hash ({@see claudePathHash()}), as Claude Code does.
      *
      * The trailing slash is stripped first: a caller passing `/home/x/` would
      * otherwise slug to `-home-x-` and silently find no memory directory,
-     * since Claude Code never writes a trailing separator into the name.
+     * since Claude Code's working directory never carries one.
      */
-    private function claudeProjectSlug(string $projectRoot): string
+    private static function claudeProjectSlug(string $projectRoot): string
     {
-        $path = rtrim($projectRoot, '/');
+        $path = self::withoutTrailingSlash($projectRoot);
 
-        return '-' . ltrim(str_replace('/', '-', $path), '-');
+        $slug = preg_match('//u', $path) === 1
+            ? (string) preg_replace_callback(
+                '/[^A-Za-z0-9]/u',
+                // A 4-byte UTF-8 sequence is exactly a supplementary-plane
+                // character, i.e. a surrogate pair in UTF-16.
+                static fn(array $m): string => strlen($m[0]) === 4 ? '--' : '-',
+                $path,
+            )
+            : (string) preg_replace('/[^A-Za-z0-9]/', '-', $path);
+
+        if (strlen($slug) <= self::CLAUDE_SLUG_MAX_LENGTH) {
+            return $slug;
+        }
+
+        return substr($slug, 0, self::CLAUDE_SLUG_MAX_LENGTH) . '-' . self::claudePathHash($path);
+    }
+
+    /**
+     * Claude Code's long-slug suffix: `Math.abs(h).toString(36)` where `h` is
+     * the 32-bit `h = h * 31 + unit` hash over the path's UTF-16 code units
+     * (the bytes, for a path that is not valid UTF-8 — unverified, see
+     * {@see claudeProjectSlug()}).
+     */
+    private static function claudePathHash(string $path): string
+    {
+        $units = [];
+        if (preg_match('//u', $path) === 1) {
+            foreach (mb_str_split($path, 1, 'UTF-8') as $char) {
+                $codePoint = (int) mb_ord($char, 'UTF-8');
+                if ($codePoint < 0x10000) {
+                    $units[] = $codePoint;
+                    continue;
+                }
+                $codePoint -= 0x10000;
+                $units[] = 0xD800 | ($codePoint >> 10);
+                $units[] = 0xDC00 | ($codePoint & 0x3FF);
+            }
+        } else {
+            foreach (str_split($path) as $byte) {
+                $units[] = ord($byte);
+            }
+        }
+
+        // `(h << 5) - h + unit | 0` in JavaScript: the same value mod 2^32,
+        // re-signed below the way `| 0` reads it.
+        $hash = 0;
+        foreach ($units as $unit) {
+            $hash = (($hash << 5) - $hash + $unit) & 0xFFFFFFFF;
+        }
+        if ($hash >= 0x80000000) {
+            $hash -= 0x100000000;
+        }
+
+        return base_convert((string) abs($hash), 10, 36);
+    }
+
+    /**
+     * The slug this class looked for before audit 15d-06 — only `/` turned
+     * into `-` — kept solely as {@see claudeMemoryDirectory()}'s fallback.
+     */
+    private static function legacyClaudeProjectSlug(string $projectRoot): string
+    {
+        return '-' . ltrim(str_replace('/', '-', self::withoutTrailingSlash($projectRoot)), '-');
+    }
+
+    /**
+     * $path without trailing `/`, except that the filesystem root stays `/`
+     * (Claude Code slugs a session started at `/` as `-`).
+     */
+    private static function withoutTrailingSlash(string $path): string
+    {
+        $trimmed = rtrim($path, '/');
+
+        return $trimmed === '' && $path !== '' ? '/' : $trimmed;
     }
 
     /**

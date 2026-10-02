@@ -193,7 +193,7 @@ final class ForeignMemoryImporterContainmentTest extends TestCase
      */
     public function testAClaudeMemoryEntrySymlinkedOutOfItsDirectoryIsRefused(): void
     {
-        $slug = '-' . ltrim(str_replace('/', '-', $this->project), '-');
+        $slug = (string) preg_replace('/[^A-Za-z0-9]/', '-', $this->project);
         $dir = $this->sandbox . '/claude/projects/' . $slug . '/memory';
         mkdir($dir, 0o777, true);
         file_put_contents($dir . '/real.md', "---\ndescription: real\n---\nREAL-CLAUDE-NOTE\n");
@@ -241,7 +241,7 @@ final class ForeignMemoryImporterContainmentTest extends TestCase
         $home = $this->sandbox . '/home';
         chmod($home, 0o1777);
 
-        $slug = '-' . ltrim(str_replace('/', '-', $this->project), '-');
+        $slug = (string) preg_replace('/[^A-Za-z0-9]/', '-', $this->project);
         $dir = $home . '/.claude/projects/' . $slug . '/memory';
         mkdir($dir, 0o777, true);
         file_put_contents($dir . '/planted.md', "---\ndescription: planted\n---\n" . self::SECRET . "\n");
@@ -266,7 +266,7 @@ final class ForeignMemoryImporterContainmentTest extends TestCase
     public function testAnOwnedHomeStillImportsTheClaudeTier(): void
     {
         $home = $this->sandbox . '/home';
-        $slug = '-' . ltrim(str_replace('/', '-', $this->project), '-');
+        $slug = (string) preg_replace('/[^A-Za-z0-9]/', '-', $this->project);
         $dir = $home . '/.claude/projects/' . $slug . '/memory';
         mkdir($dir, 0o777, true);
         file_put_contents($dir . '/note.md', "---\ndescription: mine\n---\nOWNED-HOME-NOTE\n");
@@ -287,7 +287,7 @@ final class ForeignMemoryImporterContainmentTest extends TestCase
         $home = $this->sandbox . '/home';
         chmod($home, 0o1777);
 
-        $slug = '-' . ltrim(str_replace('/', '-', $this->project), '-');
+        $slug = (string) preg_replace('/[^A-Za-z0-9]/', '-', $this->project);
         $dir = $this->sandbox . '/claude/projects/' . $slug . '/memory';
         mkdir($dir, 0o777, true);
         file_put_contents($dir . '/note.md', "---\ndescription: explicit\n---\nEXPLICIT-HOME-NOTE\n");

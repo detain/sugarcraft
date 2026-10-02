@@ -193,6 +193,127 @@ final class ForeignMemoryImporterTest extends TestCase
         $this->assertSame("From home\n\nbody", $this->store->list('agent')[0]->content());
     }
 
+    /**
+     * Claude Code dashes EVERY non-alphanumeric character, not only `/`
+     * (audit 15d-06): `.`, `_` and spaces too, with no collapsing, so the
+     * leading `/` stays a leading `-` and `/.claude` becomes `--claude`. The
+     * importer looked up the `/`-only spelling and found nothing; in the
+     * audit's repro it imported a decoy sitting at that spelling instead.
+     * The decoy is still here, and must lose to the real directory.
+     */
+    public function testSlugMatchesClaudeCodeForDottedAndUnderscoredPaths(): void
+    {
+        $project = $this->tempDir . '/web.site_x';
+        file_put_contents(
+            $this->claudeMemoryDir($project) . '/deploy.md',
+            "---\ndescription: Deploy via make\n---\nUse make deploy.\n",
+        );
+        file_put_contents(
+            $this->legacyClaudeMemoryDir($project) . '/decoy.md',
+            "---\ndescription: Decoy at the dotted slug\n---\nwrong directory\n",
+        );
+
+        $this->assertSame(1, $this->importer->importClaudeCode($project, $this->tempDir . '/claude'));
+        $this->assertSame(['Deploy via make'], $this->importedTitles());
+    }
+
+    /**
+     * Literal slugs, so the expectation is not the same regex as the code
+     * under test: each right-hand side is what Claude Code 2.1.287's own
+     * `replace(/[^a-zA-Z0-9]/g, "-")` + 200-character cap + hash suffix
+     * produced for the left-hand path, run under node. The first two are also
+     * spellings this host's real `~/.claude/projects/` holds.
+     *
+     * @return iterable<string, array{string, string}>
+     */
+    public static function claudeSlugs(): iterable
+    {
+        yield 'dotted host name' => ['/home/sites/webhooks.interserver.net', '-home-sites-webhooks-interserver-net'];
+        yield 'dot-directory doubles the dash' => [
+            '/home/sites/phlix/phlix-server/.claude/worktrees/gifted-mcclintock-809258',
+            '-home-sites-phlix-phlix-server--claude-worktrees-gifted-mcclintock-809258',
+        ];
+        yield 'underscore, space, dot-dir' => ['/srv/web.site_x/.claude/wt y', '-srv-web-site-x--claude-wt-y'];
+        yield 'BMP char is one dash, astral char is a surrogate pair' => ["/srv/caf\u{e9}/\u{1F600}x", '-srv-caf----x'];
+        yield 'over 200 characters is cut and hashed' => [
+            '/srv/' . str_repeat('deep.dir/', 30) . 'project',
+            '-srv-' . substr(str_repeat('deep-dir-', 30), 0, 195) . '-ps3jym',
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('claudeSlugs')]
+    public function testSlugSpellingMatchesClaudeCode(string $projectRoot, string $slug): void
+    {
+        file_put_contents($this->memoryDirAtSlug($slug) . '/a.md', "---\ndescription: Found\n---\nbody\n");
+
+        $this->assertSame(1, $this->importer->importClaudeCode($projectRoot, $this->tempDir . '/claude'));
+        $this->assertSame(['Found'], $this->importedTitles());
+    }
+
+    /**
+     * A tree laid out for the lookup this class did before audit 15d-06 (only
+     * `/` dashed) still imports when Claude Code's spelling holds nothing.
+     */
+    public function testImportClaudeCodeFallsBackToTheLegacySlugSpelling(): void
+    {
+        $project = $this->tempDir . '/web.site_x';
+        file_put_contents(
+            $this->legacyClaudeMemoryDir($project) . '/old.md',
+            "---\ndescription: From the old spelling\n---\nbody\n",
+        );
+
+        $this->assertSame(1, $this->importer->importClaudeCode($project, $this->tempDir . '/claude'));
+        $this->assertSame(['From the old spelling'], $this->importedTitles());
+    }
+
+    /**
+     * A path with nothing but letters, digits and `/` spells both slugs the
+     * same; that one directory is read once, not once per spelling.
+     */
+    public function testAPathWhoseSpellingsCoincideIsImportedOnce(): void
+    {
+        file_put_contents($this->memoryDirAtSlug('-srv-plain-project') . '/a.md', "---\ndescription: Once\n---\nbody\n");
+
+        $this->assertSame(1, $this->importer->importClaudeCode('/srv/plain-project', $this->tempDir . '/claude'));
+        $this->assertSame(['Once'], $this->importedTitles());
+    }
+
+    /**
+     * The listing read the directory as a glob pattern (the 15d-22 shape): a
+     * Claude home under `claude[1]` matched the sibling `claude1` and imported
+     * its notes instead of its own. Dot-files stay out, as glob's `*.md` kept
+     * them out.
+     */
+    public function testAClaudeHomeContainingGlobMetacharactersListsItsOwnNotes(): void
+    {
+        $project = $this->tempDir . '/project';
+        $own = $this->claudeMemoryDir($project, $this->tempDir . '/claude[1]');
+        file_put_contents($own . '/b.md', "---\ndescription: Own B\n---\nbody\n");
+        file_put_contents($own . '/a.md', "---\ndescription: Own A\n---\nbody\n");
+        file_put_contents($own . '/.hidden.md', "---\ndescription: Hidden\n---\nbody\n");
+        file_put_contents($own . '/notes.txt', "---\ndescription: Not markdown\n---\nbody\n");
+        file_put_contents(
+            $this->claudeMemoryDir($project, $this->tempDir . '/claude1') . '/sibling.md',
+            "---\ndescription: Sibling tree\n---\nbody\n",
+        );
+
+        $this->assertSame(2, $this->importer->importClaudeCode($project, $this->tempDir . '/claude[1]'));
+        $this->assertSame(['Own A', 'Own B'], $this->importedTitles());
+    }
+
+    /** The same listing, reached through the opencode tier's checkout path. */
+    public function testAnOpencodeCheckoutContainingGlobMetacharactersListsItsOwnNotes(): void
+    {
+        $root = $this->tempDir . '/proj[1]';
+        mkdir($root . '/.opencode/memory', 0777, true);
+        file_put_contents($root . '/.opencode/memory/own.md', "own note\n");
+        mkdir($this->tempDir . '/proj1/.opencode/memory', 0777, true);
+        file_put_contents($this->tempDir . '/proj1/.opencode/memory/sibling.md', "sibling note\n");
+
+        $this->assertSame(1, $this->importer->importOpencode($root));
+        $this->assertSame(['# own'], $this->importedTitles());
+    }
+
     public function testImportOpencodeImportsWholeFilesWithFilenameTitles(): void
     {
         $dir = $this->projectRoot . '/.opencode/memory';
@@ -263,15 +384,40 @@ final class ForeignMemoryImporterTest extends TestCase
     /**
      * Build the Claude Code memory directory for $projectRoot under $claudeHome
      * (default: this test's fake ~/.claude), mirroring the real
-     * `<home>/projects/<path-with-dashes>/memory` layout.
+     * `<home>/projects/<slug>/memory` layout. The slug is Claude Code's: every
+     * non-alphanumeric byte becomes `-` (these fixture paths are ASCII and far
+     * below the 200-character cap; uniqid()'s `.` makes the old `/`-only
+     * spelling differ from it, so every test here exercises the real lookup).
      */
     private function claudeMemoryDir(string $projectRoot, ?string $claudeHome = null): string
     {
-        $slug = '-' . ltrim(str_replace('/', '-', rtrim($projectRoot, '/')), '-');
+        return $this->memoryDirAtSlug(
+            (string) preg_replace('/[^A-Za-z0-9]/', '-', rtrim($projectRoot, '/')),
+            $claudeHome,
+        );
+    }
+
+    /** The slug this importer looked up before audit 15d-06: only `/` dashed. */
+    private function legacyClaudeMemoryDir(string $projectRoot, ?string $claudeHome = null): string
+    {
+        return $this->memoryDirAtSlug('-' . ltrim(str_replace('/', '-', rtrim($projectRoot, '/')), '-'), $claudeHome);
+    }
+
+    private function memoryDirAtSlug(string $slug, ?string $claudeHome = null): string
+    {
         $dir = ($claudeHome ?? $this->tempDir . '/claude') . '/projects/' . $slug . '/memory';
         mkdir($dir, 0777, true);
 
         return $dir;
+    }
+
+    /** @return list<string> the first line of every imported entry, sorted */
+    private function importedTitles(): array
+    {
+        $titles = array_map(static fn($e): string => strtok($e->content(), "\n"), $this->store->list('agent'));
+        sort($titles);
+
+        return $titles;
     }
 
     private function removeDirectory(string $dir): void

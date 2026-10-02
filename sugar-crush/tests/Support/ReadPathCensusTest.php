@@ -366,7 +366,10 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED — a `.opencode/memory` file behind the project tier\'s anchor',
             'CONTAINED — the user tier\'s, behind HomeDirectory::owned()',
         ],
-        'Memory/ForeignMemoryImporter.php|glob' => [
+        // glob() until audit 15d-06: the memory directory went in as part of
+        // the pattern, so a `[`/`*`/`?` in a checkout or home path listed
+        // nothing of its own (or a sibling tree's notes). Now scandir().
+        'Memory/ForeignMemoryImporter.php|scandir' => [
             'NAMES_ONLY — enumeration inside a directory both compares already accepted',
         ],
         // Seven glob() sites until audit 15d-22: the store's own path went in
