@@ -477,6 +477,16 @@ final class Width
                 $remaining = $token;
                 while (self::string($remaining) > $max) {
                     $chunk = self::truncate($remaining, $max);
+                    if ($chunk === '') {
+                        // 15b-26: the leading cluster is wider than the whole
+                        // budget (a CJK glyph or wide emoji at $max = 1), so
+                        // truncate() fits nothing and the loop would never
+                        // advance. Emit that cluster alone on an over-wide
+                        // row — wrapAnsi() does the same — because every
+                        // pass must consume at least one cluster, and an
+                        // over-wide row beats a hang or a dropped glyph.
+                        $chunk = self::nextCluster($remaining, 0);
+                    }
                     $lines[] = $chunk;
                     $remaining = substr($remaining, strlen($chunk));
                 }
