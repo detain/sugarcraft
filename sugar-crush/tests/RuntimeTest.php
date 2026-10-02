@@ -8095,9 +8095,11 @@ DOC;
 
         // NEGATIVE, on the real tree: a tool with no traits and no parent
         // contributes exactly one file, so the walk is not simply returning
-        // everything it can find.
+        // everything it can find. (WebFetch used to stand here; it took the
+        // TruncatesOutput trait for its 64 KiB result cap, so WebSearch -
+        // still trait-less and parent-less - holds the second slot.)
         $this->assertSame(['SkillTool.php'], $tools['Skill']);
-        $this->assertSame(['WebFetch.php'], $tools['WebFetch']);
+        $this->assertSame(['WebSearch.php'], $tools['WebSearch']);
 
         // THE PARENT AND TRAIT-OF-TRAIT SHAPES, WHICH THE TREE DOES NOT HAVE,
         // AND EACH IN ITS OWN FILE - because a hierarchy declared in ONE file

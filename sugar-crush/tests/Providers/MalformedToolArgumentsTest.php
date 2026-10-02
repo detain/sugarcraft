@@ -160,13 +160,17 @@ final class MalformedToolArgumentsTest extends TestCase
         ]);
     }
 
-    private function provider(string $kind, string $body): ProviderInterface
+    /**
+     * StreamedToolCallFlushTest's helper, kept token-identical (the `$parser`
+     * slot included) so the two copies cannot drift unseen.
+     */
+    private function provider(string $kind, string $body, mixed $parser = null): ProviderInterface
     {
         $client = $this->createMock(Client::class);
         $client->method('post')->willReturn(new Response(200, [], $body));
 
         return $kind === 'sglang'
-            ? new SglangProvider('https://api.example.com', 'some-model', null, $client)
+            ? new SglangProvider('https://api.example.com', 'some-model', null, $client, $parser)
             : new CustomProvider('custom', 'https://api.example.com', 'some-model', null, $client, true, true);
     }
 

@@ -575,6 +575,9 @@ final class TreeWideGuardRosterTest extends TestCase
         'Agents/WorktreeManagerConfigOriginTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         'ClaudeCodeMcpClientStdinWedgeTest.php' => ['glob($this->tempDir.\'/*\')'],
         'Cli/AgentManagerWiringTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
+        // tearDown() removes the sys_get_temp_dir() tree setUp() made;
+        // entriesOf() lists the config / dotfiles dirs symlinkedConfig() made in it.
+        'Cli/BootstrapConfigPathOverrideTest.php' => ['RecursiveDirectoryIterator($this->tempDir,\FilesystemIterator::SKIP_DOTS)', 'scandir($dir)'],
         'Cli/BootstrapHookFileTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         'Cli/BootstrapLaunchNoticeRoutingTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)', 'glob($this->tmpDir.\'/launch*.php\')'],
         'Cli/BootstrapSkillSkipsTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
@@ -585,6 +588,8 @@ final class TreeWideGuardRosterTest extends TestCase
         'Cli/SubcommandsMcpImportTest.php' => ['scandir($this->tempDir)'],
         'Commands/McpAuthLoginGuidanceTest.php' => ['glob($this->tempDir.\'/*\')'],
         'Context/EnvironmentBlockTest.php' => ['scandir($dir)'],
+        // removeDir() tears down the sys_get_temp_dir() tree setUp() made.
+        'Context/ImportResolverTest.php' => ['scandir($dir)'],
         // tearDown() empties the sys_get_temp_dir() scratch dir setUp() made.
         'Diagnostics/RuntimeNoticeSinkStderrTest.php' => ['glob($this->scratch.\'/*\')'],
         'Integration/BinSugarcrushAutoloadGuardTest.php' => ['scandir($dir)'],

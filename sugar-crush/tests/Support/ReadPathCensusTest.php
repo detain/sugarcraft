@@ -206,6 +206,9 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED_UPSTREAM:Providers/ProviderFactory.php — the dev provider config, whose '
                 . 'two boundaries live in readableDefaultConfigPath()',
             'OWNED_HOME — `~/.sugar-crush/config.json`, resolved through trustedConfigDirPath()',
+            'OWNED_HOME — userConfigForMerge(): the same `config.json` re-read strictly on the WRITE '
+                . 'side (15d-15), under writeUserConfig()\'s lock; a symlinked config is followed only '
+                . 'to a regular file requirePrivatePolicyFile() accepts (userConfigWriteTarget())',
             'OWNED_HOME — the permission policy file, additionally ownership-checked before it is read',
             'CONTAINED — mcpServerInventory() reading the project `.mcp.json` for `sugarcrush mcp list`. '
                 . 'Same ContainedPath::within() compare and same trust gate mcpClient() applies, because both '
@@ -216,6 +219,11 @@ final class ReadPathCensusTest extends TestCase
                 . 'reading. file_get_contents rather than hash_file on purpose — the latter spelling is '
                 . 'outside this census\'s sink vocabulary and would be an ungazed read on a '
                 . 'repository-chosen path',
+        ],
+        'Cli/Bootstrap.php|fopen' => [
+            'SELF_LOCATED — acquireUserConfigLock(): the `.config.json.lock` sidecar beside the '
+                . 'config, created by this process under umask 077 and opened `c` only for the '
+                . 'timed LOCK_EX; no byte of it is read',
         ],
         'Commands/CommandLoader.php|new RecursiveDirectoryIterator' => [
             'CONTAINED — the commands directory is anchored to its tree and each `*.md` confined to it',
@@ -475,8 +483,9 @@ final class ReadPathCensusTest extends TestCase
         'Tools/BuiltIn/WebFetch.php|fopen' => [
             'NOT_A_FILESYSTEM_PATH — a pinned HTTP(S) URL through a stream context',
         ],
-        'Tools/BuiltIn/WebSearch.php|file_get_contents' => [
-            'NOT_A_FILESYSTEM_PATH — the search endpoint, same shape',
+        'Tools/BuiltIn/WebSearch.php|fopen' => [
+            'NOT_A_FILESYSTEM_PATH — the search endpoint, same shape: a pinned HTTP(S) URL through '
+                . 'a stream context, redirects refused and the body read bounded (F-W3)',
         ],
         'Tools/BuiltIn/Write.php|file_get_contents' => [
             'PATH_JAIL — reads the existing file to diff before writing, same jailed path',
