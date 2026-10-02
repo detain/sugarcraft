@@ -30,7 +30,7 @@ use SugarCraft\Crush\Providers\TransientFailure;
  */
 final class EmbeddingsErrorSurfacingTest extends TestCase
 {
-    private const BASE = 'https://api.example.com/v1/';
+    private const EMBEDDINGS_BASE_URI = 'https://api.example.com/v1/';
 
     public function testSglangServerErrorSurfacesTheServerTextAndStaysTransient(): void
     {
@@ -60,7 +60,7 @@ final class EmbeddingsErrorSurfacingTest extends TestCase
 
     public function testSglangConnectFailureThrowsTransient(): void
     {
-        $connect = new ConnectException('Connection refused', new Request('POST', self::BASE . 'embeddings'));
+        $connect = new ConnectException('Connection refused', new Request('POST', self::EMBEDDINGS_BASE_URI . 'embeddings'));
         $provider = $this->sglang([$connect]);
 
         $thrown = $this->embedAndCatch($provider);
@@ -169,7 +169,7 @@ final class EmbeddingsErrorSurfacingTest extends TestCase
      */
     private function sglang(array $queue): SglangProvider
     {
-        return new SglangProvider(self::BASE, 'embed', null, $this->client($queue));
+        return new SglangProvider(self::EMBEDDINGS_BASE_URI, 'embed', null, $this->client($queue));
     }
 
     /**
@@ -177,7 +177,7 @@ final class EmbeddingsErrorSurfacingTest extends TestCase
      */
     private function custom(array $queue): CustomProvider
     {
-        return new CustomProvider('custom', self::BASE, 'embed', null, $this->client($queue), true, true);
+        return new CustomProvider('custom', self::EMBEDDINGS_BASE_URI, 'embed', null, $this->client($queue), true, true);
     }
 
     /**
@@ -187,7 +187,7 @@ final class EmbeddingsErrorSurfacingTest extends TestCase
     {
         return new Client([
             'handler' => HandlerStack::create(new MockHandler($queue)),
-            'base_uri' => self::BASE,
+            'base_uri' => self::EMBEDDINGS_BASE_URI,
         ]);
     }
 }
