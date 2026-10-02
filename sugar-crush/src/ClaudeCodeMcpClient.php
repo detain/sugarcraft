@@ -138,14 +138,18 @@ final class ClaudeCodeMcpClient
      * what is defended is that it is an IDLE bound, so no progressing write can
      * ever hit it — which the first row above is the evidence for.
      *
-     * ⚠️ AND IT IS FIFTEEN TIMES {@see callTool()}'s OWN READ BUDGET, which is a
-     * live question rather than a settled trade — see that method.
+     * ⚠️ IT USED TO BE FIFTEEN TIMES {@see callTool()}'s OWN READ BUDGET, a
+     * counted poll worth about one second. That poll is gone (audit MCP-3): a
+     * tool call's read has no total deadline now, so this idle bound is the
+     * only clock left on that path — see that method.
      */
     private const WRITE_IDLE_SECONDS = 15.0;
 
     /**
      * How many CONSECUTIVE `stream_select()` failures {@see sendMessage()} will
-     * absorb before treating the write as lost.
+     * absorb before treating the write as lost — and, since audit MCP-3,
+     * {@see readFrame()} before treating the wait as lost; its EINTR branch is
+     * dormant in the suite for the same reason as the write's.
      *
      * `stream_select()` answers `false` for EINTR — a signal arrived — which is
      * a retry and not an error. Without a ceiling a persistently failing select
@@ -204,8 +208,8 @@ final class ClaudeCodeMcpClient
      * one: {@see \SugarCraft\Crush\MCP\StdioMcpServer} and
      * {@see \SugarCraft\Crush\LSP\LspConnection} were uncapped before it. A
      * server that emits an endless stream with no newline grows this without
-     * limit for the life of the process, and {@see callTool()} polls
-     * {@see readMessages()} a hundred times per call.
+     * limit for the life of the process, and {@see callTool()} keeps reading
+     * for as long as the call takes.
      *
      * SIXTY-FOUR MEBIBYTES, AND THE INHERITANCE IS NOW A LANGUAGE FACT: this
      * line NAMES {@see \SugarCraft\Crush\Backend\EngineBackend::MAX_FRAME_BYTES}
@@ -290,6 +294,43 @@ final class ClaudeCodeMcpClient
     private const MAX_FRAME_BYTES = EngineBackend::MAX_FRAME_BYTES;
 
     /**
+     * The bound on the HANDSHAKE legs — `initialize` and `tools/list` — and on
+     * nothing else (audit MCP-3).
+     *
+     * WHAT IT REPLACED: a counted poll, 100 attempts 10 ms apart, shared by
+     * every exchange including `tools/call`. That is a TOTAL budget of about
+     * one second, and MEASURED against server-everything
+     * (`trigger-long-running-operation`, duration 3) the call threw
+     * "No response received for request 3" after 1.01s while the server was
+     * still doing the work; the reply then arrived to nobody. A `claude mcp
+     * serve` that takes over a second to boot failed `tools/list` the same way,
+     * and the launch skipped it silently.
+     *
+     * DERIVED, not restated: the stdio sibling's start ceiling, which its own
+     * doc-block sizes for a cold `npx`-style boot. A child that is slow to
+     * answer its handshake is the same question on both transports.
+     *
+     * `tools/call` has NO total deadline, on purpose and by the project's own
+     * rule: a tool call is somebody's real work (a build, a Task sub-agent) and
+     * minutes are legitimate. It ends when the answer arrives, when the child
+     * closes its stdout, or when the child is gone — see {@see readFrame()}.
+     */
+    private const HANDSHAKE_TIMEOUT_SECONDS = \SugarCraft\Crush\MCP\StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS;
+
+    /**
+     * How long {@see readFrame()} parks in `stream_select()` before it looks at
+     * the clock and the child again. A wakeup-resolution figure, not a budget:
+     * stdout readiness ends the wait at once, so a prompt reply never pays it.
+     */
+    private const READ_POLL_MICROS = 250000;
+
+    /** Protocol version the `initialize` request advertises — the stdio sibling's. */
+    private const PROTOCOL_VERSION = \SugarCraft\Mcp\StdioMcpServer::PROTOCOL_VERSION;
+
+    /** The product identity the handshake names, the same one the stdio adapter sends. */
+    private const CLIENT_INFO = ['name' => 'sugar-crush', 'version' => '1.0.0'];
+
+    /**
      * The TAIL of whatever the MCP server has written to stderr, bounded.
      *
      * The tail rather than the head because this text answers "why did it stop
@@ -310,8 +351,10 @@ final class ClaudeCodeMcpClient
      *     whole line + newline in one write  ->  1 message seen
      *     half, 400ms pause, rest + newline  ->  0 messages seen (LOST)
      *
-     * Both arms poll for 1.8s, which is the shape {@see callTool()} and
-     * {@see listTools()} drive (100 attempts, 10 ms apart). A stdio server has no
+     * Both arms poll for 1.8s. {@see callTool()} and {@see listTools()} no
+     * longer poll at all — {@see readFrame()} waits on `stream_select()` and
+     * takes one line at a time out of this same buffer — but the buffer is
+     * still what lets a split reply survive between reads. A stdio server has no
      * obligation to flush a response in one `write(2)`, so the second arm is the
      * ordinary case for any reply larger than a pipe's worth — and the symptom
      * was `RuntimeException: No response received`, which reads as a dead server.
@@ -360,12 +403,21 @@ final class ClaudeCodeMcpClient
     /** The child's pid, for liveness probes from processes that are not its parent. */
     private int $serverPid = 0;
 
+    /** Seconds {@see connect()} and {@see listTools()} may each wait; see {@see HANDSHAKE_TIMEOUT_SECONDS}. */
+    private readonly float $handshakeTimeoutSeconds;
+
     /**
-     * @param array<string, mixed>|null $initialOptions
+     * @param array<string, mixed>|null $initialOptions extra `initialize`
+     *        params, merged over the defaults (protocolVersion, capabilities,
+     *        clientInfo)
      * @param array<string, string> $env E699: overrides merged onto the
      *        inherited environment at spawn, routed through
      *        {@see \SugarCraft\Crush\Support\ProcessContainment::env()} so a
      *        contained spawn sees them too. Empty for every pre-E699 caller.
+     * @param float|null $handshakeTimeoutSeconds handshake/tools-list budget;
+     *        null or a non-positive value takes
+     *        {@see HANDSHAKE_TIMEOUT_SECONDS}, so a bad setting cannot turn the
+     *        bound off. It never bounds a `tools/call`.
      */
     public function __construct(
         public readonly ?string $command = null,
@@ -377,9 +429,13 @@ final class ClaudeCodeMcpClient
         private bool $connected = false,
         private int $requestId = 0,
         public readonly array $env = [],
+        ?float $handshakeTimeoutSeconds = null,
     ) {
         // Owner ids continue the historical `++$requestId` sequence (1, 2, …).
         $this->ids = new RequestIdSequence(firstOwnerId: $requestId + 1);
+        $this->handshakeTimeoutSeconds = $handshakeTimeoutSeconds !== null && $handshakeTimeoutSeconds > 0.0
+            ? $handshakeTimeoutSeconds
+            : self::HANDSHAKE_TIMEOUT_SECONDS;
     }
 
     /**
@@ -455,24 +511,74 @@ final class ClaudeCodeMcpClient
         // blocks the writer at one buffer.
         stream_set_blocking($pipes[2], false);
 
-        // Send initialize handshake notification
-        /** @var array<string, mixed> $handshakeOptions */
-        $handshakeOptions = $this->initialOptions ?? [];
-        $handshakeOptions['protocolVersion'] = '2024-11-05';
-        $handshakeOptions['capabilities'] = ['tools' => true, 'resources' => null];
+        // THE SPEC'S HANDSHAKE, IN ORDER (audit MCP-3): `initialize` is a
+        // REQUEST, the client WAITS for its result, and only then announces
+        // `notifications/initialized`. This used to send `initialize` as a
+        // notification — no id, so nothing could answer it — with
+        // `capabilities: {tools: true, resources: null}` (server-side fields,
+        // and a null where the schema wants an object), never sent
+        // `notifications/initialized`, and worked only because the TS SDK does
+        // not enforce initialization. A server that does would refuse every
+        // later request.
+        $initId = (string) $this->ids->next();
+        $initialize = McpMessage::request($initId, 'initialize', $this->initializeParams($options));
 
-        $initMsg = McpMessage::notification('initialize', $handshakeOptions);
-        $this->sendMessage($initMsg);
+        try {
+            $response = $this->exchange(
+                $initialize,
+                self::nowSeconds() + $this->handshakeTimeoutSeconds,
+                "No response received for initialize request {$initId}",
+            );
 
-        // Read initial responses (may include server info, capabilities, error)
-        $messages = $this->readMessages();
+            // An ERROR answer is a refusal, not a start: the server will not
+            // serve a session it never initialized.
+            if ($response->error !== null || !$response->resultSet) {
+                throw new RuntimeException(sprintf(
+                    'MCP server refused initialize: %s',
+                    $response->errorMessage() ?? 'the answer carried no result',
+                ));
+            }
 
-        // Any half line read here belongs in the SHARED buffer: the first
-        // exchange may run in a forked process, which loads it from the lock.
-        $this->lock->store(ExchangeLock::PHASE_CLEAN, $this->readBuffer);
-        $this->readBuffer = '';
+            $this->notify(McpMessage::notification('notifications/initialized'));
+        } catch (\Throwable $failure) {
+            // A half-started child must not outlive the failure on its pipes:
+            // reap it now rather than whenever this object happens to die.
+            $this->disconnect();
 
-        return $messages;
+            throw $failure;
+        }
+
+        return [$response];
+    }
+
+    /**
+     * The `initialize` params: the spec's three required fields, with the
+     * caller's options laid over them.
+     *
+     * `capabilities` is a JSON OBJECT in the schema and PHP's `[]` encodes as
+     * an array, which the SDK servers reject ("expected object, received
+     * array") — the same defect class audit MCP-1 closed for `arguments`.
+     *
+     * @param array<string, mixed>|null $options
+     * @return array<string, mixed>
+     */
+    private function initializeParams(?array $options): array
+    {
+        $params = array_replace(
+            [
+                'protocolVersion' => self::PROTOCOL_VERSION,
+                'capabilities' => new \stdClass(),
+                'clientInfo' => self::CLIENT_INFO,
+            ],
+            $this->initialOptions ?? [],
+            $options ?? [],
+        );
+
+        if (!isset($params['capabilities']) || $params['capabilities'] === []) {
+            $params['capabilities'] = new \stdClass();
+        }
+
+        return $params;
     }
 
     /**
@@ -497,22 +603,16 @@ final class ClaudeCodeMcpClient
             'arguments' => $params === null || $params === [] ? new \stdClass() : $params,
         ]);
 
-        // ⚠️ THE WRITE MAY BLOCK FIFTEEN TIMES AS LONG AS THE READ BELOW WILL
-        // WAIT, AND NOTHING RELATES THE TWO. `sendMessage()` inherits
-        // {@see WRITE_IDLE_SECONDS} = 15.0; the loop under it gives up after 100
-        // attempts 10 ms apart, so ~1.0s of waiting plus read time. Against a
-        // server that has stopped reading its stdin — the only shape that pays
-        // the write bound at all, MEASURED in that constant's note — this method
-        // parks its caller for fifteen seconds and then spends one more second
-        // waiting for an answer that the same wedge makes impossible.
-        //
-        // NOT changed here, and the reason is that the fix is a policy decision
-        // rather than a defect: shortening the write bound trades "the TUI is
-        // frozen for 15s" for "a slow-but-recovering server loses its message",
-        // and nothing in this tree measures how often the second happens. The
-        // asymmetry is recorded so the next reader is choosing rather than
-        // inheriting. See the round-57 lane b report.
-        return $this->exchange($request, "No response received for request {$id}");
+        // NO TOTAL DEADLINE ON THE READ (audit MCP-3). It was a counted poll
+        // worth about one second, so every tool that worked for longer — Bash,
+        // Grep, Task — failed with its answer still on the way. The wait now
+        // ends on the answer, on EOF, or on the child's death; the only clock
+        // left is the write's {@see WRITE_IDLE_SECONDS} = 15.0; an IDLE bound
+        // that a child still taking bytes never pays. A server that reads the
+        // request and then never answers holds this call (and the exchange
+        // lock) for as long as it lives — the stdio sibling's `callTool()`
+        // makes the same choice for the same reason.
+        return $this->exchange($request, null, "No response received for request {$id}");
     }
 
     /**
@@ -530,68 +630,137 @@ final class ClaudeCodeMcpClient
         $id = (string) $this->ids->next();
         $request = McpMessage::request($id, 'tools/list', null);
 
-        return $this->exchange($request, 'No response received for tools/list request');
+        // Bounded, unlike a tool call: this is the start-time leg, and a
+        // server that cannot list its tools in a slow-boot budget is not up.
+        return $this->exchange(
+            $request,
+            self::nowSeconds() + $this->handshakeTimeoutSeconds,
+            'No response received for tools/list request',
+        );
     }
 
     /**
-     * Send $request and poll for the response carrying its id, as ONE exchange
+     * Send $request and wait for the response carrying its id, as ONE exchange
      * under the cross-process lock (see {@see $ids}).
      *
-     * The shared state is loaded at the start and written back at the end. A
-     * holder that died mid-exchange left W (its request line may be half
-     * written: this send leads with a newline, the {@see $stdinFragmentPending}
-     * mechanism) or R (stdout may start mid-line: its buffer is dropped, and
-     * {@see readMessages()} already skips the unparseable fragment). A failed
-     * exchange leaves its own marker the same way.
+     * The wait is {@see readFrame()}'s: until `$deadline` (hrtime seconds; null
+     * = none, the tool-call policy), EOF, or the child's death — never a
+     * counted number of polls.
+     *
+     * STRICT MATCH, so a LATE reply cannot answer a later request: only a
+     * genuine response (no `method`) whose id is byte-equal to ours is taken.
+     * The reply to an earlier call that gave up — or whose process was
+     * SIGKILLed — carries that call's id, which {@see RequestIdSequence} never
+     * reissues, and is skipped like any other stranger's line. So is a request
+     * echoed back at us, which carries our id AND a method.
+     *
+     * One unparseable shape is NOT skipped: an envelope with our id and neither
+     * `result` nor `error`. That is the server's answer and it is broken; with
+     * no deadline on a tool call, skipping it would wait for a reply that
+     * already came.
      *
      * @throws RuntimeException when the write fails, the server is gone, or no
-     *         response arrives within the poll budget
+     *         response arrives before the deadline
      */
-    private function exchange(McpMessage $request, string $timeoutMessage): McpMessage
+    private function exchange(McpMessage $request, ?float $deadline, string $failureMessage): McpMessage
     {
-        $id = $request->id;
+        $id = (string) $request->id;
+
+        return $this->underLock($deadline, true, function () use ($request, $id, $deadline, $failureMessage): McpMessage {
+            $this->sendMessage($request);
+            $this->lock?->markPhase(ExchangeLock::PHASE_READING);
+
+            while (true) {
+                try {
+                    $line = $this->readFrame($deadline);
+                } catch (RuntimeException $ended) {
+                    throw new RuntimeException("{$failureMessage}: {$ended->getMessage()}", 0, $ended);
+                }
+
+                $message = McpMessage::parse($line);
+                if ($message === null) {
+                    if (self::isMalformedReplyTo($line, $id)) {
+                        throw new RuntimeException(
+                            "{$failureMessage}: the server answered with neither a result nor an error",
+                        );
+                    }
+
+                    continue;
+                }
+
+                if ($message->isResponse() && $message->id === $id) {
+                    return $message;
+                }
+            }
+        });
+    }
+
+    /**
+     * Send a NOTIFICATION as its own exchange: nothing is read, but the write
+     * still has to be serialised against every other process's request line.
+     */
+    private function notify(McpMessage $notification): void
+    {
+        $this->underLock(null, false, function () use ($notification): bool {
+            $this->sendMessage($notification);
+
+            return true;
+        });
+    }
+
+    /**
+     * Run $body as one exchange under {@see $lock} (unlocked for a test-injected
+     * connection). The shared state is loaded at the start and written back at
+     * the end. A holder that died mid-exchange left W (its request line may be
+     * half written: this send leads with a newline, the
+     * {@see $stdinFragmentPending} mechanism) or R (stdout may start mid-line:
+     * its buffer is dropped, and the reader skips the unparseable fragment). A
+     * failed exchange leaves its own marker the same way.
+     *
+     * @template T
+     * @param \Closure(): T $body
+     * @return T
+     */
+    private function underLock(?float $deadline, bool $reads, \Closure $body): mixed
+    {
         $lock = $this->lock;
 
-        if ($lock !== null && !$lock->acquire(null, fn (): bool => $this->serverIsRunning())) {
-            throw new RuntimeException('MCP server is not running');
+        if ($lock !== null && !$lock->acquire($deadline, fn (): bool => $this->serverIsRunning())) {
+            throw new RuntimeException(
+                $deadline !== null && self::nowSeconds() >= $deadline
+                    ? 'MCP server exchange lock was not free before the deadline'
+                    : 'MCP server is not running',
+            );
         }
 
         $completed = false;
+        $dirty = false;
 
         try {
             if ($lock !== null) {
                 [$phase, $buffer] = $lock->load();
-                $this->readBuffer = $phase === ExchangeLock::PHASE_CLEAN ? $buffer : '';
+                $dirty = $phase !== ExchangeLock::PHASE_CLEAN;
+                $this->readBuffer = $dirty ? '' : $buffer;
                 $this->stdinFragmentPending = $phase === ExchangeLock::PHASE_WRITING;
                 $lock->markPhase(ExchangeLock::PHASE_WRITING);
             }
 
-            $this->sendMessage($request);
-            $lock?->markPhase(ExchangeLock::PHASE_READING);
+            $result = $body();
+            $completed = true;
 
-            // Read until we get a response with matching id
-            $attempts = 0;
-            while ($attempts < 100) {
-                $messages = $this->readMessages();
-                foreach ($messages as $msg) {
-                    if ($msg->id === $id) {
-                        $completed = true;
-
-                        return $msg;
-                    }
-                }
-                usleep(10000); // 10ms
-                $attempts++;
-            }
-
-            throw new RuntimeException($timeoutMessage);
+            return $result;
         } finally {
             if ($lock !== null) {
-                if ($completed) {
-                    $lock->store(ExchangeLock::PHASE_CLEAN, $this->readBuffer);
-                } else {
+                if (!$completed) {
                     [$reached] = $lock->load();
                     $lock->store($reached === ExchangeLock::PHASE_CLEAN ? ExchangeLock::PHASE_READING : $reached, '');
+                } elseif ($dirty && !$reads) {
+                    // Our line went out whole, so stdin is clean again — but
+                    // stdout may still start mid-line and nothing has read it
+                    // back to a boundary: hand the recovery to the next reader.
+                    $lock->store(ExchangeLock::PHASE_READING, '');
+                } else {
+                    $lock->store(ExchangeLock::PHASE_CLEAN, $this->readBuffer);
                 }
 
                 // Both live in the lock file now; a private copy would go stale
@@ -601,6 +770,133 @@ final class ClaudeCodeMcpClient
                 $lock->release();
             }
         }
+    }
+
+    /**
+     * Return the next newline-terminated line from the child's stdout, waiting
+     * for it on `stream_select()` rather than on a counted poll.
+     *
+     * The wait ends in exactly three ways besides a line arriving, each a
+     * RuntimeException naming which: `$deadline` passed (hrtime seconds; null
+     * means no deadline), the child closed its stdout, or the child is gone.
+     * Bytes past the line stay in {@see $readBuffer}, so a reply that shares a
+     * read with the next line loses nothing.
+     *
+     * STDERR IS DRAINED ON EVERY PASS, and is in the select set until its EOF,
+     * so a child that logs while it works wakes this loop instead of wedging in
+     * `write(2)` — see {@see drainStderr()}. Leaving a CLOSED stderr in the set
+     * would make it permanently readable and turn the wait into a spin, hence
+     * the `feof()` test.
+     *
+     * @throws RuntimeException
+     */
+    private function readFrame(?float $deadline): string
+    {
+        $scannedFrom = 0;
+        $consecutiveSelectFailures = 0;
+
+        while (($newline = strpos($this->readBuffer, "\n", $scannedFrom)) === false) {
+            // Bytes already searched for "\n" are not searched again, so a huge
+            // frame accumulating towards the cap costs O(n), not O(n²).
+            $scannedFrom = strlen($this->readBuffer);
+            $pipes = $this->getPipes();
+
+            if (!is_resource($pipes[1])) {
+                throw new RuntimeException('the server\'s stdout is closed');
+            }
+
+            $slice = self::READ_POLL_MICROS;
+            if ($deadline !== null) {
+                $remaining = $deadline - self::nowSeconds();
+                if ($remaining <= 0.0) {
+                    throw new RuntimeException(sprintf(
+                        'no answer within the %.1fs handshake budget',
+                        $this->handshakeTimeoutSeconds,
+                    ));
+                }
+                $slice = min($slice, max(1, (int) ceil($remaining * 1_000_000)));
+            }
+
+            $read = [$pipes[1]];
+            if (isset($pipes[2]) && is_resource($pipes[2]) && !feof($pipes[2])) {
+                $read[] = $pipes[2];
+            }
+            $write = [];
+            $except = [];
+
+            // `@` for EINTR: a signal mid-select is a retry, and under
+            // `failOnWarning="true"` the warning alone would red a passing run.
+            $ready = @stream_select($read, $write, $except, 0, $slice);
+            $this->drainStderr();
+
+            if ($ready === false) {
+                $consecutiveSelectFailures++;
+                if (!$this->serverIsRunning()) {
+                    throw new RuntimeException('the server is not running');
+                }
+                if ($consecutiveSelectFailures >= self::MAX_CONSECUTIVE_SELECT_FAILURES) {
+                    throw new RuntimeException('stream_select() kept failing on the server\'s stdout');
+                }
+                usleep(1000);
+
+                continue;
+            }
+            $consecutiveSelectFailures = 0;
+
+            $atEof = $this->fillReadBuffer();
+            if (strpos($this->readBuffer, "\n", $scannedFrom) !== false) {
+                continue;
+            }
+
+            if ($atEof) {
+                throw new RuntimeException('the server closed its stdout');
+            }
+
+            // A timed-out select with the child gone: one last read for anything
+            // it wrote on the way out, then give up rather than wait for an EOF
+            // a surviving grandchild holding the pipe would never deliver.
+            if ($ready === 0 && !$this->serverIsRunning()) {
+                $this->fillReadBuffer();
+                if (strpos($this->readBuffer, "\n", $scannedFrom) !== false) {
+                    continue;
+                }
+
+                throw new RuntimeException('the server exited');
+            }
+        }
+
+        $line = substr($this->readBuffer, 0, $newline);
+        $this->readBuffer = (string) substr($this->readBuffer, $newline + 1);
+
+        return trim($line);
+    }
+
+    /**
+     * True when $line, which McpMessage::parse() refused, is still a JSON-RPC
+     * 2.0 response envelope addressed to $id (see {@see exchange()}). The id is
+     * coerced the way parse() coerces it, so an integer id matches its string.
+     * Same rule as {@see \SugarCraft\Mcp\StdioMcpServer}'s twin.
+     */
+    private static function isMalformedReplyTo(string $line, string $id): bool
+    {
+        $decoded = json_decode($line, true);
+        if (!is_array($decoded) || ($decoded['jsonrpc'] ?? null) !== '2.0') {
+            return false;
+        }
+
+        if (isset($decoded['method']) || !isset($decoded['id'])) {
+            return false;
+        }
+
+        $wireId = $decoded['id'];
+
+        return (is_string($wireId) || is_int($wireId)) && (string) $wireId === $id;
+    }
+
+    /** Monotonic seconds: an NTP step mid-handshake must neither void the bound nor fire it early. */
+    private static function nowSeconds(): float
+    {
+        return hrtime(true) / 1_000_000_000.0;
     }
 
     /**
@@ -856,8 +1152,8 @@ final class ClaudeCodeMcpClient
      * returned was thrown away with the stack frame — see {@see $readBuffer} for
      * the two-arm measurement. Nothing about the child was wrong in that case:
      * a stdio server is under no obligation to put a response on the wire in one
-     * `write(2)`, and {@see callTool()} polls this method a hundred times, so
-     * crossing a poll boundary is the ordinary case rather than the corner.
+     * `write(2)`, and a caller polls this method between waits, so crossing
+     * a poll boundary is the ordinary case rather than the corner.
      *
      * @return list<McpMessage>
      */
@@ -881,6 +1177,45 @@ final class ClaudeCodeMcpClient
         // measurement as {@see drainStderr()}.
         if (!is_resource($pipes[1])) {
             return [];
+        }
+
+        $this->fillReadBuffer();
+
+        // SPLIT ONCE, AFTER THE READS, rather than inside the loop. The old shape
+        // re-split a growing accumulator on every chunk, which was quadratic in
+        // the number of chunks and — far worse — put the "keep the tail" step
+        // somewhere the tail could not outlive.
+        $lines = explode("\n", $this->readBuffer);
+        $this->readBuffer = (string) array_pop($lines);
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            $msg = McpMessage::parse($line);
+            if ($msg !== null) {
+                $messages[] = $msg;
+            }
+        }
+
+        return $messages;
+    }
+
+    /**
+     * Move whatever the child's stdout holds RIGHT NOW into {@see $readBuffer},
+     * without blocking, enforcing {@see MAX_FRAME_BYTES}. Shared by
+     * {@see readMessages()} and {@see readFrame()} so the cap has one home.
+     *
+     * @return bool true when stdout has reached EOF (the child closed it)
+     * @throws RuntimeException past the frame cap — the buffer is dropped
+     */
+    private function fillReadBuffer(): bool
+    {
+        $pipes = $this->getPipes();
+
+        if (!is_resource($pipes[1])) {
+            return true;
         }
 
         while (true) {
@@ -909,25 +1244,7 @@ final class ClaudeCodeMcpClient
             }
         }
 
-        // SPLIT ONCE, AFTER THE READS, rather than inside the loop. The old shape
-        // re-split a growing accumulator on every chunk, which was quadratic in
-        // the number of chunks and — far worse — put the "keep the tail" step
-        // somewhere the tail could not outlive.
-        $lines = explode("\n", $this->readBuffer);
-        $this->readBuffer = (string) array_pop($lines);
-
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if ($line === '') {
-                continue;
-            }
-            $msg = McpMessage::parse($line);
-            if ($msg !== null) {
-                $messages[] = $msg;
-            }
-        }
-
-        return $messages;
+        return feof($pipes[1]);
     }
 
     /**

@@ -1224,45 +1224,51 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
-     * E686 tranche-3 (N): the Claude-Code MCP client's retry shape is one
-     * sentence over two literal loops, and the write-idle cite names a constant
-     * with its decimal. The "poll for 1.8s" narrative (attempts plus read time,
-     * measured) stays held; only the derivable digits are pinned.
+     * E686 tranche-3 (N), RE-POINTED BY AUDIT MCP-3: the Claude-Code MCP
+     * client's read wait, and the write-idle cite that names a constant with
+     * its decimal.
      *
-     * Audit B1/AG-1 moved the ONE poll loop into exchange(), which runs it
-     * under the cross-process lock; callTool() and listTools() must both still
-     * reach it, so the prose's "callTool() and listTools() drive" stays true.
+     * WHAT THIS PINNED: a retry sentence over two literal loops — "(100
+     * attempts, 10 ms apart)", "~1.0s of waiting" — derived from a
+     * `while ($attempts < 100)` / `usleep(10000)` pair in exchange(). That pair
+     * WAS the defect: a total budget of about one second on every exchange,
+     * so any tool working longer failed with its answer still on the way.
+     * WHAT IS PINNED NOW: that no counted poll comes back. exchange() waits on
+     * readFrame() with a DEADLINE ARGUMENT; callTool() passes none (a tool
+     * call is real work and has no total budget), listTools() passes the
+     * handshake budget, and that budget DERIVES from the stdio sibling's start
+     * ceiling rather than restating a number. callTool() and listTools() must
+     * both still reach exchange(), which is what keeps the lock and the strict
+     * id match on every leg.
      */
     public function testMcpWritePumpRetryProseSurvivesItsLiterals(): void
     {
         $mcp = self::sourceOf('ClaudeCodeMcpClient.php');
 
-        self::assertSame(
-            1,
-            preg_match('/drive \((\d+) attempts, (\d+) ms apart\)/', $mcp, $m),
-            'the retry-shape sentence no longer spells attempts and interval together',
-        );
-        $attempts = (int) $m[1];
-        $intervalMs = (int) $m[2];
         foreach (['callTool', 'listTools'] as $driver) {
-            self::assertStringContainsString('return $this->exchange(', self::bodyExcerpt($mcp, $driver), "{$driver}() no longer drives the shared poll loop");
+            self::assertStringContainsString('return $this->exchange(', self::bodyExcerpt($mcp, $driver), "{$driver}() no longer drives the shared exchange");
         }
-        foreach (['exchange'] as $pump) {
-            $body = self::bodyExcerpt($mcp, $pump);
-            self::assertSame(1, preg_match('/while \(\$attempts < (\d+)\)/', $body, $loop), "{$pump}() lost its counted retry loop — the prose attempts count lost its referent");
-            self::assertSame(1, preg_match('/usleep\((\d+)\)/', $body, $poll), "{$pump}() no longer polls with a fixed usleep — the prose interval lost its referent");
-            self::assertSame($attempts, (int) $loop[1], "prose attempt count drifted from {$pump}()'s loop bound");
-            self::assertSame($intervalMs, intdiv((int) $poll[1], 1000), "prose poll milliseconds drifted from {$pump}()'s usleep");
-        }
-        self::assertSame(
-            1,
-            preg_match('/so ~([\d.]+)s of waiting plus read time/', $mcp, $m),
-            'the waiting-time sentence moved — its digit is derived, so it must re-pin with the loop bounds',
+        self::assertStringContainsString(
+            '$this->exchange($request, null,',
+            self::bodyExcerpt($mcp, 'callTool'),
+            'callTool() gave its read a deadline again — a tool call has no total budget (audit MCP-3)',
         );
+
+        $exchange = self::bodyExcerpt($mcp, 'exchange');
+        $exchange = substr($exchange, 0, (int) (strpos($exchange, "\n    private function ", 1) ?: strlen($exchange)));
+        self::assertStringContainsString('$this->readFrame($deadline)', $exchange, 'exchange() no longer waits through readFrame() with its deadline');
+        self::assertSame(0, preg_match('/\$attempts|usleep\(/', $exchange), 'exchange() grew a counted poll again — the ~1s total budget audit MCP-3 removed');
+
+        $reflected = new \ReflectionClass(ClaudeCodeMcpClient::class);
         self::assertSame(
-            (float) ($attempts * $intervalMs) / 1000.0,
-            (float) $m[1],
-            'the "~Ns of waiting" figure is no longer attempts x interval',
+            StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS,
+            $reflected->getConstant('HANDSHAKE_TIMEOUT_SECONDS'),
+            'the handshake budget drifted from the stdio start ceiling it is documented to share',
+        );
+        self::assertStringContainsString(
+            'HANDSHAKE_TIMEOUT_SECONDS = \\SugarCraft\\Crush\\MCP\\StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS;',
+            $mcp,
+            'the handshake budget is restated as a literal instead of derived',
         );
 
         self::assertSame(
@@ -1271,7 +1277,7 @@ final class DocFigureProseDriftTest extends TestCase
             'the write-idle cite no longer names the constant with its decimal — update both sides',
         );
         self::assertSame(
-            (float) (new \ReflectionClass(ClaudeCodeMcpClient::class))->getConstant('WRITE_IDLE_SECONDS'),
+            (float) $reflected->getConstant('WRITE_IDLE_SECONDS'),
             (float) $m[1],
             'the cited decimal drifted from WRITE_IDLE_SECONDS',
         );

@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\ClaudeCodeMcpClient;
+use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
 
 /**
  * {@see ClaudeCodeMcpClient::disconnect()} must return in BOUNDED time, and the
@@ -343,10 +344,12 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
         $client = $this->connectedClientOverNoisy($stderrBytes);
 
         try {
-            // `callTool()` does its own bounded polling and THROWS when the
-            // reply never comes, which is exactly the wedged case. Translated
-            // to null here so the caller's assertion message is the one the
-            // reader sees, rather than a bare RuntimeException.
+            // A THROW here is the wedged case: translated to null so the
+            // caller's assertion message is the one the reader sees. Since
+            // audit MCP-3 the first read is connect()'s handshake, which waits
+            // on the short budget connectedClientOverNoisy() names, so a child
+            // wedged on an undrained fd 2 fails there, inside the time limit,
+            // rather than in a tool call that has no deadline at all.
             return $client->callTool('anything')->result;
         } catch (\RuntimeException) {
             return null;
@@ -363,7 +366,10 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
 
         $client = new ClaudeCodeMcpClient(
             PHP_BINARY,
-            [$script, $this->pidFile(), (string) $stderrBytes]
+            [$script, $this->pidFile(), (string) $stderrBytes],
+            // Far above the 0.04s a drained handshake takes, far below the
+            // suite's 60s limit: a wedge must red as an assertion, not an alarm.
+            handshakeTimeoutSeconds: 5.0,
         );
         $client->connect();
         $this->assertTrue($client->isConnected(), 'the noisy fixture server must have started');
@@ -463,7 +469,10 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
     private function connectedClientOver(string $source): ClaudeCodeMcpClient
     {
         $script = $this->tempDir . '/server.php';
-        file_put_contents($script, $source);
+        // The fixtures here are about TEARDOWN and never read their stdin, so
+        // the handshake connect() waits for (audit MCP-3) is answered for them
+        // before their own first line runs.
+        file_put_contents($script, ClaudeMcpHandshakeFixture::around($source));
         @unlink($this->pidFile());
 
         $client = new ClaudeCodeMcpClient(PHP_BINARY, [$script, $this->pidFile()]);

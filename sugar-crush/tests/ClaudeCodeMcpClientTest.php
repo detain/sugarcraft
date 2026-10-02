@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests;
 
 use SugarCraft\Crush\ClaudeCodeMcpClient;
 use SugarCraft\Crush\McpMessage;
+use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
 use PHPUnit\Framework\TestCase;
 
 final class ClaudeCodeMcpClientTest extends TestCase
@@ -396,23 +397,50 @@ final class ClaudeCodeMcpClientTest extends TestCase
     }
 
     /**
-     * A stdio MCP server must outlive the handshake. `cat` is the smallest
-     * command that does: it holds its stdin open until EOF, so disconnect()'s
-     * fclose() is what ends it — no timeout, no orphan, no scheduling race.
+     * A stdio MCP server must outlive the handshake — and since audit MCP-3 it
+     * must ANSWER it: `connect()` sends `initialize` as a request and waits for
+     * the result, so `cat` (which only echoes the request back, id, method and
+     * all) is no longer a server. The fixture answers the handshake and then
+     * holds its stdin open until EOF, so disconnect()'s fclose() is what ends
+     * it — no timeout, no orphan, no scheduling race.
      *
-     * The obvious choices are `true` and `echo`, and both are wrong here.
-     * They exit immediately, so connect()'s handshake fwrite() races the
-     * kernel closing the pipe's read end. Lose that race and the write gets
-     * EPIPE — "fwrite(): Write of 52 bytes failed with errno=32 Broken pipe" —
-     * which phpunit.xml's failOnWarning="true" turns into a failure, and
-     * sendMessage() then throws so the isConnected() assertions never run.
-     * Win it and everything passes. That is the whole flake.
+     * `true` and `echo` were always wrong here for a second reason: they exit
+     * immediately, so connect()'s handshake fwrite() races the kernel closing
+     * the pipe's read end, and an EPIPE warning is a failure under
+     * phpunit.xml's failOnWarning="true".
      */
-    private const LIVE_SERVER = 'cat';
+    private const LIVE_SERVER_BODY = '<?php while (fgets(STDIN) !== false) {}';
+
+    private string $liveServerScript = '';
+
+    protected function tearDown(): void
+    {
+        if ($this->liveServerScript !== '' && is_file($this->liveServerScript)) {
+            unlink($this->liveServerScript);
+        }
+        $this->liveServerScript = '';
+
+        parent::tearDown();
+    }
+
+    private function liveServerScript(): string
+    {
+        if ($this->liveServerScript === '') {
+            $this->liveServerScript = (string) tempnam(sys_get_temp_dir(), 'cc_live_server_');
+            file_put_contents($this->liveServerScript, ClaudeMcpHandshakeFixture::around(self::LIVE_SERVER_BODY));
+        }
+
+        return $this->liveServerScript;
+    }
+
+    private function liveClient(): ClaudeCodeMcpClient
+    {
+        return new ClaudeCodeMcpClient(PHP_BINARY, [$this->liveServerScript()]);
+    }
 
     public function testConnectReturnsEarlyWhenAlreadyConnected(): void
     {
-        $client = new ClaudeCodeMcpClient(self::LIVE_SERVER);
+        $client = $this->liveClient();
         $client->connect();
         $this->assertTrue($client->isConnected());
 
@@ -433,7 +461,7 @@ final class ClaudeCodeMcpClientTest extends TestCase
     {
         // __destruct() delegates to disconnect(); this pins that disconnect()
         // cleans up without error while the child is still running.
-        $client = new ClaudeCodeMcpClient(self::LIVE_SERVER);
+        $client = $this->liveClient();
         $client->connect();
         $this->assertTrue($client->isConnected());
         // Explicitly disconnect to avoid relying on GC timing
@@ -443,19 +471,23 @@ final class ClaudeCodeMcpClientTest extends TestCase
 
     public function testConnectSucceedsWithExistingExecutable(): void
     {
-        $client = new ClaudeCodeMcpClient(self::LIVE_SERVER);
+        $client = $this->liveClient();
         $result = $client->connect();
         $this->assertTrue($client->isConnected());
-        $this->assertIsArray($result);
+        // connect() hands back the handshake it completed: the initialize result.
+        $this->assertCount(1, $result);
+        $this->assertTrue($result[0]->isResponse());
+        $this->assertSame('fixture', $result[0]->result['serverInfo']['name'] ?? null);
         $client->disconnect();
     }
 
     public function testResolveExecutableFindsCommandInPath(): void
     {
         // A command with no path separator is resolved against PATH.
-        $this->assertStringNotContainsString(DIRECTORY_SEPARATOR, self::LIVE_SERVER);
+        $command = 'php';
+        $this->assertStringNotContainsString(DIRECTORY_SEPARATOR, $command);
 
-        $client = new ClaudeCodeMcpClient(self::LIVE_SERVER, ['-u']);
+        $client = new ClaudeCodeMcpClient($command, [$this->liveServerScript()]);
         $client->connect();
         $this->assertTrue($client->isConnected());
         $client->disconnect();

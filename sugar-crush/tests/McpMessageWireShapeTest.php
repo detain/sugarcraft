@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\ClaudeCodeMcpClient;
 use SugarCraft\Crush\McpMessage;
+use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
 
 /**
  * {@see McpMessage::toJson()} IS THE WIRE. {@see McpMessage::toArray()} IS AN
@@ -321,13 +322,16 @@ final class McpMessageWireShapeTest extends TestCase
         $dir = sys_get_temp_dir() . '/sc_mcpwire_' . getmypid() . '_' . bin2hex(random_bytes(6));
         mkdir($dir, 0o755, true);
         $script = $dir . '/emitter.php';
+        // Emitted only AFTER the handshake connect() waits for (audit MCP-3):
+        // unprompted, the "1" line would have been taken for the reply to
+        // `initialize`, whose id is also "1".
         file_put_contents(
             $script,
-            '<?php'
+            ClaudeMcpHandshakeFixture::around('<?php'
             . ' fwrite(STDOUT, \'{"jsonrpc":"2.0","id":"1","result":null}\' . "\n");'
             . ' fwrite(STDOUT, \'{"jsonrpc":"2.0"}\' . "\n");'
             . ' fwrite(STDOUT, \'{"jsonrpc":"2.0","id":"2","result":7}\' . "\n");'
-            . ' fflush(STDOUT); $e = microtime(true) + 5; while (microtime(true) < $e) { usleep(20000); }',
+            . ' fflush(STDOUT); $e = microtime(true) + 5; while (microtime(true) < $e) { usleep(20000); }'),
         );
 
         $client = new ClaudeCodeMcpClient(PHP_BINARY, [$script]);

@@ -28,6 +28,15 @@ final class ClaudeCodeMcpClientArgumentsShapeTest extends TestCase
                 exit(0);
             }
             $msg = json_decode($line);
+            if ($msg instanceof stdClass && ($msg->method ?? null) === 'initialize' && isset($msg->id)) {
+                // The handshake connect() waits for (audit MCP-3).
+                echo json_encode(['jsonrpc' => '2.0', 'id' => $msg->id, 'result' => [
+                    'protocolVersion' => '2024-11-05', 'capabilities' => new stdClass(),
+                    'serverInfo' => ['name' => 'fixture', 'version' => '0'],
+                ]]), "\n";
+                fflush(STDOUT);
+                continue;
+            }
             if (!$msg instanceof stdClass || ($msg->method ?? null) !== 'tools/call' || !isset($msg->id)) {
                 continue;
             }

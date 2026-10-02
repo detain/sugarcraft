@@ -1173,9 +1173,9 @@ final class McpToolWiringTest extends TestCase
 
     /**
      * The gated transport's fake child. Same NDJSON framing the real
-     * `ClaudeCodeMcpClient` handshake speaks (initialize arrives as a
-     * NOTIFICATION; answering it is harmless and matches what the adapter's
-     * start poll ignores), and the same call-logging discipline as
+     * `ClaudeCodeMcpClient` handshake speaks (initialize arrives as a REQUEST
+     * the client waits for, then the id-less `notifications/initialized` —
+     * audit MCP-3), and the same call-logging discipline as
      * {@see self::FIXTURE_SERVER} — the log is what proves a DENIED call
      * never reached the child, not merely that the model saw a refusal.
      */

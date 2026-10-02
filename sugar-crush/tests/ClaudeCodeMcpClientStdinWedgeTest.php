@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\ClaudeCodeMcpClient;
 use SugarCraft\Crush\McpMessage;
+use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
 
 /**
  * THE THIRD MEMBER OF THE FAMILY: a message that does not fit in one write must
@@ -538,19 +539,20 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
      */
     public function testAPendingFragmentIsTerminatedBeforeTheNextMessage(): void
     {
-        // The first `ok` is `connect()`'s own `initialize` notification, which
-        // every session sends before this row does anything. Asserting the whole
-        // sequence rather than a suffix is deliberate: it is what makes the
-        // inserted `blank` an INSERTION at a known position rather than an
-        // unexplained extra line.
+        // The handshake lines never reach the reporter: the fixture prelude
+        // consumes `initialize` and `notifications/initialized` (audit MCP-3)
+        // before the reporter's own loop starts. Asserting the whole sequence
+        // rather than a suffix is deliberate: it is what makes the inserted
+        // `blank` an INSERTION at a known position rather than an unexplained
+        // extra line.
         $this->assertSame(
-            ['ok', 'ok'],
+            ['ok'],
             $this->linesSeenAfterSending(false),
-            'the control: with no fragment pending the child must see the handshake line and '
-            . 'then the message, both parseable and nothing between them',
+            'the control: with no fragment pending the child must see exactly the message, '
+            . 'parseable and with nothing before it',
         );
         $this->assertSame(
-            ['ok', 'blank', 'ok'],
+            ['blank', 'ok'],
             $this->linesSeenAfterSending(true),
             'a pending fragment was not terminated, so the next message supplies the newline '
             . 'that closes it and is lost with it',
@@ -820,7 +822,7 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
     private function runProbe(int $floodBytes, int $messageBytes): array
     {
         $server = $this->tempDir . '/blocked_' . $floodBytes . '.php';
-        file_put_contents($server, sprintf(self::BLOCKED_SERVER_TEMPLATE, $floodBytes));
+        file_put_contents($server, sprintf(ClaudeMcpHandshakeFixture::around(self::BLOCKED_SERVER_TEMPLATE), $floodBytes));
 
         $probe = $this->tempDir . '/probe_' . $floodBytes . '_' . $messageBytes . '.php';
         file_put_contents($probe, sprintf(
@@ -949,10 +951,15 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
         }
     }
 
+    /**
+     * Every fixture here is about something AFTER the handshake — deafness,
+     * stderr, slow reads, split replies — so the handshake `connect()` waits
+     * for (audit MCP-3) is answered for it before its own first line runs.
+     */
     private function script(string $name, string $body): string
     {
         $path = $this->tempDir . '/' . $name . '.php';
-        file_put_contents($path, $body);
+        file_put_contents($path, ClaudeMcpHandshakeFixture::around($body));
 
         return $path;
     }
@@ -991,7 +998,7 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
     {
         return $this->script(
             'slowreader',
-            '<?php $in = fopen("php://stdin", "rb"); stream_set_blocking($in, false);'
+            '<?php $in = STDIN; stream_set_blocking($in, false);'
             . ' $e = microtime(true) + ' . self::FIXTURE_LIFETIME_SECONDS . ';'
             . ' while (microtime(true) < $e) { $c = fread($in, 4096); if ($c === "" || $c === false) { usleep(5000); continue; } usleep(40000); }',
         );
@@ -1021,7 +1028,7 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
     {
         return $this->script(
             'linereporter',
-            '<?php $in = fopen("php://stdin", "rb"); $seen = []; $deadline = microtime(true) + 6;'
+            '<?php $in = STDIN; $seen = []; $deadline = microtime(true) + 6;'
             . ' stream_set_blocking($in, false); $buf = "";'
             . ' while (microtime(true) < $deadline) {'
             . '   $c = fread($in, 8192); if ($c === "" || $c === false) { usleep(10000); }'
@@ -1046,7 +1053,9 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
     /**
      * A server that answers the handshake and THEN floods stderr unprompted, so
      * it is sitting blocked in its own `write(2)` — not waiting for a line —
-     * when the parent's next write begins.
+     * when the parent's next write begins. The handshake itself is the
+     * {@see ClaudeMcpHandshakeFixture} prelude, which returns only once
+     * `notifications/initialized` has arrived, i.e. once `connect()` is done.
      *
      * ⚠️ THE ORDERING IS THE WHOLE FIXTURE. Flooding in RESPONSE to a message
      * lets {@see ClaudeCodeMcpClient::readMessages()} drain it while collecting
@@ -1055,12 +1064,8 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
      */
     private const BLOCKED_SERVER_TEMPLATE = <<<'PHP'
 <?php
-$in = fopen('php://stdin', 'rb');
-fgets($in);
-fwrite(STDOUT, json_encode(['jsonrpc' => '2.0', 'id' => 'h', 'result' => ['ready' => true]]) . "\n");
-fflush(STDOUT);
 fwrite(STDERR, str_repeat('e', %d));
-while (($line = fgets($in)) !== false) {
+while (($line = fgets(STDIN)) !== false) {
     $line = rtrim($line, "\n");
     $decoded = json_decode($line, true);
     fwrite(STDOUT, json_encode([

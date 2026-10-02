@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\MCP;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\ClaudeCodeMcpClient;
 use SugarCraft\Crush\McpMessage;
+use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
 
 /**
  * THE FIFTEEN-SECOND WRITE BOUND IS A DEAF-SERVER COST, NOT A BIG-MESSAGE COST,
@@ -153,18 +154,14 @@ final class McpWriteBudgetShapeTest extends TestCase
             ]);
             $expected = strlen($message->toJson()) + 1;   // sendMessage() adds the newline
 
-            // THE BASELINE IS NOT ZERO, and assuming it was is what this row
-            // caught first: connect() sends the `initialize` notification
-            // through the same sendMessage(), so the child has already counted
-            // 129 bytes before this row writes anything. The claim is about the
-            // DELTA.
-            $before = $this->countAfterItSettles($receipt, 0);
-            $this->assertGreaterThan(
-                0,
-                $before,
-                'the child counted nothing for the handshake, so it is not reading at all and '
-                . 'the timing row above measured a write into a pipe buffer nobody empties',
-            );
+            // THE BASELINE IS ZERO NOW, and that is a consequence of audit
+            // MCP-3 rather than an assumption. The handshake used to be one
+            // unanswered notification the counter saw (129 bytes); it is now a
+            // request the child must ANSWER, which the fixture prelude does
+            // before the counting loop starts. So `connect()` returning at all
+            // is the proof this child reads its stdin — the role the old
+            // non-zero baseline played — and every byte counted is this row's.
+            $before = 0;
 
             $client->sendMessage($message);
 
@@ -226,8 +223,10 @@ final class McpWriteBudgetShapeTest extends TestCase
     private function clientReading(?string $receipt = null): ClaudeCodeMcpClient
     {
         $script = $this->workDir . '/reader_' . bin2hex(random_bytes(6)) . '.php';
-        file_put_contents($script, sprintf(
-            "<?php\n\$in = fopen('php://stdin', 'rb');\n\$n = 0;\n"
+        // STDIN, not a second `php://stdin` handle: the handshake prelude reads
+        // through STDIN, and any bytes it buffered ahead must reach the count.
+        file_put_contents($script, ClaudeMcpHandshakeFixture::around(sprintf(
+            "<?php\n\$in = STDIN;\n\$n = 0;\n"
             . "while (!feof(\$in)) {\n"
             . "    \$c = fread(\$in, 65536);\n"
             . "    if (\$c === false) { break; }\n"
@@ -236,7 +235,7 @@ final class McpWriteBudgetShapeTest extends TestCase
             . "    if (\$c === '') { usleep(1000); }\n"
             . "}\n",
             $receipt === null ? '' : sprintf('file_put_contents(%s, (string) $n);', var_export($receipt, true)),
-        ));
+        )));
 
         $client = new ClaudeCodeMcpClient(PHP_BINARY, [$script]);
         $client->connect();

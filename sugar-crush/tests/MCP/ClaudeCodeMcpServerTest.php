@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\ClaudeCodeMcpClient;
 use SugarCraft\Crush\MCP\ClaudeCodeMcpServer;
 use SugarCraft\Crush\MCP\McpTool;
+use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
 
 /**
  * E699 — the gated `claude-mcp` adapter, end to end over a fake binary.
@@ -49,8 +50,9 @@ final class ClaudeCodeMcpServerTest extends TestCase
     /**
      * The whole point of the transport, in one happy path: a granted,
      * absolute, executable binary is spawned with the operator's argv, the
-     * initialize NOTIFICATION and the tools/list round-trip fill the
-     * start-time cache the panel counts, a call maps through, and stop
+     * initialize request/result/initialized handshake and the tools/list
+     * round-trip fill the start-time cache the panel counts, a call maps
+     * through, and stop
      * reaps. Every frame rides the shared NDJSON dialect.
      */
     public function testTheGatedGrantStartsCachesToolsAndServesCalls(): void
@@ -185,10 +187,15 @@ final class ClaudeCodeMcpServerTest extends TestCase
     }
 
     /**
-     * A child that never answers costs the START poll the client already
-     * bounds (~1s of 10ms reads) — a runtime failure, so
-     * McpClient::startServer() skips it silently and the launch is
-     * degraded, never refused. The throw here is the poll's own voice.
+     * A child that never answers and then exits fails the HANDSHAKE — a
+     * runtime failure, so McpClient::startServer() skips it silently and the
+     * launch is degraded, never refused.
+     *
+     * WHAT THIS SAID: that it cost "the START poll the client already bounds
+     * (~1s of 10ms reads)". WHAT IS TRUE NOW (audit MCP-3): that poll is gone.
+     * `initialize` is a request the client waits for on a slow-boot budget, and
+     * the wait ends early on the child's EOF, which is what ends it here — so
+     * the bound below is the child's 0.4s lifetime plus reaping, not a budget.
      */
     public function testADeafChildFailsInsideTheBoundedStartPollAndLeavesNoUpServer(): void
     {
@@ -203,9 +210,11 @@ final class ClaudeCodeMcpServerTest extends TestCase
         } catch (\RuntimeException $e) {
             $caught = $e;
         }
-        self::assertNotNull($caught, 'a child that never answers tools/list must not pass start');
-        self::assertStringContainsString('No response received', $caught->getMessage());
-        self::assertLessThan(8.0, microtime(true) - $started, 'the start poll stays bounded');
+        self::assertNotNull($caught, 'a child that never answers its handshake must not pass start');
+        self::assertStringContainsString('No response received for initialize request', $caught->getMessage());
+        self::assertStringContainsString('closed its stdout', $caught->getMessage());
+        self::assertLessThan(8.0, microtime(true) - $started, 'the start stays bounded by the child\'s exit');
+        self::assertFalse($server->isUp(), 'a failed handshake must not leave an up row behind');
     }
 
     /**
@@ -216,7 +225,7 @@ final class ClaudeCodeMcpServerTest extends TestCase
      */
     public function testACrashedChildReadsNotUpAndSurvivesStop(): void
     {
-        $script = $this->ocWritePhpScript('oneshot', <<<'PHP'
+        $script = $this->ocWritePhpScript('oneshot', ClaudeMcpHandshakeFixture::around(<<<'PHP'
             <?php
             while (($line = fgets(STDIN)) !== false) {
                 $msg = json_decode($line, true);
@@ -229,7 +238,7 @@ final class ClaudeCodeMcpServerTest extends TestCase
                     break; // the crash posture: answer once, then leave
                 }
             }
-            PHP);
+            PHP));
 
         $server = $this->ocGrantServer($script);
         $server->start();
@@ -259,7 +268,7 @@ final class ClaudeCodeMcpServerTest extends TestCase
         }
 
         $pidFile = $this->ocWorkDir . '/grandchild.pid';
-        $script = $this->ocWritePhpScript('tree', <<<'PHP'
+        $script = $this->ocWritePhpScript('tree', ClaudeMcpHandshakeFixture::around(<<<'PHP'
             <?php
             while (($line = fgets(STDIN)) !== false) {
                 $msg = json_decode($line, true);
@@ -271,7 +280,7 @@ final class ClaudeCodeMcpServerTest extends TestCase
                     fflush(STDOUT);
                 }
             }
-            PHP);
+            PHP));
 
         $server = $this->ocGrantServer($script, [$pidFile]);
         $server->start();
@@ -306,7 +315,7 @@ final class ClaudeCodeMcpServerTest extends TestCase
      */
     public function testOperatorEnvOverridesReachTheSpawnedChild(): void
     {
-        $script = $this->ocWritePhpScript('envprobe', <<<PHP
+        $script = $this->ocWritePhpScript('envprobe', ClaudeMcpHandshakeFixture::around(<<<PHP
             <?php
             fwrite(STDERR, 'PROBE[' . var_export(getenv('OC_E699_PROBE'), true) . ']');
             while ((\$line = fgets(STDIN)) !== false) {
@@ -319,7 +328,7 @@ final class ClaudeCodeMcpServerTest extends TestCase
                     fflush(STDOUT);
                 }
             }
-            PHP);
+            PHP));
 
         $server = ClaudeCodeMcpServer::fromGrant('envy', ['type' => ClaudeCodeMcpServer::TYPE], [
             'binary' => PHP_BINARY, 'args' => [$script], 'env' => ['OC_E699_PROBE' => 'landed-here'],

@@ -26,7 +26,7 @@ final class ClaudeCodeMcpClientForkSafetyTest extends TestCase
 
     private const CHILD_DEADLINE_SECONDS = 15.0;
 
-    /** Single-threaded stdio server: slow (600ms), fast, echo (random 50-300ms). */
+    /** Single-threaded stdio server: answers initialize; slow (600ms), fast, echo (random 50-300ms). */
     private const FIXTURE = <<<'PHP'
         <?php
         $born = microtime(true);
@@ -35,6 +35,15 @@ final class ClaudeCodeMcpClientForkSafetyTest extends TestCase
                 exit(0);
             }
             $msg = json_decode($line, true);
+            if (is_array($msg) && ($msg['method'] ?? null) === 'initialize' && isset($msg['id'])) {
+                // The handshake connect() waits for (audit MCP-3).
+                echo json_encode(['jsonrpc' => '2.0', 'id' => $msg['id'], 'result' => [
+                    'protocolVersion' => '2024-11-05', 'capabilities' => new stdClass(),
+                    'serverInfo' => ['name' => 'fixture', 'version' => '0'],
+                ]]), "\n";
+                fflush(STDOUT);
+                continue;
+            }
             if (!is_array($msg) || ($msg['method'] ?? null) !== 'tools/call' || !isset($msg['id'])) {
                 continue;
             }

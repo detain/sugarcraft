@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\MCP;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\ClaudeCodeMcpClient;
+use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
 
 /**
  * THE FRAME CAP FAMILY, PRODUCT SIDE, AFTER PHASE-2a.
@@ -204,10 +205,12 @@ final class McpFrameCapTest extends TestCase
     private function connectedClient(): ClaudeCodeMcpClient
     {
         $script = $this->workDir . '/one_byte.php';
-        file_put_contents($script, sprintf(
+        // The byte goes out AFTER the handshake connect() waits for (audit
+        // MCP-3), so it is still the only thing waiting on the pipe.
+        file_put_contents($script, ClaudeMcpHandshakeFixture::around(sprintf(
             "<?php\nfwrite(STDOUT, 'x');\nfflush(STDOUT);\nsleep(%d);\n",
             self::FIXTURE_LIFETIME_SECONDS,
-        ));
+        )));
 
         $client = new ClaudeCodeMcpClient(PHP_BINARY, [$script]);
         $client->connect();

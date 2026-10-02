@@ -168,18 +168,30 @@ final class ClaudeCodeMcpServer implements McpServer
     }
 
     /**
-     * Spawn through the client's gated connect, then complete the
-     * START-TIME `tools/list` the cache exists to hold. An unanswered list
-     * throws inside the ~1s poll the client already bounds — the same
+     * Spawn through the client's gated connect — which now completes the
+     * spec's `initialize` request → result → `notifications/initialized`
+     * handshake — then the START-TIME `tools/list` the cache exists to hold.
+     *
+     * Both legs wait on the client's handshake budget (the stdio sibling's
+     * sixty-second start ceiling, audit MCP-3), not on the ~1s counted poll
+     * they used to share, so a `claude mcp serve` that boots slowly is no
+     * longer skipped. An unanswered or refused handshake throws — the same
      * runtime-failure family {@see \SugarCraft\Crush\MCP\McpClient::startServer()}
      * skips silently, as opposed to {@see fromGrant()}'s config errors,
-     * which are reported.
+     * which are reported — and the child is reaped before the throw rather
+     * than left on its pipes until this object dies.
      */
     public function start(): void
     {
         $this->client->connect();
 
-        $response = $this->client->listTools();
+        try {
+            $response = $this->client->listTools();
+        } catch (\Throwable $failure) {
+            $this->client->disconnect();
+
+            throw $failure;
+        }
 
         $toolDefs = $response->result['tools'] ?? [];
         if (!is_array($toolDefs)) {
