@@ -74,6 +74,7 @@ sugar-crush/tests/MouseModalGuardTest.php	3.827	22
 sugar-crush/tests/Backend/EngineBackendTeardownKillsToolTreeTest.php	3.791	2
 sugar-crush/tests/Tools/ToolOutputBudgetTest.php	3.678	35
 sugar-crush/tests/Cli/HelpTest.php	3.664	68
+sugar-crush/tests/Backend/EngineBackendStepBudgetTest.php	3.661	7
 sugar-crush/tests/Integration/BinSugarcrushAutoloadGuardTest.php	3.622	34
 sugar-crush/tests/Agents/AgentWorkerPoolTest.php	3.598	50
 sugar-crush/tests/Chat/CustomCommandShellAsyncTest.php	3.589	10
@@ -86,6 +87,7 @@ sugar-crush/tests/Workflows/WorkflowLivePaneTest.php	3.358	11
 sugar-crush/tests/Cli/BootstrapTest.php	3.210	25
 sugar-crush/tests/Hooks/HookRegistryTest.php	3.194	71
 sugar-crush/tests/Sessions/BackgroundSessionRunnerTest.php	3.139	25
+sugar-crush/tests/Permissions/TaskGrantMemoHookOriginTest.php	3.115	8
 sugar-crush/tests/Renderer/RenderMemoTest.php	3.075	26
 sugar-crush/tests/Chat/TurnHookAsyncTest.php	3.015	8
 sugar-crush/tests/Config/ReadmeJsonErrorContractDriftTest.php	3.008	19
@@ -109,6 +111,7 @@ sugar-crush/tests/Context/EnvironmentBlockSubdirectoryTest.php	2.189	5
 sugar-crush/tests/Tools/BuiltIn/UnifiedDiffBoundedMemoryTest.php	2.165	5
 sugar-crush/tests/Cli/BootstrapHookFileTest.php	2.073	41
 sugar-crush/tests/Cli/SessionRetentionWiringTest.php	2.058	16
+sugar-crush/tests/Permissions/ForgedRefusalTest.php	2.031	13
 sugar-crush/tests/Context/GlobDialectDifferentialTest.php	2.009	13
 sugar-crush/tests/Renderer/PaneWidthInvariantTest.php	1.992	190
 sugar-crush/tests/PaletteClickTest.php	1.965	20
@@ -139,6 +142,7 @@ sugar-crush/tests/Config/DocumentParagraphsTest.php	1.458	18
 sugar-crush/tests/Tools/OutputTruncationTest.php	1.451	24
 sugar-crush/tests/Commands/KeyBindingDriftTest.php	1.447	137
 sugar-crush/tests/Integration/ParallelDeadlineKillsCommandTreeTest.php	1.384	1
+sugar-crush/tests/Agents/AgentWorkerPoolCancelTreeTest.php	1.356	3
 sugar-crush/tests/MCP/McpWriteBudgetShapeTest.php	1.334	2
 sugar-crush/tests/Support/ContainedPathInventoryTest.php	1.294	49
 sugar-crush/tests/Chat/BranchCommandTest.php	1.291	13
@@ -205,11 +209,15 @@ sugar-crush/tests/Providers/RuntimeLengthStopFoldTest.php	0.521	5
 sugar-crush/tests/Integration/WorkflowResumptionTest.php	0.510	9
 sugar-crush/tests/Diagnostics/RuntimeNoticeSinkStderrTest.php	0.505	5
 sugar-crush/tests/Support/ReadPathCensusTest.php	0.503	17
+sugar-crush/tests/Permissions/ChatAlwaysGrantScopeTest.php	0.502	5
 sugar-crush/tests/MCP/StdioMcpServerClosedPipeGuardTest.php	0.492	5
+sugar-crush/tests/Agents/AgentManagerRetentionTest.php	0.492	7
 sugar-crush/tests/MCP/McpFrameCapTest.php	0.487	5
 sugar-crush/tests/Agents/TaskListHooksTest.php	0.485	10
+sugar-crush/tests/Chat/ChatPostToolUseBlockTest.php	0.477	7
 sugar-crush/tests/SuiteTempSandboxContractTest.php	0.442	5
 sugar-crush/tests/MCP/StdioMcpServerToolListRobustnessTest.php	0.417	9
+sugar-crush/tests/Commands/McpAuthCommandDiscoveryTest.php	0.415	6
 sugar-crush/tests/Support/TimedFileLockTest.php	0.409	4
 sugar-crush/tests/Skills/SkillLoaderTest.php	0.404	55
 sugar-crush/tests/Integration/StreamingWiringTest.php	0.392	20
@@ -232,6 +240,7 @@ sugar-crush/tests/Providers/VertexProviderTest.php	0.278	153
 sugar-crush/tests/Tui/PaneDragIntegrationTest.php	0.271	21
 sugar-crush/tests/Context/ContextCompactorTest.php	0.262	88
 sugar-crush/tests/Chat/UiOnlyHistoryTest.php	0.257	9
+sugar-crush/tests/Chat/ChatToolCancelKillsCommandTreeTest.php	0.256	1
 sugar-crush/tests/Integration/ContextWindowWiringTest.php	0.246	15
 sugar-crush/tests/Context/RepoMapBlockTest.php	0.234	68
 sugar-crush/tests/Chat/InFlightInputQueueTest.php	0.217	25
@@ -251,7 +260,9 @@ sugar-crush/tests/Integration/BinSugarcrushJsonStdoutDiagnosticsTest.php	0.177	1
 sugar-crush/tests/Renderer/AbandonedPaletteIsNotCompositedTest.php	0.174	3
 sugar-crush/tests/Chat/PaletteNewSessionCommandTest.php	0.168	2
 sugar-crush/tests/Commands/CustomCommandDispatchTest.php	0.167	33
+sugar-crush/tests/Support/SecretEnvScrubTest.php	0.167	20
 sugar-crush/tests/Backend/EngineBackendFrameSocketInheritanceTest.php	0.166	2
+sugar-crush/tests/Hooks/HookEnvironmentDocumentationDriftTest.php	0.161	1
 sugar-crush/tests/Tui/ShellMouseZoneTest.php	0.155	9
 sugar-crush/tests/Support/HookContextFilesTest.php	0.153	16
 sugar-crush/tests/Commands/MemoryImportCommandTest.php	0.150	10
@@ -271,6 +282,7 @@ sugar-crush/tests/Cli/NonInteractiveStdinPinTest.php	0.120	8
 sugar-crush/tests/MCP/McpNestedArgumentsWireTest.php	0.120	2
 sugar-crush/tests/Chat/ChatConfigChangeDoorsDocumentationDriftTest.php	0.117	7
 sugar-crush/tests/Tui/RendererTest.php	0.111	22
+sugar-crush/tests/Providers/SglangProviderServerLimitsTest.php	0.111	35
 sugar-crush/tests/MCP/OAuthLoopbackFlowTest.php	0.109	10
 sugar-crush/tests/Workflows/WorkflowFailureReportingTest.php	0.104	2
 sugar-crush/tests/App/MenuBarPaneTabClickTest.php	0.104	7
@@ -374,14 +386,17 @@ sugar-crush/tests/Tui/McpPanelTest.php	0.033	17
 sugar-crush/tests/ThemeTest.php	0.033	8
 sugar-crush/tests/Tools/BuiltIn/LspToolTest.php	0.032	37
 sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.032	39
+sugar-crush/tests/Permissions/PermissionGateAcceptEditsTest.php	0.032	27
 sugar-crush/tests/Tools/IgnoreRulesTest.php	0.031	36
 sugar-crush/tests/Skills/ProjectSkillsDirContainmentTest.php	0.031	10
 sugar-crush/tests/PaneClickTest.php	0.031	13
+sugar-crush/tests/Cli/BootstrapSecretEnvAllowlistTest.php	0.031	9
 sugar-crush/tests/Support/AtomicFileWriterTest.php	0.030	7
 sugar-crush/tests/Cli/BootstrapLayeredSettingsTest.php	0.029	22
 sugar-crush/tests/Config/LayeredSettingsTest.php	0.029	25
 sugar-crush/tests/Renderer/PermissionModalWrapTest.php	0.029	22
 sugar-crush/tests/Hooks/AuditHookDenialAndEscapingTest.php	0.029	10
+sugar-crush/tests/Permissions/WritePathScopeTest.php	0.029	23
 sugar-crush/tests/Hooks/HookDispatcherTest.php	0.028	55
 sugar-crush/tests/Agents/AgentWorkerPoolForkFailureTest.php	0.028	4
 sugar-crush/tests/Cli/BootstrapContextWindowTest.php	0.028	5
@@ -403,6 +418,7 @@ sugar-crush/tests/Skills/SkillDiscoveryTest.php	0.024	20
 sugar-crush/tests/Skills/TruncatesOutputNudgeMarginDocTest.php	0.024	4
 sugar-crush/tests/MousePaneJumpDoesNotHandOverTest.php	0.024	3
 sugar-crush/tests/Integration/RuleNudgeMidSessionReloadTest.php	0.024	3
+sugar-crush/tests/Skills/SkillFileReaderTest.php	0.024	14
 sugar-crush/tests/Agents/WorktreeIncludeContainmentTest.php	0.023	21
 sugar-crush/tests/Hooks/HookManagerTest.php	0.023	37
 sugar-crush/tests/Cli/HeadlessPermissionPromptTest.php	0.023	19
@@ -418,6 +434,7 @@ sugar-crush/tests/Permissions/ShellWordsTest.php	0.022	52
 sugar-crush/tests/Tui/Components/PaneFrameTest.php	0.021	15
 sugar-crush/tests/Providers/OpenAIProviderTest.php	0.021	37
 sugar-crush/tests/Cli/ArgvParserPositionalTest.php	0.021	28
+sugar-crush/tests/Renderer/BidiOverrideFrameTest.php	0.021	7
 sugar-crush/tests/Chat/ContextReminderDedupTest.php	0.020	7
 sugar-crush/tests/Permissions/PermissionGateDeclarationTest.php	0.020	68
 sugar-crush/tests/Providers/SglangProviderTest.php	0.020	45
@@ -437,6 +454,7 @@ sugar-crush/tests/UsageTest.php	0.018	37
 sugar-crush/tests/Diagnostics/RuntimeNoticeSinkTest.php	0.018	26
 sugar-crush/tests/MCP/HttpMcpServerTest.php	0.018	28
 sugar-crush/tests/Backend/EngineBackendWitherPreservesStateTest.php	0.018	17
+sugar-crush/tests/Providers/SglangServerInfoTest.php	0.018	25
 sugar-crush/tests/Messages/HistorySanitizationTest.php	0.017	25
 sugar-crush/tests/MCP/McpClientServerIsolationTest.php	0.017	13
 sugar-crush/tests/MouseWiringTest.php	0.017	16
@@ -447,6 +465,7 @@ sugar-crush/tests/Context/RulePathNudgeTest.php	0.017	29
 sugar-crush/tests/Cli/BootstrapMcpLivenessTest.php	0.017	11
 sugar-crush/tests/Providers/StreamedToolCallFlushTest.php	0.017	21
 sugar-crush/tests/App/MenuCommandDraftPreservationTest.php	0.017	12
+sugar-crush/tests/Agents/AgentPresetSkipMalformedFileTest.php	0.017	12
 sugar-crush/tests/Tools/BuiltIn/WriteTest.php	0.016	22
 sugar-crush/tests/Permissions/PermissionGateScopedWriteTest.php	0.016	52
 sugar-crush/tests/SessionTest.php	0.016	17
@@ -528,6 +547,7 @@ sugar-crush/tests/Skills/SkillFrontmatterTest.php	0.009	24
 sugar-crush/tests/Chat/BareMcpAuthWordBoundaryTest.php	0.009	8
 sugar-crush/tests/Integration/BinSugarcrushTuiErrorLogTest.php	0.009	5
 sugar-crush/tests/Providers/CustomProviderExtraBodyTest.php	0.009	16
+sugar-crush/tests/Permissions/WebFetchPermissionTest.php	0.009	23
 sugar-crush/tests/Hooks/HookResultTest.php	0.008	33
 sugar-crush/tests/Hooks/ConfirmRemoveHookTest.php	0.008	21
 sugar-crush/tests/Integration/WorkflowExecutionTest.php	0.008	6
@@ -546,6 +566,7 @@ sugar-crush/tests/Palette/PaletteActionTest.php	0.008	4
 sugar-crush/tests/Tui/TerminalBackgroundTest.php	0.008	16
 sugar-crush/tests/Providers/ProviderStreamExceptionTest.php	0.008	22
 sugar-crush/tests/Providers/ToolCallParser/EnvelopeHoldBackTest.php	0.008	16
+sugar-crush/tests/Chat/ChatHookInputEncodingTest.php	0.008	5
 sugar-crush/tests/Tui/MenuBarTest.php	0.007	13
 sugar-crush/tests/App/DockSeedTest.php	0.007	12
 sugar-crush/tests/Tui/PaneDragControllerTest.php	0.007	25
@@ -559,6 +580,7 @@ sugar-crush/tests/Hooks/HookContextTest.php	0.007	14
 sugar-crush/tests/App/PaneFocusCycleTest.php	0.007	12
 sugar-crush/tests/Agents/AgentPresetFieldCarryTest.php	0.007	15
 sugar-crush/tests/Chat/TokenProxyScriptWeightTest.php	0.007	16
+sugar-crush/tests/Config/MemoryDocumentationDriftTest.php	0.007	8
 sugar-crush/tests/Providers/ProviderHeartbeatProgressTest.php	0.006	8
 sugar-crush/tests/App/AppSkillTest.php	0.006	10
 sugar-crush/tests/Hooks/PermissionGateHookTest.php	0.006	15
@@ -578,6 +600,7 @@ sugar-crush/tests/Agents/TeamConfigTest.php	0.006	20
 sugar-crush/tests/Agents/WorktreeManagerConfigOriginTest.php	0.006	4
 sugar-crush/tests/Providers/OpenAIProviderCachedCostTest.php	0.006	15
 sugar-crush/tests/Support/ProcessContainmentCloseOnExecTest.php	0.006	2
+sugar-crush/tests/MCP/OAuthDiscoveryTest.php	0.006	15
 sugar-crush/tests/Providers/SglangProviderDsmlStreamingTest.php	0.005	7
 sugar-crush/tests/MCP/McpClientClaudeTypeFactoryTest.php	0.005	5
 sugar-crush/tests/Cli/BootstrapTrustedHomeOwnershipTest.php	0.005	5
@@ -602,6 +625,8 @@ sugar-crush/tests/Providers/SseDataNoSpaceTest.php	0.005	7
 sugar-crush/tests/Tools/BuiltIn/SkillToolArgumentsTest.php	0.005	12
 sugar-crush/tests/Tools/ToolResultUsageTest.php	0.005	10
 sugar-crush/tests/Providers/ToolCallParser/EnvelopeAwareParsersTest.php	0.005	9
+sugar-crush/tests/Backend/ToolCallLoopGuardTest.php	0.005	9
+sugar-crush/tests/Support/InteractiveSpawnCdGuardTest.php	0.005	4
 sugar-crush/tests/MCP/McpRouterTest.php	0.004	14
 sugar-crush/tests/Permissions/PermissionGateReadOnlyInspectionTest.php	0.004	11
 sugar-crush/tests/Tui/PaneTest.php	0.004	11
@@ -630,6 +655,7 @@ sugar-crush/tests/Context/Utf8ScrubTest.php	0.004	11
 sugar-crush/tests/Chat/CancelledToolPlaceholderTest.php	0.004	4
 sugar-crush/tests/Chat/TitleBackendFallbackTest.php	0.004	3
 sugar-crush/tests/Providers/SglangProviderToolSchemaCoercionTest.php	0.004	3
+sugar-crush/tests/Cli/HeadlessPermissionPromptControlsTest.php	0.004	7
 sugar-crush/tests/Providers/EchoProviderTest.php	0.003	10
 sugar-crush/tests/Permissions/PermissionGateAutoModeTest.php	0.003	9
 sugar-crush/tests/Permissions/SafetyClassifierTest.php	0.003	9
@@ -673,6 +699,7 @@ sugar-crush/tests/Tools/BuiltIn/DoctorBootProbeTest.php	0.002	2
 sugar-crush/tests/Providers/VertexThoughtTokensTest.php	0.002	6
 sugar-crush/tests/Providers/ToolCallParser/TextualRecoveryTest.php	0.002	8
 sugar-crush/tests/Providers/ToolCallParser/ToolParameterTypesTest.php	0.002	5
+sugar-crush/tests/MessageDescribeToolCallEncodingTest.php	0.002	5
 sugar-crush/tests/AttachmentTest.php	0.001	6
 sugar-crush/tests/AttachmentTypeTest.php	0.001	6
 sugar-crush/tests/Events/ToolEventsTest.php	0.001	5
@@ -681,4 +708,5 @@ sugar-crush/tests/Cli/HeadlessPermissionPromptStdinDefaultTest.php	0.001	3
 sugar-crush/tests/Memory/UnreadableNotesTest.php	0.001	3
 sugar-crush/tests/Hooks/HookManagerRunsOutOfProcessTest.php	0.001	4
 sugar-crush/tests/Config/McpStartupOrderingDocDriftTest.php	0.001	2
+sugar-crush/tests/Tools/ParallelSafeDocblockTest.php	0.001	2
 sugar-crush/tests/AssistantMsgTest.php	0.000	2
