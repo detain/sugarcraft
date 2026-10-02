@@ -859,6 +859,90 @@ SKILL
         $this->assertSame('nested/skill', $result['nested/skill']['name']);
     }
 
+    // -------------------------------------------------------------------------
+    // skillKeyFor() - the key does not depend on how the directory is spelled
+    // (audit 15d-18)
+    // -------------------------------------------------------------------------
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function directorySpellingProvider(): iterable
+    {
+        yield 'one trailing slash' => ['/'];
+        yield 'two trailing slashes' => ['//'];
+    }
+
+    /**
+     * A trailing slash used to shift the slice one byte into the skill's own
+     * directory name: `tree/deploy/SKILL.md` keyed as `/`, `tree/group/nested`
+     * as `/nested`.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('directorySpellingProvider')]
+    public function testLoadFromDirectoryKeysAreTheSameWithATrailingSlash(string $suffix): void
+    {
+        $tree = $this->makeKeyedTree();
+        $loader = new SkillLoader(reportSkips: false);
+
+        $plain = array_keys($loader->loadFromDirectory($tree));
+        $slashed = $loader->loadFromDirectory($tree . $suffix);
+
+        $this->assertSame(['deploy', 'group/nested'], $plain);
+        $this->assertSame($plain, array_keys($slashed));
+        $this->assertSame('group/nested', $slashed['group/nested']->name);
+        $this->assertSame([], $loader->skipped());
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('directorySpellingProvider')]
+    public function testLoadManifestsFromDirectoryKeysAreTheSameWithATrailingSlash(string $suffix): void
+    {
+        $tree = $this->makeKeyedTree();
+        $loader = new SkillLoader(reportSkips: false);
+
+        $plain = array_keys($loader->loadManifestsFromDirectory($tree));
+        $slashed = $loader->loadManifestsFromDirectory($tree . $suffix);
+
+        $this->assertSame(['deploy', 'group/nested'], $plain);
+        $this->assertSame($plain, array_keys($slashed));
+        $this->assertSame('group/nested', $slashed['group/nested']['name']);
+        $this->assertSame([], $loader->skipped());
+    }
+
+    /**
+     * The branch no public walk reaches today (skillFilesIn() spells every
+     * path under the directory it was given), hence reflection: a path NOT
+     * spelled under the base — here the base named through a symlink — is
+     * keyed through the realpaths, and one outside the base entirely falls
+     * back to the skill's own name instead of a garbage slice.
+     */
+    public function testSkillKeyForFallsBackSafelyForAPathNotSpelledUnderTheBase(): void
+    {
+        $tree = $this->makeKeyedTree();
+        $link = $this->tempDir . '/tree-link';
+        if (!@symlink($tree, $link)) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        $keyFor = new \ReflectionMethod(SkillLoader::class, 'skillKeyFor');
+        $loader = new SkillLoader(reportSkips: false);
+
+        $this->assertSame('group/nested', $keyFor->invoke($loader, $link, $tree . '/group/nested/SKILL.md', 'nested'));
+        $this->assertSame('deploy', $keyFor->invoke($loader, $link . '/', $tree . '/deploy/SKILL.md', 'deploy'));
+        $this->assertSame('elsewhere', $keyFor->invoke($loader, $tree, $this->tempDir . '/elsewhere/SKILL.md', 'elsewhere'));
+    }
+
+    /** `<tempDir>/tree/deploy` (top level) and `<tempDir>/tree/group/nested` (nested). */
+    private function makeKeyedTree(): string
+    {
+        $tree = $this->tempDir . '/tree';
+        foreach (['deploy', 'group/nested'] as $skill) {
+            mkdir($tree . '/' . $skill, 0777, true);
+            file_put_contents($tree . '/' . $skill . '/SKILL.md', "---\ndescription: {$skill}\n---\nBody");
+        }
+
+        return $tree;
+    }
+
     public function testLoadManifestsFromDirectoryHandlesMissingFrontmatterGracefully(): void
     {
         // Arrange -- unlike Skill::fromFile() (which requires frontmatter

@@ -577,13 +577,50 @@ final class SkillLoader
      * walkers: a skill nested more than one level under $baseDir is keyed by
      * its path relative to $baseDir (so sibling skills sharing a leaf dirname
      * don't collide); a top-level skill keeps its own name.
+     *
+     * $baseDir is trimmed of trailing slashes first (audit 15d-18): slicing
+     * `strlen($baseDir) + 1` bytes off a `skills/` spelling cut one byte into
+     * the skill's own directory name, so `skills/deploy/SKILL.md` keyed as
+     * `/` and a nested `skills/a/b/SKILL.md` as `/b`. The walk strips at most
+     * one trailing slash itself ({@see \DirectoryIterator}), so a `skills//`
+     * spelling also leaves a leading `/` on the slice, which is trimmed too.
+     *
+     * A path not spelled under $baseDir at all — which {@see skillFilesIn()}
+     * never produces today, since it seeds the walk with $baseDir as spelled —
+     * is keyed through both realpaths instead, and failing that by its own
+     * name, rather than by whatever bytes a blind substr() leaves.
      */
     private function skillKeyFor(string $baseDir, string $skillFilePath, string $fallbackName): string
     {
-        $relativePath = substr($skillFilePath, strlen($baseDir) + 1);
-        $relativeSkillDir = dirname($relativePath);
+        $base = rtrim($baseDir, '/');
+        $relativeSkillDir = str_starts_with($skillFilePath, $base . '/')
+            ? dirname(ltrim(substr($skillFilePath, strlen($base) + 1), '/'))
+            : self::canonicalRelativeSkillDir($base, $skillFilePath);
 
-        return $relativeSkillDir === '.' ? $fallbackName : $relativeSkillDir;
+        return $relativeSkillDir === null || $relativeSkillDir === '.' || $relativeSkillDir === ''
+            ? $fallbackName
+            : $relativeSkillDir;
+    }
+
+    /**
+     * The skill's directory relative to $base when both are compared as
+     * realpaths, or null when it does not lie under $base that way either.
+     */
+    private static function canonicalRelativeSkillDir(string $base, string $skillFilePath): ?string
+    {
+        $realBase = realpath($base === '' ? '/' : $base);
+        $realSkillDir = realpath(dirname($skillFilePath));
+        if ($realBase === false || $realSkillDir === false) {
+            return null;
+        }
+
+        if ($realSkillDir === $realBase) {
+            return '.';
+        }
+
+        $prefix = rtrim($realBase, '/') . '/';
+
+        return str_starts_with($realSkillDir, $prefix) ? substr($realSkillDir, strlen($prefix)) : null;
     }
 
     /**
