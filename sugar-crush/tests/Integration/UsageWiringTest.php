@@ -361,6 +361,8 @@ final class UsageWiringTest extends TestCase
             // F2: the census rule is every self-returning method carries
             // usage — a new flag-wither must appear here too.
             'withStepsTruncated' => $base->withStepsTruncated(true),
+            // Audit 15b-03: marking a row UI-only must not cost it its bill.
+            'withUiOnly' => $base->withUiOnly(),
         ];
 
         $reflected = [];

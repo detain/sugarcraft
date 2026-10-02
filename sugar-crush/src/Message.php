@@ -126,6 +126,22 @@ final class Message implements \JsonSerializable
          * @var array<string, mixed>
          */
         public readonly array $pendingToolArguments = [],
+        /**
+         * Whether this row exists for the person at the terminal ONLY and
+         * must never reach a model (audit 15b-03): a slash command's echo and
+         * its output, `/help`, a queued-prompt or mid-turn refusal notice, a
+         * background or runtime notice, a backend error string. Chat keeps
+         * every one of these in the same `list<Message>` the transcript is
+         * painted from, so without the flag each was replayed to the provider
+         * as a real turn - the model was told it had said `/help`'s listing
+         * and its own error strings, and on SGLang every System notice was
+         * hoisted into the system prompt, breaking the cache prefix.
+         *
+         * Filtered at every boundary where history becomes a request (see
+         * {@see agentVisible()}); persisted by {@see jsonSerialize()} so a
+         * resumed session keeps the distinction. Never part of {@see toWire()}.
+         */
+        public readonly bool $uiOnly = false,
     ) {}
 
     public static function user(string $content, ?int $now = null): self
@@ -141,6 +157,37 @@ final class Message implements \JsonSerializable
     public static function system(string $content, ?int $now = null): self
     {
         return new self(Role::System, $content, $now ?? time());
+    }
+
+    /**
+     * A {@see Role::System} row written for the user's eyes only - the
+     * app reporting on itself (a refusal, a queued prompt, a background
+     * status change). Shorthand for `system()->withUiOnly(true)`; see
+     * $uiOnly's docblock for why such a row must stay off the model wire.
+     */
+    public static function notice(string $content, ?int $now = null): self
+    {
+        return new self(Role::System, $content, $now ?? time(), uiOnly: true);
+    }
+
+    /**
+     * $history without its {@see $uiOnly} rows - what a backend may be shown.
+     *
+     * ONE filter for every boundary (Chat's turn, title, suggestion and
+     * summary calls; {@see \SugarCraft\Crush\Backend\EngineBackend} and
+     * the command backends' encoders) so no two request builders can
+     * disagree about what counts as a turn. Re-indexed: callers hand the
+     * result on as a `list`.
+     *
+     * @param array<int, Message> $history
+     * @return list<Message>
+     */
+    public static function agentVisible(array $history): array
+    {
+        return array_values(array_filter(
+            $history,
+            static fn(Message $message): bool => !$message->uiOnly,
+        ));
     }
 
     /**
@@ -255,6 +302,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            uiOnly: $this->uiOnly,
         );
     }
 
@@ -275,6 +323,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            uiOnly: $this->uiOnly,
         );
     }
 
@@ -300,6 +349,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            uiOnly: $this->uiOnly,
         );
     }
 
@@ -328,6 +378,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: [],
+            uiOnly: $this->uiOnly,
         );
     }
 
@@ -356,6 +407,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            uiOnly: $this->uiOnly,
         );
     }
 
@@ -383,6 +435,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            uiOnly: $this->uiOnly,
         );
     }
 
@@ -411,6 +464,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            uiOnly: $this->uiOnly,
         );
     }
 
@@ -438,6 +492,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            uiOnly: $this->uiOnly,
         );
     }
 
@@ -464,6 +519,34 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            uiOnly: $this->uiOnly,
+        );
+    }
+
+    /**
+     * Mark (or clear, via false) this row as for the user's eyes only - see
+     * $uiOnly's docblock. A command echo and its output are built with the
+     * ordinary {@see user()}/{@see assistant()} factories, because that is
+     * how the transcript renders them, and flagged here.
+     */
+    public function withUiOnly(bool $uiOnly = true): self
+    {
+        return new self(
+            role: $this->role,
+            content: $this->content,
+            createdAt: $this->createdAt,
+            attachments: $this->attachments,
+            toolCalls: $this->toolCalls,
+            toolResults: $this->toolResults,
+            pendingToolCallId: $this->pendingToolCallId,
+            reasoning: $this->reasoning,
+            imageBytes: $this->imageBytes,
+            imageProtocol: $this->imageProtocol,
+            usage: $this->usage,
+            lengthStopped: $this->lengthStopped,
+            stepsTruncated: $this->stepsTruncated,
+            pendingToolArguments: $this->pendingToolArguments,
+            uiOnly: $uiOnly,
         );
     }
 
@@ -562,6 +645,9 @@ final class Message implements \JsonSerializable
             'lengthStopped' => $this->lengthStopped,
             'stepsTruncated' => $this->stepsTruncated,
             'pendingToolArguments' => $this->pendingToolArguments,
+            // Only when set, so every agent-visible row - i.e. every row a
+            // pre-flag transcript holds - serialises byte-for-byte as before.
+            ...($this->uiOnly ? ['uiOnly' => true] : []),
         ];
     }
 
@@ -652,6 +738,7 @@ final class Message implements \JsonSerializable
             lengthStopped: ($row['lengthStopped'] ?? false) === true,
             stepsTruncated: ($row['stepsTruncated'] ?? false) === true,
             pendingToolArguments: \is_array($row['pendingToolArguments'] ?? null) ? $row['pendingToolArguments'] : [],
+            uiOnly: ($row['uiOnly'] ?? false) === true,
         );
     }
 }

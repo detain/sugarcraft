@@ -2254,13 +2254,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * Convert the chassis's root Message history into the engine's typed
      * message hierarchy.
      *
+     * UI-only rows are dropped here as well as in Chat (audit 15b-03): this is
+     * the last seam before a provider request, so a caller that hands this
+     * backend a raw transcript - an embedder, a test, a future dispatch site -
+     * still cannot put `/help`'s output or a queued-prompt notice on the wire.
+     *
      * @param array<int, Message> $history
      * @return array<int, TypedMessage>
      */
     private function toTypedMessages(array $history): array
     {
         $out = [];
-        foreach ($history as $msg) {
+        foreach (Message::agentVisible($history) as $msg) {
             $out[] = match ($msg->role->value) {
                 'user' => new UserMessage($msg->content),
                 'assistant' => new AssistantMessage($msg->content),

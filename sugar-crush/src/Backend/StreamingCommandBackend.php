@@ -220,7 +220,9 @@ final class StreamingCommandBackend implements Backend
         // (audit 15a A22).
         $payload = CommandBackend::encodeHistory($history);
         if ($payload === null) {
-            return Message::assistant('_[error: failed to encode history]_');
+            // UI-only (audit 15b-03), like every bodiless error string below:
+            // the model never said it, so it must not be replayed as its words.
+            return Message::assistant('_[error: failed to encode history]_')->withUiOnly();
         }
 
         $descriptor = [
@@ -258,7 +260,7 @@ final class StreamingCommandBackend implements Backend
             ProcessContainment::env()
         );
         if (!is_resource($proc)) {
-            return Message::assistant('_[error: failed to spawn streaming backend command]_');
+            return Message::assistant('_[error: failed to spawn streaming backend command]_')->withUiOnly();
         }
 
         // ALL THREE non-blocking, stdin included. stdout and stderr so bytes
@@ -476,14 +478,14 @@ final class StreamingCommandBackend implements Backend
             // exited, and the command exiting does not end that silence.
             return Message::assistant(
                 "_[error: no output on the streaming backend's pipes for more than {$this->idleTimeout}s]_",
-            );
+            )->withUiOnly();
         }
 
         if ($exit !== 0) {
             $tail = trim($state['stderr']);
             $hint = $tail === '' ? '' : "\n\n```\n{$tail}\n```";
 
-            return Message::assistant("_[error: streaming backend exited {$exit}]_{$hint}");
+            return Message::assistant("_[error: streaming backend exited {$exit}]_{$hint}")->withUiOnly();
         }
 
         if ($state['abandoned']) {
@@ -491,7 +493,11 @@ final class StreamingCommandBackend implements Backend
             $notice = "_[notice: the command exited but something it spawned still holds its output"
                 . " pipes open; stopped reading after {$grace}s of silence]_";
 
-            return Message::assistant($body === '' ? $notice : $body . "\n\n" . $notice);
+            // With a body the row is the model's partial answer plus a notice,
+            // which stays agent-visible; the notice alone is the app's.
+            return $body === ''
+                ? Message::assistant($notice)->withUiOnly()
+                : Message::assistant($body . "\n\n" . $notice);
         }
 
         return Message::assistant($body);

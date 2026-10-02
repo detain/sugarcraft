@@ -552,30 +552,46 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
         $chat = $this->chat(self::compactablePairs(), $this->generousSummarizer(), $main);
 
         [$parked, $cmd] = $this->submit($chat);
-        [, $turnCmd] = $parked->update($this->resolve($cmd));
+        [$landed, $turnCmd] = $parked->update($this->resolve($cmd));
         $turnCmd();
 
-        $wire = $main->lastHistory();
-        $promptIndex = null;
-        foreach ($wire as $i => $msg) {
-            if ($msg->role === Role::User && $msg->content === 'what changed in the router?') {
-                $promptIndex = $i;
+        $promptIndexIn = static function (array $history): ?int {
+            $found = null;
+            foreach ($history as $i => $msg) {
+                if ($msg->role === Role::User && $msg->content === 'what changed in the router?') {
+                    $found = $i;
+                }
             }
-        }
+
+            return $found;
+        };
+
+        // The transcript half: the tier report DOES land after the prompt, so
+        // the wire assertions below are about a real trailing row, not a vacuum.
+        $transcriptIndex = $promptIndexIn($landed->history);
+        $this->assertNotNull($transcriptIndex, 'fixture: the prompt must be in the transcript');
+        $trailing = array_slice($landed->history, $transcriptIndex + 1);
+        $this->assertNotSame([], $trailing, 'fixture: something DOES follow the prompt, or this asserts nothing');
+
+        $wire = $main->lastHistory();
+        $promptIndex = $promptIndexIn($wire);
         $this->assertNotNull($promptIndex, 'fixture: the prompt must be on the wire');
 
         $after = array_slice($wire, $promptIndex + 1);
-        $this->assertNotSame([], $after, 'fixture: something DOES follow the prompt, or this asserts nothing');
         $this->assertSame(
             [],
             array_values(array_filter($after, static fn(Message $m): bool => $m->role !== Role::System)),
             'everything after the prompt must be Role::System - an assistant turn there is a prefill '
             . 'the provider continues instead of an answer, and a second user turn is a turn nobody sent',
         );
+
+        // Audit 15b-03: the trailing rows that are app notices are UI-only and
+        // stay off the wire entirely, so the wire carries exactly the trailing
+        // rows that are NOT - no fewer (a dropped instruction) and no more.
         $this->assertSame(
-            Role::System,
-            $wire[count($wire) - 1]->role,
-            'so the wire ends on system, not on the user line an earlier docblock claimed',
+            array_values(array_filter($trailing, static fn(Message $m): bool => !$m->uiOnly)),
+            $after,
+            'the wire after the prompt is the transcript after the prompt minus its UI-only notices',
         );
     }
 

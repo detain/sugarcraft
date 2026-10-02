@@ -1641,7 +1641,7 @@ final class Chat implements Model
             ...$this->sessionChangeResets(),
             'currentSessionId' => $sessionId,
             'currentSessionName' => $name,
-            'history' => [...$history, Message::system(
+            'history' => [...$history, Message::notice(
                 '_Resumed session ' . ($name ?? $sessionId) . '._',
             )],
         ]);
@@ -1943,7 +1943,7 @@ final class Chat implements Model
                     ? "Forked into background session {$msg->sessionId} ('{$msg->name}') — use /agents to check status."
                     : "Backgrounded as {$msg->sessionId} ('{$msg->name}') — use /agents to check status.");
 
-            return [$this->mutate(['history' => [...$this->history, Message::assistant($notice)]]), null];
+            return [$this->mutate(['history' => [...$this->history, Message::assistant($notice)->withUiOnly()]]), null];
         }
         if ($msg instanceof BackgroundTickMsg) {
             return $this->pumpBackgroundSessions();
@@ -2161,7 +2161,7 @@ final class Chat implements Model
                 // it, so left alone it spun for the rest of the session - and a
                 // later turn reusing the call id (DSML's `dsml_call_0`) had its
                 // result written onto this dead row instead of its own.
-                'history' => [...$this->historyWithInterruptedPlaceholders(), Message::system('_Request cancelled._')],
+                'history' => [...$this->historyWithInterruptedPlaceholders(), Message::notice('_Request cancelled._')],
                 // Half a sentence left under the cancellation notice would
                 // read as an answer the user is still waiting on. The
                 // generation bump also strands any delta still in the inbox,
@@ -3120,6 +3120,10 @@ final class Chat implements Model
                 'history' => [
                     ...$this->history,
                     $request->assistantMessage,
+                    // Deliberately AGENT-VISIBLE (audit 15b-03): EngineBackend's
+                    // toTypedMessages() flattens tool calls and results away,
+                    // so on that path this note is the model's only record
+                    // that the call it asked for was refused.
                     Message::system('_' . DenialKind::Refused->reason("{$request->toolCall->name} was not run.") . '_'),
                     // The refusal also has to exist as a RESULT, not only as
                     // a system note (crush_feat.md §1 E7): the assistant
@@ -4044,7 +4048,7 @@ final class Chat implements Model
      */
     private function appendSpendCapNotice(SpendCapBreached $event): self
     {
-        return $this->mutate(['history' => [...$this->history, Message::system(
+        return $this->mutate(['history' => [...$this->history, Message::notice(
             sprintf(
                 '_Spend cap reached mid-turn: aborted after provider call %d — $%.4f of the $%.4f cap spent. No further calls were made this turn; /budget raises the cap._',
                 $event->completedCalls,
@@ -4702,7 +4706,7 @@ final class Chat implements Model
             // HookEvent::discardsOnBlock(): the prompt is NOT submitted. The draft
             // stays in the box exactly as the other refusals in submit() leave it.
             return [[], [$this->mutate([
-                'history' => [...$this->history, Message::system(
+                'history' => [...$this->history, Message::notice(
                     $blocked . ' Your prompt was not sent and is still in the box.',
                 )],
             ]), null]];
@@ -4717,7 +4721,7 @@ final class Chat implements Model
             $sessionBlocked = $this->turnHookRefusalReason($sessionResult);
 
             if ($sessionBlocked !== null) {
-                $notes[] = Message::system($sessionBlocked
+                $notes[] = Message::notice($sessionBlocked
                     . ' The hook\'s context note was discarded and the session continues.');
             } elseif ($sessionResult->additionalContext !== '') {
                 $notes[] = Message::system($sessionResult->additionalContext);
@@ -6830,11 +6834,15 @@ final class Chat implements Model
                 )]);
         }
 
-        return match ($row['role'] ?? '') {
+        $message = match ($row['role'] ?? '') {
             'assistant' => Message::assistant($content),
             'system'    => Message::system($content),
             default     => Message::user($content),
         };
+
+        // A command echo or notice must come back off a `/rewind` as UI-only
+        // as it went in (audit 15b-03), or the restore would put it on the wire.
+        return ($row['uiOnly'] ?? false) === true ? $message->withUiOnly() : $message;
     }
 
     /**
@@ -7209,9 +7217,11 @@ final class Chat implements Model
      *
      * THE LIST IS CAPPED AT ITS SOURCE, not here — see that method's
      * `LAUNCH_NOTICE_LIMIT` and `LAUNCH_NOTICE_MAX_CHARS`. This method appends
-     * whatever it is handed, and the reason that is safe is that these rows are
-     * part of the CONVERSATION: they are sent to the model on every turn, so an
-     * unbounded list would be a per-token cost for the whole session.
+     * whatever it is handed. These rows used to be part of the CONVERSATION —
+     * re-sent to the model on every turn, so an unbounded list would have been a
+     * per-token cost for the whole session. They are {@see Message::notice()}
+     * rows now (audit 15b-03): a launch warning is addressed to the person who
+     * can fix the config, not to the model, and the cap bounds the transcript.
      *
      * APPENDS, and callers depend on that: {@see Bootstrap::app()} calls this a
      * SECOND time with only the notices its post-`chat()` scan added, because
@@ -7227,7 +7237,7 @@ final class Chat implements Model
             if ($notice === '') {
                 continue;
             }
-            $messages[] = Message::system($notice);
+            $messages[] = Message::notice($notice);
         }
 
         // $this, not a clone, when there is nothing to say: a launch with no
@@ -7554,7 +7564,7 @@ final class Chat implements Model
             // for the two rewrites — one report per fact, because a message that
             // carries two facts reports neither of them once one of them is
             // truncated.
-            $newTurnMessages[] = Message::system($capNotice);
+            $newTurnMessages[] = Message::notice($capNotice);
         }
         if ($compactionNotice !== null) {
             $newTurnMessages[] = $compactionNotice;
@@ -7672,7 +7682,7 @@ final class Chat implements Model
         return [$this->mutate([
             'queuedPrompts' => $queue,
             'inputBuf' => '',
-            'history' => [...$this->history, Message::system(sprintf(
+            'history' => [...$this->history, Message::notice(sprintf(
                 'Queued (%d waiting) — sent as soon as this turn finishes: %s',
                 count($queue),
                 self::quoteDraftForNotice($text),
@@ -7688,7 +7698,7 @@ final class Chat implements Model
     private function refuseEmptyCustomCommand(string $text): array
     {
         return [$this->mutate([
-            'history' => [...$this->history, Message::system(sprintf(
+            'history' => [...$this->history, Message::notice(sprintf(
                 '%s is a command file whose template expanded to nothing — most often a body that is only '
                 . '$ARGUMENTS or $1, invoked with no arguments. Nothing was sent: an empty prompt costs a '
                 . 'turn and tells the model nothing. Pass arguments, or give the file a body that stands '
@@ -7741,7 +7751,7 @@ final class Chat implements Model
     private function refuseInFlightCommand(string $text): array
     {
         return [$this->mutate([
-            'history' => [...$this->history, Message::system(sprintf(
+            'history' => [...$this->history, Message::notice(sprintf(
                 '%s is a command, and commands do not run while a turn is in flight — it would rewrite '
                 . 'history this turn is about to append to. Your draft is still in the box: press Enter '
                 . 'again once the turn finishes, or Esc Esc to cancel the turn now.',
@@ -7787,7 +7797,7 @@ final class Chat implements Model
             // notice the user cannot see is how the original bug felt.
             'palette' => null,
             'sessionPicker' => null,
-            'history' => [...$this->history, Message::system(sprintf(
+            'history' => [...$this->history, Message::notice(sprintf(
                 '"%s" does not run while a turn is in flight — it would change state this turn is about '
                 . 'to write. Wait for the turn to finish, or Esc Esc to cancel it now.',
                 self::quoteDraftForNotice($what),
@@ -8628,8 +8638,8 @@ final class Chat implements Model
             $this->mutate([
                 'history' => [
                     ...$this->history,
-                    Message::user($inputText),
-                    Message::assistant($this->permissionsReport()),
+                    Message::user($inputText)->withUiOnly(),
+                    Message::assistant($this->permissionsReport())->withUiOnly(),
                 ],
                 'inputBuf' => '',
                 'inFlight' => false,
@@ -8659,8 +8669,8 @@ final class Chat implements Model
             $this->mutate([
                 'history' => [
                     ...$this->history,
-                    Message::user($inputText),
-                    Message::assistant((new NoticesCommand($this->agentManager))->report()),
+                    Message::user($inputText)->withUiOnly(),
+                    Message::assistant((new NoticesCommand($this->agentManager))->report())->withUiOnly(),
                 ],
                 'inputBuf' => '',
                 'inFlight' => false,
@@ -8927,7 +8937,7 @@ final class Chat implements Model
 
             return [$this->withInputBuf('')->mutate(['history' => [
                 ...$this->history,
-                Message::assistant("Usage: /model [provider]. Available: {$available}"),
+                Message::assistant("Usage: /model [provider]. Available: {$available}")->withUiOnly(),
             ]]), null];
         }
 
@@ -9042,7 +9052,7 @@ final class Chat implements Model
 
         return [$this->withInputBuf('')->mutate(['history' => [
             ...$this->history,
-            Message::assistant(implode("\n", $lines)),
+            Message::assistant(implode("\n", $lines))->withUiOnly(),
         ]]), null];
     }
 
@@ -9205,8 +9215,12 @@ final class Chat implements Model
             return null;
         }
 
+        // Counted over what the model sees (audit 15b-03): a `/permissions`
+        // echo is a user ROW but not a user TURN, and counting it meant a
+        // session whose first input was a command was never titled at all.
+        $visible = Message::agentVisible($next->history);
         $userTurns = 0;
-        foreach ($next->history as $message) {
+        foreach ($visible as $message) {
             if ($message->role === Role::User) {
                 ++$userTurns;
             }
@@ -9216,7 +9230,7 @@ final class Chat implements Model
         }
 
         $backend = $next->titleBackend ?? $next->backend;
-        $titlePrompt = [Message::system(self::TITLE_PROMPT), ...$next->history];
+        $titlePrompt = [Message::system(self::TITLE_PROMPT), ...$visible];
 
         return Cmd::promise(static function () use ($backend, $titlePrompt, $sessionId, $store): PromiseInterface {
             return $backend->completeAsync($titlePrompt)->then(
@@ -9337,13 +9351,17 @@ final class Chat implements Model
             return null;
         }
 
-        $last = $this->history[count($this->history) - 1] ?? null;
+        // Agent-visible rows only (audit 15b-03): a guess at the next prompt
+        // should follow the conversation, not `/help`'s listing, and a command's
+        // output landing last is not a model reply to suggest a follow-up to.
+        $visible = Message::agentVisible($this->history);
+        $last = $visible[count($visible) - 1] ?? null;
         if ($last === null || $last->role !== Role::Assistant || trim($last->content) === '') {
             return null;
         }
 
         $tail = [];
-        foreach (array_slice($this->history, -self::PROMPT_SUGGESTION_HISTORY) as $message) {
+        foreach (array_slice($visible, -self::PROMPT_SUGGESTION_HISTORY) as $message) {
             if ($message->role === Role::System) {
                 continue;
             }
@@ -9457,7 +9475,10 @@ final class Chat implements Model
         if ($backend instanceof Backend\EngineBackend && $this->maxCostUsd !== null) {
             $backend = $backend->withSpendCap($this->maxCostUsd, $this->spentUsd());
         }
-        $history = $next->history;
+        // Only the rows the model may see (audit 15b-03): command echoes and
+        // their output, notices and error strings live in the same list for
+        // the transcript's sake and never go out as turns.
+        $history = Message::agentVisible($next->history);
 
         $inbox = $next->liveToolEvents;
 
@@ -9588,7 +9609,9 @@ final class Chat implements Model
                     // A turn that failed AFTER running tools still shows what
                     // those tools did - otherwise the placeholders queued for
                     // them would be the only trace and they never even render.
-                    $message = Message::assistant('_[error: ' . $e->getMessage() . ']_');
+                    // UI-only (audit 15b-03): the model did not say this, so it
+                    // must not be replayed to it as its own words next turn.
+                    $message = Message::assistant('_[error: ' . $e->getMessage() . ']_')->withUiOnly();
                     $events = self::drainToolEventInbox($inbox, $generation);
 
                     return $events === []
@@ -9675,7 +9698,7 @@ final class Chat implements Model
     private function workflowResponse(string $inputText, string $response): array
     {
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText), Message::assistant($response)],
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
         ]);
@@ -9790,7 +9813,7 @@ final class Chat implements Model
         });
 
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText)],
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly()],
             'inputBuf' => '',
             // The workflow is a turn: it occupies the session, the spinner
             // should run, and a second prompt must queue behind it rather than
@@ -9920,7 +9943,9 @@ final class Chat implements Model
             $timer = null;
 
             $settle = static function (string $text) use ($deferred): void {
-                $deferred->resolve(new AssistantMsg(Message::assistant($text)));
+                // The engine's report, not a model reply to this conversation:
+                // UI-only like the `/workflow run` echo it answers.
+                $deferred->resolve(new AssistantMsg(Message::assistant($text)->withUiOnly()));
             };
 
             $timer = $loop->addPeriodicTimer(
@@ -10125,7 +10150,7 @@ final class Chat implements Model
     private function shareResponse(string $inputBuf, string $response): array
     {
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputBuf), Message::assistant($response)],
+            'history' => [...$this->history, Message::user($inputBuf)->withUiOnly(), Message::assistant($response)->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
         ]);
@@ -10171,7 +10196,7 @@ final class Chat implements Model
             : sprintf('Command failed with exit code %d and produced no output.', $exitCode);
 
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputBuf), Message::system($notice)],
+            'history' => [...$this->history, Message::user($inputBuf)->withUiOnly(), Message::notice($notice)],
             'inputBuf' => '',
             'inFlight' => false,
         ]);
@@ -10247,7 +10272,7 @@ final class Chat implements Model
     private function agentsResponse(string $inputBuf, string $response): array
     {
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputBuf), Message::assistant($response)],
+            'history' => [...$this->history, Message::user($inputBuf)->withUiOnly(), Message::assistant($response)->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
         ]);
@@ -10310,7 +10335,7 @@ final class Chat implements Model
     private function rulesResponse(string $inputBuf, string $response): array
     {
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputBuf), Message::assistant($response)],
+            'history' => [...$this->history, Message::user($inputBuf)->withUiOnly(), Message::assistant($response)->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
         ]);
@@ -10352,7 +10377,7 @@ final class Chat implements Model
             $name = isset($tokens[2]) ? strtolower($tokens[2]) : null;
 
             $next = $this->mutate([
-                'history' => [...$this->history, Message::user($inputBuf)],
+                'history' => [...$this->history, Message::user($inputBuf)->withUiOnly()],
                 'inputBuf' => '',
                 'inFlight' => false,
             ]);
@@ -10369,7 +10394,7 @@ final class Chat implements Model
         $name = isset($tokens[3]) ? strtolower($tokens[3]) : null;
 
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputBuf)],
+            'history' => [...$this->history, Message::user($inputBuf)->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
         ]);
@@ -10395,7 +10420,7 @@ final class Chat implements Model
         }
 
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputBuf)],
+            'history' => [...$this->history, Message::user($inputBuf)->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
         ]);
@@ -10413,7 +10438,7 @@ final class Chat implements Model
     private function gestureUsageResponse(string $inputBuf, string $usage): array
     {
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputBuf), Message::system($usage)],
+            'history' => [...$this->history, Message::user($inputBuf)->withUiOnly(), Message::notice($usage)],
             'inputBuf' => '',
             'inFlight' => false,
         ]);
@@ -10538,7 +10563,7 @@ final class Chat implements Model
     private function budgetResponse(string $inputText, string $response, ?float $cap, bool $clearCap = false): array
     {
         $changes = [
-            'history' => [...$this->history, Message::user($inputText), Message::assistant($response)],
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
         ];
@@ -10690,7 +10715,7 @@ final class Chat implements Model
 
         // Build response message
         if ($originalCount === 0) {
-            $report = Message::assistant($prefix . 'Nothing to compact: chat history is empty.');
+            $report = Message::assistant($prefix . 'Nothing to compact: chat history is empty.')->withUiOnly();
         } elseif ($tierNotice) {
             // The automatic tier reports through the very notice its synchronous
             // route uses, so the two routes say the same thing about the same
@@ -10705,7 +10730,7 @@ final class Chat implements Model
             // The counts go in ORIGINAL then NEW, which is the order
             // contextCompactedMessage() renders as "was N messages, now M": swap
             // them and the report claims the compaction GREW the history.
-            $report = Message::system($prefix . $this->contextCompactedMessage(
+            $report = Message::notice($prefix . $this->contextCompactedMessage(
                 $originalCount,
                 $newCount,
                 $savingsPercentage,
@@ -10717,10 +10742,12 @@ final class Chat implements Model
                 $prefix
                 . "Context compacted: was {$originalCount} messages, now {$newCount} messages "
                 . "(saved {$savingsPercentage}% tokens)"
-            );
+            )->withUiOnly();
         }
 
-        $echo = $inputText === '' ? [] : [Message::user($inputText)];
+        // Every caller that passes a non-empty $inputText is `/compact` itself,
+        // so the echo is a command echo: UI-only like its report.
+        $echo = $inputText === '' ? [] : [Message::user($inputText)->withUiOnly()];
 
         return [
             'history' => [...$compactedHistory, ...$echo, $report],
@@ -10897,7 +10924,7 @@ final class Chat implements Model
         // stands the notice in as an empty assistant turn - see
         // buildSummarizationRequest() on why the role and position matter and the
         // content does not.
-        $echoed = [...$this->history, Message::user($inputText)];
+        $echoed = [...$this->history, Message::user($inputText)->withUiOnly()];
         $request = $this->buildSummarizationRequest([...$echoed, Message::assistant('')], null);
         if ($request === null) {
             return null;
@@ -10908,7 +10935,7 @@ final class Chat implements Model
                 'Summarising ' . $request['count'] . ' earlier '
                 . ($request['count'] === 1 ? 'exchange' : 'exchanges')
                 . ' with the model — the transcript will compact when they arrive.',
-            )],
+            )->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
             'pendingCompactionId' => $request['id'],
@@ -11303,7 +11330,7 @@ final class Chat implements Model
             // width is an over-wide line. This is not the app's worst case - the
             // 95% refusal is 423 characters and the idle advisory 391 - but it is
             // a new message and there is no reason for it to join them.
-            'history' => [...$this->history, Message::system(sprintf(
+            'history' => [...$this->history, Message::notice(sprintf(
                 self::PARK_NOTICE_PREFIX . '%d estimated tokens of a '
                 . '%d-token context window. Summarising %d earlier %s with the model first; '
                 . 'the turn goes out when they land.',
@@ -12049,9 +12076,9 @@ final class Chat implements Model
         }
 
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText), Message::assistant(
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant(
                 'Session picker open — ↑/↓ or wheel browse, click selects, ↵ resume, space preview, esc close.',
-            )],
+            )->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
             'sessionPicker' => $picker,
@@ -12322,7 +12349,7 @@ final class Chat implements Model
     private function sessionResponse(string $inputText, string $response): array
     {
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText), Message::assistant($response)],
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
         ]);
@@ -12362,7 +12389,7 @@ final class Chat implements Model
 
         // Return Chat with same state but currentSessionId updated to the new branch
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText), Message::assistant($response)],
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
             'currentSessionId' => $newSessionId ?? $this->currentSessionId,
@@ -12463,7 +12490,7 @@ final class Chat implements Model
     private function backgroundDispatch(string $inputText, \Closure $cmd): array
     {
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText)],
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
         ]);
@@ -12738,7 +12765,7 @@ final class Chat implements Model
 
             // Return Chat with restored state
             $next = $this->mutate([
-                'history' => [...$messages, Message::user($inputText), Message::assistant($response)],
+                'history' => [...$messages, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
                 // E681: the draft the checkpoint captured goes back into the box —
                 // a checkpoint restore is one of mutate()'s replace-the-whole-draft
                 // routes (see the two-write-routes comment in mutate()). Before the
@@ -12856,7 +12883,7 @@ final class Chat implements Model
     private function memoryResponse(string $inputText, string $response): array
     {
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText), Message::assistant($response)],
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
         ]);
@@ -14553,7 +14580,7 @@ final class Chat implements Model
         } catch (\Throwable $e) {
             return [$this->mutate([
                 'palette' => null,
-                'history' => [...$this->history, Message::assistant("Could not switch to provider '{$name}': {$e->getMessage()}")],
+                'history' => [...$this->history, Message::assistant("Could not switch to provider '{$name}': {$e->getMessage()}")->withUiOnly()],
             ]), null];
         }
 
@@ -14562,7 +14589,7 @@ final class Chat implements Model
         return [$this->mutate([
             'palette' => null,
             'backend' => $backend,
-            'history' => [...$this->history, Message::assistant("Switched to provider '{$name}'.")],
+            'history' => [...$this->history, Message::assistant("Switched to provider '{$name}'.")->withUiOnly()],
         ]), null];
     }
 
@@ -14573,7 +14600,7 @@ final class Chat implements Model
         return [$this->mutate([
             'palette' => null,
             'themeName' => $name,
-            'history' => [...$this->history, Message::assistant("Theme set to '{$name}'.")],
+            'history' => [...$this->history, Message::assistant("Theme set to '{$name}'.")->withUiOnly()],
         ]), null];
     }
 
@@ -14584,7 +14611,7 @@ final class Chat implements Model
     {
         if ($this->sessionStore === null) {
             return [$this->mutate([
-                'history' => [...$this->history, Message::assistant('Session store not configured. Set a SessionStore to create sessions.')],
+                'history' => [...$this->history, Message::assistant('Session store not configured. Set a SessionStore to create sessions.')->withUiOnly()],
             ]), null];
         }
 
@@ -14602,7 +14629,9 @@ final class Chat implements Model
             // A new session starts from an empty transcript. Carrying the old
             // one across would send it to the model under the new id and, now
             // that transcripts are saved on change, store it there as well.
-            'history' => [Message::assistant("New session created: {$sessionId}")],
+            // UI-only (audit 15b-03): a transcript that opened on an assistant
+            // row is one strict providers reject, and the model did not say it.
+            'history' => [Message::assistant("New session created: {$sessionId}")->withUiOnly()],
             'currentSessionId' => $sessionId,
             'currentSessionName' => null,
         ]), null];
@@ -14616,7 +14645,7 @@ final class Chat implements Model
         $message = 'Docs: see README.md in this project, or '
             . 'https://sugarcraft.github.io/lib/sugar-crush.html';
 
-        return [$this->mutate(['history' => [...$this->history, Message::assistant($message)]]), null];
+        return [$this->mutate(['history' => [...$this->history, Message::assistant($message)->withUiOnly()]]), null];
     }
 
     /**
@@ -14933,7 +14962,7 @@ final class Chat implements Model
                 continue;
             }
             $name = $supervisor->getSession($id)?->name ?? $id;
-            $notices[] = Message::system(sprintf(
+            $notices[] = Message::notice(sprintf(
                 "Background session %s ('%s') is now %s.",
                 $id,
                 $name,
@@ -15021,9 +15050,11 @@ final class Chat implements Model
             return [$this, $rearm];
         }
 
+        // UI-only (audit 15b-03): these carry git stderr and model-authored
+        // tool names from parser warnings, and are addressed to the user.
         $messages = [];
         foreach ($notices as $notice) {
-            $messages[] = Message::system($notice);
+            $messages[] = Message::notice($notice);
         }
 
         return [$this->mutate(['history' => [...$this->history, ...$messages]]), $rearm];
@@ -15152,6 +15183,11 @@ final class Chat implements Model
     {
         $total = 0;
         foreach ($history as $msg) {
+            // A UI-only row is never sent (audit 15b-03), so it occupies none
+            // of the window this estimates.
+            if ($msg->uiOnly) {
+                continue;
+            }
             $total += (int) ceil(mb_strlen($msg->content) / 4);
             $total += 10; // role overhead
         }
@@ -15577,7 +15613,7 @@ final class Chat implements Model
             // The draft is KEPT: the user's prompt was never sent, and clearing
             // the box would lose it to a refusal they may well answer by
             // raising the cap.
-            'history' => [...$this->history, Message::assistant($notice)],
+            'history' => [...$this->history, Message::assistant($notice)->withUiOnly()],
             'inFlight' => false,
         ]), null];
     }
@@ -15700,7 +15736,7 @@ final class Chat implements Model
             // refusal keeps it: nothing was sent, and the fix for this refusal is a
             // decision about the transcript the user has to make while looking at the
             // prompt they wanted sent.
-            'history' => [...$this->history, Message::system($notice)],
+            'history' => [...$this->history, Message::notice($notice)],
             'inFlight' => false,
         ]), null];
     }
@@ -15728,6 +15764,9 @@ final class Chat implements Model
      */
     private function contextReminderMessage(int $tokenCount): Message
     {
+        // Deliberately AGENT-VISIBLE, unlike the notices around it (audit
+        // 15b-03): ContextReminderDedupTest pins that the reminder reaches the
+        // provider on the turn it fires, and dedup keeps it to one copy.
         return Message::system(
             self::CONTEXT_REMINDER_PREFIX
             . "{$tokenCount} estimated "
@@ -15904,6 +15943,22 @@ final class Chat implements Model
             $preserved++;
         }
 
+        // A wire entry carries no uiOnly flag (audit 15b-03), so a UI-only row
+        // the compactor passed through verbatim - `_Request cancelled._` riding
+        // on its pair, a command echo - would come back agent-visible. Its exact
+        // role+content is its provenance; a pair a VISIBLE row also matches is
+        // ambiguous and resolved toward visible, the pre-flag behaviour.
+        $uiOnlyKeys = [];
+        $visibleKeys = [];
+        foreach ($original as $message) {
+            $key = $message->role->value . "\0" . $message->content;
+            if ($message->uiOnly) {
+                $uiOnlyKeys[$key] = true;
+            } else {
+                $visibleKeys[$key] = true;
+            }
+        }
+
         $messages = [];
         foreach ($wire as $index => $entry) {
             if ($index >= $wireCount - $preserved) {
@@ -15913,11 +15968,15 @@ final class Chat implements Model
 
             $role = Role::from($entry['role'] ?? 'assistant');
             $content = $entry['content'] ?? '';
-            $messages[] = match ($role) {
+            $message = match ($role) {
                 Role::User => Message::user($content),
                 Role::Assistant => Message::assistant($content),
                 default => new Message($role, $content, time()),
             };
+            $key = $role->value . "\0" . $content;
+            $messages[] = isset($uiOnlyKeys[$key]) && !isset($visibleKeys[$key])
+                ? $message->withUiOnly()
+                : $message;
         }
 
         return $messages;
@@ -16014,12 +16073,14 @@ final class Chat implements Model
         // route does not get two copies of the prompt (an earlier revision of this
         // comment said it did): it gets one copy plus a STRAY `Message::user('')`,
         // an empty user turn in the transcript and on the next wire.
+        // UI-only, both: the prompt was NOT sent, so it is not a turn - a
+        // re-send is the turn - and the refusal is the app's, not the model's.
         if ($inputText !== '') {
-            $committed[] = Message::user($inputText);
+            $committed[] = Message::user($inputText)->withUiOnly();
         }
 
         $next = $this->mutate([
-            'history' => [...$committed, Message::assistant($response)],
+            'history' => [...$committed, Message::assistant($response)->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
             'lastActivityAt' => new \DateTimeImmutable(),
@@ -16066,7 +16127,7 @@ final class Chat implements Model
         int $tokenCount,
         int $tokenLimit,
     ): Message {
-        return Message::system(
+        return Message::notice(
             "Context reached the automatic-compaction tier, so older exchanges were "
             . "summarized: {$beforeMessages} messages -> {$afterMessages} messages, "
             . "~{$savedPercentage}% of the estimated token count freed "
@@ -16247,6 +16308,7 @@ final class Chat implements Model
             lengthStopped: $message->lengthStopped,
             // F2: the harness's own ceiling verdict rides the same seam.
             stepsTruncated: $message->stepsTruncated,
+            uiOnly: $message->uiOnly,
         );
     }
 
@@ -16300,7 +16362,7 @@ final class Chat implements Model
         $subject = $singular ? 'it was' : 'they were';
         $where = $singular ? 'that message' : 'those messages';
 
-        return Message::system(
+        return Message::notice(
             "{$truncatedMessages} {$unit} reached the 95% blocking tier on {$own} own, so {$subject} "
             . "truncated to fit the context window rather than the turn being refused: "
             . "~{$tokenCount} estimated tokens now, against a {$tokenLimit}-token context "
@@ -16325,7 +16387,7 @@ final class Chat implements Model
      */
     private function outputLengthStoppedNotice(): Message
     {
-        return Message::system(
+        return Message::notice(
             'The provider stopped this reply at its output limit, so the text above may end mid-thought. '
             . 'Raise "maxOutputTokens" in ~/.sugar-crush/config.json for a longer single reply, '
             . 'or ask for the remainder in your next message.'
@@ -16347,7 +16409,7 @@ final class Chat implements Model
      */
     private function stepsTruncatedNotice(): Message
     {
-        return Message::system(
+        return Message::notice(
             'This turn stopped at the step ceiling with tool results still pending, so the answer above is '
             . 'incomplete — not a finished thought. Say "continue" to resume it, or raise "maxToolSteps" in '
             . '~/.sugar-crush/config.json for longer agentic turns.'
@@ -16374,7 +16436,7 @@ final class Chat implements Model
      */
     private function unpricedModelNotice(string $model): Message
     {
-        return Message::system(
+        return Message::notice(
             'This app has no price on file for model "' . $model . '", so this turn billed $0.00 '
             . 'as a lower bound, not as a free call — spend totals and the spend cap are under-counted '
             . 'until a rate exists. Declare one under "modelPrices" in ~/.sugar-crush/config.json '
@@ -16418,8 +16480,10 @@ final class Chat implements Model
             . "the automatic-compaction tier, so older exchanges are summarized first, "
             . "and the turn is refused outright if that does not free enough.";
 
+        // UI-only, both: the prompt was held back, not sent - see
+        // foregroundBlockedResponse() for the same rule.
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText), Message::assistant($response)],
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
             'lastActivityAt' => new \DateTimeImmutable(),
@@ -16454,7 +16518,7 @@ final class Chat implements Model
         $this->onConfigChange?->__invoke('theme', $afterTheme);
 
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText), Message::assistant("Theme set to '{$afterTheme}'.")],
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant("Theme set to '{$afterTheme}'.")->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
             'themeName' => $afterTheme,
@@ -16531,7 +16595,7 @@ final class Chat implements Model
     private function mcpAuthResponse(string $inputBuf, string $response): array
     {
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputBuf), Message::assistant($response)],
+            'history' => [...$this->history, Message::user($inputBuf)->withUiOnly(), Message::assistant($response)->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
         ]);

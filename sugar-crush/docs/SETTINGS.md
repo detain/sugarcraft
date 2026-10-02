@@ -539,8 +539,10 @@ renamed or rewound, and `/resume` and `sugarcrush session list` come back
 shorter than the user left them. So the **summary** migrated in round 42 and is
 now the fifteenth call site. The reason the example still earns a mention is the
 *half* of it that did not move: the **per-session ids** stay on stderr alone,
-because one row per deleted session is exactly the per-entry fan-out into a list
-re-sent to the model every turn that the cap below exists to refuse. The
+because one row per deleted session is exactly the per-entry fan-out the cap
+below exists to refuse. (These rows used to be re-sent to the model every turn
+as well; launch notices are display-only now, so the cap bounds what the user
+scrolls past, not what the model is billed for.) The
 transcript gets `retention removed 3 unnamed sessions untouched for 30+ days
 (ids on stderr)`; stderr gets that line and the ids.
 

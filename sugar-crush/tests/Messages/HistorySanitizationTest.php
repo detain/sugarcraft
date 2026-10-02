@@ -543,11 +543,17 @@ final class HistorySanitizationTest extends TestCase
                 'a bare assistant row reached the wire after the cancel',
             );
         }
-        $this->assertStringContainsString(
-            '_Request cancelled._',
-            (string) ($wire[0]['content'] ?? ''),
-            'R-C follow-up: the notice is hoisted into the merged system row — recorded, not fixed here',
-        );
+        // The R-C follow-up this test used to record: the notice was hoisted
+        // into the merged system row. It is a UI-only row now (audit 15b-03),
+        // so it stays in the transcript and never reaches the wire at all.
+        $this->assertTrue(end($history)->uiOnly, 'the cancel notice is flagged UI-only');
+        foreach ($wire as $row) {
+            $this->assertStringNotContainsString(
+                '_Request cancelled._',
+                (string) ($row['content'] ?? ''),
+                'the cancel notice must not be hoisted into the system row, or reach the wire in any row',
+            );
+        }
     }
 
     /**

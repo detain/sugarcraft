@@ -109,7 +109,9 @@ final class CommandBackend implements Backend
     {
         $payload = self::encodeHistory($history);
         if ($payload === null) {
-            return Message::assistant('_[error: failed to encode history]_');
+            // UI-only (audit 15b-03), like every error string below: the
+            // model never said it, so it must not be replayed as its words.
+            return Message::assistant('_[error: failed to encode history]_')->withUiOnly();
         }
 
         $spawned = $this->spawn();
@@ -281,7 +283,7 @@ final class CommandBackend implements Backend
 
         $payload = self::encodeHistory($history);
         if ($payload === null) {
-            $deferred->resolve(Message::assistant('_[error: failed to encode history]_'));
+            $deferred->resolve(Message::assistant('_[error: failed to encode history]_')->withUiOnly());
 
             return $deferred->promise();
         }
@@ -415,6 +417,11 @@ final class CommandBackend implements Backend
      * it is the one character that says "a byte was here that was not text",
      * where `?` is indistinguishable from a real question mark.
      *
+     * UI-only rows are left out (audit 15b-03) - the same filter Chat applies
+     * before it dispatches, repeated here so a direct caller of either command
+     * backend gets a clean wire too. One place, so the two backends cannot
+     * disagree about it either.
+     *
      * @internal public only so StreamingCommandBackend shares it.
      *
      * @param list<Message> $history
@@ -422,7 +429,7 @@ final class CommandBackend implements Backend
     public static function encodeHistory(array $history): ?string
     {
         $payload = json_encode(
-            array_map(static fn(Message $m) => $m->toWire(), $history),
+            array_map(static fn(Message $m) => $m->toWire(), Message::agentVisible($history)),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
         );
 
@@ -475,7 +482,7 @@ final class CommandBackend implements Backend
             ProcessContainment::env()
         );
         if (!is_resource($proc)) {
-            return Message::assistant('_[error: failed to spawn backend command]_');
+            return Message::assistant('_[error: failed to spawn backend command]_')->withUiOnly();
         }
 
         return [$proc, $pipes];
@@ -495,7 +502,7 @@ final class CommandBackend implements Backend
             $tail = trim($stderr);
             $hint = $tail === '' ? '' : "\n\n```\n{$tail}\n```";
 
-            return Message::assistant("_[error: backend exited {$exit}]_{$hint}");
+            return Message::assistant("_[error: backend exited {$exit}]_{$hint}")->withUiOnly();
         }
 
         return Message::assistant(trim($stdout));

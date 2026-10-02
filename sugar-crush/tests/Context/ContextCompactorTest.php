@@ -1499,8 +1499,10 @@ final class ContextCompactorTest extends TestCase
         // settled turn (honest conversation growth, disclosed in the docblock),
         // and only pinning the exact sequence keeps "bounded above by the first
         // reading" from quietly absorbing a regression that adds less per turn.
+        // 73 lower than before audit 15b-03 from attempt 2 on: the truncation
+        // notice is a UI-only row, never sent, so the estimate no longer counts it.
         $this->assertSame(
-            [200_520, 93_126, 93_149, 93_172, 93_195],
+            [200_520, 93_053, 93_076, 93_099, 93_122],
             $estimates,
             'the whole measured sequence: attempt 1 reads the untruncated giant, every later attempt the once-truncated exchange plus one settled turn more',
         );
@@ -1895,14 +1897,20 @@ final class ContextCompactorTest extends TestCase
         $this->assertSame($history[23], $dispatched[21], 'the TAILMARK survives as the very same object at the last base position — the mutant lands a10 here');
         $this->assertSame('tail', $dispatched[21]->content, 'and keeps its value — under the mutant this message is absent from the wire entirely');
 
-        // The turn’s own messages ride behind the aligned history, in the order
-        // submit() commits them: truncation notice, then the user’s line.
-        $this->assertStringStartsWith(
-            '1 message reached the 95% blocking tier on its own',
-            $dispatched[22]->content,
-            'the rescue notice rides at index 22, immediately after the 22-entry aligned history',
-        );
-        $this->assertSame('go', $dispatched[23]->content, 'and the user prompt follows it — every one of these positions is index 2 lower than the un-aligned 24-message history would put it');
+        // The turn’s own messages ride behind the aligned history. The truncation
+        // notice submit() commits ahead of the user’s line is a UI-only row
+        // (audit 15b-03): it is in the transcript, and the user’s line is what
+        // follows the 22-entry aligned history on the wire.
+        $this->assertSame('go', $dispatched[22]->content, 'the user prompt rides at index 22, immediately after the 22-entry aligned history — index 2 lower than the un-aligned 24-message history would put it');
+        foreach ($dispatched as $row) {
+            $this->assertStringStartsNotWith('1 message reached the 95% blocking tier on its own', $row->content, 'the rescue notice is not a turn, so no wire row carries it');
+        }
+        $notices = array_values(array_filter(
+            $next->history,
+            static fn(Message $m): bool => str_starts_with($m->content, '1 message reached the 95% blocking tier on its own'),
+        ));
+        $this->assertCount(1, $notices, 'the rescue notice is still in the transcript, once');
+        $this->assertTrue($notices[0]->uiOnly, 'flagged UI-only, which is why the wire above skips it');
     }
 
     /**
