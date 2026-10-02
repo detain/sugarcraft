@@ -417,6 +417,139 @@ final class ToolSecurityTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // SSRF range gaps (audit F-W1, 2026-10-01).
+    //
+    // These tests run the PRODUCTION blocklist decision, but through a seam
+    // that turns its "allowed" verdict into a recorded leak plus a refusal —
+    // so a regression in the range list fails the leak assertion instead of
+    // dialing 100.100.100.200 or a tailnet peer for real.
+    // ------------------------------------------------------------------
+
+    public function testWebFetchRefusesEveryNonPublicRangeAsAResolverAnswer(): void
+    {
+        $nonPublic = [
+            '100.64.0.1',              // CGNAT / Tailscale, low edge
+            '100.100.100.200',         // Alibaba Cloud ECS metadata
+            '100.127.255.254',         // CGNAT, high edge
+            '192.0.0.170',             // IETF protocol assignments (NAT64 discovery)
+            '198.18.0.1',              // benchmarking
+            '198.19.255.254',          // benchmarking, high edge
+            '224.0.0.1',               // multicast
+            '239.255.255.250',         // multicast (SSDP)
+            '240.0.0.1',               // reserved
+            '255.255.255.255',         // limited broadcast
+            '::',                      // unspecified v6
+            '::ffff:100.100.100.200',  // v4-mapped spelling of the new v4 range
+            '64:ff9b::7f00:1',         // NAT64 → 127.0.0.1
+            '64:ff9b::a9fe:a9fe',      // NAT64 → 169.254.169.254
+            '64:ff9b::a00:1',          // NAT64 → 10.0.0.1
+            '64:ff9b::5db8:d822',      // NAT64 → public: fail-closed by prefix
+            '64:ff9b:1::1',            // local-use NAT64
+            '2002:7f00:1::',           // 6to4 → 127.0.0.1
+            '2002:a9fe:a9fe::1',       // 6to4 → 169.254.169.254
+            '2001:0:4136:e378::1',     // Teredo
+            'fec0::1',                 // deprecated site-local
+            'ff02::1',                 // multicast, link scope
+            'ff05::1:3',               // multicast, site scope
+        ];
+
+        $leaks = [];
+        foreach ($nonPublic as $address) {
+            $result = $this->webFetchWithLeakRecorder(['target.test' => [$address]], $leaks)
+                ->execute(['url' => 'http://target.test/']);
+
+            $this->assertTrue($result->isError(), "$address must be refused");
+            $this->assertStringContainsString('private/link-local', $result->content(), $address);
+        }
+
+        $this->assertSame([], $leaks, 'the production blocklist admitted: ' . implode(', ', $leaks));
+    }
+
+    public function testWebFetchStillAdmitsPublicUnicastBesideTheNewRanges(): void
+    {
+        // Edges of every added v4 range, plus ordinary v6 unicast — including
+        // a 2001: address outside the Teredo /32 — must keep their "allowed"
+        // verdict, or the widened list has eaten real sites.
+        $public = [
+            '93.184.216.34',
+            '8.8.8.8',
+            '100.63.255.255',
+            '100.128.0.0',
+            '192.0.1.1',
+            '198.17.255.255',
+            '198.20.0.0',
+            '223.255.255.255',
+            '2606:2800:220:1:248:1893:25c8:1946',
+            '2001:4860:4860::8888',
+            '2003::1',
+        ];
+
+        foreach ($public as $address) {
+            $this->assertFalse($this->productionBlocklistVerdict($address), "$address is public unicast");
+        }
+    }
+
+    public function testWebFetchRefusesLiteralUrlAtAlibabaMetadataWithTheDefaultGuard(): void
+    {
+        // The unseamed constructor end-to-end: the literal URL resolves to
+        // itself and the default blocklist refuses it before any dial.
+        $result = (new WebFetch())->execute(['url' => 'http://100.100.100.200/latest/meta-data/']);
+
+        $this->assertTrue($result->isError());
+        $this->assertStringContainsString('private/link-local', $result->content());
+    }
+
+    public function testWebFetchRefusesRedirectIntoCgnatMetadata(): void
+    {
+        // A public page 302-ing to the Alibaba metadata literal must die on
+        // the hop's re-check, by the production verdict — not merely by the
+        // fixture's admit-one-literal seam, which refuses everything else.
+        $port = $this->startLoopbackHttpFixture([
+            $this->httpResponse('REDIR', 302, ['Location: http://100.100.100.200/latest/meta-data/']),
+        ]);
+
+        $leaks = [];
+        $webFetch = $this->webFetchWithLeakRecorder(['pin.test' => ['127.0.0.2']], $leaks, admit: '127.0.0.2');
+
+        $result = $webFetch->execute(['url' => "http://pin.test:$port/start"]);
+
+        $this->assertTrue($result->isError());
+        $this->assertStringContainsString('redirect to private/link-local', $result->content());
+        $this->assertSame([], $leaks, 'the production blocklist admitted: ' . implode(', ', $leaks));
+    }
+
+    /**
+     * A WebFetch whose blocklist is the production decision, except that an
+     * "allowed" verdict is recorded in $leaks and refused anyway — the test
+     * can assert the verdict without ever opening a socket to it. $admit is
+     * the one fixture literal that may actually be dialed.
+     *
+     * @param array<string, list<string>> $dns
+     * @param list<string>                $leaks
+     */
+    private function webFetchWithLeakRecorder(array $dns, array &$leaks, ?string $admit = null): WebFetch
+    {
+        return new WebFetch(
+            resolveAddresses: $this->fakeDns($dns),
+            isBlockedAddress: function (string $address) use (&$leaks, $admit): bool {
+                if ($admit !== null && $address === $admit) {
+                    return false;
+                }
+                if (!$this->productionBlocklistVerdict($address)) {
+                    $leaks[] = $address;
+                }
+
+                return true;
+            },
+        );
+    }
+
+    private function productionBlocklistVerdict(string $address): bool
+    {
+        return (bool) (new \ReflectionMethod(WebFetch::class, 'addressIsBlocked'))->invoke(null, $address);
+    }
+
+    // ------------------------------------------------------------------
     // Loopback fixture helpers (WebFetch wave)
     // ------------------------------------------------------------------
 

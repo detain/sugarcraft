@@ -17,9 +17,14 @@ use SugarCraft\Crush\Tools\ToolResult;
  *     The pre-wave check used `gethostbyname()`, which answers only the IPv4
  *     A record — an AAAA-only name pointing at `::1` or `fc00::/7` sailed
  *     through it ("unresolvable" reads as "not blocked" downstream).
- *  2. Every answer is checked against the blocked ranges — both literals and
- *     the IPv4-in-IPv6 spellings (`::ffff:127.0.0.1`, `::127.0.0.1`), which
- *     Linux dials as loopback but a naive v4/v6 length compare waves past.
+ *  2. Every answer is checked against the blocked ranges — everything that
+ *     is not public unicast (RFC 1918, loopback, link-local, CGNAT/Tailscale
+ *     incl. Alibaba's 100.100.100.200 metadata, benchmarking, multicast,
+ *     reserved) plus the v6 transition prefixes (NAT64, 6to4, Teredo) — both
+ *     as answered and with the embedded IPv4 unwrapped (`::ffff:127.0.0.1`,
+ *     `::127.0.0.1`, `64:ff9b::7f00:1`, `2002:7f00:1::`), which Linux or a
+ *     translation gateway dials as loopback but a naive v4/v6 length compare
+ *     waves past (audit F-W1).
  *     A name whose answer set mixes public and private is refused outright:
  *     there is no way to know which answer a second resolver pass would hand
  *     the socket, so the whole name is treated as poisoned.
@@ -57,17 +62,61 @@ final readonly class WebFetch implements Tool, ParallelSafe
         '::1',
     ];
 
+    /**
+     * Every range a fetch must never reach. The v4 half is everything that is
+     * not ordinary public unicast; the v6 half adds the transition prefixes
+     * whose packets a gateway re-emits as IPv4 (audit F-W1, 2026-10-01 — the
+     * pre-audit list stopped at RFC 1918 + loopback + link-local, so the
+     * Alibaba metadata service, every Tailscale peer and NAT64-wrapped
+     * loopback were all dialable without a prompt).
+     */
     private const BLOCKED_IP_RANGES = [
         // 'this host' on Linux — absent pre-wave (audit M7's second half).
         '0.0.0.0/8',
         '127.0.0.0/8',
         '10.0.0.0/8',
+        // Shared address space (RFC 6598): carrier-grade NAT, every Tailscale
+        // tailnet address, and 100.100.100.200 — Alibaba Cloud's metadata
+        // service, the one cloud credential endpoint outside 169.254/16.
+        '100.64.0.0/10',
         '172.16.0.0/12',
+        // IETF protocol assignments (RFC 6890): DS-Lite B4/AFTR, the NAT64
+        // discovery literals 192.0.0.170/171 — host-adjacent, never a site.
+        '192.0.0.0/24',
         '192.168.0.0/16',
         '169.254.0.0/16',
+        // Benchmarking (RFC 2544), which internal and VPN fabrics borrow
+        // because it is guaranteed never to collide with the internet.
+        '198.18.0.0/15',
+        // Multicast, then reserved-for-future-use, which also holds the
+        // limited broadcast 255.255.255.255. Neither carries a TCP fetch, so
+        // refusing them costs nothing and keeps the list "not public unicast".
+        '224.0.0.0/4',
+        '240.0.0.0/4',
+        // The unspecified v6 address dials the local host, like 0.0.0.0.
+        '::/128',
         '::1/128',
+        // NAT64 well-known prefix (RFC 6052) and its local-use sibling (RFC
+        // 8215). On a host with DNS64/NAT64 the gateway re-dials the embedded
+        // IPv4, so `64:ff9b::7f00:1` is loopback by another name. The whole
+        // prefix is refused (fail-closed), not only the private embeddings
+        // that canonicalAddress() unwraps: the local-use /48 places the v4
+        // bits operator-defined, and a public v4 target never NEEDS the
+        // synthesized spelling while its own A record exists.
+        '64:ff9b::/96',
+        '64:ff9b:1::/48',
+        // Teredo (RFC 4380): the server and client v4 are embedded obfuscated
+        // and a relay forwards on our behalf — no prefix-level way to vet it.
+        '2001::/32',
+        // 6to4 (RFC 3056): a relay unwraps bytes 2-5 as the v4 destination.
+        '2002::/16',
         'fc00::/7',
         'fe80::/10',
+        // Deprecated site-local (RFC 3879) — still routed internally by stacks
+        // that never dropped it.
+        'fec0::/10',
+        // Multicast.
+        'ff00::/8',
     ];
 
     /** @var \Closure(string): list<string> */
@@ -408,16 +457,22 @@ final readonly class WebFetch implements Tool, ParallelSafe
     }
 
     /**
-     * The default blocklist decision: canonicalise first so a v4-in-v6
-     * spelling hits its v4 range, then compare against every CIDR.
+     * The default blocklist decision. Both the address as answered and its
+     * canonical IPv4 form are compared against every CIDR, and either match
+     * refuses it: the canonical pass lets the v4 list govern every v4-in-v6
+     * spelling, while the raw pass keeps the v6 prefix entries (NAT64, 6to4)
+     * live — canonicalising alone would turn `64:ff9b::/96` into a dead entry,
+     * since no address could still be in it by the time the list is read.
      */
     private static function addressIsBlocked(string $address): bool
     {
-        $address = self::canonicalAddress($address);
+        $forms = array_unique([$address, self::canonicalAddress($address)]);
 
-        foreach (self::BLOCKED_IP_RANGES as $cidr) {
-            if (self::ipInCidr($address, $cidr)) {
-                return true;
+        foreach ($forms as $form) {
+            foreach (self::BLOCKED_IP_RANGES as $cidr) {
+                if (self::ipInCidr($form, $cidr)) {
+                    return true;
+                }
             }
         }
 
@@ -425,11 +480,24 @@ final readonly class WebFetch implements Tool, ParallelSafe
     }
 
     /**
-     * Maps the IPv4-in-IPv6 shapes — `::ffff:a.b.c.d` (mapped) and the
-     * deprecated `::a.b.c.d` (compatibility, which `::1` also falls into) —
-     * back to IPv4 text. Without this the family-length compare in
-     * {@see ipInCidr()} wave-passes `[::ffff:127.0.0.1]` past every v4 range
-     * while Linux dials it as loopback.
+     * Maps every IPv6 shape that carries a dialable IPv4 destination back to
+     * IPv4 text, so the v4 ranges decide what the packet actually reaches:
+     *
+     *  - `::ffff:a.b.c.d` (mapped) and the deprecated `::a.b.c.d`
+     *    (compatibility, which `::1` and `::` also fall into) — Linux dials
+     *    these as the embedded v4 itself;
+     *  - `64:ff9b::a.b.c.d` (NAT64 well-known prefix, last 4 bytes) — a
+     *    NAT64 gateway re-dials the embedded v4;
+     *  - `2002:aabb:ccdd::/48` (6to4, bytes 2-5) — a 6to4 relay delivers to
+     *    `aa.bb.cc.dd`.
+     *
+     * Without this the family-length compare in {@see ipInCidr()} wave-passes
+     * `[::ffff:127.0.0.1]` or `[64:ff9b::a9fe:a9fe]` past every v4 range.
+     * The NAT64 and 6to4 prefixes are ALSO refused whole in the range list;
+     * the unwrap keeps the v4 verdict authoritative should either prefix
+     * entry ever be narrowed. The local-use NAT64 /48 and Teredo are not
+     * unwrapped — their embedding is operator-defined or obfuscated — and
+     * are refused by prefix alone.
      */
     private static function canonicalAddress(string $address): string
     {
@@ -438,13 +506,22 @@ final readonly class WebFetch implements Tool, ParallelSafe
             return $address;
         }
 
+        $embedded = null;
         $head = substr($binary, 10, 2);
         if (substr($binary, 0, 10) === str_repeat("\x00", 10)
             && ($head === "\xff\xff" || $head === "\x00\x00")
         ) {
-            $embedded = inet_ntop(substr($binary, 12, 4));
-            if ($embedded !== false) {
-                return $embedded;
+            $embedded = substr($binary, 12, 4);
+        } elseif (substr($binary, 0, 12) === "\x00\x64\xff\x9b" . str_repeat("\x00", 8)) {
+            $embedded = substr($binary, 12, 4);
+        } elseif (substr($binary, 0, 2) === "\x20\x02") {
+            $embedded = substr($binary, 2, 4);
+        }
+
+        if ($embedded !== null) {
+            $v4 = inet_ntop($embedded);
+            if ($v4 !== false) {
+                return $v4;
             }
         }
 
