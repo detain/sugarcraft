@@ -79,8 +79,9 @@ use SugarCraft\Crush\Tui\Components\PaneLabel;
  * The CandyShine renderer is constructed once per call (cheap;
  * just holds a theme reference). Only the assistant's Markdown gets
  * rendered through CandyShine; the raw user/system turns and the
- * in-progress input are run through {@see Sanitize::untrusted()}
- * first (see the render methods for why).
+ * in-progress input are run through {@see Sanitize::untrustedForDisplay()}
+ * (escape/control strip plus CR → LF) first (see the render methods and
+ * {@see untrusted()} for why).
  *
  * ## R20 wiring decision (agent status/view + session tabs)
  *
@@ -1212,10 +1213,44 @@ final class Renderer
      * that only {@see \SugarCraft\Mouse\Mark}-emitted markers ever reach the
      * scan. candy-core composes the two sweeps so the predicate lives in one
      * audited place rather than re-rolled per application.
+     *
+     * Carriage returns are mapped to line feeds on top
+     * ({@see Sanitize::untrustedForDisplay()}, audit 15b-07). The marked-frame
+     * policy keeps CR by contract, but on the wire CR is a cursor motion: it
+     * returns to column 0 of the current physical row, so the rest of a user
+     * or system row, a tool name, or an expanded Bash result with a progress
+     * bar overwrote the Files pane and the borders to its left while the frame
+     * string still looked like one row to the diff renderer. Mapping, not
+     * dropping, keeps every byte of the text on screen and agrees with
+     * {@see collapseToolOutput()}'s own `\r\n|\r|\n` split.
+     *
+     * The consequence every caller has to respect: the result may now carry an
+     * LF where the input had a CR, so a value painted into a ONE-line row (a
+     * tool head, a placeholder, a hint) must be folded through
+     * {@see oneLine()} rather than this alone. The mapping is 1:1 per
+     * character except CRLF → LF, so the input box's two-pass caret math
+     * ({@see renderInput()}) still lands on the same visible column.
      */
     private static function untrusted(string $text): string
     {
-        return Sanitize::untrustedForMarkedFrames($text);
+        return Sanitize::stripZoneSentinels(Sanitize::untrustedForDisplay($text));
+    }
+
+    /**
+     * {@see untrusted()} folded to a single row: every run of control or
+     * whitespace characters (the LF a CR was just mapped to included) becomes
+     * one space, via {@see PaneLabel::of()} — the same fold the sidebars and
+     * the "/" popup apply.
+     *
+     * For values painted into a row that must stay ONE terminal line: a tool
+     * head is a click zone located by `str_contains()` on its recorded head
+     * ({@see $toolRowHeads}), so a break inside it would split the zone across
+     * two rows and leave the recorded label matching nothing. Applied BEFORE
+     * `Width::truncate()`, which is a width tool and keeps LF.
+     */
+    private static function oneLine(string $text): string
+    {
+        return PaneLabel::of(self::untrusted($text));
     }
 
     /**
@@ -3241,7 +3276,9 @@ final class Renderer
             // it verbatim off the parsed tool call, so an unknown-tool reply can
             // carry an OSC title-set or a screen-clear. Unlike assistant
             // Markdown it has no legitimate SGR of its own, so it takes the full
-            // {@see untrusted()} scrub rather than only the sentinel strip.
+            // {@see untrusted()} scrub rather than only the sentinel strip -
+            // folded to one row by {@see oneLine()}, since a CR in it is now an
+            // LF that would otherwise split the single-line click zone.
             // A refused or interrupted call is not just a failed one: it never
             // ran, so its whole icon+text row is struck through rather than
             // merely recoloured (crush_feat.md §1 E7).
@@ -3280,7 +3317,7 @@ final class Renderer
             // naming the tool. Pinned by
             // PaneWidthInvariantTest::testTheNarrowestToolRowKeepsAtLeastOneCellOfItsName().
             $labelRoom = $width - Width::of(self::TOOL_ROW_PREFIX) - Width::of($status) - 1;
-            $name = Width::truncate(self::untrusted($result->name), max(1, $labelRoom));
+            $name = Width::truncate(self::oneLine($result->name), max(1, $labelRoom));
             $head = self::dim($theme)->strikethrough($stopped)->render(self::TOOL_ROW_PREFIX . $name);
             $label = $head . ' ' . $status;
             // Recorded for the LAYOUT question, before and regardless of
@@ -3357,7 +3394,7 @@ final class Renderer
      * the recorded label a verbatim PREFIX of the rendered row is what keeps
      * click-to-expand pointing at the right line.
      *
-     * The string is model-authored, so it is {@see untrusted()}-scrubbed (it
+     * The string is model-authored, so it is {@see oneLine()}-scrubbed (it
      * was already flattened to one line upstream by
      * {@see Message::describeToolCall()}, but this renderer never trusts that)
      * and hard-truncated to whatever the row has left, preserving the
@@ -3379,7 +3416,7 @@ final class Renderer
             return '';
         }
 
-        $text = Width::truncate(self::untrusted((string) $result->description), $room);
+        $text = Width::truncate(self::oneLine((string) $result->description), $room);
         if (trim($text) === '') {
             return '';
         }
@@ -3434,7 +3471,7 @@ final class Renderer
         $dimensions = \is_array($size) && $size[0] > 0 && $size[1] > 0 ? "{$size[0]}×{$size[1]} " : '';
         $protocol = $result->imageProtocol === null || $result->imageProtocol === ''
             ? ''
-            : self::untrusted($result->imageProtocol) . ' ';
+            : self::oneLine($result->imageProtocol) . ' ';
 
         $text = Width::truncate('🖼 ' . $dimensions . $protocol . 'image hidden (ctrl+o)', max(1, $width));
 
@@ -3502,7 +3539,7 @@ final class Renderer
                 $hit = ['ok' => true, 'body' => $mosaic->render(ImageSource::fromString($bytes), $cols, $rows)];
             } catch (\Throwable $e) {
                 $hit = ['ok' => false, 'body' => self::dim($theme)
-                    ->render('🖼 image unavailable: ' . Sanitize::untrusted($e->getMessage()))];
+                    ->render('🖼 image unavailable: ' . self::oneLine($e->getMessage()))];
             }
 
             self::$imageCache[$key] = $hit;
@@ -3773,7 +3810,7 @@ final class Renderer
     private static function renderPendingToolCall(Message $msg, Theme $theme, array $expanded = []): string
     {
         $spinner = Style::new()->foreground($theme->assistantLabel)->render('⠴');
-        $running = $spinner . ' ' . self::dim($theme)->render('running: ' . self::untrusted($msg->content));
+        $running = $spinner . ' ' . self::dim($theme)->render('running: ' . self::oneLine($msg->content));
 
         if ($msg->reasoning === null || trim($msg->reasoning) === '') {
             return $running;
@@ -3824,7 +3861,7 @@ final class Renderer
         foreach ($args as $key => $value) {
             $text = is_string($value) ? $value : (json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '');
             foreach (self::invocationValueLines($text, self::INVOCATION_VALUE_MAX_LINES) as $i => $line) {
-                $out[] = $faint->render(($i === 0 ? self::untrusted((string) $key) . ': ' : '  ') . $line);
+                $out[] = $faint->render(($i === 0 ? self::oneLine((string) $key) . ': ' : '  ') . $line);
             }
         }
 
@@ -4005,8 +4042,8 @@ final class Renderer
      * control-free row: the marked-frame policy ({@see untrusted()}, which
      * also drops zone sentinels a forged spec could use to claim clicks) and
      * then {@see PaneLabel::of()}'s line-break flattening, since
-     * `untrusted()` deliberately keeps LF/CR and the popup budgets exactly
-     * one line per row.
+     * `untrusted()` deliberately keeps LF (and maps CR to LF) while the popup
+     * budgets exactly one line per row.
      */
     private static function slashMenuText(string $raw): string
     {
@@ -4857,7 +4894,7 @@ final class Renderer
         // dropped when room runs out, then the suggestion is cut.
         $suggestion = $chat->inputBuf === '' ? $chat->promptSuggestion() : null;
         if ($suggestion !== null) {
-            $ghost = self::untrusted($suggestion);
+            $ghost = self::oneLine($suggestion);
             $room = $textWidth - Width::of($cursor);
             $hint = Width::of($ghost) + Width::of(self::SUGGESTION_ACCEPT_HINT) <= $room
                 || $room - Width::of(self::SUGGESTION_ACCEPT_HINT) >= self::SUGGESTION_MIN_COLS

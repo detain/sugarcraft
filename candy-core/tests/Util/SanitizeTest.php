@@ -534,6 +534,70 @@ final class SanitizeTest extends TestCase
         );
     }
 
+    // ---- untrustedForDisplay() ---------------------------------------------
+
+    public function testUntrustedKeepsCarriageReturnSoTheDisplayPolicyIsASeparateMethod(): void
+    {
+        // Backward-compatibility pin: the two existing policies still pass CR.
+        $this->assertSame("a\rb\r\nc", Sanitize::untrusted("a\rb\r\nc"));
+        $this->assertSame("a\rb\r\nc", Sanitize::untrustedForMarkedFrames("a\rb\r\nc"));
+    }
+
+    public function testUntrustedForDisplayMapsCrlfToOneLineFeed(): void
+    {
+        $this->assertSame("x\ny", Sanitize::untrustedForDisplay("x\r\ny"));
+        $this->assertSame("a\nb\nc", Sanitize::untrustedForDisplay("a\r\nb\r\nc"));
+    }
+
+    public function testUntrustedForDisplayMapsLoneCarriageReturnToLineFeedKeepingBothHalves(): void
+    {
+        // Mapped, never dropped: the text a CR would have painted over stays on screen.
+        $this->assertSame("visible\nHIDDEN", Sanitize::untrustedForDisplay("visible\rHIDDEN"));
+        $this->assertSame("a\nb", Sanitize::untrustedForDisplay("a\rb"));
+    }
+
+    public function testUntrustedForDisplayMapsCarriageReturnsAtTheEnds(): void
+    {
+        $this->assertSame("\nabc\n", Sanitize::untrustedForDisplay("\rabc\r"));
+        $this->assertSame("\n", Sanitize::untrustedForDisplay("\r"));
+        $this->assertSame("\n", Sanitize::untrustedForDisplay("\r\n"));
+        $this->assertSame("\n\n", Sanitize::untrustedForDisplay("\n\r"));
+    }
+
+    public function testUntrustedForDisplayMapsMixedLineEndingsAndAProgressBar(): void
+    {
+        $this->assertSame("a\nb\nc\nd\n\ne", Sanitize::untrustedForDisplay("a\r\nb\rc\nd\r\re"));
+        $this->assertSame(
+            " 10%\n 50%\n100%\ndone\n",
+            Sanitize::untrustedForDisplay(" 10%\r 50%\r100%\r\ndone\n"),
+        );
+    }
+
+    public function testUntrustedForDisplayStillStripsEscapesC0C1AndKeepsTab(): void
+    {
+        $this->assertSame(
+            "red\ttab\nbeltitlecsi2Jline",
+            Sanitize::untrustedForDisplay("\x1b[31mred\x1b[0m\ttab\r\x07bel\x1b]0;x\x07title\x00csi\u{9b}2J\x7fline"),
+        );
+        $this->assertSame("a\nb", Sanitize::untrustedForDisplay("a\r\x07\nb"), 'a CR exposed by a removed control still collapses');
+        $this->assertDoesNotMatchRegularExpression('/[\x00-\x08\x0b-\x1f\x7f]|\xC2[\x80-\x9F]/', Sanitize::untrustedForDisplay("\u{9d}0;x\u{9c}\r\x1b[2J"));
+    }
+
+    public function testUntrustedForDisplayIsFailClosedOnInvalidUtf8(): void
+    {
+        $out = Sanitize::untrustedForDisplay("\xFFa\rb\xE2\r\nc\u{9b}2J");
+        $this->assertStringNotContainsString("\r", $out);
+        $this->assertStringNotContainsString("\xC2\x9B", $out);
+        $this->assertSame("\xFFa\nb\xE2\nc2J", $out);
+    }
+
+    public function testUntrustedForDisplayLeavesCarriageReturnFreeTextIdenticalToUntrusted(): void
+    {
+        foreach (['', 'plain', "a\tb\nc", "漢字 👩‍👩‍👧 \x1b[1mbold", self::SENTINEL_OPEN . 'z' . self::SENTINEL_CLOSE] as $s) {
+            $this->assertSame(Sanitize::untrusted($s), Sanitize::untrustedForDisplay($s));
+        }
+    }
+
     public function testSentinelConstantsAgreeWithTheReservedArena(): void
     {
         $this->assertSame(Sanitize::PUA_BMP_FIRST, mb_ord(Sanitize::ZONE_SENTINEL_OPEN));

@@ -11,7 +11,7 @@ namespace SugarCraft\Core\Util;
  * Terminal control sequence injection is a real TUI attack vector: a raw
  * ESC (0x1b) desyncs the frame-diff renderer's line model, NUL/control
  * bytes garble the terminal, and BEL makes it beep on every repaint. This
- * class is the one place to audit that risk. Three policies are offered,
+ * class is the one place to audit that risk. Several policies are offered,
  * differing in how much they preserve:
  *
  *   - {@see controlChars()} — strips C0 controls (ESC included) and maps
@@ -23,6 +23,10 @@ namespace SugarCraft\Core\Util;
  *     sentinel strip, for text destined for a frame that carries candy-mouse
  *     zone markup. The Private-Use codepoints it removes are the reason a
  *     separate policy is needed: see the reservation note below.
+ *   - {@see untrustedForDisplay()} — {@see untrusted()} plus carriage-return
+ *     mapping (CRLF and lone CR → LF), for text painted into a row-addressed
+ *     frame. A surviving CR returns the cursor to column 0 mid-row, which no
+ *     line-oriented renderer can account for.
  *
  * **The Private-Use reservation.** A TUI frame is not only text: candy-mouse's
  * `Mark`/`Scan` delimit clickable zones with the sentinel pair U+E000 (open) and
@@ -258,6 +262,51 @@ final class Sanitize
         // well-formed run, and removing whole ASCII bytes or whole 2-byte
         // characters never separates a continuation from its lead.
         return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]|\xC2[\x80-\x9F]/', '', $stripped) ?? '';
+    }
+
+    /**
+     * {@see untrusted()} plus carriage-return mapping: every `\r\n` becomes
+     * `\n`, and every remaining lone `\r` becomes `\n` too. The policy for
+     * untrusted text painted into a frame that is laid out one logical line
+     * per terminal row.
+     *
+     * Why CR cannot simply survive there, as {@see untrusted()} lets it: CR is
+     * not a character but a cursor motion. It returns the cursor to column 0
+     * of the CURRENT physical row, so whatever follows it overwrites whatever
+     * the frame already painted to its left — a neighbouring pane, a border,
+     * a permission label. The frame string still looks like one row, so a
+     * width- or diff-based renderer has no way to see the damage. And CR is
+     * the common case, not an exotic one: every progress bar (`git clone`,
+     * `npm install`, `curl`) redraws its line with it, and CRLF is the line
+     * ending of every Windows-authored file.
+     *
+     * Why MAPPED to LF rather than dropped: dropping CR would splice the text
+     * either side of it into one run (`visible\rHIDDEN` → `visibleHIDDEN`),
+     * misrepresenting what was printed, and a progress bar's frames would read
+     * as one garbled line. As a line break every byte of the payload stays on
+     * screen, nothing is hidden, and the result agrees with consumers that
+     * already split on `\r\n|\r|\n` (sugar-crush's collapsed tool output,
+     * {@see cellValue()} with `$preserveNewlines`). A caller that needs a
+     * single row still folds LF itself, exactly as with {@see untrusted()}.
+     *
+     * Deliberately a separate method rather than a change to
+     * {@see untrusted()} / {@see untrustedForMarkedFrames()}: those keep CR by
+     * contract, and some consumers depend on it — terminals send a pasted
+     * newline as CR, and {@see \SugarCraft\Core\InputReader}'s paste path
+     * hands that payload to the application with its line endings exactly as
+     * typed; normalising them is the application's call, not the boundary's.
+     *
+     * Runs after the {@see untrusted()} sweep so a CR exposed by a removed
+     * control (`\r\x07\n` → `\r\n`) is still collapsed to one break; the
+     * mapping is a byte-level `str_replace`, so invalid UTF-8 cannot turn it
+     * into a no-op.
+     *
+     * @param string $s Untrusted input string.
+     * @return string {@see untrusted()}'s output with no CR left in it.
+     */
+    public static function untrustedForDisplay(string $s): string
+    {
+        return str_replace(["\r\n", "\r"], "\n", self::untrusted($s));
     }
 
     /**
