@@ -155,6 +155,19 @@ final readonly class Edit implements Tool
             );
         }
 
+        // file_exists() is true for a FIFO, and file_get_contents() on one
+        // blocks in open(2) until a writer appears -- in a turn, until the
+        // SIGKILL (audit F-T4). is_file() is a stat() and follows symlinks, so
+        // only things that are not a regular file land here: FIFOs, sockets,
+        // devices, and directories, none of which Edit can meaningfully patch.
+        if (!is_file($path)) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: "Error: not a regular file: $path",
+                isError: true,
+            );
+        }
+
         $content = file_get_contents($path);
         if ($content === false) {
             return new ToolResult(

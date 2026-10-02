@@ -231,6 +231,22 @@ final readonly class Read implements Tool, ParallelSafe, CarriesSessionState, Pr
             $path = $resolved;
         }
 
+        // A FIFO (or socket, or device) is not a source file, and opening one
+        // can block forever: filesize() reports 0 for a FIFO, so the read fell
+        // into file_get_contents(), whose open(2) waits for a writer that never
+        // comes -- a lone Read wedged until the turn-level SIGKILL (audit
+        // F-T4). is_file() is a stat(), never an open, and it follows symlinks,
+        // so a link to a regular file still reads. A missing path and a
+        // directory are excluded on purpose: both already fail fast through
+        // the error handler below, with the messages callers know.
+        if (file_exists($path) && !is_file($path) && !is_dir($path)) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: "Error: not a regular file: $path",
+                isError: true,
+            );
+        }
+
         set_error_handler(static function (int $errno, string $errstr) use ($path): bool {
             throw new \RuntimeException("Error reading file {$path}: {$errstr}");
         });

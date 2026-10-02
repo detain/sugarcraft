@@ -167,6 +167,17 @@ final readonly class Write implements Tool, PromptGuidance
             return $this->error($args, "Error: path is a directory: $path");
         }
 
+        // Something that exists but is not a regular file -- a FIFO, socket or
+        // device -- is refused outright, overwrite or not. `$exists` below is
+        // is_file(), so a FIFO slipped past the "already exists" refusal and
+        // file_put_contents() then blocked in open(2) until a reader appeared
+        // (audit F-T4). file_exists() follows symlinks, so a dangling link is
+        // still "missing" here and keeps its create-through behaviour (the
+        // jailed paths refuse a dangling link earlier, in resolveForCreate()).
+        if (file_exists($path) && !is_file($path)) {
+            return $this->error($args, "Error: not a regular file: $path");
+        }
+
         // Overwrite semantics: refuse by default, require an explicit opt-in.
         //
         // Write carries no evidence that the model ever saw what is already
