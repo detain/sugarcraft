@@ -3516,7 +3516,9 @@ final class Renderer
             $blocks[] = match ($msg->role) {
                 Role::User      => $userLabel . " " . self::untrusted($msg->content),
                 Role::Assistant => self::renderAssistantTurn($msg, $theme, $md, $width, $assistantLabel, $expanded),
-                Role::System    => self::dim($theme)->render("system: " . self::untrusted($msg->content)),
+                Role::System    => $msg->uiOnly
+                    ? self::notice($theme)->render(self::NOTICE_ROW_LABEL . self::untrusted($msg->content))
+                    : self::dim($theme)->render("system: " . self::untrusted($msg->content)),
             };
         }
         return implode("\n\n", $blocks);
@@ -4449,6 +4451,35 @@ final class Renderer
     private static function dim(Theme $theme): Style
     {
         return Style::new()->foreground($theme->systemLabel);
+    }
+
+    /**
+     * The label a UI-only {@see Message::notice()} row opens with, in place of
+     * the `system: ` an agent-visible system row carries - see {@see notice()}.
+     */
+    private const NOTICE_ROW_LABEL = 'notice: ';
+
+    /**
+     * The style of a UI-only system row - a queued or refused prompt, a
+     * launch, runtime or background notice, a compaction report (audit 15b-03,
+     * decision N1).
+     *
+     * Notices stay INLINE, where they happened, even between a prompt and its
+     * answer: moving them would make the transcript lie about the order of
+     * events. What N1 changes is how they read. A system row the model DOES
+     * see (the 70% reminder, a hook's additional context) and a notice the
+     * model never sees used to render identically, as `system: …` in the dim
+     * colour, so nothing told the user which of the two lines in the middle of
+     * an exchange were part of the conversation. A notice now keeps the dim
+     * colour and adds italics and its own `notice: ` label.
+     *
+     * Italic rather than SGR 2 (faint) for the reason {@see dim()} gives: faint
+     * darkens the projected colour under {@see Theme::CONTRAST_MIN}, and a
+     * notice is text the user has to read ("Queued (1 waiting)").
+     */
+    private static function notice(Theme $theme): Style
+    {
+        return self::dim($theme)->italic();
     }
 
     /**

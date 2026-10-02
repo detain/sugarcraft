@@ -17113,7 +17113,8 @@ final class Chat implements Model
      * has crossed its share of the budget ({@see CompactorConfig::$reminderThreshold},
      * 70% by default — which is why neither this docblock nor the message names
      * a percentage as if it were fixed). Rendered with a distinct
-     * `Role::System` (a faint "system: …" line, see {@see Renderer}) rather
+     * `Role::System` (a dim "system: …" line, see {@see Renderer}; it is
+     * agent-visible, so not the italic "notice: …" of a UI-only row) rather
      * than the `Role::Assistant` bubble used for the hard idle-compaction
      * prompt, so the two are visually distinguishable and this one never
      * blocks the turn it rides along with.
