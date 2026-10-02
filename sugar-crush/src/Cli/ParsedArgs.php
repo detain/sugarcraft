@@ -131,7 +131,7 @@ final readonly class ParsedArgs
      */
     public function withRoot(string $root, array $positionals): self
     {
-        return new self($this->help, $this->prompt, $root, $this->outputFormat, $this->unknownFlags, $this->promptRequested, $this->version, $this->usageError, $this->usageHint, $this->configPath, $this->subcommand, $this->subcommandArgs, $this->model, $this->permissionMode, $this->continueSession, $this->resumeSession, $this->resumeRequested, $positionals);
+        return $this->copyWith(['root' => $root, 'positionals' => $positionals]);
     }
 
     /**
@@ -142,7 +142,23 @@ final readonly class ParsedArgs
      */
     public function withUsageError(string $usageError, string $usageHint): self
     {
-        return new self($this->help, $this->prompt, $this->root, $this->outputFormat, $this->unknownFlags, $this->promptRequested, $this->version, $usageError, $usageHint, $this->configPath, $this->subcommand, $this->subcommandArgs, $this->model, $this->permissionMode, $this->continueSession, $this->resumeSession, $this->resumeRequested, $this->positionals);
+        return $this->copyWith(['usageError' => $usageError, 'usageHint' => $usageHint]);
+    }
+
+    /**
+     * Every promoted property is a constructor parameter of the same name, so
+     * the current state spreads back in as named arguments with the changed
+     * fields laid over it. Spelling each field out instead re-listed eighteen
+     * positionals per wither (one missed field silently resets it) and read
+     * `$this->permissionMode` by name, which ForeignAgentPresetWiringTest's
+     * census of Agent::$permissionMode readers cannot tell apart from a read
+     * of an agent's mode.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function copyWith(array $changes): self
+    {
+        return new self(...[...get_object_vars($this), ...$changes]);
     }
 
     /**

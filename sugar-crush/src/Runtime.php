@@ -3100,8 +3100,8 @@ final class Runtime
      * {@see \SugarCraft\Crush\Hooks\HookRegistry::executeHooks()} returns the
      * blocking {@see HookResult} as is — and a guessed name would be a lie on
      * the line someone reads when deciding which hook to fix. The reason is
-     * the hook's own message (stderr for a script); an empty one says so
-     * rather than leaving a bare colon.
+     * the hook's own message (a script hook's error stream, descriptor 2);
+     * an empty one says so rather than leaving a bare colon.
      *
      * THE IMAGE AND DIFF ARE DROPPED WITH THE TEXT. Both are renderings of the
      * same output: a diff of an edit that wrote a key carries that key, a

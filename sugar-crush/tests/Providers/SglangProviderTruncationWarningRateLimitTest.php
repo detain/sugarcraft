@@ -127,12 +127,14 @@ final class SglangProviderTruncationWarningRateLimitTest extends TestCase
         $provider = new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $httpClient);
         $request = $this->requestEndingIn([new ToolResultMessage('call_stream', '</parameter>')]);
 
+        $caught = null;
         try {
             iterator_to_array($provider->completeStream($request));
-            $this->fail('the first attempt was scripted to fail');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('connection reset', $e->getMessage());
+            $caught = $e;
         }
+        $this->assertNotNull($caught, 'the first attempt was scripted to fail');
+        $this->assertStringContainsString('connection reset', $caught->getMessage());
 
         $chunks = iterator_to_array($provider->completeStream($request));
 

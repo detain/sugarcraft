@@ -39,22 +39,10 @@ final class BootstrapEnsureDirReportTest extends TestCase
         $this->tempDir = sys_get_temp_dir() . '/bootstrap_ensure_dir_' . uniqid('', true);
         mkdir($this->tempDir . '/home/.sugar-crush', 0700, true);
         $this->useHomeSandbox($this->tempDir . '/home');
-
-        // Recorded rather than left to PHPUnit's failOnWarning, so the
-        // assertion names what this test is about. error_reporting() is
-        // consulted the way PHP's own display is: an `@` masks it out.
-        set_error_handler(function (int $errno, string $message): bool {
-            if ((error_reporting() & $errno) !== 0) {
-                $this->diagnostics[] = $message;
-            }
-
-            return true;
-        });
     }
 
     protected function tearDown(): void
     {
-        restore_error_handler();
         $this->restoreHomeSandbox();
 
         @chmod($this->tempDir . '/home/.sugar-crush', 0o700);
@@ -97,7 +85,7 @@ final class BootstrapEnsureDirReportTest extends TestCase
     /** The silencing changes the channel, not which paths throw. */
     public function testACreatableDirectoryIsStillCreatedPrivatelyAndSilently(): void
     {
-        Bootstrap::memoryStore();
+        $this->recordingDiagnostics(static fn () => Bootstrap::memoryStore());
 
         $dir = $this->tempDir . '/home/.sugar-crush/memory';
         self::assertDirectoryExists($dir);
@@ -108,11 +96,37 @@ final class BootstrapEnsureDirReportTest extends TestCase
     private function messageOfTheFailedStore(): string
     {
         try {
-            Bootstrap::memoryStore();
+            $this->recordingDiagnostics(static fn () => Bootstrap::memoryStore());
         } catch (\RuntimeException $e) {
             return $e->getMessage();
         }
 
         self::fail('memoryStore() opened a store whose directory could not be created');
+    }
+
+    /**
+     * Recorded rather than left to PHPUnit's failOnWarning, so the assertion
+     * names what this test is about. error_reporting() is consulted the way
+     * PHP's own display is: an `@` masks it out.
+     *
+     * Restored in a `finally` around the one call under test, not in
+     * tearDown(): SwallowingCatchCensusTest pins every install whose restore
+     * is not in its own function's `finally`, because a handler that outlives
+     * its test suppresses warning-to-failure for every later test.
+     */
+    private function recordingDiagnostics(\Closure $call): mixed
+    {
+        set_error_handler(function (int $errno, string $message): bool {
+            if ((error_reporting() & $errno) !== 0) {
+                $this->diagnostics[] = $message;
+            }
+
+            return true;
+        });
+        try {
+            return $call();
+        } finally {
+            restore_error_handler();
+        }
     }
 }

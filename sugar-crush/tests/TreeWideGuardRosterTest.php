@@ -585,8 +585,12 @@ final class TreeWideGuardRosterTest extends TestCase
         'Cli/SubcommandsMcpImportTest.php' => ['scandir($this->tempDir)'],
         'Commands/McpAuthLoginGuidanceTest.php' => ['glob($this->tempDir.\'/*\')'],
         'Context/EnvironmentBlockTest.php' => ['scandir($dir)'],
+        // tearDown() empties the sys_get_temp_dir() scratch dir setUp() made.
+        'Diagnostics/RuntimeNoticeSinkStderrTest.php' => ['glob($this->scratch.\'/*\')'],
         'Integration/BinSugarcrushAutoloadGuardTest.php' => ['scandir($dir)'],
         'Integration/BinSugarcrushDispatchTest.php' => ['RecursiveDirectoryIterator($this->tempHome,\FilesystemIterator::SKIP_DOTS)'],
+        // tearDown() removes the sys_get_temp_dir() HOME + project setUp() made.
+        'Integration/BinSugarcrushJsonStdoutDiagnosticsTest.php' => ['RecursiveDirectoryIterator($this->tempDir,\FilesystemIterator::SKIP_DOTS)'],
         'Integration/FeatWiringReachabilityTest.php' => ['scandir($dir)'],
         'Integration/McpToolWiringTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         'Integration/MultiAgentRefactorTest.php' => [
