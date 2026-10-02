@@ -312,6 +312,73 @@ final class EngineExecutorTest extends TestCase
         $this->assertNotSame((string) getmypid(), $result->output, 'the agent ran in a forked child');
     }
 
+    /**
+     * The 2026-10-02 step-budget decision: an agent that declares no
+     * `maxTurns` gets 200 steps, the same figure as TaskTool's sub-agents.
+     * Sixty tool steps then an answer is an ordinary stage, and under the old
+     * cap of 50 it ended with no report at all.
+     */
+    public function testAnUndeclaredStepCapIsTwoHundredSteps(): void
+    {
+        $this->assertSame(200, EngineExecutor::DEFAULT_MAX_TURNS);
+
+        $script = [];
+        for ($step = 1; $step <= 60; $step++) {
+            $script[] = new CompleteResponse(content: '', toolCalls: [new ToolCall('call_' . $step, 'probe', [])]);
+        }
+        $script[] = new CompleteResponse(content: 'sixty steps later');
+        $probe = self::probe();
+        $executor = new EngineExecutor(EngineBackend::new(new ScriptedProvider($script), 'm')->withTools([$probe]));
+
+        $result = $executor->execute(self::subAgent(), self::request());
+
+        $this->assertSame(AgentStatus::Completed, $result->status, (string) $result->error?->getMessage());
+        $this->assertSame('sixty steps later', $result->output);
+        $this->assertSame(60, $probe->calls);
+    }
+
+    /**
+     * Audit WF-1-rem: where the pool cannot fork (no pcntl, a failed fork) it
+     * runs this executor INLINE and cannot interrupt it, so the agent's own
+     * timeout must be enforced here. Each tool step takes 0.6 s against a
+     * 1 s timeout: the run stops at the first progress event past the
+     * deadline instead of working through all ten steps.
+     */
+    public function testARunPastTheAgentsOwnTimeoutStopsAtTheNextEventAndSettlesTimedOut(): void
+    {
+        $script = [];
+        for ($step = 1; $step <= 10; $step++) {
+            $script[] = new CompleteResponse(content: '', toolCalls: [new ToolCall('call_' . $step, 'probe', [])]);
+        }
+        $script[] = new CompleteResponse(content: 'should never get here');
+        $probe = self::probe(sleepMicroseconds: 600_000);
+        $executor = new EngineExecutor(EngineBackend::new(new ScriptedProvider($script), 'm')->withTools([$probe]));
+        $agent = new SubAgent(id: 'slow-stage', agent: RosterAgent::named('coder'), task: 'loop', timeout: 1);
+
+        $began = microtime(true);
+        $result = $executor->execute($agent, self::request());
+        $elapsed = microtime(true) - $began;
+
+        $this->assertSame(AgentStatus::TimedOut, $result->status);
+        $this->assertStringContainsString('ran past its 1 s timeout', (string) $result->error?->getMessage());
+        $this->assertLessThan(3.0, $elapsed, 'the inline run ignored the agent\'s timeout');
+        $this->assertLessThan(10, $probe->calls, 'every step ran: nothing enforced the timeout');
+    }
+
+    public function testANonPositiveTimeoutPlacesNoBoundOnTheRun(): void
+    {
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'probe', [])]),
+            new CompleteResponse(content: 'unbounded report'),
+        ]);
+        $executor = new EngineExecutor(EngineBackend::new($provider, 'm')->withTools([self::probe()]));
+        $agent = new SubAgent(id: 'unbounded-stage', agent: RosterAgent::named('coder'), task: 'look', timeout: 0);
+
+        $result = $executor->execute($agent, self::request());
+
+        $this->assertSame(AgentStatus::Completed, $result->status, 'timeout 0 must mean "no bound", not "already expired"');
+    }
+
     private static function subAgent(?int $maxTurns = null): SubAgent
     {
         return new SubAgent(id: 'stage-' . bin2hex(random_bytes(4)), agent: RosterAgent::named('coder', maxTurns: $maxTurns), task: 'check the lib');
@@ -341,10 +408,14 @@ final class EngineExecutorTest extends TestCase
     /**
      * @return Tool&object{calls: int}
      */
-    private static function probe(): Tool
+    private static function probe(int $sleepMicroseconds = 0): Tool
     {
-        return new class () implements Tool {
+        return new class ($sleepMicroseconds) implements Tool {
             public int $calls = 0;
+
+            public function __construct(private readonly int $sleepMicroseconds)
+            {
+            }
 
             public function name(): string
             {
@@ -364,6 +435,9 @@ final class EngineExecutorTest extends TestCase
             public function execute(array $args): ToolResult
             {
                 $this->calls++;
+                if ($this->sleepMicroseconds > 0) {
+                    usleep($this->sleepMicroseconds);
+                }
 
                 return new ToolResult(toolCallId: (string) ($args['id'] ?? ''), content: 'probed');
             }

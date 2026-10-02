@@ -59,7 +59,24 @@ final class ProcessExecutor implements ExecutorInterface
 
     public function __construct(
         private readonly string $binaryPath = 'php',
-        private readonly ?int $timeoutSeconds = 300,
+        /**
+         * This executor's OWN wall-clock bound on one agent, in seconds; null
+         * (the default) means none of its own.
+         *
+         * Every run is ALSO bounded by the agent's {@see SubAgent::$timeout}
+         * when that is positive, and the earlier of the two wins
+         * ({@see timeoutFor()}). The default used to be 300, and that is
+         * what made the synchronous dispatch paths ignore the workflow's own
+         * timeout (audit WF-1-rem): {@see AgentWorkerPool} runs this executor
+         * INLINE on a build without pcntl or after a failed fork, where the
+         * pool cannot interrupt it, and the pool builds it without a bound —
+         * so a stage whose `config.timeout` said 1800 died at 300 here, and
+         * one that said 60 ran for 300. With no bound of its own the agent's
+         * timeout governs, and a caller that wants a ceiling on top of it
+         * (`Chat::executeAgents()` passes `AgentPoolConfig`'s default) still
+         * gets one.
+         */
+        private readonly ?int $timeoutSeconds = null,
         /** Memory usage fraction above which new task scheduling is paused (0.0–1.0). */
         private readonly float $memoryPressureThreshold = self::DEFAULT_MEMORY_THRESHOLD,
         /**
@@ -145,6 +162,26 @@ final class ProcessExecutor implements ExecutorInterface
     }
 
     /**
+     * The bound one run of $agent gets: the earlier of this executor's own
+     * {@see $timeoutSeconds} and the agent's positive {@see SubAgent::$timeout};
+     * null when neither sets one (the heartbeat then remains the only
+     * watchdog). A timeout of zero or less on the agent means "no per-agent
+     * bound", the same reading {@see AgentWorkerPool} gives it.
+     */
+    private function timeoutFor(SubAgent $agent): ?int
+    {
+        $bounds = [];
+        if ($this->timeoutSeconds !== null) {
+            $bounds[] = $this->timeoutSeconds;
+        }
+        if ($agent->timeout > 0) {
+            $bounds[] = $agent->timeout;
+        }
+
+        return $bounds === [] ? null : min($bounds);
+    }
+
+    /**
      * Execute a single agent to completion and return the result.
      *
      * Spawns a worker process, sends the agent configuration, and waits for
@@ -177,9 +214,8 @@ final class ProcessExecutor implements ExecutorInterface
         // Use non-blocking reads so we can enforce timeouts and heartbeats
         stream_set_blocking($process['stdout'], false);
 
-        $timeoutDeadline = $this->timeoutSeconds !== null
-            ? time() + $this->timeoutSeconds
-            : null;
+        $timeout = $this->timeoutFor($agent);
+        $timeoutDeadline = $timeout !== null ? time() + $timeout : null;
 
         // Read until we get a complete or error message
         while (!feof($process['stdout'])) {
@@ -216,9 +252,9 @@ final class ProcessExecutor implements ExecutorInterface
                     $this->stopTracking($agent->id);
                     return new AgentResult(
                         agentId: $agent->id,
-                        status: AgentStatus::Failed,
+                        status: AgentStatus::TimedOut,
                         output: $buffer ?: null,
-                        error: new \RuntimeException('Worker timed out'),
+                        error: new \RuntimeException(sprintf('Worker timed out after %d s', $timeout)),
                         startedAt: $startTime,
                         completedAt: new \DateTimeImmutable(),
                     );
@@ -258,9 +294,9 @@ final class ProcessExecutor implements ExecutorInterface
                             $this->stopTracking($agent->id);
                             return new AgentResult(
                                 agentId: $agent->id,
-                                status: AgentStatus::Failed,
+                                status: AgentStatus::TimedOut,
                                 output: $buffer ?: null,
-                                error: new \RuntimeException('Worker timed out'),
+                                error: new \RuntimeException(sprintf('Worker timed out after %d s', $timeout)),
                                 startedAt: $startTime,
                                 completedAt: new \DateTimeImmutable(),
                             );
@@ -363,9 +399,8 @@ final class ProcessExecutor implements ExecutorInterface
         // Use non-blocking reads for timeout and heartbeat enforcement
         stream_set_blocking($process['stdout'], false);
 
-        $timeoutDeadline = $this->timeoutSeconds !== null
-            ? time() + $this->timeoutSeconds
-            : null;
+        $timeout = $this->timeoutFor($agent);
+        $timeoutDeadline = $timeout !== null ? time() + $timeout : null;
 
         while (!feof($process['stdout'])) {
             $heartbeatDeadline = $this->effectiveHeartbeatDeadline($agent->id);
@@ -388,8 +423,8 @@ final class ProcessExecutor implements ExecutorInterface
                     $this->stopTracking($agent->id);
                     yield new AgentResult(
                         agentId: $agent->id,
-                        status: AgentStatus::Failed,
-                        error: new \RuntimeException('Worker timed out'),
+                        status: AgentStatus::TimedOut,
+                        error: new \RuntimeException(sprintf('Worker timed out after %d s', $timeout)),
                         startedAt: $startTime,
                         completedAt: new \DateTimeImmutable(),
                     );
@@ -449,8 +484,8 @@ final class ProcessExecutor implements ExecutorInterface
                     $this->stopTracking($agent->id);
                     yield new AgentResult(
                         agentId: $agent->id,
-                        status: AgentStatus::Failed,
-                        error: new \RuntimeException('Worker timed out'),
+                        status: AgentStatus::TimedOut,
+                        error: new \RuntimeException(sprintf('Worker timed out after %d s', $timeout)),
                         startedAt: $startTime,
                         completedAt: new \DateTimeImmutable(),
                     );

@@ -65,6 +65,10 @@ final class AgentWorkerPool
      * until the TUI was killed. The synchronous paths (injected executor, no
      * pcntl, failed fork) run inside the parent and cannot be interrupted
      * from here; they get only whatever bound their executor applies itself.
+     * The default {@see ProcessExecutor} applies the agent's own
+     * {@see SubAgent::$timeout} (audit WF-1-rem), so on a build without pcntl
+     * or after a failed fork the same per-agent bound still holds; the run's
+     * time budget does not reach an agent once it is running there.
      *
      * hrtime, not time(): a wall clock stepped by NTP or by hand would fire a
      * deadline early or never.
@@ -121,6 +125,15 @@ final class AgentWorkerPool
     private const REAP_ATTEMPTS = 20;
 
     private const REAP_POLL_MICROSECONDS = 5_000;
+
+    /**
+     * How long {@see terminateWorker()} lets a cancelled worker's tree act on
+     * SIGTERM before it SIGKILLs what is left. Spent only on a member that
+     * ignores or traps the signal — a tree that dies on it ends the wait at
+     * once — and on the caller's thread, so it is short: ScriptHook's and
+     * StatusLineCommand's 0.5 s, not ProcessReaper's 1.0 s default.
+     */
+    private const TERMINATE_GRACE_SECONDS = 0.5;
 
     /**
      * @var array<int, true> PIDs this pool signalled but has not yet confirmed
@@ -279,7 +292,7 @@ final class AgentWorkerPool
      * removes files the other still owns.
      *
      * The child bookkeeping is dropped for the same reason, and it matters more
-     * now that cancelAll() and __destruct() both SIGTERM and reap whatever
+     * now that cancelAll() and __destruct() both kill and reap whatever
      * $activePids holds: a clone did not fork those children, so inheriting
      * them lets it kill and collect processes the ORIGINAL is still waiting on.
      * The original's waitForCompletion() then sees -1 for every one and settles
@@ -643,7 +656,11 @@ final class AgentWorkerPool
      * Cancel a specific agent by ID.
      *
      * If the agent is queued, it is removed from the queue.
-     * If the agent is running, its executor is signalled to cancel.
+     * If the agent is running on the forking path, its worker is killed
+     * together with every process it started ({@see terminateWorker()}) and
+     * it settles {@see AgentStatus::Stopped}. A synchronous dispatch is
+     * already over by the time anything can call this — it ran inside the
+     * caller — so there the executor's own cancel() is all there is.
      */
     public function cancel(string $agentId): void
     {
@@ -1016,17 +1033,27 @@ final class AgentWorkerPool
                 // exists to rule out — so it settles the agent too, with a
                 // result that admits the exit status is unknowable.
                 $agent = $this->active[$agentId] ?? null;
-                unset($this->activePids[$agentId], $this->active[$agentId], $this->deadlines[$agentId]);
+                $wasCancelled = isset($this->cancelled[$agentId]);
+                unset(
+                    $this->activePids[$agentId],
+                    $this->active[$agentId],
+                    $this->deadlines[$agentId],
+                    $this->cancelled[$agentId],
+                );
 
                 // The child left no readable result. Synthesize the failure
                 // rather than returning an agent id that extractResult() will
                 // decline: executeAll() yields one result per agent it
                 // dispatched, and a silent drop here would report a killed
-                // sub-agent as though it had never run.
+                // sub-agent as though it had never run. An agent cancel()
+                // killed says so, rather than leaving the user to decode a
+                // signal number (see terminateWorker()).
                 if (!$this->hasDecodableResult($agentId)) {
                     $this->storeResult(
                         $agentId,
-                        $this->workerDiedResult($agentId, $reaped === $pid ? $status : null, $agent),
+                        $wasCancelled
+                            ? $this->cancelledResult($agentId, $agent)
+                            : $this->workerDiedResult($agentId, $reaped === $pid ? $status : null, $agent),
                     );
                 }
 
@@ -1134,8 +1161,9 @@ final class AgentWorkerPool
     /**
      * Kill a forked agent that ran out of time and settle it TimedOut.
      *
-     * {@see ProcessContainment::killTree()}, not {@see terminateWorker()}'s
-     * SIGTERM: the reason a stage overruns is almost always a process the
+     * {@see ProcessContainment::killTree()}, like {@see terminateWorker()}
+     * but straight to SIGKILL — an overrun is not a request to wind down. The
+     * reason a stage overruns is almost always a process the
      * agent STARTED — a Bash command that never exits runs in its own
      * session (setsid), so signalling the forked PHP child alone leaves that
      * command running for nobody, which is the hang this bound exists to end.
@@ -1217,41 +1245,54 @@ final class AgentWorkerPool
     }
 
     /**
-     * Ask a forked worker to stop.
+     * Stop a forked worker AND every process it started (audit F-E2-rem,
+     * WF-1-rem).
      *
-     * SIGTERM, not SIGKILL — but NOT because the child runs a graceful
-     * shutdown: it installs no SIGTERM handler, so the default disposition
-     * applies and it dies without running destructors or shutdown functions,
-     * exactly as it would under SIGKILL. (It could not usefully install one
-     * either: a worker blocked in the executor's stream_select() never reaches
-     * a pcntl_signal_dispatch() point, so a handler would only fire in the
-     * moments the child was already between syscalls.) The reasons SIGTERM is
-     * still the right signal are that it is the catchable one — anything the
-     * child later grows, or any process that replaces it, gets the chance a
-     * SIGKILL would deny — and that it is *distinguishable* in the wait status,
-     * so {@see workerDiedResult()} can tell a user "killed by signal 15", i.e.
-     * "you cancelled this", apart from a signal 9 the OOM killer sent.
+     * {@see ProcessContainment::killTree()}, the walk the deadline path
+     * ({@see expireWorker()}) and the engine's turn teardown use. This used to
+     * be a single `posix_kill($pid, SIGTERM)` to the forked PHP child, and the
+     * child is never where the work is: an engine-run stage
+     * ({@see EngineExecutor}) runs Bash commands `setsid`-wrapped into their
+     * OWN session and process group, plus the engine's own turn forks below
+     * it, and the default worker's `php -r` process is `setsid`-wrapped too.
+     * Signalling the root left all of them reparented to init and running —
+     * a cancelled stage's `rm` loop, migration or `git push` finished anyway,
+     * for nobody. The walk freezes the root, collects every descendant, and
+     * signals each one and every process group they lead (never this
+     * process's own group, which the forked worker shares).
      *
-     * The one real casualty is the executor's own proc_open()ed `php -r`
-     * grandchild: the child dies before proc_terminate() can run, so the
-     * grandchild is orphaned. It self-exits within about a second on EPIPE when
-     * its now-closed pipes are next written, which is why this is left alone
-     * rather than papered over with a pid-tree walk.
+     * SIGTERM FIRST, with a {@see TERMINATE_GRACE_SECONDS} grace, then
+     * SIGKILL for whatever is left — unlike the deadline path's straight
+     * SIGKILL, because a cancel is a request, not an overrun: a command that
+     * traps SIGTERM (a dev server, a script with a cleanup trap) gets its
+     * chance to tidy up, and anything that handles it is SIGCONTed so a frozen
+     * member can act on it. The worker itself installs no SIGTERM handler
+     * (the one it inherits from a workflow run leaves through
+     * `ForkedChild::exitNow()`), so the root normally dies on the first
+     * signal; the grace is spent only on a member that ignores it, and the
+     * wait ends the moment the whole set is gone. What the signal number used
+     * to tell a user ("you cancelled this") is said outright now:
+     * {@see waitForCompletion()} settles an agent {@see cancel()} marked as
+     * {@see AgentStatus::Stopped} with a cancellation message.
      *
-     * This only signals — it never touches $active/$activePids, so cancel()
-     * leaves the agent in place for waitForCompletion() to reap, and that reap
-     * is what settles it to a terminal Failed result. (cancelAll() drops the
-     * bookkeeping itself, because it tears the whole run down and nothing polls
-     * afterwards; it hands the pids to {@see $unreapedChildren} instead.)
+     * killTree() does not reap. This only kills — it never touches
+     * $active/$activePids, so cancel() leaves the agent in place for
+     * waitForCompletion() to reap and settle. (cancelAll() drops the
+     * bookkeeping itself, because it tears the whole run down and nothing
+     * polls afterwards; it hands the pids to {@see $unreapedChildren}
+     * instead.) Without /proc or ext-posix's getpgrp, killTree() degrades to
+     * the same SIGTERM-then-SIGKILL ladder against the root alone; without
+     * ext-posix it does nothing, exactly like the guarded posix_kill() it
+     * replaces.
      */
     private function terminateWorker(string $agentId): void
     {
         $pid = $this->activePids[$agentId] ?? null;
-        if ($pid === null || !function_exists('posix_kill')) {
+        if ($pid === null) {
             return;
         }
 
-        @posix_kill($pid, defined('SIGTERM') ? SIGTERM : 15);
+        ProcessContainment::killTree($pid, self::TERMINATE_GRACE_SECONDS);
     }
 
     /**
@@ -1281,10 +1322,10 @@ final class AgentWorkerPool
      * Collect the children {@see releaseForkedWorkers()} just signalled, over a
      * bounded WNOHANG window shared by all of them.
      *
-     * Never an unflagged pcntl_waitpid(): posix_kill() is guarded because
-     * ext-posix is not guaranteed, and in exactly that build nothing signalled
+     * Never an unflagged pcntl_waitpid(): killTree() signals nothing without
+     * ext-posix, which is not guaranteed, and in exactly that build nothing signalled
      * the children at all — a blocking wait would then hang the caller on a
-     * worker that is still happily running its 300-second timeout.
+     * worker that is still happily running out its own timeout.
      */
     private function reapTerminatedWorkers(): void
     {
@@ -1352,6 +1393,27 @@ final class AgentWorkerPool
         $decoded = json_decode($data, true);
 
         return is_array($decoded) && $this->arrayToResult($decoded) !== null;
+    }
+
+    /**
+     * The result for a forked agent {@see cancel()} killed before it wrote one
+     * of its own: {@see AgentStatus::Stopped}, the status a cancellation has
+     * everywhere else (AgentManager maps it to `stopped`), timed like
+     * {@see workerDiedResult()}.
+     */
+    private function cancelledResult(string $agentId, ?SubAgent $agent): AgentResult
+    {
+        return new AgentResult(
+            agentId: $agentId,
+            status: AgentStatus::Stopped,
+            output: null,
+            error: new \RuntimeException(
+                'AgentWorkerPool: agent ' . $agentId . ' was cancelled; its worker and every process it '
+                . 'started were killed before it wrote a result.'
+            ),
+            startedAt: $agent?->startedAt,
+            completedAt: new \DateTimeImmutable(),
+        );
     }
 
     /**

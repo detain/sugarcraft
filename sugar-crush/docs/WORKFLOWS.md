@@ -99,9 +99,21 @@ any other failed stage, so the run stops there.
   the stage's budget still applies, and whichever expires first wins.
 
 The bound is enforced by `AgentWorkerPool` on its forking path, which is the
-path `/workflow run` takes. A pool built with an injected `ExecutorInterface`
-runs each agent synchronously inside the caller, where it cannot be interrupted;
-there only the executor's own timeout applies.
+path `/workflow run` takes. Where the pool cannot fork (no `pcntl`, or a failed
+`fork()`) it runs each agent synchronously inside the caller, where the pool
+cannot interrupt it; the executor then enforces the agent's own timeout itself
+(the stage's `timeout`, or a task's `timeout()`) and settles `timed_out` the same
+way. `ProcessExecutor` kills its worker at that bound rather than at a fixed
+300 s of its own; `EngineExecutor` (a launch with a provider) stops the run at
+the first tool call or streamed chunk past it, so a single provider call or tool
+already running finishes first. The stage's shared budget still decides whether
+a step starts at all, but it cannot cut short a step already running there. A
+pool built with an injected `ExecutorInterface` gets whatever bound that
+executor applies.
+
+Cancelling a running agent (`AgentWorkerPool::cancel()` or `cancelAll()`) kills
+the same way a timeout does: the worker and every process it started, its Bash
+commands included, die with it, and the agent settles `stopped`.
 
 ### Everything malformed is refused, not coerced
 
@@ -216,7 +228,7 @@ with a provider the pool's forked executor is `Agents\EngineExecutor`, bound by
 `Chat` to the chat's own engine, and every stage agent runs that engine's tool
 loop in the forked child — the hook chain and the session `PermissionGate` see
 each tool call as it is made, the stage's `tools:` is its tool list (`Task`
-withheld), and the step cap is 50. Sequential, pipeline and verification stages
+withheld), and the step cap is 200 (an agent's own `maxTurns` overrides it). Sequential, pipeline and verification stages
 fork too now (`AgentWorkerPool::executeOne()` takes the forking path whenever a
 forked executor is configured), so no stage type blocks the TUI for its
 duration. *WHY THE E663 RULE STILL HOLDS:* a launch with no provider keeps the

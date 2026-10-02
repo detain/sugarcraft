@@ -346,15 +346,18 @@ final class ProcessExecutorTest extends TestCase
     // Timeout escalation (SIGTERM → SIGKILL)
     // -------------------------------------------------------------------------
 
-    public function testExecuteTimesOutAndReturnsFailedStatus(): void
+    public function testExecuteTimesOutAndReturnsTimedOutStatus(): void
     {
         // Short timeout so the test completes quickly.
         $executor = new ProcessExecutor(binaryPath: 'php', timeoutSeconds: 1, simulatedWorker: true);
 
         $result = $executor->execute($this->agent, $this->request);
 
-        // The task takes longer than 1 second; timeout should trigger failure.
-        $this->assertSame(AgentStatus::Failed, $result->status);
+        // The task takes longer than 1 second; the timeout settles it
+        // TimedOut, the status the pool's own deadline uses (WF-1-rem) —
+        // still a failure.
+        $this->assertSame(AgentStatus::TimedOut, $result->status);
+        $this->assertTrue($result->isFailure());
         $this->assertStringContainsString('timed out', $result->error->getMessage());
     }
 
@@ -366,12 +369,72 @@ final class ProcessExecutorTest extends TestCase
         $executor = new ProcessExecutor(binaryPath: 'php', timeoutSeconds: 0, simulatedWorker: true);
         $result = $executor->execute($this->agent, $this->request);
 
-        $this->assertSame(AgentStatus::Failed, $result->status);
+        $this->assertSame(AgentStatus::TimedOut, $result->status);
         $this->assertStringContainsString('timed out', $result->error->getMessage());
 
         // If SIGKILL escalation works, the process is cleaned up and we don't
         // have zombie processes hanging around.
         $this->assertTrue(true);
+    }
+
+    // -------------------------------------------------------------------------
+    // The agent's own timeout (audit WF-1-rem)
+    // -------------------------------------------------------------------------
+
+    /**
+     * An executor built with no bound of its own — the shape AgentWorkerPool
+     * builds and runs INLINE where it cannot fork — must still honour the
+     * agent's timeout. It used to default to its own 300 s, so a stage whose
+     * timeout said 1 s (or 1800 s) got 300 s instead.
+     */
+    public function testWithNoBoundOfItsOwnTheAgentsTimeoutGoverns(): void
+    {
+        $executor = new ProcessExecutor(simulatedWorker: true);
+
+        $result = $executor->execute($this->agentWithTimeout(1), $this->request);
+
+        $this->assertSame(AgentStatus::TimedOut, $result->status, 'the ~1.04 s worker outlived its agent\'s 1 s timeout');
+        $this->assertStringContainsString('timed out after 1 s', (string) $result->error?->getMessage());
+    }
+
+    public function testTheEarlierOfTheExecutorsAndTheAgentsBoundWins(): void
+    {
+        $executor = new ProcessExecutor(timeoutSeconds: 30, simulatedWorker: true);
+
+        $result = $executor->execute($this->agentWithTimeout(1), $this->request);
+
+        $this->assertSame(AgentStatus::TimedOut, $result->status);
+        $this->assertStringContainsString('timed out after 1 s', (string) $result->error?->getMessage());
+    }
+
+    public function testTheStreamingPathHonoursTheAgentsTimeoutToo(): void
+    {
+        $executor = new ProcessExecutor(simulatedWorker: true);
+
+        $results = iterator_to_array($executor->executeStream($this->agentWithTimeout(1), $this->request), false);
+        $final = end($results);
+
+        $this->assertInstanceOf(AgentResult::class, $final);
+        $this->assertSame(AgentStatus::TimedOut, $final->status);
+    }
+
+    public function testANonPositiveAgentTimeoutWithNoExecutorBoundRunsToCompletion(): void
+    {
+        $executor = new ProcessExecutor(simulatedWorker: true);
+
+        $result = $executor->execute($this->agentWithTimeout(0), $this->request);
+
+        $this->assertSame(AgentStatus::Completed, $result->status, 'timeout 0 must mean "no per-agent bound", not "already expired"');
+    }
+
+    private function agentWithTimeout(int $timeout): SubAgent
+    {
+        return new SubAgent(
+            id: 'bounded-agent-' . uniqid((string) getmypid(), true),
+            agent: $this->agent->agent,
+            task: 'Say hello',
+            timeout: $timeout,
+        );
     }
 
     // -------------------------------------------------------------------------

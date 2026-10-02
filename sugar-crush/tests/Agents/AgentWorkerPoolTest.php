@@ -1477,12 +1477,15 @@ final class AgentWorkerPoolTest extends TestCase
 
         $result = $this->extractResultOf($pool, $agent->id);
 
+        // Audit F-E2-rem: a cancel is now a tree kill, and the result says
+        // "cancelled" outright — as the Stopped status a cancel has
+        // everywhere else — instead of leaving a signal number to decode.
         $this->assertInstanceOf(AgentResult::class, $result);
-        $this->assertSame(AgentStatus::Failed, $result->status);
+        $this->assertSame(AgentStatus::Stopped, $result->status);
         $this->assertStringContainsString(
-            'killed by signal ' . SIGTERM,
+            'was cancelled',
             (string) $result->error?->getMessage(),
-            'The synthesized result must name the signal that stopped the worker.',
+            'The synthesized result must say the agent was cancelled, not leave a signal number to decode.',
         );
     }
 

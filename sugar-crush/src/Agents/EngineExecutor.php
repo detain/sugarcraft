@@ -48,8 +48,17 @@ use SugarCraft\Crush\Usage;
  */
 final class EngineExecutor implements ExecutorInterface
 {
-    /** Step cap for an agent that declares no `maxTurns`. */
-    public const DEFAULT_MAX_TURNS = 50;
+    /**
+     * Step cap for an agent that declares no `maxTurns`.
+     *
+     * 200, matching {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool::DEFAULT_MAX_TURNS}
+     * (the 2026-10-02 step-budget decision): a real stage — read, edit, run
+     * the tests, fix, re-run — routinely needs more than the old 50 tool
+     * steps, and running out mid-task ends the stage with no final report.
+     * The cap is a runaway bound, not a budget; the stage's wall-clock
+     * `timeout` is what bounds its time.
+     */
+    public const DEFAULT_MAX_TURNS = 200;
 
     /** At most one streamed append per this many seconds; a tool call flushes at once. */
     public const STREAM_FLUSH_SECONDS = 0.25;
@@ -178,11 +187,33 @@ final class EngineExecutor implements ExecutorInterface
         $maxTurns = max(1, $agent->agent->maxTurns ?? self::DEFAULT_MAX_TURNS);
 
         $guard = ParentProcessGuard::capture('workflow that dispatched it');
-        $onProgress = static function () use ($guard): void {
-            $guard();
+
+        // The agent's own wall-clock bound, checked cooperatively at the same
+        // two progress sinks the parent guard uses (audit WF-1-rem). On the
+        // forking path the pool kills this child at the same deadline anyway,
+        // tree and all; this is what bounds the SYNCHRONOUS paths — a build
+        // without pcntl, or a failed fork — where the pool runs this executor
+        // inline and has no way to interrupt it. Cooperative, so a single
+        // blocking provider call or tool runs to its own bound first; the run
+        // stops at the next chunk or tool event after the deadline, before the
+        // next tool starts. A non-positive timeout means no per-agent bound.
+        $deadlineNs = $agent->timeout > 0 ? hrtime(true) + $agent->timeout * 1_000_000_000 : null;
+        $expired = false;
+        $checkDeadline = static function () use ($deadlineNs, &$expired, $agent): void {
+            if ($deadlineNs !== null && hrtime(true) >= $deadlineNs) {
+                $expired = true;
+
+                throw new \RuntimeException(sprintf('the agent ran past its %d s timeout and was stopped', $agent->timeout));
+            }
         };
-        $onEvent = static function (object $event) use ($guard, $onToolStarted): void {
+
+        $onProgress = static function () use ($guard, $checkDeadline): void {
             $guard();
+            $checkDeadline();
+        };
+        $onEvent = static function (object $event) use ($guard, $checkDeadline, $onToolStarted): void {
+            $guard();
+            $checkDeadline();
             if ($onToolStarted !== null && $event instanceof ToolStarted) {
                 $onToolStarted($event);
             }
@@ -211,7 +242,13 @@ final class EngineExecutor implements ExecutorInterface
                 }
             }
 
-            return self::failed($agent, $startedAt, $failure->getMessage(), Usage::sum($usages));
+            return self::failed(
+                $agent,
+                $startedAt,
+                $failure->getMessage(),
+                Usage::sum($usages),
+                $expired ? AgentStatus::TimedOut : AgentStatus::Failed,
+            );
         }
 
         $output = trim($turn->reply->content);
@@ -233,7 +270,16 @@ final class EngineExecutor implements ExecutorInterface
         );
     }
 
-    /** The pool signals the forked child itself; there is no side process here to cancel. */
+    /**
+     * Nothing to do here: this executor runs INSIDE the child
+     * {@see AgentWorkerPool} forks, so this process's own state is not where a
+     * cancel can land. The pool's kill site is the cancel, and it reaches
+     * everything this executor's run started (audit F-E2-rem): the pool kills
+     * the forked child with {@see \SugarCraft\Crush\Support\ProcessContainment::killTree()},
+     * whose walk takes the engine's own turn forks below it and every Bash
+     * command they run in its own `setsid` session — a lone signal to the
+     * child would leave those running for nobody.
+     */
     public function cancel(string $agentId): void
     {
     }
@@ -299,12 +345,18 @@ final class EngineExecutor implements ExecutorInterface
     /**
      * $spent is what the run billed before it failed: a failure does not
      * un-spend it, and the workflow's cost totals read it off this result.
+     * $status is Failed, or TimedOut for a run its own timeout stopped.
      */
-    private static function failed(SubAgent $agent, \DateTimeImmutable $startedAt, string $why, ?Usage $spent = null): AgentResult
-    {
+    private static function failed(
+        SubAgent $agent,
+        \DateTimeImmutable $startedAt,
+        string $why,
+        ?Usage $spent = null,
+        AgentStatus $status = AgentStatus::Failed,
+    ): AgentResult {
         return new AgentResult(
             agentId: $agent->id,
-            status: AgentStatus::Failed,
+            status: $status,
             error: new \RuntimeException($why),
             tokensUsed: $spent?->totalTokens ?? 0,
             costUsd: $spent?->costUsd ?? 0.0,

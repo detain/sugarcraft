@@ -51,9 +51,13 @@ final class SubAgent
      *                        forked worker and every process it started are
      *                        killed when it expires, and the agent settles
      *                        {@see AgentStatus::TimedOut} (audit WF-1). Zero or
-     *                        less means no per-agent bound. The synchronous
-     *                        dispatch paths cannot be interrupted, so there
-     *                        only the executor's own bound applies.
+     *                        less means no per-agent bound. The pool cannot
+     *                        interrupt its synchronous dispatch paths, so
+     *                        there the executor enforces it:
+     *                        {@see ProcessExecutor} kills its worker at the
+     *                        earlier of this and its own bound, and
+     *                        {@see EngineExecutor} stops the run at the next
+     *                        progress event past it (audit WF-1-rem).
      * @param int $maxRetries Carried for {@see toArray()} but NOT acted on:
      *                        nothing re-runs a failed sub-agent (see
      *                        {@see AgentPoolConfig::$maxRetries}).
