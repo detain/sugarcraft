@@ -27,7 +27,7 @@ use SugarCraft\Crush\Providers\TransientFailure;
  */
 final class StreamErrorEventTest extends TestCase
 {
-    private const OVERFLOW = "The input (1100000 tokens) is longer than the model's context length";
+    private const CONTEXT_OVERFLOW = "The input (1100000 tokens) is longer than the model's context length";
 
     private static function body(string $errorFrame): string
     {
@@ -42,7 +42,7 @@ final class StreamErrorEventTest extends TestCase
     {
         return json_encode(['error' => [
             'object' => 'error',
-            'message' => self::OVERFLOW,
+            'message' => self::CONTEXT_OVERFLOW,
             'type' => 'BadRequestError',
             'code' => $code,
         ]], JSON_THROW_ON_ERROR);
@@ -51,7 +51,7 @@ final class StreamErrorEventTest extends TestCase
     private static function topLevel(int $code): string
     {
         return json_encode(
-            ['object' => 'error', 'message' => self::OVERFLOW, 'type' => 'BadRequestError', 'code' => $code],
+            ['object' => 'error', 'message' => self::CONTEXT_OVERFLOW, 'type' => 'BadRequestError', 'code' => $code],
             JSON_THROW_ON_ERROR,
         );
     }
@@ -64,7 +64,7 @@ final class StreamErrorEventTest extends TestCase
         ]);
     }
 
-    private static function request(): CompleteRequest
+    private static function helloRequest(): CompleteRequest
     {
         return new CompleteRequest(model: 'm', messages: [new UserMessage('hi')]);
     }
@@ -85,12 +85,12 @@ final class StreamErrorEventTest extends TestCase
 
         $contents = [];
         try {
-            foreach ($provider->completeStream(self::request()) as $chunk) {
+            foreach ($provider->completeStream(self::helloRequest()) as $chunk) {
                 $contents[] = $chunk->content;
             }
             $this->fail('an in-stream error frame must not end as a successful stream; got ' . json_encode($contents));
         } catch (ProviderStreamException $e) {
-            $this->assertSame('SGLANG request failed: ' . self::OVERFLOW, $e->getMessage());
+            $this->assertSame('SGLANG request failed: ' . self::CONTEXT_OVERFLOW, $e->getMessage());
             $this->assertSame($code, $e->serverCode);
             $this->assertSame($transient, TransientFailure::isTransient($e));
         }
@@ -104,7 +104,7 @@ final class StreamErrorEventTest extends TestCase
         $provider = new CustomProvider('custom', 'http://provider.invalid', 'm', null, self::client(self::body($frame)), true, true);
 
         /** @var list<CompleteResponse> $chunks */
-        $chunks = iterator_to_array($provider->completeStream(self::request()), false);
+        $chunks = iterator_to_array($provider->completeStream(self::helloRequest()), false);
 
         $this->assertCount(2, $chunks, 'Hel, then the error chunk - nothing after the error frame is read');
         $this->assertSame('Hel', $chunks[0]->content);
@@ -113,7 +113,7 @@ final class StreamErrorEventTest extends TestCase
         $error = $chunks[1];
         $this->assertTrue($error->isError);
         $this->assertSame('', $error->content);
-        $this->assertSame(self::OVERFLOW, $error->errorMessage);
+        $this->assertSame(self::CONTEXT_OVERFLOW, $error->errorMessage);
         $this->assertSame($transient, $error->errorTransient);
         $this->assertSame($transient, TransientFailure::responseIsTransient($error));
     }

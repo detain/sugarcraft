@@ -43,7 +43,7 @@ final class StreamPrematureEndTest extends TestCase
         ]);
     }
 
-    private static function request(string $model = 'm'): CompleteRequest
+    private static function requestFor(string $model = 'm'): CompleteRequest
     {
         return new CompleteRequest(model: $model, messages: [new UserMessage('hi')]);
     }
@@ -103,7 +103,7 @@ final class StreamPrematureEndTest extends TestCase
     {
         $contents = [];
         try {
-            foreach (self::sglang(self::CUT)->completeStream(self::request()) as $chunk) {
+            foreach (self::sglang(self::CUT)->completeStream(self::requestFor()) as $chunk) {
                 $contents[] = $chunk->content;
             }
             $this->fail('a cut stream must not end as a complete answer; got ' . json_encode($contents));
@@ -119,7 +119,7 @@ final class StreamPrematureEndTest extends TestCase
     {
         $toolCalls = [];
         try {
-            foreach (self::sglang(self::TOOL_FRAGMENT)->completeStream(self::request()) as $chunk) {
+            foreach (self::sglang(self::TOOL_FRAGMENT)->completeStream(self::requestFor()) as $chunk) {
                 $toolCalls = array_merge($toolCalls, $chunk->toolCalls ?? []);
             }
             $this->fail('a cut stream must throw before the §Q7 flush');
@@ -132,7 +132,7 @@ final class StreamPrematureEndTest extends TestCase
 
     public function testSglangStillFlushesAToolCallWhenDoneArrivesWithoutAFinishReason(): void
     {
-        $chunks = self::drain(self::sglang(self::TOOL_FRAGMENT . "data: [DONE]\n\n")->completeStream(self::request()));
+        $chunks = self::drain(self::sglang(self::TOOL_FRAGMENT . "data: [DONE]\n\n")->completeStream(self::requestFor()));
 
         $flushed = array_values(array_filter($chunks, static fn (CompleteResponse $c): bool => $c->toolCalls !== null && $c->toolCalls !== []));
         $this->assertCount(1, $flushed, 'the server closed the stream, so the §Q7 null-arm flush is unchanged');
@@ -142,7 +142,7 @@ final class StreamPrematureEndTest extends TestCase
 
     public function testSglangTreatsDoneWithoutAFinishReasonAsAClosedStream(): void
     {
-        $chunks = self::drain(self::sglang(self::CUT . "data: [DONE]\n\n")->completeStream(self::request()));
+        $chunks = self::drain(self::sglang(self::CUT . "data: [DONE]\n\n")->completeStream(self::requestFor()));
 
         $this->assertSame(['The fix is to chan'], array_map(static fn (CompleteResponse $c): string => $c->content, $chunks));
         $this->assertFalse($chunks[0]->truncated);
@@ -150,7 +150,7 @@ final class StreamPrematureEndTest extends TestCase
 
     public function testSglangReadsADoneSentinelThatHasNoTrailingNewline(): void
     {
-        $chunks = self::drain(self::sglang(self::CUT . 'data: [DONE]')->completeStream(self::request()));
+        $chunks = self::drain(self::sglang(self::CUT . 'data: [DONE]')->completeStream(self::requestFor()));
 
         $this->assertSame(['The fix is to chan'], array_map(static fn (CompleteResponse $c): string => $c->content, $chunks));
     }
@@ -159,7 +159,7 @@ final class StreamPrematureEndTest extends TestCase
     {
         $body = self::CUT . 'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}' . "\n\n";
 
-        $chunks = self::drain(self::sglang($body)->completeStream(self::request()));
+        $chunks = self::drain(self::sglang($body)->completeStream(self::requestFor()));
 
         $this->assertSame('The fix is to chan', implode('', array_map(static fn (CompleteResponse $c): string => $c->content, $chunks)));
     }
@@ -168,7 +168,7 @@ final class StreamPrematureEndTest extends TestCase
 
     public function testCustomReportsACutStreamAsOneTransientErrorChunk(): void
     {
-        $chunks = self::drain(self::custom(self::CUT)->completeStream(self::request()));
+        $chunks = self::drain(self::custom(self::CUT)->completeStream(self::requestFor()));
 
         $this->assertCount(2, $chunks, 'the streamed text, then the error chunk');
         $this->assertSame('The fix is to chan', $chunks[0]->content);
@@ -181,7 +181,7 @@ final class StreamPrematureEndTest extends TestCase
         $finish = 'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}' . "\n\n";
 
         foreach (['[DONE] only' => "data: [DONE]\n\n", 'finish_reason only' => $finish] as $label => $tail) {
-            $chunks = self::drain(self::custom(self::CUT . $tail)->completeStream(self::request()));
+            $chunks = self::drain(self::custom(self::CUT . $tail)->completeStream(self::requestFor()));
 
             foreach ($chunks as $chunk) {
                 $this->assertFalse($chunk->isError, $label . ' is a clean end');
@@ -191,9 +191,9 @@ final class StreamPrematureEndTest extends TestCase
 
     // ---- VertexProvider: Anthropic arm ------------------------------------
 
-    private const ANTHROPIC_MODEL = 'claude-3-sonnet@20240229';
+    private const CLAUDE_ON_VERTEX = 'claude-3-sonnet@20240229';
 
-    private const GEMINI_MODEL = 'gemini-1.5-pro-002';
+    private const GEMINI_ON_VERTEX = 'gemini-1.5-pro-002';
 
     /** @return list<array<string, mixed>> */
     private static function anthropicPrefix(): array
@@ -207,7 +207,7 @@ final class StreamPrematureEndTest extends TestCase
 
     public function testVertexAnthropicReportsAStreamWithoutMessageStopAsATransientErrorChunk(): void
     {
-        $chunks = self::drain(self::vertex(self::ANTHROPIC_MODEL, self::anthropicPrefix())->completeStream(self::request(self::ANTHROPIC_MODEL)));
+        $chunks = self::drain(self::vertex(self::CLAUDE_ON_VERTEX, self::anthropicPrefix())->completeStream(self::requestFor(self::CLAUDE_ON_VERTEX)));
 
         $this->assertSame('The fix is to chan', implode('', array_map(static fn (CompleteResponse $c): string => $c->content, $chunks)));
         self::assertPrematureEndChunk($chunks[array_key_last($chunks)], 'Vertex streamRawPredict: ');
@@ -223,7 +223,7 @@ final class StreamPrematureEndTest extends TestCase
 
         foreach ($endings as $label => $tail) {
             $events = [...self::anthropicPrefix(), ['type' => 'content_block_stop', 'index' => 0], ...$tail];
-            $chunks = self::drain(self::vertex(self::ANTHROPIC_MODEL, $events)->completeStream(self::request(self::ANTHROPIC_MODEL)));
+            $chunks = self::drain(self::vertex(self::CLAUDE_ON_VERTEX, $events)->completeStream(self::requestFor(self::CLAUDE_ON_VERTEX)));
 
             foreach ($chunks as $chunk) {
                 $this->assertFalse($chunk->isError, $label . ' is a clean end');
@@ -239,7 +239,7 @@ final class StreamPrematureEndTest extends TestCase
         ];
 
         $errors = array_values(array_filter(
-            self::drain(self::vertex(self::ANTHROPIC_MODEL, $events)->completeStream(self::request(self::ANTHROPIC_MODEL))),
+            self::drain(self::vertex(self::CLAUDE_ON_VERTEX, $events)->completeStream(self::requestFor(self::CLAUDE_ON_VERTEX))),
             static fn (CompleteResponse $c): bool => $c->isError,
         ));
 
@@ -254,7 +254,7 @@ final class StreamPrematureEndTest extends TestCase
     {
         $events = [['candidates' => [['content' => ['parts' => [['text' => 'The fix is to chan']]]]]]];
 
-        $chunks = self::drain(self::vertex(self::GEMINI_MODEL, $events)->completeStream(self::request(self::GEMINI_MODEL)));
+        $chunks = self::drain(self::vertex(self::GEMINI_ON_VERTEX, $events)->completeStream(self::requestFor(self::GEMINI_ON_VERTEX)));
 
         $this->assertCount(2, $chunks);
         $this->assertSame('The fix is to chan', $chunks[0]->content);
@@ -268,7 +268,7 @@ final class StreamPrematureEndTest extends TestCase
             ['candidates' => [['content' => ['parts' => [['text' => 'done.']]], 'finishReason' => 'STOP']]],
         ];
 
-        $chunks = self::drain(self::vertex(self::GEMINI_MODEL, $events)->completeStream(self::request(self::GEMINI_MODEL)));
+        $chunks = self::drain(self::vertex(self::GEMINI_ON_VERTEX, $events)->completeStream(self::requestFor(self::GEMINI_ON_VERTEX)));
 
         $this->assertSame(['The fix is ', 'done.'], array_map(static fn (CompleteResponse $c): string => $c->content, $chunks));
     }
@@ -277,7 +277,7 @@ final class StreamPrematureEndTest extends TestCase
     {
         $events = [['promptFeedback' => ['blockReason' => 'SAFETY']]];
 
-        $chunks = self::drain(self::vertex(self::GEMINI_MODEL, $events)->completeStream(self::request(self::GEMINI_MODEL)));
+        $chunks = self::drain(self::vertex(self::GEMINI_ON_VERTEX, $events)->completeStream(self::requestFor(self::GEMINI_ON_VERTEX)));
 
         $this->assertCount(1, $chunks, 'the block already ends the turn; a transient cut would make it retryable');
         $this->assertTrue($chunks[0]->isError);
