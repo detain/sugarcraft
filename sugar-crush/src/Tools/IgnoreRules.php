@@ -1006,13 +1006,6 @@ final class IgnoreRules
     }
 
     /**
-     * $absolutePath relative to the root, or null when it is not under it.
-     *
-     * Null rather than false-and-a-guess: a path outside the root is one this
-     * ruleset has no jurisdiction over, and answering "not ignored" for it is
-     * the only honest verdict.
-     */
-    /**
      * $text with control bytes shown as `?` and, past $maxBytes, cut on a
      * UTF-8 boundary and marked with `…`.
      */
@@ -1031,6 +1024,13 @@ final class IgnoreRules
         return substr($text, 0, $cut) . '…';
     }
 
+    /**
+     * $absolutePath relative to the root, or null when it is not under it.
+     *
+     * Null rather than false-and-a-guess: a path outside the root is one this
+     * ruleset has no jurisdiction over, and answering "not ignored" for it is
+     * the only honest verdict.
+     */
     private function relative(string $absolutePath): ?string
     {
         $path = rtrim($absolutePath, '/');

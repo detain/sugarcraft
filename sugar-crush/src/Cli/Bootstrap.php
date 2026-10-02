@@ -7833,6 +7833,17 @@ final class Bootstrap
     }
 
     /**
+     * The root a launch's `.sugar-crush/*` lookups resolve against — the
+     * repository, on a launch from one of its subdirectories (audit 15d-13
+     * (b)); null stays null. The WORKING directory is never this: tools,
+     * hooks and spawned sessions keep `$root`. See {@see ProjectRoot}.
+     */
+    private static function configRoot(?string $root): ?string
+    {
+        return $root === null ? null : ProjectRoot::resolve($root);
+    }
+
+    /**
      * The directory a run is rooted at: the caller's `--root`, else the
      * process working directory.
      *
@@ -7846,17 +7857,6 @@ final class Bootstrap
      * has no root to offer, so saying so is the only honest degradation
      * (crush_code.md Phase 0 item 6).
      */
-    /**
-     * The root a launch's `.sugar-crush/*` lookups resolve against — the
-     * repository, on a launch from one of its subdirectories (audit 15d-13
-     * (b)); null stays null. The WORKING directory is never this: tools,
-     * hooks and spawned sessions keep `$root`. See {@see ProjectRoot}.
-     */
-    private static function configRoot(?string $root): ?string
-    {
-        return $root === null ? null : ProjectRoot::resolve($root);
-    }
-
     private static function requireRoot(?string $root): string
     {
         $resolved = $root ?? (getcwd() ?: null);
