@@ -84,7 +84,10 @@ replaces is recorded in `SkillLoader::skipped()` / `SkillManager::skipped()`
 under the losing file's path, with a reason naming the winner — `shadowed by
 [user] skill <path> (same name 'deploy'); this [project] skill was not
 loaded`. It is counted in the launch notice and listed by
-`SUGARCRUSH_DEBUG_SKILLS=1`, like an unreadable file. A loser that is the
+`SUGARCRUSH_DEBUG_SKILLS=1`, like an unreadable file; the notice's one line
+counts both kinds and names both (`2 skill files were not loaded (unreadable,
+or shadowed by a same-named skill)`), so a skill that lost a collision is not
+reported as a file you need to fix. A loser that is the
 winner's own file or a byte-identical copy of it (one skill synced into several
 tools' trees) loses nothing and is not reported.
 

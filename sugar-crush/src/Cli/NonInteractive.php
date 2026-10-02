@@ -194,7 +194,7 @@ final class NonInteractive
 
             // Building a backend scans the skill trees, and this path never
             // went through Bootstrap::chat(), which is where the one-line
-            // "some skill files could not be read" notice was raised — so a
+            // "some skill files were not loaded" notice was raised — so a
             // `-p` run collected the skips and told nobody. Only meaningful
             // when a backend was actually built here: a caller that supplied
             // one (the tests, a headless server) has scanned nothing.

@@ -112,15 +112,41 @@ final class BootstrapSkillSkipsTest extends TestCase
 
         $stderr = $this->stderrOfALaunch();
 
-        $this->assertSame(1, substr_count($stderr, 'could not be read'));
+        $this->assertSame(1, substr_count($stderr, 'not loaded (unreadable'));
         $this->assertStringContainsString('2 skill files', $stderr);
         $this->assertStringContainsString(SkillLoader::DEBUG_SKIPS_ENV, $stderr);
+    }
+
+    /**
+     * AUDIT 15d-03, THE NOTICE'S WORDING. A skill that was read fine and lost
+     * a name collision is recorded in the same skip map an unreadable one is,
+     * and the row used to call it a file that "could not be read" — sending
+     * the user to fix a file with nothing wrong in it. Here nothing is
+     * unreadable: the user's own `~/.claude/skills/deploy` loses to their
+     * native `~/.sugar-crush/skills/deploy` (native breaks the tie inside a
+     * tier), and the row must still count it, in words that fit.
+     */
+    public function testAShadowedSkillIsCountedWithoutBeingCalledUnreadable(): void
+    {
+        foreach (['/.claude/skills/deploy', '/.sugar-crush/skills/deploy'] as $i => $dir) {
+            mkdir($this->home . $dir, 0700, true);
+            file_put_contents(
+                $this->home . $dir . '/SKILL.md',
+                "---\nname: deploy\ndescription: copy {$i}\n---\nbody {$i}\n",
+            );
+        }
+
+        $stderr = $this->stderrOfALaunch();
+
+        $this->assertStringContainsString('1 skill file was not loaded', $stderr);
+        $this->assertStringContainsString('shadowed by a same-named skill', $stderr);
+        $this->assertStringNotContainsString('could not be read', $stderr);
     }
 
     /** A clean skill tree says nothing at all. */
     public function testACleanLaunchIsSilent(): void
     {
-        $this->assertStringNotContainsString('could not be read', $this->stderrOfALaunch());
+        $this->assertStringNotContainsString('not loaded (unreadable', $this->stderrOfALaunch());
     }
 
     /**
@@ -136,14 +162,14 @@ final class BootstrapSkillSkipsTest extends TestCase
 
         $stderr = $this->stderrOfAOneShotRun();
 
-        $this->assertStringContainsString('could not be read', $stderr);
+        $this->assertStringContainsString('not loaded (unreadable', $stderr);
         $this->assertStringContainsString(SkillLoader::DEBUG_SKIPS_ENV, $stderr);
     }
 
     /** ...and a clean tree is silent there too. */
     public function testACleanOneShotRunIsSilent(): void
     {
-        $this->assertStringNotContainsString('could not be read', $this->stderrOfAOneShotRun());
+        $this->assertStringNotContainsString('not loaded (unreadable', $this->stderrOfAOneShotRun());
     }
 
     /**

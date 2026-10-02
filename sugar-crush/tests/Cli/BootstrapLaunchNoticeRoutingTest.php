@@ -239,7 +239,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             sprintf(Bootstrap::SKILL_SKIP_NOTICE_FORMAT, 2, 's', 'were', SkillLoader::DEBUG_SKIPS_ENV, 'them'),
             $notices[0],
         );
-        self::assertSame(1, substr_count($stderr, 'could not be read'));
+        self::assertSame(1, substr_count($stderr, 'skill files were not loaded'));
     }
 
     /**

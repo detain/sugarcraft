@@ -289,8 +289,16 @@ final class Bootstrap
     public const PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE = 'leaving no tools at all';
 
     /**
-     * The aggregate row {@see reportSkillSkips()} raises for unreadable skill
-     * files.
+     * The aggregate row {@see reportSkillSkips()} raises for skill files that
+     * did not load: unreadable ones, and readable ones that lost a name
+     * collision to a skill of higher precedence.
+     *
+     * WORDED FOR BOTH SINCE AUDIT 15d-03. {@see skillSkips()} has carried the
+     * shadowed files since `9105feb48` (`SkillLoader::recordShadowing()`
+     * writes them through the same `recordSkip()` an unreadable file takes),
+     * but the row still said they "could not be read" — a repository's
+     * `deploy` losing to the user's own read as a broken file the user had to
+     * go and fix. The debug listing the row points at says which is which.
      *
      * PROMOTED BECAUSE A SECOND PARTY READS IT (E164).
      * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest::testSkippedSkillFilesReachBothChannelsAsOneAggregateRow()}
@@ -306,19 +314,21 @@ final class Bootstrap
      * sixth conversion is a launch-time fatal, not a cosmetic drift.
      */
     public const SKILL_SKIP_NOTICE_FORMAT =
-        '%d skill file%s could not be read and %s skipped; set %s=1 to list %s';
+        '%d skill file%s %s not loaded (unreadable, or shadowed by a same-named skill); set %s=1 to list %s';
 
     /**
      * The aggregate row {@see reportCommandSkips()} raises for unreadable
      * command files (E172).
      *
-     * THE SKILL ROW'S TWIN, byte-for-byte in shape: same five conversion
-     * slots — `%d` the count, `%s` the noun plural, `%s` the was/were verb,
-     * `%s` the env var that lists the paths, `%s` the object pronoun — because
-     * the failure the two sentences answer is the same class of thing (some of
-     * the files that WOULD have been a capability could not be read) and the
-     * plural machinery is the part that drifts when the two are edited
-     * separately. PROMOTED BECAUSE A SECOND PARTY READS IT (E164):
+     * THE SKILL ROW'S TWIN in shape: the same five conversion slots —
+     * `%d` the count, `%s` the noun plural, `%s` the was/were verb, `%s` the
+     * env var that lists the paths, `%s` the object pronoun — because the
+     * failure the two sentences answer is the same class of thing (some of the
+     * files that WOULD have been a capability did not load) and the plural
+     * machinery is the part that drifts when the two are edited separately.
+     * Not the same words: the skill row also counts skills shadowed by a
+     * same-named one (audit 15d-03), and a command file has no such loss to
+     * report. PROMOTED BECAUSE A SECOND PARTY READS IT (E164):
      * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest::testSkippedCommandFilesReachBothChannelsAsOneAggregateRow()}
      * reproduces the rendered span through this constant, plural slots
      * included.
