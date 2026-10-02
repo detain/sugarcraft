@@ -1566,6 +1566,36 @@ final class Chat implements Model
     }
 
     /**
+     * $history with every "running" placeholder replaced by the same
+     * "interrupted" row {@see reviveCheckpointMessage()} builds for `/rewind`
+     * and {@see reviveTranscriptMessage()} for a resume - the live-session
+     * twin of those two, for a turn the user aborted (audit 15b-02).
+     *
+     * Reusing that builder rather than writing a third shape keeps all three
+     * "this call lost its runner" paths rendering identically and keeps the
+     * wire valid: the healed row carries an error tool_result under the SAME
+     * call id, so the next request has no `tool_use` block left unanswered.
+     * The thought that led to the call rides along, as it does onto a
+     * finished row ({@see replaceToolRunningPlaceholder()}).
+     *
+     * @return list<Message>
+     */
+    private function historyWithInterruptedPlaceholders(): array
+    {
+        return array_map(static function (Message $message): Message {
+            if ($message->pendingToolCallId === null) {
+                return $message;
+            }
+
+            $healed = self::reviveCheckpointMessage($message->jsonSerialize());
+
+            return trim((string) $message->reasoning) !== ''
+                ? $healed->withReasoning($message->reasoning)
+                : $healed;
+        }, $this->history);
+    }
+
+    /**
      * The saved transcript of $sessionId as Messages, or [] when the store
      * has none (or cannot say).
      *
@@ -2092,7 +2122,13 @@ final class Chat implements Model
                 'inFlightCancellation' => null,
                 'lastEscapeAt' => null,
                 'generation' => $this->generation + 1,
-                'history' => [...$this->history, Message::system('_Request cancelled._')],
+                // Every "running" placeholder of the aborted turn is healed into
+                // the "interrupted" row first (audit 15b-02): the generation
+                // bump below strands the ToolFinished that would have resolved
+                // it, so left alone it spun for the rest of the session - and a
+                // later turn reusing the call id (DSML's `dsml_call_0`) had its
+                // result written onto this dead row instead of its own.
+                'history' => [...$this->historyWithInterruptedPlaceholders(), Message::system('_Request cancelled._')],
                 // Half a sentence left under the cancellation notice would
                 // read as an answer the user is still waiting on. The
                 // generation bump also strands any delta still in the inbox,
@@ -3491,15 +3527,25 @@ final class Chat implements Model
             return [$this, null];
         }
 
+        // How many placeholders each id may still claim. Ids repeat across a
+        // session (DSML/MiniMax restart at `dsml_call_0` every response), so
+        // the walk below runs NEWEST FIRST and each result resolves only as
+        // many rows as it accounts for - this batch's - rather than every row
+        // in history that ever carried the id (audit 15b-02). A batch with two
+        // id-less calls of one tool still resolves both rows, as it did.
         $resultsById = [];
+        $claims = [];
         foreach ($msg->results as $result) {
-            $resultsById[$result->id ?? $result->name] = $result;
+            $key = $result->id ?? $result->name;
+            $resultsById[$key] = $result;
+            $claims[$key] = ($claims[$key] ?? 0) + 1;
         }
 
         $newHistory = [];
-        foreach ($this->history as $historyMessage) {
+        foreach (array_reverse($this->history) as $historyMessage) {
             $pendingId = $historyMessage->pendingToolCallId;
-            if ($pendingId !== null && isset($resultsById[$pendingId])) {
+            if ($pendingId !== null && ($claims[$pendingId] ?? 0) > 0) {
+                $claims[$pendingId]--;
                 // The placeholder's content IS Message::describeToolCall()'s
                 // one-liner, and it is the only carrier of the call's
                 // arguments that reaches this point - the result itself never
@@ -3514,6 +3560,7 @@ final class Chat implements Model
             }
             $newHistory[] = $historyMessage;
         }
+        $newHistory = array_reverse($newHistory);
 
         $generation = $this->generation + 1;
         $cancellation = new CancellationToken();
@@ -3989,38 +4036,43 @@ final class Chat implements Model
      *
      * An unmatched result is appended rather than dropped - losing a tool's
      * output entirely is worse than showing it without a preceding placeholder.
+     *
+     * The search runs NEWEST FIRST (audit 15b-02). Call ids are not unique
+     * across a session - the DSML and MiniMax parsers restart at `dsml_call_0`
+     * on every response - so a top-down walk resolved the OLDEST row with the
+     * id, which is a previous turn's whenever one survived, and left this
+     * call's own placeholder spinning. The call this event finishes is the
+     * most recent one started under its id.
      */
     private function replaceToolRunningPlaceholder(ToolFinished $event): self
     {
         $result = ToolResult::fromEngineResult($event->result, $event->toolName);
 
-        $newHistory = [];
-        $replaced = false;
-        foreach ($this->history as $historyMessage) {
-            if (!$replaced && $historyMessage->pendingToolCallId === $event->toolCallId) {
-                // Same reasoning as finishToolCalls(): the placeholder content
-                // is Message::describeToolCall()'s one-liner, and ToolFinished
-                // carries no arguments, so this is the only point at which the
-                // finished row can learn WHAT ran (crush_feat.md §3 E2).
-                // The thought that led to this call rides along from the
-                // placeholder (see pumpLiveToolEvents()), so the finished row
-                // keeps its collapsible "💭 Thought" above it.
-                $newHistory[] = self::toolResultMessage(
-                    $result
-                        ->withDescription($historyMessage->content)
-                        ->withArguments($historyMessage->pendingToolArguments),
-                    $historyMessage->reasoning,
-                );
-                $replaced = true;
-
+        $newHistory = array_values($this->history);
+        for ($i = count($newHistory) - 1; $i >= 0; $i--) {
+            $historyMessage = $newHistory[$i];
+            if ($historyMessage->pendingToolCallId !== $event->toolCallId) {
                 continue;
             }
-            $newHistory[] = $historyMessage;
+
+            // Same reasoning as finishToolCalls(): the placeholder content
+            // is Message::describeToolCall()'s one-liner, and ToolFinished
+            // carries no arguments, so this is the only point at which the
+            // finished row can learn WHAT ran (crush_feat.md §3 E2).
+            // The thought that led to this call rides along from the
+            // placeholder (see pumpLiveToolEvents()), so the finished row
+            // keeps its collapsible "💭 Thought" above it.
+            $newHistory[$i] = self::toolResultMessage(
+                $result
+                    ->withDescription($historyMessage->content)
+                    ->withArguments($historyMessage->pendingToolArguments),
+                $historyMessage->reasoning,
+            );
+
+            return $this->mutate(['history' => $newHistory]);
         }
 
-        if (!$replaced) {
-            $newHistory[] = self::toolResultMessage($result);
-        }
+        $newHistory[] = self::toolResultMessage($result);
 
         return $this->mutate(['history' => $newHistory]);
     }
