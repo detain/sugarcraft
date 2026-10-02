@@ -230,6 +230,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     private const REAP_POLL_MICROSECONDS = 5_000;
 
     /**
+     * How often {@see completeAsync()} asks whether the turn child is still
+     * alive (B3). A death is noticed within this window instead of whenever
+     * the last inherited copy of the frame socket closes; one WNOHANG syscall
+     * per tick is the whole cost.
+     */
+    private const EXIT_POLL_SECONDS = 0.1;
+
+    /**
      * PIDs {@see completeAsync()} forked that {@see reapChild()} has not yet
      * confirmed reaped, swept opportunistically at the top of the next turn.
      *
@@ -1362,12 +1370,26 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         }
 
         if ($pid === 0) {
+            // B3. The parent's end goes FIRST: a copy of it held here would
+            // keep the socket half-open after the parent closes its own, so a
+            // child whose parent is gone would never see EPIPE. Then the
+            // child's end is made close-on-exec, so no command the turn spawns
+            // (Bash, Grep, hooks) inherits the write end and holds the parent's
+            // EOF hostage for as long as a backgrounded `npm run dev &` lives.
+            // Forks still inherit it — CLOEXEC is an exec rule — which is why
+            // the parent also watches the pid (see $exitTimer below).
+            fclose($parentSocket);
+            ProcessContainment::closeOnExec($childSocket);
             $this->runCompleteInChild($childSocket, $history);
         }
 
         self::$unreapedChildren[$pid] = true;
 
         fclose($childSocket);
+        // Same rule for the read end: anything the TUI parent spawns while
+        // this turn is in flight (an MCP server, the status line) must not
+        // walk away holding a copy of it.
+        ProcessContainment::closeOnExec($parentSocket);
         stream_set_blocking($parentSocket, false);
 
         $loop = Loop::get();
@@ -1388,13 +1410,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // of the idle-timeout change.
         $timeoutTimer = null;
         $cancelTimer = null;
+        $exitTimer = null;
 
         // Shared teardown for the failure ways this can end (timeout,
         // cancellation): stop watching the socket, cancel BOTH timers
         // (critical for $cancelTimer, a periodic timer that would otherwise
         // keep polling forever after settling via a different path), kill and
         // reap the child so it never zombies.
-        $teardown = function (string $rejectMessage) use (&$settled, $loop, $parentSocket, $pid, $deferred, &$timeoutTimer, &$cancelTimer): void {
+        $teardown = function (string $rejectMessage) use (&$settled, $loop, $parentSocket, $pid, $deferred, &$timeoutTimer, &$cancelTimer, &$exitTimer): void {
             if ($settled) {
                 return;
             }
@@ -1408,6 +1431,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             }
             if ($cancelTimer !== null) {
                 $loop->cancelTimer($cancelTimer);
+            }
+            if ($exitTimer !== null) {
+                $loop->cancelTimer($exitTimer);
             }
             // B2/F-E2: the whole tree, not just the turn child. The child's
             // Bash runs are setsid'd into their own groups and a parallel Task
@@ -1419,11 +1445,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             $deferred->reject(new \RuntimeException($rejectMessage));
         };
 
-        // The success path: the child either delivered its result frame or
-        // hung up. Same cleanup as $teardown minus the kill (the child is
+        // The success path: the child delivered its result frame, hung up,
+        // or was seen to exit by $exitTimer. Same cleanup as $teardown minus the kill (the child is
         // already on its way out), then settle from whatever result frame
         // arrived - a child that died before writing one is still a failure.
-        $finalize = function () use (&$settled, &$result, &$streamed, $loop, $parentSocket, $pid, $deferred, $onToken, &$timeoutTimer, &$cancelTimer): void {
+        $finalize = function () use (&$settled, &$result, &$streamed, $loop, $parentSocket, $pid, $deferred, $onToken, &$timeoutTimer, &$cancelTimer, &$exitTimer): void {
             if ($settled) {
                 return;
             }
@@ -1437,6 +1463,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             }
             if ($cancelTimer !== null) {
                 $loop->cancelTimer($cancelTimer);
+            }
+            if ($exitTimer !== null) {
+                $loop->cancelTimer($exitTimer);
             }
             self::reapChild($pid);
             $this->settleFromResultFrame($result, $deferred, $streamed ? null : $onToken);
@@ -1468,14 +1497,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             }
         });
 
-        $loop->addReadStream($parentSocket, function ($stream) use (&$buffer, &$result, &$streamed, $onToken, $onEvent, $onReasoning, $finalize, $resetTimeout): void {
-            $chunk = fread($stream, 65536);
-            if ($chunk === '' || $chunk === false) {
-                $finalize();
-
-                return;
-            }
-
+        // Frame dispatch for one chunk off the socket, shared by the read edge
+        // below and by $exitTimer's final drain so the two cannot disagree
+        // about what a frame means.
+        $consume = function (string $chunk) use (&$buffer, &$result, &$streamed, $onToken, $onEvent, $onReasoning, $finalize, $resetTimeout): void {
             $buffer .= $chunk;
             foreach (self::drainFrames($buffer) as $frame) {
                 // Progress of any kind pushes the idle deadline out.
@@ -1552,6 +1577,48 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                     $onEvent($event);
                 }
             }
+        };
+
+        $loop->addReadStream($parentSocket, function ($stream) use ($finalize, $consume): void {
+            $chunk = fread($stream, 65536);
+            if ($chunk === '' || $chunk === false) {
+                $finalize();
+
+                return;
+            }
+
+            $consume($chunk);
+        });
+
+        // B3. EOF is not proof of life or death: every process holding a copy
+        // of the child's end keeps it open, and a fork the turn made (a
+        // parallel tool, a Task sub-agent) inherits it whatever its
+        // close-on-exec flag says. A child that died WITHOUT a result frame
+        // used to leave the turn "in flight" until the last such holder exited
+        // or the idle ceiling fired. So the pid is watched as well: once it is
+        // gone, everything it ever wrote is already in the socket buffer, a
+        // non-blocking drain collects it, and the turn settles from whatever
+        // that drain held — a result frame normally, the no-result rejection
+        // otherwise. No killTree() on that branch: the root is dead, so its
+        // descendants have already been reparented and are no longer a tree
+        // anyone can walk from here.
+        $exitTimer = $loop->addPeriodicTimer(self::EXIT_POLL_SECONDS, function () use (&$settled, $pid, $parentSocket, $consume, $finalize): void {
+            if ($settled) {
+                return;
+            }
+            if (!self::childHasExited($pid)) {
+                return;
+            }
+
+            while (!$settled && is_resource($parentSocket)) {
+                $chunk = @fread($parentSocket, 65536);
+                if ($chunk === '' || $chunk === false) {
+                    break;
+                }
+                $consume($chunk);
+            }
+
+            $finalize();
         });
 
         return $deferred->promise();
@@ -1597,6 +1664,26 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             }
             usleep(self::REAP_POLL_MICROSECONDS);
         }
+    }
+
+    /**
+     * One WNOHANG look at the turn child for {@see completeAsync()}'s exit
+     * watch (B3): true once it is gone, reaping it on the way.
+     *
+     * 0 means still running. $pid means it exited and is reaped now; -1 means
+     * it is no longer waitable (reaped by someone else, e.g. an embedder's
+     * SIGCHLD=SIG_IGN) — gone either way. Never blocks, for the same reason
+     * {@see reapChild()} never does: this runs inside a loop timer.
+     */
+    private static function childHasExited(int $pid): bool
+    {
+        $status = 0;
+        if (pcntl_waitpid($pid, $status, WNOHANG) === 0) {
+            return false;
+        }
+        unset(self::$unreapedChildren[$pid]);
+
+        return true;
     }
 
     /**

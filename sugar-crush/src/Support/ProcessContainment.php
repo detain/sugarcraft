@@ -565,6 +565,86 @@ final class ProcessContainment
     }
 
     /**
+     * Mark $stream's descriptor FD_CLOEXEC so no command spawned afterwards
+     * inherits it; true when the flag is now set.
+     *
+     * WHY THIS IS NEEDED: proc_open() only marks its OWN pipe ends
+     * close-on-exec. A stream_socket_pair() end, a plain fopen() handle — any
+     * other descriptor this process holds — walks into every child it
+     * spawns, and a child holding a socket's write end keeps the reader from
+     * ever seeing EOF (audit B3: a backgrounded `sleep` held a turn's frame
+     * socket open until it exited). PHP exposes neither the fd number nor
+     * fcntl() for a stream, so the fd is found by matching the stream's
+     * dev+ino against every `/proc/self/fd/N`, and the flag is set through
+     * FFI's libc `fcntl(F_SETFD, FD_CLOEXEC)`.
+     *
+     * Best effort by contract and SILENT on every miss: no /proc, no ext-ffi,
+     * FFI disabled by `ffi.enable`, no matching fd — each answers false and
+     * changes nothing, because this runs on fork and spawn paths where a
+     * warning (phpunit's failOnWarning) or a fatal would be worse than the
+     * leak. It replaces the descriptor's flags with FD_CLOEXEC alone, which
+     * is safe because FD_CLOEXEC is the only fd flag Linux defines.
+     *
+     * Only an exec boundary honours the flag: a pcntl_fork() child still
+     * inherits the descriptor, so a caller that must notice a forked holder
+     * dying needs its own liveness check (EngineBackend polls the pid).
+     *
+     * @param resource|mixed $stream
+     */
+    public static function closeOnExec(mixed $stream): bool
+    {
+        if (!\is_resource($stream) || !\extension_loaded('ffi') || !\is_dir('/proc/self/fd')) {
+            return false;
+        }
+
+        $fd = self::descriptorNumber($stream);
+        if ($fd === null) {
+            return false;
+        }
+
+        try {
+            $libc = \FFI::cdef('int fcntl(int fd, int cmd, ...);');
+
+            // 2 = F_SETFD, 1 = FD_CLOEXEC on every Linux ABI.
+            return $libc->fcntl($fd, 2, 1) === 0;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * The fd number behind $stream, found by dev+ino match in
+     * `/proc/self/fd`, or null when no single entry matches.
+     *
+     * @param resource $stream
+     */
+    private static function descriptorNumber($stream): ?int
+    {
+        $own = @\fstat($stream);
+        if (!\is_array($own) || ($own['ino'] ?? 0) === 0) {
+            return null;
+        }
+
+        $match = null;
+        foreach (@\scandir('/proc/self/fd') ?: [] as $entry) {
+            if (!\ctype_digit($entry) || (int) $entry <= 2) {
+                continue;
+            }
+            $candidate = @\stat('/proc/self/fd/' . $entry);
+            if (\is_array($candidate) && $candidate['ino'] === $own['ino'] && $candidate['dev'] === $own['dev']) {
+                if ($match !== null) {
+                    // Two descriptors for one file (a dup): which one this
+                    // stream owns is unknowable from here, so refuse.
+                    return null;
+                }
+                $match = (int) $entry;
+            }
+        }
+
+        return $match;
+    }
+
+    /**
      * First executable named $binary on the process PATH, or '' when absent.
      *
      * An empty PATH element is skipped, not treated as '.': answering a
