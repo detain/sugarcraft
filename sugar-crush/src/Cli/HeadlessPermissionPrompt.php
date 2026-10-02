@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Cli;
 
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Crush\Hooks\HookResult;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Tools\ToolCall;
@@ -420,7 +421,7 @@ final class HeadlessPermissionPrompt
     private function question(ToolCall $call, HookResult $ask): string
     {
         return "\nsugarcrush: a tool call needs your permission.\n"
-            . '  tool: ' . $call->name() . "\n"
+            . '  tool: ' . Sanitize::visibleControls($call->name(), false) . "\n"
             . '  args: ' . $this->renderArguments($call) . "\n"
             . '  why:  ' . $this->oneLine($ask->message) . "\n"
             . '  mode: ' . $this->mode->value . "\n"
@@ -434,27 +435,38 @@ final class HeadlessPermissionPrompt
      */
     private function refusal(ToolCall $call, HookResult $ask): string
     {
+        $name = Sanitize::visibleControls($call->name(), false);
+
         return "sugarcrush: a tool call needs your permission, and stdin is not a terminal,"
             . " so there is nobody to ask — refusing it.\n"
-            . '  tool: ' . $call->name() . "\n"
+            . '  tool: ' . $name . "\n"
             . '  args: ' . $this->renderArguments($call) . "\n"
             . '  why:  ' . $this->oneLine($ask->message) . "\n"
             . '  mode: ' . $this->mode->value . "\n"
             . "  Run this from a terminal to be prompted, or give the run a policy that decides\n"
             . "  without asking: --permission-mode <mode> (bypass-permissions runs everything),\n"
-            . '  or a permissionRules entry for ' . $call->name() . " in .sugar-crush/config.json.\n";
+            . '  or a permissionRules entry for ' . $name . " in .sugar-crush/config.json.\n";
     }
 
     /**
-     * The call's arguments as one line of JSON.
+     * The call's arguments as one line of JSON, every control in it shown.
      *
-     * No extra control-character scrubbing, and that is a measurement rather
-     * than an oversight: `json_encode()` escapes every C0 byte inside a string
-     * as `\uXXXX`, so a model-authored argument carrying a raw `ESC[` cannot
-     * emit a live CSI sequence from here and repaint the question it is being
-     * asked about. `JSON_INVALID_UTF8_SUBSTITUTE` covers the other way this
-     * fails — bytes PHP will not accept as UTF-8, which would otherwise make
-     * `json_encode()` return `false` and blank the one field that matters.
+     * `json_encode()` escapes every C0 byte inside a string as `\uXXXX`, so a
+     * model-authored argument carrying a raw `ESC[` cannot emit a live CSI
+     * sequence from here and repaint the question it is being asked about.
+     * But `JSON_UNESCAPED_UNICODE` — kept, so a CJK or accented command reads
+     * as itself — writes the C1 controls U+0080–U+009F out RAW, and a UTF-8
+     * terminal decodes `\xC2\x9B` to U+009B and runs it as CSI exactly like
+     * `ESC [` (audit R17). The same flag lets a U+202E RIGHT-TO-LEFT OVERRIDE
+     * through, which paints the rest of the line reversed (15b-28). So the
+     * encoded line goes through {@see Sanitize::visibleControls()}, the gate
+     * policy: C1 shows as `<U+009B>`, bidi and zero-width characters as
+     * `<U+202E>`-style markers, and nothing in the field is executed or
+     * hidden. Layout off, so the field stays one line whatever survives.
+     *
+     * `JSON_INVALID_UTF8_SUBSTITUTE` covers the other way this fails — bytes
+     * PHP will not accept as UTF-8, which would otherwise make `json_encode()`
+     * return `false` and blank the one field that matters.
      */
     private function renderArguments(ToolCall $call): string
     {
@@ -466,6 +478,9 @@ final class HeadlessPermissionPrompt
         if ($json === false) {
             return '<arguments could not be rendered>';
         }
+
+        // Before the byte cap, so the cap measures what is actually shown.
+        $json = Sanitize::visibleControls($json, false);
 
         $length = \strlen($json);
         if ($length <= self::MAX_RENDERED_ARGUMENT_BYTES) {
@@ -502,7 +517,9 @@ final class HeadlessPermissionPrompt
     {
         $collapsed = \preg_replace('/\s+/', ' ', $message);
 
-        return \trim($collapsed ?? $message);
+        // The whitespace fold does not cover ESC or C1, and a ScriptHook's
+        // ask text is a script's stdout; shown, never executed (R17).
+        return Sanitize::visibleControls(\trim($collapsed ?? $message), false);
     }
 
     private function write(string $text): void
