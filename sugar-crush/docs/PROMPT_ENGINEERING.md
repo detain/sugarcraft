@@ -136,6 +136,17 @@ other:
   a tag added before the bytes that need it is free, whereas a tag added after leaves a forging
   window. `available-skills` is the fence around the skill listing (slot 10), whose names and
   descriptions are skill authors' text (audit 15d-02).
+- **Attribute-bearing and unterminated tags count.** A roster name matches when whitespace, `/`,
+  `>` or the end of the payload follows it, so `<system-reminder priority="high">`, an attribute
+  list broken across lines and an unterminated `<system-reminder foo="x"` all lose their `<` — a
+  reader model takes each for the channel opening. `<envx>` (another name) and `< env>` (not tag
+  syntax) stay byte-intact.
+- **Chat-template control tokens too (audit 15d-10).** The same rewrite defangs the `<` of a
+  control-token opener, `<|` or `<｜` (the fullwidth U+FF5C bar) with an optional `/` after the
+  `<` — the bars `PromptFence::CONTROL_TOKEN_PIPES` lists — so `<|im_start|>` and `<｜User｜>`
+  reach the prompt as `&lt;|im_start|>` and `&lt;｜User｜>`. The roster guards the fences a model *reads*; these guard the role boundaries a tokenizer
+  *encodes* — a different layer, but the same forgery through the same splice, so it rides the one
+  authority. A `&lt;|` in a prompt rendering is this rewrite, not corruption.
 - **Escape, do not drop.** The rewrite replaces only the leading `<` of a matched tag with its HTML
   entity, so `&lt;/env>` is inert yet information-preserving; deletion silently rewrites commit
   subjects, and looser respellings invite lenient re-matching. Clean payloads render

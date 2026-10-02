@@ -117,6 +117,17 @@ putenv('FORCE_COLOR');
 putenv('CLICOLOR_FORCE');
 
 /*
+ * And for where `/memory import claude` looks (audit R11). Claude Code's own
+ * `CLAUDE_CONFIG_DIR` moves `~/.claude`, and `ForeignMemoryImporter` now
+ * follows it, so a developer running the suite under a relocated Claude Code
+ * would have every default-home import test read THEIR Claude memory instead of
+ * the sandboxed HOME's. ForeignMemoryImporterTest sets both variables itself
+ * when it exercises them, and restores them to unset.
+ */
+putenv('CLAUDE_CONFIG_DIR');
+putenv('CLAUDE_CODE_PROJECT_DIR_NAME');
+
+/*
  * A temp directory for the suite's own throwaway files, and the two things that
  * keep `vendor/bin/phpunit` from garbage-collecting the developer's real /tmp.
  *

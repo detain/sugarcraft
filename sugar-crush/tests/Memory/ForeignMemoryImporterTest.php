@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Memory;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Memory\ForeignMemoryImporter;
 use SugarCraft\Crush\Memory\MemoryStore;
@@ -43,6 +44,8 @@ final class ForeignMemoryImporterTest extends TestCase
 
     protected function tearDown(): void
     {
+        putenv('CLAUDE_CONFIG_DIR');
+        putenv('CLAUDE_CODE_PROJECT_DIR_NAME');
         ini_set('error_log', $this->origErrorLog);
         $_SERVER['HOME'] = $this->origHome;
         putenv('HOME=' . $_SERVER['HOME']);
@@ -191,6 +194,174 @@ final class ForeignMemoryImporterTest extends TestCase
 
         $this->assertSame(1, $count);
         $this->assertSame("From home\n\nbody", $this->store->list('agent')[0]->content());
+    }
+
+    // ---- audit R11: Claude Code's CLAUDE_CONFIG_DIR / CLAUDE_CODE_PROJECT_DIR_NAME ----
+
+    /**
+     * With `CLAUDE_CONFIG_DIR` set Claude Code keeps `projects/` there, not
+     * in `~/.claude`; the import looked only in the latter and found nothing
+     * (or, as here, a stale tree left behind in `~/.claude`).
+     */
+    public function testClaudeConfigDirReplacesTheDefaultClaudeHome(): void
+    {
+        $_SERVER['HOME'] = $this->tempDir . '/fake-home';
+        putenv('HOME=' . $_SERVER['HOME']);
+        file_put_contents(
+            $this->claudeMemoryDir($this->projectRoot, $this->tempDir . '/fake-home/.claude') . '/old.md',
+            "---\ndescription: Stale tree in ~/.claude\n---\nwrong\n",
+        );
+        file_put_contents(
+            $this->claudeMemoryDir($this->projectRoot, $this->tempDir . '/relocated') . '/new.md',
+            "---\ndescription: From the relocated config dir\n---\nright\n",
+        );
+        putenv('CLAUDE_CONFIG_DIR=' . $this->tempDir . '/relocated/');
+
+        $this->assertSame(1, $this->importer->importClaudeCode($this->projectRoot));
+        $this->assertSame(['From the relocated config dir'], $this->importedTitles());
+        $this->assertSame([], $this->importer->refusedDirectories());
+    }
+
+    /**
+     * While `CLAUDE_CONFIG_DIR` is set, `CLAUDE_CODE_PROJECT_DIR_NAME` is the
+     * project directory's name outright -- Claude Code writes nowhere else, so
+     * the slug directory is not consulted even when it exists.
+     */
+    public function testProjectDirNameReplacesTheSlugWhileClaudeConfigDirIsSet(): void
+    {
+        $config = $this->tempDir . '/relocated';
+        file_put_contents(
+            $this->memoryDirAtSlug('my_project-1', $config) . '/named.md',
+            "---\ndescription: From the named project dir\n---\nright\n",
+        );
+        file_put_contents(
+            $this->claudeMemoryDir($this->projectRoot, $config) . '/slug.md',
+            "---\ndescription: From the slug dir\n---\nwrong\n",
+        );
+        putenv('CLAUDE_CONFIG_DIR=' . $config);
+        putenv('CLAUDE_CODE_PROJECT_DIR_NAME=my_project-1');
+
+        $this->assertSame(1, $this->importer->importClaudeCode($this->projectRoot));
+        $this->assertSame(['From the named project dir'], $this->importedTitles());
+    }
+
+    /**
+     * Claude Code ignores `CLAUDE_CODE_PROJECT_DIR_NAME` unless
+     * `CLAUDE_CONFIG_DIR` is set, and so does the import: the slug under
+     * `~/.claude` is where Claude Code wrote.
+     */
+    public function testProjectDirNameIsIgnoredWithoutClaudeConfigDir(): void
+    {
+        $_SERVER['HOME'] = $this->tempDir . '/fake-home';
+        putenv('HOME=' . $_SERVER['HOME']);
+        $claudeHome = $this->tempDir . '/fake-home/.claude';
+        file_put_contents(
+            $this->claudeMemoryDir($this->projectRoot, $claudeHome) . '/slug.md',
+            "---\ndescription: From the slug dir\n---\nright\n",
+        );
+        file_put_contents(
+            $this->memoryDirAtSlug('named', $claudeHome) . '/named.md',
+            "---\ndescription: From the named dir\n---\nwrong\n",
+        );
+        putenv('CLAUDE_CODE_PROJECT_DIR_NAME=named');
+
+        $this->assertSame(1, $this->importer->importClaudeCode($this->projectRoot));
+        $this->assertSame(['From the slug dir'], $this->importedTitles());
+    }
+
+    /**
+     * A name Claude Code refuses (not `[A-Za-z0-9_-]{1,64}`, or a reserved
+     * Windows device name) is ignored the way Claude Code ignores it: the
+     * slug applies. The shape rule is also what keeps the value one path
+     * segment -- `../x` never reaches the filesystem.
+     */
+    #[DataProvider('namesClaudeCodeIgnores')]
+    public function testAProjectDirNameClaudeCodeWouldIgnoreFallsBackToTheSlug(string $name): void
+    {
+        $config = $this->tempDir . '/relocated';
+        file_put_contents(
+            $this->claudeMemoryDir($this->projectRoot, $config) . '/slug.md',
+            "---\ndescription: From the slug dir\n---\nright\n",
+        );
+        putenv('CLAUDE_CONFIG_DIR=' . $config);
+        putenv('CLAUDE_CODE_PROJECT_DIR_NAME=' . $name);
+
+        $this->assertSame(1, $this->importer->importClaudeCode($this->projectRoot));
+        $this->assertSame(['From the slug dir'], $this->importedTitles());
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function namesClaudeCodeIgnores(): iterable
+    {
+        yield 'empty' => [''];
+        yield 'parent traversal' => ['../escape'];
+        yield 'separator' => ['a/b'];
+        yield 'dot' => ['my.project'];
+        yield 'too long' => [str_repeat('a', 65)];
+        yield 'reserved device name' => ['CON'];
+        yield 'reserved port name' => ['lpt1'];
+        yield 'trailing newline' => ["name\n"];
+    }
+
+    /**
+     * A relative `CLAUDE_CONFIG_DIR` would resolve inside the checkout the
+     * session runs in -- a tree the repository chooses -- so it is refused,
+     * named, and nothing is imported (not even from `~/.claude`).
+     */
+    public function testARelativeClaudeConfigDirIsRefused(): void
+    {
+        $_SERVER['HOME'] = $this->tempDir . '/fake-home';
+        putenv('HOME=' . $_SERVER['HOME']);
+        file_put_contents(
+            $this->claudeMemoryDir($this->projectRoot, $this->tempDir . '/fake-home/.claude') . '/a.md',
+            "---\ndescription: From home\n---\nbody\n",
+        );
+        putenv('CLAUDE_CONFIG_DIR=.claude');
+
+        $this->assertSame(0, $this->importer->importClaudeCode($this->projectRoot));
+        $this->assertSame([], $this->store->list('agent'));
+        $refused = $this->importer->refusedDirectories();
+        $this->assertSame(['$CLAUDE_CONFIG_DIR (.claude)'], array_keys($refused));
+        $this->assertStringContainsString('relative path', $refused['$CLAUDE_CONFIG_DIR (.claude)']);
+    }
+
+    /**
+     * The derived home's gate, applied to the directory the variable names: a
+     * world-writable one holds whatever another local user put there.
+     */
+    public function testAWorldWritableClaudeConfigDirIsRefused(): void
+    {
+        $config = $this->tempDir . '/relocated';
+        file_put_contents(
+            $this->claudeMemoryDir($this->projectRoot, $config) . '/planted.md',
+            "---\ndescription: Planted\n---\nATTACKER-MEMORY-BODY\n",
+        );
+        chmod($config, 0o777);
+        putenv('CLAUDE_CONFIG_DIR=' . $config);
+
+        $this->assertSame(0, $this->importer->importClaudeCode($this->projectRoot));
+        $this->assertSame([], $this->store->list('agent'));
+        $this->assertStringContainsString(
+            'world-writable',
+            $this->importer->refusedDirectories()['$CLAUDE_CONFIG_DIR (' . $config . ')'] ?? '',
+        );
+    }
+
+    /**
+     * An explicit `$claudeHome` is the caller naming the directory: the
+     * environment does not redirect it.
+     */
+    public function testAnExplicitClaudeHomeIsNotRedirectedByTheEnvironment(): void
+    {
+        file_put_contents(
+            $this->claudeMemoryDir($this->projectRoot) . '/a.md',
+            "---\ndescription: From the explicit home\n---\nbody\n",
+        );
+        putenv('CLAUDE_CONFIG_DIR=' . $this->tempDir . '/elsewhere');
+        putenv('CLAUDE_CODE_PROJECT_DIR_NAME=named');
+
+        $this->assertSame(1, $this->importer->importClaudeCode($this->projectRoot, $this->tempDir . '/claude'));
+        $this->assertSame(['From the explicit home'], $this->importedTitles());
     }
 
     /**

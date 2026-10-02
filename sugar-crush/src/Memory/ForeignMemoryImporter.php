@@ -72,6 +72,31 @@ final class ForeignMemoryImporter
     private const CLAUDE_SLUG_MAX_LENGTH = 200;
 
     /**
+     * Claude Code's own relocation of `~/.claude` (audit R11): with it set,
+     * Claude Code keeps `projects/` -- and so the memory this class imports --
+     * under that directory instead, and an import that looked only in
+     * `~/.claude` found nothing.
+     */
+    private const CLAUDE_CONFIG_DIR_ENV = 'CLAUDE_CONFIG_DIR';
+
+    /**
+     * Claude Code's override of the per-project directory NAME (audit R11),
+     * replacing the slug {@see claudeProjectSlug()} computes. Claude Code
+     * 2.1.287 honours it only while {@see CLAUDE_CONFIG_DIR_ENV} is set, and
+     * only for a name matching {@see CLAUDE_PROJECT_DIR_NAME_PATTERN} that is
+     * not a reserved Windows device name; otherwise it is ignored and the slug
+     * is used. This class reads it under exactly those rules, so it looks
+     * where Claude Code wrote.
+     */
+    private const CLAUDE_PROJECT_DIR_NAME_ENV = 'CLAUDE_CODE_PROJECT_DIR_NAME';
+
+    /** Claude Code's accepted shape for {@see CLAUDE_PROJECT_DIR_NAME_ENV}. */
+    private const CLAUDE_PROJECT_DIR_NAME_PATTERN = '/\A[A-Za-z0-9_-]{1,64}\z/D';
+
+    /** Names Claude Code refuses for {@see CLAUDE_PROJECT_DIR_NAME_ENV}. */
+    private const WINDOWS_RESERVED_NAME_PATTERN = '/\A(?:con|prn|aux|nul|com[0-9]|lpt[0-9])\z/Di';
+
+    /**
      * Directories and entries the most recent import declined to read, path as
      * spelled => why — see {@see refusedDirectories()}.
      *
@@ -138,6 +163,16 @@ final class ForeignMemoryImporter
      * directory rather than this class deriving one, which is what the
      * parameter is for.
      *
+     * CLAUDE CODE'S OWN RELOCATIONS ARE HONOURED (audit R11) when no
+     * `$claudeHome` is passed. `CLAUDE_CONFIG_DIR` replaces `~/.claude`, as
+     * it does for Claude Code; it is gated like the derived home, because a
+     * relative value names a directory inside whatever checkout the session
+     * runs in and a world-writable or foreign-owned one holds whatever another
+     * account put there ({@see configDirRefusal()}). While it is set,
+     * `CLAUDE_CODE_PROJECT_DIR_NAME` replaces the slug outright — no slug
+     * fallback, since Claude Code then writes nowhere else
+     * ({@see claudeProjectDirName()}).
+     *
      * @param  string      $projectRoot Absolute project path, as Claude Code slugs it.
      * @param  string|null $claudeHome  Override for `~/.claude` (tests, non-default installs).
      * @return int Number of entries imported.
@@ -145,6 +180,20 @@ final class ForeignMemoryImporter
     public function importClaudeCode(string $projectRoot, ?string $claudeHome = null): int
     {
         $this->refusedDirectories = [];
+        $projectDirName = null;
+
+        $configDir = $claudeHome === null ? self::claudeConfigDir() : null;
+        if ($configDir !== null) {
+            $refusal = self::configDirRefusal($configDir);
+            if ($refusal !== null) {
+                $this->refusedDirectories['$' . self::CLAUDE_CONFIG_DIR_ENV . ' (' . $configDir . ')'] = $refusal;
+
+                return 0;
+            }
+
+            $claudeHome = $configDir;
+            $projectDirName = self::claudeProjectDirName();
+        }
 
         if ($claudeHome === null) {
             $owned = HomeDirectory::owned();
@@ -160,7 +209,9 @@ final class ForeignMemoryImporter
             $claudeHome = $owned . '/.claude';
         }
 
-        $dir = $this->claudeMemoryDirectory($claudeHome, $projectRoot);
+        $dir = $projectDirName !== null
+            ? rtrim($claudeHome, '/') . '/projects/' . $projectDirName . '/memory'
+            : $this->claudeMemoryDirectory($claudeHome, $projectRoot);
 
         $imported = 0;
 
@@ -323,6 +374,92 @@ final class ForeignMemoryImporter
         }
 
         return $files;
+    }
+
+    /**
+     * `CLAUDE_CONFIG_DIR`, trimmed, NFC-normalised as Claude Code normalises
+     * it, or null when unset or blank -- a blank value naming the current
+     * directory is never what someone exporting an empty variable meant.
+     */
+    private static function claudeConfigDir(): ?string
+    {
+        $value = getenv(self::CLAUDE_CONFIG_DIR_ENV);
+        if (!\is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        $value = trim($value);
+        if (class_exists(\Normalizer::class)) {
+            $normalized = \Normalizer::normalize($value, \Normalizer::FORM_C);
+            $value = \is_string($normalized) ? $normalized : $value;
+        }
+
+        return rtrim($value, '/') ?: '/';
+    }
+
+    /**
+     * Why `CLAUDE_CONFIG_DIR` = $dir must not be read, or null when it may.
+     *
+     * The same three refusals {@see HomeDirectory::owned()} makes of a derived
+     * home, applied to the directory the variable names: a RELATIVE value
+     * resolves against the process's working directory -- the checkout,
+     * whose files a clone chooses -- and a WORLD-WRITABLE or FOREIGN-OWNED
+     * directory holds whatever the last local user to write there put in it,
+     * and the bodies imported from it go straight into the model's context.
+     * A directory that does not exist is not refused: there is simply nothing
+     * to import, as for a user who never ran Claude Code.
+     */
+    private static function configDirRefusal(string $dir): ?string
+    {
+        $absolute = str_starts_with($dir, '/')
+            || str_starts_with($dir, '\\')
+            || preg_match('#^[A-Za-z]:[\\\\/]#', $dir) === 1;
+        if (!$absolute) {
+            return 'it is a relative path, which would resolve inside whatever directory this session runs in '
+                . '— the checkout — so the memory read would be the repository\'s choice rather than yours; '
+                . 'set it to an absolute path';
+        }
+
+        $real = realpath($dir);
+        if ($real === false || !is_dir($real)) {
+            return null;
+        }
+
+        $perms = @fileperms($real);
+        if ($perms === false || ($perms & 0o002) !== 0) {
+            return 'it is world-writable, so a memory tree found there would be whatever the last local user to '
+                . 'write in it put there, and its bodies go straight into the model\'s context';
+        }
+
+        if (\function_exists('posix_geteuid')) {
+            $owner = @fileowner($real);
+            if ($owner === false || $owner !== posix_geteuid()) {
+                return 'it is owned by another account, so a memory tree found there is not one you wrote, and its '
+                    . 'bodies go straight into the model\'s context';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * `CLAUDE_CODE_PROJECT_DIR_NAME` when Claude Code would honour it, else
+     * null (the slug applies). Only called once `CLAUDE_CONFIG_DIR` is
+     * known to be set, the first of Claude Code's conditions; the shape and
+     * reserved-name checks are the other two. The shape check is also what
+     * keeps the value a single path segment here: no separator, no `..`.
+     */
+    private static function claudeProjectDirName(): ?string
+    {
+        $value = getenv(self::CLAUDE_PROJECT_DIR_NAME_ENV);
+        if (!\is_string($value)
+            || preg_match(self::CLAUDE_PROJECT_DIR_NAME_PATTERN, $value) !== 1
+            || preg_match(self::WINDOWS_RESERVED_NAME_PATTERN, $value) === 1
+        ) {
+            return null;
+        }
+
+        return $value;
     }
 
     /**

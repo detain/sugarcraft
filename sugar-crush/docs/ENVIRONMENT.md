@@ -13,6 +13,8 @@ Two groups are listed separately because they behave differently:
   `ProviderFactory` builds a provider's *default* config. They are the
   upstream vendors' own variable names, not ours, so they are spelled exactly
   as the vendor SDKs spell them.
+- **Claude Code variables** are Claude Code's own relocation switches, read
+  only by `/memory import claude` so it finds the memory Claude Code wrote.
 
 Environment variables are the highest-precedence configuration tier: they win
 over a choice persisted to `~/.sugar-crush/config.json` — written by the Ctrl+P
@@ -183,6 +185,19 @@ roles), resolved by `aws/aws-sdk-php` rather than by SugarCrush.
 `CustomProvider::openAiCompatibleFromEnv()`, but that is a caller-supplied
 parameter — pass a different name and that variable is read instead. It is
 not consulted by the `custom` provider type's default config.
+
+---
+
+## Claude Code variables
+
+Read by `/memory import claude` (`ForeignMemoryImporter`) so the import looks
+where Claude Code itself keeps a project's memory. They are Claude Code's own
+names and follow Claude Code's rules (audit R11):
+
+| Variable | Default when unset | Description |
+|----------|--------------------|-------------|
+| `CLAUDE_CONFIG_DIR` | `~/.claude` | Claude Code's relocated config directory; the import reads `<dir>/projects/<slug>/memory/` instead of `~/.claude/projects/<slug>/memory/`. Blank counts as unset. A **relative** value is refused (it would resolve inside the checkout the session runs in, a tree the repository chooses), and so is a directory that is world-writable or owned by another account — the same gate the derived `~/.claude` faces; the refusal is named in the command's reply and nothing is imported. |
+| `CLAUDE_CODE_PROJECT_DIR_NAME` | the project slug (the absolute path with every non-alphanumeric character turned into `-`) | Replaces the slug outright — `<config dir>/projects/<name>/memory/`, with no fallback to the slug directory. As in Claude Code, it is honoured **only while `CLAUDE_CONFIG_DIR` is set**, and only for a name of 1–64 letters, digits, `_` and `-` that is not a reserved Windows device name (`CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`); otherwise it is ignored and the slug applies, which is where Claude Code wrote. |
 
 ---
 

@@ -245,8 +245,14 @@ So `MemoryBlock::renderEntry()` runs every assembled note line through
 authority owning the prompt's fence-tag roster — `env`, `project-memory`,
 `repo-map`, `project-instructions`, `system-reminder`, `user-rules`,
 `prior-summary`, `harness-injected`, `available-skills` — and its `escape()` rewrites only the leading
-`<` of a recognised open/close tag to `&lt;`, touches nothing else, and is
-idempotent, and the promise it makes is body-level: a clean note body passes
+`<` of a recognised open/close tag to `&lt;`. A tag carrying attributes counts,
+however it is spelled — `<system-reminder priority="high">`, an attribute list broken
+across lines, an opener with no `>` at all — because a model reads each as the
+channel opening. The same rewrite defangs chat-template control tokens (audit
+15d-10): the `<` of `<|` or `<｜` (the fullwidth U+FF5C bar), with an optional
+`/`, so `<|im_start|>` and `<｜User｜>` reach the prompt as `&lt;|im_start|>` and
+`&lt;｜User｜>` — a `&lt;|` in a note's prompt rendering is this rewrite. Beyond those it touches
+nothing else (`3 < 4` stays as written), it is idempotent, and the promise it makes is body-level: a clean note body passes
 through byte-for-byte unchanged before the line prefix is applied, while a note
 forging a fence arrives as `&lt;/project-memory>` and cannot close the block it
 lives in (`MemoryBlockTest::testANoteForgingItsOwnClosingFenceRendersOneBalancedFence`,
@@ -292,6 +298,13 @@ intentional.
 The gate is not the wiring: `{projectRoot}/.opencode/memory` is a path a *cloned
 repository* chooses, so the directory is contained against the checkout and each
 `*.md` against the directory it was listed from.
+
+Claude Code's own relocations are followed (audit R11): `CLAUDE_CONFIG_DIR`
+replaces `~/.claude`, and while it is set `CLAUDE_CODE_PROJECT_DIR_NAME` replaces
+`<slug>` — under Claude Code's rules for both, which
+[`ENVIRONMENT.md`](ENVIRONMENT.md#claude-code-variables) tabulates. A relative,
+world-writable or foreign-owned `CLAUDE_CONFIG_DIR` is refused, like the derived
+home, and the refusal is named in the reply.
 
 ---
 
