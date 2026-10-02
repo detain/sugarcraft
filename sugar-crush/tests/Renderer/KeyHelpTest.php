@@ -1413,12 +1413,15 @@ final class KeyHelpTest extends TestCase
 
             $bar = end($openLines);
             $this->assertNotSame(end($closedLines), $bar, "the bar must say something at {$cols}x{$rows}");
-            $this->assertStringContainsString('window too small', (string) $bar);
-            $this->assertLessThanOrEqual(
-                Width::of((string) end($closedLines)),
-                Width::of((string) $bar),
-                'the cue may not be wider than the bar it replaces — the bar is never truncated',
+            // Fitted to the terminal like the bar is (audit 15b-09): the whole
+            // cue where it fits, and "? closes" cut to the terminal where
+            // nothing does — the part a user who sees no reference needs.
+            $this->assertSame(
+                $cols >= 33 ? 'keys: window too small · ? closes' : Width::truncate('? closes', $cols),
+                (string) $bar,
+                "the too-small cue at {$cols}x{$rows}",
             );
+            $this->assertLessThanOrEqual($cols, Width::of((string) $bar), 'the cue is held to the terminal');
         }
 
         // One row taller / one column wider than the smallest refusal, it does
@@ -2394,9 +2397,9 @@ final class KeyHelpTest extends TestCase
      * state {@see Renderer::KEY_HELP_TOO_SMALL} exists to avoid, reached a
      * different way.
      *
-     * The width bound is asserted, not assumed: the bar is the one line the
-     * renderer never truncates, so a cue wider than what it replaces would make
-     * a narrow terminal overflow by MORE than it already does.
+     * The width bound is asserted, not assumed: since audit 15b-09 the cue is
+     * fitted to the terminal like the bar, taking a shorter form that still
+     * says a prompt is waiting where the whole cue does not fit.
      */
     public function testTheBarAnnouncesAPromptTheReferenceIsCovering(): void
     {
@@ -2405,25 +2408,19 @@ final class KeyHelpTest extends TestCase
         foreach ([[100, 30], [80, 24], [54, 10], [20, 30], [5, 30]] as [$cols, $rows]) {
             $sized = $blocked->withSize($cols, $rows);
 
-            $this->assertStringContainsString(
-                'permission waiting',
-                $this->body($sized->withKeyHelp(0)),
-                "the frame must say a prompt is waiting at {$cols}x{$rows}",
-            );
-
             // The bar itself, not the frame's last line: Veil widens the
             // backdrop to the overlay's width, so a composited frame's last
             // line carries padding this comparison is not about.
             $bar = $this->statusBar($sized->withKeyHelp(0));
             $replaced = $this->statusBar($sized);
 
-            $this->assertNotSame($replaced, $bar);
-            $this->assertLessThanOrEqual(
-                Width::of($replaced),
-                Width::of($bar),
-                "the cue may not be wider than the bar it replaces at {$cols}x{$rows}"
-                . ' — the bar is never truncated',
+            $this->assertStringContainsString(
+                $cols >= 18 ? 'waiting' : '? clo',
+                $this->body($sized->withKeyHelp(0)),
+                "the frame must say a prompt is waiting at {$cols}x{$rows}",
             );
+            $this->assertNotSame($replaced, $bar);
+            $this->assertLessThanOrEqual($cols, Width::of($bar), "the cue over-ran the terminal at {$cols}x{$rows}");
         }
 
         // And it is the reference that triggers it: with the reference closed
@@ -2450,7 +2447,10 @@ final class KeyHelpTest extends TestCase
     {
         $blocked = $this->blockedOnPermission();
 
-        foreach ([[4, 30], [3, 30], [80, 4], [80, 3]] as [$cols, $rows]) {
+        // Wide terminals only: below 18 columns both cues come down to the
+        // same "? closes", so the bar cannot show which one won. The 5x5
+        // floor is crossed through `rows <= 4` here instead of `cols <= 4`.
+        foreach ([[40, 4], [33, 3], [80, 4], [80, 3]] as [$cols, $rows]) {
             $open = $blocked->withSize($cols, $rows)->withKeyHelp(0);
 
             // Fixture: both conditions really do hold here, so this is a
@@ -2461,13 +2461,13 @@ final class KeyHelpTest extends TestCase
 
             $bar = $this->statusBar($open);
             $this->assertStringContainsString(
-                'window too small',
+                'too small',
                 $bar,
                 "the more urgent cue must win at {$cols}x{$rows}: nothing is painted at all, and a bar "
                 . 'that says only "permission waiting" describes a modal the user cannot even see is there',
             );
             $this->assertStringNotContainsString(
-                'permission waiting',
+                'waiting',
                 $bar,
                 'the bar is one un-wrappable line — two messages on it would not fit, which is why this '
                 . 'is a priority and not a concatenation',
@@ -2494,7 +2494,8 @@ final class KeyHelpTest extends TestCase
      * `stripZoneMarkers()` — the columns actually painted.
      * Domain: the four sizes below, every one of them under
      * `keyHelpGeometry()`'s documented 5x5 floor, which is the entire set of
-     * shapes in which this cue is ever emitted.
+     * shapes in which this cue is ever emitted. On the 4- and 1-column ones
+     * the cue is "? closes" cut to the terminal (audit 15b-09).
      */
     public function testTheTooSmallCueIsNeverWiderThanTheBarItReplaces(): void
     {
@@ -2504,65 +2505,55 @@ final class KeyHelpTest extends TestCase
             $cue = $this->statusBar($sized->withKeyHelp(0));
             $replaced = $this->statusBar($sized);
 
-            $this->assertStringContainsString(
-                'window too small',
+            $this->assertSame(
+                $cols >= 33 ? 'keys: window too small · ? closes' : Width::truncate('? closes', $cols),
                 $cue,
                 "fixture: the cue is what the bar says at {$cols}x{$rows}",
             );
+            $this->assertLessThanOrEqual($cols, Width::of($cue), "the cue over-ran the terminal at {$cols}x{$rows}");
             $this->assertLessThanOrEqual(
                 Width::of($replaced),
                 Width::of($cue),
-                "the cue may not be wider than the bar it replaces at {$cols}x{$rows} — the bar is the "
-                . 'one line this renderer never truncates, so a wider cue would overflow by more than '
-                . 'the bar already does',
+                "the cue may not be wider than the bar it replaces at {$cols}x{$rows}: both are fitted to "
+                . 'the terminal now (audit 15b-09), and on these sizes the bar is at least as wide',
             );
         }
     }
 
     /**
-     * The same bound as a SWEEP over terminal SIZES rather than four samples, and
-     * the reason {@see Renderer::renderStatusBar()}'s comment no longer quotes a
-     * width table: the range in that comment was wrong in two consecutive rounds,
-     * because prose has nothing reading it back. These are the figures the
-     * comment used to state.
+     * The idle bar and the too-small cue as a SWEEP over terminal SIZES rather
+     * than four samples, and the reason {@see Renderer::renderStatusBar()}'s
+     * comment carries no width table: the range in that comment was wrong in
+     * two consecutive rounds, because prose has nothing reading it back.
      *
-     * **This sweep does not bound the cue, and a previous round read it as if it
-     * did.** Its fixture is idle, and the idle bar is the WIDE one. The bar the
-     * cue actually replaces where a user meets it is 18 columns narrower —
-     * {@see testTheCuesFitTheNarrowestBarAnyAppStateCanProduce()} is the sweep
-     * that covers that, over app states rather than sizes. What this one is for is
-     * the column/row structure of the idle bar, which is a different fact.
+     * Its fixture is idle, so it sees only the wide bar;
+     * {@see testTheCuesFitTheTerminalInEveryAppState()} sweeps app states.
      *
      * Instrument: {@see statusBar()}, i.e. `Width::of` after
      * `stripZoneMarkers()`.
      * Domain: cols 1-400 against rows {1,2,3,4,5,6,10,20,30,50,80,200} on
      * {@see chat()}'s fixture — a two-message chat over `EchoBackend`, idle, no
-     * prompt pending. 9,600 renders, well under a second.
+     * prompt pending. 9,600 renders.
      *
-     * Note the split inside that domain, which is itself a correction: the cue
-     * is emitted only where `keyHelpGeometry()` returns null, i.e. `cols <= 4`
-     * or `rows <= 4`. Everywhere else the box fits and the bar with the
-     * reference OPEN is just the ordinary bar. Writing this test as "the cue is
-     * always 33 across the sweep" failed on the first run for exactly that
-     * reason, which is the same domain slip in miniature that put a wrong width
-     * range in the renderer's comment twice.
+     * The cue is emitted only where `keyHelpGeometry()` returns null, i.e.
+     * `cols <= 4` or `rows <= 4`. Everywhere else the box fits and the bar with
+     * the reference OPEN is just the ordinary bar.
      *
      * What it pins, each over the part of the domain named:
      *
-     * 1. wherever the cue IS emitted, it is a CONSTANT 33 columns — it carries
-     *    no readout, so nothing in it varies with the terminal;
-     * 2. the IDLE bar takes exactly the four values 54/62/65/75 over this sweep,
-     *    so 54 is the floor **of the idle bar on this fixture** — not of the bar
-     *    generally, which is the domain the word "everywhere" used to smuggle in
-     *    here;
-     * 3. the bar responds to COLUMNS ONLY. That is the half the old comment got
-     *    backwards when it said the bar "is still 54 columns" wherever this cue
-     *    fires: `rows <= 4` fires it too, and at 100x4 the bar is 75.
+     * 1. wherever the cue IS emitted, it fits the terminal, and on a terminal
+     *    of 33 columns or more it is the whole 33-column cue (audit 15b-09: on a
+     *    narrower one it takes a shorter form, then is cut);
+     * 2. the IDLE bar fits the terminal at every size, and from 54 columns up
+     *    takes exactly the four values 54/62/65/75 it always had (below 54 it
+     *    used to stay 54 wide and over-run);
+     * 3. the bar responds to COLUMNS ONLY: `rows <= 4` fires the cue too, but
+     *    the bar with the reference closed is the same at every row count.
      */
-    public function testTheBarIsNeverNarrowerThanTheTooSmallCueAtAnySize(): void
+    public function testTheIdleBarTracksColumnsOnlyAndFitsEverySize(): void
     {
-        $cueWidths = [];
-        $barWidths = [];
+        $fullCueWidths = [];
+        $wideBars = [];
         $cueSizes = 0;
         /** @var array<int, array<int, true>> $barByCol */
         $barByCol = [];
@@ -2572,17 +2563,25 @@ final class KeyHelpTest extends TestCase
                 $sized = $this->chat('', $cols, $rows);
 
                 $withReference = $this->statusBar($sized->withKeyHelp(0));
-                if (str_contains($withReference, 'window too small')) {
+                // Every form of the cue says "too small" or leads with "?",
+                // and no ordinary bar does either.
+                if (str_contains($withReference, 'too small') || str_starts_with($withReference, '?')) {
                     ++$cueSizes;
-                    $cueWidths[Width::of($withReference)] = true;
                     $this->assertTrue(
                         $cols <= 4 || $rows <= 4,
                         "the cue may only fire under keyHelpGeometry()'s 5x5 floor ({$cols}x{$rows})",
                     );
+                    $this->assertLessThanOrEqual($cols, Width::of($withReference), "the cue over-ran {$cols}x{$rows}");
+                    if ($cols >= 33) {
+                        $fullCueWidths[Width::of($withReference)] = true;
+                    }
                 }
 
                 $bar = Width::of($this->statusBar($sized));
-                $barWidths[$bar] = true;
+                $this->assertLessThanOrEqual($cols, $bar, "the idle bar over-ran {$cols}x{$rows}");
+                if ($cols >= 54) {
+                    $wideBars[$bar] = true;
+                }
                 $barByCol[$cols][$bar] = true;
             }
         }
@@ -2590,182 +2589,92 @@ final class KeyHelpTest extends TestCase
         // 4 rows x 400 cols, plus 400 cols' worth of the cols<=4 band at the
         // other 8 row values: 1600 + 32.
         $this->assertSame(1632, $cueSizes, 'fixture: the cue really is emitted over the band claimed');
-        $this->assertSame([33], array_keys($cueWidths), 'the cue carries no readout, so it cannot vary');
+        $this->assertSame([33], array_keys($fullCueWidths), 'with room for it, the cue is the whole 33 columns');
 
-        $bars = array_keys($barWidths);
+        $bars = array_keys($wideBars);
         sort($bars);
-        $this->assertSame([54, 62, 65, 75], $bars, 'the bar widens in four steps as the readouts fit');
-        // Deliberately NOT an `assertLessThanOrEqual(min($bars), 33)` here: with
-        // the four values hard-coded on the line above, such an assertion can
-        // never be the one that fires, so counting it as coverage of the cue's
-        // margin was double-counting. The margin is asserted where it can bite, in
-        // testTheCuesFitTheNarrowestBarAnyAppStateCanProduce(), against the bar
-        // this fixture cannot produce.
+        $this->assertSame([54, 62, 65, 75], $bars, 'from 54 columns up the bar widens in four steps as the readouts fit');
 
         // Rows do not enter it: one width per column across every row tried.
-        // Without this, "the bar does not shrink with the terminal" is the
-        // unverified sentence that produced the wrong claim.
         foreach ($barByCol as $cols => $seen) {
             $this->assertCount(1, $seen, "the bar's width must not depend on rows (cols={$cols})");
         }
     }
 
     /**
-     * The bound that actually protects the frame, swept over APP STATES because
-     * that — not the terminal size — is what the status bar's width depends on.
+     * The bound that actually protects the frame, swept over APP STATES as well
+     * as sizes, because the status bar's width depends on the state: the idle
+     * bar carries the 49-cell processing hint, an in-flight turn or a pending
+     * permission prompt the 31-cell cancel hint.
      *
-     * The sibling sweep above ranges over 9,600 terminal sizes and never sees a bar
-     * narrower than 54, because its fixture is idle and cannot become anything
-     * else. Both cues, however, are substituted for the bar in states the idle
-     * fixture cannot reach:
+     * Until audit 15b-09 this pinned a MARGIN: the bar was never truncated, so
+     * each cue had to be narrower than the narrowest bar it could replace (33
+     * and 35 columns against the 36-column in-flight bar) or it would deepen
+     * the bar's over-run on a narrow terminal. Now every bar and both cues are
+     * fitted to the terminal, so the invariant is stated directly: in every
+     * (state, size) pair, the bar with the reference closed and the bar with
+     * it open both fit `$cols`.
      *
-     * - a turn in flight and a pending permission prompt both render
-     *   `0% · ⠴ thinking… · Esc Esc to cancel` — **36** columns at its narrowest —
-     *   because `requestPermission()` sets `inFlight` true;
-     * - `KEY_HELP_TOO_SMALL` (33) replaces it whenever `cols <= 4 || rows <= 4`,
-     *   which a small terminal reaches in those states as readily as when idle:
-     *   **3 columns of margin, not 21**;
-     * - `KEY_HELP_OVER_PROMPT` (35) fires *only* while a prompt pends, i.e. only
-     *   ever against that same 36-column bar: **1 column of margin.** It is the
-     *   tighter of the two and the sweep that quoted 54 could not see it at all.
-     *
-     * So this asserts the substitution PER (state, size) — cue width against the
-     * width the very same state and size renders with the reference closed — rather
-     * than against an aggregate floor, and separately records the aggregate floor
-     * and the SET of states that attain it (a set, not one state: two do, and the
-     * old single-state pin was reading `barStates()`'s ordering back as a fact).
-     *
-     * NOT the only test that reads `requestPermission()`'s `'inFlight' => true`,
-     * and the commit that added this one claimed it was "caught by the new test
-     * alone". Measured over the WHOLE suite, flipping that flag to `false` reds
-     * three tests: this one,
-     * {@see testThePromptAndTheReferenceCannotBothBeRaisedByRealInput()}, and
-     * `ChatTest::testAskHookSuspendsTheTurnInsteadOfRunningOrDenyingTheCall()`,
-     * which asserts it directly and reaches the prompt through a real `PreToolUse`
-     * hook. `ChatTest` was already one of the two domains that commit measured, so
-     * the counter-example was inside the measured universe and the exclusivity
-     * claim was avoidable. What this test adds over `ChatTest`'s is not that the
-     * flag is set but what it COSTS: the bar the flag selects is the narrow one the
-     * cue has to fit inside — and the margin assertion is what reports it here
-     * (measured, `19 is not identical to 1`, because with the flag off the prompt
-     * state renders the wide idle bar).
+     * Detection is structural rather than by text, because on a narrow
+     * terminal both cues come down to the same cut "? closes": the too-small
+     * cue fires where `keyHelpGeometry()` has no room (`cols <= 4 || rows <= 4`),
+     * the prompt cue wherever else a prompt pends.
      *
      * Instrument: {@see statusBar()}, i.e. `Width::of` after `stripZoneMarkers()`.
      * Domain: the nine states in {@see barStates()} against cols 1-400 × rows
-     * {1,4,5,30} — 14,400 (state, size) pairs, chosen so both cue branches and both
-     * geometry branches are crossed with every state. What the corpus still cannot
-     * produce is a translated bar: every figure here is measured against the
-     * hardcoded English literals, which is the caveat
-     * {@see Renderer::KEY_HELP_OVER_PROMPT}'s docblock already carries.
-     *
-     * MEASURED 2026-09-21, PHP 8.3.6: 8.8s, down from 41.5s, which is why the
-     * two big-history fixtures are hoisted WHOLE — Chat and submitted turn,
-     * not merely the message array — rather than rebuilt per render. See
-     * {@see barStates()} for the per-state measurement and for the equivalence
-     * that licenses hoisting the submit.
+     * {1,4,5,30} — 14,400 (state, size) pairs, chosen so both cue branches and
+     * both geometry branches are crossed with every state. Every figure is
+     * measured against the hardcoded English literals.
      */
-    public function testTheCuesFitTheNarrowestBarAnyAppStateCanProduce(): void
+    public function testTheCuesFitTheTerminalInEveryAppState(): void
     {
         $rowsSet = [1, 4, 5, 30];
-        $cueWidths = [];
-        $barWidths = [];
-        /** @var array<string, int> $narrowestPerState */
-        $narrowestPerState = [];
+        $fullCues = [];
         $tooSmallSubstitutions = 0;
         $overPromptSubstitutions = 0;
-        $tightestTooSmall = PHP_INT_MAX;
-        $tightestOverPrompt = PHP_INT_MAX;
 
         foreach ($this->barStates() as $label => $make) {
             foreach ($rowsSet as $rows) {
                 for ($cols = 1; $cols <= 400; $cols++) {
                     $state = $make($cols, $rows);
-                    $closed = Width::of($this->statusBar($state));
-                    $barWidths[$closed] = true;
-
-                    $narrowestPerState[$label] = min($narrowestPerState[$label] ?? PHP_INT_MAX, $closed);
-
+                    $closed = $this->statusBar($state);
                     $shown = $this->statusBar($state->withKeyHelp(0));
-                    $width = Width::of($shown);
-                    $isCue = str_contains($shown, 'window too small') || str_contains($shown, 'permission waiting');
-                    if (!$isCue) {
+
+                    $this->assertLessThanOrEqual($cols, Width::of($closed), "{$label} @ {$cols}x{$rows}: the bar over-ran");
+                    $this->assertLessThanOrEqual($cols, Width::of($shown), "{$label} @ {$cols}x{$rows}: the cue over-ran");
+
+                    if ($cols <= 4 || $rows <= 4) {
+                        ++$tooSmallSubstitutions;
+                        $expected = 'keys: window too small · ? closes';
+                    } elseif ($state->pendingPermission() !== null) {
+                        ++$overPromptSubstitutions;
+                        $expected = 'keys: ? closes · permission waiting';
+                    } else {
                         continue;
                     }
 
-                    $cueWidths[$width] = true;
-                    if (str_contains($shown, 'window too small')) {
-                        ++$tooSmallSubstitutions;
-                        $tightestTooSmall = min($tightestTooSmall, $closed - $width);
+                    $this->assertNotSame($closed, $shown, "{$label} @ {$cols}x{$rows}: no cue replaced the bar");
+                    if (Width::of($expected) <= $cols) {
+                        $this->assertSame($expected, $shown, "{$label} @ {$cols}x{$rows}: the whole cue fits");
+                        $fullCues[$expected] = true;
                     } else {
-                        ++$overPromptSubstitutions;
-                        $tightestOverPrompt = min($tightestOverPrompt, $closed - $width);
+                        $this->assertStringStartsWith(
+                            Width::truncate('? closes', $cols),
+                            $shown,
+                            "{$label} @ {$cols}x{$rows}: a shortened cue must lead with the key that closes it",
+                        );
                     }
-
-                    $this->assertLessThanOrEqual(
-                        $closed,
-                        $width,
-                        "the cue may not be wider than the bar it replaces in this very state "
-                        . "({$label} @ {$cols}x{$rows}: bar {$closed}, cue {$width}) — the bar is the one "
-                        . 'line this renderer never truncates, so a wider cue would overflow by more than '
-                        . 'the bar already does',
-                    );
                 }
             }
         }
 
-        // ORDER MATTERS HERE, and it is the reason the margins come first. A cue
-        // that WIDENS by one column drops its margin to 0 and changes $cues, and
-        // whichever of the two assertions runs first is the one a reader sees. The
-        // $cues pin used to be first: measured, widening KEY_HELP_OVER_PROMPT by one
-        // column reported "two arrays are identical, 35 vs 36" and the margin
-        // assertion never ran — the same double-counting that got
-        // assertLessThanOrEqual(min($bars), 33) deleted from the sibling sweep one
-        // method up. So the assertion advertised as catching a shrinking margin is
-        // now the one that catches it, and $cues is left as the corroborating detail
-        // it always was.
-        $this->assertSame(3, $tightestTooSmall, 'KEY_HELP_TOO_SMALL keeps 3 columns against the in-flight bar');
-        $this->assertSame(1, $tightestOverPrompt, 'KEY_HELP_OVER_PROMPT keeps exactly 1 — it is the load-bearing one');
-
-        // The floor, and the states that attain it — a SET, because $narrowest was
-        // computed with a strict `<` and therefore named whichever state
-        // barStates() happens to list first among the ties. Measured, three states
-        // reach 36 at 1x1, two of them with the byte-identical bar
-        // `0% · ⠴ thinking… · Esc Esc to cancel` — so "and it is the in-flight bar"
-        // was a tie-break artifact stated as an identification: with a strict `<`
-        // over a tie, the winner is whichever barStates() lists first, and
-        // reordering the array would have flipped the assertion with the fact
-        // unchanged. Verified the other way round instead — iterating barStates()
-        // in REVERSE leaves the two assertions below green, which the old pin could
-        // not have been. The fact is that the floor is 36 and that exactly these
-        // three states own it, all of them unreachable by the idle fixture the
-        // sibling sweep uses.
-        //
-        // `turn in flight, big context` joined the set in crush_code.md Phase 5
-        // item 5 and is the interesting one. Measured: its 2,400-message history is
-        // 122,400 estimated tokens against the 100,000-token fallback window, so
-        // submit() now compacts at the 85% tier before dispatching — 2,400 messages
-        // down to 21, 1,143 estimated tokens — and the percentage in its readout
-        // went from `122%` to `1%`. Two columns narrower is what drops it onto the
-        // floor, so unlike the other two its bar is not byte-identical to theirs,
-        // only the same width. `context over 100%` still shows its overflow because
-        // it never submits — the tiers are per-turn, and an idle oversized session
-        // is exactly the state they do not touch.
-        $floor = min($narrowestPerState);
-        $this->assertSame(36, $floor, 'the narrowest bar any state in this corpus can produce');
-        $atFloor = array_keys(array_filter($narrowestPerState, static fn(int $w): bool => $w === $floor));
-        // Sorted, so that reordering barStates() cannot flip this the way it could
-        // flip the single-state pin this replaces.
-        sort($atFloor);
-        $this->assertSame(
-            ['prompt pending', 'turn in flight', 'turn in flight, big context'],
-            $atFloor,
-            'and these are the states that attain it — all in flight, because requestPermission() sets '
-            . 'inFlight, which is what makes the cue meet this bar and not the wide idle one',
-        );
-
-        $cues = array_keys($cueWidths);
+        $cues = array_keys($fullCues);
         sort($cues);
-        $this->assertSame([33, 35], $cues, 'the two cues carry no readout, so neither can vary with the terminal');
+        $this->assertSame(
+            ['keys: ? closes · permission waiting', 'keys: window too small · ? closes'],
+            $cues,
+            'fixture: both cues really are painted whole somewhere in the corpus',
+        );
 
         // Both cues really are substituted, over the band each one owns:
         //   TOO_SMALL: 9 states x (2 rows in {1,4} x 400 cols + 2 rows in {5,30} x
@@ -2782,14 +2691,12 @@ final class KeyHelpTest extends TestCase
      *
      * Nine, and NONE of them has a spend cap set or a reported spend, so the
      * status bar's spend segment (crush_code.md Phase 5 item 7) never renders in
-     * this corpus and the floor below is measured without it. That band is covered
-     * next door instead, by
-     * `Renderer\StatusBarSpendTest::testACappedSessionStillCannotProduceABarNarrowerThanTheKeybindingCues()`,
-     * which sweeps the capped and billed states and asserts the SAME 36-column
-     * floor — the segment is dropped at narrow widths rather than squeezed in, so
-     * both cues keep the margins asserted below. Named here rather than left
-     * implicit: a reader would otherwise take "any app state" for a wider domain
-     * than these nine fixtures can reach.
+     * this corpus. That band is covered next door instead, by
+     * `Renderer\StatusBarSpendTest::testACappedSessionsBarFitsTheTerminalIdleAndInFlight()`,
+     * which sweeps the capped and billed states, idle and in flight, against the
+     * same terminal bound. Named here rather than left implicit: a reader would
+     * otherwise take "every app state" for a wider domain than these nine
+     * fixtures can reach.
      *
      * The two that matter are the last two: the idle bar carries the
      * context readout and is wide, while an in-flight turn replaces the whole bar
@@ -3055,7 +2962,7 @@ final class KeyHelpTest extends TestCase
      * separate column — and is NOT separately asserted to be. With the three names
      * hard-coded below, an `assertNotContains('ChatTest.php', …)` can never be the
      * assertion that fires; keeping it would be the same double-counting deleted
-     * from {@see testTheBarIsNeverNarrowerThanTheTooSmallCueAtAnySize()} in the
+     * from {@see testTheIdleBarTracksColumnsOnlyAndFitsEverySize()} in the
      * round that added it.
      */
     public function testTheGuardMutationDomainIsTheFilesThatBuildAPermissionRequestMsg(): void

@@ -48,20 +48,19 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
  * ## Three exemptions, all measured and all pre-existing
  *
  * 1. **The status bar** — `renderStatusBar()` fits it by choosing narrower
- *    forms or dropping segments and deliberately never truncates it, because it
- *    carries a `markPane()` sentinel PAIR and a cut between them makes
- *    `Scan::parse()` throw. Its narrowest possible form is 54 columns idle / 36
- *    in flight, so on a terminal narrower than that the bar overflows by design.
- *    Those widths are swept and pinned by {@see StatusBarSpendTest}; this file
- *    drops that row rather than re-litigating them — by PREDICATE
+ *    forms or dropping segments, and cuts it (sentinels removed first) only
+ *    when even its narrowest forms do not fit (audit 15b-09). Those widths are
+ *    swept and pinned by {@see StatusBarSpendTest} and
+ *    {@see FrameWidthClipTest}; this file drops that row rather than
+ *    re-litigating them — by PREDICATE
  *    ({@see isStatusBar()}) and not by position, because with an overlay open
  *    the frame's last line is not the bar. See {@see transcriptRows()} for the
  *    measurement.
- * 2. **{@see NARROW_FLOOR}** — `renderView()` floors the content width at
- *    `max(20, cols - 6)`, so a terminal under 26 columns gets a pane wider than
- *    itself. That floor predates this fix and is asserted as a BOUND below
- *    ({@see testEvenBelowTheContentWidthFloorTheFrameIsHeldToTheFloor}) rather
- *    than exempted, because "26" and "204" are very different failures.
+ * 2. **No longer an exemption: the content-width floor.** `renderView()` used
+ *    to floor the content width at `max(20, cols - 6)`, so a terminal under 26
+ *    columns got a 26-column frame. Since audit 15b-09 it is `max(1, cols - 6)`,
+ *    and {@see testEvenBelowTheContentWidthFloorTheFrameIsHeldToTheFloor} holds
+ *    a 20-column terminal to 20 columns.
  * 3. **Overlay rows** — `renderView()`'s choke point holds `$body`; a palette or
  *    permission prompt is composited over the finished frame by `Veil` at its
  *    own natural width, which is 54 columns and does not shrink. So an overlay
@@ -91,12 +90,6 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 final class PaneWidthInvariantTest extends TestCase
 {
     use HomeSandboxTrait;
-
-    /**
-     * Widest frame `renderView()` can produce for a terminal narrower than it:
-     * the `max(20, …)` content floor plus `SHELL_CHROME_COLS`.
-     */
-    private const NARROW_FLOOR = 26;
 
     private string $homeSandbox = '';
 
@@ -208,7 +201,7 @@ final class PaneWidthInvariantTest extends TestCase
     /** @return iterable<string, array{0: int, 1: string}> */
     public static function widthAndContentProvider(): iterable
     {
-        // 20 is below the content-width floor (see NARROW_FLOOR); 40/80/100 are
+        // 20 is below the old 26-column content-width floor (audit 15b-09); 40/80/100 are
         // real terminals; 200 is wider than any fixture, which is the case a
         // fitter that wraps unconditionally would get wrong.
         foreach ([20, 40, 80, 100, 200] as $cols) {
@@ -313,10 +306,10 @@ final class PaneWidthInvariantTest extends TestCase
     }
 
     /**
-     * The floor is a bound, not a licence. Below 26 columns the frame cannot be
-     * held to the terminal (see NARROW_FLOOR), but it must still be held to the
-     * floor — the unfixed renderer produced 204-column rows here just as it did
-     * at 100.
+     * Below the old 26-column floor the frame is held to the terminal too
+     * (audit 15b-09: the floor was 26, so this used to assert 26 here). The
+     * renderer before the width thread-through produced 204-column rows here
+     * just as it did at 100.
      *
      * @dataProvider contentClassProvider
      */
@@ -325,9 +318,9 @@ final class PaneWidthInvariantTest extends TestCase
         $chat = new Chat(history: [Message::assistant($content)], rows: 40, cols: 20);
 
         self::assertLessThanOrEqual(
-            self::NARROW_FLOOR,
+            20,
             max(array_map([self::class, 'rowWidth'], self::transcriptRows(Renderer::render($chat)))),
-            'a 20-column terminal must be held to the floor; unfixed this measured 180-406 columns',
+            'a 20-column terminal must be held to 20 columns; unfixed this measured 180-406 columns',
         );
     }
 
@@ -662,7 +655,7 @@ final class PaneWidthInvariantTest extends TestCase
         $frame = Renderer::render($chat);
 
         self::assertLessThanOrEqual(
-            self::NARROW_FLOOR,
+            20,
             max(array_map([self::class, 'rowWidth'], self::transcriptRows($frame))),
         );
 
@@ -776,7 +769,7 @@ final class PaneWidthInvariantTest extends TestCase
      * inside it.
      *
      * `renderToolImage()` sizes the reserved box at
-     * `max(8, min(IMAGE_COLS = 40, $contentWidth))`, so on any terminal of 46
+     * `max(1, min(IMAGE_COLS = 40, $contentWidth))`, so on any terminal of 46
      * columns or fewer that is `$contentWidth` ITSELF — the marker row measures
      * exactly the pane width. One `<` where the code has `<=`, or a lost fast
      * path, and the row takes the wrap branch, where `Width::wrapAnsi()`'s
@@ -800,11 +793,11 @@ final class PaneWidthInvariantTest extends TestCase
             self::markTestSkipped('candy-mosaic decodes images through ext-gd');
         }
 
-        // cols=8 is not a real terminal, it is the case that makes the CONTENT
-        // FLOOR's value load-bearing: the box is `max(8, min(40, $contentWidth))`,
-        // so a floor below 8 reserves MORE cells than the pane has and the
-        // fitter then rewrites them. Measured with the floor dropped to 1, the
-        // marker block was gone at cols=8, 12 and 20 alike.
+        // cols=8 is not a real terminal, it is the case that used to make the
+        // content floor's value load-bearing: the box was
+        // `max(8, min(40, $contentWidth))`, so a pane narrower than 8 got a box
+        // wider than itself and the fitter rewrote it. Since audit 15b-09 both
+        // floors are 1, so at cols=8 the pane and the box are 2 cells each.
         foreach ([8, 20, 26, 34, 46] as $cols) {
             $chat = new Chat(
                 history: [Message::assistant('')->withToolResults([new ToolResult(
@@ -832,14 +825,14 @@ final class PaneWidthInvariantTest extends TestCase
             // Byte-identical to what ImageOverlay itself would emit for this
             // box: the marker cell plus every one of the reserved padding cells
             // the runtime paints the picture over.
-            $box = max(8, min(40, max(20, $cols - 6)));
+            $box = max(1, min(40, max(1, $cols - 6)));
             self::assertStringContainsString(
                 ImageOverlay::markerBlock(0, $box, 1),
                 $marker,
                 "the fitter rewrote the reserved image cells at cols={$cols}",
             );
             self::assertSame(
-                max($cols, self::NARROW_FLOOR),
+                $cols,
                 self::rowWidth($marker),
                 "the marker row lost cells at cols={$cols}",
             );
@@ -850,7 +843,7 @@ final class PaneWidthInvariantTest extends TestCase
             $placements = Renderer::renderView($chat)->images;
             self::assertCount(1, $placements, "no image was registered at cols={$cols}");
             self::assertLessThanOrEqual(
-                max(20, $cols - 6),
+                max(1, $cols - 6),
                 reset($placements)->widthCells,
                 "the reserved image box is wider than the pane at cols={$cols}",
             );
@@ -1009,9 +1002,9 @@ final class PaneWidthInvariantTest extends TestCase
      * The clamped range is DERIVED rather than guessed. The bound runs out of
      * room when `Width::of(TOOL_ROW_PREFIX) + Width::of($status) + 1 >= $width`,
      * which for the 9-cell prefix and `⊘ interrupted` (13 cells) is every width
-     * up to and including 23; and `renderView()` floors the content width at
-     * `max(20, cols - 6)`, so the range a real terminal can reach is exactly
-     * 20-23. There the row cannot fit whatever the bound says and `hardFit()`
+     * up to and including 23; `renderView()`'s content width is `cols - 6`
+     * (floored at 1, audit 15b-09), so a 26-29 column terminal reaches 20-23
+     * and a narrower one goes below. There the row cannot fit whatever the bound says and `hardFit()`
      * cuts it — the deliberate narrow-terminal overflow
      * {@see testAnInterruptedToolRowStaysClickableAtTheNarrowestTerminal()}
      * documents.
@@ -1151,9 +1144,8 @@ final class PaneWidthInvariantTest extends TestCase
      */
     public function testTheFitterFillsThePaneRatherThanMerelyStayingUnderIt(): void
     {
-        // 20 is below NARROW_FLOOR, and it is what pins the floor's VALUE from
-        // the other side: with the floor dropped to 1 the frame is 20 columns
-        // wide here instead of 26.
+        // 20 is below the old 26-column floor: since audit 15b-09 the pane is
+        // 14 cells there, so the frame fills exactly the 20-column terminal.
         foreach ([20, 40, 60, 80, 100] as $cols) {
             foreach (['long word', 'cjk in a fence'] as $class) {
                 $frame = Renderer::render(new Chat(
@@ -1163,7 +1155,7 @@ final class PaneWidthInvariantTest extends TestCase
                 ));
 
                 self::assertSame(
-                    max($cols, self::NARROW_FLOOR),
+                    $cols,
                     self::widestRow(implode("\n", self::transcriptRows($frame))),
                     "\"{$class}\" does not fill a {$cols}-column pane, so the wrap width is wrong",
                 );
@@ -1435,13 +1427,12 @@ final class PaneWidthInvariantTest extends TestCase
     // =====================================================================
 
     /**
-     * The invariant, applied to one frame: every transcript row fits
-     * `max($cols, NARROW_FLOOR)`. See the class docblock for why the status bar
-     * is dropped and why the floor is part of the bound.
+     * The invariant, applied to one frame: every transcript row fits `$cols`.
+     * See the class docblock for why the status bar is dropped.
      */
     private static function assertRowsFit(string $frame, int $cols): void
     {
-        $budget = max($cols, self::NARROW_FLOOR);
+        $budget = $cols;
 
         foreach (self::transcriptRows($frame) as $index => $row) {
             self::assertLessThanOrEqual(

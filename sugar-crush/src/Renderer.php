@@ -668,6 +668,12 @@ final class Renderer
     public const PANE_ZONE_PREFIX = 'pane:';
 
     /**
+     * One open or close zone sentinel as {@see \SugarCraft\Mouse\Mark} emits it,
+     * matched byte-wise against Mark's id charset (plus the closing `/`).
+     */
+    private const ZONE_MARKER_PATTERN = '/\xEE\x80\x80\/?[A-Za-z0-9._:-]*\xEE\x80\x81/';
+
+    /**
      * Zone-id prefix every clickable command-palette / picker row carries
      * (crush_feat.md §8 E6, which names `picker-item:{$index}` literally).
      * The suffix is the row's index into {@see Chat::paletteMatches()}, i.e.
@@ -1069,10 +1075,27 @@ final class Renderer
      *
      * The whole bar, not an addition to it: the readouts it replaces are about
      * a chat the reference is currently swallowing every keystroke for, and the
-     * bar is the one line that may not wrap — so this must be SHORTER than the
-     * text it stands in for, not appended to it.
+     * bar is the one line that may not wrap.
+     *
+     * Fitted to the terminal like the bar itself (audit 15b-09): the widest of
+     * {@see KEY_HELP_TOO_SMALL_FORMS} that fits is painted, and
+     * {@see fitStatusBar()} cuts the last one on a terminal narrower than it.
+     * This cue fires on any terminal under five rows, whatever its width, so
+     * the shorter forms are reached.
      */
     private const KEY_HELP_TOO_SMALL = 'keys: window too small · ? closes';
+
+    /**
+     * {@see KEY_HELP_TOO_SMALL} and its shorter forms, widest first. Each
+     * shorter form leads with "? closes", the one thing a user who cannot see
+     * the reference needs, so a cut keeps it.
+     */
+    private const KEY_HELP_TOO_SMALL_FORMS = [
+        self::KEY_HELP_TOO_SMALL,
+        '? closes · window too small',
+        '? closes · too small',
+        '? closes',
+    ];
 
     /**
      * What the status bar says when the keybinding reference is open OVER a
@@ -1086,32 +1109,33 @@ final class Renderer
      * and silent is a stuck terminal as far as the user can tell, so the bar
      * says the prompt is there and `?` is what gets to it.
      *
-     * The whole bar, and SHORTER than what it replaces: measured with
-     * `Width::of`, the bar this stands in for is never narrower than 36 columns
-     * while a prompt pends (`0% · ⠴ thinking… · Esc Esc to cancel` — 2 + 3 + 31,
-     * and `contextIndicator()`'s last resort `"{$percent}%"` can never be empty,
-     * so 2 really is its floor), against this cue's 35. The bar is the one line
-     * this renderer never truncates, so that 1-column margin is load-bearing.
-     * Swept and asserted, over app states rather than terminal sizes alone, by
-     * `KeyHelpTest::testTheCuesFitTheNarrowestBarAnyAppStateCanProduce()` — which
-     * exists because {@see renderStatusBar()}'s comment carried 54 here, the
-     * IDLE floor, for a round while this docblock had 36 right.
+     * The whole bar, fitted to the terminal the same way (audit 15b-09): the
+     * widest of {@see KEY_HELP_OVER_PROMPT_FORMS} that fits, then the cut. It
+     * used to be held SHORTER than the in-flight bar it replaces (35 against
+     * 36 columns) because the bar was never truncated; now every bar and both
+     * cues are held to `$cols` directly, which
+     * `KeyHelpTest::testTheCuesFitTheTerminalInEveryAppState()`
+     * sweeps over app states and terminal sizes.
      *
-     * Both figures are COLUMN counts, not byte counts: `strlen` reads this cue
-     * as 36 and would sit exactly on the boundary, reporting a margin that is
-     * not there.
+     * Its width is a COLUMN count, not a byte count: `strlen` reads this cue
+     * as 36 where `Width::of()` reads 35.
      *
      * NOT run through `Lang::t()`, and deliberately noted rather than fixed:
      * `grep -rl 'Lang::t' src/` finds no PHP file in this lib, so hardcoded
      * English is a lib-wide deviation from the project rule rather than one
      * introduced here, and starting an i18n migration from one status-bar string
-     * is not the shape of that fix. But the 1-column margin above is measured
-     * against THIS literal. The day sugar-crush adopts `Lang::t()`, a translated
-     * cue can exceed the bar it replaces at translation time, where no PHP test
-     * sees it — so the bound must then be asserted against the RENDERED string
-     * rather than reasoned about here.
+     * is not the shape of that fix. A translated cue still cannot overflow the
+     * row, because {@see fitStatusBar()} measures the rendered string.
      */
     private const KEY_HELP_OVER_PROMPT = 'keys: ? closes · permission waiting';
+
+    /** {@see KEY_HELP_OVER_PROMPT} and its shorter forms, widest first, as {@see KEY_HELP_TOO_SMALL_FORMS}. */
+    private const KEY_HELP_OVER_PROMPT_FORMS = [
+        self::KEY_HELP_OVER_PROMPT,
+        '? closes · permission waiting',
+        '? closes · waiting',
+        '? closes',
+    ];
 
     /**
      * How far the LAST rendered keybinding reference overflowed its box,
@@ -1377,11 +1401,7 @@ final class Renderer
      */
     private static function stripZoneMarkers(string $frame): string
     {
-        return (string) preg_replace(
-            '/\xEE\x80\x80\/?[A-Za-z0-9._:-]*\xEE\x80\x81/',
-            '',
-            $frame
-        );
+        return (string) preg_replace(self::ZONE_MARKER_PATTERN, '', $frame);
     }
 
     /**
@@ -1434,15 +1454,17 @@ final class Renderer
         // is held to it, and fitToPane() is the backstop for the ones whose
         // own layout rules say otherwise (code blocks, tables, CJK runs).
         //
-        // The 20 in that floor is load-bearing and its VALUE is, not just its
-        // presence: renderToolImage() reserves an image box of
-        // `max(8, min(IMAGE_COLS, $contentWidth))` cells, so any floor below 8
-        // would size a marker block WIDER than the pane it sits in and
-        // fitToPane() would then rewrite the reserved cells (Width::wrapAnsi()
-        // rtrims, which destroys the padding ImageOverlay::resolve() paints
-        // over). 20 >= 8 with room to spare; a smaller floor is not a cosmetic
-        // change.
-        $contentWidth = max(20, $chat->cols() - self::SHELL_CHROME_COLS);
+        // Floored at 1, not 20 (audit 15b-09). A floor of 20 made the shell 26
+        // cells wide on any terminal under 26 columns, and every overlay
+        // composited onto that backdrop was 26 wide too, so on the standalone
+        // path the terminal soft-wrapped every row. The floor used to be
+        // load-bearing because renderToolImage() reserved at least 8 cells for
+        // a picture; it now reserves `max(1, min(IMAGE_COLS, $width))`, so the
+        // marker block can never be wider than the pane it sits in and
+        // fitToPane() never rewrites the reserved cells. Below
+        // SHELL_CHROME_COLS + 1 columns the bordered shell cannot fit at all;
+        // clipFrameToCols() cuts that case further down.
+        $contentWidth = max(1, $chat->cols() - self::SHELL_CHROME_COLS);
         $body = self::renderHistory(
             $chat->history,
             $theme,
@@ -1668,14 +1690,31 @@ final class Renderer
             // wider than the current transcript would lose its right border
             // (most visibly mid-turn, which is exactly when a permission
             // prompt appears). Widen the backdrop to fit first.
+            //
+            // The rows the overlay covers have their zone sentinels LIFTED
+            // first and put back afterwards (audit 15b-09). Veil splits each
+            // covered row around the overlay by cell offset, and its Width
+            // calls count every sentinel codepoint (and the zone id between
+            // them) as a cell. So a covered row carrying a `toolcall:` zone,
+            // or the bar's `pane:menu` zone under a full-height palette, was
+            // cut at the wrong column: the overlay slid left by the
+            // sentinels' length on that row, id fragments leaked on screen,
+            // and the row came out wider than the terminal. With the
+            // sentinels out of the way the cut lands on visible columns; a
+            // zone lying wholly beside the overlay is restored at the same
+            // columns, and a zone the overlay overlaps is dropped, because
+            // part of it is no longer on screen.
+            [$frame, $lifted] = self::liftZonesUnderOverlay($frame, $overlay);
             $backdrop = self::padForOverlay($frame, $overlay, $chat->cols());
+            $shift = self::overlayLeftShift($backdrop, $overlay, $chat->cols());
             $frame = Veil::new()->withBackdrop(50)->composite(
                 $overlay,
                 $backdrop,
                 Position::CENTER,
                 Position::CENTER,
-                self::overlayLeftShift($backdrop, $overlay, $chat->cols()),
+                $shift,
             );
+            $frame = self::restoreLiftedZones($frame, $lifted, $backdrop, $overlay, $shift);
             // No-op unless the overlay was the palette or the session picker:
             // only renderPalette()/renderSessionPicker() record item zones,
             // an overlay earlier in the chain above takes the slot before
@@ -1683,6 +1722,16 @@ final class Renderer
             // never both non-empty for one frame.
             $frame = self::markPaletteItems($frame);
             $frame = self::markSessionRows($frame);
+        }
+
+        // Below SHELL_CHROME_COLS + 1 columns the shell's border and padding
+        // alone are wider than the terminal, and so are the input box and the
+        // "/" popup chrome, so no producer can hold its own bound. Every row is
+        // cut to the terminal here instead (audit 15b-09). Only at these sizes:
+        // above them each producer fits itself and this would just re-measure
+        // every row of every frame.
+        if ($chat->cols() <= self::SHELL_CHROME_COLS) {
+            $frame = self::clipFrameToCols($frame, $chat->cols());
         }
 
         $frame = self::scanRoot($frame, $chat->cols());
@@ -1807,59 +1856,34 @@ final class Renderer
      */
     private static function renderStatusBar(Chat $chat, ?float $now = null): string
     {
-        // Shorter than the bar it replaces, so a narrow terminal cannot be
-        // made to overflow by MORE than it already does — the bar is the one
-        // line this renderer does not truncate, a pre-existing property the
-        // reference must not worsen.
+        // The two keybinding-reference cues REPLACE the bar. They used to be
+        // held narrower than the narrowest bar they could replace (33 and 35
+        // columns against the 36-column in-flight bar), because the bar was the
+        // one line this renderer did not truncate and a wider cue would have
+        // deepened its over-run. Since audit 15b-09 every bar and both cues are
+        // fitted to `$cols` instead, so that margin no longer carries anything.
         //
         // Instrument: Width::of() AFTER stripZoneMarkers() — the columns the
         // bar actually paints. The unstripped string reads 23 columns wider
         // (the `pane:menu` sentinel pair and the zone id inside it, which
         // Program resolves into a paint and never puts on screen), and strlen
-        // reads the multi-byte glyphs as bytes; the same instrument
-        // KEY_HELP_OVER_PROMPT's floor is measured with, for the same reason.
+        // reads the multi-byte glyphs as bytes.
         //
-        // The bound is two numbers, and the second one is only meaningful with
-        // its DOMAIN attached, because the bar's width depends on the app state
-        // and not just on the terminal. This cue is a CONSTANT 33 columns. The
-        // narrowest bar it can replace is 36 — the in-flight bar,
-        // `0% · ⠴ thinking… · Esc Esc to cancel`, measured at cols 1. So the
-        // margin is 3 columns, and replacing the bar with the cue can never
-        // widen the frame.
+        // Swept and asserted over app states and terminal sizes by
+        // KeyHelpTest::testTheCuesFitTheTerminalInEveryAppState();
+        // testTheIdleBarTracksColumnsOnlyAndFitsEverySize() pins that the
+        // idle bar tracks COLUMNS only. Deliberately no width table here: a
+        // range written in prose went stale in this comment three rounds
+        // running, because nothing read it back.
         //
-        // 36, not 54. 54 is the floor of the IDLE bar, which is the only bar
-        // KeyHelpTest::chat()'s two-message fixture can produce, and the previous
-        // revision quoted it under a conclusion that ranged over every app state.
-        // A fixture that cannot enter the narrow state cannot bound it: an
-        // in-flight turn and a pending permission prompt both render the 36-column
-        // bar, and BOTH have this cue substituted for it (`rows <= 4` or
-        // `cols <= 4`, which a small terminal reaches in either state). The sister
-        // cue {@see KEY_HELP_OVER_PROMPT} is tighter still — 35 columns against
-        // the same 36-column bar, because it fires precisely when a prompt is
-        // pending, i.e. only ever against the narrow bar. One column of margin.
-        //
-        // Worth noting how the wrong figure survived: 36 was ALREADY in this file,
-        // correct, in {@see KEY_HELP_OVER_PROMPT}'s own docblock, which had to
-        // measure the narrow bar because its cue only ever meets that one. Two
-        // copies of one measurement, 500 lines apart, and only the copy whose cue
-        // could also meet the WIDE bar went stale — because its fixture reached
-        // the wide bar first and stopped there.
-        //
-        // Every figure here is swept and ASSERTED rather than restated, over app
-        // STATES as well as terminal sizes, by
-        // testTheCuesFitTheNarrowestBarAnyAppStateCanProduce(). The
-        // size-only sweep stays beside it as
-        // testTheBarIsNeverNarrowerThanTheTooSmallCueAtAnySize() (which pins that
-        // on the idle fixture the bar tracks COLUMNS only and takes exactly four
-        // values), and testTheTooSmallCueIsNeverWiderThanTheBarItReplaces() does
-        // the four-sample per-size comparison. Deliberately NO width table in
-        // this comment: it has now carried a wrong bar figure in three consecutive
-        // rounds, because a range written in prose has nothing reading it back.
-        // First it said "73-94", which matches no instrument at all; then "54 at
-        // every width below 79 and 75 at 79 and above", wrong in both halves; then
-        // 54 as a floor over a domain the fixture could not cover.
+        // Both cues are fitted to the terminal like the bar is (audit 15b-09):
+        // a shorter form first, keeping "? closes", which is the one thing a
+        // user who cannot see the reference needs to know, then the cut.
         if ($chat->keyHelp() !== null && self::keyHelpGeometry($chat) === null) {
-            return self::KEY_HELP_TOO_SMALL;
+            return self::fitStatusBar(
+                self::firstFitting(self::KEY_HELP_TOO_SMALL_FORMS, $chat->cols()),
+                $chat->cols(),
+            );
         }
 
         // Ordered after the too-small cue rather than combined with it: that
@@ -1867,7 +1891,10 @@ final class Renderer
         // is the more urgent half when nothing is painted at all, and two
         // messages on one un-wrappable line would not fit anyway.
         if ($chat->keyHelp() !== null && $chat->pendingPermission() !== null) {
-            return self::KEY_HELP_OVER_PROMPT;
+            return self::fitStatusBar(
+                self::firstFitting(self::KEY_HELP_OVER_PROMPT_FORMS, $chat->cols()),
+                $chat->cols(),
+            );
         }
 
         // The "Ctrl+P menu" hint is the live path's only affordance for
@@ -1876,9 +1903,17 @@ final class Renderer
         // the `pane:menu` click zone — crush_feat.md §8 E3's "click the
         // pane's title region to jump straight to it". While a request is in
         // flight the hint is not drawn at all, so no zone is marked either.
-        $processing = $chat->inFlight
-            ? '⠴ thinking… · Esc Esc to cancel'
-            : 'Enter to send · ' . self::markPane(Pane::Menu, 'Ctrl+P menu') . ' · /exit or ^C to quit';
+        //
+        // Shortened in priority order rather than appended whole (audit
+        // 15b-09): the full idle hint is 49 cells and was the reason the bar
+        // over-ran every terminal narrower than 54 columns. The widest form
+        // that still leaves room for the separator and the context readout's
+        // narrowest form (its bare percentage) is taken, so on any terminal
+        // the full bar fitted, it is still the full bar.
+        $processing = self::fitProcessingHint(
+            $chat,
+            $chat->cols() - Width::of(' · ') - Width::of(self::contextIndicator($chat, 0)),
+        );
         // Messages the user sent while this turn was running
         // ({@see Chat::enqueuePrompt()}). The transcript notice each one wrote
         // scrolls away; this does not, which is what stops a queued message from
@@ -1893,16 +1928,13 @@ final class Renderer
         // in every state that has no queue — which is every state that existed
         // before this bundle.
         //
-        // AND ONLY WHEN IT FITS, which is a measured constraint rather than
-        // caution. The in-flight bar is ALREADY over-wide below 36 columns — the
-        // too-small cue only replaces it at `rows <= 4` or `cols <= 4`, so
-        // between 5 and 35 columns this row over-runs the frame today, and that
-        // is a pre-existing defect this segment must not deepen. Measured on a
-        // two-message in-flight fixture: 36 columns with no queue, 47 with one,
-        // i.e. an unconditional append widens the over-run range from `cols <= 35`
-        // to `cols <= 46`. So the segment is dropped when the row cannot hold it,
-        // and the queue stays visible in the transcript notice
-        // {@see Chat::enqueuePrompt()} wrote either way.
+        // AND ONLY WHEN IT FITS. The bar is held to the terminal
+        // ({@see fitStatusBar()}), so a segment that did not fit would be cut
+        // off the end anyway, and could take the tail of the hint with it.
+        // Measured on a two-message in-flight fixture: the full bar is 36
+        // columns with no queue and 47 with one. So the segment is dropped when
+        // the row cannot hold it, and the queue stays visible in the transcript
+        // notice {@see Chat::enqueuePrompt()} wrote either way.
         //
         // The reserve is the separator plus 2 columns for the context readout's
         // own floor — `contextIndicator()`'s last resort is `"{$percent}%"`, which
@@ -2017,17 +2049,17 @@ final class Renderer
         // `tests/Renderer/StatusBarSpendTest.php`:
         // testTheIdleBarTakesExactlyTheseWidthsAtEveryTerminalWidth() pins the bar
         // itself, testTheSpendSegmentNeverWidensTheBarBeyondTheTerminalAtAnyWidth()
-        // pins the invariant that matters (no state at any width may make the
-        // assembled bar wider than the terminal by more than it already was), and
-        // testACappedSessionStillCannotProduceABarNarrowerThanTheKeybindingCues()
-        // pins that the two cues above keep their margins.
+        // pins that the spend segment never pushes the bar past the terminal, and
+        // testACappedSessionsBarFitsTheTerminalIdleAndInFlight() sweeps the capped
+        // and billed states.
         //
-        // "Fitted" means picking a narrower form or dropping it — never
-        // truncating the assembled string. $bar carries markPane(Pane::Menu)'s
-        // sentinel PAIR, and a cut between them leaves an unmatched open
-        // marker, which makes Scan::parse() throw and costs the WHOLE frame
-        // its click zones (same failure mode markPaneHeader() documents). The
-        // sentinels are invisible on screen, so they come off before measuring.
+        // "Fitted" means picking a narrower form or dropping it. The assembled
+        // string is cut only by fitStatusBar()'s backstop, and only after its
+        // sentinels are removed: $bar carries markPane(Pane::Menu)'s sentinel
+        // PAIR, and a cut between them leaves an unmatched open marker, which
+        // makes Scan::parse() throw and costs the WHOLE frame its click zones
+        // (same failure mode markPaneHeader() documents). The sentinels are
+        // invisible on screen, so they come off before measuring.
         $room = $chat->cols() - Width::of(self::stripZoneMarkers($bar));
         foreach ($indicators as $indicator) {
             if (Width::of($indicator) <= $room) {
@@ -2055,7 +2087,82 @@ final class Renderer
         // substitution) but it is not "every path". The rewrite is what earns
         // the `break` its place: the reason for it is the scroll-readout path,
         // not a universal one.
-        return self::withStatusLineCommand($bar, $chat->cols());
+        return self::fitStatusBar(self::withStatusLineCommand($bar, $chat->cols()), $chat->cols());
+    }
+
+    /**
+     * The processing hint at the widest form that fits $room columns, or its
+     * narrowest form when none does ({@see fitStatusBar()} then cuts the bar).
+     *
+     * Forms are listed widest first and drop the least useful piece first.
+     * Idle: "Enter to send" goes first (it is what every input box does), then
+     * "/exit or" (Ctrl+C alone still quits), then the quit hint, and the
+     * `Ctrl+P menu` hint stays to the end because the palette it opens lists
+     * every other action and it carries the `pane:menu` click zone. In flight:
+     * the cancel key outlives "thinking…", since the transcript already shows
+     * the turn is running and Esc Esc is the only way to stop it.
+     *
+     * Every idle form marks the menu label WHOLE, so dropping a form never
+     * splits the zone's sentinel pair.
+     */
+    private static function fitProcessingHint(Chat $chat, int $room): string
+    {
+        if ($chat->inFlight) {
+            $forms = ['⠴ thinking… · Esc Esc to cancel', '⠴ Esc Esc to cancel', '⠴ thinking…', '⠴'];
+        } else {
+            $menu = self::markPane(Pane::Menu, 'Ctrl+P menu');
+            $forms = [
+                'Enter to send · ' . $menu . ' · /exit or ^C to quit',
+                $menu . ' · /exit or ^C to quit',
+                $menu . ' · ^C to quit',
+                $menu,
+                self::markPane(Pane::Menu, '^P menu'),
+            ];
+        }
+
+        return self::firstFitting($forms, $room);
+    }
+
+    /**
+     * The first of $forms whose painted width (zone sentinels excluded) is at
+     * most $room, or the last form when none is.
+     *
+     * @param non-empty-list<string> $forms widest first
+     */
+    private static function firstFitting(array $forms, int $room): string
+    {
+        foreach ($forms as $form) {
+            if (Width::of(self::stripZoneMarkers($form)) <= $room) {
+                return $form;
+            }
+        }
+
+        return $forms[\count($forms) - 1];
+    }
+
+    /**
+     * The status bar held to $cols columns: the backstop under the fitting
+     * that {@see renderStatusBar()} does piece by piece (audit 15b-09).
+     *
+     * Reached only when even the narrowest forms do not fit, which is a
+     * terminal of about a dozen columns or fewer. The bar is the frame's
+     * last row, and an over-wide last row is soft-wrapped by the terminal,
+     * which breaks the absolute-cursorTo repaint the tail clip protects.
+     *
+     * The cut is taken on the bar with its zone sentinels REMOVED, so the
+     * `pane:menu` zone is given up rather than cut in half. A half-cut
+     * sentinel pair makes `Scan::parse()` throw, and {@see scanRoot()}
+     * answers that by clearing every zone in the frame. The bar carries no
+     * SGR, so {@see Width::truncate()} dropping escapes loses nothing.
+     */
+    private static function fitStatusBar(string $bar, int $cols): string
+    {
+        $visible = self::stripZoneMarkers($bar);
+        if (Width::of($visible) <= $cols) {
+            return $bar;
+        }
+
+        return Width::truncate($visible, max(0, $cols));
     }
 
     /**
@@ -2098,9 +2205,8 @@ final class Renderer
      *
      * A bar that is ALREADY at or past $cols gets no segment at all — `$room`
      * is then <= 0 and this returns early. That is the same guard the queued
-     * -prompt segment uses, and for the same reason: between 5 and 35 columns
-     * the in-flight bar over-runs the frame today, and a pre-existing over-run
-     * is not licence to deepen it.
+     * -prompt segment uses: {@see fitStatusBar()} would cut a segment that did
+     * not fit, and an ellipsised stub of a status line says nothing.
      *
      * WHAT THE CACHED LINE COSTS PER FRAME, since this method is the only
      * reader of it: `Width::of($line)` is a grapheme walk over the WHOLE cached
@@ -2172,7 +2278,7 @@ final class Renderer
      * $room is the columns left after the two mandatory segments and the scroll
      * reservation. Forms are tried widest-first exactly as
      * {@see contextIndicator()} does, but with NO last-resort form: this one
-     * returns '' rather than overflow the one line the renderer never truncates.
+     * returns '' rather than push the bar into {@see fitStatusBar()}'s cut.
      */
     private static function spendIndicator(Chat $chat, int $room): string
     {
@@ -2777,7 +2883,7 @@ final class Renderer
      *   PaneWidthInvariantTest::testTheFitterPassesAFittingRowThroughUntouchedWhereTruncateAnsiWouldCutIt().
      *   That same pass-through is what keeps the pixel-graphics markers safe:
      *   `ImageOverlay::markerBlock()` emits a marker cell plus padding at
-     *   `max(8, min(IMAGE_COLS, $width))` cells,
+     *   `max(1, min(IMAGE_COLS, $width))` cells,
      *   which is `$width` itself on any terminal of 46 columns or fewer — i.e.
      *   the marker row sits exactly ON this `<=` boundary rather than
      *   comfortably inside it. Take the wrap branch there and
@@ -2978,6 +3084,27 @@ final class Renderer
         foreach ($rows as $index => $row) {
             if (Width::of($row) > $cols) {
                 $rows[$index] = self::hardFit($row, $cols);
+            }
+        }
+
+        return implode("\n", $rows);
+    }
+
+    /**
+     * {@see clipRowsToCols()} for a finished frame that may already carry zone
+     * sentinels: a row that has to be cut loses its sentinels first, so the
+     * cut cannot land between an open and a close marker. Every zone this
+     * renderer marks is single-row, so stripping a whole row removes whole
+     * pairs and the other rows' zones still parse. Rows that fit are returned
+     * byte-identical, sentinels included.
+     */
+    private static function clipFrameToCols(string $frame, int $cols): string
+    {
+        $rows = explode("\n", $frame);
+        foreach ($rows as $index => $row) {
+            $visible = self::stripZoneMarkers($row);
+            if (Width::of($visible) > $cols) {
+                $rows[$index] = self::hardFit($visible, $cols);
             }
         }
 
@@ -3883,7 +4010,11 @@ final class Renderer
         }
 
         $bytes = (string) $result->imageBytes;
-        $cols = max(8, min(self::IMAGE_COLS, $width));
+        // Never wider than the pane: a marker block wider than $width would
+        // take fitToPane()'s wrap branch, whose rtrim deletes the padding the
+        // runtime paints the picture over. The content width can now be as
+        // small as 1 (audit 15b-09), so the old floor of 8 is gone.
+        $cols = max(1, min(self::IMAGE_COLS, $width));
         $rows = self::imageRows($bytes, $cols, $imageRows);
         $key = hash('xxh3', $bytes) . ':' . $cols . 'x' . $rows . ':' . $mosaic->protocol();
 
@@ -4080,7 +4211,11 @@ final class Renderer
     private static function renderDiff(string $diff, Theme $theme, int $width): string
     {
         // Border (2 cols) + padding(0, 1) (2 cols) sit outside the text.
-        $inner = max(8, $width - 4);
+        // Floored at 1, not 8: with an 8-cell floor the box was 12 cells wide
+        // in any pane narrower than that, and fitToPane() then wrapped its
+        // border rows apart (audit 15b-09). Every Width call below takes a
+        // budget of at least 1, and none of them is Width::wrap().
+        $inner = max(1, $width - 4);
 
         $rows = preg_split('/\r\n|\r|\n/', rtrim($diff, "\r\n")) ?: [];
         $overflow = count($rows) - self::DIFF_MAX_ROWS;
@@ -4339,7 +4474,17 @@ final class Renderer
 
         // The shell's own chrome, then this popup's border + padding(0, 1), then
         // the two columns every row spends on its "▸ "/"  " marker.
-        $budget = max(12, $chat->cols() - self::SHELL_CHROME_COLS - self::SLASH_MENU_CHROME_COLS - 2);
+        //
+        // The 12-cell floor only holds while the terminal can afford it: the
+        // popup sits at column 0 below the input box, so its true ceiling is
+        // the terminal minus its OWN chrome and the marker. Without that cap
+        // the floor made the popup 18 cells wide on a 16-column terminal
+        // (audit 15b-09). Never below 1: the name clip below takes
+        // `$budget - 1`, and clipToWidth() is a codepoint cut, not a wrap.
+        $budget = max(1, min(
+            max(12, $chat->cols() - self::SHELL_CHROME_COLS - self::SLASH_MENU_CHROME_COLS - 2),
+            $chat->cols() - self::SLASH_MENU_CHROME_COLS - 2,
+        ));
 
         $highlighter = new Highlighter();
         // Underlined as well as recoloured, for the reason renderPalette() gives:
@@ -4370,9 +4515,13 @@ final class Renderer
             // only bites on a name wider than the whole budget - which the
             // max(12, …) floor above rules out for every built-in row (the
             // widest is `/websearch` at 10 columns with its slash, measured with
-            // `Width::string()` over `CommandRegistry::all()`) but not for a
-            // loaded custom command, whose name comes from a filename.
-            $plainName = self::clipToWidth($specName, max(1, $budget - 1));
+            // `Width::string()` over `CommandRegistry::all()`) on any terminal
+            // of 18 columns or more, but not for a loaded custom command, whose
+            // name comes from a filename, nor on a terminal narrower than that.
+            // `$budget - 1` leaves the slash its cell. Floored at 0, not 1: at a
+            // 1-cell budget a 1-cell name plus the slash would be one cell
+            // wider than the popup was sized for.
+            $plainName = self::clipToWidth($specName, max(0, $budget - 1));
             $tail = self::clipToWidth(
                 ' — ' . $description,
                 $budget - Width::string('/' . $plainName . $hint),
@@ -5090,6 +5239,151 @@ final class Renderer
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * $frame with the zone sentinels taken out of every row a vertically
+     * centred $overlay will cover, plus what was taken: per row, each
+     * sentinel's bytes and the VISIBLE column it sat at.
+     *
+     * The rows are chosen with the arithmetic {@see Veil::composite()} uses
+     * (`Position::CENTER->yOffset()` over its `splitLines()` count, no extra
+     * offset). Every other row is returned byte-identical.
+     *
+     * @return array{0: string, 1: array<int, list<array{0: string, 1: int}>>}
+     */
+    private static function liftZonesUnderOverlay(string $frame, string $overlay): array
+    {
+        $rows = explode("\n", $frame);
+        $count = \count($rows);
+        if ($count > 0 && $rows[$count - 1] === '') {
+            --$count; // Veil::splitLines() drops a trailing empty line
+        }
+        $height = \count(explode("\n", rtrim($overlay, "\n")));
+        $top = Position::CENTER->yOffset($height, $count);
+
+        $lifted = [];
+        for ($row = max(0, $top), $end = min($count, $top + $height); $row < $end; $row++) {
+            $line = $rows[$row];
+            if (!str_contains($line, Sentinel::OPEN)) {
+                continue;
+            }
+            if (preg_match_all(self::ZONE_MARKER_PATTERN, $line, $found, PREG_OFFSET_CAPTURE) < 1) {
+                continue;
+            }
+            foreach ($found[0] as [$marker, $offset]) {
+                $lifted[$row][] = [$marker, Width::of(self::stripZoneMarkers(substr($line, 0, $offset)))];
+            }
+            $rows[$row] = self::stripZoneMarkers($line);
+        }
+
+        return [implode("\n", $rows), $lifted];
+    }
+
+    /**
+     * Put the zones {@see liftZonesUnderOverlay()} took out back into the
+     * composited $frame, at the visible columns they came from, each clipped
+     * to the part of its span that lies left or right of the overlay's
+     * columns and dropped when the overlay covers all of it. Those columns are
+     * recomputed the way {@see Veil::composite()} placed the overlay: centred
+     * against the backdrop's widest line, plus $shift.
+     *
+     * An open marker pairs with the next close marker in the row (zones in
+     * this renderer are single-row and unnested), so a dropped zone always
+     * loses both of its sentinels and the scan never sees half a pair.
+     *
+     * @param array<int, list<array{0: string, 1: int}>> $lifted
+     */
+    private static function restoreLiftedZones(string $frame, array $lifted, string $backdrop, string $overlay, int $shift): string
+    {
+        if ($lifted === []) {
+            return $frame;
+        }
+
+        $overlayWidth = self::widestOf(explode("\n", $overlay));
+        $left = Position::CENTER->xOffset($overlayWidth, self::widestOf(explode("\n", $backdrop))) + $shift;
+        $right = $left + $overlayWidth;
+
+        $rows = explode("\n", $frame);
+        foreach ($lifted as $row => $markers) {
+            if (!isset($rows[$row])) {
+                continue;
+            }
+            $keep = [];
+            $open = null;
+            foreach ($markers as $index => [$marker, $col]) {
+                if (!str_starts_with($marker, Sentinel::OPEN . '/')) {
+                    $open = $index;
+                    continue;
+                }
+                if ($open === null) {
+                    continue;
+                }
+                // Clipped to the part still on screen rather than dropped
+                // whole: a tool row's zone spans the whole shell row, so a
+                // palette over its right half would otherwise cost the visible
+                // left half its click too. A zone that keeps cells on both
+                // sides keeps the left part, since an id may appear once.
+                $start = $markers[$open][1];
+                $end = $col;
+                if ($start < $left) {
+                    $end = min($end, $left);
+                } elseif ($end > $right) {
+                    $start = max($start, $right);
+                } else {
+                    $start = $end; // wholly under the overlay
+                }
+                if ($start < $end) {
+                    $keep[] = [$markers[$open][0], $start];
+                    $keep[] = [$marker, $end];
+                }
+                $open = null;
+            }
+            // Right to left, so each insert leaves the columns still to come
+            // where they were; equal columns keep their original order because
+            // an insert lands at the EARLIEST byte that reaches its column.
+            foreach (array_reverse($keep) as [$marker, $col]) {
+                $rows[$row] = self::insertAtColumn($rows[$row], $col, $marker);
+            }
+        }
+
+        return implode("\n", $rows);
+    }
+
+    /**
+     * $row with $marker inserted at the earliest byte where the visible width
+     * before it is $col. SGR/OSC escapes and zone sentinels already in the
+     * row are zero-width here, so the insert never splits an escape or a
+     * grapheme cluster. Past the end of the row it is appended.
+     */
+    private static function insertAtColumn(string $row, int $col, string $marker): string
+    {
+        if ($col <= 0) {
+            return $marker . $row;
+        }
+        $tokens = preg_split(
+            '/(\x1b\[[0-?]*[ -\/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)|\xEE\x80\x80\/?[A-Za-z0-9._:-]*\xEE\x80\x81|\X)/u',
+            $row,
+            -1,
+            PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY,
+        );
+        if ($tokens === false) {
+            return $row . $marker;
+        }
+
+        $out = '';
+        $width = 0;
+        foreach ($tokens as $i => $token) {
+            if ($token[0] !== "\x1b" && preg_match(self::ZONE_MARKER_PATTERN, $token) !== 1) {
+                $width += Width::of($token);
+            }
+            $out .= $token;
+            if ($width >= $col) {
+                return $out . $marker . implode('', \array_slice($tokens, $i + 1));
+            }
+        }
+
+        return $out . $marker;
     }
 
     /**

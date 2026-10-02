@@ -69,12 +69,18 @@ final class StatusBarSpendTest extends TestCase
 
     /**
      * The figure `Renderer::renderStatusBar()`'s comment no longer states: the
-     * idle bar's width is a FUNCTION of the terminal width, taking four values,
-     * and the widths and their thresholds are read back here.
+     * idle bar's width is a FUNCTION of the terminal width, and the widths and
+     * their thresholds are read back here.
      *
      * It steps rather than growing continuously because each variable segment
-     * picks the widest FORM that fits (see `contextIndicator()`), so the bar
-     * jumps when a form becomes affordable.
+     * picks the widest FORM that fits (see `contextIndicator()` and
+     * `fitProcessingHint()`), so the bar jumps when a form becomes affordable.
+     *
+     * From 54 columns up these are the four widths the bar always had. Below
+     * 54 it used to stay 54 wide and over-run the terminal (audit 15b-09); it
+     * now sheds the processing hint's pieces and the context readout's long
+     * forms, so it is never wider than the terminal, and under 12 columns,
+     * where even `0% · ^P menu` does not fit, it is cut to the terminal.
      */
     public function testTheIdleBarTakesExactlyTheseWidthsAtEveryTerminalWidth(): void
     {
@@ -82,6 +88,7 @@ final class StatusBarSpendTest extends TestCase
         $previous = null;
         for ($cols = 1; $cols <= self::MAX_COLS; $cols++) {
             $width = $this->width($this->chat($cols));
+            $this->assertLessThanOrEqual($cols, $width, "the idle bar over-ran a {$cols}-column terminal");
             if ($width !== $previous) {
                 $steps[$cols] = $width;
                 $previous = $width;
@@ -89,11 +96,14 @@ final class StatusBarSpendTest extends TestCase
         }
 
         $this->assertSame(
-            [1 => 54, 62 => 62, 65 => 65, 75 => 75],
+            [
+                1 => 1, 2 => 2, 3 => 3, 4 => 4, 5 => 5, 6 => 6, 7 => 7, 8 => 8, 9 => 9, 10 => 10, 11 => 11, 12 => 12,
+                16 => 16, 24 => 24, 27 => 27, 29 => 29, 37 => 37, 38 => 38, 46 => 46, 49 => 49,
+                54 => 54, 62 => 62, 65 => 65, 75 => 75,
+            ],
             $steps,
-            'the idle bar, with no cap and nothing reported: four widths, each starting at the column '
-            . 'where the next context-readout form becomes affordable. Monotonic, so it never widens as '
-            . 'the terminal narrows',
+            'the idle bar, with no cap and nothing reported: each width starts at the column where the next '
+            . 'form becomes affordable. Monotonic, so it never widens as the terminal narrows',
         );
     }
 
@@ -369,45 +379,33 @@ final class StatusBarSpendTest extends TestCase
     }
 
     /**
-     * The claim that keeps this feature out of a NEIGHBOUR's business.
+     * The capped and billed states, idle and in flight, never paint a bar
+     * wider than the terminal.
      *
-     * `Renderer::KEY_HELP_TOO_SMALL` (33 columns) and `KEY_HELP_OVER_PROMPT` (35)
-     * are bounded against the narrowest bar any app state can produce, which
-     * `KeyHelpTest::testTheCuesFitTheNarrowestBarAnyAppStateCanProduce()` pins at
-     * **36** — a margin of 3 and 1 column respectively, and the second one is
-     * load-bearing. That corpus contains no capped or billed state, so it cannot
-     * see whether the spend segment eats the margin. This does.
-     *
-     * The floor holds because the segment is DROPPED at those widths rather than
-     * squeezed in: at 1 column the row has no room for anything past the
-     * mandatory two pieces. The two cue widths are read off the class rather than
-     * written down, so a change to either fails here instead of drifting.
+     * This used to pin the narrowest bar these states could produce (36
+     * columns) against the two keybinding-reference cues (33 and 35), because
+     * the bar was never truncated and a cue wider than the bar it replaced
+     * would have deepened the over-run. Since audit 15b-09 the bar and both
+     * cues are each fitted to the terminal, so the invariant is stated
+     * directly: `KeyHelpTest::testTheCuesFitTheTerminalInEveryAppState()`
+     * covers the cues, and this covers the states that corpus has no spend in.
      */
-    public function testACappedSessionStillCannotProduceABarNarrowerThanTheKeybindingCues(): void
+    public function testACappedSessionsBarFitsTheTerminalIdleAndInFlight(): void
     {
-        $reflection = new \ReflectionClass(Renderer::class);
-        $tooSmall = Width::of((string) $reflection->getConstant('KEY_HELP_TOO_SMALL'));
-        $overPrompt = Width::of((string) $reflection->getConstant('KEY_HELP_OVER_PROMPT'));
-
-        $narrowest = PHP_INT_MAX;
-        foreach ($this->spendStates() as $make) {
+        $sawSpend = false;
+        foreach ($this->spendStates() as $label => $make) {
             for ($cols = 1; $cols <= self::MAX_COLS; $cols++) {
                 $chat = $make($cols);
                 [$typed] = $chat->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'x'));
                 [$flight] = $typed->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Enter, ''));
 
-                $narrowest = min($narrowest, $this->width($chat), $this->width($flight));
+                $this->assertLessThanOrEqual($cols, $this->width($chat), "{$label}, idle, at {$cols} columns");
+                $this->assertLessThanOrEqual($cols, $this->width($flight), "{$label}, in flight, at {$cols} columns");
+                $sawSpend = $sawSpend || str_contains($this->bar($flight), '$');
             }
         }
 
-        $this->assertSame(
-            36,
-            $narrowest,
-            'the narrowest bar a capped/billed session can produce - the same floor the uncapped corpus '
-            . 'measures, because the spend segment is dropped at those widths rather than squeezed in',
-        );
-        $this->assertGreaterThan($tooSmall, $narrowest, 'so KEY_HELP_TOO_SMALL still fits the bar it replaces');
-        $this->assertGreaterThan($overPrompt, $narrowest, 'and so does KEY_HELP_OVER_PROMPT, on its 1 column');
+        $this->assertTrue($sawSpend, 'fixture: the in-flight bar has to carry the spend segment somewhere');
     }
 
     /**
