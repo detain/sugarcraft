@@ -106,8 +106,12 @@ Then work down this list:
    `~/.config/opencode/skills` are dropped entirely — project trees survive.
 5. **The walk hit a cap.** Depth 7, or 2000 directories. A `skills/x -> /usr/share`
    link cost 8.29s on one measured launch, which is why the caps exist.
-6. **A name collision.** Native always beats foreign; within the native tiers,
-   project beats user beats built-in.
+6. **A name collision.** The tier decides first — user beats project beats
+   built-in, whatever the format — and inside one tier native beats foreign
+   (opencode beats Claude). The loser is listed by `SUGARCRUSH_DEBUG_SKILLS=1`.
+7. **The file is too big.** A `SKILL.md` over 1 MiB, or one whose frontmatter
+   does not close within its first 64 KiB, is refused and listed by
+   `SUGARCRUSH_DEBUG_SKILLS=1`.
 
 **My skill loads but its `allowed-tools` / `effort` / `context: fork` does
 nothing.** Correct — those fields are parsed and carried but not acted on by the

@@ -6,6 +6,8 @@ namespace SugarCraft\Crush\Tests\Skills;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Skills\ForeignSkillDiscovery;
+use SugarCraft\Crush\Skills\SkillLoader;
+use SugarCraft\Crush\Skills\SkillOrigin;
 use SugarCraft\Crush\Skills\SkillSource;
 use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Tests\Skills\TemporaryDirectoryTrait;
@@ -122,6 +124,63 @@ final class ForeignSkillDiscoveryTest extends TestCase
         $this->assertSame('From home', $result['shared']->description);
         $this->assertArrayHasKey('home-only', $result);
         $this->assertArrayHasKey('project-only', $result, 'a project skill with no collision is still imported');
+    }
+
+    /**
+     * Audit 15d-03 (the ForeignSkillDiscovery half): the user's copy already
+     * won inside one convention, but the repository's copy was dropped with
+     * nothing recorded. The loss now lands in the loader's skipped(), keyed by
+     * the losing file, naming the winner — for both conventions.
+     */
+    public function testTheUsersCopyShadowingTheProjectsCopyIsRecordedInSkipped(): void
+    {
+        $projectRoot = $this->tempDir . '/project-shadow';
+        $fakeHome = $this->tempDir . '/fake-home-shadow';
+        $this->useHomeSandbox($fakeHome);
+
+        $conventions = [
+            'claude' => ['/.claude/skills', '/.claude/skills', 'discoverClaude'],
+            'opencode' => ['/.opencode/skills', '/.config/opencode/skills', 'discoverOpencode'],
+        ];
+        foreach ($conventions as $format => [$projectSuffix, $userSuffix, $method]) {
+            $this->createSkillFile($projectRoot . $projectSuffix, 'shared', "From project ({$format})");
+            $this->createSkillFile($fakeHome . $userSuffix, 'shared', "From home ({$format})");
+
+            $loader = new SkillLoader(reportSkips: false);
+            $result = (new ForeignSkillDiscovery($loader))->{$method}($projectRoot);
+
+            $this->assertSame("From home ({$format})", $result['shared']->description);
+            $loserPath = $projectRoot . $projectSuffix . '/shared/SKILL.md';
+            $this->assertArrayHasKey($loserPath, $loader->skipped(), "{$format}: the project's copy must be reported");
+            $reason = $loader->skipped()[$loserPath];
+            $this->assertStringContainsString("shadowed by [user, foreign: {$format}] skill {$fakeHome}{$userSuffix}/shared/SKILL.md", $reason);
+            $this->assertStringContainsString("this [project, foreign: {$format}] skill was not loaded", $reason);
+            $this->assertCount(1, $loader->skipped(), "{$format}: nothing else was shadowed");
+        }
+    }
+
+    /**
+     * The unmerged view SkillManager interleaves with the native tiers: one
+     * entry per tier present, lowest precedence first, each skill stamped with
+     * its tier — and nothing recorded, since nothing was merged yet.
+     */
+    public function testClaudeTiersKeepsEachTierApartLowestFirst(): void
+    {
+        $projectRoot = $this->tempDir . '/project-tiers';
+        $fakeHome = $this->tempDir . '/fake-home-tiers';
+        $this->useHomeSandbox($fakeHome);
+        $this->createSkillFile($projectRoot . '/.claude/skills', 'shared', 'From project');
+        $this->createSkillFile($fakeHome . '/.claude/skills', 'shared', 'From home');
+
+        $loader = new SkillLoader(reportSkips: false);
+        $tiers = (new ForeignSkillDiscovery($loader))->claudeTiers($projectRoot);
+
+        $this->assertSame([SkillOrigin::Project->value, SkillOrigin::User->value], array_keys($tiers));
+        $this->assertSame('From project', $tiers['project']['shared']->description);
+        $this->assertSame(SkillOrigin::Project, $tiers['project']['shared']->origin);
+        $this->assertSame('From home', $tiers['user']['shared']->description);
+        $this->assertSame(SkillOrigin::User, $tiers['user']['shared']->origin);
+        $this->assertSame([], $loader->skipped());
     }
 
     // -------------------------------------------------------------------------

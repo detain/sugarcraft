@@ -299,9 +299,10 @@ final class AgentManagerWiringTest extends TestCase
 
     /**
      * On-disk presets reach the launched roster from both search paths, the
-     * project copy wins a name collision (the precedence
-     * {@see \SugarCraft\Crush\Skills\SkillLoader} already applies to skills — a
-     * repo's checked-in definition is the more specific one), and a preset
+     * project copy wins a name collision (a repo's checked-in definition is the
+     * more specific one — the order {@see \SugarCraft\Crush\Skills\SkillLoader}
+     * also used for skills until audit 15d-03(b) put the user tier first there),
+     * and a preset
      * named after a built-in REPLACES it rather than adding a duplicate row to
      * `/agents`.
      *

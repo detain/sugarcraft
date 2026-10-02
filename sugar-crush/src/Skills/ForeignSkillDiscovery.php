@@ -25,23 +25,42 @@ final class ForeignSkillDiscovery
      * and the search order below is therefore lowest-priority-first because
      * the merge loop is last-write-wins.
      *
-     * That is DELIBERATELY the opposite of the "built-in < user < project"
-     * order {@see SkillLoader::loadAll()} uses for native
-     * `.sugar-crush/skills`, and the difference is who wrote the file. A
-     * native project skill is something you put in your own repo. A foreign
-     * one arrives with any repository you clone, and project-last meant that
-     * cloning a repo carrying `.claude/skills/db-query` silently re-pointed
-     * the `db-query` the user had been relying on — with a different body,
-     * different `allowedTools`, possibly `context: fork`. That is the same
-     * "cloned content silently redefines the user's setup" the project hook
-     * file is gated for ({@see \SugarCraft\Crush\Cli\Bootstrap::hookFiles()}),
-     * one notch weaker: prompt text rather than shell. A project's foreign
-     * skill is still IMPORTED and still offered — it just cannot displace a
-     * name the user already has.
+     * This rule came first, and the native tiers have since been brought into
+     * line with it ({@see SkillOrigin::precedence()}, audit 15d-03(b)): the
+     * difference that once justified two orders — a native project skill is
+     * "something you put in your own repo" — does not hold, since a native
+     * `.sugar-crush/skills` arrives with a clone exactly as a `.claude/skills`
+     * does. Project-last meant that cloning a repo carrying
+     * `.claude/skills/db-query` silently re-pointed the `db-query` the user had
+     * been relying on — with a different body, different `allowedTools`,
+     * possibly `context: fork`. That is the same "cloned content silently
+     * redefines the user's setup" the project hook file is gated for
+     * ({@see \SugarCraft\Crush\Cli\Bootstrap::hookFiles()}), one notch weaker:
+     * prompt text rather than shell. A project's foreign skill is still
+     * IMPORTED and still offered — it just cannot displace a name the user
+     * already has, and the loss is recorded in the loader's
+     * {@see SkillLoader::skipped()} (audit 15d-03: this shadowing was the one
+     * still silent after the native and cross-convention ones were reported).
      *
      * @return array<string, Skill> keyed by skill name, tagged SkillSource::Claude
      */
     public function discoverClaude(string $projectRoot): array
+    {
+        return $this->merge($this->claudeTiers($projectRoot));
+    }
+
+    /**
+     * {@see discoverClaude()}'s two trees, NOT merged: each tier's skills keyed
+     * by {@see SkillOrigin} value, lowest precedence first.
+     *
+     * For {@see SkillManager::loadAll()}, which interleaves these with the
+     * native tiers — a user's `~/.claude/skills` entry must outrank a project's
+     * native `.sugar-crush/skills` one, and a merged result has already lost
+     * which tier each skill came from.
+     *
+     * @return array<string, array<string, Skill>>
+     */
+    public function claudeTiers(string $projectRoot): array
     {
         return $this->discover(
             self::tiers($projectRoot, '/.claude/skills', '/.claude/skills'),
@@ -111,6 +130,17 @@ final class ForeignSkillDiscovery
      */
     public function discoverOpencode(string $projectRoot): array
     {
+        return $this->merge($this->opencodeTiers($projectRoot));
+    }
+
+    /**
+     * {@see discoverOpencode()}'s two trees, NOT merged — see
+     * {@see claudeTiers()}.
+     *
+     * @return array<string, array<string, Skill>>
+     */
+    public function opencodeTiers(string $projectRoot): array
+    {
         return $this->discover(
             // The two suffixes differ (opencode keeps its user tree under
             // `~/.config`), which is the whole reason {@see tiers()} takes them
@@ -121,24 +151,63 @@ final class ForeignSkillDiscovery
     }
 
     /**
-     * Merge every directory's skills into one registry, tagging each with
-     * $source. $dirs MUST be ordered lowest-priority-first: the loop is
-     * last-write-wins, so a later directory's skill overrides an earlier
-     * one sharing its name.
+     * Read every directory's skills, tagged with $source and with the tier
+     * the directory belongs to, grouped by tier in
+     * {@see SkillOrigin::precedence()} order — lowest first, whatever order
+     * $dirs lists them in.
      *
      * @param array<string, array{0: string|null, 1: string|null, 2: SkillOrigin}> $dirs
      *        directory => [the extra containment root its symlinks may resolve
      *        into (null confines them to the directory itself), the checkout the
      *        directory itself must resolve strictly inside (null for a directory
      *        whose location no repository chose), the tier its skills belong to]
-     * @return array<string, Skill>
+     * @return array<string, array<string, Skill>>
      */
     private function discover(array $dirs, SkillSource $source): array
     {
-        $skills = [];
+        $byTier = [];
         foreach ($dirs as $dir => [$ownedBy, $anchoredIn, $origin]) {
             foreach ($this->loader->loadFromDirectory($dir, $ownedBy, $anchoredIn) as $name => $skill) {
-                $skills[$name] = $this->tag($skill, $source)->withOrigin($origin);
+                $byTier[$origin->value][$name] = $this->tag($skill, $source)->withOrigin($origin);
+            }
+        }
+
+        $tiers = [];
+        foreach (SkillOrigin::precedence() as $origin) {
+            if (isset($byTier[$origin->value])) {
+                $tiers[$origin->value] = $byTier[$origin->value];
+            }
+        }
+
+        return $tiers;
+    }
+
+    /**
+     * Fold one convention's tiers into one name => Skill map, later tier
+     * winning, and record every skill a later tier replaces through the
+     * loader's one shadowing record ({@see SkillLoader::recordShadowing()}),
+     * so it reaches {@see SkillLoader::skipped()} and the launch notice
+     * alongside every other shadowing.
+     *
+     * @param array<string, array<string, Skill>> $tiers
+     * @return array<string, Skill>
+     */
+    private function merge(array $tiers): array
+    {
+        $skills = [];
+        foreach ($tiers as $tier) {
+            foreach ($tier as $name => $skill) {
+                if (isset($skills[$name])) {
+                    $loser = $skills[$name];
+                    $this->loader->recordShadowing(
+                        (string) $name,
+                        $loser->sourcePath,
+                        $loser->origin->badge($loser->source),
+                        $skill->sourcePath,
+                        $skill->origin->badge($skill->source),
+                    );
+                }
+                $skills[$name] = $skill;
             }
         }
 

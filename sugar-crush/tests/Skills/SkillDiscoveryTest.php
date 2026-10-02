@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Skills;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Skills\SkillDiscovery;
+use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Tests\Skills\TemporaryDirectoryTrait;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
@@ -303,28 +304,67 @@ final class SkillDiscoveryTest extends TestCase
         }
     }
 
-    public function testDiscoverAllLaterPathsOverrideEarlierOnConflict(): void
+    /**
+     * Kept in step with the live loader (audit 15d-03(b)): the user's own tree
+     * beats a vendored lib's — it used to be the reverse, lib highest — and the
+     * lib's copy is recorded as shadowed rather than dropped silently.
+     */
+    public function testDiscoverAllLetsTheUsersSkillBeatALibsAndReportsIt(): void
     {
-        $discovery = new SkillDiscovery();
+        $discovery = new SkillDiscovery(new SkillLoader(reportSkips: false));
 
-        // Set up user skills with a conflicting skill name
         $fakeHome = $this->tempDir . '/override-user';
         $this->useHomeSandbox($fakeHome);
         mkdir($fakeHome . '/.sugar-crush/skills/shared-skill', 0777, true);
         file_put_contents($fakeHome . '/.sugar-crush/skills/shared-skill/SKILL.md', "---\ndescription: User version\n---\n");
 
-        // Set up lib skills with same name - should win (highest priority)
         $libPath = $this->tempDir . '/override-lib';
         mkdir($libPath . '/.sugar-crush/skills/shared-skill', 0777, true);
         file_put_contents($libPath . '/.sugar-crush/skills/shared-skill/SKILL.md', "---\ndescription: Lib version\n---\n");
 
         try {
-            $result = $discovery->discoverAll([$libPath]);
+            $result = $discovery->discoverAll([$libPath], $this->tempDir . '/no-project');
 
-            // Should only have one 'shared-skill' entry, from lib (highest priority)
             $this->assertCount(1, $result);
-            $this->assertArrayHasKey('shared-skill', $result);
-            $this->assertStringContainsString('override-lib', $result['shared-skill']);
+            $this->assertStringContainsString('override-user', $result['shared-skill']);
+
+            $shadowed = array_filter(
+                $discovery->skipped(),
+                static fn(string $path): bool => str_contains($path, 'override-lib'),
+                ARRAY_FILTER_USE_KEY,
+            );
+            $this->assertCount(1, $shadowed, 'the lib copy must be reported as shadowed');
+            $this->assertStringContainsString('shadowed by [user] skill', (string) reset($shadowed));
+            $this->assertStringContainsString('this [lib] skill was not loaded', (string) reset($shadowed));
+        } finally {
+            $this->useHomeSandbox($this->tempDir . '/default-empty-home');
+        }
+    }
+
+    /**
+     * lib < project < user end to end: the project beats a lib it vendors, and
+     * the user beats the project.
+     */
+    public function testDiscoverAllRanksLibBelowProjectBelowUser(): void
+    {
+        $discovery = new SkillDiscovery(new SkillLoader(reportSkips: false));
+
+        $projectRoot = $this->tempDir . '/rank-project';
+        $libPath = $this->tempDir . '/rank-lib';
+        $fakeHome = $this->tempDir . '/rank-user';
+        $this->useHomeSandbox($fakeHome);
+        foreach ([$libPath => ['a', 'b'], $projectRoot => ['a', 'b'], $fakeHome => ['b']] as $root => $names) {
+            foreach ($names as $name) {
+                mkdir($root . '/.sugar-crush/skills/' . $name, 0777, true);
+                file_put_contents($root . '/.sugar-crush/skills/' . $name . '/SKILL.md', "---\ndescription: {$root}\n---\n");
+            }
+        }
+
+        try {
+            $result = $discovery->discoverAll([$libPath], $projectRoot);
+
+            $this->assertStringContainsString('rank-project', $result['a'], 'the project beats the lib');
+            $this->assertStringContainsString('rank-user', $result['b'], 'the user beats the project');
         } finally {
             $this->useHomeSandbox($this->tempDir . '/default-empty-home');
         }

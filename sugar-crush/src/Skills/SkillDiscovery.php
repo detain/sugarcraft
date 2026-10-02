@@ -10,12 +10,15 @@ use SugarCraft\Crush\Support\HomeDirectory;
  * Discovers skill directories across project, user, and per-lib search paths.
  *
  * Search paths (in priority order, highest last):
- *   1. Project skills:   {projectRoot}/.sugar-crush/skills/
- *   2. User skills:      ~/.sugar-crush/skills/
- *   3. Per-lib skills:   {libPath}/.sugar-crush/skills/  (for each lib in $libPaths)
+ *   1. Per-lib skills:   {libPath}/.sugar-crush/skills/  (for each lib in $libPaths)
+ *   2. Project skills:   {projectRoot}/.sugar-crush/skills/
+ *   3. User skills:      ~/.sugar-crush/skills/
  *
  * discoverAll() merges all three sources with later paths overriding earlier
- * when the same skill name is found in multiple locations.
+ * when the same skill name is found in multiple locations, and records each
+ * override in {@see skipped()} — the order and the record {@see SkillLoader}
+ * keeps for the live walk ({@see SkillOrigin::precedence()}: the user beats the
+ * project, audit 15d-03(b)).
  *
  * DORMANT SEAM, kept and completed rather than dropped: nothing in `src/` or
  * `bin/` calls this class today — {@see SkillManager::loadAll()} is what the
@@ -118,12 +121,22 @@ final class SkillDiscovery
     }
 
     /**
-     * Discover all skills across project, user, and lib search paths.
+     * Discover all skills across lib, project and user search paths.
      *
      * Priority order (later overrides earlier on name conflicts):
-     *   1. Project skills
-     *   2. User skills
-     *   3. Per-lib skills (in the order provided by $libPaths)
+     *   1. Per-lib skills (lowest, in the order provided by $libPaths)
+     *   2. Project skills
+     *   3. User skills (highest)
+     *
+     * KEPT IN STEP WITH THE LIVE ORDER although nothing calls this yet: it used
+     * to be project < user < lib, so a vendored dependency's
+     * `.sugar-crush/skills` — another repository's content, the provenance
+     * {@see discoverLibSkills()} anchors for — outranked the user's own tree.
+     * The live walk ({@see SkillLoader::loadAllManifests()}) ranks the user
+     * above everything a checkout carries (audit 15d-03(b)); a lib tree is
+     * checkout content too, and ranks below the project that vendored it. Each
+     * replaced skill is recorded in {@see skipped()} through
+     * {@see SkillLoader::recordShadowing()}, as the live walk records its own.
      *
      * @param array<string> $libPaths   ordered list of library paths to scan for nested skills
      * @param string        $projectRoot root path for project skills (default '.')
@@ -131,22 +144,30 @@ final class SkillDiscovery
      */
     public function discoverAll(array $libPaths = [], string $projectRoot = '.'): array
     {
-        $discovered = [];
-
-        // 1. Project skills (lowest priority)
-        foreach ($this->discoverProjectSkills($projectRoot) as $path) {
-            $discovered[$this->skillNameFromPath($path)] = $path;
-        }
-
-        // 2. User skills (override project)
-        foreach ($this->discoverUserSkills() as $path) {
-            $discovered[$this->skillNameFromPath($path)] = $path;
-        }
-
-        // 3. Per-lib skills (highest priority, in given order)
+        /** @var list<array{0: string, 1: list<string>}> $tiers [tier label, skill directories], lowest first */
+        $tiers = [];
         foreach ($libPaths as $libPath) {
-            foreach ($this->discoverLibSkills($libPath) as $path) {
-                $discovered[$this->skillNameFromPath($path)] = $path;
+            $tiers[] = ['lib', $this->discoverLibSkills($libPath)];
+        }
+        $tiers[] = [SkillOrigin::Project->value, $this->discoverProjectSkills($projectRoot)];
+        $tiers[] = [SkillOrigin::User->value, $this->discoverUserSkills()];
+
+        $discovered = [];
+        $tierOf = [];
+        foreach ($tiers as [$tier, $paths]) {
+            foreach ($paths as $path) {
+                $name = $this->skillNameFromPath($path);
+                if (isset($discovered[$name])) {
+                    $this->loader->recordShadowing(
+                        $name,
+                        $discovered[$name] . '/SKILL.md',
+                        $tierOf[$name],
+                        $path . '/SKILL.md',
+                        $tier,
+                    );
+                }
+                $discovered[$name] = $path;
+                $tierOf[$name] = $tier;
             }
         }
 

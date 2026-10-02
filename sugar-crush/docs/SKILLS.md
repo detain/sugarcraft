@@ -20,17 +20,18 @@ moving.
 
 `SkillLoader` walks **three** native locations; a separate discovery class walks
 **four** foreign ones. The three are the three calls
-`SkillLoader::loadAllManifests()` makes —
-`builtInSkillsDir()`, `userSkillsDir()`, `projectSkillsDir()` — and they are
-merged lowest-priority-first by `mergeTier()`, so a later tier's skill with
-the same name replaces an earlier one (and the replaced one is reported — see
-below):
+`SkillLoader::manifestTiers()` makes —
+`builtInSkillsDir()`, `projectSkillsDir()`, `userSkillsDir()` — and
+`SkillLoader::loadAllManifests()` merges them lowest-priority-first by
+`mergeTier()`, in the order `SkillOrigin::precedence()` states, so a later
+tier's skill with the same name replaces an earlier one (and the replaced one
+is reported — see below):
 
 | Tier | Directory | Notes |
 |---|---|---|
-| built-in | `src/Skills/BuiltIn/` | Ships with the package — eight directories in this checkout (`api-design`, `composer-wizard`, `laravel-best-practices`, `php-best-practices`, `phpunit-master`, `security-audit`, `symfony-best-practices`, `testing-strategies`). |
-| user | `~/.sugar-crush/skills/` | Yours. Symlinks inside it may resolve anywhere under `$HOME`. |
-| project | `<root>/.sugar-crush/skills/` | Confined to the checkout; see [Containment](#containment). |
+| built-in | `src/Skills/BuiltIn/` | Ships with the package — eight directories in this checkout (`api-design`, `composer-wizard`, `laravel-best-practices`, `php-best-practices`, `phpunit-master`, `security-audit`, `symfony-best-practices`, `testing-strategies`). Lowest precedence. |
+| project | `<root>/.sugar-crush/skills/` | Confined to the checkout; see [Containment](#containment). Beats a built-in. |
+| user | `~/.sugar-crush/skills/` | Yours. Symlinks inside it may resolve anywhere under `$HOME`. Highest precedence. |
 
 The SugarCraft monorepo's own skills — `explore-codebase`, `matchups-sync`,
 `mcp-authoring` and `worktree-workflow` — are **not** built-ins. They live in
@@ -48,23 +49,41 @@ badged with a `SkillSource` (`src/Skills/ForeignSkillDiscovery.php`):
 `<root>/.claude/skills`, `~/.claude/skills`, `<root>/.opencode/skills`,
 `~/.config/opencode/skills`.
 
-**Native always wins a name collision.** `SkillManager::loadAll()` registers
-the foreign trees first and lays the native manifests over the top, so cloning
-a repository that ships `.claude/skills/db-query` cannot re-point a `db-query`
-you already had. Within one foreign convention the precedence is the *other*
-way round — project loses to user — for the same reason stated from the other
-side: a project's foreign skill arrived with somebody's repository.
+### Which skill keeps a name
 
-Between the two foreign conventions, opencode wins over Claude. That pair has
-no principled winner; what matters is that the order is fixed in
-`SkillManager::loadAll()` rather than decided by scan order.
+**The user beats the project.** On a name collision the tier decides first —
+built-in < project < user — whatever format each file is in, and the format
+only breaks a tie *inside* one tier:
+
+```text
+built-in  <  project: claude < opencode < native  <  user: claude < opencode < native
+```
+
+`SkillManager::loadAll()` registers the tiers in that order into a
+last-write-wins registry. So cloning a repository that ships
+`.sugar-crush/skills/deploy` or `.claude/skills/db-query` cannot re-point a
+`deploy` or `db-query` you already had — in `~/.sugar-crush/skills`,
+`~/.claude/skills` or `~/.config/opencode/skills` alike. A repository may
+still *add* a skill, and may replace a built-in (the tier below it); it may
+not re-point one you wrote. Until audit 15d-03(b) the native order was
+built-in < user < project, so a repository's `.sugar-crush/skills/deploy`
+silently replaced yours, and "native always wins" let it replace your
+`~/.claude/skills` copy too.
+
+Inside one tier, **native wins**: a repository carrying both
+`.claude/skills/deploy` and `.sugar-crush/skills/deploy` gets the native one,
+and installing another CLI cannot re-point a skill in your own
+`~/.sugar-crush/skills`. Between the two foreign conventions, opencode wins
+over Claude. That pair has no principled winner; what matters is that the
+order is fixed in `SkillManager::loadAll()` rather than decided by scan order.
 
 **Every shadowing is reported.** Whichever tier wins, the skill that lost is
 not dropped silently: each one a later tier (or a native skill, or opencode
-over Claude) replaces is recorded in `SkillLoader::skipped()` /
-`SkillManager::skipped()` under the losing file's path, with a reason naming
-the winner — `shadowed by [project] skill <path> (same name 'deploy'); this
-[user] skill was not loaded`. It is counted in the launch notice and listed by
+over Claude, or your copy over a repository's inside one foreign convention)
+replaces is recorded in `SkillLoader::skipped()` / `SkillManager::skipped()`
+under the losing file's path, with a reason naming the winner — `shadowed by
+[user] skill <path> (same name 'deploy'); this [project] skill was not
+loaded`. It is counted in the launch notice and listed by
 `SUGARCRUSH_DEBUG_SKILLS=1`, like an unreadable file. A loser that is the
 winner's own file or a byte-identical copy of it (one skill synced into several
 tools' trees) loses nothing and is not reported.
@@ -377,6 +396,18 @@ roster is cheap:
 provenance tag rides on a `Skill` object and the manifest arrays have nowhere to
 carry it. An imported skill's body is therefore read at launch even if it is
 never used.
+
+**Every read is bounded** (`SkillFileReader`, audit 15d-27). A `SKILL.md` or an
+asset over **1 MiB** (`SkillFileReader::MAX_FILE_BYTES`) is refused from a
+`stat()`, before any of it is read, and the read itself stops one byte past the
+ceiling in case the file grows in between. The manifest stage reads only the
+first **64 KiB** (`MAX_FRONTMATTER_BYTES`), which is where the frontmatter has
+to close; a block still open at that point is refused. A refused skill is not
+listed — its body could never be loaded, so offering it would promise the model
+something the `Skill` tool must then refuse — and is recorded on
+`SkillLoader::skipped()` with the size, so the launch notice counts it. These
+are memory guards, not prompt budgets: what an enabled skill's body may cost in
+the system prompt is the separate, much smaller per-skill budget.
 
 ## Invoking a skill
 

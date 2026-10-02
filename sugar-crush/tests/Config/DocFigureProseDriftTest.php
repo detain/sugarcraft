@@ -44,7 +44,9 @@ use SugarCraft\Crush\Providers\TransientFailure;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
+use SugarCraft\Crush\Skills\SkillFileReader;
 use SugarCraft\Crush\Skills\SkillLoader;
+use SugarCraft\Crush\Skills\SkillOrigin;
 use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Support\TimedFileLock;
@@ -3050,11 +3052,11 @@ final class DocFigureProseDriftTest extends TestCase
      * E686 tranche-9 (AS): the SKILLS.md tier counts and the merge orders the
      * page's precedence paragraphs state are re-counted from the walks they
      * cite — three native directory calls in priority order in
-     * {@see SkillLoader::loadAllManifests()}, four foreign tree suffixes
-     * across the two discoverers in {@see ForeignSkillDiscovery}, the
-     * foreign-first/native-over-top registration order in
-     * {@see SkillManager::loadAll()}, and the user-after-project append
-     * inside tiers() that decides every within-convention collision.
+     * {@see SkillLoader::manifestTiers()} (folded by loadAllManifests()), four
+     * foreign tree suffixes across the two discoverers in
+     * {@see ForeignSkillDiscovery}, the tier-first, then claude/opencode/native
+     * registration order in {@see SkillManager::loadAll()} (audit 15d-03(b)),
+     * and the user-after-project append inside tiers().
      */
     public function testSkillsPageTierCountsMatchTheWalksTheyCite(): void
     {
@@ -3068,27 +3070,42 @@ final class DocFigureProseDriftTest extends TestCase
         );
         $wordNumbers = ['three' => 3, 'four' => 4];
 
-        $loaderBody = self::bodyExcerpt(self::sourceOf('Skills/SkillLoader.php'), 'loadAllManifests');
+        $loader = self::sourceOf('Skills/SkillLoader.php');
+        $tiersBody = self::bodyExcerpt($loader, 'manifestTiers', 1500);
         self::assertSame(
             3,
-            preg_match_all('/\$this->(\w+SkillsDir)\(/', $loaderBody, $native),
+            preg_match_all('/\$this->(\w+SkillsDir)\(/', $tiersBody, $native),
             'the native walk no longer calls its three directory methods through $this — the pin lost its ground',
         );
         self::assertSame(3, $wordNumbers['three'] ?? -1, 'the sentence spelled its native count as something other than three');
         self::assertSame(
-            ['builtInSkillsDir', 'userSkillsDir', 'projectSkillsDir'],
+            ['builtInSkillsDir', 'projectSkillsDir', 'userSkillsDir'],
             $native[1],
-            'loadAllManifests() changed its native tier order or arity — the page names these three calls in this order',
+            'manifestTiers() changed its native tier order or arity — the page names these three calls in this order',
         );
+        self::assertStringContainsString('foreach (SkillOrigin::precedence() as $origin)', $tiersBody, 'manifestTiers() no longer orders its tiers by SkillOrigin::precedence() — the page says that is where the order is stated');
         // mergeTier(), not array_merge(), since audit 15d-03 (a): the same
-        // later-wins merge, but one that records each shadowed skill.
-        self::assertSame(2, preg_match_all('/\$this->mergeTier\(/', $loaderBody), 'the three tiers are no longer joined by exactly two mergeTier() calls — the "merged lowest-priority-first by mergeTier()" sentence describes a different shape');
-        self::assertStringContainsString('merged lowest-priority-first by `mergeTier()`', $skills, 'the page no longer names the merge the pin above counts');
+        // later-wins merge, but one that records each shadowed skill — folded
+        // over manifestTiers() since 15d-03 (b).
+        $mergeBody = self::bodyExcerpt($loader, 'loadAllManifests', 400);
+        self::assertSame(1, preg_match('/foreach \(\$this->manifestTiers\(\$projectRoot\) as \$tier\) \{\s*\$manifests = \$this->mergeTier\(\$manifests, \$tier\);/', $mergeBody), 'loadAllManifests() no longer folds manifestTiers() through mergeTier() — the "merges them lowest-priority-first by mergeTier()" sentence describes a different shape');
+        self::assertStringContainsString('`SkillLoader::loadAllManifests()` merges them lowest-priority-first by `mergeTier()`, in the order `SkillOrigin::precedence()` states', $skills, 'the page no longer names the merge the pin above checks');
         self::assertSame(
             1,
-            preg_match('/The three are the three calls `SkillLoader::loadAllManifests\(\)` makes/', $skills),
+            preg_match('/The three are the three calls `SkillLoader::manifestTiers\(\)` makes/', $skills),
             'the sentence stopped naming the method whose calls it counts',
         );
+        self::assertSame(
+            [SkillOrigin::BuiltIn, SkillOrigin::Project, SkillOrigin::User],
+            SkillOrigin::precedence(),
+            'the tier order changed — the page\'s table rows, its "built-in < project < user" diagram and the "user beats the project" rule all state this one',
+        );
+        self::assertSame(
+            1,
+            preg_match('/\| built-in \|.*\| project \|.*\| user \|/', $skills),
+            'the tier table no longer lists built-in, project, user top to bottom — lowest precedence first, as SkillOrigin::precedence() orders them',
+        );
+        self::assertStringContainsString('built-in < project: claude < opencode < native < user: claude < opencode < native', $skills, 'the precedence diagram no longer matches the tier-then-format order SkillManager::loadAll() registers in');
 
         $foreign = self::sourceOf('Skills/ForeignSkillDiscovery.php');
         self::assertSame(
@@ -3115,14 +3132,17 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString('`src/Skills/ForeignSkillDiscovery.php`', $skills, 'the page lost its pointer to the discovery class');
 
         $managerBody = self::bodyExcerpt(self::sourceOf('Skills/SkillManager.php'), 'loadAll');
-        $claudeAt = strpos($managerBody, 'discoverClaude(');
-        $opencodeAt = strpos($managerBody, 'discoverOpencode(');
+        $tierLoopAt = strpos($managerBody, 'foreach (SkillOrigin::precedence() as $tier)');
+        $claudeAt = strpos($managerBody, '$claude[$tier->value]');
+        $opencodeAt = strpos($managerBody, '$opencode[$tier->value]');
         $nativeAt = strpos($managerBody, 'registerFromManifest(');
+        self::assertIsInt($tierLoopAt, 'loadAll() no longer walks SkillOrigin::precedence() tier by tier — "the tier decides first" is that loop');
         self::assertIsInt($claudeAt);
         self::assertIsInt($opencodeAt);
         self::assertIsInt($nativeAt);
-        self::assertTrue($claudeAt < $opencodeAt, 'loadAll() no longer registers Claude before opencode — the page says opencode wins cross-convention, which needs this order');
-        self::assertTrue($opencodeAt < $nativeAt, 'the native manifests no longer land AFTER the foreign trees — "Native always wins a name collision" is this order');
+        self::assertTrue($tierLoopAt < $claudeAt, 'the foreign trees are no longer registered inside the tier loop — the tier would no longer decide first');
+        self::assertTrue($claudeAt < $opencodeAt, 'loadAll() no longer registers Claude before opencode inside a tier — the page says opencode wins cross-convention, which needs this order');
+        self::assertTrue($opencodeAt < $nativeAt, 'the native manifests no longer land AFTER a tier\'s foreign trees — "inside one tier, native wins" is this order');
 
         $tiersBody = self::bodyExcerpt($foreign, 'tiers');
         $projectAt = strpos($tiersBody, '$projectRoot . $projectSuffix =>');
@@ -3130,6 +3150,22 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertIsInt($projectAt);
         self::assertIsInt($userAt);
         self::assertTrue($projectAt < $userAt, 'tiers() no longer appends the user tree after the project tree — the page says project LOSES to user within one convention');
+    }
+
+    /**
+     * Audit 15d-27: the two read ceilings SKILLS.md quotes ("1 MiB",
+     * "64 KiB") are the constants {@see SkillFileReader} enforces, and the
+     * page names both constants — a figure in prose that no test derives rots.
+     */
+    public function testSkillsPageReadCeilingsAreTheReaderConstants(): void
+    {
+        $skills = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SKILLS.md'));
+        $bold = \chr(42) . \chr(42);
+
+        self::assertSame(1024 * 1024, SkillFileReader::MAX_FILE_BYTES, 'the whole-file ceiling is no longer 1 MiB — the page quotes 1 MiB');
+        self::assertSame(64 * 1024, SkillFileReader::MAX_FRONTMATTER_BYTES, 'the frontmatter window is no longer 64 KiB — the page quotes 64 KiB');
+        self::assertStringContainsString("over {$bold}1 MiB{$bold} (`SkillFileReader::MAX_FILE_BYTES`)", $skills, 'the page lost the whole-file ceiling or its constant');
+        self::assertStringContainsString("first {$bold}64 KiB{$bold} (`MAX_FRONTMATTER_BYTES`)", $skills, 'the page lost the frontmatter window or its constant');
     }
 
     /**

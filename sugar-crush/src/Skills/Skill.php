@@ -43,10 +43,11 @@ final readonly class Skill
         if (!is_file($path)) {
             throw new \RuntimeException("Failed to read skill file: $path");
         }
-        $content = file_get_contents($path);
-        if ($content === false) {
-            throw new \RuntimeException("Failed to read skill file: $path");
-        }
+        // Bounded (audit 15d-27): this is the eager read every foreign skill and
+        // every `enabledSkills` body goes through, and a repository chooses the
+        // file. Over the ceiling is the same RuntimeException a read failure
+        // was, so each caller's existing skip or notice reports it.
+        $content = SkillFileReader::read($path, 'skill file');
 
         // Require frontmatter - SKILL.md files must have valid frontmatter
         if (!preg_match('/^---\s*\n.*?\n---\s*\n/s', $content)) {

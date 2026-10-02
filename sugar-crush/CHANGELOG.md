@@ -80,6 +80,40 @@ happen to share the numbers 1–4.
   and whole Bash strings, so they denied even `grep -c . candy-core/composer.json`
   and `[ -f "$d/composer.json" ]`. Neither file is a secret or policy.
 
+### Skills — precedence, bounded reads, the moved monorepo skills (2026-10)
+
+- **Your own skill beats a project's** (audit 15d-03(b)). A name collision is
+  now decided by tier first — built-in < project < user, stated once in
+  `SkillOrigin::precedence()` — and by format only inside one tier (Claude <
+  opencode < native). The native order used to be built-in < user < project
+  and "native always wins" ran across tiers, so a cloned repository's
+  `.sugar-crush/skills/deploy` silently replaced your `~/.sugar-crush/skills/
+  deploy`, and its native `db-query` your `~/.claude/skills/db-query`. A
+  repository may still add a skill and replace a built-in. `SkillManager::
+  loadAll()` interleaves the tiers (`SkillLoader::manifestTiers()`,
+  `ForeignSkillDiscovery::claudeTiers()`/`opencodeTiers()`); the dormant
+  `SkillDiscovery::discoverAll()` follows the same order (lib < project < user,
+  where it used to rank a vendored lib highest).
+- **Every shadowing is reported**, including the last silent one (15d-03): a
+  repository's `.claude/skills` or `.opencode/skills` copy losing to the user's
+  copy of the same convention now lands in `skipped()` like every other loser,
+  and so in the launch notice.
+- **Skill files are read bounded** (audit 15d-27, `Skills\SkillFileReader`). A
+  `SKILL.md` or asset over 1 MiB is refused from a `stat()` without being
+  read; the manifest stage reads only the first 64 KiB, where the frontmatter
+  must close. A 50 MB `SKILL.md` used to be read whole at every launch, twice.
+  A refused skill is not listed and is recorded in `skipped()` with its size.
+- **Correction to the "Built-in skill relocation" entry below** (audit
+  15d-26): four of the twelve skills it lists as built-ins — `explore-codebase`,
+  `mcp-authoring`, `worktree-workflow` and `matchups-sync` — no longer ship
+  with sugar-crush. They are SugarCraft-monorepo procedures, and as built-ins
+  they were listed to every project; `worktree-workflow` told the model to
+  `git checkout -- . && git clean -fd` a dirty tree and self-merge the PR
+  (audit 15d-21). They moved to the monorepo's project tier
+  (`.sugar-crush/skills/` at its repository root, `cadba57fd`), so they load
+  only inside that checkout, and the destructive clean step was replaced by
+  "stop and report". Eight built-ins ship today.
+
 ### Wave 1 — provider correctness, context, skills, CLI (2026-08)
 
 - **Provider/wire fixes** — corrected streaming tool-call parsing; added

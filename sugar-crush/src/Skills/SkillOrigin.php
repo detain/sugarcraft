@@ -46,6 +46,32 @@ enum SkillOrigin: string
     case Project = 'project';
 
     /**
+     * Every tier, LOWEST precedence first — the one statement of which tier
+     * wins a skill-name collision, read by every merge that can shadow a skill
+     * ({@see SkillLoader::loadAll()}, {@see SkillLoader::manifestTiers()},
+     * {@see ForeignSkillDiscovery}, {@see SkillManager::loadAll()}). The merges
+     * are last-write-wins, so the last tier listed is the one that keeps a name.
+     *
+     * built-in < project < user: THE USER BEATS THE PROJECT (audit 15d-03(b)).
+     * This used to be built-in < user < project, so a cloned repository's
+     * `.sugar-crush/skills/deploy` silently replaced the `deploy` in the
+     * user's own `~/.sugar-crush/skills` — the opposite of the rule the
+     * foreign trees already followed, and of `LayeredSettings`' "the user's
+     * files outrank the project's". A project skill arrives with whatever was
+     * cloned; it may ADD a name, and it may still replace a built-in (that is
+     * the tier below it, and the replacement is reported), but it may not
+     * re-point a skill the operator wrote. The tier is the first key of the
+     * order; the file's format ({@see SkillSource}) only breaks a tie inside
+     * one tier.
+     *
+     * @return list<self>
+     */
+    public static function precedence(): array
+    {
+        return [self::BuiltIn, self::Project, self::User];
+    }
+
+    /**
      * The text inside a listing line's brackets: the tier, plus the foreign
      * format when the file is another tool's (`project, foreign: claude`).
      * A native skill names its tier only — the format adds nothing there.

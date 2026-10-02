@@ -404,10 +404,11 @@ SKILL;
     }
 
     /**
-     * THE COLLISION RULE: native wins. Wiring a new discovery source in must
-     * not silently re-point a name that already resolved — cloning a repo that
-     * happens to carry a `.claude/skills/deploy` may not replace the
-     * `.sugar-crush/skills/deploy` the user wrote.
+     * INSIDE ONE TIER, native wins. Wiring a new discovery source in must not
+     * silently re-point a name that already resolved — a repository carrying
+     * both a `.claude/skills/deploy` and a `.sugar-crush/skills/deploy` gets
+     * the native one. (Across tiers the tier decides first — see
+     * testTheTierDecidesFirstAndTheFormatBreaksTiesInsideATier().)
      */
     public function testANativeSkillWinsANameCollisionWithAForeignOne(): void
     {
@@ -549,15 +550,22 @@ SKILL;
     }
 
     // =========================================================================
-    // loadAll() - every shadowing is REPORTED (audit 15d-03, part a)
+    // loadAll() - who wins, and every shadowing is REPORTED (audit 15d-03)
     //
-    // Which tier wins is an open decision and is pinned here exactly as it is
-    // today (built-in < user < project, foreign < native); what changed is that
-    // the loser is no longer dropped silently — it lands in skipped() under its
-    // own path, with a reason naming the file that took its name.
+    // The tier decides first — built-in < project < user, the user beats the
+    // project (15d-03(b)) — and the format only breaks a tie inside one tier
+    // (claude < opencode < native). The loser is never dropped silently: it
+    // lands in skipped() under its own path, with a reason naming the file
+    // that took its name.
     // =========================================================================
 
-    public function testAProjectSkillShadowingAUserSkillIsReportedInSkipped(): void
+    /**
+     * Audit 15d-03(b), the finding's own scenario: the user's
+     * `~/.sugar-crush/skills/deploy` and a cloned repository's
+     * `.sugar-crush/skills/deploy`. The repository's copy used to win, and
+     * nothing pinned that order as intended.
+     */
+    public function testAProjectSkillCannotShadowAUserSkillOfTheSameName(): void
     {
         $projectRoot = $this->makeProject();
         $this->writeSkill($this->sandboxHome . '/.sugar-crush/skills/deploy', 'The copy I wrote');
@@ -568,14 +576,143 @@ SKILL;
 
             $skill = $this->registry->get('deploy');
             $this->assertNotNull($skill);
-            $this->assertSame('The copy the repo shipped', $skill->description, 'the precedence order is unchanged');
+            $this->assertSame('The copy I wrote', $skill->description, 'the user beats the project');
+            $this->assertSame(SkillOrigin::User, $skill->origin);
 
             $this->assertShadowed(
-                $this->sandboxHome . '/.sugar-crush/skills/deploy/SKILL.md',
-                'project',
                 $projectRoot . '/.sugar-crush/skills/deploy/SKILL.md',
-                'deploy',
                 'user',
+                $this->sandboxHome . '/.sugar-crush/skills/deploy/SKILL.md',
+                'deploy',
+                'project',
+            );
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * The other half of the finding's scenario: the user's own IMPORTED
+     * skill (`~/.claude/skills/db-query`) against a repository's NATIVE one.
+     * "Native always wins" used to decide this for the repository; the tier
+     * decides it now.
+     */
+    public function testAProjectsNativeSkillCannotRePointTheUsersImportedSkill(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.claude/skills/db-query', 'The Claude Code copy I installed');
+        $this->writeSkill($projectRoot . '/.sugar-crush/skills/db-query', 'The native copy the repo shipped');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $skill = $this->registry->get('db-query');
+            $this->assertNotNull($skill);
+            $this->assertSame('The Claude Code copy I installed', $skill->description);
+            $this->assertSame(SkillSource::Claude, $skill->source);
+            $this->assertShadowed(
+                (string) realpath($projectRoot . '/.sugar-crush/skills/db-query/SKILL.md'),
+                'user, foreign: claude',
+                $this->sandboxHome . '/.claude/skills/db-query/SKILL.md',
+                'db-query',
+                'project',
+            );
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * The whole order, one step at a time: one name in all six user/project
+     * locations, and each round deletes the current winner, so every adjacent
+     * pair of the order is decided by a real collision rather than inferred.
+     */
+    public function testTheTierDecidesFirstAndTheFormatBreaksTiesInsideATier(): void
+    {
+        $projectRoot = $this->makeProject();
+        // Highest precedence first — the order each round expects to win.
+        $locations = [
+            'user, native' => $this->sandboxHome . '/.sugar-crush/skills/dup',
+            'user, opencode' => $this->sandboxHome . '/.config/opencode/skills/dup',
+            'user, claude' => $this->sandboxHome . '/.claude/skills/dup',
+            'project, native' => $projectRoot . '/.sugar-crush/skills/dup',
+            'project, opencode' => $projectRoot . '/.opencode/skills/dup',
+            'project, claude' => $projectRoot . '/.claude/skills/dup',
+        ];
+        foreach ($locations as $label => $dir) {
+            $this->writeSkill($dir, $label);
+        }
+
+        try {
+            $remaining = count($locations);
+            foreach ($locations as $label => $dir) {
+                $registry = new SkillRegistry();
+                $loader = new SkillLoader(reportSkips: false);
+                (new SkillManager($loader, $registry))->loadAll($projectRoot);
+
+                $this->assertSame($label, $registry->get('dup')?->description, "with {$remaining} copies left, {$label} must win");
+                $shadowed = array_filter(
+                    $loader->skipped(),
+                    static fn(string $reason): bool => str_contains($reason, "same name 'dup'"),
+                );
+                $this->assertCount($remaining - 1, $shadowed, "every copy {$label} beat is reported");
+
+                $this->removeTestProject($dir);
+                $remaining--;
+            }
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * Below the project sits only the built-in tier, and a project's foreign
+     * skill outranks it as a native project skill does — the tier decides,
+     * whatever the format. Reported like every other shadowing.
+     */
+    public function testAProjectsImportedSkillShadowingABuiltInIsReportedInSkipped(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($projectRoot . '/.claude/skills/security-audit', 'A repository security audit, Claude format');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertSame('A repository security audit, Claude format', $this->registry->get('security-audit')?->description);
+            $this->assertShadowed(
+                self::builtInSkillFile('security-audit'),
+                'project, foreign: claude',
+                $projectRoot . '/.claude/skills/security-audit/SKILL.md',
+                'security-audit',
+                'built-in',
+            );
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * Audit 15d-03 (the remaining ForeignSkillDiscovery half): inside one
+     * foreign convention the user's copy already won, but the repository's
+     * copy was dropped with nothing recorded — the one shadowing still silent
+     * after every other merge reported its own.
+     */
+    public function testAProjectsImportedSkillShadowedByTheUsersImportedSkillIsReportedInSkipped(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.claude/skills/db-query', 'The copy I wrote');
+        $this->writeSkill($projectRoot . '/.claude/skills/db-query', 'The copy the repo shipped');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertSame('The copy I wrote', $this->registry->get('db-query')?->description);
+            $this->assertShadowed(
+                $projectRoot . '/.claude/skills/db-query/SKILL.md',
+                'user, foreign: claude',
+                $this->sandboxHome . '/.claude/skills/db-query/SKILL.md',
+                'db-query',
+                'project, foreign: claude',
             );
         } finally {
             $this->removeTestProject($projectRoot);
@@ -624,22 +761,22 @@ SKILL;
         }
     }
 
-    public function testANativeSkillShadowingAForeignOneIsReportedInSkipped(): void
+    public function testANativeSkillShadowingAForeignOneInTheSameTierIsReportedInSkipped(): void
     {
         $projectRoot = $this->makeProject();
         $this->writeSkill($this->sandboxHome . '/.claude/skills/db-query', 'The Claude Code copy');
-        $this->writeSkill($projectRoot . '/.sugar-crush/skills/db-query', 'The native copy');
+        $this->writeSkill($this->sandboxHome . '/.sugar-crush/skills/db-query', 'The native copy');
 
         try {
             $this->manager->loadAll($projectRoot);
 
             $skill = $this->registry->get('db-query');
             $this->assertNotNull($skill);
-            $this->assertSame(SkillSource::Native, $skill->source, 'native still wins the collision');
+            $this->assertSame(SkillSource::Native, $skill->source, 'inside one tier native still wins the collision');
             $this->assertShadowed(
                 $this->sandboxHome . '/.claude/skills/db-query/SKILL.md',
-                'project',
-                $projectRoot . '/.sugar-crush/skills/db-query/SKILL.md',
+                'user',
+                $this->sandboxHome . '/.sugar-crush/skills/db-query/SKILL.md',
                 'db-query',
                 'user, foreign: claude',
             );

@@ -265,7 +265,7 @@ SKILL;
     }
 
     // -------------------------------------------------------------------------
-    // loadAll() - priority: builtin < user < project
+    // loadAll() - priority: builtin < project < user
     // -------------------------------------------------------------------------
 
     public function testLoadAllPriority(): void
@@ -282,7 +282,7 @@ SKILL;
 
         // Assert
         $this->assertIsArray($result);
-        // Priority is: builtin -> user -> project
+        // Priority is: builtin -> project -> user
         // If no custom skills exist, result should contain built-in skills
     }
 
@@ -309,11 +309,13 @@ SKILL;
     }
 
     /**
-     * Audit 15d-03 (a): the eager merge reports a shadowing exactly as the
-     * manifest merge does — one helper behind both — and still lets the
-     * project tier win (the order itself is an open decision, pinned as-is).
+     * Audit 15d-03: the eager merge reports a shadowing exactly as the
+     * manifest merge does — one helper behind both — and, since 15d-03(b), the
+     * USER tier wins: a cloned repository's `.sugar-crush/skills/deploy` may not
+     * re-point the `deploy` in the user's own `~/.sugar-crush/skills`. The
+     * repository's copy is the one reported as not loaded.
      */
-    public function testLoadAllReportsAProjectSkillShadowingAUserSkill(): void
+    public function testLoadAllKeepsTheUsersSkillAndReportsTheProjectsCopyAsShadowed(): void
     {
         $userFile = $this->tempDir . '/home/.sugar-crush/skills/deploy/SKILL.md';
         $projectRoot = $this->tempDir . '/shadow-project';
@@ -328,14 +330,14 @@ SKILL;
             $result = $loader->{$method}($projectRoot);
 
             $winner = $result['deploy'];
-            $this->assertSame('Project deploy', is_array($winner) ? $winner['description'] : $winner->description, $walk);
+            $this->assertSame('User deploy', is_array($winner) ? $winner['description'] : $winner->description, $walk);
 
             $skipped = $loader->skipped();
-            $key = array_key_exists($userFile, $skipped) ? $userFile : (string) realpath($userFile);
-            $this->assertArrayHasKey($key, $skipped, "{$walk}: the shadowed user skill must be reported");
-            $this->assertStringContainsString('shadowed by [project] skill', $skipped[$key], $walk);
+            $key = array_key_exists($projectFile, $skipped) ? $projectFile : (string) realpath($projectFile);
+            $this->assertArrayHasKey($key, $skipped, "{$walk}: the shadowed project skill must be reported");
+            $this->assertStringContainsString('shadowed by [user] skill', $skipped[$key], $walk);
             $this->assertStringContainsString("same name 'deploy'", $skipped[$key], $walk);
-            $this->assertStringContainsString('this [user] skill was not loaded', $skipped[$key], $walk);
+            $this->assertStringContainsString('this [project] skill was not loaded', $skipped[$key], $walk);
             $this->assertCount(1, $skipped, "{$walk}: nothing else shadows anything");
         }
     }

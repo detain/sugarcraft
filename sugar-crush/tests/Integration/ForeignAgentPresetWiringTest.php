@@ -177,8 +177,9 @@ final class ForeignAgentPresetWiringTest extends TestCase
      * The decision, stated on {@see Bootstrap::agentRoster()}: foreign imports go in
      * BENEATH everything native, so wiring a new discovery source cannot change what
      * an existing name resolves to. Mirrors
-     * {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()}, which registers
-     * foreign skills first and lays the native manifests over them.
+     * {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()} inside one tier,
+     * where a tier's foreign skills go in first and its native manifests over
+     * them (across tiers, skills rank the user above the project — 15d-03(b)).
      *
      * Asserted on the DESCRIPTION, because both entries would answer to the same
      * name whichever won — the name is what makes them collide, so it cannot be what

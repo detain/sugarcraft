@@ -439,13 +439,13 @@ final class ReadPathCensusTest extends TestCase
                 . 'type and age; nothing is read, and a directory holding anything but regular '
                 . 'files and sockets is left whole',
         ],
-        'Skills/Skill.php|file_get_contents' => [
-            'CONTAINED_UPSTREAM:Skills/SkillLoader.php — parses a SKILL.md the loader bounded',
-        ],
-        'Skills/SkillLoader.php|file_get_contents' => [
-            'CONTAINED — a SKILL.md behind the entry + directory pair',
-            'CONTAINED — the single-file arm of the same read',
-            'CONTAINED — a skill ASSET, compared against its own skill directory',
+        // Audit 15d-27 routed the four skill reads (Skill::fromFile(), the
+        // manifest head, the body, the asset) through one size-bounded reader;
+        // the PATHS are still bounded where they always were, in the loader.
+        'Skills/SkillFileReader.php|file_get_contents' => [
+            'CONTAINED_UPSTREAM:Skills/SkillLoader.php — a whole SKILL.md or skill ASSET the loader '
+                . 'bounded (entry + directory pair; an asset against its own skill directory)',
+            'CONTAINED_UPSTREAM:Skills/SkillLoader.php — the frontmatter head of a SKILL.md the loader bounded',
         ],
         'Skills/SkillLoader.php|new DirectoryIterator' => [
             'CONTAINED — the bounded walk over a skills tree, itself capped against a grafted tree',

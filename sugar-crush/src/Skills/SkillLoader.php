@@ -626,28 +626,32 @@ final class SkillLoader
     /**
      * Load skills from multiple sources.
      *
-     * Priority order: built-in < user < project (later sources override
-     * earlier), and every override is recorded in {@see skipped()} under the
-     * losing file's path ({@see mergeTier()}). Foreign (.claude/.opencode) skills are merged one layer up, in
+     * Priority order: built-in < project < user ({@see SkillOrigin::precedence()};
+     * later sources override earlier), and every override is recorded in
+     * {@see skipped()} under the losing file's path ({@see mergeTier()}). Foreign
+     * (.claude/.opencode) skills are merged one layer up, in
      * {@see SkillManager::loadAll()}, where a {@see SkillSource} tag has
-     * somewhere to live -- see {@see loadAllManifests()} for the full argument
-     * and for why a native name wins the collision.
+     * somewhere to live -- see {@see loadAllManifests()} for the full argument.
      *
      * @return array<string, Skill>
      */
     public function loadAll(string $projectRoot = '.'): array
     {
-        // Built-in first (lowest priority)
-        $skills = self::originated($this->loadBuiltInSkills(), SkillOrigin::BuiltIn);
+        $tiers = [
+            SkillOrigin::BuiltIn->value => fn(): array => $this->loadBuiltInSkills(),
+            SkillOrigin::Project->value => fn(): array => $this->loadProjectSkills($projectRoot),
+            SkillOrigin::User->value => fn(): array => $this->loadUserSkills(),
+        ];
 
-        // User skills override builtins
-        $skills = $this->mergeTier($skills, self::originated($this->loadUserSkills(), SkillOrigin::User));
+        // Lowest precedence first, in the one order SkillOrigin states — the
+        // same fold {@see loadAllManifests()} runs, so the eager and the
+        // manifest-only walk cannot disagree about who wins.
+        $skills = [];
+        foreach (SkillOrigin::precedence() as $origin) {
+            $skills = $this->mergeTier($skills, self::originated($tiers[$origin->value](), $origin));
+        }
 
-        // Project skills override both
-        return $this->mergeTier(
-            $skills,
-            self::originated($this->loadProjectSkills($projectRoot), SkillOrigin::Project),
-        );
+        return $skills;
     }
 
     // -------------------------------------------------------------------------
@@ -679,9 +683,20 @@ final class SkillLoader
             throw new \RuntimeException("SKILL.md not found in: $skillDir");
         }
 
-        $content = file_get_contents($skillPath);
-        if ($content === false) {
-            throw new \RuntimeException("Failed to read skill manifest: $skillPath");
+        // HEAD ONLY, through the bounded reader (audit 15d-27): this stage wants
+        // the frontmatter, and used to read the whole file to find it — a
+        // repository's 50 MB SKILL.md was loaded whole at every launch. A file
+        // over the whole-file ceiling is refused here rather than listed: its
+        // body could never be loaded, so offering it to the model as a skill
+        // would only promise something the Skill tool must then refuse.
+        [$content, $truncated] = SkillFileReader::head($skillPath, 'SKILL.md');
+        if ($truncated && str_starts_with($content, '---')
+            && preg_match(self::FRONTMATTER_PATTERN, $content) !== 1) {
+            throw new \RuntimeException(sprintf(
+                'SKILL.md frontmatter does not close within its first %s bytes; not read further: %s',
+                number_format(SkillFileReader::MAX_FRONTMATTER_BYTES),
+                $skillPath,
+            ));
         }
 
         // The description is listed in the system prompt, and the YAML parse
@@ -749,9 +764,10 @@ final class SkillLoader
 
     /**
      * Stage-1 equivalent of loadAll(): discovers every skill across the same
-     * sources and priority order (built-in < user < project, later
-     * overrides earlier, each override recorded in {@see skipped()} by
-     * {@see mergeTier()}) but loads only each one's manifest, not its body.
+     * sources and priority order (built-in < project < user,
+     * {@see SkillOrigin::precedence()}; later overrides earlier, each override
+     * recorded in {@see skipped()} by {@see mergeTier()}) but loads only each
+     * one's manifest, not its body.
      *
      * Fixes the defect described in crush_feat.md section 7.E3: every
      * ReactPHP-loop session used to pay the full I/O + YAML-parse cost of
@@ -767,11 +783,11 @@ final class SkillLoader
      * {@see SkillManager::loadAll()} for the same correction and for the tests
      * that hold it.
      *
-     * Foreign-imported skills (.claude/skills, .opencode/skills) are NATIVE
-     * SOURCES' business only in the sense that they are merged one layer up:
-     * {@see SkillManager::loadAll()} calls {@see ForeignSkillDiscovery} and
-     * registers its results BEFORE these manifests, so a native name wins a
-     * collision. They are not merged here because a foreign skill carries a
+     * Foreign-imported skills (.claude/skills, .opencode/skills) are merged one
+     * layer up: {@see SkillManager::loadAll()} interleaves them with
+     * {@see manifestTiers()} tier by tier, so a user's foreign skill outranks a
+     * project's native one while a native skill still wins inside its own tier.
+     * They are not merged here because a foreign skill carries a
      * {@see SkillSource} tag and a manifest array has nowhere to put one --
      * see SkillManager::loadAll()'s doc-block for the full argument.
      *
@@ -779,33 +795,56 @@ final class SkillLoader
      */
     public function loadAllManifests(string $projectRoot = '.'): array
     {
-        // Each tier's manifests carry the tier they were read from (`origin`),
-        // the fact the system-prompt listing badges every line with (audit
-        // 15d-02) — stamped here because this is the one place that knows which
-        // directory a manifest came out of.
-        // Built-in overrides nothing (lowest priority)
-        $manifests = self::originatedManifests(
-            $this->loadManifestsFromDirectory($this->builtInSkillsDir()),
-            SkillOrigin::BuiltIn,
-        );
+        $manifests = [];
+        foreach ($this->manifestTiers($projectRoot) as $tier) {
+            $manifests = $this->mergeTier($manifests, $tier);
+        }
 
-        // User skills override builtins
-        // Same $ownedBy widening the eager walk gets — see {@see loadUserSkills()}.
-        $manifests = $this->mergeTier($manifests, self::originatedManifests(
-            $this->loadManifestsFromDirectory($this->userSkillsDir(), self::homeDir()),
-            SkillOrigin::User,
-        ));
+        return $manifests;
+    }
 
-        // Project skills override everything else — and are the one tier whose
-        // directory a repository picked the location of, so the root is passed
-        // as the anchor it must resolve inside ({@see loadProjectSkills()}).
-        return $this->mergeTier(
-            $manifests,
-            self::originatedManifests(
-                $this->loadManifestsFromDirectory($this->projectSkillsDir($projectRoot), null, $projectRoot),
-                SkillOrigin::Project,
+    /**
+     * Each native tier's Stage-1 manifests, NOT yet merged, keyed by
+     * {@see SkillOrigin} value in {@see SkillOrigin::precedence()} order —
+     * lowest first.
+     *
+     * Exposed unmerged for {@see SkillManager::loadAll()}, which has to slot
+     * the foreign trees in BETWEEN the native tiers (a user's `~/.claude/skills`
+     * entry outranks a project's `.sugar-crush/skills` one) and so cannot work
+     * from {@see loadAllManifests()}' already-folded result.
+     *
+     * Each tier's manifests carry the tier they were read from (`origin`),
+     * the fact the system-prompt listing badges every line with (audit
+     * 15d-02) — stamped here because this is the one place that knows which
+     * directory a manifest came out of.
+     *
+     * @return array<string, array<string, array{name: string, description: string, disableModelInvocation: bool, userInvocable: bool, context: string, paths: array<string>, sourcePath: string, origin: SkillOrigin}>>
+     */
+    public function manifestTiers(string $projectRoot = '.'): array
+    {
+        $walks = [
+            SkillOrigin::BuiltIn->value => fn(): array => $this->loadManifestsFromDirectory($this->builtInSkillsDir()),
+            // The one tier whose directory a repository picked the location of,
+            // so the root is passed as the anchor it must resolve inside
+            // ({@see loadProjectSkills()}).
+            SkillOrigin::Project->value => fn(): array => $this->loadManifestsFromDirectory(
+                $this->projectSkillsDir($projectRoot),
+                null,
+                $projectRoot,
             ),
-        );
+            // Same $ownedBy widening the eager walk gets — see {@see loadUserSkills()}.
+            SkillOrigin::User->value => fn(): array => $this->loadManifestsFromDirectory(
+                $this->userSkillsDir(),
+                self::homeDir(),
+            ),
+        ];
+
+        $tiers = [];
+        foreach (SkillOrigin::precedence() as $origin) {
+            $tiers[$origin->value] = self::originatedManifests($walks[$origin->value](), $origin);
+        }
+
+        return $tiers;
     }
 
     /**
@@ -817,10 +856,11 @@ final class SkillLoader
      * `.sugar-crush/skills/deploy` replaced the user's `~/.sugar-crush/skills/
      * deploy` (or a built-in such as `security-audit`) and {@see skipped()}
      * stayed empty, so nothing short of reading the registry told anyone their
-     * own skill was no longer the one being listed. WHO wins is deliberately
-     * unchanged here — the precedence order is an open decision — this only
-     * makes each loss visible, through the same {@see skipped()} record (and
-     * `SUGARCRUSH_DEBUG_SKILLS=1` stderr line) an unreadable file gets.
+     * own skill was no longer the one being listed. WHO wins is decided by
+     * {@see SkillOrigin::precedence()} (the user now beats the project, 15d-03
+     * (b)); this makes each loss visible, through the same {@see skipped()}
+     * record (and `SUGARCRUSH_DEBUG_SKILLS=1` stderr line) an unreadable file
+     * gets — the notice half of that decision.
      *
      * One helper for both walks so the eager and manifest-only merges cannot
      * drift apart on what they report; {@see SkillManager::loadAll()} reports
@@ -974,10 +1014,9 @@ final class SkillLoader
             throw new \RuntimeException("Skill file not found: $skillPath");
         }
 
-        $content = file_get_contents($skillPath);
-        if ($content === false) {
-            throw new \RuntimeException("Failed to read skill body: $skillPath");
-        }
+        // Bounded (audit 15d-27): the prompt budget caps what is spliced, not
+        // what is read, so this is the read's own ceiling.
+        $content = SkillFileReader::read($skillPath, 'SKILL.md');
 
         // Same scrub and same trailing note as {@see Skill::parse()}, so the
         // lazy body and the eager one are the same bytes (audit 15d-08).
@@ -1039,11 +1078,6 @@ final class SkillLoader
             throw new \RuntimeException("Asset not found: $assetPath");
         }
 
-        $content = file_get_contents($assetPath);
-        if ($content === false) {
-            throw new \RuntimeException("Failed to read asset: $assetPath");
-        }
-
-        return $content;
+        return SkillFileReader::read($assetPath, 'skill asset');
     }
 }

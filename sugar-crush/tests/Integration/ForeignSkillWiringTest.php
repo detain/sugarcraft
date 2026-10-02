@@ -146,12 +146,12 @@ final class ForeignSkillWiringTest extends TestCase
     }
 
     /**
-     * NATIVE WINS, pinned at the launch boundary.
+     * NATIVE WINS INSIDE ONE TIER, pinned at the launch boundary.
      *
-     * {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()} registers the foreign
-     * trees FIRST and lays the native manifests over them, so a name that already
-     * resolved to something keeps resolving to it after another CLI is installed or
-     * a repository carrying `.claude/skills` is cloned. The assertion is on the
+     * {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()} registers each tier's
+     * foreign trees FIRST and lays that tier's native manifests over them, so a
+     * repository carrying both a `.claude/skills` and a `.sugar-crush/skills` copy
+     * of a name resolves it to the native one. The assertion is on the
      * DESCRIPTION rather than on the source tag alone: a registry that had merged
      * the wrong way round would still answer `SkillSource::Native` for the name if
      * the native entry were the one that arrived second with a different body.
@@ -166,6 +166,27 @@ final class ForeignSkillWiringTest extends TestCase
         $this->assertNotNull($skill);
         $this->assertSame('NATIVE COPY', $skill->description, 'the native tier must win a name collision');
         $this->assertSame(SkillSource::Native, $skill->source);
+    }
+
+    /**
+     * THE USER BEATS THE PROJECT, pinned at the launch boundary (audit
+     * 15d-03(b)) — the tier decides before the format does. A cloned repository's
+     * native `.sugar-crush/skills` copy used to replace both the user's own native
+     * skill and the user's own `~/.claude/skills` import of the same name, with
+     * nothing in the engine's registry to say so.
+     */
+    public function testACloneCannotRePointASkillTheUserAlreadyHas(): void
+    {
+        $this->writeSkill($this->home . '/.sugar-crush/skills', 'deploy', 'MY NATIVE COPY');
+        $this->writeSkill($this->repo . '/.sugar-crush/skills', 'deploy', 'REPO NATIVE COPY');
+        $this->writeSkill($this->home . '/.claude/skills', 'db-query', 'MY CLAUDE COPY');
+        $this->writeSkill($this->repo . '/.sugar-crush/skills', 'db-query', 'REPO NATIVE COPY');
+
+        $registry = $this->engineSkillRegistry();
+
+        $this->assertSame('MY NATIVE COPY', $registry->get('deploy')?->description);
+        $this->assertSame('MY CLAUDE COPY', $registry->get('db-query')?->description);
+        $this->assertSame(SkillSource::Claude, $registry->get('db-query')?->source);
     }
 
     /**

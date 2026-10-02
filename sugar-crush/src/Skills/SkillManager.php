@@ -25,12 +25,13 @@ final class SkillManager
     }
 
     /**
-     * Load all skills from standard locations: the foreign imports other
-     * coding CLIs leave under `.claude/skills` / `.opencode/skills`, then the
-     * native built-in/user/project trees.
+     * Load all skills from standard locations: the native built-in, project
+     * and user trees, and the foreign imports other coding CLIs leave under
+     * `.claude/skills` / `.opencode/skills`, interleaved tier by tier.
      *
      * Registers Stage-1 manifests only (name/description/flags) via
-     * SkillLoader::loadAllManifests() -- not the previous
+     * SkillLoader::manifestTiers() (the unmerged tiers behind
+     * SkillLoader::loadAllManifests()) -- not the previous
      * SkillLoader::loadAll(), which eagerly read every skill's full
      * SKILL.md body off disk regardless of whether it was ever used that
      * session. Fixes crush_feat.md section 7.E3.
@@ -62,24 +63,33 @@ final class SkillManager
      * the palette badges them with. This class is also the first layer that
      * holds the registry, which is what the two-source merge below needs.
      *
-     * NATIVE WINS A NAME COLLISION, which is why the foreign trees are
-     * registered FIRST and the native manifests over the top of them (the
-     * registry is last-write-wins, the same merge convention
-     * {@see SkillLoader::loadAll()} documents). Wiring a new discovery source
-     * in must not change what an existing name resolves to: with the reverse
-     * order, installing another CLI — or cloning a repo that carries a
-     * `.claude/skills` tree — would silently re-point a skill the user
-     * already had. Additive is the only safe direction for this step. The same
-     * argument decides the two directories INSIDE each foreign tree, where
-     * {@see ForeignSkillDiscovery} gives the user's own copy precedence over a
-     * cloned repository's.
+     * WHICH SKILL KEEPS A NAME is decided tier first, format second:
      *
-     * Between the two foreign trees the fixed call order below decides it
-     * (opencode over Claude); that pair has no principled winner, so what
-     * matters is that it is deterministic rather than dependent on scan order.
-     * Either way the loser is not dropped silently: every replaced foreign
-     * skill lands in {@see skipped()} naming the skill that took its name,
-     * as the native tiers' own shadowings do (audit 15d-03).
+     *     built-in < project (claude < opencode < native) < user (claude < opencode < native)
+     *
+     * THE TIER IS THE FIRST KEY ({@see SkillOrigin::precedence()}): the user
+     * beats the project (audit 15d-03(b)). This used to be "native wins a name
+     * collision" across the board — the foreign trees were registered first
+     * and every native manifest laid over them — which let a cloned
+     * repository's `.sugar-crush/skills/db-query` re-point the `db-query` in
+     * the user's own `~/.claude/skills`, and (with built-in < user < project
+     * among the native tiers) the user's own `~/.sugar-crush/skills/deploy`
+     * as well. A project skill arrives with whatever was cloned; it may add a
+     * name, and may replace a built-in, but not a skill the operator wrote.
+     *
+     * THE FORMAT ONLY BREAKS A TIE INSIDE ONE TIER, and there native still
+     * wins: a repository carrying both `.claude/skills/deploy` and
+     * `.sugar-crush/skills/deploy` gets the native one, and installing another
+     * CLI with a skill of the same name as one in your own `~/.sugar-crush/
+     * skills` does not re-point it. Between the two foreign trees the fixed
+     * order (opencode over Claude) decides; that pair has no principled
+     * winner, so what matters is that it is deterministic rather than
+     * dependent on scan order.
+     *
+     * Every loser is recorded, not dropped silently: each skill a later
+     * registration replaces lands in {@see skipped()} naming the skill that
+     * took its name (audit 15d-03), through {@see SkillLoader::recordShadowing()}
+     * — the one record every merge uses, so the launch notice counts it.
      * That property is only true because {@see SkillLoader} follows symlinked
      * skill directories — while it did not, half of a tree could be invisible
      * and the winner of a cross-tree collision was decided by which layout the
@@ -94,48 +104,50 @@ final class SkillManager
      */
     public function loadAll(string $projectRoot = '.'): void
     {
-        // Every foreign skill registered so far, by name, so each later
-        // registration that replaces one is RECORDED rather than silent (audit
-        // 15d-03): the registry is last-write-wins and keeps no trace of what a
-        // write displaced. Keyed exactly as the registry keys — by the skill's
-        // own name, with PHP's integer-string coercion applying identically to
-        // both arrays — so a hit here is a hit there.
-        /** @var array<array-key, Skill> $foreign */
-        $foreign = [];
-        foreach ([$this->foreign->discoverClaude($projectRoot), $this->foreign->discoverOpencode($projectRoot)] as $tree) {
-            foreach ($tree as $skill) {
-                if (isset($foreign[$skill->name])) {
-                    $this->recordShadowing($skill->name, $foreign[$skill->name], $skill->sourcePath, self::tierOf($skill));
+        $claude = $this->foreign->claudeTiers($projectRoot);
+        $opencode = $this->foreign->opencodeTiers($projectRoot);
+        $native = $this->loader->manifestTiers($projectRoot);
+
+        // Who holds each name so far, so every later registration that replaces
+        // one is RECORDED rather than silent (audit 15d-03): the registry is
+        // last-write-wins and keeps no trace of what a write displaced. Keyed
+        // exactly as the registry keys — by the skill's own name, with PHP's
+        // integer-string coercion applying identically to both arrays — so a
+        // hit here is a hit there.
+        /** @var array<array-key, array{0: string, 1: string}> $holders name => [SKILL.md path, tier badge] */
+        $holders = [];
+
+        foreach (SkillOrigin::precedence() as $tier) {
+            foreach ([$claude[$tier->value] ?? [], $opencode[$tier->value] ?? []] as $tree) {
+                foreach ($tree as $skill) {
+                    $this->registry->register([$skill]);
+                    $this->claim($holders, $skill->name, $skill->sourcePath, self::tierOf($skill));
                 }
-                $foreign[$skill->name] = $skill;
-            }
-            $this->registry->register($tree);
-        }
-
-        foreach ($this->loader->loadAllManifests($projectRoot) as $manifest) {
-            // The backstop for audit 15d-01: loadSkillManifest() now types every
-            // field (SkillFrontmatter), so this should not throw — but this loop
-            // runs at launch on files a cloned repository chose, and the one
-            // thing it must never do is take the launch down. A throw here is
-            // the same event as an unparseable SKILL.md and is recorded the same
-            // way, so it reaches the launch notice through skipped().
-            try {
-                $this->registry->registerFromManifest($manifest);
-            } catch (\Throwable $e) {
-                $this->loader->recordSkip(
-                    (string) ($manifest['sourcePath'] ?? $manifest['name'] ?? '?'),
-                    $e->getMessage(),
-                );
-                // A manifest that failed to register displaced nothing, so it
-                // has no shadowing to report.
-                continue;
             }
 
-            if (isset($foreign[$manifest['name']])) {
+            foreach ($native[$tier->value] ?? [] as $manifest) {
+                // The backstop for audit 15d-01: loadSkillManifest() now types every
+                // field (SkillFrontmatter), so this should not throw — but this loop
+                // runs at launch on files a cloned repository chose, and the one
+                // thing it must never do is take the launch down. A throw here is
+                // the same event as an unparseable SKILL.md and is recorded the same
+                // way, so it reaches the launch notice through skipped().
+                try {
+                    $this->registry->registerFromManifest($manifest);
+                } catch (\Throwable $e) {
+                    $this->loader->recordSkip(
+                        (string) ($manifest['sourcePath'] ?? $manifest['name'] ?? '?'),
+                        $e->getMessage(),
+                    );
+                    // A manifest that failed to register displaced nothing: the
+                    // previous holder is still the registered skill.
+                    continue;
+                }
+
                 $origin = $manifest['origin'] ?? SkillOrigin::Project;
-                $this->recordShadowing(
-                    (string) $manifest['name'],
-                    $foreign[$manifest['name']],
+                $this->claim(
+                    $holders,
+                    $manifest['name'],
                     (string) $manifest['sourcePath'],
                     $origin->badge(SkillSource::Native),
                 );
@@ -144,13 +156,21 @@ final class SkillManager
     }
 
     /**
-     * Report a foreign skill that a later registration replaced, through the
-     * loader's one shadowing record ({@see SkillLoader::recordShadowing()}) so
-     * it reaches {@see skipped()} alongside the native tiers' own.
+     * Note that the skill at $path now holds $name, reporting the one it
+     * replaced (if any) through the loader's one shadowing record
+     * ({@see SkillLoader::recordShadowing()}), so it reaches {@see skipped()}
+     * alongside every other.
+     *
+     * @param array<array-key, array{0: string, 1: string}> $holders
      */
-    private function recordShadowing(string $name, Skill $loser, string $winnerPath, string $winnerTier): void
+    private function claim(array &$holders, int|string $name, string $path, string $tier): void
     {
-        $this->loader->recordShadowing($name, $loser->sourcePath, self::tierOf($loser), $winnerPath, $winnerTier);
+        if (isset($holders[$name])) {
+            [$loserPath, $loserTier] = $holders[$name];
+            $this->loader->recordShadowing((string) $name, $loserPath, $loserTier, $path, $tier);
+        }
+
+        $holders[$name] = [$path, $tier];
     }
 
     private static function tierOf(Skill $skill): string
