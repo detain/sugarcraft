@@ -340,6 +340,16 @@ that has the id shape (`sess_YYYYmmddHHMMSS_<8 hex>`); `/bg stop the dev server
 and rebuild` is still a task. A bare `/bg stop` prints usage and the active
 session ids.
 
+A background session talks to its daemon through files in an owner-only
+`sugar_crush_bg_<uid>_<hex>` directory in the system temp directory. Once the
+session settles and its answer has been read back, those files are deleted, and
+the directory goes with its last session. A daemon is meant to outlive the TUI
+that started it, so a TUI that exits first leaves its directory behind; the next
+launch removes any such directory once everything in it has gone untouched for
+a day (`BackgroundSupervisor::STALE_IPC_DIR_SECONDS`). A running daemon writes a
+heartbeat to its buffer every few seconds, so a live session's directory never
+reaches that age.
+
 Two guards apply to every arm, and both fall through to the model rather than
 guess. A draft must begin with the canonical spelling verbatim, so `/KEYS` is
 prose and `/compactfoo` is a prompt about foo rather than a mistyped `/compact`.

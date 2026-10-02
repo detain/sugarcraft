@@ -71,6 +71,7 @@ final class BackgroundSupervisorStopTest extends TestCase
         $spawned = $this->spawnSleepingDaemon($supervisor);
         $id = $spawned['session']->id;
         $ipc = $spawned['ipc'];
+        $bufferView = $this->linkBufferView($ipc);
 
         $started = microtime(true);
         $outcome = $supervisor->stopSession($id);
@@ -83,8 +84,9 @@ final class BackgroundSupervisorStopTest extends TestCase
             'an acknowledged STOP should settle well inside the exit budget',
         );
 
-        $buffer = (string) file_get_contents($ipc['bufferPath']);
+        $buffer = (string) file_get_contents($bufferView);
         $this->assertStringContainsString("[session:task:stopped]\n", $buffer, 'the daemon must record the stop itself');
+        $this->assertIpcReleased($ipc);
         $this->assertStringNotContainsString('via=', $buffer, 'the IPC rung must not have needed a signal');
         $this->assertFalse(
             $this->aliveNotZombie($ipc['pid'])
@@ -116,11 +118,13 @@ final class BackgroundSupervisorStopTest extends TestCase
         // The daemon's listener keeps its inode, but nothing can connect by
         // name any more — the shape of a /tmp cleaner having run.
         $this->assertTrue(unlink($ipc['socketPath']));
+        $bufferView = $this->linkBufferView($ipc);
 
         $outcome = $supervisor->stopSession($id);
 
         $this->assertSame(BackgroundStopOutcome::StoppedViaSignal, $outcome);
-        $buffer = (string) file_get_contents($ipc['bufferPath']);
+        $buffer = (string) file_get_contents($bufferView);
+        $this->assertIpcReleased($ipc);
         // via=SIGTERM is written by the DAEMON's trap: without it the default
         // disposition kills the daemon alone and the worker keeps running.
         $this->assertStringContainsString('[session:task:stopped] via=SIGTERM', $buffer);
@@ -305,6 +309,36 @@ final class BackgroundSupervisorStopTest extends TestCase
         $this->assertGreaterThan(1, $pid, 'the stand-in never became ready');
 
         return $pid;
+    }
+
+    /**
+     * A second name for the session buffer, outside the IPC directory.
+     *
+     * Settling a session now deletes its IPC files (audit BG-2), so the stop
+     * record the daemon wrote is read back through a hard link taken before
+     * the stop. The daemon appends by path, so every later write lands on the
+     * same inode the link names. Same filesystem: the fixture home and the IPC
+     * directory both live in the system temp dir.
+     *
+     * @param array{socketPath: string, bufferPath: string, pid: int, tokenPath?: string, startTime?: int|null} $ipc
+     */
+    private function linkBufferView(array $ipc): string
+    {
+        $view = $this->fixtureHome . '/buffer-view-' . bin2hex(random_bytes(4));
+        $this->assertTrue(link($ipc['bufferPath'], $view), 'could not hard-link the session buffer');
+
+        return $view;
+    }
+
+    /**
+     * @param array{socketPath: string, bufferPath: string, pid: int, tokenPath?: string, startTime?: int|null} $ipc
+     */
+    private function assertIpcReleased(array $ipc): void
+    {
+        foreach ([$ipc['socketPath'], $ipc['bufferPath'], $ipc['bufferPath'] . '.log', $ipc['tokenPath'] ?? ''] as $path) {
+            $this->assertFileDoesNotExist($path, 'a settled session left an IPC file behind (audit BG-2)');
+        }
+        $this->assertDirectoryDoesNotExist(dirname($ipc['bufferPath']), 'the last settled session left its private IPC directory behind');
     }
 
     private function aliveNotZombie(int $pid): bool

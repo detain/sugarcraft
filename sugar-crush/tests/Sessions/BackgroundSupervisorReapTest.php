@@ -552,6 +552,10 @@ final class BackgroundSupervisorReapTest extends TestCase
                 @unlink($ipc['socketPath']);
                 @unlink($ipc['bufferPath']);
                 @unlink($ipc['bufferPath'] . '.log');
+                // The token and the private directory too (audit BG-2): the
+                // test suite was leaking one sugar_crush_bg_* dir per run.
+                @unlink($ipc['tokenPath'] ?? '');
+                @rmdir(dirname($ipc['bufferPath']));
             }
         }
     }
@@ -632,6 +636,10 @@ final class BackgroundSupervisorReapTest extends TestCase
                 @unlink($ipc['socketPath']);
                 @unlink($ipc['bufferPath']);
                 @unlink($ipc['bufferPath'] . '.log');
+                // The token and the private directory too (audit BG-2): the
+                // test suite was leaking one sugar_crush_bg_* dir per run.
+                @unlink($ipc['tokenPath'] ?? '');
+                @rmdir(dirname($ipc['bufferPath']));
             }
         }
     }

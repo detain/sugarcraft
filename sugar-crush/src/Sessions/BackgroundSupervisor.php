@@ -80,6 +80,42 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      */
     public const SESSION_ID_PATTERN = '/^sess_\d{14}_[0-9a-f]{8}$/';
 
+    /**
+     * Name stem of the per-process private IPC directory under the system
+     * temp dir: `sugar_crush_bg_<uid>_<16 hex>`. Public so the startup sweep
+     * ({@see sweepStaleIpcDirs()}, reached through
+     * {@see ToolIpcFiles::sweepOnce()}) and this class's own mkdir share one
+     * spelling.
+     */
+    public const IPC_DIR_PREFIX = 'sugar_crush_bg_';
+
+    /** The exact shape {@see ensurePrivateIpcDir()} creates; nothing else is swept. */
+    private const IPC_DIR_PATTERN = '/^sugar_crush_bg_(\d+)_[0-9a-f]{16}$/';
+
+    /**
+     * How long EVERY entry of a private IPC directory (and the directory
+     * itself) must have gone untouched before the startup sweep removes it
+     * (audit BG-2).
+     *
+     * Age is the liveness signal because it is the one a stranger process can
+     * read without talking to the daemon: a running daemon stamps its buffer
+     * every {@see BackgroundSessionRunner::HEARTBEAT_INTERVAL_SECS} seconds,
+     * and a spawn in progress has just created the directory. A day is
+     * thousands of heartbeats of margin — enough that even a wedged daemon
+     * whose TUI still shows it as stalled is left alone for a full day,
+     * while the leak stays bounded.
+     */
+    public const STALE_IPC_DIR_SECONDS = 86_400;
+
+    /** S_IFMT, the directory type, and the two entry kinds a session leaves behind. */
+    private const STAT_TYPE_MASK = 0o170000;
+
+    private const STAT_DIRECTORY = 0o040000;
+
+    private const STAT_REGULAR_FILE = 0o100000;
+
+    private const STAT_SOCKET = 0o140000;
+
     /** Connect/read budget for the `AUTH` + `STOP` exchange. */
     private const STOP_IPC_TIMEOUT_SECONDS = 1.0;
 
@@ -630,11 +666,20 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
     private function ensurePrivateIpcDir(): string
     {
         if ($this->ipcDir !== '') {
-            return $this->ipcDir;
+            // Re-checked rather than trusted: the directory is removed when
+            // its last session settles ({@see releaseIpcFiles()}), and another
+            // process's startup sweep may have reclaimed one that sat silent
+            // past {@see STALE_IPC_DIR_SECONDS}. A vanished directory gets a
+            // fresh one instead of failing the next spawn.
+            clearstatcache(true, $this->ipcDir);
+            if (is_dir($this->ipcDir) && !is_link($this->ipcDir)) {
+                return $this->ipcDir;
+            }
+            $this->ipcDir = '';
         }
 
         $uid = function_exists('posix_getuid') ? posix_getuid() : (int) getmypid();
-        $dir = sys_get_temp_dir() . '/sugar_crush_bg_' . $uid . '_' . bin2hex(random_bytes(8));
+        $dir = sys_get_temp_dir() . '/' . self::IPC_DIR_PREFIX . $uid . '_' . bin2hex(random_bytes(8));
 
         $previous = umask(0o077);
         try {
@@ -675,6 +720,125 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
         foreach ($paths as $path) {
             @unlink($path);
         }
+    }
+
+    /**
+     * Remove a SETTLED session's IPC files, and the private directory once no
+     * session is left in it (audit BG-2).
+     *
+     * Called only after the daemon is gone and its buffer has been absorbed
+     * into the session, so nothing still reads or writes these paths: the
+     * daemon unlinks its own socket on an orderly exit, but the buffer, its
+     * `.log` sidecar and the token used to stay in `/tmp` forever — one
+     * directory per TUI process that ever ran `/bg`.
+     *
+     * Only paths inside THIS supervisor's own private directory are touched.
+     * A path anywhere else was not created by {@see spawnSession()} and is not
+     * this method's to delete. The `rmdir` is the "last one out" test: it
+     * fails, harmlessly, while any sibling session still has files there.
+     */
+    private function releaseIpcFiles(string $id): void
+    {
+        $ipc = $this->sessionIpc[$id] ?? null;
+        $dir = $this->ipcDir;
+        if ($ipc === null || $dir === '') {
+            return;
+        }
+
+        $ownPath = static fn (string $path): bool => $path !== '' && dirname($path) === $dir;
+        if ($ownPath($ipc['socketPath'])) {
+            @unlink($ipc['socketPath']);
+        }
+        foreach ([$ipc['bufferPath'], $ipc['bufferPath'] . '.log', $ipc['tokenPath'] ?? ''] as $path) {
+            if ($ownPath($path)) {
+                // discard() also drops a `.partial` left by an interrupted write().
+                ToolIpcFiles::discard($path);
+            }
+        }
+
+        if (@rmdir($dir)) {
+            $this->ipcDir = '';
+        }
+    }
+
+    /**
+     * Startup reaper for private IPC directories whose owning processes are
+     * all gone (audit BG-2), returning how many directories were removed.
+     *
+     * A background daemon is DESIGNED to outlive the TUI that spawned it, so
+     * when that TUI exits first nobody is left to run {@see releaseIpcFiles()}
+     * for it. This sweep is the reaper of last resort, run once per process
+     * through {@see ToolIpcFiles::sweepOnce()}.
+     *
+     * Conservative in the same ways as {@see ToolIpcFiles::sweep()}: only a
+     * real directory (by `lstat`, so a symlink is never followed) whose name
+     * is exactly the shape {@see ensurePrivateIpcDir()} mints, owned by this
+     * effective uid and named for it; only when the directory and EVERY entry
+     * in it are older than $olderThanSeconds (see
+     * {@see STALE_IPC_DIR_SECONDS} for why age is the liveness test); and only
+     * when every entry is a regular file or a socket — anything else in there
+     * is not ours, and the directory is left whole.
+     *
+     * @param string|null $dir The temp directory to scan; production passes
+     *        nothing. Tests pass a throwaway directory, as with ToolIpcFiles.
+     */
+    public static function sweepStaleIpcDirs(?string $dir = null, ?int $olderThanSeconds = null): int
+    {
+        $dir ??= sys_get_temp_dir();
+        $cutoff = $olderThanSeconds ?? self::STALE_IPC_DIR_SECONDS;
+        $uid = function_exists('posix_geteuid') ? posix_geteuid() : null;
+        $now = time();
+
+        $removed = 0;
+        foreach (glob($dir . '/' . self::IPC_DIR_PREFIX . '*', GLOB_NOSORT) ?: [] as $path) {
+            if (preg_match(self::IPC_DIR_PATTERN, basename($path), $name) !== 1) {
+                continue;
+            }
+            if ($uid !== null && (int) $name[1] !== $uid) {
+                continue;
+            }
+
+            clearstatcache(true, $path);
+            $stat = @lstat($path);
+            if ($stat === false
+                || ($stat['mode'] & self::STAT_TYPE_MASK) !== self::STAT_DIRECTORY
+                || ($uid !== null && $stat['uid'] !== $uid)
+            ) {
+                continue;
+            }
+
+            $newest = (int) $stat['mtime'];
+            $entries = [];
+            $ours = true;
+            foreach (@scandir($path) ?: [] as $entry) {
+                if ($entry === '.' || $entry === '..') {
+                    continue;
+                }
+                $entryStat = @lstat($path . '/' . $entry);
+                $type = $entryStat === false ? null : ($entryStat['mode'] & self::STAT_TYPE_MASK);
+                if ($type !== self::STAT_REGULAR_FILE && $type !== self::STAT_SOCKET) {
+                    $ours = false;
+                    break;
+                }
+                $newest = max($newest, (int) $entryStat['mtime']);
+                $entries[] = $path . '/' . $entry;
+            }
+
+            // A future mtime reads as age <= 0 and is left alone, as in
+            // ToolIpcFiles::sweep().
+            if (!$ours || $now - $newest < $cutoff) {
+                continue;
+            }
+
+            foreach ($entries as $entry) {
+                @unlink($entry);
+            }
+            if (@rmdir($path)) {
+                $removed++;
+            }
+        }
+
+        return $removed;
     }
 
     /**
@@ -783,6 +947,10 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
 
         $this->sessions[$id] = $session;
         unset($this->bufferMtimes[$id]);
+
+        // The buffer is absorbed and the daemon is gone: nothing will read
+        // or write these files again (audit BG-2).
+        $this->releaseIpcFiles($id);
 
         if ($stopped) {
             $this->onSessionStopped($session);
@@ -1211,6 +1379,12 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
                         $this->sessions[$id] = $session;
                     }
                     $reconnected[$id] = $session;
+                    // Only when the daemon is really gone: this branch is also
+                    // reached by a live daemon whose socket path vanished, and
+                    // its files are still in use (audit BG-2).
+                    if (!$childRunning) {
+                        $this->releaseIpcFiles($id);
+                    }
                 }
             } else {
                 // Session without IPC data — just mark as reconnected

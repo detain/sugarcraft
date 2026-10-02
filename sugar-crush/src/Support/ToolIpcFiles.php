@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Support;
 
+use SugarCraft\Crush\Sessions\BackgroundSupervisor;
+
 /**
  * The temp files a forked tool child hands its result back through, and the
  * only place that knows how they are named, created and cleaned up.
@@ -307,7 +309,13 @@ final class ToolIpcFiles
 
         self::$swept = true;
 
-        return self::sweep($dir);
+        // The `/bg` daemons' private IPC directories are reaped here too
+        // (audit BG-2): same moment, same reason — their owner (the TUI that
+        // spawned them) may have exited before they finished, leaving nobody
+        // to clean up. Kept out of sweep()'s prefix list because those are
+        // DIRECTORIES with a liveness rule of their own, and sweep() never
+        // touches a directory.
+        return self::sweep($dir) + BackgroundSupervisor::sweepStaleIpcDirs($dir);
     }
 
     /**

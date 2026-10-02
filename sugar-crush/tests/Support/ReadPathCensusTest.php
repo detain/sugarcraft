@@ -409,10 +409,20 @@ final class ReadPathCensusTest extends TestCase
             'PROCESS_DERIVED — `/proc/<pid>/stat`, a kernel interface named by a '
                 . 'literal, read to fingerprint a daemon pid against reuse (audit M5)',
         ],
+        'Sessions/BackgroundSupervisor.php|glob' => [
+            'NAMES_ONLY — the startup sweep (audit BG-2) lists `sugar_crush_bg_<uid>_*` names in the '
+                . 'temp dir; each candidate is then lstat-checked as a real directory of this uid '
+                . 'in the exact minted shape, and no content is read',
+        ],
         'Sessions/BackgroundSupervisor.php|require' => [
             'PROCESS_DERIVED — inside the GENERATED child script: the composer autoload of the '
                 . 'installation already executing this code, found via the live ClassLoader\'s own '
                 . 'file. A hostile autoloader there is one this process has already loaded',
+        ],
+        'Sessions/BackgroundSupervisor.php|scandir' => [
+            'NAMES_ONLY — the same sweep lists one vetted IPC directory\'s entries to stat their '
+                . 'type and age; nothing is read, and a directory holding anything but regular '
+                . 'files and sockets is left whole',
         ],
         'Skills/Skill.php|file_get_contents' => [
             'CONTAINED_UPSTREAM:Skills/SkillLoader.php — parses a SKILL.md the loader bounded',
