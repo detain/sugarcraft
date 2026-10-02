@@ -22,8 +22,9 @@ use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
  * `log`, and one `diff` for each of the staged and unstaged views), and the
  * block's git section reflects the repository as the agent has already changed
  * it rather than as it was at session start. FIVE is the count WHEN THE PROCESS
- * HELPERS EXIST AND THE DIFF IS EMITTED: four of them go through `proc_open`
- * and one through `shell_exec`, and a build where either is in
+ * HELPERS EXIST AND THE DIFF IS EMITTED: all five go through `proc_open` (the
+ * branch read falls back to `shell_exec` only where `proc_open` is disabled),
+ * each bounded by {@see GIT_TIMEOUT_SECONDS}, and a build with `proc_open` in
  * `disable_functions` runs fewer — see {@see gitStatusSnapshot()} for what it
  * emits instead, and why a hard failure there would have taken the whole
  * session down rather than one line. When the caller has suppressed the diff
@@ -387,6 +388,21 @@ final readonly class EnvironmentBlock implements PromptSection
      * "unavailable" should not have to learn a second.
      */
     private const NO_PROCESS_REASON = 'unavailable (proc_open is disabled on this build)';
+
+    /**
+     * Wall-clock bound on each git read (audit 15d-14).
+     *
+     * render() runs synchronously before every request, so an unbounded git —
+     * a huge or network-mounted repository, a slow `core.fsmonitor` hook —
+     * stalls the turn for as long as git takes, and under the 120 s parent
+     * watchdog can kill the turn before the provider is ever called. Two
+     * seconds is generous for every read here on an ordinary repository. It
+     * is per call, and ONE expiry ends the git work for the render: the
+     * remaining fields report {@see gitTimeoutReason()} without running, so a
+     * repository that is slow for one read (and is therefore slow for all of
+     * them) costs one bound plus the kill grace, not five bounds.
+     */
+    private const GIT_TIMEOUT_SECONDS = 2.0;
 
     /**
      * The honest caption for what the git section below it is — and is not.
@@ -775,10 +791,10 @@ final readonly class EnvironmentBlock implements PromptSection
             //
             // Unguarded by function_exists() as a considered choice, not an
             // oversight: gitStatusSnapshot() below reaches the shell FIVE times
-            // in this same render path — ONCE through shell_exec (the branch
-            // name) and FOUR times through proc_open, which is the count after
-            // the capped fields moved to {@see CapturesProcessOutput}; an
-            // earlier revision of this comment still said "shell_exec() three
+            // in this same render path, all through proc_open since the branch
+            // read gained its time bound (15d-14), with shell_exec as the
+            // branch's fallback where proc_open is disabled; an earlier
+            // revision of this comment still said "shell_exec() three
             // times", which had been true of the three-command version and of
             // nothing since. Both of those are far more commonly disabled than
             // php_uname, so a guard here would protect the wrong end of the same
@@ -956,13 +972,21 @@ final readonly class EnvironmentBlock implements PromptSection
      * never asked, so there is no exit code to report and "empty" would be a
      * lie. `branch` reports `unavailable (shell_exec is disabled on this build)`
      * and the four capped fields report {@see NO_PROCESS_REASON}. Five
-     * subprocesses per call is therefore the count WHERE BOTH HELPERS EXIST; on
-     * a build with `proc_open` disabled it is one, and with both disabled it is
-     * zero and the git section is five unavailability lines instead of an
-     * exception.
+     * subprocesses per call is therefore the count WHERE `proc_open` EXISTS; on
+     * a build with `proc_open` disabled it is one (the branch, through
+     * `shell_exec`), and with both disabled it is zero and the git section is
+     * five unavailability lines instead of an exception.
+     *
+     * A GIT THAT DOES NOT ANSWER IN TIME IS A FOURTH OUTCOME: the field it was
+     * reading and every field after it report {@see gitTimeoutReason()}, and
+     * the later reads are not attempted — see {@see GIT_TIMEOUT_SECONDS}.
      */
     private function gitStatusSnapshot(): string
     {
+        // Per-render, threaded by reference: the class is readonly, and the
+        // skip-after-expiry decision belongs to ONE render, never to the next.
+        $timedOut = false;
+
         // `function_exists` rather than a bare call: a function in
         // `disable_functions` is UNDEFINED, so calling it raises an Error that
         // `@` does not suppress. MEASURED with `php -d
@@ -972,12 +996,10 @@ final readonly class EnvironmentBlock implements PromptSection
         // this class returned a 327 B block on the same host. Reporting the
         // missing helper is the same rule the exit codes below follow — an
         // unavailability the model can see beats a silence it cannot.
-        $branch = \function_exists('shell_exec')
-            ? trim((string) shell_exec('git -C ' . escapeshellarg($this->cwd) . ' branch --show-current 2>/dev/null'))
-            : 'unavailable (shell_exec is disabled on this build)';
+        $branch = $this->gitBranch($timedOut);
 
-        // P5.S3 closes the FIRST-POSITION fence-escape vector: this raw
-        // shell_exec is the one git read that bypasses gitField(), so the
+        // P5.S3 closes the FIRST-POSITION fence-escape vector: the branch is
+        // the one git read that bypasses gitField(), so the
         // authority is applied here, and the value additionally gets the cap
         // the SUMMARY_MAX_BYTES paragraph spent five revisions wrongly claiming
         // the ref grammar already provided. Escape BEFORE cap so the 255 is a
@@ -986,8 +1008,8 @@ final readonly class EnvironmentBlock implements PromptSection
             PromptFence::escape($branch),
             self::BRANCH_MAX_BYTES,
         );
-        $status = $this->gitField(['status', '--porcelain'], self::SUMMARY_MAX_BYTES);
-        $log = $this->gitField(['log', '--oneline', '-5'], self::SUMMARY_MAX_BYTES);
+        $status = $this->gitField(['status', '--porcelain'], self::SUMMARY_MAX_BYTES, $timedOut);
+        $log = $this->gitField(['log', '--oneline', '-5'], self::SUMMARY_MAX_BYTES, $timedOut);
 
         // The caption goes FIRST: it is a claim about every line below it, the
         // branch line included. See GIT_STATE_CAVEAT for why the claim is the
@@ -1002,11 +1024,55 @@ final readonly class EnvironmentBlock implements PromptSection
         // which is the expensive half of the five: the worst case measured in
         // the class docblock spent 373 of its 399 ms inside `git diff`.
         if ($this->writeSinceLastRender) {
-            $section .= "\n\n" . $this->gitDiffSection('Staged changes (git diff --cached, index vs HEAD)', '--cached')
-                . "\n\n" . $this->gitDiffSection('Unstaged changes (git diff, working tree vs index)', null);
+            $section .= "\n\n" . $this->gitDiffSection('Staged changes (git diff --cached, index vs HEAD)', '--cached', $timedOut)
+                . "\n\n" . $this->gitDiffSection('Unstaged changes (git diff, working tree vs index)', null, $timedOut);
         }
 
         return $section;
+    }
+
+    /**
+     * The unavailability text for a git read cut off at {@see GIT_TIMEOUT_SECONDS}
+     * — shares the `unavailable (` prefix of every other degraded field, so a
+     * scan for degraded fields sees this one too.
+     */
+    private static function gitTimeoutReason(): string
+    {
+        return \sprintf('unavailable (git timed out after %gs)', self::GIT_TIMEOUT_SECONDS);
+    }
+
+    /**
+     * `git branch --show-current`, bounded when it can be.
+     *
+     * THROUGH runCaptured() WHERE proc_open EXISTS, because `shell_exec` has
+     * no deadline and this read is first in the render. The rest of the old
+     * read is kept: stdout only, trimmed, and empty — not an exit code — when
+     * git fails or HEAD is detached (see {@see gitStatusSnapshot()} for why
+     * empty is a real answer for this field). A TIMEOUT is not that answer,
+     * so it reports {@see gitTimeoutReason()} and marks the render timed out.
+     *
+     * `shell_exec` remains the fallback for a build with `proc_open` in
+     * `disable_functions`, unbounded as before — there is no bounded spawn
+     * left to use there — and with both disabled the field says so.
+     */
+    private function gitBranch(bool &$timedOut): string
+    {
+        $command = 'git -C ' . escapeshellarg($this->cwd) . ' branch --show-current';
+
+        if (\function_exists('proc_open')) {
+            $captured = $this->runCaptured($command, null, null, self::GIT_TIMEOUT_SECONDS);
+            if ($captured['timedOut']) {
+                $timedOut = true;
+
+                return self::gitTimeoutReason();
+            }
+
+            return trim($captured['stdout']);
+        }
+
+        return \function_exists('shell_exec')
+            ? trim((string) shell_exec($command . ' 2>/dev/null'))
+            : 'unavailable (shell_exec is disabled on this build)';
     }
 
     /**
@@ -1022,11 +1088,16 @@ final readonly class EnvironmentBlock implements PromptSection
      * defect a silently-truncated diff is, one field over.
      *
      * @param list<string> $argv Subcommand and flags, each shell-escaped individually
+     * @param bool $timedOut this render's expiry flag — read to skip, set on expiry
      */
-    private function gitField(array $argv, int $maxBytes): string
+    private function gitField(array $argv, int $maxBytes, bool &$timedOut): string
     {
         if (!\function_exists('proc_open')) {
             return self::NO_PROCESS_REASON;
+        }
+
+        if ($timedOut) {
+            return self::gitTimeoutReason();
         }
 
         $command = 'git -C ' . escapeshellarg($this->cwd);
@@ -1034,7 +1105,13 @@ final readonly class EnvironmentBlock implements PromptSection
             $command .= ' ' . escapeshellarg($arg);
         }
 
-        $captured = $this->runCaptured($command, null, $maxBytes);
+        $captured = $this->runCaptured($command, null, $maxBytes, self::GIT_TIMEOUT_SECONDS);
+
+        if ($captured['timedOut']) {
+            $timedOut = true;
+
+            return self::gitTimeoutReason();
+        }
 
         if ($captured['exitCode'] !== 0) {
             return "unavailable (git exited {$captured['exitCode']})";
@@ -1094,11 +1171,16 @@ final readonly class EnvironmentBlock implements PromptSection
      *
      * @param string      $label    Human label naming the exact command, for the model
      * @param string|null $selector `--cached` for the staged view, null for unstaged
+     * @param bool        $timedOut this render's expiry flag — see {@see gitField()}
      */
-    private function gitDiffSection(string $label, ?string $selector): string
+    private function gitDiffSection(string $label, ?string $selector, bool &$timedOut): string
     {
         if (!\function_exists('proc_open')) {
             return $label . ': ' . self::NO_PROCESS_REASON;
+        }
+
+        if ($timedOut) {
+            return $label . ': ' . self::gitTimeoutReason();
         }
 
         $command = 'git -C ' . escapeshellarg($this->cwd) . ' diff --shortstat --patch'
@@ -1110,7 +1192,13 @@ final readonly class EnvironmentBlock implements PromptSection
         // A `git diff` over an accidentally-unignored vendor tree is hundreds of
         // megabytes, and shell_exec() would materialise all of it before any cap
         // could apply.
-        $captured = $this->runCaptured($command, null, self::DIFF_MAX_BYTES);
+        $captured = $this->runCaptured($command, null, self::DIFF_MAX_BYTES, self::GIT_TIMEOUT_SECONDS);
+
+        if ($captured['timedOut']) {
+            $timedOut = true;
+
+            return $label . ': ' . self::gitTimeoutReason();
+        }
 
         if ($captured['exitCode'] !== 0) {
             return $label . ": unavailable (git exited {$captured['exitCode']})";

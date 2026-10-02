@@ -113,6 +113,21 @@ trait CapturesProcessOutput
      * discard count alone, since a cut that happened to fall on a newline
      * needs no repair).
      *
+     * $timeoutSeconds is an OPTIONAL wall-clock bound (audit 15d-14), and
+     * null — the default — keeps the historical unbounded wait byte for
+     * byte, so Bash and Grep behave exactly as before (Bash's own timeout is
+     * a separate item). A caller that cannot afford to wait, the prompt
+     * assembly's git reads above all, passes one: the drain stops at the
+     * deadline, and a child that closed its pipes but has not exited is
+     * waited on only until the same deadline, because bounding the drain
+     * alone leaves the unbounded wait inside `proc_close()`. On expiry the
+     * child's whole process group (it leads one under the `setsid -w`
+     * spawn) gets the reaper's 15→9 ladder on short graces, the pipes are
+     * closed and the child reaped; the result is exit 124 (timeout(1)'s
+     * number) with `timedOut` true and whatever output arrived before the
+     * deadline. `timedOut` is the discriminator to read — an exit code of
+     * 124 can also be a command's own answer.
+     *
      * @return array{
      *     stdout: string,
      *     stderr: string,
@@ -122,9 +137,10 @@ trait CapturesProcessOutput
      *     stderrDropped: int,
      *     stdoutMidLine: bool,
      *     stderrMidLine: bool,
+     *     timedOut: bool,
      * }
      */
-    private function runCaptured(string $command, ?string $cwd = null, ?int $maxBytes = null): array
+    private function runCaptured(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $timeoutSeconds = null): array
     {
         $descriptors = [
             0 => ['pipe', 'r'],
@@ -156,6 +172,7 @@ trait CapturesProcessOutput
                 'stderrDropped' => 0,
                 'stdoutMidLine' => false,
                 'stderrMidLine' => false,
+                'timedOut' => false,
             ];
         }
 
@@ -173,13 +190,26 @@ trait CapturesProcessOutput
         $stderr = '';
         $stdoutDropped = 0;
         $stderrDropped = 0;
+        $deadline = $timeoutSeconds === null ? null : microtime(true) + max(0.0, $timeoutSeconds);
+        $timedOut = false;
         while (!feof($pipes[1]) || !feof($pipes[2])) {
             $read = array_filter([$pipes[1], $pipes[2]], static fn($p) => !feof($p));
             if ($read === []) {
                 break;
             }
+            $selectMicros = 200000;
+            if ($deadline !== null) {
+                $remaining = $deadline - microtime(true);
+                if ($remaining <= 0.0) {
+                    $timedOut = true;
+                    break;
+                }
+                // Never sleep past the deadline: a silent child must be
+                // noticed AT the bound, not up to one 200 ms slice after it.
+                $selectMicros = max(1, min($selectMicros, (int) ceil($remaining * 1_000_000)));
+            }
             $write = $except = null;
-            if (@stream_select($read, $write, $except, 0, 200000) === false) {
+            if (@stream_select($read, $write, $except, 0, $selectMicros) === false) {
                 break;
             }
             foreach ($read as $pipe) {
@@ -195,9 +225,27 @@ trait CapturesProcessOutput
             }
         }
 
+        // Bounded mode only: EOF on both pipes does not mean the child
+        // exited (`cmd >/dev/null 2>&1` closes them at once), and proc_close()
+        // would then wait for as long as it runs. The status observed here is
+        // kept because it, not proc_close(), is the one known to carry the
+        // exit code once proc_get_status() has seen the exit.
+        $observedExit = null;
+        if ($deadline !== null && !$timedOut) {
+            $observedExit = self::awaitExitUntil($process, $deadline);
+            $timedOut = $observedExit === null;
+        }
+
+        if ($timedOut) {
+            // Kill BEFORE closing the pipes — StatusLineCommand's order: a
+            // stuck child is not writing, so EPIPE would never reach it.
+            self::terminateGroup($process);
+        }
+
         fclose($pipes[1]);
         fclose($pipes[2]);
-        $exitCode = proc_close($process);
+        $closedExit = proc_close($process);
+        $exitCode = $timedOut ? 124 : ($observedExit ?? $closedExit);
 
         // Decided BEFORE the rtrim: a stream that lost bytes but happened to
         // stop on a newline is intact, and repairing it anyway would throw
@@ -214,7 +262,67 @@ trait CapturesProcessOutput
             'stderrDropped' => $stderrDropped,
             'stdoutMidLine' => $stdoutMidLine,
             'stderrMidLine' => $stderrMidLine,
+            'timedOut' => $timedOut,
         ];
+    }
+
+    /**
+     * Grace budgets for the deadline path's 15→9 ladder: StatusLineCommand's
+     * 0.5 s each rather than the reaper's 1 s defaults, because the caller
+     * that set a deadline has already spent its patience — the ladder is the
+     * tail of that budget, not a second one of the same size.
+     */
+    private const DEADLINE_TERMINATE_GRACE_SECONDS = 0.5;
+    private const DEADLINE_KILL_GRACE_SECONDS = 0.5;
+
+    /**
+     * Poll until the child exits or $deadline passes; the exit code on exit,
+     * null on expiry. The status is read BEFORE the clock so a child that
+     * exited right at the bound still counts as exited.
+     *
+     * @param resource $process
+     */
+    private static function awaitExitUntil($process, float $deadline): ?int
+    {
+        while (true) {
+            $status = proc_get_status($process);
+            if (($status['running'] ?? false) !== true) {
+                return (int) ($status['exitcode'] ?? -1);
+            }
+            if (microtime(true) >= $deadline) {
+                return null;
+            }
+            usleep(ProcessReaper::POLL_INTERVAL_US);
+        }
+    }
+
+    /**
+     * The shared 15→9 ladder over the child's process GROUP, so git's own
+     * helpers (an fsmonitor hook, a credential helper) die with it rather
+     * than being orphaned holding the repository.
+     *
+     * The group id is read ONCE, while the child is still alive: if SIGTERM
+     * kills the wrapper first, a re-derivation would find no group and the
+     * signal-9 rung would reach only the dead wrapper, missing a descendant
+     * that trapped TERM.
+     *
+     * @param resource $process
+     */
+    private static function terminateGroup($process): void
+    {
+        $groupId = ProcessContainment::groupId($process);
+
+        ProcessReaper::escalate(
+            static function (int $signal) use ($process, $groupId): void {
+                if ($groupId !== null && \function_exists('posix_kill') && @\posix_kill(-$groupId, $signal)) {
+                    return;
+                }
+                ProcessContainment::terminate($process, $signal);
+            },
+            static fn(): bool => (proc_get_status($process)['running'] ?? false) !== true,
+            self::DEADLINE_TERMINATE_GRACE_SECONDS,
+            self::DEADLINE_KILL_GRACE_SECONDS,
+        );
     }
 
     /**

@@ -564,6 +564,10 @@ final class DescriptorInheritanceGuardTest extends TestCase
             'count' => 1,
             'reason' => 'function_exists() capability probe for a build with proc_open disabled',
         ],
+        'Context/EnvironmentBlock.php::gitBranch' => [
+            'count' => 1,
+            'reason' => 'function_exists() capability probe choosing the bounded runCaptured() read over the shell_exec fallback',
+        ],
     ];
 
     /**
