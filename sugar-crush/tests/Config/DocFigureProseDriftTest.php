@@ -25,6 +25,7 @@ use SugarCraft\Crush\Context\PromptFence;
 use SugarCraft\Crush\Context\RepoMapBlock;
 use SugarCraft\Crush\Context\RuleLoader;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Crush\Diagnostics\TuiErrorLog;
 use SugarCraft\Crush\Hooks\HookConfig;
 use SugarCraft\Crush\Hooks\HookDispatcher;
 use SugarCraft\Crush\Hooks\HookEvent;
@@ -240,10 +241,13 @@ final class DocFigureProseDriftTest extends TestCase
     public function testNoticeWorstCaseFitsOneDatagramWithPinnedMargin(): void
     {
         $maxChars = RuntimeNoticeSink::MAX_CHARS;
+        // The third `%s` names where the full text went (audit C4); its
+        // longest spelling is a destination at TuiErrorLog's description cap.
         $suffixLen = \strlen(\sprintf(
             RuntimeNoticeSink::OVERFLOW_FORMAT,
             \PHP_INT_MAX,
             's',
+            \sprintf(RuntimeNoticeSink::FULL_TEXT_AT_FORMAT, 'in', str_repeat('x', TuiErrorLog::MAX_DESCRIBED_BYTES)),
         ));
         // MAX_CHARS counts UTF-8 characters; the widest encoding is 4 bytes.
         $worstCaseBytes = $maxChars * 4 + $suffixLen;

@@ -362,7 +362,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
             'the tail pump added ordinary rows instead of one overflow — the turn budget did not arm through the dispatch',
         );
         self::assertSame(
-            \sprintf(RuntimeNoticeSink::OVERFLOW_FORMAT, 5, 's'),
+            RuntimeNoticeSink::overflowNotice(5),
             $rows[RuntimeNoticeSink::TURN_NOTICE_LIMIT]->content,
             'the truncation row is not the single announced overflow of the five dropped notices',
         );

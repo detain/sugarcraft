@@ -111,6 +111,25 @@ final class BinSugarcrushTuiErrorLogTest extends TestCase
         self::assertStringContainsString('{$tuiErrorLog}', $block, 'the fatal line must name the log file');
     }
 
+    /**
+     * Audit R16: install() can now return the null device as its last
+     * resort. A fatal line saying "details in /dev/null" would send the
+     * reader nowhere, so that branch prints the message itself.
+     */
+    public function testAFatalUnderTheNullDeviceFallbackCarriesItsOwnMessage(): void
+    {
+        $block = self::displayBlock(self::binCode());
+
+        $branch = strpos($block, 'if (TuiErrorLog::isNullDevice($tuiErrorLog)) {');
+        self::assertIsInt($branch, 'the fatal line no longer distinguishes the null-device fallback');
+        $after = substr($block, $branch);
+        $message = strpos($after, "{\$error['message']}");
+        $write = strpos($after, 'fwrite(STDERR, ');
+        self::assertIsInt($message, 'the null-device fatal line must carry the message');
+        self::assertIsInt($write);
+        self::assertLessThan($write, $message, 'the message must be chosen on the null-device branch, before the one write');
+    }
+
     public function testTheOneShotAndSubcommandDispatchesComeBeforeTheRedirect(): void
     {
         $code = self::binCode();

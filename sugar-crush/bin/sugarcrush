@@ -464,7 +464,9 @@ if ($resumeError !== null) {
 // goes to a private file instead — set BEFORE Bootstrap::app() builds the
 // Chat and arms the notice sink, so the forked turn child inherits it. TUI
 // path only: above this line, on the `-p` and subcommand paths, stderr is
-// the operator's channel. A null return leaves the ini as it was.
+// the operator's channel. A null return means the operator's own non-stderr
+// destination was kept; otherwise the ini now names the home log, the private
+// temp-dir fallback, or (audit R16, last resort) the null device — never fd 2.
 $tuiErrorLog = TuiErrorLog::install(HomeDirectory::owned());
 
 // The same reasoning covers PHP's own warnings and notices: display_errors
@@ -484,8 +486,15 @@ if ($tuiErrorLog !== null) {
         if ($error !== null && ($error['type'] & $fatal) !== 0) {
             // \r\n on both sides: a fatal skips Program's teardown, so the
             // terminal can still be in raw mode, where \n does not return
-            // the carriage.
-            fwrite(STDERR, "\r\nsugarcrush: fatal error — details in {$tuiErrorLog}\r\n");
+            // the carriage. Audit R16: when no log file could be prepared the
+            // redirect is the null device, which kept nothing — then this
+            // line is the only record, so it carries the message itself
+            // (control bytes stripped: the terminal is still ours to wreck).
+            $detail = "details in {$tuiErrorLog}";
+            if (TuiErrorLog::isNullDevice($tuiErrorLog)) {
+                $detail = preg_replace('/[\x00-\x1f\x7f]+/', ' ', "{$error['message']} in {$error['file']}:{$error['line']}");
+            }
+            fwrite(STDERR, "\r\nsugarcrush: fatal error — {$detail}\r\n");
         }
     });
 }

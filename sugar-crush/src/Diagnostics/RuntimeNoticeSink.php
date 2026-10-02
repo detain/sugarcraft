@@ -170,7 +170,7 @@ final class RuntimeNoticeSink
      * terse — the longest message routed here today is
      * `DsmlToolCallParser::parseDsml()`'s no-positioned-envelope diagnostic,
      * and it IS clipped, which is correct: its actionable half is its first
-     * sentence and the stderr copy carries the rest.
+     * sentence and the `error_log()` copy carries the rest.
      *
      * THAT LENGTH IS DERIVED, NOT WRITTEN DOWN HERE, and the previous revision
      * of this paragraph is why. WHAT IT SAID: "at 452 characters (MEASURED)".
@@ -193,13 +193,34 @@ final class RuntimeNoticeSink
 
     /**
      * Appended to a clipped notice, and counted against {@see MAX_CHARS} so the
-     * row never exceeds it.
+     * row never exceeds it. `%s` is {@see fullTextPhrase()}.
      *
      * Says where the rest is, because a row that is silently short is worse
      * than a long one — the reader cannot tell a clipped diagnostic from a
      * complete one.
+     *
+     * WHERE, NOT "STDERR" (audit C4). WHAT THIS SAID: a fixed
+     * `… (clipped; full text on stderr)`. That was written before
+     * {@see TuiErrorLog}: in the TUI — the only process with a transcript to
+     * clip into — the full text goes to `~/.sugar-crush/logs/sugarcrush.log`
+     * (or the R16 fallback), and stderr has nothing. The destination is read
+     * from the live `error_log` ini at clip time, which is right in the forked
+     * turn child too: it inherits the ini and the transport.
      */
-    public const CLIP_SUFFIX = '… (clipped; full text on stderr)';
+    public const CLIP_SUFFIX_FORMAT = '… (clipped; %s)';
+
+    /**
+     * {@see fullTextPhrase()}'s spelling for a destination that can be read
+     * back, `%s` from {@see TuiErrorLog::describeDestination()}.
+     */
+    public const FULL_TEXT_AT_FORMAT = 'full text %s %s';
+
+    /**
+     * {@see fullTextPhrase()}'s spelling when the complete text went nowhere
+     * a reader can open: the R16 null-device fallback, or {@see warn()}'s
+     * C2a skip.
+     */
+    public const FULL_TEXT_NOT_KEPT = 'full text not kept';
 
     /**
      * The most notices the IN-PROCESS backend will hold between drains.
@@ -238,7 +259,8 @@ final class RuntimeNoticeSink
      * twenty rows of up to {@see MAX_CHARS} each, every one of them resent to
      * the model on every later turn, is already a wall no healthy generation
      * fills — and the row that truncates is the signal, not a loss: the
-     * complete text is on stderr by construction.
+     * complete text is in the `error_log()` record by construction (the TUI's
+     * log file, stderr elsewhere — the row says which, audit C4).
      *
      * ACTIVE ONLY once a drain owner calls {@see beginTurn()}; until then
      * {@see drain()} bounds per batch exactly as it did before E199.
@@ -263,8 +285,12 @@ final class RuntimeNoticeSink
      * the next {@see beginTurn()} re-opens a budget, not those rows. And a
      * format constant each lane had to invent would put two spellings of the
      * same sentence in the transcript.
+     *
+     * The third `%s` is {@see fullTextPhrase()} — the audit C4 fix that
+     * {@see CLIP_SUFFIX_FORMAT} explains; build the row with
+     * {@see overflowNotice()}.
      */
-    public const OVERFLOW_FORMAT = '… and %d more runtime notice%s this session; see stderr for the full text.';
+    public const OVERFLOW_FORMAT = '… and %d more runtime notice%s this session; %s.';
 
     /**
      * Read size for one datagram.
@@ -375,11 +401,16 @@ final class RuntimeNoticeSink
      * never reaches this branch: `bin/sugarcrush` installs
      * {@see TuiErrorLog} before `Program::run()`, the ini then names a file,
      * and the complete, unclipped record goes there — including from the
-     * forked turn child, which inherits the ini. The skip is the fallback for
-     * a launch where that redirect could not be made (no owned home, an
-     * unwritable log directory), and its cost is stated rather than hidden:
-     * there, a clipped row's tail and a dropped datagram's text are lost
-     * instead of smeared across the screen. The unarmed sink (`-p`, the
+     * forked turn child, which inherits the ini. Since audit R16 that
+     * redirect cannot leave the ini on stderr either — no owned home, an
+     * unwritable log directory, falls through to a private temp-dir file and
+     * finally the null device — so in `bin/sugarcrush` this branch is now
+     * unreachable; it stays as the guard for an embedder that arms the
+     * transport without installing the redirect. Its cost is stated rather
+     * than hidden: there, a clipped row's tail and a dropped datagram's text
+     * are lost instead of smeared across the screen, and the rows say "full
+     * text not kept" rather than send the reader to stderr
+     * ({@see fullTextPhrase()}). The unarmed sink (`-p`, the
      * subcommands), the in-process backend and every non-stderr destination
      * keep the copy, so the unarmed, full and torn-down cases the mutation
      * result above pins are unchanged; both sides of the new rule are pinned
@@ -490,8 +521,9 @@ final class RuntimeNoticeSink
             // it is DISCARDED at the read, in this call — not deferred —
             // because a transport left readable keeps hasPending() true and
             // Chat's notice subscription firing on rows that will never
-            // surface. The turn's complete record is on stderr by
-            // construction; the budget protects the transcript, not the log.
+            // surface. The turn's complete record is in the error_log()
+            // copy by construction; the budget protects the transcript, not
+            // the log.
             self::discardPendingNotices();
 
             return [];
@@ -542,11 +574,7 @@ final class RuntimeNoticeSink
                 // Not a second row per later drain — the budget is announced,
                 // then it holds.
                 $discarded = $excess + self::discardPendingNotices() + $dropped;
-                $unique[] = sprintf(
-                    self::OVERFLOW_FORMAT,
-                    $discarded,
-                    $discarded === 1 ? '' : 's',
-                );
+                $unique[] = self::overflowNotice($discarded);
 
                 return $unique;
             }
@@ -555,7 +583,7 @@ final class RuntimeNoticeSink
         }
 
         if ($dropped > 0) {
-            $unique[] = sprintf(self::OVERFLOW_FORMAT, $dropped, $dropped === 1 ? '' : 's');
+            $unique[] = self::overflowNotice($dropped);
         }
 
         return $unique;
@@ -667,7 +695,7 @@ final class RuntimeNoticeSink
         // Non-blocking on the WRITE end is the half that matters: a child that
         // blocked here would stall the turn behind a diagnostic nobody is
         // reading. Overflow degrades to a dropped datagram — measured at 167
-        // in this class's doc-block — and the stderr copy still has the text.
+        // in this class's doc-block — and the error_log() copy still has the text.
         stream_set_blocking(self::$transportWrite, false);
 
         return true;
@@ -865,11 +893,57 @@ final class RuntimeNoticeSink
             return $message;
         }
 
+        $suffix = self::clipSuffix();
+
         return mb_substr(
             $message,
             0,
-            self::MAX_CHARS - mb_strlen(self::CLIP_SUFFIX, 'UTF-8'),
+            self::MAX_CHARS - mb_strlen($suffix, 'UTF-8'),
             'UTF-8',
-        ) . self::CLIP_SUFFIX;
+        ) . $suffix;
+    }
+
+    /**
+     * The suffix a clipped row ends with, naming where its full text is now.
+     *
+     * Bounded: {@see TuiErrorLog::describeDestination()} caps the destination
+     * at {@see TuiErrorLog::MAX_DESCRIBED_BYTES}, so the suffix can never eat
+     * {@see MAX_CHARS}' budget whole.
+     */
+    public static function clipSuffix(): string
+    {
+        return sprintf(self::CLIP_SUFFIX_FORMAT, self::fullTextPhrase());
+    }
+
+    /** The "and N more" tail row, spelled with {@see OVERFLOW_FORMAT}. */
+    public static function overflowNotice(int $dropped): string
+    {
+        return sprintf(self::OVERFLOW_FORMAT, $dropped, $dropped === 1 ? '' : 's', self::fullTextPhrase());
+    }
+
+    /**
+     * Where this process's complete record of a notice is — `full text on
+     * stderr`, `full text in ~/.sugar-crush/logs/sugarcrush.log` — or
+     * {@see FULL_TEXT_NOT_KEPT} (audit C4).
+     *
+     * Two cases keep nothing a reader can open, and both say so rather than
+     * point at a place that is empty: {@see warn()}'s C2a skip (transport
+     * armed and `error_log` still on stderr — no copy is written at all), and
+     * an `error_log` on the null device, which is {@see TuiErrorLog}'s R16
+     * last resort.
+     */
+    public static function fullTextPhrase(): string
+    {
+        $ini = ini_get('error_log');
+        if (self::$transportWrite !== null && TuiErrorLog::destinationIsStderr($ini)) {
+            return self::FULL_TEXT_NOT_KEPT;
+        }
+
+        $where = TuiErrorLog::describeDestination($ini);
+        if ($where === null) {
+            return self::FULL_TEXT_NOT_KEPT;
+        }
+
+        return sprintf(self::FULL_TEXT_AT_FORMAT, $where === 'stderr' ? 'on' : 'in', $where);
     }
 }

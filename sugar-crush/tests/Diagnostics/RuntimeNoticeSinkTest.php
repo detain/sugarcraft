@@ -97,7 +97,7 @@ final class RuntimeNoticeSinkTest extends TestCase
 
         self::assertCount(RuntimeNoticeSink::NOTICE_LIMIT + 1, $drained);
         self::assertSame(
-            sprintf(RuntimeNoticeSink::OVERFLOW_FORMAT, 3, 's'),
+            RuntimeNoticeSink::overflowNotice(3),
             $drained[RuntimeNoticeSink::NOTICE_LIMIT],
         );
     }
@@ -113,7 +113,7 @@ final class RuntimeNoticeSinkTest extends TestCase
         $drained = RuntimeNoticeSink::drain();
 
         self::assertSame(
-            sprintf(RuntimeNoticeSink::OVERFLOW_FORMAT, 1, ''),
+            RuntimeNoticeSink::overflowNotice(1),
             $drained[RuntimeNoticeSink::NOTICE_LIMIT],
         );
     }
@@ -149,7 +149,7 @@ final class RuntimeNoticeSinkTest extends TestCase
 
         $first = RuntimeNoticeSink::drain();
         self::assertSame(
-            sprintf(RuntimeNoticeSink::OVERFLOW_FORMAT, 1, ''),
+            RuntimeNoticeSink::overflowNotice(1),
             $first[RuntimeNoticeSink::NOTICE_LIMIT],
         );
 
@@ -249,7 +249,7 @@ final class RuntimeNoticeSinkTest extends TestCase
         }
         $second = RuntimeNoticeSink::drain();
         self::assertSame(
-            [sprintf(RuntimeNoticeSink::OVERFLOW_FORMAT, $overrun, 's')],
+            [RuntimeNoticeSink::overflowNotice($overrun)],
             $second,
             'the over-budget batch did not collapse into exactly one overflow row naming its count',
         );
@@ -290,7 +290,7 @@ final class RuntimeNoticeSinkTest extends TestCase
 
         $second = RuntimeNoticeSink::drain();
         self::assertSame(
-            [sprintf(RuntimeNoticeSink::OVERFLOW_FORMAT, 10, 's')],
+            [RuntimeNoticeSink::overflowNotice(10)],
             $second,
             'the truncating drain did not count the transport remainder into its one overflow row',
         );
@@ -311,7 +311,7 @@ final class RuntimeNoticeSinkTest extends TestCase
 
         self::assertCount(1, $drained);
         self::assertSame(RuntimeNoticeSink::MAX_CHARS, mb_strlen($drained[0], 'UTF-8'));
-        self::assertStringEndsWith(RuntimeNoticeSink::CLIP_SUFFIX, $drained[0]);
+        self::assertStringEndsWith(RuntimeNoticeSink::clipSuffix(), $drained[0]);
     }
 
     public function testTheClipNeverCutsACodepointInHalf(): void
@@ -369,7 +369,7 @@ final class RuntimeNoticeSinkTest extends TestCase
 
         // The whole argument for keeping both channels: stderr is the COMPLETE
         // record and costs no model tokens, which is what makes the clip safe
-        // to advertise in CLIP_SUFFIX.
+        // to advertise in the clip suffix.
         $long = str_repeat('z', RuntimeNoticeSink::MAX_CHARS * 2);
         $log = tempnam(sys_get_temp_dir(), 'sc_lane_a_notice_sink_');
         self::assertIsString($log);
@@ -659,5 +659,84 @@ final class RuntimeNoticeSinkTest extends TestCase
             $longest,
             'a routed message has grown past three times the budget; re-read MAX_CHARS',
         );
+    }
+
+    /**
+     * Audit C4: in the TUI the full text of a clipped or overflowed notice is
+     * in TuiErrorLog's file, so the rows must name that file — not stderr,
+     * where nothing was written. The home is spelled `~`.
+     */
+    public function testATuiArmedSinkNamesTheLogFileInItsClipAndOverflowRows(): void
+    {
+        $home = sys_get_temp_dir() . '/sc_c4_home_' . getmypid() . '_' . bin2hex(random_bytes(4));
+        $log = $home . '/.sugar-crush/logs/sugarcrush.log';
+        $previousLog = ini_get('error_log');
+        $previousHome = getenv('HOME');
+        ini_set('error_log', $log);
+        putenv('HOME=' . $home);
+
+        try {
+            self::assertTrue(RuntimeNoticeSink::arm(), 'this host could not create the transport');
+            RuntimeNoticeSink::record(str_repeat('x', RuntimeNoticeSink::MAX_CHARS * 2));
+            $drained = RuntimeNoticeSink::drain();
+            $overflow = RuntimeNoticeSink::overflowNotice(2);
+        } finally {
+            ini_set('error_log', $previousLog === false ? '' : $previousLog);
+            putenv($previousHome === false ? 'HOME' : 'HOME=' . $previousHome);
+        }
+
+        self::assertCount(1, $drained);
+        self::assertSame(RuntimeNoticeSink::MAX_CHARS, mb_strlen($drained[0], 'UTF-8'));
+        self::assertStringEndsWith('… (clipped; full text in ~/.sugar-crush/logs/sugarcrush.log)', $drained[0]);
+        self::assertSame(
+            '… and 2 more runtime notices this session; full text in ~/.sugar-crush/logs/sugarcrush.log.',
+            $overflow,
+        );
+        self::assertStringNotContainsString('stderr', $drained[0] . $overflow);
+    }
+
+    /** The `-p` / embedder shape: stderr IS where the copy went, so say so. */
+    public function testAnUnarmedTransportWithStderrDestinationStillSaysStderr(): void
+    {
+        $previous = ini_get('error_log');
+        ini_set('error_log', '');
+
+        try {
+            RuntimeNoticeSink::arm(false);
+            RuntimeNoticeSink::record(str_repeat('y', RuntimeNoticeSink::MAX_CHARS + 1));
+            $drained = RuntimeNoticeSink::drain();
+            $overflow = RuntimeNoticeSink::overflowNotice(1);
+        } finally {
+            ini_set('error_log', $previous === false ? '' : $previous);
+        }
+
+        self::assertStringEndsWith('… (clipped; full text on stderr)', $drained[0]);
+        self::assertSame('… and 1 more runtime notice this session; full text on stderr.', $overflow);
+    }
+
+    /**
+     * Two shapes keep no readable copy — warn()'s C2a skip (transport armed,
+     * error_log still on stderr) and TuiErrorLog's R16 null-device last
+     * resort — and the rows must say so instead of pointing at stderr.
+     */
+    public function testARowWhoseFullTextWasNotKeptSaysSo(): void
+    {
+        $previous = ini_get('error_log');
+
+        try {
+            self::assertTrue(RuntimeNoticeSink::arm(), 'this host could not create the transport');
+
+            ini_set('error_log', '');
+            self::assertSame('… (clipped; full text not kept)', RuntimeNoticeSink::clipSuffix(), 'C2a skip');
+
+            ini_set('error_log', '/dev/null');
+            self::assertSame('… (clipped; full text not kept)', RuntimeNoticeSink::clipSuffix(), 'R16 null device');
+            self::assertSame(
+                '… and 3 more runtime notices this session; full text not kept.',
+                RuntimeNoticeSink::overflowNotice(3),
+            );
+        } finally {
+            ini_set('error_log', $previous === false ? '' : $previous);
+        }
     }
 }

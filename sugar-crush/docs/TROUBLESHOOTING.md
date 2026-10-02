@@ -85,10 +85,13 @@ Skill-load failures are **quiet by default**, so nothing has told you yet.
 SUGARCRUSH_DEBUG_SKILLS=1 sugarcrush
 ```
 
-That puts `SkillLoader`'s per-skip and per-refused-directory lines back on
-stderr. They are off by default because the TUI renders to stdout under an alt
-screen and a skill scan also runs mid-session on the Ctrl+P provider switch, so a
-stray stderr line lands inside a frame the renderer believes it owns.
+That puts `SkillLoader`'s per-skip and per-refused-directory lines back into the
+`error_log()` stream: in the TUI that is the log file (see
+[Where diagnostics go](#where-diagnostics-go) — `~/.sugar-crush/logs/sugarcrush.log`
+by default), elsewhere stderr. They are off by default because many of the
+scanned files belong to other tools (`~/.claude/skills`,
+`~/.config/opencode/skills`), and a line on every launch about a file this CLI's
+user cannot fix is noise.
 
 Then work down this list:
 
@@ -138,7 +141,9 @@ Four answers, matching `Bootstrap::mcpConfigDecision()`:
   server failed to start. `mcp list` cannot tell you that: it contains no
   `proc_open()` by design, so `enabled` reflects the config and not liveness.
 
-If an `error_log` line says the config **could not be fully started**, at least
+If an `error_log` line (in the TUI's log file, or on stderr for `-p` and the
+subcommands — see [Where diagnostics go](#where-diagnostics-go)) says the config
+**could not be fully started**, at least
 one entry could not be built (an unknown `type`, such as `sse`, or a malformed
 entry). It does not matter where that entry sits in the file: every entry is
 attempted, and the line names each one that could not be built. Every other
@@ -354,6 +359,38 @@ one, so an empty map is not "this file is clean".
 
 ---
 
+## Where diagnostics go
+
+In the TUI, stderr is the terminal the renderer draws on, so before the
+full-screen frame opens `bin/sugarcrush` points PHP's `error_log` at a private
+file instead (`Diagnostics\TuiErrorLog`). Everything that calls `error_log()` —
+runtime notices, the tool-call parsers, provider warnings, PHP's own logged
+warnings, and the forked turn child, which inherits the setting — writes to the
+first of these that can be prepared safely:
+
+1. `~/.sugar-crush/logs/sugarcrush.log` — directory `0700`, file `0600`, a
+   symlinked file refused, one `sugarcrush TUI session start pid=N` header per
+   launch, and one older generation (`sugarcrush.log.1`) kept when it grows large;
+2. `<tmp>/sugarcrush-<uid>/sugarcrush.log` — when there is no owned home, or its
+   `.sugar-crush/logs` cannot be created or is unsafe. The directory must be
+   owned by you and closed to everyone else, since anyone can create names in
+   the temp dir;
+3. the null device — the last resort. Nothing is kept, but nothing is painted
+   over the frame either; a fatal error then prints its own message when the
+   session ends, instead of pointing at a log.
+
+An `error_log` you chose yourself (`php.ini`, `-d error_log=…`, `syslog`) is left
+exactly as it is. `-p`/`run` and the subcommands never redirect: stderr is their
+channel, and their diagnostics stay on it.
+
+Runtime notices are also shown in the transcript, clipped and capped per turn so
+they cannot flood the conversation. A clipped row, or the "and N more" row that
+closes a flooded turn, names where the complete text went —
+`full text in ~/.sugar-crush/logs/sugarcrush.log`, `full text on stderr` — or
+says `full text not kept` when it went to the null device.
+
+---
+
 ## Terminal and display problems
 
 | Symptom | Try |
@@ -361,7 +398,7 @@ one, so an empty map is not "this file is clean".
 | the theme is wrong on a light terminal | `SUGARCRUSH_BACKGROUND=light`, which outranks both OSC 11 and `COLORFGBG` |
 | my terminal's own text selection stopped working | drag inside the transcript — sugar-crush selects and copies on release itself; most terminals also bypass app mouse mode with Shift+drag. `SUGARCRUSH_DISABLE_MOUSE=1` hands the mouse back entirely, or `SUGARCRUSH_DISABLE_MOUSE_CLICKS=1` to keep wheel scrolling |
 | a drag-copy highlights but the clipboard is empty | inside tmux the copy goes through `tmux load-buffer -w`, which reaches the outer terminal only when that terminal accepts OSC 52 (the text is still in tmux's paste buffer: `prefix ]`); outside tmux install `wl-copy`/`xclip`/`xsel`, or enable OSC 52 clipboard writes in the terminal |
-| a stderr line is painted inside a frame | a construction-time notice landed after the alt screen came up; the content is also readable from `Bootstrap::projectTierRefusals()` / `skillSkips()` |
+| a stray line is painted inside a frame | not an `error_log()` line — in the TUI those go to the log file, or the null device as the last resort, never the terminal (see [Where diagnostics go](#where-diagnostics-go)). A direct stderr write can still do it: a construction-time notice that landed after the alt screen came up; the content is also readable from `Bootstrap::projectTierRefusals()` / `skillSkips()` |
 | `--help`, a subcommand, or a one-shot opened the TUI | it should not — `--help`, `--version`, all five subcommands **and** the `-p`/`run` one-shot are dispatched before `Program::run()`. This has been a real bug before, and flag order was enough to cause it: `--output-format json run` once parsed to `promptRequested=false` and fell through into the blocking full-screen TUI (`Cli\ArgvParser` line 175 records it). File a bug with the **exact** argv, order included |
 
 ## Session store problems
