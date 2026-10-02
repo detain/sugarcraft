@@ -15,6 +15,7 @@ use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Providers\Concerns\HttpClientDefaults;
 use SugarCraft\Crush\Providers\Concerns\ReasoningExtractor;
+use SugarCraft\Crush\Providers\ToolCallParser\DsmlToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\EnvelopeAware;
 use SugarCraft\Crush\Providers\ToolCallParser\EnvelopeHoldBack;
@@ -133,27 +134,45 @@ final readonly class SglangProvider implements ProviderInterface
     private const TRUNCATED_FINISH_REASONS = ['length', 'abort'];
 
     /**
-     * The model id the confirmed skynet2 deployment serves as of 2026-08-20,
-     * read from its own `GET /v1/models` (`data[0].id`). It replaced
-     * `MiniMax-M2.7`, which is GONE from that server - every request naming
-     * the old id now 404s on the model name - so this is the default
-     * {@see openAiCompatible()} hands out when a caller names no model.
+     * The model a generic `sglang` launch asks for when nobody named one, and
+     * the STATIC FALLBACK behind the served model (audit A26).
      *
-     * DOMAIN: this is a DEFAULT, not a restriction. MiniMax-M2.x remains fully
-     * supported; naming it explicitly (config `model`, `$SUGARCRUSH_MODEL`, or
-     * this factory's `$model` argument) selects every MiniMax-specific
-     * behaviour in this class unchanged - see {@see XML_PARAM_CLOSE_TAG},
+     * WHAT SKYNET2 SERVES, re-read 2026-10-02 from its own `GET /model_info`:
+     * `served_model_name: "Qwen/Qwen3.8-Flash-Next-FP8"`, `tool_call_parser:
+     * "qwen3_coder"` (fixture `tests/fixtures/sglang-model-info-qwen3.8.json`).
+     * This constant named `deepseek-ai/DeepSeek-V4-Flash-0731` until then -
+     * the model that server ran from 2026-08-20, itself the replacement of
+     * `MiniMax-M2.7` - and its docblock still said skynet2 served it, so every
+     * launch relying on the default asked for a model the server no longer
+     * had and, since A18's discovery, drew the family-mismatch notice too.
+     *
+     * NOT THE WHOLE ANSWER ANY MORE, because a third transcription would go
+     * stale exactly as the first two did. When discovery is armed
+     * ({@see ProviderFactory::createSglang()} arms it) and a request names
+     * THIS id - which is what "no model configured" looks like, since
+     * {@see ProviderFactory::defaultConfig()} stamps it - the request is
+     * addressed to the model the server reports serving instead
+     * ({@see addressedToServedModel()}), with that model's sampling,
+     * reasoning-effort and tool-call-parser defaults. This id is what is sent
+     * only when the server could not be asked or named no model. A request
+     * naming any OTHER id - `model` in a provider block, `--model`,
+     * `$SUGARCRUSH_MODEL` - is sent as named.
+     *
+     * DOMAIN: this is a DEFAULT, not a restriction. DeepSeek-V4 and
+     * MiniMax-M2.x remain fully supported; naming either explicitly selects
+     * every family-specific behaviour in this class unchanged - see
+     * {@see DEEPSEEK_V4_FAMILY_TOKEN}, {@see XML_PARAM_CLOSE_TAG},
      * {@see malformedArgumentsWarning()} and
      * {@see \SugarCraft\Crush\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser}.
      */
-    public const DEFAULT_MODEL = 'deepseek-ai/DeepSeek-V4-Flash-0731';
+    public const DEFAULT_MODEL = 'Qwen/Qwen3.8-Flash-Next-FP8';
 
     /**
      * Lowercased substring that identifies the DeepSeek-V4 family in a model
      * id, and therefore the ONE model family whose card-prescribed sampling
      * this class substitutes for its historical defaults.
      *
-     * A family token rather than the exact {@see DEFAULT_MODEL} id because the
+     * A family token rather than one exact id because the
      * card's sampling advice is stated for DeepSeek-V4-Flash as a model, and
      * the deployed id carries an org prefix and a `-0731` date suffix that a
      * redeploy will change without changing the advice. Deliberately NOT the
@@ -221,9 +240,9 @@ final readonly class SglangProvider implements ProviderInterface
     private const DEEPSEEK_V4_REASONING_EFFORT = 'max';
 
     /**
-     * The largest input the deployed server will accept for
-     * {@see DEFAULT_MODEL}: `max_req_input_len` from its own `/server_info`,
-     * read 2026-08-20.
+     * The largest input the deployed server accepted for
+     * `deepseek-ai/DeepSeek-V4-Flash-0731` (then {@see DEFAULT_MODEL}):
+     * `max_req_input_len` from its own `/server_info`, read 2026-08-20.
      *
      * WHICH OF TWO NEARLY-IDENTICAL FIGURES THIS IS, because the server
      * publishes both and they differ by six tokens. `GET /v1/models` reports
@@ -533,10 +552,11 @@ final readonly class SglangProvider implements ProviderInterface
      * @param ToolCallParserInterface|null $toolCallParser W1.A6 (§12 D6): the
      *        client-side mirror of SGLang's own `--tool-call-parser` flag.
      *        Left null the provider uses {@see OpenAiArrayToolCallParser} over
-     *        {@see argumentDecoder()}, which is the correct strategy for any
+     *        {@see argumentDecoder()} (wrapped in DSML when it adopts a served
+     *        DeepSeek-V4, see {@see resolvedToolCallParser()}), which is the correct strategy for any
      *        server actually launched with that flag - including the confirmed
      *        live deployment, RE-MEASURED 2026-08-20 after it was switched to
-     *        {@see DEFAULT_MODEL}: that model returns structured OpenAI
+     *        `deepseek-ai/DeepSeek-V4-Flash-0731`: that model returns structured OpenAI
      *        `tool_calls` both non-streaming (`finish_reason: "tool_calls"`,
      *        `function.arguments` a JSON string) and streaming (fragments keyed
      *        by `index`, two parallel calls at 0 and 1), so no new parser class
@@ -736,7 +756,14 @@ final readonly class SglangProvider implements ProviderInterface
     private function warnAboutServerMismatch(SglangServerInfo $info): void
     {
         $served = $info->servedModelName;
-        if ($served !== null && self::modelFamily($served) !== self::modelFamily($this->model)) {
+        // Audit A26: a provider built on the DEFAULT id adopts the served
+        // model ({@see addressedToServedModel()}), so there is no configured
+        // id for the served one to contradict. Before, the generic default
+        // drew this notice against skynet2 on every launch that relied on it.
+        if ($served !== null
+            && !$this->adoptsServedModel()
+            && self::modelFamily($served) !== self::modelFamily($this->model)
+        ) {
             RuntimeNoticeSink::warn(sprintf(
                 'SGLang server %s serves "%s" but the configured model is "%s"; '
                 . 'sampling, reasoning effort and the default tool-call parser follow the '
@@ -749,7 +776,7 @@ final readonly class SglangProvider implements ProviderInterface
 
         if ($info->reportsToolCallParser
             && $info->toolCallParser === null
-            && !$this->toolCallParser instanceof EnvelopeAware
+            && !$this->parserFor($served) instanceof EnvelopeAware
         ) {
             RuntimeNoticeSink::warn(sprintf(
                 'SGLang server %s was launched without --tool-call-parser, so tool calls arrive '
@@ -779,6 +806,67 @@ final readonly class SglangProvider implements ProviderInterface
             // DEEPSEEK_V4_FAMILY_TOKEN docblock said nothing could detect.
             default => 'other',
         };
+    }
+
+    /**
+     * Audit A26: whether this provider treats the server's own model as the
+     * one to talk to - discovery armed AND built on {@see DEFAULT_MODEL},
+     * which is the id {@see ProviderFactory::defaultConfig()} stamps when
+     * nobody named a model. A provider built on any other id was given a
+     * model and keeps it.
+     */
+    private function adoptsServedModel(): bool
+    {
+        return $this->serverInfoLoader !== null && $this->model === self::DEFAULT_MODEL;
+    }
+
+    /**
+     * Audit A26: `$request` re-addressed to the model the server reports
+     * serving, when this provider {@see adoptsServedModel()} and the request
+     * names the default id - otherwise `$request` itself.
+     *
+     * ON THE REQUEST, NOT ONLY IN THE BODY'S `model` FIELD, because every
+     * family default in {@see buildParams()} (temperature, `top_p`, reasoning
+     * effort and where it is placed, the output cap) and the Qwen content
+     * cosmetics judge `$request->model`: re-addressing the wire field alone
+     * would send DeepSeek's top-level `reasoning_effort: max` to a served
+     * Qwen3.8 if the fallback id were ever DeepSeek again (the 400 qwen.md
+     * E-41 measured). The request is rebuilt from its own public fields
+     * because {@see CompleteRequest} is a `readonly` value with no wither.
+     *
+     * The served name is read through the memoised {@see serverInfo()}, so
+     * this costs no request beyond the one discovery already makes; when the
+     * server could not be asked, the default id is sent as before.
+     */
+    private function addressedToServedModel(CompleteRequest $request): CompleteRequest
+    {
+        if ($request->model !== self::DEFAULT_MODEL || !$this->adoptsServedModel()) {
+            return $request;
+        }
+
+        $served = $this->serverInfo()?->servedModelName;
+        if ($served === null || $served === '' || $served === $request->model) {
+            return $request;
+        }
+
+        return new CompleteRequest(...array_replace(get_object_vars($request), ['model' => $served]));
+    }
+
+    /**
+     * The parser used when the operator named none, chosen from the MODEL:
+     * DSML wrapped around the OpenAI-array parser for the DeepSeek-V4 family,
+     * the OpenAI-array parser alone otherwise. The one definition of that
+     * rule - {@see ProviderFactory::createSglang()} asks it at build time for
+     * a configured model, {@see resolvedToolCallParser()} at request time for
+     * an adopted served one. {@see ProviderFactory}'s private
+     * `defaultToolCallParserFor()` docblock carries the argument for arming
+     * DSML by default on that family.
+     */
+    public static function defaultToolCallParserFor(string $model): ToolCallParserInterface
+    {
+        $openAi = OpenAiArrayToolCallParser::new(self::argumentDecoder());
+
+        return self::isDeepSeekV4($model) ? DsmlToolCallParser::new($openAi) : $openAi;
     }
 
     /**
@@ -951,6 +1039,7 @@ final readonly class SglangProvider implements ProviderInterface
 
     public function complete(CompleteRequest $request): CompleteResponse
     {
+        $request = $this->addressedToServedModel($request);
         $params = $this->buildParams($request);
 
         try {
@@ -988,6 +1077,7 @@ final readonly class SglangProvider implements ProviderInterface
 
     public function completeStream(CompleteRequest $request): \Generator
     {
+        $request = $this->addressedToServedModel($request);
         $params = $this->buildParams($request);
         $params['stream'] = true;
         // §Q6 (qwen.md; E-27/E-30/E-55): ask for the usage this deployment
@@ -2437,7 +2527,31 @@ final readonly class SglangProvider implements ProviderInterface
      */
     private function resolvedToolCallParser(): ToolCallParserInterface
     {
-        return $this->toolCallParser ?? OpenAiArrayToolCallParser::new(self::argumentDecoder());
+        return $this->parserFor(
+            $this->toolCallParser === null && $this->adoptsServedModel()
+                ? $this->serverInfo()?->servedModelName
+                : null,
+        );
+    }
+
+    /**
+     * The configured parser; failing that, audit A26's choice for an ADOPTED
+     * served model (`$servedModel`, when this provider adopts one), so a
+     * server that turns out to serve DeepSeek-V4 still gets the DSML safety
+     * net {@see ProviderFactory::createSglang()} arms for a configured one;
+     * failing that, the OpenAI-array default this method always returned.
+     */
+    private function parserFor(?string $servedModel): ToolCallParserInterface
+    {
+        if ($this->toolCallParser !== null) {
+            return $this->toolCallParser;
+        }
+
+        if ($servedModel !== null && $this->adoptsServedModel()) {
+            return self::defaultToolCallParserFor($servedModel);
+        }
+
+        return OpenAiArrayToolCallParser::new(self::argumentDecoder());
     }
 
     /**

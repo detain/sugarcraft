@@ -34,6 +34,8 @@ use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
  */
 final class SglangProviderDsmlStreamingTest extends TestCase
 {
+    private const DEEPSEEK_V4 = 'deepseek-ai/DeepSeek-V4-Flash-0731';
+
     private const DSML = "\xEF\xBD\x9CDSML\xEF\xBD\x9C";
 
     /**
@@ -248,14 +250,19 @@ final class SglangProviderDsmlStreamingTest extends TestCase
     }
 
     /**
-     * END TO END through the factory, with NO `toolCallParser` key: the
-     * DeepSeek-V4 default model must arm DSML by itself. This is the
+     * END TO END through the factory, with NO `toolCallParser` key: a
+     * DeepSeek-V4 model must arm DSML by itself. This is the
      * assertion that would catch the parser being correct but never selected.
+     *
+     * The default config with its model set to a DeepSeek-V4 id, rather than
+     * the default config as is: {@see SglangProvider::DEFAULT_MODEL} is the
+     * served Qwen3.8 since audit A26, and a launch on it adopts whatever the
+     * server serves (SglangProviderServedModelTest covers a served DeepSeek).
      */
     public function testTheFactoryDefaultArmsDsmlRecoveryOnTheStreamingPath(): void
     {
         $factory = new ProviderFactory();
-        $config = $factory->defaultConfig('sglang');
+        $config = ['model' => self::DEEPSEEK_V4] + $factory->defaultConfig('sglang');
 
         $this->assertNull($config['toolCallParser'], 'no parser is named in the default config');
 
@@ -265,13 +272,13 @@ final class SglangProviderDsmlStreamingTest extends TestCase
         $this->assertInstanceOf(
             DsmlToolCallParser::class,
             $parser,
-            'the sglang default model is DeepSeek-V4, so DSML must be the derived default',
+            'a DeepSeek-V4 model, so DSML must be the derived default',
         );
 
         // And it actually recovers, rather than merely being the right class.
         $provider = $this->providerStreaming(
             self::sseBody([self::envelope()]),
-            SglangProvider::DEFAULT_MODEL,
+            self::DEEPSEEK_V4,
             $parser,
         );
 

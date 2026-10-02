@@ -23,6 +23,12 @@ use SugarCraft\Crush\Providers\SglangProvider;
  */
 final class SglangProviderTruncationGuardTest extends TestCase
 {
+    /**
+     * The DeepSeek-V4 id these cases pin, written out since audit A26 moved
+     * {@see SglangProvider::DEFAULT_MODEL} to the served Qwen3.8.
+     */
+    private const DEEPSEEK_V4 = 'deepseek-ai/DeepSeek-V4-Flash-0731';
+
     private string $logFile = '';
 
     /** @var string|false */
@@ -427,7 +433,7 @@ final class SglangProviderTruncationGuardTest extends TestCase
         [$provider] = $this->providerWithEmptyCompletion();
 
         $provider->complete(new CompleteRequest(
-            model: SglangProvider::DEFAULT_MODEL,
+            model: self::DEEPSEEK_V4,
             messages: [
                 new UserMessage('read demo.tape'),
                 new ToolResultMessage('call_read', '<parameter name="a">1</parameter>'),
@@ -452,7 +458,7 @@ final class SglangProviderTruncationGuardTest extends TestCase
         $messages = [new ToolResultMessage('call_read', '</parameter>')];
 
         // Configured DeepSeek, request MiniMax -> warned.
-        [$deepSeekConfigured] = $this->providerWithEmptyCompletion(SglangProvider::DEFAULT_MODEL);
+        [$deepSeekConfigured] = $this->providerWithEmptyCompletion(self::DEEPSEEK_V4);
         $deepSeekConfigured->complete(new CompleteRequest(model: 'MiniMax-M2.7', messages: $messages));
         $this->assertStringContainsString('elevated risk of silent truncation', $this->capturedLog());
 
@@ -461,7 +467,7 @@ final class SglangProviderTruncationGuardTest extends TestCase
         // Configured MiniMax, request DeepSeek -> silent.
         [$miniMaxConfigured] = $this->providerWithEmptyCompletion('MiniMax-M2.7');
         $miniMaxConfigured->complete(new CompleteRequest(
-            model: SglangProvider::DEFAULT_MODEL,
+            model: self::DEEPSEEK_V4,
             messages: $messages,
         ));
         $this->assertSame('', $this->capturedLog());
@@ -515,13 +521,13 @@ final class SglangProviderTruncationGuardTest extends TestCase
         ])));
         $provider = new SglangProvider(
             'https://api.example.com',
-            SglangProvider::DEFAULT_MODEL,
+            self::DEEPSEEK_V4,
             null,
             $httpClient,
         );
 
         $provider->complete(new CompleteRequest(
-            model: SglangProvider::DEFAULT_MODEL,
+            model: self::DEEPSEEK_V4,
             messages: [new UserMessage('write it')],
         ));
 

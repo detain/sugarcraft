@@ -40,12 +40,14 @@ final class SglangProviderTest extends TestCase
 
         $this->assertInstanceOf(SglangProvider::class, $provider);
         $this->assertSame('sglang', $provider->name());
-        // The default is the id the confirmed deployment serves; MiniMax-M2.7
-        // is GONE from that server, so a default naming it 404s on the model
-        // name for every request. Both halves asserted: the new id is right AND
-        // the retired one is not still in place.
-        $this->assertSame('deepseek-ai/DeepSeek-V4-Flash-0731', $this->getPrivateProperty($provider, 'model'));
+        // The default is the id the confirmed deployment serves (skynet2's
+        // /model_info, 2026-10-02; audit A26). MiniMax-M2.7 and then
+        // DeepSeek-V4-Flash are GONE from that server, so a default naming
+        // either asks for a model it no longer has. Both halves asserted: the
+        // new id is right AND neither retired one is still in place.
+        $this->assertSame('Qwen/Qwen3.8-Flash-Next-FP8', $this->getPrivateProperty($provider, 'model'));
         $this->assertNotSame('MiniMax-M2.7', $this->getPrivateProperty($provider, 'model'));
+        $this->assertNotSame('deepseek-ai/DeepSeek-V4-Flash-0731', $this->getPrivateProperty($provider, 'model'));
         // The exported constant and the parameter default must be the same
         // string - ProviderFactory::defaultConfig() reads the constant, while
         // this factory method reads the default, and a drift between them would

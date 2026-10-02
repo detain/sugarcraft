@@ -1156,7 +1156,10 @@ final class ProviderFactoryTest extends TestCase
     public static function defaultParserByModelProvider(): array
     {
         return [
-            'deployed DeepSeek id' => [SglangProvider::DEFAULT_MODEL, DsmlToolCallParser::class],
+            // A literal, not SglangProvider::DEFAULT_MODEL: that id moved to
+            // the served Qwen3.8 (audit A26) and, with discovery on, defers
+            // its parser to the served model - see the round-trip test below.
+            'deployed DeepSeek id' => ['deepseek-ai/DeepSeek-V4-Flash-0731', DsmlToolCallParser::class],
             // The family predicate deliberately over-matches, so a redeploy
             // that only changes the dated suffix or the point release still
             // takes the DSML arm.
@@ -1249,27 +1252,28 @@ final class ProviderFactoryTest extends TestCase
     }
 
     /**
-     * The TRUTH behind the null above: feeding `defaultConfig('sglang')`
-     * straight back into `create()` must arm the DSML parser, because that
-     * config's own `model` is a DeepSeek-V4 id.
+     * The TRUTH behind the null above, since audit A26: feeding
+     * `defaultConfig('sglang')` straight back into `create()` names the
+     * DEFAULT id, which means "whatever the server serves" - so with
+     * discovery on (the default) the factory injects NO parser and the
+     * provider picks it from the served model at request time
+     * (SglangProviderServedModelTest drives that half). With discovery off
+     * there is nothing to adopt, and the default id's own family decides:
+     * Qwen3.8 runs `qwen3_coder`, which returns the OpenAI `tool_calls[]`
+     * array.
      *
-     * This is the assertion the old `assertSame('openai', ...)` could not
-     * make. It pins the round trip - default config in, correct parser out -
-     * rather than the spelling of one field, so it stays honest if the
-     * defaulting mechanism is rewritten.
+     * This used to pin DSML, because the default id was a DeepSeek-V4 one.
      */
-    public function testDefaultConfigSglangRoundTripsIntoTheDsmlParserForItsOwnDefaultModel(): void
+    public function testDefaultConfigSglangDefersTheParserToTheServedModel(): void
     {
         $config = $this->factory->defaultConfig('sglang');
 
-        $this->assertTrue(
-            SglangProvider::isDeepSeekV4((string) $config['model']),
-            'the sglang default model is expected to be a DeepSeek-V4 id',
-        );
+        $this->assertSame(SglangProvider::DEFAULT_MODEL, $config['model']);
+        $this->assertNull($this->sglangPropertyOf($this->factory->create($config), 'toolCallParser'));
 
         $this->assertInstanceOf(
-            DsmlToolCallParser::class,
-            $this->toolCallParserOf($this->factory->create($config)),
+            OpenAiArrayToolCallParser::class,
+            $this->toolCallParserOf($this->factory->create(['discoverServerInfo' => false] + $config)),
         );
     }
 

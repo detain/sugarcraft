@@ -27,6 +27,12 @@ use SugarCraft\Crush\Providers\SglangProvider;
  */
 final class SglangProviderTruncationWarningRateLimitTest extends TestCase
 {
+    /**
+     * The DeepSeek-V4 id these cases pin, written out since audit A26 moved
+     * {@see SglangProvider::DEFAULT_MODEL} to the served Qwen3.8.
+     */
+    private const DEEPSEEK_V4 = 'deepseek-ai/DeepSeek-V4-Flash-0731';
+
     private const WARNING_PHRASE = 'elevated risk of silent truncation';
 
     private string $logFile = '';
@@ -222,7 +228,7 @@ final class SglangProviderTruncationWarningRateLimitTest extends TestCase
         $provider = $this->batchProvider();
         $results = [new ToolResultMessage('call_read', '</parameter>')];
 
-        $provider->complete(new CompleteRequest(model: SglangProvider::DEFAULT_MODEL, messages: $results));
+        $provider->complete(new CompleteRequest(model: self::DEEPSEEK_V4, messages: $results));
         $this->assertSame('', $this->capturedLog());
 
         $provider->complete(new CompleteRequest(model: 'MiniMax-M2.7', messages: $results));

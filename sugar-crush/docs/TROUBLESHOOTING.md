@@ -324,8 +324,10 @@ sugarcrush models          # every selectable provider, "*" marks the selected o
   The server's `served_model_name` is of another model family than your
   configured `model`. Sampling, reasoning effort, the default tool-call parser
   and the fallback window all follow the configured id, so they are the wrong
-  family's. Set `model` to the served id. A spelling difference inside one
-  family (`…-Flash-Next` against `…-Flash-Next-FP8`) does not raise it.
+  family's. Set `model` to the served id, or drop it: a launch that names no
+  model adopts the served one and never raises this. A spelling difference
+  inside one family (`…-Flash-Next` against `…-Flash-Next-FP8`) does not raise
+  it either.
 - **A transcript notice says the server "was launched without
   --tool-call-parser".** `/model_info` reported `tool_call_parser: null`, so
   the model's tool calls arrive as raw text in the reply. Relaunch SGLang with

@@ -397,16 +397,21 @@ final readonly class ProviderFactory
                 // sglang run 404'd on the model name. Sourced from
                 // {@see SglangProvider::DEFAULT_MODEL} rather than repeated as
                 // a literal, so the id cannot drift between the two files.
+                //
+                // And since audit A26 the id is a FALLBACK: the provider built
+                // from it sends the model the server reports serving instead
+                // (SglangProvider::addressedToServedModel()), so the next
+                // redeploy does not leave this default naming a gone model.
+                // Another id here - or `--model` - is sent as named.
                 'model' => SglangProvider::DEFAULT_MODEL,
                 'apiKey' => getenv('SGLANG_API_KEY') ?: null,
-                // Null, NOT the concrete 'max' the provider will actually
-                // send, and the difference is the point: the effective default
-                // is derived from the MODEL
-                // ({@see SglangProvider::defaultReasoningEffort()}), so
-                // stamping a literal here would keep sending 'max' after
-                // someone edits `model` to a MiniMax id - shipping a
-                // DeepSeek-measured setting to a model it was never measured
-                // on. The key is present anyway so the knob is discoverable
+                // Null, NOT a concrete level, and the difference is the
+                // point: the effective default is derived from the MODEL
+                // ({@see SglangProvider::defaultReasoningEffort()}) - 'max'
+                // for DeepSeek-V4, the Qwen3.8 rule for that family - so
+                // stamping a literal here would keep sending it after someone
+                // edits `model` (or the server's served model changes) to a
+                // family it was never measured on. The key is present anyway so the knob is discoverable
                 // from defaultConfig() output, which is what the Ctrl+P
                 // palette's Switch Model listing shows.
                 'reasoningEffort' => null,
@@ -861,19 +866,31 @@ final readonly class ProviderFactory
      */
     private function createSglang(array $config): SglangProvider
     {
+        $model = (string) $config['model'];
+        $discover = self::configuredDiscoverServerInfo($config['discoverServerInfo'] ?? null);
+        $parserName = $config['toolCallParser'] ?? null;
+
         return SglangProvider::openAiCompatible(
             baseUrl: $config['baseUrl'],
-            model: $config['model'],
+            model: $model,
             apiKey: $config['apiKey'] ?? null,
             // The model is passed because an unnamed parser is chosen FROM it
             // ({@see defaultToolCallParserFor()}) - the same model-derived
             // defaulting `reasoningEffort` uses, and for the same reason: a
             // literal stamped here would keep applying after someone edits
             // `model` to a different family.
-            toolCallParser: $this->toolCallParser(
-                $config['toolCallParser'] ?? null,
-                (string) $config['model'],
-            ),
+            //
+            // EXCEPT for the default id with discovery on (audit A26): that
+            // provider talks to whatever the server serves, which is not
+            // known until discovery runs, so the unnamed parser is left null
+            // and the provider picks it from the served model at request
+            // time ({@see SglangProvider::defaultToolCallParserFor()}, the
+            // same rule).
+            toolCallParser: ($parserName === null || $parserName === '')
+                && $discover
+                && $model === SglangProvider::DEFAULT_MODEL
+                    ? null
+                    : $this->toolCallParser($parserName, $model),
             reasoningEffort: self::configuredReasoningEffort($config['reasoningEffort'] ?? null),
             // Shape-checked at this parse seam (associative array of string
             // keys); values ride to the server untouched, where the Jinja
@@ -884,7 +901,7 @@ final readonly class ProviderFactory
             // and the default `max_tokens` follow the deployment instead of a
             // transcription of it. On by default; `"discoverServerInfo":
             // false` turns it off for a proxy that blocks the root endpoints.
-            discoverServerInfo: self::configuredDiscoverServerInfo($config['discoverServerInfo'] ?? null),
+            discoverServerInfo: $discover,
         );
     }
 
@@ -1057,7 +1074,7 @@ final readonly class ProviderFactory
         $openAi = OpenAiArrayToolCallParser::new(SglangProvider::argumentDecoder());
 
         return match ($name) {
-            null, '' => $this->defaultToolCallParserFor($model, $openAi),
+            null, '' => $this->defaultToolCallParserFor($model),
             self::TOOL_CALL_PARSER_OPENAI => $openAi,
             self::TOOL_CALL_PARSER_MINIMAX_XML_FALLBACK => MinimaxXmlFallbackToolCallParser::new($openAi),
             self::TOOL_CALL_PARSER_DSML => DsmlToolCallParser::new($openAi),
@@ -1089,11 +1106,13 @@ final readonly class ProviderFactory
      *   does nothing, with no error anywhere.
      * - The precedent points the other way only because the deployed family
      *   changed. When the MiniMax fallback was written, MiniMax was the
-     *   deployed model and the flag was being passed. Today
-     *   {@see SglangProvider::DEFAULT_MODEL} is a DeepSeek-V4 id, so leaving
-     *   DSML opt-in would mean the DEFAULT model is the one with no safety
-     *   net. That is the asymmetry that justifies diverging, not a general
-     *   preference for armed fallbacks.
+     *   deployed model and the flag was being passed. When this was written
+     *   {@see SglangProvider::DEFAULT_MODEL} was a DeepSeek-V4 id, so leaving
+     *   DSML opt-in would have meant the DEFAULT model was the one with no
+     *   safety net. That is the asymmetry that justifies diverging, not a
+     *   general preference for armed fallbacks - and it still holds for any
+     *   DeepSeek-V4 deployment, configured or (audit A26) adopted as the
+     *   served model of a default launch.
      *
      * GATED ON {@see SglangProvider::isDeepSeekV4()}, reused rather than
      * respelled. That predicate deliberately OVER-matches (`deepseek-v40`,
@@ -1120,13 +1139,11 @@ final readonly class ProviderFactory
      * {@see SglangProvider::serverInfo()} reads the parser the server reports
      * and warns when it is null and no textual fallback is armed.
      */
-    private function defaultToolCallParserFor(
-        string $model,
-        ToolCallParserInterface $openAi,
-    ): ToolCallParserInterface {
-        return SglangProvider::isDeepSeekV4($model)
-            ? DsmlToolCallParser::new($openAi)
-            : $openAi;
+    private function defaultToolCallParserFor(string $model): ToolCallParserInterface
+    {
+        // The rule lives on the provider, which also applies it to a served
+        // model it adopts at request time (audit A26).
+        return SglangProvider::defaultToolCallParserFor($model);
     }
 
     /**

@@ -44,6 +44,13 @@ final class SglangProviderServerLimitsTest extends TestCase
 
     private const SERVED_QWEN = 'Qwen/Qwen3.8-Flash-Next-FP8';
 
+    /**
+     * The DeepSeek-V4 id these cases were written against when it was
+     * {@see SglangProvider::DEFAULT_MODEL}; spelled out since audit A26 moved
+     * the default to the served Qwen3.8.
+     */
+    private const DEEPSEEK_V4 = 'deepseek-ai/DeepSeek-V4-Flash-0731';
+
     /** @var list<array<string, mixed>> */
     private array $history = [];
 
@@ -140,7 +147,7 @@ final class SglangProviderServerLimitsTest extends TestCase
     public function testWithoutALoaderTheTranscribedFamilyWindowsStillApply(): void
     {
         self::assertSame(744_506, $this->provider(self::SERVED_QWEN)->contextWindow());
-        self::assertSame(1_048_570, $this->provider(SglangProvider::DEFAULT_MODEL)->contextWindow());
+        self::assertSame(1_048_570, $this->provider(self::DEEPSEEK_V4)->contextWindow());
         self::assertSame(196_608, $this->provider('MiniMax-M2.7')->contextWindow());
     }
 
@@ -284,7 +291,7 @@ final class SglangProviderServerLimitsTest extends TestCase
         return [
             'Qwen3.8 (served id)' => [self::SERVED_QWEN, 262_144],
             'Qwen3.8 (configured alias)' => ['Qwen/Qwen3.8-Flash-Next', 262_144],
-            'DeepSeek-V4' => [SglangProvider::DEFAULT_MODEL, 262_144],
+            'DeepSeek-V4' => [self::DEEPSEEK_V4, 262_144],
             // Unknown window: the conservative pre-A18 figure, not a guess.
             'MiniMax' => ['MiniMax-M2.7', 4096],
             'unknown' => ['some-local-model', 4096],
@@ -335,7 +342,7 @@ final class SglangProviderServerLimitsTest extends TestCase
 
     public function testAServedModelOfAnotherFamilyIsNamedOnce(): void
     {
-        $provider = $this->provider(SglangProvider::DEFAULT_MODEL, static fn (): SglangServerInfo => self::skynet2());
+        $provider = $this->provider(self::DEEPSEEK_V4, static fn (): SglangServerInfo => self::skynet2());
 
         $logged = self::withErrorLogDiscarded(static function () use ($provider): void {
             $provider->contextWindow();
@@ -345,7 +352,7 @@ final class SglangProviderServerLimitsTest extends TestCase
         $notices = RuntimeNoticeSink::drain();
         self::assertCount(1, $notices);
         self::assertStringContainsString(self::SERVED_QWEN, $notices[0]);
-        self::assertStringContainsString(SglangProvider::DEFAULT_MODEL, $notices[0]);
+        self::assertStringContainsString(self::DEEPSEEK_V4, $notices[0]);
         self::assertStringContainsString('https://skynet2.interserver.net', $notices[0]);
         self::assertStringContainsString(self::SERVED_QWEN, $logged);
     }
@@ -489,7 +496,7 @@ final class SglangProviderServerLimitsTest extends TestCase
         return [
             'served Qwen3.8 id' => [self::SERVED_QWEN, OpenAiArrayToolCallParser::class],
             'configured Qwen3.8 alias' => ['Qwen/Qwen3.8-Flash-Next', OpenAiArrayToolCallParser::class],
-            'DeepSeek-V4' => [SglangProvider::DEFAULT_MODEL, DsmlToolCallParser::class],
+            'DeepSeek-V4' => [self::DEEPSEEK_V4, DsmlToolCallParser::class],
         ];
     }
 
@@ -499,6 +506,12 @@ final class SglangProviderServerLimitsTest extends TestCase
     #[DataProvider('servedModelParsers')]
     public function testTheDefaultParserMatchesTheServedFamily(string $model, string $expected): void
     {
-        self::assertInstanceOf($expected, self::property(self::factoryBuilt(model: $model), 'toolCallParser'));
+        // Discovery off: with it on, the DEFAULT id (which is the served
+        // Qwen3.8 id) defers its parser to the served model (audit A26,
+        // SglangProviderServedModelTest); this case pins the static rule.
+        self::assertInstanceOf(
+            $expected,
+            self::property(self::factoryBuilt(['discoverServerInfo' => false], $model), 'toolCallParser'),
+        );
     }
 }

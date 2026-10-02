@@ -1175,10 +1175,20 @@ reasoning ends up in the reply the user reads instead of the collapsible
 thinking pane. Sending a level moves it back to `reasoning_content`, which is
 where `CompleteResponse::$reasoning` reads from.
 
-The default `sglang` model is `deepseek-ai/DeepSeek-V4-Flash-0731`, and it also
-sets `temperature = 1.0` plus `top_p = 0.95` when the request offers tools /
-`1.0` when it does not — the model card's own figures for agentic and
-non-agentic use. MiniMax-M2.x is unaffected by all of the above: name it as the
+The default `sglang` model is **whatever the server serves**. With no model
+named (the generic `sglang` config, no `--model`, no `$SUGARCRUSH_MODEL`), the
+provider reads `served_model_name` from `/model_info` and addresses every
+request to it, picking that model's sampling, reasoning-effort and tool-call
+parser defaults; the served-model notice above does not fire, since there is no
+configured model to contradict. Only when the server cannot be asked does it
+fall back to `Qwen/Qwen3.8-Flash-Next-FP8`, the model skynet2 serves as of
+2026-10-02 (it served `deepseek-ai/DeepSeek-V4-Flash-0731` before that, and the
+default still named it — so every default launch asked for a model the server
+no longer had). A model you do name is sent as named.
+
+The DeepSeek-V4 family also gets `temperature = 1.0` plus `top_p = 0.95` when
+the request offers tools / `1.0` when it does not — the model card's own figures
+for agentic and non-agentic use. MiniMax-M2.x is unaffected by all of the above: name it as the
 `model` and the provider keeps its previous `temperature = 0.7`, sends no
 `top_p`, and sends no `reasoning_effort` unless you set one explicitly. A
 per-request override lives on `CompleteRequest::$reasoningEffort`.
