@@ -572,6 +572,10 @@ final class DescriptorInheritanceGuardTest extends TestCase
             'count' => 1,
             'reason' => 'function_exists() capability probe: with proc_open disabled the rev-parse repo-root probe is skipped and the .git check stands',
         ],
+        'Support/ProjectRoot.php::toplevel' => [
+            'count' => 1,
+            'reason' => 'function_exists() capability probe: with proc_open disabled no walk-up runs and the launch directory stays the project root',
+        ],
     ];
 
     /**

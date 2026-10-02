@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Skills;
 
 use SugarCraft\Crush\Support\HomeDirectory;
+use SugarCraft\Crush\Support\ProjectRoot;
 
 /**
  * Discovers skill directories across project, user, and per-lib search paths.
@@ -70,6 +71,8 @@ final class SkillDiscovery
      */
     public function discoverProjectSkills(string $projectRoot): array
     {
+        // The repository's tier on a subdirectory launch (audit 15d-13 (b)).
+        $projectRoot = ProjectRoot::resolve($projectRoot);
         $path = $this->buildProjectPath($projectRoot);
 
         // The root is the anchor the directory itself is held inside, not just

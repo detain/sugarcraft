@@ -9,6 +9,7 @@ use SugarCraft\Crush\Context\Utf8Scrub;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\Frontmatter;
 use SugarCraft\Crush\Support\HomeDirectory;
+use SugarCraft\Crush\Support\ProjectRoot;
 
 /**
  * Loads skills in three stages:
@@ -528,6 +529,10 @@ final class SkillLoader
         // $projectRoot is passed on, not merely used to build the path: it is
         // the boundary the skills DIRECTORY is itself held inside. See
         // {@see skillFilesIn()}'s $anchoredIn for the escape that leaves open.
+        // Walked up to the repository on a subdirectory launch (audit 15d-13
+        // (b)), path and anchor together.
+        $projectRoot = ProjectRoot::resolve($projectRoot);
+
         return $this->loadFromDirectory($this->projectSkillsDir($projectRoot), null, $projectRoot);
     }
 
@@ -822,6 +827,9 @@ final class SkillLoader
      */
     public function manifestTiers(string $projectRoot = '.'): array
     {
+        // See {@see loadProjectSkills()}: the same walk-up, so the eager and
+        // manifest-only loaders read the same project tier.
+        $projectRoot = ProjectRoot::resolve($projectRoot);
         $walks = [
             SkillOrigin::BuiltIn->value => fn(): array => $this->loadManifestsFromDirectory($this->builtInSkillsDir()),
             // The one tier whose directory a repository picked the location of,

@@ -29,6 +29,29 @@ checkout**. That is deliberate: deriving the root from the working directory
 would take settings from wherever you were standing rather than from the
 repository `--root` named.
 
+**`<root>` is the repository, not the subdirectory you launched from** (audit
+15d-13 (b)). `cd repo/src && sugarcrush` used to look for every `.sugar-crush/*`
+file under `repo/src/.sugar-crush`, so a trusted repository's settings were
+silently ignored one directory down. The `.sugar-crush/*` lookups — settings,
+skills, rules (and `RULES.md`), commands, workflows, agent presets, hooks,
+memory — and `.mcp.json` now walk up (`Support\ProjectRoot`):
+
+1. the launch directory itself, when it holds `.sugar-crush/`, `.mcp.json` or
+   `.git` — every launch that worked before resolves where it did;
+2. otherwise, inside a git work tree (`git rev-parse --show-toplevel`, bounded
+   at 2 s), the nearest directory up to the work-tree root that holds
+   `.sugar-crush/` or `.mcp.json` — so a monorepo package keeps its own — and
+   the work-tree root when none does;
+3. outside any work tree, the launch directory. There is nothing to bound the
+   walk with, and an unbounded one reaches `~/.sugar-crush`, which is *your*
+   tier, not a project's. For the same reason a work tree rooted at or above
+   your home directory (a dotfiles repository) is never walked.
+
+The trust keys (`trustedProjectSettings` and the other three) are matched
+against that same root, so the entry to write is the repository's path. The
+**working directory does not move**: Bash, Read, Edit and the other tools,
+hooks and spawned sessions still run in the directory you launched from.
+
 **Layer 4 is not always `~/.sugar-crush/config.json`.** Two things move it:
 
 - `--config <path>` repoints it (`Bootstrap::userConfigPath()`), and it moves

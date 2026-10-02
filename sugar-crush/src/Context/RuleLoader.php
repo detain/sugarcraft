@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Context;
 
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
+use SugarCraft\Crush\Support\ProjectRoot;
 
 /**
  * Load the three tiers of standing rules and hand them to the prompt assembler.
@@ -430,11 +431,24 @@ final class RuleLoader
      */
     public function loadProjectRules(): array
     {
+        $root = $this->resolvedRoot();
+
         return $this->loadFromDirectory(
-            rtrim($this->repoRoot, '/') . '/.sugar-crush/rules',
-            $this->repoRoot,
+            rtrim($root, '/') . '/.sugar-crush/rules',
+            $root,
             'project',
         );
+    }
+
+    /**
+     * The directory the project and root tiers are read from: `$repoRoot`,
+     * walked up to the repository on a launch from one of its subdirectories
+     * (audit 15d-13 (b)). It is also the containment anchor for both tiers,
+     * so a tier is always held inside the root it was found under.
+     */
+    private function resolvedRoot(): string
+    {
+        return ProjectRoot::resolve($this->repoRoot);
     }
 
     /**
@@ -450,17 +464,18 @@ final class RuleLoader
      */
     public function loadRootRules(): array
     {
-        $path = rtrim($this->repoRoot, '/') . '/RULES.md';
+        $root = $this->resolvedRoot();
+        $path = rtrim($root, '/') . '/RULES.md';
         if (!is_file($path)) {
             return [];
         }
 
         $real = realpath($path);
-        if ($real === false || !ContainedPath::within($path, $this->repoRoot)) {
+        if ($real === false || !ContainedPath::within($path, $root)) {
             $reason = sprintf(
                 'Skipping root rules file %s: it does not resolve inside the checkout it was reached from (%s).',
                 $path,
-                $this->repoRoot,
+                $root,
             );
             $this->report($reason);
             $this->refusedPaths[$path] = $reason;

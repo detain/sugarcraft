@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Commands;
 
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
+use SugarCraft\Crush\Support\ProjectRoot;
 
 /**
  * Discovers file-based custom commands, mirroring the three-tier pattern
@@ -483,6 +484,10 @@ final class CommandLoader
      */
     public function loadProjectCommands(string $projectRoot): array
     {
+        // The repository's commands on a subdirectory launch too, anchored to
+        // the root they were found under (audit 15d-13 (b)).
+        $projectRoot = ProjectRoot::resolve($projectRoot);
+
         return $this->loadFromDirectory($this->projectCommandsDir($projectRoot), $projectRoot, 'project');
     }
 

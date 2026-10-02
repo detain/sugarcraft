@@ -54,6 +54,7 @@ use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Support\ProcessContainment;
+use SugarCraft\Crush\Support\ProjectRoot;
 use SugarCraft\Crush\Support\TimedFileLock;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\ToolResult;
@@ -1033,7 +1034,7 @@ final class Bootstrap
         // one shared helper because there is no single funnel: `app()` does
         // not call `chat()`'s resolution, and `NonInteractive` enters at
         // `backend()`.
-        self::useProjectRootForSettings($root);
+        self::useProjectRootForSettings(self::configRoot($root));
 
         // A LAUNCH's refusals, not a PROCESS's. This map is what
         // {@see projectTierRefusals()} advertises to a doctor report or a debug
@@ -1325,7 +1326,7 @@ final class Bootstrap
             // from the frozen trust list — see
             // {@see projectCommandShellIsTrusted()}. A null $root cannot be
             // trusted by a list of absolute paths, so it is false without asking.
-            projectCommandsTrusted: $root !== null && self::projectCommandShellIsTrusted($root),
+            projectCommandsTrusted: $root !== null && self::projectCommandShellIsTrusted(self::configRoot($root)),
             // THE APPOINTMENT THAT MAKES THE ARM ABOVE MEAN SOMETHING (E171).
             // `RuntimeNoticeSink::arm()` at the top of this method opens the
             // inbox; this is what says WHICH Chat reads it. The two belong
@@ -1488,9 +1489,13 @@ final class Bootstrap
 
         $userConfigDir = self::trustedConfigDirPath();
 
+        // The PROJECT tier walks up to the repository (audit 15d-13 (b)); the
+        // engine's `environmentRoot` below stays the launch directory.
+        $configRoot = self::configRoot($root);
+
         $registry = new WorkflowRegistry(
             $userConfigDir . '/workflows',
-            $root === null ? null : rtrim($root, '/') . '/.sugar-crush/workflows',
+            $configRoot === null ? null : rtrim($configRoot, '/') . '/.sugar-crush/workflows',
             // The root is passed, not merely used to build the path above,
             // because it is the boundary the project workflows DIRECTORY is
             // held inside — and it is the complete boundary only when the
@@ -1498,7 +1503,7 @@ final class Bootstrap
             // that directory's own parent, which a committed
             // `.sugar-crush -> /elsewhere` walks straight past. See
             // {@see WorkflowRegistry::readableProjectDir()}.
-            projectRoot: $root,
+            projectRoot: $configRoot,
             // THE SAME ANCHOR, FOR THE TIER THAT IS `require`d, and the reason it
             // is passed rather than left to the registry's parent-directory
             // fallback is the reason $root above is: the fallback catches a link
@@ -2383,6 +2388,10 @@ final class Bootstrap
      */
     private static function agentPresetTiers(string $root): array
     {
+        // The project tier and its anchor walk up to the repository together
+        // (audit 15d-13 (b)), so the directory read is always held inside the
+        // root it was found under.
+        $root = ProjectRoot::resolve($root);
         $projectAgents = rtrim($root, '/') . '/.sugar-crush/agents';
 
         // Both derived from the ONE trusted resolution, so the agents directory
@@ -2444,7 +2453,7 @@ final class Bootstrap
         // one shared helper because there is no single funnel: `app()` does
         // not call `chat()`'s resolution, and `NonInteractive` enters at
         // `backend()`.
-        self::useProjectRootForSettings($root);
+        self::useProjectRootForSettings(self::configRoot($root));
 
         $chat = self::chat($root);
         [$provider, $model] = self::provider();
@@ -2767,7 +2776,7 @@ final class Bootstrap
         // one shared helper because there is no single funnel: `app()` does
         // not call `chat()`'s resolution, and `NonInteractive` enters at
         // `backend()`.
-        self::useProjectRootForSettings($root);
+        self::useProjectRootForSettings(self::configRoot($root));
 
         $providerType = getenv('SUGARCRUSH_PROVIDER');
         if ($providerType !== false && $providerType !== '') {
@@ -2931,7 +2940,7 @@ final class Bootstrap
         // one shared helper because there is no single funnel: `app()` does
         // not call `chat()`'s resolution, and `NonInteractive` enters at
         // `backend()`.
-        self::useProjectRootForSettings($root);
+        self::useProjectRootForSettings(self::configRoot($root));
         $factory = new ProviderFactory();
         $provider = $factory->create($factory->defaultConfig($providerName));
         // --model wins over $SUGARCRUSH_MODEL wins over the provider default.
@@ -4678,6 +4687,10 @@ final class Bootstrap
         $paths = [self::trustedConfigDirPath() . '/hooks.yaml'];
 
         if ($root !== null) {
+            // The repository's hook file, not the launch subdirectory's (audit
+            // 15d-13 (b)); trust is asked of the same root it is read from.
+            $root = ProjectRoot::resolve($root);
+
             // CANONICAL, not as spelled. The trust decision below is made on
             // `realpath($root)`, so naming the file off the raw string would
             // leave the loaded path dependent on the process directory for a
@@ -6143,7 +6156,9 @@ final class Bootstrap
      */
     public static function mcpConfigDecision(?string $root = null): array
     {
-        $root = self::requireRoot($root);
+        // The repository's `.mcp.json`, and the trust record keyed by the
+        // repository, on a subdirectory launch too (audit 15d-13 (b)).
+        $root = ProjectRoot::resolve(self::requireRoot($root));
 
         // CANONICAL, not as spelled, for the reason {@see hookFiles()} gives at
         // its own `realpath()`: the trust decision below is made on the resolved
@@ -7624,6 +7639,17 @@ final class Bootstrap
      * has no root to offer, so saying so is the only honest degradation
      * (crush_code.md Phase 0 item 6).
      */
+    /**
+     * The root a launch's `.sugar-crush/*` lookups resolve against — the
+     * repository, on a launch from one of its subdirectories (audit 15d-13
+     * (b)); null stays null. The WORKING directory is never this: tools,
+     * hooks and spawned sessions keep `$root`. See {@see ProjectRoot}.
+     */
+    private static function configRoot(?string $root): ?string
+    {
+        return $root === null ? null : ProjectRoot::resolve($root);
+    }
+
     private static function requireRoot(?string $root): string
     {
         $resolved = $root ?? (getcwd() ?: null);

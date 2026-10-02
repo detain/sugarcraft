@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Context;
 use SugarCraft\Crush\Agents\MemoryScope;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Support\ContainedPath;
+use SugarCraft\Crush\Support\ProjectRoot;
 
 /**
  * The repo-local home of project-scope memory notes — E25 piece 2.
@@ -78,6 +79,11 @@ final class ProjectMemoryWriter
             return null;
         }
 
+        // The repository's notes on a subdirectory launch (audit 15d-13 (b)):
+        // the prompt fold and `/memory` hand over the launch directory, and
+        // the walk-up lives here so neither has to know about it.
+        $root = ProjectRoot::resolve($root);
+
         $directory = $root . '/' . self::RELATIVE_DIRECTORY;
 
         if (!is_dir($directory) || !is_writable($directory)) {
@@ -108,6 +114,10 @@ final class ProjectMemoryWriter
         if ($root === '' || !is_dir($root)) {
             return null;
         }
+
+        // Written where {@see forRoot()} reads — the repository, not the
+        // launch subdirectory (audit 15d-13 (b)).
+        $root = ProjectRoot::resolve($root);
 
         $directory = $root . '/' . self::RELATIVE_DIRECTORY;
 
