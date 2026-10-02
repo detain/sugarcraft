@@ -155,15 +155,6 @@ final class SkillPathNudge
     private const MAX_ENTRIES = 8;
 
     /**
-     * Ends an entry whose line did not fit {@see MAX_ENTRY_BYTES}.
-     *
-     * A clipped description that says nothing about being clipped reads as the
-     * skill's whole trigger phrase, and the model then decides the skill does
-     * not apply on half a sentence.
-     */
-    private const ENTRY_CLIP_MARKER = ' ... [clipped]';
-
-    /**
      * Counts the entries {@see MAX_ENTRIES} held back on THIS call.
      *
      * Worded "on a later call" and not "dropped" because that is what happens:
@@ -293,22 +284,19 @@ final class SkillPathNudge
 
     /**
      * One `- name: description` line, held to {@see MAX_ENTRY_BYTES}.
+     *
+     * Built by {@see SkillPromptLine::render()}, the authority the system-prompt
+     * listing uses too: collapsed to one line, fence-escaped, then clipped. This
+     * entry sits INSIDE `<system-reminder>…</system-reminder>`, so a
+     * description that could close it, or open another, would forge the
+     * harness's own voice out of a cloned checkout (audit 15d-02) — the reason
+     * {@see \SugarCraft\Crush\Context\RulePathNudge} escapes its entries too.
+     * There is no line-boundary fallback behind the clip — an entry IS one
+     * line — so the byte cut is the only cut.
      */
     private static function entry(Skill $skill): string
     {
-        $line = "- {$skill->name}: {$skill->description}";
-        if (strlen($line) <= self::MAX_ENTRY_BYTES) {
-            return $line;
-        }
-
-        // mb_strcut and not substr, for the reason
-        // {@see \SugarCraft\Crush\Tools\Concerns\TruncatesOutput::clipInstructions()}
-        // gives: a description is arbitrary repository text, so a plain byte
-        // cut lands inside a UTF-8 sequence and puts invalid bytes into a tool
-        // result the model reads. There is no line-boundary fallback behind
-        // this clip — an entry IS one line — so the byte cut is the only cut.
-        return mb_strcut($line, 0, self::MAX_ENTRY_BYTES - strlen(self::ENTRY_CLIP_MARKER), 'UTF-8')
-            . self::ENTRY_CLIP_MARKER;
+        return SkillPromptLine::render($skill, self::MAX_ENTRY_BYTES);
     }
 
     /**

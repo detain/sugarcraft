@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Skills;
 
+use SugarCraft\Crush\Context\PromptFence;
 use SugarCraft\Crush\Support\Frontmatter;
 
 /**
@@ -122,10 +123,19 @@ final readonly class Skill
 
     /**
      * Get the system prompt contribution from this skill.
+     *
+     * Name and body pass through {@see PromptFence::escape()} for the reason
+     * {@see SkillPromptLine} exists: both are text from whoever shipped the
+     * skill, and a body that could close a fence or open a `<system-reminder>`
+     * would speak in the harness's voice. Enabling a skill is the user's choice,
+     * which makes this the lower-risk channel of audit 15d-02, not a trusted one.
+     * The name is also collapsed to one line, because it heads a markdown
+     * section; the body keeps its newlines — it IS the skill's instructions.
      */
     public function systemPromptContribution(): string
     {
-        return "\n\n## Skill: {$this->name}\n\n{$this->content}";
+        return "\n\n## Skill: " . SkillPromptLine::field($this->name)
+            . "\n\n" . PromptFence::escape($this->content);
     }
 
     /**

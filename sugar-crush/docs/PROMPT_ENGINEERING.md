@@ -34,10 +34,14 @@ volatile `<env>` block last. Counted from the live method, there are eleven slot
 8. **Memory** (`MemoryBlock`) — fenced `project-memory`; the scope-selected standing notes,
    memoized per session like the repo map.
 9. **Enabled skill bodies** — every skill in `$app->enabledSkills` contributes its full
-   `Skill::systemPromptContribution()` as a PerTurn section.
+   `Skill::systemPromptContribution()` as a PerTurn section, name and body through
+   `PromptFence::escape()`.
 10. **Skill listing** — `SkillMatcher::listForPrompt()` names the remaining *discovered* skills at
     level-1 metadata (name and description), excluding those whose bodies the previous slot
-    already carries. PerTurn.
+    already carries. PerTurn. Names and descriptions are repository text read with no trust gate,
+    so every line goes through `SkillPromptLine::render()`: collapsed to one line,
+    `PromptFence::escape()`d, then clipped to `SkillPromptLine::LISTING_MAX_BYTES` (audit 15d-02).
+    `SkillPathNudge` uses the same helper at its own entry cap.
 11. **Environment** (`EnvironmentBlock`) — fenced `env`, **LAST**. The P3.S1 invariant.
 
 Slots 1–3 are the Static prefix; 4–8 are PerSession; 9–11 are PerTurn. A section whose `render()`
@@ -122,7 +126,7 @@ other:
 - **Fail fast.** A PCRE failure returns null, and null throws — shipping an unescaped body because
   one regex gave up is the swallowed-error shape this tree refuses. Prompt assembly has no silent
   fallback.
-- **Escape before clip.** `RepoMapBlock` and `MemoryBlock` run each line through
+- **Escape before clip.** `RepoMapBlock`, `MemoryBlock` and `SkillPromptLine` run each line through
   `PromptFence::escape()` and only then through their `clip()` budget, because neutralising a tag
   *grows* the line and the growth must land inside the cap the budget promises.
 - **Byte-oriented, no `u` modifier.** Diff bodies and paths can carry invalid UTF-8; a
