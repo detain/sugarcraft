@@ -3715,14 +3715,8 @@ final class DocFigureProseDriftTest extends TestCase
      * the McpToolBridge class doc-block's own six-row table against the
      * PermissionMode enum, exactly two divergences (plan, and auto since
      * audit F-P3(b) made it ask before every mcp__ call), and the isWriteTool
-     * mcp__ clause the plan divergence runs through.
-     *
-     * KNOWN STALE PAGE, left pinned on purpose rather than loosened: MCP.md
-     * still says "five of the six … diverges under `plan`". The page was
-     * locked by a concurrent change (wave 7) when the auto divergence landed,
-     * so the bridge note moved and the page could not; the integrator flips
-     * the page sentence and the regex below together (to "four of the six …
-     * diverges under `plan` and `auto`").
+     * mcp__ clause the plan divergence runs through. The page sentence and
+     * the regex below move together with the bridge note's "Four of six".
      */
     public function testBridgeNamingAndPermissionMatrixCoincideWithThePage(): void
     {
@@ -3744,8 +3738,8 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match("/coincides with `Bash`'s in five of the six permission modes and diverges under `plan`/", $mcp),
-            'the coincidence sentence no longer states five-of-six with its diverging mode',
+            preg_match("/coincides with `Bash`'s in four of the six permission modes and diverges under `plan` and `auto`/", $mcp),
+            'the coincidence sentence no longer states four-of-six with its two diverging modes',
         );
         $wordNumbers = ['four' => 4, 'six' => 6];
         $cases = PermissionMode::cases();

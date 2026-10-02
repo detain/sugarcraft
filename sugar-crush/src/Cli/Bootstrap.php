@@ -1885,12 +1885,14 @@ final class Bootstrap
      *
      *     foreign imports  <  the six built-in definitions  <  native presets
      *
-     * NATIVE WINS AT EVERY TIER, built-ins included, and that is the merge
-     * direction {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()} already
-     * established for skills rather than a second convention: it registers the
-     * foreign trees first and lays the native manifests — built-in, user AND
-     * project — over the top. Applied to agents the argument is the same one and
-     * slightly sharper, because `reviewer`, `coder`, `tester`, `architect`,
+     * NATIVE WINS AT EVERY TIER, built-ins included. Skills share only half of
+     * that direction: {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()}
+     * lays the native manifest over the foreign trees INSIDE one tier, but
+     * since audit 15d-03(b) the tier decides first
+     * ({@see \SugarCraft\Crush\Skills\SkillOrigin::precedence()}: built-in <
+     * project < user), so a user's foreign skill beats a project's native one.
+     * Agents keep native-over-foreign across tiers; the argument for it is
+     * slightly sharper here, because `reviewer`, `coder`, `tester`, `architect`,
      * `debugger` and `devops` are the names `/agents`, Ctrl+A and the agent strip
      * are documented against: cloning a repository that ships
      * `.claude/agents/reviewer.md` must not silently re-point `reviewer` at
@@ -6635,10 +6637,11 @@ final class Bootstrap
             // the answer to both.
             //
             // NOT "GATED EXACTLY AS `Bash`", which is how that revision put the
-            // second half. The CHAIN is shared; the DECISION coincides in five of
-            // the six permission modes and diverges under `plan`, where `Bash` is
-            // allowed for exploration and every `mcp__*` name is denied as a write
-            // tool — i.e. in the conservative direction. The measured table, and
+            // second half. The CHAIN is shared; the DECISION coincides in four of
+            // the six permission modes and diverges under `plan` and `auto`. Under
+            // `plan` `Bash` is allowed for exploration and every `mcp__*` name is
+            // denied as a write tool; under `auto` every `mcp__*` call asks
+            // (audit F-P3(b)). Both run in the conservative direction. The measured table, and
             // why the divergence is not a hole, are in
             // {@see \SugarCraft\Crush\Tools\McpToolBridge}; the end-to-end
             // measurements are in
