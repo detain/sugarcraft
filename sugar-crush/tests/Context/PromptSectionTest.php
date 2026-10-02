@@ -409,7 +409,11 @@ final class PromptSectionTest extends TestCase
 
     public function testEscapeLeavesNonRosterAndIncompleteMarkupByteIntact(): void
     {
-        $inert = '<envx> </environment> < env> <env </env <note>text</note> 1 < 2 and a < b';
+        // `<env ` / `</env ` (a roster name then whitespace) used to stand here
+        // as "incomplete" markup left intact; audit 15d-10 showed that is the
+        // attribute-bearing / unterminated opener a model reads as the fence,
+        // so they now escape — pinned in PromptFenceAttributeTagTest.
+        $inert = '<envx> </environment> < env> <env-x> <note>text</note> 1 < 2 and a < b';
 
         self::assertSame($inert, PromptFence::escape($inert));
     }

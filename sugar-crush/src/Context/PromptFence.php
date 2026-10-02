@@ -49,6 +49,14 @@ namespace SugarCraft\Crush\Context;
  * (returns null) and would either drop the payload or throw. The class doc of
  * EnvironmentBlock makes the same argument for its `?` substitution; here the
  * consequence of ignoring it would be an exception inside prompt assembly.
+ *
+ * TWO NEUTRALISATIONS, ONE REWRITE (audit 15d-10). Besides the roster tags,
+ * the same `<` → `&lt;` rewrite defangs the openers of pipe-delimited
+ * chat-template control tokens ({@see self::CONTROL_TOKEN_PIPES}). The roster
+ * guards the fences a model READS; the control tokens guard the role
+ * boundaries a tokenizer ENCODES — a different layer, but the same forgery
+ * (foreign bytes posing as the harness's own structure) through the same
+ * splice, so it rides the one authority every construction site already calls.
  */
 final class PromptFence
 {
@@ -152,6 +160,36 @@ final class PromptFence
         'available-skills',
     ];
 
+    /**
+     * The pipe glyphs that, directly after `<` (or `</`), open a chat-template
+     * control token: ASCII `|` for the ChatML / Qwen / Llama-3 / Phi families
+     * (`<|im_start|>`, `<|im_end|>`, `<|endoftext|>`, `<|eot_id|>`) and the
+     * fullwidth U+FF5C `｜` DeepSeek spells its specials with
+     * (`<｜end▁of▁sentence｜>`, `<｜User｜>`, `<｜Assistant｜>`, `</｜DSML｜…>`).
+     *
+     * WHY: a serving stack's HF tokenizer encodes a special-token literal that
+     * appears in message text as the REAL control id unless the deploy turns
+     * on split_special_tokens, so an AGENTS.md carrying
+     * `<｜end▁of▁sentence｜><｜User｜>` could end the system turn and open a
+     * forged user turn below the fence layer, where no tag escape reaches.
+     * Special tokens match only as whole strings, so rewriting the leading `<`
+     * breaks every one of them while keeping the rest of the bytes as captured.
+     *
+     * WHY EVERY `<|` AND NOT A TOKEN LIST: the vocabularies are open-ended and
+     * per-model (and the deploy's model changes), so a list of known names
+     * would be stale on the next swap. The cost is that ordinary text such as
+     * Haskell's `<|>` also arrives as `&lt;|>` — inert, information-preserving,
+     * and rare in prompt payloads. Families whose specials carry no pipe
+     * (Gemma's `<start_of_turn>`, Mistral's `[INST]`) are NOT covered.
+     *
+     * The fullwidth glyph is matched as its three UTF-8 bytes; the pattern
+     * stays byte-oriented (no `/u`) for the reason the class doc gives, and the
+     * rewrite touches only the ASCII `<`, so no multibyte sequence is split.
+     *
+     * @var list<string>
+     */
+    private const CONTROL_TOKEN_PIPES = ['|', "\u{FF5C}"];
+
     private function __construct()
     {
     }
@@ -168,28 +206,40 @@ final class PromptFence
     }
 
     /**
-     * Neutralise every fence tag inside $payload by rewriting its leading `<`.
+     * Neutralise every fence tag and chat-template control-token opener inside
+     * $payload by rewriting its leading `<` to `&lt;`.
      *
-     * Matches an opening or closing tag of every roster name with optional
-     * whitespace and optional self-closing slash before `>` — `</env>`,
-     * `<env >`, `<env/>`, `</ENV/>` all lose their `<`; bare `<env` (no
-     * closer) and `<envx>` (a different name) and `< env>` (invalid tag
-     * syntax, which no fence reader tokenises) are left byte-intact. The
-     * guarantee that matters downstream: after this call the payload contains
-     * no byte sequence that any of the roster's open or close spellings can
-     * match, and running it again changes nothing.
+     * A roster tag is `<` or `</`, a roster name in any case, then whitespace
+     * (space, tab, newline, CR, VT, FF), `/`, `>` or the end of the payload. So
+     * `</env>`, `<env >`, `<env/>`, `</ENV/>` lose their `<`, and so do the
+     * attribute-bearing spellings a reader model treats as the same channel —
+     * `<system-reminder priority="high">`, `<user-rules\tid=1>`, an attribute
+     * list broken across lines — and the UNTERMINATED opener
+     * `<system-reminder foo="x"` with no `>` at all: a model reads that as the
+     * channel opening just as readily, and lenient tag readers recover a
+     * missing `>`, so the escape does not wait for one. Left byte-intact:
+     * `<envx>` / `<env-x>` (a different name), `< env>` (invalid tag syntax no
+     * fence reader tokenises), and every `<` not followed by a roster name.
+     * Separately, `<` or `</` directly followed by a
+     * {@see self::CONTROL_TOKEN_PIPES} glyph (`<|im_start|>`,
+     * `<｜User｜>`) is rewritten the same way.
+     *
+     * The guarantee that matters downstream: after this call no `<` in the
+     * payload is followed by `/`?, a roster name and one of those terminators,
+     * nor by `/`? and a control-token pipe — the replacement contains no `<`,
+     * so running it again changes nothing.
      */
     public static function escape(string $payload): string
     {
         /** @var non-empty-string|null $pattern */
         static $pattern = null;
-        $pattern ??= '~</?(?:' . implode('|', self::TAGS) . ')\s*/?>~i';
+        $pattern ??= '~<(?=/?(?:(?:' . implode('|', self::TAGS) . ')(?:[\s/>]|\z)|'
+            . implode('|', array_map(static fn(string $pipe): string => preg_quote($pipe, '~'), self::CONTROL_TOKEN_PIPES))
+            . '))~i';
 
-        $escaped = preg_replace_callback(
-            $pattern,
-            static fn(array $match): string => '&lt;' . substr($match[0], 1),
-            $payload,
-        );
+        // Only the `<` itself is consumed (the rest is lookahead), so the
+        // rewrite cannot reach past it and adjacent tags each match on their own.
+        $escaped = preg_replace($pattern, '&lt;', $payload);
 
         // A null here means the pattern itself failed (PCRE backtrack limit on
         // a pathological payload), not "no match" — failing loud beats
