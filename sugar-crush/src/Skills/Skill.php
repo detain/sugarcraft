@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Skills;
 
 use SugarCraft\Crush\Context\PromptFence;
+use SugarCraft\Crush\Context\Utf8Scrub;
 use SugarCraft\Crush\Support\Frontmatter;
 
 /**
@@ -62,6 +63,13 @@ final readonly class Skill
      */
     public static function parse(string $content, string $name, string $sourcePath = ''): self
     {
+        // Valid UTF-8 BEFORE anything reads it (audit 15d-08): the YAML parse
+        // refuses invalid bytes, which skipped the whole skill, and a body that
+        // got past it went into the system prompt raw and failed the JSON
+        // encode of every request. The note is appended at the end of the file,
+        // so it lands in the body — the part the model reads as the skill.
+        $content = Utf8Scrub::announced($content, "the SKILL.md of skill \"{$name}\"");
+
         // Split frontmatter from content
         if (preg_match('/^---\s*\n(.*?)\n---\s*\n/s', $content, $matches)) {
             $body = substr($content, strlen($matches[0]));

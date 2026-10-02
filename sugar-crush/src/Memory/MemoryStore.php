@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Memory;
 
 use SugarCraft\Crush\Agents\MemoryScope;
+use SugarCraft\Crush\Context\Utf8Scrub;
 use SugarCraft\Crush\Support\AtomicFileWriter;
 use SugarCraft\Crush\Support\Frontmatter;
 use Symfony\Component\Yaml\Yaml;
@@ -514,11 +515,27 @@ final class MemoryStore
      * it) or is removed through {@see delete()} / {@see clear()}, so the map
      * describes the files as they are now, not a history of past mistakes.
      *
+     * $within narrows the map to the files of that one scope's directory — the
+     * question {@see \SugarCraft\Crush\Context\MemoryBlock::capture()} asks,
+     * since it announces only the project notes it failed to read and the map
+     * also holds whatever an earlier search() or list() of another scope
+     * skipped on this same store.
+     *
      * @return array<string, string>
      */
-    public function skipped(): array
+    public function skipped(string|MemoryScope|null $within = null): array
     {
-        return $this->skipped;
+        if ($within === null) {
+            return $this->skipped;
+        }
+
+        $dir = $this->scopeDirectory($within, false);
+
+        return array_filter(
+            $this->skipped,
+            static fn(string $file): bool => \dirname($file) === $dir,
+            \ARRAY_FILTER_USE_KEY,
+        );
     }
 
     /**
@@ -550,7 +567,12 @@ final class MemoryStore
                 throw new \UnexpectedValueException('file could not be read');
             }
 
-            $entry = $this->decode($content, $file);
+            // Valid UTF-8 before the parse (audit 15d-08): the YAML reader
+            // refuses invalid bytes, which skipped the whole note, and a body
+            // that got past it reached the system prompt raw and failed the
+            // JSON encode of every request. A hand-edited note in a legacy
+            // encoding loses those characters to `?`, not the note.
+            $entry = $this->decode(Utf8Scrub::clean($content), $file);
         } catch (\Throwable $e) {
             $this->skipped[$file] = $e->getMessage();
 

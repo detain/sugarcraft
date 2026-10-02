@@ -262,7 +262,12 @@ final class InstructionFileLoader
             // to where the repository put it", and resolving that too would
             // silently change which file an import names.
             $raw = file_get_contents($realPath);
-            $contents[] = $raw === false ? '' : $this->expandImports($raw, dirname($path), $this->repoRoot);
+            if ($raw === false) {
+                $contents[] = '';
+            } else {
+                [$doc, $note] = $this->utf8Document($raw, $path);
+                $contents[] = $this->expandImports($doc, dirname($path), $this->repoRoot) . $note;
+            }
         }
 
         return $this->rootCache = $contents;
@@ -453,7 +458,12 @@ final class InstructionFileLoader
                 // testAnAncestorImportLeavingTheEnclosingCheckoutIsStillBlocked
                 // kills, which is what makes the argument checkable.)
                 $raw = file_get_contents($realPath);
-                $contents[] = $raw === false ? '' : $this->expandImports($raw, \dirname($path), $ancestorRoot);
+                if ($raw === false) {
+                    $contents[] = '';
+                } else {
+                    [$doc, $note] = $this->utf8Document($raw, $path);
+                    $contents[] = $this->expandImports($doc, \dirname($path), $ancestorRoot) . $note;
+                }
             }
         }
 
@@ -543,7 +553,11 @@ final class InstructionFileLoader
                 $raw = file_get_contents($realPath);
                 if ($raw !== false) {
                     $this->emittedPaths[$realPath] = true;
-                    $contents[] = $raw;
+                    // A glob can match a binary as easily as a document, and
+                    // one invalid byte here used to fail every request
+                    // (audit 15d-08) — see utf8Document().
+                    [$doc, $note] = $this->utf8Document($raw, $path);
+                    $contents[] = $doc . $note;
                 }
             }
         }
@@ -683,7 +697,13 @@ final class InstructionFileLoader
                     // Resolved, for the reason loadRoot() reads resolved; the
                     // import base stays spelled, for the reason it stays spelled.
                     $raw = file_get_contents($realPath);
-                    return $raw === false ? null : $this->expandImports($raw, dirname($fullPath), $repoRoot);
+                    if ($raw === false) {
+                        return null;
+                    }
+
+                    [$doc, $note] = $this->utf8Document($raw, $fullPath);
+
+                    return $this->expandImports($doc, dirname($fullPath), $repoRoot) . $note;
                 }
             }
 
@@ -795,6 +815,37 @@ final class InstructionFileLoader
                 }
             }
         }
+    }
+
+    /**
+     * An instruction document's bytes as valid UTF-8, and the note announcing
+     * the repair ('' when the file was already valid).
+     *
+     * EVERY read in this class goes through here, because every one of them
+     * lands in the system prompt and the system prompt is JSON-encoded into
+     * every request: before this, one Latin-1 byte in a `CLAUDE.md` made
+     * Guzzle throw "Malformed UTF-8 characters" on every turn of the session
+     * (audit 15d-08). Scrubbed BEFORE the import expansion so each imported
+     * file is judged on its own bytes ({@see ImportResolver} scrubs those), and
+     * the note is returned separately so the caller appends it AFTER the
+     * expansion — a note spelling a path is never itself read as an `@import`.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function utf8Document(string $raw, string $path): array
+    {
+        [$doc, $replaced] = Utf8Scrub::scrub($raw);
+        if ($replaced === 0) {
+            return [$doc, ''];
+        }
+
+        // Named relative to the checkout when it is inside it: the absolute
+        // path would put this machine's directory layout into the prompt for
+        // no information the model can use.
+        $root = rtrim($this->repoRoot, '/') . '/';
+        $shown = str_starts_with($path, $root) ? substr($path, strlen($root)) : $path;
+
+        return [$doc, Utf8Scrub::notice($replaced, $shown)];
     }
 
     /**

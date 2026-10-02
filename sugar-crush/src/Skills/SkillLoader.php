@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Skills;
 
+use SugarCraft\Crush\Context\Utf8Scrub;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\Frontmatter;
 use SugarCraft\Crush\Support\HomeDirectory;
@@ -646,6 +647,13 @@ final class SkillLoader
             throw new \RuntimeException("Failed to read skill manifest: $skillPath");
         }
 
+        // The description is listed in the system prompt, and the YAML parse
+        // refuses invalid UTF-8 outright — one Latin-1 byte used to drop the
+        // whole skill or, past the parse, fail every request's JSON encode
+        // (audit 15d-08). Too small a field for a note; the body read carries
+        // one ({@see loadSkillBody()}).
+        $content = Utf8Scrub::clean($content);
+
         // Parse frontmatter only (stage 1 - don't load body)
         $parsed = preg_match(self::FRONTMATTER_PATTERN, $content, $matches)
             ? Frontmatter::parse($matches[1])
@@ -766,6 +774,10 @@ final class SkillLoader
         if ($content === false) {
             throw new \RuntimeException("Failed to read skill body: $skillPath");
         }
+
+        // Same scrub and same trailing note as {@see Skill::parse()}, so the
+        // lazy body and the eager one are the same bytes (audit 15d-08).
+        $content = Utf8Scrub::announced($content, "the SKILL.md of skill \"" . basename(dirname($skillPath)) . '"');
 
         // Strip frontmatter to get body
         if (preg_match(self::FRONTMATTER_PATTERN, $content, $matches)) {

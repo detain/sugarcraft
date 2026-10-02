@@ -1710,6 +1710,56 @@ final class BaseSystemPromptTest extends TestCase
     }
 
     /**
+     * Audit 15d-08: one byte that is not valid UTF-8 in any prompt source
+     * used to fail EVERY request of the session, because the system prompt is
+     * JSON-encoded into each one and Guzzle's encoder throws on malformed
+     * UTF-8 (both providers send `'json' => $params`). REPRODUCED before the
+     * fix with exactly this fixture's `CLAUDE.md`: `mb_check_encoding()` false
+     * on the assembled prompt and `json_encode error: Malformed UTF-8
+     * characters` from {@see \GuzzleHttp\Utils::jsonEncode()}.
+     *
+     * Every source a repository or the user writes by hand is planted Latin-1
+     * at once — the root document, a project rule, a project memory note and
+     * an enabled skill — and the prompt is assembled by the real
+     * Runtime::buildSystemPrompt(). Each canary must survive (the fix repairs
+     * bytes, it does not drop documents) and the instruction document's
+     * repair must be announced by name. The per-loader pins are
+     * {@see \SugarCraft\Crush\Tests\Context\PromptSourceUtf8Test}.
+     */
+    public function testANonUtf8InstructionFileStillProducesAnEncodableRequest(): void
+    {
+        $fixture = new PromptFixture();
+
+        try {
+            $fixture->write('CLAUDE.md', "# Legacy conventions\n\nCaf\xe9 au lait DOCCANARY\n");
+            $fixture->write('.sugar-crush/rules/legacy.md', "---\nname: legacy\n---\nRule caf\xe9 RULECANARY\n");
+            $fixture->memoryStore();
+            $fixture->write(
+                '.sugar-crush/memory/project/latin.md',
+                "---\nid: latin-note\ntype: pattern\nscope: project\n---\nNote caf\xe9 MEMCANARY\n",
+            );
+            $fixture->addSkill(Skill::parse("---\ndescription: legacy\n---\nSkill caf\xe9 SKILLCANARY\n", 'legacy'));
+
+            $prompt = self::renderUnderFixtureUserHome(static fn (): string => $fixture->systemPrompt());
+
+            self::assertTrue(mb_check_encoding($prompt, 'UTF-8'), 'the assembled system prompt must be valid UTF-8');
+            $encoded = \GuzzleHttp\Utils::jsonEncode(['messages' => [['role' => 'system', 'content' => $prompt]]]);
+            self::assertIsString($encoded, 'the request body every provider sends must encode');
+
+            foreach (['Caf? au lait DOCCANARY', 'Rule caf? RULECANARY', 'Note caf? MEMCANARY', 'Skill caf? SKILLCANARY'] as $canary) {
+                self::assertStringContainsString($canary, $prompt, "the text around the bad byte must survive: {$canary}");
+            }
+            self::assertStringContainsString(
+                '[encoding: 1 byte sequence(s) of CLAUDE.md were not valid UTF-8 and were replaced with "?".]',
+                $prompt,
+                'the repair is announced, naming the file, so the model does not read `Caf?` as the real spelling',
+            );
+        } finally {
+            $fixture->destroy();
+        }
+    }
+
+    /**
      * P5.S6: the authority preamble renders once per instruction DOCUMENT,
      * inside each fence, with the body spliced verbatim after the blank line
      * (for a tag-free document the escape is the identity, so the exact

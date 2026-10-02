@@ -600,7 +600,10 @@ final readonly class RepoMapBlock implements PromptSection
             // budgets promise bytes of what the model actually reads, and a
             // package name or description that embeds a fence tag grows when
             // the tag is neutralised, so the growth must be inside the cap.
-            $line = $this->clip(PromptFence::escape($line));
+            //
+            // Scrubbed first: a directory name is filesystem bytes, not UTF-8,
+            // and this block is part of a JSON-encoded request (audit 15d-08).
+            $line = $this->clip(PromptFence::escape(Utf8Scrub::clean($line)));
             $lineBytes = strlen($line);
 
             if ($bytes + $lineBytes > self::MAX_SECTION_BYTES) {
@@ -982,7 +985,10 @@ final readonly class RepoMapBlock implements PromptSection
             return null;
         }
 
-        $decoded = json_decode($raw, true);
+        // json_decode() refuses invalid UTF-8 outright, so one Latin-1 byte in
+        // a description used to drop the whole package from the map (audit
+        // 15d-08). Scrubbed, the package is mapped and the byte reads `?`.
+        $decoded = json_decode(Utf8Scrub::clean($raw), true);
 
         if (!is_array($decoded) || ($decoded !== [] && array_is_list($decoded))) {
             return null;
@@ -1011,9 +1017,14 @@ final readonly class RepoMapBlock implements PromptSection
         return $autoload['psr-4'];
     }
 
-    /** Every run of whitespace — newlines included — collapsed to one space. */
+    /**
+     * Every run of whitespace — newlines included — collapsed to one space.
+     *
+     * Scrubbed first, because a `/u` pattern returns null on invalid UTF-8 and
+     * the cast made that '' — the description vanished (audit 15d-08).
+     */
     private static function oneLine(string $text): string
     {
-        return trim((string) preg_replace('/\s+/u', ' ', $text));
+        return trim((string) preg_replace('/\s+/u', ' ', Utf8Scrub::clean($text)));
     }
 }

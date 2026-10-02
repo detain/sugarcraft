@@ -46,7 +46,15 @@ stands in), and a `---` inside a value (the frontmatter ends only at a whole
 cannot parse, a `tags:` that is not a list of strings — is **skipped**, never
 fatal: the rest of the store, and every turn's `<project-memory>` block, keep
 working. `MemoryStore::skipped()` returns the skipped files as path => reason
-(audit 15d-04).
+(audit 15d-04), and the `<project-memory>` block reads it: a project note that
+could not be read is announced in one bounded line under the listed notes —
+naming at most three files, each with its reason, fence-escaped and clipped like
+a note — so a missing note is visible to the model instead of silently absent.
+
+A note written in a legacy encoding is **not** skipped: bytes that are not valid
+UTF-8 are replaced with `?` when the note is read (audit 15d-08). Before that,
+the YAML reader refused such a note outright, and a body that slipped through
+reached the system prompt raw and failed every provider request's JSON encode.
 
 ### A naming mismatch worth knowing
 
@@ -237,6 +245,13 @@ repository* chooses, so the directory is contained against the checkout and each
 `Bootstrap::tools()` threads **one** loader into `Read`, `Edit`, `Glob`, `Grep`
 and `Write` so the engine's root reads and the tools' on-touch reads share one
 dedup map. Handing them separate loaders would emit the same bytes twice.
+
+Every one of those reads, and every `@import`, is scrubbed to valid UTF-8 as it
+is loaded (`Utf8Scrub`, audit 15d-08): each invalid byte sequence becomes `?`,
+and the document gains a trailing `[encoding: N byte sequence(s) of <file> were
+not valid UTF-8 and were replaced with "?".]` line naming the file. The system
+prompt is JSON-encoded into every request, so one Latin-1 byte in a `CLAUDE.md`
+used to fail every turn of the session.
 
 ### `@import`
 

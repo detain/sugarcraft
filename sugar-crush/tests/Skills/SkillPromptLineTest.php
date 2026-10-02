@@ -103,7 +103,8 @@ final class SkillPromptLineTest extends TestCase
         self::assertStringNotContainsString("\n", $line);
         self::assertStringNotContainsString("\r", $line);
         self::assertStringNotContainsString('</env>', $line);
-        self::assertSame("- latin: Caf\xe9 second line &lt;/env>", $line);
+        self::assertSame("- latin: Caf? second line &lt;/env>", $line);
+        self::assertTrue(mb_check_encoding($line, 'UTF-8'), 'the invalid byte is scrubbed to ? (audit 15d-08), not passed through');
     }
 
     public function testABudgetThatCannotHoldTheMarkerIsRefused(): void

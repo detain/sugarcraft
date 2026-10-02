@@ -133,10 +133,18 @@ final class ImportResolver
                     return $m[0];
                 }
 
+                // An imported file is spliced into an instruction document and
+                // so into every request's JSON body; one invalid UTF-8 byte in
+                // it used to fail the encode of every turn (audit 15d-08). The
+                // note is appended AFTER the recursion so the path it spells is
+                // never itself expanded as a reference.
+                [$imported, $replaced] = Utf8Scrub::scrub($imported);
+
                 // Recurse with the directory of the imported file as new base.
                 // $boundaryCheck is threaded through so a reference found
                 // INSIDE this just-imported file is checked too, at every depth.
-                return $this->expand($imported, dirname($resolved), $depth + 1, $boundaryCheck);
+                return $this->expand($imported, dirname($resolved), $depth + 1, $boundaryCheck)
+                    . Utf8Scrub::notice($replaced, $pathFragment);
             },
             $content,
         );

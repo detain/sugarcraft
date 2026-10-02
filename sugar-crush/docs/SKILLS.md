@@ -81,6 +81,10 @@ Everything after the closing `---` is the body.
 `---` fence is refused, recorded on `SkillLoader::skipped()`, and skipped. The
 skill's default name is its parent directory's name, not a `name:` field.
 
+A `SKILL.md` in a legacy encoding is not skipped: every reader scrubs it to valid
+UTF-8 first, replacing each invalid byte sequence with `?`, and the body gains a
+trailing `[encoding: …]` line saying so (audit 15d-08).
+
 **A mistyped field skips the skill, never the launch.** Both readers — the
 Stage-1 `SkillLoader::loadSkillManifest()` and the eager `Skill::parse()` — type
 the frontmatter through one class, `SkillFrontmatter`. A field of the wrong type

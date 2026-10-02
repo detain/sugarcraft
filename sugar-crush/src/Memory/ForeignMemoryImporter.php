@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Memory;
 
+use SugarCraft\Crush\Context\Utf8Scrub;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\Frontmatter;
 use SugarCraft\Crush\Support\HomeDirectory;
@@ -161,7 +162,15 @@ final class ForeignMemoryImporter
             }
 
             $raw = file_get_contents($file);
-            if ($raw === false || preg_match(self::FRONTMATTER_PATTERN, $raw, $m) !== 1) {
+            if ($raw === false) {
+                continue;
+            }
+
+            // Imported notes become memory notes, which reach the system
+            // prompt; and the YAML parse below refuses invalid UTF-8, which
+            // dropped the whole file (audit 15d-08).
+            $raw = Utf8Scrub::clean($raw);
+            if (preg_match(self::FRONTMATTER_PATTERN, $raw, $m) !== 1) {
                 continue;
             }
 
@@ -241,6 +250,7 @@ final class ForeignMemoryImporter
             if ($content === false) {
                 continue;
             }
+            $content = Utf8Scrub::clean($content);
 
             $this->store->add(
                 content: '# ' . basename($file, '.md') . "\n\n" . trim($content),

@@ -671,8 +671,17 @@ final class RuleLoader
             return null;
         }
 
+        // A rule body is folded into the system prompt, which is JSON-encoded
+        // into every request; one invalid UTF-8 byte used to fail the encode
+        // of every turn (audit 15d-08), and the YAML frontmatter parse refuses
+        // such bytes outright, which skipped the whole rule. The note lands at
+        // the end of the file and therefore in the body, where the model reads
+        // the rule. The fallback name comes from the FILENAME, which is bytes
+        // too; the key keeps the raw spelling because it is identity, not text.
+        $content = Utf8Scrub::announced($content, "rules file {$key}.md");
+
         try {
-            return Rule::new($realPath, $tier, $content, fallbackName: $key, key: $key);
+            return Rule::new($realPath, $tier, $content, fallbackName: Utf8Scrub::clean($key), key: $key);
         } catch (\Throwable $e) {
             $reason = sprintf('Failed to load rule from %s: %s', $realPath, $e->getMessage());
             $this->report($reason);

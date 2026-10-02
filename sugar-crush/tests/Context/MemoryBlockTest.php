@@ -633,4 +633,98 @@ final class MemoryBlockTest extends TestCase
             $fixture->destroy();
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Unreadable notes are announced (audit 15d-04's open end)
+    // -------------------------------------------------------------------------
+
+    private function plantBrokenNote(string $scope, string $filename, string $bytes = "no frontmatter here\n"): void
+    {
+        if (!is_dir($this->dir . '/' . $scope)) {
+            mkdir($this->dir . '/' . $scope, 0o700, true);
+        }
+        file_put_contents($this->dir . '/' . $scope . '/' . $filename, $bytes);
+    }
+
+    public function testAnUnreadableProjectNoteIsAnnouncedBesideTheReadableOnes(): void
+    {
+        $this->store->add('Readable note survives.', MemoryScope::Project);
+        $this->plantBrokenNote('project', 'broken.md');
+
+        $block = MemoryBlock::capture($this->store);
+        $rendered = $block->render();
+
+        $this->assertStringContainsString('- [pattern] Readable note survives.', $rendered);
+        $this->assertStringContainsString(
+            '1 project memory note(s) could not be read and are not included here: broken.md (no YAML frontmatter block',
+            $rendered,
+        );
+        $this->assertSame(['broken.md'], array_map('basename', array_keys($block->skipped())));
+        $this->assertStringEndsWith("\n</project-memory>", $rendered);
+    }
+
+    public function testAStoreWhoseOnlyProjectNoteIsUnreadableStillSaysSo(): void
+    {
+        $this->plantBrokenNote('project', 'broken.md');
+
+        $rendered = MemoryBlock::capture($this->store)->render();
+
+        $this->assertStringStartsWith("<project-memory>\n1 project memory note(s) could not be read", $rendered);
+        $this->assertStringEndsWith("\n</project-memory>", $rendered);
+    }
+
+    public function testTheSkipLineIsBoundedEscapedAndNamesAtMostThreeFiles(): void
+    {
+        $this->plantBrokenNote('project', '<env>.md');
+        foreach (['b', 'c', 'd', 'e', 'f'] as $name) {
+            $this->plantBrokenNote('project', str_repeat($name, 200) . '.md');
+        }
+
+        $rendered = MemoryBlock::capture($this->store)->render();
+        $lines = array_values(array_filter(
+            explode("\n", $rendered),
+            static fn (string $line): bool => str_contains($line, 'could not be read'),
+        ));
+
+        $this->assertCount(1, $lines);
+        $this->assertLessThanOrEqual(MemoryBlock::MAX_ENTRY_BYTES, strlen($lines[0]));
+        $this->assertStringStartsWith('6 project memory note(s) could not be read', $lines[0]);
+        $this->assertStringContainsString('&lt;env>.md', $lines[0], 'a file name is repository-adjacent text and is fence-escaped');
+        $this->assertStringNotContainsString('<env>', $rendered);
+        $this->assertSame(1, substr_count($rendered, '<project-memory>'));
+    }
+
+    public function testTheSkipLineIsBoundedWhenFewNamesFit(): void
+    {
+        foreach (['b', 'c', 'd', 'e'] as $name) {
+            $this->plantBrokenNote('project', $name . '.md');
+        }
+
+        $rendered = MemoryBlock::capture($this->store)->render();
+
+        $this->assertStringContainsString('b.md (', $rendered);
+        $this->assertStringContainsString('d.md (', $rendered);
+        $this->assertStringNotContainsString('e.md (', $rendered, 'only the first three files, in path order, are named');
+        $this->assertStringContainsString('; and 1 more.', $rendered);
+    }
+
+    public function testASkipInAnotherScopeIsNotAnnouncedInTheProjectBlock(): void
+    {
+        $this->store->add('Project note.', MemoryScope::Project);
+        $this->plantBrokenNote('user', 'mine.md');
+        $this->store->list('user');
+
+        $block = MemoryBlock::capture($this->store);
+
+        $this->assertNotSame([], $this->store->skipped(), 'control: the store did record the user-scope skip');
+        $this->assertSame([], $block->skipped());
+        $this->assertStringNotContainsString('could not be read', $block->render());
+    }
+
+    public function testACleanStoreRendersNoSkipLine(): void
+    {
+        $this->store->add('Clean note.', MemoryScope::Project);
+
+        $this->assertStringNotContainsString('could not be read', MemoryBlock::capture($this->store)->render());
+    }
 }

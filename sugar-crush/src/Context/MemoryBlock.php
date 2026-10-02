@@ -170,12 +170,27 @@ final readonly class MemoryBlock implements PromptSection
     private const TRUNCATION_MARKER = ' […truncated]';
 
     /**
-     * @param list<MemoryEntry> $entries already ordered newest-first and
-     *                                   filtered to project scope by
-     *                                   {@see capture()}
+     * How many unreadable notes the skip line names before it falls back to a
+     * count ("and N more"). The line is one entry's worth of bytes at most —
+     * it is clipped to {@see MAX_ENTRY_BYTES} like a note — so naming every
+     * file of a store full of broken notes was never on the table.
+     */
+    private const SKIP_LINE_NAMED_FILES = 3;
+
+    /** Per-file ceiling on the parser's reason, in bytes, inside the skip line. */
+    private const SKIP_LINE_REASON_BYTES = 120;
+
+    /**
+     * @param list<MemoryEntry>     $entries already ordered newest-first and
+     *                                       filtered to project scope by
+     *                                       {@see capture()}
+     * @param array<string, string> $skipped project-scope note files the
+     *                                       stores could not read, path =>
+     *                                       reason, sorted by path
      */
     private function __construct(
         private array $entries,
+        private array $skipped = [],
     ) {}
 
     /**
@@ -225,7 +240,18 @@ final readonly class MemoryBlock implements PromptSection
                 <=> [$a->modifiedAt()->getTimestamp(), $b->id()];
         });
 
-        return new self(array_values($entries));
+        // Read AFTER the list() calls above, which are what fill the maps.
+        // Narrowed to the project scope because that is the only scope this
+        // block lists; a user-scope note an earlier search skipped is not a
+        // note missing from THIS block. Sorted so the line is byte-stable for
+        // the same broken files whatever order the stores met them in.
+        $skipped = [
+            ...($projectStore?->skipped(MemoryScope::Project) ?? []),
+            ...$store->skipped(MemoryScope::Project),
+        ];
+        ksort($skipped, \SORT_STRING);
+
+        return new self(array_values($entries), $skipped);
     }
 
     /** An explicitly empty block, for a session with no memory store at all. */
@@ -243,6 +269,17 @@ final readonly class MemoryBlock implements PromptSection
     public function entries(): array
     {
         return $this->entries;
+    }
+
+    /**
+     * The project-scope note files the stores could not read when this block
+     * was captured, path => reason — what {@see render()}'s skip line names.
+     *
+     * @return array<string, string>
+     */
+    public function skipped(): array
+    {
+        return $this->skipped;
     }
 
     /**
@@ -284,8 +321,13 @@ final readonly class MemoryBlock implements PromptSection
             $bytes += $lineBytes;
         }
 
+        $skipLine = $this->skippedLine();
+
         if ($rendered === []) {
-            return '';
+            // A store whose only project notes are unreadable still says so:
+            // the note the user wrote is missing from the prompt either way,
+            // and this is the one place the model could learn why.
+            return $skipLine === '' ? '' : "<project-memory>\n" . $skipLine . "\n</project-memory>";
         }
 
         $omitted = count($this->entries) - count($rendered);
@@ -313,7 +355,54 @@ final readonly class MemoryBlock implements PromptSection
             $header .= sprintf(' %d further note(s) were omitted by those limits.', $omitted);
         }
 
-        return "<project-memory>\n" . $header . "\n\n" . implode("\n", $rendered) . "\n</project-memory>";
+        return "<project-memory>\n" . $header . "\n\n" . implode("\n", $rendered)
+            . ($skipLine === '' ? '' : "\n\n" . $skipLine) . "\n</project-memory>";
+    }
+
+    /**
+     * One line announcing the project notes that could not be read, or the
+     * empty string when every note parsed.
+     *
+     * WHY IT EXISTS (audit 15d-04's open end). {@see MemoryStore} now skips a
+     * malformed note instead of failing every turn, and records why in
+     * {@see MemoryStore::skipped()} — but nothing read that record, so the
+     * note the user wrote simply vanished from the prompt with no trace. This
+     * line is the trace, in the one place the model reads memory.
+     *
+     * Bounded like a note: at most {@see SKIP_LINE_NAMED_FILES} files named, each
+     * reason clipped to {@see SKIP_LINE_REASON_BYTES}, and the whole line
+     * escaped then clipped to {@see MAX_ENTRY_BYTES} — escape before clip, for
+     * {@see renderEntry()}'s reason. Basenames only: the directory is the
+     * memory store's, and spelling it would put this machine's home path into
+     * a block that is otherwise free of it. Outside {@see MAX_BYTES} for the
+     * reason the header is: notes cannot inflate it.
+     */
+    private function skippedLine(): string
+    {
+        if ($this->skipped === []) {
+            return '';
+        }
+
+        $named = [];
+        foreach (array_slice($this->skipped, 0, self::SKIP_LINE_NAMED_FILES, true) as $file => $reason) {
+            $reason = $this->oneLine($reason);
+            if (strlen($reason) > self::SKIP_LINE_REASON_BYTES) {
+                $reason = rtrim(mb_strcut($reason, 0, self::SKIP_LINE_REASON_BYTES - 3, 'UTF-8')) . '...';
+            }
+            $named[] = $this->oneLine(basename((string) $file)) . ' (' . $reason . ')';
+        }
+
+        $count = count($this->skipped);
+        $line = sprintf(
+            '%d project memory note(s) could not be read and are not included here: %s',
+            $count,
+            implode('; ', $named),
+        );
+        if ($count > count($named)) {
+            $line .= sprintf('; and %d more', $count - count($named));
+        }
+
+        return $this->clip(PromptFence::escape($line . '.'));
     }
 
     /**
@@ -398,10 +487,18 @@ final readonly class MemoryBlock implements PromptSection
         return $this->clip(PromptFence::escape($line));
     }
 
-    /** Every run of whitespace — newlines included — collapsed to one space. */
+    /**
+     * Every run of whitespace — newlines included — collapsed to one space.
+     *
+     * Scrubbed first: a `/u` pattern does not degrade on invalid UTF-8, it
+     * returns null, and the `(string)` cast turned that null into '' — so a
+     * note carrying one Latin-1 byte rendered as an empty `- [pattern] ` line
+     * (audit 15d-08). {@see MemoryStore} scrubs at load; this keeps an entry
+     * built any other way from vanishing the same way.
+     */
     private function oneLine(string $text): string
     {
-        return trim((string) preg_replace('/\s+/u', ' ', $text));
+        return trim((string) preg_replace('/\s+/u', ' ', Utf8Scrub::clean($text)));
     }
 
     /**

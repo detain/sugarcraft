@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Skills;
 
 use SugarCraft\Crush\Context\PromptFence;
+use SugarCraft\Crush\Context\Utf8Scrub;
 
 /**
  * The one authority that turns a skill's repository-supplied name and
@@ -99,7 +100,10 @@ final class SkillPromptLine
      */
     public static function field(string $text): string
     {
-        return PromptFence::escape(self::oneLine($text));
+        // Scrubbed here as well as at load: a skill's NAME is its directory
+        // name, which no loader rewrites (it is the skill's identity), and a
+        // directory name is arbitrary bytes (audit 15d-08).
+        return PromptFence::escape(self::oneLine(Utf8Scrub::clean($text)));
     }
 
     /**

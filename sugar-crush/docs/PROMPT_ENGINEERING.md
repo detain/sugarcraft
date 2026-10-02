@@ -131,6 +131,10 @@ other:
   *grows* the line and the growth must land inside the cap the budget promises.
 - **Byte-oriented, no `u` modifier.** Diff bodies and paths can carry invalid UTF-8; a
   `/u` pattern on invalid input does not degrade, it fails. The roster names are ASCII.
+  Encodability is a separate guarantee, made earlier: every loader that reads a prompt source
+  off disk — instruction files and their imports, rules, skills, memory notes, the repo map's
+  manifests — scrubs it to valid UTF-8 through `Utf8Scrub` (audit 15d-08), because the prompt
+  is JSON-encoded into every request and one invalid byte used to fail all of them.
 
 The provenance voice rides under its opener, split from the escaped body by a blank line:
 `Runtime::USER_RULES_AUTHORITY_PREAMBLE` asserts operator authorship and states where it outranks

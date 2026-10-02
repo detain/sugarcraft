@@ -372,8 +372,12 @@ final readonly class EnvironmentBlock implements PromptSection
      * untouched (`"\xc3("` scrubs to `"?("`, the `(` surviving). The number of
      * substitutions is therefore exactly the increase in `?` count, with no
      * second pass over the text.
+     *
+     * Since audit 15d-08 the substitution is performed by {@see Utf8Scrub},
+     * which every prompt-source loader shares; this constant names the same
+     * byte so the argument above stays attached to the block it was made for.
      */
-    private const UTF8_SUBSTITUTE = 0x3F;
+    private const UTF8_SUBSTITUTE = Utf8Scrub::SUBSTITUTE;
 
     /**
      * The one reason string for "the process helper this needs is disabled".
@@ -883,21 +887,13 @@ final readonly class EnvironmentBlock implements PromptSection
      */
     private function utf8Safe(string $block): string
     {
-        if (mb_check_encoding($block, 'UTF-8')) {
+        // The repair itself lives in Utf8Scrub, the one authority every
+        // prompt-source loader now shares (audit 15d-08); this block keeps its
+        // own, longer note because its bytes are paths and diffs.
+        [$scrubbed, $replaced] = Utf8Scrub::scrub($block);
+        if ($scrubbed === $block) {
             return $block;
         }
-
-        // Global mbstring state, so it is restored even if the convert throws.
-        $previous = mb_substitute_character();
-        mb_substitute_character(self::UTF8_SUBSTITUTE);
-
-        try {
-            $scrubbed = mb_convert_encoding($block, 'UTF-8', 'UTF-8');
-        } finally {
-            mb_substitute_character($previous);
-        }
-
-        $replaced = substr_count($scrubbed, '?') - substr_count($block, '?');
 
         return $scrubbed . "\n[encoding: {$replaced} byte sequence(s) of this block were not valid UTF-8"
             . ' and were replaced with "?". Any path or content shown above may be misspelled at those'
