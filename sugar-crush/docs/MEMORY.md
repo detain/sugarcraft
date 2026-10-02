@@ -32,7 +32,30 @@ every mutation of scope A would silently overwrite what the index last said abou
 scope B. Touching one scope never reads, writes or deletes another's index.
 
 The index is regenerated on every mutation and is bounded at
-`MAX_INDEX_LINES = 200` and `MAX_INDEX_BYTES = 25 * 1024`.
+`MAX_INDEX_LINES = 200` and `MAX_INDEX_BYTES = 25 * 1024`. It carries no
+timestamp: its bytes depend on the scope's notes alone, and an index whose bytes
+would not change is not rewritten. In a repo's git-visible store, adding a note
+therefore changes the index only by that note's own lines, and an unchanged
+store leaves the file untouched (audit 15d-23).
+
+### Note ids
+
+A note's id is its **file name without `.md`**. That is the id `/memory list`
+prints and the one `/memory edit` and `/memory delete` take. `/memory add` mints
+a 32-hex UUID, but a hand-written `deploy-notes.md` is the note `deploy-notes`,
+and a copied file (`cp <id>.md deploy-variant.md`) is its own note,
+`deploy-variant`. The frontmatter `id:` is a copy the store writes and never
+reads: it may be missing, and a stale one, such as a copied file's, is rewritten
+from the file name on the next edit. Before audit 15d-23 the listing showed the
+frontmatter id while the commands looked the file up by name, so such notes were
+listed under ids nothing could edit or delete.
+
+An id is letters, digits, `.`, `_` and `-`, at most 64 characters, not starting
+with `.`, and never `MEMORY` (the index's name, in any case). The id becomes the
+note's path, so the commands refuse anything else, including a path separator
+and `..`. A note file whose name is not a valid id (`my notes.md`) is skipped
+and reported, like an unreadable note, instead of being listed under an id no
+command accepts.
 
 ### Hand-edited notes
 
@@ -42,7 +65,7 @@ reader tolerates the edits people actually make: an unquoted date
 `tags: x` (read as `[x]`), omitted `createdAt`/`modifiedAt` (the file's mtime
 stands in), and a `---` inside a value (the frontmatter ends only at a whole
 `---` line). A note it cannot read — no frontmatter, a frontmatter that is not a
-`key: value` mapping, a missing or non-string `id`/`type`/`scope`, a date it
+`key: value` mapping, a missing or non-string `type`/`scope`, a date it
 cannot parse, a `tags:` that is not a list of strings — is **skipped**, never
 fatal: the rest of the store, and every turn's `<project-memory>` block, keep
 working. `MemoryStore::skipped()` returns the skipped files as path => reason
@@ -83,7 +106,7 @@ physical scope. Without that mapping, a caller passing `MemoryScope::Local` woul
 write into a `local/` directory no string-based caller ever looks at.
 
 Every public method that takes a scope accepts `string|MemoryScope`.
-`search()` and `get()` take no scope at all — they glob across every scope
+`search()` and `get()` take no scope at all — they read every scope
 subdirectory.
 
 ### `/memory`

@@ -206,51 +206,50 @@ final class MemoryBlockTest extends TestCase
      * The id tie-break, in the only situation where it is the sole thing that
      * can produce the asserted order.
      *
-     * Equal timestamps, and a store whose FILENAME order opposes its
-     * frontmatter-ID order. `MemoryStore::list()` globs, `glob()` sorts, and
-     * `usort` is stable — so discovery order alone yields the high-id note
-     * first, and only a tie-break on `id()` can put the low-id one there.
-     * Deleting the tie-break and reversing it both fail here, and both were
-     * green against every other test in this file.
-     *
-     * The divergence is produced by writing the two entries as markdown
-     * directly, which is what the store's on-disk format is FOR: the files are
-     * human-editable by design (`MemoryStore`'s own docblock), and
-     * `update($id, $entry)` names the file from `$id` while the frontmatter
-     * carries `$entry->id()`, so a hand edit or a rename separates the two.
+     * Equal timestamps, and a discovery order that opposes id order. Within
+     * one store that order cannot be built any more -- a note's id IS its file
+     * name (audit 15d-23), and list() reads names in byte order, so a single
+     * store always discovers in id order. The fold can: capture() reads the
+     * repo store before the home store and `usort` is stable, so with the
+     * high-id note in the repo store, discovery alone yields it first and only
+     * a tie-break on `id()` can put the low-id one there. Deleting the
+     * tie-break and reversing it both fail here.
      */
     public function testTheIdTieBreakOutranksTheOnDiskDiscoveryOrder(): void
     {
-        $dir = $this->dir . '/project';
-        mkdir($dir, 0o700, true);
+        $repoDir = $this->dir . '/repo';
+        mkdir($repoDir . '/project', 0o700, true);
+        mkdir($this->dir . '/project', 0o700, true);
+        $repoStore = new MemoryStore($repoDir);
 
         $lowId = str_repeat('a', 32);
         $highId = str_repeat('f', 32);
         $stamp = '2026-01-01T00:00:00+00:00';
 
-        // Filename order 01 < 99; id order high > low. The two disagree.
-        $this->writeRawEntry($dir . '/01.md', $highId, 'the high-id note', $stamp);
-        $this->writeRawEntry($dir . '/99.md', $lowId, 'the low-id note', $stamp);
+        $this->writeRawEntry($repoDir . '/project/' . $highId . '.md', $highId, 'the high-id note', $stamp);
+        $this->writeRawEntry($this->dir . '/project/' . $lowId . '.md', $lowId, 'the low-id note', $stamp);
 
-        $discovered = array_map('basename', glob($dir . '/*.md') ?: []);
+        $discovered = array_map(
+            static fn($e): string => $e->id(),
+            [...$repoStore->list(MemoryScope::Project), ...$this->store->list(MemoryScope::Project)],
+        );
         $this->assertSame(
-            ['01.md', '99.md'],
+            [$highId, $lowId],
             $discovered,
             'the premise is that discovery order presents the high id first; without it this test is vacuous',
         );
 
-        $entries = MemoryBlock::capture($this->store)->entries();
+        $entries = MemoryBlock::capture($this->store, $repoStore)->entries();
 
         $this->assertCount(2, $entries);
-        $this->assertSame($lowId, $entries[0]->id(), 'ties resolve on the id, not on the filename glob() found it under');
+        $this->assertSame($lowId, $entries[0]->id(), 'ties resolve on the id, not on the order the stores were read in');
         $this->assertSame($highId, $entries[1]->id());
     }
 
     private function writeRawEntry(string $path, string $id, string $content, string $stamp): void
     {
-        // Written by hand rather than through update(): a helper that used the
-        // store's own writer would re-derive the filename from the id and the
-        // divergence this test needs would silently disappear.
+        // Written by hand rather than through add(), which would mint a
+        // random id and lose the fixed ordering this test needs.
         file_put_contents($path, <<<MD
             ---
             id: {$id}

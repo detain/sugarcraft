@@ -63,12 +63,32 @@ use Symfony\Component\Yaml\Yaml;
  * directories are read with scandir() ({@see scopeDirectories()},
  * {@see noteFiles()}) and a note is addressed by building its path
  * ({@see findNoteFile()}), so the store's own location is never interpreted.
+ *
+ * A note's id IS its file name without `.md` (audit 15d-23). The frontmatter
+ * `id:` the store writes is a copy, never consulted on read: the listing
+ * printed the frontmatter id while get()/update()/delete() looked the file up
+ * by name, so a note whose two disagreed -- a `cp <id>.md variant.md`, or a
+ * hand-written `deploy-notes.md` -- was listed under an id no command could
+ * reach. With one source of truth every listed id is an addressable one, and
+ * the stale `id:` of a copied file is rewritten on its next update(). New ids
+ * are still 32-hex UUIDs; a hand-authored note may use any readable stem that
+ * {@see isNoteId()} accepts, and a file whose stem it refuses is reported in
+ * {@see skipped()} rather than listed under an id that cannot be addressed.
  */
 final class MemoryStore
 {
     private const MAX_INDEX_LINES = 200;
     private const MAX_INDEX_BYTES = 25 * 1024;
     private const MEMORY_INDEX_FILENAME = 'MEMORY.md';
+
+    /**
+     * The shape of a note id, which is also the stem of the file it names --
+     * so this is the path-traversal guard for get()/update()/delete(), and is
+     * strict on purpose: no separator, no leading dot (`.`, `..`, a dot-file,
+     * {@see AtomicFileWriter}'s `.<name>.tmp.<hex>` temps), at most 64 bytes.
+     * `\z` and `D`, not `$`: `$` also matches before a trailing newline.
+     */
+    private const NOTE_ID_PATTERN = '/\A[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}\z/D';
 
     /**
      * Anchored on a whole `---` line at both ends -- the shape the skill and
@@ -205,16 +225,14 @@ final class MemoryStore
      * Ids don't carry their scope, so this looks in every scope
      * subdirectory for the matching file.
      *
-     * @param string $id The UUID of the entry.
-     * @return MemoryEntry|null The entry, or null if not found.
+     * @param string $id The note id -- its file name without `.md`.
+     * @return MemoryEntry|null The entry, or null if not found (or $id is not a note id).
      */
     public function get(string $id): ?MemoryEntry
     {
-        // UUIDs are generated as 32-char lowercase hex strings (v4).
-        // Rejecting non-matching input at the boundary prevents unnecessary
-        // filesystem I/O and makes invalid IDs fail fast rather than silently
-        // returning null after a failed file_exists() check.
-        if (!preg_match('/^[0-9a-f]{32}$/', $id)) {
+        // The id becomes a path component, so anything that is not a note id
+        // is refused before it reaches the filesystem.
+        if (!self::isNoteId($id)) {
             return null;
         }
 
@@ -227,7 +245,7 @@ final class MemoryStore
      * Update an existing memory entry, or insert it if it does not exist.
      *
      * This is an upsert: writeEntry() will create the file if missing.
-     * UUID validation is enforced here rather than inside writeEntry() so
+     * Id validation is enforced here rather than inside writeEntry() so
      * that callers get a clear InvalidArgumentException immediately, rather
      * than a generic RuntimeException from a failed file_put_contents().
      *
@@ -236,17 +254,15 @@ final class MemoryStore
      * doesn't end up living in two scope directories at once, and both the
      * old and new scope's indexes are regenerated.
      *
-     * @param string      $id    The UUID of the entry to update.
+     * @param string      $id    The note id (its file name without `.md`); it
+     *                           wins over $entry->id() if the two differ.
      * @param MemoryEntry $entry The updated entry data.
      */
     public function update(string $id, MemoryEntry $entry): void
     {
-        // UUIDs are generated as 32-char lowercase hex strings (v4).
-        // Enforcing strict format here fails fast on programmer error rather
-        // than allowing malformed filenames to reach the filesystem.
-        if (!preg_match('/^[0-9a-f]{32}$/', $id)) {
-            throw new \InvalidArgumentException('Invalid memory entry id format');
-        }
+        // The id names the file written, so a malformed one (a separator, a
+        // leading dot, the index's own name) fails here, before any write.
+        self::assertNoteId($id);
 
         $oldFile = $this->findNoteFile($id);
         $oldScope = $oldFile !== null ? $this->readEntry($oldFile)?->scope() : null;
@@ -267,13 +283,11 @@ final class MemoryStore
     /**
      * Delete a memory entry by ID.
      *
-     * @param string $id The UUID of the entry to delete.
+     * @param string $id The note id -- its file name without `.md`.
      */
     public function delete(string $id): void
     {
-        if (!preg_match('/^[0-9a-f]{32}$/', $id)) {
-            throw new \InvalidArgumentException('Invalid memory entry id format');
-        }
+        self::assertNoteId($id);
 
         $file = $this->findNoteFile($id);
         $scope = 'user';
@@ -335,12 +349,14 @@ final class MemoryStore
             return;
         }
 
-        $timestamp = (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM);
-
+        // No timestamp (audit 15d-23): the index is a pure function of the
+        // scope's notes. A repo store's index sits in a git-visible tree, and a
+        // fresh `Loaded at:` line on every write turned each note change into a
+        // diff in a second file -- and made two branches that each added a
+        // note conflict on it.
         $lines = [];
         $lines[] = "# Memory Index ({$scope})\n";
-        $lines[] = "\nLoaded at: {$timestamp}\n";
-        $lines[] = "\n---\n";
+        $lines[] = "---\n";
 
         foreach ($entries as $entry) {
             $summaryLines = $this->summarizeEntry($entry);
@@ -375,6 +391,12 @@ final class MemoryStore
         // split mid-way the way a raw substr() byte cut could split them.
         if (strlen($content) > self::MAX_INDEX_BYTES) {
             $content = mb_strcut($content, 0, self::MAX_INDEX_BYTES, 'UTF-8');
+        }
+
+        // An unchanged index is left alone, so a mutation that does not
+        // change what the index says does not touch the file at all.
+        if ($this->loadIndex($scope) === $content) {
+            return;
         }
 
         // Audit M3: temp+rename publish, never a torn index. 0600 because a
@@ -563,8 +585,9 @@ final class MemoryStore
     /**
      * The file holding note $id, looked for in each scope directory by its
      * built path rather than by globbing `<id>.md` under every scope (audit
-     * 15d-22). The caller has already validated $id, so it is a plain file
-     * name. First match in path order, as glob()'s `$matches[0]` was.
+     * 15d-22). The caller has already validated $id with {@see isNoteId()},
+     * so it is a plain file name and never the index's. First match in path
+     * order, as glob()'s `$matches[0]` was.
      */
     private function findNoteFile(string $id): ?string
     {
@@ -576,6 +599,32 @@ final class MemoryStore
         }
 
         return null;
+    }
+
+    /**
+     * Whether $id can name a note: {@see NOTE_ID_PATTERN}, and not the stem
+     * of the index file in any case. The index check matters because the id
+     * is turned into `<scope dir>/<id>.md` -- `MEMORY` would make delete()
+     * unlink the index and update() overwrite it, and on a case-insensitive
+     * filesystem `memory` names the same file.
+     */
+    private static function isNoteId(string $id): bool
+    {
+        return preg_match(self::NOTE_ID_PATTERN, $id) === 1
+            && strcasecmp($id . '.md', self::MEMORY_INDEX_FILENAME) !== 0;
+    }
+
+    /**
+     * @throws \InvalidArgumentException when $id cannot name a note
+     */
+    private static function assertNoteId(string $id): void
+    {
+        if (!self::isNoteId($id)) {
+            throw new \InvalidArgumentException(
+                'Invalid memory entry id format: an id is a note\'s file name without `.md` '
+                . '-- letters, digits, `.`, `_` and `-`, at most 64, not starting with `.`'
+            );
+        }
     }
 
     /**
@@ -684,6 +733,16 @@ final class MemoryStore
             return null;
         }
 
+        // The stem is the id (audit 15d-23), so a file whose stem no command
+        // could take back -- `my note.md`, `memory.md` -- is reported, not
+        // listed under an id that `/memory edit|delete` would refuse.
+        if (!self::isNoteId(basename($file, '.md'))) {
+            $this->skipped[$file] = 'the file name is not a usable memory id -- rename it to letters, '
+                . 'digits, `.`, `_` and `-` (at most 64, not starting with `.`, not `MEMORY`)';
+
+            return null;
+        }
+
         try {
             $content = @file_get_contents($file);
 
@@ -715,7 +774,10 @@ final class MemoryStore
      * (which YAML hands back as an int timestamp), a single bare `tags:`
      * string, omitted timestamps -- and refuses, with a reason, where it is
      * not: no frontmatter, a non-mapping block, or a missing/non-string
-     * id/type/scope, none of which has a value we could honestly invent.
+     * type/scope, none of which has a value we could honestly invent.
+     *
+     * The id is the file name, not the frontmatter's `id:` (see the class
+     * docblock), so a missing or stale `id:` is no defect.
      *
      * @throws \UnexpectedValueException naming the defect
      */
@@ -744,7 +806,7 @@ final class MemoryStore
             content: trim($m[2] ?? ''),
             scope: $this->stringField($meta, 'scope'),
             tags: $this->tagsField($meta),
-            id: $this->stringField($meta, 'id'),
+            id: basename($file, '.md'),
         )->withCreatedAt($createdAt)
          ->withModifiedAt($modifiedAt);
     }
@@ -837,7 +899,7 @@ final class MemoryStore
     /**
      * Write a memory entry to a file under its scope's subdirectory.
      *
-     * @param string      $id    The UUID of the entry.
+     * @param string      $id    The note id, already validated; names the file.
      * @param MemoryEntry $entry The entry to write.
      */
     private function writeEntry(string $id, MemoryEntry $entry): void
@@ -845,8 +907,10 @@ final class MemoryStore
         $dir = $this->scopeDirectory($entry->scope(), true);
         $file = $dir . '/' . $id . '.md';
 
+        // The frontmatter copy of the id is written from the file name, so a
+        // note the store writes never disagrees with itself.
         $frontmatter = Yaml::dump([
-            'id' => $entry->id(),
+            'id' => $id,
             'type' => $entry->type(),
             'tags' => $entry->tags(),
             'scope' => $entry->scope(),
