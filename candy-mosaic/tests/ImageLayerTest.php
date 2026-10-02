@@ -195,4 +195,21 @@ final class ImageLayerTest extends TestCase
         self::assertSame(1, $second->imageId);
         self::assertCount(1, $layer->placements());
     }
+
+    public function testTheFirstIdsCellInFrameTextIsNotAMarker(): void
+    {
+        // Audit 15b-17: ids are dense from 0, so U+E002 used to mean "this
+        // frame's first picture" wherever model text put it. The block the
+        // layer hands back is the only thing that paints; the same cell typed
+        // into text next to it is left as a glyph.
+        $layer = new ImageLayer();
+        $block = $layer->place('PIXELS', 3, 2);
+        $frame = $block . "\nreply: \u{E002} and \u{E0B0}";
+
+        [$body, $paints] = ImageOverlay::resolve($frame, $layer->placements());
+
+        self::assertCount(1, $paints);
+        self::assertSame([1, 1], [$paints[0]['row'], $paints[0]['col']]);
+        self::assertStringEndsWith("reply: \u{E002} and \u{E0B0}", $body);
+    }
 }

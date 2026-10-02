@@ -620,8 +620,10 @@ final class SanitizeTest extends TestCase
         $this->assertNotSame(Sanitize::ZONE_SENTINEL_CLOSE, ImageOverlay::marker(1));
         $this->assertNotSame(Sanitize::ZONE_SENTINEL_OPEN, ImageOverlay::marker(1));
         $this->assertNotSame(Sanitize::ZONE_SENTINEL_CLOSE, ImageOverlay::marker(0));
-        $this->assertSame(self::IMAGE_MARKER, ImageOverlay::marker(0));
-        $this->assertSame(mb_ord(Sanitize::ZONE_SENTINEL_OPEN) + 2, mb_ord(ImageOverlay::marker(0)));
+        // A marker is an authenticating escape plus its U+E002 + id cell
+        // (audit 15b-17); the cell is what shares the arena with the sentinels.
+        $this->assertStringEndsWith(self::IMAGE_MARKER, ImageOverlay::marker(0));
+        $this->assertSame(mb_ord(Sanitize::ZONE_SENTINEL_OPEN) + 2, mb_ord(mb_substr(ImageOverlay::marker(0), -1, 1, 'UTF-8')));
         // Disjoint across the full arena: no image id ever spells a sentinel.
         foreach ([2, 100, ImageOverlay::MAX_IMAGES - 1] as $id) {
             $marker = ImageOverlay::marker($id);

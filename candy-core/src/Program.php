@@ -1118,10 +1118,14 @@ final class Program
             $body = $rendered;
         }
 
-        $paints = [];
-        if ($images !== []) {
-            [$body, $paints] = ImageOverlay::resolve($body, $images);
-        }
+        // Resolved on every frame, not only when images are registered: a
+        // marker is a zero-width escape plus one cell, and a frame that
+        // carries one with an empty image layer (the layer was released, the
+        // last image scrolled off) must still lose the escape before it
+        // reaches the terminal. Bare Private-Use text — Nerd Font and
+        // Powerline glyphs in tool output — is never touched (audit 15b-17),
+        // and a frame with no marker escape takes resolve()'s fast path.
+        [$body, $paints] = ImageOverlay::resolve($body, $images);
         $signature = ImageOverlay::signature($paints);
         $imagesChanged = $signature !== $this->lastImageSignature;
         $bodyChanged = $body !== $this->lastRenderedBody;

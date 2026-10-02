@@ -24,12 +24,31 @@ use SugarCraft\Core\Util\Width;
  * blobs on top of the rendered text by moving the cursor to each position and
  * emitting the bytes — an additive layer the diff never has to understand.
  *
- * Markers occupy the PUA range U+E002…(U+E002 + {@see MAX_IMAGES} − 1); the
- * first two codepoints of the block (U+E000/U+E001) stay reserved for the
- * candy-mouse click/frame zone sentinels (Sanitize::ZONE_SENTINEL_*), so a
- * pasted image id can never forge a marker and vice versa. The surrounding
- * cells of the image box are ordinary spaces the widget emits itself, so the
- * box reserves the right area in the text layout.
+ * A marker is two parts that only ever travel together: an authenticating
+ * escape sequence carrying the id ({@see MARKER_OSC}, zero cells wide) followed
+ * by one Private-Use-Area cell, U+E002 + id (one cell wide). The escape is the
+ * part untrusted text cannot carry: every sink that paints model, tool or
+ * pasted text into a frame runs {@see Util\Sanitize::untrusted()} (or a
+ * policy built on it), which deletes ESC — and a frame that let a raw ESC
+ * through would already hand the terminal to the attacker, a strictly worse
+ * bug. A bare Private-Use codepoint, by contrast, is ordinary printable text
+ * that the sanitizers pass on purpose (Powerline U+E0A0…, Nerd Font
+ * devicons/Pomicons U+E000…, icon fonts). When a bare codepoint was the whole
+ * marker, any assistant or tool row containing U+E002 + n painted a second
+ * copy of on-screen image n wherever the text put it, and {@see resolve()}
+ * blanked every glyph in the window — every Powerline separator in `eza
+ * --icons` or `git log` output turned into a space (audit 15b-17). Now
+ * {@see resolve()} acts only on the escape-plus-cell pair and leaves every bare
+ * Private-Use codepoint exactly as it found it.
+ *
+ * The cell keeps U+E002 + id rather than a plain space so the pair is bound to
+ * one id: a layout pass that re-emits the escapes of a region it cut away
+ * (Width::dropAnsi() does, to carry SGR state across the cut) leaves the
+ * escape in front of some unrelated cell, and that orphan must not paint. The
+ * window starts at U+E002 because U+E000/U+E001 are the candy-mouse click/frame
+ * zone sentinels (Sanitize::ZONE_SENTINEL_*). The surrounding cells of the
+ * image box are ordinary spaces the widget emits itself, so the box reserves
+ * the right area in the text layout.
  *
  * @internal
  */
@@ -43,6 +62,23 @@ final class ImageOverlay
     private const MARKER_BASE = 0xE002;
 
     /**
+     * Introducer of the authenticating escape: `ESC ] candy-image ; <id> ESC \`.
+     *
+     * An OSC because every ANSI-aware width and cut helper in the stack
+     * ({@see Width::string()}, {@see Width::truncateAnsi()},
+     * {@see Width::wrapAnsi()}, candy-mouse's zone scanner) already treats an
+     * OSC as zero cells and never splits one, so a marker row lays out exactly
+     * as the one-codepoint marker did. The non-numeric command keeps it inert
+     * if a frame ever reaches a terminal unresolved (terminals ignore an OSC
+     * whose command is not a number), though {@see resolve()} strips it from
+     * every frame {@see Program} paints.
+     */
+    private const MARKER_OSC = "\x1b]candy-image;";
+
+    /** String Terminator closing {@see MARKER_OSC}. */
+    private const MARKER_ST = "\x1b\\";
+
+    /**
      * Number of distinct image markers — the BMP Private-Use-Area block
      * U+E000…U+F8FF minus the two sentinel codepoints at its head, so the
      * arena tops out exactly at U+F8FF (U+F900+ is the CJK Compatibility
@@ -53,8 +89,10 @@ final class ImageOverlay
     public const MAX_IMAGES = 6398;
 
     /**
-     * The marker cell for image $id — a single width-1 codepoint a widget drops
-     * at the top-left of the box it wants the image painted in.
+     * The marker for image $id — one cell wide — that a widget drops at the
+     * top-left of the box it wants the image painted in: the zero-width
+     * authenticating escape followed by the U+E002 + id cell. Treat it as an
+     * opaque unit; {@see resolve()} paints only the two parts adjacent.
      */
     public static function marker(int $id): string
     {
@@ -62,7 +100,7 @@ final class ImageOverlay
             throw new \InvalidArgumentException("image id {$id} out of range 0.." . (self::MAX_IMAGES - 1));
         }
 
-        return self::encode(self::MARKER_BASE + $id);
+        return self::MARKER_OSC . $id . self::MARKER_ST . self::encode(self::MARKER_BASE + $id);
     }
 
     /**
@@ -93,6 +131,13 @@ final class ImageOverlay
      * {@see Ansi::cursorTo()}) plus the image bytes and its cell footprint (so
      * the runtime can clear the cells it covers). Markers with no placement are
      * still blanked (so a stale marker never shows as tofu) but produce no paint.
+     *
+     * Only a whole {@see marker()} counts. A bare Private-Use codepoint — a
+     * forged U+E002 + n in model text, a Powerline or Nerd Font glyph — is
+     * copied through untouched, and an authenticating escape with no matching
+     * cell right after it (its cell was cut away by a layout pass) is dropped
+     * without a paint. So the body is safe to resolve whether or not any image
+     * is registered: with none, the only change is that stray markers vanish.
      *
      * @param array<int, ImagePlacement> $images  image id → placement
      * @return array{0: string, 1: list<array{row: int, col: int, bytes: string, w: int, h: int}>}
@@ -130,18 +175,24 @@ final class ImageOverlay
         while ($i < $len) {
             if ($line[$i] === "\x1b") {
                 $adv = self::escapeLength($line, $i);
-                $out .= substr($line, $i, $adv);
+                $escape = substr($line, $i, $adv);
                 $i += $adv;
-                continue;
-            }
 
-            $bytes = self::codepointLength($line[$i]);
-            $chunk = substr($line, $i, $bytes);
-            $cp = self::decode($chunk);
-            $i += $bytes;
+                $id = self::markerEscapeId($escape);
+                if ($id === null) {
+                    $out .= $escape;
+                    continue;
+                }
 
-            $id = $cp - self::MARKER_BASE;
-            if ($id >= 0 && $id < self::MAX_IMAGES) {
+                // An authenticating escape is never output: either it and its
+                // cell become one space (+ a paint), or it is an orphan whose
+                // cell a layout pass cut off, and it is dropped on its own.
+                $cell = self::encode(self::MARKER_BASE + $id);
+                if (substr($line, $i, strlen($cell)) !== $cell) {
+                    continue;
+                }
+                $i += strlen($cell);
+
                 if (isset($images[$id])) {
                     $placement = $images[$id];
                     $paints[] = [
@@ -156,6 +207,10 @@ final class ImageOverlay
                 $col += 1;
                 continue;
             }
+
+            $bytes = self::codepointLength($line[$i]);
+            $chunk = substr($line, $i, $bytes);
+            $i += $bytes;
 
             $out .= $chunk;
             $col += Width::string($chunk);
@@ -225,9 +280,31 @@ final class ImageOverlay
 
     private static function hasAnyMarker(string $frame): bool
     {
-        // Any codepoint in the PUA marker window encodes to a 3-byte sequence
-        // starting 0xEE 0x80.. ; a cheap prefilter before the full walk.
-        return (bool) preg_match('/[\x{E000}-\x{F8FF}]/u', $frame);
+        // Only the authenticating escape makes a marker, so it alone decides
+        // whether the walk can change anything; bare Private-Use text cannot.
+        return str_contains($frame, self::MARKER_OSC);
+    }
+
+    /**
+     * The image id an escape sequence authenticates, or null when $escape is
+     * any other sequence (SGR, a hyperlink, …) or a malformed marker escape —
+     * an id out of range, non-digits, or a BEL/unterminated ending that
+     * {@see marker()} never emits.
+     */
+    private static function markerEscapeId(string $escape): ?int
+    {
+        if (!str_starts_with($escape, self::MARKER_OSC) || !str_ends_with($escape, self::MARKER_ST)) {
+            return null;
+        }
+
+        $digits = substr($escape, strlen(self::MARKER_OSC), -strlen(self::MARKER_ST));
+        if ($digits === '' || strlen($digits) > 4 || !ctype_digit($digits)) {
+            return null;
+        }
+
+        $id = (int) $digits;
+
+        return $id < self::MAX_IMAGES ? $id : null;
     }
 
     /** Byte length of the escape sequence starting at $i (CSI / OSC / DCS / simple). */
@@ -283,12 +360,6 @@ final class ImageOverlay
             ($b & 0xF8) === 0xF0 => 4,
             default              => 1,
         };
-    }
-
-    private static function decode(string $chunk): int
-    {
-        $cp = mb_ord($chunk, 'UTF-8');
-        return $cp === false ? 0 : $cp;
     }
 
     private static function encode(int $cp): string

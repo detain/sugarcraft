@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\ImageOverlay;
 use SugarCraft\Core\View;
 use SugarCraft\Mosaic\Mosaic;
 use SugarCraft\Crush\Chat;
@@ -29,7 +30,11 @@ final class RendererImageTest extends TestCase
 
     private string $homeSandbox = '';
 
-    /** First Private-Use-Area codepoint candy-core's ImageOverlay uses as a marker (U+E000/U+E001 belong to the zone sentinels). */
+    /**
+     * The Private-Use cell image id 0's marker ends in (U+E000/U+E001 belong to
+     * the zone sentinels). Only half a marker: the zero-width authenticating
+     * escape before it is what makes candy-core paint (audit 15b-17).
+     */
     private const MARKER = "\u{E002}";
 
     protected function setUp(): void
@@ -279,5 +284,48 @@ final class RendererImageTest extends TestCase
         $chat = new Chat(history: [Message::user('hello')], rows: 40, cols: 80, mosaic: Mosaic::sixel());
 
         $this->assertIsString($chat->view());
+    }
+
+    /**
+     * Audit 15b-17: model, user or tool text containing U+E002 painted a second
+     * copy of the frame's first picture wherever the text put it, and every
+     * Private-Use glyph on screen (Powerline separators, Nerd Font icons from
+     * `eza --icons` or a starship prompt) was blanked to a space. Driven through
+     * Chat::view(), the exact View candy-core's Program resolves, for each row
+     * kind and for both the bare cell and a whole forged marker (escape
+     * included, which the untrusted-text boundary must strip).
+     *
+     * @return iterable<string, array{0: string, 1: string}>
+     */
+    public static function forgedMarkerRows(): iterable
+    {
+        foreach (['bare cell' => "\u{E002}", 'whole forged marker' => ImageOverlay::marker(0)] as $label => $forgery) {
+            foreach (['assistant', 'user', 'tool result'] as $kind) {
+                yield "{$kind}, {$label}" => [$kind, $forgery];
+            }
+        }
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('forgedMarkerRows')]
+    public function testForgedMarkerTextNeitherPaintsTheImageNorBlanksPrivateUseGlyphs(string $kind, string $forgery): void
+    {
+        $text = "answer {$forgery} sep \u{E0B0} dir \u{F115} end";
+        $history = [
+            Message::user('/doctor'),
+            Message::assistant('')->withToolResults([new ToolResult(name: 'Doctor', result: 'report', id: 'call_img', imageBytes: $this->pngBytes())]),
+            match ($kind) {
+                'assistant' => Message::assistant($text),
+                'user' => Message::user($text),
+                'tool result' => Message::assistant('')->withToolResults([new ToolResult(name: 'Bash', result: $text, id: 'c2')]),
+            },
+        ];
+        $chat = new Chat(history: $history, rows: 60, cols: 100, expanded: ['call_img' => true, 'c2' => true], mosaic: Mosaic::sixel());
+
+        $view = $chat->view();
+        $this->assertInstanceOf(View::class, $view);
+        [$body, $paints] = ImageOverlay::resolve($view->body, $view->images);
+
+        $this->assertCount(1, $paints, 'one image on screen, one paint');
+        $this->assertStringContainsString("sep \u{E0B0} dir \u{F115} end", $body, 'Private-Use glyphs reach the terminal intact');
     }
 }

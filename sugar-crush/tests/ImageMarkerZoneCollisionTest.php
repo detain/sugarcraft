@@ -6,6 +6,8 @@ namespace SugarCraft\Crush\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\ImageOverlay;
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Mouse\Sentinel;
@@ -44,7 +46,9 @@ final class ImageMarkerZoneCollisionTest extends TestCase
         $this->assertNotSame(Sentinel::CLOSE, ImageOverlay::marker(0));
         $this->assertNotSame(Sentinel::OPEN, ImageOverlay::marker(1));
         $this->assertNotSame(Sentinel::CLOSE, ImageOverlay::marker(1));
-        $this->assertSame("\u{E002}", ImageOverlay::marker(0));
+        // A marker is a zero-width authenticating escape plus its U+E002 + id
+        // cell (audit 15b-17); the cell is the part sharing the arena.
+        $this->assertStringEndsWith("\u{E002}", ImageOverlay::marker(0));
     }
 
     /**
@@ -95,7 +99,8 @@ final class ImageMarkerZoneCollisionTest extends TestCase
      * The mask must not shift columns: a Private-Use cell is one width-1 cell
      * and is replaced by one space, or every zone's hit box after it would be
      * off by one and clicks would land on the wrong row. Pinned for both the
-     * forged sentinel byte and a live image marker.
+     * forged sentinel byte and a live image marker (whose zero-width escape the
+     * scanner already skips as an OSC, so it stays in the scan copy).
      */
     public function testMaskingPreservesColumnArithmetic(): void
     {
@@ -105,7 +110,7 @@ final class ImageMarkerZoneCollisionTest extends TestCase
         $frame = "ab\u{E000}cd" . ImageOverlay::marker(0);
         $masked = $mask->invoke(null, $frame);
 
-        $this->assertSame('ab cd ', $masked);
-        $this->assertSame(mb_strlen($frame), mb_strlen($masked));
+        $this->assertSame('ab cd ', Ansi::strip($masked));
+        $this->assertSame(Width::string($frame), Width::string($masked));
     }
 }

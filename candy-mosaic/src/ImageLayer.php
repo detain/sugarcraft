@@ -29,6 +29,14 @@ use SugarCraft\Mosaic\Renderer\Renderer;
  * is the PUA window ({@see ImageOverlay::MAX_IMAGES}); once exhausted, further
  * images get a blank block rather than a wrong one.
  *
+ * Ids are dense and predictable — the first image a layer sees is id 0, whose
+ * marker cell is U+E002 — and that is safe only because a cell alone is not a
+ * marker: {@see ImageOverlay::resolve()} paints a cell solely when the
+ * zero-width authenticating escape the block carries sits right before it, and
+ * untrusted text cannot carry an escape. A model reply containing U+E002 is
+ * therefore just a glyph, not "paint this frame's first picture here" (audit
+ * 15b-17). Keep it that way: never emit a marker by hand-encoding the cell.
+ *
  * Widgets that take the bytes *and* the id — a poster card that renders its own
  * marker, say — use {@see placeTracked()}, which returns both as a
  * {@see PlacedImage}:

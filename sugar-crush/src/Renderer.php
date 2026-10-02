@@ -1324,9 +1324,18 @@ final class Renderer
      *
      * Only the string the scanner reads is masked; the frame that goes to the
      * terminal keeps its real markers, because `Program` still has to resolve
-     * them into paints. A marker is a single width-1 cell and is replaced by a
-     * single space, so every zone's column arithmetic is unchanged — which is
-     * the whole reason this is a mask rather than a strip.
+     * them into paints. A marker's cell is a single width-1 codepoint and is
+     * replaced by a single space (its zero-width authenticating escape is an
+     * OSC, which the scanner already skips), so every zone's column arithmetic
+     * is unchanged — which is the whole reason this is a mask rather than a
+     * strip.
+     *
+     * The frame the terminal receives does not need the same treatment. A bare
+     * Private-Use codepoint there is just a glyph: since audit 15b-17
+     * `ImageOverlay::resolve()` paints only a cell preceded by the escape
+     * `ImageOverlay::marker()` emits — which {@see untrusted()} and CandyShine
+     * both strip from model and tool text — and leaves every other cell in the
+     * block, Powerline and Nerd Font icons included, as it found it.
      *
      * Sentinel triples are matched first in the alternation so genuine markup
      * survives; anything else in the PUA block (an image marker, or a Nerd
@@ -1373,6 +1382,13 @@ final class Renderer
      * string still looked like one row to the diff renderer. Mapping, not
      * dropping, keeps every byte of the text on screen and agrees with
      * {@see collapseToolOutput()}'s own `\r\n|\r|\n` split.
+     *
+     * What is deliberately NOT stripped: the rest of the Private-Use block.
+     * Image markers no longer live in the text alone — a marker is an escape
+     * plus its U+E002 + id cell, and the escape half cannot survive the ANSI
+     * sweep — so a model reply carrying U+E002 cannot paint a copy of an
+     * on-screen picture, and Powerline / Nerd Font glyphs in tool output
+     * (`eza --icons`, a starship prompt) stay visible (audit 15b-17).
      *
      * The consequence every caller has to respect: the result may now carry an
      * LF where the input had a CR, so a value painted into a ONE-line row (a

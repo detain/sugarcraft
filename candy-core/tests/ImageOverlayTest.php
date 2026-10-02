@@ -8,6 +8,8 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\ImageOverlay;
 use SugarCraft\Core\ImagePlacement;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 
 final class ImageOverlayTest extends TestCase
 {
@@ -26,17 +28,98 @@ final class ImageOverlayTest extends TestCase
         return $out;
     }
 
+    /** The Private-Use cell a marker for $id ends in (its last codepoint). */
+    private static function markerCell(int $id): int
+    {
+        return (int) mb_ord(mb_substr(ImageOverlay::marker($id), -1, 1, 'UTF-8'), 'UTF-8');
+    }
+
     public function testMarkerIsASingleWidthOneCell(): void
     {
         $m = ImageOverlay::marker(0);
-        self::assertSame(1, mb_strlen($m, 'UTF-8'));
+        // One visible cell: the authenticating escape is zero-width to every
+        // ANSI-aware measure, so a marker row lays out as it always did.
+        self::assertSame(1, Width::string($m));
+        self::assertSame(' ', Ansi::strip(str_replace(mb_substr($m, -1, 1, 'UTF-8'), ' ', $m)));
         // Arena starts at U+E002: U+E000/U+E001 belong to the candy-mouse zone
         // sentinels (Sanitize::ZONE_SENTINEL_*), disjoint by the a32c4faae ruling.
-        self::assertSame(0xE002, mb_ord($m, 'UTF-8'));
-        self::assertSame(0xE003, mb_ord(ImageOverlay::marker(1), 'UTF-8'));
+        self::assertSame(0xE002, self::markerCell(0));
+        self::assertSame(0xE003, self::markerCell(1));
         // And it tops out exactly at U+F8FF — never spilling into the CJK
         // Compatibility Ideographs block that follows the reserved arena.
-        self::assertSame(0xF8FF, mb_ord(ImageOverlay::marker(ImageOverlay::MAX_IMAGES - 1), 'UTF-8'));
+        self::assertSame(0xF8FF, self::markerCell(ImageOverlay::MAX_IMAGES - 1));
+    }
+
+    public function testMarkerCannotSurviveTheUntrustedTextSanitizers(): void
+    {
+        // The property the whole fix rests on: the part of a marker that
+        // authenticates it is an escape, and every untrusted-text policy
+        // deletes ESC. What a hostile string can still carry is the bare cell.
+        foreach ([Sanitize::untrusted(...), Sanitize::untrustedForMarkedFrames(...), Sanitize::untrustedForDisplay(...)] as $policy) {
+            $cleaned = $policy('x' . ImageOverlay::marker(0) . 'y');
+            [, $paints] = ImageOverlay::resolve($cleaned, self::images([0 => ['BLOB']]));
+            self::assertSame([], $paints);
+        }
+    }
+
+    public function testABarePrivateUseCodepointIsNeitherPaintedNorBlanked(): void
+    {
+        // Audit 15b-17: model or tool text carrying U+E002 + n used to paint a
+        // second copy of on-screen image n where the text chose, and every
+        // Private-Use glyph in the frame was blanked to a space.
+        $forged = "\u{E002}";
+        $powerline = "\u{E0B0}";
+        $nerd = "\u{F115}";
+        $pomicon = "\u{E003}"; // overlaps image id 1's cell
+        $frame = ImageOverlay::marker(0) . "   \nanswer {$forged} sep {$powerline} dir {$nerd} {$pomicon} end";
+
+        [$body, $paints] = ImageOverlay::resolve($frame, self::images([0 => ['REAL', 4, 1], 1 => ['OTHER', 4, 1]]));
+
+        self::assertCount(1, $paints, 'only the real marker paints');
+        self::assertSame([1, 1, 'REAL'], [$paints[0]['row'], $paints[0]['col'], $paints[0]['bytes']]);
+        self::assertSame("    \nanswer {$forged} sep {$powerline} dir {$nerd} {$pomicon} end", $body, 'glyphs survive byte-for-byte');
+    }
+
+    public function testBarePrivateUseTextWithNoImagesTakesTheFastPath(): void
+    {
+        $frame = "eza: \u{E0B0} \u{F115} \u{E002}";
+        self::assertSame([$frame, []], ImageOverlay::resolve($frame, []));
+    }
+
+    public function testAnOrphanedMarkerEscapeIsDroppedWithoutAPaint(): void
+    {
+        // A layout pass that cut the marker cell off (Canvas/Veil re-emit the
+        // escapes of a dropped region at the start of what is left) leaves the
+        // escape before an unrelated cell. It must not paint there, even when
+        // that cell is a space or a different id's cell, and must not reach
+        // the terminal.
+        $m0 = ImageOverlay::marker(0);
+        $escape0 = substr($m0, 0, strlen($m0) - 3);
+        $frame = "a{$escape0} b\n{$escape0}\u{E003}c\n{$escape0}";
+
+        [$body, $paints] = ImageOverlay::resolve($frame, self::images([0 => ['A'], 1 => ['B']]));
+
+        self::assertSame([], $paints);
+        self::assertSame("a b\n\u{E003}c\n", $body);
+    }
+
+    public function testMalformedMarkerEscapesAreNotMarkers(): void
+    {
+        $cell = "\u{E002}";
+        foreach (["\x1b]candy-image;\x1b\\", "\x1b]candy-image;x0\x1b\\", "\x1b]candy-image;0\x07", "\x1b]candy-image;99999\x1b\\"] as $escape) {
+            [, $paints] = ImageOverlay::resolve($escape . $cell, self::images([0 => ['A']]));
+            self::assertSame([], $paints, bin2hex($escape));
+        }
+    }
+
+    public function testOtherEscapesPassThroughResolve(): void
+    {
+        $link = Ansi::hyperlinkOpen('https://example.com');
+        $frame = "\x1b[31m{$link}x\x1b[0m" . ImageOverlay::marker(0);
+        [$body, $paints] = ImageOverlay::resolve($frame, self::images([0 => ['A']]));
+
+        self::assertSame("\x1b[31m{$link}x\x1b[0m ", $body);
+        self::assertSame(2, $paints[0]['col']);
     }
 
     public function testMarkerRejectsOutOfRangeId(): void
@@ -168,7 +251,7 @@ final class ImageOverlayTest extends TestCase
 
         self::assertCount(3, $rows);
         self::assertStringStartsWith(ImageOverlay::marker(4), $rows[0]);
-        self::assertSame(6, mb_strlen($rows[0], 'UTF-8'), 'top row is width cells (marker + spaces)');
+        self::assertSame(6, Width::string($rows[0]), 'top row is width cells (marker + spaces)');
         self::assertSame(str_repeat(' ', 6), $rows[1], 'lower rows are blank');
     }
 }
