@@ -36,6 +36,7 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Support\ProcessContainment;
+use SugarCraft\Crush\Support\SiblingSpendLedger;
 use SugarCraft\Crush\Tools\DelegatesToEngine;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -434,11 +435,31 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
          *
          * A forked sibling is the one thing it cannot see: parallel Task
          * calls of the same step each run in their own child, born at the
-         * same instant, so none counts another's spend. The caller's next
-         * step boundary does — every sibling's usage is folded in there — so
-         * the overshoot is bounded by one step's worth of parallel runs.
+         * same instant, so none has another's spend in this figure. That
+         * live part comes from {@see $siblingSpend} instead (audit B4-rem).
          */
         private readonly ?\Closure $turnSpendProbe = null,
+        /**
+         * Set ONLY on a delegated run that was forked as one member of a
+         * concurrent group ({@see \SugarCraft\Crush\Runtime::executeConcurrently()},
+         * via {@see \SugarCraft\Crush\Tools\SharesSiblingSpend}): the group's
+         * shared spend file, seen as this member (audit B4-rem).
+         *
+         * {@see runTurn()} records every step it bills onto it AS IT IS BILLED,
+         * and adds what the other members have recorded to every spend-cap
+         * check. Before it, siblings were blind to each other: each started
+         * from the same fork-instant baseline and counted only itself, so a
+         * batch of N parallel Tasks could overshoot the cap by N-1 runs' worth
+         * before the caller's own boundary caught it. The records are also
+         * what the parent bills for a member whose child died before it could
+         * report ({@see \SugarCraft\Crush\Runtime}'s crash arm).
+         *
+         * This is the one figure that moves under a running loop, and that is
+         * deliberate: it is the siblings' spend, which by construction is not
+         * in the baseline copy. The doctrine above still holds for the
+         * baseline — it is read once, at birth.
+         */
+        private readonly ?SiblingSpendLedger $siblingSpend = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -743,6 +764,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     }
 
     /**
+     * The same engine, recording each step's spend onto $ledger and reading
+     * its siblings' spend off it at every cap check — see {@see $siblingSpend}.
+     * Bound by {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool} on the run it
+     * delegates; null takes it off.
+     */
+    public function withSiblingSpend(?SiblingSpendLedger $ledger): self
+    {
+        return $this->mutate(['siblingSpend' => $ledger]);
+    }
+
+    /**
      * Register BashEscapeDenyHook with the given worktree root to prevent Bash
      * commands from referencing paths outside the worktree.
      *
@@ -905,13 +937,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         $sessionSpendAtStartUsd = $this->turnSpendProbe !== null
             ? (float) ($this->turnSpendProbe)()
             : $this->sessionSpendAtStartUsd;
-        $spentSoFarUsd = static function () use ($sessionSpendAtStartUsd, &$stepUsages): float {
+        // A forked group member also counts what its siblings have billed so
+        // far (audit B4-rem) — read live, because none of it is in the
+        // baseline above: they were all born at the same instant.
+        $siblingSpend = $this->siblingSpend;
+        $spentSoFarUsd = static function () use ($sessionSpendAtStartUsd, &$stepUsages, $siblingSpend): float {
             $spent = $sessionSpendAtStartUsd;
             foreach ($stepUsages as $stepUsage) {
                 $spent += $stepUsage?->costUsd ?? 0.0;
             }
 
-            return $spent;
+            return $spent + ($siblingSpend?->spentByOthers()?->costUsd ?? 0.0);
         };
 
         // Read once and hand to both resolvers, so a turn touches the config
@@ -1011,6 +1047,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                     // call among them reads $spentSoFarUsd as its sub-agent's
                     // cap baseline, and the step that asked for it is paid.
                     $stepUsages[] = $assistant->usage();
+                    // On the shared ledger the moment it is billed, so a
+                    // sibling's next cap check sees it — and so it survives
+                    // this process dying before the run reports (B4-rem).
+                    $this->siblingSpend?->record($assistant->usage());
                 } elseif ($message instanceof ToolResultMessage) {
                     $toolResults[] = $message;
                     // Folded AS IT SETTLES, not after the step: a sequential
@@ -1018,6 +1058,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                     // it starts, and must see this one's dollars.
                     if ($message->usage() !== null) {
                         $stepUsages[] = self::delegatedSpend($message->usage());
+                        $this->siblingSpend?->record(self::delegatedSpend($message->usage()));
                     }
                     // Last image-bearing tool result of the whole turn wins -
                     // W1.G2 reachability fix: this is the only point left
@@ -1262,6 +1303,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             if ($message instanceof AssistantMessage) {
                 $assistant = $message;
                 $stepUsages[] = $assistant->usage();
+                $this->siblingSpend?->record($assistant->usage());
             } elseif ($message instanceof ToolResultMessage) {
                 $toolResults[] = $message;
             }
@@ -1301,12 +1343,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * stays on the {@see \SugarCraft\Crush\Tools\ToolResult} for any reader
      * that wants the whole record.
      *
-     * KNOWN RESIDUE: Chat's calibration falls back to totalTokens when the
-     * provider reported no prompt buckets. That figure was already a sum over
-     * every step of a tool-using turn, not a prompt size; delegated tokens
-     * widen it further (the ratio is clamped, and only ever tightens the
-     * context tiers). The fix belongs to that fallback in Chat, not here —
-     * dropping the tokens would under-report the session total instead.
+     * The tokens are also marked as the turn's DELEGATED share
+     * ({@see Usage::$delegatedTokens}, audit B4-rem). Chat's calibration
+     * falls back to totalTokens when the provider reported no prompt buckets,
+     * and delegated tokens widen that figure into something no prompt was;
+     * {@see Usage::ownTokens()} is the total without them, for that fallback
+     * to read. Dropping the tokens here instead would under-report the
+     * session total.
      */
     private static function delegatedSpend(Usage $usage): ?Usage
     {
@@ -1314,6 +1357,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             $usage->totalTokens,
             $usage->costUsd,
             unpricedModel: $usage->unpricedModel,
+            delegatedTokens: $usage->totalTokens,
         );
     }
 
@@ -1384,7 +1428,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
 
                 continue;
             }
-            $bound ??= $spentSoFarUsd === null ? $this : $this->mutate(['turnSpendProbe' => $spentSoFarUsd]);
+            // The bound copy never inherits THIS run's sibling ledger: a run it
+            // delegates is billed back into this one as a tool result (and
+            // recorded from here), so recording it a second time under the
+            // same member would count it twice.
+            $bound ??= $spentSoFarUsd === null
+                ? $this->mutate(['siblingSpend' => null])
+                : $this->mutate(['turnSpendProbe' => $spentSoFarUsd, 'siblingSpend' => null]);
             $tools[] = $tool->withEngine($bound, $heartbeat, $subAgentEmitter);
         }
 

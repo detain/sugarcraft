@@ -19,11 +19,13 @@ use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Support\ParentProcessGuard;
+use SugarCraft\Crush\Support\SiblingSpendLedger;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Tools\DelegatesToEngine;
 use SugarCraft\Crush\Tools\ExemptFromParallelDeadline;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\PromptGuidance;
+use SugarCraft\Crush\Tools\SharesSiblingSpend;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Usage;
@@ -136,13 +138,18 @@ use SugarCraft\Crush\Usage;
  * check, and the delegated run's own cap starts from what the calling turn
  * had spent when it started ({@see EngineBackend}'s turn spend probe). A run
  * the cap stops is refused naming the cap, never passed off as a report.
+ * Parallel Task calls are siblings in one forked group, and share one spend
+ * file ({@see SharesSiblingSpend}, audit B4-rem): each run records its steps as
+ * it bills them and its cap check counts the others', so a batch cannot spend
+ * the remaining budget once per sibling; and a run whose child dies before it
+ * reports is still billed for the steps it recorded.
  *
  * Mirrors the delegation role of sugar-crush's plan P8.13 (`Task` tool) over
  * the in-tree {@see AgentManager}/{@see AgentWorkerPool} machinery; see
  * {@see AgentWorkerPool::executeAll()} for what a dispatched worker actually
  * carries across the fork.
  */
-final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine, PromptGuidance
+final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine, PromptGuidance, SharesSiblingSpend
 {
     /**
      * Step cap for a preset that declares no `maxTurns`. 200 since
@@ -182,6 +189,8 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * @param \Closure(SubAgentActivity): void|null $subAgentEmitter see {@see DelegatesToEngine}
      * @param SuspendedDelegations|null $suspended where resumable runs are kept;
      *        null uses {@see SuspendedDelegations::new()}
+     * @param SiblingSpendLedger|null $siblingSpend see {@see SharesSiblingSpend};
+     *        set only on the copy a concurrent group's forked member runs
      */
     public function __construct(
         private ?AgentManager $agentManager = null,
@@ -190,6 +199,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         private ?\Closure $heartbeat = null,
         private ?SuspendedDelegations $suspended = null,
         private ?\Closure $subAgentEmitter = null,
+        private ?SiblingSpendLedger $siblingSpend = null,
     ) {}
 
     public function withEngine(
@@ -197,7 +207,19 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         ?\Closure $heartbeat = null,
         ?\Closure $subAgentEmitter = null,
     ): self {
-        return new self($this->agentManager, $this->workerPool, $engine, $heartbeat, $this->suspended, $subAgentEmitter);
+        return new self($this->agentManager, $this->workerPool, $engine, $heartbeat, $this->suspended, $subAgentEmitter, $this->siblingSpend);
+    }
+
+    /**
+     * The copy {@see \SugarCraft\Crush\Runtime::executeConcurrently()} runs
+     * as one member of a concurrent group: its delegated run records each step
+     * onto $ledger and counts its siblings' records in its spend-cap check
+     * (audit B4-rem). Only the engine path uses it; the pool path is never
+     * parallel-safe, so it is never a group member.
+     */
+    public function withSiblingSpend(SiblingSpendLedger $ledger): self
+    {
+        return new self($this->agentManager, $this->workerPool, $this->engine, $this->heartbeat, $this->suspended, $this->subAgentEmitter, $ledger);
     }
 
     /**
@@ -585,6 +607,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             $turn = $engine
                 ->withTools($tools)
                 ->withMaxSteps($maxTurns)
+                ->withSiblingSpend($this->siblingSpend)
                 ->completeTranscript(
                     $messages,
                     // SubAgentActivity is deliberately NOT in this signature:

@@ -275,6 +275,123 @@ final class TaskSpendPropagationTest extends TestCase
         $this->assertEqualsWithDelta(1.0, $resumed->usage()?->costUsd ?? 0.0, 1e-9, 'only the resumed run\'s own step');
     }
 
+    public function testTheCallingTurnMarksTheSubAgentsTokensAsItsDelegatedShare(): void
+    {
+        // B4-rem(iii)'s seam: the turn's totalTokens counts the sub-agent's
+        // run (spend), and the share says how much of it was not this
+        // conversation's own, for the readers that treat it as a size.
+        $provider = self::routed(
+            caller: static fn (CompleteRequest $r): CompleteResponse => self::toolTurnCount($r) === 0
+                ? self::reply('', 10, 0.10, [new ToolCall('call_task', 'Task', self::taskArgs())])
+                : self::reply('all done', 10, 0.10),
+            subAgent: static fn (CompleteRequest $r): CompleteResponse => self::reply('the report', 900, 1.0),
+        );
+        $engine = EngineBackend::new($provider, 'm')->withTools([new TaskTool(self::roster())]);
+
+        $usage = $engine->complete([Message::user('delegate it')])->usage;
+
+        $this->assertSame(920, $usage?->totalTokens);
+        $this->assertSame(900, $usage?->delegatedTokens, 'the sub-agent\'s run, marked as delegated');
+        $this->assertSame(20, $usage?->ownTokens(), 'the caller\'s own two calls');
+    }
+
+    public function testParallelSiblingsSeeEachOthersSpendSoTheBatchStopsAtTheCap(): void
+    {
+        if (!function_exists('pcntl_fork')) {
+            $this->markTestSkipped('Concurrent tool dispatch requires ext-pcntl.');
+        }
+
+        // Audit B4-rem(i). Two Tasks in one message fork side by side; each
+        // sub-agent step costs $0.60 against a $1.00 cap, after the caller's
+        // own $0.10. The tool each sub-agent calls waits long enough for the
+        // sibling's first step to be billed, so at the first boundary each run
+        // sees $0.10 + its own $0.60 + its sibling's $0.60 = $1.30 and stops.
+        // Blind to each other (before the fix) each saw only $0.70, ran a
+        // second step, and the batch spent $2.40 against the $0.90 left.
+        $wait = self::namedTool('wait', static function (): string {
+            usleep(750_000);
+
+            return 'waited';
+        });
+        $provider = self::routed(
+            caller: static fn (CompleteRequest $r): CompleteResponse => self::toolTurnCount($r) === 0
+                ? self::reply('', 10, 0.10, [
+                    new ToolCall('call_a', 'Task', self::taskArgs()),
+                    new ToolCall('call_b', 'Task', self::taskArgs()),
+                ])
+                : self::reply('all done', 10, 0.0),
+            subAgent: static fn (CompleteRequest $r): CompleteResponse => self::reply(
+                'still looking',
+                100,
+                0.60,
+                [new ToolCall('call_w' . self::toolTurnCount($r), 'wait', [])],
+            ),
+        );
+        $task = new TaskTool(self::roster(5, $wait), suspended: new SuspendedDelegations($this->storeDir));
+        $engine = EngineBackend::new($provider, 'm')->withTools([$task])->withSpendCap(1.00, 0.0);
+        $events = [];
+
+        $reply = $engine->complete([Message::user('delegate twice')], onEvent: static function (object $event) use (&$events): void {
+            $events[] = $event;
+        });
+
+        $refusals = self::taskResults($events);
+        $this->assertCount(2, $refusals);
+        foreach ($refusals as $refusal) {
+            $this->assertStringContainsString(
+                'stopped by the session spend cap after 1 provider call',
+                $refusal,
+                'each sibling counted the other\'s step and stopped after its own first',
+            );
+        }
+        $this->assertEqualsWithDelta(1.30, $reply->usage?->costUsd ?? 0.0, 1e-9, 'one step each, not two');
+    }
+
+    public function testATaskWhoseForkedChildDiesStillBillsTheStepsItRecorded(): void
+    {
+        if (!function_exists('pcntl_fork')) {
+            $this->markTestSkipped('Concurrent tool dispatch requires ext-pcntl.');
+        }
+
+        // Audit B4-rem(ii). One of two parallel Tasks bills a $1.00 step and
+        // then its forked child is SIGKILLed mid-run, so it never writes a
+        // result. Before the fix that dollar vanished with the child; the
+        // step was recorded on the group's spend ledger as it was billed, and
+        // the parent now bills it from there.
+        $testPid = getmypid();
+        $die = self::namedTool('die', static function () use ($testPid): string {
+            if (getmypid() !== $testPid) {
+                posix_kill(getmypid(), SIGKILL);
+            }
+
+            return 'not reached in a forked child';
+        });
+        $provider = self::routed(
+            caller: static fn (CompleteRequest $r): CompleteResponse => self::toolTurnCount($r) === 0
+                ? self::reply('', 10, 0.10, [
+                    new ToolCall('call_dies', 'Task', self::taskArgs(['prompt' => 'crash please'])),
+                    new ToolCall('call_ok', 'Task', self::taskArgs()),
+                ])
+                : self::reply('all done', 10, 0.10),
+            subAgent: static fn (CompleteRequest $r): CompleteResponse => str_contains(self::userText($r), 'crash please')
+                ? self::reply('', 100, 1.0, [new ToolCall('call_die', 'die', [])])
+                : self::reply('the report', 50, 0.50),
+        );
+        $engine = EngineBackend::new($provider, 'm')->withTools([new TaskTool(self::roster(5, $die))]);
+        $events = [];
+
+        $reply = $engine->complete([Message::user('delegate twice')], onEvent: static function (object $event) use (&$events): void {
+            $events[] = $event;
+        });
+
+        $results = self::taskResults($events);
+        $this->assertCount(2, $results);
+        $this->assertStringContainsString('produced no result', $results[0], 'the first Task\'s child really died');
+        $this->assertSame('the report', $results[1]);
+        $this->assertEqualsWithDelta(1.70, $reply->usage?->costUsd ?? 0.0, 1e-9, 'the dead run\'s $1 is billed with everything else');
+        $this->assertSame(170, $reply->usage?->totalTokens);
+    }
+
     public function testThePoolPathCarriesTheWorkersSpend(): void
     {
         $executor = new class implements ExecutorInterface {
@@ -365,13 +482,81 @@ final class TaskSpendPropagationTest extends TestCase
         return $last;
     }
 
-    private static function roster(?int $maxTurns = 5): AgentManager
+    private static function roster(?int $maxTurns = 5, Tool ...$extra): AgentManager
     {
-        $probe = self::probeTool();
-        $manager = new AgentManager(new ScriptedProvider([]), new SkillRegistry(), toolRegistry: [$probe], toolUniverse: [$probe]);
-        $manager->register(RosterAgent::named('coder', ['probe'], maxTurns: $maxTurns));
+        $tools = [self::probeTool(), ...$extra];
+        $manager = new AgentManager(new ScriptedProvider([]), new SkillRegistry(), toolRegistry: $tools, toolUniverse: $tools);
+        $manager->register(RosterAgent::named(
+            'coder',
+            array_map(static fn (Tool $tool): string => $tool->name(), $tools),
+            maxTurns: $maxTurns,
+        ));
 
         return $manager;
+    }
+
+    /**
+     * Every Task call's final result text, in the order they finished.
+     *
+     * @param list<object> $events
+     *
+     * @return list<string>
+     */
+    private static function taskResults(array $events): array
+    {
+        $results = [];
+        foreach ($events as $event) {
+            if ($event instanceof \SugarCraft\Crush\Events\ToolFinished && $event->toolName === 'Task') {
+                $results[] = $event->result->content();
+            }
+        }
+
+        return $results;
+    }
+
+    /** The text of every user turn in $request, joined — where a sub-agent's task prompt sits. */
+    private static function userText(CompleteRequest $request): string
+    {
+        $text = '';
+        foreach ($request->messages as $message) {
+            if ($message instanceof TypedMessage && $message->role() === 'user') {
+                $text .= $message->content() . "\n";
+            }
+        }
+
+        return $text;
+    }
+
+    /**
+     * @param \Closure(): string $run
+     */
+    private static function namedTool(string $name, \Closure $run): Tool
+    {
+        return new class ($name, $run) implements Tool {
+            public function __construct(private string $toolName, private \Closure $run)
+            {
+            }
+
+            public function name(): string
+            {
+                return $this->toolName;
+            }
+
+            public function description(): string
+            {
+                return 'test tool';
+            }
+
+            public function inputSchema(): array
+            {
+                return ['type' => 'object', 'properties' => []];
+            }
+
+            public function execute(array $args): ToolResult
+            {
+                return new ToolResult(toolCallId: (string) ($args['id'] ?? ''), content: ($this->run)());
+            }
+        };
     }
 
     /**

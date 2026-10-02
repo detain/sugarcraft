@@ -20,6 +20,7 @@ use SugarCraft\Crush\Providers\EmbeddingsRequest;
 use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Support\SiblingSpendLedger;
 
 /**
  * Audit B5: two withers rebuilt the backend with a hand-written POSITIONAL
@@ -94,6 +95,11 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
             'withSpendCap' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withSpendCap(9.0, 4.0),
                 ['spendCapUsd', 'sessionSpendAtStartUsd'],
+            ],
+            // Audit B4-rem: the forked group member's shared spend file.
+            'withSiblingSpend' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withSiblingSpend(self::blank(SiblingSpendLedger::class)),
+                ['siblingSpend'],
             ],
             // Registers onto a CLONE of the manager (audit F-J5), so it owns
             // hookManager; it owns hooksDisabled too (re-asserted false).
@@ -218,6 +224,7 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
             rulesState: RulesState::new(),
             spendCapUsd: 2.5,
             sessionSpendAtStartUsd: 0.75,
+            siblingSpend: self::blank(SiblingSpendLedger::class),
         );
     }
 

@@ -164,6 +164,9 @@ final class UsageTest extends TestCase
             // model had no rate must not arrive parent-side as an ordinary
             // zero-dollar call.
             'unpricedModel' => null,
+            // Audit B4-rem: the delegated share joined the pair so a forked
+            // turn's sub-agent tokens still read as delegated parent-side.
+            'delegatedTokens' => 0,
         ], $wire);
 
         $back = Usage::fromArray($wire);
@@ -603,6 +606,35 @@ final class UsageTest extends TestCase
         $this->assertSame(1, $backMixed->inputTokens);
         $this->assertSame(0, $backMixed->cacheReadTokens, 'an explicit zero survives the wire as zero...');
         $this->assertNull($backMixed->outputTokens, '...and an unreported bucket survives it as null');
+    }
+
+    /**
+     * Audit B4-rem: the share of the total a delegated run billed. It sums
+     * across a turn's steps, crosses the fork wire by value, is clamped into
+     * `0..totalTokens`, and an older frame without the key keeps the whole
+     * total as the turn's own.
+     */
+    public function testTheDelegatedShareSumsCrossesTheWireAndStaysWithinTheTotal(): void
+    {
+        $own = Usage::new(20, 0.2);
+        $delegated = Usage::reported(900, 1.0, delegatedTokens: 900);
+        $turn = Usage::sum([$own, $delegated]);
+
+        $this->assertSame(920, $turn?->totalTokens);
+        $this->assertSame(900, $turn?->delegatedTokens);
+        $this->assertSame(20, $turn?->ownTokens());
+        $this->assertSame(0, $own->delegatedTokens, 'a provider-reported usage delegates nothing');
+
+        $this->assertEquals($turn, Usage::fromArray($turn?->toArray()));
+
+        $this->assertSame(10, Usage::new(10, 0.0, delegatedTokens: 99)->delegatedTokens, 'never more than the total');
+        $this->assertSame(0, Usage::new(10, 0.0, delegatedTokens: -5)->delegatedTokens, 'never negative');
+        $this->assertSame(900, $turn?->withInputTokens(5)->delegatedTokens, 'a bucket wither carries the share');
+
+        $old = Usage::fromArray(['totalTokens' => 50, 'costUsd' => 0.5]);
+        $this->assertSame(0, $old?->delegatedTokens);
+        $this->assertSame(50, $old?->ownTokens());
+        $this->assertNull(Usage::fromArray(['totalTokens' => 50, 'costUsd' => 0.5, 'delegatedTokens' => '9']), 'a share that is not an int is not a frame toArray() wrote');
     }
 
     /**

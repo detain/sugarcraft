@@ -183,6 +183,23 @@ final readonly class Usage
          * readers act on.
          */
         public ?string $unpricedModel = null,
+        /**
+         * The SHARE of {@see $totalTokens} that a delegated run billed — a
+         * Task sub-agent's tokens folded into the calling turn
+         * ({@see Backend\EngineBackend}'s `delegatedSpend()`, audit B4-rem).
+         * Always within `0..totalTokens`, and 0 on every usage a provider
+         * reported directly.
+         *
+         * WHY IT EXISTS: since B4 a turn's {@see $totalTokens} includes its
+         * sub-agents' tokens, which is right for SPEND and wrong for anything
+         * that reads the total as the size of THIS conversation — Chat's
+         * context calibration falls back to the total when a provider reports
+         * no prompt buckets, and a sub-agent's fifty steps would inflate it.
+         * {@see ownTokens()} is the total without them. Unlike the buckets this
+         * is never "unreported": the engine that folded a delegated run knows
+         * exactly how much it folded, so 0 is a measurement, not a default.
+         */
+        public int $delegatedTokens = 0,
     ) {}
 
     public static function new(
@@ -194,9 +211,12 @@ final readonly class Usage
         ?int $cacheCreationTokens = null,
         ?int $reasoningTokens = null,
         ?string $unpricedModel = null,
+        int $delegatedTokens = 0,
     ): self {
+        $totalTokens = max(0, $totalTokens);
+
         return new self(
-            max(0, $totalTokens),
+            $totalTokens,
             max(0.0, $costUsd),
             self::clampBucket($inputTokens),
             self::clampBucket($outputTokens),
@@ -204,6 +224,8 @@ final readonly class Usage
             self::clampBucket($cacheCreationTokens),
             self::clampBucket($reasoningTokens),
             $unpricedModel,
+            // A share cannot be negative or exceed what it is a share of.
+            min(max(0, $delegatedTokens), $totalTokens),
         );
     }
 
@@ -233,6 +255,7 @@ final readonly class Usage
         ?int $cacheCreationTokens = null,
         ?int $reasoningTokens = null,
         ?string $unpricedModel = null,
+        int $delegatedTokens = 0,
     ): ?self {
         if (
             $totalTokens <= 0
@@ -262,6 +285,7 @@ final readonly class Usage
             $cacheCreationTokens,
             $reasoningTokens,
             $unpricedModel,
+            $delegatedTokens,
         );
     }
 
@@ -291,7 +315,18 @@ final readonly class Usage
             // turn keep the first — the notice is per-turn and the blindness
             // is the finding, not the spelling.
             $this->unpricedModel ?? $other->unpricedModel,
+            $this->delegatedTokens + $other->delegatedTokens,
         );
+    }
+
+    /**
+     * {@see $totalTokens} without the share delegated runs billed into it —
+     * the tokens THIS conversation's own provider calls counted. What a reader
+     * that treats the total as a conversation size must use (audit B4-rem).
+     */
+    public function ownTokens(): int
+    {
+        return $this->totalTokens - $this->delegatedTokens;
     }
 
     /**
@@ -423,6 +458,7 @@ final readonly class Usage
             // and a wither would let a reader clear a blindness it did not
             // measure away. It ride-alongs every bucket mutate, always.
             $this->unpricedModel,
+            $this->delegatedTokens,
         );
     }
 
@@ -463,7 +499,7 @@ final readonly class Usage
      * UNREPORTED, not as zero, or the fork path silently rewrites the one
      * distinction this class exists to keep.
      *
-     * @return array{totalTokens:int,costUsd:float,inputTokens:?int,outputTokens:?int,cacheReadTokens:?int,cacheCreationTokens:?int,reasoningTokens:?int,unpricedModel:?string}
+     * @return array{totalTokens:int,costUsd:float,inputTokens:?int,outputTokens:?int,cacheReadTokens:?int,cacheCreationTokens:?int,reasoningTokens:?int,unpricedModel:?string,delegatedTokens:int}
      */
     public function toArray(): array
     {
@@ -479,6 +515,10 @@ final readonly class Usage
             // turn's blindness never reaches the parent's notice; coerced
             // there, an old frame would invent one.
             'unpricedModel' => $this->unpricedModel,
+            // The same pair law: dropped here, a forked turn's sub-agent share
+            // reads 0 parent-side and the calibration it exists for inflates
+            // again on the async path only.
+            'delegatedTokens' => $this->delegatedTokens,
         ];
     }
 
@@ -533,6 +573,15 @@ final readonly class Usage
             return null;
         }
 
+        // Absent decodes to 0: a frame from before the share existed carries
+        // no figure for it, and 0 keeps the whole total as the turn's own,
+        // which is what every reader saw then. Anything that is not an int is
+        // a frame this method did not write.
+        $delegated = $raw['delegatedTokens'] ?? 0;
+        if (!is_int($delegated)) {
+            return null;
+        }
+
         return self::reported(
             $tokens,
             (float) $cost,
@@ -542,6 +591,7 @@ final readonly class Usage
             $buckets['cacheCreationTokens'],
             $buckets['reasoningTokens'],
             is_string($unpriced) && $unpriced !== '' ? $unpriced : null,
+            $delegated,
         );
     }
 }

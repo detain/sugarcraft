@@ -374,6 +374,7 @@ final class MemoryPromptWiringTest extends TestCase
             // the reflected set demands the builder be exercised, and passing the
             // tail pair explicitly is what a dispatch-time clone does.
             'withSpendCap' => fn(EngineBackend $b): EngineBackend => $b->withSpendCap(1.0, 0.25),
+            'withSiblingSpend' => fn(EngineBackend $b): EngineBackend => $b->withSiblingSpend(null),
             'withoutHooks' => fn(EngineBackend $b): EngineBackend => $b->withoutHooks(),
             // withMemoryStore() is the setter itself, so "preserves" is not a
             // meaningful question for it; it is exercised by every other case.

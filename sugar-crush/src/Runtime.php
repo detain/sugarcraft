@@ -32,12 +32,14 @@ use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Support\ProcessContainment;
+use SugarCraft\Crush\Support\SiblingSpendLedger;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\Tools\CarriesSessionState;
 use SugarCraft\Crush\Tools\ExemptFromParallelDeadline;
 use SugarCraft\Crush\Tools\McpToolBridge;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\PromptGuidance;
+use SugarCraft\Crush\Tools\SharesSiblingSpend;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -2096,12 +2098,34 @@ final class Runtime
         $total = count($jobs);
         $next = 0;
 
+        // SIBLING SPEND (audit B4-rem). A member that bills a provider itself
+        // (a delegated Task run) records each step onto one file the whole
+        // group shares, so its siblings' cap checks can see it while they all
+        // run, and so the parent can still bill it if its child dies before
+        // reporting. Created only when such a member is about to be forked or
+        // run, and before the fan-out, so every child inherits the same name —
+        // the WHOLE-GROUP rule above, applied to one more file.
+        $ledger = null;
+        foreach ($jobs as $index => $job) {
+            if ($job['settled'] || !$job['tool'] instanceof SharesSiblingSpend) {
+                continue;
+            }
+            $ledger ??= SiblingSpendLedger::create();
+            if ($ledger === null) {
+                break;
+            }
+            $jobs[$index]['ledger'] = $ledger->forMember((string) $index);
+        }
+
         try {
             foreach ($jobs as $index => $job) {
                 if ($job['settled']) {
                     continue;
                 }
 
+                // The copy that records onto the group ledger, run on either
+                // side of the fork below.
+                $tool = self::sharingSpend($job);
                 $file = (string) $job['file'];
                 $pid = pcntl_fork();
 
@@ -2145,14 +2169,14 @@ final class Runtime
                     // Left in rather than trimmed to what the tests can see.
                     ToolIpcFiles::discard($file);
                     $jobs[$index]['file'] = null;
-                    $jobs[$index]['result'] = $this->executeGuarded($job['tool'], $job['call'], $job['args']);
+                    $jobs[$index]['result'] = $this->executeGuarded($tool, $job['call'], $job['args']);
                     $jobs[$index]['settled'] = true;
 
                     continue;
                 }
 
                 if ($pid === 0) {
-                    $this->runToolInChild($file, $job['tool'], $job['call'], $job['args']);
+                    $this->runToolInChild($file, $tool, $job['call'], $job['args']);
                 }
 
                 $jobs[$index]['pid'] = $pid;
@@ -2259,7 +2283,30 @@ final class Runtime
                     ToolIpcFiles::discard((string) $jobs[$i]['file']);
                 }
             }
+
+            // Every member that will ever be released has been by now (or the
+            // consumer walked away), so nothing reads the ledger again. A
+            // member still running finds the file gone and records nothing —
+            // SiblingSpendLedger::record() never recreates it.
+            $ledger?->discard();
         }
+    }
+
+    /**
+     * The tool a concurrent job runs: the job's own tool, or — for a member
+     * that bills a provider itself — the copy bound to the group's spend
+     * ledger under this job's member name (audit B4-rem).
+     *
+     * @param array<string, mixed> $job
+     */
+    private static function sharingSpend(array $job): Tool
+    {
+        $ledger = $job['ledger'] ?? null;
+        $tool = $job['tool'];
+
+        return $ledger instanceof SiblingSpendLedger && $tool instanceof SharesSiblingSpend
+            ? $tool->withSiblingSpend($ledger)
+            : $tool;
     }
 
     /**
@@ -2767,10 +2814,19 @@ final class Runtime
             : @unserialize($raw, ['allowed_classes' => false]);
 
         if (!is_array($decoded) || !is_array($decoded['result'] ?? null)) {
-            // No usage on this arm, knowingly (audit B4): a child that died
-            // before writing took its spend figure with it, and inventing one
-            // would be worse than the under-count. Task, the one tool that
-            // bills, is exempt from the deadline kill, so this is a crash arm.
+            // WHAT THIS SAID: "No usage on this arm, knowingly (audit B4): a
+            // child that died before writing took its spend figure with it,
+            // and inventing one would be worse than the under-count."
+            //
+            // WHAT IS TRUE NOW (audit B4-rem): a member that bills records
+            // every step onto the group's spend ledger as it is billed, so
+            // what it spent before it died is still on disk — recovered here,
+            // never invented. A member with no ledger, or one that died before
+            // its first billed step, still reports nothing, which is the truth.
+            // Task, the one tool that bills, is exempt from the deadline kill,
+            // so for it this is a crash arm.
+            $ledger = $job['ledger'] ?? null;
+
             return new ToolResult(
                 toolCallId: $job['call']->id(),
                 content: sprintf(
@@ -2779,6 +2835,7 @@ final class Runtime
                     $this->parallelToolDeadlineSeconds,
                 ),
                 isError: true,
+                usage: $ledger instanceof SiblingSpendLedger ? $ledger->spentBy($ledger->member()) : null,
             );
         }
 

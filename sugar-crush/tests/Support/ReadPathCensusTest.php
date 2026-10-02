@@ -466,6 +466,13 @@ final class ReadPathCensusTest extends TestCase
                 . 'hard link, a dangling link, a directory no temp can be made in); Edit and '
                 . 'Write hand it the path they already resolved through PathJail',
         ],
+        'Support/SiblingSpendLedger.php|fopen' => [
+            'SELF_LOCATED — create()\'s exclusive (`x`, 0600) open of the name ToolIpcFiles::reserve() '
+                . 'just chose in the temp dir; never caller-supplied',
+            'SELF_LOCATED — record()\'s `r+` append to that same group ledger, handed to the member by '
+                . 'the parent that created it',
+            'SELF_LOCATED — entries()\' read of that same group ledger',
+        ],
         'Support/ToolIpcFiles.php|glob' => [
             'SELF_LOCATED — sweeps this package\'s own IPC prefixes, uid-checked per entry',
         ],
