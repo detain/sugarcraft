@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools;
 
+use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Usage;
 
 final readonly class ToolResult
@@ -32,6 +33,16 @@ final readonly class ToolResult
      * calling turn's {@see \SugarCraft\Crush\Message::$usage}, nor the
      * session total, nor the mid-turn spend cap. Null means the tool spent
      * nothing it could report — every tool that never talks to a provider.
+     *
+     * $denial says the call was STOPPED before it ran, and which of the three
+     * ways (audit F-P8). It is set by the party that made the refusal — the
+     * engine's gate, the TUI's permission prompt — and is the ONLY thing a
+     * reader may treat as "this call never ran". The error text cannot be that
+     * signal: it is whatever the tool, the shell, or a remote MCP server chose
+     * to print, so a `printf 'Permission denied: …'; exit 1` used to be
+     * reported as a policy refusal of a command that had in fact executed.
+     * The text still opens with {@see DenialKind::reason()}'s prefix for the
+     * model and a human; it is just no longer what anything classifies on.
      */
     public function __construct(
         private string $toolCallId,
@@ -43,7 +54,23 @@ final readonly class ToolResult
         private ?string $imageProtocol = null,
         private ?string $diff = null,
         private ?Usage $usage = null,
+        private ?DenialKind $denial = null,
     ) {}
+
+    /**
+     * A call that was stopped before it ran: the error result whose text is
+     * $kind's rendered reason and which CARRIES $kind, so every consumer
+     * downstream can tell a refusal from a failure without reading the text.
+     */
+    public static function denied(string $toolCallId, DenialKind $kind, string $detail): self
+    {
+        return new self(
+            toolCallId: $toolCallId,
+            content: $kind->reason($detail),
+            isError: true,
+            denial: $kind,
+        );
+    }
 
     public function toolCallId(): string
     {
@@ -103,6 +130,22 @@ final readonly class ToolResult
     }
 
     /**
+     * Which of the three ways this call was stopped before it ran, or null
+     * when it was not stopped — including when it ran and failed with text
+     * that merely LOOKS like a refusal (audit F-P8).
+     */
+    public function denial(): ?DenialKind
+    {
+        return $this->denial;
+    }
+
+    /** The same result marked as stopped-before-it-ran by $denial (null clears it). */
+    public function withDenial(?DenialKind $denial): self
+    {
+        return $this->mutate(['denial' => $denial]);
+    }
+
+    /**
      * The same result with its model-visible text replaced and EVERY other
      * field kept — the seam {@see \SugarCraft\Crush\Runtime}'s rewrites
      * (annotate, the UTF-8 scrub) take, so a rebuild cannot drop a field that
@@ -138,7 +181,10 @@ final readonly class ToolResult
      * like the image fields: it is renderer-side presentation data, and
      * inlining a whole unified diff here would duplicate it into every
      * chat-completion request's token budget. $usage is absent for the same
-     * reason: it is accounting, not something the model reads.
+     * reason: it is accounting, not something the model reads. So is
+     * $denial: the model reads the refusal in the text, which still opens
+     * with the kind's prefix, and the structural kind is for the parties
+     * that must not trust that text (audit F-P8).
      */
     public function toArray(): array
     {

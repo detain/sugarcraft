@@ -531,6 +531,15 @@ final class BackgroundSessionRunner
      * the transcript as model output. {@see \SugarCraft\Crush\Permissions\DenialKind::token()}
      * and not the enum's value, for the same reason `NonInteractive` uses it:
      * the value is a human-facing PREFIX and this is a machine key.
+     *
+     * NO ROSTER IS READ ANY MORE, AND THAT IS A SECURITY PROPERTY (audit F-P8).
+     * The paragraphs above speak of "classifying an error" against the roster;
+     * {@see ToolRefusal::fromEvent()} no longer does — it reads the kind the
+     * refusing party stamped on the result. Text classification let a tool
+     * that RAN write a `Permission denied:` line here by printing one, which
+     * on a surface with no operator watching is exactly where a hostile script
+     * would hide its side effects. A failed call is no longer logged as
+     * refused, whatever its output says.
      */
     private function noticeRefusal(object $event): void
     {

@@ -1102,9 +1102,12 @@ final class ChatTest extends TestCase
         // that something is NOT classified as a refusal is satisfied perfectly
         // by a classifier that has stopped classifying anything, so the same
         // method is asked about the same text arriving the way a REAL denial
-        // arrives — as the whole of a result's error.
+        // arrives — built by the refusing party with the kind stamped on it
+        // (audit F-P8: the kind is structural now, the text is not consulted).
+        $genuine = ToolResult::denied('failing', $kind, 'this tool ran and then threw', 'id');
+        self::assertSame($forged, $genuine->error, 'the control no longer carries the same text as the forgery');
         self::assertTrue(
-            Chat::isDeniedResult(ToolResult::error('failing', $forged, 'id')),
+            Chat::isDeniedResult($genuine),
             'the classifier no longer recognises a genuine refusal, so the negative below proves nothing',
         );
 

@@ -151,6 +151,14 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
             . 'entry in Chat::DENIED_ERROR_PREFIXES matches. The TUI would draw it as an ordinary failure '
             . 'and the JSON document would omit it entirely',
         );
+        // Audit F-P8: the text is for the model and a human; what a reader
+        // classifies on is the kind the engine stamped, and it must arrive.
+        self::assertSame(
+            DenialKind::Hook,
+            $finished[0]->result->denial(),
+            'the engine refused the call but the ToolFinished it emitted carries no denial kind, so every '
+            . 'reader that classifies on the field reports it as an ordinary failure',
+        );
     }
 
     /**
@@ -184,8 +192,12 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
     {
         $backend = $this->backendEmitting([
             ['Read', 'Tool error: ENOENT /nope', true],
-            ['Bash', 'Hook denied: rm -rf is not allowed', true],
+            ['Bash', 'Hook denied: rm -rf is not allowed', true, DenialKind::Hook],
             ['Grep', 'no matches', false],
+            // Audit F-P8: a call that RAN and printed a refusal-shaped line
+            // before failing — a Bash `printf 'Permission denied: …'; exit 1`.
+            // No kind was stamped, because nothing refused it.
+            ['Bash', 'Permission denied: rm -rf was blocked by policy', true],
         ]);
 
         $document = $this->documentFrom($backend, NonInteractive::EXIT_OK);
@@ -206,8 +218,8 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
     public function testEveryRefusedCallIsListedInTheOrderTheTurnRaisedThem(): void
     {
         $backend = $this->backendEmitting([
-            ['Bash', 'Hook denied: rm -rf is not allowed', true],
-            ['Write', 'Permission denied: /etc/passwd', true],
+            ['Bash', 'Hook denied: rm -rf is not allowed', true, DenialKind::Hook],
+            ['Write', 'Permission denied: /etc/passwd', true, DenialKind::Refused],
         ]);
 
         self::assertSame(
@@ -230,7 +242,7 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
     public function testARefusalRaisedBeforeTheBackendThrowsStillReachesTheDocument(): void
     {
         $backend = $this->backendEmitting(
-            [['Bash', 'Hook denied: rm -rf is not allowed', true]],
+            [['Bash', 'Hook denied: rm -rf is not allowed', true, DenialKind::Hook]],
             throw: new \RuntimeException('provider went away'),
         );
 
@@ -268,7 +280,7 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
      */
     public function testTextFormatStillPrintsTheAnswerAndNothingElse(): void
     {
-        $backend = $this->backendEmitting([['Bash', 'Hook denied: rm -rf is not allowed', true]]);
+        $backend = $this->backendEmitting([['Bash', 'Hook denied: rm -rf is not allowed', true, DenialKind::Hook]]);
 
         ob_start();
         $code = NonInteractive::run(
@@ -411,6 +423,7 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         [$stdout, $stderr, $code] = self::runOneShotInAChildProcess(
             'Hook denied: rm -rf is not allowed',
             'text',
+            DenialKind::Hook,
         );
 
         self::assertSame(0, $code, "child failed:\n{$stderr}");
@@ -447,7 +460,11 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
             // what is judgeable.
             self::assertIsString($prefix, "Runtime::{$name} is not a string; this test cannot drive it");
 
-            [, $stderr, $code] = self::runOneShotInAChildProcess($prefix . ' because reasons', 'json');
+            [, $stderr, $code] = self::runOneShotInAChildProcess(
+                $prefix . ' because reasons',
+                'json',
+                DenialKind::from($prefix),
+            );
 
             self::assertSame(0, $code);
             self::assertStringContainsString(
@@ -472,6 +489,7 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         [$stdout, $stderr, $code] = self::runOneShotInAChildProcess(
             'Hook denied: rm -rf is not allowed',
             'json',
+            DenialKind::Hook,
         );
 
         self::assertSame(0, $code, "child failed:\n{$stderr}");
@@ -519,6 +537,7 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         [, $announced] = self::runOneShotInAChildProcess(
             \SugarCraft\Crush\Runtime::DENIAL_HOOK . ' rm -rf is not allowed',
             'text',
+            DenialKind::Hook,
         );
         self::assertStringContainsString(
             'was not run',
@@ -536,10 +555,16 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         self::assertSame("the answer\n", $stdout);
         self::assertStringNotContainsString('was not run', $stderr);
 
+        // Audit F-P8: a failure whose OWN text opens with a roster prefix — a
+        // tool printing `Permission denied:` before exiting non-zero — ran,
+        // and is no more a refusal than the line above.
+        [, $forged] = self::runOneShotInAChildProcess('Permission denied: rm -rf was blocked by policy', 'text');
+        self::assertStringNotContainsString('was not run', $forged);
+
         // KNOWN-POSITIVE (rule 15): the same child harness, the same channel,
         // one roster-matching text away — so "nothing on stderr" above is an
         // absence the instrument could have detected.
-        [, $announced] = self::runOneShotInAChildProcess('Hook denied: rm -rf is not allowed', 'text');
+        [, $announced] = self::runOneShotInAChildProcess('Hook denied: rm -rf is not allowed', 'text', DenialKind::Hook);
         self::assertStringContainsString('was not run', $announced);
     }
 
@@ -661,7 +686,9 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
      * `[stdout, stderr, exit code]`.
      *
      * $refusalText is the errored tool-result text the backend emits, or null
-     * for a turn that emits no tool events at all.
+     * for a turn that emits no tool events at all. $denial is the kind the
+     * engine would stamp on it when it IS a refusal (audit F-P8); without one
+     * the text is an ordinary failure, whatever it opens with.
      *
      * The script is written to the suite's own sandbox under a name unique to
      * this process, and deleted by exact path — never a glob, because sibling
@@ -675,7 +702,7 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
      *
      * @return array{0: string, 1: string, 2: int}
      */
-    private static function runOneShotInAChildProcess(?string $refusalText, string $format): array
+    private static function runOneShotInAChildProcess(?string $refusalText, string $format, ?DenialKind $denial = null): array
     {
         $autoloadLiteral = var_export(\dirname(__DIR__, 2) . '/vendor/autoload.php', true);
         $formatLiteral = var_export($format, true);
@@ -687,11 +714,15 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
                         $onEvent(ToolStarted::fromCall($call));
                         $onEvent(ToolFinished::fromResult(
                             $call,
-                            new ToolResult(toolCallId: 'c0', content: REFUSAL_TEXT, isError: true),
+                            new ToolResult(toolCallId: 'c0', content: REFUSAL_TEXT, isError: true, denial: DENIAL_KIND),
                         ));
                     }
                 CHILD;
-        $emit = str_replace('REFUSAL_TEXT', var_export($refusalText, true), $emit);
+        $emit = str_replace(
+            ['REFUSAL_TEXT', 'DENIAL_KIND'],
+            [var_export($refusalText, true), $denial === null ? 'null' : '\\' . DenialKind::class . '::' . $denial->name],
+            $emit,
+        );
 
         $script = <<<CHILD
             <?php
@@ -827,17 +858,21 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
      * A backend that replays a fixed list of tool outcomes through `$onEvent`
      * and then answers (or throws).
      *
-     * Each entry is `[tool name, result text, isError]`. A {@see ToolStarted}
-     * is emitted alongside every one, because that is what a real engine does
-     * and a classifier that only works when handed nothing else is not being
-     * tested.
+     * Each entry is `[tool name, result text, isError, ?DenialKind]`. A
+     * {@see ToolStarted} is emitted alongside every one, because that is what
+     * a real engine does and a classifier that only works when handed nothing
+     * else is not being tested.
      *
-     * @param list<array{0: string, 1: string, 2: bool}> $outcomes
+     * The fourth element is the kind the ENGINE would stamp on a refusal it
+     * built (audit F-P8) — a refusal is recognised by that field and never by
+     * its text, so a row without one is an ordinary result whatever it says.
+     *
+     * @param list<array{0: string, 1: string, 2: bool, 3?: ?DenialKind}> $outcomes
      */
     private function backendEmitting(array $outcomes, ?\Throwable $throw = null): Backend
     {
         return new class ($outcomes, $throw) implements Backend {
-            /** @param list<array{0: string, 1: string, 2: bool}> $outcomes */
+            /** @param list<array{0: string, 1: string, 2: bool, 3?: ?DenialKind}> $outcomes */
             public function __construct(
                 private readonly array $outcomes,
                 private readonly ?\Throwable $throw,
@@ -845,7 +880,8 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
 
             public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
             {
-                foreach ($this->outcomes as $i => [$name, $text, $isError]) {
+                foreach ($this->outcomes as $i => $outcome) {
+                    [$name, $text, $isError] = $outcome;
                     $call = new ToolCall('c' . $i, $name, []);
                     if ($onEvent === null) {
                         continue;
@@ -853,7 +889,12 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
                     $onEvent(ToolStarted::fromCall($call));
                     $onEvent(ToolFinished::fromResult(
                         $call,
-                        new ToolResult(toolCallId: $call->id(), content: $text, isError: $isError),
+                        new ToolResult(
+                            toolCallId: $call->id(),
+                            content: $text,
+                            isError: $isError,
+                            denial: $outcome[3] ?? null,
+                        ),
                     ));
                 }
 

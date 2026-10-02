@@ -1134,11 +1134,12 @@ final class NonInteractive
      * `$event` as one `refusals` entry, or null when it is not a refusal.
      *
      * THE CLASSIFICATION IS NOT THIS CLASS'S TO INVENT, and that is the whole
-     * design of the method. {@see DenialKind} already names the error texts
-     * that mean "this call never ran" rather than "this call ran and failed" —
-     * it is what {@see \SugarCraft\Crush\Chat::isDeniedResult()} reads to
-     * draw a refusal as its own struck-through state in the TUI. Reusing the
-     * roster makes the headless document and the interactive frame agree on
+     * design of the method. The party that refused a call stamps a
+     * {@see DenialKind} on its result — "this call never ran" rather than
+     * "this call ran and failed" — and that field is what
+     * {@see \SugarCraft\Crush\Chat::isDeniedResult()} reads to draw a
+     * refusal as its own struck-through state in the TUI. Reusing it
+     * makes the headless document and the interactive frame agree on
      * what a refusal IS by construction; a second list here would be two
      * parties disagreeing about the same tool call depending on which surface
      * the operator happened to be looking at.
@@ -1214,6 +1215,16 @@ final class NonInteractive
      * {@see ToolRefusal::fromEvent()} owns the shape and both callers ask it.
      * This method is the `refusals`-entry projection of the answer and nothing
      * else.
+     *
+     * AND THE ANSWER IS NO LONGER READ OFF THE TEXT (audit F-P8). Every
+     * paragraph above that speaks of a reason "opening with" a roster entry
+     * describes how refusals are WRITTEN; until F-P8 it was also how they were
+     * RECOGNISED, and that let any tool forge one — a Bash
+     * `printf 'Permission denied: …'; exit 1` or an MCP server's error text
+     * landed in this array as a call the policy blocked, though it ran.
+     * {@see ToolRefusal::fromEvent()} now reads the result's structural
+     * {@see \SugarCraft\Crush\Tools\ToolResult::denial()}, which only the
+     * refusing party sets, so such a call is an ordinary failed call here.
      *
      * THE OPTIONAL FOURTH KEY (E375). A `refused`-kind row additionally
      * carries `unattended: true` when — and only when — the note left by

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush;
 
+use SugarCraft\Crush\Permissions\DenialKind;
+
 /**
  * One turn in a chat conversation. Immutable, role-tagged,
  * timestamped. The chat history is a `list<Message>` carried
@@ -634,6 +636,10 @@ final class Message implements \JsonSerializable
                     'durationMs' => $r->durationMs,
                     'description' => $r->description,
                     'arguments' => $r->arguments,
+                    // Audit F-P8: a refusal is recognised by this field, not
+                    // its text, so a resumed transcript must keep it or every
+                    // real refusal comes back as an ordinary error row.
+                    'denial' => $r->denial?->value,
                 ],
                 $this->toolResults,
             ),
@@ -720,6 +726,9 @@ final class Message implements \JsonSerializable
                 durationMs: \is_int($r['durationMs'] ?? null) ? $r['durationMs'] : null,
                 description: $string($r['description'] ?? null),
                 arguments: \is_array($r['arguments'] ?? null) ? $r['arguments'] : [],
+                // Absent on a checkpoint written before F-P8: such a row
+                // revives as a plain error, never re-derived from its text.
+                denial: \is_string($r['denial'] ?? null) ? DenialKind::tryFrom($r['denial']) : null,
             );
         }
 

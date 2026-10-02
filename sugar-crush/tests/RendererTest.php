@@ -1853,7 +1853,14 @@ final class RendererTest extends TestCase
     public function testDeniedToolCallRowIsStruckThrough(): void
     {
         $chat = $this->sizedChat([$this->resultMessage(
-            \SugarCraft\Crush\ToolResult::error('bash', 'Permission denied: bash was not run.', 'call_1'),
+            // Built the way a refusing party builds one (audit F-P8): the kind
+            // is structural, and it is what the row's struck-through state reads.
+            \SugarCraft\Crush\ToolResult::denied(
+                'bash',
+                \SugarCraft\Crush\Permissions\DenialKind::Refused,
+                'bash was not run.',
+                'call_1',
+            ),
         )]);
         $theme = $chat->theme();
 

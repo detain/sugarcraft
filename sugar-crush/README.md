@@ -497,7 +497,10 @@ answered around it. `refusals` is **absent, not empty**, on a run that refused
 nothing, so the ordinary document is unchanged and `jq '.refusals // []'` is
 the way to read it unconditionally. It is not a list of tool calls that
 *failed*: a tool that ran and returned an error is a result the model acted
-on, whereas a refusal is a call that never happened.
+on, whereas a refusal is a call that never happened. That distinction is carried on
+the result by whoever refused the call, never read off its text, so a tool
+that ran and printed a line opening `Permission denied:` before failing — a
+shell script, an MCP server — is not listed (audit F-P8).
 
 `--output-format text` carries no such list on stdout, and **this paragraph
 has been wrong about that twice.** It first said the format needed none

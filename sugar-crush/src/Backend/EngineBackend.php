@@ -28,6 +28,7 @@ use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Usage;
+use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
@@ -2239,6 +2240,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             // ACCOUNTING does not ride here — it is summed in the child and
             // crosses on the result frame's Message usage.
             'usage' => $event->result->usage()?->toArray(),
+            // Audit F-P8: the refusal kind is STRUCTURE, not text, so it has
+            // to cross this frame or every real refusal reaches the TUI as an
+            // ordinary error row. Its backing value — a plain string, safe
+            // under allowed_classes => false.
+            'denial' => $event->result->denial()?->value,
         ];
     }
 
@@ -2317,6 +2323,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             imageProtocol: is_string($encoded['imageProtocol'] ?? null) ? $encoded['imageProtocol'] : null,
             diff: is_string($encoded['diff'] ?? null) ? $encoded['diff'] : null,
             usage: Usage::fromArray($encoded['usage'] ?? null),
+            // Absent (an older frame) or not a known kind: not a refusal.
+            denial: is_string($encoded['denial'] ?? null) ? DenialKind::tryFrom($encoded['denial']) : null,
         ));
     }
 

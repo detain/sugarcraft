@@ -1578,6 +1578,9 @@ final class RuntimeTest extends TestCase
             // Audit B4: a Task sub-agent's spend — dropped here, it would leak
             // off the turn total and the spend cap on the hook-failure path.
             'usage' => \SugarCraft\Crush\Usage::new(totalTokens: 99, costUsd: 0.5),
+            // Audit F-P8: the structural refusal kind — dropped here, a real
+            // refusal would stop being one the moment anything annotated it.
+            'denial' => \SugarCraft\Crush\Permissions\DenialKind::Hook,
         ];
 
         $constructor = (new \ReflectionClass(ToolResult::class))->getConstructor();

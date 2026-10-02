@@ -507,7 +507,7 @@ final class BackgroundSessionRunnerTest extends TestCase
     {
         $buffer = $this->bufferPath();
         $backend = new FakeRunnerBackend('I could not remove it.', events: [
-            new ToolFinished('call_1', 'Bash', new ToolResult('call_1', 'Hook denied: rm -rf is blocked', true)),
+            new ToolFinished('call_1', 'Bash', ToolResult::denied('call_1', DenialKind::Hook, 'rm -rf is blocked')),
         ]);
 
         $exit = $this->runner($buffer)->executeTask($backend);
@@ -538,7 +538,15 @@ final class BackgroundSessionRunnerTest extends TestCase
         foreach (Chat::DENIED_ERROR_PREFIXES as $prefix) {
             $buffer = $this->bufferPath();
             $backend = new FakeRunnerBackend('ok', events: [
-                new ToolFinished('c', 'Edit', new ToolResult('c', $prefix . ' because reasons', true)),
+                // Audit F-P8: a refusal carries its kind structurally, so the
+                // event is built the way the engine builds one — with the
+                // kind whose backing value is this roster entry stamped on it.
+                new ToolFinished('c', 'Edit', new ToolResult(
+                    'c',
+                    $prefix . ' because reasons',
+                    true,
+                    denial: DenialKind::from($prefix),
+                )),
             ]);
 
             $this->runner($buffer)->executeTask($backend);
@@ -547,7 +555,7 @@ final class BackgroundSessionRunnerTest extends TestCase
             // beside it: a hard-coded expectation here would be a second copy
             // of DenialKind's own mapping, and would agree with itself rather
             // than with the enum.
-            $kind = DenialKind::classify($prefix . ' because reasons');
+            $kind = DenialKind::tryFrom($prefix);
             $this->assertInstanceOf(DenialKind::class, $kind, 'roster entry "' . $prefix . '" classifies as nothing');
             $tokensSeen[$kind->token()] = true;
 
@@ -599,12 +607,16 @@ final class BackgroundSessionRunnerTest extends TestCase
             // as the tool that was stopped.
             new ToolFinished('c4', 'Grep', new ToolResult('c4', 'Permission denied: 3 matches in auth.log', false)),
             new ToolFinished('c3', 'Grep', new ToolResult('c3', 'the hook denied: lower case is not the prefix', true)),
+            // Audit F-P8: a tool that RAN, printed a refusal-shaped line and
+            // exited non-zero. Its text opens with the exact roster prefix;
+            // it is still a failure, because nothing refused it.
+            new ToolFinished('c6', 'Bash', new ToolResult('c6', 'Permission denied: rm -rf was blocked by policy', true)),
             // Not a ToolFinished at all: the observer sees ToolStarted too.
             new \stdClass(),
             // THE POSITIVE COMPONENT: one real refusal, last, so it is also
             // the event a classifier that only ever looks at the first one
             // would miss.
-            new ToolFinished('c5', 'Write', new ToolResult('c5', Chat::DENIED_ERROR_PREFIXES[0] . ' nope', true)),
+            new ToolFinished('c5', 'Write', ToolResult::denied('c5', DenialKind::Refused, 'nope')),
         ]);
 
         $this->runner($buffer)->executeTask($backend);
@@ -618,7 +630,7 @@ final class BackgroundSessionRunnerTest extends TestCase
         $this->assertCount(
             1,
             $records,
-            "exactly one of these six events is a refusal, and the buffer records " . count($records) . ":\n" . $contents,
+            "exactly one of these seven events is a refusal, and the buffer records " . count($records) . ":\n" . $contents,
         );
         $this->assertStringContainsString(
             ' Write was not run - ',
@@ -647,6 +659,7 @@ final class BackgroundSessionRunnerTest extends TestCase
                 'c',
                 "Permission denied: rm\nINJECTED SECOND LINE\nand a third",
                 true,
+                denial: DenialKind::Refused,
             )),
         ]);
 
@@ -676,7 +689,7 @@ final class BackgroundSessionRunnerTest extends TestCase
     {
         $buffer = $this->bufferPath();
         $backend = new FakeRunnerBackend('the answer', events: [
-            new ToolFinished('c', 'Bash', new ToolResult('c', 'Hook denied: no', true)),
+            new ToolFinished('c', 'Bash', ToolResult::denied('c', DenialKind::Hook, 'no')),
         ]);
 
         $this->runner($buffer)->executeTask($backend);

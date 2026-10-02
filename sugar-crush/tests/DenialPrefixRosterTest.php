@@ -334,10 +334,15 @@ final class DenialPrefixRosterTest extends TestCase
     }
 
     /**
-     * AND THE CLASSIFIER AGREES, which is a different claim from membership:
-     * {@see Chat::isDeniedResult()} matches with `str_starts_with` against
-     * `$result->error`, so a prefix that is on the roster but is not how the
-     * finished reason actually STARTS is still misclassified.
+     * AND THE CLASSIFIER AGREES, which is a different claim from membership.
+     *
+     * WHAT IT AGREES ON CHANGED (audit F-P8). {@see Chat::isDeniedResult()}
+     * used to match `str_starts_with` against `$result->error`, so any tool
+     * could forge a refusal by printing a prefix. It now reads the structural
+     * {@see ChatToolResult::$denial} the refusing party stamps, so this test
+     * drives each Runtime prefix BOTH ways: built as a refusal (the kind
+     * whose backing value is that prefix) it is recognised, and the identical
+     * text arriving as a plain error is NOT.
      *
      * The negative case is in the same test on purpose (rule 15): an assertion
      * that three strings are recognised proves nothing about the classifier
@@ -354,9 +359,17 @@ final class DenialPrefixRosterTest extends TestCase
     public function testTheClassifierRecognisesEachPrefixAndStillRefusesAPlainError(): void
     {
         foreach (self::runtimeDenialPrefixes() as $name => $prefix) {
+            $kind = DenialKind::tryFrom($prefix);
+            self::assertNotNull($kind, "Runtime::{$name} is not the backing value of any DenialKind");
+            $refusal = ChatToolResult::denied('Bash', $kind, 'something', 'call_1');
+            self::assertSame($prefix . ' something', $refusal->error);
             self::assertTrue(
+                Chat::isDeniedResult($refusal),
+                "Chat::isDeniedResult() does not recognise a refusal of kind Runtime::{$name}",
+            );
+            self::assertFalse(
                 Chat::isDeniedResult(ChatToolResult::error('Bash', $prefix . ' something', 'call_1')),
-                "Chat::isDeniedResult() does not recognise a result opening with Runtime::{$name}",
+                "a plain error whose text opens with Runtime::{$name} was classified as a refusal (audit F-P8)",
             );
         }
 
@@ -1527,12 +1540,13 @@ final class DenialPrefixRosterTest extends TestCase
      * AND THE CLASSIFIER `Chat` EXPOSES IS THE ENUM'S, for every kind and for
      * a plain error.
      *
-     * {@see Chat::isDeniedResult()} now delegates to
-     * {@see DenialKind::classify()}. That delegation is worth pinning at the
-     * BEHAVIOURAL level rather than by reading the body: the renderer, the
-     * headless document and three other test files all call the wrapper, and
-     * a wrapper that stopped agreeing with the enum would put the TUI and the
-     * `--output-format json` document back on two answers.
+     * {@see Chat::isDeniedResult()} delegated to {@see DenialKind::classify()}
+     * over the error text until audit F-P8 made the kind structural; it now
+     * reads {@see ChatToolResult::$denial}. Pinned at the BEHAVIOURAL level:
+     * every kind built through {@see ChatToolResult::denied()} is recognised,
+     * and the identical text without the kind — what a tool that RAN prints —
+     * is not. `classify()` itself is kept (it still answers what a string
+     * CLAIMS) and its agreement with `reason()` stays pinned here.
      */
     public function testChatsClassifierAgreesWithTheEnumOnEveryKindAndOnAPlainError(): void
     {
@@ -1542,8 +1556,12 @@ final class DenialPrefixRosterTest extends TestCase
             self::assertSame($kind, DenialKind::classify($text), "DenialKind::reason() for {$kind->name} "
                 . 'produces a string its own classify() does not recognise');
             self::assertTrue(
-                Chat::isDeniedResult(ChatToolResult::error('Bash', $text, 'call_1')),
+                Chat::isDeniedResult(ChatToolResult::denied('Bash', $kind, 'something', 'call_1')),
                 "Chat::isDeniedResult() disagrees with DenialKind on {$kind->name}",
+            );
+            self::assertFalse(
+                Chat::isDeniedResult(ChatToolResult::error('Bash', $text, 'call_1')),
+                "error text spelling {$kind->name}'s prefix was classified as a refusal (audit F-P8)",
             );
         }
 

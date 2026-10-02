@@ -14,43 +14,32 @@ use SugarCraft\Crush\ToolCall;
 use SugarCraft\Crush\ToolResult;
 
 /**
- * E348: A TOOL CALLBACK THAT *RETURNS* A `ToolResult` MAY ASSERT ITS OWN
- * REFUSAL, AND THAT IS THE DECISION — NOT AN OVERSIGHT NOBODY HAS GOT TO.
+ * E348, REVISED BY AUDIT F-P8: A TOOL CALLBACK THAT RETURNS A `ToolResult`
+ * MAY DECLARE ITS OWN REFUSAL — BY THE TYPED FIELD, NO LONGER BY THE WORDS.
  *
- * E308 closed the FORGERY route, which was `Chat::invokeTool()`'s
+ * E308 closed one FORGERY route, which was `Chat::invokeTool()`'s
  * `catch (\Throwable $e)` putting `$e->getMessage()` verbatim where
- * {@see Chat::isDeniedResult()} reads. The text a throw produces now opens
+ * {@see Chat::isDeniedResult()} read. The text a throw produces now opens
  * `Error: <tool> failed with <class>:`, which is on no roster.
  *
- * THE PASS-THROUGH BRANCH ABOVE THAT CATCH WAS NEVER CLOSED, and E348 recorded
- * that the tree said nothing about whether that was reasoned or merely
- * unnoticed. A callback returning `ToolResult::error($name, 'Permission
- * denied: …')` has its `error` field carried through verbatim, so it is drawn
- * struck through in the TUI and listed in a `--output-format json` document's
- * `refusals` array as a call that never ran.
+ * WHAT THIS FILE USED TO PIN: that the pass-through branch above that catch
+ * honoured a returned `ToolResult::error($name, 'Permission denied: …')` as a
+ * refusal, because a returned result is a deliberate act — an MCP tool whose
+ * server refused, a `Skill` a policy stopped. It recorded what would change
+ * the answer: "a typed field on `ToolResult` — a `DenialKind` rather than a
+ * spelled prefix — would let a callback DECLARE a refusal instead of writing
+ * the words, and the free-text route could then stop being honoured."
  *
- * IT IS REASONED, AND HERE IS THE REASONING. The two branches differ in what
- * the text IS, not in how much it is trusted:
+ * WHAT IS TRUE NOW: that field exists ({@see ToolResult::$denial}), because
+ * the free-text route was a forgery route on the ENGINE path too (audit
+ * F-P8): a Bash child printing `Permission denied: …` and exiting non-zero,
+ * or an MCP server's error body, was reported as a call that never ran. So:
  *
- *  - An exception message is not a claim about anything. `RuntimeException`
- *    carries whatever string was nearest — an OS error, an HTTP body, a
- *    library's own prose — and the tool that threw it did not choose to say
- *    "this call was blocked". Reading a roster prefix out of it is reading a
- *    coincidence.
- *  - A RETURNED `ToolResult::error()` is a deliberate act by the callback. An
- *    MCP tool whose server answered with a permission failure, a `Skill` that
- *    a policy stopped, a wrapper enforcing its own gate — each of those really
- *    did have the call blocked, and each is a producer the roster exists to
- *    describe. Refusing to believe it would mean a refusal is only real when
- *    THIS process made it, which is false the moment a tool is out-of-process.
- *
- * WHAT WOULD CHANGE THE ANSWER, stated so this is a position and not a shrug:
- * a typed field on `ToolResult` — a `DenialKind` rather than a spelled prefix
- * — would let a callback DECLARE a refusal instead of writing the words, and
- * the free-text route could then stop being honoured. That is a change to a
- * model-visible string and to the shape of a public DTO, and it is a separate
- * step. Until it happens the prose IS the interface, and this file is what
- * says so.
+ *  - A callback that DECLARES a refusal — {@see ToolResult::denied()}, PHP
+ *    code in this process choosing to say "blocked" — is honoured, kind and
+ *    reason intact, across the fork boundary Chat's tool path uses.
+ *  - A callback that only SPELLS one — an `error` that opens with a roster
+ *    prefix — is an ordinary failure, exactly like the same text thrown.
  *
  * DRIVEN THROUGH THE LIVE ROUTE for the same reason
  * {@see \SugarCraft\Crush\Tests\ChatTest::testAToolWhoseExceptionOpensWithARosterPrefixIsNotReportedAsARefusal()}
@@ -71,36 +60,59 @@ final class CallbackAuthoredRefusalTest extends TestCase
     }
 
     /**
-     * THE DECISION, per roster kind: a callback that RETURNS the prefix is
-     * believed.
+     * THE DECISION, per roster kind: a callback that DECLARES a refusal with
+     * the typed field is believed, and the kind and reason survive the route.
      *
      * The cases come from the enum rather than from three literals, so a
-     * fourth kind arrives here on its own and a respelling cannot leave one
-     * uncovered.
+     * fourth kind arrives here on its own.
      *
      * @dataProvider denialKinds
      */
     public function testACallbackThatReturnsARosterPrefixIsHonouredAsARefusal(DenialKind $kind): void
     {
-        $declared = $kind->reason('the server that owns this tool blocked the call');
+        $detail = 'the server that owns this tool blocked the call';
 
         $result = $this->resultOfCallbackReturning(
-            static fn (array $args): ToolResult => ToolResult::error('remote', $declared, 'ignored-id'),
+            static fn (array $args): ToolResult => ToolResult::denied('remote', $kind, $detail, 'ignored-id'),
         );
 
         self::assertTrue($result->isError());
         self::assertTrue(
             Chat::isDeniedResult($result),
-            'a callback DECLARED a refusal with ' . $kind->value . ' and it was reported as an ordinary failure',
+            'a callback DECLARED a refusal of kind ' . $kind->name . ' and it was reported as an ordinary failure',
         );
-        self::assertSame($declared, $result->error, 'the reason the callback authored was rewritten on the way out');
+        self::assertSame($kind, $result->denial, 'the declared kind did not survive the tool path');
+        self::assertSame($kind->reason($detail), $result->error, 'the reason the callback authored was rewritten on the way out');
     }
 
     /**
-     * THE KNOWN-NEGATIVE IN THE SAME SHAPE (rule 15/E228). Every assertion
-     * above is that something IS classified as a refusal, which a classifier
-     * that answered `true` unconditionally would satisfy. A callback returning
-     * an ordinary failure through the identical route must NOT be.
+     * AUDIT F-P8, the forgery: the same words WITHOUT the declaration are an
+     * ordinary failure. This is what a tool wrapping a shell or a remote
+     * server returns when the thing it wraps printed a refusal-shaped line.
+     *
+     * @dataProvider denialKinds
+     */
+    public function testACallbackThatOnlySpellsARosterPrefixIsNotARefusal(DenialKind $kind): void
+    {
+        $spelled = $kind->reason('rm -rf was blocked by policy');
+
+        $result = $this->resultOfCallbackReturning(
+            static fn (array $args): ToolResult => ToolResult::error('remote', $spelled, 'ignored-id'),
+        );
+
+        self::assertTrue($result->isError());
+        self::assertFalse(
+            Chat::isDeniedResult($result),
+            'error text opening with ' . $kind->value . ' was reported as a refusal of a call that ran',
+        );
+        self::assertNull($result->denial);
+        self::assertSame($spelled, $result->error, 'the failure text the model needs was rewritten');
+    }
+
+    /**
+     * THE KNOWN-NEGATIVE IN THE SAME SHAPE (rule 15/E228). A callback
+     * returning an ordinary failure through the identical route must NOT be
+     * a refusal.
      */
     public function testACallbackThatReturnsAnOrdinaryFailureIsNotARefusal(): void
     {
@@ -113,21 +125,18 @@ final class CallbackAuthoredRefusalTest extends TestCase
     }
 
     /**
-     * THE BOUNDARY THE DECISION RESTS ON, asserted rather than described: the
-     * SAME text, through the THROW branch of the same method, is not honoured.
-     *
-     * Without this, "returning is believed" is not a distinction — it is just
-     * a restatement of "the classifier reads the error field". This is the
-     * assertion that makes the two branches observably different, and it is
-     * what would go red if somebody "simplified" the catch back to
-     * `$e->getMessage()`.
+     * THE BOUNDARY, asserted rather than described: a DECLARED refusal is
+     * honoured, while the same text THROWN is not — so the classifier is not
+     * merely "never true". This is also what would go red if somebody
+     * "simplified" the catch back to `$e->getMessage()` AND stamped a kind.
      */
     public function testTheSameTextThrownRatherThanReturnedIsNotHonoured(): void
     {
-        $declared = DenialKind::Refused->reason('the server that owns this tool blocked the call');
+        $detail = 'the server that owns this tool blocked the call';
+        $declared = DenialKind::Refused->reason($detail);
 
         $returned = $this->resultOfCallbackReturning(
-            static fn (array $args): ToolResult => ToolResult::error('remote', $declared, 'ignored-id'),
+            static fn (array $args): ToolResult => ToolResult::denied('remote', DenialKind::Refused, $detail, 'ignored-id'),
         );
         $thrown = $this->resultOfCallbackReturning(
             static function (array $args) use ($declared): ToolResult {
@@ -138,7 +147,7 @@ final class CallbackAuthoredRefusalTest extends TestCase
         self::assertTrue(Chat::isDeniedResult($returned));
         self::assertFalse(
             Chat::isDeniedResult($thrown),
-            'the throw branch stopped wrapping, so E308 is back and this test is the one that noticed',
+            'the throw branch reported a refusal, so E308 is back and this test is the one that noticed',
         );
     }
 

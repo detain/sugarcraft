@@ -53,12 +53,20 @@ namespace SugarCraft\Crush\Permissions;
  * being respelled.
  *
  * THE SPELLINGS ARE NOT FREE CHOICES. Each case's backing value is the exact
- * text a finished reason OPENS with, and
- * {@see \SugarCraft\Crush\Chat::isDeniedResult()} matches it case-sensitively
- * with `str_starts_with`. A spelling invented anywhere else that is not on
- * this list is a BLOCKED call rendered as an ordinary tool ERROR on both
- * surfaces — the model told its call failed rather than that it was refused,
- * which is a correctness failure and not a cosmetic one.
+ * text a finished reason OPENS with — the model and a `jq` script reading a
+ * `refusals` entry's `reason` both see it — and it is also the WIRE FORM of
+ * the kind wherever a result crosses a process boundary (the engine's fork
+ * frames, the TUI event frame, a transcript checkpoint) and is decoded with
+ * `tryFrom()`. So respelling a case breaks old frames and old scripts alike.
+ *
+ * RECOGNISING A REFUSAL IS NO LONGER DONE BY THESE STRINGS (audit F-P8). It
+ * was: {@see \SugarCraft\Crush\Chat::isDeniedResult()} and
+ * {@see ToolRefusal::fromEvent()} ran {@see classify()} over a result's error
+ * text, and that text is the tool's own output — so a Bash
+ * `printf 'Permission denied: …'; exit 1` or an MCP server's error forged a
+ * refusal for a call that ran. The refusing party now stamps the case on the
+ * result ({@see \SugarCraft\Crush\Tools\ToolResult::denial()},
+ * {@see \SugarCraft\Crush\ToolResult::$denial}) and both read only that.
  *
  * THREE IS THE CLOSED VOCABULARY — DECIDED (E347, E375; ruled round 69,
  * recorded by fb `5ea48fe21`, shipped by fn `5d050411d`→`f2c2c2327`, stamped
@@ -136,6 +144,13 @@ enum DenialKind: string
 
     /**
      * The kind $error announces itself as, or null when it announces none.
+     *
+     * NEVER A REFUSAL TEST FOR A TOOL RESULT (audit F-P8). This answers what a
+     * string CLAIMS, and the error text of a tool result is whatever the tool
+     * printed — so classifying it lets any tool forge a refusal. Whether a call
+     * was actually stopped is the structural
+     * {@see \SugarCraft\Crush\Tools\ToolResult::denial()}. Kept for text this
+     * application authored itself, and for embedders already calling it.
      *
      * `str_starts_with` and not a substring test, deliberately: the prefix is
      * a claim about how the reason OPENS. A tool that ran and failed with

@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Chat;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\ToolResult;
 
@@ -21,23 +22,36 @@ use SugarCraft\Crush\ToolResult;
 final class DeniedToolCallTest extends TestCase
 {
     /**
-     * @return array<string, array{0: string}>
+     * @return array<string, array{0: DenialKind, 1: string}>
      */
     public static function refusalProvider(): array
     {
         return [
-            'user rejected the prompt' => ['Permission denied: bash was not run.'],
-            'ask reached the fork'     => ['Permission required: bash was not approved.'],
-            'hook gate'                => ['Hook denied: rm -rf is not allowed'],
+            'user rejected the prompt' => [DenialKind::Refused, 'bash was not run.'],
+            'ask reached the fork'     => [DenialKind::Unanswered, 'bash was not approved.'],
+            'hook gate'                => [DenialKind::Hook, 'rm -rf is not allowed'],
         ];
     }
 
     /**
+     * Every producer builds its refusal with {@see ToolResult::denied()}, so
+     * the kind rides on the result — and the SAME text arriving as a plain
+     * error is a failure, not a refusal (audit F-P8): the text is the tool's
+     * own output and anything can print it.
+     *
      * @dataProvider refusalProvider
      */
-    public function testEveryRefusalProducerIsClassifiedAsDenied(string $error): void
+    public function testEveryRefusalProducerIsClassifiedAsDenied(DenialKind $kind, string $detail): void
     {
-        $this->assertTrue(Chat::isDeniedResult(ToolResult::error('bash', $error, 'call_1')));
+        $denied = ToolResult::denied('bash', $kind, $detail, 'call_1');
+
+        $this->assertTrue(Chat::isDeniedResult($denied));
+        $this->assertSame($kind, $denied->denial);
+        $this->assertSame($kind->reason($detail), $denied->error);
+        $this->assertFalse(
+            Chat::isDeniedResult(ToolResult::error('bash', $kind->reason($detail), 'call_1')),
+            'error text that merely opens with ' . $kind->value . ' was drawn as a refusal',
+        );
     }
 
     public function testAGenuineFailureIsNotADenial(): void

@@ -1884,12 +1884,12 @@ final class Runtime
 
         $context = $this->hookContext($toolCall, $tool, $app);
         if (is_string($context)) {
-            return $this->failure($toolCall, $context, $onEvent);
+            return $this->failure($toolCall, $context, $onEvent, DenialKind::Hook);
         }
 
-        [$args, $denial, $context, $preContext] = $this->gate($toolCall, $context, $onPermissionRequest);
+        [$args, $denial, $context, $preContext, $denialKind] = $this->gate($toolCall, $context, $onPermissionRequest);
         if ($denial !== null) {
-            return $this->failure($toolCall, $denial, $onEvent);
+            return $this->failure($toolCall, $denial, $onEvent, $denialKind);
         }
 
         // A throwing tool must cost its own call, not the whole turn.
@@ -2041,6 +2041,7 @@ final class Runtime
                     'context' => null,
                     'args' => [],
                     'denied' => $context,
+                    'denialKind' => DenialKind::Hook,
                     'preContext' => '',
                     'pid' => null,
                     'file' => null,
@@ -2051,7 +2052,7 @@ final class Runtime
                 continue;
             }
 
-            [$args, $denial, $context, $preContext] = $this->gate($toolCall, $context, $onPermissionRequest);
+            [$args, $denial, $context, $preContext, $denialKind] = $this->gate($toolCall, $context, $onPermissionRequest);
 
             $jobs[] = [
                 'call' => $toolCall,
@@ -2059,6 +2060,7 @@ final class Runtime
                 'context' => $context,
                 'args' => $args ?? [],
                 'denied' => $denial,
+                'denialKind' => $denialKind,
                 'preContext' => $preContext,
                 'pid' => null,
                 // Reserved HERE, not next to the fork that uses it, so that
@@ -2281,9 +2283,16 @@ final class Runtime
      * chain's note into a settled ASK's verdict, so an approved question carries
      * it through this same arm; an unanswered one lands on the deny arm below.
      *
-     * @return array{0: ?array<string, mixed>, 1: ?string, 2: HookContext, 3: string}
+     * The fifth slot is the denial's KIND, non-null exactly when slot 1 is: the
+     * reason string is what the model reads, the kind is what every reader
+     * downstream classifies on, and they are handed out together so the
+     * refusal is built carrying both (audit F-P8) — never re-derived from the
+     * text, which on any other error result is tool-controlled.
+     *
+     * @return array{0: ?array<string, mixed>, 1: ?string, 2: HookContext, 3: string, 4: ?DenialKind}
      *     [arguments, denial reason, the context describing the call that will
-     *     actually run, the pre-hook model-visible note (empty unless permitted)]
+     *     actually run, the pre-hook model-visible note (empty unless permitted),
+     *     the denial kind]
      */
     private function gate(ToolCall $toolCall, HookContext $context, ?callable $onPermissionRequest): array
     {
@@ -2344,7 +2353,7 @@ final class Runtime
             // the parent, during phase 1 — is where the kind is still known.
             $this->auditRefusal($context, $kind, $hookResult->message);
 
-            return [null, $kind->reason($hookResult->message), $context, ''];
+            return [null, $kind->reason($hookResult->message), $context, '', $kind];
         }
 
         // A MODIFY hook rewrites the tool input before execution.
@@ -2361,7 +2370,7 @@ final class Runtime
             $context = $context->withRewrittenArgs($args, (string) $hookResult->modifiedInput);
         }
 
-        return [$args, null, $context, $hookResult->additionalContext];
+        return [$args, null, $context, $hookResult->additionalContext, null];
     }
 
     /**
@@ -2447,7 +2456,14 @@ final class Runtime
     private function release(array $job, ?callable $onEvent): ToolResultMessage
     {
         if ($job['denied'] !== null) {
-            return $this->failure($job['call'], (string) $job['denied'], $onEvent);
+            $kind = $job['denialKind'] ?? null;
+
+            return $this->failure(
+                $job['call'],
+                (string) $job['denied'],
+                $onEvent,
+                $kind instanceof DenialKind ? $kind : null,
+            );
         }
 
         $result = $job['result'] ?? $this->collectChildResult($job);
@@ -2854,6 +2870,10 @@ final class Runtime
             // parent's turn sum. Usage::toArray() is its own fork-boundary
             // codec (plain scalars, buckets' null-ness preserved).
             'usage' => $result->usage()?->toArray(),
+            // Audit F-P8: the refusal kind as its backing value, a plain
+            // string, so it survives allowed_classes => false. A tool that
+            // DECLARES a refusal in the child keeps it across the fork.
+            'denial' => $result->denial()?->value,
         ];
     }
 
@@ -2875,6 +2895,9 @@ final class Runtime
             // before B4) and a malformed one, as null — a corrupt frame
             // costs this call its accounting, never the call itself.
             usage: Usage::fromArray($encoded['usage'] ?? null),
+            // Tolerant like every other key: absent (an older frame) or not a
+            // known backing value decodes as "not a refusal", never a throw.
+            denial: is_string($encoded['denial'] ?? null) ? DenialKind::tryFrom($encoded['denial']) : null,
         );
     }
 
@@ -3181,12 +3204,23 @@ final class Runtime
      * always carries a result: a consumer rendering the running→done
      * transition would otherwise need a third, result-less shape for exactly
      * the two cases a user most wants explained.
+     *
+     * $denial is non-null exactly when this termination is a REFUSAL (the gate,
+     * or a call no hook could judge) and null for an unknown tool or broken
+     * arguments, which are ordinary errors. It rides on the result itself
+     * because the text cannot carry it honestly (audit F-P8): `Permission
+     * denied: …` is just as easily what a tool that RAN printed before failing.
      */
-    private function failure(ToolCall $toolCall, string $message, ?callable $onEvent): ToolResultMessage
+    private function failure(ToolCall $toolCall, string $message, ?callable $onEvent, ?DenialKind $denial = null): ToolResultMessage
     {
         // Scrubbed too: a PreToolUse deny reason is a hook's stdout, bytes this
         // class does not control any more than a tool's output.
-        $result = self::utf8Safe(new ToolResult(toolCallId: $toolCall->id(), content: $message, isError: true));
+        $result = self::utf8Safe(new ToolResult(
+            toolCallId: $toolCall->id(),
+            content: $message,
+            isError: true,
+            denial: $denial,
+        ));
 
         $this->emit($onEvent, ToolFinished::fromResult($toolCall, $result));
 

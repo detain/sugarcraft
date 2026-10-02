@@ -384,6 +384,17 @@ have asked" into "no" — `PermissionGate::refuses()` answers `true` only for
 `Deny`, and `Chat::refuseCommandShell()` follows the same rule for a custom
 command's `` !`cmd` `` form.
 
+**A refusal is recognised by who made it, not by what it says.** Every refused
+call reaches the model as a result whose text opens with `Hook denied:`,
+`Permission denied:` or `Permission required:` — but that text is not what
+the `-p` document's `refusals` array, the background daemon's log or the TUI's
+struck-through row read. The party that refuses the call (`Runtime::gate()`,
+the TUI's permission prompt) stamps the kind on the result itself
+(`ToolResult::denial()`), and only that field counts. A tool that *ran* and
+failed with output opening the same way — `printf 'Permission denied: …'; exit 1`,
+or an MCP server's error text — is an ordinary failed call on every surface,
+because it was one (audit F-P8).
+
 ---
 
 ## The hooks that outrank the gate

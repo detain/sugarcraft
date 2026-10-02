@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush;
 
+use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Tools\ToolResult as EngineToolResult;
 use SugarCraft\Mosaic\Mosaic;
 
@@ -96,6 +97,13 @@ final class ToolResult
      *                                        (`$ ls -la` for a shell call), because the
      *                                        one-liner is bounded and, whenever the model sent
      *                                        a `description`, never names the command at all.
+     * @param DenialKind|null $denial Set when the call was STOPPED before it ran, by whichever
+     *                                party refused it (audit F-P8). This, never the text of
+     *                                $error, is what {@see Chat::isDeniedResult()} reads to draw
+     *                                the struck-through row: $error is the tool's own output,
+     *                                and a tool can print anything — `Permission denied:`
+     *                                included. Mirrors {@see EngineToolResult::denial()} and
+     *                                crosses both adapters.
      */
     public function __construct(
         public readonly string $name,
@@ -109,6 +117,7 @@ final class ToolResult
         public readonly ?int $durationMs = null,
         public readonly ?string $description = null,
         public readonly array $arguments = [],
+        public readonly ?DenialKind $denial = null,
     ) {}
 
     /**
@@ -125,6 +134,16 @@ final class ToolResult
     public static function error(string $name, string $error, ?string $id = null): self
     {
         return new self($name, '', $error, $id);
+    }
+
+    /**
+     * Create the result of a call that was STOPPED before it ran: an error
+     * whose text is $kind's rendered reason and which carries $kind
+     * structurally, so a reader never has to classify the text (audit F-P8).
+     */
+    public static function denied(string $name, DenialKind $kind, string $detail, ?string $id = null): self
+    {
+        return new self($name, '', $kind->reason($detail), $id, denial: $kind);
     }
 
     /**
@@ -169,6 +188,7 @@ final class ToolResult
             durationMs: $this->durationMs,
             description: $this->description,
             arguments: $this->arguments,
+            denial: $this->denial,
         );
     }
 
@@ -198,6 +218,7 @@ final class ToolResult
             $this->durationMs,
             $trimmed === '' ? null : $trimmed,
             $this->arguments,
+            $this->denial,
         );
     }
 
@@ -221,6 +242,7 @@ final class ToolResult
             $this->durationMs,
             $this->description,
             $arguments,
+            $this->denial,
         );
     }
 
@@ -274,6 +296,7 @@ final class ToolResult
             imagePath: $this->imagePath,
             imageProtocol: $this->imageProtocol,
             diff: $this->diff,
+            denial: $this->denial,
         );
     }
 
@@ -299,6 +322,7 @@ final class ToolResult
             $result->imageProtocol(),
             $result->diff(),
             $result->durationMs(),
+            denial: $result->denial(),
         );
     }
 

@@ -47,6 +47,12 @@ use SugarCraft\Crush\Events\ToolFinished;
  * and hand it back the coupling it was extracted to remove. This class is
  * allowed the dependency because it is not the roster — it is one reader of
  * it, and every caller of this class is already holding the event.
+ *
+ * AND IT NO LONGER READS THE ROSTER AT ALL (audit F-P8). The shape described
+ * above — "did it error, does its text open with a roster entry" — let any
+ * tool forge a refusal by printing a roster prefix. The kind now travels on
+ * the result ({@see \SugarCraft\Crush\Tools\ToolResult::denial()}), stamped by
+ * the party that refused the call, and {@see fromEvent()} reads only that.
  */
 final readonly class ToolRefusal
 {
@@ -55,21 +61,35 @@ final readonly class ToolRefusal
         public DenialKind $kind,
         /** The runtime tool name, as the model called it. */
         public string $tool,
-        /** The finished result text, opening with {@see $kind}'s prefix. */
+        /**
+         * The finished result text the model was handed. For a refusal the
+         * engine built it opens with {@see $kind}'s prefix; that is a property
+         * of how refusals are WRITTEN, not how they are recognised.
+         */
         public string $reason,
     ) {}
 
     /**
      * The refusal $event announces, or null when it announces none.
      *
-     * THREE WAYS TO ANSWER NULL AND THEY ARE NOT THE SAME, which is why the
-     * guards are separate rather than one boolean: an event that is not a
-     * {@see ToolFinished} at all (every other lifecycle event on the stream),
-     * one whose tool RAN AND FAILED — a `Read` on a missing path, a `Bash`
-     * exiting non-zero, which the model is expected to act on — and one whose
-     * error text is real but off-roster. Only the last is a possible defect,
-     * and it is the one {@see \SugarCraft\Crush\Tests\DenialPrefixRosterTest}
-     * exists to make loud.
+     * THE KIND IS READ OFF THE RESULT, NEVER OFF ITS TEXT (audit F-P8). This
+     * used to hand the error text to {@see DenialKind::classify()}, and the
+     * text of an errored result is whatever the tool produced: a Bash
+     * `printf 'Permission denied: …'; touch marker; exit 1`, or an MCP server
+     * answering `isError` with that sentence, came out of here as a policy
+     * refusal — so a `--output-format json` document's `refusals` array and a
+     * daemon's sidecar log reported a call as BLOCKED that had in fact run,
+     * side effects and all. The party that refuses a call (the engine's gate,
+     * the TUI's prompt) now stamps {@see \SugarCraft\Crush\Tools\ToolResult::denial()}
+     * when it builds the result, and that field is the only thing consulted.
+     * E308 closed the same hole for tools that THROW; this closes it for the
+     * ones that simply fail.
+     *
+     * NULL FOR EVERYTHING ELSE, which is three different things: an event that
+     * is not a {@see ToolFinished} at all (every other lifecycle event on the
+     * stream), a call whose tool RAN AND FAILED — a `Read` on a missing path, a
+     * `Bash` exiting non-zero, whatever its output says — which the model is
+     * expected to act on, and a successful call.
      *
      * `object` rather than `ToolFinished` in the signature because both
      * callers are handed an untyped observer callback's argument and the
@@ -82,9 +102,8 @@ final readonly class ToolRefusal
             return null;
         }
 
-        $reason = $event->result->content();
-        $kind = DenialKind::classify($reason);
+        $kind = $event->result->denial();
 
-        return $kind === null ? null : new self($kind, $event->toolName, $reason);
+        return $kind === null ? null : new self($kind, $event->toolName, $event->result->content());
     }
 }

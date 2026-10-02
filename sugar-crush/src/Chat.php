@@ -3236,9 +3236,10 @@ final class Chat implements Model
                     // wire with no matching tool_result. It doubles as the
                     // producer for the struck-through denied row
                     // {@see Renderer::renderToolResults()} draws.
-                    Message::assistant('')->withToolResults([ToolResult::error(
+                    Message::assistant('')->withToolResults([ToolResult::denied(
                         $request->toolCall->name,
-                        DenialKind::Refused->reason("{$request->toolCall->name} was not run."),
+                        DenialKind::Refused,
+                        "{$request->toolCall->name} was not run.",
                         $request->toolCall->id,
                     )]),
                 ],
@@ -4260,20 +4261,21 @@ final class Chat implements Model
      *    {@see isDeniedResult()}'s roster (E308). An exception message is
      *    whatever string was nearest — an OS error, an HTTP body, a library's
      *    prose — and the tool did not CHOOSE to say "this call was blocked".
-     *  - A callback that RETURNS a `ToolResult` has its `error` field carried
-     *    through VERBATIM, roster prefix and all, so it can declare its own
-     *    refusal and be drawn struck through and listed in a
-     *    `--output-format json` document's `refusals` array. That is the
-     *    decision, not a gap E308 missed: an MCP tool whose server refused,
+     *  - A callback that RETURNS a `ToolResult` has every field carried
+     *    through, its structural {@see ToolResult::$denial} included, so it
+     *    can still declare its own refusal — an MCP tool whose server refused,
      *    a `Skill` a policy stopped, or a wrapper enforcing its own gate each
      *    really did have the call blocked, and disbelieving them would make a
-     *    refusal real only when THIS process made it — false the moment a tool
-     *    is out-of-process.
+     *    refusal real only when THIS process made it.
      *
-     * The reasoning, the boundary between the branches, and what would change
-     * the answer (a typed `DenialKind` field on `ToolResult`, so a callback
-     * DECLARES a refusal instead of spelling one) are asserted rather than
-     * only written down, by
+     * WHAT CHANGED, AND IT IS THE CHANGE THIS DOC-BLOCK SAID WOULD CHANGE THE
+     * ANSWER (audit F-P8). A returned result used to declare a refusal by
+     * SPELLING one: an `error` opening with a roster prefix was classified as
+     * refused. That let any text forge it — a Bash child's stderr, an MCP
+     * server's error body. Now a callback DECLARES a refusal with
+     * {@see ToolResult::denied()} (PHP code in this process choosing to say
+     * "blocked"), and an `error` that merely opens with `Permission denied:`
+     * is an ordinary failure. Both halves are asserted by
      * {@see \SugarCraft\Crush\Tests\Chat\CallbackAuthoredRefusalTest}.
      *
      * @return array{0: ToolResult, 1: mixed, 2: bool} [result, raw callback
@@ -4302,6 +4304,7 @@ final class Chat implements Model
                     $raw->imageProtocol,
                     $raw->diff,
                     $raw->durationMs,
+                    denial: $raw->denial,
                 );
                 return [$result, $raw, true];
             }
@@ -4332,6 +4335,16 @@ final class Chat implements Model
      * be in this repository at all. There is nothing for a scanner to look at.
      * A wrapper is structural: the text now opens with a literal that is on no
      * roster, so `classify()` answers null whatever the exception said.
+     *
+     * AND THE TEXT IS NO LONGER WHAT IS CLASSIFIED AT ALL (audit F-P8).
+     * {@see isDeniedResult()} and
+     * {@see \SugarCraft\Crush\Permissions\ToolRefusal::fromEvent()} now read
+     * the result's structural {@see ToolResult::$denial}, which the catch
+     * above never sets — so E308's guarantee (a throw is a failure, never a
+     * refusal) holds by construction, and holds equally for a tool that
+     * FAILS without throwing, which the wrapper alone never covered. The
+     * wrapper stays: it is the engine's wording, and it tells the model the
+     * call failed rather than quoting an exception that reads like a refusal.
      *
      * THE SHAPE IS {@see \SugarCraft\Crush\Runtime}'s, DELIBERATELY. The
      * engine path was never exposed to this — `Runtime::executionFailure()`
@@ -4403,9 +4416,10 @@ final class Chat implements Model
                 // Enforce the invariant here as well as in answerPermission()
                 // so a future caller cannot widen permission by accident: the
                 // call is reported as unapproved instead of being run.
-                $denied ??= ToolResult::error(
+                $denied ??= ToolResult::denied(
                     $toolCall->name,
-                    DenialKind::Unanswered->reason("{$toolCall->name} was not approved."),
+                    DenialKind::Unanswered,
+                    "{$toolCall->name} was not approved.",
                     $toolCall->id,
                 );
             }
@@ -4520,7 +4534,7 @@ final class Chat implements Model
         if (!$hookResult->isAllowed() && !$hookResult->isModified()) {
             return [
                 $toolCall,
-                ToolResult::error($toolCall->name, DenialKind::Hook->reason($hookResult->message), $toolCall->id),
+                ToolResult::denied($toolCall->name, DenialKind::Hook, $hookResult->message, $toolCall->id),
                 null,
                 null,
                 '',
@@ -4611,6 +4625,7 @@ final class Chat implements Model
             $result->durationMs,
             $result->description,
             $result->arguments,
+            $result->denial,
         );
     }
 
@@ -5546,6 +5561,9 @@ final class Chat implements Model
                 'imageProtocol' => $result->imageProtocol,
                 'diff' => $result->diff,
                 'durationMs' => $result->durationMs,
+                // Audit F-P8: a callback's DECLARED refusal is structure, so
+                // it crosses as the kind's backing value, not via the text.
+                'denial' => $result->denial?->value,
             ],
             'raw' => json_decode(json_encode($raw) ?: 'null', true),
         ];
@@ -5771,6 +5789,7 @@ final class Chat implements Model
             isset($r['imageProtocol']) && is_string($r['imageProtocol']) ? $r['imageProtocol'] : null,
             isset($r['diff']) && is_string($r['diff']) ? $r['diff'] : null,
             isset($r['durationMs']) && is_int($r['durationMs']) ? $r['durationMs'] : null,
+            denial: isset($r['denial']) && is_string($r['denial']) ? DenialKind::tryFrom($r['denial']) : null,
         );
 
         if (($decoded['succeeded'] ?? false) === true && $this->onToolCall !== null) {
@@ -7520,20 +7539,21 @@ final class Chat implements Model
      * is the consumer; the classification lives here, next to the code that
      * writes those errors, so the renderer never has to guess.
      *
-     * THE MATCHING ITSELF MOVED TO {@see DenialKind::classify()} (E239) and
-     * this method is now the `?ToolResult`-shaped wrapper around it. Kept
+     * IT READS THE STRUCTURAL FIELD, NEVER THE TEXT (audit F-P8). This was a
+     * wrapper around {@see DenialKind::classify()} over `$result->error`, and
+     * that text is the tool's own output: a Bash `printf 'Permission denied:
+     * …'; exit 1`, or an MCP server's error, was drawn struck through as a
+     * call that never ran though it had run. Every party that refuses a call
+     * now builds the result with {@see ToolResult::denied()}, which carries
+     * the kind in {@see ToolResult::$denial}, and that is all this reads. Kept
      * rather than inlined at the call sites: `isDeniedResult()` is what the
-     * renderer, the tests and the doc-blocks across this application all name,
-     * and it carries the null-error case that a bare `classify()` cannot.
+     * renderer, the tests and the doc-blocks across this application all name.
      * A caller that wants to know WHICH of the three kinds stopped the call —
-     * the thing a bool cannot say — should reach for `DenialKind::classify()`
-     * directly.
+     * the thing a bool cannot say — reads `$result->denial` directly.
      */
     public static function isDeniedResult(ToolResult $result): bool
     {
-        $error = $result->error;
-
-        return $error !== null && DenialKind::classify($error) !== null;
+        return $result->denial !== null;
     }
 
     /**
