@@ -78,13 +78,9 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Failure scenario:** a paid Claude model on Vertex reports `costUsd = 0.0`. The usage carrier has `unpricedModel = null`, so the UI shows a confident `$0.0000` rather than "unknown", which breaks the "unpriced ≠ zero" contract documented on `Usage`. `EngineBackend`'s mid-turn spend cap (`:922-940`) and Chat's pre-flight cap never trip. Bedrock models outside the table get an invented price.
 - **Fix:** return `?float` with `null` for unknown models (the interface already allows `?float`, `ProviderInterface.php:49`), propagate `unpricedModel` the way `OpenAIProvider::parseUsage` does, and add a `modelPrices` config like OpenAI's.
 - **Test:** `VertexProvider::parseAnthropicUsage([...], 'claude-x')` should give either a non-zero cost or `unpricedModel === 'claude-x'`.
-
-### A16 — Bedrock does not merge consecutive same-role turns and sends blank text blocks
-- **Severity:** Low (non-default provider) · **Confidence:** Verified-by-repro for the wire shape (`repro_bedrock_roles.php`). Server-side rejection was not run live (no AWS credentials). It rests on the Converse API's documented validation rules ("must alternate between user and assistant roles"; "text field … is blank").
-- **Where:** `src/Providers/BedrockProvider.php:316-332`. Compare `VertexProvider::formatAnthropicMessages` at `:708-737`, which does merge.
-- **Failure scenario:** **Repro:** `[User, User, Assistant(''), User]` is sent unchanged as `user, user, assistant{text:""}, user`. Nothing merges the two user turns, and the blank text block goes out as-is. Two everyday paths produce `user, user`. One is a turn that failed: Bedrock *throws* on errors, so the user row gets no assistant reply. The other is `HistorySanitizer` (`HistorySanitizer.php:115-118`) dropping an empty assistant reply. Because the whole history is replayed, every later request in that Bedrock session sends the same invalid shape.
-- **Fix:** merge adjacent same-role messages into one content array, and skip empty text blocks, as Vertex does.
-- **Test:** a history of `[User a, Assistant '', User b]` should produce strictly alternating roles with no empty `text`.
+- **Partly fixed on master in `587a30d68` (Vertex) and `c9772c065` (Bedrock).** Both providers carry built-in list-price tables for Claude (and, on Vertex, Gemini), looked up on cleaned model ids. An unknown model costs $0 and is flagged unpriced, so the UI shows it as unpriced rather than a confident `$0.0000`, and Bedrock's invented $0.01/1k is gone. A new `modelPrices` constructor and `create()` parameter lets a caller supply its own prices. **Remaining:**
+  - `ProviderFactory::createVertex()` and `createBedrock()` (`src/Providers/ProviderFactory.php:991`, `:980`) do not pass `self::userTierModelPrices()` as `modelPrices:`, as `createOpenAI()` does. The user's `modelPrices` setting therefore never reaches these two providers, although Chat's unpriced notice tells the user to set it. The `modelPrices` row in `docs/SETTINGS.md:162` still names only `createOpenAI()` and needs the same update.
+  - Cache read and cache write tokens are still unpriced on Vertex and Bedrock.
 
 ### A18 — New evidence for known #27/#28: the default provider sends `max_tokens: 4096` with DeepSeek-V4 `reasoning_effort: max`
 - **Severity:** (sharpens known High/Medium items) · **Confidence:** Suspected — verification pending. Measure `usage.reasoning_tokens` and `finish_reason` on the live SGLang server for a few agentic prompts at effort `max`.
@@ -92,26 +88,15 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Why this is materially new:** Part II #27 places the 4096 default on Custom/OpenAI. It is also the default path. In SGLang, generated reasoning tokens count against `max_tokens`, so a max-effort think can use the whole budget. That gives `finish_reason: length` with empty content, which is exactly known #28's "thinking-only reply ends turn", now with a likely root cause on the default configuration.
 - **Fix:** set a model-aware default (for example 32k+ for V4 at effort max), or omit `max_tokens` so the server's default applies.
 
-### A19 — Vertex transport errors are never classified as transient: 429 `RESOURCE_EXHAUSTED` and 503 `UNAVAILABLE` get no retry
-- **Severity:** Medium · **Confidence:** Verified-by-repro (`repro_vertex_transient.php`)
-- **Where:** `src/Providers/TransientFailure.php:197-237` and `:405-422`. The callers are `VertexProvider.php:318-334`, `:404-415` and `:1384-1391`, each of which sets `errorTransient: TransientFailure::isTransient($e)`.
-- **Code:**
-  ```php
-  if ($error instanceof RequestException) { ... }
-  if (method_exists($error, 'getStatusCode')) { ... }   // Google\ApiCore\ApiException has none
-  return null;
-  // ...and no instanceof arm for ApiException, so the chain walk ends with `false`
-  ```
-- **Failure scenario:** the vendored gax REST transport (`gax/src/Transport/RestTransport.php:176-177`) converts every Guzzle `RequestException` into `Google\ApiCore\ApiException::createFromRequestException()`. That exception carries the **gRPC** code (`getCode()` gives 8, 14 or 13) and `getStatus()` gives `RESOURCE_EXHAUSTED` and so on. It has **no `previous`** and no `getStatusCode()`. **Repro:** HTTP 429, 503, 500 and 401, and a gRPC-style `UNAVAILABLE(14)`, all return `isTransient=false`. Vertex quota 429s are routine on shared projects, and so are model-overloaded 503s. Every one is reported as a permanent `isError`, with no retry, so the turn fails on the first quota error. (Before the A1 fix the user then saw an empty reply; the error is now shown, but still not retried.) `VertexProvider.php:1551-1555` documents that `ApiException` "is caught by complete() and classified by TransientFailure::isTransient()". That claim is false.
-- **Fix:** add an arm `if ($link instanceof \Google\ApiCore\ApiException) return in_array($link->getStatus(), ['RESOURCE_EXHAUSTED','UNAVAILABLE','DEADLINE_EXCEEDED','INTERNAL','ABORTED'], true);`, guarded by `class_exists`. Also map `ApiException` without a status to network errors.
-- **Test:** the repro as a data provider in `TransientFailureTest`. Add a Vertex `complete()` test with a predictor that throws `ApiException(…, 8, 'RESOURCE_EXHAUSTED')`, asserting `errorTransient === true`.
-
 ### A20 — Bedrock's window and price tables match only bare model ids; every real versioned or inference-profile id gets an 8,192-token window and an invented $0.01/1k
 - **Severity:** Medium (non-default provider) · **Confidence:** Verified-by-reading for the matching. The model-id format and the on-demand rule come from AWS documentation and were not run live.
 - **Where:** `src/Providers/BedrockProvider.php:146-169` (exact-string `match` in `contextWindow()` and `costPer1kTokens()`), and `:46` (`DEFAULT_MODEL = 'anthropic.claude-sonnet-4-6'`).
 - **Failure scenario:** Bedrock model ids carry a version suffix (`…-v1:0`). Claude 4.x on-demand calls must also use an inference-profile id with a region prefix (`us.` / `eu.` / `global.` + `anthropic.claude-…`) or an ARN. None of these equal a table key, so `contextWindow()` returns `default => 8_192`. Chat's context tiers (reminder, auto-compaction, blocking refusal) then fire against 8k on a 200k model: auto-compaction runs after a few messages, on every turn. This also contradicts the `ProviderInterface` contract that unknown means `0`. `costPer1kTokens()` invents `$0.01/1k` both ways, which the interface docblock (`ProviderInterface.php:34-45`) explicitly calls the pre-billing-fix bug. The bare-id `DEFAULT_MODEL` is also probably refused for on-demand throughput on Claude 4.x (suspected; needs a live call).
 - **Fix:** normalise the id before lookup: strip a region-profile prefix and an ARN path, and match on `str_starts_with` of the family key. Return `0` and `null` for unknown models, and set `unpricedModel`. Ship an inference-profile `DEFAULT_MODEL`.
 - **Test:** `new BedrockProvider($client, model: 'us.anthropic.claude-sonnet-4-6-v1:0')` should report a window of at least 200k, and `costPer1kTokens('us.meta.x', 'input')` should be `null`.
+- **Partly fixed on master in `c9772c065`.** Model ids are normalised before both lookups: an ARN path, a `us.`/`eu.`/`global.` inference-profile prefix and version or date tails are stripped. An unknown model gets window `0` (so `ContextWindow::resolve()` applies its named fallback) and is flagged unpriced. The fabricated `claude-haiku-4-7` row was dropped, and `DEFAULT_MODEL` is now the inference-profile id `us.anthropic.claude-sonnet-4-6`. **Remaining:**
+  - the default Bedrock config in `src/Providers/ProviderFactory.php:436` still sends the bare id `anthropic.claude-sonnet-4-6`, which is probably refused for on-demand throughput on Claude 4.x;
+  - the user's `modelPrices` setting does not reach Bedrock (the `ProviderFactory` plumbing gap in A15).
 
 ### A21 — Gemini 2.5 on Vertex thinks by default: thinking tokens are left out of Usage and share the 4,096 `maxOutputTokens` default
 - **Severity:** Medium (non-default provider) · **Confidence:** Suspected. Verification pending: one live `streamGenerateContent` against `gemini-2.5-pro`/`-flash` with a long agentic prompt, reading `usageMetadata.thoughtsTokenCount` and `finishReason`.
@@ -119,6 +104,7 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Failure scenario:** Gemini 2.5 Pro and Flash think by default when `thinkingConfig` is absent. Omitting it hides the thought *parts* (`includeThoughts` defaults to false) but not the thinking itself. Thought tokens are billed as output, and per Google's documentation they count against `maxOutputTokens`. Two consequences follow. (1) `Usage.totalTokens` and `outputTokens` under-count every Gemini turn; cost is already $0 because of A15. (2) A hard prompt can spend most of the 4,096 budget thinking, ending with `finishReason: MAX_TOKENS` and little or no text. That is the same mechanism as A18 and known #28, on a different provider.
 - **Fix:** fold `thoughtsTokenCount` into a reasoning or output bucket, add a `thinkingConfig.thinkingBudget` setting, and raise the default `maxOutputTokens` for 2.5 models (for example 32k), or omit it.
 - **Test:** `parseUsageMetadata(['promptTokenCount'=>10,'candidatesTokenCount'=>5,'thoughtsTokenCount'=>900], 'gemini-2.5-pro')` should account for the 900 tokens.
+- **Partly fixed on master in `ade4d444a`** (part (a)). `thoughtsTokenCount` is now counted as output (reasoning) tokens and priced, on the streaming path too. **Remaining:** part (b), the default 4,096 `maxOutputTokens` (`VertexProvider.php:127`, `DEFAULT_MAX_TOKENS`) and a `thinkingBudget` setting, is a deferred decision (wave plan §3 #12); it needs a live check against Gemini 2.5.
 
 ### A23 — Replayed tool-call arguments send a nested empty map as `[]`
 - **Severity:** Low-Medium · **Confidence:** Verified-by-reading (found while fixing A7)
@@ -126,6 +112,13 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Failure scenario:** A7's fix (`d2911641e`) forces an object only at the top level, so lists now replay correctly. Below the top level, PHP cannot tell an empty map from an empty list once the JSON was decoded as an associative array. The model calls a tool with `{"opts":{}}` (an options bag, a filter, a headers map), and every later step and turn replays that call as `{"opts":[]}`. The model sees its own earlier call in a shape that contradicts the tool's schema, and tends to copy it. This is the same class as 15e MCP-9 (nested empty maps on the MCP wire), which was fixed there by walking the arguments against the tool's `inputSchema`.
 - **Fix:** keep the provider's raw `function.arguments` JSON string on the `ToolCall` when it arrives, and replay that string verbatim (re-encoding only calls that have no raw string, such as recovered textual calls). Alternatively, decode with objects (`json_decode` without `assoc`) end to end, so both shapes round-trip.
 - **Test:** replay an assistant tool call whose arguments arrived as `{"opts":{},"paths":[]}`, and assert the outgoing `arguments` string is byte-equal to that input.
+
+### A24 — A test comment still calls Vertex's rate table "a placeholder 0.0"
+- **Severity:** Info (test comment) · **Confidence:** Verified-by-reading (found while fixing A15 in wave 4)
+- **Where:** `tests/Integration/UsageWiringTest.php:1012-1014`: "cost stays 0.0 either way because Vertex's rate table is a placeholder 0.0".
+- **Detail:** since A15's fix (`587a30d68`), Vertex has a real list-price table, and an unknown model is flagged unpriced rather than priced at a placeholder. The test still passes, because its fixture reports no tokens, so the cost is 0.0 for that reason. Only the comment's explanation is wrong, and it tells the next reader that Vertex is still unpriced.
+- **Fix:** reword the comment to say the cost is 0.0 because the fixture reports zero tokens.
+- **Test:** none needed beyond review.
 
 ---
 
@@ -143,19 +136,16 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Failure scenario:** a turn fans out 5 parallel Tasks, each running up to 50 steps (`DEFAULT_MAX_TURNS`). None of those tokens or dollars reach `Message::usage`, so `/cost`, the token tracker and the context calibration all under-report. The sub-agent's own cap check starts from `sessionSpendAtStartUsd` with an empty `$stepUsages`, so it ignores the parent's spend so far this turn and every sibling's. The parent's boundary check ignores all sub-agent spend. A `/budget` cap can therefore be exceeded by sub-agent spend that is never counted.
 - **Fix:** add `?Usage $usage` to `ToolResult`, and carry it through `encodeResult`/`decodeResult` (`Runtime.php:2524-2557`) and `ToolResultMessage`. Fold tool-reported usage into `$stepUsages` in `runTurn()`, and pass a shared running total into the sub-agent's spend cap.
 - **Test:** a Task over a stub provider that reports a cost of $1 per step should make the parent's `Message::usage->costUsd` include the sub-agent's dollars, and a cap of $0.5 should stop the sub-agent.
-
-### B5 — `withPermissionApprover()` and `withMemoryStore()` silently drop the spend cap
-- **Severity:** Low (latent) · **Confidence:** Verified-by-reading
-- **Where:** `src/Backend/EngineBackend.php:540-543` and `:573-576`. Both call `new self(...)` with 14 arguments, so `$spendCapUsd` and `$sessionSpendAtStartUsd` fall back to null and 0.0.
-- **Failure scenario:** today `Chat.php:9269` applies `withSpendCap()` last, so nothing breaks yet. Any embedder, or future code, that calls either wither after `withSpendCap()` loses the cap without any signal. This is the bug class the `mutate()` convention exists to prevent.
-- **Fix:** route every wither through one private `mutate()` with named arguments.
-- **Test:** `withSpendCap(1.0)->withMemoryStore(null)->withPermissionApprover(fn() => true)` should preserve the cap (assert through reflection, or behaviourally with a costing stub).
+- **Partly fixed on master in `badb3353e`.** Task sub-agent spend now reaches the parent's `Message::usage`, the session total, `/cost` and the mid-turn spend cap. `ToolResult` and `ToolResultMessage` carry a `?Usage` off the frame wire; Runtime folds each settled result's tool usage into the step; the Task engine gets a `turnSpendProbe`, so the sub-agent's cap check sees the parent's spend so far this turn; and `TaskTool` sets usage on the report, on refusals and on the pool path. The same commit fixed a `TypeError` in TaskTool's listener on `SpendCapBreached`, and `EngineExecutor`'s failure paths now carry spend. **Remaining:**
+  - parallel Tasks in one step cannot see each other's spend, so the cap can be overshot by up to one step's worth of sibling spend;
+  - a forked tool child that crashes reports no usage;
+  - Chat's E17 calibration falls back to `totalTokens` when a provider reports no prompt-token buckets (`src/Chat.php:16240`), and that total now includes sub-agent tokens, which inflates the calibration. The fix belongs in `Chat.php`.
 
 ---
 
 ## C. Runtime
 
-These are covered above: B4 (no usage channel on tool results). B2 (deadline kill orphans) was fixed in `c54372b2a`.
+These are covered above: B4 (no usage channel on tool results; partly fixed in `badb3353e`). B2 (deadline kill orphans) was fixed in `c54372b2a`.
 
 ### C3 — Project instructions (`CLAUDE.md`/`AGENTS.md` + every `@import`) have no byte budget, while rules have 64 KiB
 - **Severity:** Low · **Confidence:** Verified-by-reading
@@ -182,20 +172,18 @@ These are covered above: B4 (no usage channel on tool results). B2 (deadline kil
 | A10 | Medium | reading | `CustomProvider` sends a literal `extra_body` key. Partly fixed (`4f8869c63`: no literal key; opt-in constructor `array $extraBody`); remaining: no config key feeds `extraBody` | CustomProvider.php:172, 240 |
 | A12 | Medium | repro+reading | claude-code streaming cannot work (no `--verbose`, wrong framing, argv > 128 KiB) | ClaudeCodeProvider.php:99-310 |
 | A13 | Medium | reading | OpenAI window is 8k for gpt-4o-mini/4.1. Partly fixed (`58d25cb3b`: ids sized, unknown → 0); remaining: no context-window config override | OpenAIProvider.php:103-112 |
-| A15 | Medium | reading | Vertex priced at $0 (spend cap inert); Bedrock invents $0.01 | VertexProvider.php:278; BedrockProvider.php:158 |
-| **A19** | Medium | repro | Vertex `ApiException` (429/503/500) never classified transient: no retry, then empty reply | TransientFailure.php:197-237, 405-422; VertexProvider.php:318, 404, 1384 |
-| **A20** | Medium | reading | Bedrock tables match only bare ids: real versioned/profile ids get an 8k window and an invented $0.01/1k | BedrockProvider.php:46, 146-169 |
-| **A21** | Medium | suspected | Gemini 2.5 default thinking: thought tokens missing from Usage and sharing the 4096 `maxOutputTokens` | VertexProvider.php:1459, 1770-1793 |
-| B4 | Medium (High paid) | reading | Task sub-agent spend never reaches the parent, session total or cap | TaskTool.php:604-608; ToolResult.php; EngineBackend.php:890-941 |
+| A15 | Medium | reading | Vertex priced at $0 (spend cap inert); Bedrock invents $0.01. Partly fixed (`587a30d68`, `c9772c065`: list-price tables, unknown → $0 flagged unpriced, `modelPrices` ctor param); remaining: `ProviderFactory` does not pass the user's `modelPrices` to Vertex/Bedrock, cache tokens unpriced | VertexProvider.php; BedrockProvider.php; ProviderFactory.php:980, 991 |
+| **A20** | Medium | reading | Bedrock tables match only bare ids: real versioned/profile ids get an 8k window and an invented $0.01/1k. Partly fixed (`c9772c065`: ids normalised, unknown → window 0 + unpriced, profile-id `DEFAULT_MODEL`); remaining: the factory's default config still sends the bare id, `modelPrices` plumbing (A15) | BedrockProvider.php; ProviderFactory.php:436 |
+| **A21** | Medium | suspected | Gemini 2.5 default thinking: thought tokens missing from Usage and sharing the 4096 `maxOutputTokens`. Partly fixed (`ade4d444a`: `thoughtsTokenCount` counted and priced); remaining: (b) default output budget and `thinkingBudget` (deferred decision) | VertexProvider.php:127 |
+| B4 | Medium (High paid) | reading | Task sub-agent spend never reaches the parent, session total or cap. Partly fixed (`badb3353e`: usage on `ToolResult`, folded per settled result, parent spend probe in the Task engine); remaining: parallel siblings blind to each other (overshoot ≤ one step), crashed tool child reports nothing, Chat's E17 `totalTokens` fallback inflated | TaskTool.php; ToolResult.php; Runtime.php; Chat.php:16240 |
 | A18 | (sharpens #27/#28) | suspected | Default SGLang `max_tokens` 4096 with effort `max` | SglangProvider.php:1030, 165 |
 | **A23** | Low-Med | reading | Replayed tool-call arguments send a nested empty map (`{"opts":{}}`) as `[]` (residual of A7) | ToolSchema.php:195-196 |
 | A11 | Low | reading | Malformed argument JSON runs the tool with `[]`; model not told | CustomProvider.php:628; SglangProvider.php:2221 |
-| A16 | Low | repro (shape) | Bedrock: no same-role merge, blank text blocks | BedrockProvider.php:316-332 |
-| B5 | Low | reading | Two withers drop the spend cap (latent) | EngineBackend.php:542, 575 |
 | **C3** | Low | reading | Project instructions and `@imports` have no byte budget (rules have 64 KiB) | Runtime.php:3009-3041; InstructionFileLoader.php:841-871 |
 | **C4** | Low (docs) | reading | Notice-sink clip/overflow strings and TROUBLESHOOTING.md still say "full text on stderr"; in the TUI it is in the log file (residual of C2) | RuntimeNoticeSink.php:202, 267; TROUBLESHOOTING.md:85-91, 135, 326 |
+| **A24** | Info (test comment) | reading | `UsageWiringTest` comment still calls Vertex's rate table "a placeholder 0.0" (stale since A15) | tests/Integration/UsageWiringTest.php:1012-1014 |
 
-New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A13 (fix aligned with the `contextWindow()` contract). Items sharpened in that pass and since fixed are listed under **Fixed since audit**. Found while fixing A7 in wave 2: **A23**. Found while fixing C2 in wave 3: **C4**.
+New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A13 (fix aligned with the `contextWindow()` contract). Items sharpened in that pass and since fixed are listed under **Fixed since audit**. Found while fixing A7 in wave 2: **A23**. Found while fixing C2 in wave 3: **C4**. Found while fixing A15 in wave 4: **A24**.
 
 ---
 
@@ -256,3 +244,6 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **C1** `waitpid -1` never settled an exempt parallel job — fixed on master in `c10717d8c` (both wait sites go through `parallelJobHasExited()`, which treats any non-zero answer as gone; the payload file is still read, so the real result arrives).
 - **A17** `embeddings()` swallowed transport errors and returned an empty list — fixed on master in `106ea5253` (both providers throw `\RuntimeException` with the provider's own error text and the Guzzle exception as `previous`, so `TransientFailure` still classifies 5xx, 429 and connect failures as transient and 400 as permanent; a 2xx body that is not JSON, has no `data` list, or has an item without an `embedding` also throws; `data: []` still returns an empty result).
 - **C2** Engine-side `error_log()` diagnostics painted over the TUI frame — fixed on master in `9a827f4e3` + `520298b79` + `0c2bbd0a7` (new `Diagnostics\TuiErrorLog` points `error_log` at `~/.sugar-crush/logs/sugarcrush.log`, directory 0700 and file 0600, refusing a symlinked file, rotating one generation past 5 MiB and keeping an operator's own destination; `bin/sugarcrush` arms it on the TUI path just before `Program::run`; `RuntimeNoticeSink::warn()` skips `error_log()` while armed with a transport and the destination is still stderr) and `080fac09d` (the SGLang `</parameter>` truncation-risk warning is logged once per tool-call id per provider instance, an empty id keyed by a content hash, at most 1024 entries). Residual: if the log cannot be set up, the parsers' direct `error_log()` calls can still reach the tty; the notice-sink strings and TROUBLESHOOTING.md still say "full text on stderr" (C4).
+- **B5** `withPermissionApprover()` and `withMemoryStore()` silently dropped the spend cap — fixed on master in `d4ecedcea` (every `EngineBackend` wither goes through one private `mutate()`, so both withers keep `spendCapUsd` and `sessionSpendAtStartUsd`).
+- **A19** Vertex `ApiException` 429/503 were never classified transient, so they got no retry — fixed on master in `a26489378` (`TransientFailure::isTransient()` judges a Vertex `ApiException` by its gRPC status, so `RESOURCE_EXHAUSTED` (429) and `UNAVAILABLE` (503) retry and `UNAUTHENTICATED` (401) does not, falling back to the numeric code; the `VertexProvider` docblock that claimed this already worked is corrected).
+- **A16** Bedrock did not merge consecutive same-role turns and sent blank text blocks — fixed on master in `9c706ed39` (a new `conversationTurns()` step, used by both `converse` and `converseStream`, merges adjacent same-role turns and drops blank text blocks).

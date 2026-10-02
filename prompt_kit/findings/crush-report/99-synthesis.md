@@ -96,11 +96,11 @@
 
     Kilo legacy (a `condense` tool with a user-approved preview) and Goose (agent-visible vs user-visible flags) supply the remaining pieces.
 
-11. **The code audit found about 136 new defects** (Part IX). 59 of them, including the one Critical and all 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes, unfenced repo skill descriptions, Esc Esc tool placeholders that never healed, raw CR and C1 controls reaching the terminal, a turn kill that left its commands running, streamed tool calls dropped on `stop`, built-in skills that told every project to `git clean -fd`, the full-history markdown re-render on every frame, `error_log()` output painted over the TUI, env-block git calls that honoured the user's git config and took `index.lock`, PostToolUse blocks that did nothing, hook input that defeated grep-style deny hooks, and a hostile `.gitignore` that stalled Glob for minutes. Waves 2 and 3 found 15 more, smaller defects while fixing these. About 92 remain, including:
-    - **Hooks and custom-command shell blocks still run synchronously inside `update()`**, freezing the TUI for up to 60 s and 10 s.
+11. **The code audit found about 136 new defects** (Part IX). 69 of them, including the one Critical and all 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes, unfenced repo skill descriptions, Esc Esc tool placeholders that never healed, raw CR and C1 controls reaching the terminal, a turn kill that left its commands running, streamed tool calls dropped on `stop`, built-in skills that told every project to `git clean -fd`, the full-history markdown re-render on every frame, `error_log()` output painted over the TUI, env-block git calls that honoured the user's git config and took `index.lock`, PostToolUse blocks that did nothing, hook input that defeated grep-style deny hooks, a hostile `.gitignore` that stalled Glob for minutes, prompt hooks and custom-command shell blocks that froze the TUI inside `update()`, forks that carried no conversation, the multi-second `/branch` freeze, and Vertex quota errors that were never retried. Waves 2, 3 and 4 found 18 more, smaller defects while fixing these. About 85 remain, including:
     - **UI-only rows are now off the wire, but the compaction summary still reads them.**
-    - **Sub-agent spend never reaches the parent or the spend cap.**
-    - **Permission gaps remain:** WebFetch counts as read-only, Bash inherits provider API keys, and path deny rules miss respellings.
+    - **Sub-agent spend now reaches the parent and the spend cap, but parallel sibling Tasks cannot see each other's spend**, and the user's `modelPrices` setting never reaches Vertex or Bedrock.
+    - **Two TUIs on one session still overwrite each other's transcript** (the writer lock is a deferred decision).
+    - **Permission gaps remain:** WebFetch counts as read-only, Bash inherits provider API keys, and path deny rules still miss respellings outside the main tool loop.
 
     About two thirds are reproduced with scripts. No High item remains; finish the two Medium-High items, both partly fixed, next (IX.3, IX.4).
 
@@ -193,7 +193,7 @@ Severity reflects user impact on the live default path.
 | 27 | Medium | No retry once a stream has produced its first token; no continuation on output-length stops (the 4096 `max_tokens` default on Custom/OpenAI cuts large Writes) | `Runtime::runStreaming` `:1324-1459` | 07 09 10 11 |
 | 28 | Medium | A reply that is only reasoning, or empty, ends the turn silently *(inferred)* | `runTurn()` | 06 08 10 |
 | 29 | Low-Med | Only the final assistant text of a turn is kept, so interim reasoning is lost for the next turn | `EngineBackend.php:985`, `:1019` | 03 |
-| 30 | Low-Med | `/bg` results never come back to chat; `/fork` runs ignore history; daemons are not picked up again after restart | baseline §2.4 | 04 08 10 12 |
+| 30 | Low-Med | `/bg` results never come back to chat; `/fork` runs ignore history (the forked session's stored copy is complete since the fix for audit SES-2, `698a1efff`, but the background daemon does not load it); daemons are not picked up again after restart | baseline §2.4 | 04 08 10 12 |
 | 31 | Low-Med | The OpenAI provider never emits tool calls (always streams; `parseChunk` hard-codes `toolCalls: null`); `anthropic` is OpenAI-shaped with tools off | `OpenAIProvider.php:488-507`; `ProviderFactory.php:663-694` | baseline |
 | 32 | Low-Med | `/model` switches provider, not model, and appears to drop the Task tool and rule toggles *(inferred)* | `Chat.php:14106-14146`; `Bootstrap.php:6748` | baseline |
 | 33 | Low | The session-affinity header is dormant, so multi-replica SGLang routers lose radix locality | `SessionAffinity` trait | 02 12 |
@@ -315,7 +315,7 @@ How the pieces connect:
 | # | Item | Effort | Sources |
 |---|---|---|---|
 | 4.1 | Honour preset `model`/`effort`/`permissionMode` (new `EngineBackend::withModel()`, per-sub-agent `PermissionGate`); per-call `model` arg; `subagentModel` default; **fail loudly** on unsupported preset fields (dsh) | S–M | 9 reports |
-| 4.2 | Argument-scoped **grant** rules for presets, reusing the permission-rule matcher (already argument-scoped, and since `c8fc573a5` fail-closed: the `ShellWords` splitter refuses `$()`, backticks, process substitution and non-inert redirects in allow rules, every segment must match, deny on any segment); harden it against path respellings (Part IX: F-J3); route Task through `refuseCallOutsideGrant()` (dormant) | M | CC Zed Cline Kilo |
+| 4.2 | Argument-scoped **grant** rules for presets, reusing the permission-rule matcher (already argument-scoped, and since `c8fc573a5` fail-closed: the `ShellWords` splitter refuses `$()`, backticks, process substitution and non-inert redirects in allow rules, every segment must match, deny on any segment); hand sub-agent gates the project root so path rules also match respellings there (Part IX: F-J3, fixed on the main tool loop in `3b7d2fd33`); route Task through `refuseCallOutsideGrant()` (dormant) | M | CC Zed Cline Kilo |
 | 4.3 | **Background Task** (`background:true` / preset `background`): returns `{agent_id}` at once ("DO NOT sleep or poll"). Runs via `BackgroundSupervisor` or `AgentWorkerPool`. On settle, a user-role announce row (`[Subagent '<label>' completed] … status from the runtime outcome (ok/error/timeout), stats line: runtime, tokens, cost, resume id`) is appended, and a turn is auto-dispatched if idle or injected via steer if busy. An "Active subagents" block appears in each turn context. Wire `BackgroundSupervisor::reconnect()`. Also fixes `/bg` results never returning | M–L | Claw nano dsh Goose Kilo OC |
 | 4.4 | **Messaging tools** on the dormant `Mailbox`: `SendMessage{to, text, mode: steer\|followup\|note}` (steer a running child, wake an idle one, cold-resume a stored one via `SuspendedDelegations`), child→parent replies, `Subagents{list\|wait\|cancel}`, `InterruptAgent`; delivery at step boundaries through the 1.C seam; untrusted-peer framing | M–L | Claw dsh Kilo Goose nano |
 | 4.5 | **Shared board** for parallel children (Kilo): `BoardRead`/`BoardPost` with INFO/ASK/RESULT/HOLD/VETO, notice appended to the next tool result | M | Kilo |
@@ -808,17 +808,17 @@ Five agents audited sugar-crush's own source for **new** defects, one per area. 
 
 **Totals at audit time: about 136 findings** — 1 Critical, 20 High, about 47 Medium, and the rest Low-Medium, Low or Info.
 
-**Since the audit, 63 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 59 of the original findings, plus the 4 new items found while fixing them in wave 1. Waves 2 and 3 found 15 more while fixing their items (10 in wave 2, 5 in wave 3); they are open. **About 92 findings remain** — 0 Critical, 0 High, 2 Medium-High (15b-03 and F-E2, both partly fixed), about 31 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
+**Since the audit, 73 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 69 of the original findings, plus the 4 new items found while fixing them in wave 1. Waves 2, 3 and 4 found 18 more while fixing their items (10 in wave 2, 5 in wave 3, 3 in wave 4); they are open. **About 85 findings remain** — 0 Critical, 0 High, 2 Medium-High (15b-03 and F-E2, both partly fixed), about 26 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
 
 At audit time, about two thirds were **reproduced with a script**; the rest are verified by reading, and a few are marked *suspected*. Full write-ups are in Appendices Q–U; each finding has code excerpt, failure scenario, fix and a test that would catch it.
 
 | Appendix | Area | Findings | Critical / High |
 |---|---|---|---|
-| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 17 | 0 / 0 |
-| **R** (15b) | Chat state machine, TUI, rendering, commands | 20 | 0 / 0 |
+| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 15 | 0 / 0 |
+| **R** (15b) | Chat state machine, TUI, rendering, commands | 18 | 0 / 0 |
 | **S** (15c) | Tools, permissions, hooks (security) | 18 | 0 / 0 |
 | **T** (15d) | Context assembly, memory, skills, config | 16 | 0 / 0 |
-| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 21 | 0 / 0 |
+| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 18 | 0 / 0 |
 
 Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
 
@@ -828,7 +828,7 @@ Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
   - Part II #23 now says so; roadmap item 4.2 now covers only preset grants and path respellings.
   - `docs/PERMISSIONS.md` is now corrected: its stale "Pattern matching is name-only" section was rewritten in `d3d90fece` to describe argument-scoped rules as implemented, and since `c8fc573a5` it describes the fail-closed allow rules.
   - Sub-agent **preset grants** still match by name (`AgentManager::resolveGrantedTools`).
-  - The new matcher's remaining real gap is F-J3 (path rules miss relative and absolute respellings and symlinks). F-P5 (`$(…)`, backticks and redirects slipping past allow rules) was fixed in `c8fc573a5`.
+  - The new matcher's remaining real gap is F-J3, now partly fixed (`3b7d2fd33`): on the main tool loop, path rules also match the root-anchored, resolved and symlinked spellings, but sub-agent gates, Chat's own gate calls and declaration checks get no root and still match lexically. F-P5 (`$(…)`, backticks and redirects slipping past allow rules) was fixed in `c8fc573a5`.
 - **Two documentation statements are stale:** "rule `paths:` scoping not applied" (it is; 15d-19) and "only two keys re-applied per turn" (`maxOutputTokens` is too).
 - **The image-marker / mouse-zone collision from project memory is already fixed** (Appendix P). Agent-supplied text must still be PUA-stripped (15b-17).
 - **Workerman is not used anywhere in the monorepo** (Appendix O §3).
@@ -838,7 +838,7 @@ Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
 Several audits found the same root cause in different places. Fixing each theme once fixes them all.
 
 1. **Killing a turn does not kill all of its commands (residue).** Turn teardown and the parallel deadline now kill the whole process tree (`ProcessContainment::killTree()`, `c54372b2a`), so the `setsid`'d `bash` and parallel Task sub-agents die with the turn.
-   - The remaining kill sites still signal one pid: the dormant Chat site, `AgentWorkerPool` and `EngineExecutor` (F-E2, partly fixed).
+   - The remaining kill sites still signal one pid: the dormant Chat site, `AgentWorkerPool`'s cancel path and `EngineExecutor` (F-E2, partly fixed). The pool's new per-agent deadline kill (WF-1 (a), `4fa805970`) already uses `killTree()`.
    - **Fix:** route them through `killTree()` too.
 2. **Terminal-injection and rendering hygiene.** CR, UTF-8 C1 controls, the permission modal's byte wrap and `error_log()` output over the frame are fixed (`Sanitize::untrustedForDisplay()`, the C1 sweep, `Sanitize::visibleControls()`, and `TuiErrorLog`, which sends the TUI's `error_log` to `~/.sugar-crush/logs/sugarcrush.log`). What remains:
    - The tab strip is neither clipped nor sanitized (15b-18).
@@ -855,28 +855,25 @@ Several audits found the same root cause in different places. Fixing each theme 
    - The env block is still re-rendered inside the system message, which hurts cache stability (Part I #2, Part II #2).
 5. **Errors are swallowed and turns "succeed".**
    - Malformed arguments run the tool with `[]` (A11).
-   - Vertex 429/503 are never retried (A19).
 6. **The permission layer has holes in the default and stricter modes.**
    - Accept-edits mode allows `rm`, `mv` and `cp` (F-P4).
    - WebFetch counts as read-only, so it can exfiltrate data unprompted (F-P6).
    - Bash and hooks inherit provider API keys (F-E1).
 7. **Unbounded or stalled work inside `update()`.**
    - A long streaming reply whose headings follow a closing code fence still re-renders whole on every frame, because candy-shine's `SectionScanner` finds no boundary there (15b-31, the residual of the fixed 15b-10).
-   - UserPromptSubmit and SessionStart hooks run synchronously, freezing the UI for up to 60 s (15b-04).
-   - Custom-command `` !`…` `` runs inside `update()` (15b-20).
-   - `/branch` does one INSERT per message: a 4.3 s freeze at 800 messages (15b-21).
+   - Transcript persistence still runs synchronously inside `update()`, though each save is now one transaction and `/branch` no longer re-interns the history (a residual, noted in Appendix R's **Fixed since audit** list).
    - `AgentManager` never forgets sub-agents (AG-3).
 8. **Sessions and persistence integrity.**
-    - `forkSession` copies dead tables, so the fork is empty and `--resume name` opens the parent. This is a root cause of "/fork ignores history" (SES-2).
-    - No writer lock: two TUIs on one session clobber each other (SES-3).
+    - No writer lock: two TUIs on one session still overwrite each other's transcript. The checkpoint-index and blob-intern races are closed (SES-3, partly fixed; the lock and second-TUI behaviour are a deferred decision).
+    - A `/fork` now copies the whole conversation, but the background daemon does not load it (Part II #30).
     - UI-only command output and notices are kept off the wire by `Message::$uiOnly`, but the compaction summary still reads them, and notices still interleave between a prompt and its answer (15b-03, partly fixed; relates to Part II #2 and the DCP `uiOnly` proposal).
 9. **MCP: remaining interoperability and trust gaps.**
     - `claude-mcp` gives up after about 1 s (MCP-3).
     - OAuth discovery and storage bugs (MCP-6/7/8).
     - Trust is bound to the project path, not to `.mcp.json`'s content (MCP-5).
 10. **Cost accounting holes.**
-    - Task sub-agent spend never reaches the parent or the cap (B4).
-    - Vertex is priced at $0 and Bedrock invents $0.01 (A15, A20).
+    - Task sub-agent spend now reaches the parent, the session total and the cap, but parallel sibling Tasks cannot see each other's spend (overshoot up to one step), a crashed tool child reports none, and Chat's calibration fallback is inflated by sub-agent tokens (B4, partly fixed).
+    - Vertex and Bedrock now have list-price tables and flag unknown models unpriced, but `ProviderFactory` never hands them the user's `modelPrices`, cache tokens are unpriced there, and the default Bedrock config still sends a bare model id (A15, A20, both partly fixed).
     - The OpenAI context window has no config override (A13, partly fixed: the 8k sizes are corrected, and cached tokens are now billed at the cached rate).
     - A trusted project can choose title and summary models billed to the user's key (15d-24).
     - Together these mean the spend cap is unreliable on every provider except priced ones.
@@ -905,8 +902,6 @@ The Critical item and all 20 High items are fixed on master, as is the latent Hi
   - the rest of 15b-03 (the compaction input and notice order; the `uiOnly` flag itself has landed);
   - stable unique ids (also needed by A8, the markup duplication).
 - **With the sessions phase (VIII.4 A):**
-  - SES-2 (fork copies dead tables);
-  - SES-3 (writer lease; the server design's `session_leases` table covers it);
-  - session picker bugs B1–B3;
-  - 15b-21.
-- **With rendering work:** 15b-30 and 15b-31 (candy-shine streaming fixes, so sugar-crush can drop its workarounds; 15b-10's memoization has landed), 15b-04 and 15b-20 (move hooks and shell into `Cmd`).
+  - SES-3 (b) (writer lease; the server design's `session_leases` table covers it);
+  - session picker bugs B1–B3.
+- **With rendering work:** 15b-30 and 15b-31 (candy-shine streaming fixes, so sugar-crush can drop its workarounds; 15b-10's memoization has landed).

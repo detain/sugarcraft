@@ -51,13 +51,6 @@ Confidence labels:
   - the compaction summary's input is not filtered, because filtering only one side breaks the exchange-key alignment;
   - notice order is unchanged: notices still render, interleaved, between a prompt and its answer in the transcript (they are off the wire).
 
-### 15b-04 — A synchronous UserPromptSubmit / SessionStart hook chain runs inside `update()`
-- **Severity:** Medium · **Confidence:** Verified-by-reading
-- **Where:** `src/Chat.php:4587` (`$this->hooks->userPromptSubmit(...)`) is reached from `submit()` → `update()`. `HookRegistry::executeHooks()` → `ScriptHook` does a blocking `proc_open` plus `stream_select` drain. `ScriptHook::DEFAULT_TIMEOUT_SECONDS = 60.0` per hook.
-- **Failure scenario:** A slow or hung prompt hook freezes the whole TUI for up to 60 s per hook (times the chain): no repaint, no Ctrl+C, no Esc. `releaseQueuedPrompts()` runs the same path at settle time.
-- **Fix:** Run turn hooks in a `Cmd::promise` (child or async process). Dispatch the turn from the resolved message.
-- **Test:** A hook that sleeps 2 s. Assert that `update(Enter)` returns in under 100 ms with a pending Cmd.
-
 ### 15b-05 — Menu-bar and shell commands erase the user's draft, then mid-turn refuse with "Your draft is still in the box"
 - **Severity:** Medium · **Confidence:** Verified-by-repro (`r8_menu_draft.php`)
 - **Where:** `App::runRegistryCommand()` at `src/App/App.php:1775-1799`, together with `clearInputKeys()` at `:1817-1826`. It feeds synthetic Backspace and Delete keys, then types `/name` + Enter. Callers:
@@ -167,6 +160,13 @@ Confidence labels:
 - **Fix:** reword the two rationales to the transcript-clutter reason, and point the `DetectsCapabilities` docblock at `ToolResult::mosaic()` (and the boot-time warm-up).
 - **Test:** none needed beyond review.
 
+### 15b-33 — A `/fork` docblock still names `SessionStore::forkSession()` as the transcript copy
+- **Severity:** Info (comment) · **Confidence:** Verified-by-reading (found during wave 4)
+- **Where:** `src/Chat.php:13269`, in the docblock of the `/fork` handler: "The transcript copy is {@see SessionStore::forkSession()}, the same call `/branch` makes".
+- **Detail:** since 15e SES-2's fix (`698a1efff`), the copy that carries the conversation is `EnhancedSessionStore::forkSession()`, which copies the transcript, checkpoints, blobs and meta in one transaction around `SessionStore::forkSession()`'s row copy. The `@see` points readers at the method that copies only the `sessions` row and the legacy tables.
+- **Fix:** re-point the `@see` at `EnhancedSessionStore::forkSession()`.
+- **Test:** none needed beyond review.
+
 ## E. Repository-supplied and model-supplied text in overlays and panes
 
 ### 15b-17 — Model or tool text containing U+E002+n paints a copy of on-screen image n at a position the text chooses, and blanks Nerd Font glyphs (lead 3)
@@ -208,40 +208,7 @@ Confidence labels:
 
 ## F. Custom commands, session commands and persistence
 
-### 15b-20 — A custom command's `` !`…` `` runs synchronously inside `update()` for up to 10 s, and on timeout its grandchildren survive
-- **Severity:** Medium · **Confidence:** Verified-by-repro (`r14_cmd_shell.php`)
-- **Where:**
-  - `Chat::submit()` → `expandCustomCommand()` (`src/Chat.php:7202`) → `commandDirective()` → `CommandSpec::runShellSubstitution()` (`src/Chat.php:8116`).
-  - `runShellSubstitution()` (`src/Commands/CommandSpec.php:563-760`) runs a blocking `stream_select` loop against the shared 10-second `SHELL_BUDGET_SECONDS`.
-  - On timeout it calls `proc_terminate($process)` at `:679`. That signals only the direct child. `ProcessContainment::spawnSpec()` made that child a session leader through `setsid`, but no `kill(-pgid)` is sent, even though `ProcessContainment::groupId()` exists for exactly this.
-- **Repro:**
-  - A template `` !`bash -c 'exec -a <tag> sleep 38'; echo done` `` blocks `expandTemplate()` for **10.1 s**. During that time the TUI is frozen with no repaint, Esc or Ctrl+C, the same class of defect as 15b-04.
-  - After the "killed after 10 seconds" notice, the `<tag> sleep 38` grandchild is **still running**.
-  - Any `` !`…` `` that starts a background job holding stdout (`npm run dev &`, `docker compose up &`) costs the whole budget and leaks the job.
-- **Fix:**
-  - Expand file-based commands off the update path, in a `Cmd::promise` or child process that resolves to a "submit expanded text" message.
-  - Kill the process group on timeout: `posix_kill(-ProcessContainment::groupId($process), SIGTERM)`, then `SIGKILL`, through `ProcessReaper::escalate()` as `SystemClipboard` does.
-  - Register the site with `tools/check-child-lifetimes.php`, if it is not already accounted for there.
-- **Test:** The template above with a 1 s budget override. Assert `update(Enter)` returns in under 100 ms with a pending Cmd. After the budget expires, assert `pgrep -f <tag>` finds nothing.
-
-### 15b-21 — `/branch` (and any first save of a long history under a new session id) freezes the TUI for seconds: one autocommitted INSERT per message (lead 4)
-- **Severity:** Medium · **Confidence:** Verified-by-repro (`r12_persist_cost.php`)
-- **Where:**
-  - `Chat::update()` → `persistTranscript()` (`src/Chat.php:1512`) → `EnhancedSessionStore::saveTranscript()` → `encodeCheckpoint()` → `internMessages()`.
-  - `internMessages()` executes `INSERT OR IGNORE INTO checkpoint_blobs` once per missing message (`src/Session/EnhancedSessionStore.php:709-719`) with **no surrounding transaction**. Each insert is its own WAL commit, with an fsync at the default `synchronous=FULL`.
-  - Blobs are keyed by `session_id`. `/branch` (`handleBranchCommand()`, `:12054`) moves `currentSessionId` to the fork, so the next save re-interns **every** message under the new id. `SessionStore::forkSession()` copies the `messages` rows but not `checkpoint_blobs`.
-- **Measured** (800 messages, 2.4 MB, local SSD):
-  - first save: **5.5 s**
-  - save under the new branch id: **4.3 s** (823 messages)
-  - steady-state save of one new row: 16 ms median, 35 ms max
-  - cold-cache save after a restart: 51 ms
-  - The branch figure is paid synchronously inside the `update()` that handles `/branch`.
-- The steady-state 16-35 ms is also paid on **every** history change in `update()`, including each `ToolStarted`, `ToolFinished` and runtime notice. It is tolerable on an SSD and noticeable on network or slow disks.
-- **Fix:**
-  - Wrap `internMessages()` and the transcript write in one `beginTransaction()` / `commit()`. That is one fsync per save, not one per message.
-  - In `forkSession()`, copy the source session's blobs with `INSERT … SELECT`.
-  - Longer term, move persistence off `update()` (a debounced `Cmd`).
-- **Test:** Spy on the PDO (or count `PRAGMA data_version` bumps) across `saveTranscript()` of 50 new messages and assert one commit. A `/branch` performance guard: 800 messages under 300 ms.
+Both findings here (15b-20, 15b-21) were fixed in wave 4; see **Fixed since audit**.
 
 ---
 
@@ -250,11 +217,8 @@ Confidence labels:
 | ID | Sev | Conf | Title |
 |---|---|---|---|
 | 15b-03 | Med-High | Repro | Command output, mid-turn notices and background/runtime notices go to the model as real turns. Partly fixed (`2a3a8f91c`: `Message::$uiOnly`, filtered at every wire encoder); remaining: compaction input unfiltered, notices still interleave between a prompt and its answer |
-| 15b-04 | Medium | Reading | UserPromptSubmit/SessionStart hooks run synchronously inside update() (up to 60 s freeze) |
 | 15b-05 | Medium | Repro | Menu and shell commands erase the draft, then claim "draft still in the box" |
 | 15b-09 | Medium/Low | Repro | Status bar not clipped to cols; content width (and every overlay) floored at 20+chrome |
-| 15b-20 | Medium | Repro | Custom-command `` !`…` `` blocks update() up to 10 s; timed-out grandchildren survive |
-| 15b-21 | Medium | Repro | `/branch` re-interns every message with one autocommitted INSERT each: 4.3 s freeze at 800 messages |
 | 15b-26 | Medium | Repro | candy-core `Width::wrap()` loops forever when a 2-cell cluster meets a 1-column budget (latent in sugar-crush; reachable via candy-shell pager, sugar-table) |
 | 15b-13 | Low-Med | Reading | Token proxy chars/4 underestimates CJK 3-6×. Partly fixed (`8341a37c1`: script-weighted `TokenEstimate` for Chat's estimate, 85/95% tiers, status bar); remaining: `ContextCompactor` still chars/4 (70% reminder late for CJK), stale comments |
 | 15b-17 | Low-Med | Repro | U+E002+n in model or tool text paints a copy of on-screen image n where the text chooses; Nerd Font glyphs blanked |
@@ -269,6 +233,7 @@ Confidence labels:
 | 15b-30 | Low | Repro | candy-shine `stream()` ≠ `render()` when the text has link reference definitions (sugar-crush renders such partials whole) |
 | 15b-31 | Low | Repro | candy-shine `SectionScanner::finish()` drops the closed section before a trailing heading; no boundary after a closing fence (residual of 15b-10) |
 | 15b-32 | Info | Reading | Stale comments: launch notices "re-sent every turn" (Bootstrap, SessionStore); DetectsCapabilities cites Doctor's removed `??=` probe |
+| 15b-33 | Info | Reading | `/fork` docblock (`Chat.php:13269`) still names `SessionStore::forkSession()` as the transcript copy (stale since SES-2) |
 
 **Checked and dropped:**
 - **Documented and intentional:** `/HELP`, `/clear all`, `/exit now` and unknown `/foo` fall through to the model (`docs/COMMANDS.md` "Two guards…"). The held queue after Esc Esc goes out after the next prompt (`InFlightInputQueueTest::testAQueueHeldThroughACancelGoesOutOnTheNextSettle`).
@@ -360,3 +325,6 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **15b-23** Positional `$N` splitting: an apostrophe swallowed the rest of the line and `""` shifted the arguments — fixed on master in `0147c5f7a` + `1173b2ada` (a quote opens a span only at a token start, an unterminated quote stays literal, and an empty quoted span yields an empty token). Residual: `/model ""` now answers "Could not switch to provider ''" instead of opening the palette, because the user typed an explicit empty name.
 - **15b-10** Every frame re-rendered the whole history through CandyShine — fixed on master in `05f86a2a9` (exact memos in `src/Renderer.php`: settled CandyShine bodies in an LRU per width and content hash, scoped to one theme object; incremental streaming through CandyShine's `SectionScanner`, re-rendering only the open tail; per-row SGR transitions in `balanceSgr()`; the line count of collapsed tool bodies; the tool-zone dedup is a keyed lookup and labels are styled once per frame; 529 frames of a differential corpus are byte-identical to the old Renderer). At 120×40: 50/200/800 exchanges 182/698/2949 → 15/52/211 ms per frame, 300 warm markdown exchanges 965 → 38 ms (target was under 50), a 200K streaming partial 2197 → 81 ms. Residual: `r13_stream_cost.php` as written (headings straight after a closing fence) is only partly faster, 207/2526 → 112/1120 ms at 20K/200K, because `SectionScanner` finds no boundary there (15b-31); the memo works around two candy-shine bugs (15b-30, 15b-31).
 - **15b-12** Session titling fell back to the main, tool-armed backend — fixed on master in `37ff6d54f` (titling is skipped when `titleBackend` is null, the same gate prompt suggestions use; no other `?? backend` fallback exists).
+- **15b-04** UserPromptSubmit and SessionStart hook chains ran synchronously inside `update()` — fixed on master in `f1b6862e9` (script turn hooks run off `update()` in a forked child, and the turn is dispatched from the resolved `TurnHooksResolvedMsg`).
+- **15b-20** A custom command's `` !`…` `` ran synchronously inside `update()` for up to 10 s, and on timeout its grandchildren survived — fixed on master in `2826f5cf3` (the expansion runs off `update()` through a forked child, `forkedPayloadCmd()`, and resolves to `CustomCommandExpandedMsg`; on timeout `ProcessContainment::killTree()` plus a SIGKILL to the process group also catch `&` background jobs; gate checks made in the child are replayed into the session gate).
+- **15b-21** `/branch` and any first save of a long history froze the TUI for seconds, one autocommitted INSERT per message — fixed on master in `698a1efff` (with 15e SES-2: save, checkpoint and restore each run in one `BEGIN IMMEDIATE` transaction, and a fork copies the blobs, so the first save on a `/branch` re-interns nothing). Measured at 800 messages: first save 6519 → 233 ms, first save on a branch 5996 → 17 ms; the fork itself takes about 470 ms (the fsync of the copied blobs). Residual: persistence still runs synchronously from `Chat::update()` (`persistTranscript()`); moving it to a debounced `Cmd` is not done.
