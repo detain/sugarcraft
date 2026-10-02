@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
+use SugarCraft\Crush\ToolResult as BootProbe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Mosaic\Mosaic;
@@ -24,6 +25,21 @@ use SugarCraft\Mosaic\Mosaic;
  * tool-calling schema, and invoked by Runtime::executeToolCalls() exactly
  * like Bash/Read/Edit/Glob/Grep/WebFetch.
  *
+ * THE TOOL NEVER TOUCHES THE TERMINAL (audit F-T6). It used to keep its own
+ * `self::$mosaic ??= Mosaic::auto()`, which ran the DA1 + XTWINOPS probe the
+ * first time the model called `doctor` — and that call happens inside the
+ * forked turn child, which inherits the TUI's tty descriptors. The child then
+ * wrote escape queries into the frame the parent was drawing and drained up
+ * to ~150 ms of stdin, so keystrokes typed meanwhile were lost and the
+ * terminal's reply could land in the parent's input parser as garbage. It now
+ * reads {@see BootProbe::mosaic()}, the probe-once instance the parent ran at
+ * boot ({@see \SugarCraft\Crush\Cli\Bootstrap::chat()} hands it to `Chat`)
+ * and the fork inherited; the answer is the same one the renderer uses, so
+ * the two can no longer disagree either. A headless launch enters at
+ * `Bootstrap::backend()` and never builds a `Chat`, so there that accessor
+ * still probes on first use — harmless only because no TUI owns the tty on
+ * that path; warming it at boot belongs to `Bootstrap`, not to this tool.
+ *
  * Deliberately stops at producing the image-bearing result and threading it
  * back onto the root {@see \SugarCraft\Crush\Message} (see {@see
  * \SugarCraft\Crush\Backend\EngineBackend::complete()}) -- the full
@@ -32,15 +48,6 @@ use SugarCraft\Mosaic\Mosaic;
  */
 final class Doctor implements Tool
 {
-    /**
-     * Process-lifetime cache of the terminal's image-rendering capability --
-     * probe once (DA1 + XTWINOPS, ~100ms) via {@see Mosaic::auto()} and
-     * reuse the answer for every subsequent call, matching {@see
-     * \SugarCraft\Crush\ToolResult::probeMosaic()}'s own memoization
-     * contract for the parallel (production-unreachable) type.
-     */
-    private static ?Mosaic $mosaic = null;
-
     /**
      * `doctor`, lowercase on purpose (E10, tracker #78): sibling built-ins
      * answer in TitleCase and this name deliberately stays out of step,
@@ -56,9 +63,9 @@ final class Doctor implements Tool
 
     public function description(): string
     {
-        return 'Detect the image-rendering protocol of the current terminal using the '
-            . 'candy-mosaic probe, which runs at most once per process and is cached for '
-            . 'every later call. It takes no parameters, and its answer is a line of text '
+        return 'Report the image-rendering protocol of the current terminal, as detected '
+            . 'by the candy-mosaic probe the client ran once at startup; calling it never '
+            . 're-queries the terminal. It takes no parameters, and its answer is a line of text '
             . 'naming the pixel-graphics protocol that was found (Kitty, Sixel, or iTerm2) '
             . 'or reporting that only a text-cell fallback is available, alongside a '
             . '16-by-16 PNG capability swatch rendered green on a real pixel protocol and '
@@ -86,7 +93,7 @@ final class Doctor implements Tool
 
     public function execute(array $args): ToolResult
     {
-        $mosaic = self::$mosaic ??= Mosaic::auto();
+        $mosaic = BootProbe::mosaic();
         $protocol = $mosaic->protocol();
         $pixelGraphics = !$mosaic->isInline();
 
@@ -103,9 +110,9 @@ final class Doctor implements Tool
     }
 
     /**
-     * A tiny (16x16), freshly-rendered PNG swatch -- green when {@see
-     * Mosaic::auto()} detected a real pixel-graphics protocol (Kitty/Sixel/
-     * iTerm2), amber when it fell back to a text-cell renderer
+     * A tiny (16x16), freshly-rendered PNG swatch -- green when the boot-time
+     * {@see Mosaic::auto()} probe detected a real pixel-graphics protocol
+     * (Kitty/Sixel/iTerm2), amber when it fell back to a text-cell renderer
      * (half-block/quarter-block/chafa). Genuinely computed from the live
      * probe result rather than a hardcoded placeholder.
      */
