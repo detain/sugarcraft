@@ -12,43 +12,6 @@ This report is final. What was read, what was only skimmed, and how each open le
 
 ## A. Skills (loader, registry, listing, nudges)
 
-### 15d-01 — A wrongly typed SKILL.md frontmatter value crashes sugar-crush at launch, including from an untrusted clone
-- **Severity:** High · **Confidence:** Verified by repro, end to end through `bin/sugarcrush`
-- **Where:** `src/Skills/SkillLoader.php:651-659` (`loadSkillManifest()` passes the raw YAML values through); `src/Skills/SkillRegistry.php:366-384` (`registerFromManifest()` → `new Skill(...)` with typed params); `src/Skills/SkillManager.php:97-99` (no try/catch around it); `bin/sugarcrush` (catches only `PermissionConfigException`)
-- **Code:**
-  ```php
-  // SkillLoader::loadSkillManifest()
-  'description' => $frontmatter['description'] ?? "Skill: $name",
-  'context' => $frontmatter['context'] ?? 'thread',
-  'paths' => $frontmatter['paths'] ?? [],
-  // SkillManager::loadAll()  — outside the try/catch that loadManifestsFromDirectory() has
-  foreach ($this->loader->loadAllManifests($projectRoot) as $manifest) {
-      $this->registry->registerFromManifest($manifest);   // new Skill(string $description, ..., array $paths)
-  }
-  ```
-- **Failure scenario:** A repository ships `.sugar-crush/skills/x/SKILL.md` containing any of the following:
-  - `paths: src/**/*.php` (a scalar, not a list)
-  - `description: 42`
-  - `description: 2024-01-01` (Symfony YAML parses this to an int timestamp)
-  - `context: [fork]`
-
-  Project skills have no trust gate. Running `sugarcrush` or `sugarcrush -p` in that checkout then dies:
-  ```
-  PHP Fatal error:  Uncaught TypeError: Skill::__construct(): Argument #10 ($paths) must be of type array, string given
-  #1 SkillManager.php(98) ... #2 Bootstrap.php(3762) skillRegistry() ... #4 NonInteractive.php(903)
-  exit=255
-  ```
-  (`r1.php`, `r1b.php`, and the live CLI run in `proj1/`.) The same YAML in a *foreign* tree (`.claude/skills`) goes through `Skill::fromFile()` inside `loadFromDirectory()`'s `catch (\Throwable)`, where it is silently skipped instead (see 15d-03).
-- **Related consequences of the same missing validation:**
-  - **Non-string `paths` entries.** `paths: [src/**, 2024]` registers fine, but `SkillPathNudge::forPath()` then throws `TypeError: SkillRegistry::pathMatches(): Argument #1 must be of type string, int given` (`SkillRegistry.php:397-400`, repro in `proj12/`). `Edit.php:201` writes the file *before* calling `skillNudge->forPath()` at `:243` (and `Write.php` at `:241`), so `Runtime.php:1795` turns the throw into an error result. The model is told the edit failed although it landed, retries, and gets "old_string not found".
-  - **YAML booleans as strings.** `user-invocable: no` gives `(bool) "no" === true` (`Skill.php:74`, `SkillLoader.php:655`). Symfony YAML 1.2 reads `no` as a string, so the author's "hide from picker" is ignored.
-- **Contrast:** `Rule::new()` already has typed field readers that throw `InvalidArgumentException` with the field name (`src/Context/Rule.php` `stringListField()` and the scalar/boolean readers around `:337-399`). Skills have no equivalent.
-- **Fix:**
-  1. Add the same typed readers to a single `SkillManifest::fromFrontmatter()` used by `Skill::parse()` and `loadSkillManifest()`. Coerce a scalar `paths` into a one-element list, refuse non-scalar list items, and parse booleans as YAML 1.1 (`yes`/`no`/`on`/`off`).
-  2. Wrap `registerFromManifest()` in `loadAll()` with the same `recordSkip()` path.
-  3. As a backstop, let `bin/sugarcrush` catch `\Throwable` at top level with a one-line message.
-- **Test:** `SkillManagerTest::testAMistypedProjectSkillIsSkippedNotFatal`, with a data provider over `paths: "x"`, `description: 42`, `description: 2024-01-01`, `context: [a]` and `paths: [1]`. Assert that `loadAll()` returns, the skill appears in `skipped()` with the field named, and `SkillPathNudge::forPath()` does not throw.
-
 ### 15d-02 — Skill descriptions from repo-controlled trees reach the system prompt verbatim: no PromptFence, no length cap, multi-line, in harness voice
 - **Severity:** High · **Confidence:** Verified by repro (`r5.php`)
 - **Where:** `src/Skills/SkillMatcher.php:65-70`; `src/Skills/SkillPathNudge.php:297-311`; `src/Runtime.php:3107-3111` and `:3126-3130`
@@ -75,6 +38,7 @@ This report is final. What was read, what was only skimmed, and how each open le
   2. Collapse each description to one line, run `PromptFence::escape()`, then clip it (reuse `SkillPathNudge::MAX_ENTRY_BYTES` = 300 B).
   3. Badge the source (`project`/`claude`/`opencode`) on each line.
   4. Escape in `SkillPathNudge::entry()` before clipping, as `RulePathNudge` does.
+- **Partly fixed on master in `a2d3dfcf3`.** Each skill line is now escaped with `PromptFence::escape()`, collapsed to one line and capped (1,024 B in the listing, 300 B in the nudge), and enabled skill bodies are escaped too. **Remaining:** the listing is still not fenced as its own prompt section with a provenance preamble (fix step 1; this needs a `Runtime::systemPromptSections()` edit), and lines carry no source badge (fix step 3). The text still sits in harness voice, so a one-line repo description can still address the model as the harness does.
 - **Test:** `BaseSystemPromptTest::testAForgedSkillDescriptionCannotEscapeOrForgeAFence`. Plant a project skill whose description carries every roster closer plus `<system-reminder>`, then assert the neutralised counts and that no raw newline from the description survives.
 
 ### 15d-03 — A repository's native skill silently replaces the user's own skill (and built-ins) of the same name; the "native wins" safeguard in SKILLS.md is defeated
@@ -96,32 +60,6 @@ This report is final. What was read, what was only skimmed, and how each open le
 ---
 
 ## B. Memory store
-
-### 15d-04 — One malformed memory file breaks every turn; `parseEntry()` catches `\Exception` but the failures are `TypeError`s, and repo-local memory needs no trust
-- **Severity:** High · **Confidence:** Verified by repro (`r3.php`, plus a live `bin/sugarcrush -p` in `proj3/`)
-- **Where:** `src/Memory/MemoryStore.php:506-535`
-- **Code:**
-  ```php
-  $meta = Frontmatter::parse($parts[1]);
-  return MemoryEntry::new(type: $meta['type'], content: trim($parts[2]), scope: $meta['scope'],
-          tags: $meta['tags'] ?? [], id: $meta['id'])
-      ->withCreatedAt(new \DateTimeImmutable($meta['createdAt']))
-      ->withModifiedAt(new \DateTimeImmutable($meta['modifiedAt']));
-  } catch (\Exception) { return null; }
-  ```
-- **Failure scenario:** `<repo>/.sugar-crush/memory/project/a.md` is git-visible by design and read with no trust gate (`ProjectMemoryWriter::forRoot()`). Either of two ordinary hand edits breaks it:
-  - `createdAt: 2024-01-01` unquoted, which Symfony parses to an int, gives `TypeError: DateTimeImmutable::__construct(): Argument #1 must be of type string, int given`.
-  - A missing `type:` gives `Undefined array key` and then `TypeError: MemoryEntry::new(): Argument #1 ($type) must be of type string, null given`.
-
-  Neither is an `\Exception`. The error escapes `list()` → `MemoryBlock::capture()` → `Runtime::memorySnapshot()` → `systemPromptSections()`. Live result: every prompt in that checkout prints `DateTimeImmutable::__construct(): Argument #1 ($datetime) must be of type string, int given` and exits 1. `/memory list|search` break the same way. The parse is also fragile in two other ways:
-  - `explode('---', $raw, 3)` splits on the first `---` anywhere, so a tag containing `---` makes the entry unreadable and it is silently dropped.
-  - A string `tags:` value causes a `TypeError` for `array $tags`.
-- **Fix:**
-  - Catch `\Throwable` and record a skip.
-  - Validate each field with type checks, and accept int timestamps via `'@' . $ts`.
-  - Split the frontmatter with the same anchored `^---\s*\n(.*?)\n---\s*\n` regex the skill and memory importers use.
-  - Expose skipped files to `/doctor`.
-- **Test:** `MemoryStoreTest::testAMalformedEntryIsSkippedNotFatal`, with a data provider over unquoted dates, missing `type`, `tags: "x"`, a tag containing `---`, and a non-mapping frontmatter. Assert that `list()` returns the valid siblings and `MemoryBlock::capture()` renders.
 
 ### 15d-05 — `project` scope in the home store is global, so "project" notes leak into every other project's system prompt
 - **Severity:** Medium · **Confidence:** Verified by repro (`r10.php`)
@@ -158,19 +96,6 @@ This report is final. What was read, what was only skimmed, and how each open le
 ---
 
 ## C. Instruction files and prompt-wide encoding/size
-
-### 15d-08 — Any non-UTF-8 byte in CLAUDE.md, AGENTS.md, a forced instruction, a rule, a memory note or a skill body makes every provider request throw
-- **Severity:** High (any legacy-encoded or binary-matched file bricks the project) · **Confidence:** Verified by repro (`r2.php`)
-- **Where:** `src/Context/InstructionFileLoader.php:264-265`, `:543-546` (raw `file_get_contents`); `src/Runtime.php:3037-3038` (only `PromptFence::escape()`, which is byte-oriented by design); `src/Providers/SglangProvider.php:649` / `CustomProvider.php:195` (`'json' => $params`, Guzzle `Utils::jsonEncode`, which throws)
-- **Failure scenario:** A Latin-1 `CLAUDE.md` containing `Caf\xe9` produces a 5,423-byte prompt with `mb_check_encoding` false. `GuzzleHttp\Utils::jsonEncode([... 'content' => $prompt])` then throws `InvalidArgumentException: json_encode error: Malformed UTF-8 characters`. Every turn in that checkout fails. The same applies to:
-  - an `instructions: ["docs/*"]` glob that matches a binary;
-  - rule bodies (`RuleLoader::readRule()`);
-  - skill bodies;
-  - repo-map package descriptions (partly guarded: `oneLine()`'s `/u` returns null, which becomes `''`).
-
-  Only `EnvironmentBlock::utf8Safe()` (`:884-905`) scrubs, and it covers only its own block. `MemoryBlock::oneLine()` has the inverse problem: `preg_replace('/\s+/u')` on invalid UTF-8 returns null, so the note silently renders as an empty `- [pattern] ` line.
-- **Fix:** Apply one scrub at the single assembly fold, `Runtime::assembleSections()`, using the same `?`-substitution and trailing notice that `EnvironmentBlock::utf8Safe()` uses (or `mb_scrub`), and report which section was scrubbed. Optionally also scrub per loader so the notice names the file.
-- **Test:** `BaseSystemPromptTest::testANonUtf8InstructionFileStillProducesAnEncodableRequest`. Plant a Latin-1 CLAUDE.md and assert `mb_check_encoding($prompt)` and that `Utils::jsonEncode` does not throw.
 
 ### 15d-09 — CLAUDE.md, AGENTS.md and forced instruction files have no size cap; a 3 MB file goes into every request whole
 - **Severity:** Medium · **Confidence:** Verified by repro (`r9.php`: a 3,080,000-byte AGENTS.md gives a 3,085,385-byte system prompt with no notice)
@@ -372,10 +297,7 @@ This report is final. What was read, what was only skimmed, and how each open le
 
 | ID | Sev | Conf | Title | Location |
 |---|---|---|---|---|
-| 15d-01 | High | Repro (CLI) | Mistyped SKILL.md frontmatter → uncaught TypeError at launch (untrusted clone); a mistyped `paths` item makes Edit/Write report failure after writing | `SkillRegistry.php:366-384`, `SkillManager.php:97-99`, `SkillLoader.php:651-659` |
-| 15d-02 | High | Repro | Repo skill descriptions enter the prompt unfenced, unescaped, uncapped and multi-line; the path nudge puts them inside `<system-reminder>` | `SkillMatcher.php:65-70`, `SkillPathNudge.php:297-311` |
-| 15d-04 | High | Repro (CLI) | Malformed memory file → TypeError on every turn (`catch (\Exception)` only) | `MemoryStore.php:506-535` |
-| 15d-08 | High | Repro | Non-UTF-8 instruction/rule/skill/memory bytes → Guzzle json_encode throws on every request | `InstructionFileLoader.php:264`, `Runtime.php:3037` |
+| 15d-02 | High | Repro | Repo skill descriptions enter the prompt unfenced, unescaped, uncapped and multi-line; the path nudge puts them inside `<system-reminder>`. Partly fixed (`a2d3dfcf3`: escaped, one-line, capped); remaining: no fenced section, no source badge | `SkillMatcher.php:65-70`, `SkillPathNudge.php:297-311` |
 | 15d-03 | Medium | Repro | Project `.sugar-crush/skills` shadows the user's own skills and built-ins silently; contradicts SKILLS.md | `SkillLoader.php:721-739` |
 | 15d-05 | Medium | Repro | Home-store `project` notes are global → injected into every repo's prompt | `MemoryBlock.php:213-229`, `Chat.php:12534` |
 | 15d-09 | Medium | Repro | No size cap on CLAUDE.md/AGENTS.md/forced/imports (3 MB inlined); skill budgets inert | `Runtime.php:3009-3040` |
@@ -461,3 +383,13 @@ This report is final. What was read, what was only skimmed, and how each open le
 - **15d-23:** `r13.php` + `mem13/`.
 - **Dropped KeywordTrigger lead:** `r15.php`.
 - **Scratch HOMEs:** `home1/`, `home11/`.
+
+---
+
+## Fixed since audit
+
+These findings were fixed on master after the audit. Their sections and table rows were removed; the coverage and repro lists above still name them. 15d-02 is only partly fixed and stays above with a **Remaining** note.
+
+- **15d-01** Mistyped SKILL.md frontmatter crashed sugar-crush at launch — fixed on master in `d1c1822a9` (mistyped skills are skipped and reported).
+- **15d-04** One malformed memory file broke every turn — fixed on master in `d26c38cdd`. Residual: skipped notes are announced only in the prompt; there is no `/memory` or `/doctor` display of them.
+- **15d-08** A non-UTF-8 byte in an instruction, rule, memory or skill file made every request throw — fixed on master in `218384747` (scrub at load time).

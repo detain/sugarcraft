@@ -10,56 +10,6 @@ Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/` (ea
 
 ## A. MCP transports
 
-### MCP-1 — The stdio MCP client cannot talk to the reference TypeScript or Python SDK servers: empty PHP arrays go on the wire as JSON `[]`, not `{}`
-- **Severity:** Critical (MCP stdio is the main MCP transport; it is silently non-functional against both official SDKs)
-- **Confidence:** Verified-by-repro
-- **Where:** `sugar-mcp/src/StdioMcpServer.php:268-288` (handshake), `:376-379` (tools/call), `sugar-mcp/src/McpMessage.php:209` (`json_encode($payload)` with no object coercion). The sugar-crush wrapper `sugar-crush/src/MCP/StdioMcpServer.php:63-71` delegates to it unchanged.
-- **Code:**
-  ```php
-  $response = $this->request('initialize', [
-      'protocolVersion' => self::PROTOCOL_VERSION,
-      'capabilities' => [],                 // -> "capabilities":[]
-      'clientInfo' => $this->clientInfo,
-  ], $deadline);
-  if ($response === null || (!$response->resultSet && $response->error === null)) { ...throw }
-  $this->notify('initialized', null, $deadline);          // spec name is notifications/initialized
-  $listResponse = $this->request('tools/list', [], $deadline);   // -> "params":[]
-  ...
-  $response = $this->request('tools/call', ['name' => $toolName, 'arguments' => $args]); // $args === [] -> "arguments":[]
-  ```
-- **What happens (measured):**
-  - `@modelcontextprotocol/server-everything` 2026.8.31 (SDK 1.31.0): `initialize` comes back as an **error** (`-32603 ... params.capabilities expected object, received array`). The client accepts an error response as a successful start, because the guard only rejects "no result AND no error". `tools/list` with `"params":[]` gets **no response with an id at all**, so `start()` waits the full start timeout (60 s default; 30.1 s with a 30 s timeout in the repro) and ends with **0 tools**. A zero-argument `tools/call` returns `-32603 expected record, received array`.
-  - Python `mcp` FastMCP server: `initialize` returns `-32602 Invalid request parameters`; `tools/list` with `[]` produces only an "Internal Server Error" log notification and no id-bearing reply. Through the client: start took 20.1 s (timeout), **0 tools**, and both `ping()` and `echo()` returned `{"error":"Tool call failed"}`.
-  - The same handshake with `{}` works on both servers (raw wire test, same script).
-  - The notification name is also wrong: `initialized` rather than `notifications/initialized`. Python tolerates it; the TS SDK ignores it, so `oninitialized` never fires.
-- **User impact:** every `.mcp.json` stdio server built on the official SDKs (that is, most of them) shows up as "started" with no tools after blocking launch for up to 60 s per server. Nothing is reported, because a runtime start failure is skipped on purpose (`McpClient::startServer` `:356-360`), and this one doesn't even throw.
-- **Docs contradicted:** `docs/MCP.md:132` lists Stdio as "Works here: **yes**", and `docs/MCP.md:205-215` gives `npx -y @spences10/mcp-searxng-ultimate` (an official-SDK server) as the worked example. `docs/MCP.md:293-300` says the `/mcp` inventory shows ` · up N tools` for a running stdio child. Here it shows ` · up 0 tools`.
-- **Fix:** encode empty maps as objects: `'capabilities' => new \stdClass()`, omit `params` for `tools/list` (or pass `new \stdClass()`), and send `'arguments' => $args === [] ? new \stdClass() : $args`. More generally, make `McpMessage::toJson()` emit `params` as an object when it is an empty array. Send `notifications/initialized`. Treat an `initialize` reply carrying `error` as a start failure and include `error.message` in the exception.
-- **Test:** an integration test (gated on `node`) that spawns `server-everything stdio` through `SugarCraft\Crush\MCP\StdioMcpServer` and asserts `count(listTools()) > 0`, start time < 5 s, and that a no-arg tool call succeeds. Also a unit test on `McpMessage::request('x', 'tools/list', [])->toJson()` asserting `"params":{}` (or that params is absent).
-- **Repro:** `mcp_everything.php`, `mcp_py.php`, `pyserver.py` (plus the inline raw-wire `printf | node` / `uv run` commands).
-
-### MCP-2 — `HttpMcpServer` cannot complete a Streamable HTTP handshake (no `Accept` header, no session id, same `[]` encoding)
-- **Severity:** High
-- **Confidence:** Verified-by-repro (406). The session-id and SSE-body points are Verified-by-reading.
-- **Where:** `sugar-crush/src/MCP/HttpMcpServer.php:34-41`, `:108-119`, `:148-160`
-- **Code:**
-  ```php
-  $this->rpc('initialize', ['protocolVersion' => '2024-11-05', 'capabilities' => [], ...]);
-  $response = $this->rpc('tools/list', []);
-  ...
-  return $this->httpClient->post($this->url, ['json' => [... 'params' => $params], 'headers' => $this->requestHeaders()]);
-  ```
-- **What happens:** against `server-everything streamableHttp`, `start()` fails with `406 Not Acceptable: Client must accept both application/json and text/event-stream`. Even with that fixed:
-  - the `Mcp-Session-Id` response header from `initialize` is never captured or sent back, so stateful servers reject `tools/list` (`Bad Request: No valid session ID`);
-  - `notifications/initialized` is never sent;
-  - a `text/event-stream` response body is `json_decode`d and treated as "invalid response";
-  - the `initialize` reply (including an error) is ignored entirely;
-  - the same `"capabilities":[]` / `"params":[]` encoding as MCP-1 applies.
-- **Docs contradicted:** `docs/MCP.md:133` lists HTTP as "Works here: **yes**" ("stateless POSTs"). The worked example `docs/MCP.md:211-213` (`context7`, `exa`, `gh-grep` at `…/mcp`) names Streamable HTTP endpoints, which are exactly the servers that answer 406 to a request with no `Accept`. `docs/MCP.md:297` documents a ` · ready N tools` row "whose handshake completed".
-- **Fix:** send `Accept: application/json, text/event-stream`. Store `Mcp-Session-Id` and replay it on every request. Send `notifications/initialized`. Parse SSE `data:` frames when `Content-Type` is `text/event-stream`. Encode empty maps as `{}`. Check the `initialize` result.
-- **Test:** a node-gated integration test that starts `server-everything streamableHttp` on an ephemeral port and asserts tools > 0. Also a Guzzle `MockHandler` test asserting the `Accept` header and the session-id echo.
-- **Repro:** `mcp_http.php` (start the server with `PORT=37411 node .../index.js streamableHttp`).
-
 ### MCP-3 — `ClaudeCodeMcpClient::callTool()` gives up after about 1 s, so any `claude-mcp` tool that runs longer than a second fails
 - **Severity:** Medium (the `claude-mcp` transport is double opt-in, but when enabled it is unusable for real tools such as Bash, Grep, and Task)
 - **Confidence:** Verified-by-repro
@@ -84,55 +34,17 @@ Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/` (ea
 - **Fix:** `continue` on a null parse; only give up on EOF or the deadline. Optionally log the line into the stderr tail for diagnostics.
 - **Test:** a fake PHP MCP server that writes `"hello\n"` before every response; assert that start succeeds and tools are listed.
 
-### GIT-1 — GitMcpServer handlers pass model-controlled values in option position: `gitShow(ref: "--output=/path")` writes an arbitrary file
-- **Severity:** High (it turns "read-only" git tools into arbitrary file writes, bypassing whatever permission rule allowed a read-only `mcp__git__gitShow`)
-- **Confidence:** Verified-by-repro
-- **Where:** `sugar-crush/src/MCP/GitCommandHandlers.php:210` (`['git','show','--format=...','--no-patch',$ref]`), `:404` (`array_merge(['git','add'], $paths)`), `:486` (`git revert $commit`), `:527` (`git reset --mode $commit`), `:625` (`git branch $name`), `:101` (`git config --get $key`), and the checkout, worktree, and lfs arms. None of them insert `--` or reject a leading `-`.
-- **Repro result:** `gitShow('--output=<scratch>/pwned.txt')` returned success and **created the file**, containing `7b2a357…|a@b|a|2026-10-01…`. Any path the user can write to (for example `~/.bashrc` or `.git/hooks/pre-commit`) can be overwritten with attacker-influenced bytes, because the commit subject is controlled by whoever wrote the commit. The other arms allow `git add --force/-A`, `git revert --abort`, and similar.
-- **Docs make it worse:** the only rules example in `docs/PERMISSIONS.md:144-152` is `Bash: ask`, `mcp__git__*: allow`, `Write: deny`. A user who copies it believes file writes are denied, but `mcp__git__gitShow(ref: "--output=<file>")` is auto-allowed and writes the file. `docs/MCP.md:94` / `:134` describe the git transport as in-process with a `path` that is "omitted → this project". Nothing says the model can point it elsewhere.
-- **Dispatch detail:** `GitMcpServer::callTool()` `:430` spreads the model's arguments straight onto the handler as named arguments (`$this->handlers->$method(...$args)`). The handler signatures match the advertised schemas today, so no hidden parameter is exposed. But no layer validates any value: every string reaches `proc_open` argv as written.
-- **Related (same root cause, Verified-by-reading):** every tool takes a model-supplied `path` (`GitMcpServer.php` schemas, `:51-290`) that overrides the configured `.mcp.json` `path` (`execGit()` `:1119`: `$cwd ?? $this->cwd ?? getcwd()`), with no containment to the project root. The model can run `gitReset(mode: hard)`, `gitBranchDelete`, or `gitCommit` in **any** repository on disk.
-- **Fix:** reject a leading `-` in every positional parameter (refs, branch names, keys, patterns, paths), or place `--end-of-options` / `--` correctly (`git show --format=… --no-patch --end-of-options <ref>`; `git add -- <paths>`). Contain the per-call `path` under the configured repo root (`ContainedPath`).
-- **Test:** for each handler, a data provider of `--output=/tmp/x`, `--force`, and `-A` that asserts failure and no file created. Also `path: '/'` and `path: '../other'` should be refused.
-- **Repro:** `git_handlers.php` + `gitrepo/`
-
-### GIT-2 — `execGit()` reads stdout to EOF before reading stderr, so a git command with >64 KiB of stderr (for example a chatty pre-commit hook) deadlocks forever
-- **Severity:** High (an unbounded hang of the turn or TUI; no timeout exists)
-- **Confidence:** Verified-by-repro. The hang is reproduced; the cause is the classic pipe deadlock, established by reading the code.
-- **Where:** `sugar-crush/src/MCP/GitCommandHandlers.php:1177-1183`
-- **Code:**
-  ```php
-  fclose($pipes[0]);
-  $stdout = stream_get_contents($pipes[1]);   // blocks until git exits
-  fclose($pipes[1]);
-  $stderr = stream_get_contents($pipes[2]);   // never reached while git is blocked writing stderr
-  ```
-- **Repro:** a repo whose `pre-commit` hook writes 300 KB to stderr. `gitCommit('msg')` never returned and was killed by `timeout 20` (exit 124). This repo's own Caliber pre-commit hook, and any hook running phpunit, php-cs-fixer, or eslint, easily exceeds 64 KiB.
-- **Also:** the env is replaced with only `PATH` and `HOME` (`:1150-1153`), which drops `SSH_AUTH_SOCK`, `GPG_TTY`, `GNUPGHOME`, `LANG`, and `GIT_*`. Signed commits (`commit.gpgsign=true`) and SSH remotes fail, and hooks that need the environment misbehave.
-- **Fix:** drain both pipes with `stream_select` (non-blocking) or redirect stderr to a temp file. Add a wall-clock timeout with a terminate ladder (`BoundedShutdown`). Pass `getenv()` filtered rather than a two-key env.
-- **Test:** a fixture repo with a hook writing 300 KB to stderr; assert that `gitCommit` returns within N seconds and that the failure or success carries the stderr tail.
+### MCP-9 — Empty maps nested inside a tool's own arguments still go on the wire as `[]`
+- **Severity:** Medium (same class as the fixed MCP-1, one level down)
+- **Confidence:** Verified-by-reading
+- **Where:** `sugar-mcp/src/StdioMcpServer.php:503` and `sugar-crush/src/MCP/HttpMcpServer.php:199`: `'arguments' => $args === [] ? new \stdClass() : $args`. MCP-1's fix (`44ba1a20b`, `b80b267f1`) coerces only the top-level arguments object. A decoded `{"filter":{}}` reaches PHP as `['filter' => []]` and is re-encoded as `"filter":[]`.
+- **What happens:** a tool whose schema declares an object property (a filter, an options bag, a headers map) and receives it empty fails validation on official-SDK servers (`expected object, received array`), so the call errors although the model sent valid JSON.
+- **Fix:** keep the model's arguments as decoded objects end to end (`json_decode` without `assoc`, or `JSON_OBJECT_AS_ARRAY` off for the MCP path), or walk the arguments against the tool's `inputSchema` and turn each empty array whose schema type is `object` into `stdClass`.
+- **Test:** call a server-everything tool with a nested empty object argument and assert the wire bytes carry `{}` and the call succeeds.
 
 ---
 
 ## B. Sessions and persistence
-
-### SES-1 — `/rewind` restores a checkpoint that already contains the prompt being undone: the prompt is left dangling in history AND re-seeded into the input box
-- **Severity:** Medium
-- **Confidence:** Verified-by-repro
-- **Where:** checkpoint capture `src/Chat.php:7964-7990` (`'messages' => $next->history` where `$next->history = [...$baseHistory, ...$newTurnMessages]` and `$newTurnMessages` ends with `Message::user($text)`, `:7470`); restore `src/Chat.php:12358-12385`
-- **Repro output:**
-  ```
-  checkpoint messages: 1   cp user: fix the login bug
-  after rewind:
-    user: fix the login bug
-    user: /rewind
-    assistant: Rewound 1 messages to checkpoint 0. ...
-  inputBuf: 'fix the login bug'
-  ```
-- **Impact:** `/rewind` removes only the reply, not the exchange. The model's next turn sees two consecutive user messages (the undone prompt, then the `/rewind` line). If the user presses Enter on the re-seeded draft, the prompt is sent twice. The "Rewound N messages" count is off by one exchange. `RewindCommandTest::testRewindRestoresTheDraftTheSubmitCaptured` asserts the draft but never asserts that the history *excludes* the prompt, which is why this passes.
-- **Fix:** checkpoint `$baseHistory` (the pre-turn history) rather than `$next->history`. Alternatively, on restore, drop the trailing user message when it equals the restored `inputBuf`.
-- **Test:** submit → rewind; assert `history` contains no `user` row equal to the restored draft.
-- **Repro:** `rewind.php`
 
 ### SES-2 — `forkSession()` copies only the legacy `messages`/`tool_calls` tables, which nothing writes. The fork has no transcript, no checkpoints, no meta, and inherits the parent's **name**.
 - **Severity:** Medium. It is part of the root cause of the known "/fork ignores history" item (#30), plus new consequences.
@@ -222,35 +134,13 @@ Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/` (ea
 
 ## E. Forked sub-agents (workflows and Task fan-out)
 
-### AG-1 — Forked sub-agents share the parent's MCP connections: concurrent MCP calls from parallel agents get each other's results
-- **Severity:** High. Tool results are silently swapped between agents, and each agent then acts on another agent's data. It needs two or more sub-agents running at once that call the same MCP server; that is the normal shape of a parallel workflow stage or a multi-Task fan-out.
-- **Confidence:** Verified-by-repro at the transport level (the product's own `StdioMcpServer`/`McpClient` objects, used across `pcntl_fork()` exactly as the pool uses them). That the live path reaches it is Verified-by-reading.
-- **Where:**
-  - `sugar-mcp/src/StdioMcpServer.php:111` (`private int $nextId = 0`) and `:416` (`$id = (string) $this->nextId++`): the id counter is copied into every child.
-  - `src/Agents/AgentWorkerPool.php:761-792`: the fork branch runs `runStreaming()` in the child, against objects built in the parent.
-  - `src/Agents/EngineExecutor.php:173-174`: `$request->tools ?? $this->engine->tools()`.
-  - `src/Tools/BuiltIn/TaskTool.php:450`: `$granted ?? $engine->tools()`.
-  - `src/Cli/Bootstrap.php:6928`: `...self::mcpTools($root)` puts the bridges into the engine roster.
-  - `src/Cli/Bootstrap.php:6262-6281`: `mcpClient()` is memoised per pid, but the bridges a child inherits still hold the parent's client.
-  - `Runtime::executeConcurrently` `src/Runtime.php:1853` forks one child per parallel Task call.
-- **Mechanism:** each forked child inherits the parent's stdio pipes to the MCP server and the same `nextId`. N children calling at once all write `{"id":"3",…}` to one stdin pipe and race to read one stdout pipe. Each takes the first line it sees, and since every request carries the same id, each accepts whatever line arrives. Guzzle-based `type: http` servers behave the same way, because a keep-alive connection the parent opened is reused by every child over the inherited socket.
-- **Repro output:**
-  ```
-  mcp_fork.php (3 forked children, one shared StdioMcpServer)
-  parent call: reply-for-parent (req id 2)
-  child2 (0.4s): reply-for-child0 (req id 3)
-  child0 (0.9s): reply-for-child1 (req id 3)
-  child1 (1.7s): reply-for-child2 (req id 3)
-  fork_http.php (Guzzle client used once in the parent, then 3 forked children)
-  child1 peer=34384 got echo=child0
-  child2 peer=34384 got echo=child1
-  child0 peer=34384 got echo=child2
-  ```
-  Every child received a sibling's answer. A child exiting normally (`exit(0)`, as the pool's worker does) did **not** stop the shared server: `mcp_fork_exit.php` showed the parent still served afterwards. The damage is the cross-wiring alone.
-- **Scenario:** `examples/workflows/lint-then-fix.yaml`'s parallel `fix` stage, or "spawn three Task agents to look up these tickets", with a trusted `.mcp.json` server (database, issue tracker, search). Agent A receives B's query result, reports it as its own, and may edit code from it. Nothing errors.
-- **Fix:** do not use parent-owned MCP transports in a forked child. Either (a) after fork, give the child its own `McpClient` (re-spawn the servers, or for HTTP build a fresh Guzzle client), or (b) proxy child MCP calls to the parent over the existing IPC channel, so one process owns each server and request ids stay unique. At minimum, record `getmypid()` in `StdioMcpServer` and in `HttpMcpServer`'s client, and refuse calls from a different pid with a clear error instead of cross-wiring silently.
-- **Test:** a fake stdio MCP server whose `slow` tool echoes its argument after a random delay. Run two `AgentWorkerPool` agents through `EngineExecutor` whose scripted provider calls `mcp__fake__slow(n=<agent>)`, and assert each agent's result contains its own `n`.
-- **Repro:** `mcp_fork.php`, `fake_mcp_server.php`, `mcp_fork_exit.php`, `fork_http.php` + `ka_server.py` (`python3 ka_server.py 37422 &` first).
+### AG-4 — `AgentManager::executeSubAgent()` swallows provider errors the way 15a A1 did: the sub-agent completes with empty output and no error
+- **Severity:** High (same class as 15a A1; latent today, because `executeSubAgent()` has no `src/` caller, per `Renderer.php:167` and the coverage note below)
+- **Confidence:** Verified-by-reading (found during the A1 fix)
+- **Where:** `src/Agents/AgentManager.php:678` onward. In the streaming loop (around `:816-834`), `$errorChunk = $response` is recorded and then only used to decide whether to retry. After the loop `$errorChunk->errorMessage` is never read and nothing is thrown, so the sub-agent settles as completed. A1's fix (`ea81820fb`) changed `Runtime` only.
+- **What happens:** a 401, a 400, a bad model id or an in-stream error on a sub-agent's provider ends that sub-agent with empty or partial output, reported as success. A workflow stage or caller built on it then works from nothing, with no error shown.
+- **Fix:** after the retry loop, if `$errorChunk !== null`, fail the sub-agent with `errorMessage` (or throw a `ProviderException`), exactly as A1's fix does in `Runtime`.
+- **Test:** `tests/Integration/ProviderRetryWiringTest.php` already drives `executeSubAgent()`. Add a case with a 401 `MockHandler` and assert the sub-agent fails and carries the provider's message.
 
 ### AG-2 — One preset file in the Claude Code `tools:` spelling disables every agent preset in every tier
 - **Severity:** Low-Medium
@@ -349,7 +239,7 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 - **Test:** trust a root, change one server's `args`, rebuild the client; assert that server is refused, the unchanged ones start, and the refusal names the server.
 
 ### MCP-6 — `sugarcrush mcp auth login` cannot log in to an MCP server whose URL has a path (nearly all of them): discovery appends `/.well-known/…` after the path, and the registration endpoint cannot be supplied by hand
-- **Severity:** Low-Medium (the login half is unusable for path-bearing endpoints. The HTTP transport it serves is broken independently by MCP-2)
+- **Severity:** Low-Medium (the login half is unusable for path-bearing endpoints)
 - **Confidence:** Verified-by-repro (against `mcp.notion.com`, discovery only; nothing was registered)
 - **Where:** `src/MCP/OAuthLoopbackFlow.php:108` (`$wellKnown = rtrim($serverUrl, '/') . '/.well-known/oauth-authorization-server'`), `:121` (fails when `registration_endpoint` is missing; the positional operands override only the token and authorize URLs). The same construction appears in `src/Commands/McpAuthCommand.php:251`. `McpAuthCommand::fetchOAuthMetadata()` `:375-410` never checks the HTTP status.
 - **Repro (`oauth_discovery.php`):** `login('https://mcp.notion.com/mcp', <token-url>, <authorize-url>)` returns `✗ OAuth endpoints could not be discovered … exit code: 1`, even with both overrides passed. `curl`: `https://mcp.notion.com/.well-known/oauth-authorization-server` → 200, but `…/mcp/.well-known/oauth-authorization-server` → 401.
@@ -401,7 +291,7 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
   1. `docs/TROUBLESHOOTING.md:136-139` says an unknown `type` makes startup "ordering-dependent: servers listed after it were never reached". `McpClient::startServers()` `src/MCP/McpClient.php:116-146` attempts every entry, collects failures, and throws once at the end. `docs/MCP.md:136` describes this correctly. The troubleshooting advice ("move the bad entry") is stale.
   2. `docs/WORKFLOWS.md:63,81,245-246,255-261` and `examples/workflows/lint-then-fix.yaml:19-20`: timeout and retries semantics that do not exist (WF-1).
   3. `docs/WORKFLOWS.md:113`: `{{agentName.results}}` for parallel agents (WF-3).
-  4. `docs/MCP.md:132-133,297`: Stdio/HTTP marked working (MCP-1, MCP-2). `docs/PERMISSIONS.md:144-152` pairs `mcp__git__*: allow` with `Write: deny` (GIT-1).
+  4. Resolved since the audit: the Stdio/HTTP "works" rows in `docs/MCP.md` and the `mcp__git__*: allow` + `Write: deny` example in `docs/PERMISSIONS.md` became true when MCP-1, MCP-2 and GIT-1 were fixed.
 - **Fix:** correct each one alongside its finding. Item 1 stands alone: delete the ordering paragraph.
 
 ---
@@ -410,13 +300,9 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 
 | ID | Severity | Confidence | Title |
 |---|---|---|---|
-| MCP-1 | Critical | Verified-by-repro | stdio MCP sends `[]` for empty maps; reference TS/Python SDK servers start with 0 tools after a 60 s block, and no-arg tools fail |
-| AG-1 | High | Verified-by-repro | Forked sub-agents (parallel workflow stages, Task fan-out) share the parent's MCP pipes, id counter and keep-alive sockets; concurrent MCP calls return each other's results |
-| MCP-2 | High | Verified-by-repro | Streamable HTTP MCP: 406 (no Accept), no Mcp-Session-Id, no SSE parsing |
-| GIT-1 | High | Verified-by-repro | Git MCP handlers allow option injection (`gitShow --output=` writes arbitrary files) and an uncontained per-call `path` |
-| GIT-2 | High | Verified-by-repro | `execGit` stdout-then-stderr read deadlocks on more than 64 KiB of stderr (hook output); no timeout; env stripped |
+| **AG-4** | High (latent) | Verified-by-reading | `AgentManager::executeSubAgent()` swallows provider errors like 15a A1 did: empty output, reported as success |
+| **MCP-9** | Medium | Verified-by-reading | Empty maps nested inside a tool's arguments still go on the wire as `[]` (MCP-1 fixed only the top level) |
 | MCP-3 | Medium | Verified-by-repro | `ClaudeCodeMcpClient` gives up after ~1 s per call; initialize sent as a notification |
-| SES-1 | Medium | Verified-by-repro | `/rewind` keeps the undone prompt in history and in the input box |
 | SES-2 | Medium | Verified-by-repro | `forkSession` copies dead tables (empty fork, no checkpoints, duplicate name; `--resume name` opens the parent) |
 | SES-3 | Medium | Verified-by-reading | No per-session writer lock; two TUIs clobber the transcript; checkpoint index and blob-intern races |
 | WF-1 | Medium | Verified-by-reading | Workflow/task `timeout` and `retries` are never enforced; stages have no wall-clock bound |
@@ -437,7 +323,7 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 | BG-2 | Low | Verified-by-reading | Background IPC directories never cleaned |
 | CLI-1 | Low | Verified-by-repro | `display_errors` not routed to stderr; a `mkdir()` warning precedes the headless JSON document |
 | AG-3 | Low | Verified-by-reading | `AgentManager` never forgets sub-agents; unbounded growth plus a per-frame scan |
-| DOC-1 | Low | Verified-by-reading | Doc drift: TROUBLESHOOTING startup ordering, plus doc halves of WF-1/WF-3/MCP-1/MCP-2/GIT-1 |
+| DOC-1 | Low | Verified-by-reading | Doc drift: TROUBLESHOOTING startup ordering, plus doc halves of WF-1/WF-3 |
 
 ---
 
@@ -470,7 +356,7 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 - `src/LSP/*`: dormant per the baseline; no live caller.
 - `src/Share/*`: a known stub (Part II #35).
 - `src/Agents/WorktreeManager.php`, `PathJail.php`, `PathJailConfig.php`, `TeamManager.php`, `Mailbox.php`, `Team*.php`: nothing outside `src/Agents/` constructs them (`grep 'new Mailbox|new TeamManager|new PathJail'`), so they are dormant (baseline §2.6).
-- `AgentManager::executeSubAgent()` `:678-940`: no `src/` caller (also noted at `src/Renderer.php:166-167`).
+- `AgentManager::executeSubAgent()` `:678-940`: no `src/` caller (also noted at `src/Renderer.php:166-167`). AG-4 was found in it later, during the 15a A1 fix.
 - `ForeignAgentPresetRegistry.php`: function list only.
 - `src/Events/*`: not reached.
 - `McpForeignTranslate.php`: used only by `mcp import`, which prints and writes nothing.
@@ -508,3 +394,16 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 | `fdleak.php` | lead 5 | |
 
 `ps` after the last run showed no leftover node, python, php, MCP or daemon processes.
+
+---
+
+## Fixed since audit
+
+These findings were fixed on master after the audit. Their sections and table rows were removed; the coverage and repro lists above still name them.
+
+- **MCP-1** stdio MCP sent `[]` for empty maps; official TS/Python SDK servers started with 0 tools — fixed on master in `44ba1a20b` (+ `b80b267f1` for `claude-mcp` tool arguments). Residual: nested empty maps (MCP-9).
+- **MCP-2** Streamable HTTP MCP: no `Accept`, no `Mcp-Session-Id`, no SSE — fixed on master in `72eaf4642`.
+- **GIT-1** Git MCP option injection (`gitShow --output=`) and an uncontained per-call `path` — fixed on master in `43fe9cd06`. Residual: checkout and reset cannot take `--end-of-options`.
+- **GIT-2** `execGit()` deadlock on more than 64 KiB of stderr; no timeout; env stripped — fixed on master in `4c341ef6a`. Residual: the git timeout cannot be configured from `.mcp.json`.
+- **SES-1** `/rewind` kept the undone prompt in history and in the input box — fixed on master in `abd65fd16`. Residual: checkpoints saved before the fix are restored by dropping a trailing user row that matches the restored draft.
+- **AG-1** Forked sub-agents shared the parent's MCP pipes, ids and keep-alive sockets — fixed on master in `ea6e178fd` (stdio: process-unique ids, locked exchanges, shared read buffer) and `2d96e2edb` (HTTP: pid-unique ids, fresh connection per process). Residual: parallel agents now serialise their calls to one stdio server, and a lock file per MCP server is left behind if the TUI is killed.
