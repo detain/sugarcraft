@@ -389,6 +389,31 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     }
 
     /**
+     * Rebuild with the named constructor fields replaced — the ONE path every
+     * wither takes.
+     *
+     * The withers used to each spell out the full positional argument list,
+     * and two of them (withMemoryStore, withPermissionApprover) were never
+     * extended when the spend-cap pair joined the constructor, so calling
+     * either after {@see withSpendCap()} silently took the mid-turn cap off
+     * (audit B5). Carrying every promoted field forward by NAME means a new
+     * constructor parameter is preserved by every wither automatically, and a
+     * misspelled key in $changes is an "Unknown named parameter" Error rather
+     * than a silently-ignored change.
+     *
+     * get_object_vars() is the field roster because every instance property
+     * of this class is constructor-promoted (the only other state is static);
+     * a future non-promoted instance property would fail loudly here, not
+     * corrupt a rebuild.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): self
+    {
+        return new self(...array_merge(get_object_vars($this), $changes));
+    }
+
+    /**
      * The real context window of the model this backend completes against —
      * the one number {@see \SugarCraft\Crush\Chat}'s context tiers are
      * percentages of (crush_code.md Phase 5 item 4).
@@ -411,7 +436,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withTools(array $tools): self
     {
-        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
+        return $this->mutate(['tools' => $tools]);
     }
 
     /**
@@ -440,7 +465,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withSkills(array $skills): self
     {
-        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
+        return $this->mutate(['skills' => $skills]);
     }
 
     /**
@@ -455,7 +480,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withSkillRegistry(SkillRegistry $skillRegistry): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
+        return $this->mutate(['skillRegistry' => $skillRegistry]);
     }
 
     /**
@@ -467,13 +492,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withInstructionLoader(InstructionFileLoader $instructionLoader): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
+        return $this->mutate(['instructionLoader' => $instructionLoader]);
     }
 
     public function withHooks(HookManager $hookManager): self
     {
         // An explicit hook manager always wins and clears any prior opt-out.
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
+        return $this->mutate(['hookManager' => $hookManager, 'hooksDisabled' => false]);
     }
 
     /**
@@ -501,7 +526,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withPermissionGate(PermissionGate $permissionGate): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
+        return $this->mutate(['permissionGate' => $permissionGate]);
     }
 
     /**
@@ -574,7 +599,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withPermissionApprover(\Closure $approver): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $approver, $this->memoryStore, $this->rulesState);
+        return $this->mutate(['permissionApprover' => $approver]);
     }
 
     /**
@@ -584,7 +609,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withoutHooks(): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, null, $this->maxSteps, true, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
+        return $this->mutate(['hookManager' => null, 'hooksDisabled' => true]);
     }
 
     /**
@@ -598,7 +623,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withRoot(?string $root): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
+        return $this->mutate(['root' => $root]);
     }
 
     /**
@@ -607,7 +632,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withMemoryStore(?MemoryStore $memoryStore): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $memoryStore, $this->rulesState);
+        return $this->mutate(['memoryStore' => $memoryStore]);
     }
 
     /**
@@ -632,12 +657,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withRulesState(?RulesState $rulesState): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
+        return $this->mutate(['rulesState' => $rulesState]);
     }
 
     public function withMaxSteps(int $maxSteps): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
+        return $this->mutate(['maxSteps' => max(1, $maxSteps)]);
     }
 
     /**
@@ -656,24 +681,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withSpendCap(?float $capUsd, float $sessionSpendAtStartUsd = 0.0): self
     {
-        return new self(
-            $this->provider,
-            $this->model,
-            $this->tools,
-            $this->skills,
-            $this->hookManager,
-            $this->maxSteps,
-            $this->hooksDisabled,
-            $this->skillRegistry,
-            $this->instructionLoader,
-            $this->root,
-            $this->permissionGate,
-            $this->permissionApprover,
-            $this->memoryStore,
-            $this->rulesState,
-            $capUsd,
-            $sessionSpendAtStartUsd,
-        );
+        return $this->mutate(['spendCapUsd' => $capUsd, 'sessionSpendAtStartUsd' => $sessionSpendAtStartUsd]);
     }
 
     /**
@@ -697,7 +705,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         $manager->registerBuiltIns();
         $manager->register(new BashEscapeDenyHook($worktreeRoot));
 
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
+        return $this->mutate(['hookManager' => $manager, 'hooksDisabled' => false]);
     }
 
     /**
