@@ -21,6 +21,7 @@ use SugarCraft\Crush\Config\LayeredSettings;
 use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Context\ProjectMemoryWriter;
 use SugarCraft\Crush\Context\RuleLoader;
 use SugarCraft\Crush\Context\RulePathNudge;
 use SugarCraft\Crush\Context\RulesState;
@@ -32,6 +33,7 @@ use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\LSP\LspClient;
 use SugarCraft\Crush\MCP\McpClient;
 use SugarCraft\Crush\Memory\MemoryStore;
+use SugarCraft\Crush\Memory\UnreadableNotes;
 use SugarCraft\Crush\Permissions\PermissionAction;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
@@ -536,7 +538,7 @@ final class Bootstrap
      * a private const; nothing in `src/` branches on it, and nothing should —
      * see {@see warnPermissionConfigInTranscript()} for the seam itself.
      */
-    public const TRANSCRIPT_SEAM_CALL_SITES = 22;
+    public const TRANSCRIPT_SEAM_CALL_SITES = 23;
 
     /**
      * Project hook files this process has already reported as skipped, keyed
@@ -737,6 +739,15 @@ final class Bootstrap
      * @var array<string, true>
      */
     private static array $reportedSkillSkips = [];
+
+    /**
+     * Memory note files already put in front of the user as unreadable, keyed
+     * by path — see {@see reportMemorySkips()}. Process-wide for the reason
+     * {@see $reportedSkillSkips} is.
+     *
+     * @var array<string, true>
+     */
+    private static array $reportedMemorySkips = [];
 
     /**
      * Every `*.md` command file this process's command walks could not read,
@@ -1114,6 +1125,7 @@ final class Bootstrap
         // Construction time, before Program takes the terminal — see
         // {@see reportSkillSkips()} for why here and nowhere else.
         self::reportSkillSkips();
+        self::reportMemorySkips($root);
 
         // ONE gate for the whole launch, for the reason the registry above is
         // one: PermissionGate's Auto-mode circuit breaker is per-INSTANCE
@@ -1360,7 +1372,7 @@ final class Bootstrap
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
-        // TWENTY-TWO call sites now routed onto the transcript seam. This said
+        // TWENTY-THREE call sites now routed onto the transcript seam. This said
         // SIXTEEN, counting reportPrunedSessions()'s retention summary (E78,
         // round 42) as the last one until E86 (round 43) added the sixteenth,
         // in mcpClient()'s start-then-throw catch, and P7.S3 added the
@@ -1369,7 +1381,9 @@ final class Bootstrap
         // `enabledSkills` shape notices in that same method; it said twenty
         // until E653 (round 65) added the twenty-first, the narrowed-grant
         // drain below; it said twenty-one until E172 (round 70) added the
-        // twenty-second, the command-file skip aggregate just above. All six are the reason
+        // twenty-second, the command-file skip aggregate just above, and
+        // twenty-two until the audit 15d-02 follow-up added the twenty-third,
+        // the unreadable-memory-note aggregate. All six are the reason
         // this line is LAST rather than merely tidy: the retention summary is
         // raised from sessionStore() far EARLIER in this method, and the MCP
         // one is raised far LATER, transitively through backend() -> tools() ->
@@ -3969,7 +3983,7 @@ final class Bootstrap
             // user meets that as `/skill` not offering something they wrote. ONE
             // ROW, whatever the count: this message is already an aggregate, which
             // is what makes it safe to put in a transcript that also has to carry
-            // twenty-one other sources. THIS SAID ELEVEN. Round 44 could not correct
+            // twenty-two other sources. THIS SAID ELEVEN. Round 44 could not correct
         // it — this file was outside that lane's ownership, which is the whole
         // reason, and not how long the sentence had been wrong — so it asserted
         // the gap instead, with a test whose failure message was the
@@ -3985,6 +3999,46 @@ final class Bootstrap
             SkillLoader::DEBUG_SKIPS_ENV,
             $count === 1 ? 'it' : 'them',
         ));
+    }
+
+    /**
+     * Tell the user, once and in one line, that some of their memory notes
+     * could not be read and are being skipped.
+     *
+     * Since audit 15d-04 a malformed note is skipped instead of failing every
+     * turn, and the only party told was the MODEL, inside the prompt — the
+     * person who wrote the note, and the only one who can fix it, learned
+     * nothing. Both stores the session reads are scanned whole
+     * ({@see MemoryStore::unreadable()}), every scope: a broken user-scope note
+     * never reaches the prompt either, and `/memory` is the only other place
+     * it would ever surface. The wording is {@see UnreadableNotes::notice()}'s,
+     * shared with the `/memory` section that names each file.
+     *
+     * Construction time, beside {@see reportSkillSkips()} and for its reason.
+     * A store that cannot be opened is no notice at all — the prompt route
+     * degrades the same way ({@see memoryStoreOrNull()}).
+     */
+    private static function reportMemorySkips(?string $root): void
+    {
+        $unreadable = [];
+        foreach ([self::memoryStoreOrNull(), $root === null ? null : ProjectMemoryWriter::forRoot($root)?->store()] as $store) {
+            if ($store !== null) {
+                $unreadable = [...$unreadable, ...$store->unreadable()];
+            }
+        }
+
+        $new = array_diff_key($unreadable, self::$reportedMemorySkips);
+        if ($new === []) {
+            return;
+        }
+
+        foreach (array_keys($new) as $path) {
+            self::$reportedMemorySkips[$path] = true;
+        }
+
+        // BOTH CHANNELS, ONE ROW whatever the count — the skill-skip row's
+        // contract ({@see reportSkillSkips()}).
+        self::warnPermissionConfigInTranscript(UnreadableNotes::notice($new));
     }
 
     /**
@@ -6452,7 +6506,7 @@ final class Bootstrap
             ));
 
             // REACHABILITY AT THIS SITE IS DRIVEN, not inherited from the other
-            // twenty-one call sites: {@see chat()} holds no `self::tools(` call of
+            // twenty-two call sites: {@see chat()} holds no `self::tools(` call of
             // its own and gets here transitively through `backend()` ->
             // `tools()` -> {@see mcpTools()} -> this method, then reads
             // {@see launchNotices()} on its last line — so a row recorded now is

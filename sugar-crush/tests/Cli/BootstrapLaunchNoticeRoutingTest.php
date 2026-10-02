@@ -8,18 +8,19 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Config\LayeredSettings;
+use SugarCraft\Crush\Memory\UnreadableNotes;
 use SugarCraft\Crush\Skills\SkillLoader;
 
 /**
  * Round 39 built {@see Bootstrap::warnPermissionConfigInTranscript()} and
- * migrated ONE caller onto it. This file is the guard for the other twenty-one.
+ * migrated ONE caller onto it. This file is the guard for the other twenty-two.
  *
  * HOW THAT NUMBER IS OBTAINED — not by `grep`, which overstates it by roughly
  * double because the identifier is mostly prose in `Bootstrap.php`'s
- * doc-blocks. `Bootstrap.php` holds TWENTY-TWO calls to the seam by a token scan
+ * doc-blocks. `Bootstrap.php` holds TWENTY-THREE calls to the seam by a token scan
  * (`token_get_all()`, whitespace and comments stripped, T_STRING of that name
  * both preceded by `::` and followed by `(`); one of them is round 39's, so
- * this file guards the other twenty-one. Re-derive it in one command:
+ * this file guards the other twenty-two. Re-derive it in one command:
  * `vendor/bin/phpunit --filter BootstrapTranscriptSeamCallSiteCensusTest`,
  * which also fails on this sentence by name if the count moves.
  *
@@ -32,8 +33,9 @@ use SugarCraft\Crush\Skills\SkillLoader;
  * the same step's two `enabledSkills` shape notices in that method as the
  * nineteenth and twentieth, and E653 (round 65) routed the narrowed-grant
  * aggregate drain as the twenty-first, and E172 (round 70) routed the
- * command-file skip aggregate as the twenty-second, so "the other" is
- * twenty-one and not twenty. WHY THE
+ * command-file skip aggregate as the twenty-second, and the audit 15d-02
+ * follow-up routed the unreadable-memory-note aggregate as the twenty-third,
+ * so "the other" is twenty-two and not twenty-one. WHY THE
  * HISTORY STILL EARNS ITS PLACE: it records that this file's scope GROWS with
  * the seam — a reader who adds a further call site and does not add a case
  * here has left it unguarded, and the ordinals are what make that obligation
@@ -213,7 +215,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
      *
      * ONE ROW WHATEVER THE COUNT — this message is an aggregate, and that is
      * what makes it safe to seat in a transcript that also carries
-     * twenty-one other sources (twenty-two seam call sites by the token scan in
+     * twenty-two other sources (twenty-three seam call sites by the token scan in
      * {@see BootstrapTranscriptSeamCallSiteCensusTest}, of which this is one;
      * `grep` gives about double and is the wrong tool). Two unreadable files,
      * one notice, and the notice says two.
@@ -237,6 +239,34 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             $notices[0],
         );
         self::assertSame(1, substr_count($stderr, 'could not be read'));
+    }
+
+    /**
+     * A memory note the store could not read is a note the user wrote that has
+     * silently stopped working — skipped since audit 15d-04, and until the
+     * 15d-02 follow-up reported only to the MODEL, inside the prompt. Both
+     * stores the session reads are scanned, every scope, and the result is ONE
+     * row in both channels: two broken notes (one per store and scope) plus a
+     * clean one that must not be counted.
+     */
+    public function testUnreadableMemoryNotesReachBothChannelsAsOneAggregateRow(): void
+    {
+        mkdir($this->configDir . '/memory/user', 0o700, true);
+        file_put_contents($this->configDir . '/memory/user/broken.md', "no frontmatter at all\n");
+        file_put_contents(
+            $this->configDir . '/memory/user/fine.md',
+            "---\nid: fine\ntype: pattern\nscope: user\n---\nA readable note.\n",
+        );
+        mkdir($this->projectRoot . '/.sugar-crush/memory/project', 0o700, true);
+        file_put_contents($this->projectRoot . '/.sugar-crush/memory/project/broken.md', "---\n: : :\n---\nbody\n");
+
+        [$stderr, $notices] = $this->launch(
+            '\\SugarCraft\\Crush\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        $expected = sprintf(UnreadableNotes::NOTICE_FORMAT, 2, 's', 'were', 'project: 1, user: 1', 'they are');
+        self::assertSame([$expected], $notices);
+        self::assertSame(1, substr_count($stderr, $expected));
     }
 
     /**

@@ -51,6 +51,20 @@ could not be read is announced in one bounded line under the listed notes —
 naming at most three files, each with its reason, fence-escaped and clipped like
 a note — so a missing note is visible to the model instead of silently absent.
 
+The person who wrote the note is told too, outside the prompt. At launch,
+`MemoryStore::unreadable()` reads every scope of both stores the session uses
+(`~/.sugar-crush/memory` and the repo's `.sugar-crush/memory`), and one aggregate
+row reaches the transcript and stderr, worded by `UnreadableNotes::notice()`:
+
+```text
+2 memory notes could not be read and were skipped (project: 1, user: 1); they are not in the prompt — `/memory list <scope>` names each file and why
+```
+
+`/memory list <scope>` ends with an **Unreadable notes** section naming each
+skipped file of that scope and the reason, and `/memory search` (which reads
+every scope) names all of them. A store with nothing unreadable adds nothing to
+either answer.
+
 A note written in a legacy encoding is **not** skipped: bytes that are not valid
 UTF-8 are replaced with `?` when the note is read (audit 15d-08). Before that,
 the YAML reader refused such a note outright, and a body that slipped through

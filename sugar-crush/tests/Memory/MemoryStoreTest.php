@@ -660,6 +660,34 @@ final class MemoryStoreTest extends TestCase
     }
 
     /**
+     * unreadable() reads EVERY scope before answering — skipped() alone knows
+     * only what a list() or search() has already met — and forgets a broken
+     * file that has since been deleted or fixed, so the launch notice built on
+     * it describes the store as it is now.
+     */
+    public function testUnreadableReadsEveryScopeAndForgetsFixedOrVanishedFiles(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+        $store->add('A readable note', 'user');
+        mkdir($this->tempDir . '/agent', 0o700, true);
+        $userBad = $this->tempDir . '/user/broken.md';
+        $agentBad = $this->tempDir . '/agent/broken.md';
+        file_put_contents($userBad, "no frontmatter\n");
+        file_put_contents($agentBad, "---\nid: x\n---\nmissing type and scope\n");
+
+        $this->assertSame([], $store->skipped(), 'nothing has been read yet');
+
+        $unreadable = $store->unreadable();
+        $this->assertSame([$agentBad, $userBad], array_keys($unreadable), 'every scope, sorted by path');
+        $this->assertNotSame('', $unreadable[$userBad]);
+
+        unlink($agentBad);
+        file_put_contents($userBad, "---\nid: fixed\ntype: note\nscope: user\n---\nnow readable\n");
+        $this->assertSame([], $store->unreadable(), 'a fixed note and a deleted one are both forgotten');
+        $this->assertSame([], $store->skipped());
+    }
+
+    /**
      * Audit 15d-04: one hand-edited note must never take the whole store (and,
      * through MemoryBlock::capture(), every turn's system prompt) down with it.
      * Every case here used to escape list() as a TypeError or be dropped

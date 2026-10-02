@@ -13,6 +13,7 @@ use SugarCraft\Crush\Context\ProjectMemoryWriter;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Memory\MemoryEntry;
 use SugarCraft\Crush\Memory\MemoryStore;
+use SugarCraft\Crush\Memory\UnreadableNotes;
 use SugarCraft\Crush\Role;
 
 final class MemoryCommandTest extends TestCase
@@ -675,6 +676,50 @@ final class MemoryCommandTest extends TestCase
         $this->assertSame(Role::Assistant, $lastMsg->role);
         $this->assertStringContainsString('Project memory', $lastMsg->content);
         $this->assertStringNotContainsString('User memory', $lastMsg->content);
+    }
+
+    /**
+     * A note the store skipped as unreadable is named in the `/memory list`
+     * answer for its scope, with the reason — the user's only view of it
+     * outside the prompt. A clean scope's answer gains nothing.
+     */
+    public function testMemoryListNamesTheUnreadableNotesOfThatScope(): void
+    {
+        $this->memoryStore->add('A readable note', 'user');
+        $bad = $this->tempDir . '/user/hand-edited.md';
+        file_put_contents($bad, "no frontmatter at all\n");
+
+        $answer = $this->lastAnswer('/memory list');
+        $this->assertStringContainsString('A readable note', $answer);
+        $this->assertStringContainsString("\n\n" . UnreadableNotes::SECTION_HEADER . "\n- `{$bad}` — ", $answer);
+
+        $this->assertStringNotContainsString(UnreadableNotes::SECTION_HEADER, $this->lastAnswer('/memory list project'));
+    }
+
+    /** search() reads every scope, so its answer names every unreadable note. */
+    public function testMemorySearchNamesUnreadableNotesEvenWithNoHits(): void
+    {
+        mkdir($this->tempDir . '/project', 0o700, true);
+        $bad = $this->tempDir . '/project/hand-edited.md';
+        file_put_contents($bad, "no frontmatter at all\n");
+
+        $answer = $this->lastAnswer('/memory search zzz-no-hit');
+        $this->assertStringStartsWith('No memories found matching `zzz-no-hit`.', $answer);
+        $this->assertStringContainsString("- `{$bad}` — ", $answer);
+    }
+
+    private function lastAnswer(string $input): string
+    {
+        $chat = new Chat(
+            history: [],
+            inputBuf: $input,
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        return $next->history[count($next->history) - 1]->content;
     }
 
     public function testWithMemoryStoreFluent(): void

@@ -539,6 +539,38 @@ final class MemoryStore
     }
 
     /**
+     * Read every note in every scope of this store and return the files that
+     * could not be read, path => reason — {@see skipped()} made complete.
+     *
+     * {@see skipped()} only knows what a list() or search() has already met,
+     * and the prompt lists the project scope alone, so a broken user- or
+     * agent-scope note was reported to nobody until the user happened to list
+     * that scope. This is the read a launch notice needs to say "some of your
+     * notes are being ignored" at all (audit 15d-04 follow-up). Same glob as
+     * {@see search()}, so it sees exactly the files the store itself can.
+     *
+     * A path that has vanished since an earlier read is forgotten here rather
+     * than reported: the map describes the files as they are now.
+     *
+     * @return array<string, string> sorted by path
+     */
+    public function unreadable(): array
+    {
+        $files = glob($this->memoryPath . '/*/*.md');
+        $files = $files === false ? [] : $files;
+
+        foreach ($files as $file) {
+            $this->readEntry($file);
+        }
+
+        $this->skipped = array_intersect_key($this->skipped, array_flip($files));
+        $unreadable = $this->skipped;
+        ksort($unreadable, \SORT_STRING);
+
+        return $unreadable;
+    }
+
+    /**
      * Read and parse a single memory entry from a file.
      *
      * Catches \Throwable rather than \Exception on purpose: every failure a

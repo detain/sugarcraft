@@ -89,6 +89,7 @@ use SugarCraft\Crush\Context\RuleLoader;
 use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Memory\ForeignMemoryImporter;
+use SugarCraft\Crush\Memory\UnreadableNotes;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\PromptHistory;
@@ -7079,7 +7080,7 @@ final class Chat implements Model
      * already correct at every width, instead of a banner that would have to
      * learn all of that again.
      *
-     * TWENTY-TWO OF {@see \SugarCraft\Crush\Cli\Bootstrap}'S LAUNCH-WARNING CALL
+     * TWENTY-THREE OF {@see \SugarCraft\Crush\Cli\Bootstrap}'S LAUNCH-WARNING CALL
      * SITES ARE ROUTED HERE, and the rest deliberately are not.
      *
      * WHERE THAT NUMBER COMES FROM — do not `grep` for it. The identifier
@@ -7093,7 +7094,7 @@ final class Chat implements Model
      * and {@see \SugarCraft\Crush\Tests\Cli\BootstrapTranscriptSeamCallSiteCensusTest}
      * fails this sentence, by name, the moment a call site is added.
      *
-     * WHAT THIS SAID: FOURTEEN. WHAT IS TRUE NOW: twenty-two — E78 (round 42)
+     * WHAT THIS SAID: FOURTEEN. WHAT IS TRUE NOW: twenty-three — E78 (round 42)
      * routed `reportPrunedSessions()`'s retention summary onto the seam, E86
      * (round 43) routed `mcpClient()`'s start-then-throw catch, and P7.S3
      * routed the two enabled-skill drop notices in
@@ -13052,9 +13053,8 @@ final class Chat implements Model
             // only for the scope that can host repo notes, and when it has
             // nothing to show the pre-grouping home-only bytes come back
             // verbatim (the same degradation memoryLocate promises per id).
-            $repoEntries = $scope === 'project'
-                ? (ProjectMemoryWriter::forRoot($this->projectRoot())?->store()->list($scope) ?? [])
-                : [];
+            $repoStore = $scope === 'project' ? ProjectMemoryWriter::forRoot($this->projectRoot())?->store() : null;
+            $repoEntries = $repoStore?->list($scope) ?? [];
             $entries = $this->memoryStore->list($scope);
             if ($repoEntries === []) {
                 if ($entries === []) {
@@ -13079,11 +13079,30 @@ final class Chat implements Model
                 }
                 $response = implode("\n", $lines);
             }
+            // The notes of this scope the stores could not read — the user's
+            // only view of them outside the prompt (audit 15d-04 follow-up).
+            $response .= $this->memoryUnreadableSection([
+                ...($repoStore?->skipped($scope) ?? []),
+                ...$this->memoryStore->skipped($scope),
+            ]);
         } catch (\Throwable $e) {
             $response = "**Error:** {$e->getMessage()}";
         }
 
         return $this->memoryResponse($inputText, $response);
+    }
+
+    /**
+     * The unreadable-notes section a `/memory` answer ends with, or '' when
+     * every note read — so a clean store's answer is byte-identical to before.
+     *
+     * @param array<string, string> $unreadable path => reason
+     */
+    private function memoryUnreadableSection(array $unreadable): string
+    {
+        $rows = UnreadableNotes::rows($unreadable);
+
+        return $rows === [] ? '' : "\n\n" . implode("\n", $rows);
     }
 
     /**
@@ -13101,7 +13120,8 @@ final class Chat implements Model
             // E694 slice-A: repo notes are searchable too. Same byte-stability
             // rule as memoryList() — the grouped banners join the answer only
             // when the repo store actually contributes a hit.
-            $repoEntries = ProjectMemoryWriter::forRoot($this->projectRoot())?->store()->search($query) ?? [];
+            $repoStore = ProjectMemoryWriter::forRoot($this->projectRoot())?->store();
+            $repoEntries = $repoStore?->search($query) ?? [];
             $entries = $this->memoryStore->search($query);
             $total = count($repoEntries) + count($entries);
             if ($total === 0) {
@@ -13125,6 +13145,12 @@ final class Chat implements Model
                 }
                 $response = implode("\n", $lines);
             }
+            // search() reads every scope, so a note that could not be read is
+            // a note that could not be searched — say so (audit 15d-04).
+            $response .= $this->memoryUnreadableSection([
+                ...($repoStore?->skipped() ?? []),
+                ...$this->memoryStore->skipped(),
+            ]);
         } catch (\Throwable $e) {
             $response = "**Error:** {$e->getMessage()}";
         }
