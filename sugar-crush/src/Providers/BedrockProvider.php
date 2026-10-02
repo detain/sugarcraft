@@ -364,7 +364,7 @@ final readonly class BedrockProvider implements ProviderInterface
 
         $params = [
             'modelId' => $model,
-            'messages' => $this->formatMessages($this->withoutSystemMessages($request->messages)),
+            'messages' => $this->conversationTurns($request->messages),
         ];
 
         $system = $this->systemBlocks($request);
@@ -418,7 +418,7 @@ final readonly class BedrockProvider implements ProviderInterface
 
         $params = [
             'modelId' => $model,
-            'messages' => $this->formatMessages($this->withoutSystemMessages($request->messages)),
+            'messages' => $this->conversationTurns($request->messages),
             'inferenceConfig' => $this->inferenceConfig($request) + [
                 'maxTokens' => self::DEFAULT_STREAM_MAX_TOKENS,
                 'temperature' => self::DEFAULT_TEMPERATURE,
@@ -521,6 +521,60 @@ final readonly class BedrockProvider implements ProviderInterface
         }, $messages);
     }
 
+    /**
+     * The `messages` list both request paths send: history SystemMessages
+     * hoisted out ({@see withoutSystemMessages()}), every row formatted
+     * ({@see formatMessages()}), then reshaped to what Converse validates
+     * (audit A16).
+     *
+     * Converse requires the turns to ALTERNATE user/assistant and rejects a
+     * text block that is blank, and formatMessages() - total over Message
+     * types, one row per message - guarantees neither. Two everyday paths
+     * produce `user, user`: a turn that failed (this provider THROWS on
+     * errors, so the user row gets no assistant reply) and
+     * {@see \SugarCraft\Crush\Messages\HistorySanitizer} dropping an empty
+     * assistant reply; and an empty assistant reply that survives is a blank
+     * `{text: ""}` block. Because the whole history is replayed, one such row
+     * made every later request in the session invalid.
+     *
+     * So, as {@see VertexProvider::formatAnthropicMessages()} already does
+     * for the same Anthropic-shaped rule: blank (empty or whitespace-only)
+     * text blocks are skipped, a row left with no blocks is dropped, and a
+     * row whose role matches the previous row's is merged into it, blocks
+     * kept in order. The first-turn rule (Converse also wants `user` first)
+     * is deliberately NOT patched here: Runtime always opens a history with
+     * the user's prompt, and inventing a placeholder user turn would put
+     * words in the user's mouth.
+     *
+     * @param array<Message> $messages
+     * @return list<array{role: string, content: list<array{text: string}>}>
+     */
+    private function conversationTurns(array $messages): array
+    {
+        $turns = [];
+
+        foreach ($this->formatMessages($this->withoutSystemMessages($messages)) as $row) {
+            $blocks = array_values(array_filter(
+                $row['content'],
+                static fn (array $block): bool => trim($block['text']) !== '',
+            ));
+
+            if ($blocks === []) {
+                continue;
+            }
+
+            $last = array_key_last($turns);
+            if ($last !== null && $turns[$last]['role'] === $row['role']) {
+                $turns[$last]['content'] = [...$turns[$last]['content'], ...$blocks];
+
+                continue;
+            }
+
+            $turns[] = ['role' => $row['role'], 'content' => $blocks];
+        }
+
+        return $turns;
+    }
     /**
      * Converse has no per-message `system` role: system text only exists in
      * the request-level `system` block list, and `messages` must alternate
