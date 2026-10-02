@@ -592,8 +592,9 @@ final class DocFigureProseDriftTest extends TestCase
     /**
      * E686 tranche-2 (G): the Workflow defaults are quoted in the promoted
      * constructor doc, again in docs/WORKFLOWS.md twice (own defaults and the
-     * 300-vs-3600 domain note), and the 300 fallback is repeated at every
-     * engine call site — all derived from ReflectionParameter, never trusted.
+     * per-task fallback note), and every engine call site falls back to the
+     * workflow's per-stage budget (WF-1) — all derived from
+     * ReflectionParameter or the engine source, never trusted.
      */
     public function testWorkflowDefaultFiguresSurviveTheirSignatures(): void
     {
@@ -625,25 +626,32 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame((int) $m[1], $defaults['maxConcurrent'], 'docs maxConcurrent figure drifted from the signature');
         self::assertSame((int) $m[2], $defaults['timeout'], 'docs timeout figure drifted from the signature');
 
+        // WF-1: the engine's per-task fallback is no longer a literal of its
+        // own (the old 300, which no bound ever read) but the workflow's
+        // per-stage budget, so the doc sentence names `config.timeout` and
+        // every engine call site falls back to that figure.
         self::assertSame(
             1,
-            preg_match('/`\$task->timeout \?\? (\d+)` seconds, `\$(?:task|verifier)->retries \?\? (\d+)`/', $workflowsDoc, $m),
+            preg_match('/`\$task->timeout \?\? config\.timeout` seconds, `\$(?:task|verifier)->retries \?\? (\d+)`/', $workflowsDoc, $m),
             'the per-task fallback sentence moved',
-        );
-        self::assertSame(300, (int) $m[1], 'the documented per-task fallback is no longer 300');
-        self::assertNotSame(
-            (int) $m[1],
-            $defaults['timeout'],
-            "the engine's per-task fallback and Workflow's per-stage default are documented as DIFFERENT numbers (300 vs 3600) — if they ever coincide, this note rots here first",
         );
 
         $engine = self::sourceOf('Workflows/WorkflowEngine.php');
-        preg_match_all('/timeout: \$task->timeout \?\? (\d+)/', $engine, $engineTimeouts);
-        self::assertNotEmpty($engineTimeouts[1], 'no engine call site carries the $task->timeout ?? fallback the docs describe');
-        self::assertSame([300], array_values(array_unique(array_map('intval', $engineTimeouts[1]))), 'engine per-task fallbacks are no longer uniformly the documented figure');
+        preg_match_all('/timeout: \$(?:task|verifier)->timeout \?\? ([^,]+),/', $engine, $engineTimeouts);
+        self::assertCount(5, $engineTimeouts[1], 'the engine no longer has five SubAgent dispatch sites carrying the $task->timeout fallback the docs describe');
+        self::assertSame(
+            ['$stageTimeout', '$workflow->timeout'],
+            array_values(array_unique($engineTimeouts[1])),
+            'an engine call site falls back to something other than the workflow\'s per-stage budget',
+        );
+        self::assertSame(
+            3,
+            preg_match_all('/\$workflow->timeout\);/', self::bodyExcerpt($engine, 'runGuardedFromWorkflow', 9000)),
+            'runGuardedFromWorkflow() no longer hands Workflow::$timeout to the stage, pipeline and verification executors',
+        );
         preg_match_all('/maxRetries: \$\w+->retries \?\? (\d+)/', $engine, $engineRetries);
         self::assertNotEmpty($engineRetries[1], 'no engine call site carries the retries fallback');
-        self::assertSame([(int) $m[2]], array_values(array_unique(array_map('intval', $engineRetries[1]))), 'engine retry fallbacks are no longer uniformly the documented figure');
+        self::assertSame([(int) $m[1]], array_values(array_unique(array_map('intval', $engineRetries[1]))), 'engine retry fallbacks are no longer uniformly the documented figure');
         self::assertStringContainsString(
             "default of {$defaults['timeout']}",
             $workflowsDoc,

@@ -81,6 +81,28 @@ stages:                          # a LIST, never a map
 Defaults are `Workflow`'s own: `maxConcurrent: 5`, `timeout: 3600`,
 `stopOnFirstFailure: false`.
 
+### `timeout` is a per-stage wall-clock budget
+
+`config.timeout` bounds each **stage** as a whole, measured from the moment the
+stage starts. When it runs out, the agent still working is killed together with
+every process it started (a Bash command that never exits included — the kill
+walks the whole process tree), it settles `timed_out`, and the stage fails like
+any other failed stage, so the run stops there.
+
+- A **pipeline** or **verification** stage shares one budget across its steps:
+  each step gets what the steps before it left, not a fresh allowance. A step
+  reached with nothing left is settled `timed_out` without being started.
+- A **parallel** stage's agents all run against the same budget, queue time
+  included: an agent still waiting for one of the `maxConcurrent` slots when the
+  budget runs out never starts.
+- A PHP task's own `timeout()` (below) bounds that one agent from its dispatch;
+  the stage's budget still applies, and whichever expires first wins.
+
+The bound is enforced by `AgentWorkerPool` on its forking path, which is the
+path `/workflow run` takes. A pool built with an injected `ExecutorInterface`
+runs each agent synchronously inside the caller, where it cannot be interrupted;
+there only the executor's own timeout applies.
+
 ### Everything malformed is refused, not coerced
 
 `WorkflowRegistry::parseYamlWorkflow()` raises `WorkflowLoadException` for each
@@ -243,8 +265,7 @@ return (new WorkflowBuilder())
     ->stage('build', Tasks::agent('coder')
         ->prompt('Run the build and report failures.')
         ->tools(['Bash', 'Read'])
-        ->timeout(600)
-        ->retries(1))
+        ->timeout(600))
     ->withVerification(
         'ship',
         Tasks::agent('devops')->prompt('Deploy.')->tools(['Bash']),
@@ -256,11 +277,18 @@ return (new WorkflowBuilder())
 `TaskBuilder` carries `agent()`, `prompt()`, `tools()`, `timeout()`,
 `retries()`, `isolation()` and `name()`. `timeout`, `retries` and `isolation`
 have **no YAML spelling**. A YAML-declared task therefore carries none of them,
-and `WorkflowEngine` substitutes its own literals when it builds the `SubAgent`:
-`$task->timeout ?? 300` seconds, `$task->retries ?? 0`,
-`$task->isolation ?? Isolation::None`. Note the domain: 300 is the engine's
-per-task fallback, which is a different number from `config.timeout`'s per-stage
-default of 3600.
+and `WorkflowEngine` substitutes defaults when it builds the `SubAgent`:
+`$task->timeout ?? config.timeout` seconds, `$task->retries ?? 0`,
+`$task->isolation ?? Isolation::None`. A task without its own `timeout()` is
+therefore bounded only by its stage's budget (`config.timeout`, default of 3600
+seconds); see [`timeout` is a per-stage wall-clock budget](#timeout-is-a-per-stage-wall-clock-budget).
+
+**`retries()` is recorded but not acted on.** The count reaches
+`SubAgent::$maxRetries` and nothing reads it: a task that fails or times out is
+never run again, and the stage fails on its first attempt. Re-running an agent
+that may already have edited files or spent tokens is a behavioural decision
+that has not been made, so the method is kept rather than given a meaning the
+engine does not have.
 
 `Workflow` itself is immutable; `withStatus()` returns a new instance.
 

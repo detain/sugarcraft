@@ -17,7 +17,11 @@
 #   - {{var}} interpolates initial run() context; {{stageName.output}}
 #     interpolates a prior stage's collected output.
 #   - config.maxConcurrent bounds how many parallel-stage agents run at
-#     once; config.timeout is the per-stage timeout in seconds.
+#     once; config.timeout is each stage's wall-clock budget in seconds. A
+#     stage that runs past it has its agent killed (with every process the
+#     agent started) and fails as timed out, which stops the run. Task-level
+#     timeout/retries have no YAML spelling, and retries are not enforced
+#     anywhere (see docs/WORKFLOWS.md).
 
 name: lint-then-fix
 description: >

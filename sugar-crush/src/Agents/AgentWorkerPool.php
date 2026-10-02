@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Agents;
 
 use SugarCraft\Crush\Providers\CompleteRequest;
+use SugarCraft\Crush\Support\ProcessContainment;
 
 /**
  * Worker pool for parallel agent execution.
@@ -49,6 +50,43 @@ final class AgentWorkerPool
      * {@see waitForCompletion()}.
      */
     private array $activePids = [];
+
+    /**
+     * @var array<string, array{0: int, 1: float, 2: bool}> agent id =>
+     *      [deadline as an hrtime(true) nanosecond reading, the bound in
+     *      seconds that set it, whether the run's time budget (true) rather
+     *      than the agent's own {@see SubAgent::$timeout} (false) set it]
+     *
+     * Armed for FORKED agents only, at dispatch ({@see armDeadline()}), and
+     * checked by {@see waitForCompletion()} on every poll (audit WF-1). Before
+     * this a stage had no wall-clock bound at all: `SubAgent::$timeout` was
+     * written by every WorkflowEngine dispatch site and read by nothing, so an
+     * agent blocked on a Bash command that never exits sat in the live pane
+     * until the TUI was killed. The synchronous paths (injected executor, no
+     * pcntl, failed fork) run inside the parent and cannot be interrupted
+     * from here; they get only whatever bound their executor applies itself.
+     *
+     * hrtime, not time(): a wall clock stepped by NTP or by hand would fire a
+     * deadline early or never.
+     */
+    private array $deadlines = [];
+
+    /**
+     * Wall-clock budget, in seconds, for one {@see executeAll()} run as a
+     * whole — set by {@see withTimeBudget()}; null means no run-level bound.
+     *
+     * This is the half of WF-1 a per-agent timeout cannot cover: a workflow's
+     * `config.timeout` bounds a STAGE, and a parallel stage with more agents
+     * than slots queues the extras, so "every agent finishes within N seconds
+     * of its own dispatch" still lets the stage as a whole run for a multiple
+     * of N. Each agent's deadline is the EARLIER of the two bounds, and an
+     * agent still queued when the budget runs out is settled TimedOut without
+     * ever being started.
+     */
+    private ?float $timeBudgetSeconds = null;
+
+    /** The current run's budget deadline (hrtime ns), fixed when executeAll() starts. */
+    private ?int $runDeadlineNs = null;
 
     /** @var array<string, SubAgent> Queued agents */
     private array $queue = [];
@@ -259,6 +297,11 @@ final class AgentWorkerPool
         $this->resultDirOwnerPid = (int) getmypid();
         $this->activePids = [];
         $this->unreapedChildren = [];
+        // Deadlines belong to the children the original forked; the budget
+        // itself is configuration and carries over (withTimeBudget() relies
+        // on that).
+        $this->deadlines = [];
+        $this->runDeadlineNs = null;
     }
 
     /**
@@ -423,6 +466,11 @@ final class AgentWorkerPool
         $this->releaseForkedWorkers();
         $this->reapTerminatedWorkers();
         $this->cancelled = [];
+        // Fixed once per run, BEFORE anything is dispatched: the budget bounds
+        // the run as a whole, queue time included (see $timeBudgetSeconds).
+        $this->runDeadlineNs = $this->timeBudgetSeconds === null
+            ? null
+            : hrtime(true) + (int) round($this->timeBudgetSeconds * 1_000_000_000);
 
         $executor = $this->executor ?? $this->createDefaultExecutor();
 
@@ -436,6 +484,18 @@ final class AgentWorkerPool
 
                 if (isset($this->cancelled[$agent->id])) {
                     unset($this->cancelled[$agent->id]);
+                    continue;
+                }
+
+                // The run's budget ran out while this agent waited for a slot
+                // (or before the run began). Starting it now would spend work
+                // the stage no longer has time for, so it settles TimedOut
+                // without running — on every dispatch path, not just the
+                // forking one, because nothing has started yet.
+                if ($this->runDeadlineNs !== null && hrtime(true) >= $this->runDeadlineNs) {
+                    $result = $this->budgetSpentResult($agent);
+                    yield $result;
+                    $this->haltQueueAfter($result);
                     continue;
                 }
 
@@ -498,14 +558,28 @@ final class AgentWorkerPool
             if ($result !== null) {
                 yield $result;
 
-                if ($this->stopOnFirstFailure && $result->isFailure()) {
-                    foreach (array_keys($this->queue) as $queuedId) {
-                        $this->cancelled[$queuedId] = true;
-                    }
-                    $this->queue = [];
-                }
+                $this->haltQueueAfter($result);
             }
         }
+    }
+
+    /**
+     * Empty the queue after a failed result when stopOnFirstFailure is set.
+     *
+     * One helper for both producers of a yielded result — a completed agent
+     * and a queued one whose run budget ran out — so a budget timeout stops a
+     * fail-fast batch exactly as any other failure does.
+     */
+    private function haltQueueAfter(AgentResult $result): void
+    {
+        if (!$this->stopOnFirstFailure || !$result->isFailure()) {
+            return;
+        }
+
+        foreach (array_keys($this->queue) as $queuedId) {
+            $this->cancelled[$queuedId] = true;
+        }
+        $this->queue = [];
     }
 
     /**
@@ -524,6 +598,13 @@ final class AgentWorkerPool
      */
     public function executeOne(SubAgent $agent, CompleteRequest $request): AgentResult
     {
+        // A budget already spent refuses before any path runs — the direct
+        // call below could not be stopped once started, so this is the only
+        // point at which it can honour the bound at all.
+        if ($this->timeBudgetSeconds !== null && $this->timeBudgetSeconds <= 0) {
+            return $this->budgetSpentResult($agent);
+        }
+
         if ($this->forkedExecutor !== null && !$this->customExecutor) {
             foreach ($this->executeAll([$agent], $request) as $result) {
                 return $result;
@@ -630,6 +711,28 @@ final class AgentWorkerPool
     {
         $clone = clone $this;
         $clone->stopOnFirstFailure = $stop;
+        return $clone;
+    }
+
+    /**
+     * A pool whose every {@see executeAll()} run (and {@see executeOne()}) is
+     * bounded by $seconds of wall-clock time in total; null removes the bound.
+     *
+     * Each forked agent is killed — with every process it started — at the
+     * EARLIER of its own {@see SubAgent::$timeout} and this budget, and an
+     * agent still queued when the budget runs out settles TimedOut without
+     * starting. A budget of zero or less is already spent. Called by
+     * {@see \SugarCraft\Crush\Workflows\WorkflowEngine} with what is left
+     * of a stage's `config.timeout` (audit WF-1).
+     *
+     * A clone, like {@see withStopOnFirstFailure()}: the engine's shared pool
+     * stays unbounded, and each dispatch gets a pool carrying its own stage's
+     * remainder.
+     */
+    public function withTimeBudget(?float $seconds): self
+    {
+        $clone = clone $this;
+        $clone->timeBudgetSeconds = $seconds;
         return $clone;
     }
 
@@ -809,6 +912,7 @@ final class AgentWorkerPool
         // second, differently-keyed entry here is what used to strand agents in
         // $active forever; see the $active docblock.
         $this->activePids[$agent->id] = $pid;
+        $this->armDeadline($agent);
 
         // Dispatch time, so a worker that dies without writing a result still
         // yields a *timed* AgentResult (see workerDiedResult()). Only set when
@@ -893,7 +997,12 @@ final class AgentWorkerPool
                 // status their proc_close() is waiting on.
                 $reaped = pcntl_waitpid($pid, $status, WNOHANG);
                 if ($reaped === 0) {
-                    // Still running — the only non-terminal answer.
+                    // Still running — the only non-terminal answer, unless the
+                    // agent has run out of time (WF-1).
+                    if ($this->deadlinePassed($agentId)) {
+                        return $this->expireWorker($agentId, $pid);
+                    }
+
                     continue;
                 }
 
@@ -907,7 +1016,7 @@ final class AgentWorkerPool
                 // exists to rule out — so it settles the agent too, with a
                 // result that admits the exit status is unknowable.
                 $agent = $this->active[$agentId] ?? null;
-                unset($this->activePids[$agentId], $this->active[$agentId]);
+                unset($this->activePids[$agentId], $this->active[$agentId], $this->deadlines[$agentId]);
 
                 // The child left no readable result. Synthesize the failure
                 // rather than returning an agent id that extractResult() will
@@ -988,6 +1097,126 @@ final class AgentWorkerPool
     }
 
     /**
+     * Record when a just-forked agent runs out of time: the earlier of its
+     * own {@see SubAgent::$timeout} from now and the run's budget deadline.
+     * A non-positive timeout means the agent itself carries no bound (the
+     * run's budget, if any, still applies).
+     */
+    private function armDeadline(SubAgent $agent): void
+    {
+        $deadline = null;
+        $seconds = 0.0;
+        $byBudget = false;
+
+        if ($agent->timeout > 0) {
+            $deadline = hrtime(true) + $agent->timeout * 1_000_000_000;
+            $seconds = (float) $agent->timeout;
+        }
+
+        if ($this->runDeadlineNs !== null && ($deadline === null || $this->runDeadlineNs < $deadline)) {
+            $deadline = $this->runDeadlineNs;
+            $seconds = (float) $this->timeBudgetSeconds;
+            $byBudget = true;
+        }
+
+        if ($deadline !== null) {
+            $this->deadlines[$agent->id] = [$deadline, $seconds, $byBudget];
+        }
+    }
+
+    private function deadlinePassed(string $agentId): bool
+    {
+        $deadline = $this->deadlines[$agentId] ?? null;
+
+        return $deadline !== null && hrtime(true) >= $deadline[0];
+    }
+
+    /**
+     * Kill a forked agent that ran out of time and settle it TimedOut.
+     *
+     * {@see ProcessContainment::killTree()}, not {@see terminateWorker()}'s
+     * SIGTERM: the reason a stage overruns is almost always a process the
+     * agent STARTED — a Bash command that never exits runs in its own
+     * session (setsid), so signalling the forked PHP child alone leaves that
+     * command running for nobody, which is the hang this bound exists to end.
+     * The tree walk freezes and kills the child and every descendant.
+     *
+     * killTree() does not reap, so the root is collected here over the same
+     * bounded window a teardown uses; one that is somehow still not gone goes
+     * to the deferred sweep rather than blocking the poll.
+     *
+     * A child that wrote its result in the instant before the kill keeps it:
+     * the work finished, and a decodable result is the only evidence of that.
+     */
+    private function expireWorker(string $agentId, int $pid): string
+    {
+        [, $seconds, $byBudget] = $this->deadlines[$agentId];
+        $agent = $this->active[$agentId] ?? null;
+        unset($this->deadlines[$agentId], $this->activePids[$agentId], $this->active[$agentId]);
+
+        ProcessContainment::killTree($pid);
+
+        $status = 0;
+        $reaped = 0;
+        for ($attempt = 0; $attempt < self::REAP_ATTEMPTS; $attempt++) {
+            $reaped = pcntl_waitpid($pid, $status, WNOHANG);
+            if ($reaped !== 0) {
+                break;
+            }
+
+            usleep(self::REAP_POLL_MICROSECONDS);
+        }
+        if ($reaped === 0) {
+            $this->unreapedChildren[$pid] = true;
+        }
+
+        if (!$this->hasDecodableResult($agentId)) {
+            $this->storeResult($agentId, new AgentResult(
+                agentId: $agentId,
+                status: AgentStatus::TimedOut,
+                output: null,
+                error: new \RuntimeException(sprintf(
+                    $byBudget
+                        ? 'AgentWorkerPool: agent %s ran past the %s s time budget it was dispatched under and was killed, together with every process it started.'
+                        : 'AgentWorkerPool: agent %s ran past its %s s timeout and was killed, together with every process it started.',
+                    $agentId,
+                    self::formatSeconds($seconds),
+                )),
+                startedAt: $agent?->startedAt,
+                completedAt: new \DateTimeImmutable(),
+            ));
+        }
+
+        return $agentId;
+    }
+
+    /**
+     * The result for an agent the run's budget ran out on before it started.
+     * No startedAt: it never did.
+     */
+    private function budgetSpentResult(SubAgent $agent): AgentResult
+    {
+        return new AgentResult(
+            agentId: $agent->id,
+            status: AgentStatus::TimedOut,
+            output: null,
+            error: new \RuntimeException(sprintf(
+                'AgentWorkerPool: the stage\'s time budget (%s s) was spent before agent %s could start, so it never ran.',
+                self::formatSeconds(max(0.0, (float) $this->timeBudgetSeconds)),
+                $agent->id,
+            )),
+            startedAt: null,
+            completedAt: new \DateTimeImmutable(),
+        );
+    }
+
+    /** "30" for a whole number of seconds, "12.5" otherwise. */
+    private static function formatSeconds(float $seconds): string
+    {
+        return rtrim(rtrim(sprintf('%.1f', $seconds), '0'), '.');
+    }
+
+    /**
      * Ask a forked worker to stop.
      *
      * SIGTERM, not SIGKILL — but NOT because the child runs a graceful
@@ -1045,6 +1274,7 @@ final class AgentWorkerPool
         }
 
         $this->activePids = [];
+        $this->deadlines = [];
     }
 
     /**

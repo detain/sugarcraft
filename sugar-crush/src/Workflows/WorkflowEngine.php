@@ -960,7 +960,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     }
                 } elseif ($stageType === 'stage') {
                     try {
-                        $stageResult = $this->executeStage($stage, $context);
+                        $stageResult = $this->executeStage($stage, $context, $workflow->timeout);
                     } catch (\Throwable $e) {
                         $stageResult = new StageResult(
                             stageName: $stage['name'] ?? 'unknown',
@@ -972,7 +972,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     }
                 } elseif ($stageType === 'pipeline') {
                     try {
-                        $stageResult = $this->executePipelineStage($stage, $context, $workflow->maxConcurrent);
+                        $stageResult = $this->executePipelineStage($stage, $context, $workflow->maxConcurrent, $workflow->timeout);
                     } catch (\Throwable $e) {
                         $stageResult = new StageResult(
                             stageName: $stage['name'] ?? 'unknown',
@@ -984,7 +984,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     }
                 } elseif ($stageType === 'verification') {
                     try {
-                        $stageResult = $this->executeVerificationStage($stage, $context);
+                        $stageResult = $this->executeVerificationStage($stage, $context, $workflow->timeout);
                     } catch (\Throwable $e) {
                         $stageResult = new StageResult(
                             stageName: $stage['name'] ?? 'unknown',
@@ -1044,14 +1044,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * Builds a SubAgent from the stage's task and calls AgentWorkerPool::executeOne().
      *
-     * @param array $stage   Stage array from Workflow::$stages.
-     * @param array $context Current workflow context for interpolation.
+     * @param array $stage        Stage array from Workflow::$stages.
+     * @param array $context      Current workflow context for interpolation.
+     * @param int   $stageTimeout Workflow::$timeout — this stage's wall-clock budget, in seconds.
      * @return StageResult
      */
-    private function executeStage(array $stage, array &$context): StageResult
+    private function executeStage(array $stage, array &$context, int $stageTimeout): StageResult
     {
         $stageName = $stage['name'] ?? 'unknown';
         $stageStartedAt = new \DateTimeImmutable();
+        $stageClock = hrtime(true);
 
         $tasks = $stage['tasks'] ?? [];
         if (empty($tasks)) {
@@ -1091,7 +1093,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             id: $stageName . '-' . uniqid(getmypid() . '_', true),
             agent: $agent,
             task: $interpolatedPrompt,
-            timeout: $task->timeout ?? 300,
+            timeout: $task->timeout ?? $stageTimeout,
             maxRetries: $task->retries ?? 0,
             isolation: $task->isolation ?? \SugarCraft\Crush\Agents\Isolation::None,
             permissionGate: $this->permissionGate,
@@ -1108,7 +1110,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         );
 
         // Execute via pool
-        $agentResult = $this->dispatchOne($subAgent, $request);
+        $agentResult = $this->dispatchOne($subAgent, $request, $this->stagePool($stageTimeout, $stageClock));
 
         // Store agent result in context for {{agentName.results}} interpolation
         $agentName = $task->name ?? $task->agentType;
@@ -1127,12 +1129,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @param array $stage          Stage array from Workflow::$stages.
      * @param array $context        Current workflow context for interpolation.
      * @param int   $maxConcurrent Maximum agents that may run concurrently.
+     * @param int   $stageTimeout  Workflow::$timeout — the budget for the whole
+     *                             pipeline: each step gets what the steps
+     *                             before it left, not a fresh allowance.
      * @return StageResult
      */
-    private function executePipelineStage(array $stage, array $context, int $maxConcurrent): StageResult
+    private function executePipelineStage(array $stage, array $context, int $maxConcurrent, int $stageTimeout): StageResult
     {
         $stageName = $stage['name'] ?? 'unknown';
         $stageStartedAt = new \DateTimeImmutable();
+        $stageClock = hrtime(true);
 
         $nestedStages = $stage['stages'] ?? [];
         if (empty($nestedStages)) {
@@ -1203,7 +1209,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 id: $stageName . '-' . $nestedStageName . '-' . uniqid(getmypid() . '_', true),
                 agent: $agent,
                 task: $interpolatedPrompt,
-                timeout: $task->timeout ?? 300,
+                timeout: $task->timeout ?? $stageTimeout,
                 maxRetries: $task->retries ?? 0,
                 isolation: $task->isolation ?? \SugarCraft\Crush\Agents\Isolation::None,
                 permissionGate: $this->permissionGate,
@@ -1218,7 +1224,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 systemPrompt: $agent->systemPrompt(),
             );
 
-            $agentResult = $this->dispatchOne($subAgent, $request);
+            $agentResult = $this->dispatchOne($subAgent, $request, $this->stagePool($stageTimeout, $stageClock));
 
             // Track timing
             if ($firstStartedAt === null) {
@@ -1259,14 +1265,17 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * available as {{prevResult}}. If the verifier returns failure (or
      * the task itself fails), the entire stage is marked failed.
      *
-     * @param array $stage   Stage array from Workflow::$stages.
-     * @param array $context Current workflow context for interpolation.
+     * @param array $stage        Stage array from Workflow::$stages.
+     * @param array $context      Current workflow context for interpolation.
+     * @param int   $stageTimeout Workflow::$timeout — one budget shared by the
+     *                            task and its verifier.
      * @return StageResult
      */
-    private function executeVerificationStage(array $stage, array $context): StageResult
+    private function executeVerificationStage(array $stage, array $context, int $stageTimeout): StageResult
     {
         $stageName = $stage['name'] ?? 'unknown';
         $stageStartedAt = new \DateTimeImmutable();
+        $stageClock = hrtime(true);
 
         $task = $stage['task'] ?? null;
         $verifier = $stage['verifier'] ?? null;
@@ -1306,7 +1315,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             id: $stageName . '-task-' . uniqid(getmypid() . '_', true),
             agent: $taskAgent,
             task: $taskPrompt,
-            timeout: $task->timeout ?? 300,
+            timeout: $task->timeout ?? $stageTimeout,
             maxRetries: $task->retries ?? 0,
             isolation: $task->isolation ?? \SugarCraft\Crush\Agents\Isolation::None,
             permissionGate: $this->permissionGate,
@@ -1319,7 +1328,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             systemPrompt: $taskAgent->systemPrompt(),
         );
 
-        $taskResult = $this->dispatchOne($taskSubAgent, $taskRequest);
+        $taskResult = $this->dispatchOne($taskSubAgent, $taskRequest, $this->stagePool($stageTimeout, $stageClock));
 
         // If task itself fails, the whole stage fails immediately
         if ($taskResult->status === AgentStatus::Failed || $taskResult->status === AgentStatus::TimedOut) {
@@ -1349,7 +1358,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             id: $stageName . '-verifier-' . uniqid(getmypid() . '_', true),
             agent: $verifierAgent,
             task: $verifierPrompt,
-            timeout: $verifier->timeout ?? 300,
+            timeout: $verifier->timeout ?? $stageTimeout,
             maxRetries: $verifier->retries ?? 0,
             isolation: $verifier->isolation ?? \SugarCraft\Crush\Agents\Isolation::None,
             permissionGate: $this->permissionGate,
@@ -1362,7 +1371,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             systemPrompt: $verifierAgent->systemPrompt(),
         );
 
-        $verifierResult = $this->dispatchOne($verifierSubAgent, $verifierRequest);
+        $verifierResult = $this->dispatchOne($verifierSubAgent, $verifierRequest, $this->stagePool($stageTimeout, $stageClock));
 
         // Verifier failure marks the whole stage as failed
         if ($verifierResult->status === AgentStatus::Failed || $verifierResult->status === AgentStatus::TimedOut) {
@@ -1393,14 +1402,18 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * manager dispatched. A stage run straight on the pool was invisible there
      * however much it streamed — so only parallel stages ever painted a tile.
      * Refusals propagate exactly as they do for a parallel stage.
+     *
+     * $pool is {@see stagePool()}'s budgeted clone of the shared pool, never
+     * the shared pool itself, so the stage's remaining time bounds this
+     * dispatch (WF-1).
      */
-    private function dispatchOne(SubAgent $subAgent, CompleteRequest $request): AgentResult
+    private function dispatchOne(SubAgent $subAgent, CompleteRequest $request, AgentWorkerPool $pool): AgentResult
     {
         if ($this->agentManager === null) {
-            return $this->pool->executeOne($subAgent, $request);
+            return $pool->executeOne($subAgent, $request);
         }
 
-        foreach ($this->agentManager->executeAll([$subAgent], $request, $this->pool) as $result) {
+        foreach ($this->agentManager->executeAll([$subAgent], $request, $pool) as $result) {
             return $result;
         }
 
@@ -1410,6 +1423,28 @@ final class WorkflowEngine implements WorkflowEngineInterface
             error: new \RuntimeException('cancelled before it produced a result'),
             completedAt: new \DateTimeImmutable(),
         );
+    }
+
+    /**
+     * The shared pool, bounded by what is left of a stage's budget.
+     *
+     * AUDIT WF-1: `config.timeout` (Workflow::$timeout) is documented as the
+     * per-stage timeout, and nothing read it — a stage had no wall-clock bound
+     * at all. The remainder rather than the whole figure, so a pipeline's or a
+     * verification stage's later steps get what the earlier ones left: the
+     * bound is on the STAGE, and N steps each allowed the full figure would
+     * let it run N times over. A budget that is already spent makes the pool
+     * settle the next agent TimedOut without starting it.
+     */
+    private function stagePool(int $stageTimeout, int $stageClock): AgentWorkerPool
+    {
+        return $this->pool->withTimeBudget(self::remainingBudget($stageTimeout, $stageClock));
+    }
+
+    /** Seconds left of $stageTimeout since the hrtime(true) reading $stageClock. */
+    private static function remainingBudget(int $stageTimeout, int $stageClock): float
+    {
+        return $stageTimeout - (hrtime(true) - $stageClock) / 1_000_000_000;
     }
 
     /**
@@ -1436,6 +1471,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
     {
         $stageName = $stage['name'] ?? 'unknown';
         $stageStartedAt = new \DateTimeImmutable();
+        $stageClock = hrtime(true);
 
         $tasks = $stage['tasks'] ?? [];
         if (empty($tasks)) {
@@ -1536,7 +1572,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 id: $stageName . '-' . $agentIndex . '-' . uniqid(getmypid() . '_', true),
                 agent: $agent,
                 task: $interpolatedPrompt,
-                timeout: $task->timeout ?? 300,
+                timeout: $task->timeout ?? $workflow->timeout,
                 maxRetries: $task->retries ?? 0,
                 isolation: $task->isolation ?? \SugarCraft\Crush\Agents\Isolation::None,
                 permissionGate: $this->permissionGate,
@@ -1570,6 +1606,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if ($workflow->stopOnFirstFailure) {
             $pool = $pool->withStopOnFirstFailure(true);
         }
+        // WF-1: the stage's budget bounds the whole fan-out, queue time
+        // included — see stagePool() for why it is the remainder.
+        $pool = $pool->withTimeBudget(self::remainingBudget($workflow->timeout, $stageClock));
 
         // Route the stage pool through the AgentManager when one is attached:
         // the manager registers each SubAgent and mirrors per-result usage back

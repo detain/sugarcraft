@@ -45,6 +45,19 @@ final class SubAgent
     /** Error message if the task failed. */
     public ?string $error = null;
 
+    /**
+     * @param int $timeout    Wall-clock bound in seconds, enforced by
+     *                        {@see AgentWorkerPool} on its forking path: the
+     *                        forked worker and every process it started are
+     *                        killed when it expires, and the agent settles
+     *                        {@see AgentStatus::TimedOut} (audit WF-1). Zero or
+     *                        less means no per-agent bound. The synchronous
+     *                        dispatch paths cannot be interrupted, so there
+     *                        only the executor's own bound applies.
+     * @param int $maxRetries Carried for {@see toArray()} but NOT acted on:
+     *                        nothing re-runs a failed sub-agent (see
+     *                        {@see AgentPoolConfig::$maxRetries}).
+     */
     public function __construct(
         public readonly string $id,
         public readonly Agent $agent,
