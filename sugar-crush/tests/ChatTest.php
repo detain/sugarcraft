@@ -5187,6 +5187,63 @@ final class ChatTest extends TestCase
         return $chat->update(new KeyMsg(KeyType::Enter, ''));
     }
 
+    /**
+     * Run $body with a `/bg` daemon backend that answers at once and contacts
+     * no provider (audit R13). Without it the two spawning tests below ran a
+     * real daemon against the default provider config, and since nothing
+     * ticked the supervisor the session never settled, so each run left its
+     * `sugar_crush_bg_*` IPC directory in the temp dir.
+     *
+     * @template T
+     * @param \Closure(): T $body
+     * @return T
+     */
+    private function withQuickBackgroundBackend(\Closure $body): mixed
+    {
+        $saved = ['SUGARCRUSH_BACKEND_CMD' => getenv('SUGARCRUSH_BACKEND_CMD'), 'SUGARCRUSH_PROVIDER' => getenv('SUGARCRUSH_PROVIDER')];
+        putenv('SUGARCRUSH_BACKEND_CMD=cat >/dev/null; printf BGDONE');
+        putenv('SUGARCRUSH_PROVIDER=');
+        try {
+            return $body();
+        } finally {
+            foreach ($saved as $name => $value) {
+                putenv($value === false ? $name : $name . '=' . $value);
+            }
+        }
+    }
+
+    /**
+     * Tick $chat the way the live poll does ({@see BackgroundTickMsg}) until
+     * session $id settles, and assert the supervisor released its IPC files
+     * and private directory — what a `/bg` session does in the TUI and what
+     * these tests never let happen before (audit R13).
+     */
+    private function tickUntilTheBackgroundSessionSettles(Chat $chat, BackgroundSupervisor $supervisor, string $id): Chat
+    {
+        $ipc = (new \ReflectionProperty(BackgroundSupervisor::class, 'sessionIpc'))->getValue($supervisor)[$id] ?? null;
+        $this->assertIsArray($ipc, 'fixture: the spawn recorded its IPC files');
+        $dir = dirname($ipc['bufferPath']);
+
+        $deadline = microtime(true) + 20.0;
+        while (microtime(true) < $deadline && $supervisor->getSession($id)?->isActive()) {
+            [$chat] = $chat->update(new BackgroundTickMsg());
+            usleep(100_000);
+        }
+        if ($supervisor->getSession($id)?->isActive()) {
+            $supervisor->stopSession($id);
+        }
+
+        $this->assertFalse($supervisor->getSession($id)?->isActive() ?? true, 'the background session never settled');
+        foreach ([$ipc['socketPath'], $ipc['bufferPath'], $ipc['bufferPath'] . '.log', $ipc['tokenPath'] ?? ''] as $path) {
+            if ($path !== '') {
+                $this->assertFileDoesNotExist($path, 'a settled /bg session left an IPC file behind');
+            }
+        }
+        $this->assertDirectoryDoesNotExist($dir, 'a settled /bg session left its sugar_crush_bg_* directory behind');
+
+        return $chat;
+    }
+
     /** The last assistant reply in $chat's transcript. */
     private function lastAssistantContent(Chat $chat): string
     {
@@ -5255,8 +5312,11 @@ final class ChatTest extends TestCase
         $supervisor = new BackgroundSupervisor();
         $chat = new Chat(backgroundSupervisor: $supervisor);
 
-        [$next, $cmd] = $this->submitLine($chat, '/bg summarise the diff');
-        $spawned = $this->resolveAsyncCmd($cmd);
+        [$next, $spawned] = $this->withQuickBackgroundBackend(function () use ($chat): array {
+            [$next, $cmd] = $this->submitLine($chat, '/bg summarise the diff');
+
+            return [$next, $this->resolveAsyncCmd($cmd)];
+        });
 
         $this->assertInstanceOf(BackgroundSessionSpawnedMsg::class, $spawned);
         $this->assertNull($spawned->error);
@@ -5267,8 +5327,8 @@ final class ChatTest extends TestCase
         [$reported] = $next->update($spawned);
         $this->assertStringContainsString("Backgrounded as {$spawned->sessionId}", $this->lastAssistantContent($reported));
 
-        @unlink(sys_get_temp_dir() . '/sugar_crush_' . $spawned->sessionId . '.sock');
-        @unlink(sys_get_temp_dir() . '/sugar_crush_' . $spawned->sessionId . '.buffer');
+        $settled = $this->tickUntilTheBackgroundSessionSettles($reported, $supervisor, $spawned->sessionId);
+        $this->assertStringContainsString('is now completed', $settled->history[array_key_last($settled->history)]->content, 'the poll announced the settle');
     }
 
     /**
@@ -5310,8 +5370,11 @@ final class ChatTest extends TestCase
             ]),
         );
 
-        [, $cmd] = $this->submitLine($chat, '/bg port the renderer');
-        $spawned = $this->resolveAsyncCmd($cmd);
+        [$next, $spawned] = $this->withQuickBackgroundBackend(function () use ($chat): array {
+            [$next, $cmd] = $this->submitLine($chat, '/bg port the renderer');
+
+            return [$next, $this->resolveAsyncCmd($cmd)];
+        });
 
         $this->assertInstanceOf(BackgroundSessionSpawnedMsg::class, $spawned);
         $this->assertNull($spawned->error);
@@ -5327,9 +5390,9 @@ final class ChatTest extends TestCase
             $this->assertNotSame('unknown', $session->agent->provider);
             $this->assertNotSame('unknown', $session->agent->model);
         } finally {
-            @unlink(sys_get_temp_dir() . '/sugar_crush_' . $spawned->sessionId . '.sock');
-            @unlink(sys_get_temp_dir() . '/sugar_crush_' . $spawned->sessionId . '.buffer');
-            @unlink(sys_get_temp_dir() . '/sugar_crush_' . $spawned->sessionId . '.buffer.log');
+            // Settled through the live poll, so the supervisor itself
+            // releases the session's IPC files and directory (audit R13).
+            $this->tickUntilTheBackgroundSessionSettles($next, $supervisor, $spawned->sessionId);
         }
     }
 
