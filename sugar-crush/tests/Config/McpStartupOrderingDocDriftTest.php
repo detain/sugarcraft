@@ -18,6 +18,10 @@ use PHPUnit\Framework\TestCase;
  * tests/MCP/McpClientServerIsolationTest.php proves behaviourally. Advice to
  * reorder the file sends the operator after a cause that no longer exists, so
  * the stale claim must not come back.
+ *
+ * docs/MCP.md made the same claim under its server-type table (audit DOC-2),
+ * so the page contradicted its own transport census, which already said an
+ * unknown entry costs only its own server. Both pages are pinned here.
  */
 final class McpStartupOrderingDocDriftTest extends TestCase
 {
@@ -45,6 +49,45 @@ final class McpStartupOrderingDocDriftTest extends TestCase
             $section,
             'the advice must say that every entry is attempted, whatever its position in the file',
         );
+    }
+
+    public function testMcpPageNoLongerCallsUnknownTypeOrderingDependent(): void
+    {
+        $section = self::mcpTypeTableSection();
+
+        foreach (['ordering-dependent', 'never reached', 'already up'] as $stale) {
+            self::assertStringNotContainsString(
+                $stale,
+                $section,
+                "docs/MCP.md still says \"{$stale}\" about an unknown MCP server type, but "
+                . 'McpClient::startServers() attempts every entry and reports the failures once, after the loop',
+            );
+        }
+    }
+
+    public function testMcpPageStatesThatEveryEntryIsAttempted(): void
+    {
+        $section = self::mcpTypeTableSection();
+
+        self::assertStringContainsString('attempts every entry', $section);
+        self::assertStringContainsString('costs only its own server', $section);
+        self::assertStringContainsString('Bootstrap::mcpClient()', $section);
+    }
+
+    /**
+     * docs/MCP.md from its server-type table up to the "### Foreign spellings
+     * that are read" heading, whitespace-folded like the Troubleshooting slice.
+     */
+    private static function mcpTypeTableSection(): string
+    {
+        $page = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
+        $start = strpos($page, 'Four types, and they are');
+        self::assertNotFalse($start, 'docs/MCP.md lost its server-type table');
+
+        $end = strpos($page, '### Foreign spellings', $start);
+        self::assertNotFalse($end, 'docs/MCP.md lost its "Foreign spellings" heading');
+
+        return (string) preg_replace('/\s+/', ' ', substr($page, $start, $end - $start));
     }
 
     /**

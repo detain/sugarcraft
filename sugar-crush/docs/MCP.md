@@ -94,12 +94,13 @@ Four types, and they are the four `McpClient::startServer()` constructs:
 | `git` | `GitMcpServer` | `path` (omitted → this project) |
 | `claude-mcp` | `ClaudeCodeMcpServer` | none — the repository names nothing |
 
-Any other `type` — beyond the four above and the aliases below — **throws**,
-and that throw is ordering-dependent: servers
-listed *earlier* in the file are already up, servers listed *after* the bad
-entry are never reached. The throw is caught in `Bootstrap::mcpClient()`,
-reported through `error_log()`, and the launch continues with fewer tools rather
-than dying over a live TUI.
+Any other `type` — beyond the four above and the aliases below — fails that
+one entry with `Unknown MCP server type: …`. It costs only its own server:
+`McpClient::startServers()` attempts every entry whatever its position in the
+file, collects each failure, and throws one report after the loop naming the
+entries that failed. That throw is caught in `Bootstrap::mcpClient()`, reported
+through `error_log()`, and the launch continues with fewer tools rather than
+dying over a live TUI.
 
 ### Foreign spellings that are read
 
@@ -170,7 +171,10 @@ the trust list controls rather than inside it.
 `tools/call` is unbounded. Only a positive number is honoured; a string, `0` or
 a negative falls back to `StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS`, which
 is `60.0`. A hand-edited config must not be able to turn the bound off by
-accident.
+accident. `startTimeout` is read for `stdio` entries only: a `claude-mcp`
+server's `initialize` and start-time `tools/list` each wait the same fixed
+`StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS` budget, and nothing in the
+entry or the operator tier changes it.
 
 A server that answers `initialize` with a JSON-RPC `error` has refused the
 session, so `start()` treats it as a start failure: the child is stopped and
