@@ -11,9 +11,11 @@ use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Agents\SuspendedDelegations;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Backend\TurnInterrupted;
+use SugarCraft\Crush\Events\SpendCapBreached;
 use SugarCraft\Crush\Events\SubAgentActivity;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
+use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Support\ParentProcessGuard;
@@ -24,6 +26,7 @@ use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\PromptGuidance;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Crush\Usage;
 
 /**
  * The model-callable Task tool: delegate one bounded task to a sub-agent from
@@ -123,6 +126,15 @@ use SugarCraft\Crush\Tools\ToolResult;
  * and the refusal counts them, so a caller can apply its own retry budget; a
  * report clears it. A refusal that says nothing about resuming is one where
  * nothing ran (bad grant, unknown agent) and there is nothing to continue.
+ *
+ * THE SUB-AGENT'S SPEND IS THE CALLER'S SPEND (audit B4). Every result this
+ * tool returns after a run — report, refusal or interruption alike — carries
+ * the run's {@see Usage} on {@see ToolResult::usage()}, because the bookkeeping
+ * on the {@see SubAgent} row lives in a forked child and dies with it. The
+ * engine folds that usage into the calling turn's total and its spend-cap
+ * check, and the delegated run's own cap starts from what the calling turn
+ * had spent when it started ({@see EngineBackend}'s turn spend probe). A run
+ * the cap stops is refused naming the cap, never passed off as a report.
  *
  * Mirrors the delegation role of sugar-crush's plan P8.13 (`Task` tool) over
  * the in-tree {@see AgentManager}/{@see AgentWorkerPool} machinery; see
@@ -392,6 +404,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         }
 
         $result = $results[0];
+        // The worker's provider call is billed whether or not it produced a
+        // usable answer, so every arm below carries it (audit B4).
+        $spent = Usage::reported($result->tokensUsed, $result->costUsd);
 
         if ($result->isFailure()) {
             return $this->refusal($toolCallId, sprintf(
@@ -402,14 +417,14 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $result->output !== null && trim($result->output) !== ''
                     ? ' — partial output: ' . trim($result->output)
                     : '',
-            ), $durationMs);
+            ), $durationMs, $spent);
         }
 
         if ($result->output === null || trim($result->output) === '') {
             return $this->refusal($toolCallId, sprintf(
                 'sub-agent "%s" completed without any output text',
                 $agentName,
-            ), $durationMs);
+            ), $durationMs, $spent);
         }
 
         return new ToolResult(
@@ -417,6 +432,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             content: trim($result->output),
             isError: false,
             durationMs: $durationMs,
+            usage: $spent,
         );
     }
 
@@ -554,6 +570,11 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             ));
         };
 
+        // Set when the engine's mid-turn spend cap stops the run: the loop
+        // then RETURNS normally with whatever its last step said, which must
+        // not be handed back as the sub-agent's report.
+        $capStop = null;
+
         try {
             $turn = $engine
                 ->withTools($tools)
@@ -564,8 +585,18 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                     // the grant filter strips every DelegatesToEngine tool from
                     // the sub-agent's list, delegation is one level deep, and a
                     // nested emitter therefore never exists on this channel.
-                    onEvent: static function (ToolStarted|ToolFinished $event) use ($onProgress, $record, $foldThink): void {
+                    // SpendCapBreached IS: the run's own cap check emits it, and
+                    // a narrower type here made that emit a TypeError that
+                    // surfaced as an unexplained "failed" (audit B4).
+                    onEvent: static function (ToolStarted|ToolFinished|SpendCapBreached $event) use ($onProgress, $record, $foldThink, &$capStop): void {
                         $onProgress();
+                        if ($event instanceof SpendCapBreached) {
+                            $capStop = $event;
+                            $foldThink();
+                            $record(sprintf('stopped: spend cap $%.4f reached ($%.4f spent)', $event->capUsd, $event->spentUsd), true);
+
+                            return;
+                        }
                         if ($event instanceof ToolStarted) {
                             $foldThink();
                             $record('-> '.$event->toolName, true);
@@ -591,6 +622,12 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                     onHeartbeat: $heartbeat,
                 );
         } catch (TurnInterrupted $failure) {
+            // A run that failed part-way still billed every step it completed
+            // (audit B4). The transcript holds those steps' assistant turns,
+            // each with its own usage; the opening $messages are skipped so a
+            // resumed run's earlier, already-billed steps are not counted twice.
+            $spent = self::spentSince($failure->transcript, count($messages));
+            self::bill($subAgent, $spent);
             $why = sprintf('sub-agent "%s" failed: %s', $agentName, $failure->getMessage());
             $finish(SubAgent::STATUS_FAILED, '', $why);
 
@@ -598,14 +635,36 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $toolCallId,
                 $why . '. ' . $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null),
                 self::elapsedMs($startedAt),
+                $spent,
             );
         }
 
         $reply = $turn->reply;
+        $spent = $reply->usage;
+        self::bill($subAgent, $spent);
+
+        if ($capStop !== null) {
+            $why = sprintf(
+                'sub-agent "%s" was stopped by the session spend cap after %d provider call%s ($%.4f spent of a $%.4f cap);'
+                . ' any work it did is in the tree but was not summarised',
+                $agentName,
+                $capStop->completedCalls,
+                $capStop->completedCalls === 1 ? '' : 's',
+                $capStop->spentUsd,
+                $capStop->capUsd,
+            );
+            $finish(SubAgent::STATUS_FAILED, '', $why);
+
+            return $this->refusal(
+                $toolCallId,
+                $why . '. ' . $this->suspend($agentName, $turn->transcript, $resumes, $suspension['id'] ?? null),
+                self::elapsedMs($startedAt),
+                $spent,
+            );
+        }
+
         $content = trim($reply->content);
         $finish(SubAgent::STATUS_COMPLETE, $content, null);
-        $subAgent->tokensUsed += $reply->usage?->totalTokens ?? 0;
-        $subAgent->costUsd += $reply->usage?->costUsd ?? 0.0;
 
         if ($content === '') {
             return $this->refusal($toolCallId, sprintf(
@@ -614,7 +673,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $agentName,
                 $maxTurns,
                 $this->suspend($agentName, $turn->transcript, $resumes, $suspension['id'] ?? null),
-            ), self::elapsedMs($startedAt));
+            ), self::elapsedMs($startedAt), $spent);
         }
 
         if ($suspension !== null) {
@@ -626,7 +685,34 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             content: $content,
             isError: false,
             durationMs: self::elapsedMs($startedAt),
+            usage: $spent,
         );
+    }
+
+    /**
+     * What the run billed in the steps it completed after the first $from
+     * messages of $transcript — the opening turns (and, on a resume, the
+     * saved run's own steps, billed by the Task call that made them).
+     *
+     * @param list<\SugarCraft\Crush\Messages\Message> $transcript
+     */
+    private static function spentSince(array $transcript, int $from): ?Usage
+    {
+        $usages = [];
+        foreach (array_slice($transcript, $from) as $message) {
+            if ($message instanceof AssistantMessage) {
+                $usages[] = $message->usage();
+            }
+        }
+
+        return Usage::sum($usages);
+    }
+
+    /** Mirror the run's spend onto its row (the Agents dashboard reads it). */
+    private static function bill(SubAgent $subAgent, ?Usage $spent): void
+    {
+        $subAgent->tokensUsed += $spent?->totalTokens ?? 0;
+        $subAgent->costUsd += $spent?->costUsd ?? 0.0;
     }
 
     /**
@@ -740,13 +826,16 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     /**
      * @param non-empty-string $why
      */
-    private function refusal(string $toolCallId, string $why, ?int $durationMs = null): ToolResult
+    private function refusal(string $toolCallId, string $why, ?int $durationMs = null, ?Usage $spent = null): ToolResult
     {
         return new ToolResult(
             toolCallId: $toolCallId,
             content: 'Error: Task refused — ' . $why,
             isError: true,
             durationMs: $durationMs,
+            // A refusal after a run still carries what the run spent: failing
+            // does not un-bill it (audit B4).
+            usage: $spent,
         );
     }
 

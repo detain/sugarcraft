@@ -381,6 +381,28 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
          * baseline or every turn would restart its count at zero.
          */
         private readonly float $sessionSpendAtStartUsd = 0.0,
+        /**
+         * Set ONLY on the copy {@see turnTools()} binds into a
+         * {@see \SugarCraft\Crush\Tools\DelegatesToEngine} tool: answers the
+         * DELEGATING turn's session spend right now — its baseline plus every
+         * step and every delegated run it has billed so far (audit B4).
+         *
+         * WHY: a Task sub-agent runs through this engine's own loop, and
+         * before this it inherited the caller's {@see $sessionSpendAtStartUsd}
+         * verbatim, so its cap check ignored everything the calling turn had
+         * already spent — the steps before the Task call and any Task that
+         * finished before it. The probe is read ONCE, when the delegated run
+         * starts ({@see runTurn()}), which keeps the doctrine above: the run
+         * knows the session's spend at the instant of its birth, as a copy,
+         * and a figure moving under a running loop never decides a step.
+         *
+         * A forked sibling is the one thing it cannot see: parallel Task
+         * calls of the same step each run in their own child, born at the
+         * same instant, so none counts another's spend. The caller's next
+         * step boundary does — every sibling's usage is folded in there — so
+         * the overshoot is bounded by one step's worth of parallel runs.
+         */
+        private readonly ?\Closure $turnSpendProbe = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -820,6 +842,31 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     {
         $transcript = $messages;
 
+        // EVERY step's usage, not the last one's. This loop makes up to
+        // $maxSteps provider calls per turn and each reports its own figure,
+        // so the turn's cost is the SUM: a readout fed from $lastAssistant
+        // alone would bill a five-tool turn as if it were the one final call
+        // that answered without tools (crush_code.md Phase 5 item 7). A tool
+        // that billed a provider itself (a Task sub-agent, audit B4) lands
+        // here too, as it settles — see delegatedSpend().
+        /** @var list<?Usage> $stepUsages */
+        $stepUsages = [];
+
+        // The session spend this turn is judged from: the copy Chat installed
+        // ({@see withSpendCap()}), or — on a delegated run — the delegating
+        // turn's spend as of NOW, read once (see $turnSpendProbe).
+        $sessionSpendAtStartUsd = $this->turnSpendProbe !== null
+            ? (float) ($this->turnSpendProbe)()
+            : $this->sessionSpendAtStartUsd;
+        $spentSoFarUsd = static function () use ($sessionSpendAtStartUsd, &$stepUsages): float {
+            $spent = $sessionSpendAtStartUsd;
+            foreach ($stepUsages as $stepUsage) {
+                $spent += $stepUsage?->costUsd ?? 0.0;
+            }
+
+            return $spent;
+        };
+
         // Read once and hand to both resolvers, so a turn touches the config
         // file at most one time however many settings are resolved off it.
         $userConfig = self::userConfig();
@@ -833,7 +880,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         );
 
         $app = App::new($this->provider, $this->model)
-            ->withTools($this->turnTools($onReasoning, $onHeartbeat, $onEvent))
+            ->withTools($this->turnTools($onReasoning, $onHeartbeat, $onEvent, $spentSoFarUsd))
             ->withEnabledSkills($this->skills)
             // The P6.S3 rulebook toggle set, on the same per-turn carry the enabled
             // skills ride. Read here rather than cached into the App at
@@ -850,13 +897,6 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         $lastAssistant = null;
         $lastImageBytes = null;
         $lastImageProtocol = null;
-        // EVERY step's usage, not the last one's. This loop makes up to
-        // $maxSteps provider calls per turn and each reports its own figure,
-        // so the turn's cost is the SUM: a readout fed from $lastAssistant
-        // alone would bill a five-tool turn as if it were the one final call
-        // that answered without tools (crush_code.md Phase 5 item 7).
-        /** @var list<?Usage> $stepUsages */
-        $stepUsages = [];
 
         // E707 (round 81): ORed across the turn's steps the way $stepUsages
         // sums across them - one step stopping at the output ceiling marks
@@ -909,8 +949,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             foreach ($runtime->run($app, $onEvent, $this->permissionApprover, $tokenSink, $progressSink, $onHeartbeat) as $message) {
                 if ($message instanceof AssistantMessage) {
                     $assistant = $message;
+                    // Counted ON ARRIVAL, before this step's tools run: a Task
+                    // call among them reads $spentSoFarUsd as its sub-agent's
+                    // cap baseline, and the step that asked for it is paid.
+                    $stepUsages[] = $assistant->usage();
                 } elseif ($message instanceof ToolResultMessage) {
                     $toolResults[] = $message;
+                    // Folded AS IT SETTLES, not after the step: a sequential
+                    // Task later in this same step reads $spentSoFarUsd when
+                    // it starts, and must see this one's dollars.
+                    if ($message->usage() !== null) {
+                        $stepUsages[] = self::delegatedSpend($message->usage());
+                    }
                     // Last image-bearing tool result of the whole turn wins -
                     // W1.G2 reachability fix: this is the only point left
                     // with access to the typed ToolResultMessage before only
@@ -932,7 +982,6 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
 
             if ($assistant !== null) {
                 $lastAssistant = $assistant;
-                $stepUsages[] = $assistant->usage();
                 $lengthStopped = $lengthStopped || $assistant->lengthStopped();
             }
 
@@ -963,10 +1012,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             // make another call, which is the only spend decision this loop
             // actually owns (standing rule against blanket LLM timeouts).
             if ($this->spendCapUsd !== null) {
-                $sessionSpendAtBoundary = $this->sessionSpendAtStartUsd;
-                foreach ($stepUsages as $stepUsage) {
-                    $sessionSpendAtBoundary += $stepUsage?->costUsd ?? 0.0;
-                }
+                // Includes every delegated run this step settled (audit B4),
+                // forked siblings too — the check that bounds what a parallel
+                // batch of Tasks could not see of each other.
+                $sessionSpendAtBoundary = $spentSoFarUsd();
 
                 if ($sessionSpendAtBoundary >= $this->spendCapUsd) {
                     // On the tool-event channel, in wire order with the turn's
@@ -1067,6 +1116,46 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     }
 
     /**
+     * The part of a tool's own provider spend that is folded into the calling
+     * turn's {@see Usage}: tokens, dollars and the unpriced signal — and NOT
+     * the prompt-side buckets (audit B4).
+     *
+     * WHY SPEND-ONLY. The turn's Usage is read two ways. As SPEND —
+     * {@see \SugarCraft\Crush\Chat}'s session tracker, `/cost`, and the cap
+     * check above — where a delegated run's tokens and dollars are as real as
+     * the caller's own and must be counted. And as CONTEXT SIZE — Chat's E17
+     * estimate calibration pairs {@see Usage::promptTokens()} against the
+     * prompt THIS conversation sent, and Renderer's cache-hit readout divides
+     * cacheReadTokens by it. A sub-agent's prompt is a different conversation
+     * with a different context; its input/cache buckets summed into the
+     * caller's would make both readings describe a prompt nobody sent.
+     * {@see Usage::plus()} keeps the caller's reported bucket when the other
+     * side's is null, so leaving the buckets unreported here leaves the
+     * caller's promptTokens() exactly as its own steps reported it.
+     *
+     * outputTokens/reasoningTokens are left out too: the completion-side
+     * buckets would then describe the caller's input against everyone's
+     * output, a split no reader could interpret. The full sub-agent usage
+     * stays on the {@see \SugarCraft\Crush\Tools\ToolResult} for any reader
+     * that wants the whole record.
+     *
+     * KNOWN RESIDUE: Chat's calibration falls back to totalTokens when the
+     * provider reported no prompt buckets. That figure was already a sum over
+     * every step of a tool-using turn, not a prompt size; delegated tokens
+     * widen it further (the ratio is clamped, and only ever tightens the
+     * context tiers). The fix belongs to that fallback in Chat, not here —
+     * dropping the tokens would under-report the session total instead.
+     */
+    private static function delegatedSpend(Usage $usage): ?Usage
+    {
+        return Usage::reported(
+            $usage->totalTokens,
+            $usage->costUsd,
+            unpricedModel: $usage->unpricedModel,
+        );
+    }
+
+    /**
      * This turn's tool list, with every {@see DelegatesToEngine} tool bound to
      * THIS engine — see that interface for why the binding has to happen here,
      * per turn, rather than at construction.
@@ -1087,9 +1176,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * itself was forked — without a wire back, the parent's AgentManager never
      * learns a sub-agent exists ({@see SubAgentActivity}).
      *
+     * The bound engine carries `$spentSoFarUsd` as its {@see $turnSpendProbe},
+     * so the delegated run's spend cap starts from what this turn has really
+     * spent by then, not from this turn's starting baseline (audit B4).
+     *
+     * @param \Closure(): float $spentSoFarUsd
+     *
      * @return list<Tool>
      */
-    private function turnTools(?callable $onReasoning, ?callable $onHeartbeat, ?callable $onEvent): array
+    private function turnTools(?callable $onReasoning, ?callable $onHeartbeat, ?callable $onEvent, ?\Closure $spentSoFarUsd = null): array
     {
         $heartbeat = null;
         if ($onHeartbeat !== null || $onReasoning !== null) {
@@ -1119,11 +1214,16 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             };
         }
 
+        $bound = null;
         $tools = [];
         foreach ($this->tools as $tool) {
-            $tools[] = $tool instanceof DelegatesToEngine
-                ? $tool->withEngine($this, $heartbeat, $subAgentEmitter)
-                : $tool;
+            if (!$tool instanceof DelegatesToEngine) {
+                $tools[] = $tool;
+
+                continue;
+            }
+            $bound ??= $spentSoFarUsd === null ? $this : $this->mutate(['turnSpendProbe' => $spentSoFarUsd]);
+            $tools[] = $tool->withEngine($bound, $heartbeat, $subAgentEmitter);
         }
 
         return $tools;
@@ -2106,6 +2206,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             'imagePath' => $event->result->imagePath(),
             'imageProtocol' => $event->result->imageProtocol(),
             'diff' => $event->result->diff(),
+            // Parity with the sync path's event (audit B4); the turn's
+            // ACCOUNTING does not ride here — it is summed in the child and
+            // crosses on the result frame's Message usage.
+            'usage' => $event->result->usage()?->toArray(),
         ];
     }
 
@@ -2183,6 +2287,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             imagePath: is_string($encoded['imagePath'] ?? null) ? $encoded['imagePath'] : null,
             imageProtocol: is_string($encoded['imageProtocol'] ?? null) ? $encoded['imageProtocol'] : null,
             diff: is_string($encoded['diff'] ?? null) ? $encoded['diff'] : null,
+            usage: Usage::fromArray($encoded['usage'] ?? null),
         ));
     }
 

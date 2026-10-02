@@ -2521,6 +2521,10 @@ final class Runtime
             $result->isError(),
             $result->imageBytes(),
             $result->imageProtocol(),
+            // Audit B4: a Task sub-agent's spend rides to EngineBackend's
+            // turn sum and spend cap on this message, so this builder — the
+            // only one — must never drop it.
+            $result->usage(),
         );
     }
 
@@ -2588,16 +2592,11 @@ final class Runtime
 
         $replaced = substr_count($scrubbed, "\u{FFFD}") - substr_count($content, "\u{FFFD}");
 
-        return new ToolResult(
-            toolCallId: $result->toolCallId(),
-            content: $scrubbed . "\n\n[encoding: {$replaced} invalid UTF-8 sequence(s) in this tool result"
-                . " were replaced with U+FFFD (\u{FFFD}); the underlying bytes are not UTF-8 text.]",
-            isError: $result->isError(),
-            durationMs: $result->durationMs(),
-            imageBytes: $result->imageBytes(),
-            imagePath: $result->imagePath(),
-            imageProtocol: $result->imageProtocol(),
-            diff: $result->diff(),
+        // withContent(), not a spelled-out rebuild: every other field —
+        // image, diff and the tool's own spend (audit B4) — rides through.
+        return $result->withContent(
+            $scrubbed . "\n\n[encoding: {$replaced} invalid UTF-8 sequence(s) in this tool result"
+            . " were replaced with U+FFFD (\u{FFFD}); the underlying bytes are not UTF-8 text.]",
         );
     }
 
@@ -2657,6 +2656,10 @@ final class Runtime
             : @unserialize($raw, ['allowed_classes' => false]);
 
         if (!is_array($decoded) || !is_array($decoded['result'] ?? null)) {
+            // No usage on this arm, knowingly (audit B4): a child that died
+            // before writing took its spend figure with it, and inventing one
+            // would be worse than the under-count. Task, the one tool that
+            // bills, is exempt from the deadline kill, so this is a crash arm.
             return new ToolResult(
                 toolCallId: $job['call']->id(),
                 content: sprintf(
@@ -2763,6 +2766,11 @@ final class Runtime
             'imagePath' => $result->imagePath(),
             'imageProtocol' => $result->imageProtocol(),
             'diff' => $result->diff(),
+            // Audit B4: parallel Task calls each run in a forked child, so
+            // this frame is the ONLY way a sub-agent's spend reaches the
+            // parent's turn sum. Usage::toArray() is its own fork-boundary
+            // codec (plain scalars, buckets' null-ness preserved).
+            'usage' => $result->usage()?->toArray(),
         ];
     }
 
@@ -2780,6 +2788,10 @@ final class Runtime
             imagePath: is_string($encoded['imagePath'] ?? null) ? $encoded['imagePath'] : null,
             imageProtocol: is_string($encoded['imageProtocol'] ?? null) ? $encoded['imageProtocol'] : null,
             diff: is_string($encoded['diff'] ?? null) ? $encoded['diff'] : null,
+            // fromArray() tolerates an absent key (a frame from a build
+            // before B4) and a malformed one, as null — a corrupt frame
+            // costs this call its accounting, never the call itself.
+            usage: Usage::fromArray($encoded['usage'] ?? null),
         );
     }
 
@@ -3072,24 +3084,15 @@ final class Runtime
      * `isError` is deliberately left alone: a hook or a renderer falling over
      * says nothing about whether the tool succeeded, and flipping the flag
      * would tell the model to retry a call that already worked. Every other
-     * field is copied through because {@see ToolResult} is readonly and its
+     * field is copied through ({@see ToolResult::withContent()}) because its
      * image/diff payloads are what {@see \SugarCraft\Crush\Backend\EngineBackend}
-     * renders.
+     * renders and its usage is what that engine bills (audit B4).
      */
     private static function annotate(ToolResult $result, string $note): ToolResult
     {
         $content = $result->content();
 
-        return new ToolResult(
-            toolCallId: $result->toolCallId(),
-            content: $content === '' ? $note : $content . "\n\n" . $note,
-            isError: $result->isError(),
-            durationMs: $result->durationMs(),
-            imageBytes: $result->imageBytes(),
-            imagePath: $result->imagePath(),
-            imageProtocol: $result->imageProtocol(),
-            diff: $result->diff(),
-        );
+        return $result->withContent($content === '' ? $note : $content . "\n\n" . $note);
     }
 
     /**
@@ -3113,6 +3116,10 @@ final class Runtime
      * the call ran, and whether it succeeded is unchanged by whether the
      * model may read its output. Flagging it would invite a retry of a call
      * whose side effects already happened — the text says it ran instead.
+     *
+     * `usage` is KEPT for the same reason (audit B4): withholding what a
+     * delegated run SAID does not un-spend what it cost, and dropping it here
+     * would let a PostToolUse hook take a Task's dollars off the spend cap.
      */
     private static function withheld(ToolResult $result, string $reason): ToolResult
     {
@@ -3126,6 +3133,7 @@ final class Runtime
             ),
             isError: $result->isError(),
             durationMs: $result->durationMs(),
+            usage: $result->usage(),
         );
     }
 

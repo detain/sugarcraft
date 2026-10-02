@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Messages;
 
+use SugarCraft\Crush\Usage;
+
 final readonly class ToolResultMessage implements Message
 {
     /**
@@ -14,6 +16,11 @@ final readonly class ToolResultMessage implements Message
      * \SugarCraft\Crush\Backend\EngineBackend::complete()} can thread it
      * onto the final root {@see \SugarCraft\Crush\Message} (W1.G2
      * reachability fix) instead of dropping it here.
+     *
+     * $usage carries the tool's OWN provider spend (a Task sub-agent's run,
+     * audit B4) the same way, to the one loop that sums a turn's spend and
+     * checks the spend cap ({@see \SugarCraft\Crush\Backend\EngineBackend}).
+     * It is accounting only: {@see toArray()} — the provider wire — omits it.
      */
     public function __construct(
         private string $toolCallId,
@@ -21,6 +28,7 @@ final readonly class ToolResultMessage implements Message
         private bool $isError = false,
         private ?string $imageBytes = null,
         private ?string $imageProtocol = null,
+        private ?Usage $usage = null,
     ) {}
 
     public function role(): string
@@ -56,6 +64,12 @@ final readonly class ToolResultMessage implements Message
     public function hasImage(): bool
     {
         return $this->imageBytes !== null;
+    }
+
+    /** Provider spend the tool itself incurred, or null. */
+    public function usage(): ?Usage
+    {
+        return $this->usage;
     }
 
     public function toArray(): array

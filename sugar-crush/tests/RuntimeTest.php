@@ -1575,6 +1575,9 @@ final class RuntimeTest extends TestCase
             'imagePath' => '/tmp/screenshot.png',
             'imageProtocol' => 'kitty',
             'diff' => "--- a/x.php\n+++ b/x.php\n@@ -1 +1 @@\n-old\n+new\n",
+            // Audit B4: a Task sub-agent's spend — dropped here, it would leak
+            // off the turn total and the spend cap on the hook-failure path.
+            'usage' => \SugarCraft\Crush\Usage::new(totalTokens: 99, costUsd: 0.5),
         ];
 
         $constructor = (new \ReflectionClass(ToolResult::class))->getConstructor();

@@ -16,6 +16,7 @@ use SugarCraft\Crush\Providers\EchoProvider;
 use SugarCraft\Crush\Support\ParentProcessGuard;
 use SugarCraft\Crush\Tools\DelegatesToEngine;
 use SugarCraft\Crush\Tools\Tool;
+use SugarCraft\Crush\Usage;
 
 /**
  * The executor that makes a pooled agent — a `/workflow` stage — a whole
@@ -187,18 +188,30 @@ final class EngineExecutor implements ExecutorInterface
             }
         };
 
+        $messages = self::messages($agent, $request);
+
         try {
             $turn = $this->engine
                 ->withTools($tools)
                 ->withMaxSteps($maxTurns)
                 ->completeTranscript(
-                    self::messages($agent, $request),
+                    $messages,
                     onEvent: $onEvent,
                     onReasoning: $onProgress,
                     onToken: $onToken,
                 );
         } catch (TurnInterrupted $failure) {
-            return self::failed($agent, $startedAt, $failure->getMessage());
+            // A run that failed part-way still billed the steps it completed
+            // (same bug class as audit B4): the interrupted transcript carries
+            // each completed step's assistant turn with its usage.
+            $usages = [];
+            foreach (\array_slice($failure->transcript, \count($messages)) as $message) {
+                if ($message instanceof AssistantMessage) {
+                    $usages[] = $message->usage();
+                }
+            }
+
+            return self::failed($agent, $startedAt, $failure->getMessage(), Usage::sum($usages));
         }
 
         $output = trim($turn->reply->content);
@@ -206,7 +219,7 @@ final class EngineExecutor implements ExecutorInterface
             return self::failed($agent, $startedAt, sprintf(
                 'the agent ended without a final report (step cap %d); any work it did is in the tree but was not summarised',
                 $maxTurns,
-            ));
+            ), $turn->reply->usage);
         }
 
         return new AgentResult(
@@ -283,12 +296,18 @@ final class EngineExecutor implements ExecutorInterface
         return mb_strlen($line) > self::TOOL_LINE_MAX ? mb_substr($line, 0, self::TOOL_LINE_MAX - 1) . '…' : $line;
     }
 
-    private static function failed(SubAgent $agent, \DateTimeImmutable $startedAt, string $why): AgentResult
+    /**
+     * $spent is what the run billed before it failed: a failure does not
+     * un-spend it, and the workflow's cost totals read it off this result.
+     */
+    private static function failed(SubAgent $agent, \DateTimeImmutable $startedAt, string $why, ?Usage $spent = null): AgentResult
     {
         return new AgentResult(
             agentId: $agent->id,
             status: AgentStatus::Failed,
             error: new \RuntimeException($why),
+            tokensUsed: $spent?->totalTokens ?? 0,
+            costUsd: $spent?->costUsd ?? 0.0,
             startedAt: $startedAt,
             completedAt: new \DateTimeImmutable(),
         );
