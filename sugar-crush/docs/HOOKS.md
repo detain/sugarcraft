@@ -190,7 +190,8 @@ the action has already happened:
 - `PreToolUse`, `Stop`, `TaskCreated` — stops the action outright, and stderr
   goes back to the agent.
 - `PostToolUse` — too late to stop, so it **withholds the output** instead:
-  on the engine path (`Runtime::settle()`) the model and the UI get
+  on both tool paths (`Runtime::settle()`, and `Chat::applyPostToolUse()` on
+  the dormant Chat path) the model and the UI get
   `[output withheld by PostToolUse hook: <stderr>] The call ran; its output is
   not shown.` in place of the tool's output. The image and diff are dropped
   with it, `isError` keeps whatever the tool reported, and a permitting hook's
@@ -198,9 +199,9 @@ the action has already happened:
   PreToolUse note is kept, because it was written before the output existed.
   Every verdict that does not permit counts: exit 1 or 2, any other non-zero
   exit, a timeout, an exit-3 ask (there is nobody to ask after the call ran).
-  A hook that *throws* is still only noted next to the output. The dormant Chat
-  tool path (`Chat::applyPostToolUse()`, unreachable from `bin/sugarcrush`)
-  still ignores the verdict.
+  A hook that *throws* is still only noted next to the output. On the Chat path
+  a failed call's withheld text stays in its error slot, and the hook is shown
+  the error text, as `Runtime` shows it `ToolResult::content()`.
 - `SubagentStop`, `TaskCompleted` — too late to stop; surfaces through
   `continueOnBlock` on the `HookDispatcher`, which `src/` never builds (see
   above).
@@ -428,7 +429,9 @@ arguments as JSON with **slashes and non-ASCII left unescaped** — a Read of
 byte is replaced with U+FFFD in the hook's copy. Arguments that cannot be
 encoded at all are **refused** with a `Hook denied:` reason before any hook
 runs; they are never handed to the chain as an empty `{}`, which a deny hook
-would read as nothing to refuse.
+would read as nothing to refuse. Both tool paths encode through the same
+`Runtime::hookInput()`, and the `UserPromptSubmit`/`SessionStart` input
+(`{"prompt":…}`) leaves slashes and non-ASCII unescaped the same way.
 
 #### The two `_FILE` variables, and why they exist
 
@@ -694,7 +697,7 @@ letting the call through would silently skip the guard that was written to stop
 it. On `PostToolUse` the engine path (`Runtime::settle()`) treats it as any
 other deny and **withholds the tool's output**. That is fail-closed, so a
 secret scanner that runs out of time cannot let through what it never finished
-reading. The dormant Chat path still discards the verdict.
+reading. The dormant Chat path (`Chat::applyPostToolUse()`) does the same.
 
 ---
 

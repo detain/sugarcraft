@@ -4528,11 +4528,33 @@ final class Chat implements Model
             return [$toolCall, null, null, null, ''];
         }
 
+        // The Chat mirror of audit F-H3, encoded by the engine path's own
+        // {@see Runtime::hookInput()}. A bare json_encode() here escaped every
+        // `/`, so a hook's `grep -qF /etc/passwd` guard never matched, and its
+        // `?: '{}'` fallback handed a deny hook an EMPTY argument map while the
+        // call ran with its real arguments. Arguments that cannot be encoded
+        // are refused before any hook runs, exactly as Runtime refuses them.
+        try {
+            $toolInput = Runtime::hookInput($toolCall->arguments);
+        } catch (\JsonException $e) {
+            return [
+                $toolCall,
+                ToolResult::denied($toolCall->name, DenialKind::Hook, sprintf(
+                    'the arguments of %s could not be encoded as JSON for the hook chain (%s), so no hook could judge them',
+                    $toolCall->name,
+                    $e->getMessage(),
+                ), $toolCall->id),
+                null,
+                null,
+                '',
+            ];
+        }
+
         $context = new HookContext(
             sessionId: $this->currentSessionId ?? '',
             toolName: $toolCall->name,
             toolArgs: $toolCall->arguments,
-            toolInput: json_encode($toolCall->arguments) ?: '{}',
+            toolInput: $toolInput,
             toolOutput: '',
             // Chat has no model/provider identity to report: Backend's whole
             // contract is complete(history), so neither ever reaches here.
@@ -4744,18 +4766,82 @@ final class Chat implements Model
         string $preContext = '',
     ): ToolResult {
         $postNote = '';
+        $withheldReason = null;
         if ($context !== null && $this->hooks !== null) {
             // R-1: the Chat path's live consumer of a permitting hook's
             // `additionalContext` — the same field Runtime::settle() appends on
             // the engine path. The verdict is captured here and appended below
             // after the pre-note, so the hook still observes the raw output.
-            $hookResult = $this->hooks->postToolUse($context->withToolOutput($result->result));
-            $postNote = $hookResult->additionalContext;
+            //
+            // The hook observes what the model would read: the error text for
+            // a failed call (Runtime hands it ToolResult::content(), which is
+            // the error there), not the empty `result` slot beside it — a
+            // secret printed to stderr is still a secret.
+            try {
+                $hookResult = $this->hooks->postToolUse($context->withToolOutput($result->error ?? $result->result));
+
+                // The Chat mirror of audit F-H1: a PostToolUse verdict that
+                // does not permit (deny, a timed-out chain, an ASK nobody can
+                // answer after the fact, an unknown action) WITHHOLDS the
+                // output. Only `additionalContext` used to be read here, so a
+                // secret scanner exiting 2 let the key through and its reason
+                // went nowhere. permitsExecution(), the allow-list, as
+                // Runtime::settle() reads it.
+                if (!$hookResult->permitsExecution()) {
+                    $withheldReason = $hookResult->message;
+                } else {
+                    // Read ONLY on the permitting arm: a blocking verdict's
+                    // note was written while reading the output it refused.
+                    $postNote = $hookResult->additionalContext;
+                }
+            } catch (\Throwable $e) {
+                // As Runtime::settle(): the call has already run, so a hook
+                // that throws is reported to the model rather than unwinding
+                // the whole batch's collection out of the event loop.
+                $postNote = sprintf('[PostToolUse hook failed: %s: %s]', $e::class, $e->getMessage());
+            }
         }
 
+        if ($withheldReason !== null) {
+            $result = self::withheld($result, $withheldReason);
+        }
+
+        // Kept on the withheld arm too: the pre-note came from PreToolUse
+        // hooks reading the arguments, before any output existed.
         $result = self::withAppendedModelNote($result, $preContext);
 
         return self::withAppendedModelNote($result, $postNote);
+    }
+
+    /**
+     * The result a refusing `PostToolUse` chain leaves in place of the output
+     * it objected to — the Chat mirror of {@see Runtime::withheld()} (audit
+     * F-H1), same text, so a transcript reads the same whichever pipeline ran
+     * the call.
+     *
+     * The image and diff are dropped with the text (both render the output
+     * the hook refused). The error/ok split is KEPT: the call ran, and whether
+     * it succeeded is unchanged by whether the model may read its output, so
+     * the text lands in whichever slot the tool's own outcome used. No denial
+     * kind: nothing refused the CALL, which is what that field records.
+     */
+    private static function withheld(ToolResult $result, string $reason): ToolResult
+    {
+        $reason = trim($reason);
+        $text = sprintf(
+            '[output withheld by PostToolUse hook: %s] The call ran; its output is not shown.',
+            $reason === '' ? 'no reason given' : $reason,
+        );
+
+        return new ToolResult(
+            $result->name,
+            $result->error === null ? $text : '',
+            $result->error === null ? null : $text,
+            $result->id,
+            durationMs: $result->durationMs,
+            description: $result->description,
+            arguments: $result->arguments,
+        );
     }
 
     /**
@@ -4783,11 +4869,17 @@ final class Chat implements Model
             // then hand a hook as a context with no prompt in it at all, silently.
             // Substituted instead, the offending bytes become U+FFFD and the prompt
             // still decodes.
+            //
+            // Slashes and non-ASCII unescaped too (the F-H3 encoding HOOKS.md
+            // documents for CRUSH_TOOL_INPUT), so a hook grepping the prompt
+            // for a path or a non-ASCII word matches what was typed. The
+            // `?: '{}'` arm is unreachable: a map of strings with invalid
+            // UTF-8 substituted always encodes.
             toolInput: json_encode(
                 $atStartup
                     ? ['prompt' => $prompt, 'source' => 'startup']
                     : ['prompt' => $prompt],
-                JSON_INVALID_UTF8_SUBSTITUTE,
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
             ) ?: '{}',
             toolOutput: '',
             // Same reasoning as gateToolCall(): Backend's whole contract is
@@ -5741,11 +5833,17 @@ final class Chat implements Model
             // shared budget: killing and reaping pid-by-pid made the stall
             // proportional to the number of children, which is not what
             // REAP_BUDGET_SECONDS says.
+            //
+            // killTree(), not a bare SIGKILL of the fork (the Chat mirror of
+            // audit F-E2/B2): a tool child's own commands run setsid'd in
+            // their own process group, so killing only the forked PHP pid
+            // reparented `bash` to init and the cancelled command finished
+            // anyway. killTree() freezes the tree, signals every member's
+            // group and pid, degrades to the old single-pid kill without
+            // /proc, and leaves the root for the reap below.
             $stragglers = [];
             foreach ($pendingIndexes as $index => $_) {
-                if (function_exists('posix_kill')) {
-                    posix_kill($jobs[$index]['pid'], SIGKILL);
-                }
+                \SugarCraft\Crush\Support\ProcessContainment::killTree($jobs[$index]['pid']);
                 $stragglers[] = $jobs[$index]['pid'];
             }
 

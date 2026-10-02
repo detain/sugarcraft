@@ -3013,9 +3013,13 @@ final class Runtime
      *
      * @param array<string, mixed> $arguments
      *
+     * PUBLIC so the dormant Chat tool path
+     * ({@see \SugarCraft\Crush\Chat::gateToolCall()}) encodes exactly as
+     * this one does: one definition of what a hook reads, not two that drift.
+     *
      * @throws \JsonException
      */
-    private static function hookInput(array $arguments): string
+    public static function hookInput(array $arguments): string
     {
         return json_encode(
             $arguments,
