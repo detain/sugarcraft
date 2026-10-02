@@ -444,6 +444,29 @@ final class LaunchFlagsTest extends TestCase
     }
 
     /**
+     * The PROVIDER is built on the flag's model too, not only the engine
+     * (integ-w8b follow-up to audit A26). Built from the bare default config,
+     * a `sglang` provider believed it carried `SglangProvider::DEFAULT_MODEL`,
+     * so it adopted whatever the server served and its family-mismatch notice
+     * stayed silent for a `--model` of another family — the engine sent the
+     * named id while the provider's parser, sampling and window followed the
+     * default one.
+     */
+    public function testTheModelFlagReachesTheProviderSoAFamilyMismatchIsNotAdoptedAway(): void
+    {
+        Bootstrap::useModel('deepseek-ai/DeepSeek-V4.5-Flash');
+
+        $backend = Bootstrap::backendFor('sglang');
+        $provider = (new \ReflectionProperty($backend, 'provider'))->getValue($backend);
+
+        $this->assertInstanceOf(\SugarCraft\Crush\Providers\SglangProvider::class, $provider);
+        $this->assertSame('deepseek-ai/DeepSeek-V4.5-Flash', (new \ReflectionProperty($provider, 'model'))->getValue($provider));
+        // A provider built on the named id keeps it: it does not adopt the
+        // served model, so warnAboutServerMismatch() judges the named family.
+        $this->assertFalse((new \ReflectionMethod($provider, 'adoptsServedModel'))->invoke($provider));
+    }
+
+    /**
      * `--model` is the MODEL axis only. Registering one must not change which
      * provider was selected — the trap this flag's name sets.
      */

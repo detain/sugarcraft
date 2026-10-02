@@ -2976,9 +2976,19 @@ final class Bootstrap
         // `backend()`.
         self::useProjectRootForSettings(self::configRoot($root));
         $factory = new ProviderFactory();
-        $provider = $factory->create($factory->defaultConfig($providerName));
+        $config = $factory->defaultConfig($providerName);
         // --model wins over $SUGARCRUSH_MODEL wins over the provider default.
-        $model = self::selectedModelName() ?? ($factory->defaultConfig($providerName)['model'] ?? 'gpt-4o');
+        $model = self::selectedModelName() ?? ($config['model'] ?? 'gpt-4o');
+        // THE PROVIDER IS BUILT ON THE SAME MODEL THE ENGINE SENDS, as
+        // {@see provider()} and {@see toollessBackend()} already build theirs.
+        // Built from the bare default config instead, a `sglang` provider
+        // believed it was configured with `SglangProvider::DEFAULT_MODEL`, so
+        // it adopted the server's served model and stayed silent about a
+        // family mismatch: `--model` naming a DeepSeek-V4 id against a server
+        // serving Qwen3.8 drew no notice, while the per-family parser and the
+        // fallback window followed the default id rather than the named one.
+        $config['model'] = $model;
+        $provider = $factory->create($config);
 
         $loader = self::instructionLoader($root);
         $skills ??= self::skillRegistry($root);
