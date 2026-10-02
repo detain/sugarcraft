@@ -1268,16 +1268,17 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**14,365 tests / 188,431 assertions, 0 failures, 1 skipped** — the whole of
+**14,921 tests / 273,937 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-19m06s. Measured 2026-10-02, after audit wave w4 (Task sub-agent spend reaching
-the parent turn and cap, spend-preserving backend withers, turn hooks and
-custom-command shell expansion off `update()`, session forks that carry the
-conversation with one transaction per save, Vertex and Bedrock pricing, retries
-and turn alternation, enforced workflow timeouts, symlink-aware path rules and
-the auto-mode classifier's regex fixes) added 336 tests. Before that,
-14,029/186,454 earlier on 2026-10-02, after audit wave w3 added 366
+19m21s. Measured 2026-10-02, after audit wave w5 (byte budgets on instruction
+documents, imports and skill bodies, mid-session rule reloads, live workflow
+pause and failed-stage resume, results for every workflow stage type,
+deadline-based MCP reads with a real initialize handshake, non-JSON MCP stdout
+skipped, bounded and atomic Edit/Write that refuse non-regular files, frame and
+tab-strip clipping to the terminal width, and a shell-word escape hook) added 556
+tests. Before that, 14,365/188,431 earlier on 2026-10-02, after audit wave w4
+added 336 tests; 14,029/186,454 after audit wave w3 added 366
 tests; 13,663/184,048 after audit wave w2 added 419
 tests; 13,244/181,861 after audit wave w1 added 111 tests;
 13,133/180,827 on 2026-10-01, after the audit hotfix wave added 650 tests;
