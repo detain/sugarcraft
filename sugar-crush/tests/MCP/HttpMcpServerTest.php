@@ -83,10 +83,11 @@ final class HttpMcpServerTest extends TestCase
             httpClient: $this->mockHttpClient,
         );
 
-        $this->mockHttpClient->expects($this->exactly(2))
+        $this->mockHttpClient->expects($this->exactly(3))
             ->method('post')
             ->willReturnOnConsecutiveCalls(
                 new Response(200, [], json_encode(['result' => ['capabilities' => []]])),
+                new Response(202),
                 new Response(200, [], json_encode([
                     'result' => [
                         'tools' => [
@@ -113,13 +114,14 @@ final class HttpMcpServerTest extends TestCase
             httpClient: $this->mockHttpClient,
         );
 
-        // start() makes exactly two posts (initialize + tools/list). The second
-        // start() must add NO further posts — exactly(2) proves idempotency since
-        // a third/fourth call would fail the expectation.
-        $this->mockHttpClient->expects($this->exactly(2))
+        // start() makes exactly three posts (initialize, notifications/initialized,
+        // tools/list). The second start() must add NO further posts — exactly(3)
+        // proves idempotency since a fourth call would fail the expectation.
+        $this->mockHttpClient->expects($this->exactly(3))
             ->method('post')
             ->willReturnOnConsecutiveCalls(
                 new Response(200, [], json_encode(['result' => ['capabilities' => []]])),
+                new Response(202),
                 new Response(200, [], json_encode(['result' => ['tools' => []]])),
             );
 
@@ -156,10 +158,11 @@ final class HttpMcpServerTest extends TestCase
             httpClient: $this->mockHttpClient,
         );
 
-        $this->mockHttpClient->expects($this->exactly(2))
+        $this->mockHttpClient->expects($this->exactly(3))
             ->method('post')
             ->willReturnOnConsecutiveCalls(
                 new Response(200, [], json_encode(['result' => ['capabilities' => []]])),
+                new Response(202),
                 new Response(500, [], 'Internal Server Error'),
             );
 
@@ -230,10 +233,11 @@ final class HttpMcpServerTest extends TestCase
             httpClient: $this->mockHttpClient,
         );
 
-        $this->mockHttpClient->expects($this->exactly(2))
+        $this->mockHttpClient->expects($this->exactly(3))
             ->method('post')
             ->willReturnOnConsecutiveCalls(
                 new Response(200, [], json_encode(['result' => ['capabilities' => []]])),
+                new Response(202),
                 new Response(200, [], json_encode([
                     'result' => [
                         'tools' => [
@@ -269,11 +273,11 @@ final class HttpMcpServerTest extends TestCase
             httpClient: $this->mockHttpClient,
         );
 
-        // One expectation governs all three posts: initialize + tools/list (from
-        // start) then tools/call (from callTool). Two separate expects() on the
+        // One expectation governs all four posts: initialize, the initialized
+        // notification and tools/list (from start) then tools/call (from callTool). Two separate expects() on the
         // same mock method don't sequence — the first cap would reject the third
         // call — so the tools/call shape assertion lives in the callback.
-        $this->mockHttpClient->expects($this->exactly(3))
+        $this->mockHttpClient->expects($this->exactly(4))
             ->method('post')
             ->with(
                 'http://localhost:8080/mcp',
@@ -288,6 +292,7 @@ final class HttpMcpServerTest extends TestCase
             )
             ->willReturnOnConsecutiveCalls(
                 new Response(200, [], json_encode(['result' => ['capabilities' => []]])),
+                new Response(202),
                 new Response(200, [], json_encode(['result' => ['tools' => []]])),
                 new Response(200, [], json_encode(['result' => ['output' => 'tool result']])),
             );
@@ -308,11 +313,11 @@ final class HttpMcpServerTest extends TestCase
             httpClient: $this->mockHttpClient,
         );
 
-        // Single expectation across all posts (start's two + callTool's one).
-        // A callback lets the handshake succeed and the third (tools/call) throw —
+        // Single expectation across all posts (start's three + callTool's one).
+        // A callback lets the handshake succeed and the fourth (tools/call) throw —
         // willReturnOnConsecutiveCalls() cannot raise an exception mid-sequence.
         $call = 0;
-        $this->mockHttpClient->expects($this->exactly(3))
+        $this->mockHttpClient->expects($this->exactly(4))
             ->method('post')
             ->willReturnCallback(function () use (&$call) {
                 $call++;
@@ -320,6 +325,9 @@ final class HttpMcpServerTest extends TestCase
                     return new Response(200, [], json_encode(['result' => ['capabilities' => []]]));
                 }
                 if ($call === 2) {
+                    return new Response(202);
+                }
+                if ($call === 3) {
                     return new Response(200, [], json_encode(['result' => ['tools' => []]]));
                 }
                 throw new \Exception('Network error');
@@ -343,10 +351,11 @@ final class HttpMcpServerTest extends TestCase
 
         // Single expectation across all posts: handshake succeeds, then the
         // tools/call response body is non-JSON (decodes to a non-array).
-        $this->mockHttpClient->expects($this->exactly(3))
+        $this->mockHttpClient->expects($this->exactly(4))
             ->method('post')
             ->willReturnOnConsecutiveCalls(
                 new Response(200, [], json_encode(['result' => ['capabilities' => []]])),
+                new Response(202),
                 new Response(200, [], json_encode(['result' => ['tools' => []]])),
                 new Response(200, [], 'not json'),
             );
@@ -369,10 +378,11 @@ final class HttpMcpServerTest extends TestCase
 
         // Single expectation across all posts: handshake succeeds, then the
         // tools/call response is valid JSON but carries no 'result' key.
-        $this->mockHttpClient->expects($this->exactly(3))
+        $this->mockHttpClient->expects($this->exactly(4))
             ->method('post')
             ->willReturnOnConsecutiveCalls(
                 new Response(200, [], json_encode(['result' => ['capabilities' => []]])),
+                new Response(202),
                 new Response(200, [], json_encode(['result' => ['tools' => []]])),
                 new Response(200, [], json_encode(['error' => 'method not found'])),
             );
@@ -580,7 +590,7 @@ final class HttpMcpServerTest extends TestCase
             httpClient: $this->mockHttpClient,
         );
 
-        $this->mockHttpClient->expects($this->exactly(2))
+        $this->mockHttpClient->expects($this->exactly(3))
             ->method('post')
             ->with(
                 'http://localhost:8080/mcp',
@@ -592,6 +602,7 @@ final class HttpMcpServerTest extends TestCase
             )
             ->willReturnOnConsecutiveCalls(
                 new Response(200, [], json_encode(['result' => ['capabilities' => []]])),
+                new Response(202),
                 new Response(200, [], json_encode(['result' => ['tools' => []]])),
             );
 
@@ -643,6 +654,9 @@ final class HttpMcpServerTest extends TestCase
                 $method = $options['json']['method'] ?? '';
                 if ($method === 'initialize') {
                     return new Response(200, [], json_encode(['result' => ['capabilities' => []]]));
+                }
+                if ($method === 'notifications/initialized') {
+                    return new Response(202);
                 }
 
                 return new Response(200, [], json_encode(['result' => ['tools' => []]]));
@@ -700,18 +714,30 @@ final class HttpMcpServerTest extends TestCase
         $this->assertArrayNotHasKey('Authorization', $options['headers']);
     }
 
-    public function testServerWithoutAuthStoreSendsConfiguredHeadersByteIdentical(): void
+    /**
+     * Without a store no Authorization is invented; the configured headers
+     * pass through and the transport's own Accept/Content-Type are added. An
+     * operator `Accept: application/json` is REPLACED (audit MCP-2: exactly
+     * that value is what a Streamable HTTP server answers with 406).
+     */
+    public function testServerWithoutAuthStoreSendsConfiguredHeadersPlusTransportHeaders(): void
     {
         $options = $this->e695StartAndCapture(['X-Api-Key' => 'k', 'Accept' => 'application/json'], null);
 
-        $this->assertSame(['X-Api-Key' => 'k', 'Accept' => 'application/json'], $options['headers']);
+        $this->assertSame(
+            ['X-Api-Key' => 'k', 'Accept' => HttpMcpServer::ACCEPT, 'Content-Type' => 'application/json'],
+            $options['headers'],
+        );
     }
 
-    public function testServerWithStoreHoldingNoEntrySendsConfiguredHeadersByteIdentical(): void
+    public function testServerWithStoreHoldingNoEntrySendsConfiguredHeadersPlusTransportHeaders(): void
     {
         $options = $this->e695StartAndCapture(['X-Api-Key' => 'k'], $this->e695Store());
 
-        $this->assertSame(['X-Api-Key' => 'k'], $options['headers']);
+        $this->assertSame(
+            ['X-Api-Key' => 'k', 'Accept' => HttpMcpServer::ACCEPT, 'Content-Type' => 'application/json'],
+            $options['headers'],
+        );
     }
 
     public function testExpiredTokenIsRefreshedThroughTheStoreBeforeAttaching(): void

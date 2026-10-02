@@ -130,7 +130,7 @@ census, table first:
 | Transport | Works here | Config it takes | How it runs |
 |---|---|---|---|
 | Stdio | yes | `command`, `args` (+ optional `env`, `startTimeout`) | spawned child, JSON-RPC over pipes |
-| HTTP | yes | `url` (+ optional `headers`) | stateless POSTs; a stored OAuth bearer attaches per request, and a static `Authorization` you set in the config wins over the store |
+| HTTP | yes | `url` (+ optional `headers`) | Streamable HTTP: one POST per message accepting `application/json, text/event-stream`, the `Mcp-Session-Id` from `initialize` echoed on every later request, replies read from a JSON body or SSE `data:` frames; a stored OAuth bearer attaches per request, and a static `Authorization` you set in the config wins over the store |
 | Git | yes | `path` (omit → this project) | in-process — no transport, no child, no socket |
 | Claude-mcp | yes | operator-tier `claudeMcpBinary` (+ optional `claudeMcpArgs`, `claudeMcpEnv`; never the entry) | spawned child under process containment, JSON-RPC over pipes |
 | SSE | **no** | — | spec-named and not implemented: `"type": "sse"` falls to the factory's default arm and throws `Unknown MCP server type: sse` — a config-error report, deferred until every OTHER entry has been attempted, so one `sse` entry costs only its own server |
@@ -176,6 +176,35 @@ A server that answers `initialize` with a JSON-RPC `error` has refused the
 session, so `start()` treats it as a start failure: the child is stopped and
 the exception carries the server's error code and message plus its stderr
 tail. In `/mcp` such a server shows ` · not up`, never ` · up 0 tools`.
+
+An `http` server is held to the same rule — an `initialize` error reply fails
+`start()` with the server's code and message — and speaks the Streamable HTTP
+transport the rest of the way:
+
+- **Headers the transport owns.** Every POST carries
+  `Accept: application/json, text/event-stream` and
+  `Content-Type: application/json`. A config `headers` entry of either name
+  (or of `Mcp-Session-Id` / `MCP-Protocol-Version`, matched
+  case-insensitively) is dropped, not merged: an `Accept: application/json`
+  from the config is exactly what a Streamable HTTP server refuses with 406.
+  Every other configured header is sent as written.
+- **Session.** A `Mcp-Session-Id` on the `initialize` reply is echoed on every
+  later request, starting with `notifications/initialized` (an id-less POST the
+  server answers 202). A 404 to a request that carried the id means the server
+  forgot the session: the client re-initializes once and resends; a second
+  failure is reported, not looped. `stop()` ends the session with a
+  best-effort HTTP `DELETE` carrying the id — a 405 or a dead host does not
+  fail a shutdown — and `isUp()` then answers false until `start()` runs a
+  fresh handshake.
+- **Version.** `initialize` advertises `2024-11-05`; the
+  `MCP-Protocol-Version` header is sent only when the server negotiates
+  `2025-06-18` or later, the revision that introduced it.
+- **Replies.** A `text/event-stream` reply is read as SSE: `data:` lines join
+  with a newline, comments and non-`message` events are skipped, and the
+  message whose `id` matches the request is the answer — notifications and
+  server requests the stream carries first are passed over. The reply body is
+  read whole, so a server must close the stream once it has answered, as the
+  specification asks and both reference SDKs do.
 
 ### `${VAR}` interpolation — exactly where it works
 

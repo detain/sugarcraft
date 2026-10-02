@@ -73,8 +73,8 @@ final class McpClientServerIsolationTest extends TestCase
     {
         $client = $this->clientFor(
             ['bad' => $this->httpEntry(), 'good' => $this->httpEntry()],
-            [$this->handshake(), $this->toolsList('[{"name":5,"description":"mistyped"}]'),
-             $this->handshake(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
+            [$this->handshake(), $this->initializedAck(), $this->toolsList('[{"name":5,"description":"mistyped"}]'),
+             $this->handshake(), $this->initializedAck(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
         );
 
         // No report: a mistyped ENTRY is filtered inside parseTools(), so the
@@ -99,7 +99,7 @@ final class McpClientServerIsolationTest extends TestCase
     {
         $client = $this->clientFor(
             ['mixed' => $this->httpEntry()],
-            [$this->handshake(), $this->toolsList(
+            [$this->handshake(), $this->initializedAck(), $this->toolsList(
                 '[{"name":5},{"name":"kept","description":"fine","inputSchema":{}},{"name":"nulls","description":null}]'
             )],
         );
@@ -126,7 +126,7 @@ final class McpClientServerIsolationTest extends TestCase
     {
         $client = $this->clientFor(
             ['bad' => ['type' => 'sse', 'url' => 'http://bad.invalid/rpc'], 'good' => $this->httpEntry()],
-            [$this->handshake(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
+            [$this->handshake(), $this->initializedAck(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
         );
 
         $this->assertStartFailed($client);
@@ -174,8 +174,8 @@ final class McpClientServerIsolationTest extends TestCase
     {
         $client = $this->clientFor(
             ['bad' => $this->httpEntry(), 'good' => $this->httpEntry()],
-            [$this->handshake(), $this->toolsList('["write","read"]'),
-             $this->handshake(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
+            [$this->handshake(), $this->initializedAck(), $this->toolsList('["write","read"]'),
+             $this->handshake(), $this->initializedAck(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
         );
 
         // NO failure here, and that is the row's second half: a scalar where a
@@ -214,8 +214,8 @@ final class McpClientServerIsolationTest extends TestCase
     {
         $client = $this->clientFor(
             ['bad' => $this->httpEntry(), 'good' => $this->httpEntry()],
-            [$this->handshake(), new \Error('a server type raised something that is not an Exception'),
-             $this->handshake(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
+            [$this->handshake(), $this->initializedAck(), new \Error('a server type raised something that is not an Exception'),
+             $this->handshake(), $this->initializedAck(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
         );
 
         // Silent, like any other runtime start failure: the config was fine, the
@@ -240,8 +240,8 @@ final class McpClientServerIsolationTest extends TestCase
     {
         $client = $this->clientFor(
             ['bad' => $this->httpEntry(), 'good' => $this->httpEntry()],
-            [$this->handshake(), new \Error('boom'),
-             $this->handshake(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
+            [$this->handshake(), $this->initializedAck(), new \Error('boom'),
+             $this->handshake(), $this->initializedAck(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
         );
 
         $client->startServers();
@@ -318,8 +318,8 @@ final class McpClientServerIsolationTest extends TestCase
     {
         $client = $this->clientFor(
             ['good' => $this->httpEntry(), 'bad' => $this->httpEntry()],
-            [$this->handshake(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]'),
-             $this->handshake(), $this->toolsList('[{"name":5}]')],
+            [$this->handshake(), $this->initializedAck(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]'),
+             $this->handshake(), $this->initializedAck(), $this->toolsList('[{"name":5}]')],
         );
 
         $client->startServers();
@@ -381,6 +381,15 @@ final class McpClientServerIsolationTest extends TestCase
     private function handshake(): Response
     {
         return new Response(200, [], (string) json_encode(['jsonrpc' => '2.0', 'id' => 0, 'result' => []]));
+    }
+
+    /**
+     * The 202 a Streamable HTTP server answers `notifications/initialized`
+     * with — the handshake's second leg since audit MCP-2.
+     */
+    private function initializedAck(): Response
+    {
+        return new Response(202);
     }
 
     /**
