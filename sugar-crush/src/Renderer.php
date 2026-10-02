@@ -9,6 +9,7 @@ use SugarCraft\Core\SgrState;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Parser;
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Token;
 use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View;
@@ -20,6 +21,7 @@ use SugarCraft\Mouse\Scanner;
 use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Fuzzy\Highlighter;
 use SugarCraft\Fuzzy\MatchResult;
+use SugarCraft\Shine\Render\SectionScanner;
 use SugarCraft\Shine\Renderer as Markdown;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -391,6 +393,117 @@ final class Renderer
      * @var array<string, array{ok: bool, body: string}>
      */
     private static array $imageCache = [];
+
+    /**
+     * Distinct settled assistant bodies {@see $markdownMemo} keeps before it
+     * evicts the least recently used one.
+     *
+     * Unlike {@see IMAGE_CACHE_MAX}, this bound has to be larger than the
+     * number of assistant turns in a long session. The whole transcript is
+     * rendered on every frame, oldest turn first, so an LRU smaller than the
+     * transcript evicts each entry just before it is needed again and never
+     * hits. An entry is the rendered SGR text of one reply, a few KB, so
+     * 4096 of them is tens of MB at worst. A session with more turns than
+     * that is only as slow as it was before the memo.
+     */
+    private const MARKDOWN_MEMO_MAX = 4096;
+
+    /**
+     * Rendered CandyShine bodies of settled assistant turns, keyed by wrap
+     * width and a hash of the source text, least recently used first
+     * (audit 15b-10).
+     *
+     * `Program::renderFrame()` repaints on every keystroke, token batch and
+     * tick, and {@see renderHistory()} used to re-parse every assistant reply
+     * on every one of those frames: 0.7 s per keystroke at 200 exchanges. A
+     * settled reply does not change, and its body is a pure function of
+     * (source, width, markdown theme): CandyShine reads no clock, environment
+     * or terminal state while rendering, and one renderer instance renders a
+     * given source to the same bytes however many documents it rendered
+     * before. Everything with per-frame side effects (the thought row's
+     * click zone, tool rows, image markers) stays outside the memo.
+     *
+     * The theme is not in the key. The memo belongs to one markdown theme
+     * object, {@see $markdownMemoTheme}, and is emptied when a frame renders
+     * with a different one. A theme switch costs one cold frame. Keying on
+     * spl_object_id() instead would be unsafe, because PHP reuses the id of
+     * a freed object.
+     *
+     * @var array<string, string>
+     */
+    private static array $markdownMemo = [];
+
+    /** @var \WeakReference<\SugarCraft\Shine\Theme>|null the theme {@see $markdownMemo} was filled with */
+    private static ?\WeakReference $markdownMemoTheme = null;
+
+    /**
+     * The streaming partial's incremental render state (audit 15b-10).
+     *
+     * A streaming reply only grows, and re-parsing all of it on every token
+     * batch cost 2.1 s per frame at 200 KB. CandyShine's
+     * {@see SectionScanner} splits Markdown at top-level boundaries where
+     * rendering the pieces separately gives the same bytes as rendering the
+     * whole (the law {@see Markdown::stream()} is pinned to). Here the
+     * scanner is kept alive between frames. Each frame feeds it only the
+     * bytes that arrived since the last one, and only the open tail section
+     * is rendered again. Closed sections are rendered once and appended to
+     * `bodies`.
+     *
+     * Valid while `consumed` is a prefix of the new partial and the theme
+     * and width are unchanged. Any other partial (a new turn, a retry, a
+     * resize) starts a new state.
+     *
+     * `closed` is the byte offset where the rendered sections end and the
+     * open tail starts. `lineStart` is the offset of the line the scanner is
+     * still reading.
+     *
+     * @var array{theme: \WeakReference<\SugarCraft\Shine\Theme>, width: int, consumed: string, scanner: SectionScanner, bodies: string, closed: int, lineStart: int}|null
+     */
+    private static ?array $streamMemo = null;
+
+    /**
+     * A CommonMark link reference definition (`[label]: url`) at the start
+     * of a line, matched loosely.
+     *
+     * A definition applies to the whole document, so it changes how a
+     * `[label]` in an EARLIER section renders. Section-by-section rendering
+     * cannot see that. MEASURED: `"see [foo]\n\n# H\n\n[foo]: http://x"`
+     * renders a hyperlink through {@see Markdown::render()} and a literal
+     * `[foo]` through {@see Markdown::stream()}. A partial that contains
+     * anything like a definition is therefore rendered whole. The pattern
+     * over-matches on purpose, since a false match only costs speed.
+     */
+    private const LINK_REFERENCE_DEFINITION = '/^ {0,3}\[[^\n]*\]:/m';
+
+    /**
+     * Distinct styled rows {@see $styleTokenMemo} keeps. Large for the same
+     * reason as {@see MARKDOWN_MEMO_MAX}: it has to hold every row of a long
+     * transcript, or the oldest rows are evicted just before the next frame
+     * reads them again.
+     */
+    private const STYLE_TOKEN_MEMO_MAX = 32768;
+
+    /**
+     * {@see styleTokens()}'s results, keyed by the row itself. Rows are already
+     * cut to the pane width when they get here, so the keys are short.
+     *
+     * @var array<string, array{0: list<Token>, 1: bool, 2: SgrState, 3: string}>
+     */
+    private static array $styleTokenMemo = [];
+
+    /** @var array{0: list<Token>, 1: bool, 2: SgrState, 3: string}|null {@see styleTokens()}'s answer for a row with no ESC */
+    private static ?array $plainRow = null;
+
+    private static ?SgrState $initialSgrState = null;
+
+    /**
+     * {@see hiddenBodyLineCount()}'s answers, keyed by body length and hash.
+     * Bounded by {@see MARKDOWN_MEMO_MAX}, since there is at most one entry
+     * per tool call in the transcript.
+     *
+     * @var array<string, int>
+     */
+    private static array $hiddenBodyMemo = [];
 
     /**
      * Inner width of the permission modal, in cells. Wider than the palette's
@@ -839,7 +952,7 @@ final class Renderer
      * AFTER it has been measured and padded costs nothing and is what
      * bubblezone recommends for width-sensitive containers.
      *
-     * @var list<array{id: string, label: string}> in document order
+     * @var array<array-key, array{id: string, label: string}> in document order, keyed by id
      */
     private static array $toolCallZones = [];
 
@@ -2538,13 +2651,13 @@ final class Renderer
             return;
         }
 
-        foreach (self::$toolCallZones as $zone) {
-            if ($zone['id'] === $key) {
-                return;
-            }
+        // Keyed by id so the first-wins check is a lookup. A scan here made
+        // the frame quadratic in the number of tool calls (audit 15b-10).
+        if (isset(self::$toolCallZones[$key])) {
+            return;
         }
 
-        self::$toolCallZones[] = ['id' => $key, 'label' => $label];
+        self::$toolCallZones[$key] = ['id' => $key, 'label' => $label];
     }
 
     /**
@@ -2954,18 +3067,118 @@ final class Renderer
      */
     private static function balanceSgr(array $rows): array
     {
-        $parser = new Parser();
-        $state = SgrState::initial();
+        // $state is never changed in place: it may be a snapshot shared with
+        // $styleTokenMemo, so a row that changes it works on a clone.
+        $initial = self::initialSgrState();
+        $state = $initial;
+        // Null until a row ends inside an unfinished escape. See below.
+        $parser = null;
         $out = [];
         foreach ($rows as $row) {
-            $prefix = $state->rowOpen();
-            foreach ($parser->parse($row) as $token) {
-                $state->apply($token);
+            if ($parser !== null) {
+                $prefix = $state->rowOpen();
+                $state = clone $state;
+                foreach ($parser->parse($row) as $token) {
+                    $state->apply($token);
+                }
+                $out[] = $prefix . $row . $state->rowClose();
+
+                continue;
             }
-            $out[] = $prefix . $row . $state->rowClose();
+
+            $entry = self::styleTokens($row);
+            // `==` compares every property of the two states, which is exact.
+            // SgrState's own predicates are not: isDefault() ignores the
+            // underline colour and an open hyperlink.
+            if ($state == $initial) {
+                // Most rows start unstyled, so for them the whole row (state
+                // after it, closing bytes) is memoized too.
+                $prefix = '';
+                $state = $entry[2];
+                $close = $entry[3];
+            } else {
+                $prefix = $state->rowOpen();
+                if ($entry[0] !== []) {
+                    $state = clone $state;
+                    foreach ($entry[0] as $token) {
+                        $state->apply($token);
+                    }
+                }
+                $close = $state->rowClose();
+            }
+            if ($entry[1]) {
+                // A Parser keeps an escape cut off at the end of one row and
+                // joins it to the next row. A per-row token list cannot do
+                // that, so from this row on the block goes through one shared
+                // Parser, primed with this row so that it holds the same
+                // unfinished bytes. This is the pre-memo algorithm.
+                $parser = new Parser();
+                $parser->parse($row);
+            }
+            $out[] = $prefix . $row . $close;
         }
 
         return $out;
+    }
+
+    /**
+     * Everything {@see balanceSgr()} needs to know about one row, memoized per
+     * row in {@see $styleTokenMemo} (audit 15b-10):
+     *  0. the row's tokens that can change an {@see SgrState} (SGR and OSC;
+     *     {@see SgrState::apply()} ignores text and control tokens);
+     *  1. whether the row ends inside an unfinished escape;
+     *  2. the state after the row, starting from the initial state;
+     *  3. that state's {@see SgrState::rowClose()}.
+     *
+     * balanceSgr() runs over the whole transcript on every frame. Once the
+     * Markdown was memoized, tokenizing every row byte by byte and replaying
+     * the tokens took most of the frame: 280 ms of 380 ms at 200 exchanges.
+     * A transcript is mostly the same rows frame after frame. A fresh Parser
+     * tokenizes a row the same way the shared one did, as long as the shared
+     * one held no unfinished escape when the row started, and balanceSgr()
+     * keeps that condition.
+     *
+     * @return array{0: list<Token>, 1: bool, 2: SgrState, 3: string}
+     */
+    private static function styleTokens(string $row): array
+    {
+        if (!str_contains($row, "\x1b")) {
+            // Only ESC starts a sequence for the Parser, so the row is text.
+            return self::$plainRow ??= [[], false, self::initialSgrState(), ''];
+        }
+        if (isset(self::$styleTokenMemo[$row])) {
+            return self::$styleTokenMemo[$row];
+        }
+
+        $parser = new Parser();
+        $tokens = [];
+        foreach ($parser->parse($row) as $token) {
+            if ($token->type === Token::OSC || ($token->type === Token::CSI && $token->final === 'm')) {
+                $tokens[] = $token;
+            }
+        }
+        $after = SgrState::initial();
+        foreach ($tokens as $token) {
+            $after->apply($token);
+        }
+        $entry = [$tokens, $parser->flush() !== [], $after, $after->rowClose()];
+
+        if (\count(self::$styleTokenMemo) >= self::STYLE_TOKEN_MEMO_MAX) {
+            // Drop the older half rather than one entry per insert: fewer
+            // rebuilds, and the rows the frame is reading now survive.
+            self::$styleTokenMemo = \array_slice(self::$styleTokenMemo, self::STYLE_TOKEN_MEMO_MAX >> 1, null, true);
+        }
+
+        return self::$styleTokenMemo[$row] = $entry;
+    }
+
+    /**
+     * One shared initial {@see SgrState}. Never changed: {@see balanceSgr()}
+     * clones before it applies a token.
+     */
+    private static function initialSgrState(): SgrState
+    {
+        return self::$initialSgrState ??= SgrState::initial();
     }
 
     /**
@@ -2993,6 +3206,11 @@ final class Renderer
         // (`SugarCraft\Shine\Renderer::__construct()` nulls a non-positive
         // width), so with no width every paragraph came out on one line.
         $md = new Markdown($theme->markdown, wrapWidth: $width);
+        // Built once per frame, not once per turn: the labels depend only on
+        // the theme, and styling them per turn was a fixed cost on every row
+        // of a long transcript (audit 15b-10).
+        $userLabel = Style::new()->foreground($theme->userLabel)->bold()->render('user>');
+        $assistantLabel = Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant');
         $blocks = [];
         foreach ($history as $msg) {
             // Defense-in-depth (candy-buffer #1362): User and System content is
@@ -3014,8 +3232,8 @@ final class Renderer
                 continue;
             }
             $blocks[] = match ($msg->role) {
-                Role::User      => Style::new()->foreground($theme->userLabel)->bold()->render('user>') . " " . self::untrusted($msg->content),
-                Role::Assistant => self::renderAssistantTurn($msg, $theme, $md, $expanded),
+                Role::User      => $userLabel . " " . self::untrusted($msg->content),
+                Role::Assistant => self::renderAssistantTurn($msg, $theme, $md, $width, $assistantLabel, $expanded),
                 Role::System    => self::dim($theme)->render("system: " . self::untrusted($msg->content)),
             };
         }
@@ -3031,15 +3249,16 @@ final class Renderer
      * {@see Message} DTO; this is where it actually reaches the user instead
      * of being computed and discarded.
      *
+     * @param Markdown            $md       renderer built from `$theme->markdown` at $width
+     * @param string              $label    the styled `assistant` label
      * @param array<string, bool> $expanded {@see Chat::expanded()}
      */
-    private static function renderAssistantTurn(Message $msg, Theme $theme, Markdown $md, array $expanded = []): string
+    private static function renderAssistantTurn(Message $msg, Theme $theme, Markdown $md, int $width, string $label, array $expanded = []): string
     {
-        $label = Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant');
         // Sentinels stripped BEFORE CandyShine, not after: the rendered output
         // is legitimate SGR that untrusted() would destroy, but the model's
         // raw text can still smuggle U+E000/U+E001 into the frame.
-        $body = trim($md->render(Sanitize::stripZoneSentinels($msg->content)));
+        $body = self::settledMarkdown($md, $theme, $width, Sanitize::stripZoneSentinels($msg->content));
 
         if ($msg->reasoning === null || trim($msg->reasoning) === '') {
             return $label . "\n" . $body;
@@ -3080,14 +3299,140 @@ final class Renderer
         // renderAssistantTurn(): the model's raw text can smuggle
         // U+E000/U+E001 into the frame and break the mouse-zone scan.
         $raw = Sanitize::stripZoneSentinels($partial);
+        $md = new Markdown($theme->markdown, wrapWidth: $width);
 
         try {
-            $body = rtrim((new Markdown($theme->markdown, wrapWidth: $width))->render($raw));
+            $body = rtrim(self::streamingMarkdown($md, $theme, $width, $raw));
         } catch (\Throwable) {
-            $body = self::untrusted($raw);
+            // The incremental path parses sections, the old path parsed the
+            // whole partial, and only the whole-partial outcome is the
+            // contract: retry it before falling back to plain text.
+            try {
+                $body = rtrim($md->render($raw));
+            } catch (\Throwable) {
+                $body = self::untrusted($raw);
+            }
         }
 
         return $label . "\n" . $body;
+    }
+
+    /**
+     * `trim($md->render($source))`, memoized in {@see $markdownMemo}.
+     *
+     * $md must be a renderer built from `$theme->markdown` at $width, which
+     * is the only kind {@see renderHistory()} builds.
+     */
+    private static function settledMarkdown(Markdown $md, Theme $theme, int $width, string $source): string
+    {
+        if (self::$markdownMemoTheme?->get() !== $theme->markdown) {
+            self::$markdownMemo = [];
+            self::$markdownMemoTheme = \WeakReference::create($theme->markdown);
+        }
+
+        // Length plus a 128-bit hash, so a key costs O(1) memory per turn
+        // however long the reply is.
+        $key = $width . ':' . strlen($source) . ':' . hash('xxh128', $source);
+        if (isset(self::$markdownMemo[$key])) {
+            $hit = self::$markdownMemo[$key];
+            // Move to the most-recently-used end.
+            unset(self::$markdownMemo[$key]);
+
+            return self::$markdownMemo[$key] = $hit;
+        }
+
+        $body = trim($md->render($source));
+        self::$markdownMemo[$key] = $body;
+        if (\count(self::$markdownMemo) > self::MARKDOWN_MEMO_MAX) {
+            unset(self::$markdownMemo[array_key_first(self::$markdownMemo)]);
+        }
+
+        return $body;
+    }
+
+    /**
+     * The streaming partial rendered to the same bytes as `$md->render($raw)`
+     * (up to trailing whitespace, which the caller trims), but incrementally
+     * through {@see $streamMemo}.
+     *
+     * Falls back to a whole render when the renderer's document-scope
+     * decoration makes sections unsafe ({@see Markdown::defersStreaming()}) or
+     * when the text contains a link reference definition
+     * ({@see LINK_REFERENCE_DEFINITION}).
+     *
+     * The tail is a long reply with no section boundary yet, such as one
+     * huge code block. It is still rendered whole on each frame. Only the
+     * sections before it are saved.
+     */
+    private static function streamingMarkdown(Markdown $md, Theme $theme, int $width, string $raw): string
+    {
+        if ($md->defersStreaming() || preg_match(self::LINK_REFERENCE_DEFINITION, $raw) === 1) {
+            self::$streamMemo = null;
+
+            return $md->render($raw);
+        }
+
+        $memo = self::$streamMemo;
+        if (
+            $memo === null
+            || $memo['theme']->get() !== $theme->markdown
+            || $memo['width'] !== $width
+            || !str_starts_with($raw, $memo['consumed'])
+        ) {
+            $memo = [
+                'theme' => \WeakReference::create($theme->markdown),
+                'width' => $width,
+                'consumed' => '',
+                'scanner' => new SectionScanner(),
+                'bodies' => '',
+                'closed' => 0,
+                'lineStart' => 0,
+            ];
+        }
+        // Cleared first: the scanner is mutated in place below, so a render
+        // that throws part-way must not leave a state whose scanner is ahead
+        // of its bodies.
+        self::$streamMemo = null;
+
+        $offset = strlen($memo['consumed']);
+        $delta = substr($raw, $offset);
+        if ($delta !== '') {
+            // One line per push(). The scanner keeps an unconsumed buffer and
+            // re-slices it once per newline, so a 200 KB first frame pushed in
+            // one piece would copy the buffer once per line, which is
+            // quadratic. Its state depends only on the bytes assembled so far,
+            // so how the delta is split does not change the sections.
+            foreach (preg_split('/(?<=\n)/', $delta, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $piece) {
+                $closed = $memo['scanner']->push($piece);
+                if ($closed !== []) {
+                    foreach ($closed as $section) {
+                        $memo['bodies'] .= $md->renderSection($section);
+                    }
+                    // The line just completed opens the next section, so
+                    // everything before its first byte is rendered.
+                    $memo['closed'] = $memo['lineStart'];
+                }
+                $offset += strlen($piece);
+                if (str_ends_with($piece, "\n")) {
+                    $memo['lineStart'] = $offset;
+                }
+            }
+            $memo['consumed'] = $raw;
+        }
+
+        // The open tail is cut from the source by offset rather than taken from
+        // SectionScanner::finish(). finish() scans the unterminated last line
+        // and, when that line is a heading that closes a section, discards the
+        // closed section. MEASURED: `stream(["Intro\n\n# F"])` yields only the
+        // heading. Rendering the tail as one piece is always safe, because the
+        // tail starts at a boundary the scanner has already proven.
+        // Saved before the tail is rendered: the state is complete here, and a
+        // tail the parser rejects (a partial cut inside a UTF-8 sequence) must
+        // not cost the next frame every section again.
+        self::$streamMemo = $memo;
+        $tail = substr($raw, $memo['closed']);
+
+        return $memo['bodies'] . (trim($tail) === '' ? '' : $md->renderSection($tail));
     }
 
     /**
@@ -3329,7 +3674,7 @@ final class Renderer
             // row is wrapped into a lookalike second line. See $toolRowHeads.
             self::$toolRowHeads[] = $head;
             $row = $label . self::toolCallSuffix($result, $theme, $width, Width::of($label));
-            $body = self::untrusted($result->isError() ? ($result->error ?? '') : $result->result);
+            $rawBody = $result->isError() ? ($result->error ?? '') : $result->result;
             $key = $result->id ?? $result->name;
             $isExpanded = ($expanded[$key] ?? false) === true;
             // §8 E5: the same key Ctrl+O toggles, so a click and the keystroke
@@ -3358,8 +3703,19 @@ final class Renderer
                     $block .= "\n" . $invocation;
                 }
             }
-            if ($body !== '') {
-                $block .= "\n" . self::renderToolBody($body, $result->isError() || $hasImage, $isExpanded, $theme);
+            $keepWhenCollapsed = $result->isError() || $hasImage;
+            if (!$isExpanded && !$keepWhenCollapsed) {
+                // A hidden body shows only its line count, so the whole
+                // sanitized body is not needed for it (audit 15b-10).
+                $hiddenLines = self::hiddenBodyLineCount($rawBody);
+                if ($hiddenLines > 0) {
+                    $block .= "\n" . self::hiddenBodyHint($hiddenLines, $theme);
+                }
+            } else {
+                $body = self::untrusted($rawBody);
+                if ($body !== '') {
+                    $block .= "\n" . self::renderToolBody($body, $keepWhenCollapsed, $isExpanded, $theme);
+                }
             }
 
             if ($result->hasDiff()) {
@@ -3601,10 +3957,7 @@ final class Renderer
         }
 
         if (!$keepWhenCollapsed) {
-            $count = substr_count($body, "\n") + 1;
-            $hint = "… {$count} line" . ($count === 1 ? '' : 's') . ' hidden (ctrl+o)';
-
-            return self::dim($theme)->render($hint);
+            return self::hiddenBodyHint(substr_count($body, "\n") + 1, $theme);
         }
 
         $collapsed = self::collapseToolOutput($body, self::TOOL_OUTPUT_MAX_LINES, self::TOOL_OUTPUT_MAX_CHARS);
@@ -3614,6 +3967,43 @@ final class Renderer
 
         return $collapsed['output'] . "\n"
             . self::dim($theme)->render('… output truncated (ctrl+o to expand)');
+    }
+
+    /** The faint "N lines hidden" row that stands in for a collapsed body. */
+    private static function hiddenBodyHint(int $count, Theme $theme): string
+    {
+        return self::dim($theme)->render("… {$count} line" . ($count === 1 ? '' : 's') . ' hidden (ctrl+o)');
+    }
+
+    /**
+     * How many rows `untrusted($raw)` has, or 0 when it is empty: the only
+     * facts a hidden tool body puts on screen. Memoized in
+     * {@see $hiddenBodyMemo} by a hash of the raw body (audit 15b-10).
+     *
+     * Every tool row in the transcript is rebuilt on every frame, and most
+     * of them are collapsed. Sanitizing each one's output again on each frame
+     * was the largest cost left in {@see renderHistory()}, and a tool body is
+     * the one input in a transcript that can be megabytes. Hashing the raw
+     * body is much cheaper than sanitizing it, and the sanitizer is a pure
+     * function, so the count is too.
+     */
+    private static function hiddenBodyLineCount(string $raw): int
+    {
+        if ($raw === '') {
+            return 0;
+        }
+        $key = strlen($raw) . ':' . hash('xxh128', $raw);
+        if (isset(self::$hiddenBodyMemo[$key])) {
+            return self::$hiddenBodyMemo[$key];
+        }
+
+        $body = self::untrusted($raw);
+        $count = $body === '' ? 0 : substr_count($body, "\n") + 1;
+        if (\count(self::$hiddenBodyMemo) >= self::MARKDOWN_MEMO_MAX) {
+            self::$hiddenBodyMemo = \array_slice(self::$hiddenBodyMemo, self::MARKDOWN_MEMO_MAX >> 1, null, true);
+        }
+
+        return self::$hiddenBodyMemo[$key] = $count;
     }
 
     /**
