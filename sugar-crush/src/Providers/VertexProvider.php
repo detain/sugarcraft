@@ -1703,6 +1703,11 @@ final readonly class VertexProvider implements ProviderInterface
         // drives the real seam through the vendored REST transport and asserts
         // this object in the serialized HTTP body, so deleting the
         // `setGenerationConfig()` call reds.
+        // Audit A21 (b), DEFERRED: Gemini 2.5's default thinking spends from
+        // this same `maxOutputTokens` budget, so a hard prompt can end
+        // `MAX_TOKENS` with little text under the 4096 default. A model-aware
+        // default or a `thinkingConfig.thinkingBudget` setting is a design
+        // decision still open; the usage side (a) is folded already.
         $generationConfig = [
             'temperature' => $request->temperature ?? self::DEFAULT_TEMPERATURE,
             'maxOutputTokens' => $request->maxTokens ?? self::DEFAULT_MAX_TOKENS,
@@ -1810,8 +1815,12 @@ final readonly class VertexProvider implements ProviderInterface
      * KNOWN-INCOMPLETE SEAM - `thought` parts. Gemini 2.5 marks a reasoning
      * part with `"thought": true`. This method folds every part's text into
      * `content` and has no reasoning split, because {@see geminiBody()} never
-     * sends a `thinkingConfig` and so no thought part is ever produced.
-     * Whoever enables thinking closes both halves.
+     * sends a `thinkingConfig` with `includeThoughts`, so no thought PART is
+     * ever returned. That is a statement about parts only: Gemini 2.5 still
+     * THINKS by default, and the tokens it spends doing so arrive in
+     * `usageMetadata.thoughtsTokenCount`, which {@see parseUsageMetadata()}
+     * folds into the usage (audit A21 a). Whoever enables thought parts
+     * closes the text half.
      *
      * @param array<string, mixed> $data
      */
@@ -1984,11 +1993,11 @@ final readonly class VertexProvider implements ProviderInterface
      * travels verbatim: `usageMetadata.promptTokenCount` /
      * `.candidatesTokenCount` are Gemini's spellings of the Anthropic arm's
      * `input_tokens` / `output_tokens`. `totalTokenCount` is deliberately NOT
-     * read: it also counts thinking tokens the two fields above exclude, so
-     * summing the two and reading the third would disagree, and only the
-     * two-field form can be priced per direction. The existing
-     * `VertexProviderTest` pins that omission with a fixture whose
-     * `totalTokenCount` is 99.
+     * read: only the per-field form can be priced per direction, and the
+     * total is re-derived from those fields instead (prompt + candidates +
+     * thoughts - which is what Google's own total counts, see the thinking
+     * paragraph below). The existing `VertexProviderTest` pins that omission
+     * with a fixture whose `totalTokenCount` is 99.
      *
      * CACHE-FIELD FINDING, LOCALLY PROVEN (the strongest class the brief
      * allows short of a live call): the vendored protobuf class
@@ -2010,9 +2019,21 @@ final readonly class VertexProvider implements ProviderInterface
      * prompt/candidates/total/cached counts, per-modality detail lists,
      * traffic type, and thoughts) - so `cacheCreationTokens` is null on
      * every parse, the recorded "API reports none" outcome, never invented.
-     * `thoughtsTokenCount` is real on this wire but is NOT one of Usage's
-     * four buckets; folding it into `outputTokens` would corrupt the
-     * per-direction price `complete()` has always applied. Reported.
+     *
+     * THINKING TOKENS ARE OUTPUT (audit A21 a). Gemini 2.5 thinks by default
+     * even with no `thinkingConfig` in the request - omitting it only hides
+     * the thought PARTS - and `thoughtsTokenCount` reports that thinking
+     * separately from `candidatesTokenCount`, which EXCLUDES it. Google bills
+     * thought tokens at the output rate and counts them against
+     * `maxOutputTokens`. This parse used to drop the field, so every Gemini
+     * 2.5 turn under-counted its output, its total and (once priced, A15) its
+     * cost. It is now folded the way {@see Usage::$reasoningTokens} defines
+     * the bucket: `outputTokens` = candidates + thoughts (the billed output),
+     * `reasoningTokens` = thoughts (a sub-bucket of output, never added to the
+     * total a second time), and the output side is priced on the sum. Absent
+     * thoughts leave every figure exactly as before and `reasoningTokens`
+     * null (unreported). A negative thought count is treated as 0 rather
+     * than subtracted from the output.
      *
      * @param array<string, mixed> $usageMetadata the decoded `usageMetadata`
      *                                            document; non-array arrives
@@ -2029,21 +2050,27 @@ final readonly class VertexProvider implements ProviderInterface
         $prompt = $promptRaw ?? 0;
         $candidates = $candidatesRaw ?? 0;
 
+        // Audit A21 (a): thinking is billed output - see the docblock.
+        $thoughtsRaw = self::usageInt($usageMetadata['thoughtsTokenCount'] ?? null);
+        $output = $candidates + max(0, $thoughtsRaw ?? 0);
+
         // Audit A15: unknown Gemini families bill the 0.0 lower bound with
         // their name carried, never a silent zero.
-        $cost = $this->cost($model, $prompt, $candidates);
+        $cost = $this->cost($model, $prompt, $output);
 
         return Usage::new(
-            $prompt + $candidates,
+            $prompt + $output,
             $cost ?? 0.0,
             // Unreported prompt stays unreported even when cached is known -
             // the difference would be a guess, and Usage's contract is that
             // a bucket holds only what the provider said or derived from
             // what it said.
             $promptRaw === null ? null : ($cached === null ? $promptRaw : max(0, $promptRaw - $cached)),
-            $candidatesRaw,
+            // Unreported only when NEITHER output-side field was reported.
+            $candidatesRaw === null && $thoughtsRaw === null ? null : $output,
             $cached,
             null, // no cache-creation field on this protocol - never invented
+            $thoughtsRaw,
             unpricedModel: $cost === null ? $model : null,
         );
     }
