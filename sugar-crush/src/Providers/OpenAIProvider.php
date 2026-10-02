@@ -415,9 +415,18 @@ final readonly class OpenAIProvider implements ProviderInterface
                 fn($tc) => ToolCall::fromArray([
                     'id' => $tc['id'],
                     'name' => $tc['function']['name'],
+                    // `is_array()` rather than `?? []`: a payload decoding to
+                    // a scalar (`12`, `"text"`) used to reach ToolCall's
+                    // `array $arguments` and die as a TypeError mid-turn.
                     'arguments' => is_string($tc['function']['arguments'] ?? null)
-                        ? json_decode($tc['function']['arguments'], true) ?? []
+                        ? (is_array($decoded = json_decode($tc['function']['arguments'], true)) ? $decoded : [])
                         : ($tc['function']['arguments'] ?? []),
+                    // Audit A11, as on the Custom and Sglang paths: a broken
+                    // payload is refused by Runtime, never run as `[]`.
+                    'argumentsError' => ToolCall::argumentsErrorFor($tc['function']['arguments'] ?? null),
+                    // Audit A23: replayed verbatim in history, so `{}` stays
+                    // `{}` (see ToolCall::rawArguments()).
+                    'rawArguments' => $tc['function']['arguments'] ?? null,
                 ]),
                 $message['tool_calls']
             );

@@ -692,6 +692,9 @@ final readonly class CustomProvider implements ProviderInterface
                     // arguments, but the call now says so, and Runtime answers
                     // the model with the JSON error instead of running the tool.
                     'argumentsError' => ToolCall::argumentsErrorFor($tc['function']['arguments'] ?? null),
+                    // Audit A23: replayed verbatim in history, so `{}` stays
+                    // `{}` (see ToolCall::rawArguments()).
+                    'rawArguments' => $tc['function']['arguments'] ?? null,
                 ]),
                 $message['tool_calls']
             );
@@ -878,6 +881,8 @@ final readonly class CustomProvider implements ProviderInterface
                 // emitted - but a payload that did not decode is carried as an
                 // error for Runtime to report, never run as `[]`.
                 'argumentsError' => ToolCall::argumentsErrorFor($tc['arguments'] ?? null),
+                // Audit A23: the concatenated fragments, replayed verbatim.
+                'rawArguments' => $tc['arguments'] ?? null,
             ]),
             $toolCallBuffer
         );
@@ -954,6 +959,9 @@ final readonly class CustomProvider implements ProviderInterface
                 'id' => $tc['id'] ?? '',
                 'name' => $name,
                 'arguments' => $arguments,
+                // Audit A23: replayed verbatim; ToolCall drops it for the
+                // pre-decoded and blank arms, which have no wire object.
+                'rawArguments' => $rawString,
             ]);
         }
 

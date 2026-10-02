@@ -75,6 +75,10 @@ final readonly class OpenAiArrayToolCallParser implements ToolCallParserInterfac
                 // decoded to `[]` because it was broken is refused by Runtime
                 // rather than run - with or without a decoder injected.
                 'argumentsError' => ToolCall::argumentsErrorFor($tc['function']['arguments'] ?? null),
+                // Audit A23: the wire string itself, so history replays what
+                // the model sent rather than a lossy re-encode of the decode.
+                // ToolCall keeps it only if it decodes to the arguments above.
+                'rawArguments' => $tc['function']['arguments'] ?? null,
             ]);
         }
 

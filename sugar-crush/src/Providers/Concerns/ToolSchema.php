@@ -174,6 +174,16 @@ trait ToolSchema
      * it had taken no arguments at all. Anything json_encode() still cannot
      * represent throws instead of being silently rewritten.
      *
+     * Audit A23: re-encoding is the FALLBACK. A call that arrived as wire
+     * JSON replays that string verbatim
+     * ({@see \SugarCraft\Crush\Tools\ToolCall::rawArguments()}),
+     * because no encode of the decoded array can be faithful: `{}` and `[]`
+     * both decode to an empty PHP array, so `{"opts":{}}` used to go back as
+     * `{"opts":[]}`. Only calls with no faithful wire form - recovered
+     * textual calls (DSML, MiniMax XML), pre-decoded payloads, blank or
+     * undecodable ones - take the encode below, whose top-level cast still
+     * keeps an argument-less call from going out as `[]`.
+     *
      * Already-shaped arrays (a decoded transcript replayed from disk, say)
      * are passed through untouched.
      *
@@ -192,7 +202,7 @@ trait ToolSchema
                 'type' => 'function',
                 'function' => [
                     'name' => $call->name(),
-                    'arguments' => json_encode(
+                    'arguments' => $call->rawArguments() ?? json_encode(
                         (object) $call->arguments(),
                         JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR,
                     ),

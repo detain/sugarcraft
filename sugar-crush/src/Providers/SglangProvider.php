@@ -2849,6 +2849,9 @@ final readonly class SglangProvider implements ProviderInterface
                 // it as an error, and Runtime answers the model with that
                 // instead of running the tool with the `[]` above.
                 'argumentsError' => ToolCall::argumentsErrorFor($tc['arguments'] ?? null),
+                // Audit A23: the concatenated fragments ARE the wire string;
+                // history replays them verbatim (see ToolCall::rawArguments()).
+                'rawArguments' => $tc['arguments'] ?? null,
             ]),
             $toolCallBuffer
         );
@@ -2993,6 +2996,8 @@ final readonly class SglangProvider implements ProviderInterface
                 'id' => $tc['id'] ?? '',
                 'name' => $name,
                 'arguments' => $decoded,
+                // Audit A23: replayed verbatim in history.
+                'rawArguments' => $rawString,
             ]);
         }
 
