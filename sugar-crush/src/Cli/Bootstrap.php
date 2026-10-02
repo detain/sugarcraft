@@ -1597,6 +1597,13 @@ final class Bootstrap
 
         $chat = $chat->withLaunchNotices(self::launchNotices());
 
+        // The single-writer lock on the session just opened (audit SES-3(b)).
+        // Taken LAST so that, when another TUI already has the session, the
+        // read-only notice and its `/branch` offer are the bottom row of the
+        // first frame rather than buried above the launch warnings. Every
+        // later session switch moves the lock with it inside Chat.
+        $chat = $chat->withSessionLocking();
+
         // Bare `--resume`: the picker opens over the fresh session so choosing
         // is the first thing the user does, and Esc leaves a usable chat.
         return $opened['picker'] ? $chat->withSessionPickerOpen() : $chat;
@@ -2612,7 +2619,7 @@ final class Bootstrap
      * handing both the same instances would mean reshaping {@see backend()}'s
      * internals, which this step does not touch.
      */
-    public static function app(?string $root = null, ?string $tuiErrorLog = null): App
+    public static function app(?string $root = null, ?string $tuiErrorLog = null, ?string $initialPrompt = null): App
     {
         $root ??= getcwd() ?: null;
 
@@ -2631,7 +2638,11 @@ final class Bootstrap
         // `backend()`.
         self::useProjectRootForSettings(self::configRoot($root));
 
-        $chat = self::chat($root);
+        // The words left on the command line (audit CLI-2(b)) ride this call
+        // rather than a Bootstrap call of their own in `bin/sugarcrush`, whose
+        // guard keeps every Bootstrap call out of the span between the TUI log
+        // redirect and Program. Chat submits them from init().
+        $chat = self::chat($root)->withInitialPrompt($initialPrompt);
         [$provider, $model] = self::provider();
 
         // ONE registry for the shell's Skills pane and the Skill tool in its

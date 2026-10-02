@@ -91,8 +91,10 @@ use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Memory\ForeignMemoryImporter;
 use SugarCraft\Crush\Memory\UnreadableNotes;
 use SugarCraft\Crush\Support\ContainedPath;
+use SugarCraft\Crush\Session\DebouncedTranscriptWriter;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\PromptHistory;
+use SugarCraft\Crush\Session\SessionLock;
 use SugarCraft\Crush\Session\SessionStore;
 use SugarCraft\Crush\Util\TokenTracker;
 use SugarCraft\Crush\Util\TokenEstimate;
@@ -208,6 +210,14 @@ final class Chat implements Model
 
     /** @var WorkflowEngineInterface|null Optional workflow engine for /workflow command */
     private readonly ?WorkflowEngineInterface $workflowEngine;
+
+    /**
+     * The coalescing transcript writer (audit R2) — see
+     * {@see DebouncedTranscriptWriter}. Carried by object identity across
+     * {@see mutate()} for the reason {@see $liveToolEvents} is: the pending
+     * snapshot has to reach whichever clone is on screen when the tick lands.
+     */
+    private readonly DebouncedTranscriptWriter $transcriptWriter;
 
     /** @var ContextCompactor Context compactor for /compact command and automatic compaction */
     private readonly ContextCompactor $compactor;
@@ -573,6 +583,12 @@ final class Chat implements Model
      * Stable across rebuilds for {@see BACKGROUND_POLL_SUBSCRIPTION}'s reason.
      */
     private const RUNTIME_NOTICE_SUBSCRIPTION = 'crush.runtime-notice-poll';
+
+    /**
+     * Reconciliation id of the debounced transcript save's tick (audit R2) —
+     * declared by {@see subscriptions()} only while a snapshot is pending.
+     */
+    private const TRANSCRIPT_FLUSH_SUBSCRIPTION = 'crush.transcript-flush';
 
     /**
      * How often the runtime-notice inbox is polled (seconds) while the tick is
@@ -1428,7 +1444,38 @@ final class Chat implements Model
          * command is refused while it runs — so the flag cannot outlive it.
          */
         private readonly bool $workflowTurnInFlight = false,
+        /** Shared transcript writer; null builds this lineage's own. See {@see $transcriptWriter}. */
+        ?DebouncedTranscriptWriter $transcriptWriter = null,
+        /**
+         * Whether this Chat takes the single-writer lock on the session it has
+         * open (audit SES-3(b)). Off by default — tests and embedders that
+         * build two Chats on one store keep working — and switched on by
+         * {@see withSessionLocking()}, which {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}
+         * calls on every real launch.
+         */
+        private readonly bool $sessionLocking = false,
+        /** The lock this Chat holds on {@see $currentSessionId}, when locking is on and it won it. */
+        private readonly ?SessionLock $sessionLock = null,
+        /**
+         * True when another TUI holds the open session's lock: the transcript
+         * is shown, but nothing that would write to the session or start a
+         * turn runs, and nothing is saved. `/branch` forks the session into a
+         * new one this window owns. See {@see readOnlyRefusal()}.
+         */
+        private readonly bool $readOnlySession = false,
+        /**
+         * The last draft a read-only window refused, held so the box is free
+         * for `/branch` and put back once the fork succeeds — see
+         * {@see refuseReadOnly()}.
+         */
+        private readonly ?string $readOnlyDraft = null,
+        /**
+         * The words left on the command line (`sugarcrush fix the bug`),
+         * submitted as the first prompt from {@see init()} (audit CLI-2(b)).
+         */
+        private readonly ?string $initialPrompt = null,
     ) {
+        $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
         // The widget is the source of truth; $inputBuf is its projection.
         // Seeding via setValue() lands the cursor at the end of the draft,
@@ -1544,7 +1591,38 @@ final class Chat implements Model
      */
     public function init(): ?\Closure
     {
-        return $this->runtimeNoticeWake();
+        $wake = $this->runtimeNoticeWake();
+        if ($this->initialPrompt === null) {
+            return $wake;
+        }
+
+        // The command-line prompt (audit CLI-2(b)) rides init() as a Msg so
+        // the turn starts from update(), where its Cmd reaches the Program —
+        // the same road a prompt typed into the box and sent with Enter takes.
+        $prompt = Cmd::send(new InitialPromptMsg($this->initialPrompt));
+
+        return $wake === null ? $prompt : Cmd::batch($wake, $prompt);
+    }
+
+    /**
+     * Submit the command-line prompt {@see init()} delivered, exactly as if it
+     * had been typed into the box and sent — so a read-only session refuses it
+     * and keeps it as the draft, and a slash command runs as a command.
+     *
+     * With the session picker up (bare `--resume`), choosing comes first: the
+     * words become the draft, and Enter sends them once a session is picked.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function submitInitialPrompt(string $prompt): array
+    {
+        $next = $this->mutate(['initialPrompt' => null, 'inputBuf' => $prompt]);
+
+        if ($next->sessionPicker !== null) {
+            return [$next, null];
+        }
+
+        return $next->submit();
     }
 
     /**
@@ -1596,6 +1674,17 @@ final class Chat implements Model
         [$next, $cmd] = $this->route($msg);
 
         if ($next instanceof self && $next !== $this) {
+            // A route that moved to another session (picker, tab, Ctrl+Tab,
+            // `/branch`, palette New session) hands the lock over BEFORE the
+            // save below is considered, so a `/branch` out of a read-only
+            // session saves into the branch it now owns.
+            if ($next->currentSessionId !== $this->currentSessionId) {
+                $next = $next->relockedForCurrentSession();
+            }
+
+            // Hands the snapshot to the debounced writer; the write itself
+            // rides the tick subscriptions() declares while one is pending, so
+            // no route's Cmd changes shape and no cancel arm can drop it.
             $next->persistTranscript($this);
         }
 
@@ -1610,29 +1699,127 @@ final class Chat implements Model
      * Keyed on the history ARRAY changing, which is an identity check on the
      * common path: {@see mutate()} hands an untouched history through as the
      * same array, so a keystroke costs one pointer comparison and no write.
-     * Mid-turn writes are deliberate — a tool row landing is exactly the state
+     * Mid-turn changes are saved too — a tool row landing is exactly the state
      * a crash would otherwise lose, and a "running" placeholder saved that way
      * is healed into an "interrupted" row when it is resumed
      * ({@see reviveTranscriptMessage()}).
      *
-     * A side effect inside update(), like the submit-time checkpoint it sits
-     * beside and for the same reason: it must happen before the next message is
-     * handled, and a failure is swallowed rather than costing the user the turn.
+     * DEBOUNCED SINCE AUDIT R2. This used to write the whole conversation
+     * synchronously inside `update()` on every change. It now hands the
+     * snapshot to {@see DebouncedTranscriptWriter}, which writes the newest one
+     * when the {@see TRANSCRIPT_FLUSH_SUBSCRIPTION} tick lands — at most once
+     * per {@see DebouncedTranscriptWriter::DELAY_SECONDS} — and synchronously on
+     * a session switch, before a fork and at shutdown; see that class for the
+     * full list and what a SIGKILL can still lose.
+     *
+     * A READ-ONLY session never saves (audit SES-3(b)): another TUI owns it.
      */
     private function persistTranscript(self $previous): void
     {
-        if ($this->currentSessionId === null
+        if ($this->readOnlySession
+            || $this->currentSessionId === null
             || !$this->sessionStore instanceof EnhancedSessionStore
             || $this->history === $previous->history
         ) {
             return;
         }
 
-        try {
-            $this->sessionStore->saveTranscript($this->currentSessionId, $this->history);
-        } catch (\Throwable) {
-            // Best effort - see the docblock.
+        $this->transcriptWriter->schedule($this->sessionStore, $this->currentSessionId, $this->history);
+    }
+
+    /**
+     * Write any transcript change still waiting on its debounce tick, now.
+     *
+     * Public for the host and for tests: the TUI never needs to call it — the
+     * writer flushes on its own tick, on session switches and forks, and at
+     * shutdown — but an embedder that drives `update()` without running
+     * {@see subscriptions()}, or a test asserting on the store, does.
+     */
+    public function flushTranscript(): void
+    {
+        $this->transcriptWriter->flush();
+    }
+
+    /**
+     * Turn on the single-writer session lock (audit SES-3(b)) and take it for
+     * the session this Chat has open.
+     *
+     * When another TUI already holds that session, the Chat comes back
+     * READ-ONLY: the transcript is on screen, a notice says who has it and
+     * offers `/branch` to fork it, and nothing typed is sent or saved until
+     * the user forks or switches to a session no one else has open. Every
+     * later session switch moves the lock with it
+     * ({@see relockedForCurrentSession()}).
+     *
+     * A no-op without an {@see EnhancedSessionStore} or an open session.
+     */
+    public function withSessionLocking(): self
+    {
+        return $this->mutate(['sessionLocking' => true])->relockedForCurrentSession();
+    }
+
+    /** True while another TUI owns the open session — see {@see withSessionLocking()}. */
+    public function isReadOnlySession(): bool
+    {
+        return $this->readOnlySession;
+    }
+
+    /**
+     * Submit $prompt as this session's first prompt once {@see init()} runs —
+     * the leftover command-line words (audit CLI-2(b)). Null or blank clears it.
+     */
+    public function withInitialPrompt(?string $prompt): self
+    {
+        $prompt = $prompt === null || trim($prompt) === '' ? null : $prompt;
+
+        return $this->mutate(['initialPrompt' => $prompt]);
+    }
+
+    /**
+     * Release the lock on the session being left and take the one for the
+     * session now open, deciding read-only afresh.
+     *
+     * Releasing FIRST matters only for a switch back to a session this window
+     * held a moment ago through a stale clone; taking the new lock first would
+     * then fail against ourselves.
+     */
+    private function relockedForCurrentSession(): self
+    {
+        if (!$this->sessionLocking) {
+            return $this;
         }
+
+        $id = $this->currentSessionId;
+        if ($this->sessionLock !== null && $this->sessionLock->sessionId() === $id) {
+            return $this;
+        }
+
+        $this->sessionLock?->release();
+
+        if ($id === null || !$this->sessionStore instanceof EnhancedSessionStore) {
+            return $this->mutate(['sessionLock' => null, 'readOnlySession' => false]);
+        }
+
+        $lock = $this->sessionStore->lockSession($id);
+        if ($lock !== null) {
+            return $this->mutate(['sessionLock' => $lock, 'readOnlySession' => false]);
+        }
+
+        return $this->mutate([
+            'sessionLock' => null,
+            'readOnlySession' => true,
+            'history' => [...$this->history, Message::notice(sprintf(
+                self::READ_ONLY_SESSION_NOTICE,
+                $this->currentSessionName ?? $id,
+                self::lockHolderClause($this->sessionStore->sessionLockHolder($id)),
+            ))],
+        ]);
+    }
+
+    /** ` (pid N)` for the read-only notices, or '' when the holder is unknown. */
+    private static function lockHolderClause(?int $pid): string
+    {
+        return $pid === null ? '' : " (pid {$pid})";
     }
 
     /**
@@ -1733,6 +1920,9 @@ final class Chat implements Model
      */
     private function switchToSession(string $sessionId, ?string $name): self
     {
+        // The session being left may still have a save waiting on its debounce
+        // tick (audit R2). Written now, so switching straight back reads it.
+        $this->transcriptWriter->flush();
         $history = self::loadTranscript($this->sessionStore, $sessionId);
 
         return $this->mutate([
@@ -1964,6 +2154,16 @@ final class Chat implements Model
         }
         if ($msg instanceof RuntimeNoticePumpMsg) {
             return $this->pumpRuntimeNotices();
+        }
+        if ($msg instanceof TranscriptFlushMsg) {
+            // The debounce tick (audit R2): write whatever is newest. $this is
+            // returned unchanged, so update() schedules nothing new.
+            $this->transcriptWriter->flush();
+
+            return [$this, null];
+        }
+        if ($msg instanceof InitialPromptMsg) {
+            return $this->submitInitialPrompt($msg->prompt);
         }
         if ($msg instanceof StatusLineTickMsg) {
             // The `statusLine` command's ONE side-effecting call site. Runs
@@ -8207,6 +8407,17 @@ final class Chat implements Model
             'inputHistoryCursor' => $this->inputHistoryCursor,
             'inputHistoryDraft' => $this->inputHistoryDraft,
             'workflowTurnInFlight' => $this->workflowTurnInFlight,
+            // By identity — see the property's doc-block.
+            'transcriptWriter' => $this->transcriptWriter,
+            // The lock and the read-only verdict travel together: a clone that
+            // dropped the lock would let the next session switch skip its
+            // release, and one that dropped the verdict would start saving a
+            // session another TUI owns on the next keystroke.
+            'sessionLocking' => $this->sessionLocking,
+            'sessionLock' => $this->sessionLock,
+            'readOnlySession' => $this->readOnlySession,
+            'readOnlyDraft' => $this->readOnlyDraft,
+            'initialPrompt' => $this->initialPrompt,
         ];
 
         // The two write routes into the draft, kept from fighting.
@@ -8450,6 +8661,16 @@ final class Chat implements Model
             }
 
             return $this->enqueuePrompt($text);
+        }
+
+        // A READ-ONLY SESSION (audit SES-3(b)) refuses here, ahead of the
+        // file-based commands and the built-in arms both: a prompt would start
+        // a turn on a session another TUI is writing, and so would a command
+        // file, which is a prompt. Only the commands that leave the session
+        // untouched get through — see {@see readOnlyRefusal()}.
+        $readOnly = $this->readOnlyRefusal($text);
+        if ($readOnly !== null) {
+            return $readOnly;
         }
 
         // FILE-BASED COMMANDS ARE CHECKED FIRST, ahead of dispatchCommand()'s
@@ -8923,6 +9144,108 @@ final class Chat implements Model
     }
 
     /**
+     * The row {@see withSessionLocking()} adds when the session it opened is
+     * held by another TUI (audit SES-3(b)): `%s` the session's name or id,
+     * `%s` ` (pid N)` or ''. Public because the read-only tests and the
+     * README quote it.
+     */
+    public const READ_ONLY_SESSION_NOTICE = 'Session %s is open in another sugarcrush%s, so this window is '
+        . 'read-only: nothing typed here is sent to the model or saved to that session. Type /branch to fork '
+        . 'it into a new session this window owns and carry on there.';
+
+    /**
+     * The row {@see refuseReadOnly()} adds for input a read-only session will
+     * not run: `%s` the quoted draft, `%s` the session's name or id.
+     */
+    public const READ_ONLY_REFUSAL = '"%s" was not sent: session %s is open in another sugarcrush, so this '
+        . 'window is read-only. Type /branch to fork it into a session of your own, and this draft comes back '
+        . 'in the box there.';
+
+    /**
+     * The built-in commands a READ-ONLY session still runs: the ones that only
+     * read, change this window's own view or settings, leave the process, or
+     * move to ANOTHER session (`/branch`, `/sessions`, `/fork` and `/bg`, which
+     * read the stored transcript and write only to a new session).
+     *
+     * AN ALLOWLIST, so it fails closed: a command added later is refused in a
+     * read-only window until someone decides it is safe here. Left out on
+     * purpose: `/clear`, `/compact`, `/rename`, `/rewind` (each rewrites the
+     * session another TUI is writing) and `/workflow run|resume` (a run
+     * appends to it). `/workflow list|status` read only, and are let through by
+     * {@see isReadOnlySafeCommand()}.
+     */
+    private const READ_ONLY_COMMANDS = [
+        'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share',
+        'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
+        'mcp', 'websearch', 'pane', 'layout', 'model',
+    ];
+
+    /**
+     * The refusal for $text when this session is read-only and $text would
+     * write to it or start a turn; null when it may run.
+     *
+     * @return array{0: self, 1: ?\Closure}|null
+     */
+    private function readOnlyRefusal(string $text): ?array
+    {
+        if (!$this->readOnlySession || $this->isReadOnlySafeCommand($text)) {
+            return null;
+        }
+
+        return $this->refuseReadOnly($text);
+    }
+
+    /**
+     * Say why $text did not run, and hold on to it.
+     *
+     * THE BOX IS CLEARED AND THE DRAFT STASHED, rather than left in place: the
+     * way out of a read-only window is typing `/branch`, and a draft left in
+     * the box would have to be deleted first — measured live, the next thing
+     * typed was appended to it and refused in turn. {@see handleBranchCommand()}
+     * puts the stashed draft back once the fork succeeds, so the prompt the
+     * user meant to send is waiting in the window that can now send it.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function refuseReadOnly(string $text): array
+    {
+        return [$this->mutate([
+            'history' => [...$this->history, Message::notice(sprintf(
+                self::READ_ONLY_REFUSAL,
+                self::quoteDraftForNotice($text),
+                $this->currentSessionName ?? (string) $this->currentSessionId,
+            ))],
+            'inputBuf' => '',
+            'readOnlyDraft' => $text,
+        ]), null];
+    }
+
+    /**
+     * Whether $text is a built-in command {@see READ_ONLY_COMMANDS} lets
+     * through. A file-based command is a PROMPT ({@see submit()}), so one that
+     * shadows an allowed name is refused like any prompt.
+     */
+    private function isReadOnlySafeCommand(string $text): bool
+    {
+        if (self::isBareMcpAuthCommand($text)) {
+            return true;
+        }
+
+        if (!str_starts_with($text, '/') || $this->resolveCustomCommand($text) !== null) {
+            return false;
+        }
+
+        $tokens = self::commandTokens($text);
+        $name = substr($tokens[0], 1);
+
+        if ($name === 'workflow') {
+            return \in_array($tokens[1] ?? 'list', ['list', 'status'], true);
+        }
+
+        return \in_array($name, self::READ_ONLY_COMMANDS, true);
+    }
+
+    /**
      * Whether $text is `/workflow pause …` or `/workflow status …` typed while
      * the turn in flight is a workflow run — the one exception to
      * {@see refuseInFlightCommand()}'s rule besides `/exit`/`/quit` (audit WF-4).
@@ -9383,6 +9706,20 @@ final class Chat implements Model
         string $preTurnDraft,
         ?int $preTurnCursor,
     ): array {
+        // Defence in depth for audit SES-3(b): submit() already refused, but a
+        // turn reached by another route (a parked compaction resuming) must
+        // not write checkpoints into a session another TUI owns either.
+        if ($this->readOnlySession) {
+            $prompt = '';
+            foreach ($newTurnMessages as $message) {
+                if ($message instanceof Message && $message->role === Role::User) {
+                    $prompt = $message->content;
+                }
+            }
+
+            return $this->refuseReadOnly($prompt);
+        }
+
         // Reminder-tier check (R21's ContextCompactor::shouldSendReminder(),
         // 70% of the token budget by default). Unlike the idle-compaction
         // prompt in submit() — which short-circuits the turn entirely and never
@@ -11068,6 +11405,12 @@ final class Chat implements Model
         $parts = preg_split('/\s+/', $afterWorkflow, 2);
         $command = $parts[0];
         $args = $parts[1] ?? '';
+
+        // Before workflowRun()/workflowResume() can set workflowTurnInFlight:
+        // a run appends to the transcript of a session another TUI owns.
+        if ($this->readOnlySession && \in_array($command, ['run', 'resume'], true)) {
+            return $this->refuseReadOnly($inputText);
+        }
 
         return match ($command) {
             'run' => $this->workflowRun($inputText, $args),
@@ -13836,9 +14179,19 @@ final class Chat implements Model
             return $this->sessionResponse($inputText, 'Usage: /branch (takes no arguments)');
         }
 
+        // forkSession() copies the STORED transcript: write any debounced
+        // change first, or the branch starts behind the screen (audit R2).
+        $this->transcriptWriter->flush();
+
         try {
             $newSessionId = $this->sessionStore->forkSession($this->currentSessionId);
             $response = "Branch created: {$newSessionId}";
+            if ($this->readOnlySession) {
+                // update() moves the lock onto the branch (audit SES-3(b)), so
+                // from the next keystroke this window writes again — to the
+                // fork, never to the session the other window has.
+                $response .= ' — this window now writes to the branch; the original stays with the other sugarcrush.';
+            }
         } catch (\InvalidArgumentException $e) {
             $response = "Error: {$e->getMessage()}";
         } catch (\Throwable $e) {
@@ -13848,7 +14201,10 @@ final class Chat implements Model
         // Return Chat with same state but currentSessionId updated to the new branch
         $next = $this->mutate([
             'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
-            'inputBuf' => '',
+            // Out of a read-only window, the draft it refused comes back: this
+            // window can send it now ({@see refuseReadOnly()}).
+            'inputBuf' => isset($newSessionId) ? ($this->readOnlyDraft ?? '') : '',
+            'readOnlyDraft' => isset($newSessionId) ? null : $this->readOnlyDraft,
             'inFlight' => false,
             'currentSessionId' => $newSessionId ?? $this->currentSessionId,
         ]);
@@ -14023,6 +14379,9 @@ final class Chat implements Model
         if ($this->currentSessionId === null) {
             return $this->sessionResponse($inputText, 'No active session. Start a new conversation first.');
         }
+
+        // Same reason as /branch: the fork copies what is stored (audit R2).
+        $this->transcriptWriter->flush();
 
         try {
             $forkedSessionId = $this->sessionStore->forkSession($this->currentSessionId);
@@ -16478,6 +16837,19 @@ final class Chat implements Model
         // by the edge-driven watcher {@see init()} arms; this clause is what
         // covers the in-turn case, where the watcher and the tick are both live
         // and either may win.
+        // The debounced transcript save (audit R2). Declared only while a
+        // snapshot is waiting, so it costs nothing on an idle session: the
+        // first change starts the timer, its tick writes the newest snapshot,
+        // and the reconcile after that cancels it. Changes in between only
+        // replace the snapshot — see DebouncedTranscriptWriter.
+        if ($this->transcriptWriter->hasPending()) {
+            $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(
+                self::TRANSCRIPT_FLUSH_SUBSCRIPTION,
+                $this->transcriptWriter->delaySeconds(),
+                static fn (): \SugarCraft\Core\Msg => new TranscriptFlushMsg(),
+            );
+        }
+
         if ($this->drainsRuntimeNotices && ($this->inFlight || RuntimeNoticeSink::hasPending())) {
             $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(
                 self::RUNTIME_NOTICE_SUBSCRIPTION,

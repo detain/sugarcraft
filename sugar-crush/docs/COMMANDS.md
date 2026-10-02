@@ -322,6 +322,15 @@ table quotes the row rather than the handler because the row is what `/help` and
 the "/" popup show you — but the command you can type is the handler's list, and
 [`MEMORY.md`](MEMORY.md) documents that surface, `import` included.
 
+In a **read-only** window — a session another sugarcrush already has open
+(see *Sessions* in the README) — only the commands that leave the session alone
+run: `/exit`, `/keys`, `/help`, `/permissions`, `/notices`, `/rules`, `/budget`,
+`/share`, `/agents`, `/memory`, `/bg`, `/fork`, `/branch`, `/sessions`, `/theme`,
+`/mcp`, `/websearch`, `/pane`, `/layout`, `/model` and `/workflow list|status`.
+Everything else, a custom command included, is refused; the box is cleared so
+`/branch` can be typed at once, and the refused draft comes back once `/branch`
+has forked the session into one this window owns.
+
 Three spellings dispatch with no row of their own, so nothing advertises them:
 `/agent` for `/agents`, `/background` for `/bg`, and `/quit` for `/exit`. The
 first two are second names the old prefix chain had already made reachable and

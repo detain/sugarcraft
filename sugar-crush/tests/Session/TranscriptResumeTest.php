@@ -10,6 +10,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\Attachment;
 use SugarCraft\Crush\AttachmentType;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\TranscriptFlushMsg;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
@@ -198,6 +199,11 @@ final class TranscriptResumeTest extends TestCase
         [$sent] = (new Chat(sessionStore: $store, currentSessionId: 'live', inputBuf: 'hello'))
             ->update(new KeyMsg(KeyType::Enter));
         \assert($sent instanceof Chat);
+
+        // Debounced since audit R2: the change is written when the flush tick
+        // the Chat subscribes to lands, not inside the update() that made it.
+        // DebouncedTranscriptPersistenceTest covers the timing itself.
+        $sent->update(new TranscriptFlushMsg());
 
         $this->assertSame(
             array_map(static fn(Message $m): string => $m->content, $sent->history),

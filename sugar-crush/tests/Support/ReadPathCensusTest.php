@@ -430,6 +430,13 @@ final class ReadPathCensusTest extends TestCase
         'Session/PromptHistory.php|fopen' => [
             'SELF_LOCATED — the same file, opened c+ under an exclusive lock to append',
         ],
+        'Session/SessionLock.php|file_get_contents' => [
+            'SELF_LOCATED — <configDir>/sessions/<id>.lock, read for the holder pid the read-only '
+                . 'notice names (audit SES-3(b)); the id is hashed unless it is in the minted alphabet',
+        ],
+        'Session/SessionLock.php|fopen' => [
+            'SELF_LOCATED — the same lock file, opened c+e and flock()ed to hold the session (audit SES-3(b))',
+        ],
         'Sessions/BackgroundSessionRunner.php|file_get_contents' => [
             'SELF_LOCATED — the per-spawn token file the supervisor minted in its 0700 '
                 . 'IPC dir, read to authenticate the daemon\'s handshake (audit M5)',

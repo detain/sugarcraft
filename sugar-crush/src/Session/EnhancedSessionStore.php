@@ -24,7 +24,7 @@ final class EnhancedSessionStore
     /** Wrapped session store for base session operations. */
     private SessionStore $sessionStore;
 
-    public function __construct(string $dbPath)
+    public function __construct(private readonly string $dbPath)
     {
         /** @var \WeakMap<object, string> */
         $this->messageHashes = new \WeakMap();
@@ -45,6 +45,39 @@ final class EnhancedSessionStore
         } finally {
             umask($previousUmask);
         }
+    }
+
+    /**
+     * Take the single-writer lock on $sessionId (audit SES-3(b)), or null when
+     * another TUI holds it. See {@see SessionLock} for what the lock is and why
+     * a failure to lock opens the session writable rather than read-only.
+     *
+     * The lock files live in a `sessions/` directory beside this database, so
+     * a launch on the default store locks under `~/.sugar-crush/sessions/` and
+     * a store built on a scratch path keeps its locks in that scratch tree. An
+     * in-memory database has nowhere to put one, and is unenforced.
+     */
+    public function lockSession(string $sessionId): ?SessionLock
+    {
+        return SessionLock::acquire($this->lockDirectory(), $sessionId);
+    }
+
+    /**
+     * The pid recorded by whoever holds $sessionId's lock, for the read-only
+     * notice; null when unknown. Informational only.
+     */
+    public function sessionLockHolder(string $sessionId): ?int
+    {
+        return SessionLock::holderPid($this->lockDirectory(), $sessionId);
+    }
+
+    private function lockDirectory(): ?string
+    {
+        if ($this->dbPath === '' || $this->dbPath === ':memory:' || str_starts_with($this->dbPath, 'file::memory:')) {
+            return null;
+        }
+
+        return \dirname($this->dbPath) . '/' . SessionLock::DIRECTORY;
     }
 
     // =======================================================================

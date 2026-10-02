@@ -499,7 +499,10 @@ if ($tuiErrorLog !== null) {
     });
 }
 
-(new Program(Bootstrap::app($args->root, tuiErrorLog: $tuiErrorLog), Chat::programOptions()))->run();
+// Audit CLI-2(b): the words left on the command line ride Bootstrap::app()'s
+// arguments — no Bootstrap call of their own may sit between the TUI log
+// redirect above and Program — and the hosted Chat submits them from init().
+(new Program(Bootstrap::app($args->root, tuiErrorLog: $tuiErrorLog, initialPrompt: $args->initialPrompt), Chat::programOptions()))->run();
 
 // E705: the Kitty keyboard push rides App::init() as a Cmd; the pop cannot.
 // Every way out of run() — QuitMsg, SIGINT's InterruptMsg, kill() — stops the

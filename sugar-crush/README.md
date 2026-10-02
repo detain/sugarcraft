@@ -138,7 +138,10 @@ begins with `-`). Subcommand operands (`session delete <id>`) are not affected.
 
 Every launch opens a **new** session. The conversation is saved as it changes —
 every message, tool call, tool result and thought — so any session can be picked
-up again later, with the model seeing the whole earlier exchange:
+up again later, with the model seeing the whole earlier exchange. Saves are
+batched: a change is written within half a second, and at once when you switch
+sessions, `/branch`, `/fork` or quit (Ctrl+C included), so only a hard kill
+(`kill -9`, a power cut) can lose the last half-second:
 
 ```sh
 sugarcrush                  # a new session (Up still recalls prompts from earlier ones)
@@ -154,6 +157,21 @@ with each other or with `-p`/`run`. Inside the TUI, `Ctrl+R` (or `/sessions`)
 opens the same picker and `Enter` loads the chosen session's transcript;
 `Ctrl+Tab` and the tab strip switch the same way. A tool call that was still
 running when its session was last saved comes back marked interrupted.
+
+**One window writes a session at a time.** A launch that opens a session
+another sugarcrush already has open — `--continue` in a second terminal, the
+same `--resume` twice, or picking it in the picker — opens it **read-only**: the
+transcript is shown, but prompts and the commands that would change the session
+(`/clear`, `/compact`, `/rename`, `/rewind`, `/workflow run|resume`, any custom
+command) are refused and nothing is saved. `/branch` forks the session into a
+new one this window owns and carries on there, and the refused draft comes back
+in the box;
+commands that only read or change the window itself (`/help`, `/sessions`,
+`/theme`, `/model`, …) still work, and so does switching to another session.
+The guard is a `flock()` on `~/.sugar-crush/sessions/<id>.lock`, so it is
+released the moment the holding process exits, however it exits. Where the lock
+cannot be taken at all (a home directory that refuses the file), the session
+opens writable, as before.
 
 Launches that were quit without typing leave empty sessions behind; the next
 launch deletes the ones older than an hour (unnamed, with no transcript and no

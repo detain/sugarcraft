@@ -209,6 +209,61 @@ final class BootstrapTest extends TestCase
     }
 
     /**
+     * Audit SES-3(b), end to end through the launcher: a `--continue` into a
+     * session another launch still holds opens it READ-ONLY with the fork
+     * offer as its last row, and the launch that holds it stays writable.
+     * Once the holder is gone the same session opens writable again.
+     */
+    public function testContinueIntoASessionAnotherLaunchHoldsOpensItReadOnly(): void
+    {
+        $home = $this->isolatedHome();
+
+        $holder = Bootstrap::chat($home);
+        $store = $holder->sessionStore();
+        $this->assertInstanceOf(EnhancedSessionStore::class, $store);
+        $store->saveTranscript((string) $holder->currentSessionId(), [Message::user('mine'), Message::assistant('yes')]);
+
+        try {
+            Bootstrap::useSessionLaunch(true);
+            $second = Bootstrap::chat($home);
+
+            $this->assertSame($holder->currentSessionId(), $second->currentSessionId());
+            $this->assertFalse($holder->isReadOnlySession());
+            $this->assertTrue($second->isReadOnlySession());
+            $last = $second->history[\count($second->history) - 1]->content;
+            $this->assertStringContainsString('open in another sugarcrush', $last);
+            $this->assertStringContainsString('/branch', $last);
+
+            unset($holder, $second);
+            gc_collect_cycles();
+
+            $third = Bootstrap::chat($home);
+            $this->assertFalse($third->isReadOnlySession(), 'the lock died with the launch that held it');
+        } finally {
+            Bootstrap::useSessionLaunch(false);
+        }
+    }
+
+    /**
+     * Audit CLI-2(b): the leftover command-line words ride Bootstrap::app()'s
+     * arguments into the hosted Chat, which submits them from init().
+     */
+    public function testAppHandsTheCommandLinePromptToTheHostedChat(): void
+    {
+        $home = $this->isolatedHome();
+
+        $app = Bootstrap::app($home, initialPrompt: 'fix the login bug');
+        $this->assertInstanceOf(Chat::class, $app->chat);
+
+        $prompt = (new \ReflectionProperty(Chat::class, 'initialPrompt'))->getValue($app->chat);
+        $this->assertSame('fix the login bug', $prompt);
+        $this->assertNull(
+            (new \ReflectionProperty(Chat::class, 'initialPrompt'))->getValue(Bootstrap::app($home)->chat),
+            'no words, no prompt',
+        );
+    }
+
+    /**
      * The wiring W3.M3 exists for: before it, nothing in `src/` or `bin/`
      * ever built an App with a hosted Chat, so the whole pane shell was
      * unreachable from a real run.
