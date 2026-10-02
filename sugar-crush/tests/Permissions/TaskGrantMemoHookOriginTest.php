@@ -292,7 +292,7 @@ final class TaskGrantMemoHookOriginTest extends TestCase
         };
     }
 
-    private function recordingTool(string $name): Tool
+    private function recordingTool(string $name = 'Edit'): Tool
     {
         return new class ($name) implements Tool {
             public int $calls = 0;
@@ -307,7 +307,7 @@ final class TaskGrantMemoHookOriginTest extends TestCase
             {
                 $this->calls++;
 
-                return new ToolResult(toolCallId: 'call', content: 'ran');
+                return new ToolResult(toolCallId: 'call_1', content: 'ran');
             }
         };
     }
