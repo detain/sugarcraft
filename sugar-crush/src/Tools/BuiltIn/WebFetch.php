@@ -720,9 +720,16 @@ final readonly class WebFetch implements Tool, ParallelSafe
      * `gethostby*` resolvers (which return v4 only — the best this wrapper
      * can do when record access is unavailable).
      *
+     * Public, with {@see addressIsBlocked()}, so {@see WebSearch} guards its
+     * endpoint with the SAME resolver and range list rather than a second
+     * copy: the copy it used to carry answered v4 only and lacked even
+     * `0.0.0.0/8` (audit F-W3), which is the drift two lists invite.
+     *
+     * @internal shared by the built-in web tools, not a public API
+     *
      * @return list<string>
      */
-    private static function resolveViaSystemDns(string $host): array
+    public static function resolveViaSystemDns(string $host): array
     {
         if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
             return [$host];
@@ -758,8 +765,10 @@ final readonly class WebFetch implements Tool, ParallelSafe
      * spelling, while the raw pass keeps the v6 prefix entries (NAT64, 6to4)
      * live — canonicalising alone would turn `64:ff9b::/96` into a dead entry,
      * since no address could still be in it by the time the list is read.
+     *
+     * @internal shared with {@see WebSearch}; see {@see resolveViaSystemDns()}
      */
-    private static function addressIsBlocked(string $address): bool
+    public static function addressIsBlocked(string $address): bool
     {
         $forms = array_unique([$address, self::canonicalAddress($address)]);
 

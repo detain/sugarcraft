@@ -29,27 +29,45 @@ class WebSearch implements Tool, ParallelSafe
         '::1',
     ];
 
-    private const BLOCKED_IP_RANGES = [
-        '127.0.0.0/8',
-        '10.0.0.0/8',
-        '172.16.0.0/12',
-        '192.168.0.0/16',
-        '169.254.0.0/16',
-        '::1/128',
-        'fc00::/7',
-        'fe80::/10',
-    ];
-
     private const MAX_RESPONSE_SIZE = 5 * 1024 * 1024; // 5MB
+
+    private const READ_CHUNK_BYTES = 65536;
+
+    /** Bounds the redirect target echoed in the refusal; it is remote text. */
+    private const MAX_LOCATION_ECHO_BYTES = 256;
 
     private ?string $endpoint;
 
+    /** @var \Closure(string): list<string> */
+    private \Closure $resolveAddresses;
+
+    /** @var \Closure(string): bool */
+    private \Closure $isBlockedAddress;
+
+    /**
+     * The two trailing seams mirror {@see WebFetch}'s: production passes
+     * neither and gets WebFetch's system resolver and its full range list
+     * (audit F-W3 — this class used to keep its own shorter copy of both);
+     * tests pass a fake resolver so no lookup leaves the machine, and a
+     * blocklist that admits only a loopback fixture.
+     *
+     * @param (callable(string): list<string>)|null $resolveAddresses
+     * @param (callable(string): bool)|null         $isBlockedAddress
+     */
     public function __construct(
         ?string $endpoint = null,
         private int $timeout = 30,
         private int $maxResults = 10,
+        ?callable $resolveAddresses = null,
+        ?callable $isBlockedAddress = null,
     ) {
         $this->endpoint = $endpoint ?? getenv('SUGARCRUSH_SEARCH_ENDPOINT') ?: 'http://skynet2.interserver.net:8080/search';
+        $this->resolveAddresses = $resolveAddresses === null
+            ? static fn (string $host): array => WebFetch::resolveViaSystemDns($host)
+            : \Closure::fromCallable($resolveAddresses);
+        $this->isBlockedAddress = $isBlockedAddress === null
+            ? static fn (string $address): bool => WebFetch::addressIsBlocked($address)
+            : \Closure::fromCallable($isBlockedAddress);
     }
 
     /**
@@ -86,7 +104,8 @@ class WebSearch implements Tool, ParallelSafe
             . 'suggestions, corrections, infoboxes, and a note listing any engines that did '
             . 'not answer. It returns those snippets only, never the full contents of the '
             . 'pages it lists, and it errors on an empty or over-long query, a failed '
-            . 'connection, or an endpoint that replies with a client or server error status. '
+            . 'connection, an endpoint that replies with a client or server error status, '
+            . 'or an endpoint that answers with a redirect, which it never follows. '
             . 'Optional parameters narrow the search by safesearch level, which takes 0, 1, '
             . 'or 2, and by a time_range of day, month, or year.';
     }
@@ -148,28 +167,39 @@ class WebSearch implements Tool, ParallelSafe
             );
         }
 
+        // A host-less endpoint used to skip every address check below and go
+        // straight to the fetch; there is nothing to vet, so there is nothing
+        // to dial either.
         $parsedEndpoint = parse_url($this->endpoint);
-        if ($parsedEndpoint !== false && isset($parsedEndpoint['host'])) {
-            $endpointHost = $parsedEndpoint['host'];
-            if (in_array(strtolower($endpointHost), self::BLOCKED_HOSTNAMES, true)) {
-                return new ToolResult(
-                    toolCallId: $args['id'] ?? '',
-                    content: 'Error: search endpoint cannot be localhost',
-                    isError: true,
-                );
-            }
-            if ($this->targetsBlockedAddress($endpointHost)) {
-                return new ToolResult(
-                    toolCallId: $args['id'] ?? '',
-                    content: 'Error: search endpoint cannot resolve to a private or link-local address',
-                    isError: true,
-                );
-            }
+        if ($parsedEndpoint === false || ($parsedEndpoint['host'] ?? '') === '') {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: 'Error: search endpoint is not a valid URL',
+                isError: true,
+            );
+        }
+
+        $endpointHost = strtolower(trim((string) $parsedEndpoint['host'], '[]'));
+        if (in_array($endpointHost, self::BLOCKED_HOSTNAMES, true)) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: 'Error: search endpoint cannot be localhost',
+                isError: true,
+            );
+        }
+
+        [$refusal, $dialAddress] = $this->guardedDialAddress($endpointHost);
+        if ($refusal !== null) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: $refusal,
+                isError: true,
+            );
         }
 
         $start = hrtime(true);
 
-        [$body, $responseHeaders] = $this->fetch($url);
+        [$body, $responseHeaders] = $this->fetch($url, (string) $dialAddress);
 
         if ($body !== false && strlen($body) > self::MAX_RESPONSE_SIZE) {
             return new ToolResult(
@@ -187,8 +217,23 @@ class WebSearch implements Tool, ParallelSafe
             );
         }
 
-        if (isset($responseHeaders[0]) && preg_match('/^HTTP\/\d+\.\d+\s+(\d+)/', $responseHeaders[0], $m)) {
+        if (isset($responseHeaders[0]) && preg_match('/^HTTP\/\d+(?:\.\d+)?\s+(\d{3})/', $responseHeaders[0], $m)) {
             $code = (int) $m[1];
+            // Redirects are refused, never followed (audit F-W3). PHP's
+            // wrapper used to chase up to 20 of them with no address re-check,
+            // so an endpoint reached over plain HTTP — where anyone on the path
+            // can forge the 302 — could aim the tool at 169.254.169.254 or any
+            // internal host. A search API has no reason to redirect a query;
+            // the fix for one that does is configuring its final URL.
+            if ($code >= 300 && $code < 400) {
+                return new ToolResult(
+                    toolCallId: $args['id'] ?? '',
+                    content: "Error: HTTP {$code} — search endpoint answered with a redirect"
+                        . $this->locationSuffix($responseHeaders)
+                        . '. Redirects are not followed; set SUGARCRUSH_SEARCH_ENDPOINT to the final URL.',
+                    isError: true,
+                );
+            }
             if ($code >= 400 && $code < 500) {
                 return new ToolResult(
                     toolCallId: $args['id'] ?? '',
@@ -236,72 +281,135 @@ class WebSearch implements Tool, ParallelSafe
      * SSRF host checks, status-code mapping, JSON decoding, formatting) stays
      * on the real code path.
      *
-     * `$http_response_header` is the magic local `file_get_contents()` writes
-     * into the calling scope, so it must be read HERE and returned rather
-     * than left for execute() to find — moving the call moved the variable.
+     * The socket dials $dialAddress — the literal execute() already vetted —
+     * never the hostname, the same resolve-once-then-dial shape as
+     * {@see WebFetch} (audit F-W3): handing the name to the stream layer
+     * resolved it a second time, so a TTL≈0 record could answer public to the
+     * guard and private to the dial. The name stays where the peer needs it,
+     * in `Host:` and in `ssl.peer_name` for SNI and certificate checks.
+     * Redirects are switched off at the wrapper (it otherwise follows 20,
+     * unchecked); execute() turns the 3xx it now sees into a refusal. The
+     * body is read in chunks and abandoned once past MAX_RESPONSE_SIZE, so a
+     * hostile endpoint costs at most one chunk over the cap in memory rather
+     * than whatever it chooses to stream.
+     *
+     * `$http_response_header` is the magic local the http wrapper writes into
+     * the calling scope, so it must be read HERE and returned rather than left
+     * for execute() to find — moving the call moved the variable.
      *
      * @return array{0: string|false, 1: list<string>} body (false on connect
      *                                                 failure) and raw
      *                                                 response header lines
      */
-    protected function fetch(string $url): array
+    protected function fetch(string $url, string $dialAddress): array
     {
+        $parsed = parse_url($url);
+        if ($parsed === false || ($parsed['host'] ?? '') === '') {
+            return [false, []];
+        }
+
+        $scheme = strtolower((string) ($parsed['scheme'] ?? 'http'));
+        $host = strtolower(trim((string) $parsed['host'], '[]'));
+        $defaultPort = $scheme === 'https' ? 443 : 80;
+        $port = (int) ($parsed['port'] ?? $defaultPort);
+        $authority = (str_contains($dialAddress, ':') ? "[$dialAddress]" : $dialAddress) . ':' . $port;
+
+        $origin = ($parsed['path'] ?? '') === '' ? '/' : (string) $parsed['path'];
+        if (isset($parsed['query'])) {
+            $origin .= '?' . $parsed['query'];
+        }
+        $credentials = isset($parsed['user'])
+            ? rawurlencode((string) $parsed['user']) . ':' . rawurlencode((string) ($parsed['pass'] ?? '')) . '@'
+            : '';
+        $hostHeader = $port === $defaultPort ? $host : "$host:$port";
+
         $context = stream_context_create([
             'http' => [
                 'timeout' => $this->timeout,
                 'ignore_errors' => true,
+                'follow_location' => 0,
+                'max_redirects' => 0,
+                'header' => "Host: $hostHeader\r\n",
+            ],
+            'ssl' => [
+                'peer_name' => $host,
             ],
         ]);
 
-        $body = @file_get_contents($url, false, $context);
-
-        return [$body, $http_response_header ?? []];
-    }
-
-    private function targetsBlockedAddress(string $host): bool
-    {
-        $candidate = strtolower(trim($host, '[]'));
-
-        $ip = filter_var($candidate, FILTER_VALIDATE_IP) !== false
-            ? $candidate
-            : gethostbyname($candidate);
-
-        if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
-            return false;
+        $stream = @fopen("$scheme://$credentials$authority$origin", 'rb', false, $context);
+        if ($stream === false) {
+            return [false, []];
         }
 
-        foreach (self::BLOCKED_IP_RANGES as $cidr) {
-            if (self::ipInCidr($ip, $cidr)) {
-                return true;
+        $headers = $http_response_header ?? [];
+
+        $body = '';
+        while (!feof($stream) && strlen($body) <= self::MAX_RESPONSE_SIZE) {
+            $chunk = fread($stream, self::READ_CHUNK_BYTES);
+            if ($chunk === false || $chunk === '') {
+                break;
             }
+            $body .= $chunk;
         }
+        fclose($stream);
 
-        return false;
+        return [$body, array_values(is_array($headers) ? $headers : [])];
     }
 
-    private static function ipInCidr(string $ip, string $cidr): bool
+    /**
+     * Resolve the endpoint host once and refuse it if ANY answer is blocked,
+     * else return the first answer to dial. The check this replaced asked
+     * `gethostbyname()` for one v4 answer, so an AAAA-only name at `::1`, or
+     * a record set mixing public and private, passed; it also read an
+     * unresolvable name as "not blocked" and let the fetch resolve again.
+     *
+     * @return array{0: ?string, 1: ?string} refusal message, else dial address
+     */
+    private function guardedDialAddress(string $host): array
     {
-        [$subnet, $bits] = explode('/', $cidr, 2);
-        $ipBin = @inet_pton($ip);
-        $subnetBin = @inet_pton($subnet);
-        if ($ipBin === false || $subnetBin === false || strlen($ipBin) !== strlen($subnetBin)) {
-            return false;
+        $dial = null;
+        foreach (($this->resolveAddresses)($host) as $address) {
+            // The resolver seam must yield IP literals: this string becomes
+            // the dial authority, so anything else is refused, not trusted.
+            if (!is_string($address) || filter_var($address, FILTER_VALIDATE_IP) === false) {
+                return ["Error: could not resolve search endpoint host: $host", null];
+            }
+            if (($this->isBlockedAddress)($address)) {
+                return ['Error: search endpoint cannot resolve to a private or link-local address', null];
+            }
+            $dial ??= $address;
         }
 
-        $bits = (int) $bits;
-        $fullBytes = intdiv($bits, 8);
-        $remainder = $bits % 8;
+        return $dial === null
+            ? ["Error: could not resolve search endpoint host: $host", null]
+            : [null, $dial];
+    }
 
-        if ($fullBytes > 0 && substr($ipBin, 0, $fullBytes) !== substr($subnetBin, 0, $fullBytes)) {
-            return false;
+    /**
+     * " to <Location>" for the redirect refusal, so the user can see what to
+     * configure. The value is remote text headed for the model, so control
+     * bytes are stripped and its length is bounded.
+     *
+     * @param list<string> $headers
+     */
+    private function locationSuffix(array $headers): string
+    {
+        foreach ($headers as $header) {
+            if (!str_starts_with(strtolower($header), 'location:')) {
+                continue;
+            }
+            $location = (string) preg_replace('/[\x00-\x1f\x7f]/', '', trim(substr($header, 9)));
+            if ($location === '') {
+                return '';
+            }
+            if (strlen($location) > self::MAX_LOCATION_ECHO_BYTES) {
+                $location = mb_strcut($location, 0, self::MAX_LOCATION_ECHO_BYTES) . '...';
+            }
+
+            return " to {$location}";
         }
-        if ($remainder === 0) {
-            return true;
-        }
 
-        $mask = ~(0xFF >> $remainder) & 0xFF;
-
-        return ((ord($ipBin[$fullBytes]) ^ ord($subnetBin[$fullBytes])) & $mask) === 0;
+        return '';
     }
 
     /**

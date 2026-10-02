@@ -29,20 +29,26 @@ final class WebSearchToolTest extends TestCase
      */
     private function stubbedSearch(string|false $body, array $headers = [], string $endpoint = 'http://example.com/search'): WebSearch
     {
-        // An explicit public endpoint on purpose: the SSRF guard resolves the
-        // host with gethostbyname() before the (stubbed) fetch, so defaulting
-        // to null would put the real default endpoint's DNS lookup back into
-        // a test that is supposed to touch no network at all.
+        // An explicit public endpoint AND a fake resolver on purpose: the SSRF
+        // guard resolves the host before the (stubbed) fetch, so the real
+        // resolver would put a DNS lookup back into a test that is supposed
+        // to touch no network at all. The answer is example.com's own public
+        // address, so the production blocklist still runs and admits it.
         return new class ($body, $headers, $endpoint) extends WebSearch {
             public function __construct(
                 private readonly string|false $stubBody,
                 private readonly array $stubHeaders,
                 string $endpoint,
             ) {
-                parent::__construct($endpoint);
+                parent::__construct(
+                    $endpoint,
+                    resolveAddresses: static fn (string $host): array => filter_var($host, FILTER_VALIDATE_IP) !== false
+                        ? [$host]
+                        : ['93.184.215.14'],
+                );
             }
 
-            protected function fetch(string $url): array
+            protected function fetch(string $url, string $dialAddress): array
             {
                 return [$this->stubBody, $this->stubHeaders];
             }
@@ -230,10 +236,10 @@ final class WebSearchToolTest extends TestCase
 
     public function testHandlesRedirectResponse(): void
     {
-        // The tool does not follow redirects: `ignore_errors` hands it the 302
-        // body, which is HTML, not the JSON it asked for. A known limitation,
-        // documented here — it must surface as an error, never a crash and
-        // never a "result" built from the redirect page.
+        // A 3xx is refused by name (audit F-W3), not left to fail JSON
+        // decoding: the refusal says what happened and where it pointed, so
+        // the user can configure the final URL, and it is never a "result"
+        // built from the redirect page.
         $tool = $this->stubbedSearch(
             '<html><body>Redirecting to <a href="http://example.com">example</a></body></html>',
             ['HTTP/1.1 302 Found', 'Location: http://example.com'],
@@ -242,7 +248,9 @@ final class WebSearchToolTest extends TestCase
         $result = $tool->execute(['query' => 'test', 'description' => 'test']);
         $this->assertInstanceOf(ToolResult::class, $result);
         $this->assertTrue($result->isError());
-        $this->assertStringContainsString('invalid JSON', $result->content());
+        $this->assertStringContainsString('HTTP 302', $result->content());
+        $this->assertStringContainsString('redirect to http://example.com', $result->content());
+        $this->assertStringContainsString('not followed', $result->content());
     }
 
     public function testHandlesNonStringQuery(): void
