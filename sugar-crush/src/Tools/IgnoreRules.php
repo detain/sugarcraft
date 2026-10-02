@@ -55,9 +55,43 @@ namespace SugarCraft\Crush\Tools;
  *   treated as ignored. It is the one place this is stricter than git, and the
  *   `include_ignored` argument on both tools is the escape hatch.
  *
- * NOT `readonly` as a class: {@see $parsed} memoizes parsed `.gitignore` files
- * for the duration of one walk, which is a cache rather than state — every
- * public field is `readonly` and every `with*()` still returns a new instance.
+ * ## Matching cost is bounded, and an undecidable rule fails CLOSED
+ *
+ * A cloned repository supplies both the `.gitignore` and the files it is
+ * matched against, so a pattern is hostile input. Translating every glob
+ * straight to a backtracking PCRE (the old design) let one 45-byte line —
+ * `**a**a**a…**c`, i.e. `.*a.*a.*a…c` — cost ~70 ms per path and then end in
+ * "backtrack limit exhausted", which `preg_match() === 1` read as "no match":
+ * `Glob '**\/*'` over 2,000 files took 139 s and every such rule silently
+ * stopped applying. Collapsing `*` runs is not a fix on its own: `**a**a`
+ * still needs two `a`s, so the wildcards are separated, not adjacent.
+ *
+ * So a pattern is compiled to a token list ({@see tokenize()}) that serves two
+ * matchers with the SAME language:
+ *
+ * - PCRE, only for patterns whose wildcards cannot compete for the same text
+ *   ({@see backtracksSafely()} — the `*.log` / `**\/foo` / `foo/**` shapes that
+ *   are nearly every real rule), because it is the fast path;
+ * - otherwise, and whenever PCRE errors anyway, an automaton built from the
+ *   tokens by subset construction ({@see simulate()}): O(path × pattern) for
+ *   a fresh path, one lookup per byte for a path like one already seen, and
+ *   no backtracking at all.
+ *
+ * The automaton refuses only inputs whose product exceeds {@see MATCH_BUDGET}.
+ * Such a rule is undecidable rather than "not matching", and it is resolved
+ * toward HIDING: a hide rule applies, a negation does not re-include. Ignore
+ * rules are not a security boundary, but a secret's path being shown because
+ * a stranger's rule was too expensive to evaluate is the failure that
+ * matters, and over-hiding has an escape hatch (`include_ignored`). Each such
+ * rule is recorded once on {@see undecidablePatterns()} rather than
+ * `error_log()`ed, since stderr under a full-screen TUI is nowhere the user
+ * reads.
+ *
+ * NOT `readonly` as a class: {@see $parsed} (parsed `.gitignore` files),
+ * {@see $directoryVerdicts} (the verdict per ancestor directory) and
+ * {@see $automata} (the matchers) memoize for the duration of one walk, which
+ * makes them caches rather than state — every public field is `readonly` and
+ * every `with*()` still returns a new instance.
  */
 final class IgnoreRules
 {
@@ -77,15 +111,69 @@ final class IgnoreRules
     public const DEFAULT_EXCLUDED_DIRS = ['.git', 'vendor', 'node_modules', '.phpunit.cache'];
 
     /**
+     * Upper bound on path length × pattern tokens one NFA match may cost.
+     *
+     * Sized so no plausible rule reaches it — a 200-token pattern against a
+     * PATH_MAX (4,096-byte) path is 820k — while a pathological line, which
+     * is all that can, is refused before any work rather than after it. Same
+     * order as PCRE's default `pcre.backtrack_limit`, which is the cost the
+     * regex path was already allowed per call.
+     */
+    private const MATCH_BUDGET = 1_000_000;
+
+    /** DFA states one rule's automaton may intern before it is rebuilt. */
+    private const AUTOMATON_STATE_CAP = 4096;
+
+    /** One literal byte; payload is the byte. */
+    private const T_LITERAL = 0;
+    /** `?` — one byte that is not `/`. */
+    private const T_ONE = 1;
+    /** `[...]` — one byte in the class; payload is the compiled PCRE class. */
+    private const T_CLASS = 2;
+    /** `*` — any run of bytes without `/`. */
+    private const T_STAR = 3;
+    /** `**` NOT followed by `/` — any run of bytes except `\n` (PCRE `.*`). */
+    private const T_GLOBSTAR = 4;
+    /** `**\/`, and an unanchored pattern's implicit prefix — `(?:[^/]+/)*`. */
+    private const T_DIRS = 5;
+
+    /**
      * Parsed rules per directory, keyed by the absolute directory path.
      *
      * Absent and empty `.gitignore` files are memoized as `[]` too — a walk
      * over a deep tree asks about the same directories thousands of times, and
      * the negative answer is the common one.
      *
-     * @var array<string, list<array{regex: string, dirOnly: bool, negate: bool}>>
+     * @var array<string, list<array{regex: string, tokens: list<array{0: int, 1: string}>, pcre: bool, dirOnly: bool, negate: bool, source: string}>>
      */
     private array $parsed = [];
+
+    /**
+     * {@see verdict()} per root-relative DIRECTORY prefix.
+     *
+     * {@see ignores()} re-tests every ancestor of every path, so a walk over N
+     * files in one directory asked the same question about its parents N
+     * times. The answer depends only on the memoized {@see $parsed} rules, so
+     * it is exactly as stable as they are.
+     *
+     * @var array<string, ?bool>
+     */
+    private array $directoryVerdicts = [];
+
+    /**
+     * Rules no matcher could decide within {@see MATCH_BUDGET}, keyed so each
+     * is recorded once however many paths it was tried against.
+     *
+     * @var array<string, string>
+     */
+    private array $undecidable = [];
+
+    /**
+     * Lazily-built DFA per compiled regex; see {@see simulate()}.
+     *
+     * @var array<string, array{ids: array<string, int>, sets: list<list<int>>, accepts: list<bool>, next: array<int, array<string, int>>}>
+     */
+    private array $automata = [];
 
     /**
      * @param list<string> $excludedDirs
@@ -230,13 +318,33 @@ final class IgnoreRules
         for ($i = 0; $i < $depth; $i++) {
             $prefix = implode('/', array_slice($segments, 0, $i + 1));
             // Everything above the last segment is by construction a directory.
-            $verdict = $this->verdict($prefix, $i < $depth - 1 || $isDirectory);
+            if ($i < $depth - 1 || $isDirectory) {
+                $verdict = array_key_exists($prefix, $this->directoryVerdicts)
+                    ? $this->directoryVerdicts[$prefix]
+                    : ($this->directoryVerdicts[$prefix] = $this->verdict($prefix, true));
+            } else {
+                $verdict = $this->verdict($prefix, false);
+            }
             if ($verdict === true) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * Ignore rules that were too expensive to decide and were therefore
+     * resolved toward hiding, as `<gitignore path>: <pattern>`, once each.
+     *
+     * Exposed so a caller can say WHY a path it expected is missing; an empty
+     * list is the normal case.
+     *
+     * @return list<string>
+     */
+    public function undecidablePatterns(): array
+    {
+        return array_values($this->undecidable);
     }
 
     /**
@@ -297,13 +405,212 @@ final class IgnoreRules
                 if ($rule['dirOnly'] && !$isDirectory) {
                     continue;
                 }
-                if (preg_match($rule['regex'], $scoped) === 1) {
+                $matched = $this->matches($rule, $scoped);
+                if ($matched === null) {
+                    $this->undecidable[$file . "\0" . $rule['source']] ??= $file . ': ' . $rule['source'];
+                    // Fail CLOSED, which is direction-dependent: a hide rule
+                    // is taken to apply, a negation is taken NOT to — either
+                    // way the uncertain path stays hidden.
+                    if (!$rule['negate']) {
+                        $verdict = true;
+                    }
+                    continue;
+                }
+                if ($matched) {
                     $verdict = !$rule['negate'];
                 }
             }
         }
 
         return $verdict;
+    }
+
+    /**
+     * Does $rule match $subject? Null when it cannot be decided in budget.
+     *
+     * A PCRE error (backtrack or JIT-stack limit) is NOT an answer: the old
+     * `=== 1` read it as "no match", so a rule that was expensive enough
+     * quietly stopped applying. It falls through to the exact NFA instead.
+     *
+     * @param array{regex: string, tokens: list<array{0: int, 1: string}>, pcre: bool, dirOnly: bool, negate: bool, source: string} $rule
+     */
+    private function matches(array $rule, string $subject): ?bool
+    {
+        if ($rule['pcre']) {
+            $result = preg_match($rule['regex'], $subject);
+            if ($result !== false) {
+                return $result === 1;
+            }
+        }
+
+        return $this->simulate($rule, $subject);
+    }
+
+    /**
+     * Match $rule against the WHOLE of $subject by subset construction.
+     *
+     * Accepts exactly the language of {@see regexFor()}'s `#^…$#`, quirks
+     * included — `**` (`.*`) does not cross `\n`, and `$` also matches before
+     * one trailing `\n` — so which matcher runs never changes a verdict.
+     *
+     * NFA state k is "before token k", m is accept, and m+1+k is "inside a
+     * name of the `(?:[^/]+/)*` at k". Each set of live NFA states is interned
+     * as one DFA state the first time it is reached and every transition is
+     * cached, so a fresh byte costs O(tokens) and a repeat costs one array
+     * lookup: no backtracking, and a walk of N similar paths pays the
+     * construction once. Keyed by the compiled regex, so twenty copies of one
+     * hostile line share one automaton.
+     *
+     * @param array{regex: string, tokens: list<array{0: int, 1: string}>, pcre: bool, dirOnly: bool, negate: bool, source: string} $rule
+     */
+    private function simulate(array $rule, string $subject): ?bool
+    {
+        $tokens = $rule['tokens'];
+        $m = count($tokens);
+        $n = strlen($subject);
+        if ($n * ($m + 1) > self::MATCH_BUDGET) {
+            return null;
+        }
+
+        $key = $rule['regex'];
+        if (!isset($this->automata[$key]) || count($this->automata[$key]['sets']) > self::AUTOMATON_STATE_CAP) {
+            // A cap rather than an unbounded cache: the subsets are at most
+            // exponential in the pattern, and starting over loses only speed.
+            $this->automata[$key] = ['ids' => [], 'sets' => [], 'accepts' => [], 'next' => []];
+            $start = [];
+            self::close($start, 0, $tokens, $m);
+            self::intern($this->automata[$key], $start, $m);
+        }
+        $automaton = &$this->automata[$key];
+
+        $state = 0;
+        for ($i = 0; $i < $n; $i++) {
+            $byte = $subject[$i];
+            if ($i === $n - 1 && $byte === "\n" && $automaton['accepts'][$state]) {
+                return true;
+            }
+            if (!isset($automaton['next'][$state][$byte])) {
+                $live = self::step($automaton['sets'][$state], $byte, $tokens, $m);
+                if ($live === null) {
+                    return null;
+                }
+                $automaton['next'][$state][$byte] = self::intern($automaton, $live, $m);
+            }
+            $state = $automaton['next'][$state][$byte];
+            if ($automaton['sets'][$state] === []) {
+                return false;
+            }
+        }
+
+        return $automaton['accepts'][$state];
+    }
+
+    /**
+     * The NFA states live after $byte, from the live set $states; null when a
+     * `[...]` class could not be tested.
+     *
+     * A class is still tested by PCRE, one byte against one class — which
+     * cannot backtrack, but CAN still report a limit error when the limit is
+     * set absurdly low. That is an unknown, not a "no", so it is passed up to
+     * fail closed rather than guessed.
+     *
+     * @param list<int> $states
+     * @param list<array{0: int, 1: string}> $tokens
+     * @return array<int, true>|null
+     */
+    private static function step(array $states, string $byte, array $tokens, int $m): ?array
+    {
+        $next = [];
+        foreach ($states as $state) {
+            if ($state === $m) {
+                continue;
+            }
+            if ($state > $m) {
+                // Inside one `[^/]+/` iteration: more name, or the `/` that
+                // returns to the boundary before the same token.
+                if ($byte === '/') {
+                    self::close($next, $state - $m - 1, $tokens, $m);
+                } else {
+                    $next[$state] = true;
+                }
+                continue;
+            }
+
+            [$type, $payload] = $tokens[$state];
+            if ($type === self::T_DIRS) {
+                if ($byte !== '/') {
+                    $next[$m + 1 + $state] = true;
+                }
+                continue;
+            }
+            if ($type === self::T_CLASS) {
+                $inClass = preg_match('#' . $payload . '#', $byte);
+                if ($inClass === false) {
+                    return null;
+                }
+                if ($inClass === 1) {
+                    self::close($next, $state + 1, $tokens, $m);
+                }
+                continue;
+            }
+            $advance = match ($type) {
+                self::T_LITERAL => $byte === $payload ? $state + 1 : null,
+                self::T_ONE => $byte !== '/' ? $state + 1 : null,
+                self::T_STAR => $byte !== '/' ? $state : null,
+                self::T_GLOBSTAR => $byte !== "\n" ? $state : null,
+                default => null,
+            };
+            if ($advance !== null) {
+                self::close($next, $advance, $tokens, $m);
+            }
+        }
+
+        return $next;
+    }
+
+    /**
+     * Add $state and every state reachable from it without consuming a byte:
+     * a zero-length `*`, `**` or `(?:[^/]+/)*` steps straight to the next.
+     *
+     * @param array<int, true> $set
+     * @param list<array{0: int, 1: string}> $tokens
+     */
+    private static function close(array &$set, int $state, array $tokens, int $m): void
+    {
+        while (!isset($set[$state])) {
+            $set[$state] = true;
+            if ($state >= $m) {
+                return;
+            }
+            $type = $tokens[$state][0];
+            if ($type !== self::T_STAR && $type !== self::T_GLOBSTAR && $type !== self::T_DIRS) {
+                return;
+            }
+            $state++;
+        }
+    }
+
+    /**
+     * The DFA state id for NFA set $set, creating it on first sight.
+     *
+     * @param array{ids: array<string, int>, sets: list<list<int>>, accepts: list<bool>, next: array<int, array<string, int>>} $automaton
+     * @param array<int, true> $set
+     */
+    private static function intern(array &$automaton, array $set, int $m): int
+    {
+        $states = array_keys($set);
+        sort($states);
+        $key = implode(',', $states);
+        if (isset($automaton['ids'][$key])) {
+            return $automaton['ids'][$key];
+        }
+
+        $id = count($automaton['sets']);
+        $automaton['ids'][$key] = $id;
+        $automaton['sets'][] = $states;
+        $automaton['accepts'][] = isset($set[$m]);
+
+        return $id;
     }
 
     /**
@@ -336,7 +643,7 @@ final class IgnoreRules
     }
 
     /**
-     * @return list<array{regex: string, dirOnly: bool, negate: bool}>
+     * @return list<array{regex: string, tokens: list<array{0: int, 1: string}>, pcre: bool, dirOnly: bool, negate: bool, source: string}>
      */
     private function rulesIn(string $file): array
     {
@@ -361,7 +668,7 @@ final class IgnoreRules
     }
 
     /**
-     * @return array{regex: string, dirOnly: bool, negate: bool}|null
+     * @return array{regex: string, tokens: list<array{0: int, 1: string}>, pcre: bool, dirOnly: bool, negate: bool, source: string}|null
      */
     private static function parseLine(string $line): ?array
     {
@@ -371,6 +678,7 @@ final class IgnoreRules
         if ($line === '' || str_starts_with($line, '#')) {
             return null;
         }
+        $source = $line;
 
         $negate = str_starts_with($line, '!');
         if ($negate) {
@@ -404,7 +712,19 @@ final class IgnoreRules
             return null;
         }
 
-        $regex = self::compile($line, $anchored);
+        $tokens = self::tokenize($line);
+        // Classified BEFORE the implicit prefix is added: that prefix only
+        // ever splits at `/`, so it multiplies the cost by the path's depth
+        // rather than compounding with the pattern's own wildcards.
+        $pcre = self::backtracksSafely($tokens);
+        if (!$anchored) {
+            // git's "match at any level below": a bare `build` matches
+            // `a/b/build`. An anchored pattern gets no such prefix, so
+            // `/build` is the top-level one only.
+            array_unshift($tokens, [self::T_DIRS, '']);
+        }
+
+        $regex = self::regexFor($tokens);
         if (!self::compiles($regex)) {
             // A malformed bracket expression is a broken line in someone's
             // .gitignore, not a reason to fail the search. Git skips what it
@@ -412,7 +732,44 @@ final class IgnoreRules
             return null;
         }
 
-        return ['regex' => $regex, 'dirOnly' => $dirOnly, 'negate' => $negate];
+        return [
+            'regex' => $regex,
+            'tokens' => $tokens,
+            'pcre' => $pcre,
+            'dirOnly' => $dirOnly,
+            'negate' => $negate,
+            'source' => $source,
+        ];
+    }
+
+    /**
+     * Can PCRE run this pattern without catastrophic backtracking?
+     *
+     * Backtracking explodes when unbounded wildcards can trade the same text
+     * between them: `.*a.*a.*c` tries every split of the path among its `.*`s.
+     * Allowed: at most two wildcards, at most one of which crosses `/` (`**`
+     * or `**\/`). That keeps every real-world shape — `*.log`, `*.min.*`,
+     * `**\/*.php`, `foo/**`, `a/**\/b` — on the fast path, and its worst case
+     * is quadratic, which PCRE's backtrack limit then bounds and
+     * {@see matches()} answers exactly via the NFA. Anything more goes straight
+     * to the NFA rather than paying the limit first on every path.
+     *
+     * @param list<array{0: int, 1: string}> $tokens
+     */
+    private static function backtracksSafely(array $tokens): bool
+    {
+        $wildcards = 0;
+        $crossing = 0;
+        foreach ($tokens as [$type]) {
+            if ($type === self::T_STAR) {
+                $wildcards++;
+            } elseif ($type === self::T_GLOBSTAR || $type === self::T_DIRS) {
+                $wildcards++;
+                $crossing++;
+            }
+        }
+
+        return $wildcards <= 2 && $crossing <= 1;
     }
 
     /**
@@ -443,24 +800,21 @@ final class IgnoreRules
     }
 
     /**
-     * Compile one gitignore pattern into an anchored PCRE, matched against a
-     * path relative to the `.gitignore`'s own directory.
+     * Split one gitignore pattern into matcher tokens, each byte of it
+     * accounted for exactly once.
      *
-     * The `(?:[^/]+/)*` prefix on an UNANCHORED pattern is what makes a bare
-     * `build` match `a/b/build` — git's "match at any level below" rule. An
-     * anchored pattern gets no such prefix, so `/build` is the top-level one
-     * only.
+     * @return list<array{0: int, 1: string}>
      */
-    private static function compile(string $pattern, bool $anchored): string
+    private static function tokenize(string $pattern): array
     {
-        $out = '';
+        $tokens = [];
         $length = strlen($pattern);
 
         for ($i = 0; $i < $length; $i++) {
             $char = $pattern[$i];
 
             if ($char === '\\' && $i + 1 < $length) {
-                $out .= preg_quote($pattern[++$i], '#');
+                $tokens[] = [self::T_LITERAL, $pattern[++$i]];
                 continue;
             }
 
@@ -470,36 +824,59 @@ final class IgnoreRules
                     if (($pattern[$i + 1] ?? '') === '/') {
                         $i++;
                         // Zero OR MORE directories, so `a/**\/b` matches `a/b`.
-                        $out .= '(?:[^/]+/)*';
+                        $tokens[] = [self::T_DIRS, ''];
                     } else {
-                        $out .= '.*';
+                        $tokens[] = [self::T_GLOBSTAR, ''];
                     }
                     continue;
                 }
 
-                $out .= '[^/]*';
+                $tokens[] = [self::T_STAR, ''];
                 continue;
             }
 
             if ($char === '?') {
-                $out .= '[^/]';
+                $tokens[] = [self::T_ONE, ''];
                 continue;
             }
 
             if ($char === '[') {
                 $compiled = self::compileClass($pattern, $i);
                 if ($compiled !== null) {
-                    $out .= $compiled['regex'];
+                    $tokens[] = [self::T_CLASS, $compiled['regex']];
                     $i = $compiled['end'];
                     continue;
                 }
                 // Unterminated `[` is a literal, as it is to fnmatch().
             }
 
-            $out .= preg_quote($char, '#');
+            $tokens[] = [self::T_LITERAL, $char];
         }
 
-        return '#^' . ($anchored ? '' : '(?:[^/]+/)*') . $out . '$#';
+        return $tokens;
+    }
+
+    /**
+     * The anchored PCRE for $tokens, matched against a path relative to the
+     * `.gitignore`'s own directory.
+     *
+     * @param list<array{0: int, 1: string}> $tokens
+     */
+    private static function regexFor(array $tokens): string
+    {
+        $out = '';
+        foreach ($tokens as [$type, $payload]) {
+            $out .= match ($type) {
+                self::T_LITERAL => preg_quote($payload, '#'),
+                self::T_ONE => '[^/]',
+                self::T_CLASS => $payload,
+                self::T_STAR => '[^/]*',
+                self::T_GLOBSTAR => '.*',
+                self::T_DIRS => '(?:[^/]+/)*',
+            };
+        }
+
+        return '#^' . $out . '$#';
     }
 
     /**
@@ -546,12 +923,18 @@ final class IgnoreRules
      * error_reporting, so an ambient convert-warnings-to-exceptions handler
      * still sees the compilation failure. Probing a stranger's `.gitignore`
      * must be silent by construction.
+     *
+     * Only a COMPILE failure (PREG_INTERNAL_ERROR) counts. The probe also
+     * runs a match, and a pattern that exhausts the backtrack or JIT-stack
+     * limit even against '' is valid but expensive — {@see matches()} decides
+     * it via the automaton. Reading that as "malformed" dropped the rule, the
+     * same fail-open the match path had.
      */
     private static function compiles(string $regex): bool
     {
         set_error_handler(static fn (): bool => true);
         try {
-            return preg_match($regex, '') !== false;
+            return preg_match($regex, '') !== false || preg_last_error() !== PREG_INTERNAL_ERROR;
         } finally {
             restore_error_handler();
         }
