@@ -340,6 +340,14 @@ final class HookRegistry
         // rewriting chain that is routinely not the pass that spent the time.
         $spend = [];
 
+        // WHO ASKED, accumulated ACROSS passes for the same reason as $spend
+        // (audit F-P7/F-P9): the returned ASK names only the first question,
+        // but a remembered approval may stand in for the user only when the
+        // gate was the sole hook that asked — on any pass, since a user hook
+        // that asked about the proposal and was then satisfied by a rewrite
+        // still asked a question no memo has answered.
+        $askers = [];
+
         // The model-visible `additionalContext` accumulated ACROSS passes, so a
         // plain permitting result on an early pass (which files no proposal)
         // still reaches the settled verdict even when a later pass rewrites.
@@ -356,6 +364,7 @@ final class HookRegistry
                 $chainBudget,
                 $spend,
                 $armedAt,
+                $askers,
             );
 
             if ($collected !== '') {
@@ -433,7 +442,13 @@ final class HookRegistry
                 // shown the wrong command. It is now a proposal that goes
                 // through the loop like any other, so that same hook produces a
                 // DENY from ConfirmRemoveHook on pass 2.
-                return HookResult::ask($blocking->message, $modified?->modifiedInput, $additional);
+                //
+                // STAMPED WITH WHO ASKED (F-P7/F-P9) from the registry's own
+                // record, overwriting anything the hook's result carried, so
+                // a memo downstream can tell the gate's policy question from
+                // a user hook's.
+                return HookResult::ask($blocking->message, $modified?->modifiedInput, $additional)
+                    ->withAskedBy($askers);
             }
 
             // ALLOW, settled against the arguments in $context. A permitting
@@ -687,6 +702,11 @@ final class HookRegistry
      *        deadline was armed, so the refusal can state ELAPSED rather than
      *        only BUDGETED time. The two differ by however long the last
      *        unbounded hook overran, and that difference is the evidence.
+     * @param list<string> $askers BY REFERENCE, accumulated across passes by
+     *        {@see executeHooks()}: the name of every hook that returned an
+     *        ASK (every one, not only the first — the first is the question
+     *        put, but each is a question a remembered approval must not
+     *        silently answer; see {@see HookResult::$askedBy}).
      *
      * @return array{0: ?HookResult, 1: ?HookResult, 2: ?HookResult, 3: string} [the
      *     result that blocks the call outright — a DENY, or the pass's first
@@ -704,6 +724,7 @@ final class HookRegistry
         ?float $chainBudget = null,
         array &$spend = [],
         float $armedAt = 0.0,
+        array &$askers = [],
     ): array {
         $pendingAsk = null;
         $pendingModify = null;
@@ -791,6 +812,8 @@ final class HookRegistry
             $proposal = null;
 
             if ($result->isAsk()) {
+                $askers[] = $hook->name();
+
                 // First question asked wins; a second ASK adds nothing since
                 // one unanswered prompt already blocks the call.
                 $pendingAsk ??= $result;

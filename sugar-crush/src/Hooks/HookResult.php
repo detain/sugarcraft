@@ -72,6 +72,27 @@ final readonly class HookResult
         public string $message,
         public ?string $modifiedInput = null,
         public string $additionalContext = '',
+        /**
+         * The names of the hooks that ASKED in the chain this verdict settles
+         * (audit F-P7/F-P9), in the order they asked, each once.
+         *
+         * Stamped by {@see HookRegistry::executeHooks()} on the ASK it
+         * rebuilds — never taken from a hook: the registry overwrites whatever
+         * a hook's own result carried, so a user hook cannot pass its question
+         * off as {@see BuiltIn\PermissionGateHook}'s, and the gate's name is
+         * reserved ({@see HookRegistry::isReserved()}) so no config hook can
+         * be registered under it either. Empty on every non-ASK verdict.
+         *
+         * WHY IT EXISTS: a remembered approval (Runtime's per-turn Task memo,
+         * Chat's "Always" grant) answers a question the user already answered.
+         * That is true only of the gate's own policy question, which is the
+         * same question for the same call. A user hook's ask ("confirm before
+         * touching prod") is a question about THIS call's content and must be
+         * put every time, so both memos consult {@see askedOnlyBy()} first.
+         *
+         * @var list<string>
+         */
+        public array $askedBy = [],
     ) {}
 
     public static function allow(string $message = '', string $additionalContext = ''): self
@@ -191,7 +212,41 @@ final readonly class HookResult
             return $this;
         }
 
-        return new self($this->action, $this->message, $this->modifiedInput, $context);
+        return new self($this->action, $this->message, $this->modifiedInput, $context, $this->askedBy);
+    }
+
+    /**
+     * A copy whose {@see self::$askedBy} IS $names (deduplicated, order kept).
+     *
+     * Only {@see HookRegistry::executeHooks()} should call this, on the ASK it
+     * rebuilds from what the chain actually did; see the property's note.
+     *
+     * @param list<string> $names
+     */
+    public function withAskedBy(array $names): self
+    {
+        return new self(
+            $this->action,
+            $this->message,
+            $this->modifiedInput,
+            $this->additionalContext,
+            array_values(array_unique($names)),
+        );
+    }
+
+    /**
+     * True when this is an ASK and $hookName is the ONLY hook in the chain
+     * that asked.
+     *
+     * The test a remembered approval has to pass before it may answer this
+     * question without the user (F-P7/F-P9): an ASK with no recorded asker —
+     * one a caller built by hand rather than one the registry settled — is
+     * NOT treated as the gate's, so an unattributed question always reaches
+     * the user.
+     */
+    public function askedOnlyBy(string $hookName): bool
+    {
+        return $this->isAsk() && $this->askedBy === [$hookName];
     }
 
     public function isDenied(): bool

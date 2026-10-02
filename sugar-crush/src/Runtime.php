@@ -2321,7 +2321,7 @@ final class Runtime
             // to its wording, and the wording is the half most likely to be
             // reworded.
             $kind = $onPermissionRequest === null ? DenialKind::Unanswered : DenialKind::Refused;
-            $memoKey = $this->taskGrantMemoKey($toolCall);
+            $memoKey = $this->taskGrantMemoKey($toolCall, $hookResult);
             if ($memoKey !== null && isset($this->taskGrants[$memoKey])) {
                 // F5 batch-spawn memo. A grant for THIS agent under THIS mode
                 // was already given inside this turn, so the approver would be
@@ -2403,10 +2403,21 @@ final class Runtime
      * normal question, and the tool layer's own refusal stays untouched), and
      * any embedder whose hook chain does not carry the permission gate — with
      * no gate there is no mode identity to key on.
+     *
+     * AND AN ASK THE GATE DID NOT RAISE ALONE (audit F-P7). The "N identical
+     * questions" reasoning holds only for the gate's own question, which is a
+     * function of agent and mode. A user PreToolUse script that asks (exit 3)
+     * about a Task whose prompt mentions "prod" asks about the PROMPT, which
+     * differs per spawn; keyed `agent|mode`, its one approval used to silence
+     * it for every later Task to that agent in the turn, whatever the prompt.
+     * So the memo is consulted and written only when
+     * {@see HookResult::askedOnlyBy()} names the gate as the sole asker — the
+     * registry stamps that, so a hook cannot claim it. Any other ask, or one
+     * with no recorded asker, is put to the approver every time.
      */
-    private function taskGrantMemoKey(ToolCall $toolCall): ?string
+    private function taskGrantMemoKey(ToolCall $toolCall, HookResult $ask): ?string
     {
-        if ($toolCall->name() !== 'Task') {
+        if ($toolCall->name() !== 'Task' || !$ask->askedOnlyBy(PermissionGateHook::NAME)) {
             return null;
         }
 

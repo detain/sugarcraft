@@ -386,6 +386,15 @@ Notes that matter in practice:
 - **Exit 3 with no stdout** falls back to the hook's `description`, then to a
   generic question. A prompt with an empty body is unanswerable, and defaulting
   to allow or deny would make silence mean something the hook never said.
+- **Your exit-3 question is asked every time.** sugar-crush remembers two kinds
+  of approval: a Task spawn approved once in a turn is not re-asked for the same
+  agent in that turn, and `Chat`'s "allow always" reply skips later prompts for
+  the same call. Both stand in for the user only when the permission gate was
+  the **only** hook that asked. `HookRegistry::executeHooks()` records the name
+  of every hook that returned an ask on the settled ASK (`HookResult::$askedBy`),
+  overwriting anything a hook's own result carried, and the gate's name is
+  reserved. A question your hook asks is about this call's content, so no
+  earlier approval answers it (audit F-P7, F-P9).
 - **Exit 4 whose stdout is not a JSON object is downgraded to a DENY**, never to
   an allow: a hook that meant to rewrite dangerous arguments and failed must not
   have the *original* arguments run in its place. A JSON list or scalar is
