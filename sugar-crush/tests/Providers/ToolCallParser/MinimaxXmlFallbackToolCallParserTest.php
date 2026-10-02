@@ -8,6 +8,8 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface;
+use SugarCraft\Crush\Providers\ToolCallParser\ToolParameterTypes;
+use SugarCraft\Crush\Providers\ToolCallParser\ToolSchemaAware;
 use SugarCraft\Crush\Tools\ToolCall;
 
 /**
@@ -130,7 +132,15 @@ final class MinimaxXmlFallbackToolCallParserTest extends TestCase
         $this->assertSame(['a', 'b'], array_map(static fn (ToolCall $c): string => $c->name(), $calls));
     }
 
-    public function testOnlyArrayShapedParameterValuesAreDecoded(): void
+    /**
+     * Audit 15a A9 CHANGED THIS PIN DELIBERATELY. It used to be
+     * `testOnlyArrayShapedParameterValuesAreDecoded`, asserting that `opts`
+     * and `globs` came back as PHP arrays with no schema in sight. That guess
+     * is the defect: JSON-looking text is not evidence the tool wants JSON
+     * (see {@see testA9JsonFileContentStaysAStringWhenTheSchemaSaysString}).
+     * With no schema handed over every value is now its raw text.
+     */
+    public function testWithoutASchemaEveryValueStaysItsRawText(): void
     {
         $calls = MinimaxXmlFallbackToolCallParser::new()->parse([
             'content' => '<minimax:tool_call><invoke name="grep">'
@@ -144,15 +154,227 @@ final class MinimaxXmlFallbackToolCallParserTest extends TestCase
         $this->assertNotNull($calls);
         $this->assertSame(
             [
-                'opts' => ['i' => true],
-                'globs' => ['*.php', '*.md'],
-                // Scalars keep their text: the raw XML can express those
-                // perfectly well already, so a JSON-shaped scalar is ambiguous
-                // rather than informative.
+                'opts' => '{"i":true}',
+                'globs' => '["*.php","*.md"]',
                 'limit' => '5',
                 'recursive' => 'true',
             ],
             $calls[0]->arguments(),
+        );
+        $this->assertSame('', $this->capturedLog(), 'an unknown type is not a mismatch worth logging');
+    }
+
+    private const A9_WRITE_CALL = "<minimax:tool_call>\n<invoke name=\"Write\">\n"
+        . "<parameter name=\"path\">composer.json</parameter>\n"
+        . "<parameter name=\"content\">{\"name\": \"acme/x\", \"require\": {}}</parameter>\n"
+        . "</invoke>\n</minimax:tool_call>";
+
+    /**
+     * THE A9 REGRESSION (repro_parsers.php, first line): writing a JSON file.
+     * Before the fix `content` came back as `array`, so `Write` of a
+     * composer.json failed or wrote the wrong value.
+     */
+    public function testA9JsonFileContentStaysAStringWhenTheSchemaSaysString(): void
+    {
+        $calls = MinimaxXmlFallbackToolCallParser::new()
+            ->withParameterTypes(ToolParameterTypes::new([
+                'Write' => ['path' => ['string'], 'content' => ['string']],
+            ]))
+            ->parse(['content' => self::A9_WRITE_CALL]);
+
+        $this->assertNotNull($calls);
+        $this->assertSame('{"name": "acme/x", "require": {}}', $calls[0]->arguments()['content']);
+        $this->assertSame('composer.json', $calls[0]->arguments()['path']);
+    }
+
+    public function testA9JsonFileContentStaysAStringWithNoSchema(): void
+    {
+        $calls = MinimaxXmlFallbackToolCallParser::new()->parse(['content' => self::A9_WRITE_CALL]);
+
+        $this->assertNotNull($calls);
+        $this->assertSame('{"name": "acme/x", "require": {}}', $calls[0]->arguments()['content']);
+    }
+
+    public function testA9JsonFileContentIsDecodedWhenTheSchemaSaysObject(): void
+    {
+        $calls = MinimaxXmlFallbackToolCallParser::new()
+            ->withParameterTypes(ToolParameterTypes::new(['Write' => ['content' => ['object']]]))
+            ->parse(['content' => self::A9_WRITE_CALL]);
+
+        $this->assertNotNull($calls);
+        $this->assertSame(['name' => 'acme/x', 'require' => []], $calls[0]->arguments()['content']);
+    }
+
+    public function testObjectArrayAndNullableObjectTypedParametersAreDecoded(): void
+    {
+        $calls = MinimaxXmlFallbackToolCallParser::new()
+            ->withParameterTypes(ToolParameterTypes::new(['grep' => [
+                'opts' => ['object'],
+                'globs' => ['array'],
+                'extra' => ['object', 'null'],
+            ]]))
+            ->parse([
+                'content' => '<minimax:tool_call><invoke name="grep">'
+                    . '<parameter name="opts">{"i":true}</parameter>'
+                    . "<parameter name=\"globs\">\n[\"*.php\",\"*.md\"]\n</parameter>"
+                    . '<parameter name="extra">{"k":1}</parameter>'
+                    . '</invoke></minimax:tool_call>',
+            ]);
+
+        $this->assertNotNull($calls);
+        $this->assertSame(
+            ['opts' => ['i' => true], 'globs' => ['*.php', '*.md'], 'extra' => ['k' => 1]],
+            $calls[0]->arguments(),
+        );
+    }
+
+    /**
+     * A type list containing `string` keeps the text: it is the identity
+     * transform, and the tool has said a string is acceptable.
+     */
+    public function testAStringInADeclaredTypeListWins(): void
+    {
+        $calls = MinimaxXmlFallbackToolCallParser::new()
+            ->withParameterTypes(ToolParameterTypes::new(['t' => [
+                'a' => ['string', 'object'],
+                'b' => ['integer', 'string'],
+            ]]))
+            ->parse([
+                'content' => '<minimax:tool_call><invoke name="t">'
+                    . '<parameter name="a">{"x":1}</parameter>'
+                    . '<parameter name="b">7</parameter>'
+                    . '</invoke></minimax:tool_call>',
+            ]);
+
+        $this->assertNotNull($calls);
+        $this->assertSame(['a' => '{"x":1}', 'b' => '7'], $calls[0]->arguments());
+    }
+
+    public function testDeclaredScalarTypesAreCoercedWhenTheValueParsesCleanly(): void
+    {
+        $calls = MinimaxXmlFallbackToolCallParser::new()
+            ->withParameterTypes(ToolParameterTypes::new(['read' => [
+                'limit' => ['integer'],
+                'negative' => ['integer'],
+                'ratio' => ['number'],
+                'whole' => ['number'],
+                'overwrite' => ['boolean'],
+                'off' => ['boolean'],
+                'cursor' => ['integer', 'null'],
+            ]]))
+            ->parse([
+                'content' => '<minimax:tool_call><invoke name="read">'
+                    . "<parameter name=\"limit\">\n5\n</parameter>"
+                    . '<parameter name="negative">-3</parameter>'
+                    . '<parameter name="ratio">1.5</parameter>'
+                    . '<parameter name="whole">2</parameter>'
+                    . '<parameter name="overwrite">true</parameter>'
+                    . '<parameter name="off">false</parameter>'
+                    . '<parameter name="cursor">null</parameter>'
+                    . '</invoke></minimax:tool_call>',
+            ]);
+
+        $this->assertNotNull($calls);
+        $this->assertSame(
+            [
+                'limit' => 5,
+                'negative' => -3,
+                'ratio' => 1.5,
+                'whole' => 2,
+                'overwrite' => true,
+                'off' => false,
+                'cursor' => null,
+            ],
+            $calls[0]->arguments(),
+        );
+        $this->assertSame('', $this->capturedLog());
+    }
+
+    /**
+     * Conservative on purpose: a value that does not parse as its declared
+     * type is handed over as text (the tool's own validation reports it) and
+     * logged - never rounded, truncated or guessed.
+     */
+    public function testAValueThatDoesNotParseAsItsDeclaredTypeStaysTextAndIsLogged(): void
+    {
+        $calls = MinimaxXmlFallbackToolCallParser::new()
+            ->withParameterTypes(ToolParameterTypes::new(['read' => [
+                'word' => ['integer'],
+                'padded' => ['integer'],
+                'huge' => ['integer'],
+                'fraction' => ['integer'],
+                'infinite' => ['number'],
+                'yes' => ['boolean'],
+                'notJson' => ['object'],
+                'listForObject' => ['object'],
+            ]]))
+            ->parse([
+                'content' => '<minimax:tool_call><invoke name="read">'
+                    . '<parameter name="word">five</parameter>'
+                    . '<parameter name="padded">01</parameter>'
+                    . '<parameter name="huge">99999999999999999999999</parameter>'
+                    . '<parameter name="fraction">2.5</parameter>'
+                    . '<parameter name="infinite">1e999</parameter>'
+                    . '<parameter name="yes">yes</parameter>'
+                    . '<parameter name="notJson">{oops</parameter>'
+                    . '<parameter name="listForObject">"text"</parameter>'
+                    . '</invoke></minimax:tool_call>',
+            ]);
+
+        $this->assertNotNull($calls);
+        $this->assertSame(
+            [
+                'word' => 'five',
+                'padded' => '01',
+                'huge' => '99999999999999999999999',
+                'fraction' => '2.5',
+                'infinite' => '1e999',
+                'yes' => 'yes',
+                'notJson' => '{oops',
+                'listForObject' => '"text"',
+            ],
+            $calls[0]->arguments(),
+        );
+        $this->assertStringContainsString(
+            'parameter "word" on tool "read" is declared integer but its value does not parse',
+            $this->capturedLog(),
+        );
+        $this->assertSame(8, substr_count($this->capturedLog(), 'does not parse as that type'));
+    }
+
+    public function testTypesForAnotherToolOrParameterLeaveTheValueAsText(): void
+    {
+        $calls = MinimaxXmlFallbackToolCallParser::new()
+            ->withParameterTypes(ToolParameterTypes::new([
+                'Edit' => ['content' => ['object']],
+                'Write' => ['mode' => ['object']],
+            ]))
+            ->parse(['content' => self::A9_WRITE_CALL]);
+
+        $this->assertNotNull($calls);
+        $this->assertSame('{"name": "acme/x", "require": {}}', $calls[0]->arguments()['content']);
+    }
+
+    public function testWithParameterTypesIsImmutableAndForwardsToASchemaAwareDelegate(): void
+    {
+        $inner = MinimaxXmlFallbackToolCallParser::new();
+        $outer = MinimaxXmlFallbackToolCallParser::new($inner);
+        $typed = $outer->withParameterTypes(ToolParameterTypes::new(['Write' => ['content' => ['object']]]));
+
+        $this->assertInstanceOf(ToolSchemaAware::class, $outer);
+        $this->assertNotSame($outer, $typed);
+        $this->assertSame(
+            '{"name": "acme/x", "require": {}}',
+            $outer->parse(['content' => self::A9_WRITE_CALL])[0]->arguments()['content'],
+            'the original instance never sees the types',
+        );
+
+        $delegate = (new \ReflectionProperty(MinimaxXmlFallbackToolCallParser::class, 'delegate'))->getValue($typed);
+        $this->assertInstanceOf(MinimaxXmlFallbackToolCallParser::class, $delegate);
+        $this->assertNotSame($inner, $delegate, 'the schema-aware delegate received a typed copy');
+        $this->assertSame(
+            ['name' => 'acme/x', 'require' => []],
+            $delegate->parse(['content' => self::A9_WRITE_CALL])[0]->arguments()['content'],
         );
     }
 

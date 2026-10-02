@@ -17,6 +17,8 @@ use SugarCraft\Crush\Providers\Concerns\HttpClientDefaults;
 use SugarCraft\Crush\Providers\Concerns\ReasoningExtractor;
 use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface;
+use SugarCraft\Crush\Providers\ToolCallParser\ToolParameterTypes;
+use SugarCraft\Crush\Providers\ToolCallParser\ToolSchemaAware;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Providers\Concerns\SessionAffinity;
@@ -682,7 +684,11 @@ final readonly class SglangProvider implements ProviderInterface
 
             $data = json_decode($response->getBody()->getContents(), true);
 
-            return $this->parseResponse($data, $this->contentThinkingEnabled($request));
+            return $this->parseResponse(
+                $data,
+                $this->contentThinkingEnabled($request),
+                $this->toolCallParserFor($request),
+            );
         } catch (GuzzleException $e) {
             // §Q8 (qwen.md; E-56): surface the server's own `error.message`
             // when the response carries one instead of Guzzle's raw-body dump
@@ -757,6 +763,12 @@ final readonly class SglangProvider implements ProviderInterface
             // the point of the seam. One string copy is not worth either.
             $assembledContent = '';
             $sawStructuredToolCalls = false;
+
+            // Audit 15a A9: the parser that recovery uses, carrying THIS
+            // request's tool schemas - resolved once per stream, not per
+            // chunk, and the same resolution complete() uses, so the batch
+            // and streaming paths type a recovered argument identically.
+            $toolCallParser = $this->toolCallParserFor($request);
 
             // The usage document from the §Q6 terminal frame, held (not
             // yielded) until the stream is drained, then emitted once as the
@@ -953,7 +965,7 @@ final readonly class SglangProvider implements ProviderInterface
                 $sawStructuredToolCalls = true;
             }
 
-            $recovered = $this->recoverTextualToolCalls($assembledContent, $sawStructuredToolCalls);
+            $recovered = $this->recoverTextualToolCalls($assembledContent, $sawStructuredToolCalls, $toolCallParser);
 
             if ($recovered !== null) {
                 // Empty content on purpose: the text was already streamed
@@ -1812,12 +1824,18 @@ final readonly class SglangProvider implements ProviderInterface
      * the only decoder, whereas on the streaming path it is a fallback behind
      * `delta.tool_calls[]`.
      */
-    private function parseResponse(array $data, bool $thinkingOn = false): CompleteResponse
-    {
+    private function parseResponse(
+        array $data,
+        bool $thinkingOn = false,
+        ?ToolCallParserInterface $toolCallParser = null,
+    ): CompleteResponse {
         $choice = $data['choices'][0] ?? [];
         $message = $choice['message'] ?? [];
 
-        $toolCalls = $this->resolvedToolCallParser()->parse($message);
+        // `$toolCallParser` is complete()'s request-scoped parser (audit 15a
+        // A9, {@see toolCallParserFor()}); null only for a caller with no
+        // request in hand, which gets the schema-less parser.
+        $toolCalls = ($toolCallParser ?? $this->resolvedToolCallParser())->parse($message);
 
         [$reasoning, $content] = $this->extractReasoning($message);
 
@@ -1990,6 +2008,37 @@ final readonly class SglangProvider implements ProviderInterface
     }
 
     /**
+     * The resolved parser, told the declared parameter types of the tools
+     * THIS request offers when it can use them (audit 15a A9).
+     *
+     * A text-scanning fallback such as
+     * {@see ToolCallParser\MinimaxXmlFallbackToolCallParser} receives every
+     * parameter value as raw text; without the schema it can only guess, and
+     * its old guess turned the JSON text of a composer.json `Write` into a PHP
+     * array. The types live on the request, not on this provider, so they
+     * are attached per request to an immutable copy - the provider-held
+     * parser is never mutated, and a later request offering different tools
+     * cannot inherit this one's schema.
+     *
+     * `instanceof ToolSchemaAware` is a CAPABILITY check, not the
+     * type-switch on the concrete parser that {@see completeStream()}'s
+     * buffering comment declines: no concrete class is named, and a parser
+     * that cannot use a schema (the default OpenAI-array one, whose
+     * server-decoded JSON is already typed) is returned untouched, so the
+     * default path builds no type map at all.
+     */
+    private function toolCallParserFor(CompleteRequest $request): ToolCallParserInterface
+    {
+        $parser = $this->resolvedToolCallParser();
+
+        if (!$parser instanceof ToolSchemaAware) {
+            return $parser;
+        }
+
+        return $parser->withParameterTypes(ToolParameterTypes::fromTools($request->tools));
+    }
+
+    /**
      * Runs the injected parser over the fully reassembled streamed content,
      * closing the §12 D2 gap that made parser selection a batch-path-only
      * setting.
@@ -2046,8 +2095,11 @@ final readonly class SglangProvider implements ProviderInterface
      *
      * @return array<ToolCall>|null
      */
-    private function recoverTextualToolCalls(string $content, bool $sawStructuredToolCalls): ?array
-    {
+    private function recoverTextualToolCalls(
+        string $content,
+        bool $sawStructuredToolCalls,
+        ToolCallParserInterface $toolCallParser,
+    ): ?array {
         if ($sawStructuredToolCalls || $content === '') {
             return null;
         }
@@ -2056,7 +2108,7 @@ final readonly class SglangProvider implements ProviderInterface
         // the condition every fallback parser triggers on - handing over an
         // empty array instead would take their delegated fast path and find
         // nothing.
-        $calls = $this->resolvedToolCallParser()->parse(['content' => $content]);
+        $calls = $toolCallParser->parse(['content' => $content]);
 
         return $calls === [] ? null : $calls;
     }

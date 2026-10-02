@@ -56,7 +56,7 @@ use SugarCraft\Crush\Tools\ToolCall;
  * XML, whose envelope, attribute set and value framing all differ - see
  * {@see coerceValue()} for the one difference most likely to be assumed away.
  */
-final readonly class DsmlToolCallParser implements ToolCallParserInterface
+final readonly class DsmlToolCallParser implements ToolCallParserInterface, ToolSchemaAware
 {
     /**
      * The markup token, spelled as an explicit codepoint escape ON PURPOSE.
@@ -123,6 +123,26 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface
             // sibling deliberately does not get the same guard.
             MarkupScanner::new(self::DSML_TOKEN, true),
         );
+    }
+
+    /**
+     * Forwards the request's tool schemas to the DELEGATE only (audit 15a A9).
+     *
+     * This class's own values need no schema: the model types every one with
+     * its `string=` flag ({@see coerceValue()}). But it is a decorator, and a
+     * stacked chain such as `DsmlToolCallParser::new(
+     * MinimaxXmlFallbackToolCallParser::new())` would otherwise hide its
+     * inner MiniMax recovery from the provider's `instanceof ToolSchemaAware`
+     * question - leaving that recovery untyped. Returns `$this` when the
+     * delegate cannot use the types, because then nothing would change.
+     */
+    public function withParameterTypes(ToolParameterTypes $types): static
+    {
+        if (!$this->delegate instanceof ToolSchemaAware) {
+            return $this;
+        }
+
+        return new self($this->delegate->withParameterTypes($types), $this->scanner);
     }
 
     /**
@@ -425,14 +445,13 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface
      *
      * THIS IS THE ONE PLACE DSML AND MINIMAX XML DIVERGE MOST, and assuming
      * otherwise is the likely future bug. {@see
-     * MinimaxXmlFallbackToolCallParser::coerceValue()} must GUESS - its markup
-     * carries no type information, so it deliberately decodes only JSON arrays
-     * and leaves every scalar as text to avoid handing a string-typed
-     * parameter an int. That reasoning is correct THERE and wrong HERE: the
-     * ambiguity it works around does not exist in DSML, so guessing would
-     * discard information the model actually sent. Its KNOWN GAP - that
-     * correct disambiguation needs the tool's declared JSON-Schema type, which
-     * the parser cannot see - is therefore NOT a gap in this class.
+     * MinimaxXmlFallbackToolCallParser::coerceValue()} has to look the type
+     * up - its markup carries no type information, so since audit 15a A9 it
+     * types each value by the invoked tool's declared JSON-Schema type and
+     * keeps the raw text when no schema says otherwise. That is correct THERE
+     * and unnecessary HERE: the ambiguity it works around does not exist in
+     * DSML, and overriding the model's own flag with a schema lookup would
+     * discard information the model actually sent.
      *
      * KNOWN LIMITATION, DOCUMENTED RATHER THAN FIXED: `json_decode` maps an
      * integer literal too large for a PHP int to a float, so
@@ -440,8 +459,9 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface
      * `1.2345678901234568e+22`. Decoding with `JSON_BIGINT_AS_STRING` would
      * trade that for handing a number-typed parameter a string, which under
      * `declare(strict_types=1)` is a TypeError inside the tool rather than a
-     * rounding error. Neither is right without the tool's declared schema, and
-     * this class is not handed one - the same gap the MiniMax parser records.
+     * rounding error. Neither is right without the tool's declared schema;
+     * {@see withParameterTypes()} now carries one, but only to the delegate -
+     * using it here for big integers is a separate, unscheduled change.
      *
      * VALUE FRAMING ALSO DIFFERS. MiniMax's parser strips one framing newline
      * from each end. DSML values are taken VERBATIM between `>` and

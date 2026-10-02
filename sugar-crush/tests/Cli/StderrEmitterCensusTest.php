@@ -67,7 +67,7 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
  *     `sugarcrush: ` shapes through it. A grep for `fwrite(STDERR` cannot see
  *     this file at all.
- *  3. `error_log(…)` — TWENTY-FOUR sites across twelve files. MEASURED on this
+ *  3. `error_log(…)` — TWENTY-FIVE sites across twelve files. MEASURED on this
  *     box, PHP 8.3.6, `ini_get('error_log')` is `''` and `php -r
  *     'error_log("x");' 2>file` puts `x` in the file: with no `error_log`
  *     destination configured, this IS stderr. Three of them appear in the
@@ -366,7 +366,10 @@ final class StderrEmitterCensusTest extends TestCase
         // for them. Channel 6 is where those eight are counted now; not one
         // message was deleted.
         'src/Providers/ToolCallParser/DsmlToolCallParser.php' => 7,
-        'src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php' => 3,
+        // 3 until audit 15a A9: coerceValue()'s "declared <type> but the value
+        // does not parse as it" fallback. Stderr-only by the routing rule -
+        // the call still fires, with the raw text the model sent.
+        'src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php' => 4,
         'src/Skills/SkillLoader.php' => 2,
     ];
 
@@ -419,7 +422,8 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Memory/ForeignMemoryImporter.php' => 1,
         'src/Providers/SglangProvider.php' => 1,
         'src/Providers/ToolCallParser/DsmlToolCallParser.php' => 7,
-        'src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php' => 3,
+        // 3 until audit 15a A9 - the same coerceValue() site as channel 3.
+        'src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php' => 4,
         'src/Skills/SkillLoader.php' => 2,
     ];
 
@@ -709,6 +713,7 @@ final class StderrEmitterCensusTest extends TestCase
         'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15,
         'eighteen' => 18, 'nineteen' => 19,
         'twenty-one' => 21, 'twenty-two' => 22, 'twenty-three' => 23, 'twenty-four' => 24,
+        'twenty-five' => 25,
         'twenty-six' => 26,
         'twenty-seven' => 27,
         'twenty-eight' => 28,

@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Providers\ToolCallParser\DsmlToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
+use SugarCraft\Crush\Providers\ToolCallParser\ToolParameterTypes;
 use SugarCraft\Crush\Tools\ToolCall;
 
 /**
@@ -486,6 +487,42 @@ final class DsmlToolCallParserTest extends TestCase
 
         $this->assertIsArray($calls, 'a stacked fallback must still reach its delegate');
         $this->assertSame('read', $calls[0]->name());
+    }
+
+    /**
+     * Audit 15a A9: the schema has to reach a stacked MiniMax recovery even
+     * though the provider only ever asks the OUTER parser.
+     */
+    public function testWithParameterTypesReachesAStackedMinimaxDelegate(): void
+    {
+        $content = '<minimax:tool_call><invoke name="Write">'
+            . '<parameter name="content">{"a":1}</parameter>'
+            . '<parameter name="overwrite">true</parameter></invoke></minimax:tool_call>';
+        $parser = DsmlToolCallParser::new(MinimaxXmlFallbackToolCallParser::new())
+            ->withParameterTypes(ToolParameterTypes::new([
+                'Write' => ['content' => ['string'], 'overwrite' => ['boolean']],
+            ]));
+
+        $calls = $parser->parse(['content' => $content]);
+
+        $this->assertIsArray($calls);
+        $this->assertSame(['content' => '{"a":1}', 'overwrite' => true], $calls[0]->arguments());
+    }
+
+    /**
+     * With a delegate that cannot use a schema there is nothing to change, and
+     * the DSML values themselves stay typed by their own `string=` flag.
+     */
+    public function testWithParameterTypesIsANoOpWithoutASchemaAwareDelegate(): void
+    {
+        $parser = DsmlToolCallParser::new();
+        $typed = $parser->withParameterTypes(ToolParameterTypes::new(['read' => ['limit' => ['string']]]));
+
+        $this->assertSame($parser, $typed);
+        $calls = $typed->parse([
+            'content' => self::envelope(self::invoke('read', [['limit', 'false', '3']])),
+        ]);
+        $this->assertSame(3, $calls[0]->arguments()['limit'], 'the model\'s string= flag still decides');
     }
 
     // -------------------------------------------------------------------------

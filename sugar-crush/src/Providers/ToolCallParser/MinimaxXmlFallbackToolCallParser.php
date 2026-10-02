@@ -38,7 +38,7 @@ use SugarCraft\Crush\Tools\ToolCall;
  * this is where it shipped. Both now scan positionally via
  * {@see MarkupScanner}, whose docblock carries the reproduction and the guard.
  */
-final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserInterface
+final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserInterface, ToolSchemaAware
 {
     private const ENVELOPE_TAG = 'minimax:tool_call';
 
@@ -58,9 +58,16 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
 
     private const PARAMETER_CLOSE = '</' . self::PARAMETER_TAG . '>';
 
+    /**
+     * @param ToolParameterTypes|null $parameterTypes The offered tools'
+     *        declared parameter types, or null when none were supplied - in
+     *        which case every recovered value stays its raw text
+     *        ({@see coerceValue()}).
+     */
     public function __construct(
         private ToolCallParserInterface $delegate,
         private MarkupScanner $scanner,
+        private ?ToolParameterTypes $parameterTypes = null,
     ) {}
 
     /**
@@ -79,6 +86,23 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
             // start token does, and MarkupScanner::qualifies() explains why
             // this file will not invent one. The fence guard applies to both.
             MarkupScanner::new('', false),
+        );
+    }
+
+    /**
+     * Audit 15a A9: the provider hands over the request's tool schemas so
+     * {@see coerceValue()} can type each value by what the tool DECLARED
+     * instead of by what the text happens to look like. Forwarded to the
+     * delegate when it is schema-aware too, so a stacked chain stays typed.
+     */
+    public function withParameterTypes(ToolParameterTypes $types): static
+    {
+        return new self(
+            $this->delegate instanceof ToolSchemaAware
+                ? $this->delegate->withParameterTypes($types)
+                : $this->delegate,
+            $this->scanner,
+            $types,
         );
     }
 
@@ -112,11 +136,12 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
      * recovery stays on `error_log()` alone, because a seam row is a
      * `Role::System` message re-sent to the model on every subsequent turn.
      *
-     * FOUR OF THIS CLASS'S SEVEN ARE ON THE SEAM: every envelope fenced, an
+     * FOUR OF THIS CLASS'S EIGHT ARE ON THE SEAM: every envelope fenced, an
      * `<invoke>` with no readable name, an invoke refused whole, and an
-     * unclosed invoke with no parameter recovered. The other three describe a
-     * call that still fired, or a parameter-level refusal whose consequence the
-     * invoke-level notice already reports. Both sides are counted from the
+     * unclosed invoke with no parameter recovered. The other four describe a
+     * call that still fired (including {@see coerceValue()}'s audit 15a A9
+     * type-mismatch fallback), or a parameter-level refusal whose consequence
+     * the invoke-level notice already reports. Both sides are counted from the
      * token stream by
      * {@see \SugarCraft\Crush\Tests\Cli\StderrEmitterCensusTest}'s channels
      * 3 and 6 rather than written down here as a pair of integers.
@@ -243,7 +268,7 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
                 return null;
             }
 
-            $arguments[$name] = $this->coerceValue($parameter['body']);
+            $arguments[$name] = $this->coerceValue($parameter['body'], $toolName, $name);
         }
 
         return $arguments;
@@ -251,31 +276,55 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
 
     /**
      * Parameter values arrive as raw text with no type information, yet tools
-     * declare typed JSON-Schema inputs.
+     * declare typed JSON-Schema inputs - so the type comes from the TOOL, not
+     * from the text (audit 15a A9).
      *
-     * Only a JSON-decodable *array* (object or list) is decoded, because that
-     * is the one shape the raw text cannot otherwise represent. Scalars are
-     * deliberately left as their original text: `<parameter name="old_string">1
-     * </parameter>` is an ordinary string argument that merely looks like JSON,
-     * and decoding it to int 1 hands a string-typed tool parameter the wrong
-     * PHP type. Under `declare(strict_types=1)` that is not a soft failure -
-     * {@see \SugarCraft\Crush\Tools\Edit} calls `substr_count($content,
-     * $oldString)`, which raises an uncaught TypeError and takes down the tool
-     * loop instead of returning an isError ToolResult. int/float/bool/null are
-     * exactly the ambiguous cases, so they lose the coin toss.
+     * THE DEFECT THIS REPLACES. Until A9 any value that json-decoded to an
+     * array was decoded, whatever the tool declared. `<invoke name="Write">`
+     * with `<parameter name="content">{"name": "acme/x", "require": {}}`
+     * therefore handed `Write` a PHP ARRAY for a string-typed `content`, so
+     * writing or editing any JSON file (composer.json, package.json, a .json
+     * fixture) through this parser failed or wrote the wrong value. Text
+     * that LOOKS like JSON is not evidence that the tool wants JSON.
      *
-     * KNOWN GAP, still open: the correct disambiguation needs the invoked
-     * tool's declared JSON-Schema type, which this class cannot see -
-     * {@see parse()} is handed only the response message - so a genuinely
-     * number/boolean-typed parameter reaches the tool as its string form.
-     * W1.A6 (§12 D6, `ProviderFactory::createSglang()`) has since made this
-     * parser reachable, selectable via the `toolCallParser` config key, but D6
-     * scopes that step to parser SELECTION only; threading the active tool
-     * list through remains unscheduled. It stays latent in practice because
-     * the confirmed live deployment passes `--tool-call-parser minimax-m2`, so
-     * this parser's XML branch is never entered there.
+     * THE RULE NOW, keyed on the declared `type` of that parameter
+     * ({@see ToolParameterTypes::declared()}):
+     *
+     * - UNKNOWN (no schema handed over, tool or parameter not offered, or no
+     *   `type` declared): the raw text, unchanged. This is a deliberate
+     *   behaviour change from "decode arrays when unknown" - the raw text is
+     *   the identity transform, so a tool's own validation can report a real
+     *   problem, whereas a wrong guess changes the PHP type under the tool.
+     * - declares `string` (alone or in a list such as `["string","null"]`):
+     *   the raw text. String wins any list it is part of for the same reason.
+     * - declares `object` or `array` (e.g. `["object","null"]`): JSON-decoded
+     *   when the text decodes to an array.
+     * - declares `integer`, `number`, `boolean` or `null`: converted ONLY when
+     *   the trimmed text parses cleanly as that scalar - `FILTER_VALIDATE_INT`
+     *   (no overflow, no leading zeros), `is_numeric`, the exact literals
+     *   `true`/`false`, the exact literal `null`.
+     *
+     * A declared non-string type the text does not parse as falls back to the
+     * raw text with an `error_log()` line naming the tool and parameter - the
+     * call still fires, so per the routing rule in {@see parseXml()} it is not
+     * transcript-seam material. Scalars are never guessed: before A9 the class
+     * had to leave `<parameter name="old_string">1</parameter>` as text because
+     * decoding it to int 1 is an uncaught TypeError inside
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Edit} under
+     * `declare(strict_types=1)`; with the schema the same `1` is a string for
+     * `old_string` and an int for an integer-typed `limit`, both correct.
+     *
+     * WHERE THE TYPES COME FROM - the KNOWN GAP this docblock used to record
+     * ("the correct disambiguation needs the invoked tool's declared
+     * JSON-Schema type, which this class cannot see"), closed by A9.
+     * {@see parse()} is handed only the response
+     * message, so the provider builds a {@see ToolParameterTypes} from
+     * `CompleteRequest::$tools` once per request and hands it over through
+     * {@see withParameterTypes()} on both its batch and streaming paths
+     * ({@see \SugarCraft\Crush\Providers\SglangProvider}). A parser built
+     * with {@see new()} and never given types keeps every value as text.
      */
-    private function coerceValue(string $raw): mixed
+    private function coerceValue(string $raw, string $toolName, string $paramName): mixed
     {
         // The model emits the value on its own line for multi-line payloads;
         // only that framing newline is shed, so indentation inside file
@@ -285,15 +334,57 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
         // MarkupScanner's docblock for the measured cliff that motivated it.
         $value = $this->stripFramingNewlines($raw);
 
-        $trimmed = trim($value);
+        $declared = $this->parameterTypes?->declared($toolName, $paramName);
 
-        if ($trimmed === '') {
+        if ($declared === null || in_array('string', $declared, true)) {
             return $value;
         }
 
-        $decoded = json_decode($trimmed, true);
+        $trimmed = trim($value);
 
-        return json_last_error() === JSON_ERROR_NONE && is_array($decoded) ? $decoded : $value;
+        if (in_array('object', $declared, true) || in_array('array', $declared, true)) {
+            $decoded = json_decode($trimmed, true);
+
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        if (in_array('integer', $declared, true)) {
+            $int = filter_var($trimmed, FILTER_VALIDATE_INT);
+
+            if (is_int($int)) {
+                return $int;
+            }
+        }
+
+        if (in_array('number', $declared, true) && is_numeric($trimmed)) {
+            $number = $trimmed + 0;
+
+            // `1e999` is numeric but overflows to INF, which no JSON number
+            // can be - that is text the tool should see, not a value.
+            if (is_int($number) || is_finite($number)) {
+                return $number;
+            }
+        }
+
+        if (in_array('boolean', $declared, true) && ($trimmed === 'true' || $trimmed === 'false')) {
+            return $trimmed === 'true';
+        }
+
+        if (in_array('null', $declared, true) && $trimmed === 'null') {
+            return null;
+        }
+
+        error_log(sprintf(
+            'sugarcrush: MinimaxXmlFallbackToolCallParser: parameter "%s" on tool "%s" is declared %s '
+            . 'but its value does not parse as that type; passing the raw text through untyped.',
+            $paramName,
+            $toolName,
+            implode('|', $declared),
+        ));
+
+        return $value;
     }
 
     /**
