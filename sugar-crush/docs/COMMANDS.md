@@ -377,6 +377,15 @@ prints `Usage: /rewind [n]` and rewinds nothing, because a rewind drops turns
 from the live and the persisted history and must not run on input that asked for
 something else.
 
+While a turn is in flight, Enter on a command line does not run it: the
+command could rewrite the history the turn is about to append to, so it is
+refused with a notice and the draft is kept (prose, by contrast, is queued).
+Bare `/exit` and `/quit` still quit. One more pair gets through, and only while
+the turn is a `/workflow run` or `/workflow resume`: `/workflow pause <id>` and
+`/workflow status <id>`, because pausing a live run is the reason to type at it
+and neither touches the history (pause writes the pause file, status reads
+state). The run keeps its turn; its report says **paused** when it stops.
+
 One name reaches a handler with no leading slash at all: a draft whose first two
 words are `mcp auth` is routed to `Chat::handleMcpAuthCommand()` ahead of the parse,
 because that spelling predates the discoverable `/mcp` row and the palette's MCP

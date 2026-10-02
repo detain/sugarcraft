@@ -1413,6 +1413,21 @@ final class Chat implements Model
         private readonly ?int $inputHistoryCursor = null,
         /** The draft the box held when the walk began; ↓ past the newest entry gives it back. */
         private readonly string $inputHistoryDraft = '',
+        /**
+         * Whether the turn in flight is a `/workflow run` or `/workflow resume`
+         * — a fiber {@see driveWorkflowFiber()} steps — rather than a model
+         * turn (audit WF-4). Read only by {@see submit()}'s mid-turn gate,
+         * which lets `/workflow pause` and `/workflow status` through while it
+         * holds: pausing the run is the one thing the user needs to do to it
+         * while it runs, and neither command touches the history the run is
+         * appending to (pause writes the pause file, status reads state).
+         *
+         * Set by the two commands that start such a turn and cleared by the two
+         * exits it has: the AssistantMsg arm that settles it and the
+         * double-Escape cancel arm. Nothing else can end the turn — every other
+         * command is refused while it runs — so the flag cannot outlive it.
+         */
+        private readonly bool $workflowTurnInFlight = false,
     ) {
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
         // The widget is the source of truth; $inputBuf is its projection.
@@ -1849,6 +1864,9 @@ final class Chat implements Model
                 // A user who opened the collapsed live thought keeps it open
                 // on the settled turn that now carries it.
                 ['streamingText' => '', 'reasoningText' => '', 'expanded' => $this->expandedAfterLiveThought($message->reasoning)],
+                // Whatever settled, it ends a workflow turn if one was running
+                // (driveWorkflowFiber() delivers the run's report here).
+                ['workflowTurnInFlight' => false],
                 // E17: fold this turn's estimate-vs-real observation into the
                 // calibration HERE — this mutate is the one point every exit
                 // of the arm passes through, the tool-call branch above it
@@ -2266,6 +2284,7 @@ final class Chat implements Model
                 'inFlight' => false,
                 'inFlightCancellation' => null,
                 'lastEscapeAt' => null,
+                'workflowTurnInFlight' => false,
                 'generation' => $this->generation + 1,
                 // Every "running" placeholder of the aborted turn is healed into
                 // the "interrupted" row first (audit 15b-02): the generation
@@ -8115,6 +8134,7 @@ final class Chat implements Model
             'inputHistory' => $this->inputHistory,
             'inputHistoryCursor' => $this->inputHistoryCursor,
             'inputHistoryDraft' => $this->inputHistoryDraft,
+            'workflowTurnInFlight' => $this->workflowTurnInFlight,
         ];
 
         // The two write routes into the draft, kept from fighting.
@@ -8347,6 +8367,10 @@ final class Chat implements Model
         if ($this->inFlight) {
             if ($text === '/exit' || $text === '/quit') {
                 return [$this, Cmd::quit()];
+            }
+
+            if ($this->isWorkflowControlDuringWorkflowTurn($text)) {
+                return $this->handleWorkflowCommand($text);
             }
 
             if (str_starts_with($text, '/') || self::isBareMcpAuthCommand($text)) {
@@ -8824,6 +8848,37 @@ final class Chat implements Model
                 self::quoteDraftForNotice($text),
             ))],
         ]), null];
+    }
+
+    /**
+     * Whether $text is `/workflow pause …` or `/workflow status …` typed while
+     * the turn in flight is a workflow run — the one exception to
+     * {@see refuseInFlightCommand()}'s rule besides `/exit`/`/quit` (audit WF-4).
+     *
+     * Since WF-2 the engine can pause a LIVE run, but the run occupies the
+     * turn, so the refusal used to block the very command that pauses it; the
+     * only way through was Esc Esc, which releases the turn instead of pausing
+     * the run. Neither command rewrites history the run is appending to: pause
+     * writes the pause file, status reads state, and both answer with UI-only
+     * rows that leave the turn running ({@see workflowResponse()}).
+     *
+     * Narrow on purpose: only while the work in flight IS a workflow run (a
+     * model turn still refuses), only those two verbs (`run`/`resume` would
+     * interleave a second run), and only when no file-based command overrides
+     * `/workflow` — a custom `workflow.md` is a prompt, and a prompt queues.
+     */
+    private function isWorkflowControlDuringWorkflowTurn(string $text): bool
+    {
+        if (!$this->workflowTurnInFlight || $this->workflowEngine === null) {
+            return false;
+        }
+
+        $tokens = self::commandTokens($text);
+        if ($tokens[0] !== '/workflow' || !\in_array($tokens[1] ?? '', ['pause', 'status'], true)) {
+            return false;
+        }
+
+        return $this->resolveCustomCommand($text) === null;
     }
 
     /**
@@ -10953,10 +11008,12 @@ final class Chat implements Model
      */
     private function workflowResponse(string $inputText, string $response): array
     {
+        // `inFlight` is left as it is: every caller runs idle except
+        // `/workflow pause|status` mid-run (audit WF-4), and clearing it there
+        // would release the run's turn while its fiber keeps going.
         $next = $this->mutate([
             'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
             'inputBuf' => '',
-            'inFlight' => false,
         ]);
         return [$next, null];
     }
@@ -11077,6 +11134,7 @@ final class Chat implements Model
             // driveWorkflowFiber() settles, on both the success and the error
             // path -- both resolve, neither rejects.
             'inFlight' => true,
+            'workflowTurnInFlight' => true,
         ]);
 
         return [$next, $next->driveWorkflowFiber($fiber)];
@@ -11245,9 +11303,10 @@ final class Chat implements Model
      * Handle /workflow pause command.
      *
      * A LIVE run is reachable here: its fiber is suspended between agent polls
-     * whenever this runs. Note the turn it occupies refuses slash commands
-     * ({@see refuseInFlightCommand()}), so the user reaches this mid-run after
-     * double-Escape releases the turn (which does not stop the run). The engine
+     * whenever this runs. The turn the run occupies refuses slash commands
+     * ({@see refuseInFlightCommand()}) except this one and `/workflow status`
+     * ({@see isWorkflowControlDuringWorkflowTurn()}, audit WF-4), so the user
+     * pauses it mid-run by typing it — the turn stays in flight. The engine
      * then stops the run before its next stage, and the run's own report, when
      * {@see driveWorkflowFiber()} delivers it, says `paused` (AUDIT WF-2).
      *
@@ -11335,6 +11394,7 @@ final class Chat implements Model
             'inputBuf' => '',
             // A resumed run is a turn exactly as a fresh one is; see workflowRun().
             'inFlight' => true,
+            'workflowTurnInFlight' => true,
         ]);
 
         return [$next, $next->driveWorkflowFiber($fiber)];
