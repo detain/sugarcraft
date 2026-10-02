@@ -60,26 +60,7 @@ Confidence labels:
 
 ## B. Terminal injection and frame geometry
 
-### 15b-26 — candy-core `Width::wrap()` never terminates when a 2-cell cluster meets a 1-column budget
-- **Severity:** Medium (a hang) · **Confidence:** Verified-by-repro (`timeout 5 php -r '… Width::wrap("文", 1) …'` is killed at the deadline)
-- **Where:** `candy-core/src/Util/Width.php:295` (`wrap()`). Its hard-break loop cuts long tokens between grapheme clusters, but a cluster wider than the whole budget (a CJK character or a wide emoji at `$max = 1`) is never emitted, so the loop never advances.
-- **Reachability:** sugar-crush's permission modal calls it as `Width::wrap($clean, max(2, $cols))` (`src/Renderer.php:4769`, written for 15b-19), and the modal's inner width is floored at 20, so sugar-crush does not reach it today. Other callers can: `candy-shell/src/Command/PagerCommand.php:56` passes `max(1, $width)`, and `sugar-table/src/Column.php:251` passes the column width unclamped. A 1-column pager or table column fed CJK text hangs the process.
-- **Fix:** when the next cluster is wider than `$max`, emit it alone on its own row (an over-wide row is better than a hang), or replace it with a 1-cell placeholder. Either way, each pass of the loop must consume at least one cluster.
-- **Test:** `Width::wrap("文", 1)`, `Width::wrap("a文b", 1)` and `Width::wrap("👍🏽", 1)` each return within the test's time budget and contain every input cluster.
-
-### 15b-28 — Bidi overrides and zero-width characters pass every sanitizer as ordinary text
-- **Severity:** Low · **Confidence:** Verified-by-reading
-- **Where:** `candy-core/src/Util/Sanitize.php` (`untrusted()`, `untrustedForDisplay()`, `visibleControls()`) and candy-shine `Renderer::stripControls()`. None of them touches U+202A–U+202E (embeddings and overrides), U+2066–U+2069 (isolates), U+200B–U+200D, U+2060 or U+FEFF.
-- **Failure scenario:** the 15b-07, 15b-08 and 15b-19 fixes close the cursor-motion and C1 routes, but a model-authored tool description, a tool result or a command shown in the permission modal can still carry U+202E. The terminal then displays the rest of the line reversed ("Trojan Source"), so text reads differently from what runs. Zero-width characters make two different names or paths look identical.
-- **Fix:** in the display policies, map these codepoints to a visible marker (`<U+202E>`, as `visibleControls()` already does for C1), at least in the permission modal and tool rows. `untrusted()` itself can keep them for paste fidelity.
-- **Test:** `visibleControls("rm \u{202E}txt.sh")` shows the marker, and a tool row rendered from the same text contains no raw U+202E.
-
-### 15b-29 — candy-shine `Renderer::stripControls()` does not strip lone raw 0x80–0x9F bytes
-- **Severity:** Low · **Confidence:** Verified-by-reading
-- **Where:** `candy-shine/src/Renderer.php:785-792`. The pattern is `/[\x00-\x08\x0b-\x1f\x7f]|\xC2[\x80-\x9F]/`, which removes the UTF-8-encoded C1 codepoints (the 15b-08 fix, `af42238fc`) but not a lone 8-bit C1 byte such as a bare `\x9B`.
-- **Failure scenario:** markdown text that carries a raw `\x9B` (8-bit CSI) passes CandyShine unchanged. Terminals that honour 8-bit C1 (for example xterm with 8-bit controls enabled) execute it. sugar-crush's own paths are covered, because candy-core `Sanitize::untrusted()` step 1 already removes every 0x80–0x9F byte outside a well-formed UTF-8 sequence before the text reaches CandyShine, so this matters for CandyShine's other consumers.
-- **Fix:** remove 0x80–0x9F bytes that are not part of a well-formed UTF-8 sequence, the way `Sanitize::untrusted()` step 1 does. A plain byte-class strip would corrupt valid multi-byte characters, whose continuation bytes fall in that range.
-- **Test:** CandyShine renders `"a\x9B2Jb"` without the `\x9B` byte, and still renders `→` and `👍` intact.
+15b-26, 15b-28 and 15b-29 were fixed in wave 8A; see **Fixed since audit**.
 
 ### 15b-30 — candy-shine `Renderer::stream()` breaks its "equals `render()`" law when the text has link reference definitions
 - **Severity:** Low · **Confidence:** Verified-by-repro (found while fixing 15b-10 in wave 3; re-checked with `Renderer::plain()`: `stream()` gives `See [x][a].…`, `render()` gives the resolved hyperlink)
@@ -140,8 +121,9 @@ Confidence labels:
 - **Where:**
   - `src/Cli/Bootstrap.php:412` and `src/Session/SessionStore.php:555` justify keeping per-entry launch rows out of the transcript because each would be "a list the model is re-sent every turn".
   - `src/Tools/Concerns/DetectsCapabilities.php:38` cites `Doctor::execute()`'s `self::$mosaic ??=` as the house idiom for a lazy capability probe.
+  - Added in wave 7: since 15b-17's fix (`b38bf8403`) an image marker is a zero-width authenticating OSC plus the U+E002+id cell, but `candy-core/src/Util/Sanitize.php` and `candy-core/src/View.php` still describe the marker as just "U+E002 + id" (now only its cell half), and `src/Tui/Components/ChatPane.php:84` says a marker leaks when the images are dropped, which `Program::renderFrame()` no longer allows.
 - **Detail:** since 15b-03's fix (`2a3a8f91c`), launch notices are `uiOnly` rows and never reach the model, so the token-cost half of those two rationales is no longer true (the transcript-clutter half still is). Since F-T6's fix (`977179c1e`), Doctor reads the boot-time `ToolResult::mosaic()` probe and no longer has a `??=` probe, so the docblock points readers at code that does not exist.
-- **Fix:** reword the two rationales to the transcript-clutter reason, and point the `DetectsCapabilities` docblock at `ToolResult::mosaic()` (and the boot-time warm-up).
+- **Fix:** reword the two rationales to the transcript-clutter reason, point the `DetectsCapabilities` docblock at `ToolResult::mosaic()` (and the boot-time warm-up), and describe the two-part marker in the candy-core and ChatPane docs.
 - **Test:** none needed beyond review.
 
 ### 15b-33 — A `/fork` docblock still names `SessionStore::forkSession()` as the transcript copy
@@ -153,30 +135,7 @@ Confidence labels:
 
 ## E. Repository-supplied and model-supplied text in overlays and panes
 
-### 15b-17 — Model or tool text containing U+E002+n paints a copy of on-screen image n at a position the text chooses, and blanks Nerd Font glyphs (lead 3)
-- **Severity:** Low-Medium · **Confidence:** Verified-by-repro (`r10_forged_marker.php`)
-- **Where:**
-  - `candy-core/src/ImageOverlay.php:143`: `resolve()` turns **every** codepoint in U+E002…U+F8FF into a space, and into a paint when an image with that id exists.
-  - `Program::renderFrame()` (`candy-core/src/Program.php:1123`) runs `resolve()` over the **whole** frame whenever `View::$images` is non-empty.
-  - `Renderer::untrusted()` (`src/Renderer.php:1218`) strips only the two zone sentinels, U+E000 and U+E001. `maskImageMarkers()` (`:1187`) masks the copy passed to the zone scanner (`:1145`), not the frame the terminal receives.
-  - `ImageLayer` assigns ids from 0 for each frame, so U+E002 is "the first picture in this frame".
-- **Failure scenario:**
-  - A tool result carries an image and a pixel protocol is active (sixel, kitty or iTerm2; `Mosaic::isInline()` is false). From then on, any assistant, user or tool-output row containing U+E002 produces a **second** paint of that image wherever the codepoint lands.
-  - Repro: one real image and one forged marker give `images=1 paints=2`, at rows `7:4` and `19:23`. This holds for assistant, user and tool-result rows alike.
-  - The forged copy is a 40-column, 10-row block drawn over text after the diff. It can hide the input box, the status bar or tool rows. Near the bottom row a sixel can also scroll the terminal, which desyncs the absolute-cursor diff renderer (suspected; this depends on the terminal's sixel-scrolling mode).
-  - **Non-malicious side:** in the same frames, every BMP Private-Use glyph is blanked to a space. That covers Powerline U+E0A0–E0D4, Nerd Font devicons and Pomicons U+E000–E00A (the last of which overlap ids 0–8), as found in `eza --icons`, starship or `git log` output in tool results.
-- **Fix:**
-  - Give the marker a syntax that untrusted text can no longer carry. For example, frame it with the zone sentinels (`U+E000 'img:' id U+E001`), which `untrustedForMarkedFrames()` already strips from every untrusted string, and have `resolve()` accept only that triple.
-  - Alternatively, `ImageLayer` can return the exact (row, col) positions it emitted and `resolve()` can ignore all other markers.
-  - Either way, a bare PUA codepoint stops being markup, and Nerd Font glyphs survive.
-- **Test:** Render a Chat with one sixel image and an assistant row containing `"\u{E002}"`. Assert `ImageOverlay::resolve()` returns exactly one paint and that the row keeps a Powerline glyph `"\u{E0B0}"`.
-
-### 15b-27 — The permission modal shows an empty value for a tool argument that is not valid UTF-8
-- **Severity:** Low · **Confidence:** Verified-by-reading
-- **Where:** `Message::describeToolCall()` at `src/Message.php:189-213`: `"{$key}: " . json_encode($rendered)` (and `json_encode($value) ?: ''` for non-string values), with no `JSON_INVALID_UTF8_SUBSTITUTE`.
-- **Failure scenario:** a model-authored argument containing one invalid byte (for example a Latin-1 `caf\xe9` in a Bash command) makes `json_encode()` return `false`, which concatenates as an empty string. The call is described as `Bash(command: )`, so a permission prompt built from this description asks the user to approve a command it does not show. Latent while the modal is unreachable (known #1), like 15b-19 was.
-- **Fix:** encode with `JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE`, and fall back to `Sanitize::visibleControls()` of the raw value rather than to `''`.
-- **Test:** `describeToolCall()` of a call with `["command" => "caf\xe9"]` contains `caf` followed by U+FFFD.
+Both findings here (15b-17, 15b-27) were fixed, in waves 7 and 8A; see **Fixed since audit**.
 
 ## F. Custom commands, session commands and persistence
 
@@ -189,20 +148,15 @@ Both findings here (15b-20, 15b-21) were fixed in wave 4; see **Fixed since audi
 | ID | Sev | Conf | Title |
 |---|---|---|---|
 | 15b-03 | Med-High | Repro | Command output, mid-turn notices and background/runtime notices go to the model as real turns. Partly fixed (`2a3a8f91c`: `Message::$uiOnly`, filtered at every wire encoder); remaining: compaction input unfiltered, notices still interleave between a prompt and its answer |
-| 15b-26 | Medium | Repro | candy-core `Width::wrap()` loops forever when a 2-cell cluster meets a 1-column budget (latent in sugar-crush; reachable via candy-shell pager, sugar-table) |
 | 15b-13 | Low-Med | Reading | Token proxy chars/4 underestimates CJK 3-6×. Partly fixed (`8341a37c1`: script-weighted `TokenEstimate` for Chat's estimate, 85/95% tiers, status bar); remaining: `ContextCompactor` still chars/4 (70% reminder late for CJK), stale comments |
-| 15b-17 | Low-Med | Repro | U+E002+n in model or tool text paints a copy of on-screen image n where the text chooses; Nerd Font glyphs blanked |
 | 15b-34 | Low | Reading | Ctrl+A still types `/agents` into the box: an idle draft is wiped; the mid-turn refusal says the draft is still in the box (residual of 15b-05) |
 | 15b-14 | Low | Reading | No i18n in sugar-crush |
 | 15b-15 | Low | Reading | Attachments dormant and dropped on the wire |
 | 15b-24 | Low | Reading | `/pane:x`, `/layout:x`, `/mcp:x` colon spellings not handled (documented) |
 | 15b-25 | Low (docs) | Reading | Registry-derived command table shows `/rewind` *Takes* as `—` |
-| 15b-27 | Low (latent) | Reading | `describeToolCall()` shows an empty value for an invalid-UTF-8 argument |
-| 15b-28 | Low | Reading | Bidi overrides and zero-width characters pass every sanitizer |
-| 15b-29 | Low | Reading | candy-shine `stripControls()` keeps lone raw 0x80–0x9F bytes |
 | 15b-30 | Low | Repro | candy-shine `stream()` ≠ `render()` when the text has link reference definitions (sugar-crush renders such partials whole) |
 | 15b-31 | Low | Repro | candy-shine `SectionScanner::finish()` drops the closed section before a trailing heading; no boundary after a closing fence (residual of 15b-10) |
-| 15b-32 | Info | Reading | Stale comments: launch notices "re-sent every turn" (Bootstrap, SessionStore); DetectsCapabilities cites Doctor's removed `??=` probe |
+| 15b-32 | Info | Reading | Stale comments: launch notices "re-sent every turn" (Bootstrap, SessionStore); DetectsCapabilities cites Doctor's removed `??=` probe; candy-core Sanitize/View and ChatPane still describe the one-codepoint image marker (since wave 7) |
 | 15b-33 | Info | Reading | `/fork` docblock (`Chat.php:13269`) still names `SessionStore::forkSession()` as the transcript copy (stale since SES-2) |
 
 **Checked and dropped:**
@@ -288,7 +242,7 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **15b-02** After a double-Escape cancel, tool placeholders stayed "running" forever and later same-id results landed on the old row — fixed on master in `855e42673` (the cancel arm maps every pending row to the "interrupted" row `reviveCheckpointMessage()` builds, with an error tool result under the same id; `replaceToolRunningPlaceholder()` and `finishToolCalls()` search newest first, and each result claims only its own rows). Residual: the healed row reuses the `INTERRUPTED_TOOL_CALL` text ("…interrupted by restart") even after a user cancel. A per-placeholder generation stamp was deferred; it is moot given the heal and the existing generation guards.
 - **15b-06** Switching session kept the compaction thrash counter — fixed on master in `b16819b13` (`switchToSession()` and palette New session share `sessionChangeResets()`; `lastActivityAt` goes to null).
 - **15b-07** Raw CR reached the terminal from user/system rows, tool names and descriptions and expanded tool output — fixed on master in `74ae88c2a` (new candy-core `Sanitize::untrustedForDisplay()` maps CRLF and lone CR to LF; the Renderer's `untrusted()` wrapper uses it, and one-line rows go through a new `oneLine()` before truncation).
-- **15b-08** UTF-8-encoded C1 controls passed every sanitizer — fixed on master in `af42238fc` (candy-core `Sanitize::untrusted()` and candy-shine `Renderer::stripControls()` remove `\xC2[\x80-\x9F]`). Still open nearby: lone raw C1 bytes in candy-shine (15b-29), and bidi and zero-width characters (15b-28).
+- **15b-08** UTF-8-encoded C1 controls passed every sanitizer — fixed on master in `af42238fc` (candy-core `Sanitize::untrusted()` and candy-shine `Renderer::stripControls()` remove `\xC2[\x80-\x9F]`). Lone raw C1 bytes in candy-shine (15b-29) and bidi and zero-width characters (15b-28) were fixed later, in wave 8A.
 - **15b-11** Any prompt starting "mcp auth" was captured by the MCP command — fixed on master in `373e7d953` (both sites use `isBareMcpAuthCommand()`, `/^mcp\s+auth(?:\s|$)/`; `docs/COMMANDS.md` states the whole-word rule).
 - **15b-19** The latent permission modal wrapped by bytes and kept CR — fixed on master in `e4fd37010` (new candy-core `Sanitize::visibleControls()` renders every control byte visibly in caret or `<U+…>` notation; CR maps to LF, zone sentinels are spelled out, and the text wraps by cells with `Width::wrap()`). Found while fixing it: `Width::wrap()` hangs at a 1-column budget (15b-26), and an invalid-UTF-8 argument is described as empty (15b-27).
 - **15b-22** `/rewind help` (any non-numeric argument) performed a rewind, and `/name:arg` reached handlers with a literal `:` — fixed on master in `0d094ff25` (`/rewind` accepts only an empty or `ctype_digit` count ≥ 1; the raw-text handlers take `Chat::commandArgument()`, which drops one space or `:` separator). Residual: `/pane`, `/layout` and `/mcp` still split the whole draft on whitespace (documented in `docs/COMMANDS.md`; 15b-24), and the command table's `/rewind` *Takes* column still shows `—` (15b-25).
@@ -301,3 +255,8 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **15b-09** The chat status bar was never clipped to the terminal width, and the content width (with every overlay) was floored at 20 plus chrome — fixed on master in `66d0651ac` (the status-bar hint shortens step by step, keeping the "Ctrl+P menu" click zone longest; a `fitStatusBar()` backstop strips zone markers before it cuts, so a cut never splits one; the content-width floor is `max(1, cols-6)`, the image box and diff box floors drop to 1, and the slash popup is capped at the terminal width; at 6 columns or fewer `clipFrameToCols()` cuts the bordered shell, with every `Width::wrap` budget kept at 2 or more for 15b-26). The new width test exposed a second bug, fixed in the same commit: Veil counted zone markers as screen cells, so rows under an overlay were split at the wrong column and overflowed; zones are now lifted out before compositing and put back afterwards. Measured: `r3b` last row 54 → 38 cells at 40 columns and 54 → 29 at 30; `r3_width` at 25 columns 45 over-wide rows → 0; `r17_overlay_width` 21 over-wide cases → 0. Residual: `src/Commands/TranscriptTable.php` still copies the old `max(20, cols-6)` floor (nothing overflows, because the pane fitter wraps its output); the permission modal's inner width is still floored at 20, so below 26 columns it loses its right border (it does not overflow).
 - **15b-18** The session tab strip was neither width-clipped nor sanitized — fixed on master in `01cae6d21` (each name goes through `Sanitize::untrustedForDisplay()` and `PaneLabel::safe()`, which removes escapes and control bytes, folds CR/LF/TAB to a space and drops Private-Use characters, and an empty name falls back to the cleaned id; names are capped at 20 cells with an ellipsis, the current tab is always shown, tabs that do not fit collapse into `… +N`, only visible tabs get click zones, and the strip stays one row). Measured at 80 columns: 8 long names 383 → 73 cells; a hostile name 402 → 69 cells with no OSC 52, `\e[2J` or CR; hosted App at 100 columns 433 → 100 cells.
 - **15b-05** Menu-bar and shell commands erased the user's draft, then mid-turn refused with "Your draft is still in the box" — fixed on master in `ecca2b606` + `c1e836427` (new `Chat::runCommand()` and `Chat::runPaletteAction()` run a command without touching the draft, and `App::runRegistryCommand()` uses them instead of feeding synthetic Backspace, Delete and Enter keys). Still open nearby: Chat's own Ctrl+A arm still types `/agents` into the box (15b-34).
+- **15b-17** Model or tool text containing U+E002+n painted a copy of on-screen image n and blanked Nerd Font glyphs — fixed on master in `b38bf8403` (`ImageOverlay::marker()` is a zero-width authenticating OSC, `ESC ] candy-image ; <id> ESC \`, plus the U+E002+id cell, and `resolve()` paints only that pair; untrusted text cannot carry the escape because every untrusted sink deletes ESC, and an escape whose cell a layout pass cut off is dropped; bare Private-Use codepoints are left alone, so Powerline and Nerd Font glyphs survive; `Program::renderFrame()` resolves every frame, so a marker on a frame with no image layer never reaches the terminal; `r10_forged_marker.php`: `paints=2` before, `paints=1` after, and U+E002, U+E0B0 and U+F115 survive in the line). Marker rows stay 1 cell wide (the OSC is zero-width to `Width`, `truncateAnsi`, `wrapAnsi` and candy-mouse `Scan`). Residual: stale marker prose in candy-core and ChatPane (15b-32).
+- **15b-26** candy-core `Width::wrap()` never terminated when a 2-cell cluster met a 1-column budget — fixed on master in `758f098c1` (when `truncate()` fits nothing, the leading cluster is emitted alone on an over-wide row, as `wrapAnsi()` does, so every pass consumes at least one cluster; `WidthWrapOverWideClusterTest` runs each case under a SIGALRM deadline).
+- **15b-28** Bidi overrides and zero-width characters passed every sanitizer — fixed on master in `531a0941f` + `dd4e4aa05` + `e3f6756ac` (new public `Sanitize::markInvisibleFormatting()` marks U+202A–202E, U+2066–2069, U+200B, U+2060 and U+FEFF always, and ZWNJ, ZWJ, LRM, RLM and ALM only at the start, after ASCII or after another such mark, so emoji ZWJ sequences, Persian and Indic ZWNJ and RTL marks still work; `untrustedForDisplay()` applies it and `visibleControls()` marks all of them; candy-shine `stripControls()` applies it too, covering assistant markdown and code blocks). `untrusted()` and `untrustedForMarkedFrames()` are unchanged for paste fidelity. Behaviour change: display policies now emit `<U+XXXX>` markers for these codepoints, a leading BOM included.
+- **15b-29** candy-shine `stripControls()` kept lone raw 0x80–0x9F bytes — fixed on master in `dd4e4aa05` (lone C1 bytes outside well-formed UTF-8 are removed before the C0 sweep, so no `\xC2\x9B` pair can be spliced together). On master `render("a\x9B2Jb")` actually threw CommonMark's `UnexpectedEncodingException`; with sanitising on (the default), `render()` and `renderSection()` now also scrub before the parse, removing lone C1 and repairing other malformed UTF-8 to U+FFFD, and `stream() === render()` still holds.
+- **15b-27** The permission modal showed an empty value for an argument that was not valid UTF-8 — fixed on master in `a0f07cd5a` (`Message::describeToolCall()` encodes with `JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE`, falls back to `visibleControls()` and never to `''`, and re-escapes C1 and bidi/zero-width characters so the label stays inert; a non-string `0` is no longer dropped by `?:`). The headless prompt got the same treatment in `e1acd6f0f` (15e lead 6, R17).

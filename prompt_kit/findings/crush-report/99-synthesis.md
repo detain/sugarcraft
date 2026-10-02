@@ -96,13 +96,14 @@
 
     Kilo legacy (a `condense` tool with a user-approved preview) and Goose (agent-visible vs user-visible flags) supply the remaining pieces.
 
-11. **The code audit found about 136 new defects** (Part IX). 98 of them, including the one Critical and all 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes, unfenced repo skill descriptions, Esc Esc tool placeholders that never healed, raw CR and C1 controls reaching the terminal, a turn kill that left its commands running, streamed tool calls dropped on `stop`, built-in skills that told every project to `git clean -fd`, the full-history markdown re-render on every frame, `error_log()` output painted over the TUI, env-block git calls that honoured the user's git config and took `index.lock`, PostToolUse blocks that did nothing, hook input that defeated grep-style deny hooks, a hostile `.gitignore` that stalled Glob for minutes, prompt hooks and custom-command shell blocks that froze the TUI inside `update()`, forks that carried no conversation, the multi-second `/branch` freeze, Vertex quota errors that were never retried, `claude-mcp` calls that gave up after one second, a stray stdout line that aborted MCP requests, workflow pause and resume that skipped the failed stage, uncapped `CLAUDE.md`/`AGENTS.md` and `@imports`, Edit and Write that read huge files whole and truncated files in place, file tools that hung on a FIFO, mid-session path rules that never reached the agent, a status bar and session tab strip wider than the terminal, recovered tool-call markup left in the reply and sent twice, MiniMax parameters turned into arrays, malformed tool arguments that ran the tool with `[]`, a `claude-code` provider that could not stream, menu commands that erased the draft, background sessions nothing could stop and IPC directories left in `/tmp`, a symlinked `config.json` replaced on the first write, glob metacharacters in the checkout path that hid every repo memory note, a Claude memory import that imported nothing, repo memory framed as the user's own notes, and WebFetch results that were 32× the Bash cap or reported error pages as success. Waves 2 to 6 found 23 more, smaller defects while fixing these. About 61 remain, including:
+11. **The code audit found about 136 new defects** (Part IX). 116 of them, including the one Critical and all 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes, unfenced repo skill descriptions, Esc Esc tool placeholders that never healed, raw CR and C1 controls reaching the terminal, a turn kill that left its commands running, streamed tool calls dropped on `stop`, built-in skills that told every project to `git clean -fd`, the full-history markdown re-render on every frame, `error_log()` output painted over the TUI, env-block git calls that honoured the user's git config and took `index.lock`, PostToolUse blocks that did nothing, hook input that defeated grep-style deny hooks, a hostile `.gitignore` that stalled Glob for minutes, prompt hooks and custom-command shell blocks that froze the TUI inside `update()`, forks that carried no conversation, the multi-second `/branch` freeze, Vertex quota errors that were never retried, `claude-mcp` calls that gave up after one second, a stray stdout line that aborted MCP requests, workflow pause and resume that skipped the failed stage, uncapped `CLAUDE.md`/`AGENTS.md` and `@imports`, Edit and Write that read huge files whole and truncated files in place, file tools that hung on a FIFO, mid-session path rules that never reached the agent, a status bar and session tab strip wider than the terminal, recovered tool-call markup left in the reply and sent twice, MiniMax parameters turned into arrays, malformed tool arguments that ran the tool with `[]`, a `claude-code` provider that could not stream, menu commands that erased the draft, background sessions nothing could stop and IPC directories left in `/tmp`, a symlinked `config.json` replaced on the first write, glob metacharacters in the checkout path that hid every repo memory note, a Claude memory import that imported nothing, repo memory framed as the user's own notes, WebFetch results that were 32× the Bash cap or reported error pages as success, tool output that could forge a "refused by policy" verdict, a Task grant memo and a Chat "Always" grant that silenced user-hook asks, an accept-edits mode that allowed `rm` but asked for Edit, WebFetch counted as read-only, provider API keys in the Bash and hook environment, cancelled sub-agent workers whose commands kept running, a cleartext default search endpoint, forged image markers that repainted images and blanked Nerd Font glyphs, OAuth logins that failed on path-bearing MCP URLs or lost another process's tokens, a single malformed agent preset that hid every preset, `/tmp` names one user could block for everyone, a sub-agent map that never shrank, and the SGLang `max_tokens: 4096` default. Waves 2 to 6 found 23 more, smaller defects while fixing these; 10 of them are fixed too (a `Width::wrap()` hang, bidi overrides and lone C1 bytes on screen, an empty permission-modal value, uncapped skill file reads, stale docs among them), and waves 7 and 8A found 3 more. About 36 remain, including:
     - **UI-only rows are now off the wire, but the compaction summary still reads them.**
     - **Sub-agent spend now reaches the parent and the spend cap, but parallel sibling Tasks cannot see each other's spend**, and the user's `modelPrices` setting never reaches Vertex or Bedrock.
     - **Two TUIs on one session still overwrite each other's transcript** (the writer lock is a deferred decision).
-    - **Permission gaps remain:** WebFetch counts as read-only, Bash inherits provider API keys, and path deny rules still miss respellings outside the main tool loop.
+    - **Permission gaps remain:** path deny rules still miss respellings outside the main tool loop, and the TUI engine path still refuses every Ask (Part II #1), which since wave 8A includes WebFetch under `default` and `plan` and every MCP call under `auto`.
+    - **Skill shadowing is fixed except for the launch notice**, whose wording still counts a shadowed skill as an unreadable file (15d-03).
 
-    About two thirds are reproduced with scripts. No High item remains; finish the two Medium-High items, both partly fixed, next (IX.3, IX.4).
+    About two thirds are reproduced with scripts. No High item remains; finish the one Medium-High item, 15b-03 (partly fixed), next (IX.3, IX.4).
 
 12. **The features you asked for are designed and slotted into the roadmap** (Part VIII):
     - a schema-driven settings editor, built entirely from SugarCraft libraries already in the dependency tree;
@@ -198,7 +199,7 @@ Severity reflects user impact on the live default path.
 | 32 | Low-Med | `/model` switches provider, not model, and appears to drop the Task tool and rule toggles *(inferred)* | `Chat.php:14106-14146`; `Bootstrap.php:6748` | baseline |
 | 33 | Low | The session-affinity header is dormant, so multi-replica SGLang routers lose radix locality | `SessionAffinity` trait | 02 12 |
 | 34 | Low | No Unicode-tag (U+E0000–E007F) stripping in prompt fences; MCP stdio env not filtered (`LD_PRELOAD`, `NODE_OPTIONS`) | `PromptFence::escape` `:174`; `McpClient::resolveEnv` `:608-621` | 08 |
-| 35 | Low | `/share` always fails (stub uploader); WebSearch defaults to a private host; the LSP tool is registered with a null client | baseline §11 | baseline 02 08 |
+| 35 | Low | `/share` always fails (stub uploader); WebSearch has no default endpoint since F-W3 (b) (`adbb3df16`) and errors until `SUGARCRUSH_SEARCH_ENDPOINT` is set; the LSP tool is registered with a null client | baseline §11 | baseline 02 08 |
 | 36 | Low | No snapshot or drift test of the assembled system prompt, even though section order matters for caching | — | 11 |
 | 37 | Low | Silently ignored configuration everywhere (dormant frontmatter keys); dsh's rule is "fail loud" | baseline §11.2 | 12 |
 
@@ -617,7 +618,7 @@ Three design agents covered them. **Appendix N** is the settings report, **Appen
 **Behaviour that should become settings.**
 
 The report lists **about 45 hard-coded constants**, each with file:line and a proposed key, type, default and tier. The main ones:
-- `maxToolSteps` (8);
+- `maxToolSteps` (8 at the time; 1000 by default since wave 8A, `28f223839`);
 - the 120 s idle watchdog, as `turnIdleTimeoutSeconds`;
 - the compaction thresholds 70/85/95 and keep-10;
 - the 64 KiB and 1 MiB output caps;
@@ -808,17 +809,17 @@ Five agents audited sugar-crush's own source for **new** defects, one per area. 
 
 **Totals at audit time: about 136 findings** — 1 Critical, 20 High, about 47 Medium, and the rest Low-Medium, Low or Info.
 
-**Since the audit, 102 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 98 of the original findings, plus the 4 new items found while fixing them in wave 1. Waves 2 to 6 found 23 more while fixing their items (10 in wave 2, 5 in wave 3, 3 in wave 4, 3 in wave 5, 2 in wave 6); they are open. **About 61 findings remain** — 0 Critical, 0 High, 2 Medium-High (15b-03 and F-E2, both partly fixed), about 16 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
+**Since the audit, 130 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 116 of the original findings, the 4 new items found while fixing them in wave 1, and 10 of the 23 items waves 2 to 6 found while fixing theirs (10 in wave 2, 5 in wave 3, 3 in wave 4, 3 in wave 5, 2 in wave 6). Waves 7 and 8A found 3 more (MCP-10, A26, F-D1); they are open. **About 36 findings remain** — 0 Critical, 0 High, 1 Medium-High (15b-03, partly fixed), about 11 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
 
 At audit time, about two thirds were **reproduced with a script**; the rest are verified by reading, and a few are marked *suspected*. Full write-ups are in Appendices Q–U; each finding has code excerpt, failure scenario, fix and a test that would catch it.
 
 | Appendix | Area | Findings | Critical / High |
 |---|---|---|---|
 | **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 11 | 0 / 0 |
-| **R** (15b) | Chat state machine, TUI, rendering, commands | 16 | 0 / 0 |
-| **S** (15c) | Tools, permissions, hooks (security) | 13 | 0 / 0 |
-| **T** (15d) | Context assembly, memory, skills, config | 8 | 0 / 0 |
-| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 13 | 0 / 0 |
+| **R** (15b) | Chat state machine, TUI, rendering, commands | 11 | 0 / 0 |
+| **S** (15c) | Tools, permissions, hooks (security) | 3 | 0 / 0 |
+| **T** (15d) | Context assembly, memory, skills, config | 4 | 0 / 0 |
+| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 7 | 0 / 0 |
 
 Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
 
@@ -830,44 +831,38 @@ Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
   - Sub-agent **preset grants** still match by name (`AgentManager::resolveGrantedTools`).
   - The new matcher's remaining real gap is F-J3, now partly fixed (`3b7d2fd33`): on the main tool loop, path rules also match the root-anchored, resolved and symlinked spellings, but sub-agent gates, Chat's own gate calls and declaration checks get no root and still match lexically. F-P5 (`$(…)`, backticks and redirects slipping past allow rules) was fixed in `c8fc573a5`.
 - **Two documentation statements were stale:** "rule `paths:` scoping not applied" (it is) and "only two keys re-applied per turn" (`maxOutputTokens` is too). Both are now corrected and pinned by `DocFigureProseDriftTest` (`232013284`).
-- **The image-marker / mouse-zone collision from project memory is already fixed** (Appendix P). Agent-supplied text must still be PUA-stripped (15b-17).
+- **The image-marker / mouse-zone collision from project memory is already fixed** (Appendix P). Since 15b-17's fix (`b38bf8403`, wave 7) an image marker is an authenticating escape plus its cell, so a bare Private-Use codepoint in agent text is inert and no longer needs stripping.
 - **Workerman is not used anywhere in the monorepo** (Appendix O §3).
 
 ## IX.2 Cross-cutting defect themes
 
 Several audits found the same root cause in different places. Fixing each theme once fixes them all.
 
-1. **Killing a turn does not kill all of its commands (residue).** Turn teardown and the parallel deadline now kill the whole process tree (`ProcessContainment::killTree()`, `c54372b2a`), so the `setsid`'d `bash` and parallel Task sub-agents die with the turn.
-   - The remaining kill sites still signal one pid: the dormant Chat site, `AgentWorkerPool`'s cancel path and `EngineExecutor` (F-E2, partly fixed). The pool's new per-agent deadline kill (WF-1 (a), `4fa805970`) already uses `killTree()`.
-   - **Fix:** route them through `killTree()` too.
-2. **Terminal-injection and rendering hygiene.** CR, UTF-8 C1 controls, the permission modal's byte wrap and `error_log()` output over the frame are fixed (`Sanitize::untrustedForDisplay()`, the C1 sweep, `Sanitize::visibleControls()`, and `TuiErrorLog`, which sends the TUI's `error_log` to `~/.sugar-crush/logs/sugarcrush.log`), and the status bar, frame and session tab strip are now clipped to the terminal width, with tab names sanitized. What remains:
-   - A forged image marker repaints images (15b-17).
-   - Bidi overrides and zero-width characters pass every sanitizer (15b-28); candy-shine keeps lone raw C1 bytes (15b-29).
-   - candy-core `Width::wrap()` hangs when a 2-cell cluster meets a 1-column budget (15b-26).
-   - **Fix:** extend the display policies to bidi and zero-width codepoints and PUA, enforce them at every render site (golden width tests), and make `Width::wrap()` always consume a cluster. The notice sink's clip and overflow strings still send the user to stderr for the full text, which in the TUI is now the log file (C4).
-3. **Repo-controlled content reaches the prompt without fencing or caps.**
-   - A repo's skills shadow the user's own (15d-03; every shadowing is now reported, the precedence decision is open).
-   - Instruction documents, `@imports` and enabled skill bodies now have byte budgets, but `SkillLoader` still reads skill files with no size limit (15d-27).
+1. **Killing a turn did not kill all of its commands (fixed).** Turn teardown and the parallel deadline kill the whole process tree (`ProcessContainment::killTree()`, `c54372b2a`), and since waves 7 and 8A so do the dormant Chat site (`83a92e36d`) and `AgentWorkerPool`'s cancel path (`2b136d35a`); `EngineExecutor` runs inside the pool's fork, so the pool's tree kill covers it (F-E2). `BackgroundSessionRunner` still kills without `killTree()`, and `killTree()` blocks the event loop for about 110 ms.
+2. **Terminal-injection and rendering hygiene (mostly fixed).** CR, UTF-8 C1 controls, the permission modal's byte wrap and `error_log()` output over the frame are fixed (`Sanitize::untrustedForDisplay()`, the C1 sweep, `Sanitize::visibleControls()`, and `TuiErrorLog`, which sends the TUI's `error_log` to `~/.sugar-crush/logs/sugarcrush.log`), and the status bar, frame and session tab strip are clipped to the terminal width, with tab names sanitized. Waves 7 and 8A closed the rest: forged image markers (15b-17), bidi overrides and zero-width characters (15b-28, marked visibly by `Sanitize::markInvisibleFormatting()`), lone raw C1 bytes in candy-shine (15b-29), the `Width::wrap()` hang (15b-26), and the permission prompts' invalid-UTF-8 and control-character arguments (15b-27, R17). What remains:
+   - The notice sink's clip and overflow strings still send the user to stderr for the full text, which in the TUI is now the log file (C4).
+   - Stale prose still describes the image marker as one codepoint (15b-32).
+3. **Repo-controlled content reaches the prompt without fencing or caps (mostly fixed).**
+   - A repo's skills no longer shadow the user's own: precedence is built-in < project < user and every shadowing is reported (15d-03 (b), `9e69d6c9e`); only the launch notice's wording remains.
+   - Instruction documents, `@imports` and enabled skill bodies have byte budgets, and since wave 8A every skill file read is bounded too (15d-27, `9e69d6c9e`).
 4. **Prompt assembly read the user's git config and the filesystem nondeterministically (mostly fixed).** The env block's git calls now run with `--no-optional-locks -c color.ui=false`, diff through plumbing with `--no-ext-diff`, never write the index, and are bounded at 2 s each; a subdirectory launch reports the repo root and its git state; rule and repo-map walks sort before capping (15d-12, 15d-14, 15d-13 (a), 15d-17).
    - What remains: `.sugar-crush/*` lookups still resolve at the launch subdirectory, not the repo root (15d-13 (b), a deferred decision).
    - The env block is still re-rendered inside the system message, which hurts cache stability (Part I #2, Part II #2).
 5. **Errors are swallowed and turns "succeed" (fixed).** The last open case, malformed tool-call arguments that ran the tool with `[]`, now gets an error result and the tool does not run (`16b9d6750`).
-6. **The permission layer has holes in the default and stricter modes.**
-   - Accept-edits mode allows `rm`, `mv` and `cp` (F-P4).
-   - WebFetch counts as read-only, so it can exfiltrate data unprompted (F-P6).
-   - Bash and hooks inherit provider API keys (F-E1).
+6. **The permission layer had holes in the default and stricter modes (mostly fixed).** Accept-edits now grants in-root Edit and Write and asks for `rm`, `mv` and `cp` (F-P4); WebFetch left the read-only class and gained `WebFetch(domain:…)` rules (F-P6); `auto` classifies Write, Edit, WebFetch and `mcp__*` (F-P3 (b)); Bash, Grep and hooks get a scrubbed environment (F-E1); refusals are carried structurally, so tool output cannot forge one (F-P8); and hook asks are no longer silenced by the Task memo or a Chat "Always" grant (F-P7, F-P9). What remains:
+   - Path deny rules still miss respellings where no root is passed (F-J3, partly fixed).
+   - The TUI engine path refuses every Ask (Part II #1), so the new asks are effectively refusals there.
+   - `docs/PERMISSIONS.md`'s introduction still says rules match tool names only (F-D1).
 7. **Unbounded or stalled work inside `update()`.**
    - A long streaming reply whose headings follow a closing code fence still re-renders whole on every frame, because candy-shine's `SectionScanner` finds no boundary there (15b-31, the residual of the fixed 15b-10).
    - Transcript persistence still runs synchronously inside `update()`, though each save is now one transaction and `/branch` no longer re-interns the history (a residual, noted in Appendix R's **Fixed since audit** list).
-   - `AgentManager` never forgets sub-agents (AG-3).
 8. **Sessions and persistence integrity.**
     - No writer lock: two TUIs on one session still overwrite each other's transcript. The checkpoint-index and blob-intern races are closed (SES-3, partly fixed; the lock and second-TUI behaviour are a deferred decision).
     - A `/fork` now copies the whole conversation, but the background daemon does not load it (Part II #30).
     - UI-only command output and notices are kept off the wire by `Message::$uiOnly`, but the compaction summary still reads them, and notices still interleave between a prompt and its answer (15b-03, partly fixed; relates to Part II #2 and the DCP `uiOnly` proposal).
 9. **MCP: remaining interoperability and trust gaps.**
-    - `docs/MCP.md` still describes an unknown server `type` as making startup ordering-dependent (DOC-2).
-    - OAuth discovery and storage bugs (MCP-6/7/8).
     - Trust is bound to the project path, not to `.mcp.json`'s content (MCP-5).
+    - Dynamic client registration sends its metadata in a `client_metadata` envelope rather than at the top level (MCP-10). The OAuth discovery, storage and expiry bugs (MCP-6/7/8) and the stale MCP.md ordering claim (DOC-2) were fixed in wave 7.
 10. **Cost accounting holes.**
     - Task sub-agent spend now reaches the parent, the session total and the cap, but parallel sibling Tasks cannot see each other's spend (overshoot up to one step), a crashed tool child reports none, and Chat's calibration fallback is inflated by sub-agent tokens (B4, partly fixed).
     - Vertex and Bedrock now have list-price tables and flag unknown models unpriced, but `ProviderFactory` never hands them the user's `modelPrices`, cache tokens are unpriced there, and the default Bedrock config still sends a bare model id (A15, A20, both partly fixed).
@@ -878,25 +873,21 @@ Several audits found the same root cause in different places. Fixing each theme 
 
 ## IX.3 Critical and High findings: fix first
 
-The Critical item and all 20 High items are fixed on master, as is the latent High in the sub-agent path that was found while fixing them. No Critical or High finding remains. The two Medium-High items, both partly fixed, come next:
+The Critical item and all 20 High items are fixed on master, as is the latent High in the sub-agent path that was found while fixing them. No Critical or High finding remains. Of the two Medium-High items, F-E2 was fixed in waves 7 and 8A; the other, partly fixed, comes next:
 
 | ID | Area | Finding | Repro |
 |---|---|---|---|
 | 15b-03 | Chat | Command output and notices went to the model as real turns. Partly fixed (`2a3a8f91c`: `Message::$uiOnly`, filtered at every wire encoder); remaining: compaction input, notice order | ✔ |
-| F-E2 | Tools | Kill sites that signal one pid. Partly fixed (`c54372b2a`); remaining: dormant Chat site, `AgentWorkerPool`, `EngineExecutor` | ✔ |
 
 ## IX.4 Where the audit fixes slot into the roadmap
 
 - **Before Wave 0, as an "audit hotfix" wave (mostly S):** this wave has landed on master in full (see the **Fixed since audit** list at the end of each of Appendices Q–U).
 - **With Wave 0:**
-  - the remaining process-tree kill sites (theme 1, F-E2);
   - cost accounting (theme 10);
+  - retarget `SglangProvider::DEFAULT_MODEL` at the model skynet2 serves (A26, wave 8B provider-config);
+  - the docs-only items F-D1 (PERMISSIONS.md introduction) and MCP-10 (the registration body);
   - route Chat's Ctrl+A `/agents` arm through `Chat::runCommand()`, as the menu commands now are, so it stops wiping an idle draft (15b-34).
-- **Before Wave 1.C ships:**
-  - fix the permission modal's empty value for an invalid-UTF-8 argument (15b-27), and bidi overrides in the text it shows (15b-28);
-  - port the PostToolUse withhold and the hook-input encoding fixes (F-H1, F-H3, both fixed on the live Runtime path) to their dormant Chat-path mirrors, `Chat::applyPostToolUse()` and the bare `json_encode` calls.
-
-  The approval UI will otherwise display or route untrusted text wrongly.
+- **Before Wave 1.C ships:** nothing remains. The permission modal's empty value for an invalid-UTF-8 argument (15b-27), bidi overrides in the text it shows (15b-28), and the dormant Chat-path mirrors of the F-H1 and F-H3 fixes were all fixed in waves 7 and 8A.
 - **With Wave 1.B:**
   - the rest of 15b-03 (the compaction input and notice order; the `uiOnly` flag itself has landed);
   - stable unique ids.
