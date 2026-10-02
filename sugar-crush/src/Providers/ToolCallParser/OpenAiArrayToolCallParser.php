@@ -70,6 +70,11 @@ final readonly class OpenAiArrayToolCallParser implements ToolCallParserInterfac
                 'id' => (string) ($tc['id'] ?? ''),
                 'name' => $name,
                 'arguments' => $this->decodeArguments($tc['function']['arguments'] ?? '', $name),
+                // Audit A11: classified independently of the injected decoder,
+                // whose contract returns arguments only, so a payload that
+                // decoded to `[]` because it was broken is refused by Runtime
+                // rather than run - with or without a decoder injected.
+                'argumentsError' => ToolCall::argumentsErrorFor($tc['function']['arguments'] ?? null),
             ]);
         }
 

@@ -686,8 +686,12 @@ final readonly class CustomProvider implements ProviderInterface
                     'id' => $tc['id'],
                     'name' => $tc['function']['name'],
                     'arguments' => is_string($tc['function']['arguments'] ?? '')
-                        ? json_decode($tc['function']['arguments'], true) ?? []
+                        ? (is_array($decoded = json_decode($tc['function']['arguments'], true)) ? $decoded : [])
                         : ($tc['function']['arguments'] ?? []),
+                    // Audit A11: an undecodable payload still yields `[]`
+                    // arguments, but the call now says so, and Runtime answers
+                    // the model with the JSON error instead of running the tool.
+                    'argumentsError' => ToolCall::argumentsErrorFor($tc['function']['arguments'] ?? null),
                 ]),
                 $message['tool_calls']
             );
@@ -869,7 +873,11 @@ final readonly class CustomProvider implements ProviderInterface
             fn (array $tc): ToolCall => ToolCall::fromArray([
                 'id' => $tc['id'] ?? '',
                 'name' => $tc['name'] ?? '',
-                'arguments' => json_decode($tc['arguments'] ?? '{}', true) ?? [],
+                'arguments' => is_array($decoded = json_decode($tc['arguments'] ?? '{}', true)) ? $decoded : [],
+                // Audit A11: the server declared this call complete, so it is
+                // emitted - but a payload that did not decode is carried as an
+                // error for Runtime to report, never run as `[]`.
+                'argumentsError' => ToolCall::argumentsErrorFor($tc['arguments'] ?? null),
             ]),
             $toolCallBuffer
         );

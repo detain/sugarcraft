@@ -1877,6 +1877,11 @@ final class Runtime
             return $this->failure($toolCall, "Tool not found: {$toolCall->name()}", $onEvent);
         }
 
+        $malformed = self::malformedArguments($toolCall);
+        if ($malformed !== null) {
+            return $this->failure($toolCall, $malformed, $onEvent);
+        }
+
         $context = $this->hookContext($toolCall, $tool, $app);
         if (is_string($context)) {
             return $this->failure($toolCall, $context, $onEvent);
@@ -1995,6 +2000,26 @@ final class Runtime
                     'context' => null,
                     'args' => [],
                     'denied' => "Tool not found: {$toolCall->name()}",
+                    'preContext' => '',
+                    'pid' => null,
+                    'file' => null,
+                    'result' => null,
+                    'settled' => true,
+                ];
+
+                continue;
+            }
+
+            // Audit A11: the sequential path's malformed-arguments refusal,
+            // in the not-found job's shape - settled, never gated or forked.
+            $malformed = self::malformedArguments($toolCall);
+            if ($malformed !== null) {
+                $jobs[] = [
+                    'call' => $toolCall,
+                    'tool' => $tool,
+                    'context' => null,
+                    'args' => [],
+                    'denied' => $malformed,
                     'preContext' => '',
                     'pid' => null,
                     'file' => null,
@@ -3117,8 +3142,40 @@ final class Runtime
     }
 
     /**
+     * Audit A11: the model-facing refusal for a call whose wire arguments the
+     * provider could not decode ({@see ToolCall::argumentsError()}), or null
+     * when the call is runnable.
+     *
+     * Such a call carries `[]` only to stay well-typed. Running it would hand
+     * the model a tool's "missing parameter" error for a problem that was
+     * never the parameters' - and invite the same broken call again - so it
+     * terminates like "Tool not found": no hook chain (there is no argument
+     * map for a PreToolUse hook to judge), no tool, one error result that
+     * names the JSON problem.
+     *
+     * What the NEXT request replays for this assistant call is `{}` (the
+     * provider's formatToolCalls() re-encodes `arguments()`), beside this
+     * error result. That is deliberate: re-sending the broken string could
+     * make the server reject the whole request, and the error text already
+     * quotes an excerpt of what the model sent.
+     */
+    private static function malformedArguments(ToolCall $toolCall): ?string
+    {
+        $error = $toolCall->argumentsError();
+        if ($error === null) {
+            return null;
+        }
+
+        // Worded as an ordinary tool error, not a refusal: no permission said
+        // no, and DenialKind's roster (and the struck-through refusal
+        // rendering) must not claim one did.
+        return "The tool was not run because its {$error}. "
+            . 'Send the call again with its arguments as one complete JSON object.';
+    }
+
+    /**
      * Terminate one tool call that never reached (or never survived) the tool
-     * itself — an unknown name, or a pre-hook DENY.
+     * itself — an unknown name, undecodable arguments, or a pre-hook DENY.
      *
      * The synthetic error {@see ToolResult} exists so {@see ToolFinished}
      * always carries a result: a consumer rendering the running→done

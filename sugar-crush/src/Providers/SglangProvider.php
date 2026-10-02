@@ -53,6 +53,16 @@ final readonly class SglangProvider implements ProviderInterface
     private const WARNING_EXCERPT_LIMIT = 240;
 
     /**
+     * Audit A11: the fate clause for a call whose arguments did not decode on
+     * a declared-complete end. The call is still emitted, carrying
+     * {@see \SugarCraft\Crush\Tools\ToolCall::argumentsError()}, and Runtime
+     * answers it with that error without running the tool - so the warning
+     * must not say the call runs with no arguments, which it no longer does.
+     */
+    private const REFUSED_FATE = 'the call is NOT executed - the model is sent the JSON error '
+        . 'as the tool result instead, so it can resend the call';
+
+    /**
      * Upper bound on how many tool-call ids {@see $truncationRiskWarned}
      * remembers. See {@see flagTruncationRiskInLatestToolResults()} for why
      * the set is bounded and why forgetting the oldest id is harmless.
@@ -2271,6 +2281,11 @@ final readonly class SglangProvider implements ProviderInterface
                     $tc['arguments'] ?? '',
                     (string) ($tc['name'] ?? ''),
                 ),
+                // Audit A11: a `tool_calls` finish declares the call complete,
+                // so it is still emitted - but undecodable arguments ride on
+                // it as an error, and Runtime answers the model with that
+                // instead of running the tool with the `[]` above.
+                'argumentsError' => ToolCall::argumentsErrorFor($tc['arguments'] ?? null),
             ]),
             $toolCallBuffer
         );
@@ -2447,15 +2462,16 @@ final readonly class SglangProvider implements ProviderInterface
      * parsers' class doc-blocks state: a notice goes to
      * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} if and
      * only if the emitter did not produce what the caller asked for. It did
-     * not. The model supplied an `arguments` payload and the call is about to
-     * run with NONE — `read()` with no `path`, `write()` with no `content` —
-     * which is the unrecoverable shape
+     * not. The model supplied an `arguments` payload this method cannot turn
+     * into one - `read()` with no `path`, `write()` with no `content` - which
+     * is the unrecoverable shape
      * {@see \SugarCraft\Crush\Providers\ToolCallParser\DsmlToolCallParser}
-     * refuses outright rather than fire. This class cannot refuse it (the
-     * decode result is fixed by W1.A4 and the turn stays alive), so the seam
-     * is the only place the user and the model learn that the call they are
-     * about to see the result of is not the call that was requested. The model
-     * reading the row on the next turn is the point: it can retry.
+     * refuses outright rather than fire. The decode result is still `[]`
+     * (W1.A4 keeps the turn alive), but since audit A11 the call no longer
+     * RUNS with it: every caller also stamps
+     * {@see \SugarCraft\Crush\Tools\ToolCall::argumentsErrorFor()} onto the
+     * call, and Runtime returns that error to the model as the tool result.
+     * The seam row is the user's half of the same story.
      *
      * THE ZERO-ARGUMENT CASE ABOVE IS DELIBERATELY NOT ON THE SEAM. An absent
      * or blank payload is how a genuine zero-argument call arrives, so there is
@@ -2490,16 +2506,17 @@ final readonly class SglangProvider implements ProviderInterface
             // is about to run with no arguments at all.
             RuntimeNoticeSink::warn(sprintf(
                 'SglangProvider: tool call "%s" arguments decoded to %s, not an object; '
-                . 'defaulting to no arguments. Raw payload: %s',
+                . '%s. Raw payload: %s',
                 $toolName,
                 get_debug_type($decoded),
+                $decoded === null ? 'defaulting to no arguments' : self::REFUSED_FATE,
                 self::excerpt($raw),
             ));
 
             return [];
         }
 
-        RuntimeNoticeSink::warn(self::malformedArgumentsWarning($toolName, $raw));
+        RuntimeNoticeSink::warn(self::malformedArgumentsWarning($toolName, $raw, self::REFUSED_FATE));
 
         return [];
     }
@@ -2526,14 +2543,15 @@ final readonly class SglangProvider implements ProviderInterface
      * other cause and naming MiniMax as fact would send the reader to the
      * wrong server.
      *
-     * §Q7 adds the optional $fate clause, and the default keeps EVERY
-     * existing call site byte-identical: it replaces only the final "what
-     * happens to the call" sentence, per branch. The flush passes a
-     * "dropped, not executed" fate because that is what §Q7 does with an
-     * incomplete payload; the W1.A4 degrade-to-no-arguments callers keep
-     * their original wording without repeating it here.
+     * §Q7 added the $fate clause: it replaces only the final "what happens
+     * to the call" sentence, per branch. The flush passes a "dropped, not
+     * executed" fate because that is what §Q7 does with an incomplete
+     * payload. Audit A11 made it required: the W1.A4 default ("defaulting to
+     * no arguments") stopped being true once a declared-complete call with
+     * broken arguments became an error result instead of a `[]` run, so
+     * {@see decodeToolArguments()} now passes {@see REFUSED_FATE}.
      */
-    private static function malformedArgumentsWarning(string $toolName, string $raw, ?string $fate = null): string
+    private static function malformedArgumentsWarning(string $toolName, string $raw, string $fate): string
     {
         $trimmed = rtrim($raw);
         $structurallyClosed = str_ends_with($trimmed, '}') || str_ends_with($trimmed, ']');
@@ -2543,7 +2561,7 @@ final readonly class SglangProvider implements ProviderInterface
                 'SglangProvider: tool call "%s" arguments are not valid JSON (%s); %s. Raw payload: %s',
                 $toolName,
                 json_last_error_msg(),
-                $fate ?? 'defaulting to no arguments',
+                $fate,
                 self::excerpt($raw),
             );
         }
@@ -2561,7 +2579,7 @@ final readonly class SglangProvider implements ProviderInterface
                 ? sprintf(', and contain the literal "%s"', self::XML_PARAM_CLOSE_TAG)
                 : '',
             self::XML_PARAM_CLOSE_TAG,
-            $fate ?? 'the call is being executed with no arguments',
+            $fate,
             self::excerpt($raw),
         );
     }

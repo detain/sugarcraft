@@ -191,4 +191,118 @@ final class ToolCallTest extends TestCase
         $originalArgs['file_path'] = '/modified';
         $this->assertSame('/test', $toolCall->arguments()['file_path']);
     }
+
+    // =========================================================================
+    // argumentsError (audit A11)
+    // =========================================================================
+
+    public function testAWellFormedCallCarriesNoArgumentsError(): void
+    {
+        $this->assertNull((new ToolCall('c', 'Read', ['path' => 'a']))->argumentsError());
+        $this->assertNull(ToolCall::fromArray(['id' => 'c', 'name' => 'Read'])->argumentsError());
+    }
+
+    public function testWithArgumentsErrorReturnsANewInstanceAndLeavesTheOriginal(): void
+    {
+        $original = new ToolCall('c', 'Read', []);
+        $marked = $original->withArgumentsError('arguments were not valid JSON (Syntax error): {');
+
+        $this->assertNotSame($original, $marked);
+        $this->assertNull($original->argumentsError());
+        $this->assertSame('arguments were not valid JSON (Syntax error): {', $marked->argumentsError());
+        $this->assertSame('c', $marked->id());
+        $this->assertSame('Read', $marked->name());
+        $this->assertNull($marked->withArgumentsError(null)->argumentsError());
+    }
+
+    public function testToArrayFromArrayRoundTripKeepsTheArgumentsError(): void
+    {
+        $marked = (new ToolCall('c', 'Read', []))->withArgumentsError('arguments were not valid JSON (Syntax error): {"path": "a');
+
+        $array = $marked->toArray();
+        $this->assertSame('arguments were not valid JSON (Syntax error): {"path": "a', $array['argumentsError']);
+
+        $restored = ToolCall::fromArray($array);
+        $this->assertSame($marked->argumentsError(), $restored->argumentsError());
+        $this->assertSame($array, $restored->toArray());
+    }
+
+    public function testFromArrayIgnoresANonStringArgumentsError(): void
+    {
+        $this->assertNull(ToolCall::fromArray(['id' => 'c', 'name' => 'Read', 'argumentsError' => ['x']])->argumentsError());
+    }
+
+    /**
+     * serialize() is the transcript format of
+     * {@see \SugarCraft\Crush\Agents\SuspendedDelegations}, the one place a
+     * ToolCall object crosses a process boundary whole.
+     */
+    public function testSerializeRoundTripKeepsTheArgumentsError(): void
+    {
+        $marked = (new ToolCall('c', 'Read', []))->withArgumentsError('arguments decoded to int, not a JSON object: 12');
+
+        $restored = unserialize(serialize($marked), ['allowed_classes' => [ToolCall::class]]);
+
+        $this->assertInstanceOf(ToolCall::class, $restored);
+        $this->assertSame('arguments decoded to int, not a JSON object: 12', $restored->argumentsError());
+    }
+
+    public function testACallSerializedBeforeTheFieldExistedReadsAsNoError(): void
+    {
+        // The pre-A11 three-property shape, as a suspended transcript on disk holds it.
+        $legacy = sprintf(
+            'O:%d:"%s":3:{s:%d:"%s";s:1:"c";s:%d:"%s";s:4:"Read";s:%d:"%s";a:0:{}}',
+            strlen(ToolCall::class),
+            ToolCall::class,
+            strlen("\0" . ToolCall::class . "\0id"),
+            "\0" . ToolCall::class . "\0id",
+            strlen("\0" . ToolCall::class . "\0name"),
+            "\0" . ToolCall::class . "\0name",
+            strlen("\0" . ToolCall::class . "\0arguments"),
+            "\0" . ToolCall::class . "\0arguments",
+        );
+
+        $restored = unserialize($legacy, ['allowed_classes' => [ToolCall::class]]);
+
+        $this->assertInstanceOf(ToolCall::class, $restored);
+        $this->assertSame('Read', $restored->name());
+        $this->assertNull($restored->argumentsError());
+    }
+
+    /**
+     * @return array<string, array{mixed, ?string}>
+     */
+    public static function rawArgumentPayloads(): array
+    {
+        return [
+            'decoded array' => [['path' => 'a'], null],
+            'absent' => [null, null],
+            'blank string' => ['  ', null],
+            'json object' => ['{"path":"a"}', null],
+            'empty object' => ['{}', null],
+            'json null' => ['null', null],
+            'truncated object' => ['{"path": "a', 'arguments were not valid JSON (Control character error, possibly incorrectly encoded): {"path": "a'],
+            'closed but invalid' => ['{"path": }', 'arguments were not valid JSON (Syntax error): {"path": }'],
+            'json scalar' => ['12', 'arguments decoded to int, not a JSON object: 12'],
+            'json string' => ['"text"', 'arguments decoded to string, not a JSON object: "text"'],
+            'non-string wire value' => [7, 'arguments were int, not a JSON object'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('rawArgumentPayloads')]
+    public function testArgumentsErrorForClassifiesTheWirePayload(mixed $raw, ?string $expected): void
+    {
+        $this->assertSame($expected, ToolCall::argumentsErrorFor($raw));
+    }
+
+    public function testArgumentsErrorForBoundsTheQuotedExcerptWithoutSplittingUtf8(): void
+    {
+        $raw = '{"content": "' . str_repeat('é', 400);
+
+        $error = (string) ToolCall::argumentsErrorFor($raw);
+
+        $this->assertStringEndsWith(' [...]', $error);
+        $this->assertLessThan(300, strlen($error));
+        $this->assertTrue(mb_check_encoding($error, 'UTF-8'));
+    }
 }
