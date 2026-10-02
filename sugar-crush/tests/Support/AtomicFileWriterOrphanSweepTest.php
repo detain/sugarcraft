@@ -150,14 +150,16 @@ final class AtomicFileWriterOrphanSweepTest extends TestCase
         file_put_contents($target, 'old');
         $orphan = $this->plant('.f.txt.tmp.0123456789abcdef', AtomicFileWriter::ORPHAN_TEMP_MIN_AGE_SECONDS + 60);
 
+        $caught = null;
         try {
             AtomicFileWriter::replace($target, 'new', static function ($handle, string $contents): void {
                 throw new \RuntimeException('disk full');
             });
-            self::fail('the failing writer seam must surface');
         } catch (\RuntimeException $e) {
-            self::assertSame('disk full', $e->getMessage());
+            $caught = $e;
         }
+        self::assertNotNull($caught, 'the failing writer seam must surface');
+        self::assertSame('disk full', $caught->getMessage());
 
         clearstatcache();
         self::assertFileExists($orphan);

@@ -626,6 +626,8 @@ final class TreeWideGuardRosterTest extends TestCase
         'Support/FixtureLifetimeCensusTest.php' => ['RecursiveDirectoryIterator($root)', "glob(\$dir.'/*.php')"],
         'Tools/PtyShimAutoloadResolutionTest.php' => ['RecursiveDirectoryIterator($path,\FilesystemIterator::SKIP_DOTS)'],
         'Workflows/WorkflowRegistryTest.php' => ['scandir($dir)'],
+        // tearDown() removes the sys_get_temp_dir() HOME sandbox setUp() made.
+        'Workflows/WorkflowRetriesTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
     ];
 
     /**

@@ -2578,6 +2578,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      */
     private const ACCEPTED_CONST_DUPLICATION = [
         'BOUND_SECONDS' => 'The shutdown family pins one bound value across several suites; the single-copy bounds other suites wait are the drift polity.',
+        'DEEPSEEK_V4' => 'The SGLang suites that pin DeepSeek-V4 behaviour (DSML hold-back, server limits, the truncation guard and its warning rate limit) name the same deployment id, spelled out since audit A26 moved SglangProvider::DEFAULT_MODEL to Qwen3.8; it is a request label those suites send, and the served-model suite names its own V4.5 id under a different constant.',
         'DSML' => 'The suites that parse the DSML delimiter feed the same string to their fixtures.',
         'FIXTURE_LIFETIME_SECONDS' => 'The frame-cap pair and the shutdown pair each pin one lifetime; the odd values are the drift polity.',
         'FLOODING_STDERR_BYTES' => 'The two shutdown suites flood the same byte count.',

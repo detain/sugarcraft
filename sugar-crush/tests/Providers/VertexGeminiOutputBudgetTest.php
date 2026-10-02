@@ -22,13 +22,13 @@ use SugarCraft\Crush\Providers\VertexProvider;
  */
 final class VertexGeminiOutputBudgetTest extends TestCase
 {
-    private const GEMINI_MODEL = 'gemini-2.5-pro';
-    private const ANTHROPIC_MODEL = 'claude-sonnet-4-6@20250929';
+    private const GEMINI_25_PRO = 'gemini-2.5-pro';
+    private const CLAUDE_SONNET_46_VERTEX = 'claude-sonnet-4-6@20250929';
 
     public function testAGeminiRequestWithNoCeilingSendsNoMaxOutputTokens(): void
     {
-        $body = $this->sentBody(self::GEMINI_MODEL, null, new CompleteRequest(
-            model: self::GEMINI_MODEL,
+        $body = $this->sentBody(self::GEMINI_25_PRO, null, new CompleteRequest(
+            model: self::GEMINI_25_PRO,
             messages: [new UserMessage('Hi')],
         ));
 
@@ -39,8 +39,8 @@ final class VertexGeminiOutputBudgetTest extends TestCase
     /** An explicit ceiling (the `maxOutputTokens` setting) still reaches the wire. */
     public function testAnExplicitCeilingIsStillSent(): void
     {
-        $body = $this->sentBody(self::GEMINI_MODEL, null, new CompleteRequest(
-            model: self::GEMINI_MODEL,
+        $body = $this->sentBody(self::GEMINI_25_PRO, null, new CompleteRequest(
+            model: self::GEMINI_25_PRO,
             messages: [new UserMessage('Hi')],
             maxTokens: 32_768,
         ));
@@ -53,8 +53,8 @@ final class VertexGeminiOutputBudgetTest extends TestCase
      */
     public function testAConfiguredThinkingBudgetRidesGenerationConfig(int $budget): void
     {
-        $body = $this->sentBody(self::GEMINI_MODEL, $budget, new CompleteRequest(
-            model: self::GEMINI_MODEL,
+        $body = $this->sentBody(self::GEMINI_25_PRO, $budget, new CompleteRequest(
+            model: self::GEMINI_25_PRO,
             messages: [new UserMessage('Hi')],
         ));
 
@@ -73,7 +73,7 @@ final class VertexGeminiOutputBudgetTest extends TestCase
         $captured = null;
         $provider = VertexProvider::create(
             projectId: 'p',
-            model: self::GEMINI_MODEL,
+            model: self::GEMINI_25_PRO,
             predictor: fn (): array => [],
             streamer: function (string $endpoint, string $method, array $body) use (&$captured): \Generator {
                 $captured = $body;
@@ -84,7 +84,7 @@ final class VertexGeminiOutputBudgetTest extends TestCase
         );
 
         foreach ($provider->completeStream(new CompleteRequest(
-            model: self::GEMINI_MODEL,
+            model: self::GEMINI_25_PRO,
             messages: [new UserMessage('Hi')],
         )) as $unused) {
             // drain
@@ -102,8 +102,8 @@ final class VertexGeminiOutputBudgetTest extends TestCase
      */
     public function testTheAnthropicArmKeepsItsRequiredDefaultAndIgnoresTheBudget(): void
     {
-        $body = $this->sentBody(self::ANTHROPIC_MODEL, 2048, new CompleteRequest(
-            model: self::ANTHROPIC_MODEL,
+        $body = $this->sentBody(self::CLAUDE_SONNET_46_VERTEX, 2048, new CompleteRequest(
+            model: self::CLAUDE_SONNET_46_VERTEX,
             messages: [new UserMessage('Hi')],
         ));
 
@@ -117,7 +117,7 @@ final class VertexGeminiOutputBudgetTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('thinkingBudget');
 
-        VertexProvider::create(projectId: 'p', model: self::GEMINI_MODEL, predictor: fn (): array => [], thinkingBudget: -2);
+        VertexProvider::create(projectId: 'p', model: self::GEMINI_25_PRO, predictor: fn (): array => [], thinkingBudget: -2);
     }
 
     /**

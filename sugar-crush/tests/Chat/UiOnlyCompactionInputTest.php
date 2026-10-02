@@ -86,7 +86,7 @@ final class UiOnlyCompactionInputTest extends TestCase
     }
 
     /** A summarization backend that records what it was sent and answers $reply. */
-    private static function summarizer(string $reply, ?array &$seen): Backend
+    private static function summarizer(string $reply, ?array &$seen = null): Backend
     {
         return new class ($reply, $seen) implements Backend {
             public function __construct(private readonly string $reply, private mixed &$seen) {}

@@ -28,7 +28,7 @@ final class UiOnlyNoticeStyleTest extends TestCase
         return explode("\n", Renderer::render($chat));
     }
 
-    private static function plain(string $row): string
+    private static function withoutSgr(string $row): string
     {
         return (string) preg_replace('/\e\[[0-9;]*m/', '', $row);
     }
@@ -37,7 +37,7 @@ final class UiOnlyNoticeStyleTest extends TestCase
     private static function rowContaining(array $rows, string $needle): ?string
     {
         foreach ($rows as $row) {
-            if (str_contains(self::plain($row), $needle)) {
+            if (str_contains(self::withoutSgr($row), $needle)) {
                 return $row;
             }
         }
@@ -56,12 +56,12 @@ final class UiOnlyNoticeStyleTest extends TestCase
 
         $notice = self::rowContaining($rows, 'Queued (1 waiting)');
         $this->assertNotNull($notice);
-        $this->assertStringContainsString('notice: Queued (1 waiting)', self::plain($notice));
+        $this->assertStringContainsString('notice: Queued (1 waiting)', self::withoutSgr($notice));
         $this->assertStringContainsString(self::ITALIC, $notice, 'the notice is italic');
 
         $system = self::rowContaining($rows, 'hook context for the model');
         $this->assertNotNull($system);
-        $this->assertStringContainsString('system: hook context for the model', self::plain($system), 'an agent-visible system row keeps its label');
+        $this->assertStringContainsString('system: hook context for the model', self::withoutSgr($system), 'an agent-visible system row keeps its label');
         $this->assertStringNotContainsString(self::ITALIC, $system, 'and is not italic: the two must look different');
     }
 
@@ -78,7 +78,7 @@ final class UiOnlyNoticeStyleTest extends TestCase
 
     public function testNoticesStayInlineBetweenAPromptAndItsAnswer(): void
     {
-        $plain = array_map(self::plain(...), self::rows(new Chat(history: [
+        $plain = array_map(self::withoutSgr(...), self::rows(new Chat(history: [
             Message::user('PROMPT-ONE'),
             Message::notice('/budget is a command, and commands do not run while a turn is in flight'),
             Message::notice('Queued (1 waiting)'),

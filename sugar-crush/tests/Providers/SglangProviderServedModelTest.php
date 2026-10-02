@@ -37,7 +37,7 @@ final class SglangProviderServedModelTest extends TestCase
      * A DeepSeek-V4-family id that is neither the old nor the new default, so
      * an assertion that it reached the wire can only pass by adoption.
      */
-    private const DEEPSEEK_V4 = 'deepseek-ai/DeepSeek-V4.5-Flash';
+    private const DEEPSEEK_V4_5_FLASH = 'deepseek-ai/DeepSeek-V4.5-Flash';
 
     private const DSML = "\xEF\xBD\x9CDSML\xEF\xBD\x9C";
 
@@ -70,7 +70,7 @@ final class SglangProviderServedModelTest extends TestCase
     private static function servingDeepSeek(?string $toolCallParser = 'deepseekv4', bool $reports = true): SglangServerInfo
     {
         return SglangServerInfo::new(
-            servedModelName: self::DEEPSEEK_V4,
+            servedModelName: self::DEEPSEEK_V4_5_FLASH,
             maxReqInputLen: 1_048_570,
             toolCallParser: $toolCallParser,
             reportsToolCallParser: $reports,
@@ -79,7 +79,7 @@ final class SglangProviderServedModelTest extends TestCase
 
     private function provider(
         string $model,
-        ?\Closure $loader,
+        ?\Closure $loader = null,
         string $body = '{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],"usage":{"total_tokens":1}}',
         ?ToolCallParserInterface $parser = null,
     ): SglangProvider {
@@ -98,7 +98,7 @@ final class SglangProviderServedModelTest extends TestCase
     }
 
     /** @return array<string, mixed> */
-    private function sentBody(): array
+    private function firstSentBody(): array
     {
         $decoded = json_decode((string) $this->history[0]['request']->getBody(), true);
         self::assertIsArray($decoded);
@@ -106,7 +106,7 @@ final class SglangProviderServedModelTest extends TestCase
         return $decoded;
     }
 
-    private static function request(string $model): CompleteRequest
+    private static function requestNamed(string $model): CompleteRequest
     {
         return new CompleteRequest(model: $model, messages: [new UserMessage('Hi')]);
     }
@@ -142,10 +142,10 @@ final class SglangProviderServedModelTest extends TestCase
     {
         $provider = $this->provider(SglangProvider::DEFAULT_MODEL, static fn (): SglangServerInfo => self::servingDeepSeek());
 
-        self::withErrorLogDiscarded(static fn () => $provider->complete(self::request(SglangProvider::DEFAULT_MODEL)), 'sc_a26_');
+        self::withErrorLogDiscarded(static fn () => $provider->complete(self::requestNamed(SglangProvider::DEFAULT_MODEL)), 'sc_a26_');
 
-        $sent = $this->sentBody();
-        self::assertSame(self::DEEPSEEK_V4, $sent['model']);
+        $sent = $this->firstSentBody();
+        self::assertSame(self::DEEPSEEK_V4_5_FLASH, $sent['model']);
         // JSON has no float/int distinction: 1.0 decodes as 1.
         self::assertSame(1.0, (float) $sent['temperature']);
         self::assertSame('max', $sent['reasoning_effort'] ?? null);
@@ -162,11 +162,11 @@ final class SglangProviderServedModelTest extends TestCase
         );
 
         self::withErrorLogDiscarded(
-            static fn () => iterator_to_array($provider->completeStream(self::request(SglangProvider::DEFAULT_MODEL)), false),
+            static fn () => iterator_to_array($provider->completeStream(self::requestNamed(SglangProvider::DEFAULT_MODEL)), false),
             'sc_a26_',
         );
 
-        self::assertSame(self::DEEPSEEK_V4, $this->sentBody()['model']);
+        self::assertSame(self::DEEPSEEK_V4_5_FLASH, $this->firstSentBody()['model']);
     }
 
     /** A model somebody NAMED is sent as named, whatever the server serves. */
@@ -174,9 +174,9 @@ final class SglangProviderServedModelTest extends TestCase
     {
         $provider = $this->provider(SglangProvider::DEFAULT_MODEL, static fn (): SglangServerInfo => self::servingDeepSeek());
 
-        self::withErrorLogDiscarded(static fn () => $provider->complete(self::request('MiniMax-M2.7')), 'sc_a26_');
+        self::withErrorLogDiscarded(static fn () => $provider->complete(self::requestNamed('MiniMax-M2.7')), 'sc_a26_');
 
-        self::assertSame('MiniMax-M2.7', $this->sentBody()['model']);
+        self::assertSame('MiniMax-M2.7', $this->firstSentBody()['model']);
     }
 
     /** A provider configured with its own id never adopts - it gets the notice instead. */
@@ -185,10 +185,10 @@ final class SglangProviderServedModelTest extends TestCase
         $provider = $this->provider('MiniMax-M2.7', static fn (): SglangServerInfo => self::servingDeepSeek());
 
         self::withErrorLogDiscarded(static function () use ($provider): void {
-            $provider->complete(self::request(SglangProvider::DEFAULT_MODEL));
+            $provider->complete(self::requestNamed(SglangProvider::DEFAULT_MODEL));
         }, 'sc_a26_');
 
-        self::assertSame(SglangProvider::DEFAULT_MODEL, $this->sentBody()['model']);
+        self::assertSame(SglangProvider::DEFAULT_MODEL, $this->firstSentBody()['model']);
         self::assertCount(1, RuntimeNoticeSink::drain(), 'a configured MiniMax against a served DeepSeek is a real mismatch');
     }
 
@@ -211,9 +211,9 @@ final class SglangProviderServedModelTest extends TestCase
     {
         $provider = $this->provider(SglangProvider::DEFAULT_MODEL, $loader);
 
-        self::withErrorLogDiscarded(static fn () => $provider->complete(self::request(SglangProvider::DEFAULT_MODEL)), 'sc_a26_');
+        self::withErrorLogDiscarded(static fn () => $provider->complete(self::requestNamed(SglangProvider::DEFAULT_MODEL)), 'sc_a26_');
 
-        self::assertSame(SglangProvider::DEFAULT_MODEL, $this->sentBody()['model']);
+        self::assertSame(SglangProvider::DEFAULT_MODEL, $this->firstSentBody()['model']);
     }
 
     // -------------------------------------------------------------------------
@@ -245,7 +245,7 @@ final class SglangProviderServedModelTest extends TestCase
 
         $response = null;
         self::withErrorLogDiscarded(static function () use ($provider, &$response): void {
-            $response = $provider->complete(self::request(SglangProvider::DEFAULT_MODEL));
+            $response = $provider->complete(self::requestNamed(SglangProvider::DEFAULT_MODEL));
         }, 'sc_a26_');
 
         self::assertNotNull($response);
