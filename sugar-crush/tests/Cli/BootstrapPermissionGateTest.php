@@ -479,9 +479,13 @@ final class BootstrapPermissionGateTest extends TestCase
         $this->assertSame('light', Bootstrap::readUserConfig()['theme'] ?? null);
 
         // scandir(), not glob('*'): the temp file's name starts with a dot, so
-        // a glob would report a clean directory however many were left.
+        // a glob would report a clean directory however many were left. The
+        // one dotfile that DOES stay is the write lock's sidecar (audit
+        // 15d-15), which is never unlinked by design — named exactly, so a
+        // `.config.json.XXXXXX` temp file still reds this.
         $entries = array_values(array_diff(scandir($this->tempDir . '/home/.sugar-crush') ?: [], ['.', '..']));
-        $this->assertSame(['config.json'], $entries, 'a temp file was left behind next to the config');
+        sort($entries);
+        $this->assertSame(['.config.json.lock', 'config.json'], $entries, 'a temp file was left behind next to the config');
     }
 
     /**
@@ -509,8 +513,11 @@ final class BootstrapPermissionGateTest extends TestCase
         $this->assertFileExists($this->tempDir . '/home/.sugar-crush/config.json');
         $this->assertSame('tokyonight', Bootstrap::readUserConfig()['theme'] ?? null);
 
+        // The lock sidecar (audit 15d-15) is the one expected dotfile; see
+        // the inode test above.
         $entries = array_values(array_diff(scandir($this->tempDir . '/home/.sugar-crush') ?: [], ['.', '..']));
-        $this->assertSame(['config.json'], $entries, 'a temp file was left behind next to the config');
+        sort($entries);
+        $this->assertSame(['.config.json.lock', 'config.json'], $entries, 'a temp file was left behind next to the config');
     }
 
     /**

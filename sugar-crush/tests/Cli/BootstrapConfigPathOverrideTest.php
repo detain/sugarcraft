@@ -229,4 +229,269 @@ final class BootstrapConfigPathOverrideTest extends TestCase
 
         Bootstrap::permissionGate();
     }
+
+    /**
+     * A dotfiles setup — `~/.sugar-crush/config.json` a symlink into a
+     * checkout — must keep its link across a persist (audit 15d-15). The
+     * rename used to land on the LINK PATH, replacing the link with a private
+     * 0600 copy: every later edit to the real file, `permissionMode` and
+     * `permissionRules` included, then silently stopped applying. Both halves
+     * are asserted: the link is still a link to the same place, and the write
+     * (merged, not a one-key file) is in the file it points at.
+     */
+    public function testWriteUserConfigPreservesASymlinkedConfig(): void
+    {
+        [$link, $real] = $this->symlinkedConfig(['permissionMode' => 'plan']);
+
+        Bootstrap::writeUserConfig(['theme' => 'dracula']);
+
+        \clearstatcache();
+        $this->assertTrue(\is_link($link), 'the persist replaced the symlinked config with a regular file');
+        $this->assertSame($real, \readlink($link));
+
+        /** @var array<string, mixed> $onDisk */
+        $onDisk = \json_decode((string) \file_get_contents($real), true);
+        $this->assertSame(['permissionMode' => 'plan', 'theme' => 'dracula'], $onDisk);
+
+        // The temp file is staged beside the RESOLVED file and renamed onto it,
+        // so nothing may be left behind in either directory.
+        $this->assertSame(['config.json'], $this->entriesOf(\dirname($real)));
+        $this->assertSame(['.config.json.lock', 'config.json'], $this->entriesOf(\dirname($link)));
+
+        // And the link is what the launch reads: an edit to the real file is
+        // live, which is the property the regular-file copy destroyed.
+        \file_put_contents($real, (string) \json_encode(['theme' => 'edited-in-dotfiles']));
+        $this->assertSame('edited-in-dotfiles', Bootstrap::readUserConfig()['theme'] ?? null);
+    }
+
+    /**
+     * A dangling link is refused, not "repaired": creating its target would
+     * be guessing which file the user meant, and replacing the link would be
+     * the 15d-15 defect again. The launch refuses this state too, so losing
+     * the setting is the honest outcome.
+     */
+    public function testWriteUserConfigRefusesToWriteThroughADanglingSymlink(): void
+    {
+        $dir = $this->tempDir . '/home/.sugar-crush';
+        \mkdir($dir, 0700, true);
+        $missing = $this->tempDir . '/dotfiles/config.json';
+        \symlink($missing, $dir . '/config.json');
+
+        Bootstrap::writeUserConfig(['theme' => 'dracula']);
+
+        \clearstatcache();
+        $this->assertTrue(\is_link($dir . '/config.json'), 'the dangling link was replaced');
+        $this->assertSame($missing, \readlink($dir . '/config.json'));
+        $this->assertFileDoesNotExist($missing, 'the write invented the link\'s target');
+    }
+
+    /**
+     * Following a link is only safe to a file the launch would itself accept
+     * as this account's policy ({@see Bootstrap::requirePrivatePolicyFile()}).
+     * A link into a world-writable file must neither be written through —
+     * that would put the user's policy in a file anyone can rewrite — nor
+     * replaced by a private copy.
+     */
+    public function testWriteUserConfigRefusesToWriteThroughALinkToAWorldWritableFile(): void
+    {
+        [$link, $real] = $this->symlinkedConfig(['theme' => 'before']);
+        \chmod($real, 0o666);
+        $before = (string) \file_get_contents($real);
+
+        Bootstrap::writeUserConfig(['theme' => 'after']);
+
+        \clearstatcache();
+        $this->assertTrue(\is_link($link), 'the link to an unacceptable target was replaced');
+        $this->assertSame($before, \file_get_contents($real), 'the write went through a link into a world-writable file');
+    }
+
+    /**
+     * A config that is present but unparsable — an editor mid-save, a hand
+     * edit with a typo, a top-level list — is read as `{}` by the forgiving
+     * read path, and the write used to merge onto THAT: the user's whole
+     * file replaced by the one key a theme switch named. The write now
+     * refuses, leaving the bytes exactly as they were.
+     *
+     * @dataProvider unparsableConfigs
+     */
+    public function testWriteUserConfigRefusesToOverwriteAnUnparsableConfig(string $contents): void
+    {
+        $path = $this->tempDir . '/elsewhere/crush.json';
+        \file_put_contents($path, $contents);
+        Bootstrap::useConfigPath($path);
+
+        Bootstrap::writeUserConfig(['theme' => 'dracula']);
+
+        $this->assertSame($contents, \file_get_contents($path), 'an unparsable config was overwritten with the patch');
+    }
+
+    /** @return array<string, array{string}> */
+    public static function unparsableConfigs(): array
+    {
+        return [
+            'truncated mid-save' => ["{\n  \"permissionMode\": \"plan\",\n  \"permissionRu"],
+            'hand-edit typo' => ['{"permissionMode": "plan",}'],
+            'top-level list' => ['[{"permissionMode": "plan"}]'],
+            'empty list' => ['[]'],
+        ];
+    }
+
+    /**
+     * The refusal is for files that HOLD something: a zero-byte or
+     * whitespace-only config is "nothing configured" to the launch, and
+     * refusing to write over it would make the state an older build or a
+     * full disk left behind permanently unpersistable.
+     */
+    public function testWriteUserConfigStillWritesOverAnEmptyConfig(): void
+    {
+        $path = $this->tempDir . '/elsewhere/crush.json';
+        \file_put_contents($path, " \n");
+        Bootstrap::useConfigPath($path);
+
+        Bootstrap::writeUserConfig(['theme' => 'dracula']);
+
+        $this->assertSame(['theme' => 'dracula'], \json_decode((string) \file_get_contents($path), true));
+    }
+
+    /**
+     * The read-merge-write is serialised: a second session persisting a
+     * DIFFERENT key while this one is mid-update must not lose either key.
+     *
+     * The test plays the first session by hand — it takes the sidecar lock,
+     * reads its merge base, and only writes after giving a real child process
+     * (the second session, persisting `theme`) ample time to run. Without the
+     * lock the child's write lands inside that window and the hand-played
+     * write, merged from the stale base, erases it. With the lock the child
+     * waits, then re-reads and merges onto the hand-played write.
+     */
+    public function testConcurrentWritersDoNotLoseEachOthersKeys(): void
+    {
+        $path = $this->writeOverrideFile(['keep' => 'me']);
+        $lockPath = \dirname($path) . '/.' . \basename($path) . '.lock';
+
+        $lock = \fopen($lockPath, 'c');
+        $this->assertIsResource($lock);
+        $this->assertTrue(\flock($lock, \LOCK_EX));
+
+        $child = null;
+
+        try {
+            /** @var array<string, mixed> $base */
+            $base = \json_decode((string) \file_get_contents($path), true);
+            $child = $this->spawnWriter($path, ['theme' => 'from-the-other-session']);
+
+            // Long enough for an UNLOCKED child to boot and finish its write
+            // many times over; ends early once one has landed, since that is
+            // already the failure the assertion below reports.
+            $deadline = \microtime(true) + 1.5;
+            while (\microtime(true) < $deadline && \file_get_contents($path) === (string) \json_encode(['keep' => 'me'])) {
+                \usleep(20_000);
+            }
+
+            \file_put_contents($path, (string) \json_encode($base + ['provider' => 'from-this-session']));
+        } finally {
+            \flock($lock, \LOCK_UN);
+            \fclose($lock);
+        }
+
+        $this->assertSame(0, $this->reap($child), 'the second session\'s writer did not exit cleanly');
+
+        /** @var array<string, mixed> $onDisk */
+        $onDisk = \json_decode((string) \file_get_contents($path), true);
+        $this->assertSame('me', $onDisk['keep'] ?? null);
+        $this->assertSame('from-this-session', $onDisk['provider'] ?? null);
+        $this->assertSame(
+            'from-the-other-session',
+            $onDisk['theme'] ?? null,
+            'a concurrent persist was lost: the write did not wait for the config lock',
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     *
+     * @return array{string, string} the link path and the file it points at
+     */
+    private function symlinkedConfig(array $config): array
+    {
+        $dotfiles = $this->tempDir . '/dotfiles';
+        \mkdir($dotfiles, 0700, true);
+        $real = $dotfiles . '/config.json';
+        \file_put_contents($real, (string) \json_encode($config));
+
+        $dir = $this->tempDir . '/home/.sugar-crush';
+        \mkdir($dir, 0700, true);
+        $link = $dir . '/config.json';
+        \symlink($real, $link);
+
+        return [$link, $real];
+    }
+
+    /**
+     * scandir(), not glob('*'): the temp file's name starts with a dot.
+     *
+     * @return list<string>
+     */
+    private function entriesOf(string $dir): array
+    {
+        $entries = \array_values(\array_diff(\scandir($dir) ?: [], ['.', '..']));
+        \sort($entries);
+
+        return $entries;
+    }
+
+    /**
+     * Run `writeUserConfig($patch)` against $path in a separate PHP process.
+     *
+     * @param array<string, mixed> $patch
+     *
+     * @return resource
+     */
+    private function spawnWriter(string $path, array $patch)
+    {
+        $script = $this->tempDir . '/writer.php';
+        \file_put_contents($script, <<<'PHP'
+            <?php
+            declare(strict_types=1);
+            require $argv[1];
+            \SugarCraft\Crush\Cli\Bootstrap::useConfigPath($argv[2]);
+            \SugarCraft\Crush\Cli\Bootstrap::writeUserConfig((array) \json_decode($argv[3], true));
+            PHP);
+
+        $process = \proc_open(
+            [\PHP_BINARY, $script, \dirname(__DIR__, 2) . '/vendor/autoload.php', $path, (string) \json_encode($patch)],
+            [0 => ['file', '/dev/null', 'r'], 1 => ['file', $this->tempDir . '/writer.out', 'w'], 2 => ['file', $this->tempDir . '/writer.err', 'w']],
+            $pipes,
+            null,
+            ['HOME' => $this->tempDir . '/home', 'PATH' => (string) \getenv('PATH')],
+        );
+        $this->assertIsResource($process);
+
+        return $process;
+    }
+
+    /** @param resource|null $process */
+    private function reap($process): int
+    {
+        if ($process === null) {
+            return -1;
+        }
+
+        // Bounded: the child's own lock wait is five seconds.
+        $deadline = \microtime(true) + 20.0;
+        while (\microtime(true) < $deadline) {
+            $status = \proc_get_status($process);
+            if (!$status['running']) {
+                \proc_close($process);
+
+                return $status['exitcode'];
+            }
+            \usleep(20_000);
+        }
+
+        \proc_terminate($process, 9);
+        \proc_close($process);
+
+        return -1;
+    }
 }

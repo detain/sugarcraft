@@ -53,6 +53,7 @@ use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
+use SugarCraft\Crush\Support\TimedFileLock;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Tools\BuiltIn\Bash;
@@ -3466,6 +3467,12 @@ final class Bootstrap
      * one-way promotion from the lowest-trust layer to the highest, performed
      * by a UI action that says "Switch theme".
      *
+     * FORGIVING, AND THEREFORE A READ-ONLY ANSWER: an unreadable or unparsable
+     * file comes back `[]` so a corrupt config costs a setting and not the
+     * session. That is wrong as a MERGE BASE — it would write the patch over
+     * everything the file held — so the write path does not use this method;
+     * it reads through {@see userConfigForMerge()}, which says null instead.
+     *
      * @return array<string, mixed>
      */
     private static function rawUserConfig(): array
@@ -3606,7 +3613,9 @@ final class Bootstrap
     /**
      * Read-merge-write $patch into the persisted user config, so a single
      * call only ever touches the keys it names (e.g. switching the theme
-     * doesn't clobber a previously-persisted provider choice).
+     * doesn't clobber a previously-persisted provider choice). This is the
+     * ONE door through which the CLI writes its settings file; the private
+     * helpers below it only resolve, lock and read.
      *
      * The replacement is ATOMIC — write a sibling temp file, then `rename()`
      * over the target — because a partial write here is not merely a lost
@@ -3617,18 +3626,40 @@ final class Bootstrap
      * `rename()` within a directory is atomic on POSIX, so a reader ever sees
      * the old file or the new one and never a half of either.
      *
+     * A SYMLINKED CONFIG SURVIVES THE WRITE (audit 15d-15). `rename()` onto the
+     * link path replaces the LINK, so a dotfiles setup
+     * (`~/.sugar-crush/config.json -> ~/dotfiles/…/config.json`) used to lose
+     * its link to the first `/theme`: the live policy then came from a private
+     * copy, and every later `permissionMode`/`permissionRules` edit to the real
+     * file silently stopped applying. The write now goes to the file the link
+     * RESOLVES to — temp file beside it, rename onto it — and only when that
+     * file passes the same "this account's, not world-writable" test
+     * {@see requirePrivatePolicyFile()} holds the launch to. A dangling link, a
+     * link to a directory, or a link to a file that fails that test is not
+     * written at all: losing the setting is the documented outcome of a failed
+     * write, and replacing a link the user made is not.
+     *
+     * AN UNPARSABLE CONFIG IS NEVER OVERWRITTEN. The read side treats one as
+     * `{}` ({@see rawUserConfig()}), and merging the patch onto that wrote a
+     * one-key file over a config an editor was mid-save on or a hand edit had
+     * broken — the user's whole policy destroyed by a theme switch. A file that
+     * exists but cannot be read, does not decode, or is not a JSON object now
+     * refuses the persist instead; a missing or zero-byte file is still "nothing
+     * configured", as {@see permissionConfig()} reads it.
+     *
+     * THE READ-MERGE-WRITE IS SERIALISED by a {@see TimedFileLock} on a sidecar
+     * beside the path being written through ({@see acquireUserConfigLock()}),
+     * so two sessions persisting different keys no longer lose one of them. A
+     * lock that cannot be had within the wait costs THIS setting, never a
+     * throw: the callers are a TUI closure (`/theme`, Ctrl+P, `/model`) and the
+     * shell's dock persistence, and none of them can do anything with an
+     * exception but crash the session over a theme.
+     *
      * @param array<string, mixed> $patch
      */
     public static function writeUserConfig(array $patch): void
     {
-        // rawUserConfig(), NOT readUserConfig(): see that method for why merging
-        // onto the LAYERED view would persist a project's or a settings.json's
-        // values into the user's own file as a side effect of switching a theme.
-        $merged = array_merge(self::rawUserConfig(), $patch);
-        $json = json_encode($merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        if ($json === false) {
-            return;
-        }
+        $path = self::userConfigPath();
 
         // The write, not the read, is what earns the directory — see
         // {@see userConfigPath()}. Taken from the target FILE rather than from
@@ -3644,45 +3675,216 @@ final class Bootstrap
         // /tmp override still lands (same filesystem) but leaves that stray
         // directory behind, which is what
         // {@see BootstrapConfigPathOverrideTest::testWriteUserConfigPersistsIntoTheOverrideFile()}
-        // pins.
-        $dir = \dirname(self::userConfigPath());
-        self::ensureDir($dir);
+        // pins. A symlinked config's directory holds the link, so it exists.
+        self::ensureDir(\dirname($path));
 
-        // The temp file must be the target's SIBLING: rename() is only atomic
-        // within one filesystem, and tempnam() silently falls back to the
-        // system temp dir when the requested one is unusable — which on a
-        // separate mount would turn the rename into a failure rather than a
-        // torn write, but is worth refusing explicitly either way.
-        //
-        // Compared through realpath() on BOTH sides, never as raw strings:
-        // tempnam() hands back a CANONICAL path, so a `HOME` with a trailing
-        // slash (`HOME=/root/` is ordinary in a Dockerfile), a doubled slash,
-        // or a `/./` made `dirname($temp) !== $dir` true for every write and
-        // silently disabled config persistence outright — the sibling check
-        // refusing the one directory it was pointed at. `realpath()` cannot
-        // fail here: ensureDir() has just guaranteed $dir, and tempnam()
-        // returns a file it created.
-        $temp = @tempnam($dir, '.config.json.');
-        if ($temp === false || realpath(\dirname($temp)) !== realpath($dir)) {
-            if (is_string($temp)) {
-                @unlink($temp);
+        $lock = self::acquireUserConfigLock($path);
+        if ($lock === null) {
+            return;
+        }
+
+        try {
+            // Resolved and read UNDER the lock: a target or a merge base taken
+            // before it would be exactly the stale read the lock exists to stop.
+            $target = self::userConfigWriteTarget($path);
+            if ($target === null) {
+                return;
             }
 
-            return;
+            // The strict read, NOT readUserConfig(): see rawUserConfig() for why
+            // merging onto the LAYERED view would persist a project's or a
+            // settings.json's values into the user's own file as a side effect
+            // of switching a theme — and see the doc-block above for why
+            // rawUserConfig()'s own `{}`-on-garbage answer is not safe to write.
+            $existing = self::userConfigForMerge($target);
+            if ($existing === null) {
+                return;
+            }
+
+            $merged = array_merge($existing, $patch);
+            $json = json_encode($merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            if ($json === false) {
+                return;
+            }
+
+            $dir = \dirname($target);
+
+            // The temp file must be the target's SIBLING: rename() is only atomic
+            // within one filesystem, and tempnam() silently falls back to the
+            // system temp dir when the requested one is unusable — which on a
+            // separate mount would turn the rename into a failure rather than a
+            // torn write, but is worth refusing explicitly either way. For a
+            // symlinked config the sibling is the RESOLVED file's: the link and
+            // its target may sit on different mounts (a dotfiles checkout on
+            // another volume is ordinary).
+            //
+            // Compared through realpath() on BOTH sides, never as raw strings:
+            // tempnam() hands back a CANONICAL path, so a `HOME` with a trailing
+            // slash (`HOME=/root/` is ordinary in a Dockerfile), a doubled slash,
+            // or a `/./` made `dirname($temp) !== $dir` true for every write and
+            // silently disabled config persistence outright — the sibling check
+            // refusing the one directory it was pointed at. `realpath()` cannot
+            // fail here: ensureDir() has just guaranteed $dir (or the link
+            // resolved into it), and tempnam() returns a file it created.
+            $temp = @tempnam($dir, '.config.json.');
+            if ($temp === false || realpath(\dirname($temp)) !== realpath($dir)) {
+                if (is_string($temp)) {
+                    @unlink($temp);
+                }
+
+                return;
+            }
+
+            if (@file_put_contents($temp, $json) !== strlen($json) || !@rename($temp, $target)) {
+                // Losing the setting is the correct outcome of a failed write.
+                // Leaving the previous config intact is the important half.
+                @unlink($temp);
+
+                return;
+            }
+
+            // tempnam() creates at 0600; the file this replaces was created at the
+            // process umask. 0600 is kept deliberately — this file now carries the
+            // launch's permission policy, so it is nobody else's business.
+            @chmod($target, 0600);
+        } finally {
+            TimedFileLock::release($lock);
+            fclose($lock);
+        }
+    }
+
+    /**
+     * The file {@see writeUserConfig()} should rename onto, or null when
+     * $path is a symlink this process must not write through.
+     *
+     * A plain file (or a path that does not exist yet) is its own target. A
+     * symlink is followed — that is the point, see the write's doc-block — but
+     * only to a REGULAR FILE that {@see requirePrivatePolicyFile()} accepts:
+     * owned by this account and neither it nor its directory writable by every
+     * account. That is the test the launch already applies to the policy file
+     * it reads, so a link the write follows is a link the launch would have
+     * run; following one the launch would refuse would let a theme switch
+     * write the user's policy into somebody else's file. A dangling link is
+     * refused rather than "repaired" by creating its target: the launch
+     * refuses that state too (README, permission policy), and guessing which
+     * file the user meant is not this method's call.
+     */
+    private static function userConfigWriteTarget(string $path): ?string
+    {
+        clearstatcache(true, $path);
+        if (!is_link($path)) {
+            return $path;
         }
 
-        if (@file_put_contents($temp, $json) !== strlen($json) || !@rename($temp, self::userConfigPath())) {
-            // Losing the setting is the correct outcome of a failed write.
-            // Leaving the previous config intact is the important half.
-            @unlink($temp);
-
-            return;
+        $resolved = realpath($path);
+        if ($resolved === false || !is_file($resolved)) {
+            return null;
         }
 
-        // tempnam() creates at 0600; the file this replaces was created at the
-        // process umask. 0600 is kept deliberately — this file now carries the
-        // launch's permission policy, so it is nobody else's business.
-        @chmod(self::userConfigPath(), 0600);
+        try {
+            self::requirePrivatePolicyFile($resolved);
+        } catch (PermissionConfigException) {
+            return null;
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * The persisted config to merge a patch onto, or null when the file there
+     * must not be overwritten — {@see rawUserConfig()}'s read with its
+     * forgiveness removed, for the write path only.
+     *
+     * The read callers keep the forgiving answer on purpose: a corrupt config
+     * costs a theme on read, never the session. On WRITE the same `[]` is not
+     * forgiveness but deletion — it is the merge base, so everything the file
+     * held is gone the moment the rename lands. Missing and zero-byte stay
+     * `[]`, matching {@see permissionConfig()}: there is nothing to lose. A
+     * top-level JSON list is refused like any other non-object, on the JSON
+     * TEXT, because `json_decode()` maps `[]` and `{}` to the same value.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function userConfigForMerge(string $target): ?array
+    {
+        clearstatcache(true, $target);
+        if (!file_exists($target)) {
+            return [];
+        }
+
+        if (!is_file($target)) {
+            return null;
+        }
+
+        $contents = @file_get_contents($target);
+        if ($contents === false) {
+            return null;
+        }
+
+        if (trim($contents) === '') {
+            return [];
+        }
+
+        $data = json_decode($contents, true);
+        if (!is_array($data) || !str_starts_with(ltrim($contents), '{')) {
+            return null;
+        }
+
+        return $data;
+    }
+
+    /**
+     * Take the exclusive lock that serialises {@see writeUserConfig()}'s
+     * read-merge-write, or null when it cannot be had.
+     *
+     * A SIDECAR (`.<name>.lock` beside $path), never the config itself: the
+     * write replaces the config's inode by rename(), so a lock held on it
+     * would guard a file that is no longer the one on disk, and a second
+     * writer opening the path afterwards would lock the new inode unopposed.
+     * The sidecar is never unlinked for the same reason TaskList's are not —
+     * an unlink lets a waiter win the lock on a dead inode while a newcomer
+     * locks a fresh one.
+     *
+     * Beside the path WRITTEN THROUGH, not beside a symlink's target: every
+     * session reaches the config by that one path, and the target is often a
+     * dotfiles checkout where a stray lock file would show up as untracked.
+     * Created under umask 077 for the reason the config is chmod 0600 —
+     * anyone who can open it can hold it, and holding it is a way to make
+     * this user's settings stop persisting.
+     *
+     * A timeout or an unopenable sidecar is null rather than the
+     * {@see TimedFileLock} throw: see writeUserConfig() for why its callers
+     * must not receive one. The setting is lost and the file left as it was —
+     * failing CLOSED, which is the half of TimedFileLock's doctrine that
+     * matters here (a write that went ahead without the lock is the lost
+     * update this exists to prevent).
+     *
+     * @return resource|null
+     */
+    private static function acquireUserConfigLock(string $path)
+    {
+        $lockPath = \dirname($path) . '/.' . basename($path) . '.lock';
+
+        $umask = umask(0077);
+        try {
+            $fp = @fopen($lockPath, 'c');
+        } finally {
+            umask($umask);
+        }
+
+        if ($fp === false) {
+            return null;
+        }
+
+        try {
+            TimedFileLock::acquire($fp, \LOCK_EX, $lockPath);
+        } catch (\RuntimeException) {
+            fclose($fp);
+
+            return null;
+        }
+
+        return $fp;
     }
 
     /**
