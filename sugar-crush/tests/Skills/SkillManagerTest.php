@@ -200,9 +200,12 @@ SKILL;
         yield 'description is an int' => ["description: 42", 'description'];
         yield 'description is an unquoted date' => ["description: 2024-01-01", 'description'];
         yield 'context is a list' => ["description: x\ncontext: [a]", 'context'];
-        // Spelled `'paths: ' . '[...]'` because GlobDialectDifferentialTest
-        // harvests every `paths: [...]` in the tree into its path corpus, and an
-        // unquoted integer entry there becomes an int array key it cannot take.
+        // The flow list is concatenated on rather than written inline after
+        // the key because GlobDialectDifferentialTest harvests every inline
+        // `paths:` flow list in src/ and tests/ into its glob corpus (whose
+        // size PathGlob's doc-block pins), and an unquoted integer entry there
+        // becomes an int array key it cannot take. This comment avoids the
+        // literal shape for the same reason.
         yield 'paths entry is an int' => ["description: x\npaths: " . '[1]', 'paths[0]'];
         yield 'paths has a non-string entry after a glob' => ["description: x\npaths: " . '[src/**, 2024]', 'paths[1]'];
         yield 'user-invocable is not a boolean word' => ["description: x\nuser-invocable: maybe", 'user-invocable'];
