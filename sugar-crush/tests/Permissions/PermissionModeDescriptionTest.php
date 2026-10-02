@@ -30,9 +30,10 @@ use SugarCraft\Crush\ToolCall;
  * three of the six descriptions shipped FALSE underneath it, and in all three
  * the false clause was the clause with no row.
  *
- * - `default` said "networking ask first". `WebFetch` is in
- *   {@see PermissionGate::isReadOnlyTool()}, so it ALLOWS. The two rows for
- *   `default` were `Read` and `Write`.
+ * - `default` said "networking ask first". `WebFetch` was then in
+ *   {@see PermissionGate::isReadOnlyTool()}, so it ALLOWED. The two rows for
+ *   `default` were `Read` and `Write`. (Audit F-P6 later moved the POLICY:
+ *   `WebFetch` left the read-only class and asks.)
  * - `accept-edits` said "Everything else … asks", which literally covers reads,
  *   and reads ALLOW. Its rows never probed a read.
  * - `plan` said "every other write, is denied". A `Bash` write that did not
@@ -66,10 +67,13 @@ final class PermissionModeDescriptionTest extends TestCase
      * The probe set. One entry per capability any description makes a claim
      * about, plus the ones a description might reasonably be read as covering
      * and quietly does not — `WebFetch` beside `WebSearch` because the gate
-     * classes one a read and the other not, `rm ./a` beside `rm /etc/hosts`
-     * because containment is what separates them under `accept-edits`, and a
+     * once classed one a read and the other not, `rm ./a` beside `rm /etc/hosts`
+     * because containment once separated them under `accept-edits`, and a
      * plain `rm ./a` at all because that is the call `plan` was describing
-     * wrongly.
+     * wrongly. Three probes pin audit F-P4/F-P6/F-P3(b): a Write outside the
+     * root and one into `.git` (the two targets `accept-edits` still asks
+     * about and `auto` classifies), and a WebFetch whose URL carries a query
+     * (the one `auto` treats as an external endpoint).
      *
      * @return array<string, array{0: string, 1: array<string, mixed>}>
      */
@@ -80,9 +84,12 @@ final class PermissionModeDescriptionTest extends TestCase
             'Grep' => ['Grep', ['pattern' => 'needle']],
             'Lsp' => ['Lsp', ['operation' => 'definition']],
             'WebFetch' => ['WebFetch', ['url' => 'https://x.example']],
+            'WebFetch with query' => ['WebFetch', ['url' => 'https://x.example/?d=secret']],
             'WebSearch' => ['WebSearch', ['query' => 'needle']],
             'Write tool' => ['Write', ['file_path' => './x']],
             'Edit tool' => ['Edit', ['file_path' => './x']],
+            'Write outside root' => ['Write', ['file_path' => '/etc/hosts']],
+            'Write into .git' => ['Write', ['file_path' => './.git/hooks/pre-commit']],
             'Bash exploring' => ['Bash', ['command' => 'git log --oneline']],
             'Bash mkdir scoped' => ['Bash', ['command' => 'mkdir ./notes']],
             'Bash rm scoped' => ['Bash', ['command' => 'rm ./a']],
@@ -111,24 +118,31 @@ final class PermissionModeDescriptionTest extends TestCase
         $D = PermissionDecision::Deny;
 
         return [
-            // "Reads run silently, and WebFetch is classed a read — it fetches
-            //  without asking. Everything else asks first: writes, shell, and
-            //  WebSearch."
+            // "Reads run silently. Everything else asks first: writes, shell,
+            //  WebFetch and WebSearch."  WebFetch was ALLOW here until audit
+            //  F-P6 took it out of the read-only class.
             'default' => [
-                'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $A,
+                'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $K, 'WebFetch with query' => $K,
                 'WebSearch' => $K, 'Write tool' => $K, 'Edit tool' => $K,
+                'Write outside root' => $K, 'Write into .git' => $K,
                 'Bash exploring' => $K, 'Bash mkdir scoped' => $K, 'Bash rm scoped' => $K,
                 'Bash rm unscoped' => $K, 'Bash redirecting' => $K, 'Bash fetching' => $K,
                 'Bash into shell' => $K, 'MCP tool' => $K,
             ],
-            // "Reads run. Shell filesystem commands (mkdir, touch, mv, cp, rm,
-            //  rmdir) on paths below the working directory also run without
-            //  asking, and the same command on a path outside it asks.
-            //  Everything else — the Write and Edit tools included — asks."
+            // "Reads run, and so do edits: the Write and Edit tools on a file
+            //  inside the project, and the shell commands mkdir, touch and
+            //  rmdir on paths below the working directory. The same edit
+            //  outside the project, or into .git or policy files, asks.
+            //  Everything else asks too — rm, mv and cp included, and
+            //  WebFetch."
+            //
+            // Audit F-P4 inverted two cells: `Write tool`/`Edit tool` were
+            // ASK and `Bash rm scoped` was ALLOW.
             'accept-edits' => [
-                'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $A,
-                'WebSearch' => $K, 'Write tool' => $K, 'Edit tool' => $K,
-                'Bash exploring' => $K, 'Bash mkdir scoped' => $A, 'Bash rm scoped' => $A,
+                'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $K, 'WebFetch with query' => $K,
+                'WebSearch' => $K, 'Write tool' => $A, 'Edit tool' => $A,
+                'Write outside root' => $K, 'Write into .git' => $K,
+                'Bash exploring' => $K, 'Bash mkdir scoped' => $A, 'Bash rm scoped' => $K,
                 'Bash rm unscoped' => $K, 'Bash redirecting' => $K, 'Bash fetching' => $K,
                 'Bash into shell' => $K, 'MCP tool' => $K,
             ],
@@ -136,32 +150,43 @@ final class PermissionModeDescriptionTest extends TestCase
             //  read-only commands (`git log`, `grep`, `ls` …) with no output
             //  redirection or substitution. Any other shell command is denied —
             //  a destructive `rm` and an outbound `curl` included — as is every
-            //  write through Write, Edit or an MCP tool."
+            //  write through Write, Edit or an MCP tool. WebFetch and
+            //  WebSearch ask."
             //
             // Every Bash cell but `Bash exploring` was ALLOW before audit F-P2
             // (only the redirect was denied): `rm`, `mkdir`, `curl` and a
             // pipe-into-shell all ran under the mode that promises no changes.
             'plan' => [
-                'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $A,
+                'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $K, 'WebFetch with query' => $K,
                 'WebSearch' => $K, 'Write tool' => $D, 'Edit tool' => $D,
+                'Write outside root' => $D, 'Write into .git' => $D,
                 'Bash exploring' => $A, 'Bash mkdir scoped' => $D, 'Bash rm scoped' => $D,
                 'Bash rm unscoped' => $D, 'Bash redirecting' => $D, 'Bash fetching' => $D,
                 'Bash into shell' => $D, 'MCP tool' => $D,
             ],
-            // "Everything runs unless the safety classifier objects. Blocked
-            //  commands trip a circuit breaker that escalates to asking."
+            // "Everything runs unless the safety classifier objects — it reads
+            //  shell commands, Edit and Write targets (outside the project,
+            //  .git and policy files are blocked) and WebFetch URLs that carry
+            //  a query. MCP tools ask first. Blocked calls trip a circuit
+            //  breaker that escalates to asking."
+            //
+            // `Write outside root`, `Write into .git`, `WebFetch with query`
+            // and `MCP tool` were all ALLOW before audit F-P3(b): the
+            // classifier read `Bash` and nothing else.
             'auto' => [
-                'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $A,
+                'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $A, 'WebFetch with query' => $D,
                 'WebSearch' => $A, 'Write tool' => $A, 'Edit tool' => $A,
+                'Write outside root' => $D, 'Write into .git' => $D,
                 'Bash exploring' => $A, 'Bash mkdir scoped' => $A, 'Bash rm scoped' => $A,
                 'Bash rm unscoped' => $A, 'Bash redirecting' => $A, 'Bash fetching' => $A,
-                'Bash into shell' => $D, 'MCP tool' => $A,
+                'Bash into shell' => $D, 'MCP tool' => $K,
             ],
-            // "Read-only tools run. Everything else is denied outright rather
-            //  than asked about."
+            // "Read-only tools run; WebFetch is not one of them. Everything
+            //  else is denied outright rather than asked about."
             'dont-ask' => [
-                'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $A,
+                'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $D, 'WebFetch with query' => $D,
                 'WebSearch' => $D, 'Write tool' => $D, 'Edit tool' => $D,
+                'Write outside root' => $D, 'Write into .git' => $D,
                 'Bash exploring' => $D, 'Bash mkdir scoped' => $D, 'Bash rm scoped' => $D,
                 'Bash rm unscoped' => $D, 'Bash redirecting' => $D, 'Bash fetching' => $D,
                 'Bash into shell' => $D, 'MCP tool' => $D,
@@ -171,8 +196,9 @@ final class PermissionModeDescriptionTest extends TestCase
             //  the second sentence need a rule or a breaker command, so they are
             //  anchored by testBypassRefusesOnlyThroughADenyRuleOrTheBreaker().
             'bypass-permissions' => [
-                'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $A,
+                'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $A, 'WebFetch with query' => $A,
                 'WebSearch' => $A, 'Write tool' => $A, 'Edit tool' => $A,
+                'Write outside root' => $A, 'Write into .git' => $A,
                 'Bash exploring' => $A, 'Bash mkdir scoped' => $A, 'Bash rm scoped' => $A,
                 'Bash rm unscoped' => $A, 'Bash redirecting' => $A, 'Bash fetching' => $A,
                 'Bash into shell' => $A, 'MCP tool' => $A,
@@ -201,17 +227,19 @@ final class PermissionModeDescriptionTest extends TestCase
         return [
             'default' => [
                 ['Reads run silently', 'Read'],
-                ['WebFetch is classed a read', 'WebFetch'],
                 ['asks first: writes', 'Write tool'],
                 ['shell', 'Bash exploring'],
+                ['WebFetch', 'WebFetch'],
                 ['WebSearch', 'WebSearch'],
             ],
             'accept-edits' => [
-                ['Reads run.', 'Read'],
-                ['mkdir, touch, mv, cp, rm, rmdir', 'Bash mkdir scoped'],
-                ['below the working directory also run without asking', 'Bash rm scoped'],
-                ['on a path outside it asks', 'Bash rm unscoped'],
-                ['the Write and Edit tools included — asks', 'Write tool'],
+                ['Reads run', 'Read'],
+                ['the Write and Edit tools on a file inside the project', 'Write tool'],
+                ['mkdir, touch and rmdir on paths below the working directory', 'Bash mkdir scoped'],
+                ['The same edit outside the project', 'Write outside root'],
+                ['or into .git or policy files, asks', 'Write into .git'],
+                ['rm, mv and cp included', 'Bash rm scoped'],
+                ['and WebFetch', 'WebFetch'],
             ],
             'plan' => [
                 ['Reads run', 'Read'],
@@ -221,13 +249,19 @@ final class PermissionModeDescriptionTest extends TestCase
                 ['a destructive `rm`', 'Bash rm scoped'],
                 ['an outbound `curl`', 'Bash fetching'],
                 ['every write through Write, Edit or an MCP tool', 'MCP tool'],
+                ['WebFetch and WebSearch ask', 'WebFetch'],
             ],
             'auto' => [
                 ['Everything runs unless the safety classifier objects', 'Bash exploring'],
+                ['Edit and Write targets (outside the project', 'Write outside root'],
+                ['.git and policy files are blocked', 'Write into .git'],
+                ['WebFetch URLs that carry a query', 'WebFetch with query'],
+                ['MCP tools ask first', 'MCP tool'],
                 ['circuit breaker that escalates to asking', 'Bash into shell'],
             ],
             'dont-ask' => [
                 ['Read-only tools run', 'Read'],
+                ['WebFetch is not one of them', 'WebFetch'],
                 ['denied outright rather than asked about', 'Write tool'],
             ],
             'bypass-permissions' => [
@@ -321,7 +355,7 @@ final class PermissionModeDescriptionTest extends TestCase
     {
         return [
             'default' => 'Reads run silently',
-            'accept-edits' => 'mkdir, touch, mv, cp, rm, rmdir',
+            'accept-edits' => 'mkdir, touch and rmdir',
             'plan' => 'known read-only commands',
             'auto' => 'circuit breaker',
             'dont-ask' => 'denied outright',

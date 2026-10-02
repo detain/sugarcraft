@@ -3677,8 +3677,16 @@ final class DocFigureProseDriftTest extends TestCase
      * E686 tranche-9 (AY): the bridge-name convention and the permission
      * matrix the MCP.md page summarizes — NAME_PREFIX and its concatenation,
      * the McpToolBridge class doc-block's own six-row table against the
-     * PermissionMode enum, exactly one divergence (plan), and the isWriteTool
-     * mcp__ clause the divergence runs through.
+     * PermissionMode enum, exactly two divergences (plan, and auto since
+     * audit F-P3(b) made it ask before every mcp__ call), and the isWriteTool
+     * mcp__ clause the plan divergence runs through.
+     *
+     * KNOWN STALE PAGE, left pinned on purpose rather than loosened: MCP.md
+     * still says "five of the six … diverges under `plan`". The page was
+     * locked by a concurrent change (wave 7) when the auto divergence landed,
+     * so the bridge note moved and the page could not; the integrator flips
+     * the page sentence and the regex below together (to "four of the six …
+     * diverges under `plan` and `auto`").
      */
     public function testBridgeNamingAndPermissionMatrixCoincideWithThePage(): void
     {
@@ -3703,7 +3711,7 @@ final class DocFigureProseDriftTest extends TestCase
             preg_match("/coincides with `Bash`'s in five of the six permission modes and diverges under `plan`/", $mcp),
             'the coincidence sentence no longer states five-of-six with its diverging mode',
         );
-        $wordNumbers = ['five' => 5, 'six' => 6];
+        $wordNumbers = ['four' => 4, 'six' => 6];
         $cases = PermissionMode::cases();
         self::assertCount($wordNumbers['six'], $cases, 'PermissionMode gained or lost a case — every mode matrix on the page and in the bridge doc-block must move together');
 
@@ -3718,18 +3726,19 @@ final class DocFigureProseDriftTest extends TestCase
         }
         self::assertCount(6, $byMode, 'the bridge doc-block matrix no longer carries one row per permission mode (its header row never counts)');
         self::assertEqualsCanonicalizing($values, array_keys($byMode), 'the matrix rows and PermissionMode::cases() values disagree — this is the same enum-equality gate the permission page carries, now also under the bridge note');
-        $divergent = array_values(array_filter($byMode, static fn (array $row): bool => str_contains($row[2], 'diverges')));
-        self::assertCount(1, $divergent, 'exactly one row may diverge — the page says five of six coincide');
-        self::assertSame('plan', array_key_first(array_filter($byMode, static fn (array $row): bool => str_contains($row[2], 'diverges'))), 'the divergence moved off plan — MCP.md names plan as the diverging mode');
+        $divergent = array_keys(array_filter($byMode, static fn (array $row): bool => str_contains($row[2], 'diverges')));
+        sort($divergent);
+        self::assertSame(['auto', 'plan'], $divergent, 'exactly plan and auto may diverge — the bridge note says four of six coincide');
         self::assertSame(['DENIED', 'ALLOWED'], array_slice($byMode['plan'], 0, 2), 'plan no longer denies the mcp__ name while allowing Bash — the conservative-direction paragraph depends on this shape');
+        self::assertSame(['ASKS', 'allowed'], array_slice($byMode['auto'], 0, 2), 'auto no longer asks before the mcp__ name while allowing Bash — the conservative-direction paragraph depends on this shape');
         $coincident = 0;
         foreach ($byMode as $row) {
             if ($row[0] === $row[1]) {
                 ++$coincident;
             }
         }
-        self::assertSame($wordNumbers['five'], $coincident, 'the column count of coinciding verdicts stopped matching the page and the bridge note ("Five of six coincide.")');
-        self::assertStringContainsString('Five of six coincide.', self::proseOf($bridgeDoc), 'the bridge note\'s own count sentence drifted from its table — flip note and page together');
+        self::assertSame($wordNumbers['four'], $coincident, 'the column count of coinciding verdicts stopped matching the bridge note ("Four of six coincide.")');
+        self::assertStringContainsString('Four of six coincide.', self::proseOf($bridgeDoc), 'the bridge note\'s own count sentence drifted from its table — flip note and page together');
 
         $gate = self::bodyExcerpt(self::sourceOf('Permissions/PermissionGate.php'), 'isWriteTool');
         self::assertStringContainsString("'mcp__'", $gate, 'isWriteTool() no longer treats mcp__ names as writes — the plan-row divergence and the page sentence both run through this clause');

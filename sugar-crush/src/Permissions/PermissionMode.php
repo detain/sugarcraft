@@ -66,8 +66,12 @@ enum PermissionMode: string
             // the false one. That is why the table below is now TOTAL over a
             // probe set rather than a hand-picked subset: a claim cannot be the
             // one nobody measured when every tool is measured for every mode.
-            self::Default => 'Reads run silently, and WebFetch is classed a read — it fetches without '
-                . 'asking. Everything else asks first: writes, shell, and WebSearch.',
+            //
+            // And then the POLICY moved under it (audit F-P6): an outbound
+            // fetch whose URL the model composes is how a secret leaves, so
+            // WebFetch left the read-only class and now asks with the rest.
+            self::Default => 'Reads run silently. Everything else asks first: writes, shell, WebFetch '
+                . 'and WebSearch.',
             // MEASURED, not assumed. A first draft of this said "writes scoped
             // to the working directory run without asking", which reads as the
             // Write and Edit TOOLS — and PermissionGate::evaluateAcceptEdits()
@@ -83,9 +87,16 @@ enum PermissionMode: string
             // isReadOnlyTool() check `default` uses. The reads clause is now
             // stated rather than left to be inferred from a word that excluded
             // it.
-            self::AcceptEdits => 'Reads run. Shell filesystem commands (mkdir, touch, mv, cp, rm, rmdir) '
-                . 'on paths below the working directory also run without asking, and the same command on a '
-                . 'path outside it asks. Everything else — the Write and Edit tools included — asks.',
+            //
+            // Then the POLICY was inverted rather than the sentence (audit
+            // F-P4): the mode named for accepting edits asked about the Write
+            // and Edit tools while running `rm`, `mv` and `cp` unprompted. The
+            // tools now carry the grant inside the project, and the shell keeps
+            // only the create-only verbs.
+            self::AcceptEdits => 'Reads run, and so do edits: the Write and Edit tools on a file inside the '
+                . 'project, and the shell commands mkdir, touch and rmdir on paths below the working '
+                . 'directory. The same edit outside the project, or into .git or policy files, asks. '
+                . 'Everything else asks too — rm, mv and cp included, and WebFetch.',
             // MEASURED, twice. The first sentence here said "every other write
             // is denied", which was false for a Bash write: evaluatePlan() then
             // allowed every Bash call a three-regex redirect check missed, so
@@ -102,11 +113,17 @@ enum PermissionMode: string
             self::Plan => 'Reads run, and so does a shell command made only of known read-only commands '
                 . '(`git log`, `grep`, `ls` …) with no output redirection or substitution. Any other shell '
                 . 'command is denied — a destructive `rm` and an outbound `curl` included — as is every write '
-                . 'through Write, Edit or an MCP tool.',
-            self::Auto => 'Everything runs unless the safety classifier objects. Blocked commands '
-                . 'trip a circuit breaker that escalates to asking.',
-            self::DontAsk => 'Read-only tools run. Everything else is denied outright rather than '
-                . 'asked about.',
+                . 'through Write, Edit or an MCP tool. WebFetch and WebSearch ask.',
+            // The classifier's reach is spelled out because it widened (audit
+            // F-P3(b)): it used to read shell commands only, so a Write into
+            // `.git/hooks`, a WebFetch carrying `?k=SECRET` and every MCP call
+            // ran under "unless the classifier objects" with nothing to object.
+            self::Auto => 'Everything runs unless the safety classifier objects — it reads shell commands, '
+                . 'Edit and Write targets (outside the project, .git and policy files are blocked) and '
+                . 'WebFetch URLs that carry a query. MCP tools ask first. Blocked calls trip a circuit '
+                . 'breaker that escalates to asking.',
+            self::DontAsk => 'Read-only tools run; WebFetch is not one of them. Everything else is denied '
+                . 'outright rather than asked about.',
             self::BypassPermissions => 'The mode gates nothing. Only explicit deny rules and the '
                 . 'unswitchable `rm -rf /` breaker still refuse.',
         };

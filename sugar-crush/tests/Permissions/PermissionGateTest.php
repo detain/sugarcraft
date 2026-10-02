@@ -127,7 +127,13 @@ final class PermissionGateTest extends TestCase
         $this->assertSame(PermissionDecision::Ask, $decision);
     }
 
-    public function testAcceptEditsPromptsOnEdit(): void
+    /**
+     * Inverted by audit F-P4: this asserted Ask, which made the mode named
+     * for accepting edits refuse the reviewable edit tool while it ran `rm`
+     * unprompted. An in-root Edit now runs; PermissionGateAcceptEditsTest
+     * covers the targets that still ask.
+     */
+    public function testAcceptEditsAllowsAnInRootEdit(): void
     {
         $gate = new PermissionGate(PermissionMode::AcceptEdits);
 
@@ -136,7 +142,7 @@ final class PermissionGateTest extends TestCase
             arguments: ['file_path' => './foo.php', 'old_string' => 'x', 'new_string' => 'y'],
         ));
 
-        $this->assertSame(PermissionDecision::Ask, $decision);
+        $this->assertSame(PermissionDecision::Allow, $decision);
     }
 
     // =========================================================================

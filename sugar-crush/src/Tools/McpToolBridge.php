@@ -43,17 +43,22 @@ use SugarCraft\Crush\MCP\McpTool;
  *     default              ask                 ask
  *     accept-edits         ask                 ask
  *     plan                 DENIED              ALLOWED   <- diverges
- *     auto                 allowed             allowed
+ *     auto                 ASKS                allowed   <- diverges
  *     dont-ask             DENIED              DENIED
  *     bypass-permissions   allowed             allowed
  *
- * Five of six coincide. `plan` diverges because
+ * Four of six coincide. `auto` diverges because audit F-P3(b) made
+ * {@see \SugarCraft\Crush\Permissions\PermissionGate::evaluateAuto()} ask
+ * before every `mcp__*` call — a server-defined capability gives the safety
+ * classifier nothing to read, so it used to run unjudged — while a `Bash`
+ * call is classified by its command (`Bash` here is the bare name, which the
+ * classifier passes). `plan` diverges because
  * {@see \SugarCraft\Crush\Permissions\PermissionGate::evaluatePlan()} allows
  * `Bash` for EXPLORATION — its own doc-block says so — while
  * {@see \SugarCraft\Crush\Permissions\PermissionGate::isWriteTool()} treats every
  * `mcp__` name as a write, and a server-side tool's effects are unknowable from
- * here. So the divergence runs in the CONSERVATIVE direction: the `mcp__*` name
- * is the more restricted of the two, never the less. It is not a hole, and it is
+ * here. So both divergences run in the CONSERVATIVE direction: the `mcp__*`
+ * name is the more restricted of the two, never the less. It is not a hole, and it is
  * written down because the sentence it replaces was the load-bearing half of a
  * safety argument and `plan` is the mode the differential test drives.
  *

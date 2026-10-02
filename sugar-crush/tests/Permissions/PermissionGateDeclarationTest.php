@@ -49,16 +49,19 @@ final class PermissionGateDeclarationTest extends TestCase
     public static function declarationMatrix(): iterable
     {
         $expected = [
-            // mode                            => [Read,  Bash,  Edit,  Write, mcp__git__push]
-            PermissionMode::Default->value => [false, false, false, false, false],
-            PermissionMode::AcceptEdits->value => [false, false, false, false, false],
-            PermissionMode::Plan->value => [false, false, true,  true,  true],
-            PermissionMode::Auto->value => [false, false, false, false, false],
-            PermissionMode::DontAsk->value => [false, true,  true,  true,  true],
-            PermissionMode::BypassPermissions->value => [false, false, false, false, false],
+            // mode                            => [Read,  Bash,  Edit,  Write, mcp__git__push, WebFetch]
+            //
+            // `WebFetch` joined the matrix with audit F-P6: it left the
+            // read-only class, so `dont-ask` now refuses its declaration.
+            PermissionMode::Default->value => [false, false, false, false, false, false],
+            PermissionMode::AcceptEdits->value => [false, false, false, false, false, false],
+            PermissionMode::Plan->value => [false, false, true,  true,  true,  false],
+            PermissionMode::Auto->value => [false, false, false, false, false, false],
+            PermissionMode::DontAsk->value => [false, true,  true,  true,  true,  true],
+            PermissionMode::BypassPermissions->value => [false, false, false, false, false, false],
         ];
 
-        $tools = ['Read', 'Bash', 'Edit', 'Write', 'mcp__git__push'];
+        $tools = ['Read', 'Bash', 'Edit', 'Write', 'mcp__git__push', 'WebFetch'];
 
         foreach ($expected as $modeValue => $refusals) {
             $mode = PermissionMode::from($modeValue);
@@ -284,6 +287,13 @@ final class PermissionGateDeclarationTest extends TestCase
      * distinction {@see PermissionRule::matches()} draws. For that pair the
      * test asserts the property that actually matters instead: some real call
      * under that declaration is allowed, so refusing it would be wrong.
+     *
+     * THREE MORE ARE ARGUMENT-DEPENDENT since audit F-P3(b), for the same
+     * reason: under `auto` the classifier judges `Edit`/`Write` by their target
+     * and `WebFetch` by its URL, so a call with neither is a fail-closed block
+     * ("not provably inside the root", "unparseable URL") while the
+     * declaration is not refused. Same treatment: an in-root edit and a plain
+     * fetch under the same declaration are allowed.
      */
     #[\PHPUnit\Framework\Attributes\DataProvider('declarationMatrix')]
     public function testRefusesAgreesWithEvaluateOnTheSameDeclaration(
@@ -301,6 +311,24 @@ final class PermissionGateDeclarationTest extends TestCase
                 PermissionDecision::Allow,
                 $evaluating->evaluate(new ToolCall($tool, ['command' => 'git log --oneline'])),
                 'plan does not refuse a Bash declaration because a read-only Bash call is allowed — and it was not',
+            );
+
+            return;
+        }
+
+        $autoWitnesses = [
+            'Edit' => ['file_path' => './src/a.php'],
+            'Write' => ['file_path' => './src/a.php'],
+            'WebFetch' => ['url' => 'https://example.com/docs'],
+        ];
+        if ($mode === PermissionMode::Auto && isset($autoWitnesses[$tool])) {
+            $this->assertFalse($refusing->refuses(new ToolDeclaration($tool)));
+            $this->assertSame(PermissionDecision::Deny, $evaluating->evaluate(new ToolCall($tool)));
+            $this->assertSame(
+                PermissionDecision::Allow,
+                (new PermissionGate($mode, [], new SafetyClassifier()))
+                    ->evaluate(new ToolCall($tool, $autoWitnesses[$tool])),
+                "auto does not refuse a {$tool} declaration because an ordinary {$tool} call is allowed — and it was not",
             );
 
             return;

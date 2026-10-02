@@ -778,8 +778,10 @@ final class ForeignAgentPresetRegistry
      * nothing has to be lost. The rewrite is surgically anchored: only the
      * `(prefix:*)` tail form — Claude's documented prefix-match rule — is
      * touched. Every other shape passes through byte-identically, including
-     * `WebFetch(domain:github.com)` (a colon with no `*` tail, whose meaning
-     * this project's matcher does not share) and already-native `Bash(git *)`.
+     * `WebFetch(domain:github.com)` (a colon with no `*` tail — and since
+     * audit F-P6 a form {@see \SugarCraft\Crush\Permissions\PermissionRule}
+     * matches natively, against the url's host) and already-native
+     * `Bash(git *)`.
      * This is a boundary translation, not a general YAML or dialect parser —
      * adding a second syntax this class cannot enforce is how the next E645
      * gets written.
