@@ -313,9 +313,10 @@ final class ReasoningExtractionTest extends TestCase
     // so a properly-splitting parser is told to populate reasoning_content
     // even if a given deployment's default ever changes. SglangProvider sends
     // it at the top level (W1.A3 fix: the `extra_body` wrapper D3/D4 called
-    // for is a Python-SDK concept SGLang itself never parses); CustomProvider
-    // still uses the ineffective nested form - out of scope here, tracked in
-    // crush_feat.md §12 D4.
+    // for is a Python-SDK concept SGLang itself never parses). CustomProvider
+    // used to send that ineffective nested form, which strict servers 400 on
+    // (audit 15a A10); it now sends no flag by default and puts an opt-in
+    // `extraBody` flag at the top level, like SglangProvider.
     // -------------------------------------------------------------------------
 
     public function testSglangCompletePinsSeparateReasoningInRequestBody(): void
@@ -339,10 +340,14 @@ final class ReasoningExtractionTest extends TestCase
         $this->assertTrue($sent['separate_reasoning'] ?? null);
     }
 
-    public function testCustomProviderCompletePinsSeparateReasoningInRequestBody(): void
+    public function testCustomProviderCompleteSendsSeparateReasoningTopLevelOnlyWhenOptedIn(): void
     {
         $history = [];
         $mock = new MockHandler([
+            new Response(200, [], json_encode([
+                'choices' => [['message' => ['content' => 'ok']]],
+                'usage' => ['total_tokens' => 1],
+            ])),
             new Response(200, [], json_encode([
                 'choices' => [['message' => ['content' => 'ok']]],
                 'usage' => ['total_tokens' => 1],
@@ -351,12 +356,29 @@ final class ReasoningExtractionTest extends TestCase
         $stack = HandlerStack::create($mock);
         $stack->push(Middleware::history($history));
         $httpClient = new Client(['base_uri' => 'https://api.example.com/', 'handler' => $stack]);
+        $request = new CompleteRequest(model: 'MiniMax-M2.7', messages: [new UserMessage('Hi')]);
 
-        $provider = new CustomProvider('local-sglang', 'https://api.example.com', 'MiniMax-M2.7', null, $httpClient, true, true);
-        $provider->complete(new CompleteRequest(model: 'MiniMax-M2.7', messages: [new UserMessage('Hi')]));
+        $default = new CustomProvider('local-sglang', 'https://api.example.com', 'MiniMax-M2.7', null, $httpClient, true, true);
+        $default->complete($request);
 
-        $sent = json_decode((string) $history[0]['request']->getBody(), true);
+        $optedIn = new CustomProvider(
+            'local-sglang',
+            'https://api.example.com',
+            'MiniMax-M2.7',
+            null,
+            $httpClient,
+            true,
+            true,
+            extraBody: ['separate_reasoning' => true],
+        );
+        $optedIn->complete($request);
 
-        $this->assertTrue($sent['extra_body']['separate_reasoning'] ?? null);
+        $defaultSent = json_decode((string) $history[0]['request']->getBody(), true);
+        $this->assertArrayNotHasKey('extra_body', $defaultSent);
+        $this->assertArrayNotHasKey('separate_reasoning', $defaultSent);
+
+        $optedInSent = json_decode((string) $history[1]['request']->getBody(), true);
+        $this->assertArrayNotHasKey('extra_body', $optedInSent);
+        $this->assertTrue($optedInSent['separate_reasoning'] ?? null);
     }
 }

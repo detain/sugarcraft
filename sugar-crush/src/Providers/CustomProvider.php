@@ -46,6 +46,25 @@ final readonly class CustomProvider implements ProviderInterface
     /** Bytes of a dropped call's raw arguments quoted in its warning. */
     private const WARNING_EXCERPT_LIMIT = 200;
 
+    /**
+     * Audit 15a A10: the body keys complete()/completeStream() write
+     * themselves. An `$extraBody` entry naming one is rejected at
+     * construction rather than silently overriding (or being overridden by)
+     * the provider's own value - either outcome would ship a request the
+     * caller didn't ask for.
+     *
+     * @var list<string>
+     */
+    private const RESERVED_BODY_KEYS = [
+        'model',
+        'messages',
+        'temperature',
+        'max_tokens',
+        'stream',
+        'stream_options',
+        'tools',
+    ];
+
     public function __construct(
         private string $name,
         private string $baseUrl,
@@ -62,8 +81,59 @@ final readonly class CustomProvider implements ProviderInterface
          * {@see SessionAffinity} trait docblock.
          */
         private ?string $sessionAffinityId = null,
-    ) {}
+        /**
+         * Audit 15a A10: server-specific request fields, merged into the TOP
+         * LEVEL of every chat/completions body.
+         *
+         * `extra_body` is an OpenAI *Python SDK* client-side argument: the SDK
+         * splices that dict into the JSON body before it hits the wire, so the
+         * server only ever sees its keys at the top level. This provider used
+         * to send a literal `"extra_body": {"separate_reasoning": true}` key,
+         * which strict OpenAI-compatible servers (api.openai.com, hosted
+         * gateways) answer with a 400 on every request, while lenient ones
+         * (SGLang - see SglangProvider::buildParams()) drop it unparsed, so
+         * the flag never reached anyone. Merging top-level here is what the
+         * SDK does.
+         *
+         * The default is empty, not `['separate_reasoning' => true]`: this
+         * class also fronts the `anthropic` type and arbitrary custom servers,
+         * and a strict server rejects an unknown top-level field just as it
+         * rejected `extra_body`. Opt in per server that understands the key.
+         * This parameter is the seam a future per-provider config key would
+         * feed; nothing wires one yet.
+         *
+         * @var array<string, mixed>
+         */
+        private array $extraBody = [],
+    ) {
+        foreach (array_keys($extraBody) as $key) {
+            if (!is_string($key) || $key === '') {
+                throw new \InvalidArgumentException(sprintf(
+                    'CustomProvider extraBody keys must be non-empty strings, got %s.',
+                    var_export($key, true),
+                ));
+            }
+            if ($key === 'extra_body') {
+                throw new \InvalidArgumentException(
+                    'CustomProvider extraBody must not contain an "extra_body" key: extra_body is an OpenAI '
+                    . 'Python SDK argument the SDK flattens into the body, and sent literally it is an unknown '
+                    . 'field strict servers reject. Pass its inner keys (e.g. ["separate_reasoning" => true]) '
+                    . 'directly instead.',
+                );
+            }
+            if (in_array($key, self::RESERVED_BODY_KEYS, true)) {
+                throw new \InvalidArgumentException(sprintf(
+                    'CustomProvider extraBody must not set "%s": the provider writes that body key itself.',
+                    $key,
+                ));
+            }
+        }
+    }
 
+    /**
+     * @param array<string, mixed> $extraBody Top-level server-specific body
+     *        fields; see the constructor's `$extraBody` for the contract.
+     */
     public static function openAiCompatible(
         string $name,
         string $baseUrl,
@@ -72,6 +142,7 @@ final readonly class CustomProvider implements ProviderInterface
         bool $supportsStreaming = true,
         bool $supportsFunctionCalling = true,
         ?string $sessionAffinityId = null,
+        array $extraBody = [],
     ): self {
         $headers = [
             'Content-Type' => 'application/json',
@@ -101,6 +172,7 @@ final readonly class CustomProvider implements ProviderInterface
             supportsStreaming: $supportsStreaming,
             supportsFunctionCalling: $supportsFunctionCalling,
             sessionAffinityId: $sessionAffinityId,
+            extraBody: $extraBody,
         );
     }
 
@@ -166,14 +238,16 @@ final readonly class CustomProvider implements ProviderInterface
             'messages' => $this->formatMessages($request->messages),
             'temperature' => $request->temperature ?? 0.7,
             'max_tokens' => $request->maxTokens ?? 4096,
-            // Pin the reasoning-splitting flag explicitly rather than relying
-            // on a self-hosted backend's default (see SglangProvider - a
-            // CustomProvider instance frequently points at the same class of
-            // OpenAI-compatible self-hosted server). A no-op for any parser
-            // that doesn't understand it, and a no-op for `minimax-append-think`
-            // specifically, which is exactly why extractReasoning()'s
-            // <think>-stripping fallback below still matters regardless.
-            'extra_body' => ['separate_reasoning' => true],
+            // No reasoning-splitting flag by default (audit 15a A10): the old
+            // literal `extra_body` wrapper was never parsed by SGLang (the
+            // self-hosted class of server a CustomProvider instance frequently
+            // points at - see SglangProvider) and is a 400 on strict servers.
+            // A deployment that understands `separate_reasoning` opts in
+            // through the `$extraBody` constructor parameter (merged
+            // top-level by withExtraBody()).
+            // Either way extractReasoning()'s <think>-stripping fallback in
+            // parseResponse() is what handles reasoning on this provider -
+            // a parser such as `minimax-append-think` inlines it regardless.
         ];
 
         if ($request->tools !== null && $this->supportsFunctionCalling) {
@@ -196,7 +270,7 @@ final readonly class CustomProvider implements ProviderInterface
             // heartbeatOptions() is [] unless E493's caller supplied a
             // progress closure, so the spread is byte-neutral otherwise.
             $response = $this->httpClient->post('chat/completions', [
-                'json' => $params,
+                'json' => $this->withExtraBody($params),
                 'headers' => $this->sessionAffinityHeaders(),
             ] + self::heartbeatOptions($request->onHeartbeat));
 
@@ -215,6 +289,21 @@ final readonly class CustomProvider implements ProviderInterface
                 errorTransient: TransientFailure::isTransient($e),
             );
         }
+    }
+
+    /**
+     * Audit 15a A10: the one place `$extraBody` reaches the wire, shared by
+     * complete() and completeStream() so the two bodies cannot drift. The
+     * constructor already rejected every key the provider writes itself;
+     * the `+` union additionally keeps the provider's own value should a
+     * new body key be added without updating RESERVED_BODY_KEYS.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function withExtraBody(array $params): array
+    {
+        return $params + $this->extraBody;
     }
 
     /**
@@ -241,7 +330,6 @@ final readonly class CustomProvider implements ProviderInterface
             // capture below, which leaves the turn unreported — the same
             // honest null the batch path gives, never a fabricated count.
             'stream_options' => ['include_usage' => true],
-            'extra_body' => ['separate_reasoning' => true],
         ];
 
         if ($request->tools !== null && $this->supportsFunctionCalling) {
@@ -260,7 +348,7 @@ final readonly class CustomProvider implements ProviderInterface
 
         try {
             $response = $this->httpClient->post('chat/completions', [
-                'json' => $params,
+                'json' => $this->withExtraBody($params),
                 'stream' => true,
                 'headers' => $this->sessionAffinityHeaders(),
             ]);
