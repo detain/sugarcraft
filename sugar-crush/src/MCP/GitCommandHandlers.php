@@ -39,7 +39,8 @@ final readonly class GitCommandHandlers
      * large: a pre-commit hook running a test suite or a linter is the normal
      * case, not the pathological one, and killing it mid-run would turn a
      * slow commit into a failed one. Five minutes bounds the hang without
-     * second-guessing a legitimate hook.
+     * second-guessing a legitimate hook. A `.mcp.json` `git` entry overrides
+     * it with its `timeout` key ({@see configuredTimeout()}, audit R18).
      */
     public const DEFAULT_TIMEOUT_SECONDS = 300.0;
 
@@ -104,6 +105,38 @@ final readonly class GitCommandHandlers
         if (!($timeoutSeconds > 0.0)) {
             throw new \InvalidArgumentException("Git timeout must be positive, got {$timeoutSeconds}");
         }
+    }
+
+    /**
+     * The per-call bound a `.mcp.json` `"type": "git"` entry's `timeout` key
+     * asks for, in seconds (audit R18, residual of GIT-2).
+     *
+     * WHY it is configurable: {@see DEFAULT_TIMEOUT_SECONDS} is sized for a
+     * pre-commit hook that runs a linter or a test suite, but a repository
+     * whose hooks run a longer suite needs more, one that wants a hung hook
+     * reported quickly needs less — and the bound used to be reachable only
+     * from PHP.
+     *
+     * Only a positive finite number is honoured, the same rule as a stdio
+     * entry's `startTimeout`: anything else (absent, a string that is not a
+     * number, 0, a negative, a boolean) yields the default, because a
+     * hand-edited config must not be able to turn the bound OFF by accident.
+     */
+    public static function configuredTimeout(mixed $value): float
+    {
+        if (!is_numeric($value)) {
+            return self::DEFAULT_TIMEOUT_SECONDS;
+        }
+
+        $seconds = (float) $value;
+
+        return $seconds > 0.0 && is_finite($seconds) ? $seconds : self::DEFAULT_TIMEOUT_SECONDS;
+    }
+
+    /** The wall-clock ceiling each git invocation runs under, in seconds. */
+    public function timeoutSeconds(): float
+    {
+        return $this->timeoutSeconds;
     }
 
     // =========================================================================

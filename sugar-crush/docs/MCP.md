@@ -114,7 +114,8 @@ whose entries `proc_open()` arbitrary commands. Its absence is a decision.
     },
     "repo": {
       "type": "git",
-      "path": "/home/you/src/myproject"
+      "path": "/home/you/src/myproject",
+      "timeout": 600
     }
   }
 }
@@ -126,7 +127,7 @@ Four types, and they are the four `McpClient::startServer()` constructs:
 |---|---|---|
 | `stdio` (the default when `type` is absent) | `StdioMcpServer` | `command`, `args`, `env`, `startTimeout` |
 | `http` | `HttpMcpServer` | `url`, `headers` |
-| `git` | `GitMcpServer` | `path` (omitted → this project) |
+| `git` | `GitMcpServer` | `path` (omitted → this project), `timeout` |
 | `claude-mcp` | `ClaudeCodeMcpServer` | none — the repository names nothing |
 
 Any other `type` — beyond the four above and the aliases below — **throws**
@@ -167,7 +168,7 @@ census, table first:
 |---|---|---|---|
 | Stdio | yes | `command`, `args` (+ optional `env`, `startTimeout`) | spawned child, JSON-RPC over pipes |
 | HTTP | yes | `url` (+ optional `headers`) | Streamable HTTP: one POST per message accepting `application/json, text/event-stream`, the `Mcp-Session-Id` from `initialize` echoed on every later request, replies read from a JSON body or SSE `data:` frames; a stored OAuth bearer attaches per request, and a static `Authorization` you set in the config wins over the store |
-| Git | yes | `path` (omit → this project) | in-process — no transport, no child, no socket |
+| Git | yes | `path` (omit → this project) (+ optional `timeout`) | in-process — no transport, no child, no socket |
 | Claude-mcp | yes | operator-tier `claudeMcpBinary` (+ optional `claudeMcpArgs`, `claudeMcpEnv`; never the entry) | spawned child under process containment, JSON-RPC over pipes |
 | SSE | **no** | — | spec-named and not implemented: `"type": "sse"` falls to the factory's default arm and throws `Unknown MCP server type: sse` — a config-error report, deferred until every OTHER entry has been attempted, so one `sse` entry costs only its own server |
 
@@ -594,8 +595,12 @@ the model can aim it at:
 Git itself, hooks included, runs under three guarantees:
 
 - **Each call is bounded.** A git command, including the hooks `gitCommit`
-  runs, gets 300 seconds. When that runs out, git and every process its hooks
-  started are killed, and the call fails with an error that says it timed out
+  runs, gets 300 seconds unless the entry's `timeout` says otherwise: set it
+  (in seconds) higher for a repository whose pre-commit hook runs a long test
+  suite, or lower to hear about a hung hook sooner. Only a positive number is
+  read; anything else — `0`, a negative, `"10m"` — keeps the 300-second
+  default, so the config cannot switch the bound off. When the bound runs
+  out, git and every process its hooks started are killed, and the call fails with an error that says it timed out
   and includes the end of git's stderr. Hook output never stalls a call,
   whatever its size. A failure keeps the last 64 KiB of stderr.
 - **Git inherits your environment.** `SSH_AUTH_SOCK`, `GNUPGHOME`, `LANG` and

@@ -436,10 +436,15 @@ final class McpClient
                 // an explicit store backed by a temp path for hermeticity.
                 authStore: $this->authStore ?? McpAuthStore::create(),
             ),
+            // `timeout` (seconds per git invocation, hooks included) is
+            // OPTIONAL — audit R18. GitCommandHandlers::configuredTimeout()
+            // honours only a positive number, like `startTimeout` above, so
+            // the config can move the bound but never switch it off.
             'git' => new GitMcpServer(
                 name: $name,
                 handlers: new GitCommandHandlers(
                     cwd: $config['path'] ?? null,
+                    timeoutSeconds: GitCommandHandlers::configuredTimeout($config['timeout'] ?? null),
                 ),
             ),
             // E699: the gated transport. Deliberately NOT `new ClaudeCodeMcpServer`

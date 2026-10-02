@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\MCP;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\MCP\GitCommandHandlers;
+use SugarCraft\Crush\MCP\McpClient;
 use SugarCraft\Crush\Support\ProcessContainment;
 
 /**
@@ -181,6 +182,35 @@ final class GitCommandHandlersProcessTest extends TestCase
     }
 
     /**
+     * Audit R18: the bound is configurable from `.mcp.json`. A `git` entry's
+     * `timeout` reaches the handlers McpClient builds, so a hook that sleeps
+     * well past it is killed at the configured second — before the fix the
+     * key was ignored, the 300 s default applied, and this commit waited the
+     * hook out and succeeded.
+     */
+    public function testMcpJsonTimeoutBoundsTheGitCallMcpClientBuilds(): void
+    {
+        $this->installPreCommitHook("echo 'slow hook started' >&2\nsleep 20");
+        $configPath = $this->tempDir . '/.mcp.json';
+        file_put_contents($configPath, (string) json_encode([
+            'mcpServers' => [
+                'repo' => ['type' => 'git', 'path' => $this->repoPath, 'timeout' => 1],
+            ],
+        ]));
+        $client = new McpClient($configPath, unrestricted: true);
+        $client->startServers();
+
+        $started = microtime(true);
+        $result = $client->callTool('repo', 'gitCommit', ['message' => 'bounded by .mcp.json']);
+        $elapsed = microtime(true) - $started;
+
+        $this->assertFalse($result['success'], 'the hook outlived the configured bound, so the commit must fail');
+        $this->assertStringContainsString('timed out after 1s', (string) $result['error']);
+        $this->assertLessThan(8.0, $elapsed, 'the configured one-second bound, not the 300 s default');
+        $this->assertSame('', $this->headSubject(), 'the timed-out commit must not exist');
+    }
+
+    /**
      * The child sees the inherited environment — set via putenv() at call
      * time, so it is not a snapshot — and git's no-prompt switch.
      */
@@ -225,6 +255,37 @@ final class GitCommandHandlersProcessTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
 
         new GitCommandHandlers($this->repoPath, timeoutSeconds: 0.0);
+    }
+
+    public function testConfiguredTimeoutReadsAPositiveNumberOfSeconds(): void
+    {
+        $this->assertSame(42.0, GitCommandHandlers::configuredTimeout(42));
+        $this->assertSame(1.5, GitCommandHandlers::configuredTimeout(1.5));
+        $this->assertSame(120.0, GitCommandHandlers::configuredTimeout('120'), 'a numeric string reads like startTimeout does');
+        $this->assertSame(42.0, (new GitCommandHandlers($this->repoPath, GitCommandHandlers::configuredTimeout(42)))->timeoutSeconds());
+    }
+
+    /**
+     * @return iterable<string, array{mixed}>
+     */
+    public static function unusableTimeouts(): iterable
+    {
+        yield 'absent' => [null];
+        yield 'zero' => [0];
+        yield 'negative' => [-5];
+        yield 'not a number' => ['10m'];
+        yield 'boolean' => [true];
+        yield 'list' => [[30]];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('unusableTimeouts')]
+    public function testConfiguredTimeoutKeepsTheDefaultForAnUnusableValue(mixed $value): void
+    {
+        $this->assertSame(
+            GitCommandHandlers::DEFAULT_TIMEOUT_SECONDS,
+            GitCommandHandlers::configuredTimeout($value),
+            'the config can move the bound but never switch it off',
+        );
     }
 
     /**
