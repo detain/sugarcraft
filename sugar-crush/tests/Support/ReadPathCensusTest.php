@@ -306,6 +306,12 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED — a rule body, read only for a path that already passed the directory anchor '
                 . 'and the per-entry within() compare',
         ],
+        'Diagnostics/TuiErrorLog.php|fopen' => [
+            'SELF_LOCATED — the TUI error log, `~/.sugar-crush/logs/sugarcrush.log` under the '
+                . 'owned home bin/sugarcrush passes in; opened `ab` only to create it under a 0077 '
+                . 'umask and write one launch header — nothing is read back. A symlinked file or a '
+                . 'world-writable directory is refused before the open (audit C2a)',
+        ],
         // CALLER_SUPPLIED, not CONTAINED_UPSTREAM, and the correction was made BY
         // this test: the first draft claimed the upstream gate was in
         // `Cli/Bootstrap.php`, and the measured check refused it, because Bootstrap's

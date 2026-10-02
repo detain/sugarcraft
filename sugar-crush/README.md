@@ -54,6 +54,8 @@ export SUGARCRUSH_MODEL=gpt-4o          # optional; provider default otherwise
 
 Every environment variable SugarCrush reads is documented in [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
 
+**Where the interactive TUI's diagnostics go.** Parser, provider and runtime warnings are written through PHP's `error_log()`, and in the TUI stderr is the screen being drawn on — so before the TUI starts, `error_log` is pointed at `~/.sugar-crush/logs/sugarcrush.log` (directory 0700, file 0600; a log over 5 MiB at launch is rotated to `sugarcrush.log.1`, and each launch writes a `session start pid=…` header). The ones meant for you also show up in the transcript as system rows. If your PHP ini already sets `error_log` to something other than stderr, that is left alone. `-p`/`run` and the subcommands are unaffected: they keep writing to stderr. If the log can't be set up (no home directory this process can confirm is yours, or a log directory it can't create), the TUI still launches. In that case the warnings that also have a transcript row are shown only there, and are not written to the screen. Any other `error_log()` line can still appear on the screen, as it did before this change.
+
 ### Non-interactive (one-shot) mode
 
 `bin/sugarcrush` parses `argv` *before* it constructs a `Program`, so the

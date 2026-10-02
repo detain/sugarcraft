@@ -34,7 +34,9 @@ use React\EventLoop\Loop;
  * transcript copy is clipped and bounded because those rows are part of the
  * CONVERSATION — sent to the model on every subsequent turn — which is the
  * argument {@see \SugarCraft\Crush\Cli\Bootstrap::LAUNCH_NOTICE_LIMIT}
- * makes for the launch list.
+ * makes for the launch list. In the TUI that record lands in
+ * {@see TuiErrorLog}'s private file rather than on the tty; the one case
+ * where {@see warn()} writes only the transcript copy is spelled out there.
  *
  * "BOUNDED" AND NOT "CAPPED", AND THE DIFFERENCE FROM THE LAUNCH LIST IS REAL.
  * WHAT THIS SAID: "clipped and capped … the same argument LAUNCH_NOTICE_LIMIT
@@ -362,10 +364,33 @@ final class RuntimeNoticeSink
      * WHY THE SENTENCE STILL EARNS ITS PLACE: it is the reason the order is
      * not to be "tidied" if `record()` ever DOES grow a throwing path — at
      * which point the swap becomes observable and gets a test.
+     *
+     * ONE CASE NOW SKIPS THE COPY (audit C2a). WHAT THIS USED TO SAY: the
+     * `error_log()` copy is unconditional. WHAT IS TRUE NOW: it is skipped
+     * exactly when the sink is armed WITH the cross-fork transport — which
+     * only an interactive launch arms — AND `error_log` still resolves to
+     * stderr ({@see TuiErrorLog::destinationIsStderr()}). In that process fd 2
+     * is the tty the renderer owns, so the "forensic" copy was a raw line
+     * painted over the frame, not a record anyone could keep. The TUI normally
+     * never reaches this branch: `bin/sugarcrush` installs
+     * {@see TuiErrorLog} before `Program::run()`, the ini then names a file,
+     * and the complete, unclipped record goes there — including from the
+     * forked turn child, which inherits the ini. The skip is the fallback for
+     * a launch where that redirect could not be made (no owned home, an
+     * unwritable log directory), and its cost is stated rather than hidden:
+     * there, a clipped row's tail and a dropped datagram's text are lost
+     * instead of smeared across the screen. The unarmed sink (`-p`, the
+     * subcommands), the in-process backend and every non-stderr destination
+     * keep the copy, so the unarmed, full and torn-down cases the mutation
+     * result above pins are unchanged; both sides of the new rule are pinned
+     * on a real fd 2 by
+     * {@see \SugarCraft\Crush\Tests\Diagnostics\RuntimeNoticeSinkStderrTest}.
      */
     public static function warn(string $message): void
     {
-        error_log($message);
+        if (!(self::$transportWrite !== null && TuiErrorLog::destinationIsStderr(ini_get('error_log')))) {
+            error_log($message);
+        }
         self::record($message);
     }
 

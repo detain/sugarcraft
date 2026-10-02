@@ -210,6 +210,8 @@ use SugarCraft\Crush\Cli\Help;
 use SugarCraft\Crush\Cli\NonInteractive;
 use SugarCraft\Crush\Cli\PermissionConfigException;
 use SugarCraft\Crush\Cli\Subcommands;
+use SugarCraft\Crush\Diagnostics\TuiErrorLog;
+use SugarCraft\Crush\Support\HomeDirectory;
 
 // Parse argv first and dispatch before ever touching Program/Bootstrap::chat()
 // — `--help` and `-p`/`run "<prompt>"` must never attach to the TTY or enter
@@ -433,6 +435,13 @@ if ($resumeError !== null) {
         'Run `sugarcrush session list` to see stored sessions, or `sugarcrush --resume` to pick one.',
     ));
 }
+
+// Audit C2a: from here on fd 2 is the tty the renderer owns, so error_log()
+// goes to a private file instead — set BEFORE Bootstrap::app() builds the
+// Chat and arms the notice sink, so the forked turn child inherits it. TUI
+// path only: above this line, on the `-p` and subcommand paths, stderr is
+// the operator's channel. A null return leaves the ini as it was.
+TuiErrorLog::install(HomeDirectory::owned());
 
 (new Program(Bootstrap::app($args->root), Chat::programOptions()))->run();
 
