@@ -2375,6 +2375,13 @@ final class Runtime
      * `result\n\npre\n\npost`, an order deterministic by construction rather
      * than by timing. An empty note is the no-op the POST side already is:
      * `annotate()` is not called and the result stays byte-identical.
+     *
+     * A `PostToolUse` verdict that does not permit (a DENY from exit 1/2, a
+     * timed-out hook, an ASK nobody can answer after the fact) WITHHOLDS the
+     * output (audit F-H1): the model and the UI get
+     * `[output withheld by PostToolUse hook: <reason>]` instead of the bytes
+     * the hook objected to — see {@see self::withheld()}. The bytes then read
+     * `withheld\n\npre`.
      */
     private function settle(
         ToolCall $toolCall,
@@ -2395,8 +2402,29 @@ final class Runtime
         // tool output (pre-notes are model-visible context, not the tool's
         // stdout), and the model-visible bytes land as `result\n\npre\n\npost`.
         $postNote = '';
+        $withheldReason = null;
         try {
             $hookResult = $this->hookManager->postToolUse($context->withToolOutput($result->content()));
+
+            // A BLOCK HERE USED TO BE A SILENT NO-OP (audit F-H1): only
+            // `additionalContext` was read, so a secret scanner exiting 2 on
+            // `AKIA…` let the key through to the model and its reason went
+            // nowhere. The call has already run — nothing can stop it — but
+            // what the model READS is still ours to decide, and withholding is
+            // the one answer under which such a hook protects anything.
+            //
+            // permitsExecution(), the allow-list, rather than isDenied(): a
+            // timed-out hook (reported as DENY by the chain), an ASK nobody
+            // can answer after the fact, and any action this class does not
+            // recognise all fail CLOSED, the same doctrine the PRE gate keeps.
+            if (!$hookResult->permitsExecution()) {
+                $withheldReason = $hookResult->message;
+            }
+
+            // Read ONLY on the permitting arm: a blocking verdict's own note is
+            // a hook's stdout produced while looking at the output it refused —
+            // the likeliest place for a scanner to have echoed the very secret
+            // it caught.
             // A permitting PostToolUse hook's stdout now REACHES THE MODEL: the
             // chain collects it into `additionalContext` (see
             // {@see \SugarCraft\Crush\Hooks\HookRegistry::executeHooks()}) and
@@ -2405,7 +2433,9 @@ final class Runtime
             // EXISTING blessed {@see self::annotate()} seam so it lands in the
             // model-visible content with no new wire shape. Empty context is a
             // no-op (annotate not called) and leaves the result BYTE-IDENTICAL.
-            $postNote = $hookResult->additionalContext;
+            if ($withheldReason === null) {
+                $postNote = $hookResult->additionalContext;
+            }
         } catch (\Throwable $e) {
             $postNote = sprintf(
                 '[PostToolUse hook failed: %s: %s]',
@@ -2414,6 +2444,14 @@ final class Runtime
             );
         }
 
+        if ($withheldReason !== null) {
+            $result = self::withheld($result, $withheldReason);
+        }
+
+        // KEPT ON THE WITHHELD ARM TOO: the pre-note was produced by PreToolUse
+        // hooks BEFORE the call ran, from its arguments alone, so it cannot
+        // carry the output that was refused — and it was already a permitted,
+        // model-visible promise about this call.
         if ($preContext !== '') {
             $result = self::annotate($result, $preContext);
         }
@@ -2989,6 +3027,43 @@ final class Runtime
             imagePath: $result->imagePath(),
             imageProtocol: $result->imageProtocol(),
             diff: $result->diff(),
+        );
+    }
+
+    /**
+     * The result a refusing `PostToolUse` chain leaves in place of the output
+     * it objected to (audit F-H1).
+     *
+     * NO HOOK NAME, because the settled verdict does not carry one —
+     * {@see \SugarCraft\Crush\Hooks\HookRegistry::executeHooks()} returns the
+     * blocking {@see HookResult} as is — and a guessed name would be a lie on
+     * the line someone reads when deciding which hook to fix. The reason is
+     * the hook's own message (stderr for a script); an empty one says so
+     * rather than leaving a bare colon.
+     *
+     * THE IMAGE AND DIFF ARE DROPPED WITH THE TEXT. Both are renderings of the
+     * same output: a diff of an edit that wrote a key carries that key, a
+     * screenshot can show it, and {@see self::resultMessage()} threads both to
+     * the model and to EngineBackend. Withholding only `content` would leave
+     * the payload the hook refused one field over.
+     *
+     * `isError` is KEPT, by the same argument {@see self::annotate()} makes:
+     * the call ran, and whether it succeeded is unchanged by whether the
+     * model may read its output. Flagging it would invite a retry of a call
+     * whose side effects already happened — the text says it ran instead.
+     */
+    private static function withheld(ToolResult $result, string $reason): ToolResult
+    {
+        $reason = trim($reason);
+
+        return new ToolResult(
+            toolCallId: $result->toolCallId(),
+            content: sprintf(
+                '[output withheld by PostToolUse hook: %s] The call ran; its output is not shown.',
+                $reason === '' ? 'no reason given' : $reason,
+            ),
+            isError: $result->isError(),
+            durationMs: $result->durationMs(),
         );
     }
 

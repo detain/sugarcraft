@@ -189,8 +189,21 @@ the action has already happened:
 
 - `PreToolUse`, `Stop`, `TaskCreated` — stops the action outright, and stderr
   goes back to the agent.
-- `PostToolUse`, `SubagentStop`, `TaskCompleted` — too late to stop; surfaces
-  through `continueOnBlock`.
+- `PostToolUse` — too late to stop, so it **withholds the output** instead:
+  on the engine path (`Runtime::settle()`) the model and the UI get
+  `[output withheld by PostToolUse hook: <stderr>] The call ran; its output is
+  not shown.` in place of the tool's output. The image and diff are dropped
+  with it, `isError` keeps whatever the tool reported, and a permitting hook's
+  note from earlier in the same chain is discarded with the verdict. A
+  PreToolUse note is kept, because it was written before the output existed.
+  Every verdict that does not permit counts: exit 1 or 2, any other non-zero
+  exit, a timeout, an exit-3 ask (there is nobody to ask after the call ran).
+  A hook that *throws* is still only noted next to the output. The dormant Chat
+  tool path (`Chat::applyPostToolUse()`, unreachable from `bin/sugarcrush`)
+  still ignores the verdict.
+- `SubagentStop`, `TaskCompleted` — too late to stop; surfaces through
+  `continueOnBlock` on the `HookDispatcher`, which `src/` never builds (see
+  above).
 - `PreCompact`, `SessionStart` — stderr reaches **you only**; there is no agent
   action to feed it to. (The two wired events are elaborated under *The two turn
   events* below, including where a shipped block reason actually surfaces.)
@@ -295,7 +308,9 @@ Where the note then lands depends on the event:
   result: `Runtime::settle()` through the existing `Runtime::annotate()` seam,
   `Chat::applyPostToolUse()` onto whichever half (result or error) carries the
   body. An empty note returns the result **byte-identical**, so a chain that
-  printed nothing cannot alter any payload, wired or not.
+  printed nothing cannot alter any payload, wired or not. This applies only when
+  the chain permits. A refusing chain withholds the output on the engine path
+  instead (see what a **block** does, above).
 - **`PreToolUse`** — WHAT THIS SAID: that neither live gate consumes a
   permitting verdict's note, that both read only `message` and `modifiedInput`,
   and that "a note meant for the model belongs on a `PostToolUse` hook". WHAT
@@ -667,8 +682,10 @@ under a 5-second external clock and each returning exit 124:
 Past the deadline the child gets SIGTERM, half a second, then signal 9, and the
 hook is reported as a **DENY**: an expired hook has answered nothing, and
 letting the call through would silently skip the guard that was written to stop
-it. On `PostToolUse` that verdict is discarded by both consumers, so the only
-effect there is that the tool result stops waiting.
+it. On `PostToolUse` the engine path (`Runtime::settle()`) treats it as any
+other deny and **withholds the tool's output**. That is fail-closed, so a
+secret scanner that runs out of time cannot let through what it never finished
+reading. The dormant Chat path still discards the verdict.
 
 ---
 
