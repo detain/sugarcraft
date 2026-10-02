@@ -2072,7 +2072,7 @@ final class DocFigureProseDriftTest extends TestCase
             ];
         }
         ksort($live);
-        self::assertCount(5, $live, 'the BuiltIn hook roster changed — the name table, the built-ins table, and BOTH bullet halves of the registration claim move together');
+        self::assertCount(7, $live, 'the BuiltIn hook roster changed — the name table, the built-ins table, and BOTH bullet halves of the registration claim move together');
 
         self::assertSame(
             1,
@@ -2088,7 +2088,7 @@ final class DocFigureProseDriftTest extends TestCase
         // Built-ins table: the three rows, their event cells, and whichever
         // matchers they spell out.
         $tableStart = strpos($hooksRaw, '## The built-in hooks');
-        $tableEnd = strpos($hooksRaw, 'Two more exist');
+        $tableEnd = strpos($hooksRaw, 'Four more exist');
         self::assertIsInt($tableStart);
         self::assertIsInt($tableEnd);
         $table = substr($hooksRaw, $tableStart, $tableEnd - $tableStart);
@@ -2142,12 +2142,17 @@ final class DocFigureProseDriftTest extends TestCase
         // The two bullets = the roster minus the registered three, set-equal.
         self::assertSame(1, preg_match('/(\w+) more exist and are/', $hooks, $two), 'the not-registered sentence lost its spelled count');
         self::assertSame(count(array_diff(array_keys($live), $registered[1])), $words[strtolower($two[1])] ?? -1, 'the unregistered half of the roster no longer matches BuiltIn-minus-registered');
-        $bulletStart = strpos($hooksRaw, 'Two more exist');
+        $bulletStart = strpos($hooksRaw, 'Four more exist');
         self::assertIsInt($bulletStart);
         $bullets = substr($hooksRaw, $bulletStart);
         self::assertSame(1, preg_match('/`(\w+)` — registered by `Bootstrap::(\w+)\(\)` when a gate exists,\s*which is every CLI launch\. It is what makes the (\w+)-mode gate/', $bullets, $gateRow), 'the gate bullet no longer names its class, its Bootstrap seam, and the gate mode count together');
         self::assertSame(1, preg_match('/`(\w+)` — opt-in, constructed with a jail root/', $bullets, $jailRow), 'the opt-in bullet moved');
-        self::assertEqualsCanonicalizing(array_keys(array_diff_key($live, array_flip($registered[1]))), [$gateRow[1], $jailRow[1]], 'the two bullets no longer name exactly the unregistered BuiltIn classes');
+        self::assertSame(1, preg_match('/`(\w+)` and `(\w+)` — the repeat-call loop guard,\s*registered per turn by `EngineBackend::(\w+)\(\)`/', $bullets, $guardRow), 'the loop-guard bullet no longer names its pair and the EngineBackend seam that registers them');
+        self::assertEqualsCanonicalizing(array_keys(array_diff_key($live, array_flip($registered[1]))), [$gateRow[1], $jailRow[1], $guardRow[1], $guardRow[2]], 'the bullets no longer name exactly the unregistered BuiltIn classes');
+        $guardSeam = self::bodyExcerpt(self::sourceOf('Backend/EngineBackend.php'), $guardRow[3], 3000);
+        foreach ([$guardRow[1], $guardRow[2]] as $guardClass) {
+            self::assertStringContainsString('register(new ' . $guardClass . '(', $guardSeam, "EngineBackend::{$guardRow[3]}() no longer registers {$guardClass} — the bullet names the wrong seam");
+        }
         self::assertTrue(method_exists(Bootstrap::class, $gateRow[2]), "Bootstrap::{$gateRow[2]}() no longer exists — the bullet names the wrong seam");
         $hooksBody = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $gateRow[2], 6000);
         foreach (['registerBuiltIns()', 'loadEntries(', 'new ' . $gateRow[1] . '('] as $needle) {

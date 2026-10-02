@@ -791,7 +791,7 @@ final class BootstrapLayeredSettingsTest extends TestCase
         $plain = new \SugarCraft\Crush\Backend\EngineBackend(new \SugarCraft\Crush\Providers\EchoProvider(), 'f2');
 
         self::assertSame($plain, (new \ReflectionMethod(Bootstrap::class, 'withResolvedMaxToolSteps'))->invoke(null, $plain), 'no key, no new instance, the shipped default speaks');
-        self::assertSame(8, self::readMaxSteps($plain), 'the shipped ceiling stays 8 (F2 made it configurable, not different)');
+        self::assertSame(1000, self::readMaxSteps($plain), 'the shipped ceiling is 1000 (WAVE_PLAN_2 §5; F2 made it configurable)');
     }
 
     public function testBothProductionBackendFactoriesThreadTheCeiling(): void

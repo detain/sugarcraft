@@ -713,13 +713,23 @@ anything from a file and ahead of the permission gate:
 | `ConfirmRemoveHook` | `PreToolUse` | denies obvious destructive shell (`rm -rf`, `find … -delete`, …) |
 | `AuditHook` | `PostToolUse`, matcher `.*` | appends every call — and every refused or withheld one, see [below](#what-the-audit-log-records) — to whatever `AuditHook::defaultLogFile()` answers — a fixed leaf inside a per-user directory the hook creates `0700` and refuses to use if it is not its own |
 
-Two more exist and are **not** registered by default:
+Four more exist and are **not** registered by default:
 
 - `PermissionGateHook` — registered by `Bootstrap::hooks()` when a gate exists,
   which is every CLI launch. It is what makes the six-mode gate reachable from
   the main loop at all.
 - `BashEscapeDenyHook` — opt-in, constructed with a jail root, and an embedder
   has to register it explicitly.
+- `RepeatCallGuardHook` and `RepeatCallCountHook` — the repeat-call loop guard,
+  registered per turn by `EngineBackend::resolveHookManager()` around one
+  shared `Backend\ToolCallLoopGuard` ledger, on a copy of the launch's chain
+  and on a `withoutHooks()` turn too. Within one turn, the same tool called
+  with the same arguments (key order ignored) that returns the same result
+  gets a warning appended to its 3rd result (`PostToolUse`, as
+  `additionalContext`), is denied from the 5th call (`PreToolUse`), and ends
+  the turn on the 8th. A changed result resets the count. They are not in
+  `registerBuiltIns()` because their ledger lives one turn and a hook manager
+  lives for the launch.
 
 `ConfirmRemoveHook` and `BashEscapeDenyHook` are both documented in their own
 source as **heuristics, not security boundaries**. Neither can see through

@@ -218,13 +218,25 @@ through the hook gate, yield the results. It has no step counter — every
 `Runtime::__construct` takes no such parameter.
 
 **The multi-step ceiling belongs to the caller, not to `Runtime`.**
-`private readonly int $maxSteps = 8` is a constructor parameter of
+`private readonly int $maxSteps = 1000` is a constructor parameter of
 `src/Backend/EngineBackend.php`, and the bound it arms is the loop
 `for ($step = 0; $step < $this->maxSteps; $step++)`
 — the loop that feeds each turn's tool results back and re-runs the `Runtime`
 until the model answers without tools. `EngineBackend::withMaxSteps()` clamps
 its argument with `max(1, $maxSteps)`, so the ceiling can be raised or lowered
 but never set to zero, which would make a turn produce nothing at all.
+
+Two brakes ship with that ceiling, both in `EngineBackend` and neither in
+`Runtime`. The **repeat-call loop guard** (`Backend\ToolCallLoopGuard`) keeps a
+per-turn ledger keyed on tool name + canonical arguments + a hash of the
+result, and rides the hook chain as a fresh `RepeatCallGuardHook`
+(`PreToolUse`, refuses) / `RepeatCallCountHook` (`PostToolUse`, counts and
+warns) pair registered on a per-turn copy of the manager: the 3rd identical
+call gets a warning appended to its result, the 5th is refused, the 8th ends
+the turn. When the budget runs out, or the guard ends the turn,
+`summariseStoppedTurn()` makes one more `Runtime::run()` with
+`App::withTools([])` and a user message asking for done / remaining / next, so
+the turn ends in an answer.
 (E686 tranche-8: every line-number anchor this paragraph carried had rotted
 within rounds — the page's own rule is to cite symbols by name, never by line.)
 
@@ -321,6 +333,9 @@ part-way — is resumable: its typed transcript is saved on disk
 (`Agents\SuspendedDelegations`; memory would not survive, since every turn and
 every parallel `Task` runs in a fork) and the refusal names a `resume` id that
 continues the same conversation through `EngineBackend::completeTranscript()`.
+A step-capped run is the one that is no longer a refusal: the engine's no-tools
+summary (see the agentic loop below) is returned as its report, with the
+`resume` id appended.
 
 ---
 

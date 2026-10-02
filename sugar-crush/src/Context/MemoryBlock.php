@@ -43,8 +43,8 @@ use SugarCraft\Crush\Memory\MemoryStore;
  *
  *   - Cost. `search()` reads every `.md` file in EVERY scope directory and
  *     YAML-parses each one, per call. `buildSystemPrompt()` runs once per step
- *     of the agentic loop (up to `maxSteps`, default 8), so a per-term search
- *     would be terms x 8 full-store scans per turn.
+ *     of the agentic loop (up to `maxSteps`, default 1000), so a per-term search
+ *     would be terms x steps full-store scans per turn.
  *   - Prompt caching, stated carefully because P3.S1 inverted this argument
  *     when it moved the volatile env block to the very END of the system prompt
  *     (the ordering invariant recorded in

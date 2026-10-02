@@ -206,7 +206,9 @@ final class EngineBackendSpendCapTest extends TestCase
 
         $reply = $backend->withMaxSteps(3)->complete([Message::user('go')], null, $onEvent);
 
-        $this->assertSame(3, $provider->calls, 'an in-budget agentic turn must not lose a step to the mere existence of a cap');
+        // 3 steps + the no-tools summary request the exhausted budget earns
+        // (WAVE_PLAN_2 §5) — the cap, far from breached, refuses neither.
+        $this->assertSame(4, $provider->calls, 'an in-budget agentic turn must not lose a step to the mere existence of a cap');
         $this->assertSame('checking', $reply->content);
         $this->assertSame(
             [],

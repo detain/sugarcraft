@@ -117,7 +117,8 @@ use SugarCraft\Crush\Usage;
  * parent pid it started under and abandons the run once that process is gone.
  *
  * A RUN THAT ENDS WITHOUT A REPORT CAN BE RESUMED. When the sub-agent hits its
- * step cap without answering, or fails part-way (a provider error, a dropped
+ * step cap (its report is then the engine's no-tools summary of where it
+ * stopped, with the resume id appended), or fails part-way (a provider error, a dropped
  * connection, a cancelled parent), its transcript is saved to
  * {@see SuspendedDelegations} and the refusal names a `resume` id. Calling
  * Task again with that id continues the SAME conversation — every tool call
@@ -143,8 +144,13 @@ use SugarCraft\Crush\Usage;
  */
 final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine, PromptGuidance
 {
-    /** Step cap for a preset that declares no `maxTurns`. */
-    public const DEFAULT_MAX_TURNS = 50;
+    /**
+     * Step cap for a preset that declares no `maxTurns`. 200 since
+     * WAVE_PLAN_2 §5 (was 50), alongside the main loop's 1000; it must read
+     * the same as {@see \SugarCraft\Crush\Agents\EngineExecutor::DEFAULT_MAX_TURNS},
+     * the workflow path's copy of the same default.
+     */
+    public const DEFAULT_MAX_TURNS = 200;
 
     /** The instruction a resume continues with when the caller gives no better one. */
     public const DEFAULT_RESUME_PROMPT = 'Continue the task from where you stopped. When it is done, reply with your final report.';
@@ -676,7 +682,22 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             ), self::elapsedMs($startedAt), $spent);
         }
 
-        if ($suspension !== null) {
+        // A run that hit its step cap now ENDS IN A SUMMARY rather than in
+        // silence: the engine makes one no-tools request asking what is done,
+        // what remains and what comes next (WAVE_PLAN_2 §5), so $content is no
+        // longer empty there and the refusal above no longer catches it. The
+        // summary is the report — it is exactly what the caller needs — but
+        // the run is still unfinished, so it keeps its resume id rather than
+        // forgetting it: dropping resumability is the regression the summary
+        // would otherwise have introduced.
+        if ($reply->stepsTruncated) {
+            $content .= sprintf(
+                "\n\n[sub-agent \"%s\" stopped at its step cap (%d); the above is its own summary of where it stopped. %s.]",
+                $agentName,
+                $maxTurns,
+                $this->suspend($agentName, $turn->transcript, $resumes, $suspension['id'] ?? null),
+            );
+        } elseif ($suspension !== null) {
             $this->suspendedStore()->forget($suspension['id']);
         }
 

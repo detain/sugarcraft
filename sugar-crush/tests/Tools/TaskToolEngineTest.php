@@ -108,6 +108,28 @@ final class TaskToolEngineTest extends TestCase
         $this->assertCount(1, $probe->calls, 'the work it did still happened');
     }
 
+    public function testAStepCappedSubAgentReportsItsSummaryAndKeepsItsResumeId(): void
+    {
+        // WAVE_PLAN_2 §5: the capped run's engine makes one no-tools summary
+        // request. Its answer is the report — and the run, still unfinished,
+        // stays resumable instead of the summary silently costing it that.
+        $probe = self::probe('probe');
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'probe', [])]),
+            new CompleteResponse(content: 'done: probed once; remaining: everything else'),
+        ]);
+        $manager = self::manager([$probe], RosterAgent::named('coder', ['probe'], maxTurns: 1));
+        $engine = EngineBackend::new($provider, 'm')->withTools([$probe]);
+
+        $result = (new TaskTool($manager, suspended: $this->store))->withEngine($engine)->execute(self::call());
+
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertStringStartsWith('done: probed once; remaining: everything else', $result->content());
+        $this->assertStringContainsString('stopped at its step cap (1)', $result->content());
+        $this->assertNull($provider->requests[1]->tools, 'the summary request offered no tools');
+        $this->assertNotNull($this->store->load(self::resumeId($result->content())), 'the capped run was saved for a resume');
+    }
+
     public function testTheSessionHookChainGovernsTheSubAgentsCalls(): void
     {
         // Named `Read` so the built-in ProtectFilesHook judges its file_path.
@@ -179,8 +201,11 @@ final class TaskToolEngineTest extends TestCase
     public function testARunThatHitItsStepCapResumesWithItsOwnTranscript(): void
     {
         $probe = self::probe('probe');
+        // The capped run's no-tools summary request (WAVE_PLAN_2 §5) comes
+        // back empty, so the run is still reportless and refused with an id.
         $provider = new ScriptedProvider([
             new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'probe', ['step' => 1])]),
+            new CompleteResponse(content: ''),
         ]);
         $manager = self::manager([$probe], RosterAgent::named('coder', ['probe'], maxTurns: 1));
         $task = (new TaskTool($manager, suspended: $this->store))
@@ -196,14 +221,16 @@ final class TaskToolEngineTest extends TestCase
         $this->assertSame('the report, finished', $resumed->content());
         $this->assertCount(1, $probe->calls, 'the resumed run did not redo the finished step');
 
-        $turns = self::turns($provider->requests[1]);
+        $turns = self::turns($provider->requests[2]);
         $this->assertSame(['system', 'You are coder.'], $turns[0], 'the preset prompt was carried, not re-added');
         $this->assertSame(['user', 'Audit candy-core and report the findings'], $turns[1]);
         $this->assertSame('assistant', $turns[2][0]);
         $this->assertSame(['tool', 'probe ok'], $turns[3], 'the earlier tool result is in the resumed context');
-        $this->assertSame(['user', 'carry on and report'], $turns[4]);
+        $this->assertSame('user', $turns[4][0]);
+        $this->assertStringContainsString('whole budget of 1 tool steps', $turns[4][1], 'the summary exchange is part of the saved transcript');
+        $this->assertSame(['user', 'carry on and report'], $turns[array_key_last($turns)]);
         $this->assertNotNull(
-            $provider->requests[1]->messages[2]->toArray()['tool_calls'] ?? null,
+            $provider->requests[2]->messages[2]->toArray()['tool_calls'] ?? null,
             'the earlier assistant step kept its tool call across the disk round-trip',
         );
         $this->assertNull($this->store->load($id), 'a report clears the suspension');

@@ -207,9 +207,21 @@ is the same money decision `maxOutputTokens` refuses to delegate.
 
 `maxToolSteps` is the same axis counted in CALLS rather than tokens: how many
 provider round-trips ONE agentic turn may take before the harness stops it
-(F2). Unset keeps the shipped ceiling of 8; a turn that exhausts the ceiling
-without the model finishing names itself in the transcript instead of ending
-silently, and the notice points back at this key. It is user-tier only for the
+(F2). Unset keeps the shipped ceiling of 1000 (sub-agents spawned by `Task`
+default to 200 unless their preset declares `maxTurns`, see
+[AGENTS_AUTHORING.md](AGENTS_AUTHORING.md)). A turn that exhausts
+the ceiling without the model finishing gets one more request with tools
+disabled, asking the model to summarise what is done, what remains and what
+comes next, so the reply is an answer rather than a half-finished step; it
+still names itself in the transcript as stopped, and the notice points back at
+this key. A ceiling that high is safe because of the **repeat-call loop
+guard** that ships with it: within one turn, the same tool called with the same
+arguments (key order ignored) that returns the same result gets a warning
+appended to its 3rd result, is refused from the 5th call, and ends the turn on
+the 8th, again with the no-tools summary. A changed result resets the count, so
+polling something that is still moving is never caught. The guard matters
+because the spend cap cannot catch a loop on a provider that reports $0, such
+as a self-hosted SGLang server. It is user-tier only for the
 `maxOutputTokens` reason squared: the key multiplies billed calls, so raising it
 from a checked-out repository would spend the operator's credential on the
 project's behalf. Nonsense values (non-integer, zero, negative) resolve to the

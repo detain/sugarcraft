@@ -19,6 +19,8 @@ use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook;
 use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
+use SugarCraft\Crush\Hooks\BuiltIn\RepeatCallCountHook;
+use SugarCraft\Crush\Hooks\BuiltIn\RepeatCallGuardHook;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Message;
@@ -99,6 +101,28 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
       * lives in the providers, not below this ceiling.
       */
     private const COMPLETE_TIMEOUT_SECONDS = 120;
+
+    /**
+     * The user message of {@see summariseStoppedTurn()}'s request when the
+     * step budget ran out (`%d` = the ceiling). Model-facing, so English like
+     * every other prompt layer; it names the budget so the model does not
+     * read the stop as an error of its own.
+     */
+    private const BUDGET_EXHAUSTED_SUMMARY_PROMPT = 'This turn has used its whole budget of %d tool steps, so tools are now '
+        . 'disabled. Do not call any tools. Reply to the user with a concise summary of: what has been done, what remains '
+        . 'to be done, and the next step you would take.';
+
+    /**
+     * The same request when the repeat-call loop guard ended the turn
+     * (`%s` = the tool, `%d` = {@see ToolCallLoopGuard::END_TURN_AT}). It asks
+     * the model to SAY it was stopped, because the step-exhausted notice
+     * does not fire for this exit and nothing else tells the operator why
+     * the turn ended early.
+     */
+    private const LOOP_GUARD_SUMMARY_PROMPT = 'This turn was stopped because you called %s with identical arguments and '
+        . 'got the identical result %d times. Tools are now disabled. Do not call any tools. Tell the user the turn was '
+        . 'stopped for repeating that call, then summarise concisely: what has been done, what remains to be done, and '
+        . 'what you would do differently next.';
 
     /**
      * The two escape hatches for {@see Runtime}'s concurrent tool dispatch,
@@ -295,7 +319,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         private readonly array $tools = [],
         private readonly array $skills = [],
         private readonly ?HookManager $hookManager = null,
-        private readonly int $maxSteps = 8,
+        /**
+         * The per-turn provider-call ceiling. 1000 (Goose's figure) since
+         * WAVE_PLAN_2 §5 "maxToolSteps": the old 8 cut ordinary agentic work
+         * off mid-task. A ceiling that high is only safe beside the brakes
+         * that ship with it — the repeat-call loop guard
+         * ({@see ToolCallLoopGuard}), which stops a model stuck on one call
+         * long before step 1000 (the spend cap cannot: SGLang reports $0),
+         * and the no-tools summary request ({@see summariseStoppedTurn()})
+         * that makes an exhausted budget end in an answer rather than a
+         * half-finished step. `maxToolSteps` in config.json overrides it.
+         */
+        private readonly int $maxSteps = 1000,
         private readonly bool $hooksDisabled = false,
         private readonly ?SkillRegistry $skillRegistry = null,
         private readonly ?InstructionFileLoader $instructionLoader = null,
@@ -883,9 +918,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // file at most one time however many settings are resolved off it.
         $userConfig = self::userConfig();
 
+        // One ledger per turn: a new turn is a new plan, so repeats are
+        // never carried across the user's prompts (see ToolCallLoopGuard).
+        $loopGuard = ToolCallLoopGuard::new();
+
         $runtime = new Runtime(
             $this->provider,
-            $this->resolveHookManager(),
+            $this->resolveHookManager($loopGuard),
             parallelToolCalls: self::parallelToolCallsEnabled($userConfig),
             parallelToolDeadlineSeconds: self::parallelToolDeadlineSeconds($userConfig),
             maxOutputTokens: self::maxOutputTokens($userConfig),
@@ -925,6 +964,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // out, and the message carries `stepsTruncated` so Chat can say so.
         $answeredWithoutTools = false;
         $stoppedBySpendCap = false;
+
+        // The third deliberate exit: the repeat-call loop guard saw one call
+        // reach its turn-ending repeat. Not a truncation in F2's sense — the
+        // budget did not run out, the model was stuck — so it does not set
+        // `stepsTruncated` (whose notice tells the operator to raise
+        // `maxToolSteps`, the wrong remedy for a loop).
+        $stoppedByLoopGuard = false;
 
         // Whether the runtime managed to emit anything incrementally, so the
         // end-of-turn fallback below stays a FALLBACK rather than a duplicate:
@@ -1084,6 +1130,52 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 ...($assistant !== null ? [$assistant] : []),
                 ...$toolResults,
             ]);
+
+            // Checked LAST in the step, after the spend cap (a breached cap
+            // stops the turn without paying for a summary) and after the App
+            // carries this step's results, so the summary request below sees
+            // the refusal that tripped it. The guard trips inside this step's
+            // PreToolUse chain; the step's other calls still settle first.
+            if ($loopGuard->endsTurn()) {
+                $stoppedByLoopGuard = true;
+                break;
+            }
+        }
+
+        // F2: neither deliberate break fired, so the LAST step still ended
+        // with tool results pending and the ceiling, not the model, ended the
+        // turn. One flag on the DTO; the transcript notice is Chat's settle
+        // arm's job (sibling of the E707 length-stopped notice).
+        $stepsTruncated = !$answeredWithoutTools && !$stoppedBySpendCap && !$stoppedByLoopGuard;
+
+        // WAVE_PLAN_2 §5: a turn the harness stopped — budget exhausted or a
+        // loop the guard ended — gets ONE more request with tools disabled,
+        // asking the model what is done, what remains and what comes next.
+        // Without it the turn's reply is whatever prose rode along with the
+        // last tool-calling step, typically a half-sentence like "Now let me
+        // check…", and the operator is left to reconstruct a thousand steps
+        // from the tool log. Not after the spend cap: that exit refuses the
+        // next provider call by definition, and a summary is one.
+        if ($stepsTruncated || $stoppedByLoopGuard) {
+            $summary = $this->summariseStoppedTurn(
+                $runtime,
+                $app,
+                $transcript,
+                $stoppedByLoopGuard ? $loopGuard->endedBy() : null,
+                $onEvent,
+                $tokenSink,
+                $progressSink,
+                $onHeartbeat,
+                $stepUsages,
+            );
+            // An EMPTY summary does not displace the last step's prose: the
+            // reply then reads exactly as it did before the summary existed,
+            // and TaskTool's "ended without a final report" refusal still
+            // fires for a sub-agent that had nothing to say.
+            if ($summary !== null && trim($summary->content()) !== '') {
+                $lastAssistant = $summary;
+                $lengthStopped = $lengthStopped || $summary->lengthStopped();
+            }
         }
 
         $content = $lastAssistant?->content() ?? '';
@@ -1114,17 +1206,75 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // access to $lastAssistant before only the plain-string Message DTO
         // survives back to Chat/Renderer. withImage() does the same for an
         // image-bearing tool result (W1.G2 reachability fix).
-        // F2: neither deliberate break fired, so the LAST step still ended
-        // with tool results pending and the ceiling, not the model, ended the
-        // turn. One flag on the DTO; the transcript notice is Chat's settle
-        // arm's job (sibling of the E707 length-stopped notice).
-        $stepsTruncated = !$answeredWithoutTools && !$stoppedBySpendCap;
-
         return Message::assistant($content, reasoning: $lastAssistant?->reasoning())
             ->withImage($lastImageBytes, $lastImageProtocol)
             ->withUsage(Usage::sum($stepUsages))
             ->withLengthStopped($lengthStopped)
             ->withStepsTruncated($stepsTruncated);
+    }
+
+    /**
+     * The final no-tools request of a turn the harness stopped (WAVE_PLAN_2 §5),
+     * answering the summary's assistant message — or null when the provider
+     * produced none.
+     *
+     * One more {@see Runtime::run()} over the turn's whole transcript with
+     * `App::withTools([])`, so the request advertises no tools at all (Runtime
+     * sends `tools: null` for an empty list, and the tool-guidance prompt layer
+     * renders from the same list), plus a user message naming why the turn
+     * stopped and asking for done / remaining / next. It streams on the turn's
+     * own token channel, so the operator sees it arrive like any other reply,
+     * and its usage is billed into the turn like any other step.
+     *
+     * The exchange is appended to `$transcript`: it IS what the conversation
+     * now holds, and a resumed delegated run ({@see completeTranscript()})
+     * must see that it already summarised rather than replay a dangling
+     * tool-result tail. A model that emits tool calls anyway gets them settled
+     * as unknown-tool errors by Runtime, and those results ride along in the
+     * transcript to keep every call paired with its result; they are not fed
+     * back — there is no next step.
+     *
+     * @param list<TypedMessage> $transcript
+     * @param list<?Usage>       $stepUsages
+     */
+    private function summariseStoppedTurn(
+        Runtime $runtime,
+        App $app,
+        array &$transcript,
+        ?string $loopedTool,
+        ?callable $onEvent,
+        ?callable $tokenSink,
+        ?callable $progressSink,
+        ?callable $onHeartbeat,
+        array &$stepUsages,
+    ): ?AssistantMessage {
+        $request = new UserMessage($loopedTool === null
+            ? sprintf(self::BUDGET_EXHAUSTED_SUMMARY_PROMPT, $this->maxSteps)
+            : sprintf(self::LOOP_GUARD_SUMMARY_PROMPT, $loopedTool, ToolCallLoopGuard::END_TURN_AT));
+
+        $summaryApp = $app
+            ->withMessages([...$transcript, $request])
+            ->withTools([]);
+
+        $assistant = null;
+        $toolResults = [];
+        foreach ($runtime->run($summaryApp, $onEvent, $this->permissionApprover, $tokenSink, $progressSink, $onHeartbeat) as $message) {
+            if ($message instanceof AssistantMessage) {
+                $assistant = $message;
+                $stepUsages[] = $assistant->usage();
+            } elseif ($message instanceof ToolResultMessage) {
+                $toolResults[] = $message;
+            }
+        }
+
+        $transcript = [
+            ...$transcript,
+            $request,
+            ...($assistant !== null ? [$assistant] : []),
+            ...$toolResults,
+        ];
+
+        return $assistant;
     }
 
     /**
@@ -2382,7 +2532,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * re-running this per turn REPLACES the same entry rather than stacking
      * gates with independent circuit-breaker state.
      */
-    private function resolveHookManager(): HookManager
+    private function resolveHookManager(ToolCallLoopGuard $loopGuard): HookManager
     {
         $manager = $this->hookManager;
 
@@ -2396,6 +2546,22 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         if ($this->permissionGate !== null) {
             $manager->register(new PermissionGateHook($this->permissionGate));
         }
+
+        // The repeat-call loop guard's pair, on a per-turn COPY when the
+        // manager is the launch's shared one: the guard's ledger lives one
+        // turn, and registering it on the shared manager would leave the
+        // previous turn's ledger armed on every later caller of it (Chat's
+        // own hook lookups included) until the next turn overwrote it. A
+        // clone gets its own registry and shares the hook objects
+        // ({@see HookManager::__clone()}), so the chain is otherwise the
+        // same one. Registered LAST — after the gate — and on a
+        // `withoutHooks()` turn too: it is a brake on runaway loops, not a
+        // permission guard, so the opt-out does not drop it.
+        if ($manager === $this->hookManager) {
+            $manager = clone $manager;
+        }
+        $manager->register(new RepeatCallGuardHook($loopGuard));
+        $manager->register(new RepeatCallCountHook($loopGuard));
 
         return $manager;
     }

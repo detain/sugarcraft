@@ -243,11 +243,14 @@ final class TaskSpendPropagationTest extends TestCase
 
     public function testAResumedRunBillsOnlyItsOwnStepsNotTheSavedOnes(): void
     {
-        // First run: one $1 step, then the step cap; second (resume): one
-        // new $1 step, then a provider failure. The saved transcript's step
-        // was billed by the FIRST Task call and must not be billed again.
+        // First run: one $1 step, then the step cap and its $0.50 no-tools
+        // summary request (WAVE_PLAN_2 §5), which comes back empty so the run
+        // is still reportless; second (resume): one new $1 step, then a
+        // provider failure. The saved transcript's steps were billed by the
+        // FIRST Task call and must not be billed again.
         $provider = new ScriptedProvider([
             self::reply('', 100, 1.0, [new ToolCall('call_1', 'probe', [])]),
+            self::reply('', 50, 0.5),
             self::reply('', 100, 1.0, [new ToolCall('call_2', 'probe', [])]),
             new \RuntimeException('provider went away'),
         ]);
@@ -258,7 +261,7 @@ final class TaskSpendPropagationTest extends TestCase
 
         $first = $task->execute(self::taskArgs());
         $this->assertTrue($first->isError());
-        $this->assertEqualsWithDelta(1.0, $first->usage()?->costUsd ?? 0.0, 1e-9, 'a step-capped run without a report still billed');
+        $this->assertEqualsWithDelta(1.5, $first->usage()?->costUsd ?? 0.0, 1e-9, 'a step-capped run without a report still billed, its summary request included');
         preg_match('/"resume": "([0-9a-f]{16})"/', $first->content(), $m);
         $this->assertArrayHasKey(1, $m, 'the refusal names a resume id');
 
