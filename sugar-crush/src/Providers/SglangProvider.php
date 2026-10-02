@@ -775,9 +775,12 @@ final readonly class SglangProvider implements ProviderInterface
                     $line = trim(substr($buffer, 0, $newlinePos));
                     $buffer = substr($buffer, $newlinePos + 1);
 
-                    if (str_starts_with($line, 'data: ')) {
-                        $sawDone = $sawDone || $line === 'data: [DONE]';
-                        $data = json_decode(substr($line, 6), true);
+                    // Audit 15a A5: `data:` with or without the one optional
+                    // space - the spec's reading, which some gateways rely on.
+                    $payload = SseData::value($line);
+                    if ($payload !== null) {
+                        $sawDone = $sawDone || $payload === '[DONE]';
+                        $data = json_decode($payload, true);
                         // Audit 15a A2: an error raised after the 200 went out
                         // (context overflow, abort, OOM) arrives as an SSE
                         // frame, not a status. It matches neither branch
@@ -846,7 +849,7 @@ final readonly class SglangProvider implements ProviderInterface
             // A server that closes after its last frame without the "\n" the
             // loop splits on leaves that frame in $buffer; it can still be the
             // sentinel, and a clean end must not be mistaken for a cut.
-            $sawDone = $sawDone || trim($buffer) === 'data: [DONE]';
+            $sawDone = $sawDone || SseData::isDone($buffer);
 
             // Audit 15a A3: EOF with neither a `finish_reason` nor `[DONE]` is
             // a cut connection (proxy idle-timeout, server restart, reset),

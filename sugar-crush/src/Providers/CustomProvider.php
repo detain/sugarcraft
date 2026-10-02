@@ -294,9 +294,12 @@ final readonly class CustomProvider implements ProviderInterface
                     $buffer = substr($buffer, $newlinePos + 1);
 
                     $line = trim($line);
-                    if (str_starts_with($line, 'data: ')) {
-                        $sawDone = $sawDone || $line === 'data: [DONE]';
-                        $data = json_decode(substr($line, 6), true);
+                    // Audit 15a A5: `data:` with or without the one optional
+                    // space - the spec's reading, which some gateways rely on.
+                    $payload = SseData::value($line);
+                    if ($payload !== null) {
+                        $sawDone = $sawDone || $payload === '[DONE]';
+                        $data = json_decode($payload, true);
                         if ($data === null) {
                             // JSON parse failed, skip — this is also the path
                             // the `data: [DONE]` sentinel takes, and reading
@@ -360,7 +363,7 @@ final readonly class CustomProvider implements ProviderInterface
             // A server that closes after its last frame without the "\n" the
             // loop splits on leaves that frame in $buffer; it can still be the
             // sentinel, and a clean end must not be mistaken for a cut.
-            $sawDone = $sawDone || trim($buffer) === 'data: [DONE]';
+            $sawDone = $sawDone || SseData::isDone($buffer);
 
             // Audit 15a A3: EOF with neither a `finish_reason` nor `[DONE]` is
             // a cut connection (proxy idle-timeout, server restart, reset),
