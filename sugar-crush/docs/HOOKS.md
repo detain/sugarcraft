@@ -410,10 +410,10 @@ Notes that matter in practice:
 
 ### Environment handed to the script
 
-`ScriptHook::execute()` builds the `$env` array it hands `proc_open()` from
-**eight** `CRUSH_*` keys — six, on the one run where the temp directory will not
-take a file, which is covered below — and it **replaces** the environment rather
-than adding to it:
+`ScriptHook::execute()` sets **eight** `CRUSH_*` keys — six, on the one run where the temp directory will not
+take a file, which is covered below — and lays them **over** the environment
+SugarCrush was launched with, which the hook inherits after three changes (see
+[What else the hook inherits](#what-else-the-hook-inherits)):
 
 ```
 CRUSH_SESSION_ID       CRUSH_TOOL_NAME   CRUSH_TOOL_INPUT
@@ -522,18 +522,50 @@ passes every per-entry check and is still refused gets moved onto the files and
 tried again. If even that is refused, the refusal names both payload sizes
 rather than saying only that the hook could not be executed.
 
-Nothing from your shell survives — no `HOME`, no `LANG`, no `VIRTUAL_ENV`, and
-none of the `SUGARCRUSH_*` variables that configured the launch.
+#### What else the hook inherits
 
-Those eight are what the hook *sets*. What a hook actually *sees* is a different
-list, and counting it is the only way to find out — so, re-measured on this tree
-with `command: 'env | sort'` and the project root as `cwd`, twice, varying only
-`toolOutput`:
+Your launch environment reaches the hook — `PATH`, `HOME`, `LANG`,
+`VIRTUAL_ENV`, the `SUGARCRUSH_*` variables that configured the launch — with
+three changes, made by `ProcessContainment::scrubbedEnv()`:
+
+1. **Credentials are removed** (audit F-E1). A variable whose name matches
+   `*_API_KEY`, `*_TOKEN`, `*_SECRET` or `AWS_*` — case-insensitive — is
+   dropped, and so is every provider key SugarCrush itself reads
+   (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `OPENAI_API_KEY`,
+   `SGLANG_API_KEY`, `CUSTOM_PROVIDER_API_KEY`). A hook's stdout can become
+   `additionalContext` the model reads, so a key in its environment was one
+   `env` away from the transcript. Bash and Grep get the same scrub. If a hook
+   genuinely needs one — a notifier posting with `SLACK_TOKEN` — name it in
+   `secretEnvAllowlist` in your own `~/.sugar-crush/settings.json` (see
+   [`SETTINGS.md`](SETTINGS.md)); a glob there never releases a provider key,
+   only its exact name does, and no project file can set the key at all.
+2. **Two terminal handles are removed:** `SUDO_ASKPASS` and `GPG_TTY`, which
+   would let a detached child reach a prompt or a tty nobody can see.
+3. **Fail-fast values are forced** over whatever your shell had:
+   `GIT_TERMINAL_PROMPT=0`, `GIT_ASKPASS=/bin/false`, `SSH_ASKPASS=echo`,
+   `DEBIAN_FRONTEND=noninteractive`, `PAGER=cat`, `GIT_PAGER=cat` and
+   `SYSTEMD_PAGER=/bin/cat`, so a command that would prompt refuses on stderr
+   instead.
+
+The `CRUSH_*` keys go on last, so no credential pattern can remove one.
+
+This page used to say the opposite: that the hook's environment *replaces*
+yours, that nothing from your shell survives, and that `PATH` is not inherited.
+That described an earlier `ScriptHook`. Once every spawn moved onto the shared
+containment block the hook inherited everything, credentials included, and the
+page went on describing the old build until the F-E1 audit counted 129 lines
+where it promised 8.
+
+Those eight are what the hook *sets*. What a hook actually *sees* depends on the
+shell you launched from, so the measurement fixes that shell: `command: 'env |
+sort'`, the project root as `cwd`, and SugarCrush launched under `env -i` with
+exactly `HOME`, `PATH`, `LANG`, `OPENAI_API_KEY`, `GITHUB_TOKEN`, `AWS_PROFILE`
+and `SUDO_ASKPASS` set — twice, varying only `toolOutput`:
 
 | `toolOutput` | `env` lines | Which |
 |---|---|---|
-| `''` (empty) | **8** | 7 × `CRUSH_*` + `PWD` |
-| `'RESULT-TEXT'` | **9** | 8 × `CRUSH_*` + `PWD` |
+| `''` (empty) | **18** | 7 × `CRUSH_*` + 7 forced + 3 inherited + `PWD` |
+| `'RESULT-TEXT'` | **19** | 8 × `CRUSH_*` + 7 forced + 3 inherited + `PWD` |
 
 ```
 CRUSH_MODEL=…
@@ -544,8 +576,25 @@ CRUSH_TOOL_INPUT_FILE=/tmp/crush-hook-payload-…
 CRUSH_TOOL_NAME=…
 CRUSH_TOOL_OUTPUT=…          ← only in the second run
 CRUSH_TOOL_OUTPUT_FILE=/tmp/crush-hook-payload-…
-PWD=/…/sugar-crush
+DEBIAN_FRONTEND=noninteractive
+GIT_ASKPASS=/bin/false
+GIT_PAGER=cat
+GIT_TERMINAL_PROMPT=0
+HOME=…
+LANG=…
+PAGER=cat
+PATH=…
+PWD=/…/project
+SSH_ASKPASS=echo
+SYSTEMD_PAGER=/bin/cat
 ```
+
+The three inherited lines are `HOME`, `LANG` and `PATH`. The launch had four
+more that the hook does not: `OPENAI_API_KEY`, `GITHUB_TOKEN` and `AWS_PROFILE`
+are credential-shaped, and `SUDO_ASKPASS` is a terminal handle.
+`HookEnvironmentDocumentationDriftTest` re-runs this exact measurement and
+compares it with the table and the listing, so neither can drift from the code
+again.
 
 Note that `CRUSH_TOOL_OUTPUT_FILE` appears in **both** runs while
 `CRUSH_TOOL_OUTPUT` appears in only one: the file is written even for an empty
@@ -561,36 +610,15 @@ also means the empty-`toolOutput` run prints one fewer `CRUSH_*` line than it
 has keys — `env` hides empties — while the degraded run's six keys are six for
 the temp-directory reason above. Do not conflate the two counts.)
 
-And `PWD` is the one line the hook did not put there: the command is passed to
-`proc_open()` as a **string**, so it runs under `/bin/sh -c`, and `sh` exports
-`PWD` itself.
+And `PWD` is the one line that came from neither SugarCrush nor your launch
+environment: the command is passed to `proc_open()` as a **string**, so it runs
+under `/bin/sh -c`, and `sh` exports `PWD` itself.
 
-**`PATH` is a separate story, and the distinction matters.** `sh` does synthesise
-a default `PATH` when it inherits none, so `echo "PATH=[$PATH]"` inside a hook
-prints `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin` and a bare
-`ls` in a hook resolves fine. But that value is a **shell variable that is never
-exported**, which is exactly why it is missing from the `env` listing above.
-Measured, on this tree:
-
-| Probe | Result |
-|---|---|
-| `env \| grep '^PATH='` | no match |
-| `export -p \| grep PATH` | no match |
-| `env env \| grep -c '^PATH='` | `0` |
-| `php -r 'var_dump(getenv("PATH"));'` | `bool(false)` |
-| `command -v ls` | `/usr/bin/ls` |
-
-So the consequence is one step worse than "set `PATH` or use absolute paths".
-The hook's own shell can find things; **anything that shell execs cannot.** A
-one-liner works and the script it calls breaks, which is the more confusing half
-of the failure. If your hook shells out to a program that itself resolves
-commands by `PATH`, `export PATH=…` explicitly — do not rely on the default
-being inherited, because it is not inherited at all.
-
-One trap to avoid when checking this yourself: probing with `sh -c 'echo $PATH'`
-proves nothing, because the grandchild is *also* a shell and synthesises the same
-default independently. Use a non-shell grandchild — the `php -r` row above — or
-`env env`.
+**`PATH` is inherited, and exported**, so a program your hook execs resolves
+commands by it exactly as your shell would. (Earlier revisions of this page
+said `PATH` was never inherited and printed a probe table to prove it. That
+table measured the eight-variable environment described above as withdrawn, and
+went with it.)
 
 `cwd` is the project root when it is a real directory.
 

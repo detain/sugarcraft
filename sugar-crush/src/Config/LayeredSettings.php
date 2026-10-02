@@ -253,6 +253,19 @@ final class LayeredSettings
      *                 credential on the project's behalf — the argument
      *                 `maxOutputTokens`'s bullet above already makes, with the
      *                 multiplier pointed the other way.
+     *  - `secretEnvAllowlist`
+     *                 {@see \SugarCraft\Crush\Support\ProcessContainment::useSecretEnvAllowlist()},
+     *                 installed by `Bootstrap::tools()` and `Bootstrap::hooks()`
+     *                 (`installSecretEnvAllowlist()`): the credential-shaped
+     *                 variable names (or globs) that Bash, Grep and script hooks
+     *                 still inherit after the audit F-E1 scrub
+     *                 ({@see \SugarCraft\Crush\Support\ProcessContainment::scrubbedEnv()}).
+     *                 USER-TIER ONLY because its whole effect is to hand the
+     *                 operator's credentials to model-visible processes: a
+     *                 checked-out repository that could set it could write
+     *                 `["*"]` and read every key in the operator's shell back
+     *                 through one `env` call — the exfiltration the scrub exists
+     *                 to close, re-opened by a file that arrived with a clone.
      *
      * `statusLine` IS THE ONLY KEY HERE WHOSE VALUE IS A COMMAND, and that is
      * why it is user-tier only ({@see PROJECT_TIER_KEYS} does not list it).
@@ -379,6 +392,7 @@ final class LayeredSettings
         'statusLine',
         'layout',
         'maxToolSteps',
+        'secretEnvAllowlist',
     ];
 
     /**
@@ -598,7 +612,8 @@ final class LayeredSettings
      * DERIVED, not written out, so the two lists above cannot drift apart into a
      * third list that agrees with neither. Today it is `provider`,
      * `instructions`, `disabledRules`, `maxOutputTokens`, `modelPrices`,
-     * `allowedTools`, `statusLine`, `layout` and `maxToolSteps`, in
+     * `allowedTools`, `statusLine`, `layout`, `maxToolSteps` and
+     * `secretEnvAllowlist`, in
      * {@see LAYERED_KEYS} order — named rather than numbered
      * here, because the
      * ordinals this sentence used to carry went stale the moment a fifth key

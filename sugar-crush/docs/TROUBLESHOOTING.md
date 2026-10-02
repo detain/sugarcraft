@@ -161,10 +161,14 @@ diverge.
    `AuditHook` are registered ahead of everything from a file, and a `Deny` wins
    outright.
 
-**My hook script cannot find its interpreter, or `$HOME` is empty.** Expected:
-`ScriptHook::execute()` **replaces** the environment with eight `CRUSH_*`
-variables. Nothing from your shell survives — `sh` supplies a default `PATH` and
-that is all. See
+**My hook (or a Bash command) cannot see `GITHUB_TOKEN`, an `AWS_*` variable or
+an API key.** Expected: `ScriptHook::execute()` sets eight `CRUSH_*` variables over
+your launch environment, but every variable named like a credential
+(`*_API_KEY`, `*_TOKEN`, `*_SECRET`, `AWS_*`) is removed first, because what a
+hook, Bash or Grep prints reaches the model. Name the ones a hook or command
+genuinely needs in `secretEnvAllowlist` in `~/.sugar-crush/settings.json` (see
+[`SETTINGS.md`](SETTINGS.md)). `PATH`, `HOME` and the rest of your shell are
+inherited. See
 [`HOOKS.md`](HOOKS.md#environment-handed-to-the-script) for the measured
 environment.
 

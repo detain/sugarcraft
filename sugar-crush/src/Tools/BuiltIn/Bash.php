@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
+use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\PromptGuidance;
@@ -199,17 +200,11 @@ final readonly class Bash implements Tool, PromptGuidance
         // Mirrors charmbracelet/bubbletea.*.Exec.
         // Use bash -c to interpret shell syntax; escapeshellarg prevents command injection.
         //
-        // The prefix is `cd ROOT || exit 1` on a line of its own, never
-        // `cd ROOT && COMMAND` (audit F-E3): `&&` binds tighter than `;`, so
-        // `cd ROOT && a; b` parses as `(cd ROOT && a); b`, and when ROOT is
-        // gone (a removed worktree, a renamed checkout) `b` ran in the PHP
-        // process's cwd — possibly the main checkout an isolated teammate was
-        // meant never to touch. Exiting the shell is the only form that guards
-        // every list, pipeline and compound the command may contain. A newline
-        // rather than `;` ends the guard so it stays a complete command
-        // whatever the first line of $command is, and an empty command is now
-        // a no-op instead of a `&&`-dangling syntax error. bash's own
-        // "cd: ROOT: No such file or directory" reaches the model on stderr.
+        // The prefix is ProcessContainment::cdGuard() — `cd ROOT || exit 1` on
+        // a line of its own, never `cd ROOT && COMMAND` (audit F-E3; the
+        // helper's doc-block carries the parse that makes `&&` wrong). It is
+        // shared with interactiveSpawnCommand() since F-E5, which had kept
+        // the old form, so the two spellings cannot drift apart again.
         //
         // proc_open's own cwd parameter is not the alternative it looks like.
         // MEASURED, PHP 8.3.6: a missing cwd makes proc_open() raise
@@ -218,7 +213,7 @@ final readonly class Bash implements Tool, PromptGuidance
         // spawn failure the capture path would have to special-case, where
         // the shell guard gives an ordinary non-zero exit with a reason.
         if ($cwd !== null) {
-            $cmd = "bash -c " . escapeshellarg("cd " . escapeshellarg($cwd) . " || exit 1\n" . $command);
+            $cmd = "bash -c " . escapeshellarg(ProcessContainment::cdGuard($cwd) . $command);
         } else {
             $cmd = "bash -c " . escapeshellarg($command);
         }

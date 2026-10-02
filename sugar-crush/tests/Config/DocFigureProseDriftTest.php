@@ -33,6 +33,7 @@ use SugarCraft\Crush\Hooks\ScriptHook;
 use SugarCraft\Crush\MCP\McpRouter;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Support\HookContextFiles;
+use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Tests\Support\SourceFileWalkTrait;
 use SugarCraft\Crush\LSP\LspConnection;
 use SugarCraft\Crush\MCP\StdioMcpServer;
@@ -1328,39 +1329,73 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
-     * E686 tranche-4 (P): the `env | sort` table is roster arithmetic, not a
-     * remembered measurement — the full run shows every key set plus `PWD`,
-     * the empty-`toolOutput` run hides exactly the payload variables the
-     * listing marks `← only in the second run`, and the pointer-before-empty-
-     * skip order inside `stagePayloads()` is what makes the output pointer
-     * "appear in both runs". The stale parenthetical this tranche fixed —
-     * claiming the empty run "coincidentally shows six lines" while the same
-     * page's table printed eight — is pinned absent, its correction in both
-     * directions.
+     * E686 tranche-4 (P), re-cut for audit F-E1: the `env | sort` table is
+     * roster arithmetic, not a remembered measurement — each run's line count
+     * is its `CRUSH_*` count plus the forced fail-fast block plus the
+     * inherited survivors plus `PWD`; the empty-`toolOutput` run hides exactly
+     * the payload variable the listing marks `← only in the second run`; and
+     * the pointer-before-empty-skip order inside `stagePayloads()` is what
+     * makes the output pointer "appear in both runs". The forced lines must be
+     * {@see ProcessContainment::NONINTERACTIVE_ENV} verbatim, and no listed
+     * name may be one {@see ProcessContainment::scrubbedEnv()} removes.
+     *
+     * This arm used to pin an 8/9-line table of `CRUSH_*` + `PWD` alone — the
+     * "replaces the environment" build. The hook had inherited the whole
+     * launch environment for a long time when F-E1 counted 129 lines; the
+     * LIVE re-measurement now lives in
+     * {@see \SugarCraft\Crush\Tests\Hooks\HookEnvironmentDocumentationDriftTest}.
      */
     public function testHookSeenEnvTableSurvivesTheRosterArithmetic(): void
     {
         $roster = self::hookEnvRoster();
         $hooks = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
         $words = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10];
+        $row = "/\\| %s \\| \\*\\*(\\d+)\\*\\* \\| (\\d+) × `CRUSH_\\*` \\+ (\\d+) forced \\+ (\\d+) inherited \\+ `PWD` \\|/";
 
         self::assertSame(
             1,
-            preg_match("/\\| `''` \\(empty\\) \\| \\*\\*(\\d+)\\*\\* \\| (\\d+) × `CRUSH_\\*` \\+ `PWD` \\|/", $hooks, $empty),
-            'the empty-toolOutput table row no longer states lines and CRUSH-count together',
+            preg_match(sprintf($row, "`\'\'` \\(empty\\)"), $hooks, $empty),
+            'the empty-toolOutput table row no longer states lines, CRUSH, forced and inherited counts together',
         );
         self::assertSame(
             1,
-            preg_match("/\\| `'RESULT-TEXT'` \\| \\*\\*(\\d+)\\*\\* \\| (\\d+) × `CRUSH_\\*` \\+ `PWD` \\|/", $hooks, $full),
-            'the full-payload table row no longer states lines and CRUSH-count together',
+            preg_match(sprintf($row, "`\'RESULT-TEXT\'`"), $hooks, $full),
+            'the full-payload table row no longer states lines, CRUSH, forced and inherited counts together',
         );
         self::assertSame(
             1,
-            preg_match('/```\n((?:CRUSH_[A-Z_]+=.*\n)+)(PWD=[^\n]*)\n```/', $hooks, $run),
-            'the sorted env listing no longer reads as CRUSH_* lines closed by PWD — re-pin with the table',
+            preg_match('/```\n((?:[A-Z_]+=[^\n]*\n)+)```/', $hooks, $run, 0, (int) strpos($hooks, '| `\'RESULT-TEXT\'` |')),
+            'the sorted env listing no longer follows the table — re-pin with the table',
         );
-        preg_match_all('/^(CRUSH_[A-Z_]+)=.*$/m', $run[1], $shown);
-        self::assertEqualsCanonicalizing($roster['all'], $shown[1], 'the listing and the live environment arrays diverged');
+        preg_match_all('/^([A-Z_]+)=(.*)$/m', $run[1], $lines, PREG_SET_ORDER);
+        $names = array_column($lines, 1);
+        $sorted = $names;
+        sort($sorted, SORT_STRING);
+        self::assertSame($sorted, $names, 'the listing is labelled `env | sort` and must be in sort order');
+
+        $crush = array_values(array_filter($names, static fn (string $n): bool => str_starts_with($n, 'CRUSH_')));
+        self::assertEqualsCanonicalizing($roster['all'], $crush, 'the listing and the live environment arrays diverged');
+
+        $forced = [];
+        foreach ($lines as [, $name, $value]) {
+            if (array_key_exists($name, ProcessContainment::NONINTERACTIVE_ENV)) {
+                $forced[$name] = $value;
+            }
+        }
+        ksort($forced);
+        $expectedForced = ProcessContainment::NONINTERACTIVE_ENV;
+        ksort($expectedForced);
+        self::assertSame($expectedForced, $forced, 'the forced lines are no longer NONINTERACTIVE_ENV verbatim');
+
+        self::assertContains('PWD', $names, 'the listing lost the PWD line sh exports');
+        $inherited = array_values(array_diff($names, $crush, array_keys($forced), ['PWD']));
+        foreach ($names as $name) {
+            self::assertFalse(
+                ProcessContainment::isSecretEnvName($name) || in_array($name, ProcessContainment::STRIPPED_ENV_NAMES, true),
+                "the listing shows {$name}, a variable scrubbedEnv() removes",
+            );
+        }
+
         self::assertSame(
             1,
             preg_match('/^(CRUSH_[A-Z_]+)=.*← only in the second run/m', $run[1], $hidden),
@@ -1369,10 +1404,14 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertContains($hidden[1], $roster['payloads'], 'the hidden variable is not a payload — stagePayloads() passes it empty, not absent');
 
         $total = count($roster['all']);
+        foreach ([$empty, $full] as $r) {
+            self::assertSame(count(ProcessContainment::NONINTERACTIVE_ENV), (int) $r[3], 'a row\'s forced count drifted from NONINTERACTIVE_ENV');
+            self::assertSame(count($inherited), (int) $r[4], 'a row\'s inherited count drifted from the listing');
+            self::assertSame((int) $r[2] + (int) $r[3] + (int) $r[4] + 1, (int) $r[1], 'a row\'s line count is no longer CRUSH + forced + inherited + PWD');
+        }
         self::assertSame($total - 1, (int) $empty[2], 'the empty-run CRUSH-count drifted from the roster less the hidden payload');
-        self::assertSame($total, (int) $empty[1], 'the empty-run line count drifted from its CRUSH-count plus PWD');
         self::assertSame($total, (int) $full[2], 'the full-run CRUSH-count drifted from the live roster');
-        self::assertSame($total + 1, (int) $full[1], 'the full-run line count drifted from the roster plus PWD');
+        self::assertSame(count($names), (int) $full[1], 'the full-run line count drifted from the listing');
 
         self::assertSame(1, preg_match('/appears in \*\*both\*\* runs/', $hooks), 'the both-runs pointer claim moved — it is why the empty row keeps its pointer line');
         $stager = self::bodyExcerpt(self::sourceOf('Hooks/ScriptHook.php'), 'stagePayloads', 2000);
@@ -1382,7 +1421,8 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertNotFalse($emptySkip, 'stagePayloads() no longer keeps the empty-payload file the way the docs cite it — the both-runs claim lost its referent');
         self::assertLessThan($emptySkip, $pointerWrite, 'the pointer is no longer committed before the empty-value skip — an empty payload would lose its _FILE and the table row is false');
 
-        self::assertStringNotContainsString('coincidentally shows six lines', $hooks, 'the pre-pointer stale parenthetical is back — the table above this page says the empty run shows eight lines, not six');
+        self::assertStringNotContainsString('coincidentally shows six lines', $hooks, 'the pre-pointer stale parenthetical is back');
+        self::assertStringNotContainsString('it **replaces** the environment', $hooks, 'the replaced-environment claim F-E1 disproved is back');
         self::assertSame(
             1,
             preg_match('/prints (\w+) fewer `CRUSH_\*` line than it\s+has keys/', $hooks, $m),
@@ -1511,8 +1551,10 @@ final class DocFigureProseDriftTest extends TestCase
      * roster with ONE number. The launch configuration stays outside the hook
      * environment: the page names the parallel-calls disable variable by the
      * very string EngineBackend reads, no quoted `SUGARCRUSH_*` key appears
-     * in the environment assembly, and the "nothing from your shell survives"
-     * sentence stands.
+     * in the environment assembly. The "nothing from your shell survives"
+     * sentence this arm used to keep standing was false — audit F-E1 measured
+     * the hook inheriting the whole launch environment — so it is now pinned
+     * ABSENT, and the inherit list that replaced it is pinned present.
      */
     public function testCrossPageRosterAndLaunchVarBoundarySurviveTheRoster(): void
     {
@@ -1523,7 +1565,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/\*\*replaces\*\* the environment with (\w+) `CRUSH_\*`\s+variables/', $trouble, $m),
+            preg_match('/sets (\w+) `CRUSH_\*` variables over\s+your launch environment/', $trouble, $m),
             'the TROUBLESHOOTING roster sentence moved — re-pin with the prose, do not delete it',
         );
         self::assertSame(count($roster['all']), $words[$m[1]] ?? -1, 'TROUBLESHOOTING.md and HOOKS.md must spell one roster with one number — the spelled count drifted from the live arrays');
@@ -1540,11 +1582,17 @@ final class DocFigureProseDriftTest extends TestCase
             'the documented disable variable drifted from the name EngineBackend reads',
         );
 
+        // Audit F-E1 reversed this sentence: the launch's `SUGARCRUSH_*`
+        // variables ARE inherited (scrubbedEnv() is a getenv() copy), and the
+        // page said they were not. The code-side half below still holds —
+        // ScriptHook never SETS one — so the pin now reads the inherit list.
         self::assertSame(
             1,
-            preg_match('/none of the `SUGARCRUSH_\*` variables that configured the launch/', $hooks),
-            'the launch-vars-do-not-survive sentence moved — hook authors program against it',
+            preg_match('/the `SUGARCRUSH_\*` variables that configured the launch — with\s+three changes/', $hooks),
+            'the launch-vars-are-inherited sentence moved — hook authors program against it',
         );
+        self::assertStringNotContainsString('Nothing from your shell survives', $hooks, 'the replaced-environment claim F-E1 disproved is back in HOOKS.md');
+        self::assertStringNotContainsString('Nothing from your shell survives', $trouble, 'the replaced-environment claim F-E1 disproved is back in TROUBLESHOOTING.md');
         self::assertSame(
             0,
             preg_match_all("/['\"]SUGARCRUSH_[A-Z_]+['\"]/", self::bodyExcerpt(self::sourceOf('Hooks/ScriptHook.php'), 'executeStaged', 7000)),
@@ -5822,7 +5870,7 @@ final class DocFigureProseDriftTest extends TestCase
         $wordNumbers = [
             'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7,
             'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12,
-            'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16,
+            'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17,
         ];
 
         self::assertSame(1, preg_match('/`LayeredSettings::LAYERED_KEYS` is exactly these ([a-z]+)/', $settings, $tableCount), 'the "exactly these (word)" sentence under the layered table is gone');

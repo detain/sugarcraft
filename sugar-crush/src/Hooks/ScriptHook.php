@@ -586,13 +586,16 @@ final readonly class ScriptHook implements BoundedHookInterface
         // `setsid -w` detach over /dev/tty, NONINTERACTIVE forced and
         // SUDO_ASKPASS/GPG_TTY stripped — with the hook's own CRUSH_* keys
         // and staged payloads riding LAST so a site's required keys still
-        // win. The size-refusal reasoning below is unchanged.
+        // win. scrubbedEnv(), not env() (audit F-E1): a hook's stdout can
+        // become `additionalContext` the model reads, so credential-shaped
+        // variables are dropped unless the operator's `secretEnvAllowlist`
+        // names them. The size-refusal reasoning below is unchanged.
         $process = @proc_open(
             ProcessContainment::spawnSpec($this->command),
             $descriptors,
             $pipes,
             $cwd,
-            ProcessContainment::env($fixed + $payload['env'])
+            ProcessContainment::scrubbedEnv($fixed + $payload['env'])
         );
 
         if (!is_resource($process) && $payload['fallback'] !== null) {
@@ -605,7 +608,7 @@ final readonly class ScriptHook implements BoundedHookInterface
                 $descriptors,
                 $pipes,
                 $cwd,
-                ProcessContainment::env($fixed + $payload['fallback'])
+                ProcessContainment::scrubbedEnv($fixed + $payload['fallback'])
             );
         }
 

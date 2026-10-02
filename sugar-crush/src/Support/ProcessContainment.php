@@ -28,6 +28,9 @@ namespace SugarCraft\Crush\Support;
  *     block on a pinentry the human never sees. An unset GPG_TTY costs gpg
  *     a loopback/askpass fallback, which is the loud refusal containment
  *     asks for; an inherited one is a tty handle containment cannot revoke.
+ *     The spawns whose output the MODEL reads (Bash, Grep, script hooks)
+ *     take {@see scrubbedEnv()} instead, which also drops credentials
+ *     (audit F-E1).
  *
  *  3. HOW DOES IT DIE? — {@see terminate()} kills the child's WHOLE process
  *     GROUP when the child leads one (the case for every setsid-wrapped
@@ -94,6 +97,50 @@ final class ProcessContainment
      * precisely the channel detach cannot revoke.
      */
     public const STRIPPED_ENV_NAMES = ['SUDO_ASKPASS', 'GPG_TTY'];
+
+    /**
+     * Name shapes {@see scrubbedEnv()} treats as credentials (audit F-E1),
+     * matched with `fnmatch()` on the UPPER-CASED name.
+     *
+     * WHY THE MODEL-VISIBLE PATHS DROP THEM: a Bash command's output and a
+     * hook's stdout both reach the transcript, and from there the provider.
+     * `env | grep API_KEY` was measured returning the session's own provider
+     * key and an unrelated third-party key from the operator's shell — so an
+     * injected instruction could read a secret and, with any egress tool, send
+     * it out. Shapes rather than a list because the operator's shell holds
+     * credentials for services this package has never heard of; `AWS_*`
+     * whole because the AWS chain spreads one credential over several names
+     * (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`).
+     */
+    public const SECRET_ENV_PATTERNS = ['*_API_KEY', '*_TOKEN', '*_SECRET', 'AWS_*'];
+
+    /**
+     * The credentials this package itself reads (docs/ENVIRONMENT.md,
+     * "Provider credential variables"). Every one also matches
+     * {@see SECRET_ENV_PATTERNS} today; they are named anyway for the
+     * allowlist rule in {@see secretEnvAllowed()}: only an EXACT allowlist
+     * entry releases one of these, so `*_TOKEN` written to pass `GITHUB_TOKEN`
+     * through to `gh` cannot also hand the model `ANTHROPIC_AUTH_TOKEN`.
+     */
+    public const PROVIDER_SECRET_ENV_NAMES = [
+        'ANTHROPIC_API_KEY',
+        'ANTHROPIC_AUTH_TOKEN',
+        'OPENAI_API_KEY',
+        'SGLANG_API_KEY',
+        'CUSTOM_PROVIDER_API_KEY',
+    ];
+
+    /**
+     * The operator's `secretEnvAllowlist` setting, installed once per process
+     * by {@see \SugarCraft\Crush\Cli\Bootstrap}. Process state, like the
+     * setsid memo above, because the readers are a trait method and a hook
+     * built from a config file — neither has a constructor the launch could
+     * thread a value through without every intermediate factory learning it —
+     * and forks inherit it, which is exactly the reach the setting needs.
+     *
+     * @var list<string>
+     */
+    private static array $secretEnvAllowlist = [];
 
     /**
      * Path of a `setsid(1)` proven to forward its child's exit status
@@ -192,6 +239,134 @@ final class ProcessContainment
         }
 
         return \array_merge($env, self::NONINTERACTIVE_ENV, $overrides);
+    }
+
+    /**
+     * {@see env()} with the credentials removed — the environment for the
+     * spawn paths whose output the MODEL reads: Bash and Grep (through
+     * {@see \SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput}) and
+     * script hooks ({@see \SugarCraft\Crush\Hooks\ScriptHook}). Audit F-E1.
+     *
+     * A name is removed when it matches {@see SECRET_ENV_PATTERNS} or is one
+     * of {@see PROVIDER_SECRET_ENV_NAMES}, unless {@see secretEnvAllowed()}
+     * lets it through. $overrides are applied AFTER the scrub, so a site's
+     * own required keys (a hook's `CRUSH_*` payload, EnvironmentBlock's git
+     * lock switch) are never caught by a pattern.
+     *
+     * env() ITSELF STAYS UNSCRUBBED, deliberately: MCP stdio servers, LSP
+     * servers, the claude-code client and the command backends are processes
+     * the OPERATOR configured to authenticate as them, and their output is a
+     * protocol this package parses, not text handed to the model verbatim.
+     *
+     * @param array<string, string> $overrides
+     * @return array<string, string>
+     */
+    public static function scrubbedEnv(array $overrides = []): array
+    {
+        $env = self::env();
+        foreach (\array_keys($env) as $name) {
+            if (self::isSecretEnvName((string) $name) && !self::secretEnvAllowed((string) $name)) {
+                unset($env[$name]);
+            }
+        }
+
+        return \array_merge($env, $overrides);
+    }
+
+    /**
+     * Whether $name is credential-shaped: one of
+     * {@see PROVIDER_SECRET_ENV_NAMES}, or a match for a
+     * {@see SECRET_ENV_PATTERNS} shape. Case-insensitive, because a lower-case
+     * `github_token` is just as much a token and an over-eager scrub costs a
+     * script one variable while an under-eager one costs the credential.
+     */
+    public static function isSecretEnvName(string $name): bool
+    {
+        $upper = \strtoupper($name);
+        if (\in_array($upper, self::PROVIDER_SECRET_ENV_NAMES, true)) {
+            return true;
+        }
+        foreach (self::SECRET_ENV_PATTERNS as $pattern) {
+            if (\fnmatch($pattern, $upper)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether the installed allowlist lets credential-shaped $name through.
+     *
+     * Entries are names or `fnmatch()` globs, compared upper-cased like the
+     * patterns. A {@see PROVIDER_SECRET_ENV_NAMES} member needs an EXACT
+     * entry: a glob is how an operator says "my GitHub tooling needs its
+     * token", and reading it as also releasing the session's own provider
+     * key would be the leak this scrub exists to close, reopened by the
+     * setting that was meant to be the narrow exception.
+     */
+    public static function secretEnvAllowed(string $name): bool
+    {
+        $upper = \strtoupper($name);
+        $provider = \in_array($upper, self::PROVIDER_SECRET_ENV_NAMES, true);
+        foreach (self::$secretEnvAllowlist as $entry) {
+            $entry = \strtoupper($entry);
+            if ($entry === $upper || (!$provider && \fnmatch($entry, $upper))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Install the operator's `secretEnvAllowlist` for every later
+     * {@see scrubbedEnv()} in this process (and its forks). Replaces, never
+     * appends, so a re-read config cannot accumulate stale entries; blank and
+     * non-string entries are dropped, and `[]` restores the full scrub.
+     *
+     * @param array<mixed> $entries
+     */
+    public static function useSecretEnvAllowlist(array $entries): void
+    {
+        $clean = [];
+        foreach ($entries as $entry) {
+            if (\is_string($entry) && \trim($entry) !== '') {
+                $clean[] = \trim($entry);
+            }
+        }
+        self::$secretEnvAllowlist = \array_values(\array_unique($clean));
+    }
+
+    /**
+     * The allowlist {@see useSecretEnvAllowlist()} installed.
+     *
+     * @return list<string>
+     */
+    public static function secretEnvAllowlist(): array
+    {
+        return self::$secretEnvAllowlist;
+    }
+
+    /**
+     * The `cd DIR || exit 1` guard line every `/bin/sh -c` script that must
+     * run inside DIR starts with — ONE spelling for Bash and
+     * {@see interactiveSpawnCommand()} (audit F-E3, then F-E5 for the copy
+     * that kept the old form).
+     *
+     * Never `cd DIR && COMMAND`: `&&` binds tighter than `;`, so
+     * `cd DIR && a; b` parses as `(cd DIR && a); b`, and when DIR is gone (a
+     * removed worktree, a renamed checkout) `b` runs in the PHP process's cwd
+     * — possibly the main checkout an isolated teammate was meant never to
+     * touch. Exiting the shell guards every list, pipeline and compound the
+     * command may contain. The NEWLINE (not `;`) ends the guard so it stays a
+     * complete command whatever the command's first line is, and an empty
+     * command is a no-op rather than a dangling-`&&` syntax error. The shell's
+     * own "cd: DIR: No such file or directory" reaches the caller on stderr.
+     */
+    public static function cdGuard(string $dir): string
+    {
+        return 'cd ' . \escapeshellarg($dir) . " || exit 1\n";
     }
 
     /**
@@ -322,11 +497,16 @@ final class ProcessContainment
      * all, so GIT_TERMINAL_PROMPT/GIT_ASKPASS/SSH_ASKPASS forcing and the
      * SUDO_ASKPASS/GPG_TTY strips ride both paths identically.
      *
+     * $cwd is entered through {@see cdGuard()} (audit F-E5): this used to
+     * prefix `cd DIR && `, the form F-E3 retired from Bash, so a vanished
+     * $cwd ran every command after the first `;` in the PHP process's own
+     * directory.
+     *
      * @return non-empty-list<string>
      */
     public static function interactiveSpawnCommand(string $command, ?string $cwd = null): array
     {
-        $script = ($cwd === null || $cwd === '' ? '' : 'cd ' . \escapeshellarg($cwd) . ' && ') . $command;
+        $script = ($cwd === null || $cwd === '' ? '' : self::cdGuard($cwd)) . $command;
 
         return ['/bin/sh', '-c', $script];
     }

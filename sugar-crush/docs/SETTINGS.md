@@ -163,9 +163,10 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `statusLine` | `Bootstrap::chat()` → `StatusLineCommand::fromSettings()` | **no** |
 | `layout` | `Bootstrap::app()` → `App::$dock` via `DockLayout::fromArray()` | **no** |
 | `maxToolSteps` | `Bootstrap::backend()` → `resolvedMaxToolSteps()` | **no** |
+| `secretEnvAllowlist` | `Bootstrap::tools()` → `installSecretEnvAllowlist()` | **no** |
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these sixteen, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these seventeen, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. A key nothing reads is worse than
@@ -236,6 +237,26 @@ and counts; `1.5` does not. There is no upper bound, but the bound stops at
 what an integer can hold: a value too large to be one (`1e19`, or a numeric
 string such as `"99999999999999999999"`) resolves to the default as well,
 rather than being clamped to a ceiling the key deliberately does not have.
+
+`secretEnvAllowlist` is the one exception to the credential scrub (audit
+F-E1). Bash, Grep and script hooks inherit your environment **minus** every
+variable whose name matches `*_API_KEY`, `*_TOKEN`, `*_SECRET` or `AWS_*`
+(case-insensitive), because what those processes print is handed to the model,
+and `env | grep KEY` used to hand it your provider key. The value is a list of
+names or `fnmatch()` globs that are let through anyway — `["GITHUB_TOKEN"]`
+for a `gh` workflow, `["NPM_*"]` for a publish script. A glob never releases a
+key SugarCrush itself authenticates with (`ANTHROPIC_API_KEY`,
+`ANTHROPIC_AUTH_TOKEN`, `OPENAI_API_KEY`, `SGLANG_API_KEY`,
+`CUSTOM_PROVIDER_API_KEY`); only that exact name does. Anything but a list of
+strings scrubs everything. MCP and LSP servers, the `claude-code` provider and
+the command backends are not scrubbed — they are processes you configured to
+authenticate as you, and their output is a protocol, not text the model reads.
+The key is read when the tool set and the hook chain are built
+(`Bootstrap::tools()` and `Bootstrap::hooks()`), and it is user-tier only for
+the plainest reason on this page: a project-tier `["*"]` would let a cloned
+repository read every credential in your shell back through one `env` call.
+See [`HOOKS.md`](HOOKS.md#environment-handed-to-the-script) for what a hook
+sees.
 
 Where a row names two methods, the first is the public entry point and the
 second is the method that does the read — cited because that is the one to
@@ -714,10 +735,11 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   all four `trustedProject*` grants.
 - [`MEMORY.md`](MEMORY.md) — the rest of the `~/.sugar-crush/` layout.
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
-  this stack. They do not cover it: only five of the sixteen layered keys have an
+  this stack. They do not cover it: only five of the seventeen layered keys have an
   env override (`provider`, `titleModel`, `summaryModel`, `parallelToolCalls`,
   `parallelToolDeadlineSeconds`). `theme`, `instructions`, `disabledSkills`,
   `disabledRules`, `allowedTools`, `disabledTools`, `maxOutputTokens`,
-  `modelPrices`, `statusLine`, `layout` and `maxToolSteps` have none.
+  `modelPrices`, `statusLine`, `layout`, `maxToolSteps` and `secretEnvAllowlist`
+  have none.
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.)

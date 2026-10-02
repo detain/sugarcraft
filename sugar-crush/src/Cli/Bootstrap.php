@@ -53,6 +53,7 @@ use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
+use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\TimedFileLock;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\ToolResult;
@@ -4437,6 +4438,9 @@ final class Bootstrap
      */
     private static function hooks(?PermissionGate $gate = null, ?string $root = null): HookManager
     {
+        // Script hooks spawn through ProcessContainment::scrubbedEnv(), so the
+        // operator's credential allowlist must be in force before any runs.
+        self::installSecretEnvAllowlist();
         $hooks = new HookManager(new HookRegistry());
         $hooks->registerBuiltIns(); // audit + confirm-rm + protect-files guards
 
@@ -7055,6 +7059,7 @@ final class Bootstrap
         // downstream of this return receives an already-filtered set, including
         // `mcpTools()`'s appended bridges, which is what makes
         // `disabledTools: ["mcp__git__*"]` mean anything.
+        self::installSecretEnvAllowlist();
         $tools = self::filterToolSet(self::unfilteredTools(
             $root,
             $loader,
@@ -7080,6 +7085,39 @@ final class Bootstrap
         }
 
         return $tools;
+    }
+
+    /**
+     * The user-tier `settings.json` / `config.json` key naming credential
+     * variables the F-E1 scrub lets through to Bash, Grep and script hooks.
+     */
+    private const SECRET_ENV_ALLOWLIST_CONFIG_KEY = 'secretEnvAllowlist';
+
+    /**
+     * Install the operator's `secretEnvAllowlist` on
+     * {@see ProcessContainment::useSecretEnvAllowlist()} — audit F-E1.
+     *
+     * Called from {@see tools()} and {@see hooks()}, the two builders of the
+     * spawn sites the scrub covers (Bash/Grep and script hooks), so whichever
+     * of the two a launch path reaches first installs it before anything it
+     * built can spawn. Re-installing is
+     * idempotent: the setter REPLACES the list, so an unset or malformed key
+     * restores the full scrub rather than leaving a previous read in force.
+     *
+     * The merged config can only carry this key from the USER tier:
+     * {@see LayeredSettings::PROJECT_TIER_KEYS} does not list it, so no
+     * project file — trusted or not — can widen what the model may read.
+     * A value that is not a list is ignored and a non-string entry is dropped,
+     * which is the safe direction: a typo'd allowlist scrubs more, never less.
+     *
+     * @param ?array<string, mixed> $config the already-read merged config;
+     *                                      null reads it
+     */
+    private static function installSecretEnvAllowlist(?array $config = null): void
+    {
+        $raw = ($config ?? self::readUserConfig())[self::SECRET_ENV_ALLOWLIST_CONFIG_KEY] ?? null;
+
+        ProcessContainment::useSecretEnvAllowlist(is_array($raw) && array_is_list($raw) ? $raw : []);
     }
 
     /**

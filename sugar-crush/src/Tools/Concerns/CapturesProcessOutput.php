@@ -52,6 +52,10 @@ use SugarCraft\Crush\Support\ProcessReaper;
  *
  * {@see \SugarCraft\Crush\Support\ProcessContainment::env()} carries the
  * fail-fast half the detach cannot reach — prompts that consult the environment before touching a device.
+ * Both run paths take it through {@see \SugarCraft\Crush\Support\ProcessContainment::scrubbedEnv()},
+ * which also drops credential-shaped variables (audit F-E1): this trait's
+ * output is the model's to read, so a provider key in the child's env is
+ * one `env` away from the transcript.
  * Both halves apply to EVERY runCaptured() caller (Bash, Grep,
  * EnvironmentBlock share this one choke point), which is what "sweep the
  * behaviour, not the token" asked for.
@@ -128,9 +132,10 @@ trait CapturesProcessOutput
      * deadline. `timedOut` is the discriminator to read — an exit code of
      * 124 can also be a command's own answer.
      *
-     * $envOverrides is handed to {@see ProcessContainment::env()} and wins
-     * over the inherited environment; the default `[]` is the historical
-     * environment. EnvironmentBlock passes `GIT_OPTIONAL_LOCKS=0` this way
+     * $envOverrides is handed to {@see ProcessContainment::scrubbedEnv()} and
+     * wins over the inherited environment — and over the credential scrub,
+     * which runs before it; the default `[]` is the inherited environment
+     * minus credentials (audit F-E1). EnvironmentBlock passes `GIT_OPTIONAL_LOCKS=0` this way
      * (audit 15d-12) so the lock rule stays scoped to its own git reads.
      *
      * @param array<string, string> $envOverrides
@@ -158,7 +163,9 @@ trait CapturesProcessOutput
         // spec comes from ProcessContainment::spawnSpec() (a proven
         // `setsid -w` wrapper naming /bin/sh explicitly, because that is
         // exactly the shell PHP's string form runs, or the original command
-        // where no usable detach exists) and the env from ::env(). ONE
+        // where no usable detach exists) and the env from ::scrubbedEnv() —
+        // ::env() minus credentials (audit F-E1), because what this child
+        // prints is handed to the model. ONE
         // proc_open call, with the spec chosen above, not a ternary of two:
         // DescriptorInheritanceGuardTest licenses spawn sites by name, and a
         // doubly-anonymous result would read as two unclassifiable exposed
@@ -166,7 +173,7 @@ trait CapturesProcessOutput
         // paths: detach is the half that needs a binary, fail-fast env needs
         // none.
         $spawnSpec = ProcessContainment::spawnSpec($command);
-        $env = ProcessContainment::env($envOverrides);
+        $env = ProcessContainment::scrubbedEnv($envOverrides);
         $process = @proc_open($spawnSpec, $descriptors, $pipes, $cwd, $env);
         if (!is_resource($process)) {
             return [
@@ -391,7 +398,9 @@ trait CapturesProcessOutput
             $pty = \SugarCraft\Pty\Pty::open();
             $child = $pty->spawn(
                 ProcessContainment::interactiveSpawnCommand($command, $cwd),
-                ProcessContainment::env(),
+                // Scrubbed for the same reason as runCaptured(): the pty's
+                // transcript is the model's to read (audit F-E1).
+                ProcessContainment::scrubbedEnv(),
                 80,
                 24,
                 true,
