@@ -1019,10 +1019,11 @@ and `/clear` frees the whole context at once.
 Beside the context readout, a **spend** readout appears once the provider has
 reported something to show — dollars, and the cap if one is set. It is a
 separate segment from the context figure on purpose: the context number is a
-chars/4 **estimate** and wears a `~`, while the spend is the provider's own
-**count** and wears a `$`. They are never summed. A session under a cap that
-nothing has been reported for reads `$?` rather than `$0.0000`, because the two
-are different claims and the cap is inert in that state.
+script-weighted **estimate** (about four characters a token for English and
+code, about one for CJK, more for emoji) and wears a `~`, while the spend is
+the provider's own **count** and wears a `$`. They are never summed. A session
+under a cap that nothing has been reported for reads `$?` rather than `$0.0000`,
+because the two are different claims and the cap is inert in that state.
 
 When you type `/compact` and a provider is configured, the older exchanges are
 summarized **by a model** rather than by the local truncate-and-placeholder

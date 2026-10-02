@@ -95,6 +95,7 @@ use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\PromptHistory;
 use SugarCraft\Crush\Session\SessionStore;
 use SugarCraft\Crush\Util\TokenTracker;
+use SugarCraft\Crush\Util\TokenEstimate;
 
 /**
  * The chat shell, as a SugarCraft {@see Model}.
@@ -1281,8 +1282,9 @@ final class Chat implements Model
          */
         private readonly ?int $promptEstimateAtDispatch = null,
         /**
-         * Empirical scale factor from the ESTIMATOR's unit (chars/4 + 10 per
-         * message) to the PROVIDER's counted tokens, derived from the last
+         * Empirical scale factor from the ESTIMATOR's unit (script-weighted
+         * chars/4 + 10 per message, {@see rawTokenProxy()}) to the PROVIDER's
+         * counted tokens, derived from the last
          * settled turn that reported usage (E17 step (a): "use the last real
          * measurement to calibrate the estimator"). Null = no observation
          * yet, which is every offline run, every non-reporting provider, and
@@ -15131,12 +15133,15 @@ final class Chat implements Model
     }
 
     /**
-     * Estimate token count for a message history using the same
-     * 1-token≈4-chars heuristic as {@see ContextCompactor}'s internal
-     * countTokens(), so the idle-compaction threshold agrees with what
-     * /compact itself would report.
+     * Estimate token count for a message history. For ASCII/Latin text this
+     * is the same 1-token≈4-chars heuristic as {@see ContextCompactor}'s
+     * internal countTokens(), so the idle-compaction threshold agrees with
+     * what /compact itself would report; for CJK, other non-Latin scripts and
+     * emoji the raw proxy is script-weighted ({@see TokenEstimate},
+     * audit 15b-13) and reads HIGHER than the compactor's plain chars/4 — the
+     * safe direction, since it is the tiers that must not fire late.
      *
-     * CALIBRATED since E17: the raw chars/4 + 10 proxy is multiplied by the
+     * CALIBRATED since E17: the raw script-weighted + 10 proxy is multiplied by the
      * session's last estimate-vs-real observation ({@see $tokenEstimateCalibration})
      * when one exists. Read that field's docblock and
      * {@see turnEstimateObservation()} before concluding the units here are
@@ -15166,7 +15171,9 @@ final class Chat implements Model
     }
 
     /**
-     * The PRE-calibration chars/4 + 10 proxy — the raw half of
+     * The PRE-calibration proxy — {@see TokenEstimate::ofText()} (chars/4
+     * for ASCII/Latin, heavier per character for CJK, other scripts and
+     * emoji) + 10 per message — the raw half of
      * {@see estimateTokenCount()}, exposed as its own concept because E17's
      * observation must be paired against THIS, never against the calibrated
      * output: recording raw×f at dispatch and folding real/(raw×f) at settle
@@ -15188,7 +15195,9 @@ final class Chat implements Model
             if ($msg->uiOnly) {
                 continue;
             }
-            $total += (int) ceil(mb_strlen($msg->content) / 4);
+            // Script-weighted, not codepoints/4 (audit 15b-13): CJK/emoji ran
+            // 3-6x under, past what the [1.0, 3.0] calibration can correct.
+            $total += TokenEstimate::ofText($msg->content);
             $total += 10; // role overhead
         }
 
@@ -15230,7 +15239,8 @@ final class Chat implements Model
      * absolute count next to the percentage instead of multiplying the
      * fraction back out against a limit it would have to hardcode.
      *
-     * Approximate by construction - it is a chars/4 proxy, not a
+     * Approximate by construction - it is a script-weighted chars/4 proxy
+     * ({@see TokenEstimate}), not a
      * provider-reported usage figure - so any UI showing it must say so.
      */
     public function contextTokens(): int
