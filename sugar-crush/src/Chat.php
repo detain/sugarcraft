@@ -5715,6 +5715,8 @@ final class Chat implements Model
 
         $gate = $msg->gatedCommands === [] ? null : $this->permissionGate();
         foreach ($msg->gatedCommands as $command) {
+            // Root-less on purpose: a Bash verdict never reads the root
+            // (audit F-J3-rem(b), pinned by ChatBashGateRootTest).
             $gate?->evaluate(new \SugarCraft\Crush\ToolCall('Bash', ['command' => $command]));
         }
 
@@ -9733,6 +9735,9 @@ final class Chat implements Model
             $onGateEvaluated($command);
         }
 
+        // No project root: a Bash verdict never reads one — rules read it
+        // for path subjects only, accept-edits and the classifier for
+        // Edit/Write only (audit F-J3-rem(b), pinned by ChatBashGateRootTest).
         if ($gate->evaluate(new \SugarCraft\Crush\ToolCall('Bash', ['command' => $command]))
             === \SugarCraft\Crush\Permissions\PermissionDecision::Deny) {
             return sprintf(
