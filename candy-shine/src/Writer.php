@@ -4,23 +4,24 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shine;
 
-use SugarCraft\Shine\Render\SectionScanner;
+use SugarCraft\Shine\Render\SectionStream;
 
 /**
  * Push-side object channel of the E736 7.3 streaming family: feed Markdown
  * chunks as they arrive, and every newly proven top-level section is
  * rendered and written through the {@see StreamSink} immediately —
  * write-through flush law, one flush per completed section, no buffering
- * beyond the section scanner's own hold.
+ * beyond the section stream's own hold.
  *
  * Byte-identity law (shared with {@see Renderer::stream()}, pinned by the
  * same corpus): for any split of the same input bytes,
  *   feed(all chunks in order); close()
- * leaves exactly {@see Renderer::render()} bytes in the sink. The scanner's
- * state depends only on assembled bytes, never on where a chunk ended, and
- * close() performs the terminal flush-partial: the trailing section the
- * scanner was holding is rendered and written (minus the final newline run,
- * which render() rtrims anyway).
+ * leaves exactly {@see Renderer::render()} bytes in the sink. The section
+ * stream's state depends only on assembled bytes, never on where a chunk
+ * ended, and close() performs the terminal flush-partial: the trailing
+ * section, and any section held back for a link reference definition that
+ * never came, are rendered and written (minus the final newline run, which
+ * render() rtrims anyway).
  *
  * Renderers with document-scope post-processing ({@see
  * Renderer::defersStreaming()}) buffer the source and emit render() exactly
@@ -37,11 +38,10 @@ use SugarCraft\Shine\Render\SectionScanner;
  */
 final class Writer
 {
-    private readonly SectionScanner $scanner;
+    private readonly SectionStream $sections;
 
-    private bool $started = false;
-
-    private string $carryRun = '';
+    /** The newline run held back until the next non-blank body: render() drops the last one. */
+    private string $pending = '';
 
     private bool $closed = false;
 
@@ -52,7 +52,7 @@ final class Writer
         private readonly Renderer $renderer,
         private readonly StreamSink $sink,
     ) {
-        $this->scanner = new SectionScanner();
+        $this->sections = new SectionStream($renderer);
         if ($renderer->defersStreaming()) {
             $this->deferredSource = '';
         }
@@ -87,8 +87,8 @@ final class Writer
 
             return;
         }
-        foreach ($this->scanner->push($chunk) as $section) {
-            $this->emitSection($section);
+        foreach ($this->sections->push($chunk) as $body) {
+            $this->emit($body);
         }
     }
 
@@ -110,11 +110,10 @@ final class Writer
                 $this->sink->write($rendered);
             }
         } else {
-            $final = $this->scanner->finish();
-            if ($final !== null) {
-                $this->emitSection($final);
+            foreach ($this->sections->finish() as $body) {
+                $this->emit($body);
             }
-            // The pending carryRun is dropped, not written: render() rtrims
+            // The pending run is dropped, not written: render() rtrims
             // exactly this trailing newline run at document end.
         }
 
@@ -127,22 +126,23 @@ final class Writer
     }
 
     /**
-     * Render one completed section and write it through, reproducing
-     * stream()'s head/carry choreography byte for byte: the previous
-     * section's trailing newline run rides out with this section's head.
+     * Write one rendered section body through, reproducing stream()'s
+     * choreography byte for byte: the previous body's trailing newline run
+     * rides out with this body's head, and a body of nothing but newlines
+     * joins that run.
      */
-    private function emitSection(string $section): void
+    private function emit(string $body): void
     {
-        $body           = $this->renderer->renderSection($section);
-        $tail           = strlen(rtrim($body, "\n"));
-        $head           = substr($body, 0, $tail);
-        if ($this->started && $this->carryRun !== '') {
-            $this->sink->write($this->carryRun);
+        $head = rtrim($body, "\n");
+        if ($head === '') {
+            $this->pending .= $body;
+
+            return;
         }
-        $this->started  = true;
-        $this->carryRun = $tail < strlen($body) ? substr($body, $tail) : '';
-        if ($head !== '') {
-            $this->sink->write($head);
+        if ($this->pending !== '') {
+            $this->sink->write($this->pending);
         }
+        $this->sink->write($head);
+        $this->pending = substr($body, strlen($head));
     }
 }

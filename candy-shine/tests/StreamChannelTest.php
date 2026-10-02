@@ -42,6 +42,19 @@ final class StreamChannelTest extends TestCase
             'indent-refuse' => ["# Top\n\n    code\n\n# After\n"],
             'raw-html'      => ["# Top\n\n<pre>\n# inside\n</pre>\n\n# After\n"],
             'trailing-run'  => ["# Top\n\nbody\n\n\n"],
+            // Audit 15b-30: link reference definitions cross sections.
+            'ref-forward'   => ["See [x][a].\n\n# H\n\n[a]: https://e.x\n"],
+            'ref-backward'  => ["[a]: https://e.x\n\n# H\n\nSee [x][a].\n"],
+            'ref-first-wins' => ["# One\n\n[a]: https://first.x\n\n# Two\n\n[a]: https://second.x\n\nSee [a].\n"],
+            'ref-in-quote'  => ["See ![i][b].\n\n# H\n\n> [b]: https://q.x\n"],
+            // Audit 15b-31: the unterminated-heading tail, and headings
+            // straight after a closing fence.
+            'unterminated-heading' => ["Intro\n\n# F"],
+            'fence-glued-heading'  => ["```php\necho 1;\n```\n## Next\n\ntext\n```\nx\n```\n# Last"],
+            // Lines the scanner could misread; the parser confirms each cut.
+            'html-comment'  => ["<!--\n\n# H\n-->\n\n# After\n"],
+            'backtick-info' => ["```a`b\n```\n\n# H\n"],
+            'outdented-fence-close' => ["- a\n  ```\n  x\n```\n\n# H\n\ny\n"],
         ];
     }
 
@@ -112,6 +125,35 @@ final class StreamChannelTest extends TestCase
         );
     }
 
+    /**
+     * Audit 15b-30: a reference in one section and its definition in a later
+     * one used to stay literal `[x][a]` text in stream() while render()
+     * resolved it.
+     */
+    public function testAReferenceDefinedInALaterSectionResolves(): void
+    {
+        $t        = "See [x][a].\n\n# H\n\n[a]: https://e.x\n";
+        $renderer = $this->plain();
+        $streamed = implode('', iterator_to_array($renderer->stream([$t]), false));
+
+        $this->assertSame($renderer->render($t), $streamed);
+        $this->assertStringNotContainsString('[x][a]', $streamed);
+    }
+
+    /**
+     * Audit 15b-31: an unterminated last line that is a heading used to
+     * throw away the section it closed.
+     */
+    public function testAnUnterminatedHeadingKeepsTheSectionBeforeIt(): void
+    {
+        $renderer = $this->plain();
+
+        $this->assertSame(
+            $renderer->render("Intro\n\n# F"),
+            implode('', self::collect($renderer, ["Intro\n\n# F"])),
+        );
+    }
+
     public function testParagraphOnlyDocumentEmitsSingleChunk(): void
     {
         $chunks = self::collect($this->plain(), ["para one\n\npara two\n"]);
@@ -138,6 +180,11 @@ final class StreamChannelTest extends TestCase
             'after-indented-code-refused'     => ["# Top\n\n    code\n\n# After\n", 1],
             'after-table-refused'             => ["# Top\n\n| a |\n|---|\n| 1 |\n\n# After\n", 1],
             'bare-heading-twin-cuts'          => ["# Top\n\nprose\n\n# After\n", 3],
+            // Audit 15b-31: a heading right under a closing fence is a cut.
+            'heading-after-fence-cuts'        => ["```\ncode\n```\n# After\n", 3],
+            // The parser refuses the scanner's cut: "# H" is inside the
+            // fence the outdented "```" opens.
+            'refused-cut-holds'               => ["- a\n  ```\n  x\n```\n\n# H\n", 1],
         ];
     }
 

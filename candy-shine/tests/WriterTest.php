@@ -70,6 +70,10 @@ final class WriterTest extends TestCase
             'fenced-code'      => ["# T\n\n```php\n<?php é\n```\n\n# U\n\ntail", 2],
             'trailing-text'    => [self::TRAILING_TEXT, 1],
             'glued-heading'    => ["# Top\n\npara\n# glued\n", 3],
+            'ref-forward'      => ["See [x][a].\n\n# H\n\n[a]: https://e.x\n", 4],
+            'ref-backward'     => ["[a]: https://e.x\n\n# H\n\nSee [x][a].\n", 5],
+            'fence-glued'      => ["```\ncode\n```\n# H\n\ntext", 2],
+            'unterminated-heading' => ["Intro\n\n# F", 1],
         ];
     }
 

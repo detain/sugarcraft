@@ -8,7 +8,7 @@ use SugarCraft\Shine\Lang;
 use SugarCraft\Shine\Render\BlockContext;
 use SugarCraft\Shine\Render\BlockKind;
 use SugarCraft\Shine\Render\BlockStack;
-use SugarCraft\Shine\Render\SectionScanner;
+use SugarCraft\Shine\Render\SectionStream;
 use SugarCraft\Shine\Style\StyleCascade;
 use SugarCraft\Shine\Style\StyleSheet;
 use SugarCraft\Core\Util\Ansi;
@@ -18,6 +18,7 @@ use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Sprinkles\Table\Table as SprinklesTable;
 use League\CommonMark\Environment\Environment;
+use League\CommonMark\Event\DocumentPreParsedEvent;
 use League\CommonMark\Extension\Autolink\AutolinkExtension;
 use League\CommonMark\Extension\CommonMark\CommonMarkCoreExtension;
 use League\CommonMark\Extension\CommonMark\Node\Block\BlockQuote;
@@ -47,11 +48,13 @@ use League\CommonMark\Extension\DescriptionList\DescriptionList as MdDescription
 use League\CommonMark\Extension\DescriptionList\DescriptionListExtension;
 use League\CommonMark\Extension\DescriptionList\Node\Description;
 use League\CommonMark\Extension\DescriptionList\Node\DescriptionTerm;
+use League\CommonMark\Node\Block\Document;
 use League\CommonMark\Node\Block\Paragraph;
 use League\CommonMark\Node\Inline\Newline;
 use League\CommonMark\Node\Inline\Text;
 use League\CommonMark\Node\Node;
 use League\CommonMark\Parser\MarkdownParser;
+use League\CommonMark\Reference\ReferenceMapInterface;
 
 /**
  * Markdown → ANSI renderer. Parses input with `league/commonmark` and
@@ -109,6 +112,12 @@ final class Renderer
      * render pays that cost, once per instance.
      */
     private ?MarkdownParser $parser = null;
+
+    /**
+     * Link reference definitions {@see parseSection()} seeds into the parse
+     * in flight, null outside one. Only the stream family sets it.
+     */
+    private ?ReferenceMapInterface $seedReferences = null;
     private readonly ?int $wrapWidth;
     private readonly bool $emitHyperlinks;
     private readonly ?string $baseUrl;
@@ -175,6 +184,21 @@ final class Renderer
             $env->addExtension(new StrikethroughExtension());
             $env->addExtension(new AutolinkExtension());
             $env->addExtension(new DescriptionListExtension());
+            // Fires once per parse, before any line is read, on the fresh
+            // map the parse resolves references against. Seeded entries go
+            // in first, so the section's own duplicates lose to them, which
+            // is CommonMark's first-definition-wins across the whole document.
+            $env->addEventListener(DocumentPreParsedEvent::class, function (DocumentPreParsedEvent $event): void {
+                if ($this->seedReferences === null) {
+                    return;
+                }
+                $map = $event->getDocument()->getReferenceMap();
+                foreach ($this->seedReferences as $reference) {
+                    if (!$map->contains($reference->getLabel())) {
+                        $map->add($reference);
+                    }
+                }
+            });
             $this->parser = new MarkdownParser($env);
         }
         return $this->parser;
@@ -241,15 +265,22 @@ final class Renderer
      * holds byte-for-byte.
      *
      * Input is buffered only until the next PROVABLE top-level boundary:
-     * a column-0 ATX heading preceded by a blank line, outside fenced and
-     * raw-HTML blocks, and not directly following a blockquote, list-item,
-     * indented-code, or table row (defensive refusals — such a heading can
-     * never be absorbed across the cut, but the hold keeps the contract
-     * airtight against parser subtleties). Documents without such a
-     * boundary, and renderers whose document-scope post-processing is
-     * global by nature (block prefix/suffix, indent, margin,
-     * preservedNewLines), emit a single final chunk — still byte-identical
-     * to {@see render()}.
+     * a column-0 ATX heading outside fenced and raw-HTML blocks, either
+     * preceded by a blank line and not directly following a blockquote,
+     * list-item, indented-code, or table row (defensive refusals — such a
+     * heading can never be absorbed across the cut, but the hold keeps the
+     * contract airtight against parser subtleties), or straight after a
+     * closing code fence. The parser confirms every such boundary before a
+     * section is rendered on its own ({@see SectionStream}).
+     *
+     * Link reference definitions apply to the whole document, so they are
+     * carried across sections: a section is rendered against every
+     * definition before it, and a section with a bracket the parser could
+     * not resolve is held back until a later definition resolves it or the
+     * document ends (audit 15b-30). Documents without a boundary, and
+     * renderers whose document-scope post-processing is global by nature
+     * (block prefix/suffix, indent, margin, preservedNewLines), emit a
+     * single final chunk — still byte-identical to {@see render()}.
      *
      * Pure channel: no timers, no I/O handles, no ReactPHP (E646). Each
      * yielded chunk is a plain string of composed SGR bytes; consuming the
@@ -270,25 +301,24 @@ final class Renderer
             return;
         }
 
-        $started  = false;
-        $carryRun = '';
-        foreach ($this->sections($chunks) as $section) {
-            $body  = $this->renderSection($section);
-            $tail  = strlen(rtrim($body, "\n"));
-            $head  = substr($body, 0, $tail);
-            if ($started && $carryRun !== '') {
-                yield $carryRun;
+        $pending = '';
+        foreach ($this->sectionBodies($chunks) as $body) {
+            $head = rtrim($body, "\n");
+            if ($head === '') {
+                // A body with nothing but newlines joins the run held back.
+                $pending .= $body;
+                continue;
             }
-            $started  = true;
-            $carryRun = $tail < strlen($body) ? substr($body, $tail) : '';
-            if ($head !== '') {
-                yield $head;
+            if ($pending !== '') {
+                yield $pending;
             }
+            yield $head;
+            $pending = substr($body, strlen($head));
         }
-        // The last carried newline run is deliberately dropped: render()
-        // rtrims trailing "\n" once at document end, and this reproduces
-        // that exactly — every interior run is re-emitted with the next
-        // section's head, so the concatenation equals render() byte for byte.
+        // The last held newline run is deliberately dropped: render() rtrims
+        // trailing "\n" once at document end, and this reproduces that
+        // exactly — every interior run is re-emitted with the next section's
+        // head, so the concatenation equals render() byte for byte.
     }
 
     /**
@@ -311,7 +341,7 @@ final class Renderer
      * Write-side counterpart of {@see stream()}: an object channel that
      * accepts Markdown chunks through {@see Writer::feed()} and pushes every
      * newly proven section into the sink immediately (write-through flush
-     * law, E736 7.3). Shares the section scanner and deferral predicate with
+     * law, E736 7.3). Shares the section stream and deferral predicate with
      * this channel, so feed()/close() output equals stream() output for the
      * same bytes.
      */
@@ -321,26 +351,24 @@ final class Renderer
     }
 
     /**
-     * Split the input chunk stream into source sections at provable
-     * top-level boundaries (see {@see stream()}). The scanner is line
-     * driven and its state depends only on the assembled bytes, never on
-     * where a chunk ended — which is what makes chunk-split invariance a
-     * structural property rather than a hopeful one.
+     * The rendered bodies of the input's sections, in order, through one
+     * {@see SectionStream}. Its state depends only on the assembled bytes,
+     * never on where a chunk ended — which is what makes chunk-split
+     * invariance a structural property rather than a hopeful one.
      *
      * @param iterable<string> $chunks
-     * @return \Generator<string> non-blank sections, source bytes, in order
+     * @return \Generator<string> raw section bodies, without render()'s document-scope post-processing
      */
-    private function sections(iterable $chunks): \Generator
+    private function sectionBodies(iterable $chunks): \Generator
     {
-        $scanner = new SectionScanner();
+        $sections = new SectionStream($this);
         foreach ($chunks as $chunk) {
-            foreach ($scanner->push(self::requireChunk($chunk)) as $closed) {
-                yield $closed;
+            foreach ($sections->push(self::requireChunk($chunk)) as $body) {
+                yield $body;
             }
         }
-        $final = $scanner->finish();
-        if ($final !== null) {
-            yield $final;
+        foreach ($sections->finish() as $body) {
+            yield $body;
         }
     }
 
@@ -350,11 +378,28 @@ final class Renderer
      * indent, or margin — those wrap the assembled stream exactly once (and
      * when they are configured at all, stream() falls back to buffering).
      *
-     * A throwaway copy renders each section so every section starts from a
-     * fresh Document block context; the shared per-instance lazy stack (the
-     * plan-1.1 pending trap) is never touched by the stream channel.
+     * The section is rendered on its own: a reference-style link whose
+     * definition lives in another section stays literal text. The stream
+     * family carries definitions across sections through
+     * {@see SectionStream}, which renders with {@see parseSection()} and
+     * {@see renderParsedSection()}.
      */
     public function renderSection(string $section): string
+    {
+        return $this->renderParsedSection($this->parseSection($section));
+    }
+
+    /**
+     * Parse one section, prepared exactly as {@see render()} prepares a whole
+     * document (sanitizing, emoji), with $seed's link reference definitions
+     * known before the section's own. Every step of that preparation is
+     * byte-local and never crosses a newline, so per-section preparation
+     * keeps `stream() === render()`.
+     *
+     * @internal the stream family's primitive ({@see SectionStream}); the
+     *           document is league/commonmark's and may change with it.
+     */
+    public function parseSection(string $section, ?ReferenceMapInterface $seed = null): Document
     {
         if ($this->sanitize) {
             $section = self::scrubForParse($section);
@@ -365,6 +410,27 @@ final class Renderer
                 $section = self::stripControls($section);
             }
         }
+
+        $this->seedReferences = $seed;
+        try {
+            return $this->parser()->parse($section);
+        } finally {
+            $this->seedReferences = null;
+        }
+    }
+
+    /**
+     * Render a document {@see parseSection()} built, as {@see renderSection()}
+     * does.
+     *
+     * A throwaway copy renders each section so every section starts from a
+     * fresh Document block context; the shared per-instance lazy stack (the
+     * plan-1.1 pending trap) is never touched by the stream channel.
+     *
+     * @internal the stream family's primitive ({@see SectionStream}).
+     */
+    public function renderParsedSection(Document $document): string
+    {
         $sub = $this->copy();
         $sub->blockStack = new BlockStack();
         $sub->styleSheet = StyleSheet::base();
@@ -375,7 +441,7 @@ final class Renderer
             cascadedStyle: $sub->theme->paragraph ?? Style::new(),
         ));
 
-        return $sub->renderChildren($sub->parser()->parse($section));
+        return $sub->renderChildren($document);
     }
 
     private static function requireChunk(mixed $chunk): string
