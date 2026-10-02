@@ -1919,6 +1919,12 @@ final class Chat implements Model
                     // notice pointing at `maxToolSteps`, so an unfinished
                     // agentic loop never reads as a completed answer.
                     ...($message->stepsTruncated ? [$this->stepsTruncatedNotice()] : []),
+                    // The third harness stop, same append shape: a turn the
+                    // repeat-call loop guard ENDED says so here rather than
+                    // leaving it to the model's no-tools summary to mention.
+                    ...($message->loopGuardStoppedBy !== null
+                        ? [$this->loopGuardStoppedNotice($message->loopGuardStoppedBy)]
+                        : []),
                     // Billing fix, same append shape as the E707 line above:
                     // a turn the app could NOT price gets exactly one
                     // transcript-visible notice naming the model, so a $0.00
@@ -18048,7 +18054,9 @@ final class Chat implements Model
             lengthStopped: $message->lengthStopped,
             // F2: the harness's own ceiling verdict rides the same seam.
             stepsTruncated: $message->stepsTruncated,
+            pendingToolArguments: $message->pendingToolArguments,
             uiOnly: $message->uiOnly,
+            loopGuardStoppedBy: $message->loopGuardStoppedBy,
         );
     }
 
@@ -18136,7 +18144,7 @@ final class Chat implements Model
 
     /**
      * The notice the settle arm writes when the app's OWN step ceiling ended
-     * the turn with tool results still pending - F2 (spawn-latency plan), the
+     * the turn before the model finished - F2 (spawn-latency plan), the
      * sibling of {@see outputLengthStoppedNotice()} on the harness side of the
      * same silent-truncation family: that one reports a reply the PROVIDER cut
      * short, this one reports a loop THIS app stopped. Before F2 this exit was
@@ -18146,14 +18154,46 @@ final class Chat implements Model
      * see docs/SETTINGS.md) and the one action that costs nothing - asking
      * again resumes where the ceiling stopped, because the transcript keeps
      * every settled step.
+     *
+     * THE WORDING FOLLOWS WHAT THE REPLY NOW IS (wave 9 follow-up of
+     * w8a-steps). It used to say the turn stopped "with tool results still
+     * pending" and that "the answer above is incomplete". Since the budget
+     * exit makes one last no-tools request asking for what is done, what
+     * remains and what comes next, the reply above is normally that summary —
+     * nothing is pending, and calling it an incomplete answer misdescribes it.
+     * "Describes where it stopped" is true of the summary and of the fallback
+     * (the last step's prose, when the summary came back empty) alike.
      */
     private function stepsTruncatedNotice(): Message
     {
         return Message::notice(
-            'This turn stopped at the step ceiling with tool results still pending, so the answer above is '
-            . 'incomplete — not a finished thought. Say "continue" to resume it, or raise "maxToolSteps" in '
-            . '~/.sugar-crush/config.json for longer agentic turns.'
+            'This turn used all of its tool steps before the work was done, so the reply above describes where it '
+            . 'stopped — what is finished and what remains — not a finished answer. Say "continue" to pick it up '
+            . 'from there, or raise "maxToolSteps" in ~/.sugar-crush/config.json for longer agentic turns.'
         );
+    }
+
+    /**
+     * The notice the settle arm writes when the repeat-call loop guard ENDED
+     * the turn ({@see Backend\ToolCallLoopGuard::END_TURN_AT} identical calls
+     * to $toolName, same arguments, same result). Distinct from
+     * {@see stepsTruncatedNotice()} on purpose: raising `maxToolSteps` is the
+     * wrong remedy for a model stuck repeating itself, so this names the loop
+     * and the remedies that do help. The reply above is the no-tools summary
+     * EngineBackend asks for on this exit, as on the budget one.
+     *
+     * $toolName is the model-chosen call name, so it is quoted through
+     * {@see quoteDraftForNotice()} like any other untrusted text in a notice.
+     */
+    private function loopGuardStoppedNotice(string $toolName): Message
+    {
+        return Message::notice(sprintf(
+            'This turn was ended by the repeat-call loop guard: the model called %s %d times with the same arguments '
+            . 'and got the same result each time. The reply above describes where it stopped. Point it at a different '
+            . 'approach, or say "continue" once something has changed.',
+            self::quoteDraftForNotice($toolName),
+            Backend\ToolCallLoopGuard::END_TURN_AT,
+        ));
     }
 
     /**

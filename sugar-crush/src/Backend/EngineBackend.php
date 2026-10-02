@@ -1252,7 +1252,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             ->withImage($lastImageBytes, $lastImageProtocol)
             ->withUsage(Usage::sum($stepUsages))
             ->withLengthStopped($lengthStopped)
-            ->withStepsTruncated($stepsTruncated);
+            ->withStepsTruncated($stepsTruncated)
+            // The guard's own exit, named so Chat can say which loop it ended.
+            ->withLoopGuardStoppedBy($stoppedByLoopGuard ? $loopGuard->endedBy() : null);
     }
 
     /**
@@ -2244,6 +2246,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 // F2: plain bool on the same rule — a pre-F2 frame settles
                 // false, "the child did not say the ceiling bit".
                 'stepsTruncated' => $message->stepsTruncated,
+                // Plain ?string on the same rule; a frame without it settles
+                // "the guard did not end this turn".
+                'loopGuardStoppedBy' => $message->loopGuardStoppedBy,
             ];
         } catch (\Throwable $e) {
             $payload = ['kind' => 'result', 'ok' => false, 'error' => $e->getMessage()];
@@ -2416,6 +2421,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 ->withLengthStopped(($data['lengthStopped'] ?? false) === true)
                 // F2: strict `=== true`, same pre-key tolerance as above.
                 ->withStepsTruncated(($data['stepsTruncated'] ?? false) === true)
+                ->withLoopGuardStoppedBy(is_string($data['loopGuardStoppedBy'] ?? null) ? $data['loopGuardStoppedBy'] : null)
         );
     }
 

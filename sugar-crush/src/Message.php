@@ -144,6 +144,18 @@ final class Message implements \JsonSerializable
          * resumed session keeps the distinction. Never part of {@see toWire()}.
          */
         public readonly bool $uiOnly = false,
+        /**
+         * The tool whose identical repeats made the repeat-call loop guard
+         * END this turn ({@see \SugarCraft\Crush\Backend\ToolCallLoopGuard::END_TURN_AT}),
+         * or null on every other turn. The third harness-side stop beside
+         * $lengthStopped and $stepsTruncated, and deliberately not folded into
+         * the latter: the step-ceiling notice tells the operator to raise
+         * `maxToolSteps`, which is the wrong remedy for a model stuck in a
+         * loop. Carried so the settle arm in {@see \SugarCraft\Crush\Chat}
+         * can say the turn was stopped and why, instead of leaving it to the
+         * model's no-tools summary to mention. Never part of {@see toWire()}.
+         */
+        public readonly ?string $loopGuardStoppedBy = null,
     ) {}
 
     public static function user(string $content, ?int $now = null): self
@@ -352,6 +364,7 @@ final class Message implements \JsonSerializable
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
+            loopGuardStoppedBy: $this->loopGuardStoppedBy,
         );
     }
 
@@ -373,6 +386,7 @@ final class Message implements \JsonSerializable
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
+            loopGuardStoppedBy: $this->loopGuardStoppedBy,
         );
     }
 
@@ -399,6 +413,7 @@ final class Message implements \JsonSerializable
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
+            loopGuardStoppedBy: $this->loopGuardStoppedBy,
         );
     }
 
@@ -428,6 +443,7 @@ final class Message implements \JsonSerializable
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: [],
             uiOnly: $this->uiOnly,
+            loopGuardStoppedBy: $this->loopGuardStoppedBy,
         );
     }
 
@@ -457,6 +473,7 @@ final class Message implements \JsonSerializable
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
+            loopGuardStoppedBy: $this->loopGuardStoppedBy,
         );
     }
 
@@ -485,6 +502,7 @@ final class Message implements \JsonSerializable
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
+            loopGuardStoppedBy: $this->loopGuardStoppedBy,
         );
     }
 
@@ -514,6 +532,7 @@ final class Message implements \JsonSerializable
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
+            loopGuardStoppedBy: $this->loopGuardStoppedBy,
         );
     }
 
@@ -542,6 +561,7 @@ final class Message implements \JsonSerializable
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
+            loopGuardStoppedBy: $this->loopGuardStoppedBy,
         );
     }
 
@@ -569,6 +589,7 @@ final class Message implements \JsonSerializable
             stepsTruncated: $stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
+            loopGuardStoppedBy: $this->loopGuardStoppedBy,
         );
     }
 
@@ -596,6 +617,36 @@ final class Message implements \JsonSerializable
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $uiOnly,
+            loopGuardStoppedBy: $this->loopGuardStoppedBy,
+        );
+    }
+
+    /**
+     * Attach (or clear, via null) the loop guard's "this turn was ended"
+     * verdict — see $loopGuardStoppedBy's docblock. Written at
+     * {@see \SugarCraft\Crush\Backend\EngineBackend}'s loop-exit seam
+     * beside {@see withStepsTruncated()} and carried across the fork result
+     * frame the same way.
+     */
+    public function withLoopGuardStoppedBy(?string $toolName): self
+    {
+        return new self(
+            role: $this->role,
+            content: $this->content,
+            createdAt: $this->createdAt,
+            attachments: $this->attachments,
+            toolCalls: $this->toolCalls,
+            toolResults: $this->toolResults,
+            pendingToolCallId: $this->pendingToolCallId,
+            reasoning: $this->reasoning,
+            imageBytes: $this->imageBytes,
+            imageProtocol: $this->imageProtocol,
+            usage: $this->usage,
+            lengthStopped: $this->lengthStopped,
+            stepsTruncated: $this->stepsTruncated,
+            pendingToolArguments: $this->pendingToolArguments,
+            uiOnly: $this->uiOnly,
+            loopGuardStoppedBy: $toolName === '' ? null : $toolName,
         );
     }
 
@@ -697,6 +748,7 @@ final class Message implements \JsonSerializable
             'usage' => $this->usage,
             'lengthStopped' => $this->lengthStopped,
             'stepsTruncated' => $this->stepsTruncated,
+            'loopGuardStoppedBy' => $this->loopGuardStoppedBy,
             'pendingToolArguments' => $this->pendingToolArguments,
             // Only when set, so every agent-visible row - i.e. every row a
             // pre-flag transcript holds - serialises byte-for-byte as before.
@@ -795,6 +847,7 @@ final class Message implements \JsonSerializable
             stepsTruncated: ($row['stepsTruncated'] ?? false) === true,
             pendingToolArguments: \is_array($row['pendingToolArguments'] ?? null) ? $row['pendingToolArguments'] : [],
             uiOnly: ($row['uiOnly'] ?? false) === true,
+            loopGuardStoppedBy: $string($row['loopGuardStoppedBy'] ?? null),
         );
     }
 }

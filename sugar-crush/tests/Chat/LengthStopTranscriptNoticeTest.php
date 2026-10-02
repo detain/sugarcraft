@@ -32,10 +32,19 @@ final class LengthStopTranscriptNoticeTest extends TestCase
         . 'Raise "maxOutputTokens" in ~/.sugar-crush/config.json for a longer single reply, '
         . 'or ask for the remainder in your next message.';
 
-    /** F2's sibling sentence, pinned whole for the same reason. */
-    private const STEPS_NOTICE = 'This turn stopped at the step ceiling with tool results still pending, so the answer above is '
-        . 'incomplete — not a finished thought. Say "continue" to resume it, or raise "maxToolSteps" in '
-        . '~/.sugar-crush/config.json for longer agentic turns.';
+    /**
+     * F2's sibling sentence, pinned whole for the same reason. It no longer
+     * says "tool results still pending": since the budget exit ends in a
+     * no-tools summary request, the reply above is that summary.
+     */
+    private const STEPS_NOTICE = 'This turn used all of its tool steps before the work was done, so the reply above describes where it '
+        . 'stopped — what is finished and what remains — not a finished answer. Say "continue" to pick it up '
+        . 'from there, or raise "maxToolSteps" in ~/.sugar-crush/config.json for longer agentic turns.';
+
+    /** The loop guard's own sentence (the third harness stop), with the tool it ended. */
+    private const LOOP_NOTICE = 'This turn was ended by the repeat-call loop guard: the model called %s 8 times with the same arguments '
+        . 'and got the same result each time. The reply above describes where it stopped. Point it at a different '
+        . 'approach, or say "continue" once something has changed.';
 
     /** The billing wave's third sibling, spelled with the offending model name. */
     private const UNPRICED_NOTICE = 'This app has no price on file for model "%s", so this turn billed $0.00 '
@@ -53,6 +62,38 @@ final class LengthStopTranscriptNoticeTest extends TestCase
         $this->assertSame(Role::System, $last->role);
         $this->assertSame(self::STEPS_NOTICE, $last->content, 'F2: the silently-exhausted loop becomes one loud transcript line naming its own knob');
         $this->assertStringNotContainsString("\x1b", $last->content);
+    }
+
+    public function testTheStepNoticeNoLongerClaimsToolResultsArePending(): void
+    {
+        [$chat] = $this->settle(Message::assistant('done: a; remaining: b')->withStepsTruncated(true));
+        $last = $chat->history[array_key_last($chat->history)];
+
+        $this->assertStringNotContainsString('still pending', $last->content, 'the summary request settled every step; nothing is pending');
+        $this->assertStringContainsString('maxToolSteps', $last->content, 'it still names the knob');
+    }
+
+    public function testATurnTheLoopGuardEndedIsFollowedByItsOwnNotice(): void
+    {
+        [$chat] = $this->settle(Message::assistant('I kept repeating probe')->withLoopGuardStoppedBy('probe'));
+
+        $history = $chat->history;
+        $last = $history[array_key_last($history)];
+
+        $this->assertSame(Role::System, $last->role);
+        $this->assertSame(sprintf(self::LOOP_NOTICE, 'probe'), $last->content);
+        $this->assertStringNotContainsString('maxToolSteps', $last->content, 'raising the step budget is the wrong remedy for a loop');
+        $this->assertSame('I kept repeating probe', $history[array_key_last($history) - 1]->content, 'the summary settles first');
+    }
+
+    public function testTheLoopNoticeQuotesTheModelChosenToolNameSafely(): void
+    {
+        [$chat] = $this->settle(Message::assistant('x')->withLoopGuardStoppedBy("evil\x1b]0;pwned\x07\nname"));
+        $last = $chat->history[array_key_last($chat->history)];
+
+        $this->assertStringContainsString('repeat-call loop guard', $last->content, 'fixture: the notice really fired');
+        $this->assertStringNotContainsString("\x1b", $last->content);
+        $this->assertStringNotContainsString("\n", $last->content, 'one notice line, whatever the name carried');
     }
 
     public function testBothCeilingsFireTheirOwnNoticesInOrder(): void

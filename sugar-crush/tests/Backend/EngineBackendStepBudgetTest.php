@@ -62,6 +62,7 @@ final class EngineBackendStepBudgetTest extends TestCase
 
         $this->assertSame('done: 3 probes; remaining: the rest; next: probe 4', $reply->content);
         $this->assertTrue($reply->stepsTruncated, 'the budget still ran out — the step-exhausted notice keeps firing');
+        $this->assertNull($reply->loopGuardStoppedBy, 'a budget exit is not the loop guard\'s');
         $this->assertSame(4 * 10, $reply->usage?->totalTokens, 'the summary request is billed into the turn like any step');
     }
 
@@ -91,6 +92,7 @@ final class EngineBackendStepBudgetTest extends TestCase
 
         $this->assertSame('I was stopped for repeating probe.', $reply->content);
         $this->assertFalse($reply->stepsTruncated, 'a loop is not a budget problem — the raise-maxToolSteps notice would be the wrong advice');
+        $this->assertSame('probe', $reply->loopGuardStoppedBy, 'the reply names the loop the guard ended, so Chat can say so');
     }
 
     public function testAChangingResultIsNeverTreatedAsALoop(): void

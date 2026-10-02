@@ -299,6 +299,21 @@ final class EngineBackendLengthStopTest extends TestCase
         $this->assertFalse($garbage->stepsTruncated, 'same strictness as its E707 sibling — a truthy string is not the child having SAID it');
     }
 
+    public function testTheLoopGuardVerdictRidesTheSameResultFrame(): void
+    {
+        // The guard's exit crosses the completeAsync() fork like its two
+        // siblings; a frame without the key, or with a non-string in it,
+        // settles "the guard did not end this turn".
+        $stopped = $this->settleFrame(['ok' => true, 'content' => 'x', 'loopGuardStoppedBy' => 'probe']);
+        $this->assertSame('probe', $stopped->loopGuardStoppedBy);
+
+        $legacy = $this->settleFrame(['ok' => true, 'content' => 'x']);
+        $this->assertNull($legacy->loopGuardStoppedBy);
+
+        $garbage = $this->settleFrame(['ok' => true, 'content' => 'x', 'loopGuardStoppedBy' => true]);
+        $this->assertNull($garbage->loopGuardStoppedBy);
+    }
+
     // =========================================================================
     // harness
     // =========================================================================
