@@ -1010,8 +1010,11 @@ JSON;
         ));
 
         // tokensUsed is the discriminating assertion; cost stays 0.0 either
-        // way because Vertex's rate table is a placeholder 0.0 - said plainly
-        // so no reader grades that line as a falsifier.
+        // way because the fixture reports no positive token count - the
+        // model IS priced (Vertex has a real list-price table since audit
+        // A15), but `cost()` skips non-positive sides, so there is nothing
+        // to bill. Said plainly so no reader grades that line as a falsifier
+        // (audit A24: this used to blame a "placeholder 0.0" rate table).
         $this->assertSame(0, $response->tokensUsed);
         $this->assertSame(0.0, $response->costUsd);
     }
