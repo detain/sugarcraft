@@ -423,7 +423,7 @@ final class FeatWiringReachabilityTest extends TestCase
         $this->assertStringContainsString('MARKER-P7S3-BODY', $prompt);
         $this->assertSame(
             0,
-            substr_count($prompt, '- p7s3-killshot-skill:'),
+            substr_count($prompt, '- [project] p7s3-killshot-skill:'),
             'an enabled skill must not also be listed as a level-1 line (P7.S3 exclusion)',
         );
     }
@@ -456,7 +456,7 @@ final class FeatWiringReachabilityTest extends TestCase
         // And the listing still carries it, untouched: exclusion applies only
         // to enabled names, the discovery half of the wire never changed.
         $this->assertStringContainsString(
-            '- p7s3-dormant-skill: Discovered, never enabled.',
+            '- [project] p7s3-dormant-skill: Discovered, never enabled.',
             $withoutKey,
         );
     }
@@ -536,7 +536,7 @@ final class FeatWiringReachabilityTest extends TestCase
         $this->assertStringNotContainsString('## Skill: p7s3-contested-skill', $prompt);
         $this->assertStringNotContainsString('CONTESTED-P7S3-BODY', $prompt);
         $this->assertStringNotContainsString(
-            '- p7s3-contested-skill:',
+            '- [project] p7s3-contested-skill:',
             $prompt,
             'a disabled skill is out of the listing too — the disable happens registry-side',
         );
@@ -642,7 +642,7 @@ final class FeatWiringReachabilityTest extends TestCase
         $this->assertStringNotContainsString('## Skill: p7s3-string-shaped-skill', $prompt);
         $this->assertStringNotContainsString('STRING-P7S3-BODY', $prompt);
         $this->assertStringContainsString(
-            '- p7s3-string-shaped-skill: Discovered, named by a value that is not a list.',
+            '- [project] p7s3-string-shaped-skill: Discovered, named by a value that is not a list.',
             $prompt,
             'the launch is whole, not degraded: the skill is still discovered and listed, only the '
                 . 'body channel declined to open',

@@ -94,7 +94,14 @@ final class PromptFence
      * leaves a window in which repository-controlled bytes could forge the
      * harness's own provenance voice, exactly the `system-reminder` case above,
      * which is itself proof that a defang-only tag earns its place with nothing
-     * emitting it.
+     * emitting it. The ninth entry, `available-skills`, is the fence
+     * Runtime::systemPromptSections() builds inline around the level-1 skill
+     * listing (audit 15d-02): every name and description in it is text from
+     * whoever shipped the skill — a cloned checkout's `.claude/skills` among
+     * them, with no trust gate — so a description spelling `</available-skills>`
+     * must arrive inert, or it would end its own fence and hand the rest of the
+     * line to the model outside the provenance preamble. It joins at zero golden
+     * bytes: the golden fixture's one skill is enabled, so its listing is empty.
      *
      * WHAT PINS THIS ROSTER — EIGHT SITES, counted from the tests that read it and not
      * from the note that used to name one. Two are whole-roster: the SORTED list in
@@ -142,6 +149,7 @@ final class PromptFence
         'user-rules',
         'prior-summary',
         'harness-injected',
+        'available-skills',
     ];
 
     private function __construct()

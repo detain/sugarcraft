@@ -11,6 +11,8 @@ use SugarCraft\Crush\Skills\ForeignSkillDiscovery;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Skills\SkillManager;
+use SugarCraft\Crush\Skills\SkillMatcher;
+use SugarCraft\Crush\Skills\SkillOrigin;
 use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Skills\SkillSource;
@@ -357,6 +359,45 @@ SKILL;
             $this->manager->loadAll($projectRoot);
 
             $this->assertNotNull($this->registry->get('home-claude'));
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * Audit 15d-02, fix step 3: every registered skill carries the tier its
+     * walker found it in, so the system-prompt listing can badge the line —
+     * and a cloned checkout's description can no longer pass for one the
+     * operator or the harness shipped. All five routes a real launch takes,
+     * through the real SkillManager, read back off the registry AND off the
+     * listing the prompt is built from.
+     */
+    public function testLoadAllStampsEachSkillWithTheTierItWasFoundIn(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($projectRoot . '/.sugar-crush/skills/repo-native', 'Native, shipped in the repo');
+        $this->writeSkill($projectRoot . '/.claude/skills/repo-claude', 'Claude format, shipped in the repo');
+        $this->writeSkill($this->sandboxHome . '/.sugar-crush/skills/home-native', 'Native, the operator\'s own');
+        $this->writeSkill($this->sandboxHome . '/.config/opencode/skills/home-opencode', 'opencode format, the operator\'s own');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $expected = [
+                'repo-native' => [SkillOrigin::Project, '[project]'],
+                'repo-claude' => [SkillOrigin::Project, '[project, foreign: claude]'],
+                'home-native' => [SkillOrigin::User, '[user]'],
+                'home-opencode' => [SkillOrigin::User, '[user, foreign: opencode]'],
+                'explore-codebase' => [SkillOrigin::BuiltIn, '[built-in]'],
+            ];
+            $listing = (new SkillMatcher())->listForPrompt($this->registry);
+
+            foreach ($expected as $name => [$origin, $badge]) {
+                $skill = $this->registry->get($name);
+                $this->assertNotNull($skill, "{$name} must be registered");
+                $this->assertSame($origin, $skill->origin, "{$name} must carry the tier it was read from");
+                $this->assertStringContainsString("\n- {$badge} {$name}: ", $listing, "{$name}'s listing line must open with {$badge}");
+            }
         } finally {
             $this->removeTestProject($projectRoot);
         }

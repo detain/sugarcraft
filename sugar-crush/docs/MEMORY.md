@@ -181,7 +181,7 @@ So `MemoryBlock::renderEntry()` runs every assembled note line through
 `PromptFence::escape()` before the per-entry clip. `PromptFence` is the single
 authority owning the prompt's fence-tag roster — `env`, `project-memory`,
 `repo-map`, `project-instructions`, `system-reminder`, `user-rules`,
-`prior-summary`, `harness-injected` — and its `escape()` rewrites only the leading
+`prior-summary`, `harness-injected`, `available-skills` — and its `escape()` rewrites only the leading
 `<` of a recognised open/close tag to `&lt;`, touches nothing else, and is
 idempotent, and the promise it makes is body-level: a clean note body passes
 through byte-for-byte unchanged before the line prefix is applied, while a note

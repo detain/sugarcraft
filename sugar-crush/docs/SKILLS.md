@@ -47,6 +47,27 @@ Between the two foreign conventions, opencode wins over Claude. That pair has
 no principled winner; what matters is that the order is fixed in
 `SkillManager::loadAll()` rather than decided by scan order.
 
+### The listing badges every skill with its tier
+
+Each walker stamps the skills it reads with a `SkillOrigin` — `built-in`,
+`user` or `project`, by the directory it was reading, never by matching the
+path afterwards — and every line of the system-prompt skill listing opens with
+it, plus the foreign format when there is one:
+
+```text
+- [built-in] security-audit: …
+- [user] deploy: …
+- [project, foreign: claude] helper: …
+```
+
+The listing itself is fenced `<available-skills>`, under a preamble that says
+the list is assembled by the harness but every name and description is its
+skill author's text, and explains the badge (audit 15d-02). A skill registered
+by some other route, with no tier stated, is badged `project` — the least
+trusted tier, so an unknown origin is never presented as the operator's or
+the harness's. The path nudge's lines (`SkillPathNudge`) carry no badge; its
+`<system-reminder>` header does not explain one.
+
 ### The registry key is the path, not the directory name
 
 `SkillLoader::skillKeyFor()` keys a skill by its path *relative to the tier
@@ -105,7 +126,7 @@ it; the other skills load as usual. What is coerced and what is refused:
 
 | Key | Default | Read by | Effect today |
 |---|---|---|---|
-| `description` | `Skill: <name>` | `SkillMatcher::listForPrompt()` | Live. This one line is what the model sees at session start; it is the whole basis on which the model decides to invoke the skill. It is repository text, so `SkillPromptLine` renders it — and the skill's name — collapsed to one line, `PromptFence::escape()`d and clipped to `SkillPromptLine::LISTING_MAX_BYTES` (audit 15d-02): a multi-line description cannot start a line of its own, and a fence tag in it arrives as inert `&lt;` text. |
+| `description` | `Skill: <name>` | `SkillMatcher::listForPrompt()` | Live. This one line is what the model sees at session start; it is the whole basis on which the model decides to invoke the skill. It is repository text, so `SkillPromptLine` renders it — and the skill's name — collapsed to one line, `PromptFence::escape()`d and clipped to `SkillPromptLine::LISTING_MAX_BYTES` (audit 15d-02): a multi-line description cannot start a line of its own, and a fence tag in it arrives as inert `&lt;` text. The line sits inside the `<available-skills>` fence behind its tier badge — see [The listing badges every skill with its tier](#the-listing-badges-every-skill-with-its-tier). |
 | `user-invocable` | `true` | `SkillRegistry::isUserInvocable()` → `App::userInvocableSkills()` | Live on the App shell's skill picker. `false` hides the skill from the picker while leaving it model-invocable. |
 | `disable-model-invocation` | `false` | `SkillRegistry::isAutoInvocable()` | Live. `true` keeps the skill out of the prompt listing **and** makes `SkillTool` refuse it by name — the check is re-done in the tool so a skill added to a registry by some other route still cannot be reached. |
 | `paths` | `[]` | `SkillRegistry::getForPaths()`, `SkillPathNudge` | Live. Glob patterns (see [What a `paths:` glob matches](#what-a-paths-glob-matches) for the semantics — they are not `FNM_PATHNAME`); touching a matching file nudges the skill into view once per session. Read from the Stage-1 manifest, so it costs no body read. The nudge is bounded (E66): at most 8 entries, each at most 300 bytes, and where it is spent depends on the tool: `Grep` and `Glob` subtract it from their own `maxOutputBytes`, so it is spent INSIDE the cap; `Read` takes an eighth BESIDE its cap (hence its stated 1.375x `maxBytes` total); `Edit` and `Write` have no output cap at all, so the class ceiling of 2,636 bytes is the whole bound there. A `description` too long for an entry is clipped and marked, and a skill held back is announced by a later call rather than dropped. Only model-invocable skills are ever nudged — a `disable-model-invocation: true` skill is filtered out of the nudge (E72), because telling the model to open a skill it may not invoke is a dead instruction. |

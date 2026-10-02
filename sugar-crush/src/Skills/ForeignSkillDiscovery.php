@@ -75,7 +75,11 @@ final class ForeignSkillDiscovery
      * user skills — while keeping its PROJECT ones, which are anchored to the
      * checkout and do not depend on a home at all.
      *
-     * @return array<string, array{0: string|null, 1: string|null}>
+     * The third element of each entry is the {@see SkillOrigin} the tree's skills
+     * are badged with in the system-prompt listing (audit 15d-02): the project
+     * tree arrived with the checkout, the user tree is the operator's own.
+     *
+     * @return array<string, array{0: string|null, 1: string|null, 2: SkillOrigin}>
      */
     private static function tiers(string $projectRoot, string $projectSuffix, string $userSuffix): array
     {
@@ -85,12 +89,12 @@ final class ForeignSkillDiscovery
             // $anchoredIn — the same "who wrote this file" line the PRECEDENCE
             // rule on {@see discoverClaude()} is drawn on, applied to the
             // directory as well as to the links inside it.
-            $projectRoot . $projectSuffix => [null, $projectRoot],
+            $projectRoot . $projectSuffix => [null, $projectRoot, SkillOrigin::Project],
         ];
 
         $home = HomeDirectory::owned();
         if ($home !== null) {
-            $tiers[$home . $userSuffix] = [$home, $home];
+            $tiers[$home . $userSuffix] = [$home, $home, SkillOrigin::User];
         }
 
         return $tiers;
@@ -122,19 +126,19 @@ final class ForeignSkillDiscovery
      * last-write-wins, so a later directory's skill overrides an earlier
      * one sharing its name.
      *
-     * @param array<string, array{0: string|null, 1: string|null}> $dirs
+     * @param array<string, array{0: string|null, 1: string|null, 2: SkillOrigin}> $dirs
      *        directory => [the extra containment root its symlinks may resolve
      *        into (null confines them to the directory itself), the checkout the
      *        directory itself must resolve strictly inside (null for a directory
-     *        whose location no repository chose)]
+     *        whose location no repository chose), the tier its skills belong to]
      * @return array<string, Skill>
      */
     private function discover(array $dirs, SkillSource $source): array
     {
         $skills = [];
-        foreach ($dirs as $dir => [$ownedBy, $anchoredIn]) {
+        foreach ($dirs as $dir => [$ownedBy, $anchoredIn, $origin]) {
             foreach ($this->loader->loadFromDirectory($dir, $ownedBy, $anchoredIn) as $name => $skill) {
-                $skills[$name] = $this->tag($skill, $source);
+                $skills[$name] = $this->tag($skill, $source)->withOrigin($origin);
             }
         }
 
@@ -161,6 +165,7 @@ final class ForeignSkillDiscovery
             content: $skill->content,
             sourcePath: $skill->sourcePath,
             source: $source,
+            origin: $skill->origin,
         );
     }
 }

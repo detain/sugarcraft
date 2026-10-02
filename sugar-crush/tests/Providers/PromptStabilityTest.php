@@ -811,10 +811,15 @@ final class PromptStabilityTest extends TestCase
     // project-instructions layer grew by the authority preamble Runtime now
     // renders inside every fence (280 B + 2 B separator; this fixture carries
     // one document). Sum identity with STABLE_LAYER_WIDTHS re-verified.
-    private const STABLE_LAYERS_BYTES = 1857;
+    // MEASURED 2026-10-01 at audit 15d-02: 1,857 -> 2,556. One mover only: the
+    // skill listing is now fenced `<available-skills>` under Runtime's
+    // SKILL_LISTING_AUTHORITY_PREAMBLE (648 B) and each line carries its origin
+    // badge — +19 opener, +648 preamble, +2 blank line, +10 `[project] `, +20
+    // closer = +699, all on the production side.
+    private const STABLE_LAYERS_BYTES = 2556;
 
     /**
-     * The same 1,857 bytes (post-P5.S6; 1,575 before) as
+     * The same 2,556 bytes (post-15d-02; 1,857 post-P5.S6; 1,575 before) as
      * {@see STABLE_LAYERS_BYTES}, split per layer, so a
      * width that moves names the layer AND the code that authored the bytes.
      *
@@ -832,8 +837,8 @@ final class PromptStabilityTest extends TestCase
      *   | `<project-instructions>` |   421 |      90 |  331  the fence spellings + P5.S6 authority preamble (280 B) + separator |
      *   | `<project-memory>`       |   518 |      51 |  467  MemoryBlock header + `- [pattern] ` + fences |
      *   | `## Skill: prefix-demo`  |    73 |      59 |   14  Skill::systemPromptContribution()'s heading |
-     *   | the skill listing        |   118 |      70 |   48  SkillMatcher's caption + `- `/`: ` |
-     *   | **total**                | 1,857 |     289 | 1,568 |
+     *   | `<available-skills>`     |   817 |      70 |  747  Runtime's fence + 15d-02 preamble (648 B) + SkillMatcher's caption + `- [project] `/`: ` |
+     *   | **total**                | 2,556 |     289 | 2,267 |
      *
      * The `project-instructions` row is MEASURED 2026-09-05 (P5.S6): the
      * pre-preamble take of it was 139/90/49, recorded 2026-08-31; the whole
@@ -851,7 +856,7 @@ final class PromptStabilityTest extends TestCase
         '<project-instructions>' => 421,
         '<project-memory>' => 518,
         '## Skill: prefix-demo' => 73,
-        'Available skills (invoke via Skill tool):' => 118,
+        '<available-skills>' => 817,
     ];
 
     /**
@@ -870,7 +875,7 @@ final class PromptStabilityTest extends TestCase
         '<project-instructions>' => 90,
         '<project-memory>' => 51,
         '## Skill: prefix-demo' => 59,
-        'Available skills (invoke via Skill tool):' => 70,
+        '<available-skills>' => 70,
     ];
 
     /**
@@ -896,7 +901,7 @@ final class PromptStabilityTest extends TestCase
         '<project-instructions>' => [self::FIXTURE_AGENTS_BODY],
         '<project-memory>' => [self::FIXTURE_MEMORY_NOTE],
         '## Skill: prefix-demo' => [self::FIXTURE_SKILL_NAME, self::FIXTURE_SKILL_BODY],
-        'Available skills (invoke via Skill tool):' => [self::FIXTURE_LISTED_SKILL_NAME, self::FIXTURE_LISTED_SKILL_DESCRIPTION],
+        '<available-skills>' => [self::FIXTURE_LISTED_SKILL_NAME, self::FIXTURE_LISTED_SKILL_DESCRIPTION],
     ];
 
     /**
@@ -908,7 +913,7 @@ final class PromptStabilityTest extends TestCase
         '<project-instructions>' => 'SugarCraft\\Crush\\Runtime (the fence spellings and the P5.S6 authority preamble)',
         '<project-memory>' => 'SugarCraft\\Crush\\Context\\MemoryBlock',
         '## Skill: prefix-demo' => 'SugarCraft\\Crush\\Skills\\Skill::systemPromptContribution()',
-        'Available skills (invoke via Skill tool):' => 'SugarCraft\\Crush\\Skills\\SkillMatcher',
+        '<available-skills>' => 'SugarCraft\\Crush\\Runtime (the fence and the 15d-02 preamble) and SugarCraft\\Crush\\Skills\\SkillMatcher (caption and badged lines)',
     ];
 
     /**
@@ -1009,7 +1014,7 @@ final class PromptStabilityTest extends TestCase
         '<project-instructions>',
         '<project-memory>',
         '## Skill: prefix-demo',
-        'Available skills (invoke via Skill tool):',
+        '<available-skills>',
     ];
 
     /**

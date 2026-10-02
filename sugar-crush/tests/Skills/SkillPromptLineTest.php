@@ -7,7 +7,9 @@ namespace SugarCraft\Crush\Tests\Skills;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Context\PromptFence;
 use SugarCraft\Crush\Skills\Skill;
+use SugarCraft\Crush\Skills\SkillOrigin;
 use SugarCraft\Crush\Skills\SkillPromptLine;
+use SugarCraft\Crush\Skills\SkillSource;
 
 /**
  * Audit 15d-02: the one authority that turns a repository-supplied skill name
@@ -130,9 +132,70 @@ final class SkillPromptLineTest extends TestCase
         self::assertNotSame([], $files);
 
         foreach ($files as $file) {
-            $line = SkillPromptLine::render(Skill::fromFile($file), SkillPromptLine::LISTING_MAX_BYTES);
+            // Rendered as the listing renders it — badge included, since the
+            // badge's bytes come out of the same budget (audit 15d-02).
+            $line = SkillPromptLine::render(
+                Skill::fromFile($file)->withOrigin(SkillOrigin::BuiltIn),
+                SkillPromptLine::LISTING_MAX_BYTES,
+                withOrigin: true,
+            );
+            self::assertStringStartsWith('- [built-in] ', $line, $file);
             self::assertStringEndsNotWith(SkillPromptLine::CLIP_MARKER, $line, $file);
         }
+    }
+
+    /**
+     * Audit 15d-02, fix step 3: the listing's lines open with the tier the
+     * skill file came from, and a foreign format is named beside it. The badge
+     * is opt-in — the path nudge's `<system-reminder>` header does not explain
+     * it, so its lines stay unbadged and byte-identical.
+     */
+    public function testTheOriginBadgeOpensTheLineOnlyWhenAskedFor(): void
+    {
+        $skill = self::skill('php-audit', 'Security audit for PHP code');
+
+        self::assertSame('- php-audit: Security audit for PHP code', SkillPromptLine::render($skill, 300));
+        self::assertSame(
+            '- [project] php-audit: Security audit for PHP code',
+            SkillPromptLine::render($skill, 300, withOrigin: true),
+            'an untiered skill is badged with the least-trusted tier, never a friendlier one',
+        );
+        self::assertSame(
+            '- [built-in] php-audit: Security audit for PHP code',
+            SkillPromptLine::render($skill->withOrigin(SkillOrigin::BuiltIn), 300, withOrigin: true),
+        );
+
+        $foreign = new Skill(
+            name: 'php-audit',
+            description: 'Security audit for PHP code',
+            userInvocable: true,
+            disableModelInvocation: false,
+            allowedTools: null,
+            disallowedTools: null,
+            model: null,
+            effort: 'medium',
+            context: 'thread',
+            paths: [],
+            content: 'body',
+            sourcePath: '/home/u/.claude/skills/php-audit/SKILL.md',
+            source: SkillSource::Claude,
+            origin: SkillOrigin::User,
+        );
+        self::assertSame(
+            '- [user, foreign: claude] php-audit: Security audit for PHP code',
+            SkillPromptLine::render($foreign, 300, withOrigin: true),
+        );
+        self::assertSame(SkillOrigin::User, $foreign->withName('renamed')->origin, 'withName() must carry the tier');
+    }
+
+    /** The clip cuts the tail, so it can never take the badge with it. */
+    public function testTheBadgeSurvivesTheClip(): void
+    {
+        $line = SkillPromptLine::render(self::skill('fat', str_repeat('word ', 400)), 120, withOrigin: true);
+
+        self::assertStringStartsWith('- [project] fat: word', $line);
+        self::assertLessThanOrEqual(120, strlen($line));
+        self::assertStringEndsWith(SkillPromptLine::CLIP_MARKER, $line);
     }
 
     public function testAnEnabledSkillBodyCannotForgeAFence(): void

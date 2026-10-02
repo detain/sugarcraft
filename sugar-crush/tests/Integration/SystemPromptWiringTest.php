@@ -568,7 +568,7 @@ final class SystemPromptWiringTest extends TestCase
         $prompt = $this->soleSystemPrompt($provider);
         $this->assertStringContainsString('Available skills (invoke via Skill tool):', $prompt);
         $this->assertStringContainsString(
-            '- sysprompt-marker-skill: Marker skill for the system-prompt listing.',
+            '- [project] sysprompt-marker-skill: Marker skill for the system-prompt listing.',
             $prompt,
         );
         $this->assertLessThan(
@@ -648,7 +648,7 @@ final class SystemPromptWiringTest extends TestCase
         // enabled name never appears there.
         $this->assertSame(
             0,
-            substr_count($prompt, '- enabled-body-skill:'),
+            substr_count($prompt, '- [project] enabled-body-skill:'),
             'the exclusion seam must drop the enabled skill from the listing regardless of what else lists (P7.S3)',
         );
     }
@@ -776,13 +776,13 @@ final class SystemPromptWiringTest extends TestCase
                 . 'took the splice away from it, which is the exclusion seam overreaching (P7.S3)',
         );
         $this->assertStringContainsString(
-            '- kept-listed-skill: One line, still advertised.',
+            '- [project] kept-listed-skill: One line, still advertised.',
             $prompt,
             'the listing must survive exclusion intact for every skill that is NOT enabled (P7.S3)',
         );
-        $this->assertStringNotContainsString('- enabled-neighbour-skill:', $prompt);
+        $this->assertStringNotContainsString('- [project] enabled-neighbour-skill:', $prompt);
         $this->assertStringNotContainsString(
-            '- kept-listed-skill: One line, still advertised.' . "\n" . '- kept-listed-skill',
+            '- [project] kept-listed-skill: One line, still advertised.' . "\n" . '- [project] kept-listed-skill',
             $prompt,
         );
     }
@@ -922,7 +922,7 @@ final class SystemPromptWiringTest extends TestCase
         $this->assertStringContainsString('## Skill: fixture-demo-skill', $prompt);
         $this->assertStringContainsString('FIXTURE SKILL BODY', $prompt);
         $this->assertStringContainsString(
-            '- fixture-listed-skill: Listing-half fixture skill, never enabled.',
+            '- [project] fixture-listed-skill: Listing-half fixture skill, never enabled.',
             $prompt,
         );
         // The exclusion itself, at the assembler seam: the enabled skill's

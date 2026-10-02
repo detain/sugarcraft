@@ -5261,7 +5261,7 @@ final class DocFigureProseDriftTest extends TestCase
         $root = \dirname(__DIR__, 2);
         $raw = (string) file_get_contents($root . '/docs/PROMPT_ENGINEERING.md');
         $flat = self::markdownProse($raw);
-        $words = ['four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8];
+        $words = ['four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9];
 
         self::assertSame(1, preg_match('/The roster is the (\w+) tags `PromptFence::tags\(\)` returns/', $flat, $tagWord), 'the tags sentence no longer spells its count beside PromptFence::tags()');
         $tags = PromptFence::tags();

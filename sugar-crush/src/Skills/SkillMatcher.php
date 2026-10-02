@@ -23,8 +23,8 @@ final readonly class SkillMatcher
     /**
      * Build a formatted listing of all auto-invocable skills for system-prompt injection.
      *
-     * Each skill renders as "- {name}: {description}" on its own line, preceded
-     * by a header — collapsed to one line, fence-escaped and held to
+     * Each skill renders as "- [{origin}] {name}: {description}" on its own
+     * line, preceded by a header — collapsed to one line, fence-escaped and held to
      * {@see SkillPromptLine::LISTING_MAX_BYTES} by {@see SkillPromptLine::render()}. This gives the LLM full visibility of every available skill
      * at session start — it then decides relevance via the Skill tool rather
      * than via any PHP-side heuristic.
@@ -65,9 +65,12 @@ final readonly class SkillMatcher
 
         // Through SkillPromptLine and never interpolated: name and description
         // are repository text from a cloned checkout's skills tree, read with no
-        // trust gate, and this listing sits OUTSIDE every fence (audit 15d-02).
+        // trust gate (audit 15d-02). Each line also opens with its provenance
+        // badge, so a repository's description cannot pass for one the operator
+        // or the harness shipped; Runtime::systemPromptSections() wraps the whole
+        // listing in the `available-skills` fence whose preamble explains it.
         $lines = array_map(
-            fn(Skill $s) => SkillPromptLine::render($s, SkillPromptLine::LISTING_MAX_BYTES),
+            fn(Skill $s) => SkillPromptLine::render($s, SkillPromptLine::LISTING_MAX_BYTES, withOrigin: true),
             $autoInvocable
         );
 

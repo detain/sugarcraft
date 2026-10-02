@@ -67,10 +67,21 @@ final class SkillPromptLine
      * One `- name: description` line: single-line, fence-escaped, and never
      * longer than $maxBytes.
      *
+     * $withOrigin opens the line with the skill's provenance badge —
+     * `- [project] name: description`, `- [user, foreign: claude] …` — from
+     * {@see SkillOrigin::badge()} (audit 15d-02, fix step 3). The system-prompt
+     * listing asks for it, and its fence preamble tells the model what the
+     * bracket means; {@see SkillPathNudge} does not, because its
+     * `<system-reminder>` header carries no such explanation and a bare bracket
+     * in front of a name is one the model could mistake for part of it. The
+     * badge leads the line so the byte clip, which cuts the tail, can never
+     * remove it, and its bytes are enum constants, so no repository text
+     * reaches it.
+     *
      * @throws \InvalidArgumentException when $maxBytes cannot hold the marker,
      *         since such a budget could only ever return a marker with no line.
      */
-    public static function render(Skill $skill, int $maxBytes): string
+    public static function render(Skill $skill, int $maxBytes, bool $withOrigin = false): string
     {
         if ($maxBytes <= strlen(self::CLIP_MARKER)) {
             throw new \InvalidArgumentException(sprintf(
@@ -80,7 +91,8 @@ final class SkillPromptLine
             ));
         }
 
-        $line = '- ' . self::field($skill->name) . ': ' . self::field($skill->description);
+        $badge = $withOrigin ? '[' . $skill->origin->badge($skill->source) . '] ' : '';
+        $line = '- ' . $badge . self::field($skill->name) . ': ' . self::field($skill->description);
         if (strlen($line) <= $maxBytes) {
             return $line;
         }

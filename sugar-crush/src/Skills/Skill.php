@@ -27,6 +27,10 @@ final readonly class Skill
         public string $content,
         public string $sourcePath,
         public SkillSource $source = SkillSource::Native,
+        // Who put the file there, as opposed to its format ($source). Defaults
+        // to the least-trusted tier — see SkillOrigin::Project for why an
+        // untiered skill must not be labelled anything friendlier.
+        public SkillOrigin $origin = SkillOrigin::Project,
     ) {}
 
     /**
@@ -182,6 +186,31 @@ final readonly class Skill
             content: $this->content,
             sourcePath: $this->sourcePath,
             source: $this->source,
+            origin: $this->origin,
+        );
+    }
+
+    /**
+     * The same skill tagged with the tier its walker found it in — see
+     * {@see SkillOrigin} for why the walker, and not a path prefix, decides.
+     */
+    public function withOrigin(SkillOrigin $origin): self
+    {
+        return new self(
+            name: $this->name,
+            description: $this->description,
+            userInvocable: $this->userInvocable,
+            disableModelInvocation: $this->disableModelInvocation,
+            allowedTools: $this->allowedTools,
+            disallowedTools: $this->disallowedTools,
+            model: $this->model,
+            effort: $this->effort,
+            context: $this->context,
+            paths: $this->paths,
+            content: $this->content,
+            sourcePath: $this->sourcePath,
+            source: $this->source,
+            origin: $origin,
         );
     }
 }

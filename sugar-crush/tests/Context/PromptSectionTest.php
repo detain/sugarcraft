@@ -300,6 +300,7 @@ final class PromptSectionTest extends TestCase
         sort($tags);
 
         self::assertSame([
+            'available-skills',
             'env',
             'harness-injected',
             'prior-summary',
@@ -470,7 +471,7 @@ final class PromptSectionTest extends TestCase
         // file in `~/.sugar-crush/rules` — precisely the directory real users
         // create — reddened the exact-list pin below with a fourth fence. Both
         // inputs are now pinned at empty /tmp sandboxes, and the SECOND
-        // polarity below (one planted user rule) proves the three-element
+        // polarity below (one planted user rule) proves the exact-list
         // assertion is hermetic by pinning, not by the accident of a bare host.
         $root = sys_get_temp_dir() . '/promptsection_root_' . uniqid('', true);
         $home = sys_get_temp_dir() . '/promptsection_home_' . uniqid('', true);
@@ -496,15 +497,16 @@ final class PromptSectionTest extends TestCase
 
             // The layers this pinned App really builds on an empty host: <env>
             // from the direct block, <project-memory> from the empty
-            // MemoryBlock and <repo-map> from the snapshot section — an absent
-            // layer reports its fence as metadata while rendering '' (the
-            // PromptSection contract; only the base and skill layers are
-            // fence-less). project-instructions comes from the Runtime
+            // MemoryBlock, <repo-map> from the snapshot section and
+            // <available-skills> from the skill listing (audit 15d-02) — an
+            // absent layer reports its fence as metadata while rendering '' (the
+            // PromptSection contract; only the base, maxims and enabled-skill
+            // layers are fence-less). project-instructions comes from the Runtime
             // construction pinned with the routing test in the next commit;
             // the roster-missing case fails loudly here, not silently in
             // production.
             self::assertSame(
-                ['<env>', '<project-memory>', '<repo-map>'],
+                ['<available-skills>', '<env>', '<project-memory>', '<repo-map>'],
                 $distinct,
                 'an empty rules root and an empty HOME must build exactly the always-present fences',
             );
@@ -515,7 +517,7 @@ final class PromptSectionTest extends TestCase
 
             // Polarity two of the same pin: with ONE rule planted in the
             // sandbox HOME the user fence must appear — without this the
-            // three-element assertion above could be satisfied by a splice
+            // exact-list assertion above could be satisfied by a splice
             // that never reads HOME at all.
             mkdir($home . '/.sugar-crush/rules', 0o700, true);
             file_put_contents(
@@ -534,7 +536,7 @@ final class PromptSectionTest extends TestCase
             sort($withRule);
 
             self::assertSame(
-                ['<env>', '<project-memory>', '<repo-map>', '<user-rules>'],
+                ['<available-skills>', '<env>', '<project-memory>', '<repo-map>', '<user-rules>'],
                 $withRule,
                 'one rule in the pinned HOME must add its fence - the render reads the sandbox, not the host',
             );

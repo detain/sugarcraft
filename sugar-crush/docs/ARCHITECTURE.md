@@ -259,7 +259,8 @@ names it:
    `<project-memory>`;
 9. explicitly enabled skills' full bodies;
 10. `SkillMatcher::listForPrompt()` — name + description for every discovered
-    auto-invocable skill;
+    auto-invocable skill, each line badged with its tier (`[built-in]`,
+    `[user]`, `[project]`), fenced `<available-skills>` behind its preamble;
 11. `EnvironmentBlock` LAST — cwd, model, git status and diff, date; memoized
     per `Runtime` because `render()` shells out to git once per build.
 

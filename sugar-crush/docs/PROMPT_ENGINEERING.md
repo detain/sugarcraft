@@ -38,10 +38,13 @@ volatile `<env>` block last. Counted from the live method, there are eleven slot
    `PromptFence::escape()`.
 10. **Skill listing** — `SkillMatcher::listForPrompt()` names the remaining *discovered* skills at
     level-1 metadata (name and description), excluding those whose bodies the previous slot
-    already carries. PerTurn. Names and descriptions are repository text read with no trust gate,
-    so every line goes through `SkillPromptLine::render()`: collapsed to one line,
-    `PromptFence::escape()`d, then clipped to `SkillPromptLine::LISTING_MAX_BYTES` (audit 15d-02).
-    `SkillPathNudge` uses the same helper at its own entry cap.
+    already carries. PerTurn. Fenced `available-skills` with the skill-listing preamble, because
+    names and descriptions are skill authors' text — a cloned checkout's `.claude/skills` among
+    them, read with no trust gate. Every line goes through `SkillPromptLine::render()`: collapsed
+    to one line, `PromptFence::escape()`d, then clipped to `SkillPromptLine::LISTING_MAX_BYTES`, and
+    opened with a provenance badge from `SkillOrigin::badge()` — `[built-in]`, `[user]`,
+    `[project]`, plus `foreign: claude` or `foreign: opencode` for another tool's format
+    (audit 15d-02). `SkillPathNudge` uses the same helper at its own entry cap, without the badge.
 11. **Environment** (`EnvironmentBlock`) — fenced `env`, **LAST**. The P3.S1 invariant.
 
 Slots 1–3 are the Static prefix; 4–8 are PerSession; 9–11 are PerTurn. A section whose `render()`
@@ -110,13 +113,15 @@ other:
   bounds a reader model tracks) or to forge `system-reminder`, which is a trust channel rather
   than a section. In the assembled prompt every roster tag is a delimiter regardless of which
   body carries the bytes.
-- **The roster is the eight tags `PromptFence::tags()` returns**, read at this base: `env`,
+- **The roster is the nine tags `PromptFence::tags()` returns**, read at this base: `env`,
   `project-memory`, `repo-map`, `project-instructions`, `system-reminder`, `user-rules`,
-  `prior-summary`, `harness-injected`. Two entries are noteworthy in kind: `prior-summary` is the
-  tag `Chat::renderPriorSummariesForSummary()` wraps in a *summariser request* outside the
-  assembled system prompt — foreign by exactly the route a repo file is — and `harness-injected`
-  is the roster's one pre-registered, defang-only tag: nothing emits it yet, and a tag added
-  before the bytes that need it is free, whereas a tag added after leaves a forging window.
+  `prior-summary`, `harness-injected`, `available-skills`. Two entries are noteworthy in kind:
+  `prior-summary` is the tag `Chat::renderPriorSummariesForSummary()` wraps in a *summariser
+  request* outside the assembled system prompt — foreign by exactly the route a repo file is — and
+  `harness-injected` is the roster's one pre-registered, defang-only tag: nothing emits it yet, and
+  a tag added before the bytes that need it is free, whereas a tag added after leaves a forging
+  window. `available-skills` is the fence around the skill listing (slot 10), whose names and
+  descriptions are skill authors' text (audit 15d-02).
 - **Escape, do not drop.** The rewrite replaces only the leading `<` of a matched tag with its HTML
   entity, so `&lt;/env>` is inert yet information-preserving; deletion silently rewrites commit
   subjects, and looser respellings invite lenient re-matching. Clean payloads render
@@ -139,14 +144,18 @@ other:
 The provenance voice rides under its opener, split from the escaped body by a blank line:
 `Runtime::USER_RULES_AUTHORITY_PREAMBLE` asserts operator authorship and states where it outranks
 and where it yields; `Runtime::INSTRUCTIONS_AUTHORITY_PREAMBLE` asserts repository-maintainer
-authorship and disclaims precedence over the harness layers above; the `repo-map` and
+authorship and disclaims precedence over the harness layers above;
+`Runtime::SKILL_LISTING_AUTHORITY_PREAMBLE` says the listing is harness-assembled while each
+entry's text is its skill author's, explains the provenance badge and disclaims precedence the same
+way; the `repo-map` and
 `project-memory` fences open with count-bearing headers their block classes render instead of
 preambles, because those layers describe derived state rather than claim authority.
 
 The escape semantics are pinned at the splice level by the forgery guards
 `BaseSystemPromptTest::testForgedInstructionDocumentCannotForgeFencesOrAuthorityVoice()`,
 `BaseSystemPromptTest::testAForgedUserRuleBodyCannotEscapeItsOwnFence()`,
-`BaseSystemPromptTest::testAForgedHarnessInjectedCloserInsideAnInstructionDocumentCannotRender()`
+`BaseSystemPromptTest::testAForgedHarnessInjectedCloserInsideAnInstructionDocumentCannotRender()`,
+`BaseSystemPromptTest::testAForgedSkillDescriptionCannotEscapeOrForgeAFence()`
 and, on the summariser path, `Chat\CompactModelSummaryTest::testAForgedPriorSummaryCloserTravelsIntoTheNextRequestDefanged()`;
 the roster itself is pinned whole by
 `Context\PromptSectionTest::testTheEscapeRosterIsExactlyTheDerivedFenceTagList()` and its

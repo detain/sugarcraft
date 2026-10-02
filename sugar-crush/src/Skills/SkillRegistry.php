@@ -361,7 +361,7 @@ final class SkillRegistry
      * would silently break every path-scoped skill loaded via the lazy
      * manifest path (crush_feat.md section 7 E3/E4).
      *
-     * @param array{name:string,description:string,disableModelInvocation:bool,userInvocable:bool,context:string,paths:array<string>,sourcePath:string} $manifest
+     * @param array{name:string,description:string,disableModelInvocation:bool,userInvocable:bool,context:string,paths:array<string>,sourcePath:string,origin?:SkillOrigin} $manifest
      */
     public function registerFromManifest(array $manifest): void
     {
@@ -378,6 +378,9 @@ final class SkillRegistry
             paths: $manifest['paths'],
             content: '',
             sourcePath: $manifest['sourcePath'],
+            // Absent from a hand-built manifest: such a skill keeps Skill's
+            // least-trusted default rather than claiming a tier nobody stated.
+            origin: $manifest['origin'] ?? SkillOrigin::Project,
         );
 
         $this->skills[$manifest['name']] = $skill;

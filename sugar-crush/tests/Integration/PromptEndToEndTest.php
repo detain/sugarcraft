@@ -136,7 +136,7 @@ final class PromptEndToEndTest extends TestCase
      *      needle below names a phase that post-dates the plan's Phase-1 tree.
      *  ordering — listing block strictly before the last (env) block: the
      *      P3.S1 invariant re-pinned on the block arm with layers live.
-     *  exclusion — '- e2e-block-skill:' absent: the P7.S3 double-presentation
+     *  exclusion — '- [project] e2e-block-skill:' absent: the P7.S3 double-presentation
      *      polarity, asserted on fork-surviving bytes for the first time.
      */
     public function testARealKeystrokeTurnDeliversEveryLayerOnTheBlockArm(): void
@@ -230,7 +230,7 @@ final class PromptEndToEndTest extends TestCase
         // Exclusion polarity (P7.S3): the enabled body must not double-list.
         $this->assertSame(
             0,
-            substr_count($envelope['prompt'], '- ' . self::SKILL_NAME . ':'),
+            substr_count($envelope['prompt'], '- [project] ' . self::SKILL_NAME . ':'),
             'an enabled skill body must not also appear as a level-1 listing line, even across the fork',
         );
     }

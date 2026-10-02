@@ -600,14 +600,14 @@ final class SkillLoader
     public function loadAll(string $projectRoot = '.'): array
     {
         // Built-in first (lowest priority)
-        $builtin = $this->loadBuiltInSkills();
+        $builtin = self::originated($this->loadBuiltInSkills(), SkillOrigin::BuiltIn);
 
         // User skills override builtins
-        $user = $this->loadUserSkills();
+        $user = self::originated($this->loadUserSkills(), SkillOrigin::User);
         $skills = array_merge($builtin, $user);
 
         // Project skills override both
-        $project = $this->loadProjectSkills($projectRoot);
+        $project = self::originated($this->loadProjectSkills($projectRoot), SkillOrigin::Project);
         $skills = array_merge($skills, $project);
 
         return $skills;
@@ -737,26 +737,62 @@ final class SkillLoader
      * {@see SkillSource} tag and a manifest array has nowhere to put one --
      * see SkillManager::loadAll()'s doc-block for the full argument.
      *
-     * @return array<string, array{name: string, description: string, disableModelInvocation: bool, userInvocable: bool, context: string, paths: array<string>, sourcePath: string}>
+     * @return array<string, array{name: string, description: string, disableModelInvocation: bool, userInvocable: bool, context: string, paths: array<string>, sourcePath: string, origin: SkillOrigin}>
      */
     public function loadAllManifests(string $projectRoot = '.'): array
     {
+        // Each tier's manifests carry the tier they were read from (`origin`),
+        // the fact the system-prompt listing badges every line with (audit
+        // 15d-02) — stamped here because this is the one place that knows which
+        // directory a manifest came out of.
         // Built-in overrides nothing (lowest priority)
-        $manifests = $this->loadManifestsFromDirectory($this->builtInSkillsDir());
+        $manifests = self::originatedManifests(
+            $this->loadManifestsFromDirectory($this->builtInSkillsDir()),
+            SkillOrigin::BuiltIn,
+        );
 
         // User skills override builtins
         // Same $ownedBy widening the eager walk gets — see {@see loadUserSkills()}.
-        $manifests = array_merge($manifests, $this->loadManifestsFromDirectory($this->userSkillsDir(), self::homeDir()));
+        $manifests = array_merge($manifests, self::originatedManifests(
+            $this->loadManifestsFromDirectory($this->userSkillsDir(), self::homeDir()),
+            SkillOrigin::User,
+        ));
 
         // Project skills override everything else — and are the one tier whose
         // directory a repository picked the location of, so the root is passed
         // as the anchor it must resolve inside ({@see loadProjectSkills()}).
         $manifests = array_merge(
             $manifests,
-            $this->loadManifestsFromDirectory($this->projectSkillsDir($projectRoot), null, $projectRoot),
+            self::originatedManifests(
+                $this->loadManifestsFromDirectory($this->projectSkillsDir($projectRoot), null, $projectRoot),
+                SkillOrigin::Project,
+            ),
         );
 
         return $manifests;
+    }
+
+    /**
+     * Tag every skill of one tier with that tier.
+     *
+     * @param array<string, Skill> $skills
+     * @return array<string, Skill>
+     */
+    private static function originated(array $skills, SkillOrigin $origin): array
+    {
+        return array_map(static fn(Skill $skill): Skill => $skill->withOrigin($origin), $skills);
+    }
+
+    /**
+     * Stamp every manifest of one tier with that tier, for
+     * {@see SkillRegistry::registerFromManifest()} to carry onto the Skill.
+     *
+     * @param array<string, array<string, mixed>> $manifests
+     * @return array<string, array<string, mixed>>
+     */
+    private static function originatedManifests(array $manifests, SkillOrigin $origin): array
+    {
+        return array_map(static fn(array $manifest): array => [...$manifest, 'origin' => $origin], $manifests);
     }
 
     /**
