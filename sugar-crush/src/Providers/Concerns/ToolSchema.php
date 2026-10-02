@@ -163,7 +163,16 @@ trait ToolSchema
      *
      * `function.arguments` is a JSON STRING in the OpenAI schema, not an
      * object, and an argument-less call hits the same empty-array-vs-object
-     * trap as {@see normalizeToolSchema()} — hence JSON_FORCE_OBJECT.
+     * trap as {@see normalizeToolSchema()}. Only the TOP level is forced to an
+     * object, via an `(object)` cast: JSON_FORCE_OBJECT is recursive and
+     * replayed a list argument `{"paths":["a.php","b.php"]}` as
+     * `{"paths":{"0":"a.php","1":"b.php"}}`, contradicting the tool's own
+     * schema in every later turn of the transcript.
+     *
+     * Invalid UTF-8 (a filename, a pasted log line) is substituted rather than
+     * failing the encode: the old `?: '{}'` fallback replayed such a call as if
+     * it had taken no arguments at all. Anything json_encode() still cannot
+     * represent throws instead of being silently rewritten.
      *
      * Already-shaped arrays (a decoded transcript replayed from disk, say)
      * are passed through untouched.
@@ -183,7 +192,10 @@ trait ToolSchema
                 'type' => 'function',
                 'function' => [
                     'name' => $call->name(),
-                    'arguments' => json_encode($call->arguments(), JSON_FORCE_OBJECT) ?: '{}',
+                    'arguments' => json_encode(
+                        (object) $call->arguments(),
+                        JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR,
+                    ),
                 ],
             ];
         }, $toolCalls);
