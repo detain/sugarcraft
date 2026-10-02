@@ -535,14 +535,22 @@ final class ToolSecurityTest extends TestCase
 
     public function testWebFetchDefaultCapIsTheSharedToolOutputDefault(): void
     {
-        // WebFetch spells its cap as its own constant (see MAX_OUTPUT_BYTES's
-        // doc-block for why); this pins it to the trait's shared default so
-        // lowering one without the other is a red test, not silent drift.
-        $this->assertSame(
-            (new \ReflectionClassConstant(WebFetch::class, 'DEFAULT_MAX_OUTPUT_BYTES'))->getValue(),
-            (new \ReflectionClassConstant(WebFetch::class, 'MAX_OUTPUT_BYTES'))->getValue(),
+        // WebFetch's default IS the trait's DEFAULT_MAX_OUTPUT_BYTES since audit
+        // F-T3's follow-up (R9) — it used to spell a private MAX_OUTPUT_BYTES
+        // pinned equal here. The shared constant is now the only number, and
+        // TruncatesOutputNudgeMarginDocTest's census names WebFetch among its
+        // users, so what is left to pin is that a default-built tool actually
+        // advertises that figure.
+        $default = (new \ReflectionClassConstant(WebFetch::class, 'DEFAULT_MAX_OUTPUT_BYTES'))->getValue();
+        $this->assertSame(65536, $default);
+        $this->assertFalse(
+            (new \ReflectionClass(WebFetch::class))->hasConstant('MAX_OUTPUT_BYTES'),
+            'WebFetch grew its own output-cap constant again; use the trait default',
         );
-        $this->assertStringContainsString('at most 65,536 bytes', (new WebFetch())->description());
+        $this->assertStringContainsString(
+            'at most ' . number_format($default) . ' bytes',
+            (new WebFetch())->description(),
+        );
     }
 
     // ------------------------------------------------------------------

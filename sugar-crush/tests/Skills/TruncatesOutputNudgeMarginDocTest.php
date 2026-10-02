@@ -187,6 +187,15 @@ final class TruncatesOutputNudgeMarginDocTest extends TestCase
      * census incomplete with the suite green, in the one file whose stated
      * thesis is "a figure in a comment is not a measurement".
      *
+     * THAT FIFTH TOOL ARRIVED, and this is the test that made it name itself.
+     * WebFetch (audit F-T3) first spelled the same 64 KiB as a private
+     * `MAX_OUTPUT_BYTES` precisely so it would NOT join this census before the
+     * trait's doc-block was edited. Its follow-up (R9) switched it to
+     * `self::DEFAULT_MAX_OUTPUT_BYTES`, which redded this method with
+     * "Derived users: Bash, Glob, Grep, LspTool, WebFetch" until the bystander
+     * paragraph named it — the census now reads `{Glob, Grep, Bash, LspTool,
+     * WebFetch}`, with the last three as bystanders.
+     *
      * THE PREDICATE IS THE DOC-BLOCK'S OWN SENTENCE, and getting there took a
      * mutation. The first version asked `hasProperty('skillNudge')`, which is
      * the FIRST gate

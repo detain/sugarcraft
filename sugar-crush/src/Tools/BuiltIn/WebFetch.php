@@ -79,19 +79,6 @@ final readonly class WebFetch implements Tool, ParallelSafe
      */
     private const MAX_WIRE_BYTES = 2 * 1024 * 1024;
 
-    /**
-     * The default result cap: the same 64 KiB as the trait's
-     * DEFAULT_MAX_OUTPUT_BYTES, which ToolSecurityTest pins this equal to.
-     *
-     * It is spelled here rather than as `self::DEFAULT_MAX_OUTPUT_BYTES`
-     * because that token is a census entry: TruncatesOutputNudgeMarginDocTest
-     * re-derives every built-in that names the constant and requires the
-     * trait's doc-block to list the ones that spend no nudge budget. Joining
-     * that census is a trait doc edit outside this tool; until it is made,
-     * the equality test is what keeps the two numbers from drifting apart.
-     */
-    private const MAX_OUTPUT_BYTES = 65536;
-
     private const BLOCKED_HOSTNAMES = [
         'localhost',
         '127.0.0.1',
@@ -170,7 +157,7 @@ final readonly class WebFetch implements Tool, ParallelSafe
     public function __construct(
         ?callable $resolveAddresses = null,
         ?callable $isBlockedAddress = null,
-        private int $maxOutputBytes = self::MAX_OUTPUT_BYTES,
+        private int $maxOutputBytes = self::DEFAULT_MAX_OUTPUT_BYTES,
     ) {
         $this->resolveAddresses = $resolveAddresses === null
             ? static fn (string $host): array => self::resolveViaSystemDns($host)

@@ -113,9 +113,14 @@ trait TruncatesOutput
      * that was deliberately left, and the cheap answer is to give some back.
      *
      * NOT EVERY USER OF THIS CONSTANT IS IN THAT RELATIONSHIP:
-     * {@see \SugarCraft\Crush\Tools\BuiltIn\Bash} and
-     * {@see \SugarCraft\Crush\Tools\BuiltIn\LspTool} take the same default
-     * and spend no nudge budget, so the margin says nothing about them. It is a
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Bash},
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\LspTool} and
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\WebFetch} take the same default
+     * and spend no nudge budget, so the margin says nothing about them. (The
+     * last of those also holds a far larger read bound of its own; that one
+     * caps memory, not the result, and this constant is still the result cap
+     * — audit F-T3, which used to be spelled as a private copy of this number
+     * until the census named the tool.) It is a
      * property of the DEFAULT caps of the tools that do, which is also why it
      * is asserted over the shipped set rather than imposed by construction —
      * see the reasoning on `CALLER_BUDGET_DIVISOR`.
