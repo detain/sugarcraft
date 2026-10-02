@@ -411,6 +411,16 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . 'identity two lines above, so the literal and the stream cannot disagree.',
         ],
 
+        // ---- sugar-crush -------------------------------------------------
+        'sugar-crush/src/Support/ProcessContainment.php::->fcntl($fd)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'CORRECT. closeOnExec() (audit B3): FD_CLOEXEC on a stream_socket_pair() end. $fd '
+            . 'comes from descriptorNumber(), which matches the stream\'s st_dev+st_ino against '
+            . '`/proc/self/fd` -- the same recovery PosixBackend::descriptorForStream() uses -- '
+            . 'and answers null (so no call is made) when no entry or more than one matches. '
+            . 'Never a cast of a PHP stream.',
+        ],
+
         // ---- the rest of the tree ----------------------------------------
         // Every one of these passes the STREAM ITSELF, uncast. `posix_isatty()`
         // and `posix_ttyname()` are declared `resource|int`, so this is not
