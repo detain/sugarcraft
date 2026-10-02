@@ -341,17 +341,24 @@ final class ReadPathCensusTest extends TestCase
             'CALLER_SUPPLIED — the URI came from the editor request this client is answering',
         ],
         // Audit B7: the exchange lock's sidecar files. Every path is `<lock>.<suffix>`
-        // where <lock> is the tempnam() the connecting process created; forks read
-        // the same files because they inherited that path, not because content named it.
+        // where <lock> is the file the connecting process created; forks read the
+        // same files because they inherited that path, not because content named it.
+        // Audit B8: the lock is no longer a tempnam() — create() names it
+        // `sugar-crush-lsp-lock-<pidns>-<pid>-<rand>` in the temp dir, and
+        // sweepStale() reads that same directory for this class' own prefix.
         'LSP/LspExchangeLock.php|file_get_contents' => [
-            'SELF_LOCATED — load(): the `.state` file beside the tempnam() lock create() made',
+            'SELF_LOCATED — load(): the `.state` file beside the lock create() made',
             'SELF_LOCATED — loadFrame(): the `.frame` file beside the same lock',
             'SELF_LOCATED — journal(): the `.notes` file beside the same lock',
         ],
         'LSP/LspExchangeLock.php|fopen' => [
-            'SELF_LOCATED — handle(): the tempnam() lock file itself, opened for flock()',
+            'SELF_LOCATED — create(): the exclusive (`x`) create of a fresh owner-named lock in the temp dir',
+            'SELF_LOCATED — sweepStale(): a dead owner\'s lock, matched by this class\' own FILE_PREFIX name '
+                . 'shape in the temp dir, opened only to take its flock before the unlink',
+            'SELF_LOCATED — handle(): the lock file itself, opened for flock()',
         ],
         'LSP/LspExchangeLock.php|glob' => [
+            'SELF_LOCATED — sweepStale(): the temp dir listed for this class\' own FILE_PREFIX',
             'SELF_LOCATED — destroy(): the owner sweeping its own `<lock>.*` sidecars and temps',
         ],
         // WAS `CALLER_SUPPLIED — nothing in src/ builds one yet, so the first caller

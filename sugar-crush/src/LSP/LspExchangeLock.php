@@ -43,6 +43,14 @@ namespace SugarCraft\Crush\LSP;
  * contents or the new ones, never a torn mix — a guarantee an in-place
  * rewrite of the locked file itself could not give (and the lock file cannot
  * be renamed over, or the flock would move to a different inode).
+ *
+ * A KILLED OWNER LEAVES ITS FILES BEHIND (audit B8, the LSP twin of R14):
+ * {@see destroy()} runs only when the server is stopped, so a TUI that is
+ * SIGKILLed, OOM-killed or loses its terminal leaves the lock and its three
+ * sidecars per server in the temp dir, forever. The lock's name therefore
+ * records who owns it — `sugar-crush-lsp-lock-<pid-namespace>-<owner-pid>-<random>`
+ * — and every {@see create()} first sweeps the sets whose owner is gone
+ * ({@see sweepStale()}).
  */
 final class LspExchangeLock
 {
@@ -59,6 +67,12 @@ final class LspExchangeLock
 
     private const NOTE_BYTES = 262144;
 
+    /** Every lock file's name starts with this; {@see sweepStale()} reads no other. */
+    public const FILE_PREFIX = 'sugar-crush-lsp-lock-';
+
+    /** The errno kill(pid, 0) reports for a pid no process has. */
+    private const ERRNO_ESRCH = 3;
+
     /** @var resource|null this process' own handle, never an inherited one */
     private $handle = null;
 
@@ -72,31 +86,201 @@ final class LspExchangeLock
     }
 
     /**
-     * Create the lock for a connection the CURRENT process owns.
+     * Create the lock for a connection the CURRENT process owns, after
+     * sweeping the sets dead owners left in the same directory.
+     *
+     * @param string|null $dir where the files go (null → the system temp dir;
+     *        tests pass a private one)
      *
      * @throws \RuntimeException when no temp file can be created — a shared
      *         connection without exclusion is the defect this class closes, so
      *         it is refused rather than silently run unlocked
      */
-    public static function create(string $label): self
+    public static function create(string $label, ?string $dir = null): self
     {
-        $path = @tempnam(sys_get_temp_dir(), 'sugar-crush-lsp-lock-');
-        if ($path === false) {
+        $dir = rtrim($dir ?? sys_get_temp_dir(), '/');
+        $pid = (int) getmypid();
+
+        // Boot sweep: the sets of owners that died without destroy().
+        self::sweepStale($dir);
+
+        // tempnam() cannot carry the owner in the name, so the file is made
+        // the way tempnam() makes one — exclusive create ('x'), mode 0600,
+        // retried on the (vanishingly rare) random-suffix collision.
+        $path = null;
+        for ($attempt = 0; $attempt < 8 && $path === null; $attempt++) {
+            $candidate = $dir . '/' . self::FILE_PREFIX . self::pidNamespace() . '-' . $pid . '-' . bin2hex(random_bytes(6));
+            $handle = @fopen($candidate, 'x');
+            if ($handle === false) {
+                continue;
+            }
+
+            fclose($handle);
+            @chmod($candidate, 0600);
+            $path = $candidate;
+        }
+
+        if ($path === null) {
             throw new \RuntimeException(
-                "LSP server {$label}: cannot create the exchange lock file in " . sys_get_temp_dir()
+                "LSP server {$label}: cannot create the exchange lock file in " . $dir
             );
         }
 
-        $lock = new self($path, (int) getmypid());
+        $lock = new self($path, $pid);
         if (!$lock->replace($lock->statePath(), LspExchangeState::new()->encode())) {
             @unlink($path);
 
             throw new \RuntimeException(
-                "LSP server {$label}: cannot create the exchange state file in " . sys_get_temp_dir()
+                "LSP server {$label}: cannot create the exchange state file in " . $dir
             );
         }
 
         return $lock;
+    }
+
+    /**
+     * Remove the lock sets in $dir whose owner process no longer exists.
+     *
+     * A lock — and with it its `.state`, `.frame`, `.notes` and any write temp
+     * a killed holder stranded — is removed only when ALL of these hold, so a
+     * set somebody can still use is never taken away:
+     *  - its name is this class' current shape. Pre-B8 names (`tempnam()`'s
+     *    `sugar-crush-lsp-lock-XXXXXX`) say nothing about their owner and are
+     *    left;
+     *  - it was made in THIS pid namespace. A pid read from another namespace
+     *    (a container sharing /tmp) names a different process, or none — a
+     *    live owner there would look dead from here;
+     *  - its owner pid is gone: kill(pid, 0) fails with ESRCH. EPERM means a
+     *    live process of another user. A reused pid keeps the set — a leak,
+     *    never a wrong removal — and so does a host that cannot tell;
+     *  - nobody holds its flock right now. A forked child of the dead owner
+     *    may still be mid-exchange on the server the owner started; it is
+     *    left alone, and the set goes on a later sweep. Everything is
+     *    unlinked while the sweep holds the flock, sidecars first and the
+     *    lock last, so a sweep killed half-way leaves a lock that the next
+     *    one still finds. A process that was already waiting on the lock
+     *    when the name went refuses its exchange ({@see acquire()} checks the
+     *    name still leads to the inode it locked), the same answer a stopped
+     *    server gives.
+     *
+     * A sidecar whose lock is already gone (a sweep that died between the two
+     * unlinks) is removed on the same owner and namespace terms: with no lock
+     * file, no process can open the set again.
+     *
+     * Best-effort by design: a file another sweeper removed first, or one
+     * that cannot be opened, is skipped and never throws — the sweep must
+     * never be the reason a language server fails to start.
+     *
+     * @return int how many files were removed
+     */
+    public static function sweepStale(?string $dir = null): int
+    {
+        $dir = rtrim($dir ?? sys_get_temp_dir(), '/');
+        $paths = @glob($dir . '/' . self::FILE_PREFIX . '*', GLOB_NOSORT);
+        if ($paths === false || $paths === []) {
+            return 0;
+        }
+
+        // One listing serves both the locks and their sidecars: a second glob
+        // per lock would read a pattern built from $dir, whose own `[` or `*`
+        // would then be taken as wildcards.
+        $locks = [];
+        $sidecars = [];
+        $pattern = '/^' . preg_quote(self::FILE_PREFIX, '/') . '(\d+)-(\d+)-[0-9a-f]+(\..+)?$/';
+        foreach ($paths as $path) {
+            if (preg_match($pattern, basename($path), $m) !== 1) {
+                continue;
+            }
+
+            $suffix = $m[3] ?? '';
+            if ($suffix === '') {
+                $locks[$path] = [$m[1], (int) $m[2]];
+            } else {
+                $sidecars[substr($path, 0, -strlen($suffix))][] = $path;
+            }
+        }
+
+        $namespace = self::pidNamespace();
+        $self = (int) getmypid();
+        $abandoned = static fn (string $ns, int $owner): bool => $ns === $namespace
+            && $owner > 0
+            && $owner !== $self
+            && self::processIsGone($owner);
+        $removed = 0;
+
+        foreach ($locks as $path => [$ns, $owner]) {
+            if (!$abandoned($ns, $owner)) {
+                continue;
+            }
+
+            $handle = @fopen($path, 'r+');
+            if ($handle === false) {
+                continue;
+            }
+
+            $wouldBlock = 0;
+            if (flock($handle, LOCK_EX | LOCK_NB, $wouldBlock)) {
+                foreach ([...($sidecars[$path] ?? []), $path] as $file) {
+                    if (@unlink($file)) {
+                        $removed++;
+                    }
+                }
+                flock($handle, LOCK_UN);
+            }
+            fclose($handle);
+            unset($sidecars[$path]);
+        }
+
+        foreach ($sidecars as $lockPath => $files) {
+            if (isset($locks[$lockPath]) || file_exists($lockPath)) {
+                continue;
+            }
+
+            preg_match($pattern, basename($lockPath), $m);
+            if (!$abandoned($m[1], (int) $m[2])) {
+                continue;
+            }
+
+            foreach ($files as $file) {
+                if (@unlink($file)) {
+                    $removed++;
+                }
+            }
+        }
+
+        return $removed;
+    }
+
+    /**
+     * Whether no process with this pid exists — the one answer that makes a
+     * lock set safe to remove. Anything uncertain answers false.
+     */
+    private static function processIsGone(int $pid): bool
+    {
+        if (function_exists('posix_kill') && function_exists('posix_get_last_error')) {
+            if (@posix_kill($pid, 0)) {
+                return false;
+            }
+
+            // ESRCH alone means "no such process"; EPERM is a live process
+            // of another user, and any other errno is not an answer.
+            return posix_get_last_error() === self::ERRNO_ESRCH;
+        }
+
+        // Without posix, /proc can still say "absent" on Linux; elsewhere
+        // nothing can, and the set is kept.
+        return is_dir('/proc/self') && !file_exists("/proc/{$pid}");
+    }
+
+    /**
+     * The inode of this process' pid namespace (Linux), or '0' where there is
+     * no such notion — pids are then compared host-wide, as they are.
+     */
+    private static function pidNamespace(): string
+    {
+        $link = @readlink('/proc/self/ns/pid');
+
+        return is_string($link) && preg_match('/\[(\d+)\]/', $link, $m) === 1 ? $m[1] : '0';
     }
 
     /**
@@ -116,7 +300,18 @@ final class LspExchangeLock
         while (true) {
             $wouldBlock = 0;
             if (flock($handle, LOCK_EX | LOCK_NB, $wouldBlock)) {
-                return true;
+                if ($this->stillNamed($handle)) {
+                    return true;
+                }
+
+                // The name went while this process waited: a stale-lock sweep
+                // (or the owner's destroy()) unlinked it — and the sidecars
+                // the state lives in — under the flock this wait just won.
+                // Exchanging now would start from no state on a stream the
+                // last holder may have left mid-frame.
+                $this->release();
+
+                return false;
             }
 
             if ($wouldBlock !== 1) {
@@ -305,6 +500,21 @@ final class LspExchangeLock
         }
 
         return true;
+    }
+
+    /**
+     * Whether {@see $path} still leads to the inode $handle has open.
+     *
+     * @param resource $handle
+     */
+    private function stillNamed($handle): bool
+    {
+        clearstatcache(true, $this->path);
+        $named = @stat($this->path);
+        $held = @fstat($handle);
+
+        return $named !== false && $held !== false
+            && $named['ino'] === $held['ino'] && $named['dev'] === $held['dev'];
     }
 
     /** @return resource|null */
