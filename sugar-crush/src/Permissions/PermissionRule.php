@@ -104,8 +104,10 @@ use SugarCraft\Crush\ToolCall;
  * {@see PermissionMode::Plan}, which refuses whole tool KINDS, and the path
  * jails, which resolve. Be precise about one that reads like a third and is
  * not: the unconditional `rm -rf /` breaker in {@see PermissionGate} is
- * mode-independent, but it reads `arguments['command']` and tokenises it, so it
- * is shell-text matching too and `/bin/rm -rf /` is past it. (Its own
+ * mode-independent, but it reads `arguments['command']` and tokenises it
+ * without expanding anything, so it is shell-text matching too: since audit
+ * F-P1 it catches `/bin/rm -rf /` and `rm '-rf' ~`, and `bash -c 'rm -rf /'`
+ * and `$(echo rm) -rf /` are still past it (both measured). (Its own
  * newline-separator hole — measured: under `bypass-permissions`,
  * `echo hi\nrm -rf /` was ALLOWED where `echo hi && rm -rf /` was denied — is
  * closed in this change alongside this class's.) Saying all of this here rather

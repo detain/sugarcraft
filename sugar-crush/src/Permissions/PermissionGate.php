@@ -22,17 +22,19 @@ use SugarCraft\Crush\ToolCall;
  * Four modes are implemented here (P2B.S2 + P2B.S3):
  * - Default:     reads silently; writes/networking always Ask
  * - AcceptEdits: scoped filesystem writes auto-Allow; everything else Ask
- * - Plan:        reads and non-redirecting `Bash` Allow; every other write Deny
+ * - Plan:        reads and provably read-only `Bash` Allow; every other `Bash`
+ *                and every other write Deny
  * - Auto:        everything runs gated by SafetyClassifier; 3-strike / 20-total circuit breaker
  *
- * That Plan line used to read "all writes Deny", which {@see evaluatePlan()}
- * has never done and does not claim to: a `Bash` call is allowed for
- * exploration and denied only when {@see isBashWriteCommand()} sees a
- * redirection in its arguments. The summary is corrected rather than the
- * evaluator because exploration under Plan is the deliberate behaviour (and
- * the tested one) — but the difference matters to a caller reasoning about a
- * `Bash` DECLARATION, which carries no arguments to redirect: see
- * {@see refuses()}.
+ * The Plan line has been wrong twice, and both are worth knowing. It first
+ * read "all writes Deny" while {@see evaluatePlan()} allowed every `Bash` call
+ * a three-regex redirect check did not catch; it was then corrected to
+ * "non-redirecting `Bash` Allow", which was accurate and was the defect —
+ * `rm`, `sed -i`, `git push --force` and `echo x>f` all ran under the mode a
+ * user picks to change nothing (audit F-P2). Plan now allows a `Bash` call only
+ * when {@see isPlanReadOnlyBash()} proves every command in it read-only, and
+ * denies everything else, unparseable lines included. A `Bash` DECLARATION,
+ * which carries no command to judge, is still allowed: see {@see refuses()}.
  *
  * The `rm -rf /` / `rm -rf ~` circuit breaker (R3) is evaluated unconditionally in
  * `evaluate()`, before rules and before mode dispatch — no rule and no mode can
@@ -217,9 +219,11 @@ final class PermissionGate
      * - The `rm -rf /` breaker cannot fire either, for the same reason — it
      *   reads `arguments['command']`.
      * - `Plan` refuses `Edit`, `Write` and every `mcp__*` declaration, but NOT
-     *   `Bash`: what makes a `Bash` call a write under Plan is a redirection in
-     *   its arguments ({@see isBashWriteCommand()}), so a bare `Bash` name is
-     *   allowed there exactly as an exploratory `git log` is.
+     *   `Bash`: Plan allows a `Bash` call whose command
+     *   {@see isPlanReadOnlyBash()} proves read-only (`git log`, `grep -rn`)
+     *   and denies every other one, so the verdict lives in the command — which
+     *   a declaration does not have. Refusing the name would refuse the
+     *   read-only uses too; each real call is judged when it arrives.
      * - `DontAsk` refuses every declaration that is not a read-only tool.
      * - `Auto` refuses NOTHING through its mode evaluator, and this is
      *   structural rather than an oversight: Auto's judgement is
@@ -281,7 +285,7 @@ final class PermissionGate
         return match ($this->mode) {
             PermissionMode::Default => $this->evaluateDefault($call),
             PermissionMode::AcceptEdits => $this->evaluateAcceptEdits($call),
-            PermissionMode::Plan => $this->evaluatePlan($call),
+            PermissionMode::Plan => $this->evaluatePlan($call, $argumentsKnown),
             PermissionMode::Auto => $commitAutoStrikes
                 ? $this->evaluateAuto($call)
                 : $this->autoDeclarationDecision(),
@@ -430,22 +434,35 @@ final class PermissionGate
     }
 
     /**
-     * Plan: reads/shell exploration freely, but no edits land until approved.
+     * Plan: read and explore, change nothing until the plan is approved.
+     *
+     * `Bash` runs only when {@see isPlanReadOnlyBash()} can show the whole
+     * command line is made of read-only commands, and is DENIED otherwise —
+     * fail closed, including for a line it cannot parse (audit F-P2; before
+     * that, every `Bash` call ran unless a three-regex redirect check caught
+     * it, so `rm`, `sed -i` and `git push --force` ran unprompted).
+     *
+     * A `Bash` DECLARATION ({@see refuses()}, `$argumentsKnown` false) is
+     * Allowed: it has no command to judge, a read-only `git log` is a
+     * legitimate use of it, and each real call is still judged here when it
+     * arrives. A real call whose `command` is missing or empty has nothing
+     * read-only about it and is Denied.
      */
-    private function evaluatePlan(ToolCall $call): PermissionDecision
+    private function evaluatePlan(ToolCall $call, bool $argumentsKnown): PermissionDecision
     {
         // Reads are always allowed in Plan mode
         if ($this->isReadOnlyTool($call)) {
             return PermissionDecision::Allow;
         }
 
-        // Bash commands are allowed for exploration (e.g. git log, find, grep)
-        // but denied when they redirect output (writing to files)
         if ($call->name === 'Bash') {
-            if ($this->isBashWriteCommand($call)) {
-                return PermissionDecision::Deny;
+            if (!$argumentsKnown) {
+                return PermissionDecision::Allow;
             }
-            return PermissionDecision::Allow;
+
+            return $this->isPlanReadOnlyBash($call)
+                ? PermissionDecision::Allow
+                : PermissionDecision::Deny;
         }
 
         // All other writes are denied in Plan mode — nothing edits until the plan is approved
@@ -822,22 +839,548 @@ final class PermissionGate
     }
 
     /**
-     * Detect if a Bash command writes to files via shell redirection or tee.
+     * Is this `Bash` call PROVABLY read-only — the one shape of `Bash` that
+     * Plan mode lets run?
+     *
+     * THIS PREDICATE IS ON A GRANT PATH and it is an ALLOW-LIST, both on
+     * purpose. Until audit F-P2 Plan did the opposite: it allowed every `Bash`
+     * call and denied only the ones `isBashWriteCommand()` caught, a three-regex
+     * deny list (`\s+>\s+`, `\s+>>\s+`, `|\s*tee`). Measured under `plan`, that
+     * denied `echo x > f` and ALLOWED `echo x >f`, `echo x>f`, `echo x 2> f`,
+     * `cat a >| f`, `sed -i s/a/b/ src.php`, `git commit -am wip`,
+     * `git push --force`, `rm src/main.php`, `mv src /tmp/`, `curl -o f …`,
+     * `cp /dev/null README.md`, `python3 -c "open('f','w')"` and
+     * `truncate -s0 f`. Plan is the mode a user picks to GUARANTEE nothing
+     * changes, and a deny list over shell text can only ever enumerate the
+     * spellings somebody thought of. So the question is inverted: not "does
+     * this write?" but "can every part of this be shown not to?", and anything
+     * this method cannot show resolves to `false` — Deny under Plan.
+     *
+     * The line is tokenised by {@see ShellWords} (quote removal, every control
+     * operator, redirections pulled out), and ALL of the following must hold:
+     *
+     * - it parses COMPLETELY — an unterminated quote, substitution or here-doc
+     *   is not something this method can reason about;
+     * - no command or process substitution (`$(…)`, backtick, `<(…)`, `>(…)`)
+     *   anywhere, quoted or not: whatever runs inside one is a command this
+     *   method never sees;
+     * - no `${…}` or `$[…]` expansion, because bash evaluates array subscripts
+     *   and substring offsets ARITHMETICALLY and `${x@P}` prompt-expands, and
+     *   each of those runs a `$(…)` that lives in a variable's VALUE — one
+     *   `${x:=…}` earlier on the same line can put it there. Measured on bash
+     *   5.2: `echo ${x:=\$\(id\)} ${x@P}` runs `id`. Plain `$NAME` stays
+     *   allowed; it substitutes a value and evaluates nothing;
+     * - every redirection is harmless by {@see isHarmlessPlanRedirection()} —
+     *   an fd duplication or a write to `/dev/null`, never a file;
+     * - every simple command in every pipeline and list names a command in
+     *   {@see PLAN_READ_ONLY_COMMANDS}, LITERALLY (not a glob, not a brace, not
+     *   a path — `/bin/cat` is not `cat` here, and a `NAME=value` prefix is not
+     *   a command), and its arguments pass that command's check.
+     *
+     * Control operators are fine — `cat a | grep b | wc -l`, `ls; pwd`,
+     * `git status && git log` — because every command they join is judged on
+     * its own; a separator cannot introduce a command this loop does not visit.
+     * `ls; rm x` is denied by its second command, not by its `;`.
+     *
+     * The honest limit: a read-only command is still a READ. `cat ~/.ssh/id_rsa`
+     * is allowed here exactly as `Read` would allow it — Plan withholds writes,
+     * not visibility, and secret-file guarding is
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook}'s job. And `git`
+     * honours the repository's own configuration (`core.fsmonitor`,
+     * `core.pager`, `diff.external`, textconv drivers), which can name a
+     * program: Plan trusts a checkout's `.git/config` the way running `git` in
+     * it by hand does, and nothing in Plan can write that file.
      */
-    private function isBashWriteCommand(ToolCall $call): bool
+    private function isPlanReadOnlyBash(ToolCall $call): bool
     {
-        $args = $call->arguments;
-
-        if (!isset($args['command']) || !is_string($args['command'])) {
+        $command = $call->arguments['command'] ?? null;
+        if (!is_string($command) || trim($command) === '') {
             return false;
         }
 
-        $cmd = $args['command'];
+        $parsed = ShellWords::parse($command);
+        if (!$parsed->complete || $parsed->hasSubstitution() || $parsed->parameterExpansions !== []) {
+            return false;
+        }
 
-        // File redirection operators: > >> | tee
-        return (bool) preg_match('/\s+>\s+/', $cmd)
-            || (bool) preg_match('/\s+>>\s+/', $cmd)
-            || (bool) preg_match('/\|\s*tee(\s+|$)/', $cmd);
+        foreach ($parsed->redirections as $redirection) {
+            if (!$this->isHarmlessPlanRedirection($redirection)) {
+                return false;
+            }
+        }
+
+        $judged = false;
+        foreach ($parsed->commands as $index => $words) {
+            if ($words === []) {
+                // Redirections only (`2>/dev/null` on its own) — judged above.
+                continue;
+            }
+            $flags = $parsed->expandable[$index] ?? [];
+            $name = $words[0];
+            if (($flags[0] ?? true) || !array_key_exists($name, self::PLAN_READ_ONLY_COMMANDS)) {
+                return false;
+            }
+            if (!$this->planArgumentsAreReadOnly($name, array_slice($words, 1), array_slice($flags, 1))) {
+                return false;
+            }
+            $judged = true;
+        }
+
+        return $judged;
+    }
+
+    /**
+     * The commands Plan mode lets `Bash` run, mapped to how their arguments are
+     * judged by {@see planArgumentsAreReadOnly()}.
+     *
+     * AN ALLOW-LIST ON PURPOSE: a command missing from it costs one denied
+     * exploration step (the model can use `Read`/`Grep`/`Glob` instead); a
+     * writing command wrongly on it costs the guarantee Plan exists to give.
+     * Additions need the same scrutiny as a security fix.
+     *
+     * `null` means no spelling of that command's arguments can write a file or
+     * run another program, so its words are not inspected — and therefore a
+     * glob or a `$VAR` in them is fine (`cat src/*.php`, `ls $HOME`).
+     * A string names the per-command check for the ones where SOME argument
+     * writes or executes: `find -delete`/`-exec`, `sort -o`, `uniq IN OUT`,
+     * `rg --pre CMD`, `tree -o`, `file -C`, `date -s`, `printf -v` (which
+     * evaluates an array subscript, so it runs code — measured), and `git`'s
+     * many writing subcommands. A checked command refuses ANY word bash may
+     * still rewrite ({@see ShellWords::$expandable}), because `find . {-delete,}`
+     * and a file named `-delete` matched by `find *` both hand find a flag no
+     * literal word showed.
+     *
+     * Left out deliberately, with the reason, so nobody re-adds one in passing:
+     * `sed`/`awk`/`perl`/`python*`/`php`/`node`/`ruby` (interpreters — `awk`
+     * writes with `print > f`, `sed` with `w`); `xargs`, `env`, `sudo`,
+     * `nohup`, `timeout`, `nice`, `command`, `exec`, `eval`, `source`/`.`,
+     * `bash`/`sh -c`, `time` (each runs ANOTHER command, which would escape
+     * this list); `test`/`[` (`[ -v 'a[$(cmd)]' ]` evaluates the subscript and
+     * runs `cmd` — measured on bash 5.2); `less`/`more` (interactive, and
+     * `LESSOPEN` runs a preprocessor); `xxd` and `tee` (a second operand or
+     * any operand is an output file); `curl`/`wget` (network, and `-o`).
+     *
+     * @var array<string, ?string>
+     */
+    private const PLAN_READ_ONLY_COMMANDS = [
+        'basename' => null,
+        'cat' => null,
+        'cd' => null,
+        'cmp' => null,
+        'comm' => null,
+        'cut' => null,
+        'df' => null,
+        'diff' => null,
+        'dirname' => null,
+        'du' => null,
+        'echo' => null,
+        'egrep' => null,
+        'false' => null,
+        'fgrep' => null,
+        'grep' => null,
+        'head' => null,
+        'id' => null,
+        'jq' => null,
+        'ls' => null,
+        'nl' => null,
+        'pwd' => null,
+        'readlink' => null,
+        'realpath' => null,
+        'stat' => null,
+        'tail' => null,
+        'tr' => null,
+        'true' => null,
+        'type' => null,
+        'uname' => null,
+        'wc' => null,
+        'whereis' => null,
+        'which' => null,
+        'whoami' => null,
+        'date' => 'date',
+        'file' => 'file',
+        'find' => 'find',
+        'git' => 'git',
+        'printf' => 'printf',
+        'rg' => 'rg',
+        'sort' => 'sort',
+        'tree' => 'tree',
+        'uniq' => 'uniq',
+    ];
+
+    /**
+     * `find` primaries that delete, run a program or write a file. Matched
+     * against quote-removed words, so `'-delete'` is caught too.
+     */
+    private const PLAN_FIND_REFUSED = [
+        '-delete', '-exec', '-execdir', '-ok', '-okdir',
+        '-fprint', '-fprint0', '-fprintf', '-fls',
+    ];
+
+    /**
+     * `git` subcommands Plan can run, each further narrowed by
+     * {@see planGitIsReadOnly()}. Anything else — `commit`, `push`, `checkout`,
+     * `reset`, `stash`, `fetch`, an alias (which may be `!shell`) — is denied.
+     */
+    private const PLAN_GIT_SUBCOMMANDS = [
+        'status', 'log', 'show', 'diff', 'blame', 'shortlog', 'rev-parse', 'rev-list',
+        'ls-files', 'ls-tree', 'describe', 'cat-file', 'grep', 'branch', 'tag', 'remote', 'config',
+    ];
+
+    /**
+     * Output targets a Plan-mode redirection may name: writing to them changes
+     * no file.
+     */
+    private const PLAN_HARMLESS_OUTPUT_TARGETS = ['/dev/null', '/dev/stdout', '/dev/stderr'];
+
+    /**
+     * A redirection Plan can allow — judged on the operator AND the target,
+     * because the old check's mistake was judging spacing.
+     *
+     * - `2>&1`, `>&2`, `3<&0`, `2>&-`: fd duplication / closing, no file.
+     * - `>`, `>>`, `>|`, `&>`, `&>>` (and `>& word`, which bash reads as
+     *   `&> word`) only onto {@see PLAN_HARMLESS_OUTPUT_TARGETS} — so
+     *   `cmd 2>/dev/null` is allowed and `cmd 2> f` is not, in any spacing.
+     * - `<` reads a file, so any target — except bash's `/dev/tcp/…` and
+     *   `/dev/udp/…`, which open a network connection rather than a file.
+     * - `<<<` feeds a word to stdin; the word was already parsed, and any
+     *   substitution in it already refused the line.
+     * - Refused: `<>` opens read-WRITE (creating the file), and `<<`/`<<-`
+     *   here-doc bodies are expanded by bash (`$(…)` in a body runs) but are
+     *   skipped, unparsed, by {@see ShellWords} — so nothing here has looked
+     *   at them.
+     *
+     * @param array{command: int, fd: ?string, op: string, target: ?string} $redirection
+     */
+    private function isHarmlessPlanRedirection(array $redirection): bool
+    {
+        $target = $redirection['target'] ?? '';
+
+        return match ($redirection['op']) {
+            '>&' => preg_match('/^(?:\d+-?|-)$/', $target) === 1
+                || in_array($target, self::PLAN_HARMLESS_OUTPUT_TARGETS, true),
+            '<&' => preg_match('/^(?:\d+-?|-)$/', $target) === 1,
+            '>', '>>', '>|', '&>', '&>>' => in_array($target, self::PLAN_HARMLESS_OUTPUT_TARGETS, true),
+            '<' => !str_starts_with($target, '/dev/tcp/') && !str_starts_with($target, '/dev/udp/'),
+            '<<<' => true,
+            default => false,
+        };
+    }
+
+    /**
+     * @param list<string> $args  the words after the command name
+     * @param list<bool>   $flags {@see ShellWords::$expandable} for those words
+     */
+    private function planArgumentsAreReadOnly(string $name, array $args, array $flags): bool
+    {
+        $check = self::PLAN_READ_ONLY_COMMANDS[$name];
+        if ($check === null) {
+            return true;
+        }
+        if (count($flags) !== count($args) || in_array(true, $flags, true)) {
+            return false;
+        }
+
+        return match ($check) {
+            'find' => array_intersect($args, self::PLAN_FIND_REFUSED) === [],
+            'git' => $this->planGitIsReadOnly($args),
+            // `-o FILE` / `--output` writes; `--compress-program` runs a
+            // program; `-T DIR` / `--temporary-directory` writes there. GNU
+            // getopt clusters short options (`-uo f`) and accepts any
+            // unambiguous long-option prefix (`--out=f`), hence the shape.
+            'sort' => $this->noOptionMatches($args, '/^-[^-]*[oT]|^--(?:o|com|te)/'),
+            // `uniq [OPTION]... [INPUT [OUTPUT]]` — a second operand is
+            // written. Option values must be attached (`-f1`, not `-f 1`):
+            // a detached value counts as an operand, which only over-refuses.
+            'uniq' => $this->operandCount($args) <= 1,
+            // `--pre CMD` runs CMD on every file; `--hostname-bin` runs one too.
+            'rg' => $this->noOptionMatches($args, '/^--(?:pre|hostname-bin)/'),
+            // `-o FILE` writes the listing; `-R` (with `-H`) writes
+            // `00Tree.html` into every directory.
+            'tree' => $this->noOptionMatches($args, '/^-[^-]*[oR]|^--o/'),
+            // `-C` / `--compile` writes a compiled `.mgc` magic file.
+            'file' => $this->noOptionMatches($args, '/^-[^-]*C|^--co/'),
+            'date' => $this->planDateIsReadOnly($args),
+            // `printf -v NAME` assigns, and a NAME of `a[$(cmd)]` runs `cmd`
+            // (the subscript is evaluated arithmetically — measured). Only a
+            // FORMAT may come first.
+            'printf' => $args === [] || $args[0] === '--' || !str_starts_with($args[0], '-'),
+            default => false,
+        };
+    }
+
+    /**
+     * True when no OPTION word (one starting with `-`, other than a bare `-`)
+     * before a `--` matches `$refused`.
+     *
+     * @param list<string> $args
+     */
+    private function noOptionMatches(array $args, string $refused): bool
+    {
+        foreach ($args as $arg) {
+            if ($arg === '--') {
+                return true;
+            }
+            if ($arg !== '-' && str_starts_with($arg, '-') && preg_match($refused, $arg) === 1) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * The number of operands (non-option words, and every word after `--`).
+     *
+     * @param list<string> $args
+     */
+    private function operandCount(array $args): int
+    {
+        $count = 0;
+        $optionsEnded = false;
+        foreach ($args as $arg) {
+            if (!$optionsEnded && $arg === '--') {
+                $optionsEnded = true;
+                continue;
+            }
+            if (!$optionsEnded && $arg !== '-' && str_starts_with($arg, '-')) {
+                continue;
+            }
+            ++$count;
+        }
+
+        return $count;
+    }
+
+    /**
+     * `date` DISPLAYS with `+FORMAT`, `-u`, `-R`, `-I…`, `-d DATE`,
+     * `-r FILE` and `-f FILE`, and SETS the clock with `-s`/`--set` or a bare
+     * `MMDDhhmm` operand. An allow-list of the display forms, since a
+     * deny-list would have to know every way an operand can look like a date.
+     *
+     * @param list<string> $args
+     */
+    private function planDateIsReadOnly(array $args): bool
+    {
+        $count = count($args);
+        for ($i = 0; $i < $count; ++$i) {
+            $arg = $args[$i];
+            if (in_array($arg, ['-d', '--date', '-r', '--reference', '-f', '--file'], true)) {
+                ++$i; // the next word is that option's value, not an operand
+                continue;
+            }
+            if (str_starts_with($arg, '+')
+                || in_array($arg, ['-u', '--utc', '--universal', '-R', '--rfc-email', '--debug'], true)
+                || preg_match('/^(?:-I[a-z]*|--iso-8601(?:=[a-z]+)?|--rfc-3339=[a-z]+|--(?:date|reference|file)=.*|-[dfr].+)$/', $arg) === 1
+            ) {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * `git`, narrowed to inspection. Global options before the subcommand are
+     * refused except `--no-pager`/`-P`: `-c core.pager=CMD`, `--exec-path`,
+     * `-C`, `--git-dir` all change what runs or where.
+     *
+     * @param list<string> $args the words after `git`
+     */
+    private function planGitIsReadOnly(array $args): bool
+    {
+        while ($args !== [] && in_array($args[0], ['--no-pager', '-P'], true)) {
+            array_shift($args);
+        }
+        $subcommand = array_shift($args);
+        if ($subcommand === null || !in_array($subcommand, self::PLAN_GIT_SUBCOMMANDS, true)) {
+            return false;
+        }
+
+        return match ($subcommand) {
+            'branch' => $this->planGitListingIsReadOnly(
+                $args,
+                ['-a', '--all', '-r', '--remotes', '-v', '-vv', '--verbose', '--show-current', '--color',
+                    '--no-color', '--column', '--no-column', '-i', '--ignore-case', '--omit-empty', '--no-abbrev'],
+                ['-l', '--list'],
+                '/^-[arvil]+$/',
+                '/l/',
+            ),
+            'tag' => $this->planGitListingIsReadOnly(
+                $args,
+                ['-i', '--ignore-case', '--color', '--no-color', '--column', '--no-column', '--omit-empty'],
+                ['-l', '--list', '-n'],
+                '/^-(?:[il]+|n\d*)$/',
+                '/[ln]/',
+            ),
+            'remote' => $this->planGitRemoteIsReadOnly($args),
+            'config' => $this->planGitConfigIsReadOnly($args),
+            default => $this->planGitInspectionIsReadOnly($subcommand, $args),
+        };
+    }
+
+    /**
+     * `log`, `show`, `diff`, `blame`, `grep` and the plumbing readers. Their
+     * one write is `--output=FILE` (log/show/diff), and `git grep -O CMD` /
+     * `--open-files-in-pager` runs a program. git accepts any unambiguous
+     * long-option prefix (`--out=f`), so every `--o…` option is refused except
+     * the read-only ones a model actually types. Words after `--` are
+     * pathspecs.
+     *
+     * @param list<string> $args
+     */
+    private function planGitInspectionIsReadOnly(string $subcommand, array $args): bool
+    {
+        foreach ($args as $arg) {
+            if ($arg === '--') {
+                return true;
+            }
+            if (str_starts_with($arg, '--o')
+                && !in_array($arg, ['--oneline', '--only-matching', '--ours'], true)
+            ) {
+                return false;
+            }
+            if ($subcommand === 'grep' && preg_match('/^-[^-]*O/', $arg) === 1) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * `git branch` / `git tag` LIST with no arguments, with `--list`, or with
+     * a filter (`--contains`, `--merged`, `--points-at` — git switches to list
+     * mode for those itself), and otherwise treat a bare operand as the name of
+     * a branch or tag to CREATE. So an operand is allowed only in list mode,
+     * and every option must be a known listing option.
+     *
+     * A filter's value is skipped only when it does not start with `-`: git
+     * itself takes `--contains -d x` as `--contains` (defaulted) and then
+     * `-d x`, a delete — consuming `-d` as a value here would miss it.
+     *
+     * @param list<string> $args
+     * @param list<string> $plainOptions options that neither list nor take a value
+     * @param list<string> $listOptions  options that switch to list mode
+     * @param string       $cluster      a regex for a valid short-option cluster
+     * @param string       $listInCluster which cluster letters switch to list mode
+     */
+    private function planGitListingIsReadOnly(
+        array $args,
+        array $plainOptions,
+        array $listOptions,
+        string $cluster,
+        string $listInCluster,
+    ): bool {
+        $listMode = false;
+        $operand = false;
+        $count = count($args);
+        for ($i = 0; $i < $count; ++$i) {
+            $arg = $args[$i];
+            $isFilter = in_array($arg, ['--contains', '--no-contains', '--merged', '--no-merged', '--points-at'], true);
+            if ($isFilter || in_array($arg, ['--sort', '--format'], true)) {
+                $listMode = $listMode || $isFilter;
+                if ($i + 1 < $count && !str_starts_with($args[$i + 1], '-')) {
+                    ++$i;
+                }
+                continue;
+            }
+            if (preg_match('/^--(?:contains|no-contains|merged|no-merged|points-at)=/', $arg) === 1) {
+                $listMode = true;
+                continue;
+            }
+            if (preg_match('/^--(?:sort|format|color|column|abbrev)=/', $arg) === 1
+                || in_array($arg, $plainOptions, true)
+            ) {
+                continue;
+            }
+            if (in_array($arg, $listOptions, true)) {
+                $listMode = true;
+                continue;
+            }
+            if (preg_match($cluster, $arg) === 1) {
+                $listMode = $listMode || preg_match($listInCluster, $arg) === 1;
+                continue;
+            }
+            if (str_starts_with($arg, '-')) {
+                return false;
+            }
+            $operand = true;
+        }
+
+        return !$operand || $listMode;
+    }
+
+    /**
+     * `git remote`, `git remote -v`, `git remote get-url …` and
+     * `git remote show …` read; `add`/`remove`/`rename`/`set-url`/`prune`
+     * write.
+     *
+     * @param list<string> $args
+     */
+    private function planGitRemoteIsReadOnly(array $args): bool
+    {
+        while ($args !== [] && in_array($args[0], ['-v', '--verbose'], true)) {
+            array_shift($args);
+        }
+        if ($args === []) {
+            return true;
+        }
+        $options = match (array_shift($args)) {
+            'get-url' => ['--push', '--all'],
+            'show' => ['-n'],
+            default => null,
+        };
+        if ($options === null) {
+            return false;
+        }
+        foreach ($args as $arg) {
+            if (str_starts_with($arg, '-') && !in_array($arg, $options, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * `git config` READS only with an explicit read action — `--get`,
+     * `--get-all`, `--get-regexp`, `--get-urlmatch`, `--list` (or the
+     * `get`/`list` subcommands of git 2.46+). The old-style `git config KEY`
+     * also reads, but `git config KEY VALUE` writes, and telling them apart by
+     * operand count is the kind of judgement this predicate does not make. A
+     * write action next to a read one makes git refuse ("only one action at a
+     * time"), but it is refused here as well, including by unambiguous prefix
+     * (`--ad` is `--add`).
+     *
+     * @param list<string> $args
+     */
+    private function planGitConfigIsReadOnly(array $args): bool
+    {
+        $writes = ['--add', '--unset', '--unset-all', '--replace-all', '--rename-section', '--remove-section', '--edit'];
+        foreach ($args as $arg) {
+            if ($arg === '-e') {
+                return false;
+            }
+            if (str_starts_with($arg, '--') && strlen($arg) > 3) {
+                $option = explode('=', $arg, 2)[0];
+                foreach ($writes as $write) {
+                    if (str_starts_with($write, $option)) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        if ($args !== [] && in_array($args[0], ['get', 'list'], true)) {
+            return true;
+        }
+
+        return array_intersect(
+            $args,
+            ['--get', '--get-all', '--get-regexp', '--get-urlmatch', '--get-color', '--get-colorbool', '--list', '-l'],
+        ) !== [];
     }
 
     /**

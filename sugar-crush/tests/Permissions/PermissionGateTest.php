@@ -192,6 +192,143 @@ final class PermissionGateTest extends TestCase
     }
 
     /**
+     * Audit F-P2: Plan's `Bash` check was a three-regex deny list
+     * (`\s+>\s+`, `\s+>>\s+`, `|\s*tee`), so everything below except the first
+     * row ALLOWED under the mode a user picks to change nothing. Plan now
+     * allows only a provably read-only command line and denies the rest, so
+     * every row is Deny.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function planDeniedBashCommands(): iterable
+    {
+        // The audit's repro list.
+        yield 'spaced redirect' => ['echo x > f'];
+        yield 'redirect without space before target' => ['echo x >f'];
+        yield 'redirect with no spaces' => ['echo x>f'];
+        yield 'stderr redirect' => ['echo x 2> f'];
+        yield 'noclobber-override redirect' => ['cat a >| f'];
+        yield 'sed in place' => ['sed -i s/a/b/ src.php'];
+        yield 'git commit' => ['git commit -am wip'];
+        yield 'git force push' => ['git push --force'];
+        yield 'rm' => ['rm src/main.php'];
+        yield 'mv out of the tree' => ['mv src /tmp/'];
+        yield 'curl writing a file' => ['curl -o f http://x'];
+        yield 'cp over a file' => ['cp /dev/null README.md'];
+        yield 'interpreter writing a file' => ["python3 -c \"open('f','w')\""];
+        yield 'truncate' => ['truncate -s0 f'];
+        // Further spellings the allow-list has to refuse.
+        yield 'redirect to an absolute path' => ['echo x>/tmp/f'];
+        yield 'append redirect' => ['echo x>>f'];
+        yield 'both-streams redirect' => ['ls &> f'];
+        yield 'dup-style redirect to a file' => ['ls >& f'];
+        yield 'read-write open creates the file' => ['ls <>f'];
+        yield 'write hidden after a separator' => ['ls; rm x'];
+        yield 'write hidden on a second line' => ["ls\nrm x"];
+        yield 'tee in a pipeline' => ['cat a | tee b'];
+        yield 'command substitution' => ['git log $(rm x)'];
+        yield 'backtick substitution' => ['ls `rm x`'];
+        yield 'process substitution' => ['diff <(rm x) a'];
+        yield 'here-doc body is expanded by bash' => ["cat <<EOF\n\$(rm x)\nEOF"];
+        yield 'find -delete' => ['find . -delete'];
+        yield 'find -delete quoted' => ["find . '-delete'"];
+        yield 'find -delete via brace expansion' => ['find . {-delete,}'];
+        yield 'find -exec' => ['find . -exec rm {} \;'];
+        yield 'find -fprint' => ['find . -fprint out'];
+        yield 'unterminated quote' => ["echo 'oops"];
+        yield 'assignment then subscript evaluation' => ['echo ${x:=\$\(id\)} ${x@P}'];
+        yield 'arithmetic expansion' => ['echo $[1+1]'];
+        yield 'test -v evaluates a subscript' => ["[ -v 'a[\$(id)]' ]"];
+        yield 'printf -v evaluates a subscript' => ["printf -v 'a[\$(id)]' x"];
+        yield 'command word by path' => ['/bin/rm x'];
+        yield 'assignment prefix' => ['GIT_EXTERNAL_DIFF=./x git diff'];
+        yield 'command runner' => ['xargs rm < list'];
+        yield 'shell -c' => ["bash -c 'rm x'"];
+        yield 'env runner' => ['env rm x'];
+        yield 'eval' => ['eval rm x'];
+        yield 'git global -c' => ['git -c core.pager=./x log'];
+        yield 'git log --output' => ['git log --output=f'];
+        yield 'git log abbreviated --output' => ['git log --out=f'];
+        yield 'git grep opens a pager program' => ['git grep -O./x foo'];
+        yield 'git branch creates' => ['git branch topic'];
+        yield 'git branch deletes behind a defaulted filter' => ['git branch --contains -d topic'];
+        yield 'git tag creates' => ['git tag v1'];
+        yield 'git config writes' => ['git config user.name x'];
+        yield 'git config abbreviated --add' => ['git config --get a --ad b c'];
+        yield 'git remote add' => ['git remote add o https://x.example'];
+        yield 'git alias' => ['git st'];
+        yield 'sort -o' => ['sort -o out in'];
+        yield 'sort clustered -o' => ['sort -uo out in'];
+        yield 'uniq output operand' => ['uniq in out'];
+        yield 'rg --pre' => ['rg --pre ./x foo'];
+        yield 'tree -o' => ['tree -o out'];
+        yield 'file -C' => ['file -C -m x'];
+        yield 'date -s' => ['date -s 2020-01-01'];
+        yield 'network read redirect' => ['cat </dev/tcp/x.example/80'];
+        yield 'empty command' => [''];
+    }
+
+    #[DataProvider('planDeniedBashCommands')]
+    public function testPlanModeDeniesEveryBashCommandItCannotProveReadOnly(string $command): void
+    {
+        $gate = new PermissionGate(PermissionMode::Plan);
+
+        $this->assertSame(
+            PermissionDecision::Deny,
+            $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => $command])),
+            "plan mode must not run `{$command}`",
+        );
+    }
+
+    /**
+     * The other half of an allow-list: what it exists to let through. Each of
+     * these is the exploration Plan is for, and a policy that denied them would
+     * push the model to stop exploring rather than to explore safely.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function planAllowedBashCommands(): iterable
+    {
+        yield 'git log' => ['git log --oneline'];
+        yield 'git diff' => ['git diff HEAD~1'];
+        yield 'git status' => ['git status --short'];
+        yield 'git show with no-pager' => ['git --no-pager show HEAD'];
+        yield 'git branch listing' => ['git branch -a'];
+        yield 'git branch pattern in list mode' => ['git branch --list "feat*"'];
+        yield 'git tag listing' => ['git tag -l'];
+        yield 'git config read' => ['git config --get user.name'];
+        yield 'git remote listing' => ['git remote -v'];
+        yield 'recursive grep' => ['grep -rn foo src'];
+        yield 'ls' => ['ls -la'];
+        yield 'pipeline of readers' => ['cat a | grep b | wc -l'];
+        yield 'quoted glob for find' => ["find . -name '*.php'"];
+        yield 'glob for an argv-insensitive reader' => ['cat src/*.php'];
+        yield 'stderr discarded' => ['ls missing 2>/dev/null'];
+        yield 'stderr merged' => ['git status 2>&1'];
+        yield 'both streams discarded' => ['grep x a >/dev/null 2>&1'];
+        yield 'input redirect' => ['wc -l < a'];
+        yield 'list of readers' => ['cd src && ls; pwd'];
+        yield 'plain variable' => ['echo $HOME'];
+        yield 'sort without output' => ['sort -u a'];
+        yield 'uniq with one operand' => ['uniq a'];
+        yield 'rg' => ['rg -n foo src'];
+        yield 'date display' => ['date +%F'];
+        yield 'printf format' => ['printf "%s\n" x'];
+    }
+
+    #[DataProvider('planAllowedBashCommands')]
+    public function testPlanModeAllowsProvablyReadOnlyBash(string $command): void
+    {
+        $gate = new PermissionGate(PermissionMode::Plan);
+
+        $this->assertSame(
+            PermissionDecision::Allow,
+            $gate->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => $command])),
+            "plan mode should let `{$command}` explore",
+        );
+    }
+
+    /**
      * R3(c): MCP tools follow the real `mcp__<server>__<tool>` naming convention
      * (@see PermissionRule) — "McpTool" was never a real tool name and never matched.
      */

@@ -364,9 +364,9 @@ scoping, not your safety boundary: the main agent is not preset-scoped for
   permission gate, which see tool calls and never see `proc_open()`.
 
 Neither substitutes for the other. The bridge decision coincides with `Bash`'s
-in five of the six permission modes and diverges under `plan`, where `Bash` is
-allowed for exploration and every `mcp__*` name is denied as a write tool — i.e.
-in the conservative direction.
+in five of the six permission modes and diverges under `plan`, where a
+read-only `Bash` command is allowed for exploration and every `mcp__*` name is
+denied as a write tool — i.e. in the conservative direction.
 
 No `denyPatterns` are passed on this path, deliberately: `McpClient` consults
 them only through `router()`, which only the `AgentPreset` arm reaches, so they

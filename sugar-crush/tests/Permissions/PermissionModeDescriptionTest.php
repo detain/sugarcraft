@@ -35,11 +35,12 @@ use SugarCraft\Crush\ToolCall;
  *   `default` were `Read` and `Write`.
  * - `accept-edits` said "Everything else … asks", which literally covers reads,
  *   and reads ALLOW. Its rows never probed a read.
- * - `plan` said "every other write, is denied". A `Bash` write that does not
- *   redirect — `rm ./a`, `curl https://x.example` — ALLOWS, because
- *   {@see PermissionGate::evaluatePlan()} answers on the tool name before
- *   {@see PermissionGate::isWriteTool()} is consulted. Its rows probed a
- *   redirect and the Write tool, not a destructive `rm`.
+ * - `plan` said "every other write, is denied". A `Bash` write that did not
+ *   redirect — `rm ./a`, `curl https://x.example` — ALLOWED, because
+ *   {@see PermissionGate::evaluatePlan()} answered on the tool name before
+ *   {@see PermissionGate::isWriteTool()} was consulted. Its rows probed a
+ *   redirect and the Write tool, not a destructive `rm`. (Audit F-P2 later
+ *   fixed the POLICY: `plan` now denies those, and the `plan` row says so.)
  *
  * Sharper rows would not have fixed that, because the defect is not which rows
  * were chosen but that CHOOSING was possible. So the table below is TOTAL:
@@ -131,21 +132,21 @@ final class PermissionModeDescriptionTest extends TestCase
                 'Bash rm unscoped' => $K, 'Bash redirecting' => $K, 'Bash fetching' => $K,
                 'Bash into shell' => $K, 'MCP tool' => $K,
             ],
-            // "Reads run, and any shell command that does not redirect output
-            //  runs — a destructive `rm` and an outbound `curl` included, so
-            //  this is not a dry run. A shell command that redirects output is
-            //  denied, as is every write through Write, Edit or an MCP tool."
+            // "Reads run, and so does a shell command made only of known
+            //  read-only commands (`git log`, `grep`, `ls` …) with no output
+            //  redirection or substitution. Any other shell command is denied —
+            //  a destructive `rm` and an outbound `curl` included — as is every
+            //  write through Write, Edit or an MCP tool."
             //
-            // The `Bash rm scoped` / `Bash fetching` cells are the ones the old
-            // sentence contradicted, and `Bash into shell` is the third: `plan`
-            // runs a pipe-into-shell, because no SafetyClassifier is consulted
-            // outside `auto`.
+            // Every Bash cell but `Bash exploring` was ALLOW before audit F-P2
+            // (only the redirect was denied): `rm`, `mkdir`, `curl` and a
+            // pipe-into-shell all ran under the mode that promises no changes.
             'plan' => [
                 'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $A,
                 'WebSearch' => $K, 'Write tool' => $D, 'Edit tool' => $D,
-                'Bash exploring' => $A, 'Bash mkdir scoped' => $A, 'Bash rm scoped' => $A,
-                'Bash rm unscoped' => $A, 'Bash redirecting' => $D, 'Bash fetching' => $A,
-                'Bash into shell' => $A, 'MCP tool' => $D,
+                'Bash exploring' => $A, 'Bash mkdir scoped' => $D, 'Bash rm scoped' => $D,
+                'Bash rm unscoped' => $D, 'Bash redirecting' => $D, 'Bash fetching' => $D,
+                'Bash into shell' => $D, 'MCP tool' => $D,
             ],
             // "Everything runs unless the safety classifier objects. Blocked
             //  commands trip a circuit breaker that escalates to asking."
@@ -214,10 +215,11 @@ final class PermissionModeDescriptionTest extends TestCase
             ],
             'plan' => [
                 ['Reads run', 'Read'],
-                ['any shell command that does not redirect output runs', 'Bash exploring'],
+                ['made only of known read-only commands', 'Bash exploring'],
+                ['no output redirection', 'Bash redirecting'],
+                ['Any other shell command is denied', 'Bash into shell'],
                 ['a destructive `rm`', 'Bash rm scoped'],
                 ['an outbound `curl`', 'Bash fetching'],
-                ['redirects output is denied', 'Bash redirecting'],
                 ['every write through Write, Edit or an MCP tool', 'MCP tool'],
             ],
             'auto' => [
@@ -320,7 +322,7 @@ final class PermissionModeDescriptionTest extends TestCase
         return [
             'default' => 'Reads run silently',
             'accept-edits' => 'mkdir, touch, mv, cp, rm, rmdir',
-            'plan' => 'redirects output',
+            'plan' => 'known read-only commands',
             'auto' => 'circuit breaker',
             'dont-ask' => 'denied outright',
             'bypass-permissions' => 'gates nothing',

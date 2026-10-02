@@ -185,8 +185,9 @@ check is the failure mode with no upper bound on how wrong it can be.
 
 Only `Deny` refuses; an `Ask` proceeds, because settling one needs the blocking
 permission prompt. See [`PERMISSIONS.md`](PERMISSIONS.md) — and note that a bare
-`Bash` *declaration* is allowed even under `plan`, since what makes a `Bash`
-call a write there is a redirection in its arguments.
+`Bash` *declaration* is allowed even under `plan`, since `plan` judges each
+`Bash` call by its command — read-only commands run, everything else is denied
+— and a declaration has no command to judge.
 
 ---
 

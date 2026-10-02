@@ -29,7 +29,12 @@ namespace SugarCraft\Crush\Permissions;
  *   {@see $redirections}; here-doc bodies are skipped, not parsed as commands;
  * - recording every command / process substitution (`$(`, backtick, `<(`,
  *   `>(`) in {@see $substitutions}, its raw text kept inside the word it sits in;
- * - `#` comments at the start of a word.
+ * - `#` comments at the start of a word;
+ * - flagging, per word, whether bash may turn it into something OTHER than
+ *   its literal text ({@see $expandable}: an unquoted glob or brace
+ *   character, any `$` expansion, any substitution), and recording every
+ *   `${…}` / `$[…]` expansion in {@see $parameterExpansions} — the two facts a
+ *   fail-closed ALLOW check needs and quote removal throws away.
  *
  * What it deliberately does NOT do: any expansion. `~`, `$HOME`, `${HOME}`,
  * globs and substitutions stay literal in the words, because the deciding
@@ -68,6 +73,23 @@ final readonly class ShellWords
      *        source order: `$(`, `` ` ``, `<(` or `>(`.
      * @param list<string> $operators Every control operator in source order.
      * @param bool $complete See the class docblock.
+     * @param list<list<bool>> $expandable Parallel to {@see $commands}: TRUE
+     *        for a word bash may rewrite before the command sees it — it holds
+     *        an UNQUOTED `*`, `?`, `[` or `{` (pathname or brace expansion) or
+     *        any `$` expansion / substitution, quoted or not. Quote removal is
+     *        what makes this necessary: `find . '{-delete,}'` and
+     *        `find . {-delete,}` produce the same word here, and only the
+     *        second hands find a `-delete`. A caller that judges ARGUMENTS
+     *        (rather than only the command name) cannot judge a flagged word.
+     * @param list<string> $parameterExpansions The opener of every `${…}` and
+     *        `$[…]` in source order. Recorded separately from
+     *        {@see $substitutions} because they are not substitutions — and
+     *        yet they can run one: an array subscript or a substring offset is
+     *        evaluated ARITHMETICALLY, `${x@P}` is prompt-expanded, and both
+     *        execute a `$(…)` that sits inside a variable's VALUE, which
+     *        `${x:=…}` can assign on the same line. No text check can see a
+     *        substitution that only exists after an assignment, so a
+     *        fail-closed caller has to refuse the operator itself.
      */
     private function __construct(
         public array $commands,
@@ -75,6 +97,8 @@ final readonly class ShellWords
         public array $substitutions,
         public array $operators,
         public bool $complete,
+        public array $expandable = [],
+        public array $parameterExpansions = [],
     ) {
     }
 
@@ -91,9 +115,15 @@ final readonly class ShellWords
         $complete = true;
 
         $words = [];
+        $wordFlags = [];
+        $expandable = [];
+        $parameterExpansions = [];
         $hasRedirect = false;
         $current = '';
         $inWord = false;
+        // Whether bash may rewrite $current before the command sees it — see
+        // the $expandable constructor parameter.
+        $expands = false;
         // Whether any byte of $current came from quoting/escaping — a quoted
         // `'2'>f` is a word followed by `>f`, never an fd number.
         $quoted = false;
@@ -102,7 +132,7 @@ final readonly class ShellWords
         /** @var list<array{delimiter: string, stripTabs: bool}> $pendingHeredocs */
         $pendingHeredocs = [];
 
-        $endWord = static function () use (&$words, &$current, &$inWord, &$quoted, &$pendingRedirect, &$redirections, &$pendingHeredocs): void {
+        $endWord = static function () use (&$words, &$wordFlags, &$current, &$inWord, &$quoted, &$expands, &$pendingRedirect, &$redirections, &$pendingHeredocs): void {
             if (!$inWord) {
                 return;
             }
@@ -115,12 +145,14 @@ final readonly class ShellWords
                 $pendingRedirect = null;
             } else {
                 $words[] = $current;
+                $wordFlags[] = $expands;
             }
             $current = '';
             $inWord = false;
             $quoted = false;
+            $expands = false;
         };
-        $endCommand = static function () use (&$words, &$hasRedirect, &$commands, &$pendingRedirect, &$complete, $endWord): void {
+        $endCommand = static function () use (&$words, &$wordFlags, &$expandable, &$hasRedirect, &$commands, &$pendingRedirect, &$complete, $endWord): void {
             $endWord();
             if ($pendingRedirect !== null) {
                 // `echo >; ls` — bash: syntax error near unexpected token.
@@ -129,8 +161,10 @@ final readonly class ShellWords
             }
             if ($words !== [] || $hasRedirect) {
                 $commands[] = $words;
+                $expandable[] = $wordFlags;
             }
             $words = [];
+            $wordFlags = [];
             $hasRedirect = false;
         };
 
@@ -168,36 +202,35 @@ final readonly class ShellWords
             }
 
             if ($char === '"') {
-                $current .= self::readDoubleQuoted($line, $i, $substitutions, $complete);
+                $current .= self::readDoubleQuoted($line, $i, $substitutions, $complete, $expands, $parameterExpansions);
                 $inWord = true;
                 $quoted = true;
                 continue;
             }
 
             if ($char === '$') {
-                if ($next === "'") {
+                // bash removes `\<newline>` before it looks at what follows the
+                // `$`, so `$\⏎{x}` IS `${x}` and `$\⏎(cmd)` IS `$(cmd)`. Look
+                // past continuations, or the expansion reads as a literal `$`.
+                $at = self::skipContinuations($line, $i + 1);
+                $after = $line[$at] ?? '';
+                if ($after === "'") {
+                    $i = $at - 1;
                     $current .= self::readAnsiC($line, $i, $complete);
                     $inWord = true;
                     $quoted = true;
                     continue;
                 }
-                if ($next === '"') {
-                    ++$i; // `$"…"` is a translatable "…"
-                    $current .= self::readDoubleQuoted($line, $i, $substitutions, $complete);
+                if ($after === '"') {
+                    $i = $at; // `$"…"` is a translatable "…"
+                    $current .= self::readDoubleQuoted($line, $i, $substitutions, $complete, $expands, $parameterExpansions);
                     $inWord = true;
                     $quoted = true;
                     continue;
                 }
-                if ($next === '(' || $next === '{') {
-                    if ($next === '(') {
-                        $substitutions[] = '$(';
-                    }
-                    $start = $i;
-                    ++$i;
-                    if (!self::skipBalanced($line, $i)) {
-                        $complete = false;
-                    }
-                    $current .= substr($line, $start, $i - $start + 1);
+                $expands = true;
+                if ($after === '(' || $after === '{' || $after === '[') {
+                    $current .= '$' . self::readDollarGroup($line, $i, $at, $substitutions, $parameterExpansions, $complete);
                     $inWord = true;
                     continue;
                 }
@@ -214,6 +247,7 @@ final readonly class ShellWords
                 }
                 $current .= substr($line, $start, $i - $start + 1);
                 $inWord = true;
+                $expands = true;
                 continue;
             }
 
@@ -226,6 +260,7 @@ final readonly class ShellWords
                 }
                 $current .= substr($line, $start, $i - $start + 1);
                 $inWord = true;
+                $expands = true;
                 continue;
             }
 
@@ -280,6 +315,11 @@ final readonly class ShellWords
                 continue;
             }
 
+            if ($char === '*' || $char === '?' || $char === '[' || $char === '{') {
+                // Unquoted, so bash may glob or brace-expand this word: the
+                // literal text is no longer what the command receives.
+                $expands = true;
+            }
             $current .= $char;
             $inWord = true;
         }
@@ -290,7 +330,90 @@ final readonly class ShellWords
             $complete = false;
         }
 
-        return new self($commands, $redirections, $substitutions, $operators, $complete);
+        return new self($commands, $redirections, $substitutions, $operators, $complete, $expandable, $parameterExpansions);
+    }
+
+    /**
+     * The index of the first byte at or after `$i` that is not part of a
+     * `\<newline>` line continuation.
+     */
+    private static function skipContinuations(string $line, int $i): int
+    {
+        while (($line[$i] ?? '') === '\\' && ($line[$i + 1] ?? '') === "\n") {
+            $i += 2;
+        }
+
+        return $i;
+    }
+
+    /**
+     * `$i` sits on a `$` whose group opener — `(`, `{` or `[` — is at `$at`
+     * (past any continuations). Skips the balanced group, records it, and
+     * returns its text from the opener on, leaving `$i` on the closer (or the
+     * last byte).
+     *
+     * A `$(` is a substitution. A `${` or `$[` is a parameter / arithmetic
+     * expansion, recorded in {@see $parameterExpansions}; a substitution
+     * NESTED inside one (`${x:-$(cmd)}`, a backtick in a default) runs as
+     * surely as a bare one, so it is recorded in {@see $substitutions} too —
+     * before this a `$(` inside `${…}` was skipped with the braces and a
+     * consumer of {@see $substitutions} never saw it.
+     *
+     * @param list<string> $substitutions
+     * @param list<string> $parameterExpansions
+     */
+    private static function readDollarGroup(
+        string $line,
+        int &$i,
+        int $at,
+        array &$substitutions,
+        array &$parameterExpansions,
+        bool &$complete,
+    ): string {
+        $opener = $line[$at];
+        $i = $at;
+        if ($opener === '(') {
+            $substitutions[] = '$(';
+        } else {
+            $parameterExpansions[] = '$' . $opener;
+        }
+        $balanced = $opener === '['
+            ? self::skipBracket($line, $i)
+            : self::skipBalanced($line, $i);
+        if (!$balanced) {
+            $complete = false;
+        }
+        $group = substr($line, $at, $i - $at + 1);
+        if ($opener !== '(') {
+            $body = str_replace("\\\n", '', $group);
+            if (str_contains($body, '$(')) {
+                $substitutions[] = '$(';
+            }
+            if (str_contains($body, '`')) {
+                $substitutions[] = '`';
+            }
+        }
+
+        return $group;
+    }
+
+    /**
+     * `$i` sits on the `[` of a `$[…]`; advance it to the matching `]`.
+     */
+    private static function skipBracket(string $line, int &$i): bool
+    {
+        $length = strlen($line);
+        $depth = 0;
+        for (; $i < $length; ++$i) {
+            if ($line[$i] === '[') {
+                ++$depth;
+            } elseif ($line[$i] === ']' && --$depth === 0) {
+                return true;
+            }
+        }
+        $i = $length - 1;
+
+        return false;
     }
 
     /**
@@ -298,10 +421,20 @@ final readonly class ShellWords
      * end). Inside double quotes a backslash only escapes `$`, backtick, `"`,
      * `\` and newline — any other backslash is a literal byte, as in bash.
      *
+     * `$expands` is raised for any `$` expansion or backtick inside — quoted
+     * text is still expanded, just not split or globbed.
+     *
      * @param list<string> $substitutions
+     * @param list<string> $parameterExpansions
      */
-    private static function readDoubleQuoted(string $line, int &$i, array &$substitutions, bool &$complete): string
-    {
+    private static function readDoubleQuoted(
+        string $line,
+        int &$i,
+        array &$substitutions,
+        bool &$complete,
+        bool &$expands,
+        array &$parameterExpansions,
+    ): string {
         $length = strlen($line);
         $out = '';
         for (++$i; $i < $length; ++$i) {
@@ -323,19 +456,19 @@ final readonly class ShellWords
                 $out .= $char;
                 continue;
             }
-            if ($char === '$' && (($line[$i + 1] ?? '') === '(' || ($line[$i + 1] ?? '') === '{')) {
-                if ($line[$i + 1] === '(') {
-                    $substitutions[] = '$(';
+            if ($char === '$') {
+                $expands = true;
+                $at = self::skipContinuations($line, $i + 1);
+                $after = $line[$at] ?? '';
+                if ($after === '(' || $after === '{' || $after === '[') {
+                    $out .= '$' . self::readDollarGroup($line, $i, $at, $substitutions, $parameterExpansions, $complete);
+                    continue;
                 }
-                $start = $i;
-                ++$i;
-                if (!self::skipBalanced($line, $i)) {
-                    $complete = false;
-                }
-                $out .= substr($line, $start, $i - $start + 1);
+                $out .= $char;
                 continue;
             }
             if ($char === '`') {
+                $expands = true;
                 $substitutions[] = '`';
                 $start = $i;
                 if (!self::skipBacktick($line, $i)) {

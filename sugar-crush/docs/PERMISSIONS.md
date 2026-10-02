@@ -76,7 +76,7 @@ under `dont-ask`.
 |---|---|---|---|
 | `default` | Allow | Ask | Ask |
 | `accept-edits` | Allow | scoped filesystem writes Allow; the rest Ask | Ask |
-| `plan` | Allow | `Bash` Allow unless it redirects, then Deny; `Edit`/`Write`/`mcp__*` Deny | Ask |
+| `plan` | Allow | `Bash` Allow only when every command in it is a known read-only one (no file redirection, no substitution), otherwise Deny; `Edit`/`Write`/`mcp__*` Deny | Ask |
 | `auto` | gated by `SafetyClassifier`, with a 3-strike / 20-total circuit breaker | as classified | as classified |
 | `dont-ask` | Allow | Deny | Deny |
 | `bypass-permissions` | Allow | Allow | Allow |
@@ -135,12 +135,73 @@ a pattern — so `./.*/` stays literal. Under `sh`/dash the same pattern expands
 the `Bash` tool spawns its shell has to add `*`/`?`/`[` to the refused set at the
 same time; there is a test that fails if the wrapper changes.
 
-`plan` deliberately allows exploratory `Bash`. Whether a `Bash` call is a write
-under `plan` is decided by looking for a redirection or `tee` in its arguments
-(`isBashWriteCommand()`), so `git log` is allowed and `echo x > f` is denied.
+`plan` allows exploratory `Bash` **only when it can prove the command line is
+read-only**, and denies everything else — including a line it cannot parse.
+This is an allow-list, on purpose (`PermissionGate::isPlanReadOnlyBash()`,
+audit F-P2). Until then `plan` ran every `Bash` call that three regexes did not
+flag as a redirect: `echo x > f` was denied, but `echo x>f`, `echo x 2> f`,
+`cat a >| f`, `sed -i …`, `rm src/main.php`, `git commit -am wip`,
+`git push --force`, `curl -o f …` and `python3 -c "open('f','w')"` all **ran**.
+
+A `Bash` call is allowed under `plan` when, after quote-aware tokenising
+(`Permissions\ShellWords`), **all** of these hold:
+
+- it parses completely (an unterminated quote, substitution or here-doc is
+  denied);
+- it contains no command or process substitution — `$(…)`, backticks, `<(…)`,
+  `>(…)` — and no `${…}` / `$[…]` expansion (bash evaluates subscripts and
+  `${x@P}` in ways that run a `$(…)` hidden in a variable's value; plain
+  `$NAME` is fine);
+- every redirection is harmless: an fd duplication (`2>&1`), an output
+  redirection onto `/dev/null`, `/dev/stdout` or `/dev/stderr`, an input
+  redirection (`< file`, except bash's `/dev/tcp/…`), or a here-string. Any
+  output redirection onto a file is denied **in every spacing and form**
+  (`>f`, `2> f`, `>|`, `&>`, `>>`); `<>` and here-docs are denied;
+- every command in every pipeline and list (`|`, `&&`, `;`, newline) is on the
+  read-only list, named literally — not by path (`/bin/cat`), not behind a
+  `NAME=value` prefix:
+  - any arguments: `cat`, `head`, `tail`, `ls`, `grep`/`egrep`/`fgrep`, `wc`,
+    `cut`, `tr`, `nl`, `diff`, `cmp`, `comm`, `stat`, `du`, `df`, `basename`,
+    `dirname`, `realpath`, `readlink`, `echo`, `pwd`, `cd`, `which`, `type`,
+    `whereis`, `uname`, `id`, `whoami`, `true`, `false`, `jq`;
+  - with the writing/executing arguments refused: `find` (no `-delete`,
+    `-exec`, `-execdir`, `-ok`, `-okdir`, `-fprint*`, `-fls`), `sort` (no `-o`,
+    `-T`, `--compress-program`), `uniq` (at most one operand — a second is the
+    output file), `rg` (no `--pre`, `--hostname-bin`), `tree` (no `-o`, `-R`),
+    `file` (no `-C`), `date` (display forms only), `printf` (no `-v`), and `git`
+    limited to `status`, `log`, `show`, `diff`, `blame`, `shortlog`,
+    `rev-parse`, `rev-list`, `ls-files`, `ls-tree`, `describe`, `cat-file`,
+    `grep` (no `--output`, no `grep -O`), listing-only `branch`/`tag`,
+    `remote [-v|get-url|show]`, and `config` with a read action (`--get`,
+    `--list`, `get`, `list`). Global `git` options other than `--no-pager` are
+    denied (`git -c core.pager=… log` runs a program). For these checked
+    commands a word bash may still rewrite — an unquoted glob or brace, a
+    `$VAR` — is denied, because `find . {-delete,}` hands `find` a `-delete`
+    that no literal word shows; quote the pattern (`find . -name '*.php'`).
+
+So `git log --oneline`, `grep -rn foo src`, `cat a | grep b | wc -l`,
+`find . -name '*.php'` and `ls 2>/dev/null` run, and `ls; rm x`,
+`cat a | tee b`, `git log $(rm x)`, `find . -delete` and `echo x>/tmp/f` are
+denied. Deliberately **not** on the list: interpreters and editors (`sed`,
+`awk`, `perl`, `python`, `php`, `node`), anything that runs another command
+(`xargs`, `env`, `sudo`, `timeout`, `nohup`, `bash -c`, `eval`, `exec`,
+`source`), `test`/`[` (`[ -v 'a[$(cmd)]' ]` runs `cmd`), pagers, `tee`, `xxd`,
+`curl`/`wget`. A command missing from the list costs one denied step — the
+model still has `Read`, `Grep` and `Glob`.
+
+Two honest limits. A read is still a read: `cat ~/.ssh/id_rsa` is allowed under
+`plan` exactly as `Read` on that path would be — `plan` withholds writes, not
+visibility, and secret files are `ProtectFilesHook`'s job. And `git` honours
+the repository's own `.git/config`, which can name a program
+(`core.fsmonitor`, `core.pager`, a diff driver); `plan` trusts a checkout's git
+config the way running `git` in it by hand does. Note also that rules are
+evaluated **before** the mode: an explicit allow rule such as
+`Allow Bash(git *)` overrides `plan`, so `git push --force` runs under it.
+
 A `Bash` **declaration** — a name with no arguments, which is what a workflow
-stage's `tools:` list is — carries nothing to redirect and is therefore allowed
-under `plan` too.
+stage's `tools:` list is — is still allowed under `plan`: it has no command to
+judge, and each real call is judged when it arrives. A real call with no
+`command` at all is denied.
 
 ### `auto`'s circuit breaker
 
@@ -178,31 +239,67 @@ index — `permissionRules[2] ('Write') has no valid 'action' … rule skipped
 rather than coerced`. A `permissionRules` key that is not a list at all loads
 zero rules and says so.
 
-### Pattern matching is name-only — measured
+### Pattern matching: a tool name, plus an optional argument glob
 
-`ruleMatches()` compares the pattern against `ToolCall::$name`:
+A pattern is `Tool` or `Tool(argument-glob)`, and both halves are `fnmatch()`
+(`PermissionRule::matches()`): `Bash*` is a prefix match, `mcp__*__push`
+works, and the argument half is matched against the tool's **subject**
+argument (`PermissionRule::SUBJECT_ARGUMENTS`) — `command` for `Bash`,
+`file_path` / `path` for the file tools, `url` for `WebFetch`, `query` for
+`WebSearch`, `name` for `Skill`. Measured on this tree, `bypass-permissions`
+mode, `Bash{command: "rm -rf build"}`:
 
-- a pattern ending in `*` is a **prefix** match on the name;
-- anything else is an **exact** match on the name.
-
-Nothing looks at the call's arguments. `PermissionRule`'s own doc-comment offers
-`Bash(composer update *)` and `Read(./.env)` as examples, and
-`PermissionGate::refuses()` says argument-sensitive rules are "left to the call
-site that has them" — but the call site uses the same `ruleMatches()`. Measured
-on this tree, `bypass-permissions` mode, `Bash{command: "rm -rf build"}`:
-
-| rule pattern | decision |
+| rule | decision |
 |---|---|
-| `Bash(rm *)` | **Allow** — the rule never matched |
-| `Bash` | Deny |
-| `Bash*` | Deny |
+| `Deny Bash(rm *)` | Deny |
+| `Deny Bash` | Deny |
+| `Deny Bash*` | Deny |
 | *(no rules)* with `command: "rm -rf /"` | Deny (step 0, the breaker) |
 
-So write rules against tool names: `Bash`, `Edit`, `Write`, `Read`, `Grep`,
-`Glob`, `WebFetch`, `WebSearch`, `Lsp`, `Skill`, `doctor`, and
-`mcp__<server>__<tool>` for bridges (`mcp__git__*` works, and is the one
-example in the doc-comment that does). To constrain a *command*, use a hook
-matcher instead — see [`HOOKS.md`](HOOKS.md).
+(This section used to be titled "Pattern matching is name-only" and to show
+`Bash(rm *)` → **Allow**. That was true while the only matcher compared the tool
+name; argument-scoped patterns have matched since the matcher moved into
+`PermissionRule`, and the old table no longer describes the code.)
+
+How the argument half is matched:
+
+- **Shell subjects** (`Bash`) are split on `;`, `&`, `|` and newline. A
+  restrictive rule (`deny`, `ask`) fires when the whole command **or any
+  segment** matches; a permissive one (`allow`) fires only when **every**
+  segment matches. So `Deny Bash(rm *)` catches `echo hi && rm -rf build`, and
+  `Allow Bash(git *)` does **not** grant `git log && rm x` (measured: Deny under
+  `dont-ask`).
+- **Path subjects** are normalised lexically on both sides — `./`, `//`, `.`
+  and `..` segments — so `Deny Read(./.env)` also covers `.env` and
+  `./foo/../.env`, and a relative restrictive pattern matches at any depth
+  (`/home/you/proj/.env`).
+
+Its limits, stated because each one is real:
+
+- **Every argument-scoped deny is advisory.** It matches a *spelling*, and a
+  command has spellings no glob enumerates: `Deny Bash(rm *)` does not catch
+  `/bin/rm -rf build` (measured: Allow), `$(echo rm) -rf build`,
+  `bash -c 'rm -rf build'` or `find build -delete`; a path deny does not
+  survive a symlink. Treat it as a guard rail against an accident.
+- **An argument-scoped `allow` grants more than it reads as** (audit F-P5,
+  not yet fixed). The split is on separators only, so a command substitution,
+  a backtick or a redirection stays inside the one segment the glob matches.
+  Measured under `dont-ask` with `Allow Bash(git *)`: `git log $(id)`,
+  ``git log `id` `` and `git log > /home/u/.bashrc` are all **Allow**. Until
+  that is closed, write a `Bash(...)` allow rule as if it granted the whole
+  command line after its prefix.
+- Rules are evaluated **before** the mode, so an `allow` rule overrides even
+  `plan`'s read-only `Bash` check (`Allow Bash(git *)` lets `git push --force`
+  run under `plan`).
+- An argument-scoped rule does not refuse a **declaration** (a workflow stage's
+  `tools: [Bash]`), only a real call — one `Deny Bash(rm *)` should not make
+  every stage that declares `Bash` unusable.
+
+The tool names a pattern can start with: `Bash`, `Edit`, `Write`, `Read`,
+`Grep`, `Glob`, `WebFetch`, `WebSearch`, `Lsp`, `Skill`, `doctor`, and
+`mcp__<server>__<tool>` for bridges (`mcp__git__*`). To constrain a command
+beyond what a glob can say, use a hook matcher instead — see
+[`HOOKS.md`](HOOKS.md).
 
 **`doctor` is lower-case**, and this list said `Doctor` — not a typo without a
 consequence. Matching is `fnmatch()`, which is case-sensitive, so a rule copied

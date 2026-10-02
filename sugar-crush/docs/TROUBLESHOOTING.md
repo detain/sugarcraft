@@ -183,11 +183,15 @@ TUI's own thread, so every second of one is a second the terminal is frozen.
 
 ## A permission rule has no effect
 
-Almost always because the pattern is argument-shaped. `ruleMatches()` compares
-the pattern to the tool **name**: exact, or prefix if it ends in `*`. Measured:
-`Bash(rm *)` against `Bash{command: "rm -rf build"}` → **Allow**, the rule never
-matched; `Bash` and `Bash*` → Deny. See
-[`PERMISSIONS.md`](PERMISSIONS.md#pattern-matching-is-name-only--measured).
+Argument-scoped patterns do match — `Deny Bash(rm *)` against
+`Bash{command: "rm -rf build"}` is **Deny** — but they match a *spelling*, and
+the usual reasons one seems to do nothing are: a different spelling of the same
+command (`/bin/rm -rf build` is not `rm *`); a case mismatch in the tool name
+(`fnmatch()` is case-sensitive — `doctor`, not `Doctor`); an `allow` rule whose
+pattern spans a shell separator (`Allow Bash(cd x && make)` never fires — every
+segment must match on its own); or an earlier rule that matched first (first
+match wins). See
+[`PERMISSIONS.md`](PERMISSIONS.md#pattern-matching-a-tool-name-plus-an-optional-argument-glob).
 
 A malformed entry is skipped **item-wise** and reported with its index —
 `permissionRules[2] ('Write') has no valid 'action' … rule skipped rather than

@@ -39,9 +39,10 @@ final class PermissionGateDeclarationTest extends TestCase
      * table is auditable in a way a paragraph is not: `auto` refuses NOTHING
      * (its judgement is SafetyClassifier's, which reads the command out of the
      * arguments a declaration does not have), and `plan` does not refuse `Bash`
-     * (what makes a Bash call a write under Plan is a redirection in its
-     * arguments). Both are documented on refuses(); this pins them so a change
-     * to either has to change this table too.
+     * (Plan allows a Bash call whose command is provably read-only and denies
+     * every other — audit F-P2 — so the verdict is in arguments a declaration
+     * does not have). Both are documented on refuses(); this pins them so a
+     * change to either has to change this table too.
      *
      * @return iterable<string, array{PermissionMode, string, bool}>
      */
@@ -274,6 +275,15 @@ final class PermissionGateDeclarationTest extends TestCase
      * itself rather than from the table, so the two tests fail for different
      * reasons — the table catches a policy change, this one catches a drift
      * between the two paths that the table would still satisfy.
+     *
+     * ONE PAIR IS ARGUMENT-DEPENDENT, and it is named rather than hidden: under
+     * `plan`, `evaluate()` DENIES a Bash call with no command (nothing about it
+     * is provably read-only — audit F-P2 made Plan's Bash fail closed) while
+     * `refuses()` does not refuse the Bash DECLARATION, whose command is
+     * unknowable rather than absent. That is the same absent-vs-unknowable
+     * distinction {@see PermissionRule::matches()} draws. For that pair the
+     * test asserts the property that actually matters instead: some real call
+     * under that declaration is allowed, so refusing it would be wrong.
      */
     #[\PHPUnit\Framework\Attributes\DataProvider('declarationMatrix')]
     public function testRefusesAgreesWithEvaluateOnTheSameDeclaration(
@@ -283,6 +293,18 @@ final class PermissionGateDeclarationTest extends TestCase
     ): void {
         $evaluating = new PermissionGate($mode, [], new SafetyClassifier());
         $refusing = new PermissionGate($mode, [], new SafetyClassifier());
+
+        if ($mode === PermissionMode::Plan && $tool === 'Bash') {
+            $this->assertFalse($refusing->refuses(new ToolDeclaration($tool)));
+            $this->assertSame(PermissionDecision::Deny, $evaluating->evaluate(new ToolCall($tool)));
+            $this->assertSame(
+                PermissionDecision::Allow,
+                $evaluating->evaluate(new ToolCall($tool, ['command' => 'git log --oneline'])),
+                'plan does not refuse a Bash declaration because a read-only Bash call is allowed — and it was not',
+            );
+
+            return;
+        }
 
         $this->assertSame(
             $evaluating->evaluate(new ToolCall($tool)) === PermissionDecision::Deny,

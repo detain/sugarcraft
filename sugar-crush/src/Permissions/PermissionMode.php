@@ -39,8 +39,8 @@ enum PermissionMode: string
      * Each sentence is written against the evaluator that enforces it —
      * {@see PermissionGate::evaluateDefault()} and its five siblings — not
      * against the class doc-block, which was measured overstating `Plan` as
-     * "all writes Deny" when a non-redirecting `Bash` has always been allowed
-     * there.
+     * "all writes Deny" when a non-redirecting `Bash` was allowed there (it no
+     * longer is — see the `Plan` arm).
      *
      * THREE OF THESE SIX SHIPPED FALSE, and they were found by re-measuring
      * every clause rather than by re-reading them — `default` on networking,
@@ -86,19 +86,23 @@ enum PermissionMode: string
             self::AcceptEdits => 'Reads run. Shell filesystem commands (mkdir, touch, mv, cp, rm, rmdir) '
                 . 'on paths below the working directory also run without asking, and the same command on a '
                 . 'path outside it asks. Everything else — the Write and Edit tools included — asks.',
-            // MEASURED, and this one over-claimed in the direction that matters
-            // most: "every other write is denied" is false for a Bash write.
-            // evaluatePlan() answers on the TOOL NAME — `Bash` is handled ahead
-            // of isWriteTool(), and the only Bash it denies is one that
-            // redirects. So `rm ./a` and `curl https://x.example` both ALLOW
-            // under `plan`, and a user reading this screen to decide whether it
-            // is safe to let a model loose was being told the opposite. Plan
-            // stops edits LANDING THROUGH A TOOL; it is not a dry run, and the
-            // sentence now says so where that user reads it.
-            self::Plan => 'Reads run, and any shell command that does not redirect output runs — a '
-                . 'destructive `rm` and an outbound `curl` included, so this is not a dry run. A shell '
-                . 'command that redirects output is denied, as is every write through Write, Edit or an '
-                . 'MCP tool.',
+            // MEASURED, twice. The first sentence here said "every other write
+            // is denied", which was false for a Bash write: evaluatePlan() then
+            // allowed every Bash call a three-regex redirect check missed, so
+            // `rm ./a` and `curl https://x.example` both ran. The second
+            // sentence told the truth about that — "any shell command that does
+            // not redirect output runs … this is not a dry run" — and the truth
+            // was the defect (audit F-P2): `sed -i`, `git push --force` and
+            // `echo x>f` ran unprompted in the mode a user picks to change
+            // nothing. The POLICY was fixed rather than the sentence this time:
+            // Plan now runs a shell command only when every command in it is on
+            // PermissionGate's read-only allow-list, and denies the rest. The
+            // `rm` and `curl` clauses stay because they are the two a user
+            // would most reasonably wonder about.
+            self::Plan => 'Reads run, and so does a shell command made only of known read-only commands '
+                . '(`git log`, `grep`, `ls` …) with no output redirection or substitution. Any other shell '
+                . 'command is denied — a destructive `rm` and an outbound `curl` included — as is every write '
+                . 'through Write, Edit or an MCP tool.',
             self::Auto => 'Everything runs unless the safety classifier objects. Blocked commands '
                 . 'trip a circuit breaker that escalates to asking.',
             self::DontAsk => 'Read-only tools run. Everything else is denied outright rather than '

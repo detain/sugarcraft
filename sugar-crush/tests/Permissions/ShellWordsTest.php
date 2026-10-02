@@ -190,6 +190,59 @@ final class ShellWordsTest extends TestCase
         $this->assertSame([['rm', '-rf /']], ShellWords::parse("rm '-rf /")->commands);
     }
 
+    /**
+     * Quote removal makes `'{-delete,}'` and `{-delete,}` the same word, and
+     * only the unquoted one is brace-expanded into a `-delete` flag — so the
+     * expandability of each word is recorded beside it (audit F-P2).
+     */
+    public function testExpandableFlagsEachWordBashMayRewrite(): void
+    {
+        $parsed = ShellWords::parse(
+            "find . {-delete,} '{-delete,}' *.php '*.php' \$X \"\$X\" '\$X' \$'\\x41' a`b` \$(c) <(d) ~",
+        );
+
+        $this->assertSame(
+            [[false, false, true, false, true, false, true, true, false, false, true, true, true, false]],
+            $parsed->expandable,
+        );
+    }
+
+    public function testExpandableStaysParallelToCommandsAcrossRedirectsAndOperators(): void
+    {
+        $parsed = ShellWords::parse('ls *.c 2>/dev/null | wc -l; > f');
+
+        $this->assertSame([['ls', '*.c'], ['wc', '-l'], []], $parsed->commands);
+        $this->assertSame([[false, true], [false, false], []], $parsed->expandable);
+    }
+
+    /**
+     * `${…}` and `$[…]` can evaluate arithmetic and prompt strings, both of
+     * which run a substitution hidden in a variable's value; they are recorded
+     * so a fail-closed caller can refuse them. A `$(` nested inside one runs
+     * as surely as a bare one and must be recorded as a substitution — it used
+     * to be skipped along with the braces.
+     */
+    public function testParameterExpansionsAreRecordedWithTheirNestedSubstitutions(): void
+    {
+        $plain = ShellWords::parse('echo ${HOME} "$[1+1]"');
+        $this->assertSame(['${', '$['], $plain->parameterExpansions);
+        $this->assertFalse($plain->hasSubstitution());
+
+        $nested = ShellWords::parse('echo ${x:-$(rm x)} "${y:-`rm y`}"');
+        $this->assertSame(['$(', '`'], $nested->substitutions);
+    }
+
+    /**
+     * bash removes `\<newline>` before it reads what follows a `$`, so a
+     * continuation cannot hide an expansion or a substitution from the parse.
+     */
+    public function testLineContinuationAfterDollarDoesNotHideAnExpansion(): void
+    {
+        $this->assertSame(['${'], ShellWords::parse("echo \$\\\n{x:=1}")->parameterExpansions);
+        $this->assertSame(['$('], ShellWords::parse("echo \"\$\\\n(rm x)\"")->substitutions);
+        $this->assertSame([['echo', '${x}']], ShellWords::parse("echo \$\\\n{x}")->commands);
+    }
+
     public function testDequotedRejoinsOneCommandPerLine(): void
     {
         $this->assertSame(
