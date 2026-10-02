@@ -73,6 +73,11 @@ use Psr\Http\Client\NetworkExceptionInterface;
  *   - A {@see TransferException} carrying no response — a read that died
  *     mid-body ("Unable to read from stream"), which is what a dropped
  *     connection looks like on the stream transport.
+ *   - A {@see ProviderStreamException} whose own `$transient` verdict is
+ *     true — a failure reported INSIDE a 200 SSE stream, where no HTTP status
+ *     exists to classify. Its factory decides the verdict (an in-band error
+ *     code goes through {@see statusIsTransient()}, so 5xx/408/429 retry and
+ *     a 400 context-length overflow does not); this class only reads it.
  *
  * Explicitly NOT transient: any other 4xx (401/403 auth, 400 malformed,
  * 404, 413/422 context-length overflow), `\InvalidArgumentException` from a
@@ -206,6 +211,13 @@ final class TransientFailure
                 break;
             }
             $seen[$key] = true;
+
+            // An in-stream failure carries its verdict explicitly, because the
+            // only HTTP status in play was the stream's 200 - see that class.
+            // Definitive, like a status: it stops the walk.
+            if ($link instanceof ProviderStreamException) {
+                return $link->transient;
+            }
 
             $status = self::statusCode($link);
             if ($status !== null) {
@@ -428,8 +440,11 @@ final class TransientFailure
      * method is that the REST of 4xx is permanent: 401/403 will not fix
      * themselves, 400 and 422 mean the request is wrong, and a
      * context-length overflow retried three times overflows three times.
+     *
+     * Public so {@see ProviderStreamException::fromErrorEvent()} judges a
+     * server's in-band error code by this same rule instead of a copy of it.
      */
-    private static function statusIsTransient(int $status): bool
+    public static function statusIsTransient(int $status): bool
     {
         return $status >= 500 || $status === 408 || $status === 429;
     }

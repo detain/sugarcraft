@@ -56,8 +56,9 @@ final readonly class SglangProvider implements ProviderInterface
      * are one short sentence, so this only exists to stop a pathological
      * server that echoes a whole request into `message` from walling the
      * Chat pane - the exact readability failure this extraction fixes.
+     * Aliased so an in-stream error frame (audit A2) is clipped identically.
      */
-    private const ERROR_MESSAGE_DISPLAY_LIMIT = 2000;
+    private const ERROR_MESSAGE_DISPLAY_LIMIT = ProviderStreamException::MESSAGE_DISPLAY_LIMIT;
 
     /**
      * §Q7 (qwen.md; E-32): the `finish_reason` values that mean "this
@@ -768,6 +769,19 @@ final readonly class SglangProvider implements ProviderInterface
 
                     if (str_starts_with($line, 'data: ')) {
                         $data = json_decode(substr($line, 6), true);
+                        // Audit 15a A2: an error raised after the 200 went out
+                        // (context overflow, abort, OOM) arrives as an SSE
+                        // frame, not a status. It matches neither branch
+                        // below, so it used to be dropped and the turn ended
+                        // as a "success" holding whatever had streamed. Stop
+                        // reading and throw - this provider's convention -
+                        // with a verdict TransientFailure reads directly.
+                        $streamError = ProviderStreamException::fromErrorEvent($data, 'SGLANG request failed: ');
+                        if ($streamError !== null) {
+                            $stream->close();
+
+                            throw $streamError;
+                        }
                         // §Q7: read on EVERY decoded frame, before the delta
                         // gate - a finish frame the delta branch skips (no
                         // `delta` key at all) still has to be seen, or a

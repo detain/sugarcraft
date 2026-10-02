@@ -298,6 +298,26 @@ final readonly class CustomProvider implements ProviderInterface
                             // around) it reach the fold.
                             continue;
                         }
+                        // Audit 15a A2: an error raised after the 200 went out
+                        // (context overflow, abort, OOM) arrives as an SSE
+                        // frame and matched neither branch below, so the turn
+                        // used to end as a "success". Report it the way this
+                        // provider reports every failure - one isError chunk
+                        // - and stop reading; Runtime retries it only when
+                        // transient and nothing was emitted yet, else throws.
+                        $streamError = ProviderStreamException::fromErrorEvent($data);
+                        if ($streamError !== null) {
+                            $stream->close();
+
+                            yield new CompleteResponse(
+                                content: '',
+                                isError: true,
+                                errorMessage: $streamError->getMessage(),
+                                errorTransient: TransientFailure::isTransient($streamError),
+                            );
+
+                            return;
+                        }
                         // E707 (round 81): read the stop value BEFORE the
                         // delta gate - the Sglang law that a truncating end
                         // can arrive on a frame carrying no content of its

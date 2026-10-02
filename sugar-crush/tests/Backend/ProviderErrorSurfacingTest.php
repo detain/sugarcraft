@@ -15,6 +15,8 @@ use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\CustomProvider;
 use SugarCraft\Crush\Providers\ProviderResponseException;
+use SugarCraft\Crush\Providers\ProviderStreamException;
+use SugarCraft\Crush\Providers\SglangProvider;
 use SugarCraft\Crush\Providers\TransientFailure;
 use SugarCraft\Crush\Providers\VertexProvider;
 
@@ -122,6 +124,104 @@ final class ProviderErrorSurfacingTest extends TestCase
         $this->expectExceptionMessage('bad key for project');
 
         EngineBackend::new($provider, 'claude-3-sonnet@20240229')->withoutHooks()->complete([Message::user('hi')]);
+    }
+
+    private const OVERFLOW = "The input (1100000 tokens) is longer than the model's context length";
+
+    /**
+     * A 200 SSE stream that fails mid-way (audit 15a A2): text, then the
+     * server's in-band error frame, then `[DONE]`.
+     */
+    private static function erroringStream(int $code, string $before = 'Hel'): Response
+    {
+        $error = json_encode(['error' => ['message' => self::OVERFLOW, 'code' => $code]], JSON_THROW_ON_ERROR);
+
+        return new Response(
+            200,
+            ['Content-Type' => 'text/event-stream'],
+            'data: {"choices":[{"index":0,"delta":{"content":"' . $before . '"}}]}' . "\n\n"
+                . 'data: ' . $error . "\n\n"
+                . 'data: [DONE]' . "\n\n",
+        );
+    }
+
+    private static function okStream(string $text): Response
+    {
+        return new Response(
+            200,
+            ['Content-Type' => 'text/event-stream'],
+            'data: {"choices":[{"index":0,"delta":{"content":"' . $text . '"}}]}' . "\n\n"
+                . 'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}' . "\n\n"
+                . 'data: [DONE]' . "\n\n",
+        );
+    }
+
+    /** @param list<Response> $responses */
+    private static function mockClient(array $responses, ?MockHandler &$mock = null): Client
+    {
+        $mock = new MockHandler($responses);
+
+        return new Client(['handler' => HandlerStack::create($mock), 'base_uri' => 'http://provider.invalid/']);
+    }
+
+    /**
+     * Audit 15a A2, SGLang: a context-overflow error frame inside a 200
+     * stream used to come back as the reply "Hel". It must surface the
+     * server's text, and - being a 400 - must not be retried.
+     */
+    public function testASglangInStreamErrorFrameSurfacesTheServerMessage(): void
+    {
+        $mock = null;
+        $client = self::mockClient(array_fill(0, 3, self::erroringStream(400)), $mock);
+        $provider = new SglangProvider('http://provider.invalid', 'm', null, $client);
+
+        try {
+            $reply = EngineBackend::new($provider, 'm')->withoutHooks()->complete([Message::user('hi')]);
+            $this->fail('an in-stream error must not come back as a reply; got content ' . var_export($reply->content, true));
+        } catch (ProviderStreamException $e) {
+            $this->assertStringContainsString(self::OVERFLOW, $e->getMessage());
+            $this->assertFalse(TransientFailure::isTransient($e));
+        }
+
+        $this->assertSame(2, $mock->count(), 'a 400 error frame is permanent: exactly one request, no retry');
+    }
+
+    /**
+     * Audit 15a A2, Custom: the same frame becomes an `isError` chunk, which
+     * Runtime (A1) turns into a thrown ProviderResponseException.
+     */
+    public function testACustomInStreamErrorFrameSurfacesTheServerMessage(): void
+    {
+        $mock = null;
+        $client = self::mockClient(array_fill(0, 3, self::erroringStream(400)), $mock);
+        $provider = new CustomProvider('custom', 'http://provider.invalid', 'm', null, $client, true, true);
+
+        try {
+            $reply = EngineBackend::new($provider, 'm')->withoutHooks()->complete([Message::user('hi')]);
+            $this->fail('an in-stream error must not come back as a reply; got content ' . var_export($reply->content, true));
+        } catch (ProviderResponseException $e) {
+            $this->assertSame(self::OVERFLOW, $e->getMessage());
+            $this->assertTrue($e->response->isError);
+        }
+
+        $this->assertSame(2, $mock->count(), 'a 400 error frame is permanent: exactly one request, no retry');
+    }
+
+    /**
+     * A transient (503) error frame that arrives before any text is retried,
+     * and the retried attempt's answer is the reply - the verdict the frame
+     * carries is what the retry seam acts on.
+     */
+    public function testATransientSglangErrorFrameIsRetried(): void
+    {
+        $mock = null;
+        $client = self::mockClient([self::erroringStream(503, ''), self::okStream('recovered')], $mock);
+        $provider = new SglangProvider('http://provider.invalid', 'm', null, $client);
+
+        $reply = EngineBackend::new($provider, 'm')->withoutHooks()->complete([Message::user('hi')]);
+
+        $this->assertSame('recovered', $reply->content);
+        $this->assertSame(0, $mock->count(), 'one failed attempt, one retry');
     }
 
     private function awaitRejection(PromiseInterface $promise): \Throwable
