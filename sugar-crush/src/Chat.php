@@ -9648,7 +9648,7 @@ final class Chat implements Model
             return $this->workflowResponse($inputText, $response);
         }
 
-        $afterWorkflow = ltrim(substr($inputText, 9));
+        $afterWorkflow = self::commandArgument($inputText);
         if ($afterWorkflow === '') {
             return $this->workflowHelpResponse($inputText);
         }
@@ -10078,7 +10078,7 @@ final class Chat implements Model
     private function handleShareCommand(string $inputBuf): array
     {
         // Parse args from the command (after "/share")
-        $afterShare = ltrim(substr($inputBuf, 6));
+        $afterShare = self::commandArgument($inputBuf);
         $args = $afterShare !== '' ? preg_split('/\s+/', $afterShare) : [];
 
         // Execute the ShareCommand - it outputs directly to stdout, capture via output buffering
@@ -10102,7 +10102,7 @@ final class Chat implements Model
      */
     private function handleWebSearchCommand(string $inputBuf): array
     {
-        $afterCommand = ltrim(substr($inputBuf, 11)); // "/websearch" = 10 chars
+        $afterCommand = self::commandArgument($inputBuf);
         $args = $afterCommand !== '' ? preg_split('/\s+/', $afterCommand) : [];
 
         ob_start();
@@ -10219,13 +10219,11 @@ final class Chat implements Model
             return $this->agentsResponse($inputBuf, 'Agent manager not configured. Set an AgentManager to use /agents commands.');
         }
 
-        // Parse args from the command (after "/agent" or "/agents").
-        // /agents is 7 chars, /agent is 6 chars - detect which alias was used
-        // by full-prefix match (not just presence of a trailing space) so a
-        // bare "/agents" with no arguments slices off all 7 chars and yields
-        // an empty $afterCommand instead of the trailing "s" of "/agents".
-        $prefixLength = str_starts_with($inputBuf, '/agents') ? 7 : 6;
-        $afterCommand = ltrim(substr($inputBuf, $prefixLength));
+        // Parse args from the command (after "/agent" or "/agents"). The
+        // helper ends the name where the parser does, so neither alias needs
+        // its own length - which is what a bare "/agents" once got wrong,
+        // yielding the trailing "s" as an argument.
+        $afterCommand = self::commandArgument($inputBuf);
         $args = $afterCommand !== '' ? preg_split('/\s+/', $afterCommand) : [];
 
         // Execute the AgentsCommand - it outputs directly to stdout, capture via output buffering
@@ -10289,7 +10287,7 @@ final class Chat implements Model
      */
     private function handleRulesCommand(string $inputBuf): array
     {
-        $afterCommand = ltrim(mb_substr(trim($inputBuf), mb_strlen('/rules')));
+        $afterCommand = self::commandArgument($inputBuf);
         $args = $afterCommand !== '' ? (preg_split('/\s+/', $afterCommand) ?: []) : [];
 
         ob_start();
@@ -10448,7 +10446,7 @@ final class Chat implements Model
      */
     private function handleBudgetCommand(string $inputText): array
     {
-        $argument = trim(mb_substr(trim($inputText), mb_strlen('/budget')));
+        $argument = self::commandArgument($inputText);
 
         if ($argument === '') {
             return $this->budgetResponse($inputText, $this->budgetStatusLine(), null);
@@ -12343,7 +12341,7 @@ final class Chat implements Model
         }
 
         // /branch takes no arguments
-        $afterBranch = ltrim(substr($inputText, 7)); // after "/branch"
+        $afterBranch = self::commandArgument($inputText);
 
         if ($this->currentSessionId === null) {
             return $this->sessionResponse($inputText, 'No active session. Start a new conversation first.');
@@ -12558,14 +12556,33 @@ final class Chat implements Model
     }
 
     /**
-     * Everything after the leading "/command" token, trimmed; '' when the
-     * command was typed bare.
+     * The argument text of a dispatched command: everything after "/name" and
+     * the ONE separator {@see CommandParser} accepted there, trimmed; '' when
+     * the command was typed bare.
+     *
+     * The separator is a space OR a ':', because CommandParser ends the name
+     * at whichever comes first and {@see dispatchCommand()} routes on that
+     * name - so `/rename:Release prep` reaches the same arm as `/rename
+     * Release prep`. The handlers used to slice the raw draft at a fixed
+     * offset (`substr($inputText, 7)` for "/rename"), which only ever skipped
+     * the name: the colon spelling arrived with its ':' still on the front
+     * and stored a session called ":Release prep", and `/rewind:all` read as
+     * a step count (audit 15b-22). Only one separator is consumed, so a
+     * space-spelled argument that itself begins with ':' keeps it.
+     *
+     * Kept in this one place rather than as each handler's own offset so the
+     * name/argument boundary cannot drift from the parser's again. Not
+     * `$parsed->args`: those are CommandParser's unquoted tokens, and these
+     * handlers want the raw text (a session name keeps its spacing, a
+     * workflow sub-command re-splits it its own way).
      */
     private static function commandArgument(string $inputText): string
     {
-        $parts = preg_split('/\s+/', trim($inputText), 2) ?: [];
+        if (preg_match('/^\s*\/[^\s:]*[\s:]?(.*)$/s', $inputText, $m) !== 1) {
+            return '';
+        }
 
-        return isset($parts[1]) ? trim($parts[1]) : '';
+        return trim($m[1]);
     }
 
     /**
@@ -12594,7 +12611,7 @@ final class Chat implements Model
         }
 
         // /rename requires exactly one argument: the new name
-        $afterRename = ltrim(substr($inputText, 7)); // after "/rename"
+        $afterRename = self::commandArgument($inputText);
 
         if ($afterRename === '') {
             return $this->sessionResponse($inputText, 'Usage: /rename <newName>');
@@ -12644,15 +12661,21 @@ final class Chat implements Model
             return $this->sessionResponse($inputText, 'No active session. Start a new conversation first.');
         }
 
-        // Parse optional step count: /rewind or /rewind <n>
-        $afterRewind = ltrim(substr($inputText, 7)); // after "/rewind"
+        // Optional step count: `/rewind` is one step, `/rewind <n>` is n.
+        // Anything else is answered with usage and rewinds NOTHING. The old
+        // `(int)` cast clamped to 1, so `/rewind last`, `/rewind help`,
+        // `/rewind -2` and `/rewind:all` each performed a one-step rewind -
+        // a destructive command (it drops the latest answer from the live and
+        // the persisted history) run on input that asked for something else
+        // (audit 15b-22).
+        $afterRewind = self::commandArgument($inputText);
         $stepsBack = 1;
 
         if ($afterRewind !== '') {
-            $stepsBack = (int) trim($afterRewind);
-            if ($stepsBack < 1) {
-                $stepsBack = 1;
+            if (!ctype_digit($afterRewind) || (int) $afterRewind < 1) {
+                return $this->sessionResponse($inputText, 'Usage: /rewind [n] - step back n checkpoints, n a positive whole number (default 1).');
             }
+            $stepsBack = (int) $afterRewind;
         }
 
         try {
@@ -12804,7 +12827,7 @@ final class Chat implements Model
             return $this->memoryResponse($inputText, 'Memory store not configured. Set a MemoryStore to use /memory commands.');
         }
 
-        $afterMemory = ltrim(substr($inputText, 7)); // after "/memory"
+        $afterMemory = self::commandArgument($inputText);
         if ($afterMemory === '') {
             return $this->memoryHelpResponse($inputText);
         }
@@ -16413,7 +16436,7 @@ final class Chat implements Model
      */
     private function handleThemeCommand(string $inputText): array
     {
-        $afterTheme = trim(ltrim(substr($inputText, 6))); // after "/theme"
+        $afterTheme = self::commandArgument($inputText);
 
         if ($afterTheme === '') {
             return $this->sessionResponse(

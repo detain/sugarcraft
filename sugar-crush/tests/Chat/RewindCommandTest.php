@@ -432,7 +432,7 @@ final class RewindCommandTest extends TestCase
     // /rewind with invalid step count
     // =========================================================================
 
-    public function testRewindWithZeroStepsDefaultsToOne(): void
+    public function testRewindWithZeroStepsPrintsUsageAndRewindsNothing(): void
     {
         $this->sessionStore->createSession('test-session', 'openai', 'gpt-4');
 
@@ -463,15 +463,18 @@ final class RewindCommandTest extends TestCase
             currentSessionId: 'test-session',
         );
 
-        // /rewind 0 should default to 1 step back
+        // Audit 15b-22: `/rewind 0` used to be clamped to one step and RUN —
+        // a destructive restore on an argument that is not a step count. It
+        // now answers usage and leaves the transcript as it was.
         [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
 
         $this->assertFalse($next->inFlight);
-        // Should have restored to checkpoint with 2 messages (1 step back from checkpoint index 2)
-        $this->assertCount(4, $next->history);
+        $this->assertCount(5, $next->history);
+        $this->assertSame('Extra', $next->history[2]->content);
+        $this->assertStringStartsWith('Usage: /rewind [n]', $next->history[4]->content);
     }
 
-    public function testRewindWithNegativeStepsDefaultsToOne(): void
+    public function testRewindWithNegativeStepsPrintsUsageAndRewindsNothing(): void
     {
         $this->sessionStore->createSession('test-session', 'openai', 'gpt-4');
 
@@ -502,11 +505,14 @@ final class RewindCommandTest extends TestCase
             currentSessionId: 'test-session',
         );
 
-        // /rewind -5 should default to 1 step back
+        // Audit 15b-22: like `/rewind 0`, a negative count is usage, not a
+        // one-step rewind.
         [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
 
         $this->assertFalse($next->inFlight);
-        $this->assertCount(4, $next->history);
+        $this->assertCount(5, $next->history);
+        $this->assertSame('Extra', $next->history[2]->content);
+        $this->assertStringStartsWith('Usage: /rewind [n]', $next->history[4]->content);
     }
 
     // =========================================================================

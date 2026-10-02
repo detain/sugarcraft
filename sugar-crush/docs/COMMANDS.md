@@ -338,6 +338,21 @@ answering a question loosely, because `/permissions rules` would ask the model
 about a gate it cannot see and answer plausibly, and `/rules terse` would never
 reach the toggle.
 
+A name ends at the first space or `:`, so `/rename:Release prep` is the same
+command as `/rename Release prep`. The arms that read their argument as raw text
+take what follows the name and that one separator, trimmed
+(`Chat::commandArgument()`), so the colon spelling leaves no stray `:` on the
+argument; a space-spelled argument that itself starts with `:` keeps it. `/pane`,
+`/layout` and `/mcp` split the whole draft on whitespace instead, so for those
+three use the space spelling.
+
+`/rewind` takes one optional argument: a positive whole number of checkpoints to
+step back, `1` when omitted (`/rewind`, `/rewind 3`, `/rewind:3`). Anything else
+— `/rewind help`, `/rewind last`, `/rewind -2`, `/rewind 0`, `/rewind:all` —
+prints `Usage: /rewind [n]` and rewinds nothing, because a rewind drops turns
+from the live and the persisted history and must not run on input that asked for
+something else.
+
 One name reaches a handler with no leading slash at all: a draft whose first two
 words are `mcp auth` is routed to `Chat::handleMcpAuthCommand()` ahead of the parse,
 because that spelling predates the discoverable `/mcp` row and the palette's MCP
