@@ -88,7 +88,7 @@ final class ProjectMemoryWriter
             return null;
         }
 
-        return new self(new MemoryStore($directory), $directory);
+        return new self(MemoryStore::forRepository($directory), $directory);
     }
 
     /**
@@ -119,7 +119,7 @@ final class ProjectMemoryWriter
             return null;
         }
 
-        return new self(new MemoryStore($directory), $directory);
+        return new self(MemoryStore::forRepository($directory), $directory);
     }
 
     /**

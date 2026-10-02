@@ -394,6 +394,8 @@ final class ReadPathCensusTest extends TestCase
                 . 'directories, for every listing and id lookup',
         ],
         'Memory/MemoryStore.php|file_get_contents' => [
+            'SELF_LOCATED — a repo store\'s scope MEMORY.md, read only to tell a generated index (retired, audit N2) '
+                . 'from a hand-written one; never returned or rendered',
             'SELF_LOCATED — a scope index this store wrote',
             'SELF_LOCATED — an entry this store wrote',
         ],

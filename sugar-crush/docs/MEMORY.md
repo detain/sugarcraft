@@ -23,6 +23,9 @@ only by a `scope:` field:
 ├── user/     <uuid>.md …  MEMORY.md
 ├── project/  <uuid>.md …  MEMORY.md
 └── agent/    <uuid>.md …  MEMORY.md
+
+<repo>/.sugar-crush/memory/
+└── project/  <uuid>.md …            (no index file — derived on read)
 ```
 
 Directory partitioning is the point: `project`, `user` and `agent` entries live
@@ -34,9 +37,19 @@ scope B. Touching one scope never reads, writes or deletes another's index.
 The index is regenerated on every mutation and is bounded at
 `MAX_INDEX_LINES = 200` and `MAX_INDEX_BYTES = 25 * 1024`. It carries no
 timestamp: its bytes depend on the scope's notes alone, and an index whose bytes
-would not change is not rewritten. In a repo's git-visible store, adding a note
-therefore changes the index only by that note's own lines, and an unchanged
-store leaves the file untouched (audit 15d-23).
+would not change is not rewritten (audit 15d-23).
+
+**A repo's store writes no index file** (audit N2). The repo-local store
+(`<repo>/.sugar-crush/memory/`, below) is git-visible, and an index file there is
+a second file that every note change edits: two branches that each add a note
+both rewrite `MEMORY.md` and conflict on it, although the notes themselves merge
+cleanly. The index is derivable, so that store (`MemoryStore::forRepository()`)
+keeps only the notes, and `loadIndex()` derives the same bytes from them on read.
+A `MEMORY.md` an earlier build generated in a repo scope is removed on the next
+change to that scope, so it does not sit in the tree going stale; one written by
+hand (anything not opening with the generated `# Memory Index (` header) is left
+alone. The home store under `~/.sugar-crush/memory/` is in no repository and
+keeps its index file.
 
 ### Note ids
 

@@ -157,4 +157,24 @@ final class ProjectMemoryWriterTest extends TestCase
         $this->assertCount(1, $entries);
         $this->assertSame('a repo-local convention', $entries[0]->content());
     }
+
+    /**
+     * Audit N2: the repo-local tree is git-visible, and an index file in it
+     * was a second file every note change edited -- two branches that each
+     * added a note conflicted on it. The writer's store keeps none; its index
+     * is derived on read.
+     */
+    public function testTheRepoLocalTreeHoldsTheNotesAndNoIndexFile(): void
+    {
+        $writer = ProjectMemoryWriter::createForRoot($this->root);
+        $id = $writer?->write('a repo-local convention');
+
+        $scopeDir = $this->root . '/' . ProjectMemoryWriter::RELATIVE_DIRECTORY . '/project';
+        $this->assertSame(["{$id}.md"], array_values(array_diff(scandir($scopeDir) ?: [], ['.', '..'])));
+        $this->assertFalse(ProjectMemoryWriter::forRoot($this->root)?->store()->writesIndex());
+        $this->assertStringContainsString(
+            'a repo-local convention',
+            (string) ProjectMemoryWriter::forRoot($this->root)?->store()->loadIndex(MemoryScope::Project),
+        );
+    }
 }
