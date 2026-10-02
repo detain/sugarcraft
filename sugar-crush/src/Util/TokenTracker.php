@@ -44,7 +44,7 @@ namespace SugarCraft\Crush\Util;
  *  - {@see totalCost()} covers all of them; cost never had a split.
  *
  * All of these are PROVIDER-COUNTED tokens. They are a different unit from the
- * chars/4 estimate the context readout shows with a leading `~` - see
+ * {@see TokenEstimate} estimate the context readout shows with a leading `~` - see
  * {@see \SugarCraft\Crush\Usage} - and must not be summed with it.
  */
 final class TokenTracker

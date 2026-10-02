@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Context;
 
+use SugarCraft\Crush\Util\TokenEstimate;
+
 /**
  * Handles automatic context compaction when conversation history grows large.
  *
@@ -38,7 +40,11 @@ namespace SugarCraft\Crush\Context;
  * context window when the backend can report one — so these percentages land on
  * a different absolute token count per provider.
  *
- * Token counting estimates 1 token ≈ 4 characters for PHP strings.
+ * Token counting is {@see TokenEstimate}'s script-weighted estimate plus 10
+ * per message - the same figure {@see \SugarCraft\Crush\Chat}'s own estimate
+ * uses, so the two agree on CJK and emoji text, where one token per four
+ * characters read 3-6x low (audit 15b-13). ASCII still counts four characters
+ * per token.
  */
 final class ContextCompactor
 {
@@ -145,8 +151,8 @@ final class ContextCompactor
      * Determine whether compaction should run based on current token usage.
      *
      * Returns true when context usage reaches or exceeds the background
-     * compaction threshold (85% by default). Uses token counting with
-     * the estimate that 1 token ≈ 4 characters.
+     * compaction threshold (85% by default), on {@see countTokens()}'s
+     * script-weighted estimate.
      *
      * @param array<array{role:string,content:string}> $messages Wire-format messages.
      * @param int $tokenLimit Maximum tokens allowed in context window.
@@ -335,11 +341,16 @@ final class ContextCompactor
             max(0, $threshold - $preservedTokens - self::INTRA_EXCHANGE_HEADROOM_TOKENS),
             count($oversized),
         );
-        $charBudget = max(0, ($share - 10) * 4);
+        // The share is held in TOKENS - the unit countTokens() checks it in. The
+        // character budget is its ASCII reading (four per token) and stays the
+        // hard cap; truncateMessageHead() shortens further when the head's script
+        // weighs more than a quarter-token per character (audit 15b-13-rem).
+        $tokenBudget = max(0, $share - 10);
+        $charBudget = $tokenBudget * 4;
 
         $truncated = $messages;
         foreach (array_keys($oversized) as $index) {
-            $truncated[$index] = $this->truncateMessageHead($messages[$index], $charBudget);
+            $truncated[$index] = $this->truncateMessageHead($messages[$index], $charBudget, $tokenBudget);
         }
 
         return $truncated;
@@ -367,7 +378,7 @@ final class ContextCompactor
      * @param array<string,mixed> $message
      * @return array<string,mixed>
      */
-    private function truncateMessageHead(array $message, int $charBudget): array
+    private function truncateMessageHead(array $message, int $charBudget, int $tokenBudget): array
     {
         $content = (string) ($message['content'] ?? '');
 
@@ -386,13 +397,50 @@ final class ContextCompactor
         // method from rewriting content that already fits its budget — the
         // guarantee the doc-block above states. Not independently load-bearing
         // logic today.
-        if (mb_strlen($content) <= $charBudget) {
+        //
+        // Since the count became script-weighted (audit 15b-13-rem) the guard
+        // reads BOTH budgets: a CJK giant can sit under the character budget
+        // (four per token) while weighing four times its token share, and that
+        // message must still be cut.
+        if (mb_strlen($content) <= $charBudget && TokenEstimate::ofText($content) <= $tokenBudget) {
             return $message;
         }
 
         $length = mb_strlen($content);
         $markerReserve = min($charBudget, self::INTRA_EXCHANGE_MARKER_MAX_CHARS);
-        $head = $charBudget - $markerReserve;
+        $head = min($length, $charBudget - $markerReserve);
+        $truncated = self::headWithMarker($content, $length, $head, $charBudget);
+
+        // ASCII never enters this loop: its estimate is a quarter-token per
+        // character, so the character cap already holds the token share. Any
+        // heavier script shrinks the head to the longest one whose estimate
+        // fits; the estimate only grows with the head, so a bisection finds it.
+        if (TokenEstimate::ofText($truncated) > $tokenBudget) {
+            $low = 0;
+            $high = $head;
+            while ($low < $high) {
+                $mid = intdiv($low + $high + 1, 2);
+                if (TokenEstimate::ofText(self::headWithMarker($content, $length, $mid, $charBudget)) <= $tokenBudget) {
+                    $low = $mid;
+                } else {
+                    $high = $mid - 1;
+                }
+            }
+            $truncated = self::headWithMarker($content, $length, $low, $charBudget);
+        }
+
+        $message['content'] = $truncated;
+
+        return $message;
+    }
+
+    /**
+     * The first $head characters of $content plus the marker naming how many
+     * of its $length were dropped, hard-clamped to $charBudget characters - see
+     * {@see truncateMessageHead()} for why the clamp may cut the marker itself.
+     */
+    private static function headWithMarker(string $content, int $length, int $head, int $charBudget): string
+    {
         $dropped = $length - $head;
         $truncated = mb_substr($content, 0, $head)
             . "\n\n[... {$dropped} characters truncated to fit the context window ...]";
@@ -401,9 +449,7 @@ final class ContextCompactor
             $truncated = mb_substr($truncated, 0, $charBudget);
         }
 
-        $message['content'] = $truncated;
-
-        return $message;
+        return $truncated;
     }
 
     /**
@@ -423,8 +469,8 @@ final class ContextCompactor
      * twenty turns past the threshold accumulated twenty copies. Any new caller
      * inherits the same obligation.
      *
-     * $tokenCount is an ESTIMATE — {@see countTokens()}'s chars/4 + 10 per
-     * message. $tokenLimit is the provider's real window only on the one path
+     * $tokenCount is an ESTIMATE — {@see countTokens()}'s script-weighted
+     * {@see TokenEstimate} + 10 per message. $tokenLimit is the provider's real window only on the one path
      * where there is one to have: callers reach it through
      * {@see \SugarCraft\Crush\Context\ContextWindow::ofBackend()}, which
      * returns the hardcoded
@@ -1206,8 +1252,9 @@ final class ContextCompactor
     /**
      * Count estimated tokens in a message array.
      *
-     * Uses the approximation 1 token ≈ 4 characters for PHP strings.
-     * Each message also accounts for role overhead (~10 tokens).
+     * {@see TokenEstimate::ofText()} per message - a quarter-token per ASCII or
+     * Latin character, more for other scripts, CJK and emoji - plus ~10 tokens
+     * of role overhead each.
      *
      * @param array<array{role:string,content:string}> $messages
      */
@@ -1216,7 +1263,10 @@ final class ContextCompactor
         $total = 0;
         foreach ($messages as $msg) {
             $content = is_array($msg) ? ($msg['content'] ?? '') : (string) $msg;
-            $total += (int) ceil(mb_strlen($content) / 4);
+            // Script-weighted, the same figure Chat's estimate uses (audit
+            // 15b-13-rem): codepoints/4 read CJK and emoji 3-6x low, so every
+            // tier here fired late for those sessions.
+            $total += TokenEstimate::ofText((string) $content);
             $total += 10; // role overhead
         }
         return $total;

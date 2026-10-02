@@ -433,7 +433,7 @@ final class Chat implements Model
 
     /**
      * Floor of the E17 calibration factor — 1.0, ON PURPOSE: an observation
-     * implying the provider counts FEWER tokens than chars/4+10 (possible:
+     * implying the provider counts FEWER tokens than the raw proxy (possible:
      * the +10-per-message overhead dominates a history of short messages,
      * and an unreported-usage streak paired wrongly could produce anything)
      * must not make the blocking tier LOUDER about fitting than the raw
@@ -452,7 +452,7 @@ final class Chat implements Model
      * that bundled error: the tier may fire up to a third early — the safe
      * direction against an overflow — and no single chatty turn can triple
      * the session's estimate. Widening this bound is a real decision, not a
-     * tuning knob: at 1.0 the estimator is raw chars/4, at higher clamps the
+     * tuning knob: at 1.0 the estimator is the raw proxy, at higher clamps the
      * total-vs-prompt inflation dominates.
      */
     private const TOKEN_CALIBRATION_MAX = 3.0;
@@ -1356,7 +1356,7 @@ final class Chat implements Model
         private readonly ?int $promptEstimateAtDispatch = null,
         /**
          * Empirical scale factor from the ESTIMATOR's unit (script-weighted
-         * chars/4 + 10 per message, {@see rawTokenProxy()}) to the PROVIDER's
+         * {@see TokenEstimate} + 10 per message, {@see rawTokenProxy()}) to the PROVIDER's
          * counted tokens, derived from the last
          * settled turn that reported usage (E17 step (a): "use the last real
          * measurement to calibrate the estimator"). Null = no observation
@@ -12385,7 +12385,7 @@ final class Chat implements Model
      * cancels this token, so a cancelled round-trip can publish nothing either
      * way.
      *
-     * $tokenCount is ESTIMATED tokens (chars/4 + 10 per message) of the
+     * $tokenCount is ESTIMATED tokens (script-weighted + 10 per message) of the
      * PRE-compaction history and $tokenLimit is the PROVIDER-COUNTED window, the
      * same two figures {@see submit()} read for the heuristic notice; the notice
      * below names the unit of each because they are not the same kind of number.
@@ -16487,13 +16487,14 @@ final class Chat implements Model
     }
 
     /**
-     * Estimate token count for a message history. For ASCII/Latin text this
-     * is the same 1-token≈4-chars heuristic as {@see ContextCompactor}'s
-     * internal countTokens(), so the idle-compaction threshold agrees with
-     * what /compact itself would report; for CJK, other non-Latin scripts and
-     * emoji the raw proxy is script-weighted ({@see TokenEstimate},
-     * audit 15b-13) and reads HIGHER than the compactor's plain chars/4 — the
-     * safe direction, since it is the tiers that must not fire late.
+     * Estimate token count for a message history: the script-weighted
+     * {@see TokenEstimate} (1 token ≈ 4 chars for ASCII/Latin, heavier for CJK,
+     * other non-Latin scripts and emoji - audit 15b-13) + 10 per message, the
+     * same figure as {@see ContextCompactor}'s internal countTokens() since
+     * 15b-13-rem, so the idle-compaction threshold agrees with what /compact
+     * itself would report in every script. They read the same rows too: this
+     * skips UI-only rows, and the compactor is never handed them
+     * ({@see compactionWire()}).
      *
      * CALIBRATED since E17: the raw script-weighted + 10 proxy is multiplied by the
      * session's last estimate-vs-real observation ({@see $tokenEstimateCalibration})
@@ -16567,7 +16568,7 @@ final class Chat implements Model
      * the model's real context window whenever the backend can report one, so
      * this fraction is now "how full is the window", not "how close to a
      * fixed 100,000-token proxy". Numerator and denominator are also in
-     * different units - an estimated chars/4 count against a
+     * different units - a script-weighted estimated count against a
      * provider-counted window - which is why {@see Renderer} prints the pair
      * with a leading `~` rather than as a measured percentage.
      *
@@ -16593,7 +16594,7 @@ final class Chat implements Model
      * absolute count next to the percentage instead of multiplying the
      * fraction back out against a limit it would have to hardcode.
      *
-     * Approximate by construction - it is a script-weighted chars/4 proxy
+     * Approximate by construction - it is a script-weighted character proxy
      * ({@see TokenEstimate}), not a
      * provider-reported usage figure - so any UI showing it must say so.
      */
@@ -16654,7 +16655,7 @@ final class Chat implements Model
      * This session's provider-reported spend in US dollars.
      *
      * A DIFFERENT unit from everything {@see contextTokens()} and
-     * {@see contextTokenLimit()} deal in: those are a chars/4 estimate of what
+     * {@see contextTokenLimit()} deal in: those are a script-weighted estimate of what
      * was sent, this is what the provider said it billed. {@see Renderer} shows
      * them as two separate segments of the status bar for that reason and never
      * combines them - see {@see Usage} for the full statement of the hazard.
@@ -16729,7 +16730,7 @@ final class Chat implements Model
      *
      * THE UNIT STORY, named rather than papered over, because the pairing is
      * not the clean prompt-vs-prompt comparison E17 step (a) ultimately
-     * wants: the estimate is chars/4 over the history the tier measured, and
+     * wants: the estimate is script-weighted over the history the tier measured, and
      * the observation is the provider's count of a prompt that also carries
      * the system block, the tool schemas, and the fresh user turn — summed
      * over every step the agentic loop made, completion tokens included,
@@ -17549,7 +17550,7 @@ final class Chat implements Model
      * @param list<Message> $history The history to commit: compacted when
      *                               compaction freed anything, otherwise the
      *                               original untouched.
-     * @param int $tokenCount ESTIMATED tokens (chars/4 proxy) in $history.
+     * @param int $tokenCount ESTIMATED tokens (script-weighted proxy) in $history.
      * @param int $tokenLimit PROVIDER-COUNTED context window from
      *                        {@see contextTokenLimit()}.
      * @return array{0:Chat,1:?\Closure}
@@ -17607,7 +17608,7 @@ final class Chat implements Model
      * because what it reports is the rewrite, not the dispatch.
      *
      * Every figure names the domain it is true of, because the two token
-     * numbers here are NOT the same kind of thing - the count is a chars/4
+     * numbers here are NOT the same kind of thing - the count is a script-weighted
      * estimate, the window is what the provider advertises - and
      * {@see \SugarCraft\Crush\Tests\Integration\ContextWindowWiringTest} pins
      * each number against the label next to it rather than against the sentence,
@@ -17845,7 +17846,7 @@ final class Chat implements Model
      * Role::System like the compaction and reminder notices — the app reporting on
      * its own action — and it rides BEFORE the user's line for the same reason
      * {@see contextCompactedMessage()} does: it describes history that already
-     * existed. Each figure names its own unit (a chars/4 ESTIMATE against the
+     * existed. Each figure names its own unit (a script-weighted ESTIMATE against the
      * provider-advertised window).
      *
      * WHAT THIS PARAGRAPH SAID: that the pairing of each figure with its own

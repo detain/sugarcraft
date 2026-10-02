@@ -49,8 +49,9 @@ namespace SugarCraft\Crush\Util;
  * after one byte-class scan; anything else costs three PCRE counting passes
  * that build no match arrays.
  *
- * {@see \SugarCraft\Crush\Context\ContextCompactor::countTokens()} still counts
- * plain chars/4 and could adopt this to agree with Chat on non-Latin text.
+ * {@see \SugarCraft\Crush\Context\ContextCompactor::countTokens()} uses it too
+ * (audit 15b-13-rem), so the compactor's tiers and Chat's estimate agree on
+ * non-Latin text.
  */
 final class TokenEstimate
 {

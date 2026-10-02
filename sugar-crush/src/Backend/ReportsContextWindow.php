@@ -49,8 +49,8 @@ interface ReportsContextWindow
      * The model's context window in PROVIDER-COUNTED tokens.
      *
      * Note the unit mismatch the caller has to live with: everything this is
-     * compared against in `Chat` is a chars/4 estimate, not a tokenizer
-     * count. That is why the status bar prints its readout with a leading
+     * compared against in `Chat` is a script-weighted character estimate
+     * ({@see \SugarCraft\Crush\Util\TokenEstimate}), not a tokenizer count. That is why the status bar prints its readout with a leading
      * `~` and why the 95% tier exists at all rather than a 100% one.
      *
      * A backend that cannot determine one should return 0 rather than guess;

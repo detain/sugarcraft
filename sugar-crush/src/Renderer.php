@@ -2298,7 +2298,8 @@ final class Renderer
      * output rather than rounding differently from it.
      *
      * These are DOLLARS against PROVIDER-COUNTED tokens. The segment to the left
-     * is a chars/4 estimate wearing a `~`. The two are never combined, and the
+     * is a script-weighted character estimate ({@see \SugarCraft\Crush\Util\TokenEstimate})
+     * wearing a `~`. The two are never combined, and the
      * `$` is what keeps them distinguishable at a glance — see {@see \SugarCraft\Crush\Usage}.
      *
      * $room is the columns left after the two mandatory segments and the scroll
@@ -2485,8 +2486,9 @@ final class Renderer
      * used to: since crush_code.md Phase 5 item 4 the limit IS the model's
      * advertised context window whenever the backend can report one, so it is
      * no longer "not the provider's window". The count on the left of the
-     * slash is what stays an approximation — a chars/4 proxy, not a tokenizer
-     * count — which also means the percentage between two units that do not
+     * slash is what stays an approximation — a script-weighted character proxy
+     * ({@see \SugarCraft\Crush\Util\TokenEstimate}), not a tokenizer count —
+     * which also means the percentage between two units that do not
      * quite match. Labelling it is the honest option; printing "12.4K"
      * unqualified would read as a figure the provider reported.
      *
