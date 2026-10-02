@@ -47,6 +47,8 @@ final class LoopGuardStoppedFieldTest extends TestCase
             'withLengthStopped' => [static fn(Message $m): Message => $m->withLengthStopped(true)],
             'withStepsTruncated' => [static fn(Message $m): Message => $m->withStepsTruncated(false)],
             'withUiOnly' => [static fn(Message $m): Message => $m->withUiOnly(false)],
+            'attachFile' => [static fn(Message $m): Message => $m->attachFile('/tmp/x')],
+            'attachImage' => [static fn(Message $m): Message => $m->attachImage('/tmp/x.png')],
         ];
     }
 

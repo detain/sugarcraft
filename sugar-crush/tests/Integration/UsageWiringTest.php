@@ -363,6 +363,8 @@ final class UsageWiringTest extends TestCase
             'withStepsTruncated' => $base->withStepsTruncated(true),
             // Audit 15b-03: marking a row UI-only must not cost it its bill.
             'withUiOnly' => $base->withUiOnly(),
+            // The loop guard's turn-ending verdict, the third harness stop.
+            'withLoopGuardStoppedBy' => $base->withLoopGuardStoppedBy('probe'),
         ];
 
         $reflected = [];
