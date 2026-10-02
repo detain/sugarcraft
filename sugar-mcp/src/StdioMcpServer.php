@@ -71,8 +71,8 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  *    starts at a line boundary;
  *  - a holder that dies mid-exchange leaves a W/R phase marker behind; the
  *    next holder terminates a half-written request line with a leading "\n"
- *    (the TS and Python SDK servers log the junk line and carry on) and skips
- *    unparseable fragments until the first parseable message;
+ *    (the TS and Python SDK servers log the junk line and carry on), and
+ *    the reader skips the half-consumed fragment like any unparseable line;
  *  - only the owner (the pid that called start()) ever tears the server down:
  *    stop()/__destruct in any other pid close that process' own handles and
  *    leave the shared server running.
@@ -561,14 +561,14 @@ final class StdioMcpServer implements McpServer
         $id = (string) $this->ids->next();
         $json = McpMessage::request($id, $method, $params)->toJson();
 
-        return $this->exchange($deadline, true, function (string $prefix, bool $recovering) use ($json, $id, $deadline): ?McpMessage {
+        return $this->exchange($deadline, true, function (string $prefix) use ($json, $id, $deadline): ?McpMessage {
             if (!$this->writeLine($prefix . $json, $deadline)) {
                 return null;
             }
 
             $this->lock?->markPhase(ExchangeLock::PHASE_READING);
 
-            return $this->readResponse($id, $deadline, $recovering);
+            return $this->readResponse($id, $deadline);
         });
     }
 
@@ -584,15 +584,15 @@ final class StdioMcpServer implements McpServer
      * Run one exchange under the cross-process lock (see FORK SAFETY above).
      *
      * $body gets the line prefix ("\n" when a previous holder died while
-     * writing, so its half line is terminated before ours) and whether this
-     * exchange is recovering from a dead holder (its reader must skip
-     * fragments). A null from $body — or a throw — is a FAILED exchange: the
+     * writing, so its half line is terminated before ours); a fragment the
+     * dead holder left on stdout is skipped by readResponse(), which skips
+     * every unparseable line. A null from $body — or a throw — is a FAILED exchange: the
      * phase marker it reached stays behind so the next holder recovers, since
      * a request abandoned at a deadline can leave half a line on either pipe
      * just as a killed process can.
      *
      * @template T
-     * @param \Closure(string, bool): (T|null) $body
+     * @param \Closure(string): (T|null) $body
      * @return T|null
      */
     private function exchange(?float $deadline, bool $reads, \Closure $body): mixed
@@ -614,11 +614,11 @@ final class StdioMcpServer implements McpServer
 
             // A dead holder's buffer is not trustworthy: it may end in the head
             // of a line whose tail is still in the pipe. Drop it and let the
-            // recovering reader skip the fragment instead.
+            // reader skip the fragment instead.
             $this->readBuffer = $dirty ? '' : $buffer;
             $lock->markPhase(ExchangeLock::PHASE_WRITING);
 
-            $result = $body($phase === ExchangeLock::PHASE_WRITING ? "\n" : '', $dirty);
+            $result = $body($phase === ExchangeLock::PHASE_WRITING ? "\n" : '');
         } finally {
             if ($result === null) {
                 // Keep the marker this exchange reached (W or R); the buffer is
@@ -768,16 +768,28 @@ final class StdioMcpServer implements McpServer
 
     /**
      * Read framed lines until the response for $id arrives, skipping
-     * notifications and foreign ids. A non-JSON-RPC line ENDS the search as
-     * failure: whoever sent it is not speaking the protocol, and continuing
-     * past garbage risks matching a stale id from a desynchronised stream.
+     * notifications, foreign ids AND unparseable lines. Only EOF or the
+     * deadline ends the search.
      *
-     * EXCEPT while $recovering: a previous holder died mid-exchange, so the
-     * stream may start with the tail of a line it half consumed. Unparseable
-     * lines are skipped until the first parseable message proves the stream
-     * is at a line boundary again; from then on the garbage rule applies.
+     * Skipping garbage is what the reference SDK clients do (audit MCP-4):
+     * real servers print a startup banner or a log line to stdout, or emit a
+     * blank keep-alive line (readLine() trims it to ''), and the genuine reply
+     * follows on the next line. Treating that line as fatal made start() fail
+     * with "Failed to start MCP server" and callTool() report "Tool call
+     * failed" while the answer was already in the pipe. Skipping cannot match
+     * a stale reply: ids are unique per exchange across processes
+     * ({@see RequestIdSequence}) and the match below is strict.
+     *
+     * The same rule covers recovery from a holder that died mid-exchange: the
+     * stream may start with the tail of a line it half consumed, and that
+     * fragment is skipped like any other unparseable line.
+     *
+     * One unparseable shape is NOT noise: a JSON-RPC 2.0 envelope carrying OUR
+     * id but neither `result` nor `error`. That is the server's answer, and
+     * it is broken — the call fails now instead of waiting on a reply that
+     * already came (callTool() has no deadline, so skipping it would hang).
      */
-    private function readResponse(string $id, ?float $deadline = null, bool $recovering = false): ?McpMessage
+    private function readResponse(string $id, ?float $deadline = null): ?McpMessage
     {
         while (true) {
             if ($deadline !== null && self::nowSeconds() >= $deadline) {
@@ -791,14 +803,12 @@ final class StdioMcpServer implements McpServer
 
             $message = McpMessage::parse($line);
             if ($message === null) {
-                if ($recovering) {
-                    continue;
+                if (self::isMalformedReplyTo($line, $id)) {
+                    return null;
                 }
 
-                return null;
+                continue;
             }
-
-            $recovering = false;
 
             // Strict match: only a genuine response (no method) whose id is
             // byte-equal to ours answers the request. An id-less broadcast —
@@ -812,6 +822,27 @@ final class StdioMcpServer implements McpServer
 
             return $message;
         }
+    }
+
+    /**
+     * True when $line, which McpMessage::parse() refused, is still a JSON-RPC
+     * 2.0 response envelope addressed to $id (see readResponse()). The id is
+     * coerced the way parse() coerces it, so an integer id matches its string.
+     */
+    private static function isMalformedReplyTo(string $line, string $id): bool
+    {
+        $decoded = json_decode($line, true);
+        if (!is_array($decoded) || ($decoded['jsonrpc'] ?? null) !== '2.0') {
+            return false;
+        }
+
+        if (isset($decoded['method']) || !isset($decoded['id'])) {
+            return false;
+        }
+
+        $wireId = $decoded['id'];
+
+        return (is_string($wireId) || is_int($wireId)) && (string) $wireId === $id;
     }
 
     /**

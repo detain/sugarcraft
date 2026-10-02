@@ -145,6 +145,41 @@ final class StdioMcpServerRoundTripTest extends TestCase
         $server->stop();
     }
 
+    public function testNonJsonStdoutLinesAreSkippedInsteadOfAbortingTheRequest(): void
+    {
+        // Audit MCP-4: a boot banner, a log line, a blank keep-alive and a
+        // whitespace-only line precede every genuine answer. Each one used to
+        // end the in-flight request as a failure, so start() threw "Failed to
+        // start MCP server" with the real initialize reply one line away.
+        $server = $this->spawn('noisy', 'noisy_stdout_server.php');
+        $server->start();
+
+        self::assertTrue($server->isUp());
+        self::assertSame(['shout'], array_map(static fn ($tool): string => $tool->name, $server->listTools()));
+        self::assertSame(
+            'heard',
+            $server->callTool('shout', [])['content'][0]['text'],
+            'a tool call must read past the noise to its own reply',
+        );
+        self::assertSame(
+            'heard',
+            $server->callTool('shout', [])['content'][0]['text'],
+            'the stream must stay in step: the second call gets its own reply',
+        );
+        self::assertSame(
+            ['error' => 'Tool call failed'],
+            $server->callTool('broken', []),
+            'an envelope carrying our id but no result/error is the (broken) answer, not noise to skip',
+        );
+        self::assertSame(
+            'heard',
+            $server->callTool('shout', [])['content'][0]['text'],
+            'a broken answer consumes only its own line',
+        );
+
+        $server->stop();
+    }
+
     public function testADoubleStartIsRefusedInsteadOfOrphaningTheLiveChild(): void
     {
         // Review probe P6: a second start() used to overwrite the proc handle,
