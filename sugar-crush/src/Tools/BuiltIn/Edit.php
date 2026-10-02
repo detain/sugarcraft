@@ -8,6 +8,7 @@ use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\RulePathNudge;
 use SugarCraft\Crush\Skills\SkillPathNudge;
+use SugarCraft\Crush\Support\AtomicFileWriter;
 use SugarCraft\Crush\Tools\Concerns\BuildsUnifiedDiff;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\Tool;
@@ -28,6 +29,10 @@ final readonly class Edit implements Tool
      * $skillNudge turns a skill's `paths:` frontmatter into a live signal
      * (crush_feat.md section 7 E4): editing a file a skill scopes itself to
      * announces that skill once. Null keeps the tool standalone.
+     *
+     * $writeSeam is a TEST SEAM only (audit F-T7): the payload writer handed
+     * to {@see AtomicFileWriter::replace()}, so a test can fail a write
+     * part-way and prove the original bytes survive. Production passes null.
      */
     public function __construct(
         private ?string $root = null,
@@ -37,6 +42,7 @@ final readonly class Edit implements Tool
         private array $sessionCache = [],
         private ?SkillPathNudge $skillNudge = null,
         private ?RulePathNudge $ruleNudge = null,
+        private ?\Closure $writeSeam = null,
     ) {}
 
     public function name(): string
@@ -229,9 +235,16 @@ final readonly class Edit implements Tool
         }
 
         $newContent = str_replace($oldString, $newString, $originalContent);
-        $result = file_put_contents($path, $newContent);
 
-        if ($result === false) {
+        // Temp-then-rename, not file_put_contents() (audit F-T7): that
+        // truncated the file first, so a SIGKILL of the turn fork (Esc-Esc,
+        // the completion deadline) or an ENOSPC part-way through left a 0-byte
+        // or torn source file, with no undo to recover it. replace() keeps the
+        // file's mode, owner where it can, symlink and hard links; see it for
+        // the cases that still write in place.
+        try {
+            AtomicFileWriter::replace($path, $newContent, $this->writeSeam);
+        } catch (\RuntimeException) {
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
                 content: "Error writing file: $path",

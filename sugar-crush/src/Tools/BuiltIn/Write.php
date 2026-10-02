@@ -8,6 +8,7 @@ use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\RulePathNudge;
 use SugarCraft\Crush\Skills\SkillPathNudge;
+use SugarCraft\Crush\Support\AtomicFileWriter;
 use SugarCraft\Crush\Tools\Concerns\BuildsUnifiedDiff;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\PathJail;
@@ -56,6 +57,10 @@ final readonly class Write implements Tool, PromptGuidance
      * directory a skill scopes itself to, or one carrying a nested
      * CLAUDE.md/AGENTS.md, surfaces that context once, exactly as touching the
      * same path through Read/Edit/Glob would.
+     *
+     * $writeSeam is a TEST SEAM only (audit F-T7): the payload writer handed
+     * to {@see AtomicFileWriter::replace()}, so a test can fail a write
+     * part-way and prove the original bytes survive. Production passes null.
      */
     public function __construct(
         private ?string $root = null,
@@ -64,6 +69,7 @@ final readonly class Write implements Tool, PromptGuidance
         private ?SkillPathNudge $skillNudge = null,
         private ?RulePathNudge $ruleNudge = null,
         private int $maxDiffBytes = self::DEFAULT_MAX_DIFF_BYTES,
+        private ?\Closure $writeSeam = null,
     ) {}
 
     public function name(): string
@@ -242,7 +248,15 @@ final readonly class Write implements Tool, PromptGuidance
 
         $nestedContent = $this->instructionLoader?->loadForPath($path);
 
-        if (@file_put_contents($path, $content) === false) {
+        // Temp-then-rename for an overwrite AND a create (audit F-T7): the
+        // old file_put_contents() truncated first, so a killed turn or an
+        // ENOSPC mid-write destroyed the file being overwritten, and a create
+        // could leave a half-written new file looking complete. replace()
+        // keeps an overwritten file's mode, owner where it can, symlink and
+        // hard links, and gives a new file the umask default as before.
+        try {
+            AtomicFileWriter::replace($path, $content, $this->writeSeam);
+        } catch (\RuntimeException) {
             return $this->error($args, "Error writing file: $path");
         }
 

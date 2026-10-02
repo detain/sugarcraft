@@ -435,6 +435,9 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — the uniquely-named temp this writer creates beside the '
                 . 'target and renames onto it; the path is dirname(target) plus a '
                 . 'random suffix, never caller-supplied beyond the target itself',
+            'CALLER_SUPPLIED — replace()\'s in-place fallback opens the target itself (a '
+                . 'hard link, a dangling link, a directory no temp can be made in); Edit and '
+                . 'Write hand it the path they already resolved through PathJail',
         ],
         'Support/ToolIpcFiles.php|glob' => [
             'SELF_LOCATED — sweeps this package\'s own IPC prefixes, uid-checked per entry',

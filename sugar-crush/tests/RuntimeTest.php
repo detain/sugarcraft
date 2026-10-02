@@ -6520,15 +6520,22 @@ DOC;
         // and a dead one produce identical silence, and the verdict below is an
         // assertion of ABSENCE. These two run through the SAME scanner in the
         // SAME test - a sibling test is a separately deletable unit.
+        //
+        // Edit and Write publish through AtomicFileWriter::replace() since audit
+        // F-T7, a static call this direct-call scan does not follow (the same
+        // gap as a helper reached by `new`, stated below), so Edit's own file
+        // now reports nothing and Write's only its mkdir(). The writer they
+        // reach is the control in Edit's place: real shipped code with a known
+        // answer, through the same instrument.
         $this->assertSame(
-            ['file_put_contents'],
-            array_keys(self::writePrimitivesCalledIn($builtIns . '/Edit.php')),
-            'the scanner no longer finds Edit\'s file_put_contents() - it is dead, fix it before reading the verdict',
+            ['chgrp', 'chmod', 'chown', 'fopen', 'ftruncate', 'fwrite', 'mkdir', 'rename', 'unlink'],
+            array_keys(self::writePrimitivesCalledIn(dirname(__DIR__) . '/src/Support/AtomicFileWriter.php')),
+            'the scanner no longer finds the primitives Edit/Write write through - it is dead, fix it before reading the verdict',
         );
         $this->assertSame(
-            ['file_put_contents', 'mkdir'],
+            ['mkdir'],
             array_keys(self::writePrimitivesCalledIn($builtIns . '/Write.php')),
-            'the scanner no longer finds Write\'s two primitives - it is dead, fix it before reading the verdict',
+            'the scanner no longer finds Write\'s mkdir() - it is dead, fix it before reading the verdict',
         );
 
         // EVERY NAME ON THE LIST MUST NAME A REAL TOOL. A typo, or a name left
@@ -6800,14 +6807,16 @@ DOC;
     {
         // THE CONTROLS, THROUGH THE SAME INSTRUMENT, BEFORE THE NEW SHAPE.
         $builtIns = \dirname(__DIR__) . '/src/Tools/BuiltIn';
+        // Edit/Write write through AtomicFileWriter since audit F-T7, so that
+        // file is the second control, as in the corpus census above.
         $this->assertSame(
-            ['file_put_contents', 'mkdir'],
+            ['mkdir'],
             array_keys(self::writePrimitivesCalledIn($builtIns . '/Write.php')),
             'the known-positive control moved, so nothing this test says about the new token class is worth anything',
         );
         $this->assertSame(
-            ['file_put_contents'],
-            array_keys(self::writePrimitivesCalledIn($builtIns . '/Edit.php')),
+            ['chgrp', 'chmod', 'chown', 'fopen', 'ftruncate', 'fwrite', 'mkdir', 'rename', 'unlink'],
+            array_keys(self::writePrimitivesCalledIn(\dirname(__DIR__) . '/src/Support/AtomicFileWriter.php')),
             'the second known-positive control moved',
         );
         $this->assertSame(
