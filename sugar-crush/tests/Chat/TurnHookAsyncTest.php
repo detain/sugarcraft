@@ -316,7 +316,7 @@ final class TurnHookAsyncTest extends TestCase
             $loop->cancelTimer($guard);
         }
 
-        $this->assertTrue($done, 'the turn-hook Cmd settled');
+        $this->assertTrue($done, 'the forked Cmd settled');
 
         return $value;
     }
@@ -352,7 +352,7 @@ final class TurnHookAsyncTest extends TestCase
             usleep(20000);
         }
 
-        $this->fail('the hook script never started');
+        $this->fail('the forked child never started');
     }
 
     private function waitUntilGone(int $pid): bool

@@ -1213,6 +1213,38 @@ final class Chat implements Model
          */
         private readonly ?array $resolvedTurnHooks = null,
         /**
+         * The file-based command whose template is being expanded in a forked
+         * child right now (audit 15b-20), or null when none is.
+         *
+         * WHY IT EXISTS: a body's `` !`…` `` forms run real shell commands under
+         * a shared {@see CommandSpec::SHELL_BUDGET_SECONDS} budget, and the
+         * expansion used to run inside {@see update()}, freezing the frame,
+         * Escape and Ctrl+C for up to the whole budget. {@see pendCustomCommand()}
+         * parks the command line HERE the way {@see $pendingTurnHooks} parks a
+         * prompt, and {@see resumeCustomCommand()} re-enters {@see submit()} once
+         * the {@see CustomCommandExpandedMsg} lands.
+         *
+         * @var ?array{text: string, draft: string, cursor: int}
+         */
+        private readonly ?array $pendingCustomCommand = null,
+        /**
+         * The expansion a forked child produced, consumed by
+         * {@see expandCustomCommand()} in place of expanding the template again
+         * — which would run every `` !`…` `` a second time. Matched on the typed
+         * command line.
+         *
+         * It outlives the {@see submit()} re-entry in ONE case: when that
+         * re-entry parks the expanded prompt behind a forked turn-hook chain
+         * ({@see $pendingTurnHooks}), {@see resumeTurnHooks()} re-runs submit()
+         * from the top once more, and the expansion has to be there for it. It
+         * is cleared whenever no turn-hook chain is pending
+         * ({@see withoutStaleCustomExpansion()}), so it can never expand a later,
+         * separately typed command.
+         *
+         * @var ?array{text: string, expanded: string}
+         */
+        private readonly ?array $resolvedCustomCommand = null,
+        /**
          * Discovers `*.md` commands under `~/.sugar-crush/commands` and
          * `<root>/.sugar-crush/commands` (crush_code.md Phase 2 item 4). Null —
          * the default — means no file-based commands at all, which is what every
@@ -1911,6 +1943,9 @@ final class Chat implements Model
         if ($msg instanceof TurnHooksResolvedMsg) {
             return $this->resumeTurnHooks($msg);
         }
+        if ($msg instanceof CustomCommandExpandedMsg) {
+            return $this->resumeCustomCommand($msg);
+        }
         if ($msg instanceof HistoryCompactedMsg) {
             // Accounted BEFORE the latch check, and for the same reason the
             // AssistantMsg arm accounts before its staleness guard: the
@@ -2187,6 +2222,7 @@ final class Chat implements Model
             }
 
             $this->inFlightCancellation?->cancel();
+            $parkedDraft = $this->pendingTurnHooks['draft'] ?? $this->pendingCustomCommand['draft'] ?? null;
 
             return [$this->mutate([
                 // A submission parked behind a forked turn-hook chain (audit
@@ -2195,10 +2231,16 @@ final class Chat implements Model
                 // below strands any verdict already on its way, and the prompt —
                 // never echoed, so it would otherwise be gone — goes back into the
                 // box when the box is still empty.
-                ...($this->pendingTurnHooks !== null && trim($this->inputBuf) === ''
-                    ? ['inputBuf' => $this->pendingTurnHooks['draft']]
+                //
+                // A command line parked behind a forked template expansion (audit
+                // 15b-20) is released the same way, and so is any expansion kept
+                // for a turn-hook re-entry that will now never happen.
+                ...($parkedDraft !== null && trim($this->inputBuf) === ''
+                    ? ['inputBuf' => $parkedDraft]
                     : []),
                 'pendingTurnHooks' => null,
+                'pendingCustomCommand' => null,
+                'resolvedCustomCommand' => null,
                 'inFlight' => false,
                 'inFlightCancellation' => null,
                 'lastEscapeAt' => null,
@@ -4982,7 +5024,62 @@ final class Chat implements Model
             return [$prompt, $session];
         };
 
-        return Cmd::promise(static function () use ($run, $generation, $text, $cancellation): PromiseInterface {
+        return self::forkedPayloadCmd(
+            static function () use ($run): string {
+                [$prompt, $session] = $run();
+                $json = json_encode([
+                    'prompt' => self::turnHookResultToArray($prompt),
+                    'session' => $session === null ? null : self::turnHookResultToArray($session),
+                ], JSON_INVALID_UTF8_SUBSTITUTE);
+
+                return $json === false ? '' : $json;
+            },
+            static function (string $file) use ($generation, $text): Msg {
+                [$prompt, $session] = self::collectTurnHookResults($file);
+
+                return new TurnHooksResolvedMsg($generation, $text, $prompt, $session);
+            },
+            static function () use ($run, $generation, $text): Msg {
+                [$prompt, $session] = $run();
+
+                return new TurnHooksResolvedMsg($generation, $text, $prompt, $session);
+            },
+            $cancellation,
+        );
+    }
+
+    /**
+     * Run $childWork in a forked child and resolve with the Msg its payload
+     * decodes to — the one fork + WNOHANG-poll shape behind both pieces of
+     * {@see submit()} that leave the update path: a turn's script hooks (audit
+     * 15b-04, {@see forkTurnHooksCmd()}) and a command file's shell forms (audit
+     * 15b-20, {@see forkCustomCommandCmd()}).
+     *
+     * - The child runs $childWork, writes the string it returns through
+     *   {@see Support\ToolIpcFiles} (0600, atomic rename) and exits through
+     *   {@see Support\ForkedChild::exitNow()}, never back into the loop.
+     * - The parent polls from a loop timer every {@see TURN_HOOK_POLL_SECONDS},
+     *   so the frame keeps painting and the keyboard stays live, and hands the
+     *   payload file to $collect once the child has been reaped.
+     * - CANCEL KILLS THE TREE: once $cancellation fires, the next poll takes the
+     *   child and everything under it — a setsid'd hook script or `bash -c`, and
+     *   whatever that started — through {@see Support\ProcessContainment::killTree()},
+     *   reaps it on {@see reapKilledToolChildren()}'s bounded window, discards
+     *   the payload and resolves null, so nothing is dispatched.
+     * - A failed fork (-1) runs $inline here, blocking but never wrong — the
+     *   pre-fix behaviour, as {@see forkToolCalls()} degrades.
+     *
+     * @param \Closure(): string          $childWork runs in the child; returns the payload
+     * @param \Closure(string): Msg       $collect   decodes the payload file (and discards it)
+     * @param \Closure(): Msg             $inline    the synchronous fallback
+     */
+    private static function forkedPayloadCmd(
+        \Closure $childWork,
+        \Closure $collect,
+        \Closure $inline,
+        CancellationToken $cancellation,
+    ): \Closure {
+        return Cmd::promise(static function () use ($childWork, $collect, $inline, $cancellation): PromiseInterface {
             $deferred = new Deferred();
 
             if ($cancellation->isCancelled()) {
@@ -4998,19 +5095,14 @@ final class Chat implements Model
             $pid = pcntl_fork();
 
             if ($pid === -1) {
-                [$prompt, $session] = $run();
-                $deferred->resolve(new TurnHooksResolvedMsg($generation, $text, $prompt, $session));
+                \SugarCraft\Crush\Support\ToolIpcFiles::discard($file);
+                $deferred->resolve($inline());
 
                 return $deferred->promise();
             }
 
             if ($pid === 0) {
-                [$prompt, $session] = $run();
-                $json = json_encode([
-                    'prompt' => self::turnHookResultToArray($prompt),
-                    'session' => $session === null ? null : self::turnHookResultToArray($session),
-                ], JSON_INVALID_UTF8_SUBSTITUTE);
-                \SugarCraft\Crush\Support\ToolIpcFiles::write($file, $json === false ? '' : $json);
+                \SugarCraft\Crush\Support\ToolIpcFiles::write($file, $childWork());
                 \SugarCraft\Crush\Support\ForkedChild::exitNow(0);
             }
 
@@ -5019,7 +5111,7 @@ final class Chat implements Model
             $timer = null;
             $timer = $loop->addPeriodicTimer(
                 self::TURN_HOOK_POLL_SECONDS,
-                static function () use ($pid, $file, $generation, $text, $cancellation, $loop, &$settled, &$timer, $deferred): void {
+                static function () use ($pid, $file, $collect, $cancellation, $loop, &$settled, &$timer, $deferred): void {
                     if ($settled) {
                         return;
                     }
@@ -5042,8 +5134,7 @@ final class Chat implements Model
 
                     $settled = true;
                     $loop->cancelTimer($timer);
-                    [$prompt, $session] = self::collectTurnHookResults($file);
-                    $deferred->resolve(new TurnHooksResolvedMsg($generation, $text, $prompt, $session));
+                    $deferred->resolve($collect($file));
                 },
             );
 
@@ -5144,7 +5235,7 @@ final class Chat implements Model
             'inputBuf' => $pending['draft'],
         ])->withInputCursor($pending['cursor'])->submit();
 
-        $after = $after->mutate(['resolvedTurnHooks' => null]);
+        $after = $after->mutate(['resolvedTurnHooks' => null])->withoutStaleCustomExpansion();
         if ($after->inFlight || $boxOccupied) {
             $after = $after->mutate(['input' => $typedDraft]);
         }
@@ -5154,6 +5245,241 @@ final class Chat implements Model
         }
 
         return self::releaseQueuedPrompts([$after, $cmd]);
+    }
+
+    /**
+     * Whether expanding the command file $text names would run a shell, and so
+     * has to leave the TUI's thread (audit 15b-20).
+     *
+     * True only when every one of these holds, so every other expansion stays
+     * synchronous and byte-identical:
+     * - $text names a file-based command whose body has a `` !`…` `` form
+     *   ({@see CommandSpec::hasShellSubstitution()}) — `$ARGUMENTS` and `@path`
+     *   are bounded in-process work;
+     * - the form could actually reach a shell: a PROJECT-tier body in an
+     *   untrusted checkout has every shell form refused by
+     *   {@see refuseCommandShell()}'s first check, which reads nothing but this
+     *   model, so forking it would buy nothing;
+     * - no expansion for this exact line is already in hand (the re-entry);
+     * - this build can fork. Without pcntl the expansion runs here as before,
+     *   the degradation {@see forkToolCalls()} takes.
+     */
+    private function customCommandMustFork(string $text): bool
+    {
+        if (($this->resolvedCustomCommand['text'] ?? null) === $text
+            || !\function_exists('pcntl_fork')
+            || !\function_exists('pcntl_waitpid')
+        ) {
+            return false;
+        }
+
+        $command = $this->resolveCustomCommand($text);
+        if ($command === null) {
+            return false;
+        }
+        [$spec] = $command;
+
+        return $spec->hasShellSubstitution()
+            && !($spec->tier === 'project' && !$this->projectCommandsTrusted);
+    }
+
+    /**
+     * Park the command line $text behind a forked template expansion and hand
+     * back the Cmd that runs it (audit 15b-20) — the {@see pendTurnHooks()}
+     * shape, for the same reasons: `inFlight` held with a fresh
+     * {@see CancellationToken} so Enter queues and double-Escape cancels, the
+     * generation bumped so an abandoned expansion is recognisably stale, and the
+     * box consumed so the line cannot be submitted twice. Pure; the fork happens
+     * in the Cmd.
+     *
+     * @return array{0: self, 1: \Closure}
+     */
+    private function pendCustomCommand(string $text): array
+    {
+        $cancellation = new CancellationToken();
+        $generation = $this->generation + 1;
+
+        $next = $this->mutate([
+            'inFlight' => true,
+            'inFlightCancellation' => $cancellation,
+            'generation' => $generation,
+            'lastEscapeAt' => null,
+            'pendingCustomCommand' => [
+                'text' => $text,
+                'draft' => $this->inputBuf,
+                'cursor' => $this->inputCursorOffset(),
+            ],
+            'inputBuf' => '',
+        ]);
+
+        return [$next, $this->forkCustomCommandCmd($text, $generation, $cancellation)];
+    }
+
+    /**
+     * The Cmd that expands $text's template in a forked child and resolves with
+     * a {@see CustomCommandExpandedMsg} (audit 15b-20), through
+     * {@see forkedPayloadCmd()}.
+     *
+     * The child expands against THIS model — the state at the moment Enter was
+     * pressed, which is what the synchronous path expanded against — so the
+     * closure captures `$this` on purpose; nothing it reads can go stale, since
+     * the model is immutable.
+     *
+     * THE EXPANSION CROSSES THE BOUNDARY BASE64-ENCODED: it carries raw command
+     * output, which need not be UTF-8, and JSON's substitution would hand the
+     * model different bytes from the ones the synchronous path sent.
+     *
+     * THE PERMISSION GATE'S STATE DOES NOT CROSS IT, which is why the child also
+     * reports every command it put to the gate (see
+     * {@see refuseCommandShell()}). A cancelled expansion reports nothing, so
+     * its evaluations are not replayed — the commands it judged never ran.
+     */
+    private function forkCustomCommandCmd(string $text, int $generation, CancellationToken $cancellation): \Closure
+    {
+        $chat = $this;
+        $run = static function () use ($chat, $text): array {
+            $gated = [];
+            $expanded = $chat->expandCustomCommand($text, static function (string $command) use (&$gated): void {
+                $gated[] = $command;
+            });
+
+            return [$expanded, $gated];
+        };
+
+        return self::forkedPayloadCmd(
+            static function () use ($run): string {
+                [$expanded, $gated] = $run();
+                $json = json_encode([
+                    'expanded' => $expanded === null ? null : base64_encode($expanded),
+                    'gated' => $gated,
+                ], JSON_INVALID_UTF8_SUBSTITUTE);
+
+                return $json === false ? '' : $json;
+            },
+            static function (string $file) use ($generation, $text): Msg {
+                [$expanded, $gated] = self::collectCustomCommandExpansion($file);
+
+                return new CustomCommandExpandedMsg($generation, $text, $expanded, $gated);
+            },
+            static function () use ($run, $generation, $text): Msg {
+                [$expanded, $gated] = $run();
+
+                return new CustomCommandExpandedMsg($generation, $text, $expanded, $gated);
+            },
+            $cancellation,
+        );
+    }
+
+    /**
+     * Read back what an expansion child wrote, discarding the payload either
+     * way. Anything unreadable is a null expansion, which
+     * {@see resumeCustomCommand()} refuses rather than sends.
+     *
+     * @return array{0: ?string, 1: list<string>}
+     */
+    private static function collectCustomCommandExpansion(string $file): array
+    {
+        $data = self::takeIpcPayload($file);
+        $decoded = ($data !== false && $data !== '') ? json_decode($data, true) : null;
+        if (!\is_array($decoded) || !\is_string($decoded['expanded'] ?? null)) {
+            return [null, []];
+        }
+
+        $expanded = base64_decode($decoded['expanded'], true);
+        $gated = array_values(array_filter(
+            \is_array($decoded['gated'] ?? null) ? $decoded['gated'] : [],
+            'is_string',
+        ));
+
+        return [$expanded === false ? null : $expanded, $gated];
+    }
+
+    /**
+     * Re-enter {@see submit()} with a forked expansion (audit 15b-20).
+     *
+     * Dropped when stale — no command is pending, the generation moved (a
+     * double-Escape cancelled it), or it expanded another line — exactly as
+     * {@see resumeTurnHooks()} drops a stale verdict.
+     *
+     * Otherwise, in this order:
+     * 1. the child's permission-gate evaluations are replayed against the
+     *    session's gate, so the Auto-mode circuit breaker counts what the
+     *    synchronous path would have counted ({@see forkCustomCommandCmd()});
+     * 2. a child that reported no expansion is refused visibly with the line
+     *    back in the box — sending the raw `/name` would deliver the body's
+     *    intent with none of it expanded;
+     * 3. the box is seeded back with the line Enter consumed (text and cursor,
+     *    so `/rewind`'s draft capture matches the synchronous path) and submit()
+     *    runs from the top with the expansion in {@see $resolvedCustomCommand}:
+     *    the empty-expansion refusal, spend cap, compaction tiers and turn hooks
+     *    all apply to it unchanged. When those turn hooks park it again
+     *    (15b-04), the expansion is kept for that second re-entry.
+     *
+     * What the user typed during the wait is put back afterwards, and a refusal
+     * releases the prompts queued meanwhile — both as in resumeTurnHooks().
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function resumeCustomCommand(CustomCommandExpandedMsg $msg): array
+    {
+        $pending = $this->pendingCustomCommand;
+        if ($pending === null || $msg->generation !== $this->generation || $msg->text !== $pending['text']) {
+            return [$this, null];
+        }
+
+        $gate = $msg->gatedCommands === [] ? null : $this->permissionGate();
+        foreach ($msg->gatedCommands as $command) {
+            $gate?->evaluate(new \SugarCraft\Crush\ToolCall('Bash', ['command' => $command]));
+        }
+
+        $typedDraft = $this->input;
+        $boxOccupied = trim($this->inputBuf) !== '';
+
+        $resumed = $this->mutate([
+            'inFlight' => false,
+            'inFlightCancellation' => null,
+            'pendingCustomCommand' => null,
+            'inputBuf' => $pending['draft'],
+        ])->withInputCursor($pending['cursor']);
+
+        if ($msg->expanded === null) {
+            $after = $resumed->mutate([
+                'history' => [...$this->history, Message::notice(sprintf(
+                    '%s was not sent: expanding it ended without a result. %s',
+                    self::quoteDraftForNotice($msg->text),
+                    $boxOccupied
+                        ? 'The box keeps the draft you typed while it ran.'
+                        : 'It is still in the box.',
+                ))],
+            ]);
+            $cmd = null;
+        } else {
+            [$after, $cmd] = $resumed->mutate([
+                'resolvedCustomCommand' => ['text' => $msg->text, 'expanded' => $msg->expanded],
+            ])->submit();
+            $after = $after->withoutStaleCustomExpansion();
+        }
+
+        if ($after->inFlight || $boxOccupied) {
+            $after = $after->mutate(['input' => $typedDraft]);
+        }
+
+        if ($after->inFlight) {
+            return [$after, $cmd];
+        }
+
+        return self::releaseQueuedPrompts([$after, $cmd]);
+    }
+
+    /**
+     * Drop a kept {@see $resolvedCustomCommand} unless a turn-hook chain is still
+     * pending on it — the one re-entry it is kept for.
+     */
+    private function withoutStaleCustomExpansion(): self
+    {
+        return $this->resolvedCustomCommand !== null && $this->pendingTurnHooks === null
+            ? $this->mutate(['resolvedCustomCommand' => null])
+            : $this;
     }
 
     /**
@@ -5384,15 +5710,6 @@ final class Chat implements Model
     }
 
     /**
-     * Read + decode + delete a forked child's result file, reconstruct its
-     * ToolResult, and fire $onToolCall in THIS (the parent) process when the
-     * underlying callback succeeded - see forkToolCalls()'s docblock
-     * for why that firing can't happen in the child itself. A missing or
-     * unreadable file (the child never wrote one - killed by the timeout
-     * above, or crashed) is reported as a timeout error rather than silently
-     * dropped.
-     */
-    /**
      * Read one forked child's IPC payload and discard it, whether or not it was
      * readable — shared by the tool fan-out ({@see collectToolResult()}) and the
      * turn-hook fork ({@see collectTurnHookResults()}), which write through the
@@ -5411,6 +5728,15 @@ final class Chat implements Model
         return $data;
     }
 
+    /**
+     * Read + decode + delete a forked child's result file, reconstruct its
+     * ToolResult, and fire $onToolCall in THIS (the parent) process when the
+     * underlying callback succeeded - see forkToolCalls()'s docblock
+     * for why that firing can't happen in the child itself. A missing or
+     * unreadable file (the child never wrote one - killed by the timeout
+     * above, or crashed) is reported as a timeout error rather than silently
+     * dropped.
+     */
     private function collectToolResult(string $file, ToolCall $toolCall): ToolResult
     {
         $data = self::takeIpcPayload($file);
@@ -7468,6 +7794,8 @@ final class Chat implements Model
             'queuedPrompts' => $this->queuedPrompts,
             'pendingTurnHooks' => $this->pendingTurnHooks,
             'resolvedTurnHooks' => $this->resolvedTurnHooks,
+            'pendingCustomCommand' => $this->pendingCustomCommand,
+            'resolvedCustomCommand' => $this->resolvedCustomCommand,
             'commandLoader' => $this->commandLoader,
             // Carried, so the disk walk happens once per process rather than
             // once per keystroke — see the property's doc-block.
@@ -7755,6 +8083,17 @@ final class Chat implements Model
         // dispatch itself) must apply to it exactly as it applies to typed
         // prose. Returning early would route the one kind of prompt a repository
         // can author around every one of those checks.
+        // A BODY THAT RUNS A SHELL IS EXPANDED OFF THE UPDATE PATH (audit 15b-20):
+        // its `` !`…` `` forms can take the whole shell budget, and running them
+        // here froze the frame and the keyboard for all of it. The command line
+        // is parked and the expansion forked from a Cmd; the expanded text comes
+        // back as a {@see CustomCommandExpandedMsg} and re-enters this method,
+        // where expandCustomCommand() consumes it, so everything below applies
+        // to it exactly as on the synchronous path.
+        if ($this->customCommandMustFork($text)) {
+            return $this->pendCustomCommand($text);
+        }
+
         $expanded = $this->expandCustomCommand($text);
         if ($expanded !== null) {
             // AN EXPANSION THAT PRODUCED NOTHING IS REFUSED, not sent. The
@@ -8656,7 +8995,40 @@ final class Chat implements Model
      * where the name ends is the part that is wrong here, its shell-quote
      * splitting is the part that is right, and this takes only the second.
      */
-    private function expandCustomCommand(string $text): ?string
+    private function expandCustomCommand(string $text, ?\Closure $onGateEvaluated = null): ?string
+    {
+        // THE RE-ENTRY (audit 15b-20): a forked child already expanded this
+        // command line, shell forms and all, and {@see resumeCustomCommand()}
+        // runs submit() again with the result stored here. Consumed instead of
+        // expanded, so each `` !`…` `` runs exactly once per submission and the
+        // turn-hook verdicts that may follow judge the same string.
+        $resolved = $this->resolvedCustomCommand;
+        if ($resolved !== null && $resolved['text'] === $text) {
+            return $resolved['expanded'];
+        }
+
+        $command = $this->resolveCustomCommand($text);
+        if ($command === null) {
+            return null;
+        }
+        [$spec, $arguments] = $command;
+
+        return $spec->expandTemplate(
+            $arguments,
+            (new CommandParser())->parse('/c ' . $arguments)?->args ?? [],
+            $this->commandDirective($spec, $onGateEvaluated),
+        );
+    }
+
+    /**
+     * The file-based command a typed `/name …` names, with its argument string,
+     * or null when it names none — the lookup half of
+     * {@see expandCustomCommand()}, split out so {@see customCommandMustFork()}
+     * asks about exactly the spec the expansion would use.
+     *
+     * @return ?array{0: CommandSpec, 1: string}
+     */
+    private function resolveCustomCommand(string $text): ?array
     {
         if ($this->customCommands === []) {
             return null;
@@ -8703,11 +9075,7 @@ final class Chat implements Model
             return null;
         }
 
-        return $spec->expandTemplate(
-            $arguments,
-            (new CommandParser())->parse('/c ' . $arguments)?->args ?? [],
-            $this->commandDirective($spec),
-        );
+        return [$spec, $arguments];
     }
 
     /**
@@ -8727,16 +9095,16 @@ final class Chat implements Model
      * `` !`cd /tmp && …` `` moved the process must not move the boundary its
      * later `@path` forms are checked against.
      */
-    private function commandDirective(CommandSpec $spec): \Closure
+    private function commandDirective(CommandSpec $spec, ?\Closure $onGateEvaluated = null): \Closure
     {
         $root = $this->projectRoot();
 
-        return function (string $kind, string $payload, float $secondsRemaining) use ($spec, $root): string {
+        return function (string $kind, string $payload, float $secondsRemaining) use ($spec, $root, $onGateEvaluated): string {
             if ($kind === 'include') {
                 return $spec->includeFile($payload, $root);
             }
 
-            $refusal = $this->refuseCommandShell($spec, $payload);
+            $refusal = $this->refuseCommandShell($spec, $payload, $onGateEvaluated);
             if ($refusal !== null) {
                 return $refusal;
             }
@@ -8778,7 +9146,7 @@ final class Chat implements Model
      * `Deny Bash(rm *)`, and the `rm -rf /` breaker, both of which read
      * `arguments['command']` and so need the real command string this passes.
      */
-    private function refuseCommandShell(CommandSpec $spec, string $command): ?string
+    private function refuseCommandShell(CommandSpec $spec, string $command, ?\Closure $onGateEvaluated = null): ?string
     {
         if ($spec->tier === 'project' && !$this->projectCommandsTrusted) {
             return sprintf(
@@ -8807,6 +9175,15 @@ final class Chat implements Model
         // pairs crush_feat.md §1 D flags — NOT `Tools\ToolCall`, which is the
         // engine-side pair and which PermissionGate does not accept. Named
         // fully rather than imported so the choice is visible at the call site.
+        // RECORDED when asked to be (audit 15b-20): an expansion forked off the
+        // update path evaluates against the CHILD's copy of the gate, whose
+        // Auto-mode circuit-breaker counters die with it, so the child reports
+        // every command it put to the gate and {@see resumeCustomCommand()}
+        // replays them, in order, against the session's own.
+        if ($onGateEvaluated !== null) {
+            $onGateEvaluated($command);
+        }
+
         if ($gate->evaluate(new \SugarCraft\Crush\ToolCall('Bash', ['command' => $command]))
             === \SugarCraft\Crush\Permissions\PermissionDecision::Deny) {
             return sprintf(

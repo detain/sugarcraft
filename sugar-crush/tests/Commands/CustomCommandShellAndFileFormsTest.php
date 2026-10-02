@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Commands;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\Loop;
+use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Commands\CommandSpec;
+use SugarCraft\Crush\CustomCommandExpandedMsg;
 use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
@@ -103,14 +106,56 @@ final class CustomCommandShellAndFileFormsTest extends TestCase
         $chat = $this->chat($trusted, $hooks);
         // The draft is replaced wholesale rather than typed, except where a test
         // deliberately exercises the per-keystroke clone path below.
-        [$next] = (new \ReflectionMethod(Chat::class, 'mutate'))
+        $next = $this->settle((new \ReflectionMethod(Chat::class, 'mutate'))
             ->invoke($chat, ['inputBuf' => $draft])
-            ->update(new KeyMsg(KeyType::Enter));
+            ->update(new KeyMsg(KeyType::Enter)));
 
         $added = array_slice($next->history, 2);
         $this->assertCount(1, $added, 'a dispatched custom command sends exactly one user message');
 
         return $added[0]->content;
+    }
+
+    /**
+     * Finish a submission whose template runs a shell. Since audit 15b-20 such
+     * an expansion is forked off `update()`: Enter parks the command line and
+     * hands back a Cmd, and the expanded prompt only reaches history once the
+     * {@see CustomCommandExpandedMsg} that Cmd resolves with is fed back. Every
+     * claim in this file is about what that prompt says, so the helper runs the
+     * Cmd on the shared loop (bounded) and returns the model after the re-entry.
+     * A submission that did not park is returned as it is.
+     *
+     * @param array{0: Chat, 1: ?\Closure} $pair what `update(Enter)` returned
+     */
+    private function settle(array $pair): Chat
+    {
+        [$chat, $cmd] = $pair;
+        $pending = (new \ReflectionProperty(Chat::class, 'pendingCustomCommand'))->getValue($chat);
+        if ($pending === null || $cmd === null) {
+            return $chat;
+        }
+
+        $async = $cmd();
+        $this->assertInstanceOf(AsyncCmd::class, $async);
+
+        $loop = Loop::get();
+        $msg = null;
+        $done = false;
+        $async->promise->then(static function ($value) use (&$msg, &$done, $loop): void {
+            $msg = $value;
+            $done = true;
+            $loop->stop();
+        });
+        if (!$done) {
+            $guard = $loop->addTimer(30.0, static fn() => $loop->stop());
+            $loop->run();
+            $loop->cancelTimer($guard);
+        }
+        $this->assertInstanceOf(CustomCommandExpandedMsg::class, $msg, 'the forked expansion settled');
+
+        [$next] = $chat->update($msg);
+
+        return $next;
     }
 
     /** A path inside the sandbox that a refused command would have created. */
@@ -176,7 +221,7 @@ final class CustomCommandShellAndFileFormsTest extends TestCase
         foreach (str_split('/branch') as $char) {
             [$chat] = $chat->update(new KeyMsg(KeyType::Char, $char));
         }
-        [$next] = $chat->update(new KeyMsg(KeyType::Enter));
+        $next = $this->settle($chat->update(new KeyMsg(KeyType::Enter)));
 
         $this->assertSame('twig', array_slice($next->history, 2)[0]->content);
     }
@@ -658,9 +703,9 @@ final class CustomCommandShellAndFileFormsTest extends TestCase
             )],
         );
 
-        [$next] = (new \ReflectionMethod(Chat::class, 'mutate'))
+        $next = $this->settle((new \ReflectionMethod(Chat::class, 'mutate'))
             ->invoke($chat, ['inputBuf' => '/branch'])
-            ->update(new KeyMsg(KeyType::Enter));
+            ->update(new KeyMsg(KeyType::Enter)));
 
         $this->assertSame('twig', array_slice($next->history, 2)[0]->content);
     }
@@ -994,9 +1039,9 @@ final class CustomCommandShellAndFileFormsTest extends TestCase
         $chat = \SugarCraft\Crush\Cli\Bootstrap::chat($this->project);
         $before = \count($chat->history);
 
-        [$next] = (new \ReflectionMethod(Chat::class, 'mutate'))
+        $next = $this->settle((new \ReflectionMethod(Chat::class, 'mutate'))
             ->invoke($chat, ['inputBuf' => $draft])
-            ->update(new KeyMsg(KeyType::Enter));
+            ->update(new KeyMsg(KeyType::Enter)));
 
         $added = array_slice($next->history, $before);
         $this->assertCount(1, $added, 'a dispatched custom command sends exactly one user message');

@@ -129,9 +129,11 @@ final class CommandSpec
      *
      * SHORT AND NOT OPERATOR-CONFIGURABLE, which is deliberate and is the
      * opposite of the rule for a provider HTTP call: a completion legitimately
-     * runs for tens of minutes, whereas this is a local command run
-     * SYNCHRONOUSLY inside `submit()` before a prompt is sent, and every second
-     * of it is a second the terminal is frozen. The frontmatter deliberately
+     * runs for tens of minutes, whereas this is a local command run before a
+     * prompt is sent, and every second of it is a second the prompt waits. (It
+     * no longer freezes the terminal where pcntl is available — audit 15b-20
+     * moved the expansion into a forked child — but without pcntl it still runs
+     * synchronously inside `submit()`.) The frontmatter deliberately
      * cannot raise it: frontmatter is repository-authored, and a cloned
      * `review.md` that could set its own budget could freeze the app for as long
      * as it liked.
@@ -343,6 +345,46 @@ final class CommandSpec
     {
         return $this->template !== null;
     }
+
+    /**
+     * Whether this body holds a `` !`…` `` form, i.e. whether expanding it may
+     * have to run a shell (audit 15b-20).
+     *
+     * Asked BEFORE expanding, so {@see \SugarCraft\Crush\Chat} can move exactly
+     * the expansions that can block off its update path and leave every other
+     * one — `$ARGUMENTS`, `@path` — synchronous and unchanged. Read off the same
+     * {@see TEMPLATE_PATTERN} {@see expandTemplate()} scans with, so the two can
+     * never disagree about what counts as a shell form; an argument's text is
+     * never scanned (see that method), so only the body is asked.
+     *
+     * A scan PCRE gives up on answers true: {@see expandTemplate()} then fails
+     * closed with its own notice, and over-reporting only costs a fork.
+     */
+    public function hasShellSubstitution(): bool
+    {
+        if ($this->template === null) {
+            return false;
+        }
+
+        $matched = preg_match_all(self::TEMPLATE_PATTERN, $this->template, $matches, PREG_PATTERN_ORDER);
+        if ($matched === false) {
+            return true;
+        }
+
+        foreach ($matches[2] as $shell) {
+            if ($shell !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Seconds a timed-out `` !`…` `` tree gets between SIGTERM and SIGKILL —
+     * the 50 ms the pre-15b-20 ladder slept between its two `proc_terminate()`s.
+     */
+    private const TIMEOUT_TERM_GRACE_SECONDS = 0.05;
 
     /**
      * The prompt this file-based command sends, with its argument placeholders
@@ -595,6 +637,14 @@ final class CommandSpec
             return sprintf('[!`%s` was not run: the shell could not be started]', self::abbreviateForm($command));
         }
 
+        // READ WHILE THE CHILD IS ALIVE, for the timeout's tree kill below
+        // (audit 15b-20): once it has exited, `proc_get_status()` reaps it and
+        // neither its pid nor its process group can be read any more — and the
+        // case that needs them most is exactly that one, a `` !`npm run dev &` ``
+        // whose shell is gone while the job it started holds stdout open.
+        $pid = (int) (proc_get_status($process)['pid'] ?? 0);
+        $groupPid = ProcessContainment::groupId($process);
+
         $streams = [1 => $pipes[1], 2 => $pipes[2]];
         foreach ($streams as $stream) {
             stream_set_blocking($stream, false);
@@ -683,12 +733,31 @@ final class CommandSpec
         }
 
         if ($timedOut) {
-            // SIGTERM, then SIGKILL: a `bash -c` blocked in a syscall may ignore
-            // the first, and proc_close() WAITS, so closing without having
-            // actually killed the child is how a bounded call becomes unbounded.
-            proc_terminate($process);
-            usleep(50000);
-            if ((proc_get_status($process)['running'] ?? false) === true) {
+            // THE WHOLE TREE, not the direct child (audit 15b-20). proc_terminate()
+            // signalled only the `setsid` wrapper, so a template's
+            // `` !`bash -c 'sleep 38'; echo done` `` — or any `npm run dev &` that
+            // holds stdout — kept running after the "killed after N seconds"
+            // notice, MEASURED by `r14_cmd_shell.php`. killTree() freezes and
+            // collects the descendants while the root still holds them, then
+            // signals every process group they are in (spawnSpec() made the
+            // command a session leader, so a backgrounded job whose shell already
+            // exited is still in that group) and every member.
+            //
+            // SIGTERM with a short grace, then SIGKILL: a `bash -c` blocked in a
+            // syscall may ignore the first, and proc_close() WAITS, so closing
+            // without having actually killed the child is how a bounded call
+            // becomes unbounded. The grace is the 50 ms the old ladder slept.
+            //
+            // THEN THE GROUP, as the floor killTree() cannot reach on its own: a
+            // root that already exited (the `&` case above) has no descendants
+            // left to walk, but its group still holds the job. A group with
+            // live members keeps its id, so the signal cannot land elsewhere.
+            if ($pid > 0 && \function_exists('posix_kill')) {
+                ProcessContainment::killTree($pid, self::TIMEOUT_TERM_GRACE_SECONDS);
+                if ($groupPid !== null) {
+                    @posix_kill(-$groupPid, 9);
+                }
+            } else {
                 proc_terminate($process, 9);
             }
         }
