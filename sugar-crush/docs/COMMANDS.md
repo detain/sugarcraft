@@ -137,6 +137,19 @@ Five distinct behaviours, and note `$9` → the empty string rather than a liter
 | `` !`cmd` `` | the command's stdout |
 | `@path/to/file.ext` | the file's contents |
 
+How `$1` … `$9` are split (`CommandParser::splitArgs()`): on spaces and tabs,
+with a `'…'` or `"…"` span kept as one argument and its quotes stripped
+(`/deploy "us east" prod` gives `us east`, `prod`). Three edge rules:
+
+- a quote opens a span **only at the start of an argument** — mid-word it is
+  text, so `/fix don't touch main.php` gives `fix`, `don't`, `touch`, `main.php`;
+- a quote with **no closing partner** is kept as text and the rest still splits
+  (`'abc def` gives `'abc`, `def`);
+- an **empty** span is an argument: `/cmd "" second` puts the empty string in
+  `$1` and `second` in `$2`, so later arguments keep their numbers.
+
+`$ARGUMENTS` is never split, so none of this touches it.
+
 The single-pass property is load-bearing rather than tidy. Text one pass
 substitutes is invisible to the matcher, so:
 

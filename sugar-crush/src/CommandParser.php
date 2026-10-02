@@ -90,52 +90,64 @@ final class CommandParser
     }
 
     /**
-     * Split a raw argument string into positional arguments,
-     * respecting single- and double-quote boundaries and
-     * stripping quotes from the resulting tokens.
+     * Split a raw argument string into positional arguments, honouring
+     * single- and double-quote spans and stripping their quotes.
      *
-     * @return list<non-empty-string>
+     * A QUOTE OPENS A SPAN ONLY AT THE START OF A TOKEN. Mid-word it is prose:
+     * `don't` and `it's` are words, and treating their apostrophe as an opening
+     * quote swallowed the rest of the line into one token with the apostrophe
+     * deleted (audit 15b-23). After a span closes, text up to the next
+     * whitespace joins the same token (`"foo bar"baz` is `foo barbaz`), as in
+     * `sh`; a quote reached there is literal too.
+     *
+     * AN UNTERMINATED QUOTE IS KEPT LITERALLY: with no closing partner it is
+     * not a quote at all, so the character stays in the token and the rest of
+     * the line splits on whitespace as usual (`'abc def` is `'abc`, `def`).
+     * Running it silently to the end of the line guessed at a boundary the
+     * user never typed.
+     *
+     * AN EMPTY SPAN IS AN ARGUMENT: `"" second` is two arguments, the first
+     * empty. Dropping it renumbers every later one, so `$1` in a custom
+     * command template received what the user typed as `$2`.
+     *
+     * @return list<string>
      */
     private function splitArgs(string $raw): array
     {
         $tokens = [];
-        $current = '';
-        $quote = null;
-
         $len = strlen($raw);
-        for ($i = 0; $i < $len; $i++) {
+        $i = 0;
+
+        while ($i < $len) {
             $ch = $raw[$i];
 
-            if ($quote !== null) {
-                if ($ch === $quote) {
-                    $quote = null;
-                } else {
-                    $current .= $ch;
-                }
+            if ($ch === ' ' || $ch === "\t") {
+                $i++;
                 continue;
             }
+
+            $current = '';
 
             if ($ch === "'" || $ch === '"') {
-                $quote = $ch;
-                continue;
-            }
-
-            if ($ch === ' ' || $ch === "\t") {
-                if ($current !== '') {
-                    $tokens[] = $current;
-                    $current = '';
+                $close = strpos($raw, $ch, $i + 1);
+                if ($close !== false) {
+                    $current = substr($raw, $i + 1, $close - $i - 1);
+                    $i = $close + 1;
+                } else {
+                    // Unterminated: keep the quote character as text.
+                    $current = $ch;
+                    $i++;
                 }
-                continue;
             }
 
-            $current .= $ch;
-        }
+            while ($i < $len && $raw[$i] !== ' ' && $raw[$i] !== "\t") {
+                $current .= $raw[$i];
+                $i++;
+            }
 
-        if ($current !== '') {
             $tokens[] = $current;
         }
 
-        /** @var list<non-empty-string> */
         return $tokens;
     }
 }
