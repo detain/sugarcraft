@@ -80,12 +80,15 @@ final class ChatPane
      * The pane's text bytes plus the hosted chat's pixel-graphics layer.
      *
      * The image layer has to ride out of here rather than being dropped:
-     * {@see LiveRenderer::renderView()} leaves a Private-Use-Area marker cell in
-     * the body for every image-bearing tool result (crush_feat.md §9 E3) and
-     * only `Program::renderFrame()` — given the placements on a
-     * {@see \SugarCraft\Core\View} — turns those markers back into painted
-     * blobs and blank cells. Returning just the string would paint no image AND
-     * leak the raw marker bytes into the terminal.
+     * {@see LiveRenderer::renderView()} leaves a marker in the body for every
+     * image-bearing tool result (crush_feat.md §9 E3) — a zero-width
+     * authenticating OSC plus one U+E002 + id cell
+     * ({@see \SugarCraft\Core\ImageOverlay::marker()}) — and only
+     * `Program::renderFrame()`, given the placements on a
+     * {@see \SugarCraft\Core\View}, paints those markers as images. Returning
+     * just the string would paint no image: since 15b-17's fix
+     * `renderFrame()` resolves every frame, so a marker whose placement was
+     * dropped is cleared to a blank cell rather than leaked to the terminal.
      *
      * Placements need no coordinate fix-up for the pane's position: markers are
      * resolved against the FINAL composed frame by

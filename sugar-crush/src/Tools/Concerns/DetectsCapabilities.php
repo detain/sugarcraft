@@ -34,9 +34,11 @@ namespace SugarCraft\Crush\Tools\Concerns;
  * dependency pointing the wrong way, and ~20 lines of stat calls are cheaper
  * than either that or an edit outside this step's file ceiling.
  *
- * Memoized in a static keyed by binary — the house idiom is
- * {@see \SugarCraft\Crush\Tools\BuiltIn\Doctor::execute()}'s `self::$mosaic ??=`
- * — so a launch that walks `app()`, `backend()` and `backendFor()` in sequence
+ * Memoized in a static keyed by binary — the house idiom for a probe-once
+ * capability, as {@see \SugarCraft\Crush\ToolResult::mosaic()} caches the
+ * terminal probe that {@see \SugarCraft\Crush\Cli\Bootstrap::chat()} warms at
+ * boot and every later reader (Doctor among them, since audit F-T6) shares —
+ * so a launch that walks `app()`, `backend()` and `backendFor()` in sequence
  * still pays for one scan per name, and the second ask is a hash lookup.
  */
 trait DetectsCapabilities

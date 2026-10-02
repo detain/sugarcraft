@@ -655,10 +655,12 @@ final class SessionStore
      * half that still goes to stderr alone.
      * WHY THAT STILL EARNS THE SHAPE BELOW: the split is the reason a full row
      * per session is worth returning at all. One transcript row per deleted
-     * session would be a per-entry fan-out into a list the model is re-sent
-     * every turn, so the transcript carries the aggregate and stderr carries
-     * this — the complete, unclipped record, with the id, the last-used stamp
-     * and the message count the user needs to recognise what went.
+     * session would be a per-entry fan-out that buries every other launch
+     * notice under a list the user scrolls past (launch notices are UI-only
+     * rows since audit 15b-03, so the cost is transcript clutter, not tokens),
+     * so the transcript carries the aggregate and stderr carries this — the
+     * complete, unclipped record, with the id, the last-used stamp and the
+     * message count the user needs to recognise what went.
      *
      * @return array<int, array{id: string, name: ?string, updated_at: string, messages: int}>
      */

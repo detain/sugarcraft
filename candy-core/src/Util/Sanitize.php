@@ -39,10 +39,11 @@ namespace SugarCraft\Core\Util;
  *
  * **The Private-Use reservation.** A TUI frame is not only text: candy-mouse's
  * `Mark`/`Scan` delimit clickable zones with the sentinel pair U+E000 (open) and
- * U+E001 (close), and {@see \SugarCraft\Core\ImageOverlay} allocates its image
- * marker cells from the rest of the block (U+E002 + id) — the sentinels own the
- * two codepoints at the head, so the two marker vocabularies are disjoint by
- * construction. Those codepoints are
+ * U+E001 (close), and {@see \SugarCraft\Core\ImageOverlay} allocates the
+ * cell half of each image marker from the rest of the block (U+E002 + id; the
+ * marker is a zero-width authenticating OSC followed by that cell) — the
+ * sentinels own the two codepoints at the head, so the two marker vocabularies
+ * are disjoint by construction. Those codepoints are
  * ordinary, well-formed 3-byte UTF-8, so {@see untrusted()} — whose vocabulary
  * is escapes, C0/C1 (raw or UTF-8-encoded) and DEL — passes hostile input
  * carrying them straight
@@ -538,8 +539,8 @@ final class Sanitize
      * forged `U+E000 id U+E001` triple is its inert id text.
      *
      * Deliberately surgical rather than block-wide: image marker cells
-     * ({@see \SugarCraft\Core\ImageOverlay}, U+E002 + id, disjoint from the
-     * sentinel pair) and Nerd Font glyphs
+     * ({@see \SugarCraft\Core\ImageOverlay}: the U+E002 + id cell half of a
+     * marker, disjoint from the sentinel pair) and Nerd Font glyphs
      * share the block and must keep flowing through a display path. Callers that
      * want a guaranteed PUA-free string use {@see stripPrivateUse()}.
      *
