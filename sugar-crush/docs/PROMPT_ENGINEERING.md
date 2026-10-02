@@ -51,8 +51,10 @@ volatile `<env>` block last. Counted from the live method, there are eleven slot
    `skillBudgetCombined` tokens, measured with `TokenEstimate::ofText()`: a body over either keeps
    its `## Skill:` heading and is replaced by one line saying how to load it (the Skill tool, or
    Read on its file), never clipped. The budgets are the App's `compactorConfig` when it carries
-   one, else `CompactorConfig::new()`'s defaults; each build records its deferrals on
-   `Runtime::skillDeferrals()`, and the launch names them in one notice (audit R1).
+   one, else `CompactorConfig::new()`'s defaults. An engine turn's App always carries one:
+   `EngineBackend::withCompactorConfig()`'s, else those same defaults — the source the launch
+   notice prices against, since no settings key feeds compaction budgets. Each build records its
+   deferrals on `Runtime::skillDeferrals()`, and the launch names them in one notice (audit R1).
 10. **Skill listing** — `SkillMatcher::listForPrompt()` names the remaining *discovered* skills at
     level-1 metadata (name and description), excluding those whose bodies the previous slot
     already carries. PerTurn. Fenced `available-skills` with the skill-listing preamble, because

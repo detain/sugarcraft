@@ -14,6 +14,7 @@ use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Events\SpendCapBreached;
@@ -464,6 +465,26 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
          * baseline — it is read once, at birth.
          */
         private readonly ?SiblingSpendLedger $siblingSpend = null,
+        /**
+         * The compaction budgets every turn's {@see App} is built with —
+         * today read for the per-skill and combined budgets that decide which
+         * enabled skill bodies {@see Runtime::planEnabledSkills()} splices
+         * into the system prompt and which it defers (audit R1).
+         *
+         * Before this field the per-turn App was built with NO compactor
+         * config at all, so the engine's skill budget was whatever
+         * {@see Runtime} fell back to, decided in a different file from the
+         * launch notice that names the deferred skills
+         * ({@see \SugarCraft\Crush\Cli\Bootstrap}'s prompt-budget report) and
+         * from {@see \SugarCraft\Crush\Chat}'s own compactor: three readers
+         * that agreed only because each happened to default to
+         * {@see CompactorConfig::new()}. No settings key feeds compaction
+         * budgets, so null resolves to that same {@see CompactorConfig::new()}
+         * — the source Bootstrap's notice prices against — explicitly, here,
+         * where a future settings key or a Chat's configured compactor
+         * arrives through {@see withCompactorConfig()}.
+         */
+        private readonly ?CompactorConfig $compactorConfig = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -743,6 +764,25 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         return $this->mutate(['rulesState' => $rulesState]);
     }
 
+    /**
+     * The compaction budgets this backend's turns are priced against.
+     * Null restores the default ({@see CompactorConfig::new()}).
+     * @see $compactorConfig
+     */
+    public function withCompactorConfig(?CompactorConfig $compactorConfig): self
+    {
+        return $this->mutate(['compactorConfig' => $compactorConfig]);
+    }
+
+    /**
+     * The compaction budgets the next turn's {@see App} is built with — the
+     * configured one, else the {@see CompactorConfig::new()} defaults.
+     */
+    public function compactorConfig(): CompactorConfig
+    {
+        return $this->compactorConfig ?? CompactorConfig::new();
+    }
+
     public function withMaxSteps(int $maxSteps): self
     {
         return $this->mutate(['maxSteps' => max(1, $maxSteps)]);
@@ -1003,6 +1043,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             ->withInstructionLoader($this->instructionLoader)
             ->withRoot($this->root)
             ->withMemoryStore($this->memoryStore)
+            // Audit R1: the skill budget the prompt splice applies, from the
+            // same source the launch notice priced it against.
+            ->withCompactorConfig($this->compactorConfig())
             ->withMessages($messages);
 
         $lastAssistant = null;

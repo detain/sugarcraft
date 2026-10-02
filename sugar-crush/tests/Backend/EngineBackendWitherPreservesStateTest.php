@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Backend;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Hooks\HookManager;
@@ -100,6 +101,11 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
             'withSiblingSpend' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withSiblingSpend(self::blank(SiblingSpendLedger::class)),
                 ['siblingSpend'],
+            ],
+            // Audit R1: the per-turn App's compaction budgets.
+            'withCompactorConfig' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withCompactorConfig(new CompactorConfig(skillBudgetPerSkill: 7)),
+                ['compactorConfig'],
             ],
             // Registers onto a CLONE of the manager (audit F-J5), so it owns
             // hookManager; it owns hooksDisabled too (re-asserted false), and
@@ -230,6 +236,7 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
             spendCapUsd: 2.5,
             sessionSpendAtStartUsd: 0.75,
             siblingSpend: self::blank(SiblingSpendLedger::class),
+            compactorConfig: new CompactorConfig(skillBudgetPerSkill: 3),
         );
     }
 
