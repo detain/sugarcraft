@@ -327,6 +327,19 @@ Three spellings dispatch with no row of their own, so nothing advertises them:
 first two are second names the old prefix chain had already made reachable and
 that stay reachable; `quit` is the control-plane case above.
 
+`/bg` (and `/background`) has one sub-command its row does not advertise:
+`/bg stop <session-id>` stops a running background session — the id is the one
+the "Backgrounded as …" line printed. It asks the daemon to stop over its
+authenticated socket and, if that socket is gone, signals the daemon's pid only
+after re-checking the process start time recorded at spawn, so a recycled pid is
+never signalled. The worker running the task is torn down with it, the buffer
+records `[session:task:stopped]`, and the session settles as `stopped`. Because
+"stop" is also an ordinary first word, the sub-command is recognised only when
+`stop` is followed by exactly one token that is a session id this run knows or
+that has the id shape (`sess_YYYYmmddHHMMSS_<8 hex>`); `/bg stop the dev server
+and rebuild` is still a task. A bare `/bg stop` prints usage and the active
+session ids.
+
 Two guards apply to every arm, and both fall through to the model rather than
 guess. A draft must begin with the canonical spelling verbatim, so `/KEYS` is
 prose and `/compactfoo` is a prompt about foo rather than a mistyped `/compact`.

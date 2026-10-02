@@ -2013,10 +2013,24 @@ final class Chat implements Model
             $notice = $msg->error !== null
                 ? "Could not start background session '{$msg->name}': {$msg->error}"
                 : ($msg->command === '/fork'
-                    ? "Forked into background session {$msg->sessionId} ('{$msg->name}') — use /agents to check status."
-                    : "Backgrounded as {$msg->sessionId} ('{$msg->name}') — use /agents to check status.");
+                    ? "Forked into background session {$msg->sessionId} ('{$msg->name}') — use /agents to check status, /bg stop {$msg->sessionId} to cancel."
+                    : "Backgrounded as {$msg->sessionId} ('{$msg->name}') — use /agents to check status, /bg stop {$msg->sessionId} to cancel.");
 
             return [$this->mutate(['history' => [...$this->history, Message::assistant($notice)->withUiOnly()]]), null];
+        }
+        if ($msg instanceof BackgroundSessionStoppedMsg) {
+            // Record the settled status as already announced, so the next
+            // background poll does not repeat it as "is now stopped".
+            $statuses = $this->backgroundStatuses;
+            $settled = $this->backgroundSupervisor?->getSession($msg->sessionId);
+            if ($settled !== null) {
+                $statuses[$msg->sessionId] = $settled->status->value;
+            }
+
+            return [$this->mutate([
+                'history' => [...$this->history, Message::assistant(self::backgroundStopNotice($msg))->withUiOnly()],
+                'backgroundStatuses' => $statuses,
+            ]), null];
         }
         if ($msg instanceof BackgroundTickMsg) {
             return $this->pumpBackgroundSessions();
@@ -13422,6 +13436,16 @@ final class Chat implements Model
      * `/bg` is answered with usage rather than silently backgrounding
      * something else.
      *
+     * `/bg stop <id>` stops a running session (audit BG-1) through
+     * {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor::stopSession()}.
+     * It shares its first word with ordinary prose, so the parsing rule is
+     * deliberately narrow: the argument must be exactly `stop` followed by ONE
+     * token, and that token must be a session id this supervisor knows or one
+     * shaped like the ids it mints (`sess_YYYYmmddHHMMSS_<8 hex>`). Anything
+     * else — "/bg stop the dev server and rebuild" — is a task, as it always
+     * was. A bare `/bg stop` answers usage plus the active ids rather than
+     * backgrounding the word "stop".
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleBackgroundCommand(string $inputText): array
@@ -13435,12 +13459,104 @@ final class Chat implements Model
             return $this->sessionResponse($inputText, 'Usage: /bg <task>');
         }
 
+        if (strcasecmp($task, 'stop') === 0) {
+            return $this->sessionResponse($inputText, $this->backgroundStopUsage());
+        }
+
+        $stopTarget = $this->backgroundStopTarget($task);
+        if ($stopTarget !== null) {
+            return $this->backgroundDispatch($inputText, $this->scheduleBackgroundStop($stopTarget));
+        }
+
         $name = self::backgroundSessionName($task);
 
         return $this->backgroundDispatch(
             $inputText,
             $this->scheduleBackgroundSpawn('/bg', $name, $task, null),
         );
+    }
+
+    /**
+     * The session id `/bg stop <id>` names, or null when $argument is a task.
+     * See {@see handleBackgroundCommand()} for the rule and why it is narrow.
+     */
+    private function backgroundStopTarget(string $argument): ?string
+    {
+        if (preg_match('/^stop\s+(\S+)$/i', $argument, $m) !== 1) {
+            return null;
+        }
+
+        $id = $m[1];
+        if ($this->backgroundSupervisor?->getSession($id) !== null
+            || preg_match(\SugarCraft\Crush\Sessions\BackgroundSupervisor::SESSION_ID_PATTERN, $id) === 1
+        ) {
+            return $id;
+        }
+
+        return null;
+    }
+
+    /** Usage for a bare `/bg stop`, listing what there is to stop. */
+    private function backgroundStopUsage(): string
+    {
+        $active = [];
+        foreach ($this->backgroundSupervisor?->getActiveSessions() ?? [] as $id => $session) {
+            $active[] = "{$id} ('{$session->name}')";
+        }
+
+        return 'Usage: /bg stop <session-id>' . "\n"
+            . ($active === []
+                ? 'No active background sessions.'
+                : 'Active background sessions: ' . implode(', ', $active));
+    }
+
+    /**
+     * The Cmd that stops $sessionId off-turn: `stopSession()` may wait
+     * several seconds on its signal rungs, which must not freeze `update()`.
+     * Resolves, never rejects, for the reason {@see scheduleBackgroundSpawn()}
+     * gives.
+     */
+    private function scheduleBackgroundStop(string $sessionId): \Closure
+    {
+        $supervisor = $this->backgroundSupervisor;
+
+        return Cmd::promise(static function () use ($supervisor, $sessionId): PromiseInterface {
+            $name = $supervisor?->getSession($sessionId)?->name;
+            try {
+                $outcome = $supervisor === null
+                    ? \SugarCraft\Crush\Sessions\BackgroundStopOutcome::CouldNotStop
+                    : $supervisor->stopSession($sessionId);
+
+                return \React\Promise\resolve(new BackgroundSessionStoppedMsg($sessionId, $outcome, $name));
+            } catch (\Throwable $e) {
+                return \React\Promise\resolve(new BackgroundSessionStoppedMsg(
+                    $sessionId,
+                    \SugarCraft\Crush\Sessions\BackgroundStopOutcome::CouldNotStop,
+                    $name,
+                    $e->getMessage(),
+                ));
+            }
+        });
+    }
+
+    /** The transcript line for a settled `/bg stop`. */
+    private static function backgroundStopNotice(BackgroundSessionStoppedMsg $msg): string
+    {
+        $label = $msg->name === null ? $msg->sessionId : "{$msg->sessionId} ('{$msg->name}')";
+
+        return match ($msg->outcome) {
+            \SugarCraft\Crush\Sessions\BackgroundStopOutcome::UnknownSession
+                => "No background session {$msg->sessionId} in this run — /bg stop lists the active ones.",
+            \SugarCraft\Crush\Sessions\BackgroundStopOutcome::AlreadyFinished
+                => "Background session {$label} had already finished; nothing to stop.",
+            \SugarCraft\Crush\Sessions\BackgroundStopOutcome::StoppedViaIpc
+                => "Stopped background session {$label}.",
+            \SugarCraft\Crush\Sessions\BackgroundStopOutcome::StoppedViaSignal
+                => "Stopped background session {$label} (its control socket was gone, so the daemon was signalled).",
+            \SugarCraft\Crush\Sessions\BackgroundStopOutcome::CouldNotStop
+                => "Could not stop background session {$label}"
+                    . ($msg->error !== null ? ": {$msg->error}" : ' — its daemon could not be reached or safely signalled.'),
+        };
     }
 
     /**

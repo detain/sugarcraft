@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Sessions;
 
 use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\ProcessReaper;
+use SugarCraft\Crush\Support\ProcessTree;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\Tui\StallDetector;
 use SugarCraft\Crush\Tui\StallWarning;
@@ -47,7 +49,7 @@ use SugarCraft\Crush\Tui\StallWarning;
  *    refusal, never a trust; the runner's command loop authenticates every
  *    connection the same way before honouring `STOP`.
  */
-final class BackgroundSupervisor implements SessionNotificationInterface
+final class BackgroundSupervisor implements SessionNotificationInterface, SessionStopNotificationInterface
 {
     /**
      * Heartbeat timeout in seconds — matching Phase 1's ProcessExecutor.
@@ -61,6 +63,28 @@ final class BackgroundSupervisor implements SessionNotificationInterface
      * going, so a hostile local connect cannot consume the budget by itself.
      */
     private const SPAWN_AUTH_TIMEOUT_SECS = 5.0;
+
+    /**
+     * How long {@see stopSession()} waits for the daemon to exit after an
+     * acknowledged `STOP` or a SIGTERM. The daemon's own worker teardown may
+     * spend up to {@see BackgroundSessionRunner::TERMINATE_GRACE_SECONDS} plus
+     * its 2 s kill grace before it exits, so the budget is that plus a margin.
+     * In practice the worker dies on its first SIGTERM and this returns in
+     * well under a second.
+     */
+    public const STOP_EXIT_WAIT_SECONDS = BackgroundSessionRunner::TERMINATE_GRACE_SECONDS + 3.0;
+
+    /**
+     * The shape {@see generateSessionId()} mints. Public so `/bg stop <id>`
+     * can tell an id from prose without a second spelling of the format.
+     */
+    public const SESSION_ID_PATTERN = '/^sess_\d{14}_[0-9a-f]{8}$/';
+
+    /** Connect/read budget for the `AUTH` + `STOP` exchange. */
+    private const STOP_IPC_TIMEOUT_SECONDS = 1.0;
+
+    /** How long the final tree kill gets before the stop is reported failed. */
+    private const STOP_KILL_WAIT_SECONDS = 2.0;
 
     /** @var array<string, BackgroundSession> Sessions indexed by session ID */
     private array $sessions = [];
@@ -738,21 +762,31 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
             return false;
         }
 
-        $buffer = (string) @file_get_contents($ipc['bufferPath']);
+        $buffer = self::readBuffer($ipc);
         $output = self::restoreOutput($buffer);
         if ($output !== '') {
             $session = $session->withOutput($output);
         }
 
-        $failed = self::bufferReportsFailure($buffer);
-        $session = $session->withStatus(
-            $failed ? BackgroundSessionStatus::Failed : BackgroundSessionStatus::Completed
-        );
+        // A `stopped` outcome is its own terminal state (audit BG-1): the user
+        // asked for it, so reporting it as Failed would be wrong, and it must
+        // be decided HERE, from the buffer, so a stop that this process did
+        // not observe completing (a wait that ran out, a stop issued before a
+        // TUI restart) still settles as what it was.
+        $stopped = self::lastTaskOutcome($buffer) === 'stopped';
+        $failed = !$stopped && self::bufferReportsFailure($buffer);
+        $session = $session->withStatus(match (true) {
+            $stopped => BackgroundSessionStatus::Stopped,
+            $failed => BackgroundSessionStatus::Failed,
+            default => BackgroundSessionStatus::Completed,
+        });
 
         $this->sessions[$id] = $session;
         unset($this->bufferMtimes[$id]);
 
-        if ($failed) {
+        if ($stopped) {
+            $this->onSessionStopped($session);
+        } elseif ($failed) {
             $this->onSessionFailed($session);
         } else {
             $this->onSessionCompleted($session);
@@ -785,12 +819,23 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
      * Decide a settled session's outcome from the last `[session:task:...]`
      * record its daemon wrote.
      *
-     * Anything other than a completion record — failed, timeout, stopped, a
-     * lone `start` from a daemon that died mid-turn, or no record at all —
-     * counts as a failure. Reporting those as Completed would be the same
+     * Anything other than a completion record — failed, timeout, a lone
+     * `start` from a daemon that died mid-turn, or no record at all — counts
+     * as a failure. (A `stopped` record is settled as Stopped before this is
+     * asked; see {@see self::reapFinishedDaemon()}.) Reporting those as Completed would be the same
      * class of lie as the old "Backgrounded as <id>" for work that never ran.
      */
     private static function bufferReportsFailure(string $buffer): bool
+    {
+        return !in_array(self::lastTaskOutcome($buffer), ['complete', 'completed'], true);
+    }
+
+    /**
+     * The word inside the LAST `[session:task:<word>]` record in $buffer, or
+     * null when the daemon wrote none. Trailing detail after the `]` (such as
+     * `via=SIGTERM`) is ignored.
+     */
+    private static function lastTaskOutcome(string $buffer): ?string
     {
         $outcome = null;
         foreach (explode("\n", $buffer) as $line) {
@@ -802,7 +847,7 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
             $outcome = $end === false ? $rest : substr($rest, 0, $end);
         }
 
-        return !in_array($outcome, ['complete', 'completed'], true);
+        return $outcome;
     }
 
     /**
@@ -833,6 +878,240 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
             $this->bufferMtimes[$id] = $mtime;
             $session->recordHeartbeat();
         }
+    }
+
+    // =========================================================================
+    // Stopping a Session (audit BG-1)
+    // =========================================================================
+
+    /**
+     * Stop a running background session — `/bg stop <id>` (audit BG-1).
+     *
+     * The daemon has always understood `STOP`, but nothing sent it: a `/bg`
+     * task ran to its timeout (an hour by default, in whatever permission mode
+     * the daemon resolved) and, being setsid'd and double-forked, outlived the
+     * TUI that started it. This is the sender.
+     *
+     * The ladder, every rung bounded:
+     *
+     *  1. IPC. Connect to the daemon's socket, `AUTH <token>` (the 0600 token
+     *     file this supervisor minted), `STOP`, read `OK:stopping`, then wait
+     *     for the pid to go. The daemon's own {@see BackgroundSessionRunner::stopWorker()}
+     *     tears the worker down and writes `[session:task:stopped]`.
+     *  2. SIGTERM, when the socket is unusable or the acknowledged daemon did
+     *     not exit in time. The runner traps it and runs the same teardown as
+     *     STOP, so the worker is not orphaned.
+     *  3. A tree kill ({@see ProcessContainment::killTree()}) of the daemon and
+     *     everything below it, for a daemon that ignored rung 2 — a daemon
+     *     SIGKILLed alone would leave the worker reparented to init, still
+     *     spending tokens.
+     *
+     * NO SIGNAL IS SENT TO A PID WHOSE IDENTITY CANNOT BE PROVEN. Rungs 2 and 3
+     * each re-check the `/proc` start time captured at the authenticated
+     * handshake immediately before signalling. A mismatch is a recycled pid —
+     * the daemon is gone and the number belongs to a stranger — and a missing
+     * fingerprint means the identity is unknowable; neither is signalled.
+     *
+     * Settling goes through {@see self::reapFinishedDaemon()} so a later
+     * `tick()` sees an inactive session and never re-labels it. When the stop
+     * was forced so hard the daemon could not write its own record, the
+     * supervisor appends `[session:task:stopped]` itself so the buffer and the
+     * status agree. A task that completed in the race before the stop landed
+     * settles Completed and reports AlreadyFinished — the honest answer.
+     */
+    public function stopSession(string $sessionId): BackgroundStopOutcome
+    {
+        $session = $this->sessions[$sessionId] ?? null;
+        if ($session === null) {
+            return BackgroundStopOutcome::UnknownSession;
+        }
+        if (!$session->isActive()) {
+            return BackgroundStopOutcome::AlreadyFinished;
+        }
+
+        $ipc = $this->sessionIpc[$sessionId] ?? null;
+        if ($ipc === null || $ipc['pid'] <= 0) {
+            // Nothing this supervisor spawned or can address — an injected
+            // session, or a spawn whose daemon pid was never learned.
+            return BackgroundStopOutcome::CouldNotStop;
+        }
+
+        if ($this->daemonGone($ipc)) {
+            // Already exited (or the pid now names someone else): settle it
+            // from its buffer like tick() would, and say so.
+            $this->reapFinishedDaemon($sessionId, $session);
+
+            return BackgroundStopOutcome::AlreadyFinished;
+        }
+
+        $via = BackgroundStopOutcome::StoppedViaIpc;
+        $gone = $this->requestStopOverIpc($ipc)
+            && $this->waitForDaemonExit($ipc, self::STOP_EXIT_WAIT_SECONDS);
+
+        if (!$gone) {
+            $via = BackgroundStopOutcome::StoppedViaSignal;
+            $gone = $this->stopBySignal($ipc);
+        }
+
+        if (!$gone) {
+            return BackgroundStopOutcome::CouldNotStop;
+        }
+
+        $outcome = self::lastTaskOutcome(self::readBuffer($ipc));
+        if ($outcome !== 'stopped' && !in_array($outcome, ['complete', 'completed'], true)) {
+            // Killed before it could write its own record (rung 3). One whole
+            // line, single append — the same line protocol the daemon uses.
+            @file_put_contents($ipc['bufferPath'], "[session:task:stopped] via=supervisor-kill\n", FILE_APPEND);
+        }
+
+        $this->reapFinishedDaemon($sessionId, $session);
+
+        return ($this->sessions[$sessionId] ?? $session)->status === BackgroundSessionStatus::Stopped
+            ? $via
+            : BackgroundStopOutcome::AlreadyFinished;
+    }
+
+    /**
+     * Rung 1: authenticated `STOP` over the daemon's socket; true only when
+     * the daemon acknowledged with `OK:stopping`.
+     *
+     * @param array{socketPath: string, bufferPath: string, pid: int, tokenPath?: string, startTime?: int|null} $ipc
+     */
+    private function requestStopOverIpc(array $ipc): bool
+    {
+        $token = self::readToken($ipc);
+        if ($token === '' || !file_exists($ipc['socketPath'])) {
+            // The daemon refuses every unauthenticated connection, so without
+            // the token there is nothing to say; go straight to the signal.
+            return false;
+        }
+
+        $client = @stream_socket_client(
+            'unix://' . $ipc['socketPath'],
+            $errno,
+            $errstr,
+            self::STOP_IPC_TIMEOUT_SECONDS,
+        );
+        if ($client === false) {
+            return false;
+        }
+
+        stream_set_timeout($client, (int) ceil(self::STOP_IPC_TIMEOUT_SECONDS));
+        fwrite($client, BackgroundSessionRunner::AUTH_PREFIX . $token . "\nSTOP\n");
+        fflush($client);
+
+        $acknowledged = false;
+        $deadline = microtime(true) + self::STOP_IPC_TIMEOUT_SECONDS * 2;
+        while (!$acknowledged && microtime(true) < $deadline && !feof($client)) {
+            $line = @fgets($client);
+            if ($line === false) {
+                break;
+            }
+            $acknowledged = trim($line) === 'OK:stopping';
+        }
+        fclose($client);
+
+        return $acknowledged;
+    }
+
+    /**
+     * Rungs 2 and 3: SIGTERM, then a tree kill — each only after re-proving
+     * the pid is still the daemon the handshake named.
+     *
+     * @param array{socketPath: string, bufferPath: string, pid: int, tokenPath?: string, startTime?: int|null} $ipc
+     */
+    private function stopBySignal(array $ipc): bool
+    {
+        if (!function_exists('posix_kill')) {
+            return false;
+        }
+
+        if ($this->daemonGone($ipc)) {
+            return true;
+        }
+        if (!$this->daemonIdentityProven($ipc)) {
+            return false;
+        }
+        @posix_kill($ipc['pid'], 15);
+        if ($this->waitForDaemonExit($ipc, self::STOP_EXIT_WAIT_SECONDS)) {
+            return true;
+        }
+
+        if (!$this->daemonIdentityProven($ipc)) {
+            return $this->daemonGone($ipc);
+        }
+        ProcessContainment::killTree($ipc['pid']);
+
+        return $this->waitForDaemonExit($ipc, self::STOP_KILL_WAIT_SECONDS);
+    }
+
+    /**
+     * True only when a start-time fingerprint was captured at spawn AND the
+     * live `/proc` entry still carries it. Stricter than
+     * {@see isProcessRunning()}, which falls back to signal 0 when procfs is
+     * silent: "probably alive" is fine for deciding not to reap, never for
+     * deciding to send a signal.
+     *
+     * @param array{socketPath: string, bufferPath: string, pid: int, tokenPath?: string, startTime?: int|null} $ipc
+     */
+    private function daemonIdentityProven(array $ipc): bool
+    {
+        $expected = $ipc['startTime'] ?? null;
+
+        return $expected !== null && self::procStartTime($ipc['pid']) === $expected;
+    }
+
+    /**
+     * The daemon has exited (a zombie counts — see {@see isProcessRunning()}),
+     * or its pid has been recycled.
+     *
+     * @param array{socketPath: string, bufferPath: string, pid: int, tokenPath?: string, startTime?: int|null} $ipc
+     */
+    private function daemonGone(array $ipc): bool
+    {
+        return !$this->isProcessRunning($ipc['pid'], $ipc['startTime'] ?? null);
+    }
+
+    /**
+     * Poll {@see daemonGone()} for at most $seconds.
+     *
+     * @param array{socketPath: string, bufferPath: string, pid: int, tokenPath?: string, startTime?: int|null} $ipc
+     */
+    private function waitForDaemonExit(array $ipc, float $seconds): bool
+    {
+        $deadline = microtime(true) + $seconds;
+        while (true) {
+            if ($this->daemonGone($ipc)) {
+                return true;
+            }
+            if (microtime(true) >= $deadline) {
+                return false;
+            }
+            usleep(20_000);
+        }
+    }
+
+    /**
+     * The session buffer's whole content, '' when it cannot be read.
+     *
+     * @param array{socketPath: string, bufferPath: string, pid: int, tokenPath?: string, startTime?: int|null} $ipc
+     */
+    private static function readBuffer(array $ipc): string
+    {
+        return (string) @file_get_contents($ipc['bufferPath']);
+    }
+
+    /**
+     * The per-spawn secret, or '' when it is unavailable — which every caller
+     * treats as "cannot authenticate", never as "authenticate with nothing".
+     *
+     * @param array{socketPath: string, bufferPath: string, pid: int, tokenPath?: string, startTime?: int|null} $ipc
+     */
+    private static function readToken(array $ipc): string
+    {
+        return isset($ipc['tokenPath'])
+            ? trim((string) @file_get_contents($ipc['tokenPath']))
+            : '';
     }
 
     // =========================================================================
@@ -889,9 +1168,7 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
                     // the same shape as a dead socket, and the right shape for
                     // a stranger. The token lives in a 0600 file only this
                     // (owner-verified) process can read.
-                    $token = isset($ipc['tokenPath'])
-                        ? trim((string) @file_get_contents($ipc['tokenPath']))
-                        : '';
+                    $token = self::readToken($ipc);
 
                     $supervisor = @stream_socket_client(
                         'unix://' . $ipc['socketPath'],
@@ -966,6 +1243,15 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
             return false;
         }
 
+        // A zombie has finished all the work it will ever do; only its parent's
+        // wait() is outstanding. Counting it as running would leave a stopped
+        // daemon unsettled for as long as its parent is slow to reap
+        // (audit BG-1 — {@see stopSession()} and the reaper must agree).
+        $stat = ProcessTree::stat($pid);
+        if ($stat !== null && ($stat['state'] === 'Z' || $stat['state'] === 'X')) {
+            return false;
+        }
+
         if ($startTime !== null) {
             $observed = self::procStartTime($pid);
             if ($observed !== null) {
@@ -1013,6 +1299,19 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
     public function onSessionFailed(BackgroundSession $session): void
     {
         if ($this->listener !== null) {
+            $this->listener->onSessionFailed($session);
+        }
+    }
+
+    /**
+     * Forward a stop to a listener that can tell it from a failure, and to
+     * `onSessionFailed()` otherwise (see {@see SessionStopNotificationInterface}).
+     */
+    public function onSessionStopped(BackgroundSession $session): void
+    {
+        if ($this->listener instanceof SessionStopNotificationInterface) {
+            $this->listener->onSessionStopped($session);
+        } elseif ($this->listener !== null) {
             $this->listener->onSessionFailed($session);
         }
     }

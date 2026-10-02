@@ -169,6 +169,11 @@ final class BackgroundSessionRunner
      */
     public const CONNECT_WAIT_SECONDS = 3.0;
 
+    /**
+     * Set by the SIGTERM handler {@see trapTerminate()} installs; read once
+     * per {@see supervise()} iteration.
+     */
+    private bool $terminateRequested = false;
 
     public function __construct(
         public readonly string $sessionId,
@@ -751,6 +756,7 @@ final class BackgroundSessionRunner
         $lastHeartbeat = \time();
         $result = null;
         $stopped = false;
+        $this->trapTerminate();
 
         while (true) {
             $status = 0;
@@ -786,6 +792,16 @@ final class BackgroundSessionRunner
                 break;
             }
 
+            if ($this->terminateRequested) {
+                // The supervisor's fallback when the socket is unusable
+                // (audit BG-1): same teardown as STOP, so the worker is never
+                // orphaned by a signal that only reached this process.
+                $this->stopWorker($worker);
+                $result = 'stopped';
+                $this->log('[session:task:stopped] via=SIGTERM');
+                break;
+            }
+
             if (\time() - $lastHeartbeat >= self::HEARTBEAT_INTERVAL_SECS) {
                 $this->log('[session:heartbeat] pid=' . \getmypid());
                 $lastHeartbeat = \time();
@@ -800,6 +816,39 @@ final class BackgroundSessionRunner
         $this->log('[session:daemon:exit]');
 
         return $result === 'completed' ? 0 : 1;
+    }
+
+    /**
+     * Turn SIGTERM into the same orderly stop as an authenticated `STOP`
+     * (audit BG-1).
+     *
+     * {@see BackgroundSupervisor::stopSession()} falls back to signalling the
+     * daemon pid when the socket path is gone. On the default disposition that
+     * signal would kill THIS process only: the worker — the fork actually
+     * running the agent turn, and the thing spending tokens — would be
+     * reparented to init and keep going until its turn ended, with no
+     * `[session:task:...]` record saying the session had been stopped. The
+     * handler only raises a flag; {@see supervise()} acts on it between
+     * accepts, so the teardown runs on the main path, not in signal context.
+     *
+     * Installed here, after the worker fork and in the daemon only: pcntl
+     * dispositions are inherited across `pcntl_fork()`, and the worker should
+     * keep dying on SIGTERM's default, which is what {@see stopWorker()}'s
+     * first rung relies on. Async signals so a SIGTERM that lands during the
+     * blocking accept is seen within one iteration rather than at the next
+     * tick. Without ext-pcntl's signal functions this is a no-op and the
+     * supervisor's last rung (a tree kill) still covers the worker.
+     */
+    private function trapTerminate(): void
+    {
+        if (!\function_exists('pcntl_signal') || !\function_exists('pcntl_async_signals')) {
+            return;
+        }
+
+        \pcntl_async_signals(true);
+        \pcntl_signal(\SIGTERM, function (): void {
+            $this->terminateRequested = true;
+        });
     }
 
     /**
