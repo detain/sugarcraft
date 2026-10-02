@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\MCP;
 use GuzzleHttp\Client;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamInterface;
+use SugarCraft\Mcp\RequestIdSequence;
 
 /**
  * Client half of the MCP **Streamable HTTP** transport: one endpoint URL, every
@@ -18,6 +19,18 @@ use Psr\Http\Message\StreamInterface;
  * Acceptable), no `Mcp-Session-Id` echo (400 "No valid session ID"), no
  * `notifications/initialized`, an SSE reply json_decoded into "invalid
  * response", and `[]` on the wire where the schema wants `{}`.
+ *
+ * FORK SAFETY (audit AG-1). sugar-crush starts servers in the TUI parent and
+ * calls them from forked turn/sub-agent processes. The object a child inherits
+ * carries the parent's id counter AND the parent's Guzzle client, whose curl
+ * handle keeps the parent's keep-alive socket: three children posting at once
+ * wrote to that one socket and each read a sibling's reply (measured). So a
+ * process other than the one that started the session (a) mints pid-tagged
+ * request ids ({@see RequestIdSequence}) — the reply matcher compares ids as
+ * strings — and (b) sends every request on a FRESH connection that is closed
+ * afterwards, never the inherited socket. The `Mcp-Session-Id` stays shared:
+ * one session carrying many concurrent requests with distinct ids is legal
+ * Streamable HTTP. Only the owner ends the session in {@see stop()}.
  */
 final class HttpMcpServer implements McpServer
 {
@@ -57,8 +70,11 @@ final class HttpMcpServer implements McpServer
 
     private bool $initialized = false;
 
-    /** Monotonic JSON-RPC request id — never reuse an id within a session. */
-    private int $nextId = 0;
+    /**
+     * JSON-RPC request ids — never reused within a session, and unique across
+     * forked processes (integers for the owner, pid-tagged strings otherwise).
+     */
+    private readonly RequestIdSequence $ids;
 
     /** Session id the server assigned in its `initialize` reply, if any. */
     private ?string $sessionId = null;
@@ -66,13 +82,21 @@ final class HttpMcpServer implements McpServer
     /** `protocolVersion` the server answered `initialize` with. */
     private ?string $negotiatedVersion = null;
 
+    /**
+     * @param \Closure|null $pidProvider @internal test seam returning the
+     *        current pid (default getmypid()), so the forked-process id and
+     *        connection behaviour can be pinned without forking
+     */
     public function __construct(
         public readonly string $name,
         private string $url,
         private array $headers,
         private Client $httpClient,
         private readonly ?McpAuthStore $authStore = null,
-    ) {}
+        ?\Closure $pidProvider = null,
+    ) {
+        $this->ids = new RequestIdSequence($pidProvider);
+    }
 
     public function start(): void
     {
@@ -80,6 +104,10 @@ final class HttpMcpServer implements McpServer
         if ($this->initialized) {
             return;
         }
+
+        // The process that opens the session owns it (ids, connection reuse,
+        // and the DELETE that ends it).
+        $this->ids->claim();
 
         try {
             $this->handshake();
@@ -116,7 +144,10 @@ final class HttpMcpServer implements McpServer
      */
     public function stop(): void
     {
-        if ($this->sessionId !== null) {
+        // A forked process shares the owner's session: ending it here would cut
+        // the session out from under the parent and every sibling. Forget it
+        // locally instead.
+        if ($this->sessionId !== null && $this->ids->isOwner()) {
             try {
                 $this->httpClient->delete($this->url, [
                     'headers' => $this->wireHeaders(),
@@ -263,7 +294,7 @@ final class HttpMcpServer implements McpServer
      * captured here, before the body is read, so every later request echoes it.
      *
      * @param array<string, mixed>|null $params
-     * @return array{0: int, 1: ResponseInterface}
+     * @return array{0: int|string, 1: ResponseInterface}
      */
     private function dispatch(string $method, ?array $params): array
     {
@@ -284,12 +315,13 @@ final class HttpMcpServer implements McpServer
     }
 
     /**
-     * The next JSON-RPC request id. The ONE place ids are minted, so a later
-     * change to their shape is a one-line edit.
+     * The next JSON-RPC request id. The ONE place ids are minted: an integer
+     * in the process that started the session, `<pid>-<nonce>-<n>` in any
+     * other (see the FORK SAFETY note on the class).
      */
-    private function nextRequestId(): int
+    private function nextRequestId(): int|string
     {
-        return $this->nextId++;
+        return $this->ids->next();
     }
 
     /**
@@ -297,7 +329,7 @@ final class HttpMcpServer implements McpServer
      */
     private function send(array $payload): ResponseInterface
     {
-        return $this->httpClient->post($this->url, [
+        return $this->httpClient->post($this->url, $this->connectionOptions() + [
             'json' => $payload,
             'headers' => $this->wireHeaders(),
             // Statuses are this class's to interpret: a 404 on a session-bearing
@@ -311,6 +343,26 @@ final class HttpMcpServer implements McpServer
             // and the spec has the server close an SSE reply stream once the
             // response is sent (both reference SDKs do).
         ]);
+    }
+
+    /**
+     * Per-request transport options. In a process other than the session's
+     * owner the inherited curl handle still holds the OWNER's keep-alive
+     * socket; reusing it lets two processes interleave on one TCP stream and
+     * read each other's replies. A fresh connection, closed after use, keeps
+     * each process on its own socket. (A MockHandler ignores these.)
+     *
+     * @return array<string, mixed>
+     */
+    private function connectionOptions(): array
+    {
+        // Without ext-curl Guzzle falls back to PHP's stream wrapper, which
+        // opens a new connection per request anyway — nothing to inherit.
+        if ($this->ids->isOwner() || !\defined('CURLOPT_FRESH_CONNECT')) {
+            return [];
+        }
+
+        return ['curl' => [CURLOPT_FRESH_CONNECT => true, CURLOPT_FORBID_REUSE => true]];
     }
 
     /**
@@ -354,7 +406,7 @@ final class HttpMcpServer implements McpServer
      *
      * @return array<mixed>|null
      */
-    private function replyFor(ResponseInterface $response, int $id): ?array
+    private function replyFor(ResponseInterface $response, int|string $id): ?array
     {
         $this->assertSuccess($response);
 
@@ -385,7 +437,7 @@ final class HttpMcpServer implements McpServer
      *
      * @return array<mixed>
      */
-    private function replyFromEventStream(StreamInterface $body, int $id): array
+    private function replyFromEventStream(StreamInterface $body, int|string $id): array
     {
         $state = ['event' => '', 'data' => []];
         $buffer = '';
@@ -441,7 +493,7 @@ final class HttpMcpServer implements McpServer
      * @param array{event: string, data: list<string>} $state
      * @return array<mixed>|null
      */
-    private static function consumeSseLine(string $line, array &$state, int $id): ?array
+    private static function consumeSseLine(string $line, array &$state, int|string $id): ?array
     {
         if ($line === '') {
             $event = $state['event'];
@@ -488,7 +540,7 @@ final class HttpMcpServer implements McpServer
      * @param list<mixed> $messages
      * @return array<mixed>|null
      */
-    private static function matchReply(array $messages, int $id): ?array
+    private static function matchReply(array $messages, int|string $id): ?array
     {
         foreach ($messages as $message) {
             if (!is_array($message) || isset($message['method']) || !array_key_exists('id', $message)) {

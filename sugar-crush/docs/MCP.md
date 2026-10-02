@@ -365,6 +365,38 @@ one-shot `sugarcrush mcp list`, or any session that started nothing) there is
 no memo to read and the panel renders exactly as it did before this readout
 existed — byte for byte.
 
+### One server, shared by every forked turn and sub-agent
+
+Servers are started once, in the TUI process, and every turn runs in a
+`pcntl_fork()`ed child — as do parallel workflow stages, sub-agents and
+parallel `Task` calls. All of them talk to the **same** server process over
+the same pipes (or, for `http`, the same `Mcp-Session-Id`). That is deliberate:
+re-spawning per process would relaunch an `npx` server on every turn and throw
+away whatever state the server keeps (a browser session, a memory store).
+
+Sharing is made safe in the transport (audit B1/AG-1):
+
+- **Request ids are unique across processes.** The process that started the
+  server sends `0, 1, 2, …`; any forked process sends `<pid>-<nonce>-<n>`, so a
+  reply can only ever be matched by the call that asked for it — including the
+  late reply of a call whose turn was killed by Esc or the idle watchdog.
+- **Calls on one stdio server are serialised.** Each exchange (request written,
+  response read) holds a cross-process lock, so when parallel agents call the
+  same `stdio` or `claude-mcp` server their calls run one after another; a slow
+  tool call delays the next agent's call to that server. Different servers do
+  not wait on each other.
+- **A killed call does not poison the stream.** Unread output is kept with the
+  lock rather than in one process' memory, and a call that dies mid-exchange
+  leaves a marker: the next call terminates any half-written request line and
+  skips the fragment of a half-read reply.
+- **Only the starting process stops a server.** A forked process exiting —
+  normally or not — never signals the shared server or ends the shared HTTP
+  session.
+- **`http` servers** get process-unique ids too, and a forked process sends
+  every request on a fresh connection instead of the TUI's inherited
+  keep-alive socket. One session carrying concurrent requests is normal
+  Streamable HTTP, so those calls are not serialised.
+
 ---
 
 ## What the model sees

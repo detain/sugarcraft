@@ -38,10 +38,10 @@ final class HttpMcpServerStreamableHttpTest extends TestCase
     private array $history = [];
 
     /**
-     * @param list<Response|\Throwable> $responses
+     * @param list<Response|\Throwable|callable> $responses
      * @param array<string, string> $headers
      */
-    private function server(array $responses, array $headers = []): HttpMcpServer
+    private function server(array $responses, array $headers = [], ?\Closure $pidProvider = null): HttpMcpServer
     {
         $this->history = [];
         $stack = HandlerStack::create(new MockHandler($responses));
@@ -52,6 +52,7 @@ final class HttpMcpServerStreamableHttpTest extends TestCase
             url: self::URL,
             headers: $headers,
             httpClient: new Client(['handler' => $stack]),
+            pidProvider: $pidProvider,
         );
     }
 
@@ -479,5 +480,85 @@ final class HttpMcpServerStreamableHttpTest extends TestCase
 
         self::assertCount(3, $this->history);
         self::assertFalse($server->isUp());
+    }
+
+    /**
+     * Audit AG-1: a forked turn or sub-agent inherits this object — the id
+     * counter AND the Guzzle client whose curl handle holds the parent's
+     * keep-alive socket. Measured: three forked children posting at once over
+     * that one socket each read a sibling's reply. A non-owner pid must mint
+     * pid-tagged ids and ask for a fresh, unshared connection.
+     */
+    public function testAForkedProcessSendsPidTaggedIdsOnAFreshConnection(): void
+    {
+        $pid = 100;
+        // Answers over SSE with a stale reply for another id FIRST, so the
+        // string-id matcher has to pick ours out of the stream.
+        $answer = static function (RequestInterface $request): Response {
+            $id = json_decode((string) $request->getBody(), true)['id'];
+
+            return self::sse(
+                'data: ' . json_encode(['jsonrpc' => '2.0', 'id' => '2', 'result' => ['content' => [['type' => 'text', 'text' => 'stale']]]]) . "\n\n"
+                . 'data: ' . json_encode(['jsonrpc' => '2.0', 'id' => $id, 'result' => ['content' => [['type' => 'text', 'text' => "for {$id}"]]]]) . "\n\n"
+            );
+        };
+        $server = $this->server(
+            [self::initReply(), new Response(202), self::toolsReply(1), $answer, $answer],
+            pidProvider: static function () use (&$pid): int {
+                return $pid;
+            },
+        );
+        $server->start();
+
+        $pid = 4242; // now running in a forked child
+        $first = $server->callTool('echo', ['n' => 'a']);
+        $second = $server->callTool('echo', ['n' => 'b']);
+
+        $firstId = $this->body(3)['id'];
+        $secondId = $this->body(4)['id'];
+        self::assertIsString($firstId);
+        self::assertMatchesRegularExpression('/^4242-[0-9a-f]{12}-0$/', $firstId);
+        self::assertMatchesRegularExpression('/^4242-[0-9a-f]{12}-1$/', (string) $secondId);
+        self::assertSame("for {$firstId}", $first['content'][0]['text'] ?? null);
+        self::assertSame("for {$secondId}", $second['content'][0]['text'] ?? null);
+
+        foreach ([3, 4] as $index) {
+            $curl = $this->history[$index]['options']['curl'] ?? [];
+            self::assertTrue($curl[CURLOPT_FRESH_CONNECT] ?? false, "request #{$index} must not reuse the inherited socket");
+            self::assertTrue($curl[CURLOPT_FORBID_REUSE] ?? false, "request #{$index} must not leave its socket for reuse");
+        }
+        foreach ([0, 1, 2] as $index) {
+            self::assertArrayNotHasKey('curl', $this->history[$index]['options'], 'the owner keeps its keep-alive connection');
+        }
+        self::assertSame(self::SESSION, $this->request(4)->getHeaderLine('Mcp-Session-Id'), 'the session is shared, not re-opened');
+    }
+
+    public function testTheOwnerKeepsIntegerIds(): void
+    {
+        $server = $this->server(
+            [self::initReply(), new Response(202), self::toolsReply(1)],
+            pidProvider: static fn (): int => 100,
+        );
+        $server->start();
+
+        self::assertSame(0, $this->body(0)['id']);
+        self::assertSame(1, $this->body(2)['id']);
+    }
+
+    public function testAForkedProcessStopDoesNotEndTheSharedSession(): void
+    {
+        $pid = 100;
+        $server = $this->server(
+            [self::initReply(), new Response(202), self::toolsReply(1), new Response(200)],
+            pidProvider: static function () use (&$pid): int {
+                return $pid;
+            },
+        );
+        $server->start();
+
+        $pid = 4242;
+        $server->stop();
+
+        self::assertCount(3, $this->history, 'a forked process must not DELETE the session its parent still uses');
     }
 }
