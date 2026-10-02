@@ -217,13 +217,19 @@ description line where you did not. There is no double-presentation.
 Two widenings are deliberately **not** shipped, and are named here so that
 nobody infers them from the shape of the code:
 
-- **`rules paths:` scoping is not applied at the splice.** `Rule::buildTriggers()`
-  (reached from `Rule::new()`) builds a `PathTrigger` from a rule's `paths:`, and
-  `PathTrigger` matches — but nothing
-  in `Runtime::buildSystemPrompt()` consults any path predicate when it splices.
-  Path-conditional splicing is a deferred step (P6.S5b). Until it lands, a skill
-  named in `enabledSkills` is in every prompt turn, whichever files the session
-  touches.
+- **A skill's `paths:` does not gate its enabled body.** A skill named in
+  `enabledSkills` is in every prompt turn, whichever files the session touches;
+  its `paths:` drives only the `SkillPathNudge` described above. Rules are
+  different, and this is where the two used to be confused: a rule's `paths:`
+  IS applied (P6.S5b). `Rule::buildTriggers()` (reached from `Rule::new()`)
+  builds a `PathTrigger` from it, the splice in
+  `Runtime::systemPromptSections()` skips every rule
+  `RulePathNudge::isPathScoped()` claims, and `Bootstrap` wires `RulePathNudge`
+  into Read, Edit, Write, Glob and Grep, which deliver the rule in their tool
+  output on the first touch of a matching file — re-walking the rules on every
+  consult, so a scoped rule written mid-session is delivered too. A rule's
+  `keywords:` and `description:` are still not applied: `KeywordTrigger` and
+  `IntentTrigger` have no consumer in `src/`.
 - **`context:` is not consulted at the splice** — see
   [The `context:` field today](#the-context-field-today).
 

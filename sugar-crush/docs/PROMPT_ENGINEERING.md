@@ -26,7 +26,8 @@ volatile `<env>` block last. Counted from the live method, there are eleven slot
 4. **Repo map** (`RepoMapBlock`) — fenced `repo-map`; per-session memoized snapshot of derived
    repository facts.
 5. **User-tier rules** — each enabled rule from `RuleLoader::load()` whose tier is `user` gets its
-   own fence, `user-rules`, with the operator-authority preamble.
+   own fence, `user-rules`, with the operator-authority preamble — except a `paths:`-scoped rule,
+   which is delivered at tool time instead (see the trigger bullets below).
 6. **Instruction documents** — `InstructionFileLoader::loadRoot()` then `loadForced()` (read
    through their path-keyed sibling `loadDocuments()`), each non-blank document its own
    `project-instructions` fence with the project-authority preamble. Budgeted like the rules
@@ -39,7 +40,8 @@ volatile `<env>` block last. Counted from the live method, there are eleven slot
    past that ceiling is replaced at its import site by an `import-deferred` note carrying the same
    pointer line.
 7. **Project-tier rules** — the same `project-instructions` fence and preamble as the documents,
-   because the authorship claim is identical: bytes shipped inside the checkout.
+   because the authorship claim is identical: bytes shipped inside the checkout. A
+   `paths:`-scoped project rule is skipped here the same way.
 8. **Memory** (`MemoryBlock`) — fenced `project-memory`; the scope-selected standing notes,
    memoized per session like the repo map.
 9. **Enabled skill bodies** — every skill in `$app->enabledSkills` contributes its full
@@ -253,13 +255,19 @@ reason each stays out:
 - **A `<system-reminder>` channel inside user turns.** User and tool content can be forged by
   anything that writes there; if a reminder channel is ever needed the non-spoofable appended
   system role is preferred — and note the roster defangs the tag inside fenced sections precisely
-  because the emitted channel exists (its only emitter today is the skill nudge, on the tool-output
-  side).
-- **Triggers are built but not applied.** Every rule carries `paths:` / `keywords:` /
-  `description` triggers into its `Rule` object and the splice in
-  `Runtime::systemPromptSections()` consults none of them, so a path-scoped rule renders into
-  every session until the gating steps wire the match. Framing and escape are tier-blind, so this
-  is a scoping gap, not a safety gap — named in the code comment, not hidden.
+  because the emitted channel exists (its emitters today are the two path nudges,
+  `SkillPathNudge` and `RulePathNudge`, both on the tool-output side).
+- **Keyword and intent triggers are built but not applied.** Every rule carries its `paths:` /
+  `keywords:` / `description` triggers into its `Rule` object, and only the first is consulted.
+  The `paths:` half shipped (P6.S5b): the splice in `Runtime::systemPromptSections()` skips every
+  rule `RulePathNudge::isPathScoped()` claims, and `Bootstrap` wires `RulePathNudge` into Read,
+  Edit, Write, Glob and Grep, which deliver the rule in their tool output on the first touch of a
+  matching file. The nudge re-walks the rules on every consult, so a scoped rule added or edited
+  mid-session is delivered too. The other two are not applied: `KeywordTrigger` and
+  `IntentTrigger` have no consumer in `src/`, so a `keywords:`- or `description:`-only rule
+  renders into every session; and `Rule::$models` is parsed and read by nothing. Framing and
+  escape are tier-blind, so this is a scoping gap, not a safety gap — named in the code comment,
+  not hidden.
 - **The agent-side second assembler.** `Agents\Agent::systemPrompt()` renders its own copy of the
   layer idea for workflow stages; it is live for the workflow engine but is not this page's
   pipeline, and wiring the per-step write signal into it was measured, escalated and left as its
@@ -275,9 +283,12 @@ How each user-facing surface reaches the model, and where it does not reach:
   of the user, project and root tiers; the tier picks the *voice* (fence and preamble), never a
   second walk, and the rulebook toggles subtract inside that one entry point so the `/rules`
   listing and the prompt cannot disagree about which packs are on. Rules enter the system prompt
-  (slots 5 and 7).
-- **Triggers.** Built per rule, consulted by nobody at assembly — see the register above. The
-  listing-and-selection trigger family for *skills* does ship: slot 10 exists so discovered
+  (slots 5 and 7), except `paths:`-scoped ones, which enter tool output (next bullet).
+- **Triggers.** Built per rule; only `paths:` is applied. A `paths:`-scoped rule leaves the
+  system prompt and reaches the model through `RulePathNudge`, inside the `<system-reminder>`
+  block that Read, Edit, Write, Glob and Grep append to their output when they touch a matching
+  file. `KeywordTrigger` and `IntentTrigger` have no consumer in `src/` — see the register above.
+  The listing-and-selection trigger family for *skills* does ship: slot 10 exists so discovered
   skills are auto-triggerable through the `Skill` tool.
 - **Skills.** Two channels, deliberately one body path: explicitly enabled skills contribute full
   bodies via `Skill::systemPromptContribution()` (slot 9) and are excluded from the

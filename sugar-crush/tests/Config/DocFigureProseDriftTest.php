@@ -174,6 +174,14 @@ use SugarCraft\Crush\Workflows\Workflow;
     * before the page did),  and the threading sentence omitted Grep — the fifth tool that
     * receives the loader. Both corrections are pinned by the arms above them.
     *
+    * AUDIT 15d-19 adds three arms for three FALSE sentences that called
+    * themselves drift-guarded and were pinned by nothing: SETTINGS.md's "only
+    * two keys" re-applied per turn (runTurn() re-applies three), and the
+    * PROMPT_ENGINEERING.md / SKILLS.md passages saying rule `paths:` scoping is
+    * unapplied (P6.S5b applies it), plus the "only emitter" of
+    * `<system-reminder>` beside them. Each figure, list and trigger verdict is
+    * derived from comment-stripped src/.
+    *
     * @internal
     */
 final class DocFigureProseDriftTest extends TestCase
@@ -5871,6 +5879,297 @@ final class DocFigureProseDriftTest extends TestCase
             (int) $caps[2],
             'TROUBLESHOOTING.md still names the old breadth cap — SKILLS.md and this page quote the same constant; flip both in the commit that moves MAX_DIRECTORIES',
         );
+    }
+
+    /**
+     * Audit 15d-19: SETTINGS.md's "only N keys actually change behaviour
+     * mid-session" sentence said two (`parallelToolCalls`,
+     * `parallelToolDeadlineSeconds`) for as long as `maxOutputTokens` had
+     * been riding the same per-turn read — nothing pinned the figure to the
+     * method that does the reading. Both the spelled count and the named
+     * list are now DERIVED from `EngineBackend::runTurn()`: every use of the
+     * per-turn config variable must be a `self::<resolver>($var)` call, and
+     * each resolver's `$config[self::CONST]` lookups name the keys. The
+     * project-tier caveat after it is derived from PROJECT_TIER_KEYS.
+     */
+    public function testPerTurnReappliedKeysSentenceNamesExactlyWhatRunTurnReads(): void
+    {
+        $text = self::sourceOf('Backend/EngineBackend.php');
+        $spans = [];
+        foreach (self::functionSpans($text) as $span) {
+            $spans[$span['name']] ??= $span;
+        }
+        self::assertArrayHasKey('runTurn', $spans, 'EngineBackend::runTurn() is gone — SETTINGS.md cites it as the per-turn reader');
+        $runTurn = self::codeOnly(substr($text, $spans['runTurn']['begin'], $spans['runTurn']['end'] - $spans['runTurn']['begin']));
+
+        self::assertStringNotContainsString('readUserConfig(', $runTurn, 'runTurn() now calls readUserConfig() directly — this arm only follows the self::userConfig() read; teach it the new route');
+        self::assertSame(
+            1,
+            preg_match_all('/(\$\w+)\s*=\s*self::userConfig\(\);/', $runTurn, $read),
+            'runTurn() no longer reads the user config exactly once through self::userConfig() — the "re-read every turn" paragraph describes one read',
+        );
+        $var = $read[1][0];
+        $uses = substr_count($runTurn, $var) - 1;
+        preg_match_all('/self::(\w+)\(' . preg_quote($var, '/') . '\)/', $runTurn, $resolverCalls);
+        self::assertNotSame([], $resolverCalls[1], 'runTurn() feeds its per-turn config to no resolver — the sentence would claim keys nothing re-applies');
+        self::assertSame(
+            $uses,
+            count($resolverCalls[1]),
+            "runTurn() hands {$var} to something other than a self::<resolver>({$var}) call — a key read that way is invisible to this derivation; extend it rather than let the SETTINGS.md count go stale",
+        );
+
+        $keys = [];
+        foreach ($resolverCalls[1] as $resolver) {
+            self::assertArrayHasKey($resolver, $spans, "runTurn() calls self::{$resolver}() and EngineBackend no longer declares it");
+            $body = self::codeOnly(substr($text, $spans[$resolver]['begin'], $spans[$resolver]['end'] - $spans[$resolver]['begin']));
+            self::assertGreaterThan(
+                0,
+                preg_match_all('/\$config\[self::([A-Z_]+)\]/', $body, $lookups),
+                "self::{$resolver}() reads no \$config[self::KEY] — the per-turn key it applies cannot be derived",
+            );
+            foreach ($lookups[1] as $constant) {
+                $key = (new \ReflectionClassConstant(EngineBackend::class, $constant))->getValue();
+                self::assertIsString($key, "EngineBackend::{$constant} is no longer a string key");
+                $keys[] = $key;
+            }
+        }
+        $keys = array_values(array_unique($keys));
+
+        $settings = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SETTINGS.md'));
+        $words = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8];
+
+        self::assertSame(
+            1,
+            preg_match('/only (\w+) keys actually change behaviour mid-session\. That per-turn read feeds exactly (\w+) settings — (.*?) — so/', $settings, $claim),
+            'the "only N keys actually change behaviour mid-session" sentence in docs/SETTINGS.md was reworded out from under this arm — re-establish the pin, do not delete it',
+        );
+        self::assertSame(count($keys), $words[$claim[1]] ?? -1, "SETTINGS.md says {$claim[1]} keys change mid-session — runTurn() re-applies " . count($keys) . ' (' . implode(', ', $keys) . ')');
+        self::assertSame(count($keys), $words[$claim[2]] ?? -1, "SETTINGS.md says the per-turn read feeds exactly {$claim[2]} settings — runTurn() feeds " . count($keys));
+        preg_match_all('/`([a-z][A-Za-z0-9]*)`/', $claim[3], $named);
+        $sortedNamed = $named[1];
+        sort($sortedNamed);
+        $sortedKeys = $keys;
+        sort($sortedKeys);
+        self::assertSame($sortedKeys, $sortedNamed, 'the per-turn key list in SETTINGS.md no longer names exactly the keys runTurn() resolves off its per-turn config');
+        self::assertStringContainsString('`EngineBackend::runTurn()`, the loop behind `complete()`, calls `readUserConfig()` once per turn', $settings, 'the "re-read every turn" sentence no longer names runTurn() as the per-turn reader');
+
+        self::assertSame(
+            1,
+            preg_match('/`\.sugar-crush\/settings\.local\.json` reaches only the first (\w+), because `(\w+)` is a key no project file may set/', $settings, $tier),
+            'the project-tier caveat after the per-turn list was reworded out from under this arm',
+        );
+        $projectKeys = (new \ReflectionClassConstant(\SugarCraft\Crush\Config\LayeredSettings::class, 'PROJECT_TIER_KEYS'))->getValue();
+        $first = $words[$tier[1]] ?? -1;
+        self::assertSame(
+            array_values(array_filter($named[1], static fn (string $k): bool => in_array($k, $projectKeys, true))),
+            array_slice($named[1], 0, $first),
+            'the "reaches only the first N" caveat no longer counts the per-turn keys PROJECT_TIER_KEYS lets a project set — or the list is no longer ordered project-settable first',
+        );
+        self::assertSame(array_slice($named[1], $first), [$tier[2]], 'the caveat names a different user-tier-only per-turn key than the list leaves after the first N');
+        self::assertNotContains($tier[2], $projectKeys, "the caveat says no project file may set `{$tier[2]}` — PROJECT_TIER_KEYS now lists it");
+    }
+
+    /**
+     * Audit 15d-19: PROMPT_ENGINEERING.md ("Triggers are built but not
+     * applied … a path-scoped rule renders into every session", "consulted by
+     * nobody at assembly") and SKILLS.md ("`rules paths:` scoping is not
+     * applied … a deferred step (P6.S5b)") kept describing the pre-P6.S5b
+     * tree long after the splice began skipping path-scoped rules and the
+     * five path-resolving tools began delivering them. The facts are DERIVED
+     * here from comment-stripped src/: whether the splice consults
+     * `RulePathNudge::isPathScoped()`, which tools `Bootstrap` hands the
+     * nudge to, which `*Trigger` classes have a consumer outside their own
+     * directory and the `Rule` builder, and whether anything reads
+     * `Rule::$models`. Every passage that names the unapplied triggers must
+     * name exactly the unconsumed ones, and the old sentences must be gone
+     * while the splice skip stands.
+     */
+    public function testRuleTriggerPassagesStateWhichTriggersTheSourceApplies(): void
+    {
+        $root = \dirname(__DIR__, 2);
+
+        $runtime = self::sourceOf('Runtime.php');
+        $runtimeSpans = [];
+        foreach (self::functionSpans($runtime) as $span) {
+            $runtimeSpans[$span['name']] ??= $span;
+        }
+        self::assertArrayHasKey('systemPromptSections', $runtimeSpans, 'Runtime::systemPromptSections() is gone — both pages cite it as the splice');
+        $splice = self::codeOnly(substr($runtime, $runtimeSpans['systemPromptSections']['begin'], $runtimeSpans['systemPromptSections']['end'] - $runtimeSpans['systemPromptSections']['begin']));
+        self::assertMatchesRegularExpression(
+            '/if \(RulePathNudge::isPathScoped\(\$rule\)\) \{\s*continue;/',
+            $splice,
+            'the splice no longer skips RulePathNudge::isPathScoped() rules — PROMPT_ENGINEERING.md and SKILLS.md now say paths: IS applied; rewrite both trigger passages in the commit that reverts P6.S5b',
+        );
+
+        $bootstrap = self::codeOnly(self::sourceOf('Cli/Bootstrap.php'));
+        self::assertMatchesRegularExpression('/\$ruleNudge = RulePathNudge::(?:fromLoader|new)\(/', $bootstrap, 'Bootstrap no longer builds the RulePathNudge the pages say it wires');
+        $nudged = [];
+        $offset = 0;
+        while (preg_match('/new (\w+)\(/', $bootstrap, $m, PREG_OFFSET_CAPTURE, $offset) === 1) {
+            $argStart = $m[0][1] + \strlen($m[0][0]);
+            if (str_contains(self::balancedArguments($bootstrap, $argStart), 'ruleNudge: $ruleNudge')) {
+                $nudged[] = $m[1][0];
+            }
+            $offset = $argStart;
+        }
+        $nudged = array_values(array_unique($nudged));
+        sort($nudged);
+        self::assertNotSame([], $nudged, 'Bootstrap hands $ruleNudge to no tool — the tool-time channel the pages describe is unwired');
+
+        $triggerClasses = [];
+        // scandir() rather than a wildcard literal: a glob-shaped string here
+        // would join the PathGlob corpus GlobDialectDifferentialTest harvests.
+        foreach (scandir($root . '/src/Context/Triggers') ?: [] as $file) {
+            if (str_ends_with($file, 'Trigger.php') && $file !== 'Trigger.php') {
+                $triggerClasses[] = basename($file, '.php');
+            }
+        }
+        self::assertContains('KeywordTrigger', $triggerClasses, 'KeywordTrigger left src/Context/Triggers — the pages name it');
+        self::assertContains('IntentTrigger', $triggerClasses, 'IntentTrigger left src/Context/Triggers — the pages name it');
+        $consumed = [];
+        $modelsRead = false;
+        foreach (self::srcTexts() as $relative => $text) {
+            if (str_starts_with($relative, 'src/Context/Triggers/') || $relative === 'src/Context/Rule.php') {
+                continue;
+            }
+            $previous = null;
+            foreach (\PhpToken::tokenize($text) as $token) {
+                if ($token->isIgnorable()) {
+                    continue;
+                }
+                if ($token->is([T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED]) && !($previous?->is(T_USE) ?? false)) {
+                    $short = substr((string) strrchr('\\' . $token->text, '\\'), 1);
+                    if (in_array($short, $triggerClasses, true)) {
+                        $consumed[$short] = true;
+                    }
+                    if ($token->text === 'models' && ($previous?->is([T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR]) ?? false)) {
+                        $modelsRead = true;
+                    }
+                }
+                $previous = $token;
+            }
+        }
+        $unconsumed = array_values(array_diff($triggerClasses, array_keys($consumed)));
+        sort($unconsumed);
+        self::assertArrayHasKey('PathTrigger', $consumed, 'nothing outside the trigger directory and Rule consumes PathTrigger any more — the "only paths: is applied" sentences are false');
+
+        $pages = [
+            'docs/PROMPT_ENGINEERING.md' => 2,
+            'docs/SKILLS.md' => 1,
+        ];
+        $stale = [
+            'Triggers are built but not applied.',
+            'consulted by nobody',
+            'consults none of them',
+            'a path-scoped rule renders into every session',
+            '`rules paths:` scoping is not applied',
+            'Path-conditional splicing is a deferred step',
+        ];
+        foreach ([...array_keys($pages), 'README.md'] as $page) {
+            $prose = self::markdownProse((string) file_get_contents($root . '/' . $page));
+            foreach ($stale as $sentence) {
+                self::assertStringNotContainsString($sentence, $prose, "{$page} still says \"{$sentence}\" — the splice skips path-scoped rules and RulePathNudge delivers them at tool time (P6.S5b)");
+            }
+        }
+
+        foreach ($pages as $page => $expectedPassages) {
+            $prose = self::markdownProse((string) file_get_contents($root . '/' . $page));
+
+            preg_match_all('/((?:`[A-Za-z]+Trigger`(?:, | and )?)+) (?:has|have) no consumer in `src\/`/', $prose, $claims);
+            if ($unconsumed === []) {
+                self::assertSame([], $claims[0], "{$page} still names triggers with no consumer in src/ — every trigger class is consumed now");
+            } else {
+                self::assertCount($expectedPassages, $claims[1], "{$page} no longer carries its {$expectedPassages} \"... no consumer in `src/`\" sentence(s) — re-establish the pin, do not delete it");
+            }
+            foreach ($claims[1] as $claim) {
+                preg_match_all('/`([A-Za-z]+Trigger)`/', $claim, $named);
+                $listed = $named[1];
+                sort($listed);
+                self::assertSame($unconsumed, $listed, "{$page} names " . implode(', ', $listed) . ' as having no consumer in src/ — the unconsumed set is ' . implode(', ', $unconsumed));
+            }
+
+            self::assertGreaterThan(
+                0,
+                preg_match_all('/(?:wires `RulePathNudge` into|block that) ((?:[A-Z][a-z]+, )*[A-Z][a-z]+ and [A-Z][a-z]+)/', $prose, $toolLists),
+                "{$page} no longer names the tools RulePathNudge is wired into",
+            );
+            foreach ($toolLists[1] as $list) {
+                $tools = preg_split('/, | and /', $list) ?: [];
+                sort($tools);
+                self::assertSame($nudged, $tools, "{$page} names the rule-nudged tools as {$list} — Bootstrap passes \$ruleNudge to " . implode(', ', $nudged));
+            }
+            self::assertStringContainsString('`RulePathNudge::isPathScoped()` claims', $prose, "{$page} no longer names the shared predicate the splice skips on");
+        }
+
+        $engineering = self::markdownProse((string) file_get_contents($root . '/docs/PROMPT_ENGINEERING.md'));
+        if ($modelsRead) {
+            self::assertStringNotContainsString('`Rule::$models` is parsed and read by nothing', $engineering, 'something in src/ reads ->models now — PROMPT_ENGINEERING.md still calls Rule::$models unread');
+        } else {
+            self::assertStringContainsString('`Rule::$models` is parsed and read by nothing', $engineering, 'nothing in src/ reads Rule::$models and PROMPT_ENGINEERING.md stopped saying so');
+        }
+    }
+
+    /**
+     * Audit 15d-19 (same passage): PROMPT_ENGINEERING.md said the emitted
+     * `<system-reminder>` channel's "only emitter today is the skill nudge" —
+     * stale since RulePathNudge began opening the same tag. The emitter set
+     * is derived from src/: every class whose code holds a string literal
+     * opening with the tag.
+     */
+    public function testSystemReminderEmitterSentenceNamesEveryEmitterInSrc(): void
+    {
+        $emitters = [];
+        foreach (self::srcTexts() as $relative => $text) {
+            foreach (\PhpToken::tokenize($text) as $token) {
+                if ($token->is([T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE]) && preg_match('/^["\']?<system-reminder>/', $token->text) === 1) {
+                    $emitters[] = basename($relative, '.php');
+                }
+            }
+        }
+        $emitters = array_values(array_unique($emitters));
+        sort($emitters);
+        self::assertContains('RulePathNudge', $emitters, 'RulePathNudge no longer opens a <system-reminder> block — the emitter census lost its newest member');
+
+        $prose = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/PROMPT_ENGINEERING.md'));
+        self::assertStringNotContainsString('its only emitter today is the skill nudge', $prose, 'PROMPT_ENGINEERING.md still calls the skill nudge the only <system-reminder> emitter');
+        self::assertSame(
+            1,
+            preg_match('/its emitters today are the (\w+) path nudges, (.*?), both on the tool-output side/', $prose, $claim),
+            'the <system-reminder> emitter sentence was reworded out from under this arm',
+        );
+        preg_match_all('/`(\w+)`/', $claim[2], $named);
+        $listed = $named[1];
+        sort($listed);
+        self::assertSame($emitters, $listed, 'the emitter sentence no longer names exactly the src/ classes that open <system-reminder>');
+        self::assertSame(count($emitters), ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4][$claim[1]] ?? -1, "the emitter sentence spells {$claim[1]} — src/ has " . count($emitters));
+    }
+
+    /**
+     * Source with every comment and doc-block token dropped, so a `{@see}`
+     * or a WHAT-THIS-SAID note cannot stand in for live code.
+     */
+    private static function codeOnly(string $text): string
+    {
+        // A method slice has no open tag, and without one the tokenizer reads
+        // the whole slice as inline HTML — comments included. Detected by token
+        // rather than by an open-tag literal, which would be glob-shaped and join
+        // the PathGlob corpus GlobDialectDifferentialTest harvests.
+        $tokens = \PhpToken::tokenize($text);
+        $sliced = $tokens !== [] && $tokens[0]->is(T_INLINE_HTML);
+        if ($sliced) {
+            $tokens = \PhpToken::tokenize("<?php\n" . $text);
+        }
+        $out = '';
+        foreach ($tokens as $index => $token) {
+            if ($index === 0 && $sliced) {
+                continue;
+            }
+            if (!$token->is([T_COMMENT, T_DOC_COMMENT])) {
+                $out .= $token->text;
+            }
+        }
+
+        return $out;
     }
 
     private static function sourceOf(string $relative): string

@@ -600,17 +600,20 @@ what your `allowedTools` excluded.
 
 ## When a change takes effect
 
-The settings files are **re-read every turn** — `EngineBackend::complete()`
-calls `readUserConfig()` once per turn, so all four are opened again each time.
+The settings files are **re-read every turn** — `EngineBackend::runTurn()`, the
+loop behind `complete()`, calls `readUserConfig()` once per turn, so all four
+are opened again each time.
 
-**Re-read is not the same as re-applied**, and only two keys actually change
-behaviour mid-session. That per-turn read feeds exactly two settings —
-`parallelToolCalls` and `parallelToolDeadlineSeconds` — so writing
-`.sugar-crush/settings.local.json` mid-session changes those on the next turn
-and nothing else. Every other key is consumed once, while `Bootstrap` builds
-the session: `disabledSkills` is read by `Bootstrap::skillRegistry()` at launch
-(and again on a Ctrl+P skill switch), `theme` and `provider` when the `Chat` is
-constructed, `disabledRules` when the launch seeds the session's `RulesState`
+**Re-read is not the same as re-applied**, and only three keys actually change
+behaviour mid-session. That per-turn read feeds exactly three settings —
+`parallelToolCalls`, `parallelToolDeadlineSeconds` and `maxOutputTokens` — so
+editing your own `~/.sugar-crush/config.json` or `~/.sugar-crush/settings.json`
+mid-session changes those on the next turn and nothing else. A trusted project's
+`.sugar-crush/settings.local.json` reaches only the first two, because
+`maxOutputTokens` is a key no project file may set. Every other key is
+consumed once, while `Bootstrap` builds the session: `disabledSkills` is read
+by `Bootstrap::skillRegistry()` at launch (and again on a Ctrl+P skill
+switch), `theme` and `provider` when the `Chat` is constructed, `disabledRules` when the launch seeds the session's `RulesState`
 — a mid-session edit to that file waits for a restart like the rest, though a
 `/rules` toggle flips the seeded set live, from the next turn onward — and
 `allowedTools`/`disabledTools` when the tool set is assembled.
