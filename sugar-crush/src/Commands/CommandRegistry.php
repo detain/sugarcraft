@@ -155,11 +155,11 @@ final class CommandRegistry
             // derives text from them (the palette reads this row's label).
             CommandSpec::new(
                 'mcp',
-                'Manage MCP server auth (list/add/remove)',
+                'Manage MCP server auth (list/add/remove; login prints the CLI command)',
                 'MCP',
                 paletteAction: PaletteAction::ToggleMcp,
                 paletteLabel: 'List MCP servers',
-                argumentHint: '<list|add|remove> [server]',
+                argumentHint: '<list|add|remove|login> [server]',
             ),
             // The hint rides in the description rather than in $shortcut:
             // $shortcut is only ever painted by the Ctrl+P palette
@@ -279,7 +279,7 @@ final class CommandRegistry
             CommandSpec::new('memory', 'Add, list, search, edit, import, or clear memory entries', 'Memory'),
             CommandSpec::new('branch', 'Fork the current session into a new branch', 'Session'),
             CommandSpec::new('rename', 'Rename the current session', 'Session', argumentHint: '<name>'),
-            CommandSpec::new('rewind', 'Restore chat state from an earlier checkpoint', 'Session'),
+            CommandSpec::new('rewind', 'Restore chat state from an earlier checkpoint', 'Session', argumentHint: '[n]'),
             CommandSpec::new('bg', 'Run a task in a background session', 'Session', argumentHint: '<task>'),
             CommandSpec::new('fork', 'Clone this conversation into a background session', 'Session', argumentHint: '<prompt>'),
             CommandSpec::new(

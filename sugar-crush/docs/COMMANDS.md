@@ -284,7 +284,7 @@ it does not; the *What the row says* column is its `description`.
 | `/exit` | ✓ | ✓ | — | Quit the app |
 | `/theme` | ✓ | | — | Switch the color theme |
 | `/agents` | ✓ | | — | List active agents, or inspect one by name |
-| `/mcp` | ✓ | | `<list\|add\|remove\|login> [server]` | Manage MCP server auth (list/add/remove; login guides to `sugarcrush mcp auth login`) |
+| `/mcp` | ✓ | | `<list\|add\|remove\|login> [server]` | Manage MCP server auth (list/add/remove; login prints the CLI command) |
 | `/keys` | ✓ | | — | Show the keyboard shortcut reference (or press ?) |
 | `/help` | ✓ | ✓ | — | List every slash command |
 | `/permissions` | ✓ | ✓ | — | Show this session's permission mode, its source, and the rules it decides by |
@@ -301,7 +301,7 @@ it does not; the *What the row says* column is its `description`.
 | `/memory` | ✓ | | — | Add, list, search, edit, import, or clear memory entries |
 | `/branch` | ✓ | | — | Fork the current session into a new branch |
 | `/rename` | ✓ | | `<name>` | Rename the current session |
-| `/rewind` | ✓ | | — | Restore chat state from an earlier checkpoint |
+| `/rewind` | ✓ | | `[n]` | Restore chat state from an earlier checkpoint |
 | `/bg` | ✓ | | `<task>` | Run a task in a background session |
 | `/fork` | ✓ | | `<prompt>` | Clone this conversation into a background session |
 | `/websearch` | ✓ | | `<query> [--safesearch 0\|1\|2] [--time-range day\|month\|year]` | Search the web via SearXNG |
