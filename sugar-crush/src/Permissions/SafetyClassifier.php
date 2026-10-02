@@ -12,10 +12,39 @@ use SugarCraft\Crush\ToolCall;
  * "Auto" paragraph: 13 categories). Returns the category name if blocked,
  * null if the action is safe to auto-execute.
  *
+ * Only `Bash` is classified. Whether Write/Edit/WebFetch/`mcp__*` calls
+ * should be classified in auto mode too (audit F-P3 part b) is a pending
+ * decision, not an oversight to patch here.
+ *
+ * Every pattern runs case-insensitively (see {@see self::regex()}), so a row
+ * whose meaning hangs on a flag's case — curl's `-d` vs `-D`, ssh's `-L` vs
+ * `-l` — scopes that part with `(?-i:...)`. A pattern must escape every
+ * metacharacter it means literally: an unescaped `|` turned three
+ * live-credentials rows into "any command containing `env `" (audit F-P3a).
+ *
  * Mirrors charmbracelet/crush safety-classifier behavior (P2B.S3).
  */
 final class SafetyClassifier
 {
+    /**
+     * Command position: the start of the command line or of a chained /
+     * piped / subshell command, optionally under `sudo`. Rows for a bare
+     * command name (`fetch`, `httpx`, `expect`) are anchored here so that
+     * `git fetch https://…`, `pip install httpx` and `git commit -m "expect
+     * it"` stop reading as invocations of those programs.
+     */
+    private const CMD = '(?:^|[;&|(`\n])\s*(?:sudo\s+)?';
+
+    /**
+     * The remaining words of the SAME simple command, ending in whitespace,
+     * or nothing. Quoted strings are consumed whole, so a flag spelled inside
+     * a header value (`-H 'X: -d'`) is not a flag, while a `;` inside a quoted
+     * header does not end the command; an unquoted `|`, `;`, `&` or newline
+     * does. Without this bound a flag row read the next command's flags:
+     * `curl -s x | grep -F y` would have been an upload.
+     */
+    private const ARGS = '(?:(?:\'[^\']*\'|"(?:[^"\\\\]|\\\\.)*"|[^\'"|;&\n])*\s)?';
+
     /**
      * Known dangerous patterns keyed by category name.
      *
@@ -23,18 +52,29 @@ final class SafetyClassifier
      */
     private const PATTERNS = [
         'curl/wget-into-shell' => [
-            'curl\s+.*\|\s*(sh|bash|zsh|fish)',
-            'wget\s+.*\|\s*(sh|bash|zsh|fish)',
-            'curl\s+.*>\s*/dev/',
-            'curl\s+.*\|.*(eval|exec|bash\s+-c)',
-            'wget\s+.*\|.*(eval|exec|bash\s+-c)',
+            // `\b` so `| shasum` / `| shellcheck` are not `| sh`; an optional
+            // `sudo` / absolute path so `| sudo bash` and `| /bin/sh` are.
+            'curl\s+.*\|\s*(?:sudo\s+(?:-\S+\s+)*)?(?:\S*/)?(?:sh|bash|zsh|fish)\b',
+            'wget\s+.*\|\s*(?:sudo\s+(?:-\S+\s+)*)?(?:\S*/)?(?:sh|bash|zsh|fish)\b',
+            // A redirect onto a device (`/dev/tcp/…`, a disk) — not the
+            // `> /dev/null` / `2>/dev/null` every quiet health check uses.
+            'curl\s+.*>\s*/dev/(?!null\b|stdout\b|stderr\b|fd/)',
+            'curl\s+.*\|.*(?:\b(?:eval|exec)\b|bash\s+-c)',
+            'wget\s+.*\|.*(?:\b(?:eval|exec)\b|bash\s+-c)',
         ],
         'external-endpoint' => [
-            'curl\s+-X\s*(POST|PUT|PATCH)\s+https?://',
-            'wget\s+--method=',
-            'httpie\s+',
-            'httpx\s+',
-            'fetch\s+https?://',
+            // A mutating method anywhere in the command, not only as its first
+            // flag (`curl -s -X POST …`, `curl --request PUT …`).
+            'curl\s+' . self::ARGS . '(?:(?-i:-[A-Za-z]*X)\s*|--request[\s=]+)(?:POST|PUT|PATCH|DELETE)\b',
+            // A request body or upload sends local data out:
+            // `-d @~/.ssh/id_rsa`, `-d@file`, `-sd x`, `-F f=@x`, `-T x`.
+            // Case-sensitive: `-D -` dumps headers and `-f` fails quietly.
+            'curl\s+' . self::ARGS . '(?-i:-[A-Za-z]*[dFT])',
+            'curl\s+' . self::ARGS . '--(?:data(?:-binary|-raw|-urlencode|-ascii)?|json|form(?:-string)?|upload-file)\b',
+            'wget\s+' . self::ARGS . '--(?:method|post-data|post-file|body-data|body-file)\b',
+            self::CMD . 'httpie\s+',
+            self::CMD . 'httpx\s+',
+            self::CMD . 'fetch\s+https?://',
             'Invoke-WebRequest\s+-Uri\s+https?://',
             'Start-BitsTransfer\s+.*https?://',
         ],
@@ -128,18 +168,19 @@ final class SafetyClassifier
         'pre-session-deletion' => [
             // Deleting files known to pre-date the session is dangerous
             // These are heuristics; actual pre-session detection requires fs metadata
-            'rm\s+rf\s+./vendor',
-            'rm\s+rf\s+./node_modules',
-            'rm\s+rf\s+./.git',
-            'rm\s+-rf\s+./vendor',
-            'rm\s+-rf\s+./node_modules',
-            'rm\s+-rf\s+./.git',
+            // `.` escaped and the name bounded: the unescaped `./.git` matched
+            // `./.github` and `a/.git`; `./vendor` matched `a/vendor-bin`.
+            '\brm\s+-?(?:rf|fr)\s+' . self::ARGS . '(?:\./)?vendor(?:/\*?)?(?=$|[\s;&|)])',
+            '\brm\s+-?(?:rf|fr)\s+' . self::ARGS . '(?:\./)?node_modules(?:/\*?)?(?=$|[\s;&|)])',
+            '\brm\s+-?(?:rf|fr)\s+' . self::ARGS . '(?:\./)?\.git(?:/\*?)?(?=$|[\s;&|)])',
         ],
         'force-push-reset-hard' => [
-            'git\s+push\s+--force',
-            'git\s+push\s+-f',
-            'git\s+push\s+--force-with-lease',
-            'git\s+push\s+--force-if-includes',
+            // Anywhere among push's own arguments (`git push origin main -f`),
+            // which also covers --force-with-lease / --force-if-includes.
+            'git\s+push\s+' . self::ARGS . '(?:--force\b|-[a-z]*f)',
+            // A `+` refspec forces that one ref: `git push origin +main`,
+            // `git push origin +HEAD:main`.
+            'git\s+push\s+' . self::ARGS . '\+\S',
             'git\s+reset\s+--hard',
             'git\s+reset\s+--mixed',
             'git\s+reset\s+--soft\s+HEAD~',
@@ -171,11 +212,11 @@ final class SafetyClassifier
             'git\s+push\s+origin\s+.*:refs/heads/[\w-]+/[\w-]+',
         ],
         'automation-comments' => [
-            'gh\s+issue\s+comment\s+create',
-            'gh\s+issue\s+comment\s+edit',
-            'gh\s+pr\s+comment\s+create',
-            'gh\s+pr\s+comment\s+edit',
-            'gh\s+pr\s+review\s+submit',
+            // gh's real syntax is `gh pr comment 12 --body …`; the old
+            // `comment create` / `review submit` rows matched no gh command.
+            'gh\s+issue\s+comment\s+',
+            'gh\s+pr\s+comment\s+',
+            'gh\s+pr\s+review\s+',
             'gh\s+api\s+repos/.*/issues/.*/comments',
             'hub\s+issue\s+comment',
             'hub\s+pr\s+comment',
@@ -183,22 +224,23 @@ final class SafetyClassifier
             'gitlab\s+mr\s+note\s+create',
         ],
         'interactive-shell-portforward' => [
-            'ssh\s+.*-L\s+',
-            'ssh\s+.*-R\s+',
-            'ssh\s+.*-D\s+',
-            'ssh\s+.*-W\s+',
+            // Case-sensitive (the `i` flag made `ssh -l root host` a
+            // forward), value attached or not (`-L8080:…`), after any
+            // cluster of ssh's boolean flags (`-NfL`).
+            'ssh\s+' . self::ARGS . '(?-i:-[46AaCfGgKkMNnqsTtVvXxYy]*[LRDW])',
             'kubectl\s+port-forward',
             'kubectl\s+exec\s+-i\s+-t',
             'kubectl\s+exec\s+--stdin\s+--tty',
             'docker\s+exec\s+-it',
             'docker\s+run\s+.*-it\s+',
-            'python\s+.*-c\s+.*import\s+pty',
-            'script\s+.*-q\s+.*/dev/null',
-            'expect\s+',
+            'python[\d.]*\s+.*-c\s+.*import\s+pty',
+            self::CMD . 'script\s+.*-q\s+.*/dev/null',
+            self::CMD . 'expect\s+',
             'socat\s+',
-            'ncat\s+--exec',
-            'nc\s+-e\s+',
-            'netcat\s+.*-e\s+',
+            '\bncat\s+--exec',
+            // `\b`: unbounded, `nc\s+-e` matched inside `rsync -e ssh …`.
+            '\bnc\s+-e\s+',
+            '\bnetcat\s+.*-e\s+',
         ],
         'live-credentials' => [
             'echo\s+.*AWS_ACCESS_KEY',
@@ -217,11 +259,16 @@ final class SafetyClassifier
             'cat\s+.*credentials\s+.*aws',
             'grep\s+.*AWS_ACCESS_KEY_ID\s+.*',
             'grep\s+.*password\s+.*\s+\|.+\s+echo',
-            'env\s+|\s*grep\s+SECRET',
-            'env\s+|\s*grep\s+PASSWORD',
-            'env\s+|\s*grep\s+KEY',
+            // The `|` is escaped: unescaped, each row was the alternation
+            // "`env ` anywhere OR `grep KEY` anywhere" (`python3 -m venv
+            // env`, `poetry env info`, `grep KEY README.md` were all
+            // blocked). Spacing around the pipe, grep's flags and a name
+            // prefix (`API_KEY`) are all optional.
+            '\b(?:env|printenv)(?:\s+-\S+)*\s*\|\s*grep\s+(?:-\S+\s+)*["\x27]?[\w*.^]*SECRET',
+            '\b(?:env|printenv)(?:\s+-\S+)*\s*\|\s*grep\s+(?:-\S+\s+)*["\x27]?[\w*.^]*PASSWORD',
+            '\b(?:env|printenv)(?:\s+-\S+)*\s*\|\s*grep\s+(?:-\S+\s+)*["\x27]?[\w*.^]*KEY',
             'strings\s+.*\.env',
-            'python\s+.*-c\s+.*os\.environ\[',
+            'python[\d.]*\s+.*-c\s+.*os\.environ\[',
         ],
         'package-registry-sideload' => [
             'npm\s+install\s+.*--registry\s+https://registry\.npmjs\.org',
@@ -233,11 +280,11 @@ final class SafetyClassifier
             'pip3\s+install\s+.*--extra-index-url\s+https://pypi\.org/simple',
             'yarn\s+add\s+.*--registry\s+https://registry\.yarnpkg\.com',
             'yarn\s+add\s+.*--ignore-scripts',
-            'pnpm\s+add\s+.*--registry\s+https://registry.npmjs.org',
+            'pnpm\s+add\s+.*--registry\s+https://registry\.npmjs\.org',
             'composer\s+require\s+.*--repository\s+https://packagist\.org',
             'gem\s+install\s+.*--no-document',
-            'go\s+get\s+.*https://github\.com/',
-            'go\s+install\s+.*@latest',
+            '\bgo\s+get\s+.*https://github\.com/',
+            '\bgo\s+install\s+.*@latest',
             'curl\s+.*pypi\.org.*pip\s+install',
             'wget\s+.*pypi\.org.*pip\s+install',
         ],
@@ -279,7 +326,20 @@ final class SafetyClassifier
 
     private function matches(string $pattern, string $subject): bool
     {
-        $delimited = '#' . $pattern . '#i';
-        return (bool) preg_match($delimited, $subject);
+        $result = @preg_match(self::regex($pattern), $subject);
+
+        // A PCRE failure (backtrack/JIT limit on a crafted command) is not a
+        // verdict of "safe": fail closed, so an oversized command cannot slip
+        // past a row by exhausting it.
+        return $result !== 0;
+    }
+
+    /**
+     * The delimited form of a PATTERNS row. `#` is the delimiter, so a row
+     * must not contain an unescaped `#` (the table's compile test pins it).
+     */
+    private static function regex(string $pattern): string
+    {
+        return '#' . $pattern . '#i';
     }
 }
