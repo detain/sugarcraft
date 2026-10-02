@@ -90,13 +90,19 @@ use SugarCraft\Crush\ToolCall;
  * covers `.env`, `.//.env` and `./foo/../.env`, which it did not before and
  * which are the spellings a model is likelier to emit than the documented one.
  * Additionally, for a RESTRICTIVE rule only, a relative pattern reads as "at
- * any depth", so that same deny covers `/home/u/proj/.env`. NOT closed: a
- * symlinked or hard-linked spelling of the same file, a bind mount, and — the
- * mirror image of the depth reading — an ABSOLUTE pattern (`Deny Read(/etc/*)`)
- * against a relative call spelling that resolves there. Nothing here touches
- * the filesystem, deliberately: a matcher that stat'ed every candidate would
- * make the decision depend on the process's cwd and on races with the tool it
- * is gating.
+ * any depth", so that same deny covers `/home/u/proj/.env`. And when the caller
+ * supplies the workspace root the tools resolve against (audit F-J3 — the live
+ * hook chain does, from `HookContext::$projectRoot`), the call is ALSO read the
+ * way the tool will read it: anchored at that root and resolved on disk. That
+ * closes the two holes this paragraph used to list as open — an ABSOLUTE
+ * pattern (`Deny Read(/proj/secret.txt)`) against a relative spelling
+ * (`secret.txt`, `./secret.txt`, `sub/../secret.txt`), and a symlink
+ * (`notes -> secret.txt`). STILL NOT closed: a hard link (a second name for
+ * the inode, which no path resolution can map back), a bind mount, a path
+ * swapped between this decision and the tool's open (the gate resolves, the
+ * tool resolves again; a race between them is the path jails' problem, and
+ * they resolve at use), and every call judged WITHOUT a root — the sub-agent
+ * gate and the declaration check still match spellings only.
  *
  * So treat any `Tool(...)` deny as a guard rail against the model doing
  * something by ACCIDENT, not as a containment boundary against something trying
@@ -229,6 +235,12 @@ final class PermissionRule
      */
     private const PATH_SUBJECT_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Lsp'];
 
+    /**
+     * How many symlinks {@see resolveOnDisk()} follows by hand before it stops —
+     * Linux's `MAXSYMLINKS`, so a link loop ends where the kernel would end it.
+     */
+    private const MAX_SYMLINK_HOPS = 40;
+
     public function __construct(
         public readonly string $pattern,
         public readonly PermissionAction $action,
@@ -360,8 +372,12 @@ final class PermissionRule
      *        {@see ToolDeclaration} rather than a real call, so the arguments
      *        are not merely absent but UNKNOWABLE. An argument-scoped rule then
      *        never matches, in either direction — see below.
+     * @param string|null $projectRoot The workspace root the TOOL resolves a
+     *        relative path against (`--root`). Only path subjects read it — see
+     *        {@see matchesPathSubject()} — and null (or `''`) keeps the purely
+     *        lexical matching every root-less caller had before audit F-J3.
      */
-    public function matches(ToolCall $call, bool $argumentsKnown = true): bool
+    public function matches(ToolCall $call, bool $argumentsKnown = true, ?string $projectRoot = null): bool
     {
         if (!self::matchesToolName($this->toolNamePattern(), $call->name)) {
             return false;
@@ -408,7 +424,12 @@ final class PermissionRule
             return $this->action !== PermissionAction::Allow;
         }
 
-        return $this->matchesSubject($subject, $argumentPattern, $call->name);
+        return $this->matchesSubject(
+            $subject,
+            $argumentPattern,
+            $call->name,
+            $projectRoot === '' ? null : $projectRoot,
+        );
     }
 
     /**
@@ -432,14 +453,18 @@ final class PermissionRule
      * over-blocks, and an `Allow` written with the real double space simply
      * fails to fire — but it is a coercion, not an identity.
      */
-    private function matchesSubject(string $subject, string $argumentPattern, string $toolName): bool
-    {
+    private function matchesSubject(
+        string $subject,
+        string $argumentPattern,
+        string $toolName,
+        ?string $projectRoot,
+    ): bool {
         if (in_array($toolName, self::SHELL_SUBJECT_TOOLS, true)) {
             return $this->matchesShellSubject($subject, $argumentPattern);
         }
 
         if (in_array($toolName, self::PATH_SUBJECT_TOOLS, true)) {
-            return $this->matchesPathSubject($subject, $argumentPattern);
+            return $this->matchesPathSubject($subject, $argumentPattern, $projectRoot);
         }
 
         return fnmatch($argumentPattern, self::collapseWhitespace($subject));
@@ -584,9 +609,8 @@ final class PermissionRule
     /**
      * Match a PATH subject.
      *
-     * TWO STEPS THAT ARE NOT THE SAME KIND OF THING, and keeping them apart is
-     * what lets one apply to every action and the other only to the restrictive
-     * ones:
+     * THREE STEPS THAT ARE NOT THE SAME KIND OF THING, and keeping them apart is
+     * what lets each go only where it is safe:
      *
      * 1. LEXICAL NORMALISATION of both the pattern and the subject
      *    ({@see normalisePath()}). This maps different spellings of the SAME
@@ -607,34 +631,194 @@ final class PermissionRule
      *    themselves; reading `/etc/passwd` as "any `etc/passwd` at any depth"
      *    would be inventing an intent the leading `/` denies.
      *
-     * NOTHING HERE TOUCHES THE FILESYSTEM. No `realpath()`, no `getcwd()`: a
-     * gate whose decision depended on the process's working directory would
-     * decide differently for the same call in two sessions, and one that
-     * resolved a symlink would be racing the tool it is gating. The cost is the
-     * limit named in the class doc-block — a symlinked spelling is not caught —
-     * and it is the correct thing to lose here rather than in the path jails,
-     * which resolve because containment is their entire job.
+     * 3. THE TOOL'S OWN READING, only when a root is supplied (audit F-J3).
+     *    The tools resolve a relative path against `--root` and then open
+     *    whatever the filesystem says it names
+     *    ({@see \SugarCraft\Crush\Tools\PathJail::resolve()}), so steps 1-2
+     *    alone judged a string the tool never opens: with
+     *    `Deny Read(/proj/secret.txt)`, `secret.txt` and `./secret.txt` were
+     *    ALLOWED (measured), and so was a symlink `notes -> secret.txt` under
+     *    any path deny at all. The extra spellings are the call anchored at the
+     *    root, and where it really lands on disk — {@see resolvedPathSpellings()},
+     *    the same realpath-or-realpath(parent) move as
+     *    {@see \SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook}.
+     *
+     * WHY THIS NOW TOUCHES THE FILESYSTEM, when this block used to promise it
+     * never would. The promise rested on two worries — a decision that depends
+     * on the process's cwd, and a gate racing the tool it gates — and neither
+     * survives contact with the alternative. The root is passed in, not read
+     * from `getcwd()` (a RELATIVE root is resolved the way the tool resolves
+     * it, which is against the cwd — mirroring the tool is the point), and no
+     * root means no resolution, so a root-less caller decides exactly as
+     * before. The race is real but one-sided: it can only make the gate judge a
+     * spelling the tool then does not open, and the tool's own jail resolves
+     * again at use. Against that, a deny that a symlink defeats is not a rule
+     * about the FILE — it is a rule about one of the file's names, and the
+     * model picks the name.
+     *
+     * THE ASYMMETRY, applied to the new spellings:
+     *
+     * - `Deny` / `Ask` fire on the UNION — any lexical spelling, any resolved
+     *   one, each with the depth reading. Over-blocking (a deny catching a
+     *   symlink the user did not think of) is the safe direction.
+     * - `Allow` fires on the INTERSECTION: a lexical spelling (the call's own,
+     *   or the call anchored at the root, so `Allow Write(/proj/src/*)` covers
+     *   `src/a.php`) must match AND a resolved spelling must match too. So a
+     *   symlink cannot LAUNDER a grant — `src/link -> /etc/passwd` passes the
+     *   lexical half of `Allow Write(/proj/src/*)` and fails the resolved half,
+     *   and falls through to the mode. The cost, stated because it is real: a
+     *   symlink inside an allowed tree whose target lies outside it is no
+     *   longer granted by the rule, even when the user meant it to be; it gets
+     *   the mode's answer (usually a prompt) instead. The resolved half also
+     *   uses only the absolute real path, the real path re-spelled under the
+     *   root as the caller wrote it, and the root-relative remainder — never
+     *   the depth reading — so it narrows and never widens.
      */
-    private function matchesPathSubject(string $subject, string $argumentPattern): bool
+    private function matchesPathSubject(string $subject, string $argumentPattern, ?string $projectRoot): bool
     {
         $pattern = self::normalisePath($argumentPattern);
-        $path = self::normalisePath(self::collapseWhitespace($subject));
+        $lexical = self::normalisePath(self::collapseWhitespace($subject));
 
-        if (fnmatch($pattern, $path)) {
-            return true;
+        if ($projectRoot === null) {
+            return $this->matchesAnyPathSpelling($pattern, [$lexical]);
         }
 
-        if ($this->action === PermissionAction::Allow || str_starts_with($pattern, '/')) {
-            return false;
+        $lexicalSpellings = [$lexical];
+        if (!str_starts_with($lexical, '/')) {
+            $lexicalSpellings[] = self::normalisePath($projectRoot . '/' . $lexical);
+        }
+        $resolvedSpellings = self::resolvedPathSpellings($subject, $projectRoot);
+
+        if ($this->action === PermissionAction::Allow) {
+            return $this->matchesAnyPathSpelling($pattern, $lexicalSpellings)
+                && $this->matchesAnyPathSpelling($pattern, $resolvedSpellings);
         }
 
-        foreach (self::trailingPathSuffixes($path) as $suffix) {
-            if (fnmatch($pattern, $suffix)) {
+        return $this->matchesAnyPathSpelling($pattern, [...$lexicalSpellings, ...$resolvedSpellings]);
+    }
+
+    /**
+     * Does ANY spelling match — exactly, or (restrictive action, relative
+     * pattern) at any depth? Step 2 of {@see matchesPathSubject()}, applied
+     * per spelling.
+     *
+     * @param list<string> $spellings normalised path spellings
+     */
+    private function matchesAnyPathSpelling(string $pattern, array $spellings): bool
+    {
+        $depth = $this->action !== PermissionAction::Allow && !str_starts_with($pattern, '/');
+
+        foreach (array_unique($spellings) as $spelling) {
+            if (fnmatch($pattern, $spelling)) {
                 return true;
+            }
+            if (!$depth) {
+                continue;
+            }
+            foreach (self::trailingPathSuffixes($spelling) as $suffix) {
+                if (fnmatch($pattern, $suffix)) {
+                    return true;
+                }
             }
         }
 
         return false;
+    }
+
+    /**
+     * Where the TOOL will land for this subject, spelled every way a pattern
+     * might name it: the absolute real path, and — when it lies inside the
+     * root — the same path re-spelled under the root AS THE CALLER WROTE IT,
+     * plus the root-relative remainder.
+     *
+     * The re-spelling is what keeps a symlinked root working: with `--root
+     * /home/u/proj` where `proj -> /srv/proj`, the real path of `secret.txt` is
+     * `/srv/proj/secret.txt`, while the user wrote their deny as
+     * `Read(/home/u/proj/secret.txt)` — so the real path alone would miss it.
+     *
+     * Anchored at the REAL root exactly as {@see \SugarCraft\Crush\Tools\PathJail::resolve()}
+     * anchors it. Returns nothing for a value no filesystem call can take (a
+     * NUL byte), which leaves a deny with its lexical spellings and an `Allow`
+     * with no resolved half — no grant, the fail-closed direction.
+     *
+     * @return list<string>
+     */
+    private static function resolvedPathSpellings(string $subject, string $projectRoot): array
+    {
+        if (str_contains($subject, "\0") || str_contains($projectRoot, "\0")) {
+            return [];
+        }
+
+        $rootAbsolute = str_starts_with($projectRoot, '/')
+            ? $projectRoot
+            : (getcwd() ?: '') . '/' . $projectRoot;
+        $rootReal = self::resolveOnDisk($rootAbsolute);
+
+        $resolved = self::resolveOnDisk(
+            str_starts_with($subject, '/') ? $subject : $rootReal . '/' . $subject,
+        );
+        $spellings = [$resolved];
+
+        $prefix = rtrim($rootReal, '/') . '/';
+        if ($resolved === $rootReal || str_starts_with($resolved, $prefix)) {
+            $relative = $resolved === $rootReal ? '' : substr($resolved, strlen($prefix));
+            $spellings[] = self::normalisePath($projectRoot . '/' . $relative);
+            $spellings[] = $relative;
+        }
+
+        return $spellings;
+    }
+
+    /**
+     * The canonical absolute path an ABSOLUTE path names, whether or not the
+     * leaf (or several trailing segments) exists yet.
+     *
+     * `realpath()` when it answers; otherwise the nearest existing ancestor is
+     * canonicalised and the missing remainder re-attached lexically — the walk
+     * {@see \SugarCraft\Crush\Tools\PathJail::resolveForCreate()} does for a
+     * `Write` into a directory that does not exist yet. A DANGLING symlink on
+     * the way is followed to its target (a `Write` through it creates the
+     * target, so the target is what the write is about), bounded by the
+     * kernel's own `MAXSYMLINKS` so a link loop terminates.
+     */
+    private static function resolveOnDisk(string $absolute, int $hops = 0): string
+    {
+        $real = realpath($absolute);
+        if ($real !== false) {
+            return $real;
+        }
+
+        $tail = [];
+        $probe = $absolute;
+        while (true) {
+            if ($hops < self::MAX_SYMLINK_HOPS && is_link($probe)) {
+                $target = readlink($probe);
+                if ($target !== false) {
+                    $base = str_starts_with($target, '/') ? $target : dirname($probe) . '/' . $target;
+
+                    return self::resolveOnDisk(
+                        $tail === [] ? $base : $base . '/' . implode('/', array_reverse($tail)),
+                        $hops + 1,
+                    );
+                }
+            }
+
+            $parent = dirname($probe);
+            if ($parent === $probe) {
+                return self::normalisePath($probe . '/' . implode('/', array_reverse($tail)));
+            }
+
+            $tail[] = basename($probe);
+            $probe = $parent;
+
+            $real = realpath($probe);
+            if ($real !== false) {
+                // The remainder may still hold `..`; normalising it lexically is
+                // sound here because it is applied on top of a REAL path, which
+                // has no symlink left for a `..` to climb out of.
+                return self::normalisePath($real . '/' . implode('/', array_reverse($tail)));
+            }
+        }
     }
 
     /**

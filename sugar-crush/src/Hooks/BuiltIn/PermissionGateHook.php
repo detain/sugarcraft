@@ -120,12 +120,21 @@ final readonly class PermissionGateHook implements HookInterface
         return $this->gate;
     }
 
+    /**
+     * Hands the gate the context's project root because that is the root the
+     * tools resolve a relative path against — without it a path rule judged
+     * the call's SPELLING, so `Deny Read(/proj/secret.txt)` let `secret.txt`
+     * and a symlink to it through (audit F-J3). An empty root (a context built
+     * with no workspace) is passed as null: anchoring at `''` would anchor at
+     * `/` and invent paths the tool never opens.
+     */
     public function execute(HookContext $context): HookResult
     {
         $call = new ToolCall($context->toolName, $context->toolArgs);
         $mode = $this->gate->mode()->value;
+        $root = $context->projectRoot === '' ? null : $context->projectRoot;
 
-        return match ($this->gate->evaluate($call)) {
+        return match ($this->gate->evaluate($call, $root)) {
             PermissionDecision::Allow => HookResult::allow(),
             PermissionDecision::Deny => HookResult::deny(
                 "Permission mode '{$mode}' does not allow {$context->toolName}.",

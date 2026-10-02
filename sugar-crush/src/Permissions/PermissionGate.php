@@ -181,10 +181,19 @@ final class PermissionGate
      * move a counter a real one is judged by. {@see refuses()} is the read-only
      * question, and it takes a type this method will not accept so the two
      * cannot be mixed up at a call site.
+     *
+     * @param string|null $projectRoot The workspace root the call's tool
+     *        resolves a relative path against. Supplied, a path-scoped rule is
+     *        also matched against the call as the tool will read it — anchored
+     *        at the root and resolved through symlinks — so
+     *        `Deny Read(/proj/secret.txt)` stops `secret.txt` and a symlink to
+     *        it (audit F-J3; {@see PermissionRule::matches()}). Null keeps the
+     *        lexical-only matching, which is what a caller without a root (the
+     *        sub-agent gate, Chat's `!` shell check) always had.
      */
-    public function evaluate(ToolCall $call): PermissionDecision
+    public function evaluate(ToolCall $call, ?string $projectRoot = null): PermissionDecision
     {
-        return $this->decide($call, commitAutoStrikes: true, argumentsKnown: true);
+        return $this->decide($call, commitAutoStrikes: true, argumentsKnown: true, projectRoot: $projectRoot);
     }
 
     /**
@@ -265,9 +274,16 @@ final class PermissionGate
      *        the same distinction (real call vs. hypothetical) into different
      *        subsystems, which is why they are separate parameters rather than
      *        one: an Auto strike is about STATE, this is about EVIDENCE.
+     * @param string|null $projectRoot see {@see evaluate()}; only the rules
+     *        read it — the mode evaluators judge a tool KIND or a command, not
+     *        a resolved path.
      */
-    private function decide(ToolCall $call, bool $commitAutoStrikes, bool $argumentsKnown): PermissionDecision
-    {
+    private function decide(
+        ToolCall $call,
+        bool $commitAutoStrikes,
+        bool $argumentsKnown,
+        ?string $projectRoot = null,
+    ): PermissionDecision {
         // 0. Circuit breaker: `rm -rf /` / `rm -rf ~` is refused unconditionally,
         // in every mode, before rules are considered — no Allow rule and no mode
         // (including BypassPermissions) can talk this gate into a self-destruct.
@@ -276,7 +292,7 @@ final class PermissionGate
         }
 
         // 1. Check explicit rules first (highest priority)
-        $ruleDecision = $this->evaluateRules($call, $argumentsKnown);
+        $ruleDecision = $this->evaluateRules($call, $argumentsKnown, $projectRoot);
         if ($ruleDecision !== null) {
             return $ruleDecision;
         }
@@ -301,11 +317,13 @@ final class PermissionGate
      * @param bool $argumentsKnown threaded straight through to
      *        {@see PermissionRule::matches()} — see {@see decide()} for why the
      *        two entry points differ on it.
+     * @param string|null $projectRoot threaded through likewise; see
+     *        {@see evaluate()}.
      */
-    private function evaluateRules(ToolCall $call, bool $argumentsKnown): ?PermissionDecision
+    private function evaluateRules(ToolCall $call, bool $argumentsKnown, ?string $projectRoot): ?PermissionDecision
     {
         foreach ($this->rules as $rule) {
-            if ($rule->matches($call, $argumentsKnown)) {
+            if ($rule->matches($call, $argumentsKnown, $projectRoot)) {
                 return $this->actionToDecision($rule->action);
             }
         }

@@ -300,6 +300,21 @@ How the argument half is matched:
   and `..` segments — so `Deny Read(./.env)` also covers `.env` and
   `./foo/../.env`, and a relative restrictive pattern matches at any depth
   (`/home/you/proj/.env`).
+- **A path rule judges the file the tool will open** (audit F-J3). The tools
+  resolve a relative path against `--root`, and the gate on the live hook
+  chain is now handed that root, so it also reads the call anchored at the
+  root and resolved on disk (symlinks followed; for a file that does not exist
+  yet, its nearest existing parent). Measured before the fix with
+  `Deny Read(/proj/secret.txt)`: `secret.txt` and `./secret.txt` were
+  **Allow**, and so was a symlink `notes -> secret.txt`. Now `secret.txt`,
+  `./secret.txt`, `sub/../secret.txt`, `notes`, and the same file reached
+  through a symlinked root are all **Deny**, and an absolute pattern written
+  with either spelling of a symlinked root matches. `deny` and `ask` fire on
+  **any** of these spellings. An `allow` fires only when the call's spelling
+  (as written, or anchored at the root — so `Allow Write(/proj/src/*)` covers
+  `src/a.php`) **and** the resolved file both match, so a symlink cannot
+  launder a grant: `src/link -> /etc/passwd` gets the mode's answer, not the
+  rule's — including a symlink inside an allowed tree that you meant to allow.
 
 Its limits, stated because each one is real:
 
@@ -307,7 +322,11 @@ Its limits, stated because each one is real:
   command has spellings no glob enumerates: `Deny Bash(rm *)` does not catch
   `/bin/rm -rf build` (measured: Allow), `$(echo rm) -rf build`,
   `bash -c 'rm -rf build'` or `find build -delete`; a path deny does not
-  survive a symlink. Treat it as a guard rail against an accident.
+  survive a hard link or a bind mount, and only catches a symlink or a
+  relative spelling of an absolute pattern where the caller knows the
+  workspace root — the main tool loop does, a sub-agent's own gate and a
+  declaration check do not, and match spellings only. Treat it as a guard
+  rail against an accident.
 - **A shell `allow` is per rule, and still a glob over arguments.**
   `Allow Bash(git *)` plus `Allow Bash(grep *)` does not grant
   `git log | grep x` — rules are first-match-wins and no single rule covers
