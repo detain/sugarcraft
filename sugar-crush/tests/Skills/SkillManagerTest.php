@@ -388,7 +388,7 @@ SKILL;
                 'repo-claude' => [SkillOrigin::Project, '[project, foreign: claude]'],
                 'home-native' => [SkillOrigin::User, '[user]'],
                 'home-opencode' => [SkillOrigin::User, '[user, foreign: opencode]'],
-                'explore-codebase' => [SkillOrigin::BuiltIn, '[built-in]'],
+                'api-design' => [SkillOrigin::BuiltIn, '[built-in]'],
             ];
             $listing = (new SkillMatcher())->listForPrompt($this->registry);
 

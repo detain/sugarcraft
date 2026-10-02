@@ -54,10 +54,16 @@ This creates an isolated directory with its own working tree but shares the `.gi
 ### 3. Verify Clean State
 
 ```bash
-git status
+git -C ../wt-<slug>-<short> status
 # Expected: "nothing to commit, working tree clean"
-# If not clean: git checkout -- . && git clean -fd
 ```
+
+If the tree is **not** clean: STOP and report the `git status` output to the
+user. Never discard, reset, or clean anything to make it clean — uncommitted
+changes and untracked files may be someone's unsaved work. Name the worktree
+path explicitly with `git -C <path>` (as above): the shell's working directory
+does not persist between tool calls, so a bare `git status` after a `cd` in an
+earlier call runs in the main checkout, not the worktree.
 
 ### 4. Do the Work
 
@@ -113,7 +119,7 @@ git pull --ff-only
 After merging, clean up:
 
 ```bash
-git worktree remove ../wt-<slug>-<short
+git worktree remove ../wt-<slug>-<short>
 git worktree prune  # cleanup any stale entries
 ```
 
@@ -138,4 +144,4 @@ git worktree prune  # cleanup any stale entries
 |-----------|--------|
 | "fatal: '`<path>`' already exists" | Worktree already exists — `cd` to it |
 | "fatal: cannot create worktree: 'master'" | Branch from current HEAD, not master |
-| "fatal: 'master' is a branch but is not fully merged" | Use `--force` if you're certain, otherwise check with reviewer |
+| "fatal: 'master' is a branch but is not fully merged" | Stop and report to the user — never `--force`, which can discard unmerged work |

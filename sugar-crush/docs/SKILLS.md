@@ -27,9 +27,20 @@ the same name replaces an earlier one:
 
 | Tier | Directory | Notes |
 |---|---|---|
-| built-in | `src/Skills/BuiltIn/` | Ships with the package — twelve directories in this checkout (`api-design`, `composer-wizard`, `explore-codebase`, `laravel-best-practices`, `matchups-sync`, `mcp-authoring`, `php-best-practices`, `phpunit-master`, `security-audit`, `symfony-best-practices`, `testing-strategies`, `worktree-workflow`). |
+| built-in | `src/Skills/BuiltIn/` | Ships with the package — eight directories in this checkout (`api-design`, `composer-wizard`, `laravel-best-practices`, `php-best-practices`, `phpunit-master`, `security-audit`, `symfony-best-practices`, `testing-strategies`). |
 | user | `~/.sugar-crush/skills/` | Yours. Symlinks inside it may resolve anywhere under `$HOME`. |
 | project | `<root>/.sugar-crush/skills/` | Confined to the checkout; see [Containment](#containment). |
+
+The SugarCraft monorepo's own skills — `explore-codebase`, `matchups-sync`,
+`mcp-authoring` and `worktree-workflow` — are **not** built-ins. They live in
+the monorepo's project tier, `.sugar-crush/skills/` at the repository root, so
+they load only when sugar-crush runs with that checkout as its project root.
+They used to ship under `src/Skills/BuiltIn/`, which listed them in every
+project's system prompt: a user in an unrelated repository who said "open a
+PR" matched `worktree-workflow`, whose body then told the model to run
+`git checkout -- . && git clean -fd` on a dirty tree — discarding uncommitted
+work — and to self-merge the PR (audit 15d-21). That instruction is gone too:
+a tree that is not clean now means stop and report.
 
 The **foreign** trees are other tools' conventions, imported read-only and
 badged with a `SkillSource` (`src/Skills/ForeignSkillDiscovery.php`):

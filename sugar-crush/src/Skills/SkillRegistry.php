@@ -28,7 +28,7 @@ final class SkillRegistry
      *
      * WHY 1,024, AND NOT A NUMBER A REAL ROSTER COULD REACH. MEASURED on this
      * tree by {@see Skill::fromFile()} over `src/Skills/BuiltIn/*\/SKILL.md`:
-     * the twelve shipped built-ins declare FOUR distinct `paths:` globs between
+     * the eight shipped built-ins declare FOUR distinct `paths:` globs between
      * them (`composer.json`, `composer.lock`, `**\/*.php`, `**\/*Test.php`),
      * across five `paths:` entries, and no skill declares more than two. 1,024
      * is 256x that, so a roster would need ~200 skills each declaring five
