@@ -75,8 +75,8 @@ final class C1ControlStripTest extends TestCase
 
     public function testSweepSurvivesMalformedUtf8InTheInput(): void
     {
-        // CommonMark rejects a malformed document before rendering, but
-        // stripControls() also runs on pre-parse input (emoji expansion), so
+        // render() repairs a malformed document before the parse (15b-29),
+        // but stripControls() is also handed raw text directly, so
         // it must stay a byte sweep: a /u regex would fail on the stray \xFF
         // and disable the whole strip.
         $method = (new \ReflectionClass(Renderer::class))->getMethod('stripControls');

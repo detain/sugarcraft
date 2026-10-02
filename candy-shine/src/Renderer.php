@@ -12,6 +12,7 @@ use SugarCraft\Shine\Render\SectionScanner;
 use SugarCraft\Shine\Style\StyleCascade;
 use SugarCraft\Shine\Style\StyleSheet;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -355,6 +356,9 @@ final class Renderer
      */
     public function renderSection(string $section): string
     {
+        if ($this->sanitize) {
+            $section = self::scrubForParse($section);
+        }
         if ($this->expandEmoji) {
             $section = self::expandEmojiShortcodes($section);
             if ($this->sanitize) {
@@ -611,6 +615,9 @@ final class Renderer
 
     public function render(string $markdown): string
     {
+        if ($this->sanitize) {
+            $markdown = self::scrubForParse($markdown);
+        }
         if ($this->expandEmoji) {
             $markdown = self::expandEmojiShortcodes($markdown);
             // Strip control bytes AFTER expansion (not before), so a shortcode
@@ -764,15 +771,48 @@ final class Renderer
     }
 
     /**
-     * Strip C0 control bytes (except tab / newline), ESC, DEL and the
-     * UTF-8-encoded C1 controls U+0080–U+009F from a source-derived string.
-     * This closes the ANSI-injection vector while preserving legitimate
-     * formatting whitespace.
+     * A well-formed UTF-8 sequence of two to four bytes (RFC 3629: no
+     * overlongs, no surrogates, nothing past U+10FFFF), spelled byte-wise.
+     * {@see stripControls()} skips over these so it can tell a lone 8-bit C1
+     * byte from a continuation byte that merely falls in 0x80–0x9F.
+     */
+    private const UTF8_MULTIBYTE = '[\xC2-\xDF][\x80-\xBF]'
+        . '|\xE0[\xA0-\xBF][\x80-\xBF]|[\xE1-\xEC\xEE\xEF][\x80-\xBF]{2}|\xED[\x80-\x9F][\x80-\xBF]'
+        . '|\xF0[\x90-\xBF][\x80-\xBF]{2}|[\xF1-\xF3][\x80-\xBF]{3}|\xF4[\x80-\x8F][\x80-\xBF]{2}';
+
+    /**
+     * Strip C0 control bytes (except tab / newline), ESC, DEL and the C1
+     * controls U+0080–U+009F — both UTF-8-encoded and as lone raw 8-bit
+     * bytes — from a source-derived string, then render the invisible bidi
+     * and zero-width format characters as `<U+XXXX>` markers. This closes
+     * the ANSI-injection vector while preserving legitimate formatting
+     * whitespace.
      *
      * The C1 sweep matters because a UTF-8 terminal such as xterm decodes
      * `\xC2\x9B` to U+009B and executes it as CSI — markdown carrying
      * `U+009B 2 J` would clear the screen without a single ESC byte (audit
      * 15b-08). Only the introducer is removed; the inert tail stays visible.
+     *
+     * The lone-byte sweep (audit 15b-29) covers the 8-bit spelling: a bare
+     * `\x9B` is malformed UTF-8, and a terminal with 8-bit controls enabled
+     * runs it as CSI too. A plain `[\x80-\x9F]` class would shred every
+     * multi-byte character whose continuation bytes land in that range (→,
+     * 👍), so well-formed sequences are matched first and skipped
+     * (`(*SKIP)(*FAIL)`), and only a 0x80–0x9F byte left over is removed —
+     * the rule candy-core's `Ansi::strip()` applies for
+     * `Sanitize::untrusted()`. It runs BEFORE the C0 sweep on purpose:
+     * removing an ASCII byte first could splice `\xC2 \x00 \x9B` into a
+     * fresh, well-formed `\xC2\x9B` that the skip would then protect. The
+     * other order cannot create one — after the lone-byte sweep every
+     * surviving 0x80–0x9F byte continues a lead that sits right before it,
+     * and the C0 sweep removes only ASCII bytes and whole `\xC2` pairs.
+     *
+     * The marker step (audit 15b-28) is candy-core's
+     * `Sanitize::markInvisibleFormatting()`: a U+202E RIGHT-TO-LEFT OVERRIDE
+     * in a code block would otherwise paint the rest of the line reversed
+     * ("Trojan Source"), and a zero-width space would make two different
+     * identifiers look the same. Joiners that are doing their job (the ZWJ
+     * inside 👩‍💻) survive.
      *
      * Byte-oriented, NO /u flag: a /u pattern fails (returns null) on any
      * malformed UTF-8 in the document, which would turn the whole strip off.
@@ -784,11 +824,55 @@ final class Renderer
      */
     private static function stripControls(string $s): string
     {
+        // A byte pattern cannot hit PCRE's UTF-8 failure path, but
+        // preg_replace is still typed ?string — fail closed to '' rather
+        // than return null.
+        $s = self::stripLoneC1($s);
         // Remove C0 controls except \t (0x09) and \n (0x0a); also strip ESC
-        // (0x1b), DEL (0x7f) and UTF-8 C1 (\xC2\x80-\xC2\x9F). A byte
-        // pattern cannot hit PCRE's UTF-8 failure path, but preg_replace is
-        // still typed ?string — fail closed to '' rather than return null.
-        return preg_replace('/[\x00-\x08\x0b-\x1f\x7f]|\xC2[\x80-\x9F]/', '', $s) ?? '';
+        // (0x1b), DEL (0x7f) and UTF-8 C1 (\xC2\x80-\xC2\x9F).
+        $s = preg_replace('/[\x00-\x08\x0b-\x1f\x7f]|\xC2[\x80-\x9F]/', '', $s) ?? '';
+
+        return Sanitize::markInvisibleFormatting($s);
+    }
+
+    /**
+     * Remove every 0x80–0x9F byte that is not part of a well-formed UTF-8
+     * sequence — a lone 8-bit C1 control such as a bare `\x9B` (CSI) —
+     * leaving every valid character, including those whose continuation
+     * bytes fall in that range, byte-identical (audit 15b-29).
+     */
+    private static function stripLoneC1(string $s): string
+    {
+        return preg_replace('/(?:' . self::UTF8_MULTIBYTE . ')(*SKIP)(*FAIL)|[\x80-\x9F]/', '', $s) ?? '';
+    }
+
+    /**
+     * Make raw source safe to hand the CommonMark parser when sanitising:
+     * lone 8-bit C1 bytes are removed ({@see stripLoneC1()}), then any other
+     * malformed UTF-8 is repaired to U+FFFD.
+     *
+     * Why before the parse and not only in {@see stripControls()}: CommonMark
+     * refuses input that is not valid UTF-8 with an
+     * `UnexpectedEncodingException`, so markdown carrying one raw `\x9B`
+     * (audit 15b-29) never reached the per-node sweep — it threw out of
+     * {@see render()} instead. Removing the C1 byte (rather than repairing it
+     * to U+FFFD) matches candy-core's `Sanitize::untrusted()`, so the same
+     * text reads the same through both. Every step is byte-local and never
+     * crosses a newline, so {@see renderSection()} applying it per section
+     * keeps `stream() === render()`.
+     */
+    private static function scrubForParse(string $s): string
+    {
+        $s = self::stripLoneC1($s);
+        if (mb_check_encoding($s, 'UTF-8')) {
+            return $s;
+        }
+        $prev = mb_substitute_character();
+        mb_substitute_character(0xFFFD);
+        $s = mb_convert_encoding($s, 'UTF-8', 'UTF-8');
+        mb_substitute_character($prev);
+
+        return $s;
     }
 
     private function renderText(string $literal): string
