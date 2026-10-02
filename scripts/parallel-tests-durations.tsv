@@ -730,3 +730,16 @@ sugar-crush/tests/Providers/SglangProviderServedModelTest.php	0.050	11
 sugar-crush/tests/Support/SiblingSpendLedgerTest.php	0.050	6
 sugar-crush/tests/Config/PermissionsIntroDriftTest.php	0.030	4
 sugar-crush/tests/Providers/VertexGeminiOutputBudgetTest.php	0.030	8
+sugar-crush/tests/Chat/ExecuteAgentsTimeoutTest.php	3.800	2
+sugar-crush/tests/Chat/WorkflowControlMidRunTest.php	1.300	6
+sugar-crush/tests/Support/ProcessTreeKillAsyncTest.php	1.000	5
+sugar-crush/tests/Chat/ChatCancelKeepsLoopLiveTest.php	0.450	2
+sugar-crush/tests/Backend/EngineBackendCancelKeepsLoopLiveTest.php	0.400	1
+sugar-crush/tests/Chat/MemoryRepoRootReplyTest.php	0.100	4
+sugar-crush/tests/Providers/ToolCallRawArgumentsReplayTest.php	0.070	22
+sugar-crush/tests/Chat/PositionalCommandColonSpellingTest.php	0.060	15
+sugar-crush/tests/Permissions/ChatBashGateRootTest.php	0.060	2
+sugar-crush/tests/Commands/CommandsTableTakesColumnDriftTest.php	0.050	3
+sugar-crush/tests/Hooks/PostToolUseAttributionTest.php	0.050	12
+sugar-crush/tests/Chat/WorkflowAttemptsReportTest.php	0.040	2
+sugar-crush/tests/Messages/LoopGuardStoppedFieldTest.php	0.040	14
