@@ -206,7 +206,7 @@ command removes. `/memory list` and `/memory search` read both stores and group 
 rows under a banner naming the store each row lives in; bulk clear remains a home-store
 command and REFUSES, touching nothing, while the repo store holds project notes (E694).
 A root that is empty, missing, or whose `.sugar-crush` resolves outside the
-tree degrades the write to the home store and contributes nothing to the read. **User-scope and agent-scope
+tree degrades the write to the home store (the `/memory add` reply says so) and contributes nothing to the read. **User-scope and agent-scope
 entries never reach the prompt**
 (`MemoryPromptWiringTest::testAUserScopeNoteDoesNotReachThePrompt`,
 `MemoryPromptWiringTest::testTheMemoryDirectoryIsReadOncePerRuntimeNotOncePerStep`).
@@ -319,7 +319,8 @@ landed — a deliberate, loud asymmetry rather than a silent truncation.
 Imports are **not idempotent** (`MemoryStore::add()` mints a fresh UUID per call),
 which is why de-duplication lives at the trigger point rather than in the importer:
 the command writes a sentinel at `.sugar-crush/memory/.imported-<target>` in the
-project after a non-empty import, and refuses to import again while that file
+project, at its repository root (the same root every other `.sugar-crush/*` lookup
+uses, so a subdirectory launch and a launch from the top share it), after a non-empty import, and refuses to import again while that file
 exists — delete it to re-import. Only the caller knows whether a re-import was
 intentional.
 

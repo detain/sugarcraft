@@ -14520,13 +14520,20 @@ final class Chat implements Model
             // tree can host one. The degradation to the shared home store is
             // deliberate — a headless `--root ''`, a read-only checkout, or a
             // `.sugar-crush` planted as a symlink out of the tree should cost
-            // the user their note, not their command. The response wording is
-            // byte-identical either way; the id names the file.
-            $id = $scope === 'project'
-                ? (ProjectMemoryWriter::createForRoot($this->projectRoot())?->write($content)
-                    ?? $this->memoryStore->add($content, $scope))
+            // the user their note, not their command. The reply SAYS when the
+            // note fell back (15d-05 residual): a project note in the home store
+            // is not in the repository, so a teammate's checkout never sees it,
+            // and a silent fallback let the user believe otherwise.
+            $repoWriter = $scope === 'project' ? ProjectMemoryWriter::createForRoot($this->projectRoot()) : null;
+            $id = $repoWriter !== null
+                ? $repoWriter->write($content)
                 : $this->memoryStore->add($content, $scope);
             $response = "Memory created with ID: `{$id}` (scope: {$scope})";
+            if ($scope === 'project' && $repoWriter === null) {
+                $response .= "\n\nSaved in the home store, not this repository: its `.sugar-crush/memory/` "
+                    . 'could not be created or written, or it resolves outside the repository, so the note '
+                    . 'is kept on this machine only and is not part of the checkout.';
+            }
         } catch (\Throwable $e) {
             $response = "**Error:** {$e->getMessage()}";
         }
@@ -14593,7 +14600,12 @@ final class Chat implements Model
             );
         }
 
-        $sentinel = $projectRoot . '/.sugar-crush/memory/.imported-' . $target;
+        // Under the REPOSITORY root, not the launch directory (15d-05/15d-13
+        // residual): every other `.sugar-crush/*` lookup walks up to the repo
+        // root, so a sentinel written beside a subdirectory launch was a second
+        // `.sugar-crush/` the next launch from the top never saw, and the same
+        // project re-imported from there.
+        $sentinel = \SugarCraft\Crush\Support\ProjectRoot::resolve($projectRoot) . '/.sugar-crush/memory/.imported-' . $target;
         if (file_exists($sentinel)) {
             return $this->memoryResponse(
                 $inputText,
@@ -14720,7 +14732,8 @@ final class Chat implements Model
      */
     private function importSentinelDirIsContained(string $dir): bool
     {
-        $root = $this->projectRoot();
+        // The same root the sentinel path was built under (memoryImport()).
+        $root = \SugarCraft\Crush\Support\ProjectRoot::resolve($this->projectRoot());
         $probe = $dir;
         while ($probe !== '/' && !file_exists($probe) && !is_link($probe)) {
             $probe = dirname($probe);
