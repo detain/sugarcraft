@@ -466,6 +466,25 @@ the model can aim it at:
 - **Tool calls may only use the parameters the tool declares.** Unknown or
   positional arguments are refused.
 
+Git itself, hooks included, runs under three guarantees:
+
+- **Each call is bounded.** A git command, including the hooks `gitCommit`
+  runs, gets 300 seconds. When that runs out, git and every process its hooks
+  started are killed, and the call fails with an error that says it timed out
+  and includes the end of git's stderr. Hook output never stalls a call,
+  whatever its size. A failure keeps the last 64 KiB of stderr.
+- **Git inherits your environment.** `SSH_AUTH_SOCK`, `GNUPGHOME`, `LANG` and
+  your `GIT_*` settings reach git and its hooks, so SSH remotes and signed
+  commits keep working. Credential prompts are switched off
+  (`GIT_TERMINAL_PROMPT=0`), because no terminal is attached to answer them.
+  A prompt fails with a message on stderr instead of hanging. `GPG_TTY` is
+  dropped, as it is for every child process SugarCrush starts. gpg therefore
+  needs a cached passphrase or a graphical pinentry.
+- **Your environment cannot redirect git to another repository.**
+  `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` and the other variables that
+  `git rev-parse --local-env-vars` lists are removed. Every call runs against
+  the contained root.
+
 `sugarcrush --help` lists exactly five under its **Subcommands** heading —
 `doctor`, `models`, `session list|delete`, `mcp list|import`,
 `completion bash|zsh|fish` — and those five are the ones that answer and exit
