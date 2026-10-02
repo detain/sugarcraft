@@ -2496,8 +2496,14 @@ final class Chat implements Model
             // this, the live, Chat path. Must be checked before the generic
             // Char arm below, or the literal "a" would be typed into the
             // input buffer instead.
+            //
+            // Through runCommand(), not `withInputBuf('/agents')->submit()`
+            // (audit 15b-34): the chord is a shortcut, not something the
+            // user typed, so it must leave their draft alone — the old arm
+            // replaced whatever was in the box with `/agents` and submitted
+            // it, silently discarding the draft.
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'a'
-                => $this->withInputBuf('/agents')->submit(),
+                => $this->runCommand('/agents'),
             // "?" opens the keybinding reference, but ONLY on a BLANK input
             // line. It is a plain printable character with no modifier, so an
             // unconditional bind would make a question impossible to type -
@@ -7318,11 +7324,13 @@ final class Chat implements Model
             // echo and the listing to the very history the turn is about to
             // write to, which is what the keyboard's own Ctrl+A refusal
             // exists to prevent. Through {@see refuseInFlightAction()} and
-            // not the {@see refuseInFlightCommand()} that Ctrl+A uses,
+            // not the {@see refuseInFlightCommand()} a TYPED `/agents` gets,
             // because that notice ends "your draft is still in the box:
             // press Enter again" — true of a typed command, and a sentence
             // about a draft that a click never touched would be a claim
-            // attached to the wrong thing.
+            // attached to the wrong thing. (Ctrl+A goes through
+            // {@see runCommand()}'s own refusal, which names the command and
+            // says the draft was not touched.)
             Pane::Agents => $this->inFlight
                 ? $this->refuseInFlightAction('/agents')
                 : $this->handleAgentsCommand('/agents'),
@@ -8972,7 +8980,7 @@ final class Chat implements Model
      * THE OVERLAY IT IS WRITTEN UNDER, AND A GESTURE THAT WRITES NOTHING
      * CLOSES NOTHING. The four routes are this method, its two dispatch-site
      * callers ({@see selectSessionTab()}, {@see selectPane()}'s Agents arm),
-     * and Ctrl+A, which reaches {@see refuseInFlightCommand()} instead and so
+     * and Ctrl+A, which reaches {@see runCommand()}'s refusal instead and so
      * clears the two overlay fields at its own arm in
      * {@see refuseWhileInFlight()} — measured before that line, mid-turn under
      * an open palette OR picker, `Ctrl+A` left the overlay up over its notice
@@ -9007,9 +9015,11 @@ final class Chat implements Model
      *
      * ENUMERATED, not pattern-matched, and each one has its own reason:
      *
-     *   * Ctrl+A. Its arm is `withInputBuf('/agents')->submit()`, so it both
-     *     DESTROYS the draft and submits a command. Routed to the same refusal a
-     *     typed `/agents` gets, from `$this` — the draft never moves. It also
+     *   * Ctrl+A. Its arm runs `/agents` through {@see runCommand()}, which
+     *     leaves the draft alone and refuses mid-turn with a notice that says
+     *     so (audit 15b-34; the arm used to replace the draft with `/agents`
+     *     and submit it, and this route then answered with the TYPED refusal,
+     *     whose "press Enter again" would have sent the user's draft). It also
      *     closes any open overlay, for the reason spelled out at its arm below
      *     and stated as one rule at {@see refuseInFlightAction()}.
      *   * Ctrl+Tab / Ctrl+Shift+Tab. {@see cycleSessionTab()} adopts another
@@ -9055,7 +9065,7 @@ final class Chat implements Model
             // that difference is deliberate and argued at {@see selectPane()};
             // the overlay was not a difference anybody chose.
             return $this->mutate(['palette' => null, 'sessionPicker' => null])
-                ->refuseInFlightCommand('/agents');
+                ->runCommand('/agents');
         }
 
         if ($msg->type === KeyType::Tab && $msg->ctrl) {
@@ -10323,9 +10333,9 @@ final class Chat implements Model
      *   dispatching. Escape is still the cancel.
      *
      *   Both of {@see submit()}'s entry points are covered: Enter reaches the
-     *   mid-turn branch at the head of submit(), and Ctrl+A — whose arm would
-     *   otherwise replace the draft with `/agents` and submit it — is intercepted
-     *   ahead of its arm by {@see refuseWhileInFlight()}. Pinned by
+     *   mid-turn branch at the head of submit(), and Ctrl+A — whose arm runs
+     *   `/agents` through {@see runCommand()} — is intercepted ahead of its arm
+     *   by {@see refuseWhileInFlight()}. Pinned by
      *   {@see \SugarCraft\Crush\Tests\Commands\SlashDispatchTest::testSlashClearIsUnreachableWhileATurnIsInFlight()}.
      *   What once falsified the claim was a bug in the `/compact` summarization
      *   clearing `inFlight` out from under a running turn — fixed at the source
@@ -14995,8 +15005,9 @@ final class Chat implements Model
      *     `currentSuggestion()` exist only on `TextInput`. The "/" popup keeps
      *     writing through {@see withInputBuf()}, unchanged — as do the four
      *     other whole-draft writers, which is the complete list of that
-     *     method's callers (`grep -n 'withInputBuf('`): the Up-recall arm, the
-     *     Ctrl+A `/agents` dispatch, the keyHelp `?` append, and `/keys`
+     *     method's callers (`grep -n 'withInputBuf('`): the Up-recall arm,
+     *     {@see runCommand()} seeding a command it then restores the draft
+     *     over (menu rows, Ctrl+N, Ctrl+A), the keyHelp `?` append, and `/keys`
      *     clearing the box. The palette is NOT among them: it has no
      *     fill-on-select at all — its selections run actions, and its own
      *     query buffer is a separate string this widget never sees.

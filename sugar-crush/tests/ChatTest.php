@@ -2194,7 +2194,10 @@ final class ChatTest extends TestCase
         [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Char, rune: 'a', ctrl: true));
 
         $this->assertNull($cmd);
-        $this->assertSame('', $next->inputBuf);
+        // Audit 15b-34: the chord used to replace the draft with `/agents`
+        // and submit it, so the draft was gone. A shortcut runs the command
+        // beside the draft, as a menu row does (Chat::runCommand()).
+        $this->assertSame('unsubmitted draft', $next->inputBuf, 'Ctrl+A must not consume the unsent draft');
         $this->assertCount(2, $next->history);
         $this->assertSame(Role::User, $next->history[0]->role);
         $this->assertSame('/agents', $next->history[0]->content);
@@ -2253,7 +2256,7 @@ final class ChatTest extends TestCase
         [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Char, rune: 'a', ctrl: true));
 
         $this->assertNull($cmd);
-        $this->assertSame('', $next->inputBuf);
+        $this->assertSame('unsubmitted draft', $next->inputBuf, 'the draft survives the shortcut (audit 15b-34)');
         $this->assertCount(2, $next->history);
         $this->assertSame('/agents', $next->history[0]->content);
         $this->assertStringContainsString('Agent manager not configured', $next->history[1]->content);

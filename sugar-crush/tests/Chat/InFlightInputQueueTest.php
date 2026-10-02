@@ -598,10 +598,11 @@ final class InFlightInputQueueTest extends TestCase
     }
 
     /**
-     * Ctrl+A is the other route into `submit()` — its arm is
-     * `withInputBuf('/agents')->submit()`, so left alone it would both DESTROY the
-     * draft and dispatch a command. Intercepted ahead of its arm, so the draft
-     * never moves.
+     * Ctrl+A is the other route into a command — its arm runs `/agents`
+     * through `Chat::runCommand()`. Intercepted ahead of its arm, so the draft
+     * never moves, and the notice is runCommand()'s: it says the draft was
+     * left alone, never the TYPED refusal's "press Enter again", which would
+     * send the user's own draft rather than `/agents` (audit 15b-34).
      */
     public function testCtrlAIsRefusedMidTurnWithoutTouchingTheDraft(): void
     {
@@ -613,6 +614,25 @@ final class InFlightInputQueueTest extends TestCase
         $this->assertSame('a draft worth keeping', $after->inputBuf, 'the draft was NOT replaced by /agents');
         $this->assertStringContainsString('/agents', $this->lastOf($after)->content, 'and the refusal names what it refused');
         $this->assertSame(Role::System, $this->lastOf($after)->role);
+        $this->assertStringNotContainsString('press Enter', $this->lastOf($after)->content, 'Enter would send the draft, not /agents — the notice must not suggest it');
+        $this->assertStringNotContainsString('still in the box', $this->lastOf($after)->content, 'the draft never held /agents, so the typed-command wording is a false claim here');
+        $this->assertStringContainsString('draft was not touched', $this->lastOf($after)->content);
+    }
+
+    /**
+     * The idle half of audit 15b-34: Ctrl+A runs `/agents` beside the draft
+     * instead of replacing it, and does not put `/agents` into ↑ recall —
+     * the user never typed it.
+     */
+    public function testCtrlAWhenIdleRunsAgentsAndLeavesTheDraftAlone(): void
+    {
+        $chat = $this->withDraft(new Chat(), 'a draft worth keeping');
+
+        [$after, $cmd] = $chat->update(new KeyMsg(KeyType::Char, 'a', ctrl: true));
+
+        $this->assertNull($cmd);
+        $this->assertSame('a draft worth keeping', $after->inputBuf, 'the idle draft survived the shortcut');
+        $this->assertSame('/agents', $after->history[0]->content ?? null, 'and /agents really ran');
     }
 
     /**
