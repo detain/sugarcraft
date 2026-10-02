@@ -520,6 +520,11 @@ final class TreeWideGuardRosterTest extends TestCase
         // markdownPagesUnder(\dirname(__DIR__, 2)) - walks README.md plus the
         // whole of docs/ recursively; the root is the function's parameter.
         'Cli/BootstrapLaunchFormatConstantsTest.php' => 'markdownPagesUnder() takes the package root as a parameter and walks docs/ under it',
+        // skillFilesUnder($this->builtInSkillsPath) and
+        // skillFilesUnder(self::monorepoSkillsPath()) - a scandir() walk (not
+        // a glob, so GlobDialectDifferentialTest's corpus stays put; audit
+        // 15d-21) over src/Skills/BuiltIn and the monorepo's .sugar-crush/skills.
+        'Skills/BuiltInSkillsTest.php' => 'skillFilesUnder() takes src/Skills/BuiltIn (and the monorepo skill tier) as a parameter and walks every <skill>/SKILL.md under it',
         // dotPathsIn(\dirname(__DIR__, 2) . '/src') at three call sites.
         'Cli/ProjectTierRefusalInventoryTest.php' => 'dotPathsIn() takes src/ as a parameter and walks it recursively',
         // phpFilesUnder($root . '/src') where $root = \dirname(__DIR__).
@@ -599,6 +604,9 @@ final class TreeWideGuardRosterTest extends TestCase
         'MCP/OAuthAuthorizationCodeExchangeTest.php' => ['glob($this->tempDir.\'/*\')'],
         'MCP/OAuthClientRegistrationTest.php' => ['glob($this->tempDir.\'/*\')'],
         'Sessions/BackgroundSupervisorReapTest.php' => ['glob($this->tempDir.\'/*\')'],
+        // removeTestProject() tears down the sys_get_temp_dir() project
+        // createTestProject() made.
+        'Skills/SkillManagerTest.php' => ['RecursiveDirectoryIterator($dir,\RecursiveDirectoryIterator::SKIP_DOTS)'],
         'SuiteChildStdinIsolationTest.php' => ['scandir($dir)'],
         'SuiteChildStdinPrependResidualTest.php' => ['scandir($dir)'],
         'SuiteSkipRosterTest.php' => ['scandir($cache)', 'scandir($dir)', 'scandir($path)'],
@@ -2030,8 +2038,10 @@ final class TreeWideGuardRosterTest extends TestCase
         // Moved 4 -> 3 at P6.S2, in the same change-set that retired the
         // `BaseSystemPromptTest.php` row (warrant and retraction recorded in the
         // WALKS_A_DIRECTORY_THE_TEST_MADE doc-block), as this message demands.
+        // Moved 3 -> 4 at w2 integration: BuiltInSkillsTest's census became a
+        // scandir() walk over src/Skills/BuiltIn (audit 15d-21 follow-up).
         $this->assertCount(
-            3,
+            4,
             self::DECLARED_TREE_WIDE_GUARDS,
             'the declared-guard list has changed size. A row is a LICENCE, so adding one is a '
             . 'deliberate act that belongs in the same change-set as this count; removing one '
