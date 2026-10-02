@@ -11267,6 +11267,16 @@ final class Chat implements Model
         $response .= "Stages completed: " . self::countDispatchedStages($result) . "\n";
         $response .= "Total tokens: {$result->totalTokens}\n";
         $response .= "Total cost: \${$result->totalCost}";
+        // Since WF-1(b) a stage's agent may be re-run after a failed or
+        // timed-out attempt; the pool folds every attempt into ONE result, so
+        // without this line a stage that took three tries to pass (and paid
+        // for all three) read exactly like one that passed first time.
+        foreach ($result->stageResults as $stage) {
+            $attempts = max([1, ...array_map(static fn(\SugarCraft\Crush\Agents\AgentResult $agent): int => $agent->attempts, $stage->agents)]);
+            if ($attempts > 1) {
+                $response .= "\nStage '{$stage->stageName}': {$attempts} attempts";
+            }
+        }
         // The failing stage's message, or the reason never reaches the
         // user at all: a failed run used to print the word "completed" in
         // bold with `Status: failed` under it and nothing else, so a stage
