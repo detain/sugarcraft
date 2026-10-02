@@ -356,6 +356,215 @@ final class ProcessContainment
     }
 
     /**
+     * Upper bound on {@see killTree()}'s freeze walk: passes × poll is a
+     * ~250 ms ceiling on how long a teardown may sit on the caller's thread
+     * (the TUI's event loop, for the Escape-Escape path) while a tree that
+     * will not hold still is chased. A quiet tree settles in two passes.
+     */
+    private const TREE_FREEZE_MAX_PASSES = 50;
+
+    private const TREE_FREEZE_POLL_US = 5000;
+
+    /**
+     * KILL $pid AND EVERYTHING IT STARTED — the public group-kill entry point
+     * for any site that tears down a forked child of this package (audit
+     * B2/F-E2: EngineBackend's turn teardown, Runtime's parallel deadline; the
+     * dormant Chat kill site and the custom-command `!` runner are meant to
+     * call this too).
+     *
+     * WHY `posix_kill($pid, 9)` WAS NOT ENOUGH. Every command a tool runs is
+     * `setsid -w`-wrapped ({@see spawnSpec()}), so it leads its OWN session and
+     * process group. SIGKILLing the forked PHP child that ran it leaves
+     * `/bin/sh -c …` and its children reparented to init, still running — a
+     * cancelled `rm` loop, migration or `git push` finished anyway. And a
+     * parallel Task sub-agent is a fork BELOW the killed child, exempt from the
+     * group deadline, so it carried on (with its own Bash groups and parallel
+     * forks) until its next progress check noticed the parent was gone.
+     *
+     * FREEZE, WALK, KILL — in that order, because the order is what makes the
+     * walk sound:
+     *  1. SIGSTOP the root, then repeatedly scan /proc for its descendants and
+     *     SIGSTOP each new one, until two consecutive passes find nothing new
+     *     and every collected process is stopped (or already dead). A stopped
+     *     process cannot fork, so the set stops growing; and while the root is
+     *     alive its children stay ITS children — once it dies they reparent to
+     *     init and the tree can no longer be recovered. So the walk always
+     *     runs BEFORE any kill. Bounded ({@see TREE_FREEZE_MAX_PASSES}): a
+     *     process stuck in an uninterruptible wait cannot stop, and the kill
+     *     below still goes out.
+     *  2. For every distinct process group a collected member is in, signal
+     *     the whole group — this reaches a setsid'd command's members that
+     *     already left the tree (a backgrounded `&` job whose shell exited).
+     *     NEVER the caller's own group: forks of this process inherit its
+     *     pgrp (the TUI's), so those get per-pid kills only.
+     *  3. Signal every collected pid and the root individually.
+     *
+     * $termGraceSeconds > 0 sends 15 first (with SIGCONT, so a stopped process
+     * can act on it), waits up to the grace for the set to go, then sends 9 to
+     * whatever is left. The default 0.0 is straight to 9, which is what both
+     * live callers want: they were already SIGKILLing the root, and a stopped
+     * tree has nothing left to do but die.
+     *
+     * Does NOT reap: the root stays the caller's to `waitpid()` (EngineBackend's
+     * bounded reapChild(), Runtime's reapKilled()); descendants are reparented
+     * to init by the kill and reaped there.
+     *
+     * LINUX-ONLY TREE HALF. Without a readable /proc ({@see ProcessTree}) or
+     * without ext-posix's getpgrp this degrades to exactly the pre-fix
+     * behaviour, `posix_kill($pid, 9)` on the root alone.
+     *
+     * Refuses $pid <= 0 and the caller's own pid (a kill(0)/kill(-1)/self-kill
+     * through this method is never what a teardown meant).
+     */
+    public static function killTree(int $pid, float $termGraceSeconds = 0.0): void
+    {
+        if ($pid <= 0 || !\function_exists('posix_kill')) {
+            return;
+        }
+        $self = \function_exists('posix_getpid') ? \posix_getpid() : \getmypid();
+        if ($pid === $self) {
+            return;
+        }
+
+        if (!\function_exists('posix_getpgrp') || !ProcessTree::available()) {
+            if ($termGraceSeconds <= 0.0) {
+                @\posix_kill($pid, 9);
+            } else {
+                ProcessReaper::escalate(
+                    static function (int $signal) use ($pid): void {
+                        @\posix_kill($pid, $signal);
+                    },
+                    static fn(): bool => !self::alive($pid),
+                    $termGraceSeconds,
+                );
+            }
+
+            return;
+        }
+
+        // SIGSTOP/SIGCONT numbers differ by architecture (19/18 on x86 and
+        // arm, 17/19 on some others), unlike 9 and 15, so they come from
+        // ext-pcntl when it is loaded and fall back to the Linux x86/arm
+        // values only when it is not.
+        $stop = \defined('SIGSTOP') ? \SIGSTOP : 19;
+        $cont = \defined('SIGCONT') ? \SIGCONT : 18;
+        $ownGroup = \posix_getpgrp();
+
+        $members = self::freezeTree($pid, $self, $stop);
+
+        $groups = [];
+        foreach ($members as $member) {
+            $stat = ProcessTree::stat($member);
+            if ($stat !== null && $stat['pgid'] > 1 && $stat['pgid'] !== $ownGroup) {
+                $groups[$stat['pgid']] = true;
+            }
+        }
+        $groups = \array_keys($groups);
+
+        $deliver = static function (int $signal) use ($groups, $members, $cont): void {
+            foreach ($groups as $group) {
+                @\posix_kill(-$group, $signal);
+            }
+            foreach ($members as $member) {
+                @\posix_kill($member, $signal);
+            }
+            if ($signal !== 9) {
+                foreach ($groups as $group) {
+                    @\posix_kill(-$group, $cont);
+                }
+                foreach ($members as $member) {
+                    @\posix_kill($member, $cont);
+                }
+            }
+        };
+
+        if ($termGraceSeconds <= 0.0) {
+            $deliver(9);
+
+            return;
+        }
+
+        ProcessReaper::escalate(
+            $deliver,
+            static function () use ($members): bool {
+                foreach ($members as $member) {
+                    if (self::alive($member)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            },
+            $termGraceSeconds,
+        );
+    }
+
+    /**
+     * Step 1 of {@see killTree()}: stop $root and every descendant until the
+     * set holds still, returning root + descendants (never $self).
+     *
+     * @return list<int>
+     */
+    private static function freezeTree(int $root, int $self, int $stop): array
+    {
+        @\posix_kill($root, $stop);
+        $members = [$root => true];
+        $stablePasses = 0;
+
+        for ($pass = 0; $pass < self::TREE_FREEZE_MAX_PASSES; $pass++) {
+            $snapshot = ProcessTree::snapshot() ?? [];
+            $grew = false;
+            foreach (ProcessTree::descendants($root, $snapshot) as $descendant) {
+                if ($descendant === $self || isset($members[$descendant])) {
+                    continue;
+                }
+                @\posix_kill($descendant, $stop);
+                $members[$descendant] = true;
+                $grew = true;
+            }
+
+            $allHeld = true;
+            foreach (\array_keys($members) as $member) {
+                $state = $snapshot[$member]['state'] ?? 'X';
+                // T stopped, t tracing-stop, Z zombie, X dead/absent: none of
+                // these can fork again.
+                if (!\in_array($state, ['T', 't', 'Z', 'X'], true)) {
+                    $allHeld = false;
+
+                    break;
+                }
+            }
+
+            // TWO clean passes, not one: a scan is not atomic, so a member
+            // that forked after the directory listing and stopped before its
+            // own stat was read looks "held" with a child the listing missed.
+            // A second pass that starts after everything was seen stopped
+            // cannot miss anything — nothing in the set can fork any more.
+            $stablePasses = (!$grew && $allHeld) ? $stablePasses + 1 : 0;
+            if ($stablePasses >= 2) {
+                break;
+            }
+
+            \usleep(self::TREE_FREEZE_POLL_US);
+        }
+
+        return \array_keys($members);
+    }
+
+    /**
+     * Whether $pid still names a running (non-zombie) process.
+     */
+    private static function alive(int $pid): bool
+    {
+        $stat = ProcessTree::stat($pid);
+        if ($stat !== null) {
+            return $stat['state'] !== 'Z' && $stat['state'] !== 'X';
+        }
+
+        return !ProcessTree::available() && @\posix_kill($pid, 0);
+    }
+
+    /**
      * First executable named $binary on the process PATH, or '' when absent.
      *
      * An empty PATH element is skipped, not treated as '.': answering a

@@ -31,6 +31,7 @@ use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Support\ForkedChild;
+use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\Tools\CarriesSessionState;
 use SugarCraft\Crush\Tools\ExemptFromParallelDeadline;
@@ -2089,9 +2090,10 @@ final class Runtime
                         // A tool that never returns would otherwise wedge the turn
                         // here. It is killed and reported as a failed call; its
                         // siblings' results survive intact.
-                        if (function_exists('posix_kill')) {
-                            posix_kill($job['pid'], SIGKILL);
-                        }
+                        // B2/F-E2: killTree, not a bare SIGKILL of the job
+                        // pid — the job's own commands are setsid'd into
+                        // their own groups and would outlive it otherwise.
+                        ProcessContainment::killTree($job['pid']);
                         self::reapKilled($job['pid']);
                         $jobs[$index]['settled'] = true;
                         $killed = true;

@@ -32,6 +32,7 @@ use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Tools\DelegatesToEngine;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -1408,9 +1409,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             if ($cancelTimer !== null) {
                 $loop->cancelTimer($cancelTimer);
             }
-            if (function_exists('posix_kill')) {
-                posix_kill($pid, SIGKILL);
-            }
+            // B2/F-E2: the whole tree, not just the turn child. The child's
+            // Bash runs are setsid'd into their own groups and a parallel Task
+            // sub-agent is a fork below it; a SIGKILL of $pid alone left all
+            // of them running for nobody. killTree() falls back to exactly
+            // that direct kill where /proc or ext-posix is missing.
+            ProcessContainment::killTree($pid);
             self::reapChild($pid);
             $deferred->reject(new \RuntimeException($rejectMessage));
         };

@@ -160,8 +160,19 @@ final class EngineBackendReapTest extends TestCase
         // Regression guard for the fix itself: switching to a non-blocking
         // reap is only safe while the kill attempt survives, otherwise a
         // cancelled turn leaks a running child on every posix-having host too.
-        $this->assertStringContainsString("function_exists('posix_kill')", $source);
-        $this->assertStringContainsString('posix_kill($pid, SIGKILL)', $source);
+        //
+        // WHAT THIS PINNED: a guarded `posix_kill($pid, SIGKILL)` inline in
+        // completeAsync(). WHAT IS TRUE NOW (audit B2/F-E2): that bare kill
+        // reached the turn child only and orphaned the setsid'd command it
+        // was running, so the teardown calls ProcessContainment::killTree(),
+        // which owns the posix guard and — where /proc or ext-posix is missing
+        // — degrades to exactly the old direct kill. The property survives;
+        // its spelling moved into the helper, so both halves are pinned.
+        $this->assertStringContainsString('ProcessContainment::killTree($pid)', $source);
+
+        $helper = self::methodSource(new \ReflectionMethod(\SugarCraft\Crush\Support\ProcessContainment::class, 'killTree'));
+        $this->assertStringContainsString("function_exists('posix_kill')", $helper);
+        $this->assertStringContainsString('posix_kill($pid, 9)', $helper, 'the no-/proc fallback is still a direct kill of the root');
     }
 
     // -------------------------------------------------------------------------
