@@ -549,6 +549,13 @@ final class BackgroundSupervisorReapTest extends TestCase
             putenv($previousCmd === false ? 'SUGARCRUSH_BACKEND_CMD' : 'SUGARCRUSH_BACKEND_CMD=' . $previousCmd);
             putenv($previousProvider === false ? 'SUGARCRUSH_PROVIDER' : 'SUGARCRUSH_PROVIDER=' . $previousProvider);
             if (is_array($ipc)) {
+                // Let the daemon finish first: it re-binds its socket and
+                // appends to its buffer until it exits, so cleaning up under
+                // a live one re-creates the files and strands the directory.
+                $settleBy = microtime(true) + 10.0;
+                while ($ipc['pid'] > 0 && microtime(true) < $settleBy && @posix_kill($ipc['pid'], 0)) {
+                    usleep(50_000);
+                }
                 @unlink($ipc['socketPath']);
                 @unlink($ipc['bufferPath']);
                 @unlink($ipc['bufferPath'] . '.log');
@@ -633,6 +640,13 @@ final class BackgroundSupervisorReapTest extends TestCase
             putenv($previousCmd === false ? 'SUGARCRUSH_BACKEND_CMD' : 'SUGARCRUSH_BACKEND_CMD=' . $previousCmd);
             putenv($previousProvider === false ? 'SUGARCRUSH_PROVIDER' : 'SUGARCRUSH_PROVIDER=' . $previousProvider);
             if (is_array($ipc)) {
+                // Let the daemon finish first: it re-binds its socket and
+                // appends to its buffer until it exits, so cleaning up under
+                // a live one re-creates the files and strands the directory.
+                $settleBy = microtime(true) + 10.0;
+                while ($ipc['pid'] > 0 && microtime(true) < $settleBy && @posix_kill($ipc['pid'], 0)) {
+                    usleep(50_000);
+                }
                 @unlink($ipc['socketPath']);
                 @unlink($ipc['bufferPath']);
                 @unlink($ipc['bufferPath'] . '.log');
