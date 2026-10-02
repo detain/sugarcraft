@@ -467,7 +467,9 @@ final class RulePathScopingWiringTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/RulePathNudge::new\(\s*\(new RuleLoader\(\$root\)\)->load\(\),\s*\$rulesState\s*\)/', $source),
+            // Audit 15d-20: the tracker now re-runs this loader on every consult
+            // instead of holding one boot-time walk, so the pin reads the closure.
+            preg_match('/RulePathNudge::fromLoader\(\s*static fn \(\): array => \(new RuleLoader\(\$root\)\)->load\(\),\s*\$rulesState,?\s*\)/', $source),
             'the tracker itself must be built with the set — the rule list stays unfiltered so a pack switched back on mid-session is deliverable again',
         );
     }

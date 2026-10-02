@@ -6898,23 +6898,32 @@ final class Bootstrap
         // P6.S5b: the second transient channel carries `paths:`-scoped RULES, and
         // it is a separate tracker from the skills one on purpose — one subject
         // per class, so retuning a skill budget never moves a rule budget. The
-        // rules come from the same entry point the prompt splice uses, walked ONCE
-        // here at boot; announce time is pure string matching against the triggers
-        // the loader already built, with no filesystem read per tool call.
+        // rules come from the same entry point the prompt splice uses, and are
+        // RE-WALKED on every consult rather than once here (audit 15d-20): the
+        // splice re-walks per build and skips every path-scoped rule as "delivered
+        // at tool time", so a tracker frozen at boot left a rule written
+        // mid-session in neither channel, kept announcing an edited rule's launch
+        // text, and still nudged a rule whose `paths:` had been removed. The cost
+        // is one `load()` per path-resolving tool call — see
+        // {@see RulePathNudge::fromLoader()}.
         //
         // THE TOGGLE REACHES THIS CHANNEL TOO. The set handed below is the SAME
         // instance `chat()` gave the backend and `Chat`, so a pack silenced in
         // `disabledRules` is absent from the first turn and one silenced later with
         // `/rules` goes quiet on the next tool call — the tracker consults it per
-        // rule rather than baking the launch answer into a candidate list, because
-        // `load()` IS walked once here and the splice's copy is not. Passing a
+        // rule rather than baking the launch answer into a candidate list, and the
+        // loader below is built WITHOUT the set so that per-rule consult stays the
+        // one place this channel applies the toggle. Passing a
         // pre-filtered rule list instead would freeze boot-time intent and leave the
         // toggle half of the goal unmet; passing a SECOND `RulesState` built from the
         // same config key would be the two-copies disagreement the note above the
         // `chat()` construction names. Null — every caller that does not thread a
         // set, including the shell's display copies in `app()`, whose tracker no tool
         // call ever reaches — is the pre-fix behaviour, stated rather than assumed.
-        $ruleNudge = RulePathNudge::new((new RuleLoader($root))->load(), $rulesState);
+        $ruleNudge = RulePathNudge::fromLoader(
+            static fn (): array => (new RuleLoader($root))->load(),
+            $rulesState,
+        );
 
         $tools = [
             new Bash($root),

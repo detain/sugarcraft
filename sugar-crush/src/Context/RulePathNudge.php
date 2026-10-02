@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Context;
 
+use Closure;
 use InvalidArgumentException;
 use SugarCraft\Crush\Context\Triggers\PathTrigger;
 
@@ -54,11 +55,38 @@ use SugarCraft\Crush\Context\Triggers\PathTrigger;
  * with a visible marker rather than breaking the ceiling. A clipped pointer is
  * degraded prose; a clipped BODY would be a different rule.
  *
- * The tracker holds no filesystem handle and walks nothing: the rules arrive as
- * the list {@see RuleLoader::load()} already produced for the session, the same
- * set the splice iterates, and matching is pure string work against compiled
- * globs. It is deliberately invisible to the read-sink census over `src/` for
- * the reason {@see PathTrigger} gives.
+ * The tracker holds no filesystem handle and walks nothing itself: the rules
+ * arrive either as a fixed list or from a loader closure the caller owns, and
+ * matching is pure string work against compiled globs. It is deliberately
+ * invisible to the read-sink census over `src/` for the reason
+ * {@see PathTrigger} gives.
+ *
+ * WHY THE SHIPPED TRACKER RE-READS THE RULES (audit 15d-20). The splice walks
+ * {@see RuleLoader::load()} afresh on EVERY prompt build and skips every rule
+ * {@see isPathScoped()} claims, on the promise that this channel delivers it. A
+ * tracker handed one boot-time walk breaks that promise three ways the moment a
+ * rule file changes under a running session: a scoped rule written mid-session
+ * (the agent can write `.sugar-crush/rules/`) is in neither channel until a
+ * restart; an edited scoped rule keeps announcing the text read at launch; and a
+ * rule whose `paths:` was removed is spliced as standing AND still nudged. So the
+ * boot path builds this class through {@see fromLoader()}, and every
+ * {@see forPaths()} consult rebuilds the candidate list from the same entry point
+ * the splice calls — both channels then judge the same walk, whatever order the
+ * prompt build and the tool call happen in. The walk is the price: one `load()`
+ * per path-resolving tool call, which re-reads the rule tiers (a handful of small
+ * files in practice, capped by the loader's own file and byte bounds) and is
+ * small beside the Read, Grep or Glob it rides on. A cheaper stat fingerprint
+ * would need this class to know the loader's directory list, which would be a
+ * second copy of the tier layout free to drift from the first.
+ *
+ * WHAT THE LEDGER REMEMBERS ACROSS A RELOAD. Marks stay keyed by
+ * {@see Rule::$path}, but a mark now records WHICH text was delivered (a digest
+ * of the name line and body {@see entry()} renders). A re-walk that returns the
+ * same bytes is not an edit and stays silent; a rule whose body or name changed
+ * since its announcement is delivered again, with its current text, on the next
+ * matching touch — the model was told the old instructions and the splice will
+ * never tell it the new ones. A change to `paths:` alone re-announces nothing: the
+ * instructions the model holds are still the current ones.
  *
  * THE DISABLE GATE (follow-up (a) to P6.S5b). A rulebook pack the operator turned
  * off — in the `disabledRules` config key or with the session-scoped `/rules`
@@ -113,23 +141,48 @@ final class RulePathNudge
      * handed, and an identity collision here would retire a rule for the whole
      * session without ever naming it.
      *
-     * @var array<string, true>
+     * The value is the {@see digest()} of the text the model received, so an
+     * edited rule reads as unannounced again (audit 15d-20). `true` is a mark
+     * whose text is unknown — what {@see markAnnouncedPaths()} receives from a
+     * forked child, which reports paths only — and is bound to the current
+     * digest on the next reload, so a later edit still re-announces.
+     *
+     * @var array<string, string|true>
      */
     private array $announced = [];
 
     /**
-     * The rules this channel can announce: path-scoped, non-blank-bodied.
+     * The rules this channel can announce: path-scoped, non-blank-bodied, keyed
+     * by {@see Rule::$path}, first-seen wins (the loader's own de-dup order).
      *
-     * Resolved once in the constructor rather than re-derived per tool call,
-     * and filtered by exactly the same predicate {@see hasPending()} and
+     * Resolved by {@see adopt()} — once in the constructor for a fixed list, and
+     * again on every consult for a tracker built {@see fromLoader()} — and
+     * filtered by exactly the same predicate {@see hasPending()} and
      * {@see forPaths()} consult — the E72 lesson from the sibling skills tracker
      * is that a candidate one filter admits and the other refuses leaves
      * `hasPending()` true forever, so the steady state of a long session stops
      * short-circuiting.
      *
-     * @var list<Rule>
+     * @var array<string, Rule>
      */
-    private readonly array $candidates;
+    private array $candidates = [];
+
+    /**
+     * {@see digest()} of each candidate, under the same key as {@see $candidates}.
+     *
+     * Computed when the list is adopted rather than per check, so the pending
+     * guard of a long session stays one array walk.
+     *
+     * @var array<string, string>
+     */
+    private array $digests = [];
+
+    /**
+     * Re-produces the session's rule list on demand, or null for a fixed list.
+     *
+     * @var (Closure(): list<Rule>)|null
+     */
+    private readonly ?Closure $loader;
 
     /**
      * The session's rulebook toggle set, or null when nothing can be turned off.
@@ -229,30 +282,17 @@ final class RulePathNudge
      * @param RulesState|null $rulesState  The session's rulebook toggle set, consulted
      *        per rule at match time through {@see enabledForThisSession()}. Null —
      *        what every caller predating this argument passes — means no pack is off.
+     * @param (Closure(): list<Rule>)|null $loader Re-produces the rule list; when
+     *        given, every {@see forPaths()} consult replaces $rules with its answer.
+     *        Null keeps $rules fixed for the tracker's life.
      *
      * @throws InvalidArgumentException if the list holds a non-Rule element.
      */
-    public function __construct(array $rules, ?RulesState $rulesState = null)
+    public function __construct(array $rules, ?RulesState $rulesState = null, ?Closure $loader = null)
     {
         $this->rulesState = $rulesState;
-
-        $candidates = [];
-        foreach ($rules as $rule) {
-            if (!$rule instanceof Rule) {
-                throw new InvalidArgumentException(sprintf(
-                    'RulePathNudge expects a list of Rule instances, %s given.',
-                    get_debug_type($rule),
-                ));
-            }
-
-            if (!self::isPathScoped($rule) || trim($rule->body) === '') {
-                continue;
-            }
-
-            $candidates[] = $rule;
-        }
-
-        $this->candidates = $candidates;
+        $this->loader = $loader;
+        $this->adopt($rules);
     }
 
     /**
@@ -264,6 +304,107 @@ final class RulePathNudge
     public static function new(array $rules, ?RulesState $rulesState = null): self
     {
         return new self($rules, $rulesState);
+    }
+
+    /**
+     * Build a tracker that re-reads the rule list on every consult — the shape the
+     * boot path ships, so a rule added, edited or demoted mid-session is judged by
+     * the same walk the splice makes (audit 15d-20; see the class doc-block).
+     *
+     * Nothing is loaded here: the first {@see forPaths()} call walks, and so does
+     * every later one, which is what makes a construction-time walk redundant.
+     *
+     * @param Closure(): list<Rule> $loader     Typically `fn () => (new RuleLoader($root))->load()`.
+     * @param RulesState|null       $rulesState See the constructor.
+     */
+    public static function fromLoader(Closure $loader, ?RulesState $rulesState = null): self
+    {
+        return new self([], $rulesState, $loader);
+    }
+
+    /**
+     * Replace the candidate list with the announceable subset of $rules.
+     *
+     * @param array<mixed> $rules
+     *
+     * @throws InvalidArgumentException if the list holds a non-Rule element.
+     */
+    private function adopt(array $rules): void
+    {
+        $candidates = [];
+        $digests = [];
+        foreach ($rules as $rule) {
+            if (!$rule instanceof Rule) {
+                throw new InvalidArgumentException(sprintf(
+                    'RulePathNudge expects a list of Rule instances, %s given.',
+                    get_debug_type($rule),
+                ));
+            }
+
+            // First-seen wins, as in the loader's own de-dup: a second rule under
+            // a path already held could never be emitted (the ledger is keyed by
+            // path), and two digests under one key would make the edit check
+            // oscillate between them forever.
+            if (!self::isPathScoped($rule) || trim($rule->body) === '' || isset($candidates[$rule->path])) {
+                continue;
+            }
+
+            $candidates[$rule->path] = $rule;
+            $digests[$rule->path] = self::digest($rule);
+        }
+
+        $this->candidates = $candidates;
+        $this->digests = $digests;
+    }
+
+    /**
+     * Re-run the loader, if there is one, and adopt what it returns.
+     *
+     * A `true` mark — announced by a forked child, text unknown — is bound to the
+     * digest the walk finds now, which is the text the child almost certainly
+     * read; leaving it `true` would exempt that rule from every later edit.
+     */
+    private function reload(): void
+    {
+        if ($this->loader === null) {
+            return;
+        }
+
+        $rules = ($this->loader)();
+        if (!is_array($rules)) {
+            throw new InvalidArgumentException(sprintf(
+                'RulePathNudge loader must return a list of Rule instances, %s given.',
+                get_debug_type($rules),
+            ));
+        }
+
+        $this->adopt($rules);
+
+        foreach ($this->announced as $path => $mark) {
+            if ($mark === true && isset($this->digests[$path])) {
+                $this->announced[$path] = $this->digests[$path];
+            }
+        }
+    }
+
+    /**
+     * Has the model already received THIS rule's current text?
+     */
+    private function isAnnounced(Rule $rule): bool
+    {
+        $mark = $this->announced[$rule->path] ?? null;
+
+        return $mark === true || ($mark !== null && $mark === ($this->digests[$rule->path] ?? null));
+    }
+
+    /**
+     * Identity of the text {@see entry()} would deliver: name and body, never the
+     * triggers, so narrowing a rule's `paths:` does not repeat instructions the
+     * model already holds.
+     */
+    private static function digest(Rule $rule): string
+    {
+        return hash('xxh128', $rule->name . "\0" . $rule->body);
     }
 
     /**
@@ -341,15 +482,24 @@ final class RulePathNudge
      */
     public function forPaths(array $paths, ?int $budget = null): ?string
     {
-        if ($paths === [] || !$this->hasPending()) {
+        if ($paths === []) {
+            return null;
+        }
+
+        // Before the pending guard, not after: a rule written since the last
+        // call is exactly what can turn a settled guard back into a pending one.
+        $this->reload();
+
+        if (!$this->hasPending()) {
             return null;
         }
 
         // Collected before anything is marked, because how many matched rules
         // did not fit is part of the result and cannot be known mid-loop.
+        // Candidates are unique by path, so no rule can be collected twice.
         $pending = [];
         foreach ($this->candidates as $rule) {
-            if (isset($this->announced[$rule->path]) || isset($pending[$rule->path])) {
+            if ($this->isAnnounced($rule)) {
                 continue;
             }
 
@@ -390,7 +540,7 @@ final class RulePathNudge
             if ($used + $cost + $reserve <= $room) {
                 $used += $cost;
                 $lines[] = $entry;
-                $emitted[] = $path;
+                $emitted[] = $rule;
 
                 continue;
             }
@@ -407,19 +557,19 @@ final class RulePathNudge
 
             $used += $cost;
             $lines[] = $pointer;
-            $emitted[] = $path;
+            $emitted[] = $rule;
         }
 
         if ($lines === []) {
             return null;
         }
 
-        foreach ($emitted as $path) {
+        foreach ($emitted as $rule) {
             // Marked HERE and not during collection: only a line the model
             // actually receives may spend the one-shot mark. A DEFERRED rule is
             // marked too, because the ruling counts a pointer as delivery — the
             // model was told the rule exists and where to read it.
-            $this->announced[$path] = true;
+            $this->announced[$rule->path] = $this->digests[$rule->path];
         }
 
         $deferred = $total - count($lines);
@@ -485,6 +635,11 @@ final class RulePathNudge
      * never a replacement: concurrent children report overlapping sets in no
      * defined order. See {@see \SugarCraft\Crush\Tools\CarriesSessionState}.
      *
+     * A path already marked keeps its mark: a child reports the whole set it
+     * inherited, so overwriting would let a stale inherited path erase the record
+     * of which text the parent delivered. A new path is marked `true` (text
+     * unknown) and bound on the next reload — see {@see $announced}.
+     *
      * @param list<string|int> $paths
      */
     public function markAnnouncedPaths(array $paths): void
@@ -492,7 +647,7 @@ final class RulePathNudge
         foreach ($paths as $path) {
             if (is_string($path) || is_int($path)) {
                 $path = (string) $path;
-                if ($path !== '') {
+                if ($path !== '' && !isset($this->announced[$path])) {
                     $this->announced[$path] = true;
                 }
             }
@@ -514,7 +669,7 @@ final class RulePathNudge
     private function hasPending(): bool
     {
         foreach ($this->candidates as $rule) {
-            if (!isset($this->announced[$rule->path]) && $this->enabledForThisSession($rule)) {
+            if (!$this->isAnnounced($rule) && $this->enabledForThisSession($rule)) {
                 return true;
             }
         }

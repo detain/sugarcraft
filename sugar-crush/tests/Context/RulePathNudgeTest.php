@@ -559,6 +559,144 @@ final class RulePathNudgeTest extends TestCase
         );
     }
 
+    // -- audit 15d-20: the rule set is re-read, not frozen at boot ------------
+    //
+    // The splice re-walks `RuleLoader::load()` on every prompt build and skips
+    // every path-scoped rule as "delivered at tool time", so a tracker that only
+    // ever saw the boot-time walk left a rule written mid-session in NEITHER
+    // channel. Each test below drives a loader whose answer the test changes
+    // between calls, exactly as a file written under `.sugar-crush/rules/` changes
+    // what the next real walk returns.
+
+    public function testARuleAddedAfterBootIsAnnouncedOnItsFirstMatchingTouch(): void
+    {
+        $rules = [self::scopedRule('/rules/standing.md', 'STANDING CANARY.', [])];
+        $nudge = RulePathNudge::fromLoader(static function () use (&$rules): array {
+            return $rules;
+        });
+
+        self::assertNull(
+            $nudge->forPath('/repo/src/A/B.php'),
+            'at boot nothing is path-scoped, so a matching touch buys nothing',
+        );
+
+        $rules[] = self::scopedRule('/rules/php.md', 'Use strict_types in every PHP file.', ['**/src/**/*.php']);
+
+        self::assertSame(
+            self::ENVELOPE_OPEN . '- php' . "\n" . 'Use strict_types in every PHP file.' . self::ENVELOPE_CLOSE,
+            $nudge->forPath('/repo/src/A/B.php'),
+            'a scoped rule written mid-session reaches the model on the first touch it claims — the splice skips it, so this is its only channel',
+        );
+        self::assertSame(['/rules/php.md'], $nudge->announcedPaths());
+        self::assertNull($nudge->forPath('/repo/src/A/C.php'), 'and it is still announced once');
+    }
+
+    public function testAnEditedRuleAnnouncesItsCurrentBody(): void
+    {
+        $rules = [self::scopedRule('/rules/tone.md', 'BOOT BODY CANARY.', ['**/*.php'])];
+        $nudge = RulePathNudge::fromLoader(static function () use (&$rules): array {
+            return $rules;
+        });
+
+        $rules = [self::scopedRule('/rules/tone.md', 'EDITED BODY CANARY.', ['**/*.php'])];
+        $delivered = (string) $nudge->forPath('/repo/src/Widget.php');
+
+        self::assertStringContainsString('EDITED BODY CANARY.', $delivered, 'the first touch after an edit delivers the body on disk now');
+        self::assertStringNotContainsString('BOOT BODY CANARY.', $delivered, 'and never the text the boot-time walk read');
+    }
+
+    public function testARuleEditedAfterItsAnnouncementIsAnnouncedAgainWithItsNewBody(): void
+    {
+        $rules = [
+            self::scopedRule('/rules/tone.md', 'FIRST BODY CANARY.', ['**/*.php']),
+            self::scopedRule('/rules/other.md', 'UNCHANGED CANARY.', ['**/*.php']),
+        ];
+        $nudge = RulePathNudge::fromLoader(static function () use (&$rules): array {
+            return $rules;
+        });
+
+        $first = (string) $nudge->forPath('/repo/src/Widget.php');
+        self::assertStringContainsString('FIRST BODY CANARY.', $first);
+        self::assertStringContainsString('UNCHANGED CANARY.', $first);
+
+        $rules[0] = self::scopedRule('/rules/tone.md', 'SECOND BODY CANARY.', ['**/*.php']);
+        $second = (string) $nudge->forPath('/repo/src/Widget.php');
+
+        self::assertSame(
+            self::ENVELOPE_OPEN . '- tone' . "\n" . 'SECOND BODY CANARY.' . self::ENVELOPE_CLOSE,
+            $second,
+            'the model was told the old instructions, so the edited rule is delivered again — and only it',
+        );
+        self::assertNull($nudge->forPath('/repo/src/Widget.php'), 'once the current body is out, the rule is quiet again');
+    }
+
+    public function testARuleWhosePathsAreRemovedMidSessionIsNoLongerNudged(): void
+    {
+        $rules = [self::scopedRule('/rules/tone.md', 'NOW STANDING CANARY.', ['**/*.php'])];
+        $nudge = RulePathNudge::fromLoader(static function () use (&$rules): array {
+            return $rules;
+        });
+
+        $rules = [self::scopedRule('/rules/tone.md', 'NOW STANDING CANARY.', [])];
+
+        self::assertFalse(
+            RulePathNudge::isPathScoped($rules[0]),
+            'precondition: without paths: the rule is standing, so the splice renders it into the prompt',
+        );
+        self::assertNull(
+            $nudge->forPath('/repo/src/Widget.php'),
+            'and this channel must not ALSO deliver it — that is the double presentation the shared predicate exists to prevent',
+        );
+        self::assertSame([], $nudge->announcedPaths());
+        self::assertFalse(self::reportsPending($nudge), 'nor may it hold the pending guard open');
+    }
+
+    public function testAReloadThatChangesNothingNeverReannounces(): void
+    {
+        $nudge = RulePathNudge::fromLoader(static fn (): array => [
+            // A fresh instance per walk, as a real loader returns: the ledger must
+            // compare content, not object identity, or every call re-announces.
+            self::scopedRule('/rules/tone.md', 'STABLE CANARY.', ['**/*.php']),
+        ]);
+
+        self::assertStringContainsString('STABLE CANARY.', (string) $nudge->forPath('/repo/src/A.php'));
+        self::assertNull($nudge->forPath('/repo/src/B.php'), 'an identical re-walk is not an edit');
+    }
+
+    public function testAForkMergedMarkSurvivesTheNextReload(): void
+    {
+        $nudge = RulePathNudge::fromLoader(static fn (): array => [
+            self::scopedRule('/rules/tone.md', 'CHILD ANNOUNCED CANARY.', ['**/*.php']),
+        ]);
+
+        // What a forked tool child reports back: paths only, no body version.
+        $nudge->markAnnouncedPaths(['/rules/tone.md']);
+
+        self::assertNull(
+            $nudge->forPath('/repo/src/Widget.php'),
+            'a rule a child already delivered is not delivered twice by the parent\'s next reload',
+        );
+    }
+
+    public function testARuleDeletedMidSessionIsNeverAnnounced(): void
+    {
+        $rules = [self::scopedRule('/rules/gone.md', 'DELETED CANARY.', ['**/*.php'])];
+        $nudge = RulePathNudge::fromLoader(static function () use (&$rules): array {
+            return $rules;
+        });
+
+        $rules = [];
+
+        self::assertNull($nudge->forPath('/repo/src/Widget.php'), 'a rule no longer on disk instructs nobody');
+    }
+
+    public function testALoaderYieldingSomethingOtherThanARuleIsRefused(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        RulePathNudge::fromLoader(static fn (): array => ['not a rule'])->forPath('/repo/src/Widget.php');
+    }
+
     /**
      * The candidate-list guard's answer, read directly: it is private precisely
      * because nothing outside the class may branch on it, and both of its operands
