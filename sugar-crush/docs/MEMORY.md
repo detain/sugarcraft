@@ -34,6 +34,20 @@ scope B. Touching one scope never reads, writes or deletes another's index.
 The index is regenerated on every mutation and is bounded at
 `MAX_INDEX_LINES = 200` and `MAX_INDEX_BYTES = 25 * 1024`.
 
+### Hand-edited notes
+
+Notes are plain files and a repo's `.sugar-crush/memory/` is git-visible, so the
+reader tolerates the edits people actually make: an unquoted date
+(`createdAt: 2024-01-01`, which YAML returns as an int timestamp), a bare
+`tags: x` (read as `[x]`), omitted `createdAt`/`modifiedAt` (the file's mtime
+stands in), and a `---` inside a value (the frontmatter ends only at a whole
+`---` line). A note it cannot read — no frontmatter, a frontmatter that is not a
+`key: value` mapping, a missing or non-string `id`/`type`/`scope`, a date it
+cannot parse, a `tags:` that is not a list of strings — is **skipped**, never
+fatal: the rest of the store, and every turn's `<project-memory>` block, keep
+working. `MemoryStore::skipped()` returns the skipped files as path => reason
+(audit 15d-04).
+
 ### A naming mismatch worth knowing
 
 The `MemoryScope` enum's cases are `User`, `Project`, `Local` — but every

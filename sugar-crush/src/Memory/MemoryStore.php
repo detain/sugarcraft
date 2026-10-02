@@ -60,6 +60,29 @@ final class MemoryStore
     private const MAX_INDEX_BYTES = 25 * 1024;
     private const MEMORY_INDEX_FILENAME = 'MEMORY.md';
 
+    /**
+     * Anchored on a whole `---` line at both ends -- the shape the skill and
+     * foreign-memory importers already use. The previous `explode('---', ..., 3)`
+     * split on the first `---` ANYWHERE, so a tag such as `a---b` cut the
+     * frontmatter in half and the note vanished. The closing fence may end the
+     * file, which a hand-written note with no body legitimately does.
+     */
+    private const FRONTMATTER_PATTERN = '/^---\s*\n(.*?)\n---[ \t]*(?:\r?\n|$)(.*)$/s';
+
+    /**
+     * Files the store could not read as a memory note, path => reason.
+     *
+     * A note lives in a git-visible, hand-editable file (a repo's
+     * `.sugar-crush/memory/` is read with no trust gate), so a malformed one is
+     * an ordinary event, not a programming error: it is skipped so the rest of
+     * the store -- and every turn's system prompt, which lists it -- keeps
+     * working, and recorded here so the skip can be reported instead of being
+     * silent.
+     *
+     * @var array<string, string>
+     */
+    private array $skipped = [];
+
     public function __construct(
         private readonly string $memoryPath,
     ) {
@@ -267,6 +290,8 @@ final class MemoryStore
             if (@unlink($file) === false && file_exists($file)) {
                 throw new \RuntimeException("Failed to delete memory file: {$file}");
             }
+
+            unset($this->skipped[$file]);
         }
 
         $this->generateIndex($scope);
@@ -289,6 +314,7 @@ final class MemoryStore
 
         foreach ($files as $file) {
             unlink($file);
+            unset($this->skipped[$file]);
         }
 
         $this->generateIndex($scope);
@@ -481,57 +507,185 @@ final class MemoryStore
     }
 
     /**
+     * The files skipped as unreadable memory notes since this store was built,
+     * keyed by path, each with the reason it was refused.
+     *
+     * An entry is dropped again the moment its file parses (the author fixed
+     * it) or is removed through {@see delete()} / {@see clear()}, so the map
+     * describes the files as they are now, not a history of past mistakes.
+     *
+     * @return array<string, string>
+     */
+    public function skipped(): array
+    {
+        return $this->skipped;
+    }
+
+    /**
      * Read and parse a single memory entry from a file.
      *
+     * Catches \Throwable rather than \Exception on purpose: every failure a
+     * hand edit can provoke -- a YAML int where a string was expected, a
+     * missing key -- surfaced as a TypeError, which `catch (\Exception)` let
+     * escape through list() into MemoryBlock::capture() and failed EVERY turn
+     * of the session (audit 15d-04). decode() validates field by field so the
+     * reason is precise; the broad catch is the backstop for anything it
+     * did not anticipate.
+     *
      * @param string $file The full path to the .md file.
-     * @return MemoryEntry|null The parsed entry, or null if parsing fails.
+     * @return MemoryEntry|null The parsed entry, or null if the file is skipped.
      */
     private function readEntry(string $file): ?MemoryEntry
     {
-        $content = file_get_contents($file);
-
-        if ($content === false) {
+        // The per-scope index shares the `*.md` glob with the notes but is
+        // generated output, not a note -- never a skip worth reporting.
+        if (basename($file) === self::MEMORY_INDEX_FILENAME) {
             return null;
         }
 
-        return $this->parseEntry($content);
+        try {
+            $content = @file_get_contents($file);
+
+            if ($content === false) {
+                throw new \UnexpectedValueException('file could not be read');
+            }
+
+            $entry = $this->decode($content, $file);
+        } catch (\Throwable $e) {
+            $this->skipped[$file] = $e->getMessage();
+
+            return null;
+        }
+
+        unset($this->skipped[$file]);
+
+        return $entry;
     }
 
     /**
      * Parse a memory entry from markdown content with YAML frontmatter.
      *
-     * @param string $raw The raw file content.
-     * @return MemoryEntry|null The parsed entry, or null if parsing fails.
+     * Tolerant where the author's intent is unambiguous -- an unquoted date
+     * (which YAML hands back as an int timestamp), a single bare `tags:`
+     * string, omitted timestamps -- and refuses, with a reason, where it is
+     * not: no frontmatter, a non-mapping block, or a missing/non-string
+     * id/type/scope, none of which has a value we could honestly invent.
+     *
+     * @throws \UnexpectedValueException naming the defect
      */
-    private function parseEntry(string $raw): ?MemoryEntry
+    private function decode(string $raw, string $file): MemoryEntry
     {
-        if (!str_starts_with($raw, '---')) {
-            return null;
-        }
-
-        // Limit of 3 splits on '---' so content containing '---' is handled correctly:
-        // parts[0]="", parts[1]=frontmatter, parts[2]=content (everything after the 2nd ---)
-        $parts = explode('---', $raw, 3);
-
-        if (count($parts) < 3) {
-            return null;
+        if (preg_match(self::FRONTMATTER_PATTERN, $raw, $m) !== 1) {
+            throw new \UnexpectedValueException('no YAML frontmatter block (a leading and a closing "---" line)');
         }
 
         try {
-            /** @var array{id: string, type: string, tags: array<string>, scope: string, createdAt: string, modifiedAt: string} $meta */
-            $meta = Frontmatter::parse($parts[1]);
-
-            return MemoryEntry::new(
-                type: $meta['type'],
-                content: trim($parts[2]),
-                scope: $meta['scope'],
-                tags: $meta['tags'] ?? [],
-                id: $meta['id'],
-            )->withCreatedAt(new \DateTimeImmutable($meta['createdAt']))
-             ->withModifiedAt(new \DateTimeImmutable($meta['modifiedAt']));
-        } catch (\Exception) {
-            return null;
+            $meta = Frontmatter::parse($m[1]);
+        } catch (\Throwable $e) {
+            throw new \UnexpectedValueException('invalid YAML frontmatter: ' . $e->getMessage(), 0, $e);
         }
+
+        if (!is_array($meta) || ($meta !== [] && array_is_list($meta))) {
+            throw new \UnexpectedValueException('frontmatter is not a key: value mapping');
+        }
+
+        $fallback = $this->fileTime($file);
+        $createdAt = $this->dateField($meta, 'createdAt') ?? $fallback;
+        $modifiedAt = $this->dateField($meta, 'modifiedAt') ?? $createdAt;
+
+        return MemoryEntry::new(
+            type: $this->stringField($meta, 'type'),
+            content: trim($m[2] ?? ''),
+            scope: $this->stringField($meta, 'scope'),
+            tags: $this->tagsField($meta),
+            id: $this->stringField($meta, 'id'),
+        )->withCreatedAt($createdAt)
+         ->withModifiedAt($modifiedAt);
+    }
+
+    /**
+     * @param array<mixed> $meta
+     */
+    private function stringField(array $meta, string $key): string
+    {
+        $value = $meta[$key] ?? null;
+
+        if (!is_string($value) || trim($value) === '') {
+            throw new \UnexpectedValueException(
+                $value === null ? "missing `{$key}:`" : "`{$key}:` must be a non-empty string, got " . get_debug_type($value)
+            );
+        }
+
+        return $value;
+    }
+
+    /**
+     * A bare `tags: x` is read as the one-element list the author meant;
+     * numbers are stringified (YAML types `tags: [2024]` as an int). Anything
+     * else -- a nested list, a mapping, a boolean -- is refused rather than
+     * guessed at.
+     *
+     * @param array<mixed> $meta
+     * @return list<string>
+     */
+    private function tagsField(array $meta): array
+    {
+        $tags = $meta['tags'] ?? [];
+
+        if (is_string($tags)) {
+            $tags = [$tags];
+        }
+
+        if (!is_array($tags) || !array_is_list($tags)) {
+            throw new \UnexpectedValueException('`tags:` must be a list of strings');
+        }
+
+        $out = [];
+        foreach ($tags as $tag) {
+            if (!is_string($tag) && !is_int($tag) && !is_float($tag)) {
+                throw new \UnexpectedValueException('`tags:` must be a list of strings, found ' . get_debug_type($tag));
+            }
+            $out[] = (string) $tag;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Null when the key is absent, so the caller can choose the fallback.
+     *
+     * YAML without PARSE_DATETIME turns an unquoted `2024-01-01` into an int
+     * Unix timestamp, which is read via the `@` form; a DateTimeInterface is
+     * accepted too, for a parse that did enable that flag.
+     *
+     * @param array<mixed> $meta
+     */
+    private function dateField(array $meta, string $key): ?\DateTimeImmutable
+    {
+        $value = $meta[$key] ?? null;
+
+        try {
+            return match (true) {
+                $value === null => null,
+                $value instanceof \DateTimeInterface => \DateTimeImmutable::createFromInterface($value),
+                is_int($value) => new \DateTimeImmutable('@' . $value),
+                is_string($value) && trim($value) !== '' => new \DateTimeImmutable($value),
+                default => throw new \UnexpectedValueException('wrong type ' . get_debug_type($value)),
+            };
+        } catch (\Throwable $e) {
+            throw new \UnexpectedValueException("`{$key}:` is not a date: " . $e->getMessage(), 0, $e);
+        }
+    }
+
+    /**
+     * The timestamp a note with no recorded dates is given: when its file was
+     * last written, which is the closest thing to the truth on disk.
+     */
+    private function fileTime(string $file): \DateTimeImmutable
+    {
+        $mtime = @filemtime($file);
+
+        return $mtime !== false ? new \DateTimeImmutable('@' . $mtime) : new \DateTimeImmutable();
     }
 
     /**

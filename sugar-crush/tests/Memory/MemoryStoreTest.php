@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Memory;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\MemoryScope;
+use SugarCraft\Crush\Context\MemoryBlock;
 use SugarCraft\Crush\Memory\MemoryEntry;
 use SugarCraft\Crush\Memory\MemoryStore;
 
@@ -655,6 +657,112 @@ final class MemoryStoreTest extends TestCase
 
         $renderedLines = explode("\n", $content);
         $this->assertLessThanOrEqual(200, count($renderedLines));
+    }
+
+    /**
+     * Audit 15d-04: one hand-edited note must never take the whole store (and,
+     * through MemoryBlock::capture(), every turn's system prompt) down with it.
+     * Every case here used to escape list() as a TypeError or be dropped
+     * without a trace; a recoverable shape now loads, an unrecoverable one is
+     * skipped and named by skipped().
+     *
+     * @param array<string>|null $expectedTags null when the note must be skipped
+     */
+    #[DataProvider('malformedEntryProvider')]
+    public function testAMalformedEntryIsSkippedNotFatal(string $frontmatter, ?array $expectedTags): void
+    {
+        $store = new MemoryStore($this->tempDir);
+        $siblingId = $store->add('Valid sibling note', 'project');
+
+        $badFile = $this->tempDir . '/project/hand-edited.md';
+        file_put_contents($badFile, "---\n{$frontmatter}\n---\nHand-edited body\n");
+
+        $entries = $store->list('project');
+        $byId = [];
+        foreach ($entries as $entry) {
+            $byId[$entry->id()] = $entry;
+        }
+
+        $this->assertArrayHasKey($siblingId, $byId, 'the valid sibling must survive a bad neighbour');
+
+        $rendered = MemoryBlock::capture($store)->render();
+        $this->assertStringContainsString('Valid sibling note', $rendered);
+
+        if ($expectedTags === null) {
+            $this->assertCount(1, $entries);
+            $this->assertArrayHasKey($badFile, $store->skipped());
+            $this->assertNotSame('', $store->skipped()[$badFile]);
+            $this->assertStringNotContainsString('Hand-edited body', $rendered);
+
+            return;
+        }
+
+        $this->assertCount(2, $entries);
+        $this->assertSame([], $store->skipped());
+        $loaded = $byId['0123456789abcdef0123456789abcdef'] ?? null;
+        $this->assertNotNull($loaded);
+        $this->assertSame('Hand-edited body', $loaded->content());
+        $this->assertSame($expectedTags, $loaded->tags());
+        $this->assertStringContainsString('Hand-edited body', $rendered);
+    }
+
+    /**
+     * @return array<string, array{string, array<string>|null}>
+     */
+    public static function malformedEntryProvider(): array
+    {
+        $head = "id: 0123456789abcdef0123456789abcdef\nscope: project\n";
+
+        return [
+            // Symfony turns an unquoted date into an int timestamp.
+            'unquoted dates load as timestamps' => [
+                $head . "type: note\ntags: []\ncreatedAt: 2024-01-01\nmodifiedAt: 2024-01-02",
+                [],
+            ],
+            'missing type is skipped' => [
+                $head . "tags: []\ncreatedAt: '2024-01-01T00:00:00+00:00'\nmodifiedAt: '2024-01-01T00:00:00+00:00'",
+                null,
+            ],
+            'a scalar string tag is coerced to a one-element list' => [
+                $head . "type: note\ntags: \"x\"\ncreatedAt: '2024-01-01T00:00:00+00:00'\nmodifiedAt: '2024-01-01T00:00:00+00:00'",
+                ['x'],
+            ],
+            'a tag containing --- loads' => [
+                $head . "type: note\ntags: ['a---b']\ncreatedAt: '2024-01-01T00:00:00+00:00'\nmodifiedAt: '2024-01-01T00:00:00+00:00'",
+                ['a---b'],
+            ],
+            'missing timestamps fall back instead of failing' => [
+                $head . 'type: note',
+                [],
+            ],
+            'non-mapping frontmatter is skipped' => [
+                "- just\n- a list",
+                null,
+            ],
+            'a non-string tag list member is skipped' => [
+                $head . "type: note\ntags: [[nested]]",
+                null,
+            ],
+            'an unparseable date string is skipped' => [
+                $head . "type: note\ncreatedAt: 'not a date at all'",
+                null,
+            ],
+        ];
+    }
+
+    public function testASkipIsForgottenOnceTheFileIsFixed(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+        $store->add('Valid sibling note', 'project');
+        $file = $this->tempDir . '/project/hand-edited.md';
+
+        file_put_contents($file, "---\nscope: project\nid: x\n---\nhello\n");
+        $store->list('project');
+        $this->assertArrayHasKey($file, $store->skipped());
+
+        file_put_contents($file, "---\nscope: project\nid: x\ntype: note\n---\nhello\n");
+        $this->assertCount(2, $store->list('project'));
+        $this->assertSame([], $store->skipped());
     }
 
     private function removeDirectory(string $dir): void
