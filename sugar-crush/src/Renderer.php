@@ -21,7 +21,7 @@ use SugarCraft\Mouse\Scanner;
 use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Fuzzy\Highlighter;
 use SugarCraft\Fuzzy\MatchResult;
-use SugarCraft\Shine\Render\SectionScanner;
+use SugarCraft\Shine\Render\SectionStream;
 use SugarCraft\Shine\Renderer as Markdown;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -441,39 +441,23 @@ final class Renderer
      *
      * A streaming reply only grows, and re-parsing all of it on every token
      * batch cost 2.1 s per frame at 200 KB. CandyShine's
-     * {@see SectionScanner} splits Markdown at top-level boundaries where
-     * rendering the pieces separately gives the same bytes as rendering the
-     * whole (the law {@see Markdown::stream()} is pinned to). Here the
-     * scanner is kept alive between frames. Each frame feeds it only the
-     * bytes that arrived since the last one, and only the open tail section
-     * is rendered again. Closed sections are rendered once and appended to
-     * `bodies`.
+     * {@see SectionStream} splits Markdown at top-level boundaries the parser
+     * confirms, where rendering the pieces separately gives the same bytes as
+     * rendering the whole (the law {@see Markdown::stream()} is pinned to),
+     * and carries link reference definitions across them. Here the stream is
+     * kept alive between frames. Each frame feeds it only the bytes that
+     * arrived since the last one; the sections it answers are final and are
+     * appended to `bodies` once. What it has not answered yet (the open tail,
+     * and any section waiting for a definition) is rendered again each frame
+     * from a clone.
      *
      * Valid while `consumed` is a prefix of the new partial and the theme
      * and width are unchanged. Any other partial (a new turn, a retry, a
      * resize) starts a new state.
      *
-     * `closed` is the byte offset where the rendered sections end and the
-     * open tail starts. `lineStart` is the offset of the line the scanner is
-     * still reading.
-     *
-     * @var array{theme: \WeakReference<\SugarCraft\Shine\Theme>, width: int, consumed: string, scanner: SectionScanner, bodies: string, closed: int, lineStart: int}|null
+     * @var array{theme: \WeakReference<\SugarCraft\Shine\Theme>, width: int, consumed: string, stream: SectionStream, bodies: string}|null
      */
     private static ?array $streamMemo = null;
-
-    /**
-     * A CommonMark link reference definition (`[label]: url`) at the start
-     * of a line, matched loosely.
-     *
-     * A definition applies to the whole document, so it changes how a
-     * `[label]` in an EARLIER section renders. Section-by-section rendering
-     * cannot see that. MEASURED: `"see [foo]\n\n# H\n\n[foo]: http://x"`
-     * renders a hyperlink through {@see Markdown::render()} and a literal
-     * `[foo]` through {@see Markdown::stream()}. A partial that contains
-     * anything like a definition is therefore rendered whole. The pattern
-     * over-matches on purpose, since a false match only costs speed.
-     */
-    private const LINK_REFERENCE_DEFINITION = '/^ {0,3}\[[^\n]*\]:/m';
 
     /**
      * Distinct styled rows {@see $styleTokenMemo} keeps. Large for the same
@@ -3640,9 +3624,7 @@ final class Renderer
      * through {@see $streamMemo}.
      *
      * Falls back to a whole render when the renderer's document-scope
-     * decoration makes sections unsafe ({@see Markdown::defersStreaming()}) or
-     * when the text contains a link reference definition
-     * ({@see LINK_REFERENCE_DEFINITION}).
+     * decoration makes sections unsafe ({@see Markdown::defersStreaming()}).
      *
      * The tail is a long reply with no section boundary yet, such as one
      * huge code block. It is still rendered whole on each frame. Only the
@@ -3650,7 +3632,7 @@ final class Renderer
      */
     private static function streamingMarkdown(Markdown $md, Theme $theme, int $width, string $raw): string
     {
-        if ($md->defersStreaming() || preg_match(self::LINK_REFERENCE_DEFINITION, $raw) === 1) {
+        if ($md->defersStreaming()) {
             self::$streamMemo = null;
 
             return $md->render($raw);
@@ -3667,19 +3649,16 @@ final class Renderer
                 'theme' => \WeakReference::create($theme->markdown),
                 'width' => $width,
                 'consumed' => '',
-                'scanner' => new SectionScanner(),
+                'stream' => new SectionStream($md),
                 'bodies' => '',
-                'closed' => 0,
-                'lineStart' => 0,
             ];
         }
-        // Cleared first: the scanner is mutated in place below, so a render
-        // that throws part-way must not leave a state whose scanner is ahead
+        // Cleared first: the stream is mutated in place below, so a render
+        // that throws part-way must not leave a state whose stream is ahead
         // of its bodies.
         self::$streamMemo = null;
 
-        $offset = strlen($memo['consumed']);
-        $delta = substr($raw, $offset);
+        $delta = substr($raw, strlen($memo['consumed']));
         if ($delta !== '') {
             // One line per push(). The scanner keeps an unconsumed buffer and
             // re-slices it once per newline, so a 200 KB first frame pushed in
@@ -3687,36 +3666,21 @@ final class Renderer
             // quadratic. Its state depends only on the bytes assembled so far,
             // so how the delta is split does not change the sections.
             foreach (preg_split('/(?<=\n)/', $delta, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $piece) {
-                $closed = $memo['scanner']->push($piece);
-                if ($closed !== []) {
-                    foreach ($closed as $section) {
-                        $memo['bodies'] .= $md->renderSection($section);
-                    }
-                    // The line just completed opens the next section, so
-                    // everything before its first byte is rendered.
-                    $memo['closed'] = $memo['lineStart'];
-                }
-                $offset += strlen($piece);
-                if (str_ends_with($piece, "\n")) {
-                    $memo['lineStart'] = $offset;
+                foreach ($memo['stream']->push($piece) as $body) {
+                    $memo['bodies'] .= $body;
                 }
             }
             $memo['consumed'] = $raw;
         }
 
-        // The open tail is cut from the source by offset rather than taken from
-        // SectionScanner::finish(). finish() scans the unterminated last line
-        // and, when that line is a heading that closes a section, discards the
-        // closed section. MEASURED: `stream(["Intro\n\n# F"])` yields only the
-        // heading. Rendering the tail as one piece is always safe, because the
-        // tail starts at a boundary the scanner has already proven.
         // Saved before the tail is rendered: the state is complete here, and a
         // tail the parser rejects (a partial cut inside a UTF-8 sequence) must
-        // not cost the next frame every section again.
+        // not cost the next frame every section again. The tail is rendered
+        // from a clone, because finish() ends a stream and this one is fed
+        // again next frame.
         self::$streamMemo = $memo;
-        $tail = substr($raw, $memo['closed']);
 
-        return $memo['bodies'] . (trim($tail) === '' ? '' : $md->renderSection($tail));
+        return $memo['bodies'] . implode('', (clone $memo['stream'])->finish());
     }
 
     /**

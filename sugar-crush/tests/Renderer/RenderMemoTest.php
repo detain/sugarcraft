@@ -240,17 +240,51 @@ final class RenderMemoTest extends TestCase
         self::assertSame(self::wholeStreamingRender($a, $light, 80), self::streamingTurn($a, $light, 80));
     }
 
-    public function testALinkReferenceDefinitionIsRenderedWhole(): void
+    public function testALinkReferenceDefinitionResolvesWithoutAWholeRender(): void
     {
-        // A definition applies to the whole document, so rendering by section
-        // would leave the earlier `[foo]` as literal text. MEASURED in
-        // candy-shine: stream() drops the link here, render() keeps it.
+        // A definition applies to the whole document, so the `[foo]` before
+        // it must still become a link. Audit 15b-30: candy-shine now carries
+        // definitions across sections, so the partial is no longer rendered
+        // whole to get that right.
         $theme = Theme::byName('dark');
-        $partial = "see [foo] now\n\n# H\n\n[foo]: http://example.com/x\n";
+        $partial = "see [foo] now\n\n# H\n\n[foo]: http://example.com/x\n\n# I\n\ntail\n";
 
         $turn = self::streamingTurn($partial, $theme, 80);
         self::assertSame(self::wholeStreamingRender($partial, $theme, 80), $turn);
         self::assertStringContainsString("\x1b]8;;http://example.com/x", $turn);
+
+        $memo = (new ReflectionProperty(Renderer::class, 'streamMemo'))->getValue();
+        self::assertIsArray($memo, 'the incremental path ran');
+        self::assertStringContainsString("\x1b]8;;http://example.com/x", $memo['bodies']);
+    }
+
+    public function testHeadingsStraightAfterAFenceStillStreamIncrementally(): void
+    {
+        // Audit 15b-31: PARA puts its next "## Heading" right under the
+        // closing fence. That was no section boundary, so this partial was
+        // one open tail rendered whole on every frame.
+        $theme = Theme::byName('dark');
+        $partial = str_repeat(self::PARA, 20);
+
+        self::assertSame(self::wholeStreamingRender($partial, $theme, 80), self::streamingTurn($partial, $theme, 80));
+
+        $memo = (new ReflectionProperty(Renderer::class, 'streamMemo'))->getValue();
+        self::assertIsArray($memo);
+        self::assertGreaterThan(
+            strlen($partial),
+            strlen($memo['bodies']),
+            'all but the last section are kept rendered',
+        );
+    }
+
+    public function testAnUnterminatedHeadingKeepsTheTextBeforeIt(): void
+    {
+        $theme = Theme::byName('dark');
+        $partial = "Intro paragraph\n\n# F";
+
+        $turn = self::streamingTurn($partial, $theme, 80);
+        self::assertSame(self::wholeStreamingRender($partial, $theme, 80), $turn);
+        self::assertStringContainsString('Intro paragraph', $turn);
     }
 
     public function testTheStreamingFrameStaysTheSameAcrossRepaints(): void
@@ -371,7 +405,9 @@ final class RenderMemoTest extends TestCase
             . "# After a quote\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n"
             . "<div>\n\n# inside html?\n\n</div>\n\n"
             . "# CJK 文字\n\n文字文字文字 " . str_repeat('word ', 30) . "\n\n"
-            . "    indented code\n\n# Last\n\n~~~\nfence ~~~ with tildes\n~~~\n\nTail text";
+            . "    indented code\n\n# Refs\n\nSee [the ref] and ![an image][ref] and [missing].\n\n"
+            . "```\nfenced\n```\n## Glued under a fence\n\n[the ref]: https://example.com/r\n[REF]: https://example.com/i\n\n"
+            . "# Last\n\n~~~\nfence ~~~ with tildes\n~~~\n\nTail text";
     }
 
     private static function streamingTurn(string $partial, Theme $theme, int $width): string
