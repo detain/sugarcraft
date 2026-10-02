@@ -219,6 +219,32 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     public const MAX_FRAME_BYTES = 64 * 1024 * 1024;
 
     /**
+     * B6: the rejection a turn settles with when the child's frame stream
+     * stops being parseable - a header declaring an impossible length, a body
+     * that does not decode, or a child gone with half a frame still on the
+     * wire. One spelling for the three sites, because a test (and a user
+     * reading the error) must be able to tell this apart from "exited
+     * without a result": here the child may have finished its work and the
+     * CHANNEL lost it.
+     */
+    private const FRAME_STREAM_CORRUPTED = 'Provider worker frame stream corrupted';
+
+    /**
+     * B6: the write timeout on the child's end of the frame socket, in
+     * seconds. PHP applies `default_socket_timeout` (60s) to every blocking
+     * socket write, and MEASURED on PHP 8.3.6 with it set to 1s a 4 MB frame
+     * against a parent that stalled 3s was cut at 1,059,776 bytes - the write
+     * gave up mid-frame and everything after it was unparseable. With this
+     * timeout set, the same write simply waited and delivered all 4,000,000
+     * bytes. A stalled-but-alive parent must apply BACKPRESSURE, not cost the
+     * child its frame: a live parent either reads or tears down, and teardown
+     * closes its end (EPIPE here, because the child closed its inherited copy
+     * of that end - B3) and kills this child's tree. A year, not "forever",
+     * only because the API takes a number.
+     */
+    private const CHILD_WRITE_TIMEOUT_SECONDS = 365 * 24 * 3600;
+
+    /**
      * {@see reapChild()}'s bounded WNOHANG poll: 20 attempts x 5ms is a 100ms
      * ceiling on how long teardown may sit on the event loop. A SIGKILLed or
      * already-exiting child is reaped on the first attempt or two; the budget
@@ -1380,6 +1406,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             // the parent also watches the pid (see $exitTimer below).
             fclose($parentSocket);
             ProcessContainment::closeOnExec($childSocket);
+            // B6: backpressure, not a timed-out half frame - see the constant.
+            stream_set_timeout($childSocket, self::CHILD_WRITE_TIMEOUT_SECONDS);
             $this->runCompleteInChild($childSocket, $history);
         }
 
@@ -1396,6 +1424,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         $buffer = '';
         $settled = false;
         $result = null;
+        // B6: set when the frame stream stopped being parseable, so the
+        // settle reports a broken channel rather than a missing result.
+        $streamCorrupt = false;
+        // Set once $exitTimer has reaped the child: its pid may then be
+        // reused, and nothing may signal it any more.
+        $childReaped = false;
         // Set once any token frame has been forwarded, so the result frame's
         // own one-shot $onToken call is suppressed rather than repeating the
         // reply the caller has already been handed chunk by chunk.
@@ -1449,7 +1483,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // or was seen to exit by $exitTimer. Same cleanup as $teardown minus the kill (the child is
         // already on its way out), then settle from whatever result frame
         // arrived - a child that died before writing one is still a failure.
-        $finalize = function () use (&$settled, &$result, &$streamed, $loop, $parentSocket, $pid, $deferred, $onToken, &$timeoutTimer, &$cancelTimer, &$exitTimer): void {
+        $finalize = function () use (&$settled, &$result, &$streamed, &$buffer, &$streamCorrupt, $loop, $parentSocket, $pid, $deferred, $onToken, &$timeoutTimer, &$cancelTimer, &$exitTimer): void {
             if ($settled) {
                 return;
             }
@@ -1468,6 +1502,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 $loop->cancelTimer($exitTimer);
             }
             self::reapChild($pid);
+            // B6. A child that is gone with bytes still unframed in $buffer
+            // wrote a frame it never finished (or a header that lied about
+            // its length): the result frame, if it ever wrote one, is buried
+            // inside that remainder. "Exited without a result" would blame
+            // the child for losing work it may well have finished, so the
+            // turn says what actually happened to the stream instead.
+            if ($result === null && ($streamCorrupt || $buffer !== '')) {
+                $deferred->reject(new \RuntimeException(self::FRAME_STREAM_CORRUPTED));
+
+                return;
+            }
             $this->settleFromResultFrame($result, $deferred, $streamed ? null : $onToken);
         };
 
@@ -1500,9 +1545,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // Frame dispatch for one chunk off the socket, shared by the read edge
         // below and by $exitTimer's final drain so the two cannot disagree
         // about what a frame means.
-        $consume = function (string $chunk) use (&$buffer, &$result, &$streamed, $onToken, $onEvent, $onReasoning, $finalize, $resetTimeout): void {
+        $consume = function (string $chunk) use (&$buffer, &$result, &$streamed, &$streamCorrupt, &$childReaped, $onToken, $onEvent, $onReasoning, $finalize, $resetTimeout, $teardown): void {
             $buffer .= $chunk;
-            foreach (self::drainFrames($buffer) as $frame) {
+            $corrupt = false;
+            $frames = self::drainFrames($buffer, $corrupt);
+            // B6. The frames decoded BEFORE the bad header are whole and real,
+            // so they are still delivered below; only after them does the
+            // stream stop meaning anything. Nothing past that point can be
+            // re-synchronised (a length-prefixed stream has no delimiter to
+            // scan for), so the turn is torn down - child tree killed - the
+            // moment the last good frame has been handed on.
+            foreach ($frames as $frame) {
                 // Progress of any kind pushes the idle deadline out.
                 $resetTimeout();
 
@@ -1577,6 +1630,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                     $onEvent($event);
                 }
             }
+
+            if ($corrupt) {
+                $streamCorrupt = true;
+                // Once $exitTimer has REAPED the child its pid is free for
+                // reuse, so teardown's killTree() must not run against it;
+                // the child is gone anyway and finalize() settles with the
+                // same corruption verdict.
+                $childReaped ? $finalize() : $teardown(self::FRAME_STREAM_CORRUPTED);
+            }
         };
 
         $loop->addReadStream($parentSocket, function ($stream) use ($finalize, $consume): void {
@@ -1602,13 +1664,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // otherwise. No killTree() on that branch: the root is dead, so its
         // descendants have already been reparented and are no longer a tree
         // anyone can walk from here.
-        $exitTimer = $loop->addPeriodicTimer(self::EXIT_POLL_SECONDS, function () use (&$settled, $pid, $parentSocket, $consume, $finalize): void {
+        $exitTimer = $loop->addPeriodicTimer(self::EXIT_POLL_SECONDS, function () use (&$settled, &$childReaped, $pid, $parentSocket, $consume, $finalize): void {
             if ($settled) {
                 return;
             }
             if (!self::childHasExited($pid)) {
                 return;
             }
+            $childReaped = true;
 
             while (!$settled && is_resource($parentSocket)) {
                 $chunk = @fread($parentSocket, 65536);
@@ -1824,8 +1887,27 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * in a byte stream that has no other structure: a serialized payload can
      * contain any byte, so there is no delimiter to scan for, and a single
      * fwrite() is not guaranteed to be atomic or complete - hence the loop.
-     * A dead parent (fwrite failing or making no progress) ends the write
-     * rather than spinning; the child is about to exit anyway.
+     *
+     * WHAT THIS SAID: that a dead parent "ends the write rather than
+     * spinning; the child is about to exit anyway". WHAT IS TRUE (B6): the
+     * write ended by RETURNING, silently, possibly mid-frame - and the child
+     * was not about to exit at all. It went on running the agent loop, every
+     * later frame landed inside the truncated frame's declared length, and
+     * even a finished turn's result frame was lost (repro: 1,059,776 bytes
+     * read, ZERO frames decoded). A short write means the stream is dead and
+     * possibly holds half a frame, so nothing written after it can ever be
+     * parsed; the only honest move is to stop, at once. Continuing would
+     * keep running tools - Bash, Edit, Write - for a turn nobody can receive.
+     * The child exits through {@see \SugarCraft\Crush\Support\ForkedChild::exitNow()} (the fork's exit
+     * convention, a self-SIGKILL); the parent then sees either the stream
+     * corruption or the child's exit and settles the turn as a failure.
+     *
+     * CHILD-ONLY BY CONSTRUCTION: every caller is {@see runCompleteInChild()}
+     * and the sinks it builds, which only ever run in the forked child - this
+     * must never be called from the TUI parent, where exitNow() would kill
+     * the app. A stalled-but-alive parent no longer reaches this branch: the
+     * child's socket carries {@see CHILD_WRITE_TIMEOUT_SECONDS}, so the write
+     * waits instead of timing out.
      *
      * @param resource             $socket
      * @param array<string, mixed> $frame
@@ -1839,7 +1921,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         for ($written = 0; $written < $total;) {
             $n = @fwrite($socket, substr($out, $written));
             if ($n === false || $n === 0) {
-                return;
+                \SugarCraft\Crush\Support\ForkedChild::exitNow(1);
             }
             $written += $n;
         }
@@ -1850,14 +1932,24 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * trailing partial frame in $buffer for the next readable edge - a frame
      * can and does span two reads once a tool result carries image bytes.
      *
-     * A frame whose declared length is nonsensical means the stream is no
-     * longer parseable, so the buffer is dropped rather than misinterpreted;
-     * the turn then fails via the missing-result path instead of resolving
-     * with garbage.
+     * A frame whose declared length is nonsensical, or whose body does not
+     * decode to an array, means the stream is no longer parseable. WHAT THIS
+     * SAID: the buffer was dropped "and the turn then fails via the
+     * missing-result path". WHAT IS TRUE (B6): parsing simply continued on
+     * the next read, so every later frame - the result frame included - was
+     * read against a byte offset that meant nothing, and the turn ended as
+     * "exited without a result" (or idled out) with nobody told the channel
+     * broke. Now the buffer is still dropped, but $corrupt is set so the
+     * caller can tear the turn down; the frames decoded BEFORE the bad one
+     * are returned as usual, because they were whole.
+     *
+     * @param bool $corrupt set true when the stream stopped being parseable;
+     *                      never reset to false here, so one flag can span
+     *                      several calls
      *
      * @return list<array<string, mixed>>
      */
-    private static function drainFrames(string &$buffer): array
+    private static function drainFrames(string &$buffer, bool &$corrupt = false): array
     {
         $frames = [];
 
@@ -1866,6 +1958,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             $length = is_array($header) ? (int) ($header[1] ?? 0) : 0;
             if ($length <= 0 || $length > self::MAX_FRAME_BYTES) {
                 $buffer = '';
+                $corrupt = true;
                 break;
             }
             if (strlen($buffer) < 4 + $length) {
@@ -1878,9 +1971,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             // allowed_classes => false: a hostile/corrupt payload must never
             // be able to instantiate anything (see encodeEvent()).
             $decoded = @unserialize($body, ['allowed_classes' => false]);
-            if (is_array($decoded)) {
-                $frames[] = $decoded;
+            if (!is_array($decoded)) {
+                // A whole-length body that is not a frame: the length prefix
+                // and the bytes disagree, so the offset is no longer trusted.
+                $buffer = '';
+                $corrupt = true;
+                break;
             }
+            $frames[] = $decoded;
         }
 
         return $frames;
