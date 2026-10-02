@@ -77,8 +77,11 @@ final readonly class AgentDefinition
             // survived here in a preset. `AgentDefinitionTest` now refuses any
             // argument-scoped declaration in any preset that matches nothing.
             //
-            // The `Allow` arm is an INTERSECTION over `[;&|\r\n]+` segments, so
-            // this admits `git status` and refuses `git log && rm -rf /`. That
+            // The `Allow` arm is fail-closed: it splits the line with the
+            // ShellWords tokeniser, requires EVERY unquoted-operator segment to
+            // match, and refuses command/process substitution, `${…}` expansion
+            // and non-inert redirection outright (audit F-P5), so this admits
+            // `git status` and refuses `git log && rm -rf /`. That
             // is enforced per call by {@see AgentManager::refuseCallOutsideGrant()};
             // the roster {@see AgentManager::resolveGrantedTools()} sends can
             // only carry the NAME half, because a tool schema has no field for

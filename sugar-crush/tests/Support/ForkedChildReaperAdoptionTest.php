@@ -48,7 +48,8 @@ use PHPUnit\Framework\TestCase;
  * the registration of a file that was already protected:
  * `Hooks/AuditHookConcurrentAppendTest.php` forks through the trait and
  * reaps first in tearDown(), and the only thing SCOPE did not yet know was
- * that it had to keep doing so.
+ * that it had to keep doing so. Audit B7 (wave w1) added `LSP/` the same
+ * way: its fork-safety tests already fork through the trait and reap.
  */
 final class ForkedChildReaperAdoptionTest extends TestCase
 {
@@ -57,7 +58,7 @@ final class ForkedChildReaperAdoptionTest extends TestCase
      *
      * @var list<string>
      */
-    private const SCOPE = ['Agents/', 'Backend/', 'Diagnostics/', 'Hooks/', 'Integration/', 'MCP/', 'Support/', 'Tools/'];
+    private const SCOPE = ['Agents/', 'Backend/', 'Diagnostics/', 'Hooks/', 'Integration/', 'LSP/', 'MCP/', 'Support/', 'Tools/'];
 
     /**
      * Prefixes with in-process forks that are NOT yet under {@see SCOPE},
