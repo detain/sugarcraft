@@ -709,11 +709,20 @@ Two more exist and are **not** registered by default:
   has to register it explicitly.
 
 `ConfirmRemoveHook` and `BashEscapeDenyHook` are both documented in their own
-source as **heuristics, not security boundaries**. Regex cannot see through
-shell indirection: `x=rf; rm -$x`, aliases, `$(echo rm) -rf`, `$HOME/../..`,
-command substitution, symlinks and here-docs all evade them. They catch the
-obvious footgun — a model literally emitting `rm -rf` — not a hostile command.
-For real containment, run the process in a jail or container.
+source as **heuristics, not security boundaries**. Neither can see through
+shell indirection: `x=rf; rm -$x`, aliases, `$(echo rm) -rf`, a variable set
+earlier (`d=/etc; cat $d/passwd`), symlinks and here-docs fed to an
+interpreter all evade them. They catch the obvious footgun — a model literally
+emitting `rm -rf` or `cat ~/.ssh/id_rsa` — not a hostile command. For real
+containment, run the process in a jail or container.
+
+`BashEscapeDenyHook` reads the command through the same quote-aware tokenizer
+as the permission rules, so separators, pipes, subshells and glued
+redirections (`cat</etc/shadow`, `cd ..;ls`, `echo x >/tmp/out`) do not hide a
+path. It expands `~`, `$HOME` and `$PWD` (the root), denies `$OLDPWD`, `cd -`
+and `~user`, and also judges the bodies of `$(…)`, backticks, `<(…)`,
+`sh -c '…'` and `eval`. It allows `/dev/null`, `/dev/std*` and an absolute
+path to an existing executable in command position (`/usr/bin/php -v`).
 
 Quoting is **not** among those evasions for `ConfirmRemoveHook` any more: each
 pattern runs against the raw command *and* its quote-removed words (the same

@@ -715,6 +715,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * `cd $worktreeRoot` prefix which does NOT prevent escape via `cd /` or
      * `..` traversal within the command string itself.
      *
+     * The returned backend owns a CLONE of the hook manager (audit F-J5): the
+     * worktree-scoped guard belongs to the sub-agent's backend only, and
+     * registering on the shared instance in place gave the parent's chain the
+     * sub-agent's root as a deny boundary too — a `with*()` that mutated its
+     * receiver.
+     *
+     * Not wired in production yet: it waits on worktree isolation (crush_report
+     * Part II #23), which is what will give a sub-agent a root of its own.
+     *
      * @see \SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook
      */
     public function withWorktreeRoot(string $worktreeRoot): self
@@ -723,7 +732,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             return $this;
         }
 
-        $manager = $this->hookManager ?? new HookManager(new HookRegistry());
+        $manager = $this->hookManager !== null
+            ? clone $this->hookManager
+            : new HookManager(new HookRegistry());
         $manager->registerBuiltIns();
         $manager->register(new BashEscapeDenyHook($worktreeRoot));
 
@@ -2339,8 +2350,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * A {@see withPermissionGate()} gate is registered LAST, after the
      * built-ins — see {@see PermissionGateHook} for why that order (both are
      * fail-closed; the order picks which message wins). Registration mutates
-     * the manager in place, exactly as {@see withWorktreeRoot()} already does:
-     * {@see HookManager} owns a private registry with no copy constructor, and
+     * the manager in place (unlike {@see withWorktreeRoot()}, which clones it
+     * because it ADDS a hook its receiver must not gain):
      * {@see \SugarCraft\Crush\Hooks\HookRegistry} keys hooks by name, so
      * re-running this per turn REPLACES the same entry rather than stacking
      * gates with independent circuit-breaker state.

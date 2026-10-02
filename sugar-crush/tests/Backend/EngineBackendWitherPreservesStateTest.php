@@ -95,8 +95,8 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 static fn(EngineBackend $b): EngineBackend => $b->withSpendCap(9.0, 4.0),
                 ['spendCapUsd', 'sessionSpendAtStartUsd'],
             ],
-            // Registers onto the SAME manager object in place, so identity is
-            // preserved; it owns hooksDisabled (re-asserted false).
+            // Registers onto a CLONE of the manager (audit F-J5), so it owns
+            // hookManager; it owns hooksDisabled too (re-asserted false).
             'withWorktreeRoot' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withWorktreeRoot('/wt'),
                 ['hookManager', 'hooksDisabled'],
@@ -156,6 +156,31 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
         $s = $this->state(EngineBackend::new($this->provider(), 'm')->withWorktreeRoot('/wt'));
         $this->assertInstanceOf(HookManager::class, $s['hookManager']);
         $this->assertFalse($s['hooksDisabled']);
+    }
+
+    /**
+     * Audit F-J5: `withWorktreeRoot()` registered its worktree-scoped Bash
+     * guard on the receiver's own manager, so the PARENT backend's chain also
+     * started denying paths outside the sub-agent's worktree.
+     */
+    public function testWithWorktreeRootLeavesTheReceiversHookChainAlone(): void
+    {
+        $shared = new HookManager(new HookRegistry());
+        $parent = EngineBackend::new($this->provider(), 'm')->withHooks($shared);
+
+        $child = $parent->withWorktreeRoot('/wt');
+
+        $this->assertNull(
+            $shared->hook('PreToolUse', 'bash-escape-deny'),
+            'the parent backend\'s manager gained the worktree guard',
+        );
+        $this->assertNull($shared->hook('PreToolUse', 'protect-files'));
+        $this->assertSame($shared, $this->state($parent)['hookManager']);
+
+        $childManager = $this->state($child)['hookManager'];
+        $this->assertInstanceOf(HookManager::class, $childManager);
+        $this->assertNotSame($shared, $childManager);
+        $this->assertNotNull($childManager->hook('PreToolUse', 'bash-escape-deny'));
     }
 
     public function testSweepCoversEveryPublicWither(): void

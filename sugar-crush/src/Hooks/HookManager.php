@@ -14,6 +14,20 @@ final class HookManager
     ) {}
 
     /**
+     * A clone gets its OWN registry, so registering on the copy leaves the
+     * original's chain alone (audit F-J5: {@see
+     * \SugarCraft\Crush\Backend\EngineBackend::withWorktreeRoot()} used to add
+     * its worktree-scoped Bash guard to the parent backend's shared manager).
+     * The registry's state is arrays of hook instances, so a shallow registry
+     * clone is a full copy of the chain; the hook objects themselves are
+     * shared, exactly as they are between two turns on one manager.
+     */
+    public function __clone()
+    {
+        $this->registry = clone $this->registry;
+    }
+
+    /**
      * Load hooks from a YAML hook file, adding each one to the chain.
      *
      * LIVE since crush_code.md Phase 2 item 5:
