@@ -5,10 +5,14 @@ hook chain, and — riding in that chain as its last entry — a `PermissionGate
 carrying one of six modes plus your own rules.
 
 This page documents what the gate decides, measured against
-`src/Permissions/PermissionGate.php` on this checkout. One thing in it will
-surprise you if you have read the class's own examples: **rule patterns match
-tool NAMES only.** An argument-shaped pattern such as `Bash(rm *)` matches
-nothing. That is measured, not inferred, and the measurement is below.
+`src/Permissions/PermissionGate.php` and `src/Permissions/PermissionRule.php`
+on this checkout. A rule pattern names a tool and, optionally, the argument it
+acts on: `Bash` matches the tool, `Bash(rm *)` the shell commands it runs,
+`Read(.env)` the file it opens — read the way the tool reads it, anchored at
+the project root with symlinks followed — and `WebFetch(domain:github.com)`
+the host it fetches. How each kind of argument is matched, and where that
+matching stops, is in
+[Pattern matching](#pattern-matching-a-tool-name-plus-an-optional-argument-glob).
 
 ---
 
