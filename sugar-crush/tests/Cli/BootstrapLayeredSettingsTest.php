@@ -114,13 +114,13 @@ final class BootstrapLayeredSettingsTest extends TestCase
     {
         $this->writeUserSettings(['titleModel' => 'suggested-by-settings-json']);
         $this->trustTheProject();
-        $this->writeProjectSettings(LayeredSettings::SHARED_PATH, ['summaryModel' => 'suggested-by-project']);
+        $this->writeProjectSettings(LayeredSettings::SHARED_PATH, ['disabledSkills' => ['suggested-by-project']]);
         Bootstrap::useProjectRootForSettings($this->projectRoot);
 
         // Both suggestions are in force for this run...
         $effective = Bootstrap::readUserConfig();
         self::assertSame('suggested-by-settings-json', $effective['titleModel']);
-        self::assertSame('suggested-by-project', $effective['summaryModel']);
+        self::assertSame(['suggested-by-project'], $effective['disabledSkills']);
 
         Bootstrap::writeUserConfig(['theme' => 'chosen-by-the-user']);
 
@@ -211,14 +211,14 @@ final class BootstrapLayeredSettingsTest extends TestCase
     public function testTheLocalProjectFileOutranksTheTrackedOneWhenTrusted(): void
     {
         $this->trustTheProject();
-        $this->writeProjectSettings(LayeredSettings::SHARED_PATH, ['theme' => 'shared', 'titleModel' => 'shared']);
+        $this->writeProjectSettings(LayeredSettings::SHARED_PATH, ['theme' => 'shared', 'disabledTools' => ['shared']]);
         $this->writeProjectSettings(LayeredSettings::LOCAL_PATH, ['theme' => 'local']);
         Bootstrap::useProjectRootForSettings($this->projectRoot);
 
         $config = Bootstrap::readUserConfig();
 
         self::assertSame('local', $config['theme']);
-        self::assertSame('shared', $config['titleModel']);
+        self::assertSame(['shared'], $config['disabledTools']);
     }
 
     /**
@@ -474,13 +474,13 @@ final class BootstrapLayeredSettingsTest extends TestCase
         file_put_contents($this->configDir . '/config.json', '{ not json at all');
         chmod($this->configDir . '/config.json', 0o600);
         $this->writeUserSettings(['theme' => 'from-settings-json']);
-        $this->writeProjectSettings(LayeredSettings::SHARED_PATH, ['titleModel' => 'chosen-by-the-repo']);
+        $this->writeProjectSettings(LayeredSettings::SHARED_PATH, ['disabledSkills' => ['chosen-by-the-repo']]);
         Bootstrap::useProjectRootForSettings($this->projectRoot);
 
         $config = Bootstrap::readUserConfig();
 
         self::assertSame('from-settings-json', $config['theme']);
-        self::assertArrayNotHasKey('titleModel', $config);
+        self::assertArrayNotHasKey('disabledSkills', $config);
 
         $this->trustTheProject();
 
@@ -492,7 +492,7 @@ final class BootstrapLayeredSettingsTest extends TestCase
             'the repaired config answers the user tier again — the freeze is the trust decision, not a continued parse failure',
         );
         self::assertArrayNotHasKey(
-            'titleModel',
+            'disabledSkills',
             $repaired,
             'a grant that arrived after the process already refused this config path must not take effect in it',
         );

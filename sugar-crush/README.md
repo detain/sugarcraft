@@ -223,7 +223,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, ten keys are **never** taken from a project file:
+Even for a trusted project, twelve keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path;
@@ -241,7 +241,11 @@ clone can run up; `modelPrices`, because it sets the rate every billed token
 converts at — the mirrored direction on the same money axis, where a
 project-supplied map could zero a rate and silently blind the spend cap and the
 `/budget` totals, the exact failure the unpriced-model notice exists to make
-loud; `layout`, because it records where the operator chose to put
+loud; `titleModel` and `summaryModel`, because they choose the model every
+title, prompt suggestion and `/compact` summary runs on with the operator's
+key — within one provider the price spread is over 100×, and a model with no
+price on file bills as $0, so a project-chosen one blinds the spend cap the same
+way a zeroed rate would; `layout`, because it records where the operator chose to put
 their own windows — frame geometry is a personal habit, not a property of the
 checked-out code, and a project that moves your panes behind your back is
 answering to the wrong owner; `maxToolSteps`, because it multiplies how many

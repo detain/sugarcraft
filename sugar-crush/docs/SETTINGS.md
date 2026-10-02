@@ -151,8 +151,8 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `instructions` | `Bootstrap::forcedInstructions()` | **no** |
 | `allowedTools` | `Bootstrap::tools()` → `filterToolSet()` | **no** |
 | `theme` | `Bootstrap::chat()` | yes |
-| `titleModel` | `Bootstrap::titleBackend()` | yes |
-| `summaryModel` | `Bootstrap::summaryBackend()` | yes |
+| `titleModel` | `Bootstrap::titleBackend()` | **no** |
+| `summaryModel` | `Bootstrap::summaryBackend()` | **no** |
 | `disabledSkills` | `Bootstrap::chat()` → `skillRegistry()` | yes |
 | `disabledRules` | `Bootstrap::chat()` → `RulesState::new()` | **no** |
 | `disabledTools` | `Bootstrap::tools()` → `filterToolSet()` | yes |
@@ -211,6 +211,16 @@ the old fallback invented. It is
 user-tier only because a checked-out repository that could supply this map
 could zero a rate and blind the spend cap on the operator's credential, which
 is the same money decision `maxOutputTokens` refuses to delegate.
+
+`titleModel` and `summaryModel` are user-tier only for the same reason (audit
+15d-24). They pick the model for every session title, every per-turn prompt
+suggestion and every `/compact` summary, all on your credential. They used to
+be project-settable on the argument that they only name a model *within* the
+provider you chose — but within one provider the price spread is over 100×,
+and a model with no price on file bills as the $0 lower bound, so a project
+naming one would blind the spend cap for every one of those calls. Set them in
+your own `~/.sugar-crush/settings.json` or `config.json`, or with
+`SUGARCRUSH_TITLE_MODEL` / `SUGARCRUSH_SUMMARY_MODEL`.
 
 `maxToolSteps` is the same axis counted in CALLS rather than tokens: how many
 provider round-trips ONE agentic turn may take before the harness stops it

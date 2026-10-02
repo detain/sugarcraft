@@ -333,9 +333,8 @@ final class LayeredSettings
      * and the reason is the shape of the value rather than what it names: it is
      * the ONLY layered key whose meaningful direction is UP. Every other
      * project-adjacent key either REMOVES capability (`disabledSkills`,
-     * `disabledTools` — they shrink a set the harness already bounded), NAMES a
-     * model WITHIN the provider the operator chose (`titleModel`,
-     * `summaryModel` — cost is bounded by that choice), or BOUNDS throughput
+     * `disabledTools` — they shrink a set the harness already bounded), or
+     * BOUNDS throughput
      * (`parallelToolDeadlineSeconds` — a smaller number is the failure mode a
      * repository could pick, and it costs time, not money). A larger output
      * ceiling is a bigger paid request on the user's credential, repeated every
@@ -402,9 +401,6 @@ final class LayeredSettings
      * questions and the second one has a different answer per key:
      *
      *  - `theme` is pixels.
-     *  - `titleModel` / `summaryModel` name a model WITHIN the provider the user
-     *    already chose, on the user's own credential and endpoint. The cost of a
-     *    hostile value is tokens and a wrong title.
      *  - `disabledSkills` REMOVES a capability rather than adding one, and "this
      *    repo has no use for the terraform skill" is the archetypal thing a
      *    repository knows and a user does not. Gated all the same, because
@@ -418,6 +414,18 @@ final class LayeredSettings
      *    Gated for `disabledSkills`' reason too — removing a capability can
      *    remove a check — and it CANNOT widen anything, because that set is the
      *    ceiling and both tool keys only ever shrink it.
+     *
+     * `titleModel` / `summaryModel` ARE ABSENT (audit 15d-24), and they used to
+     * be here, on the argument that they "name a model WITHIN the provider the
+     * user already chose, so the cost of a hostile value is tokens and a wrong
+     * title". That bound does not hold. Within one provider the price spread
+     * is more than 100x, and these two keys pick the model for every session
+     * title, every per-turn prompt suggestion and every `/compact` summary, on
+     * the operator's credential. Worse, a model missing from the provider's
+     * price table bills as the $0 lower bound, so a project naming one blinds
+     * the spend cap for every one of those calls - the exact failure
+     * `modelPrices` is refused to projects for. A model choice is a money
+     * decision, and the money decision stays with whoever pays.
      *
      * `allowedTools` IS ABSENT, and it is the interesting one, because on
      * capability alone it looks as safe as its sibling: a whitelist intersected
@@ -597,8 +605,6 @@ final class LayeredSettings
      */
     public const PROJECT_TIER_KEYS = [
         'theme',
-        'titleModel',
-        'summaryModel',
         'disabledSkills',
         'parallelToolCalls',
         'parallelToolDeadlineSeconds',
@@ -611,9 +617,9 @@ final class LayeredSettings
      *
      * DERIVED, not written out, so the two lists above cannot drift apart into a
      * third list that agrees with neither. Today it is `provider`,
-     * `instructions`, `disabledRules`, `maxOutputTokens`, `modelPrices`,
-     * `allowedTools`, `statusLine`, `layout`, `maxToolSteps` and
-     * `secretEnvAllowlist`, in
+     * `titleModel`, `summaryModel`, `instructions`, `disabledRules`,
+     * `maxOutputTokens`, `modelPrices`, `allowedTools`, `statusLine`, `layout`,
+     * `maxToolSteps` and `secretEnvAllowlist`, in
      * {@see LAYERED_KEYS} order — named rather than numbered
      * here, because the
      * ordinals this sentence used to carry went stale the moment a fifth key

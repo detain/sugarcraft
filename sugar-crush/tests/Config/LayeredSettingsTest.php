@@ -52,7 +52,7 @@ final class LayeredSettingsTest extends TestCase
     public function testTheUserTierOnlyKeysAreExactlyTheLayeredKeysNoProjectMaySet(): void
     {
         self::assertSame(
-            ['provider', 'instructions', 'disabledRules', 'maxOutputTokens', 'modelPrices', 'allowedTools', 'statusLine', 'layout', 'maxToolSteps', 'secretEnvAllowlist'],
+            ['provider', 'titleModel', 'summaryModel', 'instructions', 'disabledRules', 'maxOutputTokens', 'modelPrices', 'allowedTools', 'statusLine', 'layout', 'maxToolSteps', 'secretEnvAllowlist'],
             LayeredSettings::userTierOnlyKeys(),
         );
 
@@ -117,13 +117,13 @@ final class LayeredSettingsTest extends TestCase
     {
         $merged = LayeredSettings::merge(
             ['theme' => 'from-config-json'],
-            ['theme' => 'from-user-settings', 'titleModel' => 'from-user-settings'],
-            ['theme' => 'from-project', 'titleModel' => 'from-project', 'summaryModel' => 'from-project'],
+            ['theme' => 'from-user-settings', 'disabledSkills' => ['from-user-settings']],
+            ['theme' => 'from-project', 'disabledSkills' => ['from-project'], 'disabledTools' => ['from-project']],
         );
 
         self::assertSame('from-config-json', $merged['theme']);
-        self::assertSame('from-user-settings', $merged['titleModel']);
-        self::assertSame('from-project', $merged['summaryModel']);
+        self::assertSame(['from-user-settings'], $merged['disabledSkills']);
+        self::assertSame(['from-project'], $merged['disabledTools']);
     }
 
     /**
@@ -169,13 +169,13 @@ final class LayeredSettingsTest extends TestCase
     /** `settings.local.json` outranks `settings.json`; both are project tier. */
     public function testTheLocalProjectFileOutranksTheSharedOne(): void
     {
-        $this->writeProject(LayeredSettings::SHARED_PATH, ['theme' => 'shared', 'titleModel' => 'shared']);
+        $this->writeProject(LayeredSettings::SHARED_PATH, ['theme' => 'shared', 'disabledTools' => 'shared']);
         $this->writeProject(LayeredSettings::LOCAL_PATH, ['theme' => 'local']);
 
         $layer = LayeredSettings::projectLayer($this->projectRoot, true);
 
         self::assertSame('local', $layer['theme']);
-        self::assertSame('shared', $layer['titleModel']);
+        self::assertSame('shared', $layer['disabledTools']);
     }
 
     /**
@@ -192,7 +192,7 @@ final class LayeredSettingsTest extends TestCase
      */
     public function testTheProjectKeySourceNamesTheFileThatActuallyWon(): void
     {
-        $this->writeProject(LayeredSettings::SHARED_PATH, ['theme' => 'shared', 'titleModel' => 'shared']);
+        $this->writeProject(LayeredSettings::SHARED_PATH, ['theme' => 'shared', 'disabledTools' => 'shared']);
         $this->writeProject(LayeredSettings::LOCAL_PATH, ['theme' => 'local']);
 
         self::assertSame(
@@ -202,7 +202,7 @@ final class LayeredSettingsTest extends TestCase
         // Only ONE file carries this one, and it is not the winner of the other.
         self::assertSame(
             $this->projectRoot . '/' . LayeredSettings::SHARED_PATH,
-            LayeredSettings::projectKeySource($this->projectRoot, true, 'titleModel'),
+            LayeredSettings::projectKeySource($this->projectRoot, true, 'disabledTools'),
         );
     }
 
@@ -219,7 +219,7 @@ final class LayeredSettingsTest extends TestCase
         // Untrusted: the layer never loads, so nothing set it.
         self::assertNull(LayeredSettings::projectKeySource($this->projectRoot, false, 'theme'));
         // Trusted, but no file carries the key.
-        self::assertNull(LayeredSettings::projectKeySource($this->projectRoot, true, 'titleModel'));
+        self::assertNull(LayeredSettings::projectKeySource($this->projectRoot, true, 'disabledTools'));
         // Trusted and the key IS in the file — but this tier may not set it, so
         // `only()` drops it before the merge and naming the file as its source
         // would point at a value that reached nothing.
@@ -386,6 +386,33 @@ final class LayeredSettingsTest extends TestCase
         self::assertSame([], LayeredSettings::projectLayer($this->projectRoot, true));
     }
 
+    /**
+     * Audit 15d-24: a trusted project used to be able to pick the model every
+     * title, prompt suggestion and `/compact` summary runs on, with the
+     * operator's credential - and an unpriced pick bills $0 against the spend
+     * cap. Both keys are dropped from BOTH project files, at full trust, while
+     * a sibling key the tier may still set survives (so the empty answer is
+     * the filter, not an unread file).
+     */
+    public function testAProjectCannotChooseTheTitleOrSummaryModel(): void
+    {
+        $this->writeProject(LayeredSettings::SHARED_PATH, ['titleModel' => 'o1-pro', 'theme' => 'shared']);
+        $this->writeProject(LayeredSettings::LOCAL_PATH, ['summaryModel' => 'o1-pro']);
+
+        self::assertSame(['theme' => 'shared'], LayeredSettings::projectLayer($this->projectRoot, true));
+        self::assertNull(LayeredSettings::projectKeySource($this->projectRoot, true, 'titleModel'));
+        self::assertNull(LayeredSettings::projectKeySource($this->projectRoot, true, 'summaryModel'));
+
+        // The user's own layer still carries both.
+        file_put_contents(
+            $this->userDir . '/' . LayeredSettings::USER_FILE,
+            (string) json_encode(['titleModel' => 'mine', 'summaryModel' => 'also-mine']),
+        );
+        $user = LayeredSettings::userLayer($this->userDir);
+        self::assertSame('mine', $user['titleModel'] ?? null);
+        self::assertSame('also-mine', $user['summaryModel'] ?? null);
+    }
+
     /** BOUNDARY TWO: a genuine directory holding a symlink to somewhere else. */
     public function testASettingsFileSymlinkedOutOfTheProjectIsRefused(): void
     {
@@ -396,11 +423,11 @@ final class LayeredSettingsTest extends TestCase
         symlink($outside . '/steal.json', $this->projectRoot . '/' . LayeredSettings::SHARED_PATH);
         // The sibling stays genuine, so this asserts the refusal is per FILE and
         // does not take the whole directory down with it.
-        $this->writeProject(LayeredSettings::LOCAL_PATH, ['titleModel' => 'genuine']);
+        $this->writeProject(LayeredSettings::LOCAL_PATH, ['disabledTools' => 'genuine']);
 
         $layer = LayeredSettings::projectLayer($this->projectRoot, true);
 
-        self::assertSame(['titleModel' => 'genuine'], $layer);
+        self::assertSame(['disabledTools' => 'genuine'], $layer);
     }
 
     public function testAnEmptyProjectRootContributesNothing(): void

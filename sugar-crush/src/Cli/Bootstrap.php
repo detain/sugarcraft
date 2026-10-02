@@ -3538,7 +3538,7 @@ final class Bootstrap
      * Separate from the layered read because {@see writeUserConfig()} merges
      * onto what it reads and then writes the result back. Reading the LAYERED
      * view there would copy every effective value into the user's own file the
-     * first time anything persisted a theme: a `titleModel` a project chose
+     * first time anything persisted a theme: a `disabledSkills` a project chose
      * would become a permanent user-tier setting, outliving the checkout that
      * suggested it and surviving into every other repository. That is a
      * one-way promotion from the lowest-trust layer to the highest, performed
