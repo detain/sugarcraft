@@ -32,12 +32,66 @@ final class LspConnection implements LspConnectionInterface
      * `<pid>-<nonce>-<n>` in any forked process (audit B1): a counter copied
      * into every forked turn would hand two processes the same id on one
      * shared stdout, and a SIGKILLed call's late reply to the next fork.
-     * NOTE: this fixes id uniqueness only. Exchanges are not serialised across
-     * processes the way the MCP stdio transport's are; nothing connects an
-     * LspConnection today, and wiring one must add that before forked turns
-     * share it.
+     * Unique ids are half of fork safety; the other half is {@see $lock}.
      */
     private readonly RequestIdSequence $ids;
+
+    /**
+     * FORK SAFETY (audit B7) — the LSP twin of the stdio MCP transport's
+     * ({@see \SugarCraft\Mcp\StdioMcpServer}'s FORK SAFETY note). The server is
+     * started by one process and may be used from pcntl_fork()ed turns and
+     * sub-agents, each holding copies of these pipes. So:
+     *  - each whole exchange (request write + response read, or a notification
+     *    write) runs under a cross-process flock, {@see exchange()}: concurrent
+     *    callers SERIALISE instead of interleaving frames on stdin and reading
+     *    — and discarding — each other's replies on stdout;
+     *  - stdout bytes read past a response live in the lock's state file, not
+     *    in one process' memory, so the next exchange — in whichever process —
+     *    starts at a frame boundary;
+     *  - a holder killed mid-read leaves a READING phase: the next reader drops
+     *    what it cannot vouch for and resynchronises on the first complete
+     *    frame that parses ({@see resync()}); the dead call's reply is then
+     *    discarded by id. A holder killed mid-WRITE leaves its frame and the
+     *    count already sent, and the next holder sends exactly the bytes still
+     *    owed — `Content-Length` framing has no other repair; only a kill
+     *    inside the write syscall itself makes the count unknowable, and that
+     *    latches {@see $framingBroken} for every process;
+     *  - server notifications go to the reading process' callback AND into a
+     *    shared journal every other process replays at its next exchange
+     *    ({@see receiveNotification()}), so a publishDiagnostics read by one
+     *    turn is not lost to the rest; server REQUESTS (which carry the
+     *    server's own ids) are answered, never mistaken for our responses;
+     *  - only the owner (the pid that ran {@see connect()}) stops the server:
+     *    {@see disconnect()} / {@see __destruct()} in any other pid close that
+     *    process' copies and leave the shared server running.
+     * stderr is NOT locked: it is diagnostics only (see {@see drainStderr()}).
+     *
+     * Null until {@see connect()}; without one (a connection assembled through
+     * reflection by a test) exchanges run unlocked, as they always did.
+     */
+    private ?LspExchangeLock $lock = null;
+
+    /** The pid that ran {@see connect()}; 0 = never connected by this object. */
+    private int $ownerPid = 0;
+
+    /** The server's pid, for liveness probes from processes that are not its parent. */
+    private int $serverPid = 0;
+
+    /**
+     * Non-zero while this process is inside an exchange. A notification
+     * callback that sends a request runs INSIDE its caller's exchange, under a
+     * lock it must neither re-acquire nor release.
+     */
+    private int $exchangeDepth = 0;
+
+    /** The shared state as this exchange last stored it; null outside an exchange. */
+    private ?LspExchangeState $exchangeState = null;
+
+    /** True while stdout must be resynchronised after a holder died mid-read. */
+    private bool $resyncing = false;
+
+    /** Newest journal entry this process has dispatched (inherited across fork, which is right). */
+    private int $notesSeen = 0;
 
     /** Persistent read buffer so partial messages survive across reads. */
     private string $readBuffer = '';
@@ -173,7 +227,7 @@ final class LspConnection implements LspConnectionInterface
      *
      * `stream_select()` returns `false` for EINTR — a signal arrived — which is
      * a retry and not an error. OF THE TWO EXITS IN THAT BRANCH, THIS COUNT IS
-     * THE ONE THAT FIRES; the {@see childIsRunning()} check beside it is DORMANT
+     * THE ONE THAT FIRES; the {@see serverIsRunning()} check beside it is DORMANT
      * BY CONSTRUCTION, for the reason measured against
      * {@see \SugarCraft\Crush\MCP\StdioMcpServer}'s copy of the same loop: a
      * write-set select can only be INTERRUPTED while it BLOCKS, and it only
@@ -250,6 +304,16 @@ final class LspConnection implements LspConnectionInterface
             throw new \RuntimeException("Failed to start LSP server: {$command}");
         }
 
+        // The lock exists before the child does: a server nobody can exchange
+        // with safely is not started at all. A previous connection's lock is
+        // this object's to remove only in the process that created it.
+        if ($this->lock !== null && $this->isOwnerProcess()) {
+            $this->lock->destroy();
+        }
+        $this->lock = LspExchangeLock::create($command);
+        $this->ownerPid = (int) getmypid();
+        $this->notesSeen = 0;
+
         // E672/E674: choke-point spec + env; a language server is configured
         // third-party code and its own env keys ride last.
         $this->process = @proc_open(
@@ -265,8 +329,14 @@ final class LspConnection implements LspConnectionInterface
         );
 
         if (!is_resource($this->process)) {
+            $this->process = null;
+            $this->lock->destroy();
+            $this->lock = null;
+
             throw new \RuntimeException("Failed to start LSP server: {$command}");
         }
+
+        $this->serverPid = (int) proc_get_status($this->process)['pid'];
 
         // NON-BLOCKING STDOUT, which is what makes $timeout mean anything.
         // {@see readResponse()} bounds itself with a `microtime()` deadline
@@ -358,6 +428,16 @@ final class LspConnection implements LspConnectionInterface
      */
     public function disconnect(): void
     {
+        // A forked process must not speak `shutdown`/`exit`: the server is the
+        // owner's, shared by every sibling. Detach this process' copies only.
+        if (!$this->isOwnerProcess()) {
+            $this->stopProcess();
+            $this->initialized = false;
+            $this->capabilities = null;
+
+            return;
+        }
+
         if (!$this->initialized) {
             $this->stopProcess();
             return;
@@ -404,11 +484,21 @@ final class LspConnection implements LspConnectionInterface
         // a fresh full read budget on top.
         $deadline = microtime(true) + $this->requestTimeout;
 
-        if (!$this->writeMessage($payload, $deadline)) {
-            return LspResponse::ioError('Failed to write message');
-        }
+        return $this->exchange(
+            $deadline,
+            function () use ($payload, $id, $deadline): LspResponse {
+                if (!$this->writeMessage($payload, $deadline)) {
+                    return LspResponse::ioError('Failed to write message');
+                }
 
-        return $this->readResponse($id, $deadline);
+                $this->beginReading();
+
+                return $this->readResponse($id, $deadline);
+            },
+            static fn (): LspResponse => microtime(true) >= $deadline
+                ? LspResponse::timeout()
+                : LspResponse::ioError('LSP server is not available for an exchange'),
+        );
     }
 
     /**
@@ -435,7 +525,13 @@ final class LspConnection implements LspConnectionInterface
         // likeliest to meet a server that has stopped reading. `requestTimeout`
         // is the only clock this class owns; a notification gets its own copy
         // because there is no surrounding exchange to share one with.
-        $this->writeMessage($payload, microtime(true) + $this->requestTimeout);
+        $deadline = microtime(true) + $this->requestTimeout;
+
+        $this->exchange(
+            $deadline,
+            fn (): bool => $this->writeMessage($payload, $deadline),
+            static fn (): bool => false,
+        );
     }
 
     /**
@@ -517,6 +613,15 @@ final class LspConnection implements LspConnectionInterface
         // agreed frame boundary, so {@see writeMessage()} refuses every later
         // send. A predicate that answers "usable" for a session that can never
         // send again is the one thing worse than no predicate.
+        //
+        // The latch is SHARED (audit B7): another process sharing this server
+        // may have broken the framing since this one last exchanged. The state
+        // file is replaced atomically, so reading it unlocked is safe.
+        if (!$this->framingBroken && $this->lock !== null && $this->exchangeDepth === 0
+            && $this->lock->load()->broken) {
+            $this->framingBroken = true;
+        }
+
         if ($this->framingBroken) {
             return false;
         }
@@ -802,13 +907,38 @@ final class LspConnection implements LspConnectionInterface
         }
 
         $json = json_encode($payload, JSON_THROW_ON_ERROR);
-        $message = 'Content-Length: ' . strlen($json) . "\r\n\r\n" . $json;
+
+        return $this->writeFrame('Content-Length: ' . strlen($json) . "\r\n\r\n" . $json, $deadline);
+    }
+
+    /**
+     * The write loop of {@see writeMessage()}, over raw frame bytes — also used
+     * to finish a frame a dead holder left half-written (audit B7).
+     *
+     * Inside an exchange every pass is RECORDED in the shared state: the frame
+     * once, then the count sent so far, with an in-flight mark around each
+     * `fwrite()`. That record is what lets the next holder repair a stream this
+     * process is killed in the middle of (see {@see $lock}).
+     *
+     * @param bool $owed the frame is a dead holder's remainder: when nothing of
+     *        it goes out before the deadline it stays owed for the next holder,
+     *        instead of being forgotten like a message of our own that the
+     *        server never saw
+     */
+    private function writeFrame(string $message, ?float $deadline, bool $owed = false): bool
+    {
+        if (!is_resource($this->process) || $this->pipes === null || $this->framingBroken
+            || !is_resource($this->pipes[0])) {
+            return false;
+        }
+
         $total = strlen($message);
         $consecutiveSelectFailures = 0;
+        $this->recordFrameStart($message);
 
         while ($message !== '') {
             if ($deadline !== null && microtime(true) >= $deadline) {
-                return $this->abandonWrite($total, strlen($message));
+                return $this->abandonWrite($total, strlen($message), $owed);
             }
 
             // BEFORE the select, every pass, and this is the line that closes
@@ -827,9 +957,9 @@ final class LspConnection implements LspConnectionInterface
             if ($ready === false) {
                 $consecutiveSelectFailures++;
 
-                if (!self::childIsRunning($this->process)
+                if (!$this->serverIsRunning()
                     || $consecutiveSelectFailures >= self::MAX_CONSECUTIVE_SELECT_FAILURES) {
-                    return $this->abandonWrite($total, strlen($message));
+                    return $this->abandonWrite($total, strlen($message), $owed);
                 }
 
                 usleep(1000);
@@ -846,10 +976,14 @@ final class LspConnection implements LspConnectionInterface
             // A dead server closes the read end; writing then raises a "broken
             // pipe" notice. Suppressed — the failed write is the signal, not the
             // diagnostic.
+            // The in-flight mark brackets the syscall: a process killed between
+            // the two records cannot say how much of this chunk the server got.
+            $this->recordFrameProgress($total - strlen($message), true);
             $written = @fwrite($this->pipes[0], $message);
+            $this->recordFrameProgress($total - strlen($message) + (is_int($written) ? $written : 0), false);
 
             if ($written === false) {
-                return $this->abandonWrite($total, strlen($message));
+                return $this->abandonWrite($total, strlen($message), $owed);
             }
 
             if ($written === 0) {
@@ -864,6 +998,7 @@ final class LspConnection implements LspConnectionInterface
         }
 
         fflush($this->pipes[0]);
+        $this->recordFrameDone();
 
         return true;
     }
@@ -901,10 +1036,17 @@ final class LspConnection implements LspConnectionInterface
      * @param int $total     bytes the framed message started at
      * @param int $remaining bytes still unwritten when the loop gave up
      */
-    private function abandonWrite(int $total, int $remaining): bool
+    private function abandonWrite(int $total, int $remaining, bool $owed = false): bool
     {
         if ($remaining !== $total) {
             $this->framingBroken = true;
+        }
+
+        // A partial write is carried by the latch; an untouched message of our
+        // own is simply lost. Only a dead holder's untouched remainder is
+        // still owed to the server, and its record stays for the next holder.
+        if ($remaining !== $total || !$owed) {
+            $this->recordFrameDone();
         }
 
         return false;
@@ -968,6 +1110,27 @@ final class LspConnection implements LspConnectionInterface
      */
     private function stopProcess(): void
     {
+        // A forked process holds COPIES of the pipes; the server belongs to the
+        // owner, which may still be serving it while siblings are mid-exchange
+        // (audit B7). Close our copies and forget — no drain (fd 2 is the
+        // owner's to read), no signal, no reap, no lock-file unlink.
+        if ($this->process !== null && !$this->isOwnerProcess()) {
+            foreach ($this->pipes ?? [] as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+
+            $this->lock?->close();
+            $this->lock = null;
+            $this->process = null;
+            $this->pipes = null;
+            $this->drainBuffer();
+            $this->pendingContentLength = null;
+
+            return;
+        }
+
         // ONE LAST DRAIN, BEFORE THE SIGNAL. A server blocked in write(2) on a
         // full stderr pipe cannot run its own SIGTERM handler to shut down
         // cleanly, so it would take the ladder's escalation to signal 9 every
@@ -998,11 +1161,43 @@ final class LspConnection implements LspConnectionInterface
         // E673: read the group WHILE alive — servers that fork helpers die
         // whole instead of orphaning them past disconnect().
         ProcessReaper::terminateAndClose($this->process, ProcessContainment::groupId($this->process));
+        $this->lock?->destroy();
+        $this->lock = null;
 
         $this->process = null;
         $this->pipes = null;
         $this->drainBuffer();
         $this->pendingContentLength = null;
+    }
+
+    /** Is this the process that ran {@see connect()} (or has nothing connected)? */
+    private function isOwnerProcess(): bool
+    {
+        return $this->ownerPid === 0 || $this->ownerPid === (int) getmypid();
+    }
+
+    /**
+     * Liveness that works from any process. The owner asks proc_get_status();
+     * a forked child cannot — waitpid() on a pid that is not its child fails
+     * with ECHILD and PHP reports "not running" — so it probes the pid captured
+     * at connect with signal 0. Without ext-posix a child assumes the server is
+     * up and lets the pipes report a dead one (write failure / no reply).
+     */
+    private function serverIsRunning(): bool
+    {
+        if (!is_resource($this->process)) {
+            return false;
+        }
+
+        if ($this->isOwnerProcess()) {
+            return self::childIsRunning($this->process);
+        }
+
+        if ($this->serverPid <= 0 || !function_exists('posix_kill')) {
+            return true;
+        }
+
+        return posix_kill($this->serverPid, 0);
     }
 
     /**
@@ -1059,13 +1254,26 @@ final class LspConnection implements LspConnectionInterface
 
             $msgId = isset($message['id']) ? (string) $message['id'] : null;
 
-            // Server-initiated notification.
-            if ($msgId === null && isset($message['method'])) {
-                $this->handleNotification($message['method'], $message['params'] ?? null);
+            // Server-initiated traffic carries a `method`; only a message
+            // WITHOUT one is a response. A server REQUEST's id is in the
+            // SERVER's namespace — commonly 0, 1, 2…, exactly the owner's own
+            // ids — so matching it against ours would hand, say,
+            // `workspace/configuration` back as the answer to our request.
+            if (isset($message['method']) && is_string($message['method'])) {
+                $params = isset($message['params']) && is_array($message['params']) ? $message['params'] : null;
+
+                if ($msgId === null) {
+                    $this->receiveNotification($message['method'], $params);
+                } else {
+                    $this->refuseServerRequest($message['id'], $message['method'], $deadline);
+                }
+
                 continue;
             }
 
-            // Not our response — skip it.
+            // Not our response — skip it. Under fork-sharing this is also where
+            // the late reply of a call whose process was killed, or which gave
+            // up at its deadline, is discarded (its id is process-unique).
             if ($msgId === null || $msgId !== $id) {
                 continue;
             }
@@ -1090,6 +1298,13 @@ final class LspConnection implements LspConnectionInterface
     private function readMessage(): ?array
     {
         if ($this->pipes === null) {
+            return null;
+        }
+
+        // A holder died mid-read: until a complete frame proves where the
+        // boundaries are, the strict header parser below would throw on the
+        // first fragment. See {@see resync()}.
+        if ($this->resyncing && $this->pendingContentLength === null && !$this->resync()) {
             return null;
         }
 
@@ -1506,6 +1721,334 @@ final class LspConnection implements LspConnectionInterface
             $phase,
             self::MAX_FRAME_BYTES,
         ));
+    }
+
+    // -------------------------------------------------------------------------
+    // Cross-process exchanges (audit B7) — see the FORK SAFETY note on $lock
+    // -------------------------------------------------------------------------
+
+    /**
+     * Run one exchange under the cross-process lock.
+     *
+     * The shared state is loaded once the lock is held ({@see beginExchange()})
+     * and written back when the exchange ends ({@see endExchange()}) — on every
+     * exit a live process takes, a throw included. A process that is KILLED
+     * takes none of them, and the phase and frame record it last stored are
+     * exactly what the next holder recovers from.
+     *
+     * @template T
+     * @param \Closure(): T $body
+     * @param \Closure(): T $refused the answer when the lock cannot be had (the
+     *        deadline passed, the server died, the owner closed the connection)
+     *        or a dead holder's frame could not be finished before the deadline
+     * @return T
+     */
+    private function exchange(?float $deadline, \Closure $body, \Closure $refused): mixed
+    {
+        $lock = $this->lock;
+
+        if ($lock === null || $this->exchangeDepth > 0) {
+            $this->exchangeDepth++;
+
+            try {
+                return $body();
+            } finally {
+                $this->exchangeDepth--;
+            }
+        }
+
+        if (!$lock->acquire($deadline, fn (): bool => $this->serverIsRunning())) {
+            return $refused();
+        }
+
+        $this->exchangeDepth = 1;
+        $desynced = false;
+
+        try {
+            if (!$this->beginExchange($lock, $deadline)) {
+                return $refused();
+            }
+
+            return $body();
+        } catch (LspProtocolException $protocol) {
+            // The frame-cap and header guards drop the buffer before throwing:
+            // stdout is no longer at a known boundary.
+            $desynced = true;
+
+            throw $protocol;
+        } finally {
+            $this->endExchange($desynced);
+            $this->exchangeDepth = 0;
+            $lock->release();
+        }
+    }
+
+    /**
+     * Pick the stream up where the previous holder — maybe dead, maybe in
+     * another process — left it. False when a frame it owed could not be
+     * finished before $deadline (it stays owed; this exchange sends nothing).
+     */
+    private function beginExchange(LspExchangeLock $lock, ?float $deadline): bool
+    {
+        $state = $lock->load();
+        $this->exchangeState = $state;
+        $this->framingBroken = $this->framingBroken || $state->broken;
+
+        // STDOUT. Clean or writing: the stored buffer plus the pipe is the
+        // stream, at a frame boundary (a buffer stored mid-body carries its
+        // header again — see endExchange()). Reading: the holder died with the
+        // buffer in its own memory, so the pipe may start mid-frame.
+        $this->pendingContentLength = null;
+        $this->resyncing = $state->phase === LspExchangeState::PHASE_READING;
+        $this->readBuffer = $this->resyncing ? '' : $state->buffer;
+
+        // The buffer stays in the state while this exchange only writes: if
+        // this process dies before it reads, nothing on stdout was disturbed.
+        $this->storeExchangeState($state->withPhase(
+            $this->resyncing ? LspExchangeState::PHASE_READING : LspExchangeState::PHASE_WRITING
+        ));
+
+        // STDIN. A record left in flight cannot say how much of its chunk the
+        // server received; any other record says exactly what is still owed.
+        if (!$this->framingBroken && $state->frameInflight) {
+            $this->framingBroken = true;
+        } elseif (!$this->framingBroken && $state->owesFrame()) {
+            $frame = $lock->loadFrame();
+
+            if (strlen($frame) !== $state->frameLength) {
+                $this->framingBroken = true;
+            } elseif (!$this->writeFrame(substr($frame, $state->frameWritten), $deadline, owed: true)
+                && !$this->framingBroken) {
+                return false;
+            }
+        }
+
+        if ($this->framingBroken) {
+            $this->storeExchangeState($this->currentExchangeState()->withBroken(true)->withoutFrame());
+        }
+
+        $this->replayNotes($state->noteSeq);
+
+        return true;
+    }
+
+    /** About to consume stdout: from here on, the buffer lives in this process only. */
+    private function beginReading(): void
+    {
+        if ($this->exchangeState !== null && !$this->resyncing) {
+            $this->storeExchangeState($this->exchangeState
+                ->withPhase(LspExchangeState::PHASE_READING)
+                ->withBuffer(''));
+        }
+    }
+
+    /**
+     * Hand the stream to the next holder. Unconsumed stdout goes back into the
+     * shared state — with a `Content-Length` header rebuilt in front of a body
+     * whose header this exchange already consumed — unless this exchange can
+     * no longer vouch for where the frames are, in which case it leaves the
+     * READING phase for the next reader to resynchronise from.
+     */
+    private function endExchange(bool $desynced): void
+    {
+        if ($this->exchangeState !== null) {
+            $state = $this->exchangeState->withBroken($this->exchangeState->broken || $this->framingBroken);
+
+            if ($desynced || $this->resyncing) {
+                $state = $state->withPhase(LspExchangeState::PHASE_READING)->withBuffer('');
+            } else {
+                $unread = $this->pendingContentLength === null
+                    ? $this->readBuffer
+                    : 'Content-Length: ' . $this->pendingContentLength . "\r\n\r\n" . $this->readBuffer;
+                $state = $state->withPhase(LspExchangeState::PHASE_CLEAN)->withBuffer($unread);
+            }
+
+            if ($state->broken) {
+                $state = $state->withoutFrame();
+            }
+
+            $this->storeExchangeState($state);
+        }
+
+        // Private copies must not outlive the lock: the next exchange may run
+        // in another process, and these would then be stale.
+        $this->exchangeState = null;
+        $this->readBuffer = '';
+        $this->pendingContentLength = null;
+        $this->resyncing = false;
+    }
+
+    private function currentExchangeState(): LspExchangeState
+    {
+        return $this->exchangeState ?? LspExchangeState::new();
+    }
+
+    private function storeExchangeState(LspExchangeState $state): void
+    {
+        if ($this->lock === null || $this->exchangeState === null) {
+            return;
+        }
+
+        $this->exchangeState = $state;
+        $this->lock->store($state);
+    }
+
+    /** Record the frame about to be written, before its first byte goes out. */
+    private function recordFrameStart(string $frame): void
+    {
+        if ($this->lock === null || $this->exchangeState === null) {
+            return;
+        }
+
+        $this->lock->storeFrame($frame);
+        $this->storeExchangeState($this->exchangeState->withFrame(strlen($frame), 0, false));
+    }
+
+    private function recordFrameProgress(int $written, bool $inflight): void
+    {
+        if ($this->exchangeState === null || $this->exchangeState->frameLength === 0) {
+            return;
+        }
+
+        $this->storeExchangeState($this->exchangeState->withFrame($this->exchangeState->frameLength, $written, $inflight));
+    }
+
+    private function recordFrameDone(): void
+    {
+        if ($this->exchangeState === null || $this->exchangeState->frameLength === 0) {
+            return;
+        }
+
+        $this->storeExchangeState($this->exchangeState->withoutFrame());
+    }
+
+    /**
+     * A server notification read by THIS process: journal it for every other
+     * process sharing the server, then dispatch it here. Outside an exchange
+     * (no lock) it is only dispatched, as it always was.
+     *
+     * @param array<mixed>|null $params
+     */
+    private function receiveNotification(string $method, ?array $params): void
+    {
+        if ($this->lock !== null && $this->exchangeState !== null) {
+            $seq = $this->lock->appendNote($method, $params);
+            $this->notesSeen = $seq;
+            $this->storeExchangeState($this->exchangeState->withNoteSeq($seq));
+        }
+
+        $this->handleNotification($method, $params);
+    }
+
+    /** Dispatch journal entries another process read since this one last looked. */
+    private function replayNotes(int $newest): void
+    {
+        if ($this->lock === null || $newest <= $this->notesSeen) {
+            return;
+        }
+
+        foreach ($this->lock->notesAfter($this->notesSeen) as $note) {
+            $this->notesSeen = $note['seq'];
+            $this->handleNotification($note['method'], $note['params']);
+        }
+
+        // Entries the journal no longer holds are gone for this process; do not
+        // look for them again on every exchange.
+        $this->notesSeen = max($this->notesSeen, $newest);
+    }
+
+    /**
+     * Answer a server-to-client REQUEST with "method not found". This client
+     * implements none, and a request left unanswered can stall a server that
+     * waits on it (`workspace/configuration`, `client/registerCapability`).
+     * Its id is echoed exactly as the server sent it.
+     */
+    private function refuseServerRequest(mixed $id, string $method, ?float $deadline): void
+    {
+        if (!is_int($id) && !is_string($id)) {
+            return;
+        }
+
+        // A JSON-RPC error object, held in a variable: an inline `'error' => […]`
+        // literal is the shape ReadmeJsonErrorContractDriftTest reads as one of
+        // sugar-crush's own `--format json` error documents, which this is not.
+        $methodNotFound = ['code' => -32601, 'message' => "Method not supported by this client: {$method}"];
+
+        $this->writeMessage(['jsonrpc' => '2.0', 'id' => $id, 'error' => $methodNotFound], $deadline);
+    }
+
+    /**
+     * Find a frame boundary after a holder died mid-read. Content-Length
+     * framing has no sync marker, so a boundary is PROVEN rather than assumed:
+     * the first `Content-Length:` header whose declared body is complete AND
+     * parses as JSON-RPC. Bytes before it are the dead reader's half-consumed
+     * frame and are dropped; the frame found is usually the dead call's own
+     * reply, which the id match then discards.
+     *
+     * @return bool true once {@see $readBuffer} starts at a proven frame;
+     *         false when more bytes are needed (the caller polls again)
+     */
+    private function resync(): bool
+    {
+        while (true) {
+            $first = strpos($this->readBuffer, 'Content-Length:');
+
+            if ($first === false) {
+                // Keep only what could be the start of a header split across reads.
+                $this->readBuffer = substr($this->readBuffer, -(strlen('Content-Length:') - 1));
+            } else {
+                $this->readBuffer = substr($this->readBuffer, $first);
+
+                $start = $this->provenFrameStart();
+                if ($start !== null) {
+                    $this->readBuffer = substr($this->readBuffer, $start);
+                    $this->resyncing = false;
+
+                    return true;
+                }
+            }
+
+            $this->refuseAnOversizedFrame('a stream being resynchronised after a dead reader');
+
+            if (!$this->refill()) {
+                return false;
+            }
+        }
+    }
+
+    /**
+     * Offset of the first candidate header in {@see $readBuffer} whose body is
+     * complete and parses. A candidate whose body has not fully arrived does
+     * not stop the search: it may be text inside a dead frame that merely
+     * LOOKS like a header, naming a length that will never come.
+     */
+    private function provenFrameStart(): ?int
+    {
+        $offset = 0;
+
+        while (($at = strpos($this->readBuffer, 'Content-Length:', $offset)) !== false) {
+            $offset = $at + 1;
+
+            $separator = strpos($this->readBuffer, "\r\n\r\n", $at);
+            if ($separator === false) {
+                return null;
+            }
+
+            if (preg_match('/\AContent-Length:[ \t]*(\d{1,10})[ \t]*(?:\r\n|\z)/', substr($this->readBuffer, $at, $separator - $at), $m) !== 1) {
+                continue;
+            }
+
+            $length = (int) $m[1];
+            if ($length < 1 || $length > self::MAX_FRAME_BYTES || strlen($this->readBuffer) < $separator + 4 + $length) {
+                continue;
+            }
+
+            if ($this->parseMessage(substr($this->readBuffer, $separator + 4, $length)) !== null) {
+                return $at;
+            }
+        }
+
+        return null;
     }
 
     /** @param array<string, mixed>|null $params */

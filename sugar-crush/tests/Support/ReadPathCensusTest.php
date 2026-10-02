@@ -319,6 +319,20 @@ final class ReadPathCensusTest extends TestCase
         'LSP/LspClient.php|file' => [
             'CALLER_SUPPLIED — the URI came from the editor request this client is answering',
         ],
+        // Audit B7: the exchange lock's sidecar files. Every path is `<lock>.<suffix>`
+        // where <lock> is the tempnam() the connecting process created; forks read
+        // the same files because they inherited that path, not because content named it.
+        'LSP/LspExchangeLock.php|file_get_contents' => [
+            'SELF_LOCATED — load(): the `.state` file beside the tempnam() lock create() made',
+            'SELF_LOCATED — loadFrame(): the `.frame` file beside the same lock',
+            'SELF_LOCATED — journal(): the `.notes` file beside the same lock',
+        ],
+        'LSP/LspExchangeLock.php|fopen' => [
+            'SELF_LOCATED — handle(): the tempnam() lock file itself, opened for flock()',
+        ],
+        'LSP/LspExchangeLock.php|glob' => [
+            'SELF_LOCATED — destroy(): the owner sweeping its own `<lock>.*` sidecars and temps',
+        ],
         // WAS `CALLER_SUPPLIED — nothing in src/ builds one yet, so the first caller
         // owns the boundary`, and the first caller has now arrived:
         // Cli\Bootstrap::mcpClient() resolves `$root/.mcp.json` and refuses it
