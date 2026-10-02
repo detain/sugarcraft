@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\LSP;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\ProcessReaper;
+use SugarCraft\Mcp\RequestIdSequence;
 
 /**
  * LSP client connection over stdio using JSON-RPC 2.0.
@@ -26,8 +27,17 @@ final class LspConnection implements LspConnectionInterface
     /** @var array{0: resource, 1: resource, 2: resource}|null */
     private $pipes = null;
 
-    /** Monotonic JSON-RPC request id — avoids collisions that time() causes. */
-    private int $nextId = 0;
+    /**
+     * JSON-RPC request ids — monotonic in the process that connected, and
+     * `<pid>-<nonce>-<n>` in any forked process (audit B1): a counter copied
+     * into every forked turn would hand two processes the same id on one
+     * shared stdout, and a SIGKILLed call's late reply to the next fork.
+     * NOTE: this fixes id uniqueness only. Exchanges are not serialised across
+     * processes the way the MCP stdio transport's are; nothing connects an
+     * LspConnection today, and wiring one must add that before forked turns
+     * share it.
+     */
+    private readonly RequestIdSequence $ids;
 
     /** Persistent read buffer so partial messages survive across reads. */
     private string $readBuffer = '';
@@ -208,7 +218,9 @@ final class LspConnection implements LspConnectionInterface
     public function __construct(
         private readonly string $serverPath,
         private readonly array $serverArgs = [],
-    ) {}
+    ) {
+        $this->ids = new RequestIdSequence();
+    }
 
     /**
      * Start the LSP server process with the given command and environment.
@@ -221,6 +233,7 @@ final class LspConnection implements LspConnectionInterface
     public function connect(string $command, array $env, ?string $cwd = null, float $timeout = 30.0): void
     {
         $this->requestTimeout = $timeout;
+        $this->ids->claim();
 
         // E672: once the containment wrapper fronts the spawn, a bogus
         // binary NO LONGER fails inside posix_spawn() — `setsid` itself
@@ -378,7 +391,7 @@ final class LspConnection implements LspConnectionInterface
             return LspResponse::ioError('Not connected to LSP server');
         }
 
-        $id = (string) $this->nextId++;
+        $id = (string) $this->ids->next();
         $payload = ['jsonrpc' => '2.0', 'id' => $id, 'method' => $method];
         if ($params !== null) {
             $payload['params'] = $params;
