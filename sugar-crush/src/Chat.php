@@ -774,8 +774,11 @@ final class Chat implements Model
          * into the small-model title request through a shared request
          * builder and silently breaking titling; keeping the title call on
          * its OWN Backend instance means it can never inherit the main
-         * conversation's model or params. Null falls back to the main
-         * backend as a last resort (same order opencode uses).
+         * conversation's model or params. Null means the session is never
+         * auto-titled - deliberately NOT a fallback to the main backend,
+         * which may be agentic or tool-armed (audit 15b-12; see
+         * {@see scheduleTitleGeneration()}). The prompt suggestion rides
+         * this same backend and is likewise skipped when it is null.
          */
         private readonly ?Backend $titleBackend = null,
         /**
@@ -9185,6 +9188,19 @@ final class Chat implements Model
      * `/rename` or a prior auto-title both latch `currentSessionName`).
      * Mirrors opencode's `ensureTitle()` gating.
      *
+     * Only ever the TOOL-LESS {@see $titleBackend}, never a fallback to the
+     * main conversation backend (audit 15b-12). The main backend may be
+     * agentic or tool-armed: on the `SUGARCRUSH_BACKEND_CMD[_STREAM]` tier it
+     * is an external command - often an agentic CLI - that would receive the
+     * first prompt a SECOND time and could act on it twice (side effects,
+     * double billing), and a {@see Backend\EngineBackend} would run a full
+     * tool-enabled turn in a fork under the default bypass mode, all to
+     * produce four to eight words. `Bootstrap::titleBackend()` is null on
+     * exactly those runs (no selected provider, a provider default with no
+     * model, a construction failure), so such a session is simply never
+     * auto-titled; `/rename` still names it. No title backend, no title -
+     * the same rule {@see schedulePromptSuggestion()} follows.
+     *
      * The request is built here and nowhere else, on its own Backend, with
      * no `$onToken`/`$onEvent`/cancellation threaded through: opencode's
      * #20269 was a main-turn parameter leaking into this cheap side-call
@@ -9231,7 +9247,12 @@ final class Chat implements Model
             return null;
         }
 
-        $backend = $next->titleBackend ?? $next->backend;
+        // No title backend, no title (audit 15b-12) - the same gate
+        // {@see schedulePromptSuggestion()} applies, for the same reason.
+        $backend = $next->titleBackend;
+        if ($backend === null) {
+            return null;
+        }
         $titlePrompt = [Message::system(self::TITLE_PROMPT), ...$visible];
 
         return Cmd::promise(static function () use ($backend, $titlePrompt, $sessionId, $store): PromiseInterface {
