@@ -112,6 +112,14 @@ cannot judge with certainty to `Ask`, not to `Allow`. Concretely:
   directory**, resolved lexically. `../` escapes now prompt (`rm ../../../etc/passwd`
   used to auto-run — being non-absolute was the only test), and so does the root
   itself: `rm -rf .` is not "something inside the directory".
+- A path with a **`.git`, `.sugar-crush` or `.mcp.json` segment** prompts even
+  though it is contained (audit F-J4): `cp ./x ./.git/hooks/pre-commit` plants
+  code that runs on your next `git commit`, `rm ./.git/index` is not an edit,
+  `.sugar-crush/` holds hooks, presets and settings, and `.mcp.json` names
+  commands the next launch spawns. The segment is matched the way bash matches
+  a glob to a dotfile, so `./.g*/hooks/x` prompts while `rm ./*` still auto-runs;
+  `.gitignore` and `.github/` are different names and are unaffected.
+  `.claude/` and `.opencode/` are not on the list.
 - Flags are a **whitelist** (`-p -f -i -r -R -v -n -d` and their long forms, plus
   `--`). An unrecognised flag prompts. "Anything starting with `-` is a flag,
   skip it" silently skipped flags that take a path, so `mv -t ../../etc ./x`

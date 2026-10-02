@@ -91,8 +91,8 @@ final readonly class ProtectFilesHook implements HookInterface
      *
      * READING A POLICY FILE GRANTS NO CAPABILITY. The other defaults are
      * secrets, where refusing `Read` IS the point: `.env` read out into the
-     * transcript is the credential leaked. These two decide what the session
-     * may do, and a decision is changed by WRITING it. Denying the read bought
+     * transcript is the credential leaked. The `.sugar-crush` entries decide
+     * what the session may do, and a decision is changed by WRITING it. Denying the read bought
      * no containment and cost the ordinary inspection — "why is my reviewer
      * preset behaving oddly" is answered by opening
      * `.sugar-crush/agents/reviewer.md`, and this repo's own tracked
@@ -111,10 +111,50 @@ final readonly class ProtectFilesHook implements HookInterface
      * spelling nobody has shown to be a separate file, and enumerating every
      * editor's backup suffix here would be the whack-a-mole version of the same
      * guess.
+     *
+     * `.git/hooks/` AND `.git/info/` (audit F-J4) ARE POLICY OF A DIFFERENT
+     * KIND: code and rules that run OUTSIDE this session. A file written to
+     * `.git/hooks/pre-commit` executes on the user's next `git commit` — in
+     * their own shell, under no sugar-crush mode at all — so one injected
+     * `cp ./payload.sh ./.git/hooks/pre-commit` was persistence that outlived
+     * the session that planted it, and before this entry it was allowed in
+     * `bypass-permissions` (the shipped default) and auto-run under
+     * `accept-edits`. `.git/info/` rides along because `info/attributes` can
+     * route a path through a `filter`/`diff` driver and `info/exclude` decides
+     * what `git status` shows the user. Write-only, like the rest of this
+     * list: reading a hook script grants nothing, so `Read`/`Grep` of one stays
+     * allowed. `Bash` is judged against every pattern (see {@see execute()}),
+     * which means `ls .git/hooks` and `cat .git/hooks/pre-commit` are refused
+     * too — accepted as the fail-closed cost, since a shell string cannot say
+     * which way it is about to touch the file, and `Read` answers the same
+     * question.
+     *
+     * The shape: `(?<![\w-])` so `./.git/hooks`, `".git/hooks` and
+     * `--x=.git/hooks` all count while a bare `repo.git/hooks` does not (a
+     * bare repository's hooks run on a push TO it, not on this user's next
+     * commit); the `/` straight after `.git` keeps `.github/` out; `/+(?:\./+)*`
+     * so `.git//hooks` and `.git/./hooks` are the same directory they are to
+     * the kernel; `(?![\w.-])` so `hooks-sample/` is not `hooks/`; and `i`
+     * because on a case-insensitive filesystem (macOS, Windows) `.GIT/HOOKS`
+     * IS the hooks directory — on Linux the widening costs a refusal of a
+     * name nobody uses.
+     *
+     * KNOWN LIMIT — `git config` writes `.git/config` WITHOUT NAMING IT.
+     * `git config core.hooksPath ./evil` redirects every hook to a directory
+     * no pattern here covers, and `core.fsmonitor`, `core.pager`,
+     * `diff.external` and filter drivers name a program the same way. A
+     * key-by-key pattern list would be the whack-a-mole this docblock already
+     * refuses for backup suffixes, and the honest boundary is the permission
+     * MODE: `git config …` is not a scoped write, so `accept-edits` and
+     * `default` prompt for it; `bypass-permissions` does not, by definition.
+     * Nor is `.git/config` itself in this list: it sits in
+     * {@see self::DEFAULT_PROTECTED_PATTERNS} proper and is refused read-side
+     * too.
      */
     public const WRITE_ONLY_PATTERNS = [
         '#(^|/)\.sugar-crush/(hooks\.yaml|config\.json)(?![\w.-])#',
         '#(^|/)\.sugar-crush/agents/#',
+        '#(?<![\w-])\.git/+(?:\./+)*(?:hooks|info)(?![\w.-])#i',
     ];
 
     /**

@@ -708,8 +708,18 @@ include_ignored=true` all read the secret under the default
 | `mcp__*` | every string leaf of the decoded arguments, at any depth (not the raw JSON, which spells `/` as `\/`) — so an MCP call whose free text merely mentions `.env` is refused too |
 
 `Read`, `Grep`, `Glob` and `Lsp` cannot write, so they skip the write-only
-policy patterns (`.sugar-crush/hooks.yaml` and friends); `Bash` and MCP tools
-get the full list.
+policy patterns (`.sugar-crush/hooks.yaml` and friends, plus `.git/hooks/` and
+`.git/info/`); `Bash` and MCP tools get the full list — so `cat
+.git/hooks/pre-commit` in `Bash` is refused where `Read` of the same file is
+not.
+
+`.git/hooks/` and `.git/info/` are on that list since audit F-J4: a file
+written to `.git/hooks/pre-commit` runs on the user's next `git commit`,
+outside any sugar-crush session, and `cp ./payload.sh ./.git/hooks/pre-commit`
+was allowed under `bypass-permissions` and auto-run under `accept-edits`. The
+known limit is `git config`: `git config core.hooksPath ./evil` (or
+`core.fsmonitor`, a filter driver, …) rewrites `.git/config` without naming it,
+so no path pattern sees it — the permission mode is the boundary there.
 
 The secret-file family is a deliberate list: `.env`, `.env.<anything>`
 (`.env.local`, `.env.production`, `.env.bak`) and direnv's `.envrc` are

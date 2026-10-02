@@ -54,10 +54,12 @@ use SugarCraft\Crush\ToolCall;
  * reasoning for that lives in {@see PermissionGate::isContainedRelativePath()}.
  * It is correct ONLY because of how the approved command is eventually spawned.
  * MEASURED, writing STAR for the asterisk so this docblock does not close on
- * itself: the command `cp ./payload ./.STAR/victim` is Allowed here, and under
- * `/bin/sh` (dash) the fragment `./.STAR/` expands to `./../` — a real write,
+ * itself: the command `cp ./payload ./.?/victim` is Allowed here, and under
+ * `/bin/sh` (dash) the fragment `./.?/` expands to `./../` — a real write,
  * and a real delete, outside the working directory. Under bash it does not,
- * because bash excludes `.` and `..` from glob results.
+ * because bash excludes `.` and `..` from glob results. (The first measured
+ * spelling was `./.STAR/`; that one now prompts because `.STAR` can name
+ * `.git` — audit F-J4 — so it no longer demonstrates the Allow.)
  *
  * {@see \SugarCraft\Crush\Tools\BuiltIn\Bash} wraps every command in `bash -c`,
  * which is what makes the Allow safe. That file is not this one's dependency
@@ -296,6 +298,79 @@ final class PermissionGateScopedWriteTest extends TestCase
     }
 
     /**
+     * Contained by spelling, but not an edit (audit F-J4). Every row auto-
+     * Allowed before {@see PermissionGate::UNSCOPED_SEGMENTS}: the containment
+     * check is lexical, and `./.git/hooks/pre-commit` is strictly below the
+     * working directory. The first row is the finding — a hook that runs on
+     * the user's next `git commit`, outside any sugar-crush mode.
+     *
+     * @return array<string, array{string}>
+     */
+    public static function repositoryAndPolicyPathsThatMustPrompt(): array
+    {
+        return [
+            'plant a pre-commit hook'      => ['cp ./x ./.git/hooks/pre-commit'],
+            'plant a post-checkout hook'   => ['mv ./x .git/hooks/post-checkout'],
+            'touch a pre-push hook'        => ['touch ./.git/hooks/pre-push'],
+            'delete the index'             => ['rm ./.git/index'],
+            'nested repository'            => ['mkdir ./sub/.git'],
+            'the .git directory itself'    => ['rm -rf ./.git'],
+            'quoted segment'               => ['cp ./x "./.git/hooks/pre-commit"'],
+            'case-insensitive filesystem'  => ['cp ./x ./.GIT/hooks/pre-commit'],
+            'glob that names .git'         => ['cp ./x ./.g*/hooks/pre-commit'],
+            'single-char glob names .git'  => ['cp ./x ./.gi?/hooks/pre-commit'],
+            'policy dir as a dir target'   => ['cp ./hooks.yaml ./.sugar-crush/'],
+            'policy settings tier'         => ['cp -f ./x ./.sugar-crush/settings.json'],
+            'MCP server roster'            => ['mv ./evil.json ./.mcp.json'],
+        ];
+    }
+
+    /**
+     * @dataProvider repositoryAndPolicyPathsThatMustPrompt
+     */
+    public function testRepositoryAndPolicyPathsPrompt(string $command): void
+    {
+        $this->assertSame(
+            PermissionDecision::Ask,
+            $this->decide($command),
+            "accept-edits must NOT auto-run a write into .git or policy: {$command}",
+        );
+    }
+
+    /**
+     * The segment match is exact (after glob semantics), not a prefix: these
+     * names merely start like `.git` and are ordinary project files, and a
+     * bare `*` cannot match a dotfile under bash, so `rm ./*` keeps its
+     * grant.
+     *
+     * @return array<string, array{string}>
+     */
+    public static function lookalikesThatStillAutoAllow(): array
+    {
+        return [
+            'cp two relatives (control)' => ['cp ./a ./b'],
+            '.gitignore'                 => ['touch ./.gitignore'],
+            '.github workflows'          => ['mkdir -p ./.github/workflows'],
+            '.gitkeep in a subdir'       => ['touch ./src/.gitkeep'],
+            'a name ending in git'       => ['mkdir ./widget'],
+            'star does not name a dot'   => ['rm ./*'],
+            'leading ? does not either'  => ['rm ./?git'],
+        ];
+    }
+
+    /**
+     * @dataProvider lookalikesThatStillAutoAllow
+     */
+    public function testLookalikesOfRepositoryPathsStillAutoAllow(string $command): void
+    {
+        $this->assertSame(
+            PermissionDecision::Allow,
+            $this->decide($command),
+            "accept-edits must still auto-run: {$command}",
+        );
+    }
+
+    /**
      * A missing or non-string `command` is not a scoped write. Guarded before
      * this change too; pinned because the tokenizer now dereferences it.
      */
@@ -320,10 +395,9 @@ final class PermissionGateScopedWriteTest extends TestCase
     /**
      * A CROSS-FILE TRIPWIRE, not a test of this class.
      *
-     * `PermissionGate` leaves `*` out of its metacharacter set, so
-     * `cp ./payload ./.STAR/victim` (STAR = asterisk) is auto-Allowed under
-     * accept-edits. That is safe only because
-     * {@see \SugarCraft\Crush\Tools\BuiltIn\Bash} spawns through `bash -c`, and
+     * `PermissionGate` leaves the glob characters out of its metacharacter
+     * set, so `cp ./payload ./.?/victim` is auto-Allowed under accept-edits.
+     * That is safe only because {@see \SugarCraft\Crush\Tools\BuiltIn\Bash} spawns through `bash -c`, and
      * bash excludes `.` and `..` from glob results. MEASURED under `/bin/sh`
      * (dash), the same fragment expands to `./../` and the write lands one
      * directory up.

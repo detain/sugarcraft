@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Hooks;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Hooks\HookResult;
+use SugarCraft\Crush\Permissions\PermissionGate;
+use SugarCraft\Crush\Permissions\PermissionMode;
 
 /**
  * @see ProtectFilesHook
@@ -475,6 +478,77 @@ final class ProtectFilesHookTest extends TestCase
     }
 
     // =========================================================================
+    // Audit F-J4 — .git/hooks and .git/info are written in no mode
+    // =========================================================================
+
+    /**
+     * A file in `.git/hooks/` runs on the user's next `git commit`, in their
+     * own shell and outside every sugar-crush mode — so the deny has to come
+     * from this hook, ahead of the gate, and hold in `bypass-permissions` (the
+     * shipped default) as much as anywhere. Each row passed the full chain
+     * under bypass before the fix; the gate is registered LAST with the given
+     * mode, exactly as `Bootstrap::hooks()` orders it, and the message is
+     * asserted so a mode that would have refused anyway (plan) cannot make the
+     * row pass for the wrong reason.
+     *
+     * @param array<string, mixed> $args
+     * @dataProvider gitMachineryWritesInEveryMode
+     */
+    public function testGitMachineryIsNotWrittenInAnyMode(PermissionMode $mode, string $tool, array $args): void
+    {
+        $verdict = $this->chainVerdict($tool, $args, $mode);
+
+        $this->assertTrue(
+            $verdict->isDenied(),
+            "{$mode->value}: {$tool} " . json_encode($args) . ' must not write git machinery',
+        );
+        $this->assertStringContainsString('prevents modification of files matching', (string) $verdict->message);
+    }
+
+    /** @return array<string, array{0: PermissionMode, 1: string, 2: array<string, mixed>}> */
+    public static function gitMachineryWritesInEveryMode(): array
+    {
+        $calls = [
+            'Write a pre-commit hook' => ['Write', ['file_path' => '.git/hooks/pre-commit', 'content' => "#!/bin/sh\n"]],
+            'Edit info/attributes' => ['Edit', ['file_path' => '.git/info/attributes', 'old_string' => 'a', 'new_string' => 'b']],
+            'Bash cp, quoted target' => ['Bash', ['command' => 'cp x ".git/hooks/pre-commit"']],
+            'Bash cp, dot-slash' => ['Bash', ['command' => 'cp ./payload.sh ./.git/hooks/pre-commit']],
+            'Bash quote inside the name' => ['Bash', ['command' => "cp x .git/'hooks'/pre-push"]],
+            'Bash doubled slash' => ['Bash', ['command' => 'cp x .git//hooks/pre-commit']],
+            'MCP write' => ['mcp__fs__write_file', ['path' => '.git/hooks/post-checkout', 'content' => 'x']],
+        ];
+
+        $rows = [];
+        foreach (PermissionMode::cases() as $mode) {
+            foreach ($calls as $label => [$tool, $args]) {
+                $rows["{$mode->value}: {$label}"] = [$mode, $tool, $args];
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Write-only, like the rest of the policy list: reading a hook script
+     * grants nothing, so `Read` of one stays allowed — through the chain
+     * under bypass, where nothing but this hook could refuse it. `.github/`
+     * and a hook-SAMPLE directory are different names and stay writable.
+     */
+    public function testGitHooksMayBeReadAndLookalikesWritten(): void
+    {
+        $mode = PermissionMode::BypassPermissions;
+
+        $this->assertTrue($this->chainVerdict('Read', ['file_path' => '.git/hooks/pre-commit'], $mode)->isAllowed());
+        $this->assertTrue($this->chainVerdict('Read', ['file_path' => '.git/info/exclude'], $mode)->isAllowed());
+        $this->assertTrue(
+            $this->chainVerdict('Write', ['file_path' => '.github/workflows/ci.yml', 'content' => 'x'], $mode)->isAllowed(),
+        );
+        $this->assertTrue(
+            $this->chainVerdict('Write', ['file_path' => '.git/hooks-sample/README', 'content' => 'x'], $mode)->isAllowed(),
+        );
+    }
+
+    // =========================================================================
     // Configurable Protected-Files List
     // =========================================================================
 
@@ -534,11 +608,19 @@ final class ProtectFilesHookTest extends TestCase
     // Helper Methods
     // =========================================================================
 
-    /** @param array<string, mixed> $args */
-    private function chainVerdict(string $tool, array $args): HookResult
+    /**
+     * The built-in chain; with $mode, the permission gate is registered last,
+     * as `Bootstrap::hooks()` does.
+     *
+     * @param array<string, mixed> $args
+     */
+    private function chainVerdict(string $tool, array $args, ?PermissionMode $mode = null): HookResult
     {
         $manager = new HookManager(new HookRegistry());
         $manager->registerBuiltIns();
+        if ($mode !== null) {
+            $manager->register(new PermissionGateHook(new PermissionGate($mode)));
+        }
 
         return $manager->preToolUse(new HookContext(
             sessionId: 'test-session-123',

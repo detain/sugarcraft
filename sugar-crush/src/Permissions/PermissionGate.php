@@ -1430,6 +1430,10 @@ final class PermissionGate
      * check. "Strictly below" also rejects the root itself: `rm -rf .` and
      * `rm -rf ./` are prompts, not grants.
      *
+     * Contained is not the same as ordinary: a path with a `.git`,
+     * `.sugar-crush` or `.mcp.json` segment is inside the directory and still
+     * prompts — see {@see UNSCOPED_SEGMENTS} (audit F-J4).
+     *
      * ## Honest limits — each of these is a decision, not an oversight
      *
      * - SYMLINKS ARE NOT RESOLVED. `rm ./link-that-points-outside` is spelled as a
@@ -1447,9 +1451,12 @@ final class PermissionGate
      *   anchored in" is a property of the SHELL, not of the pattern: bash
      *   excludes `.` and `..` from glob results, so `./.<star>/` stays literal.
      *   Dash does not. MEASURED under `/bin/sh`, `./.<star>/` expands to
-     *   `./../`, which turns the auto-Allowed `cp ./payload ./.<star>/victim`
+     *   `./../`, which turned the auto-Allowed `cp ./payload ./.<star>/victim`
      *   into a real write — and a real delete — one directory above the
-     *   working directory.
+     *   working directory. That particular spelling now prompts for an
+     *   unrelated reason (`.<star>` can name `.git`, see
+     *   {@see UNSCOPED_SEGMENTS}), but `./.?/` is still granted here and,
+     *   MEASURED the same way, still expands to `./../` under dash.
      *
      *   What makes the omission safe is that
      *   {@see \SugarCraft\Crush\Tools\BuiltIn\Bash} spawns every approved
@@ -1519,12 +1526,70 @@ final class PermissionGate
         }
 
         foreach ($paths as $path) {
-            if (!$this->isContainedRelativePath($path)) {
+            if (!$this->isContainedRelativePath($path) || $this->namesUnscopedSegment($path)) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    /**
+     * Path segments that are inside the working directory by spelling and
+     * still not "an ordinary scoped write" (audit F-J4) — matched against
+     * EVERY segment, so `.git`, `./.git/hooks/x`, `a/.git/b` and `./sub/.git`
+     * all count.
+     *
+     *  - `.git`: the repository's own machinery. `cp ./payload.sh
+     *    ./.git/hooks/pre-commit` auto-ran under `accept-edits` and planted
+     *    code that executes on the user's next `git commit`, outside any
+     *    sugar-crush session; `rm ./.git/index`, `mv ./x ./.git/HEAD` and a
+     *    nested `mkdir ./sub/.git` are no more "an edit" than that is.
+     *    {@see \SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook} denies the
+     *    hooks/info half outright in every mode; this is the wider, cheaper
+     *    half — one prompt for anything that touches `.git` at all.
+     *  - `.sugar-crush`: hooks, agent presets, rules, skills and the
+     *    permission settings tiers all load from it. The hook's write-only
+     *    patterns name individual files, so `cp ./hooks.yaml ./.sugar-crush/`
+     *    (a DIRECTORY target) and `cp ./x ./.sugar-crush/settings.json` slipped
+     *    past both layers.
+     *  - `.mcp.json`: every entry is a command the next launch spawns as a
+     *    stdio MCP server.
+     *
+     * NOT LISTED, AND STILL GRANTED HERE: `.claude/` and `.opencode/` (foreign
+     * agent presets and skills are discovered from them) and anything else in
+     * the policy-file surface the audit tracks as known #9 — closing that
+     * surface is a policy-file inventory, not a line in this list.
+     *
+     * Matched with `fnmatch()` and FNM_PERIOD, the way bash matches a glob to a
+     * dotfile (writing STAR for the asterisk so this docblock does not close
+     * on itself): `./.gSTAR/hooks/x` and `./.gi?/x` name `.git` to the shell —
+     * globs are NOT expanded before this check, see {@see isScopedWriteTool()}
+     * — while `./STAR/x` and `./?git/x` do not, so `rm ./STAR` keeps its
+     * grant. Lowercased first because on a
+     * case-insensitive filesystem `.GIT` is the repository; on Linux that
+     * widening costs one prompt for a name nobody uses. A QUOTED glob is
+     * literal to bash but arrives here quote-stripped, so it is refused too —
+     * the fail-closed direction.
+     *
+     * @var list<string>
+     */
+    private const UNSCOPED_SEGMENTS = ['.git', '.sugar-crush', '.mcp.json'];
+
+    private function namesUnscopedSegment(string $path): bool
+    {
+        foreach (explode('/', strtolower($path)) as $segment) {
+            if ($segment === '' || $segment === '.' || $segment === '..') {
+                continue;
+            }
+            foreach (self::UNSCOPED_SEGMENTS as $name) {
+                if (fnmatch($segment, $name, FNM_PERIOD)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
