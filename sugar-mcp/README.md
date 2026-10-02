@@ -35,7 +35,7 @@ $server = new StdioMcpServer(
     args: ['-y', '@modelcontextprotocol/server-everything'],
 );
 
-$server->start();                    // initialize → initialized → tools/list
+$server->start();                    // initialize → notifications/initialized → tools/list
 foreach ($server->listTools() as $tool) {
     echo $tool->name, ': ', $tool->description, PHP_EOL;
 }
@@ -48,7 +48,20 @@ $server->stop();                     // also runs automatically on destruct
 
 - The handshake runs under **one** monotonic (`hrtime`) deadline
   (`DEFAULT_START_TIMEOUT_SECONDS`, 60s, sized for cold `npx` fetches) shared
-  across `initialize`, `initialized` and `tools/list`.
+  across `initialize`, `notifications/initialized` and `tools/list`.
+- An `initialize` reply carrying `error` is a start failure: `start()` stops
+  the child and throws a `RuntimeException` naming the server's error code and
+  message (plus any captured stderr), rather than reporting "up, 0 tools".
+
+## Wire shape
+
+MCP `params`, `capabilities` and tool `arguments` are JSON objects, and the
+official TypeScript and Python SDK servers reject a JSON array in their place.
+PHP's `[]` encodes as an array, so `McpMessage::toJson()` emits empty `params`
+as `{}`, `initialize` sends `"capabilities":{}`, an argument-less `callTool()`
+sends `"arguments":{}`, and `tools/list` omits `params` entirely (as the
+reference TS client does). A nested empty map inside your own params must be
+spelled `new \stdClass()` to reach the wire as `{}`.
 - `callTool()` carries **no** deadline: a tool call is somebody's real work and
   is bounded by child liveness, never by a wall-clock kill of in-flight work.
 - Every socket wait is bounded by `stream_select` polls; stderr is absorbed on

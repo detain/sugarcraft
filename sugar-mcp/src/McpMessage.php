@@ -193,7 +193,14 @@ final class McpMessage
         }
 
         if ($this->params !== null) {
-            $payload['params'] = $this->params;
+            // MCP params are always a JSON object, but PHP cannot tell an empty
+            // map from an empty list and json_encode([]) is `[]`. The official
+            // TS and Python SDKs reject `"params":[]` (Zod/Pydantic "expected
+            // object, received array") and, for tools/list, never send an
+            // id-bearing reply at all — so an empty map must leave as `{}`.
+            // Non-empty params keep their own shape; nested empty maps are the
+            // caller's to spell as \stdClass, which json_encode emits as `{}`.
+            $payload['params'] = $this->params === [] ? new \stdClass() : $this->params;
         }
 
         // Emitted on the resultSet sentinel rather than `$result !== null`, so

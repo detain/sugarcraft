@@ -172,6 +172,11 @@ a negative falls back to `StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS`, which
 is `60.0`. A hand-edited config must not be able to turn the bound off by
 accident.
 
+A server that answers `initialize` with a JSON-RPC `error` has refused the
+session, so `start()` treats it as a start failure: the child is stopped and
+the exception carries the server's error code and message plus its stderr
+tail. In `/mcp` such a server shows ` · not up`, never ` · up 0 tools`.
+
 ### `${VAR}` interpolation — exactly where it works
 
 `McpClient::resolveEnv()` expands `${VAR}` and `${VAR:-default}`, and it is

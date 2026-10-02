@@ -57,7 +57,7 @@ final class StdioMcpServer implements McpServer
     public const PROTOCOL_VERSION = '2024-11-05';
 
     /**
-     * Monotonic ceiling for the whole handshake (initialize → initialized →
+     * Monotonic ceiling for the whole handshake (initialize → notifications/initialized →
      * tools/list). Sized for cold package fetches: an `npx`-style launcher
      * downloading its server takes 30–60s on first run, and failing that boot
      * faster is not failing better. Bounds the handshake ONLY — never a tool
@@ -265,27 +265,42 @@ final class StdioMcpServer implements McpServer
         $deadline = self::nowSeconds() + $this->startTimeoutSeconds;
 
         try {
+            // capabilities is a JSON object in the schema; PHP's `[]` encodes as
+            // a JSON array, which the official SDK servers answer with an
+            // "expected object, received array" error (audit MCP-1).
             $response = $this->request('initialize', [
                 'protocolVersion' => self::PROTOCOL_VERSION,
-                'capabilities' => [],
+                'capabilities' => new \stdClass(),
                 'clientInfo' => $this->clientInfo,
             ], $deadline);
 
-            // A successful initialize answers with a result object; an error reply
-            // is at least a server that speaks our protocol badly. Anything else —
-            // silence, garbage, a null-shaped non-response — means we cannot trust
-            // a single byte from this process. Diagnostics are read BEFORE stop()
-            // because stop() clears the stderr capture.
-            if ($response === null || (!$response->resultSet && $response->error === null)) {
+            // A successful initialize answers with a result. Silence, garbage
+            // or a null-shaped non-response means we cannot trust a byte from
+            // this process — and an ERROR reply is a refusal, not a start: the
+            // server will not serve tools to a session it never initialized,
+            // so carrying on would report "up, 0 tools" after burning the
+            // whole tools/list budget. The server's own code and message are
+            // the most useful diagnostic there is, so they lead the exception.
+            // Diagnostics are read BEFORE stop() because stop() clears the
+            // stderr capture.
+            if ($response === null || $response->error !== null || !$response->resultSet) {
                 $diagnostics = $this->stderrTailForDiagnostics();
+                $refusal = $response?->error !== null ? $this->describeError($response) : '';
                 $this->stop();
 
-                throw new \RuntimeException("Failed to start MCP server: {$this->name}" . $diagnostics);
+                throw new \RuntimeException("Failed to start MCP server: {$this->name}" . $refusal . $diagnostics);
             }
 
-            $this->notify('initialized', null, $deadline);
+            // The spec's method name. A bare `initialized` is ignored by the TS
+            // SDK (its oninitialized hook never fires) and only tolerated by
+            // others, so a server gating work on initialization never sees it.
+            $this->notify('notifications/initialized', null, $deadline);
 
-            $listResponse = $this->request('tools/list', [], $deadline);
+            // params omitted rather than sent as `{}`: tools/list params are
+            // optional ({cursor?}) and omission is exactly what the reference
+            // TS client puts on the wire, so it is the shape every server has
+            // been tested against.
+            $listResponse = $this->request('tools/list', null, $deadline);
             $this->tools = $listResponse === null ? [] : $this->parseTools($listResponse->toArray());
         } catch (\Throwable $failure) {
             // A throw from any handshake leg — the oversized-frame refusal
@@ -375,7 +390,10 @@ final class StdioMcpServer implements McpServer
     {
         $response = $this->request('tools/call', [
             'name' => $toolName,
-            'arguments' => $args,
+            // An argument-less call arrives as PHP `[]`, which would encode as a
+            // JSON array; `arguments` is a JSON object in the schema and the SDK
+            // servers reject the array form ("expected record, received array").
+            'arguments' => $args === [] ? new \stdClass() : $args,
         ]);
 
         if ($response === null || !$response->resultSet) {
@@ -707,6 +725,19 @@ final class StdioMcpServer implements McpServer
         if (strlen($this->stderrTail) > self::MAX_STDERR_BYTES) {
             $this->stderrTail = substr($this->stderrTail, -self::MAX_STDERR_BYTES);
         }
+    }
+
+    /** The server's own refusal (code + message) for the start-failure exception. */
+    private function describeError(McpMessage $response): string
+    {
+        $code = $response->errorCode();
+        $message = $response->errorMessage();
+
+        return sprintf(
+            ' — initialize refused%s: %s',
+            $code === null ? '' : " ({$code})",
+            $message === null || $message === '' ? (string) json_encode($response->error) : $message,
+        );
     }
 
     /** Human-readable stderr fragment for the start-failure exception. */
