@@ -12,28 +12,6 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 
 ## A. Providers: error handling, SSE parsing, wire format
 
-### A4 — Streamed tool calls are emitted only from a chunk where `finish_reason === 'tool_calls'` and `delta` is non-null; otherwise they are silently dropped
-- **Severity:** Medium · **Confidence:** Verified-by-repro (cases `tc-finish-stop` and `tc-delta-null`)
-- **Where:** `src/Providers/SglangProvider.php:779` and `:2048`, `src/Providers/CustomProvider.php:308-310` and `:620`.
-- **Code:**
-  ```php
-  if ($data !== null && isset($data['choices'][0]['delta'])) { $chunk = $this->parseChunk(...); }   // delta:null -> never parsed
-  ...
-  if ($finishReason !== 'tool_calls' || $toolCallBuffer === []) { return null; }                     // 'stop' -> never flushed
-  ```
-  At end of stream, `$toolCallBuffer` is flushed only on the truncated path (`null`, `length`, `abort`).
-- **Failure scenario:** some servers, parser versions and proxies (vLLM historically; certain SGLang `tool_choice`/reasoning-parser combinations) end a tool-call stream with `finish_reason: "stop"`, or send the final chunk with `"delta": null`. **Repro:** both cases produce zero tool calls and an empty reply. The model's tool request disappears and the turn ends with nothing.
-- **Fix:** at end of stream, if `$toolCallBuffer !== []` and was never emitted, flush it, whatever the finish reason was. Read `finish_reason` independently of `delta`.
-- **Test:** cover both repro bodies. Assert that one `Read` call with `{"path":"a.php"}` is yielded.
-
-### A7 — `formatToolCalls()` re-serialises every list argument as an object (`JSON_FORCE_OBJECT` applies recursively)
-- **Severity:** Medium · **Confidence:** Verified-by-repro (`repro_force_object.php`)
-- **Where:** `src/Providers/Concerns/ToolSchema.php:186`. This is used by the Sglang, Custom and OpenAI history formatters.
-- **Code:** `'arguments' => json_encode($call->arguments(), JSON_FORCE_OBJECT) ?: '{}',`
-- **Failure scenario:** the model calls `mcp__git__git_add {"paths":["a.php","b.php"]}` (`GitMcpServer.php:120` declares `paths` as an array). On every later step and turn, the history sent back says `{"paths":{"0":"a.php","1":"b.php"}}`. The model sees its own earlier calls in the wrong shape and tends to copy them. Any MCP tool whose schema requires an array then gets objects, so validation fails or the server misbehaves. Separately, `?: '{}'` silently replays a call as having no arguments when `json_encode` fails (for example on invalid UTF-8).
-- **Fix:** `$args === [] ? '{}' : json_encode($args, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR)`. Force object only at the top level.
-- **Test:** replay an assistant tool call with a list argument. Assert that the outgoing `arguments` string decodes to a JSON array.
-
 ### A8 — When textual (DSML or MiniMax-XML) tool calls are recovered, the markup stays in the assistant content: it is painted to the UI and replayed alongside the structured call
 - **Severity:** Medium · **Confidence:** Verified-by-repro (`repro_parsers.php`, second half)
 - **Where:** `src/Providers/SglangProvider.php:785-802` (content is streamed and accumulated) and `:851-871` (calls are recovered afterwards, but the already-yielded content is never retracted). Also `Runtime.php:1365` (`$buffer .= $response->content`).
@@ -90,14 +68,8 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Code:** `match ($this->defaultModel) { 'gpt-4o' => 128_000, 'gpt-4-turbo' => 128_000, 'gpt-4' => 8_192, 'gpt-3.5-turbo' => 16_385, default => 8_192 }`
 - **Failure scenario:** with `model: gpt-4o-mini` (128k context) or `gpt-4.1` (1M context), Chat's context tiers are computed against 8k, so compaction warnings and prompts fire after a few messages on every turn.
 - **Fix:** add the missing ids. Return `0` for unknown models: by the `ProviderInterface::contextWindow()` contract (`ProviderInterface.php:19-31`), 0 means unknown, and `ContextWindow::resolve()` then applies the one named fallback. The hard-coded `default => 8_192` is a guess the contract forbids. Also add a config override.
+- **Partly fixed on master in `58d25cb3b`.** `gpt-4o-mini` is sized 128k, `gpt-4.1` and `gpt-4.1-mini` 1,047,576, and an unknown model answers `0`, so `ContextWindow::resolve()` applies its named fallback. **Remaining:** there is still no config override for the context window. Adding one needs a key in `LayeredSettings`, plumbing through `ProviderFactory::createOpenAI()`, a `docs/SETTINGS.md` row, and the `TrustKeyDocumentationDriftTest` roster.
 - **Test:** a data provider covering each `PRICE_TABLE` key should get a window of at least 128k.
-
-### A14 — OpenAI cost bills cached prompt tokens at the full input rate
-- **Severity:** Low · **Confidence:** Verified-by-reading
-- **Where:** `OpenAIProvider.php:521-535`. The code is `$promptTokens * $input`, while `parseUsage` already separates `cached` at `:433-439`.
-- **Failure scenario:** in long agentic sessions most prompt tokens are cache hits, which OpenAI discounts by 50-90%. Reported spend is inflated by up to about 2x, so `/budget` caps trip early.
-- **Fix:** `(prompt - cached) * input + cached * input * cachedFactor + completion * output`, with a per-model cached rate.
-- **Test:** usage `{prompt_tokens:1000, prompt_tokens_details:{cached_tokens:900}}` should cost less than 1000 × the input rate.
 
 ### A15 — Claude on Vertex is always priced at $0.00, which disables the spend cap; Bedrock invents a $0.01/1k price for unknown models
 - **Severity:** Medium · **Confidence:** Verified-by-reading
@@ -154,23 +126,16 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Fix:** fold `thoughtsTokenCount` into a reasoning or output bucket, add a `thinkingConfig.thinkingBudget` setting, and raise the default `maxOutputTokens` for 2.5 models (for example 32k), or omit it.
 - **Test:** `parseUsageMetadata(['promptTokenCount'=>10,'candidatesTokenCount'=>5,'thoughtsTokenCount'=>900], 'gemini-2.5-pro')` should account for the 900 tokens.
 
+### A23 — Replayed tool-call arguments send a nested empty map as `[]`
+- **Severity:** Low-Medium · **Confidence:** Verified-by-reading (found while fixing A7)
+- **Where:** `src/Providers/Concerns/ToolSchema.php:195-196` (`formatToolCalls()`: `json_encode((object) $call->arguments(), …)`), used by the Sglang, Custom and OpenAI history formatters. The arguments reach it as a PHP array, because the providers decode the model's argument JSON with `json_decode(…, true)`.
+- **Failure scenario:** A7's fix (`d2911641e`) forces an object only at the top level, so lists now replay correctly. Below the top level, PHP cannot tell an empty map from an empty list once the JSON was decoded as an associative array. The model calls a tool with `{"opts":{}}` (an options bag, a filter, a headers map), and every later step and turn replays that call as `{"opts":[]}`. The model sees its own earlier call in a shape that contradicts the tool's schema, and tends to copy it. This is the same class as 15e MCP-9 (nested empty maps on the MCP wire), which was fixed there by walking the arguments against the tool's `inputSchema`.
+- **Fix:** keep the provider's raw `function.arguments` JSON string on the `ToolCall` when it arrives, and replay that string verbatim (re-encoding only calls that have no raw string, such as recovered textual calls). Alternatively, decode with objects (`json_decode` without `assoc`) end to end, so both shapes round-trip.
+- **Test:** replay an assistant tool call whose arguments arrived as `{"opts":{},"paths":[]}`, and assert the outgoing `arguments` string is byte-equal to that input.
+
 ---
 
 ## B. Engine fork protocol and process lifecycle
-
-### B2 — Esc or watchdog teardown kills only the turn process; the shell command it was running keeps going as an orphan
-- **Severity:** Medium · **Confidence:** Verified-by-repro (`repro_orphan.php`)
-- **Where:** `src/Backend/EngineBackend.php:1411-1414` (`posix_kill($pid, SIGKILL)` on the child pid only). The spawn is at `src/Tools/Concerns/CapturesProcessOutput.php:146-148`, which wraps commands in `setsid -w`, so they live in a separate session and process group.
-- **Failure scenario:** the agent runs `make`, `npm test`, a migration or `rm -rf build && …` through Bash, and the user presses Esc, or the 120s idle ceiling (known #7) fires. The turn child dies immediately, but `/bin/sh -c …` and its children keep running (repro: `sleep 37.123` was still alive after the SIGKILL). They keep writing files and spending CPU after the user has "stopped" the agent. Because SIGKILL cannot be caught, the child gets no chance to clean up. Parallel tool grandchildren killed at the deadline (`Runtime.php:2040-2043`) leak the same way.
-- **Fix:** have the turn child record the pgids of the commands it spawns, for example in an inherited pipe or file that the parent reads. On teardown, send `SIGTERM` to the child first; a handler there terminates the recorded groups through `ProcessReaper`, then SIGKILL follows. Or start commands with `PR_SET_PDEATHSIG` (via `setpriv --pdeathsig` or an FFI `prctl`).
-- **Test:** fork a child that runs `Bash` `sleep 30`, SIGKILL it through the teardown path, and assert that no `sleep 30` process remains within 2s.
-
-### B3 — Both ends of the frame socketpair leak into every process the turn spawns, so a backgrounded command can hold the turn open
-- **Severity:** Low · **Confidence:** Verified-by-repro (`repro_fd_inherit.php`)
-- **Where:** `EngineBackend.php:1343-1370`. The child never closes `$parentSocket`, and PHP socketpairs are not close-on-exec.
-- **Failure scenario:** repro output: a `proc_open`'d `ls /proc/self/fd` shows both socket fds. If the child dies without writing a `result` frame (a fatal error, OOM, or `exitNow` before the write), EOF on the parent end is delayed until every process that inherited the write end exits. A `php -S … &` or `npm run dev &` started by Bash keeps the turn "in flight" until the 120s idle timeout. In the repro, EOF arrived only after the background `sleep 4` exited. The leaked `$parentSocket` copy in the child also means a parent `fclose` never sends EPIPE to the child.
-- **Fix:** `fclose($parentSocket)` first thing in the child. Spawn tools with fds above 2 closed: wrap with `/bin/sh -c 'exec 3>&- …'`, use `closefrom` through the setsid wrapper, or set FD_CLOEXEC via `ext-sockets`' `socket_create_pair` plus `socket_export_stream` and `fcntl`.
-- **Test:** in a forked child, `proc_open` `ls -l /proc/self/fd` and assert that no `socket:` entries exist beyond stdio.
 
 ### B4 — Task sub-agent spend is invisible to the parent turn, to the session total and to the spend cap
 - **Severity:** Medium (High on paid providers) · **Confidence:** Verified-by-reading
@@ -192,25 +157,11 @@ Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **V
 - **Fix:** route every wither through one private `mutate()` with named arguments.
 - **Test:** `withSpendCap(1.0)->withMemoryStore(null)->withPermissionApprover(fn() => true)` should preserve the cap (assert through reflection, or behaviourally with a costing stub).
 
-### B6 — The frame writer gives up silently mid-frame, and the reader re-syncs by discarding without tearing down
-- **Severity:** Low (it needs a parent stall longer than `default_socket_timeout`, 60s by default) · **Confidence:** Verified-by-repro (`repro_frame_stall.php`, using the real `writeFrame`/`drainFrames` through reflection)
-- **Where:** `EngineBackend.php:1742-1755` (`if ($n === false || $n === 0) { return; }`, which can leave a partial frame on the wire) and `:1776-1778` (a bad header gives `$buffer = ''` and parsing continues).
-- **Failure scenario:** the child's socket is blocking and subject to PHP's `default_socket_timeout`. **Repro** (timeout 2s): the parent stalls for 4s, and both frames arrive intact. The parent stalls for 9s: `writeFrame` gives up after about 4s with a 4 MB `token` frame only partly written. It returns silently, the child then writes its `result` frame and exits 0, and the parent reads 1,059,776 bytes and decodes **zero frames**. The `result` frame is lost inside the remainder of the truncated frame's declared length. In production this takes a TUI event loop blocked for more than 60s while the child fills the socket buffer (about 200 KB). The turn then ends as "exited without a result" even though the child finished its work, and every streamed token after the cut is dropped.
-- **Fix:** on a short write, mark the stream dead and exit the child non-zero. On a bad header, call `teardown('frame stream corrupted')` instead of continuing.
-- **Test:** feed `drainFrames` a truncated frame followed by a valid frame, and assert that the stream is declared corrupt rather than silently producing nothing.
-
 ---
 
 ## C. Runtime
 
-These are covered above: B2 (deadline kill orphans) and B4 (no usage channel on tool results).
-
-### C1 — A parallel batch made only of deadline-exempt jobs never settles if `waitpid` returns -1 (latent; not reachable today)
-- **Severity:** Info (latent hardening) · **Confidence:** Verified-by-reading that it is **not reachable** in the current tree. Downgraded from Low/Suspected.
-- **Where:** `Runtime.php:2012-2014` settles only when `waitpid` returns the pid; `-1` (ECHILD) is ignored. `:2034` exempts `ExemptFromParallelDeadline` (Task) from the deadline kill.
-- **Why it cannot fire now:** the only `pcntl_signal(SIGCHLD, …)` in the monorepo is `candy-pty/src/SignalForwarder.php:165` (`attachSigchld`), and neither sugar-crush nor anything it loads calls it. `candy-pty`'s `ChildPollTrait` uses `waitpid($pid, …)` on its own pid. `AgentWorkerPool` waits per pid. `proc_close()` reaps only its own child. Nothing steals the status of a parallel job's pid. The hazard appears only if a future embedder installs `SIGCHLD=SIG_IGN` or a blanket `pcntl_wait()`. `AgentWorkerPool.php:901` already guards against exactly that case.
-- **Fix (cheap hardening):** treat `-1` as settled (and let `collectChildResult` report "status lost").
-- **Test:** reap the job pid externally before polling, and assert the generator finishes.
+These are covered above: B4 (no usage channel on tool results). B2 (deadline kill orphans) was fixed in `c54372b2a`.
 
 ### C2 — Engine-side diagnostics go to `error_log()`, which in the TUI is the terminal itself: they paint raw text over the alt-screen frame
 - **Severity:** Medium · **Confidence:** Verified-by-reading. The destination was checked on this machine: `php -r 'error_log("probe-line");'` with the stock ini (`error_log` unset, `log_errors=1`) writes `probe-line` to fd 2. There was no live TUI capture.
@@ -236,32 +187,26 @@ These are covered above: B2 (deadline kill orphans) and B4 (no usage channel on 
 
 | ID | Severity | Confidence | Title | Location |
 |---|---|---|---|---|
-| A4 | Medium | repro | Tool calls dropped when `finish_reason='stop'` or `delta:null` | SglangProvider.php:779, 2048; CustomProvider.php:308, 620 |
-| A7 | Medium | repro | `JSON_FORCE_OBJECT` replays list arguments as objects | ToolSchema.php:186 |
 | A8 | Medium | repro | Recovered DSML/XML markup stays in content (painted, then sent twice) | SglangProvider.php:785-871 |
 | A9 | Medium | repro | MiniMax fallback makes JSON-looking strings into arrays (Write of composer.json breaks) | MinimaxXmlFallbackToolCallParser.php:278-297 |
 | A10 | Medium | reading | `CustomProvider` sends a literal `extra_body` key | CustomProvider.php:172, 240 |
 | A12 | Medium | repro+reading | claude-code streaming cannot work (no `--verbose`, wrong framing, argv > 128 KiB) | ClaudeCodeProvider.php:99-310 |
-| A13 | Medium | reading | OpenAI window is 8k for gpt-4o-mini/4.1 | OpenAIProvider.php:103-112 |
+| A13 | Medium | reading | OpenAI window is 8k for gpt-4o-mini/4.1. Partly fixed (`58d25cb3b`: ids sized, unknown → 0); remaining: no context-window config override | OpenAIProvider.php:103-112 |
 | A15 | Medium | reading | Vertex priced at $0 (spend cap inert); Bedrock invents $0.01 | VertexProvider.php:278; BedrockProvider.php:158 |
 | **A19** | Medium | repro | Vertex `ApiException` (429/503/500) never classified transient: no retry, then empty reply | TransientFailure.php:197-237, 405-422; VertexProvider.php:318, 404, 1384 |
 | **A20** | Medium | reading | Bedrock tables match only bare ids: real versioned/profile ids get an 8k window and an invented $0.01/1k | BedrockProvider.php:46, 146-169 |
 | **A21** | Medium | suspected | Gemini 2.5 default thinking: thought tokens missing from Usage and sharing the 4096 `maxOutputTokens` | VertexProvider.php:1459, 1770-1793 |
-| B2 | Medium | repro | Esc/watchdog SIGKILL leaves setsid'd Bash commands running | EngineBackend.php:1411-1414 |
 | B4 | Medium (High paid) | reading | Task sub-agent spend never reaches the parent, session total or cap | TaskTool.php:604-608; ToolResult.php; EngineBackend.php:890-941 |
 | **C2** | Medium | reading | `error_log()` diagnostics (notice sink, parsers, per-request `</parameter>` warning) paint over the TUI frame | RuntimeNoticeSink.php:366-369; SglangProvider.php:2409; Dsml/Minimax parsers |
 | A18 | (sharpens #27/#28) | suspected | Default SGLang `max_tokens` 4096 with effort `max` | SglangProvider.php:1030, 165 |
+| **A23** | Low-Med | reading | Replayed tool-call arguments send a nested empty map (`{"opts":{}}`) as `[]` (residual of A7) | ToolSchema.php:195-196 |
 | A11 | Low | reading | Malformed argument JSON runs the tool with `[]`; model not told | CustomProvider.php:628; SglangProvider.php:2221 |
-| A14 | Low | reading | OpenAI bills cached tokens at full rate | OpenAIProvider.php:521-535 |
 | A16 | Low | repro (shape) | Bedrock: no same-role merge, blank text blocks | BedrockProvider.php:316-332 |
 | A17 | Low | reading | `embeddings()` swallows errors | SglangProvider.php:967; CustomProvider.php:378 |
-| B3 | Low | repro | Socketpair fds leak into spawned processes and delay EOF | EngineBackend.php:1343-1370 |
 | B5 | Low | reading | Two withers drop the spend cap (latent) | EngineBackend.php:542, 575 |
-| B6 | Low | repro | Frame write times out mid-frame silently; the following `result` frame is swallowed | EngineBackend.php:1742-1796 |
 | **C3** | Low | reading | Project instructions and `@imports` have no byte budget (rules have 64 KiB) | Runtime.php:3009-3041; InstructionFileLoader.php:841-871 |
-| C1 | Info | reading | `waitpid -1` never settles an exempt parallel job: latent, no SIGCHLD reaper exists | Runtime.php:2012, 2034 |
 
-New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A13 (fix aligned with the `contextWindow()` contract). Items sharpened in that pass and since fixed are listed under **Fixed since audit**.
+New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A13 (fix aligned with the `contextWindow()` contract). Items sharpened in that pass and since fixed are listed under **Fixed since audit**. Found while fixing A7 in wave 2: **A23**.
 
 ---
 
@@ -284,7 +229,7 @@ New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → V
 3. Vertex `defaultStreamer()` SSE parsing: **no new framing defect.** The streamer accepts `data:` without a space, CRLF via `trim`, and a trailing unterminated event. Errors arrive as `isError` chunks and so run into A1. The missing end-of-stream check was added to A3, and the classification gap is A19.
 4. Uncapped project instructions: **confirmed** as C3. The other half of the lead (`RuleLoader` re-reading disk every step) is a performance cost only and was not reported. `InstructionFileLoader::loadRoot()` is cached per session.
 5. A16 and A18 live validation: A16's wire shape is now verified by repro; the server rejection is not (no AWS credentials). A18 and A21 still need a live model. The SGLang and Vertex endpoints were not called from this audit, so both stay **Suspected**.
-6. C1 `SIGCHLD` reaper: **dropped to Info.** The only SIGCHLD handler in the monorepo (`candy-pty` `SignalForwarder::attachSigchld`) is never installed by sugar-crush.
+6. C1 `SIGCHLD` reaper: **dropped to Info.** The only SIGCHLD handler in the monorepo (`candy-pty` `SignalForwarder::attachSigchld`) is never installed by sugar-crush. C1 was hardened later anyway (`c10717d8c`).
 7. `error_log()` from `flagTruncationRiskInLatestToolResults()`: **confirmed** and broadened to C2.
 
 **Checked and found sound (no finding):** the A1 fix placement versus `ReasoningProgressTest` (compatible if the throw goes after the retry loop); Bedrock `AwsException` classification (`getStatusCode()` exists, the chain is preserved, 429/5xx retry); `ContainedPath` (realpath on both sides, separator-anchored prefix); `HookContextFiles` (owner/mode/symlink checks, umask, atomic rename; retention is deliberate); `SystemClipboard` (bounded write, terminate ladder); `HomeDirectory::owned()`; `Frontmatter` repair pass; `EchoProvider`/`EchoBackend`; `CancellationToken`; `TurnInterrupted`.
@@ -313,3 +258,10 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **A5** `data:` with no space after the colon was ignored — fixed on master in `5781eb9f8` (new `Providers\SseData`, used by SglangProvider and CustomProvider; VertexProvider already accepted it). ClaudeCodeProvider's `data: ` check is A12's NDJSON framing fault, not this one.
 - **A22** `CommandBackend`/`StreamingCommandBackend` encoded history without `JSON_INVALID_UTF8_SUBSTITUTE` — fixed on master in `987c8d87f` (`CommandBackend::encodeHistory()` substitutes; `StreamingCommandBackend` reuses it).
 - **B7** The LSP client had unique ids but no cross-process exchange lock — fixed on master in `d0f7cb6f6` (per-process `LspExchangeLock` flock with bounded polling, `LspExchangeState` sidecar, shared readahead, recovery from a holder killed mid-read or mid-write, notifications journaled and replayed, server-to-client requests answered -32601, only the connecting process stops the server).
+- **A4** Streamed tool calls were dropped on `finish_reason=stop` or `delta:null` — fixed on master in `90dc99dfc` (a null-delta finish frame is parsed with an empty delta; at end of stream a still-buffered call is flushed whatever the finish reason, with the decode-or-drop rule of the truncated flush; `CustomProvider` gains `flushBufferedToolCalls()`). Residual: the `error` finish reason deliberately does not flush (the server disowned its generation).
+- **A7** `formatToolCalls()` replayed every list argument as an object (`JSON_FORCE_OBJECT` is recursive) — fixed on master in `d2911641e` (only the top level is forced to an object, via an `(object)` cast; invalid UTF-8 is substituted instead of the old `?: '{}'` fallback; anything else `json_encode()` cannot represent throws). Remaining: nested empty maps in replayed arguments (`{"opts":{}}`) now go out as `[]`, because PHP cannot tell an empty map from an empty list after an associative `json_decode`. Lists are correct, maps are not; filed as **A23**.
+- **A14** OpenAI cost billed cached prompt tokens at the full input rate — fixed on master in `58d25cb3b` (fresh × input + cached × cached-input + completion × output, from a new `CACHED_INPUT_TABLE`; models with no cached rate bill cache hits at the input rate; an operator `modelPrices` entry may declare a `cached` rate, documented in `docs/SETTINGS.md`).
+- **B2** Esc or watchdog teardown killed only the turn process; the setsid'd shell command kept running — fixed on master in `c54372b2a` (new `ProcessContainment::killTree()`: freeze the root, walk `/proc` via the new `Support\ProcessTree` stopping every descendant, then SIGKILL every member's process group and pid, bounded to about 250 ms; wired into `EngineBackend` teardown and the `Runtime` parallel-deadline kill). Residual: `killTree()` blocks the event loop for about 110 ms on Escape. The remaining kill sites are 15c F-E2.
+- **B3** Both ends of the frame socketpair leaked into every process the turn spawned — fixed on master in `53da0a291` (the child closes the parent's end first; new `ProcessContainment::closeOnExec()` sets `FD_CLOEXEC` via FFI `fcntl` on both ends; `completeAsync` also polls the turn pid with `WNOHANG`, so a dead turn is noticed without waiting for EOF).
+- **B6** The frame writer gave up silently mid-frame and the reader resynced without teardown — fixed on master in `ee2e59b08` (the child's end carries a year-long write timeout and a failed write ends the child with `exitNow(1)`; `drainFrames()` reports corruption, and `completeAsync` delivers the frames decoded before it, then tears the turn down with "Provider worker frame stream corrupted").
+- **C1** `waitpid -1` never settled an exempt parallel job — fixed on master in `c10717d8c` (both wait sites go through `parallelJobHasExited()`, which treats any non-zero answer as gone; the payload file is still read, so the real result arrives).

@@ -96,14 +96,13 @@
 
     Kilo legacy (a `condense` tool with a user-approved preview) and Goose (agent-visible vs user-visible flags) supply the remaining pieces.
 
-11. **The code audit found about 136 new defects** (Part IX). 26 of them, including the one Critical and 18 of the 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes and unfenced repo skill descriptions. About 110 remain, including:
+11. **The code audit found about 136 new defects** (Part IX). 44 of them, including the one Critical and all 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes, unfenced repo skill descriptions, Esc Esc tool placeholders that never healed, raw CR and C1 controls reaching the terminal, a turn kill that left its commands running, streamed tool calls dropped on `stop`, and built-in skills that told every project to `git clean -fd`. Wave 2 found 10 more, smaller defects while fixing these. About 102 remain, including:
     - **The TUI re-renders the full history as markdown every frame.**
-    - **Esc Esc leaves tool placeholders spinning, and raw CR reaches the terminal.**
-    - **Killing a turn does not kill the commands it started.**
+    - **UI-only command output and notices are sent to the model as real turns.**
     - **Sub-agent spend never reaches the parent or the spend cap.**
     - **Permission gaps remain:** WebFetch counts as read-only, Bash inherits provider API keys, and path deny rules miss respellings.
 
-    About two thirds are reproduced with scripts. Fix the remaining High items first (IX.3, IX.4).
+    About two thirds are reproduced with scripts. No High item remains; fix the three Medium-High items next (IX.3, IX.4).
 
 12. **The features you asked for are designed and slotted into the roadmap** (Part VIII):
     - a schema-driven settings editor, built entirely from SugarCraft libraries already in the dependency tree;
@@ -809,16 +808,16 @@ Five agents audited sugar-crush's own source for **new** defects, one per area. 
 
 **Totals at audit time: about 136 findings** — 1 Critical, 20 High, about 47 Medium, and the rest Low-Medium, Low or Info.
 
-**Since the audit, 30 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 26 of the original findings, plus the 4 new items found while fixing them. **About 110 findings remain** — 0 Critical, 2 High, 3 Medium-High, about 42 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
+**Since the audit, 48 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 44 of the original findings, plus the 4 new items found while fixing them in wave 1. Wave 2 found 10 more while fixing its items; they are open. **About 102 findings remain** — 0 Critical, 0 High, 3 Medium-High (one of them, F-E2, partly fixed), about 36 Medium, and the rest Low-Medium, Low or Info. The tables below count what remains.
 
 At audit time, about two thirds were **reproduced with a script**; the rest are verified by reading, and a few are marked *suspected*. Full write-ups are in Appendices Q–U; each finding has code excerpt, failure scenario, fix and a test that would catch it.
 
 | Appendix | Area | Findings | Critical / High |
 |---|---|---|---|
-| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 24 | 0 / 0 |
-| **R** (15b) | Chat state machine, TUI, rendering, commands | 21 | 0 / 2 |
-| **S** (15c) | Tools, permissions, hooks (security) | 23 | 0 / 0 |
-| **T** (15d) | Context assembly, memory, skills, config | 20 | 0 / 0 |
+| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 18 | 0 / 0 |
+| **R** (15b) | Chat state machine, TUI, rendering, commands | 19 | 0 / 0 |
+| **S** (15c) | Tools, permissions, hooks (security) | 24 | 0 / 0 |
+| **T** (15d) | Context assembly, memory, skills, config | 19 | 0 / 0 |
 | **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 22 | 0 / 0 |
 
 Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
@@ -838,21 +837,20 @@ Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
 
 Several audits found the same root cause in different places. Fixing each theme once fixes them all.
 
-1. **Killing a turn does not kill its commands.** Esc Esc or the watchdog SIGKILLs only the PHP child. The `setsid`'d `bash` (and Task grandchildren) keep running (B2, F-E2). **Fix:** kill the process group(s) recorded by `ProcessContainment`, and reap Task children.
-2. **Terminal-injection and rendering hygiene.**
-   - Raw CR reaches the frame (15b-07).
-   - UTF-8 C1 controls pass every sanitizer (15b-08).
+1. **Killing a turn does not kill all of its commands (residue).** Turn teardown and the parallel deadline now kill the whole process tree (`ProcessContainment::killTree()`, `c54372b2a`), so the `setsid`'d `bash` and parallel Task sub-agents die with the turn.
+   - The remaining kill sites still signal one pid: the dormant Chat site, `AgentWorkerPool` and `EngineExecutor` (F-E2, partly fixed).
+   - **Fix:** route them through `killTree()` too.
+2. **Terminal-injection and rendering hygiene.** CR, UTF-8 C1 controls and the permission modal's byte wrap are fixed (`Sanitize::untrustedForDisplay()`, the C1 sweep, `Sanitize::visibleControls()`). What remains:
    - The tab strip is neither clipped nor sanitized (15b-18).
    - A forged image marker repaints images (15b-17).
    - `error_log()` output paints over the TUI (C2).
-   - The latent permission modal wraps by bytes and keeps CR, which **must be fixed before Wave 1.C ships** (15b-19).
-   - **Fix:** one `Sanitize::forTerminal()` covering C0, C1, CR, ESC, OSC, PUA and grapheme-aware width, enforced at every render site (golden width tests), plus `error_log` routed to a file or the notice sink while the TUI owns the screen.
+   - Bidi overrides and zero-width characters pass every sanitizer (15b-28); candy-shine keeps lone raw C1 bytes (15b-29).
+   - candy-core `Width::wrap()` hangs when a 2-cell cluster meets a 1-column budget (15b-26).
+   - **Fix:** extend the display policies to bidi and zero-width codepoints and PUA, enforce them at every render site (golden width tests), make `Width::wrap()` always consume a cluster, and route `error_log` to a file or the notice sink while the TUI owns the screen.
 3. **Repo-controlled content reaches the prompt without fencing or caps.**
-   - A repo's skills shadow the user's own (15d-03).
+   - A repo's skills shadow the user's own (15d-03; every shadowing is now reported, the precedence decision is open).
    - CLAUDE.md, AGENTS.md and `@imports` have no size cap (15d-09, C3).
-   - PromptFence misses tags that carry attributes, and chat-template control tokens aren't defanged (15d-10).
    - Repo memory is framed as "notes the user wrote" (15d-07).
-   - Built-in skills ship SugarCraft-monorepo procedures to every project, including `git checkout -- . && git clean -fd` and `gh pr merge` (15d-21), the same problem as Part II #13.
 4. **Prompt assembly reads the user's git config and the filesystem nondeterministically.**
    - `color.ui=always` puts escape codes in the prompt, and `diff.external` runs the user's diff tool every turn.
    - `git status` and `git diff` take `index.lock`, so the user's concurrent `git add` fails (15d-12).
@@ -861,7 +859,6 @@ Several audits found the same root cause in different places. Fixing each theme 
    - These also hurt cache stability (Part I #2).
    - **Fix:** `git -c color.ui=never --no-optional-locks`, `--no-ext-diff`, a timeout, `rev-parse --show-toplevel`, and sorted walks.
 5. **Errors are swallowed and turns "succeed".**
-   - Tool calls are lost on `finish_reason=stop` (A4).
    - Malformed arguments run the tool with `[]` (A11).
    - Vertex 429/503 are never retried (A19).
 6. **The permission layer has holes in the default and stricter modes.**
@@ -887,30 +884,29 @@ Several audits found the same root cause in different places. Fixing each theme 
 10. **Cost accounting holes.**
     - Task sub-agent spend never reaches the parent or the cap (B4).
     - Vertex is priced at $0 and Bedrock invents $0.01 (A15, A20).
-    - OpenAI bills cached tokens at full rate (A14).
-    - The OpenAI window is 8k for gpt-4o-mini and 4.1 (A13).
+    - The OpenAI context window has no config override (A13, partly fixed: the 8k sizes are corrected, and cached tokens are now billed at the cached rate).
     - A trusted project can choose title and summary models billed to the user's key (15d-24).
     - Together these mean the spend cap is unreliable on every provider except priced ones.
 
 ## IX.3 Critical and High findings: fix first
 
-The Critical item and 18 of the 20 High items are fixed on master, as is the latent High in the sub-agent path that was found while fixing them. These remain:
+The Critical item and all 20 High items are fixed on master, as is the latent High in the sub-agent path that was found while fixing them. No Critical or High finding remains. The three Medium-High items come next:
 
 | ID | Area | Finding | Repro |
 |---|---|---|---|
-| 15b-02 | Chat | After Esc Esc, "running" placeholders spin forever; later same-id results land on the old row | ✔ |
-| 15b-07 | TUI | Raw CR reaches the terminal (progress-bar output in Ctrl+O view overwrites panes) | ✔ |
+| 15b-03 | Chat | Command output, mid-turn notices and background/runtime notices go to the model as real turns | ✔ |
+| 15b-10 | TUI | Full-history markdown re-render every frame: 0.7 s per keystroke at 200 exchanges | ✔ |
+| F-E2 | Tools | Kill sites that signal one pid. Partly fixed (`c54372b2a`); remaining: dormant Chat site, `AgentWorkerPool`, `EngineExecutor` | ✔ |
 
 ## IX.4 Where the audit fixes slot into the roadmap
 
 - **Before Wave 0, as an "audit hotfix" wave (mostly S):** this wave has landed on master in full (see the **Fixed since audit** list at the end of each of Appendices Q–U).
 - **With Wave 0:**
-  - process-group kill (theme 1);
+  - the remaining process-tree kill sites (theme 1, F-E2);
   - git env hardening (theme 4);
-  - the SugarCraft-specific built-in skills (15d-21) alongside Part II #13;
   - cost accounting (theme 10).
 - **Before Wave 1.C ships:**
-  - fix the permission modal's byte-wrap and CR handling (15b-19);
+  - fix the permission modal's empty value for an invalid-UTF-8 argument (15b-27), and bidi overrides in the text it shows (15b-28);
   - fix PostToolUse block semantics (F-H1);
   - fix the hook JSON escaping (F-H3).
 
@@ -922,5 +918,5 @@ The Critical item and 18 of the 20 High items are fixed on master, as is the lat
   - SES-2 (fork copies dead tables);
   - SES-3 (writer lease; the server design's `session_leases` table covers it);
   - session picker bugs B1–B3;
-  - 15b-21 and 15b-22.
+  - 15b-21.
 - **With rendering work:** 15b-10 (cache rendered markdown per row, render only the visible window), 15b-04 and 15b-20 (move hooks and shell into `Cmd`).

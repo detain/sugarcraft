@@ -4,7 +4,7 @@ Scope: `src/Tools/` (built-ins, Concerns, PathJail, IgnoreRules, McpToolBridge),
 Checkout: master @ `05db616f3`, PHP 8.3.6 CLI, `memory_limit=-1`.
 Repro scripts: `/home/sites/crush-research-repos/_audit-scratch/15c/rNN_*.php`. Every repro runs against `.../15c/root` and never against the real repo.
 
-Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings at audit time: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low. Eight have since been fixed on master (see **Fixed since audit** at the end), so 23 remain: 1 Med-High, 9 Medium, 3 Low-Medium, 10 Low.
+Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings at audit time: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low. Eight have since been fixed on master (see **Fixed since audit** at the end), so 23 remain: 1 Med-High (F-E2, partly fixed), 9 Medium, 3 Low-Medium, 10 Low. One more was found during wave 2 (F-E4, Info), so 24 are open.
 
 > **Correction to the known list. Read this first.** Argument-scoped permission rules **are implemented**, in `PermissionRule::matches()` / `matchesShellSubject()`. `Bash(rm *)` deny now **denies**, and `Bash(git *)` allow no longer grants all of Bash (`r11_rules.php`). Two sources described older code: synthesis Part II row #23 ("`Bash(git *)` grants all of Bash") and `docs/PERMISSIONS.md` §"Pattern matching is name-only — measured" (which said `Bash(rm *)` "never matched → Allow"). Both are now corrected; the PERMISSIONS.md section was rewritten in `d3d90fece` to describe argument-scoped matching, and since `c8fc573a5` it describes the fail-closed allow rules that closed F-P5. The real defects in the new matcher were narrower. F-P5 (`$(…)`, backticks and redirection slipping past an allow rule) is now fixed. F-J3 covers path rules missing respellings and is still open.
 
@@ -156,6 +156,14 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 - **Fix:** Have the PHP child record the setsid child's pgid (`ProcessContainment::groupId()`) in the IPC file or socket frame, and have the parent `posix_kill(-pgid, SIGTERM→SIGKILL)` alongside the pid kill. Alternatively, the child installs a SIGTERM handler that terminates its group, and the parent sends SIGTERM first. `prctl(PR_SET_PDEATHSIG)` is not available from PHP.
 - **Sub-agent cascade (lead 6, confirmed by reading):** A Task call is `ParallelSafe` and `ExemptFromParallelDeadline`, so it runs in its own fork under the turn fork, and the deadline sweep skips it (`Runtime.php` phase 3: `|| $job['tool'] instanceof ExemptFromParallelDeadline) continue;`). When the turn fork is killed, the Task fork is reparented. Its only check is `ParentProcessGuard` (`TaskTool.php`, `$orphanGuard` in `onProgress`), and that fires only on the sub-agent's **next** ToolStarted, ToolFinished or reasoning delta. Until then, the sub-agent's in-flight provider request continues. In-flight Bash calls continue as in the repro above. Any parallel group the sub-agent had already forked keeps running too, because `executeConcurrently()`'s `finally` "DELIBERATELY DOES NOT … KILL" an abandoned child. `Write.php:30-39` gives "a cancelled turn could still leave a file on disk the user never approved" as the reason Write must never be ParallelSafe. A parallel Task, which runs Write, Edit and Bash, re-opens exactly that hole one level down.
 - **Test:** The repro as a PHPUnit test with the kill pattern from MEMORY (backgrounded pkill watchdog). Assert the marker file does **not** appear within 4 s after the parent kill. Add a sibling test where the Bash runs inside a Task sub-agent.
+- **Partly fixed on master in `c54372b2a`** (with 15a B2). New `ProcessContainment::killTree()` freezes the root, walks `/proc` stopping every descendant, then SIGKILLs every member's process group and pid. It is wired into `EngineBackend`'s cancel and idle teardown and into `Runtime`'s parallel-deadline kill, so the setsid'd `bash` dies with the turn, and so does the cascade to parallel Task sub-agents and their own Bash groups and forks. **Remaining:** the dormant `Chat.php` kill site (about `:4783`) is deferred to w7-gate-prov; the `AgentWorkerPool` and `EngineExecutor` fork kill sites still send a single `posix_kill` to the pid, not `killTree()`. Also, `killTree()` blocks the event loop for about 110 ms on Escape.
+
+### F-E4 — `ParallelSafe`'s docblock still describes two orphan hazards that B2 and B3 fixed
+- **Severity:** Info (doc) · **Confidence:** Verified-by-reading (found during wave 2)
+- **Where:** `src/Tools/ParallelSafe.php:57-77`. The paragraph "**An orphaned tool child has no deadline.**" says a SIGKILLed completion child leaves its parallel group with nothing to enforce the deadline. The paragraph "**An orphan also holds the parent's result socket open.**" says forked tool children inherit `$childSocket` because PHP sets no close-on-exec on it, so the TUI sees EOF late.
+- **Detail:** both are now false for the live path on Linux. Turn teardown kills the whole process tree, parallel tool children included (`killTree()`, `c54372b2a`, 15a B2). The frame socket ends are `FD_CLOEXEC`, the child closes the parent's end, and the parent notices a dead turn by polling its pid rather than waiting for EOF (`53da0a291`, 15a B3). The first paragraph still holds where `/proc` or ext-posix is missing, because `killTree()` then falls back to killing the root only. The docblock is the contract a new `ParallelSafe` tool author reads, so it now overstates the risk and points at the wrong mitigation.
+- **Fix:** rewrite both paragraphs to describe `killTree()` and the close-on-exec frame socket, keeping the no-`/proc` fallback caveat and the "a ParallelSafe tool must terminate on its own" rule.
+- **Test:** none needed beyond review. A doc-drift assertion could pin that the docblock names `killTree`.
 
 ### F-E3 — Bash's `cd ROOT && CMD` runs any later `;`-separated commands in the wrong directory when `cd` fails
 - **Severity:** Low. **Confidence:** Verified-by-reading.
@@ -222,7 +230,7 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 
 | ID | Sev | Conf | Title |
 |---|---|---|---|
-| F-E2 | Med-High | Repro | Cancel or deadline SIGKILLs the PHP child only; setsid'd bash keeps running; Task sub-agents cascade |
+| F-E2 | Med-High | Repro | Cancel or deadline SIGKILLs the PHP child only; setsid'd bash keeps running; Task sub-agents cascade. Partly fixed (`c54372b2a`: tree kill at turn teardown and parallel deadline); remaining: dormant Chat site, `AgentWorkerPool` and `EngineExecutor` kill sites |
 | F-T2 | Medium | Repro | Edit ignores `$maxBytes`; 35 MB file → 650 MB peak |
 | F-T3 | Medium | Reading | WebFetch 2 MiB raw result (32× Bash cap) |
 | F-T5 | Medium | Repro | Hostile `.gitignore` → Glob 139 s over 2,000 files (turn killed); backtrack errors fail open |
@@ -245,6 +253,7 @@ Status: **final.** All scoped files were read, and every lead from the checkpoin
 | F-H4 | Low | Reading | SkillTool `args` silently dropped |
 | F-W2 | Low | Repro | WebFetch returns 3xx/4xx/5xx bodies as success; relative `Location:` ends the chain |
 | F-W3 | Low | Reading | WebSearch: cleartext default, unchecked redirects (blind SSRF), unbounded read |
+| F-E4 | Info (doc) | Reading | `ParallelSafe` docblock still describes the orphan-deadline and inherited-socket hazards fixed by B2 and B3 |
 
 ---
 
