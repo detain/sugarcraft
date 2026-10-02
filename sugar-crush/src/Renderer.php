@@ -660,6 +660,16 @@ final class Renderer
     public const SESSION_TAB_ZONE_PREFIX = 'tab:';
 
     /**
+     * Widest a session name may be on its tab, in cells, before it is cut with
+     * an ellipsis (audit 15b-18). Session names are free text — `/rename`
+     * stores whatever was typed — so without a per-tab cap one long name takes
+     * the whole strip and every other tab collapses into the overflow marker.
+     * 20 keeps three tabs of a typical long name visible at 80 columns; the
+     * session picker still shows each name whole.
+     */
+    private const SESSION_TAB_NAME_COLS = 20;
+
+    /**
      * Zone-id prefix every clickable pane region carries (crush_feat.md §8
      * E3). The suffix is always a {@see Pane} case's own `value`, so
      * {@see Chat::update()} can turn a click straight back into the enum
@@ -2641,6 +2651,23 @@ final class Renderer
      * below 2 sessions (see `Chat::cycleSessionTab()`). See the "R20 wiring
      * decision" note on this class's docblock for why `Tui\SessionTabs`
      * itself is not instantiated to build this strip.
+     *
+     * The strip is prepended above the shell, outside every clip, so it has
+     * to hold its own two invariants (audit 15b-18):
+     *
+     * - ONE row no wider than `$chat->cols()`. candy-core repaints with an
+     *   absolute `cursorTo()`, so a row the terminal soft-wraps paints every
+     *   row below it one line low, and {@see transcriptTextRegion()} counts
+     *   the strip's lines to find the shell. Each name is capped at
+     *   {@see SESSION_TAB_NAME_COLS}; the current tab is placed first and cut
+     *   further if it alone would not fit; the remaining tabs are added in
+     *   list order while they fit, and the rest collapse into `… +N`.
+     * - No terminal markup from a name. Names are free text from `/rename`
+     *   and from every other writer of the shared session.db, so each goes
+     *   through {@see sessionTabName()} before it is measured.
+     *
+     * Zones are marked per visible tab only, after layout, so no zone is
+     * ever cut and a hidden tab registers nothing to click.
      */
     private static function renderSessionTabStrip(Chat $chat): string
     {
@@ -2654,17 +2681,127 @@ final class Renderer
             return '';
         }
 
+        $cols = max(1, $chat->cols());
         $current = $chat->currentSessionId();
-        $labels = [];
+        $currentIndex = null;
+        /** @var list<array{id: string, name: string, current: bool}> $tabs */
+        $tabs = [];
         foreach ($rows as $row) {
             $id = (string) ($row['id'] ?? '');
-            $rawName = (string) ($row['name'] ?? '');
-            $name = $rawName !== '' ? $rawName : $id;
-            $label = ($id !== '' && $id === $current) ? "[{$name}]" : " {$name} ";
-            $labels[] = self::markSessionTab($id, $label);
+            $name = self::sessionTabName((string) ($row['name'] ?? ''));
+            if ($name === '') {
+                $name = self::sessionTabName($id);
+            }
+            $isCurrent = $id !== '' && $id === $current;
+            if ($isCurrent) {
+                $currentIndex = count($tabs);
+            }
+            $tabs[] = [
+                'id' => $id,
+                'name' => self::clipSessionTabName($name, self::SESSION_TAB_NAME_COLS),
+                'current' => $isCurrent,
+            ];
         }
 
-        return implode('|', $labels);
+        $count = count($tabs);
+        $visible = range(0, $count - 1);
+        if (self::sessionTabsWidth($tabs, $visible) > $cols) {
+            // Room for "|… +N" at the widest N this strip can need.
+            $reserve = 1 + Width::string('… +' . ($count - 1));
+            // With no current session (a fresh launch has none selected) the
+            // first tab is the anchor, which is what plain left-to-right
+            // filling would have kept anyway.
+            $anchor = $currentIndex ?? 0;
+            $tabs[$anchor]['name'] = self::clipSessionTabName(
+                $tabs[$anchor]['name'],
+                $cols - $reserve - 2,
+            );
+
+            $used = self::sessionTabWidth($tabs[$anchor]) + $reserve;
+            $visible = [$anchor];
+            for ($i = 0; $i < $count; $i++) {
+                if ($i === $anchor) {
+                    continue;
+                }
+                $cost = self::sessionTabWidth($tabs[$i]) + 1;
+                if ($used + $cost > $cols) {
+                    break;
+                }
+                $used += $cost;
+                $visible[] = $i;
+            }
+            sort($visible);
+        }
+
+        $labels = [];
+        foreach ($visible as $i) {
+            $tab = $tabs[$i];
+            $label = $tab['current'] ? "[{$tab['name']}]" : " {$tab['name']} ";
+            $labels[] = self::markSessionTab($tab['id'], $label);
+        }
+        $hidden = $count - count($visible);
+        if ($hidden > 0) {
+            $labels[] = '… +' . $hidden;
+        }
+        $strip = implode('|', $labels);
+
+        // Backstop for terminals too narrow for even the current tab and the
+        // marker (under ~8 columns). Cut with the zones removed, as
+        // fitStatusBar() does, so a cut can never leave half a sentinel pair.
+        $plain = self::stripZoneMarkers($strip);
+
+        return Width::string($plain) > $cols ? Width::truncate($plain, $cols) : $strip;
+    }
+
+    /**
+     * A session name (or id) as inert single-row text: escape sequences and
+     * control bytes removed, CR/LF/TAB runs folded to one space, and every
+     * Private-Use code point dropped so a name cannot forge a click zone
+     * (U+E000/U+E001) or an image marker (U+E002 up) in the frame. The same
+     * boundary the sidebars use ({@see PaneLabel::safe()}), on top of the
+     * renderer's CR-to-LF display mapping.
+     */
+    private static function sessionTabName(string $raw): string
+    {
+        return PaneLabel::safe(Sanitize::untrustedForDisplay($raw));
+    }
+
+    /**
+     * $name cut to $budget cells, ending in an ellipsis when it was cut.
+     * Grapheme-aware ({@see Width::truncate()}), so a wide or combining
+     * cluster is never split. A budget under one cell yields the empty name.
+     */
+    private static function clipSessionTabName(string $name, int $budget): string
+    {
+        if (Width::string($name) <= $budget) {
+            return $name;
+        }
+        if ($budget <= 1) {
+            return $budget === 1 ? '…' : '';
+        }
+
+        return rtrim(Width::truncate($name, $budget - 1)) . '…';
+    }
+
+    /** @param array{id: string, name: string, current: bool} $tab */
+    private static function sessionTabWidth(array $tab): int
+    {
+        // Two cells of chrome either way: "[name]" or " name ".
+        return Width::string($tab['name']) + 2;
+    }
+
+    /**
+     * @param list<array{id: string, name: string, current: bool}> $tabs
+     * @param list<int> $indices
+     */
+    private static function sessionTabsWidth(array $tabs, array $indices): int
+    {
+        $width = max(0, count($indices) - 1);
+        foreach ($indices as $i) {
+            $width += self::sessionTabWidth($tabs[$i]);
+        }
+
+        return $width;
     }
 
     /**
