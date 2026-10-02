@@ -2361,10 +2361,6 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
-     * A `PreToolUse` chain that asks about every tool, so a prompt in this file can
-     * be raised by the production path instead of by a hand-dispatched Msg.
-     */
-    /**
      * The real {@see PermissionGateHook} in `default` mode, which asks for the
      * `bash` tool these fixtures register — the one asker whose question a
      * {@see PermissionReply::Always} grant may answer (audit F-P9).
@@ -2399,6 +2395,10 @@ final class KeyHelpTest extends TestCase
         $this->assertInstanceOf(\SugarCraft\Crush\ToolResultsMsg::class, $resolved, 'the released batch did not complete');
     }
 
+    /**
+     * A `PreToolUse` chain that asks about every tool, so a prompt in this file can
+     * be raised by the production path instead of by a hand-dispatched Msg.
+     */
     private static function askEveryToolHooks(): HookManager
     {
         $asks = new class implements HookInterface {

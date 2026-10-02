@@ -4602,37 +4602,6 @@ final class Chat implements Model
     }
 
     /**
-     * The tool call a hook chain's rewrite (if any) says should actually run,
-     * paired with the context that describes THAT call.
-     *
-     * Both halves move together deliberately. The context returned here is the
-     * one {@see applyPostToolUse()} hands `PostToolUse`, and the incoming one
-     * still describes the model's PROPOSAL — so leaving it behind made
-     * `AuditHook` record a command that was never executed, on precisely the
-     * calls (the rewritten ones) whose record anybody would care about.
-     *
-     * Returns $toolCall untouched when the result carries no rewrite, or when
-     * the rewrite will not decode to an argument map ({@see
-     * \SugarCraft\Crush\Hooks\HookResult::rewrittenArgs()}, which is also
-     * where the JSON-list case is refused) — the same conservative fallback
-     * the engine path takes, and the reason
-     * {@see \SugarCraft\Crush\Hooks\ScriptHook::modifyOrDeny()} refuses to
-     * emit a non-object rewrite in the first place.
-     *
-     * ONLY A MODIFY OR AN ASK CARRIES A REWRITE HERE, matching
-     * {@see Runtime::rewrittenArguments()} (which gates on `isModified()`) and
-     * {@see Runtime::asAsked()} (the ASK half) — the "decision for decision"
-     * claim on {@see gateToolCall()} is only true if this side draws the same
-     * line. A plain ALLOW carrying a `modifiedInput` is constructible (the
-     * {@see \SugarCraft\Crush\Hooks\HookResult} constructor is public) and
-     * {@see \SugarCraft\Crush\Hooks\HookRegistry::executeHooks()} never
-     * re-scans one, since only a MODIFY makes the loop take another pass — so
-     * honouring it would dispatch arguments no hook in the chain ever judged,
-     * which is the fail-open the re-scan exists to close.
-     *
-     * @return array{0: ToolCall, 1: HookContext}
-     */
-    /**
      * The identity a {@see PermissionReply::Always} grant is filed under for
      * this call, or null when no grant may ever answer this ask (audit F-P9).
      *
@@ -4693,6 +4662,37 @@ final class Chat implements Model
         return $value;
     }
 
+    /**
+     * The tool call a hook chain's rewrite (if any) says should actually run,
+     * paired with the context that describes THAT call.
+     *
+     * Both halves move together deliberately. The context returned here is the
+     * one {@see applyPostToolUse()} hands `PostToolUse`, and the incoming one
+     * still describes the model's PROPOSAL — so leaving it behind made
+     * `AuditHook` record a command that was never executed, on precisely the
+     * calls (the rewritten ones) whose record anybody would care about.
+     *
+     * Returns $toolCall untouched when the result carries no rewrite, or when
+     * the rewrite will not decode to an argument map ({@see
+     * \SugarCraft\Crush\Hooks\HookResult::rewrittenArgs()}, which is also
+     * where the JSON-list case is refused) — the same conservative fallback
+     * the engine path takes, and the reason
+     * {@see \SugarCraft\Crush\Hooks\ScriptHook::modifyOrDeny()} refuses to
+     * emit a non-object rewrite in the first place.
+     *
+     * ONLY A MODIFY OR AN ASK CARRIES A REWRITE HERE, matching
+     * {@see Runtime::rewrittenArguments()} (which gates on `isModified()`) and
+     * {@see Runtime::asAsked()} (the ASK half) — the "decision for decision"
+     * claim on {@see gateToolCall()} is only true if this side draws the same
+     * line. A plain ALLOW carrying a `modifiedInput` is constructible (the
+     * {@see \SugarCraft\Crush\Hooks\HookResult} constructor is public) and
+     * {@see \SugarCraft\Crush\Hooks\HookRegistry::executeHooks()} never
+     * re-scans one, since only a MODIFY makes the loop take another pass — so
+     * honouring it would dispatch arguments no hook in the chain ever judged,
+     * which is the fail-open the re-scan exists to close.
+     *
+     * @return array{0: ToolCall, 1: HookContext}
+     */
     private static function applyRewrite(
         ToolCall $toolCall,
         HookContext $context,

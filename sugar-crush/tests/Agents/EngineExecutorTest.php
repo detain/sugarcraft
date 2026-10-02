@@ -119,7 +119,7 @@ final class EngineExecutorTest extends TestCase
             new CompleteResponse(content: 'looking first', toolCalls: [new ToolCall('call_1', 'probe', ['path' => "src/\nA.php"])]),
             new CompleteResponse(content: 'the answer'),
         ]);
-        $executor = new EngineExecutor(EngineBackend::new($provider, 'm')->withTools([self::probe()]));
+        $executor = new EngineExecutor(EngineBackend::new($provider, 'm')->withRoot($this->emptyRoot())->withTools([self::probe()]));
 
         $results = iterator_to_array($executor->executeStream(self::subAgent(), self::request()), false);
         $final = array_pop($results);
@@ -144,7 +144,7 @@ final class EngineExecutorTest extends TestCase
             streams: true,
         );
         $results = iterator_to_array(
-            (new EngineExecutor(EngineBackend::new($chunky, 'm')))->executeStream(self::subAgent(), self::request()),
+            (new EngineExecutor(EngineBackend::new($chunky, 'm')->withRoot($this->emptyRoot())))->executeStream(self::subAgent(), self::request()),
             false,
         );
 
@@ -316,7 +316,9 @@ final class EngineExecutorTest extends TestCase
      * The 2026-10-02 step-budget decision: an agent that declares no
      * `maxTurns` gets 200 steps, the same figure as TaskTool's sub-agents.
      * Sixty tool steps then an answer is an ordinary stage, and under the old
-     * cap of 50 it ended with no report at all.
+     * cap of 50 it ended with no report at all. Each step's arguments differ,
+     * because sixty IDENTICAL calls are a loop: the repeat-call guard
+     * (`ToolCallLoopGuard`) ends that turn at the eighth.
      */
     public function testAnUndeclaredStepCapIsTwoHundredSteps(): void
     {
@@ -324,7 +326,7 @@ final class EngineExecutorTest extends TestCase
 
         $script = [];
         for ($step = 1; $step <= 60; $step++) {
-            $script[] = new CompleteResponse(content: '', toolCalls: [new ToolCall('call_' . $step, 'probe', [])]);
+            $script[] = new CompleteResponse(content: '', toolCalls: [new ToolCall('call_' . $step, 'probe', ['step' => $step])]);
         }
         $script[] = new CompleteResponse(content: 'sixty steps later');
         $probe = self::probe();
@@ -377,6 +379,34 @@ final class EngineExecutorTest extends TestCase
         $result = $executor->execute($agent, self::request());
 
         $this->assertSame(AgentStatus::Completed, $result->status, 'timeout 0 must mean "no bound", not "already expired"');
+    }
+
+    /** @var list<string> */
+    private array $emptyRoots = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->emptyRoots as $dir) {
+            @rmdir($dir);
+        }
+        $this->emptyRoots = [];
+        parent::tearDown();
+    }
+
+    /**
+     * An empty, non-git project root for the two tests that time the stream.
+     * Their assertions depend on the first token arriving inside one
+     * STREAM_FLUSH_SECONDS window, and a turn rooted at the cwd first shells
+     * out to `git status` for the <env> block: in a large checkout with a
+     * dirty tree that alone was measured at 0.43 s, past the 0.25 s window.
+     */
+    private function emptyRoot(): string
+    {
+        $dir = sys_get_temp_dir() . '/crush-engine-executor-' . bin2hex(random_bytes(6));
+        mkdir($dir, 0o700);
+        $this->emptyRoots[] = $dir;
+
+        return $dir;
     }
 
     private static function subAgent(?int $maxTurns = null): SubAgent

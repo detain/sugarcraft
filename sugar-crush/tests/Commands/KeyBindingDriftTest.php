@@ -1666,7 +1666,6 @@ final class KeyBindingDriftTest extends TestCase
         $this->assertNull($answered->pendingPermission(), "'{$key->string()}' must answer the prompt");
     }
 
-    /** A live, ARMED permission prompt on a `Bash` call. */
     /**
      * A prompt the real {@see PermissionGateHook} raised (`default` mode asks
      * for Bash) over a registered `Bash` tool — the one kind of prompt whose
@@ -1712,6 +1711,7 @@ final class KeyBindingDriftTest extends TestCase
         $this->assertInstanceOf(\SugarCraft\Crush\ToolResultsMsg::class, $resolved, 'the released batch did not complete');
     }
 
+    /** A live, ARMED permission prompt on a `Bash` call. */
     private function blockedOnPermission(): Chat
     {
         [$blocked] = $this->chat([Message::user('clean up')])->update(new PermissionRequestMsg(

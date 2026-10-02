@@ -393,12 +393,14 @@ final class OAuthClientRegistrationTest extends TestCase
             fn () => $ocr->getValidAuth('https://z/mcp', 'https://as/token'),
             fn () => $ocr->validAuthFor('https://z/mcp'),
         ] as $call) {
+            $caught = null;
             try {
                 $call();
-                $this->fail('an expired refresh-less entry must throw');
             } catch (\RuntimeException $e) {
-                $this->assertStringContainsString('mcp auth login', $e->getMessage());
+                $caught = $e;
             }
+            $this->assertNotNull($caught, 'an expired refresh-less entry must throw');
+            $this->assertStringContainsString('mcp auth login', $caught->getMessage());
         }
 
         $this->assertSame([], $history, 'no grant is guessed: neither a registration update nor a client_credentials token request may be sent');
@@ -462,12 +464,14 @@ final class OAuthClientRegistrationTest extends TestCase
         foreach (['{"expires_in":10}', '{"access_token":""}', '{"access_token":"a","expires_in":"soon"}'] as $body) {
             $ocr = new OAuthClientRegistration($this->clientAnswering([new Response(200, [], $body)]), $this->authFilePath);
 
+            $caught = null;
             try {
                 $ocr->fetchToken('https://as/token', 'cid', '');
-                $this->fail('must reject: ' . $body);
             } catch (\RuntimeException $e) {
-                $this->assertStringContainsString('Token response', $e->getMessage());
+                $caught = $e;
             }
+            $this->assertNotNull($caught, 'must reject: ' . $body);
+            $this->assertStringContainsString('Token response', $caught->getMessage());
         }
     }
 
@@ -553,12 +557,14 @@ final class OAuthClientRegistrationTest extends TestCase
         $ocr = new OAuthClientRegistration($this->clientRecording([], $history), $this->authFilePath);
         $ocr->saveAuth('https://z/mcp', $this->storeEntry('Z1', time() + 3600));
 
+        $caught = null;
         try {
             $ocr->updateRegistration('https://z/mcp', ['client_name' => 'x']);
-            $this->fail('no registration_client_uri means no RFC 7592 update');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('registration_client_uri', $e->getMessage());
+            $caught = $e;
         }
+        $this->assertNotNull($caught, 'no registration_client_uri means no RFC 7592 update');
+        $this->assertStringContainsString('registration_client_uri', $caught->getMessage());
 
         $this->assertSame([], $history);
     }
@@ -893,12 +899,14 @@ final class OAuthClientRegistrationTest extends TestCase
 
         $this->assertSame([], $ocr->loadAuth());
 
+        $caught = null;
         try {
             $ocr->saveAuth('https://y/mcp', $this->storeEntry('Y1', time() + 3600));
-            $this->fail('a save over an unparseable auth file must refuse');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString($this->authFilePath, $e->getMessage());
+            $caught = $e;
         }
+        $this->assertNotNull($caught, 'a save over an unparseable auth file must refuse');
+        $this->assertStringContainsString($this->authFilePath, $caught->getMessage());
 
         $this->assertSame('{"https://x/mcp": {"accessToken": "X1"', file_get_contents($this->authFilePath));
     }
