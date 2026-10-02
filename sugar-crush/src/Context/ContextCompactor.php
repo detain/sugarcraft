@@ -86,6 +86,31 @@ final class ContextCompactor
     }
 
     /**
+     * A copy of this compactor that preserves $fewer fewer of the most recent
+     * exchanges in full, never fewer than one (or than the configured count,
+     * when that is already below one). $fewer <= 0 answers this same instance.
+     *
+     * The escape from the 95% blocking tier: when the preserved exchanges alone
+     * overflow the window, each further attempt the user makes drops the oldest
+     * of them ({@see \SugarCraft\Crush\Chat}'s `blockedAttempts()` counts the
+     * attempts). The supplied summaries ride across, so the keys a model was
+     * offered still land.
+     */
+    public function withRecentPreserveReducedBy(int $fewer): self
+    {
+        if ($fewer <= 0) {
+            return $this;
+        }
+
+        $current = $this->config->recentPreserveCount;
+
+        return new self(
+            $this->config->withRecentPreserveCount(max(min(1, $current), $current - $fewer)),
+            $this->exchangeSummaries,
+        );
+    }
+
+    /**
      * The content key a model-written summary is filed under: the exact
      * user/assistant text of the exchange it summarises, hashed.
      *

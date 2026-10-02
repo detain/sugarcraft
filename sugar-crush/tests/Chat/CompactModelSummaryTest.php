@@ -41,15 +41,14 @@ final class CompactModelSummaryTest extends TestCase
      * A transcript long enough that stage 2 runs. Two pairs are preserved (see
      * {@see compactorConfig()}), so the earlier ones get summarised.
      *
-     * Mind the arithmetic when reading the counts below: `/compact` appends a
-     * user line and a notice, and those form a PAIR, so a 5-pair fixture is a
-     * 6-pair history by the time the compaction is sized — 2 preserved, 4
-     * condensed. That is deliberate (see `Chat::scheduleModelCompaction()`) and
-     * it is why the fixtures here supply four summaries for five pairs.
+     * Mind the arithmetic when reading the counts below: a 6-pair fixture is 2
+     * preserved and 4 condensed. The `/compact` line and its notice are UI-only
+     * rows, which compaction never reads (audit 15b-03-rem(a)), so they are not
+     * a pair; until that fix they were, and this fixture was five pairs.
      *
      * @return list<Message>
      */
-    private function history(int $pairs = 5): array
+    private function history(int $pairs = 6): array
     {
         $out = [];
         for ($i = 1; $i <= $pairs; $i++) {
@@ -65,7 +64,7 @@ final class CompactModelSummaryTest extends TestCase
         return CompactorConfig::new()->withRecentPreserveCount(2);
     }
 
-    private function chat(?Backend $summaryBackend, string $draft = '/compact', int $pairs = 5): Chat
+    private function chat(?Backend $summaryBackend, string $draft = '/compact', int $pairs = 6): Chat
     {
         return new Chat(
             history: $this->history($pairs),
@@ -135,7 +134,7 @@ final class CompactModelSummaryTest extends TestCase
     }
 
     /**
-     * The four records a 5-pair fixture earns — one per offered exchange, each
+     * The four records a 6-pair fixture earns — one per offered exchange, each
      * with only the `asked` facet filled. For the tests below whose subject is
      * routing and timing rather than the shape of a record.
      *
@@ -997,8 +996,9 @@ final class CompactModelSummaryTest extends TestCase
     public function testAHistoryWithNothingToSummariseTakesTheSynchronousRouteEvenWithABackend(): void
     {
         $seen = null;
-        // ONE pair, which with the `/compact` pair makes two - exactly
-        // recentPreserveCount, so nothing is condensed and nothing is worth asking.
+        // ONE pair, under recentPreserveCount (the UI-only `/compact` line and its
+        // notice are not a pair), so nothing is condensed and nothing is worth
+        // asking.
         $chat = $this->chat(
             $this->summarizer($this->record(1, ['asked' => 'never asked']), $seen),
             '/compact',

@@ -625,6 +625,14 @@ final class Chat implements Model
     private const CONTEXT_REMINDER_PREFIX = 'Heads up: this conversation has grown to ~';
 
     /**
+     * The first bytes of the 95% tier's refusal ({@see foregroundBlockedResponse()}),
+     * which {@see blockedAttempts()} counts. The refusal is a UI-only row and
+     * {@see Message::jsonSerialize()} persists that flag, so content plus flag
+     * still recognise it after a save and resume.
+     */
+    private const BLOCKED_TURN_PREFIX = 'This turn was NOT sent: the conversation is at ~';
+
+    /**
      * @param list<Message> $history
      * @param array<string, callable> $tools Map of tool name => callable(array $arguments): mixed
      * @param callable|null $onToolCall Optional callback called when tools are invoked
@@ -8380,10 +8388,7 @@ final class Chat implements Model
         // the most recent exchanges in full, so a handful of enormous ones
         // genuinely cannot be shrunk, and that is the state worth refusing on.
         $tokenLimit = $this->contextTokenLimit();
-        $wireHistory = array_map(
-            static fn(Message $msg): array => $msg->toWire(),
-            $this->history
-        );
+        $wireHistory = self::compactionWire($this->history);
 
         $baseHistory = $this->history;
         // `$this`, until the automatic tier has something to report about the
@@ -8447,8 +8452,11 @@ final class Chat implements Model
                 return $parked;
             }
 
-            $compactedWire = $this->compactor->compact($wireHistory);
-            $savedPercentage = $this->compactor->savingsPercentage();
+            // One instance for both calls: savingsPercentage() reads the state
+            // compact() just left on it.
+            $attemptCompactor = $this->attemptCompactor($this->history);
+            $compactedWire = $attemptCompactor->compact($wireHistory);
+            $savedPercentage = $attemptCompactor->savingsPercentage();
 
             // Adopt the compacted history only when it actually bought
             // something. A history of at most recentPreserveCount exchanges is
@@ -9199,10 +9207,7 @@ final class Chat implements Model
         // prompt still goes out, but a system-role warning is appended
         // alongside it so the user sees context is filling up well before
         // the hard 85%/95% compaction tiers would kick in.
-        $baseWire = array_map(
-            static fn(Message $msg): array => $msg->toWire(),
-            $baseHistory
-        );
+        $baseWire = self::compactionWire($baseHistory);
         $dueForReminder = $this->compactor->shouldSendReminder($baseWire, $tokenLimit);
 
         // Order is load-bearing, twice over.
@@ -11936,17 +11941,23 @@ final class Chat implements Model
     ): array {
         $originalCount = count($baseHistory);
 
-        // Convert history to wire format for the compactor
-        $wireHistory = array_map(
-            static fn(Message $msg): array => $msg->toWire(),
-            $baseHistory
-        );
+        // The agent-visible rows only, like every compactor input (audit
+        // 15b-03): see compactionWire().
+        $wireHistory = self::compactionWire($baseHistory);
 
         // Compact the history using all 5 stages. The summaries ride on a COPY
         // of the compactor: savingsPercentage() is per-instance state read
         // straight after compact(), so both calls have to land on the same
         // object.
-        $compactor = $summaries === [] ? $this->compactor : $this->compactor->withExchangeSummaries($summaries);
+        // `/compact` counts as an attempt against the blocking tier
+        // ({@see blockedAttempts()}) - its echo is appended below, after the
+        // compaction, so it is counted here on the history it will be part of.
+        // The model route's echo is already in $baseHistory, and its probe
+        // counted it too.
+        $attemptCompactor = $this->attemptCompactor(
+            $inputText === '' ? $baseHistory : [...$baseHistory, Message::user($inputText)->withUiOnly()],
+        );
+        $compactor = $summaries === [] ? $attemptCompactor : $attemptCompactor->withExchangeSummaries($summaries);
         $compactedWire = $compactor->compact($wireHistory);
         $savingsPercentage = $compactor->savingsPercentage();
 
@@ -12161,12 +12172,13 @@ final class Chat implements Model
             );
         }
 
-        // The `/compact` line and the notice below form a PAIR, so the probe
-        // stands the notice in as an empty assistant turn - see
-        // buildSummarizationRequest() on why the role and position matter and the
-        // content does not.
+        // The probe mirrors what is about to be appended - the `/compact` echo
+        // and the notice below, both UI-only - so the offered set is derived from
+        // the shape the landing compacts (see buildSummarizationRequest()). Both
+        // are UI-only, so neither is an exchange: compactionWire() drops them and
+        // the offered set is the one the CURRENT conversation earns.
         $echoed = [...$this->history, Message::user($inputText)->withUiOnly()];
-        $request = $this->buildSummarizationRequest([...$echoed, Message::assistant('')], null);
+        $request = $this->buildSummarizationRequest([...$echoed, Message::assistant('')->withUiOnly()], null);
         if ($request === null) {
             return null;
         }
@@ -12208,10 +12220,12 @@ final class Chat implements Model
      * information]` placeholder however cooperative the model was.
      *
      * The stand-in's CONTENT does not matter (its pair is the newest, so it is
-     * always inside the preserved tail) but its ROLE and POSITION do, because
-     * those are what the grouping counts. That is why the caller supplies the
-     * whole probe rather than this method appending a placeholder of a role only
-     * one of the two routes uses.
+     * always inside the preserved tail) but its ROLE, POSITION and UI-ONLY FLAG
+     * do, because those are what the grouping counts: only agent-visible rows
+     * reach the compactor ({@see compactionWire()}), so a stand-in for a UI-only
+     * notice must be UI-only too, or it would count as a turn the landing never
+     * sees. That is why the caller supplies the whole probe rather than this
+     * method appending a placeholder of a role only one of the two routes uses.
      *
      * Null is the ordinary answer and not a failure: no {@see $summaryBackend}
      * (offline, either `$SUGARCRUSH_BACKEND_CMD*` shell-out, every unit test),
@@ -12248,11 +12262,13 @@ final class Chat implements Model
             return null;
         }
 
-        $wireHistory = array_map(
-            static fn(Message $msg): array => $msg->toWire(),
-            $probeHistory,
-        );
-        $exchanges = $this->compactor->exchangesToSummarize($wireHistory);
+        // Agent-visible rows only (audit 15b-03): a command echo and its output
+        // are not an exchange the model took part in, so it is not asked to
+        // summarise them - and compactionChanges() derives the keys these
+        // summaries are filed under from the same filtered list, which is what
+        // keeps every key landing on its exchange. See compactionWire().
+        $wireHistory = self::compactionWire($probeHistory);
+        $exchanges = $this->attemptCompactor($probeHistory)->exchangesToSummarize($wireHistory);
         if ($exchanges === []) {
             return null;
         }
@@ -12504,7 +12520,7 @@ final class Chat implements Model
         // already models for `inFlight`.
         $cancellation = new CancellationToken();
         $request = $this->buildSummarizationRequest(
-            [...$this->history, Message::system(''), Message::user($inputText)],
+            [...$this->history, Message::notice(''), Message::user($inputText)],
             $inputText,
             $cancellation,
         );
@@ -12559,7 +12575,7 @@ final class Chat implements Model
         // newest condensed exchange its model summary, never the turn.
         if ($hookNotes !== []) {
             $request = $this->buildSummarizationRequest(
-                [...$this->history, Message::system(''), ...$hookNotes, Message::user($inputText)],
+                [...$this->history, Message::notice(''), ...$hookNotes, Message::user($inputText)],
                 $inputText,
                 $cancellation,
             ) ?? $request;
@@ -13080,10 +13096,7 @@ final class Chat implements Model
         // $compacted, so moving them changes nothing about the ordering of the checks
         // that consume them. Where the counter itself is written is the next block.
         $tokenLimit = $this->contextTokenLimit();
-        $compactedWire = array_map(
-            static fn(Message $m): array => $m->toWire(),
-            $compacted->history
-        );
+        $compactedWire = self::compactionWire($compacted->history);
 
         // THE BREAKER'S MEASUREMENT on this route — the same pair the tier used to
         // decide to park in the first place, applied to what the model's summaries
@@ -17270,21 +17283,34 @@ final class Chat implements Model
      * ≈0 there and rebuilt untouched exchanges lossily; the rescue splices
      * instead. See {@see intraExchangeTruncation()}.
      *
+     * $wire IS A COMPACTION OF $original'S AGENT-VISIBLE ROWS ONLY
+     * ({@see compactionWire()}, audit 15b-03-rem(a)), so the suffix is matched
+     * against those rows and $original's UI-only rows are put back afterwards by
+     * {@see withUiOnlyRowsRestored()}. That replaces the old guess, which matched
+     * each rebuilt row's role and content against the UI-only rows to re-flag a
+     * row the compactor had passed through: a row the compactor never sees needs
+     * no guess, and the condensed lines it used to make OUT of UI-only rows came
+     * back agent-visible whatever the guess said.
+     *
      * @param array<array{role:string,content:string}> $wire
-     * @param list<Message> $original The history `$wire` was compacted from.
+     * @param list<Message> $original The history `$wire` was compacted from,
+     *        UI-only rows included.
      * @return list<Message>
      */
     private function messagesFromWire(array $wire, array $original): array
     {
         $wire = array_values($wire);
         $original = array_values($original);
+        // The wire was built by compactionWire(), so it is aligned with the
+        // agent-visible rows alone; the UI-only rows are put back afterwards.
+        $visible = Message::agentVisible($original);
         $wireCount = count($wire);
-        $originalCount = count($original);
+        $visibleCount = count($visible);
 
         $preserved = 0;
-        while ($preserved < $wireCount && $preserved < $originalCount) {
+        while ($preserved < $wireCount && $preserved < $visibleCount) {
             $entry = $wire[$wireCount - 1 - $preserved];
-            $candidate = $original[$originalCount - 1 - $preserved];
+            $candidate = $visible[$visibleCount - 1 - $preserved];
             if (
                 ($entry['role'] ?? 'assistant') !== $candidate->role->value
                 || ($entry['content'] ?? '') !== $candidate->content
@@ -17294,43 +17320,166 @@ final class Chat implements Model
             $preserved++;
         }
 
-        // A wire entry carries no uiOnly flag (audit 15b-03), so a UI-only row
-        // the compactor passed through verbatim - `_Request cancelled._` riding
-        // on its pair, a command echo - would come back agent-visible. Its exact
-        // role+content is its provenance; a pair a VISIBLE row also matches is
-        // ambiguous and resolved toward visible, the pre-flag behaviour.
-        $uiOnlyKeys = [];
-        $visibleKeys = [];
-        foreach ($original as $message) {
-            $key = $message->role->value . "\0" . $message->content;
-            if ($message->uiOnly) {
-                $uiOnlyKeys[$key] = true;
-            } else {
-                $visibleKeys[$key] = true;
-            }
-        }
-
-        $messages = [];
-        foreach ($wire as $index => $entry) {
-            if ($index >= $wireCount - $preserved) {
-                $messages[] = $original[$originalCount - ($wireCount - $index)];
-                continue;
-            }
-
+        $rewritten = [];
+        for ($index = 0; $index < $wireCount - $preserved; $index++) {
+            $entry = $wire[$index];
             $role = Role::from($entry['role'] ?? 'assistant');
             $content = $entry['content'] ?? '';
-            $message = match ($role) {
+            $rewritten[] = match ($role) {
                 Role::User => Message::user($content),
                 Role::Assistant => Message::assistant($content),
                 default => new Message($role, $content, time()),
             };
-            $key = $role->value . "\0" . $content;
-            $messages[] = isset($uiOnlyKeys[$key]) && !isset($visibleKeys[$key])
-                ? $message->withUiOnly()
-                : $message;
         }
 
-        return $messages;
+        return self::withUiOnlyRowsRestored($original, $rewritten, $visibleCount - $preserved);
+    }
+
+    /**
+     * The wire a {@see ContextCompactor} is handed: $history's AGENT-VISIBLE
+     * rows only (audit 15b-03-rem(a)).
+     *
+     * Compaction exists to shrink what the model is sent, and a UI-only row -
+     * a command echo and its output, a queued or refused notice, a launch,
+     * runtime or background notice - is never sent. Feeding the compactor the
+     * whole transcript did three wrong things: the summarization request
+     * offered `/help`'s listing to a model as an exchange to summarise; the
+     * condensed `[summary] /help → …` line came back as a NEW, agent-visible
+     * row, so the next turn put the UI text on the wire after all; and the
+     * compactor's tiers counted bytes {@see estimateTokenCount()} skips, so a
+     * large notice could rewrite a conversation that fits.
+     *
+     * EVERY compactor call site in this class goes through here, on both sides
+     * of the exchange-key alignment: {@see buildSummarizationRequest()} keys the
+     * exchanges it offers off this list, and {@see compactionChanges()} compacts
+     * this same list, so a summary is looked up under exactly the key it was
+     * filed under. Filtering one side only would shift the pair grouping and
+     * the preserved tail, and every summary would miss.
+     *
+     * The UI-only rows are not lost: {@see messagesFromWire()} and
+     * {@see intraExchangeTruncation()} put them back around whatever the
+     * compactor returned ({@see withUiOnlyRowsRestored()}).
+     *
+     * @param list<Message> $history
+     * @return list<array{role:string,content:string}>
+     */
+    private static function compactionWire(array $history): array
+    {
+        return array_map(
+            static fn(Message $msg): array => $msg->toWire(),
+            Message::agentVisible($history),
+        );
+    }
+
+    /**
+     * How many attempts have run into the 95% blocking tier since the
+     * conversation last got a turn out: each blocking refusal
+     * ({@see foregroundBlockedResponse()}) in the rows after the newest
+     * agent-visible assistant reply, plus each `/compact` typed among them.
+     * Zero whenever there is no refusal in that span, so `/compact` on a session
+     * that was never blocked compacts exactly as it always has.
+     *
+     * {@see attemptCompactor()} preserves this many exchanges fewer. That is what
+     * makes the refusal's "each further attempt drops the oldest of them" TRUE,
+     * and it has to be explicit since the compactor reads agent-visible rows only
+     * (see the refusal's docblock for the accident it replaces).
+     *
+     * Derived from the transcript rather than kept as a field, so it survives a
+     * save and resume and a `/rewind` reads the count of the history it restored;
+     * a turn that gets out ends the span with its own visible reply.
+     *
+     * @param list<Message> $history
+     */
+    private static function blockedAttempts(array $history): int
+    {
+        $refusals = 0;
+        $compacts = 0;
+        for ($i = count($history) - 1; $i >= 0; $i--) {
+            $message = $history[$i];
+            if (!$message->uiOnly) {
+                if ($message->role === Role::Assistant) {
+                    break;
+                }
+                continue;
+            }
+            if ($message->role === Role::Assistant && str_starts_with($message->content, self::BLOCKED_TURN_PREFIX)) {
+                $refusals++;
+            } elseif ($message->role === Role::User && preg_match('#^/compact(?:\s|$)#', ltrim($message->content)) === 1) {
+                $compacts++;
+            }
+        }
+
+        return $refusals === 0 ? 0 : $refusals + $compacts;
+    }
+
+    /**
+     * The compactor a compaction of $history runs with: this session's, with
+     * {@see blockedAttempts()} fewer exchanges preserved (never fewer than one).
+     *
+     * EVERY compaction of a history goes through here with the history it
+     * compacts - and {@see buildSummarizationRequest()} with its probe, which
+     * mirrors that history - because the preserved window decides which
+     * exchanges are offered to a model, and the offered keys must be the ones
+     * the landing looks up.
+     *
+     * @param list<Message> $history
+     */
+    private function attemptCompactor(array $history): ContextCompactor
+    {
+        return $this->compactor->withRecentPreserveReducedBy(self::blockedAttempts($history));
+    }
+
+    /**
+     * $original's UI-only rows put back around a compaction of its
+     * agent-visible rows.
+     *
+     * $rewritten is the new text that replaced the first $rewrittenCount
+     * agent-visible rows of $original (summary lines, file stubs, `[3x]`
+     * groups); the agent-visible rows after them were preserved verbatim.
+     *
+     *  - FROM THE FIRST PRESERVED ROW ON, $original is kept exactly as it was,
+     *    UI-only rows in their own places: nothing there was rewritten, so a
+     *    notice between a prompt and its answer stays between them.
+     *  - THE UI-ONLY ROWS OF THE REWRITTEN REGION are kept verbatim too, in
+     *    their order, ahead of the lines that replaced that region. They cost
+     *    the model nothing, so condensing them would save nothing, and the old
+     *    route that did condense them is the one that turned them into
+     *    agent-visible summary lines. They cannot keep their exact places,
+     *    because the region they sat in no longer exists row for row; ahead of
+     *    it is where a launch notice already was, and keeps every one of them
+     *    before the preserved tail they preceded.
+     *
+     * With nothing preserved, the boundary is just after the last agent-visible
+     * row, so trailing notices stay trailing.
+     *
+     * @param list<Message> $original
+     * @param list<Message> $rewritten
+     * @return list<Message>
+     */
+    private static function withUiOnlyRowsRestored(array $original, array $rewritten, int $rewrittenCount): array
+    {
+        $boundary = 0;
+        $seen = 0;
+        foreach ($original as $position => $message) {
+            if ($message->uiOnly) {
+                continue;
+            }
+            if ($seen === $rewrittenCount) {
+                $boundary = $position;
+                break;
+            }
+            $seen++;
+            $boundary = $position + 1;
+        }
+
+        $head = [];
+        foreach (array_slice($original, 0, $boundary) as $message) {
+            if ($message->uiOnly) {
+                $head[] = $message;
+            }
+        }
+
+        return [...$head, ...$rewritten, ...array_slice($original, $boundary)];
     }
 
     /**
@@ -17349,17 +17498,24 @@ final class Chat implements Model
      * 85% tier was holding). It does not wedge, and the
      * message says how in terms that were MEASURED rather than assumed:
      *
-     *  - Retrying works, eventually. Each refusal appends a small user/refusal
-     *    pair, which pushes one enormous exchange out of the ten compaction
-     *    preserves in full - so the history really does shrink per attempt.
-     *    Driven on 13 equal exchanges of ~10,000 estimated tokens against an
-     *    88,000-token window: refused at 100,487 estimated tokens, then the
-     *    very next retry dispatched at 80,664. The dead end is a SINGLE
+     *  - Retrying works, eventually. Every attempt since the last turn that got
+     *    out - each refusal, and each `/compact` typed after one - makes the
+     *    next compaction preserve one exchange fewer ({@see blockedAttempts()}),
+     *    so the history really does shrink per attempt. On 13 equal exchanges
+     *    of ~10,000 estimated tokens against an 88,000-token window the second
+     *    retry goes out with eight preserved. The dead end is a SINGLE
      *    exchange bigger than the tier, not a large history.
-     *  - `/compact` does the same thing by the same mechanism (it adopts
-     *    unconditionally and appends its own pair): 100,487 -> 80,574 on that
-     *    fixture, and the following turn went out.
+     *  - `/compact` is such an attempt too and compacts with the reduced
+     *    window itself, so after it the next retry goes out on that fixture.
      *  - `/clear` frees everything at once.
+     *
+     *    THE SHRINK USED TO BE AN ACCIDENT of the compactor reading UI-only
+     *    rows: the refusal's echo/refusal pair and `/compact`'s own pair counted
+     *    as exchanges and pushed a real one out of the preserved ten. Since the
+     *    compactor reads agent-visible rows only (audit 15b-03-rem(a)) those
+     *    rows count for nothing, and without the explicit count this refusal's
+     *    advice would have become false - every retry refused against the same
+     *    estimate.
      *
      * `/fork` is deliberately NOT offered, though an earlier draft offered it:
      * {@see handleForkCommand()} spawns a background session and leaves the
@@ -17405,7 +17561,7 @@ final class Chat implements Model
         int $tokenLimit,
         ?Message $compactionNotice = null,
     ): array {
-        $response = "This turn was NOT sent: the conversation is at ~{$tokenCount} "
+        $response = self::BLOCKED_TURN_PREFIX . "{$tokenCount} "
             . "estimated tokens against a {$tokenLimit}-token context window, still "
             . "over the blocking tier after automatic compaction ran: compaction "
             . "preserves the most recent exchanges in full, and those alone overflow "
@@ -17531,10 +17687,12 @@ final class Chat implements Model
      *
      * @param array<array{role:string,content:string}> $wire        The wire the
      *        blocking tier just rejected.
-     * @param list<Message> $baseHistory Must be INDEX-ALIGNED with $wire: entry i
-     *        is the Message $wire[i] was produced from — same role, same content.
-     *        Both call sites guarantee it: {@see applyModelCompaction()} maps
-     *        toWire() over the very list it passes, and {@see submit()} adopts
+     * @param list<Message> $baseHistory Its AGENT-VISIBLE rows must be
+     *        INDEX-ALIGNED with $wire: visible entry i is the Message $wire[i]
+     *        was produced from — same role, same content ($wire being a
+     *        {@see compactionWire()}). Its UI-only rows ride through untouched.
+     *        Both call sites guarantee it: {@see applyModelCompaction()} builds
+     *        compactionWire() over the very list it passes, and {@see submit()} adopts
      *        {@see messagesFromWire()}'s output when compaction freed something
      *        and re-derives that output from the compacted wire when it freed
      *        nothing.
@@ -17590,6 +17748,12 @@ final class Chat implements Model
         // message and exposes no exchange-pair arithmetic, and one exchange whose
         // two halves are both oversized legitimately truncates TWO of them, so
         // naming this number "exchanges" would ship a figure with the wrong unit.
+        //
+        // $wire is a compactionWire(), so it is index-aligned with the
+        // AGENT-VISIBLE rows of $baseHistory; the splice runs over those and the
+        // UI-only rows are put back in their own places below - a truncation
+        // rewrites no row's position, so every one of them keeps its own.
+        $visibleBase = Message::agentVisible($baseHistory);
         $history = [];
         $truncatedMessages = 0;
         foreach ($wire as $index => $entry) {
@@ -17599,7 +17763,7 @@ final class Chat implements Model
                 $truncatedMessages++;
             }
 
-            $original = $baseHistory[$index] ?? null;
+            $original = $visibleBase[$index] ?? null;
             if ($original === null) {
                 // Unreachable while this method's @param alignment contract holds.
                 // A wire-only rebuild for a future misaligned caller is merely
@@ -17617,6 +17781,17 @@ final class Chat implements Model
                 ? self::messageWithContent($original, (string) $newContent)
                 : $original;
         }
+
+        // Re-interleave the UI-only rows: walk $baseHistory and swap each
+        // agent-visible row for its spliced counterpart, in order. Any spliced
+        // row past the visible count (the misaligned-caller rebuild above) is
+        // appended rather than dropped.
+        $spliced = $history;
+        $history = [];
+        foreach ($baseHistory as $message) {
+            $history[] = $message->uiOnly ? $message : (array_shift($spliced) ?? $message);
+        }
+        array_push($history, ...$spliced);
 
         return [
             'history' => $history,

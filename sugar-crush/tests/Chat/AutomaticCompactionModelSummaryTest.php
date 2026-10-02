@@ -79,9 +79,9 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
      * no amount of summarizing the rest gets back under the 95% blocking tier.
      *
      * The pair arithmetic is the part worth reading twice: the parked route
-     * appends TWO messages (a notice and the echoed prompt) before it compacts,
-     * which forms one extra pair and so pushes one more exchange out of the
-     * preserved ten than the synchronous route would. A fixture sized against
+     * appends the echoed prompt before it compacts (and a UI-only notice, which
+     * compaction never reads), which forms one extra pair and so pushes one more
+     * exchange out of the preserved ten than the synchronous route would. A fixture sized against
      * the synchronous route's boundary can therefore slip UNDER the tier on this
      * route — this one is sized so it does not.
      *
@@ -99,10 +99,11 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
     }
 
     /**
-     * 13 exchanges of ~10,000 estimated tokens each: still over the 70% reminder
+     * 13 exchanges of ~9,000 estimated tokens each: still over the 70% reminder
      * tier of the 88,000-token window (61,600) AFTER the parked compaction has
-     * run, and under its 95% tier, so the turn goes out with a reminder beside
-     * it.
+     * run, and under its 95% tier (83,600), so the turn goes out with a reminder
+     * beside it. The parked prompt pushes one exchange out of the preserved ten,
+     * so nine survive: ~81,200.
      *
      * @return list<Message>
      */
@@ -110,8 +111,8 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
     {
         $history = [];
         for ($i = 0; $i < 13; $i++) {
-            $history[] = Message::user(str_repeat(chr(97 + $i), 20_000));
-            $history[] = Message::assistant(str_repeat(chr(110 + $i), 20_000));
+            $history[] = Message::user(str_repeat(chr(97 + $i), 18_000));
+            $history[] = Message::assistant(str_repeat(chr(110 + $i), 18_000));
         }
 
         return $history;
@@ -435,12 +436,13 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
             $chat->contextTokenLimit(),
             'fixture: the two figures must differ or a swap would be invisible',
         );
-        // Five, and the arithmetic is checkable: the fixture is 13 pairs, the park
-        // adds two more (the standalone notice and the unanswered prompt), and
-        // compaction preserves the ten most recent - leaving five condensed, all
-        // of them user/assistant exchanges a model can be asked about.
+        // Four, and the arithmetic is checkable: the fixture is 13 pairs, the park
+        // adds one more (the unanswered prompt; the park notice is UI-only and
+        // compaction never reads it - audit 15b-03-rem(a)), and compaction
+        // preserves the ten most recent - leaving four condensed, all of them
+        // user/assistant exchanges a model can be asked about.
         $this->assertSame(
-            5,
+            4,
             self::figureLabelled($notice->content, '/Summarising (\d+) earlier/'),
             'the count is the size of the offered set, which is what the model is actually sent',
         );
@@ -737,7 +739,9 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
     {
         $main = new RecordingTurnBackend(88_000);
         $chat = new Chat(
-            history: [Message::user('q'), Message::assistant('a')],
+            // Two pairs, one preserved: one to summarise. The UI-only `/compact`
+            // line is not a pair (audit 15b-03-rem(a)).
+            history: [Message::user('q0'), Message::assistant('a0'), Message::user('q'), Message::assistant('a')],
             inputBuf: '/compact',
             backend: $main,
             compactorConfig: \SugarCraft\Crush\Context\CompactorConfig::new()->withRecentPreserveCount(1),
