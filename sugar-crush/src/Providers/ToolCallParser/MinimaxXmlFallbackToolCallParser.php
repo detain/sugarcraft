@@ -38,7 +38,7 @@ use SugarCraft\Crush\Tools\ToolCall;
  * this is where it shipped. Both now scan positionally via
  * {@see MarkupScanner}, whose docblock carries the reproduction and the guard.
  */
-final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserInterface, ToolSchemaAware
+final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserInterface, ToolSchemaAware, EnvelopeAware
 {
     private const ENVELOPE_TAG = 'minimax:tool_call';
 
@@ -112,19 +112,54 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
      */
     public function parse(array $message): ?array
     {
+        return $this->recover($message)->calls();
+    }
+
+    /**
+     * This parser's envelope opener, then the delegate chain's (audit 15a A8).
+     *
+     * @return list<string>
+     */
+    public function envelopeMarkers(): array
+    {
+        return [
+            self::ENVELOPE_PREFILTER,
+            ...($this->delegate instanceof EnvelopeAware ? $this->delegate->envelopeMarkers() : []),
+        ];
+    }
+
+    /**
+     * {@see parse()}'s decision tree, carrying the spans of the envelopes the
+     * calls came from (audit 15a A8), so the provider can cut them out of the
+     * assistant's text.
+     *
+     * @param array<string, mixed> $message
+     */
+    public function recover(array $message): TextualRecovery
+    {
         // A server-parsed `tool_calls` array is always authoritative; the XML
         // scan is only ever reached when that array is absent.
         if (isset($message['tool_calls'])) {
-            return $this->delegate->parse($message);
+            return $this->recoverViaDelegate($message);
         }
 
         $content = $message['content'] ?? null;
 
         if (!is_string($content) || !str_contains($content, self::ENVELOPE_PREFILTER)) {
-            return $this->delegate->parse($message);
+            return $this->recoverViaDelegate($message);
         }
 
         return $this->parseXml($content);
+    }
+
+    /**
+     * @param array<string, mixed> $message
+     */
+    private function recoverViaDelegate(array $message): TextualRecovery
+    {
+        return $this->delegate instanceof EnvelopeAware
+            ? $this->delegate->recover($message)
+            : TextualRecovery::new($this->delegate->parse($message));
     }
 
     /**
@@ -146,11 +181,13 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
      * {@see \SugarCraft\Crush\Tests\Cli\StderrEmitterCensusTest}'s channels
      * 3 and 6 rather than written down here as a pair of integers.
      *
-     * @return array<ToolCall>|null
+     * The calls (null when none was recovered) plus the span of every
+     * envelope that contributed at least one (audit 15a A8).
      */
-    private function parseXml(string $content): ?array
+    private function parseXml(string $content): TextualRecovery
     {
         $calls = [];
+        $spans = [];
         $envelopes = $this->scanner->envelopes($content, self::ENVELOPE_TAG);
 
         if ($envelopes === []) {
@@ -175,6 +212,8 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
                     $envelope['offset'],
                 ));
             }
+
+            $before = count($calls);
 
             foreach ($this->scanner->elements($envelope['body'], self::INVOKE_TAG) as $invoke) {
                 $name = $invoke['attributes']['name'] ?? null;
@@ -230,9 +269,13 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
                     arguments: $arguments,
                 );
             }
+
+            if (count($calls) > $before) {
+                $spans[] = [$envelope['offset'], $envelope['end']];
+            }
         }
 
-        return $calls === [] ? null : $calls;
+        return TextualRecovery::new($calls === [] ? null : $calls, $calls === [] ? [] : $spans);
     }
 
     /**

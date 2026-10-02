@@ -56,7 +56,7 @@ use SugarCraft\Crush\Tools\ToolCall;
  * XML, whose envelope, attribute set and value framing all differ - see
  * {@see coerceValue()} for the one difference most likely to be assumed away.
  */
-final readonly class DsmlToolCallParser implements ToolCallParserInterface, ToolSchemaAware
+final readonly class DsmlToolCallParser implements ToolCallParserInterface, ToolSchemaAware, EnvelopeAware
 {
     /**
      * The markup token, spelled as an explicit codepoint escape ON PURPOSE.
@@ -151,24 +151,60 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface, Tool
      */
     public function parse(array $message): ?array
     {
+        return $this->recover($message)->calls();
+    }
+
+    /**
+     * This parser's envelope opener, then the delegate chain's (audit 15a A8).
+     *
+     * @return list<string>
+     */
+    public function envelopeMarkers(): array
+    {
+        return [
+            self::ENVELOPE_PREFILTER,
+            ...($this->delegate instanceof EnvelopeAware ? $this->delegate->envelopeMarkers() : []),
+        ];
+    }
+
+    /**
+     * {@see parse()}'s decision tree, carrying the spans of the envelopes the
+     * calls came from (audit 15a A8) so the provider can cut exactly those
+     * out of the assistant's text. Whichever parser in the chain produced the
+     * calls is the one whose spans come back.
+     *
+     * @param array<string, mixed> $message
+     */
+    public function recover(array $message): TextualRecovery
+    {
         // A server-parsed `tool_calls` array is always authoritative; the DSML
         // scan is only ever reached when that array is absent. This delegation
         // is what makes arming this parser nearly free on a CORRECTLY
         // configured deployment.
         if (isset($message['tool_calls'])) {
-            return $this->delegate->parse($message);
+            return $this->recoverViaDelegate($message);
         }
 
         $content = $message['content'] ?? null;
 
         if (!is_string($content) || !str_contains($content, self::ENVELOPE_PREFILTER)) {
-            return $this->delegate->parse($message);
+            return $this->recoverViaDelegate($message);
         }
 
         // Falling through to the delegate when the scan recovers nothing keeps
         // a stacked fallback composable: "this content only TALKS about DSML"
         // and "there is no DSML here" must reach the next parser identically.
-        return $this->parseDsml($content) ?? $this->delegate->parse($message);
+        return $this->parseDsml($content) ?? $this->recoverViaDelegate($message);
+    }
+
+    /**
+     * @param array<string, mixed> $message
+     */
+    private function recoverViaDelegate(array $message): TextualRecovery
+    {
+        return $this->delegate instanceof EnvelopeAware
+            ? $this->delegate->recover($message)
+            : TextualRecovery::new($this->delegate->parse($message));
     }
 
     /**
@@ -230,11 +266,13 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface, Tool
      * {@see \SugarCraft\Crush\Tests\Cli\StderrEmitterCensusTest}'s channels
      * 3 and 6, which count both sides from the token stream.
      *
-     * @return array<ToolCall>|null
+     * Null when no call was recovered; otherwise the calls plus the span of
+     * every envelope that contributed at least one (audit 15a A8).
      */
-    private function parseDsml(string $content): ?array
+    private function parseDsml(string $content): ?TextualRecovery
     {
         $calls = [];
+        $spans = [];
         $envelopes = $this->scanner->envelopes($content, self::ENVELOPE_TAG);
 
         if ($envelopes === []) {
@@ -267,6 +305,8 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface, Tool
                 ));
             }
 
+            $before = count($calls);
+
             foreach ($this->scanner->elements($envelope['body'], self::INVOKE_TAG) as $invoke) {
                 $call = $this->toolCall($invoke, count($calls));
 
@@ -274,9 +314,13 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface, Tool
                     $calls[] = $call;
                 }
             }
+
+            if (count($calls) > $before) {
+                $spans[] = [$envelope['offset'], $envelope['end']];
+            }
         }
 
-        return $calls === [] ? null : $calls;
+        return $calls === [] ? null : TextualRecovery::new($calls, $spans);
     }
 
     /**

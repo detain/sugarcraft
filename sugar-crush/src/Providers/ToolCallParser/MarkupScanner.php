@@ -112,7 +112,12 @@ final readonly class MarkupScanner
      * literal envelope marker (a `write` of a document that quotes it), and
      * terminating on that would split one call into two.
      *
-     * @return list<array{body: string, offset: int, closed: bool}>
+     * `end` is the byte offset just past the span - past the close tag, or
+     * the content's length for an unclosed one - so a caller can cut the
+     * whole envelope out of the content it was found in (audit 15a A8:
+     * recovered markup must not stay in the assistant's text).
+     *
+     * @return list<array{body: string, offset: int, end: int, closed: bool}>
      */
     public function envelopes(string $content, string $tag): array
     {
@@ -150,7 +155,12 @@ final readonly class MarkupScanner
             $closeAt = strpos($content, $close, $bodyStart);
 
             if ($closeAt === false) {
-                $spans[] = ['body' => substr($content, $bodyStart), 'offset' => $at, 'closed' => false];
+                $spans[] = [
+                    'body' => substr($content, $bodyStart),
+                    'offset' => $at,
+                    'end' => \strlen($content),
+                    'closed' => false,
+                ];
 
                 break;
             }
@@ -158,6 +168,7 @@ final readonly class MarkupScanner
             $spans[] = [
                 'body' => substr($content, $bodyStart, $closeAt - $bodyStart),
                 'offset' => $at,
+                'end' => $closeAt + \strlen($close),
                 'closed' => true,
             ];
 

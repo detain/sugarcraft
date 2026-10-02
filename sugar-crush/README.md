@@ -1107,8 +1107,14 @@ same reason.
 The setting applies to **both** the batch `complete()` path and the streaming
 path. On the streaming path the fallback runs over the reassembled content once
 the response ends, and only when the structured `delta.tool_calls[]` route
-produced nothing, so it can neither duplicate a call nor delay a streamed
-token.
+produced nothing, so it cannot duplicate a call. A recovered envelope is cut
+out of the assistant's text on both paths, so the markup is neither shown nor
+sent back to the model next to the structured call. To make that possible on
+the streaming path, `minimax-xml-fallback` and `dsml` hold text back from the
+screen from the first bytes that could open an envelope: a chunk ending in a
+partial marker or a line break waits for the next one, and anything after a
+complete marker waits for the end of the response. Text that turns out not to
+be a recovered call is then shown unchanged. `openai` holds nothing back.
 
 It also accepts an optional `reasoningEffort` key — SGLang's top-level
 `reasoning_effort` request field. One of `none`, `minimal`, `low`, `medium`,

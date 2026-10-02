@@ -16,6 +16,9 @@ use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Providers\Concerns\HttpClientDefaults;
 use SugarCraft\Crush\Providers\Concerns\ReasoningExtractor;
 use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
+use SugarCraft\Crush\Providers\ToolCallParser\EnvelopeAware;
+use SugarCraft\Crush\Providers\ToolCallParser\EnvelopeHoldBack;
+use SugarCraft\Crush\Providers\ToolCallParser\TextualRecovery;
 use SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface;
 use SugarCraft\Crush\Providers\ToolCallParser\ToolParameterTypes;
 use SugarCraft\Crush\Providers\ToolCallParser\ToolSchemaAware;
@@ -780,6 +783,21 @@ final readonly class SglangProvider implements ProviderInterface
             // and streaming paths type a recovered argument identically.
             $toolCallParser = $this->toolCallParserFor($request);
 
+            // Audit 15a A8: the HOLD-BACK. A parser that recovers calls from
+            // markup in the text names the literals that can open an
+            // envelope; from the first byte that could be one, content stops
+            // being yielded and waits here, because a painted chunk cannot be
+            // retracted once the envelope turns out to be a recovered call.
+            // The end of the stream decides: a recovered envelope is cut, any
+            // other held text is released verbatim. {@see EnvelopeHoldBack}
+            // states what that costs. The default OpenAI-array parser names
+            // no markers, so its stream is not held at all. Locals for the
+            // same `final readonly class` reason as $toolCallBuffer.
+            $holdBackMarkers = $toolCallParser instanceof EnvelopeAware ? $toolCallParser->envelopeMarkers() : [];
+            $heldContent = '';
+            $emittedLength = 0;
+            $envelopeOpened = false;
+
             // The usage document from the §Q6 terminal frame, held (not
             // yielded) until the stream is drained, then emitted once as the
             // final chunk below. Last-write-wins on purpose: the protocol
@@ -875,20 +893,48 @@ final readonly class SglangProvider implements ProviderInterface
                                 // needs buffering. Releasing it here is the
                                 // half of the gate that costs no abstraction.
                                 $assembledContent = '';
+
+                                // A8: by the same argument nothing held can
+                                // be an envelope this turn acts on, so it is
+                                // released now, ahead of this chunk's own
+                                // text, and holding stops for the rest of
+                                // the stream.
+                                $visible = $heldContent . $chunk->content;
+                                $heldContent = '';
+                                $holdBackMarkers = [];
                             } else {
                                 $assembledContent .= $chunk->content;
+
+                                if ($envelopeOpened) {
+                                    // Appended without a rescan, so a long
+                                    // envelope (a `write` of a large file)
+                                    // stays linear.
+                                    $heldContent .= $chunk->content;
+                                    $visible = '';
+                                } else {
+                                    [$visible, $heldContent, $envelopeOpened] = EnvelopeHoldBack::split(
+                                        $heldContent . $chunk->content,
+                                        $holdBackMarkers,
+                                    );
+                                }
                             }
 
-                            // Yielded UNCHANGED and in wire order. The
-                            // recovery below is purely additive - it never
-                            // withholds, delays or rewrites a content chunk,
-                            // so the streamed-token UX is byte-for-byte what
-                            // it was. A delta-less finish frame carries no
-                            // text, so it is yielded only when it assembled
-                            // calls - otherwise it would be a new, empty
-                            // chunk the stream never used to produce.
+                            $emittedLength += \strlen($visible);
+
+                            // Yielded in wire order; only its TEXT can be
+                            // held back (A8), never its reasoning or calls,
+                            // and a chunk whose text is entirely held is
+                            // still yielded, just as an empty-content delta
+                            // always was - Runtime announces every
+                            // content-less chunk as progress, so a long held
+                            // envelope keeps the turn's idle deadline reset
+                            // instead of looking like a stall. A delta-less
+                            // finish frame carries no text, so it is yielded
+                            // only when it assembled calls - otherwise it
+                            // would be a new, empty chunk the stream never
+                            // used to produce.
                             if ($hasDelta || $chunk->toolCalls !== null) {
-                                yield $chunk;
+                                yield $visible === $chunk->content ? $chunk : self::withContent($chunk, $visible);
                             }
                         } elseif ($data !== null && !isset($data['choices'][0]) && is_array($data['usage'] ?? null)) {
                             // §Q6 (E-27's other half): the terminal
@@ -975,13 +1021,20 @@ final readonly class SglangProvider implements ProviderInterface
                 $sawStructuredToolCalls = true;
             }
 
-            $recovered = $this->recoverTextualToolCalls($assembledContent, $sawStructuredToolCalls, $toolCallParser);
+            $recovery = $this->recoverTextualToolCalls($assembledContent, $sawStructuredToolCalls, $toolCallParser);
+            $recovered = $recovery?->calls();
 
             if ($recovered !== null) {
-                // Empty content on purpose: the text was already streamed
-                // above, and {@see \SugarCraft\Crush\Runtime::runStreaming()}
-                // appends every chunk's content to its buffer, so repeating
-                // it here would duplicate the whole turn in the transcript.
+                // Audit 15a A8: the content is what was held back with every
+                // recovered envelope cut out - normally nothing at all, or
+                // the prose a model wrote after its call. What was yielded
+                // above stays as it was ({@see TextualRecovery::
+                // contentWithoutEnvelopes()} never reaches back past
+                // $emittedLength), and {@see \SugarCraft\Crush\Runtime::
+                // runStreaming()} appends every chunk's content to its
+                // buffer, so the turn's text ends up as the prose without
+                // the markup - painted once, and sent back to the model
+                // once, as the structured call alone.
                 // `tokensUsed: 0` / `costUsd: 0.0` make
                 // {@see \SugarCraft\Crush\Usage::reported()} return null for
                 // this chunk, which {@see \SugarCraft\Crush\Usage::sum()}
@@ -989,12 +1042,19 @@ final readonly class SglangProvider implements ProviderInterface
                 // in particular a turn that reported nothing still sums to
                 // null rather than to zero.
                 yield new CompleteResponse(
-                    content: '',
+                    content: $recovery->contentWithoutEnvelopes($assembledContent, $emittedLength),
                     reasoning: null,
                     toolCalls: $recovered,
                     tokensUsed: 0,
                     costUsd: 0.0,
                 );
+            } elseif ($heldContent !== '') {
+                // A8: what was held was not a recovered envelope after all -
+                // prose quoting the markup, a `<` that opened nothing, a
+                // trailing blank line. Released verbatim, ahead of the flush,
+                // truncation and usage frames, so the transcript holds every
+                // byte the model wrote, in order.
+                yield new CompleteResponse(content: $heldContent);
             }
 
             if ($flushedToolCalls !== null) {
@@ -1845,7 +1905,23 @@ final readonly class SglangProvider implements ProviderInterface
         // `$toolCallParser` is complete()'s request-scoped parser (audit 15a
         // A9, {@see toolCallParserFor()}); null only for a caller with no
         // request in hand, which gets the schema-less parser.
-        $toolCalls = ($toolCallParser ?? $this->resolvedToolCallParser())->parse($message);
+        $toolCallParser ??= $this->resolvedToolCallParser();
+
+        if ($toolCallParser instanceof EnvelopeAware) {
+            // Audit 15a A8, batch half: a call recovered from markup in the
+            // text is cut out of that text before anything reads it, so the
+            // assistant message holds the prose and the structured call -
+            // not the call twice. Cut from the RAW content, which is what the
+            // spans index, before reasoning extraction shifts any offset.
+            $recovery = $toolCallParser->recover($message);
+            $toolCalls = $recovery->calls();
+
+            if ($recovery->spans() !== [] && is_string($message['content'] ?? null)) {
+                $message['content'] = $recovery->contentWithoutEnvelopes($message['content']);
+            }
+        } else {
+            $toolCalls = $toolCallParser->parse($message);
+        }
 
         [$reasoning, $content] = $this->extractReasoning($message);
 
@@ -2095,21 +2171,24 @@ final readonly class SglangProvider implements ProviderInterface
      * has no such key, so it returns null immediately. A deployment on the
      * default parser sees no behaviour change whatsoever.
      *
-     * KNOWN GAP, deliberately not closed here: the recovered markup is still
-     * present in the content that was streamed to the screen and into the
-     * transcript, so a user watching a fallback-recovered turn sees the raw
-     * envelope. Stripping it would mean withholding content chunks until the
-     * envelope is known to be complete, which is the one thing that WOULD
-     * degrade the streamed-token UX. {@see parseResponse()} has the identical
-     * property on the batch path and always has.
+     * THE MARKUP DOES NOT STAY IN THE TEXT (audit 15a A8). This docblock used
+     * to record, as a known gap, that the recovered envelope was still in the
+     * content streamed to the screen and into the transcript - so the user saw
+     * raw markup, and the next request carried every call twice: once as that
+     * text, once as the structured call the chat template renders back into
+     * the same markup. An {@see EnvelopeAware} parser now reports where each
+     * envelope sits, completeStream() holds text back from the first byte
+     * that could open one ({@see EnvelopeHoldBack}), and the spans returned
+     * here are cut out of what was held. {@see parseResponse()} cuts them on
+     * the batch path the same way.
      *
-     * @return array<ToolCall>|null
+     * Null when nothing was recovered, so the caller releases what it held.
      */
     private function recoverTextualToolCalls(
         string $content,
         bool $sawStructuredToolCalls,
         ToolCallParserInterface $toolCallParser,
-    ): ?array {
+    ): ?TextualRecovery {
         if ($sawStructuredToolCalls || $content === '') {
             return null;
         }
@@ -2118,9 +2197,32 @@ final readonly class SglangProvider implements ProviderInterface
         // the condition every fallback parser triggers on - handing over an
         // empty array instead would take their delegated fast path and find
         // nothing.
-        $calls = $toolCallParser->parse(['content' => $content]);
+        $message = ['content' => $content];
+        $recovery = $toolCallParser instanceof EnvelopeAware
+            ? $toolCallParser->recover($message)
+            : TextualRecovery::new($toolCallParser->parse($message));
 
-        return $calls === [] ? null : $calls;
+        return $recovery->calls() === null || $recovery->calls() === [] ? null : $recovery;
+    }
+
+    /**
+     * `$chunk` with its text replaced by the part the A8 hold-back lets
+     * through. Every other field is carried over as it was.
+     */
+    private static function withContent(CompleteResponse $chunk, string $content): CompleteResponse
+    {
+        return new CompleteResponse(
+            content: $content,
+            reasoning: $chunk->reasoning,
+            toolCalls: $chunk->toolCalls,
+            tokensUsed: $chunk->tokensUsed,
+            costUsd: $chunk->costUsd,
+            isError: $chunk->isError,
+            errorMessage: $chunk->errorMessage,
+            errorTransient: $chunk->errorTransient,
+            truncated: $chunk->truncated,
+            usage: $chunk->usage,
+        );
     }
 
     /**

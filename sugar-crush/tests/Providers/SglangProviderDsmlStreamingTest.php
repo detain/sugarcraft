@@ -152,13 +152,15 @@ final class SglangProviderDsmlStreamingTest extends TestCase
     }
 
     /**
-     * The streamed-token UX must be untouched: every content chunk is still
-     * yielded, in wire order, byte-for-byte, and the recovery chunk adds no
-     * content of its own (Runtime::runStreaming() appends every chunk's
-     * content to the transcript buffer, so any content here would duplicate
-     * the turn).
+     * The prose still streams incrementally, in wire order; the envelope does
+     * not stream at all (audit 15a A8). Before A8 every fragment was yielded
+     * byte-for-byte, the envelope included, so the user watched raw DSML
+     * paint and Runtime stored it as the assistant's text next to the
+     * recovered call. Now the text is held from the blank line that opens
+     * the DSML start token, the envelope is cut once it is recovered, and the
+     * recovery chunk carries what is left of the held text - here nothing.
      */
-    public function testContentStillStreamsIncrementallyAndTheRecoveryChunkAddsNone(): void
+    public function testProseStreamsIncrementallyAndTheRecoveredEnvelopeNeverStreams(): void
     {
         $fragments = ['Let me ', "read that.\n\n", self::envelope()];
 
@@ -171,12 +173,15 @@ final class SglangProviderDsmlStreamingTest extends TestCase
         $chunks = $this->drain($provider);
         $streamed = array_map(static fn ($c): string => $c->content, $chunks);
 
-        // Every fragment arrives as its own chunk, in order.
-        $this->assertSame($fragments, array_slice($streamed, 0, 3));
+        // The prose arrives as it streamed; the blank line in front of the
+        // envelope and the envelope itself are held back.
+        $this->assertSame(['Let me ', 'read that.', ''], array_slice($streamed, 0, 3));
+        $this->assertSame('Let me read that.', implode('', $streamed));
+        $this->assertStringNotContainsString(self::DSML, implode('', $streamed));
 
         $recovery = $chunks[array_key_last($chunks)];
         $this->assertNotNull($recovery->toolCalls);
-        $this->assertSame('', $recovery->content, 'the recovery chunk must not repeat the turn');
+        $this->assertSame('', $recovery->content, 'nothing held survives the cut');
         $this->assertSame(0, $recovery->tokensUsed, 'and must not perturb the usage total');
         $this->assertSame(0.0, $recovery->costUsd);
     }
