@@ -11668,7 +11668,7 @@ final class Chat implements Model
      */
     private function handlePaneCommand(string $inputBuf): array
     {
-        $tokens = preg_split('/\s+/', trim($inputBuf)) ?: [];
+        $tokens = self::commandTokens($inputBuf);
         $verb = strtolower($tokens[1] ?? '');
 
         if ($verb === 'toggle') {
@@ -11715,7 +11715,7 @@ final class Chat implements Model
      */
     private function handleLayoutCommand(string $inputBuf): array
     {
-        $tokens = preg_split('/\s+/', trim($inputBuf)) ?: [];
+        $tokens = self::commandTokens($inputBuf);
 
         if (count($tokens) !== 2 || strtolower($tokens[1]) !== 'reset') {
             return $this->gestureUsageResponse($inputBuf, 'usage: /layout reset');
@@ -14024,6 +14024,28 @@ final class Chat implements Model
         }
 
         return trim($m[1]);
+    }
+
+    /**
+     * A slash command split into whitespace tokens, the command word first
+     * and {@see commandArgument()}'s argument after it — for the arms that
+     * read positional words (`/pane`, `/layout`, `/mcp`).
+     *
+     * Splitting the whole draft instead left the colon spelling's
+     * sub-command glued to the name: `/pane:dock left` came out as
+     * `["/pane:dock", "left"]`, so the arm read `left` as its verb and
+     * answered with usage (audit 15b-24). The command word is normalised to
+     * `/name` so a caller can still index the argument words from 1.
+     *
+     * @return list<string>
+     */
+    private static function commandTokens(string $inputText): array
+    {
+        $name = preg_match('/^\s*(\/[^\s:]*)/', $inputText, $m) === 1 ? $m[1] : '';
+        $argument = self::commandArgument($inputText);
+        $words = $argument === '' ? [] : (preg_split('/\s+/', $argument, -1, PREG_SPLIT_NO_EMPTY) ?: []);
+
+        return [$name, ...$words];
     }
 
     /**
@@ -18160,7 +18182,7 @@ final class Chat implements Model
      * Split an MCP command line into {@see McpAuthCommand::execute()}'s argv.
      *
      * Both spellings reduce to the same argv: the leading command word is
-     * dropped whether it is written `/mcp` or `mcp`, and the `auth` noun the
+     * dropped whether it is written `/mcp`, `/mcp:` or `mcp`, and the `auth` noun the
      * bare form spells out is optional under the slash form - `/mcp list`
      * and `mcp auth list` are the same command.
      *
@@ -18168,7 +18190,12 @@ final class Chat implements Model
      */
     private static function parseMcpArgs(string $inputBuf): array
     {
-        $tokens = preg_split('/\s+/', trim($inputBuf), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        // The slash form goes through commandTokens(), so `/mcp:list` is
+        // `/mcp list` (audit 15b-24); the bare `mcp auth …` form has no
+        // colon spelling to honour.
+        $tokens = str_starts_with(ltrim($inputBuf), '/')
+            ? self::commandTokens($inputBuf)
+            : (preg_split('/\s+/', trim($inputBuf), -1, PREG_SPLIT_NO_EMPTY) ?: []);
 
         if (isset($tokens[0]) && ltrim($tokens[0], '/') === 'mcp') {
             array_shift($tokens);

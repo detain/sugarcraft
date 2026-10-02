@@ -366,8 +366,9 @@ command as `/rename Release prep`. The arms that read their argument as raw text
 take what follows the name and that one separator, trimmed
 (`Chat::commandArgument()`), so the colon spelling leaves no stray `:` on the
 argument; a space-spelled argument that itself starts with `:` keeps it. `/pane`,
-`/layout` and `/mcp` split the whole draft on whitespace instead, so for those
-three use the space spelling.
+`/layout` and `/mcp` read their argument as words, split from that same
+argument, so `/pane:dock left`, `/layout:reset` and `/mcp:list` are their
+space spellings.
 
 `/rewind` takes one optional argument: a positive whole number of checkpoints to
 step back, `1` when omitted (`/rewind`, `/rewind 3`, `/rewind:3`). Anything else
