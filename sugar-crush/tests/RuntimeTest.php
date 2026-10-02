@@ -6768,11 +6768,21 @@ DOC;
      * "what this alphabet cannot express" enumeration.
      *
      * THE KNOWN-ANSWER CONTROLS RAN FIRST AND ARE ASSERTED HERE, not just in
-     * the report (§1.4 check 13). All three are real shipped tools, and all
+     * the report (§1.4 check 13). All three are real shipped code, and all
      * three answer identically before and after the change: `Write.php` reports
-     * `file_put_contents` and `mkdir`, `Edit.php` reports `file_put_contents`,
+     * `mkdir`, `Support/AtomicFileWriter.php` reports `chgrp`, `chmod`,
+     * `chown`, `fopen`, `ftruncate`, `fwrite`, `mkdir`, `rename` and `unlink`,
      * and `Read.php` reports nothing. A repair that moved any of them would be
      * a regression wearing a fix's clothes.
+     *
+     * WHAT THAT PARAGRAPH SAID UNTIL AUDIT F-T7's FOLLOW-UP (R8): `Write.php`
+     * reported `file_put_contents` and `mkdir`, and `Edit.php` reported
+     * `file_put_contents`. WHAT IS TRUE NOW: since F-T7 both tools publish
+     * through `AtomicFileWriter::replace()`, a static call this direct-call
+     * scanner does not follow, so `Edit.php` reports nothing, `Write.php` only
+     * its `mkdir`, and the write controls themselves live in
+     * `Support/AtomicFileWriter.php` - which is why that file, not `Edit.php`,
+     * is the second control asserted below.
      *
      * BOTH POLARITIES OF THE NEW ARM, in one file so a dead arm cannot pass:
      * the bare relative name IS the global symbol and must be reported; the

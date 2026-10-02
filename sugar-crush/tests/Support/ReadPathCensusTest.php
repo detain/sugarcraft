@@ -477,6 +477,11 @@ final class ReadPathCensusTest extends TestCase
                 . 'hard link, a dangling link, a directory no temp can be made in); Edit and '
                 . 'Write hand it the path they already resolved through PathJail',
         ],
+        'Support/AtomicFileWriter.php|glob' => [
+            'NAMES_ONLY — sweepOrphanTemps() lists `.<target>.tmp.<16 hex>` beside a target '
+                . 'it has just published (audit R8); no content is read, the pattern is the '
+                . 'target\'s own escaped name, and only an old regular file this uid owns is unlinked',
+        ],
         'Support/SiblingSpendLedger.php|fopen' => [
             'SELF_LOCATED — create()\'s exclusive (`x`, 0600) open of the name ToolIpcFiles::reserve() '
                 . 'just chose in the temp dir; never caller-supplied',

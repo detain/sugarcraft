@@ -15,7 +15,9 @@ namespace SugarCraft\Crush\Support;
  * directory, then one `rename()` onto the target. A crash mid-write can only
  * ever leave an orphan temp behind, never a half-written live file — the
  * defect the atomicity audit (M3) found when a reader could catch a truncated
- * index or note mid-`file_put_contents`.
+ * index or note mid-`file_put_contents`. The orphan is not permanent: the next
+ * successful publish of the same target removes it once it is old enough that
+ * no live writer can still own it ({@see sweepOrphanTemps()}).
  *
  * Append-only files (the team inboxes' `FILE_APPEND | LOCK_EX` lines) are NOT
  * this class's territory: a locked single-line append is already the atomic
@@ -43,6 +45,28 @@ namespace SugarCraft\Crush\Support;
  */
 final class AtomicFileWriter
 {
+    /**
+     * How old an orphaned `.<name>.tmp.<hex>` must be before a later publish
+     * of the same target removes it ({@see sweepOrphanTemps()}).
+     *
+     * The temp name carries no pid, so age is the only evidence that nobody is
+     * still writing it. A live publish holds its temp for as long as the
+     * payload takes to write and fsync — seconds — so an hour cannot catch one
+     * mid-flight, while the cost of waiting that long is a stray dotfile the
+     * user may glimpse, not a resource under contention. The same hour
+     * {@see ToolIpcFiles::sweep()} waits before reclaiming its own leftovers.
+     */
+    public const ORPHAN_TEMP_MIN_AGE_SECONDS = 3600;
+
+    /**
+     * S_IFMT / S_IFREG, spelled out because PHP exposes neither: only a
+     * regular file by `lstat()` is ever swept, so a planted symlink or a
+     * directory wearing the temp name is left strictly alone.
+     */
+    private const STAT_TYPE_MASK = 0o170000;
+
+    private const STAT_REGULAR_FILE = 0o100000;
+
     /**
      * Atomically replace $path with $contents.
      *
@@ -115,6 +139,26 @@ final class AtomicFileWriter
      *    DIRECTORY's write bit, so without this a 0444 file — which the
      *    in-place write always failed on — would be silently replaced.
      *
+     * ACLs AND EXTENDED ATTRIBUTES ARE NOT CARRIED OVER — a KNOWN LIMIT, not
+     * an oversight. The published file is a new inode, so a POSIX ACL
+     * (`setfacl`), an SELinux label, a macOS quarantine flag or any other
+     * `user.*`/`security.*` xattr on the original is lost on the rename route;
+     * a default ACL on the DIRECTORY still applies to the temp, as it would to
+     * any new file. PHP has no portable call to read or write either (no
+     * `getxattr`/`acl_get_file` in core, and shelling out to `getfacl` on every
+     * Edit adds a process spawn to every edit), so copying them is
+     * out of reach here rather than declined. Only the IN-PLACE fallback keeps
+     * them, because it keeps the inode — which is why a hard-linked file, the
+     * one case where identity is unmistakably part of the file, takes it. A
+     * user who depends on an ACL on a source file the agent edits should
+     * expect the mode bits to survive and the ACL not to.
+     *
+     * A SIGKILL MID-PUBLISH CAN STILL LEAVE A TEMP, and that one is a
+     * different kind of limit: nothing in this process runs after a SIGKILL,
+     * so no handler can remove it then. It is reclaimed LATER instead — see
+     * {@see sweepOrphanTemps()}, which the next successful publish of the same
+     * file runs.
+     *
      * OWNERSHIP IS BEST EFFORT, AND SILENTLY SO. chown() to another uid needs
      * CAP_CHOWN, and chgrp() needs membership of the target group; a normal
      * user editing a file someone else owns (but may write, through its group
@@ -134,7 +178,8 @@ final class AtomicFileWriter
      *                           names $path, the original bytes are untouched
      *                           (on every route but the in-place fallback,
      *                           which documents its own window) and no temp
-     *                           is left behind.
+     *                           is left behind by any failure this process
+     *                           survives to see.
      */
     public static function replace(string $path, string $contents, ?\Closure $writer = null): void
     {
@@ -278,7 +323,78 @@ final class AtomicFileWriter
             throw new \RuntimeException(sprintf('Failed to atomically write "%s": %s', $path, $e->getMessage()), 0, $e);
         }
 
+        self::sweepOrphanTemps($path);
+
         return true;
+    }
+
+    /**
+     * Remove `.<name>.tmp.<16 hex>` files a KILLED publish of $path left
+     * behind (audit F-T7 residual, R8).
+     *
+     * {@see publish()} unlinks its temp on every failure it can see, but a
+     * SIGKILL, an OOM kill or a power cut between the `fopen()` and the
+     * `rename()` runs no `catch` and no `finally`, so the temp stays beside the
+     * user's file for good — and every such kill adds another, since each
+     * publish draws a fresh random suffix. Nothing else will ever remove them:
+     * the name is ours, the user did not create it, and a project's
+     * `.gitignore` will not mention it.
+     *
+     * Swept by the NEXT successful publish of the same target, which is the
+     * one moment this class is already in that directory with a reason to be.
+     * Deliberately conservative, on {@see ToolIpcFiles::sweep()}'s terms:
+     *
+     *  - only THIS target's temps: the exact `.<basename>.tmp.` prefix and
+     *    exactly sixteen lowercase hex digits, the shape `publish()` draws, so
+     *    a user's own `.notes.tmp.bak` is never matched;
+     *  - only a regular file by `lstat()`, never a symlink or a directory;
+     *  - only one this effective uid owns, when posix can say (a courtesy in a
+     *    shared directory — the kernel's own check governs the unlink);
+     *  - only one older than {@see ORPHAN_TEMP_MIN_AGE_SECONDS}, because a
+     *    concurrent publish of the same target holds a temp of exactly this
+     *    shape while it writes, and removing it would fail THAT publish.
+     *
+     * Best effort and silent: a sweep that cannot read the directory or unlink
+     * an entry changes nothing about the publish that just succeeded.
+     */
+    private static function sweepOrphanTemps(string $path): void
+    {
+        $pattern = self::globLiteral(\dirname($path))
+            . '/' . self::globLiteral('.' . basename($path) . '.tmp.')
+            . str_repeat('[0-9a-f]', 16);
+
+        $found = @glob($pattern, GLOB_NOSORT);
+        if ($found === false || $found === []) {
+            return;
+        }
+
+        $uid = function_exists('posix_geteuid') ? posix_geteuid() : null;
+        $now = time();
+
+        foreach ($found as $orphan) {
+            $stat = @lstat($orphan);
+            if ($stat === false || ($stat['mode'] & self::STAT_TYPE_MASK) !== self::STAT_REGULAR_FILE) {
+                continue;
+            }
+            if ($uid !== null && $stat['uid'] !== $uid) {
+                continue;
+            }
+            // A future mtime (clock skew, a restored backup) reads as age <= 0
+            // and is left alone rather than treated as ancient.
+            if ($now - (int) $stat['mtime'] < self::ORPHAN_TEMP_MIN_AGE_SECONDS) {
+                continue;
+            }
+            @unlink($orphan);
+        }
+    }
+
+    /**
+     * $text as a glob() pattern that matches only itself: a target named
+     * `notes[1].md` or `a*b` must not widen the sweep to its neighbours.
+     */
+    private static function globLiteral(string $text): string
+    {
+        return addcslashes($text, '\\*?[');
     }
 
     /**
