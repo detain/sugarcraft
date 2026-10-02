@@ -1420,9 +1420,10 @@ final class VertexProviderTest extends TestCase
     public function testGeminiGenerationConfigOmitsTheOptionalKnobsThatWereNotSet(): void
     {
         // NEGATIVE POLARITY on the same builder: the guarded keys must be
-        // ABSENT, not present-and-null. `temperature`/`maxOutputTokens` are
-        // unguarded and fall back to the class defaults, which is why they
-        // stay.
+        // ABSENT, not present-and-null. `temperature` is unguarded and falls
+        // back to the class default, which is why it stays. Since audit A21
+        // (b) `maxOutputTokens` is guarded too: no 4096 ceiling for Gemini
+        // 2.5's default thinking to spend the whole of.
         $captured = null;
         $provider = $this->providerWithPredictor([], $captured, self::GEMINI_MODEL);
 
@@ -1432,7 +1433,7 @@ final class VertexProviderTest extends TestCase
         ));
 
         $this->assertSame(
-            ['temperature' => 0.7, 'maxOutputTokens' => 4096],
+            ['temperature' => 0.7],
             $captured['body']['generationConfig'],
         );
     }

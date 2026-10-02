@@ -168,6 +168,23 @@ final class OpenAIProviderTest extends TestCase
         $this->assertSame(0, $provider->contextWindow());
     }
 
+    /** Audit A13 remainder: the configured window answers first, for any model. */
+    public function testAConfiguredContextWindowOverridesTheTable(): void
+    {
+        $client = $this->createMock(ClientContract::class);
+
+        $this->assertSame(400_000, (new OpenAIProvider($client, 'unknown-model', [], 400_000))->contextWindow());
+        $this->assertSame(64_000, (new OpenAIProvider($client, 'gpt-4o', [], 64_000))->contextWindow());
+    }
+
+    public function testANonPositiveContextWindowIsRefusedAtConstruction(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('contextWindow');
+
+        new OpenAIProvider($this->createMock(ClientContract::class), 'gpt-4o', [], 0);
+    }
+
     // -------------------------------------------------------------------------
     // 8. costPer1kTokens() returns correct values for known models and input/output
     // -------------------------------------------------------------------------

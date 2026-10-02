@@ -186,11 +186,12 @@ cannot tell whether the sentence is about them.)
 > was wrong. `config.json` keeps working indefinitely, and there is nothing to
 > migrate *to*: `settings.json` is never written.
 
-Only these seventeen keys are layered — `provider`, `theme`, `titleModel`,
+Only these twenty keys are layered — `provider`, `theme`, `titleModel`,
 `summaryModel`, `instructions`, `disabledSkills`, `disabledRules`,
 `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxOutputTokens`,
 `modelPrices`, `allowedTools`,
-`disabledTools`, `statusLine`, `layout`, `maxToolSteps`, `secretEnvAllowlist`. The
+`disabledTools`, `statusLine`, `layout`, `maxToolSteps`, `secretEnvAllowlist`,
+`contextWindow`, `extraBody`, `thinkingBudget`. The
 `trustedProject*` lists are read from `~/.sugar-crush/config.json` **alone**, so
 no lower layer can grant itself trust.
 
@@ -223,7 +224,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, twelve keys are **never** taken from a project file:
+Even for a trusted project, fifteen keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path;
@@ -255,7 +256,11 @@ still a bill a clone can run up on the operator's credential;
 `secretEnvAllowlist`, because it names which of the operator's credentials
 Bash, Grep and script hooks may still inherit after the scrub that keeps them
 out of model-visible output — a project-tier `["*"]` would read every key in
-the operator's shell back through one `env` call; and
+the operator's shell back through one `env` call; `contextWindow`,
+`extraBody` and `thinkingBudget`, the three provider-shaping keys, because each
+moves the bill — an inflated window switches auto-compaction off so requests
+grow until the server refuses them, an extra body field such as `n` multiplies
+every request, and a thinking budget is billed as output; and
 `allowedTools`, for a reason worth spelling
 out because on capability alone it looks harmless. A whitelist is an intersection — it
 cannot add a tool that `Bootstrap::tools()` did not build — but its effect is

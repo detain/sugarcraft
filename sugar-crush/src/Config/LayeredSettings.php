@@ -268,6 +268,30 @@ final class LayeredSettings
      *                 through one `env` call — the exfiltration the scrub exists
      *                 to close, re-opened by a file that arrived with a clone.
      *
+     *  - `contextWindow`
+     *                 {@see \SugarCraft\Crush\Providers\OpenAIProvider::contextWindow()}'s
+     *                 override (audit A13), read by
+     *                 {@see \SugarCraft\Crush\Providers\ProviderFactory::createOpenAI()}:
+     *                 a token count for whatever model the provider runs, or
+     *                 `{"<model>": tokens}` per model. USER-TIER ONLY because it
+     *                 is the denominator of every context tier: a checkout that
+     *                 inflated it would switch automatic compaction and the
+     *                 blocking refusal off, so requests grow until the server
+     *                 rejects them - on the operator's bill.
+     *  - `extraBody`
+     *                 top-level request fields for the `custom` provider (audit
+     *                 A10), read by `ProviderFactory::createCustom()` and
+     *                 validated by {@see \SugarCraft\Crush\Providers\CustomProvider}.
+     *                 USER-TIER ONLY on the money axis: a field such as `n`
+     *                 multiplies what every request bills, and the value is sent
+     *                 to whichever host the operator's provider names.
+     *  - `thinkingBudget`
+     *                 Gemini's `thinkingConfig.thinkingBudget` on the `vertex`
+     *                 provider (audit A21 b), read by
+     *                 `ProviderFactory::createVertex()`. Thinking tokens bill as
+     *                 output, so this is `maxOutputTokens`'s argument on the
+     *                 reasoning half of the reply: USER-TIER ONLY.
+     *
      * `statusLine` IS THE ONLY KEY HERE WHOSE VALUE IS A COMMAND, and that is
      * why it is user-tier only ({@see PROJECT_TIER_KEYS} does not list it).
      * Every other key on this list names a preference, a model, a glob or a
@@ -393,6 +417,9 @@ final class LayeredSettings
         'layout',
         'maxToolSteps',
         'secretEnvAllowlist',
+        'contextWindow',
+        'extraBody',
+        'thinkingBudget',
     ];
 
     /**
@@ -620,7 +647,8 @@ final class LayeredSettings
      * third list that agrees with neither. Today it is `provider`,
      * `titleModel`, `summaryModel`, `instructions`, `disabledRules`,
      * `maxOutputTokens`, `modelPrices`, `allowedTools`, `statusLine`, `layout`,
-     * `maxToolSteps` and `secretEnvAllowlist`, in
+     * `maxToolSteps`, `secretEnvAllowlist`, `contextWindow`, `extraBody` and
+     * `thinkingBudget`, in
      * {@see LAYERED_KEYS} order — named rather than numbered
      * here, because the
      * ordinals this sentence used to carry went stale the moment a fifth key

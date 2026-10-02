@@ -244,6 +244,16 @@ final readonly class VertexProvider implements ProviderInterface
      *        Fed from config by {@see ProviderFactory::createVertex()}: the
      *        provider block's own `modelPrices`, else the user-tier
      *        `modelPrices` setting (audit A15).
+     * @param int|null $thinkingBudget Audit A21 (b): Gemini's
+     *        `generationConfig.thinkingConfig.thinkingBudget`, from the
+     *        `thinkingBudget` setting ({@see ProviderFactory::createVertex()}).
+     *        -1 asks for dynamic thinking, 0 turns it off (Flash models only;
+     *        Pro refuses 0), a positive count caps it. Null sends no
+     *        `thinkingConfig`, leaving the model's own default. Sent on the
+     *        Gemini arm only - the Anthropic arm's extended thinking is a
+     *        different request shape this class does not build.
+     *
+     * @throws \InvalidArgumentException when $thinkingBudget is below -1
      */
     public function __construct(
         private string $projectId,
@@ -252,7 +262,16 @@ final readonly class VertexProvider implements ProviderInterface
         ?callable $predictor = null,
         ?callable $streamer = null,
         private array $modelPrices = [],
+        private ?int $thinkingBudget = null,
     ) {
+        if ($thinkingBudget !== null && $thinkingBudget < -1) {
+            throw new \InvalidArgumentException(sprintf(
+                'VertexProvider thinkingBudget must be -1 (dynamic), 0 (off) or a positive token '
+                . 'count, got %d.',
+                $thinkingBudget,
+            ));
+        }
+
         $this->predictor = $predictor !== null
             ? \Closure::fromCallable($predictor)
             : self::defaultPredictor($location);
@@ -266,6 +285,7 @@ final readonly class VertexProvider implements ProviderInterface
      * @param (callable(string, string, array<string, mixed>): array<string, mixed>)|null $predictor
      * @param (callable(string, string, array<string, mixed>): iterable<int, array<string, mixed>>)|null $streamer
      * @param array<string, array{input?: float|int, output?: float|int}> $modelPrices see {@see __construct()}
+     * @param int|null $thinkingBudget see {@see __construct()}
      */
     public static function create(
         string $projectId,
@@ -274,8 +294,9 @@ final readonly class VertexProvider implements ProviderInterface
         ?callable $predictor = null,
         ?callable $streamer = null,
         array $modelPrices = [],
+        ?int $thinkingBudget = null,
     ): self {
-        return new self($projectId, $location, $model, $predictor, $streamer, $modelPrices);
+        return new self($projectId, $location, $model, $predictor, $streamer, $modelPrices, $thinkingBudget);
     }
 
     public function name(): string
@@ -1702,15 +1723,31 @@ final readonly class VertexProvider implements ProviderInterface
         // drives the real seam through the vendored REST transport and asserts
         // this object in the serialized HTTP body, so deleting the
         // `setGenerationConfig()` call reds.
-        // Audit A21 (b), DEFERRED: Gemini 2.5's default thinking spends from
-        // this same `maxOutputTokens` budget, so a hard prompt can end
-        // `MAX_TOKENS` with little text under the 4096 default. A model-aware
-        // default or a `thinkingConfig.thinkingBudget` setting is a design
-        // decision still open; the usage side (a) is folded already.
         $generationConfig = [
             'temperature' => $request->temperature ?? self::DEFAULT_TEMPERATURE,
-            'maxOutputTokens' => $request->maxTokens ?? self::DEFAULT_MAX_TOKENS,
         ];
+
+        // Audit A21 (b): NO `maxOutputTokens` UNLESS ONE WAS ASKED FOR.
+        // Gemini 2.5 thinks by default and its thought tokens spend from this
+        // same budget, so the 4096 this used to send (the Anthropic arm's
+        // REQUIRED default, borrowed) let a hard prompt finish `MAX_TOKENS`
+        // with little or no text. Unlike `max_tokens` on the Messages API the
+        // field is optional here, and an absent one means the model's own
+        // maximum (65,535 on the 2.5 family). A fixed raise was the other
+        // option and was declined: older Gemini models cap output at 8,192
+        // and Vertex answers a larger value with a 400, so any one number is
+        // wrong for one family. `maxOutputTokens` in settings still sends.
+        if ($request->maxTokens !== null) {
+            $generationConfig['maxOutputTokens'] = $request->maxTokens;
+        }
+
+        // The other half of A21 (b): how much of that budget thinking may
+        // take. Only when configured: a model that does not think may refuse
+        // a `thinkingConfig`, so the operator opts in by setting it. Not
+        // verified live - this repo holds no GCP credentials.
+        if ($this->thinkingBudget !== null) {
+            $generationConfig['thinkingConfig'] = ['thinkingBudget' => $this->thinkingBudget];
+        }
 
         if ($request->topP !== null) {
             $generationConfig['topP'] = $request->topP;

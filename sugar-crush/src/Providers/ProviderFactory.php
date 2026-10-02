@@ -75,7 +75,7 @@ final readonly class ProviderFactory
     private const TYPE_SCHEMAS = [
         'openai' => [
             'required' => ['apiKey'],
-            'optional' => ['organization', 'model', 'modelPrices'],
+            'optional' => ['organization', 'model', 'modelPrices', 'contextWindow'],
         ],
         'anthropic' => [
             'required' => ['apiKey'],
@@ -95,11 +95,11 @@ final readonly class ProviderFactory
         ],
         'vertex' => [
             'required' => ['projectId'],
-            'optional' => ['location', 'model', 'modelPrices'],
+            'optional' => ['location', 'model', 'modelPrices', 'thinkingBudget'],
         ],
         'custom' => [
             'required' => ['name', 'baseUrl', 'model'],
-            'optional' => ['apiKey', 'supportsStreaming', 'supportsFunctionCalling'],
+            'optional' => ['apiKey', 'supportsStreaming', 'supportsFunctionCalling', 'extraBody'],
         ],
     ];
 
@@ -630,7 +630,88 @@ final readonly class ProviderFactory
         // `readUserConfig()` answers `mergedConfig(true)`, the project tier has
         // already been stripped from `modelPrices` inside that merge (it is
         // user-tier only), so this read cannot be poisoned by a checkout.
-        return new OpenAIProvider($client, $model, self::modelPricesFor($config));
+        return new OpenAIProvider(
+            $client,
+            $model,
+            self::modelPricesFor($config),
+            // Audit A13: the operator's window for this model, for one the
+            // built-in table does not size (or sizes wrongly).
+            self::configuredContextWindow(
+                $config['contextWindow'] ?? self::userTierSetting('contextWindow'),
+                $model,
+            ),
+        );
+    }
+
+    /**
+     * Normalises the `contextWindow` setting (audit A13) for `$model`.
+     *
+     * Two shapes, because the operator's two questions differ: a NUMBER is
+     * "this provider's window", applied to whatever model it runs; an OBJECT,
+     * `{"<model>": tokens}`, sizes models individually and leaves an unnamed
+     * one on the built-in table. Anything else - zero, negative, fractional,
+     * a non-number - is no override, the same tolerant posture as
+     * `modelPrices` and `maxOutputTokens`: a malformed settings value costs
+     * the setting, never the launch.
+     */
+    private static function configuredContextWindow(mixed $value, string $model): ?int
+    {
+        if (is_array($value)) {
+            $value = $value[$model] ?? null;
+        }
+
+        $tokens = self::wholeNumber($value);
+
+        return $tokens !== null && $tokens > 0 ? $tokens : null;
+    }
+
+    /**
+     * Normalises the `thinkingBudget` setting (audit A21 b): -1 (dynamic),
+     * 0 (off) or a positive token count; anything else is no setting, for
+     * {@see configuredContextWindow()}'s tolerant reason.
+     */
+    private static function configuredThinkingBudget(mixed $value): ?int
+    {
+        $tokens = self::wholeNumber($value);
+
+        return $tokens !== null && $tokens >= -1 ? $tokens : null;
+    }
+
+    /**
+     * Normalises the `extraBody` setting (audit A10): an object of top-level
+     * request fields, or `[]`. Only the SHAPE is checked here (null, `''` -
+     * an unset `${VAR}` placeholder - and non-arrays mean none); the KEYS are
+     * {@see CustomProvider}'s to validate, so the refusal of `extra_body`
+     * and of the fields that provider writes itself has one definition.
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function configuredExtraBody(mixed $value): array
+    {
+        return is_array($value) ? $value : [];
+    }
+
+    /**
+     * An integer from a JSON number or a numeric string (which is what a
+     * `${VAR}` placeholder in a provider block resolves to), or null. A float
+     * counts only when it is whole and fits an int, so `2.5` and `1e19` are
+     * refused rather than truncated or wrapped.
+     */
+    private static function wholeNumber(mixed $value): ?int
+    {
+        if (is_int($value)) {
+            return $value;
+        }
+
+        if (is_string($value) && preg_match('/^-?\d{1,18}$/', trim($value)) === 1) {
+            return (int) trim($value);
+        }
+
+        if (is_float($value) && is_finite($value) && floor($value) === $value && abs($value) < 1e18) {
+            return (int) $value;
+        }
+
+        return null;
     }
 
     /**
@@ -668,15 +749,30 @@ final readonly class ProviderFactory
      */
     private static function userTierModelPrices(): array
     {
+        $prices = self::userTierSetting('modelPrices') ?? [];
+
+        return is_array($prices) ? $prices : [];
+    }
+
+    /**
+     * One key of the merged user-tier settings
+     * ({@see \SugarCraft\Crush\Cli\Bootstrap::readUserConfig()}), or null.
+     *
+     * The provider-shaping keys read here - `modelPrices`, `contextWindow`,
+     * `extraBody`, `thinkingBudget` - are all USER-TIER ONLY in
+     * {@see \SugarCraft\Crush\Config\LayeredSettings}, so the project tier has
+     * already been stripped from them inside that merge and a checkout cannot
+     * reach this read.
+     */
+    private static function userTierSetting(string $key): mixed
+    {
         try {
-            $prices = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig()['modelPrices'] ?? [];
+            return \SugarCraft\Crush\Cli\Bootstrap::readUserConfig()[$key] ?? null;
         } catch (\Throwable) {
             // Same posture as EngineBackend::userConfig(): a settings read may
             // never take the provider launch down with it.
-            return [];
+            return null;
         }
-
-        return is_array($prices) ? $prices : [];
     }
 
     /**
@@ -1072,6 +1168,11 @@ final readonly class ProviderFactory
             location: $config['location'] ?? 'us-central1',
             model: $config['model'] ?? 'claude-3-sonnet@20240229',
             modelPrices: self::modelPricesFor($config),
+            // Audit A21 (b): how much of a Gemini reply's output budget
+            // thinking may spend. User-tier only - raising it raises spend.
+            thinkingBudget: self::configuredThinkingBudget(
+                $config['thinkingBudget'] ?? self::userTierSetting('thinkingBudget'),
+            ),
         );
     }
 
@@ -1087,6 +1188,12 @@ final readonly class ProviderFactory
             apiKey: $config['apiKey'] ?? null,
             supportsStreaming: $config['supportsStreaming'] ?? true,
             supportsFunctionCalling: $config['supportsFunctionCalling'] ?? true,
+            // Audit A10: server-specific top-level body fields (for example
+            // SGLang's `separate_reasoning`), which used to have a
+            // constructor seam and no config key. The provider block's own
+            // map wins; else the user-tier setting, which a project may not
+            // set - a field such as `n` multiplies what every request bills.
+            extraBody: self::configuredExtraBody($config['extraBody'] ?? self::userTierSetting('extraBody')),
         );
     }
 }

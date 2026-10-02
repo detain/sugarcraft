@@ -92,12 +92,29 @@ final readonly class OpenAIProvider implements ProviderInterface
      *        optional `cached` rate prices cache-hit prompt tokens; an entry
      *        without it bills them at its own `input` rate (see
      *        {@see cachedInputPer1k()}).
+     * @param int|null $contextWindowOverride Audit A13: the operator's own
+     *        window for the configured model, from the `contextWindow`
+     *        setting ({@see ProviderFactory::createOpenAI()}). It replaces
+     *        the built-in table in {@see contextWindow()} - the table cannot
+     *        know a model released after it was written, and before this an
+     *        unknown model could only fall to ContextWindow's generic
+     *        fallback. Null keeps the table.
+     *
+     * @throws \InvalidArgumentException when the override is not positive
      */
     public function __construct(
         private ClientContract $client,
         private string $defaultModel = 'gpt-4o',
         private array $modelPrices = [],
-    ) {}
+        private ?int $contextWindowOverride = null,
+    ) {
+        if ($contextWindowOverride !== null && $contextWindowOverride < 1) {
+            throw new \InvalidArgumentException(sprintf(
+                'OpenAIProvider contextWindow must be a positive token count, got %d.',
+                $contextWindowOverride,
+            ));
+        }
+    }
 
     public function name(): string
     {
@@ -132,9 +149,16 @@ final readonly class OpenAIProvider implements ProviderInterface
      * {@see ProviderInterface::contextWindow()} — so
      * {@see \SugarCraft\Crush\Context\ContextWindow::resolve()} applies its
      * one named fallback instead of this file guessing a denominator.
+     *
+     * A configured `contextWindow` (the constructor's override) answers
+     * first, for any model: the operator's figure is the narrower statement.
      */
     public function contextWindow(): int
     {
+        if ($this->contextWindowOverride !== null) {
+            return $this->contextWindowOverride;
+        }
+
         return match ($this->defaultModel) {
             'gpt-4o' => 128_000,
             'gpt-4o-mini' => 128_000,

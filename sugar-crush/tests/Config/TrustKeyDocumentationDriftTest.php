@@ -371,6 +371,11 @@ final class TrustKeyDocumentationDriftTest extends TestCase
         15 => 'fifteen',
         16 => 'sixteen',
         17 => 'seventeen',
+        18 => 'eighteen',
+        19 => 'nineteen',
+        20 => 'twenty',
+        21 => 'twenty-one',
+        22 => 'twenty-two',
     ];
 
     /** README.md as bytes, loud when the page it reads is gone. */

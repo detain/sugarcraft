@@ -164,9 +164,12 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `layout` | `Bootstrap::app()` → `App::$dock` via `DockLayout::fromArray()` | **no** |
 | `maxToolSteps` | `Bootstrap::backend()` → `resolvedMaxToolSteps()` | **no** |
 | `secretEnvAllowlist` | `Bootstrap::tools()` → `installSecretEnvAllowlist()` | **no** |
+| `contextWindow` | `ProviderFactory::createOpenAI()` → `OpenAIProvider::contextWindow()` | **no** |
+| `extraBody` | `ProviderFactory::createCustom()` → `CustomProvider` | **no** |
+| `thinkingBudget` | `ProviderFactory::createVertex()` → `VertexProvider` | **no** |
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these seventeen, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these twenty, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. A key nothing reads is worse than
@@ -175,7 +178,9 @@ a missing one, because it looks configurable.
 `maxOutputTokens` is the exception that has no exception: it is E707's opt-in
 output ceiling, and **unset is not zero** — an absent key sends no `max_tokens`
 override, and every provider keeps the documented default it already ships
-(4096 on the Anthropic-shaped wires). The `sglang` provider's default is not a
+(4096 on the Anthropic-shaped wires; Gemini on `vertex` sends no ceiling at
+all, so the model's own maximum applies — see `thinkingBudget` below). The
+`sglang` provider's default is not a
 constant: it is `min(262144, window − estimated prompt − margin)`, where the
 window is what the server itself reports from `/server_info` (read once per
 session), else a per-family table (DeepSeek-V4 and Qwen3.8), else 4096 for a
@@ -271,6 +276,40 @@ the plainest reason on this page: a project-tier `["*"]` would let a cloned
 repository read every credential in your shell back through one `env` call.
 See [`HOOKS.md`](HOOKS.md#environment-handed-to-the-script) for what a hook
 sees.
+
+Three keys shape a provider rather than a session, and all three are read
+once, when the provider is built. A provider's own block in
+`.sugar-crush/config.dev.json` may carry the same key, and there it wins,
+because it is the narrower statement. All three are user-tier only, for the
+same money reason as `maxOutputTokens`.
+
+- **`contextWindow`** sizes the `openai` provider's context window, the number
+  every context tier (the 70% reminder, 85% auto-compaction and 95% refusal) is
+  a percentage of (audit A13). Give a token count for whatever model the
+  provider runs (`"contextWindow": 400000`), or an object to size models one
+  by one (`{"gpt-5": 400000}`), which leaves an unnamed model on the built-in
+  table. A model the table does not know otherwise reports "unknown" and gets
+  the generic fallback. Zero, negatives, fractions and non-numbers are ignored.
+  A project may not set it: an inflated window switches compaction and the
+  refusal off, so requests grow until the server rejects them.
+- **`extraBody`** adds top-level request fields to the `custom`
+  (OpenAI-compatible) provider (audit A10), for example
+  `{"separate_reasoning": true}` for an SGLang server reached through
+  `custom`. `extra_body` itself (an OpenAI Python SDK convention a strict server
+  rejects) and any field the provider writes itself (`model`, `messages`,
+  `stream`, …) are refused when the provider is built, naming the key. A
+  project may not set it: a field such as `n` multiplies what every request
+  bills.
+- **`thinkingBudget`** sets Gemini's `thinkingConfig.thinkingBudget` on the
+  `vertex` provider (audit A21): `-1` for dynamic thinking, `0` to turn it off
+  (Flash models only; Pro refuses `0`), or a token cap. Unset sends no
+  `thinkingConfig`, so the model's own default applies. Thinking tokens bill as
+  output, which is why a project may not set it. Separately, Vertex no longer
+  sends a 4096 `maxOutputTokens` to Gemini when you set none: Gemini 2.5 thinks
+  by default and its thinking spends from that same budget, so a hard prompt
+  could end at the ceiling with almost no answer. With no `maxOutputTokens` the
+  model's own maximum applies (65,535 on Gemini 2.5). Neither change has been
+  checked against a live Gemini endpoint yet.
 
 Where a row names two methods, the first is the public entry point and the
 second is the method that does the read — cited because that is the one to
@@ -749,11 +788,11 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   all four `trustedProject*` grants.
 - [`MEMORY.md`](MEMORY.md) — the rest of the `~/.sugar-crush/` layout.
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
-  this stack. They do not cover it: only five of the seventeen layered keys have an
+  this stack. They do not cover it: only five of the twenty layered keys have an
   env override (`provider`, `titleModel`, `summaryModel`, `parallelToolCalls`,
   `parallelToolDeadlineSeconds`). `theme`, `instructions`, `disabledSkills`,
   `disabledRules`, `allowedTools`, `disabledTools`, `maxOutputTokens`,
-  `modelPrices`, `statusLine`, `layout`, `maxToolSteps` and `secretEnvAllowlist`
-  have none.
+  `modelPrices`, `statusLine`, `layout`, `maxToolSteps`, `secretEnvAllowlist`,
+  `contextWindow`, `extraBody` and `thinkingBudget` have none.
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.)
