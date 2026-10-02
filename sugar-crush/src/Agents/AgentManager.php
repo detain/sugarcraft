@@ -12,6 +12,7 @@ use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Permissions\PermissionRule;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Providers\ProviderResponseException;
 use SugarCraft\Crush\Providers\TransientFailure;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\ToolCall;
@@ -841,6 +842,20 @@ final class AgentManager
                     TransientFailure::backoff($attempt);
                 }
 
+                // Audit 15e AG-4 (the sub-agent twin of 15a A1): the loop only
+                // breaks holding an error chunk when it will not retry it - not
+                // transient, or the last attempt - so that chunk is this run's
+                // final answer and it is a FAILURE. Falling through used to
+                // settle the sub-agent COMPLETE with empty (or partial) output
+                // and the provider's errorMessage unread, so a 401 or a bad
+                // model id handed its caller nothing, reported as success.
+                // Thrown BEFORE the tool-call evaluation: the calls belong to a
+                // failed response and must not cost a prompt or a gate strike.
+                // The outer catch marks the sub-agent FAILED with this text.
+                if ($errorChunk !== null) {
+                    throw ProviderResponseException::fromResponse($errorChunk);
+                }
+
                 // E28: one evaluation, for the ACCEPTED attempt only. A denial
                 // still ends the sub-agent — it just throws after the stream
                 // has settled rather than mid-stream, which the pull-snapshot
@@ -873,6 +888,14 @@ final class AgentManager
                     }
 
                     TransientFailure::backoff($attempt);
+                }
+
+                // Audit 15e AG-4: see the matching throw in the streaming
+                // branch. A final isError response (permanent, or still
+                // failing on the last attempt) fails the sub-agent with the
+                // provider's own text instead of completing it with ''.
+                if ($response->isError) {
+                    throw ProviderResponseException::fromResponse($response);
                 }
 
                 // Evaluate tool calls through the agent's grant and then the
