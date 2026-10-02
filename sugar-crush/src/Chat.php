@@ -16784,7 +16784,11 @@ final class Chat implements Model
      * crossed onto its carrier. {@see Providers\CompleteResponse::$usage}
      * landed in this commit as the carrier; until `Runtime`'s two fold sites
      * and the providers pass it, {@see Usage::promptTokens()} answers null
-     * and this prefers the total it does answer with. Both distortions push
+     * and this prefers the total it does answer with — the conversation's OWN
+     * total ({@see Usage::ownTokens()}), never the share its Task sub-agents
+     * billed into the turn, which measures their prompts, not this one. A
+     * turn whose every token was delegated therefore observes nothing and
+     * keeps the existing factor. Both distortions push
      * the same way — observed HIGH — so the calibrated estimate fires the
      * tier EARLIER than the raw proxy, the safe direction against an
      * overflow, and {@see TOKEN_CALIBRATION_MAX} bounds how early;
@@ -16808,7 +16812,10 @@ final class Chat implements Model
     private function turnEstimateObservation(?Usage $usage): array
     {
         $estimate = $this->promptEstimateAtDispatch;
-        $observed = $usage?->promptTokens() ?? $usage?->totalTokens;
+        // ownTokens(), not totalTokens: since B4 a turn's total also carries
+        // the tokens its Task sub-agents billed, and a sub-agent's fifty steps
+        // are no part of THIS conversation's prompt (audit B4-rem(iii)).
+        $observed = $usage?->promptTokens() ?? $usage?->ownTokens();
 
         if ($estimate === null || $estimate <= 0 || $observed === null || $observed <= 0) {
             return ['promptEstimateAtDispatch' => null];

@@ -127,6 +127,34 @@ final class TokenEstimateCalibrationTest extends TestCase
         );
     }
 
+    public function testTheTotalFallbackLeavesOutTheShareSubAgentsBilled(): void
+    {
+        $chat = $this->calibratableChat([Message::user('hello')]);
+        // No prompt buckets, so the fallback reads the total — 60, of which a
+        // Task sub-agent billed 36. The conversation's own 24 pairs with the
+        // 12-token estimate for a 2.0 factor (68 over the settled 34). Read
+        // as a whole, 60/12 = 5.0 clamps to the 3.0 ceiling and answers 102.
+        $chat = $this->settle($this->dispatchDraft($chat, 'x'), Usage::new(60, 0.01, delegatedTokens: 36));
+
+        $this->assertSame(
+            68,
+            $chat->contextTokens(),
+            'a sub-agent\'s steps are not this conversation\'s prompt — the fallback must read ownTokens(), not totalTokens (audit B4-rem(iii))',
+        );
+    }
+
+    public function testATurnWhoseEveryTokenWasDelegatedObservesNothing(): void
+    {
+        $chat = $this->calibratableChat([Message::user('hello')]);
+        $chat = $this->settle($this->dispatchDraft($chat, 'x'), Usage::new(1200, 0.5, delegatedTokens: 1200));
+
+        $this->assertSame(
+            34,
+            $chat->contextTokens(),
+            'with no own tokens there is no measurement of this prompt, so no factor is stored — the raw 34 stands',
+        );
+    }
+
     public function testASilentSettlementKeepsTheLastMeasurement(): void
     {
         $chat = $this->calibratableChat([Message::user('hello')]);
