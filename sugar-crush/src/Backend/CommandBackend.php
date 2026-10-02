@@ -399,17 +399,31 @@ final class CommandBackend implements Backend
     }
 
     /**
-     * The wire history, or null when it could not be encoded. Shared so
-     * {@see complete()} and {@see completeAsync()} cannot disagree about the
-     * JSON flags a wrapper's `jq` sees.
+     * The wire history, or null when it could not be encoded. Shared by
+     * {@see complete()}, {@see completeAsync()} AND
+     * {@see StreamingCommandBackend}, so no two command entry points can
+     * disagree about the JSON flags a wrapper's `jq` sees.
+     *
+     * `JSON_INVALID_UTF8_SUBSTITUTE` (audit 15a A22): these rows are Chat's own
+     * history - a pasted Latin-1 snippet, a file read verbatim - and neither
+     * the tool-result scrub in Runtime nor the loader scrub
+     * ({@see \SugarCraft\Crush\Context\Utf8Scrub}) ever touches them. One
+     * invalid byte made the encode return false, and since the row is replayed
+     * in every later request, EVERY later turn on a command backend answered
+     * `failed to encode history`. Each invalid sequence becomes U+FFFD - the
+     * same substitute Runtime's tool-result repair picks, for the same reason:
+     * it is the one character that says "a byte was here that was not text",
+     * where `?` is indistinguishable from a real question mark.
+     *
+     * @internal public only so StreamingCommandBackend shares it.
      *
      * @param list<Message> $history
      */
-    private static function encodeHistory(array $history): ?string
+    public static function encodeHistory(array $history): ?string
     {
         $payload = json_encode(
             array_map(static fn(Message $m) => $m->toWire(), $history),
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
         );
 
         return $payload === false ? null : $payload;

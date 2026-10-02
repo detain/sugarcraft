@@ -215,11 +215,11 @@ final class StreamingCommandBackend implements Backend
      */
     private function begin(array $history, ?callable $onToken): array|Message
     {
-        $payload = json_encode(
-            array_map(static fn(Message $m) => $m->toWire(), $history),
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
-        );
-        if ($payload === false) {
+        // CommandBackend's encoder, not a copy of it: the copy is how this arm
+        // kept failing on invalid UTF-8 after the other was meant to be fixed
+        // (audit 15a A22).
+        $payload = CommandBackend::encodeHistory($history);
+        if ($payload === null) {
             return Message::assistant('_[error: failed to encode history]_');
         }
 
