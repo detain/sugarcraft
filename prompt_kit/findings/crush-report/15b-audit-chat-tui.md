@@ -64,18 +64,6 @@ Confidence labels:
 
 ## B. Terminal injection and frame geometry
 
-### 15b-09 — The chat status bar is never clipped to the terminal width
-- **Severity:** Medium (standalone `Chat` root) / Low (hosted App) · **Confidence:** Verified-by-repro (`r3b.php`, `r4_app.php`)
-- **Where:** `Renderer::renderStatusBar()` at `src/Renderer.php:1657-1907`. `$processing` (54 cells idle: `Enter to send · Ctrl+P menu · /exit or ^C to quit`) is always appended. Only the optional segments are width-budgeted. Return is at `:1907` with no `Width::truncate`.
-- **Repro:** `Chat::withSize(40,20)` gives a last row of width 54; `withSize(30,10)` also gives 54.
-  - In the hosted App, `Tui\Renderer::clipWidth()` cuts it at the frame edge. Inside the chat pane it overruns the pane's inner width: `│ 0% · Enter to send · C │` at 50 columns, where the context figure was already squeezed to `0%`.
-  - In-flight text (`⠴ thinking… · Esc Esc to cancel`) behaves the same way.
-- **Second geometry defect:** `$contentWidth = max(20, cols - 6)` at `:1294` makes the shell 26 cells wide on terminals under 26 columns. `r3_width.php` gives width 26 > 25 for every row kind at 25 columns.
-  - The overlays share this floor. `r17_overlay_width.php`, with the status bar excluded: the palette, `/keys` and Ctrl+R history are 26 cells at 16 and 24 columns, and the slash popup is 18 cells at 16 columns. Their own clipping is otherwise correct: no overlay overran at 32 or 48 columns, and no frame was taller than its rows.
-- **Re-measured after the 15b-07 CR fix (`74ae88c2a`):** `r3_width.php` still reports every row kind at 25 columns as 26 cells (`width 26>25`), CR rows included. The CR fix removed the cursor motion, not this floor, so the second geometry defect is unchanged.
-- **Fix:** `Width::truncate($bar, $cols)` (ANSI-aware) at `:1907`. Drop or shorten `$processing` segments in priority order. Clamp `contentWidth` to `max(1, cols-6)`.
-- **Test:** For cols in {20, 30, 40}, assert every frame row satisfies `Width::string($row) <= $cols`.
-
 ### 15b-26 — candy-core `Width::wrap()` never terminates when a 2-cell cluster meets a 1-column budget
 - **Severity:** Medium (a hang) · **Confidence:** Verified-by-repro (`timeout 5 php -r '… Width::wrap("文", 1) …'` is killed at the deadline)
 - **Where:** `candy-core/src/Util/Width.php:295` (`wrap()`). Its hard-break loop cuts long tokens between grapheme clusters, but a cluster wider than the whole budget (a CJK character or a wide emoji at `$max = 1`) is never emitted, so the loop never advances.
@@ -187,18 +175,6 @@ Confidence labels:
   - Either way, a bare PUA codepoint stops being markup, and Nerd Font glyphs survive.
 - **Test:** Render a Chat with one sixel image and an assistant row containing `"\u{E002}"`. Assert `ImageOverlay::resolve()` returns exactly one paint and that the row keeps a Powerline glyph `"\u{E0B0}"`.
 
-### 15b-18 — The session tab strip is neither width-clipped nor sanitized, unlike the session picker
-- **Severity:** Low-Medium (standalone `Chat` root: Medium; hosted App: Low) · **Confidence:** Verified-by-repro (`r19_tabstrip.php`, `r19b_tabstrip_noevil.php`)
-- **Where:** `Renderer::renderSessionTabStrip()` at `src/Renderer.php:2388-2412`. It reads `listSessions()` (up to 20 rows) and joins `" {$name} "` labels with `|`. There is no `Width::truncate`, no `untrusted()` and no line-break flattening. The picker passes the same rows through `Chat::sanitizeSessionRows()` (`src/Chat.php:11833`). The strip is placed above the shell at `:1367` and is outside every clip.
-- **Repro:**
-  - Eight ordinary sessions named "Refactor the authentication middleware part N" give a top row **383 cells wide at 80 columns** in the standalone root. That is the over-wide row the diff renderer cannot handle: the terminal wraps it and every later row is painted one line low.
-  - In the hosted App, `Tui\Renderer` clips plain names to the pane. A name holding `\e]52;…\a \e[2J` defeats that clip (a 433-cell row at 100 columns), and both escapes reach the hosted frame as well.
-- **Where names come from:** the titler sanitizes (`sanitizeSessionTitle()`). `/rename` stores the typed text as is (`src/Chat.php:12291`). Any other writer to the shared `~/.sugar-crush/session.db` also sets names: another sugar-crush version, the incubating Python port, or a hand-edited DB. So the escape half is defence in depth, but the width half triggers on ordinary data.
-- **Fix:**
-  - Build labels from `sanitizeSessionField()` or `PaneLabel::safe()`.
-  - Lay the strip out against `$chat->cols()`: clip each label to a per-tab budget, keep the current tab visible, and collapse the rest into `… +N`.
-- **Test:** A store with 8 long names and `cols=80`. Assert `Width::string(first row) <= 80`. Add a name with `\e]52;c;eA==\a` and assert no `\e]` appears in the frame.
-
 ### 15b-27 — The permission modal shows an empty value for a tool argument that is not valid UTF-8
 - **Severity:** Low · **Confidence:** Verified-by-reading
 - **Where:** `Message::describeToolCall()` at `src/Message.php:189-213`: `"{$key}: " . json_encode($rendered)` (and `json_encode($value) ?: ''` for non-string values), with no `JSON_INVALID_UTF8_SUBSTITUTE`.
@@ -218,11 +194,9 @@ Both findings here (15b-20, 15b-21) were fixed in wave 4; see **Fixed since audi
 |---|---|---|---|
 | 15b-03 | Med-High | Repro | Command output, mid-turn notices and background/runtime notices go to the model as real turns. Partly fixed (`2a3a8f91c`: `Message::$uiOnly`, filtered at every wire encoder); remaining: compaction input unfiltered, notices still interleave between a prompt and its answer |
 | 15b-05 | Medium | Repro | Menu and shell commands erase the draft, then claim "draft still in the box" |
-| 15b-09 | Medium/Low | Repro | Status bar not clipped to cols; content width (and every overlay) floored at 20+chrome |
 | 15b-26 | Medium | Repro | candy-core `Width::wrap()` loops forever when a 2-cell cluster meets a 1-column budget (latent in sugar-crush; reachable via candy-shell pager, sugar-table) |
 | 15b-13 | Low-Med | Reading | Token proxy chars/4 underestimates CJK 3-6×. Partly fixed (`8341a37c1`: script-weighted `TokenEstimate` for Chat's estimate, 85/95% tiers, status bar); remaining: `ContextCompactor` still chars/4 (70% reminder late for CJK), stale comments |
 | 15b-17 | Low-Med | Repro | U+E002+n in model or tool text paints a copy of on-screen image n where the text chooses; Nerd Font glyphs blanked |
-| 15b-18 | Low-Med | Repro | Session tab strip unclipped (383 cells at 80 cols, standalone root) and unsanitized |
 | 15b-14 | Low | Reading | No i18n in sugar-crush |
 | 15b-15 | Low | Reading | Attachments dormant and dropped on the wire |
 | 15b-24 | Low | Reading | `/pane:x`, `/layout:x`, `/mcp:x` colon spellings not handled (documented) |
@@ -328,3 +302,5 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **15b-04** UserPromptSubmit and SessionStart hook chains ran synchronously inside `update()` — fixed on master in `f1b6862e9` (script turn hooks run off `update()` in a forked child, and the turn is dispatched from the resolved `TurnHooksResolvedMsg`).
 - **15b-20** A custom command's `` !`…` `` ran synchronously inside `update()` for up to 10 s, and on timeout its grandchildren survived — fixed on master in `2826f5cf3` (the expansion runs off `update()` through a forked child, `forkedPayloadCmd()`, and resolves to `CustomCommandExpandedMsg`; on timeout `ProcessContainment::killTree()` plus a SIGKILL to the process group also catch `&` background jobs; gate checks made in the child are replayed into the session gate).
 - **15b-21** `/branch` and any first save of a long history froze the TUI for seconds, one autocommitted INSERT per message — fixed on master in `698a1efff` (with 15e SES-2: save, checkpoint and restore each run in one `BEGIN IMMEDIATE` transaction, and a fork copies the blobs, so the first save on a `/branch` re-interns nothing). Measured at 800 messages: first save 6519 → 233 ms, first save on a branch 5996 → 17 ms; the fork itself takes about 470 ms (the fsync of the copied blobs). Residual: persistence still runs synchronously from `Chat::update()` (`persistTranscript()`); moving it to a debounced `Cmd` is not done.
+- **15b-09** The chat status bar was never clipped to the terminal width, and the content width (with every overlay) was floored at 20 plus chrome — fixed on master in `66d0651ac` (the status-bar hint shortens step by step, keeping the "Ctrl+P menu" click zone longest; a `fitStatusBar()` backstop strips zone markers before it cuts, so a cut never splits one; the content-width floor is `max(1, cols-6)`, the image box and diff box floors drop to 1, and the slash popup is capped at the terminal width; at 6 columns or fewer `clipFrameToCols()` cuts the bordered shell, with every `Width::wrap` budget kept at 2 or more for 15b-26). The new width test exposed a second bug, fixed in the same commit: Veil counted zone markers as screen cells, so rows under an overlay were split at the wrong column and overflowed; zones are now lifted out before compositing and put back afterwards. Measured: `r3b` last row 54 → 38 cells at 40 columns and 54 → 29 at 30; `r3_width` at 25 columns 45 over-wide rows → 0; `r17_overlay_width` 21 over-wide cases → 0. Residual: `src/Commands/TranscriptTable.php` still copies the old `max(20, cols-6)` floor (nothing overflows, because the pane fitter wraps its output); the permission modal's inner width is still floored at 20, so below 26 columns it loses its right border (it does not overflow).
+- **15b-18** The session tab strip was neither width-clipped nor sanitized — fixed on master in `01cae6d21` (each name goes through `Sanitize::untrustedForDisplay()` and `PaneLabel::safe()`, which removes escapes and control bytes, folds CR/LF/TAB to a space and drops Private-Use characters, and an empty name falls back to the cleaned id; names are capped at 20 cells with an ellipsis, the current tab is always shown, tabs that do not fit collapse into `… +N`, only visible tabs get click zones, and the strip stays one row). Measured at 80 columns: 8 long names 383 → 73 cells; a hostile name 402 → 69 cells with no OSC 52, `\e[2J` or CR; hosted App at 100 columns 433 → 100 cells.

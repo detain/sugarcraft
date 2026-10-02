@@ -10,29 +10,7 @@ Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/` (ea
 
 ## A. MCP transports
 
-### MCP-3 — `ClaudeCodeMcpClient::callTool()` gives up after about 1 s, so any `claude-mcp` tool that runs longer than a second fails
-- **Severity:** Medium (the `claude-mcp` transport is double opt-in, but when enabled it is unusable for real tools such as Bash, Grep, and Task)
-- **Confidence:** Verified-by-repro
-- **Where:** `sugar-crush/src/ClaudeCodeMcpClient.php:446-475` (`callTool`) and `:490-516` (`listTools`); handshake at `:424-433`
-- **Code:**
-  ```php
-  $attempts = 0;
-  while ($attempts < 100) { $messages = $this->readMessages(); ... usleep(10000); $attempts++; }
-  throw new RuntimeException("No response received for request {$id}");
-  ```
-- **What happens:** `trigger-long-running-operation(duration=3)` on server-everything threw `No response received for request 3` after 1.02 s. The late reply is then dropped. The handshake also sends `initialize` as a **notification** (no id) with `capabilities: {tools: true, resources: null}`, and never sends `notifications/initialized`. This works only because the TS SDK does not enforce initialization. `listTools()` at start has the same ~1 s budget, so a slow-booting `claude mcp serve` would fail to start and be skipped silently.
-- **Fix:** reuse the deadline-based `readResponse()` loop from sugar-mcp (no fixed 100 × 10 ms) and give it a generous per-call deadline. Send `initialize` as a request and wait for its result, then send `notifications/initialized`. Better still, replace this class with `SugarCraft\Mcp\StdioMcpServer` plus a spawn planner, as stdio already does.
-- **Test:** a node-gated test running a server-everything long operation of about 3 s through `ClaudeCodeMcpServer::callTool` and asserting success.
-- **Repro:** `ccmcp.php`
-
-### MCP-4 — One stray non-JSON stdout line aborts the in-flight MCP request
-- **Severity:** Low-Medium
-- **Confidence:** Verified-by-reading
-- **Where:** `sugar-mcp/src/StdioMcpServer.php:571-574`
-- **Code:** `$message = McpMessage::parse($line); if ($message === null) { return null; }`
-- **Scenario:** a server that prints a banner or log line to stdout, or emits a blank keep-alive line (`readLine()` trims it to `''`), makes `request()` return null. `start()` then fails with "Failed to start MCP server", or `callTool` returns "Tool call failed", even though the real reply arrives on the next line. The reference SDK clients skip unparseable lines.
-- **Fix:** `continue` on a null parse; only give up on EOF or the deadline. Optionally log the line into the stderr tail for diagnostics.
-- **Test:** a fake PHP MCP server that writes `"hello\n"` before every response; assert that start succeeds and tools are listed.
+Both findings here (MCP-3, MCP-4) were fixed in wave 5; see **Fixed since audit**.
 
 ---
 
@@ -137,47 +115,12 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
   - The synchronous dispatch paths (an injected executor, no pcntl, or a failed fork) cannot be interrupted: `AgentWorkerPool::executeOne()` without a forked executor still calls `ProcessExecutor::execute()` inline, with that executor's own 300 s default (`src/Agents/ProcessExecutor.php:62`).
   - The cancel path, `AgentWorkerPool::terminateWorker()` (`:1247`), still sends SIGTERM to the root pid only, not `killTree()`.
 
-### WF-2 — `/workflow pause` cannot pause a running workflow; resuming a *failed* run skips the failed stage and reports success; the pause file is never cleared
-- **Severity:** Medium
-- **Confidence:** Verified-by-repro
-- **Where:** `src/Workflows/WorkflowEngine.php:479-509` (`pause()` needs a result recorded by `rememberResult()`, which happens only after `run()` returns, and writes `'stagesCompleted' => count($result->stageResults)` at `:501`, a count that **includes the failed stage**); `:547-589` (`resume()` skips `stagesCompleted` stages and never deletes the pause file); `:606-649` (`getStatus()` reads only the pause file); `src/Chat.php:9800-9830` (always prints "resumed and completed").
-- **Repro (`wf_pause.php`, 3-stage YAML; stage `b` fails on the first run):**
-  ```
-  run1: failed id=three-aa8a6eee stages=2
-  status after pause: paused
-  resume: completed stages=c tokensTotal=0
-  prompts run on resume: ["do c using "]      <- b skipped; {{b.output}} is empty
-  status after resume: paused                  <- pause file left behind
-  second resume re-runs: ["do c using "]      <- resumable forever
-  resume of completed run: completed stages=0 prompts=0
-  ```
-- **Impact:**
-  - The only thing `/workflow pause <id>` can act on is a run that has already ended. During a run it says "Run the workflow first", or it snapshots the previous run with that name.
-  - The obvious recovery after a failure (pause, fix, resume) silently skips the stage that failed and feeds an empty `{{b.output}}` downstream. It then reports **completed**, with the paused run's tokens and cost dropped from the totals.
-  - `/workflow status` says "paused" forever, and each further resume re-runs the tail.
-  - Only the SIGINT/SIGTERM handler (`:2131-2167`) writes a correct pause file, because there `stageResults` holds only finished stages.
-- **Fix:**
-  - Count only successful stages in `stagesCompleted` (`array_filter(…, isSuccess)`).
-  - Make `pause()` work on a live run: set a flag that the stage loop checks between stages, and write the file from the live `$stageResults`.
-  - Delete the pause file (or mark it `completed`) once `resume()` finishes.
-  - Carry the paused tokens and cost into the resumed totals.
-  - Have Chat report `failed` when the result failed.
-- **Test:** the repro as a PHPUnit case. Assert that the resume re-runs `b`, that status is not `paused` after the resume, and that a second resume throws `WorkflowNotRunningException`.
-
-### WF-3 — `{{agent.results}}` never resolves for a parallel agent (its documented purpose), and a run-context key that equals an agent type crashes the stage after the agent has run
-- **Severity:** Low-Medium
-- **Confidence:** Verified-by-repro
-- **Where:**
-  - `src/Workflows/WorkflowEngine.php:1113-1115`: only `executeStage()` writes `$context[$agentName]['results']`, keyed by `$task->name ?? $task->agentType`. A YAML regular stage has no task name, so the key is the agent *type* (`coder`).
-  - `:1435`: `executeParallelStage(array $stage, array $context, …)` takes the context by value and records no per-agent results. The same is true of the pipeline and verification stages (`:1132`, `:1266`).
-  - `:1911-1916`: the `.results` interpolation.
-  - `docs/WORKFLOWS.md:113`: "`{{agentName.results}}` — one parallel agent's output".
-- **Repro (`wf_ctx.php`):**
-  - A parallel stage with agents `styler` and `checker`, then a stage prompting `styler said {{styler.results}}`. The verify agent receives the literal `{{styler.results}} / {{checker.results}}`.
-  - `/workflow run three coder=x` (any `key=val` whose key equals an agent type): stage `a` **fails** with `Cannot access offset of type string on string`. The agent had already run (1 dispatch), and its tokens are dropped from the totals (`tokens=0`).
-- **Impact:** the only way to address one parallel agent's output does not work, so authors fall back to `{{fix.output}}`, the concatenation of every agent with no separators. Two regular stages with the default `agent: coder` also overwrite each other's `coder.results`.
-- **Fix:** key results by the task name, falling back to the stage name and not to the agent type. Write them from every stage type, including one per parallel agent (`$agentResults[$i]` belongs to `$tasks[$i]`'s name). Keep them in a namespace user context cannot collide with (for example `$context['@results'][$name]`). Refuse a run-context key that shadows one.
-- **Test:** the two repro workflows as PHPUnit cases with a fake executor.
+### WF-4 — While a workflow runs, Chat refuses every slash command, so a live `/workflow pause` or `/workflow status` only gets through after Esc Esc
+- **Severity:** Low-Medium · **Confidence:** Verified-by-reading (found while fixing WF-2 in wave 5)
+- **Where:** `src/Chat.php:8060-8063`: while `$this->inFlight`, every input starting with `/` except a bare `/exit` or `/quit` goes to `refuseInFlightCommand()` (`:8527`), which posts "commands do not run while a turn is in flight" and keeps the draft.
+- **Detail:** since WF-2's fix (`efdfe79f8`), `WorkflowEngine` can pause a live run: the pause file is written at once, the current stage finishes, and the run returns `Paused` before the next stage. `/workflow run` and `/workflow resume` drive the run in a Fiber through `driveWorkflowFiber()`, so the TUI stays responsive, but the run counts as in flight. The TUI therefore refuses the very command that pauses it: a typed `/workflow pause <id>` (or `/workflow status <id>`) mid-run gets the refusal notice, and the only way through is Esc Esc, which cancels the run rather than pausing it. The engine-level pause works and is tested; the TUI cannot reach it.
+- **Fix:** let `/workflow pause` and `/workflow status` through `refuseInFlightCommand()`'s gate while the in-flight work is a workflow run, the way `/exit` and `/quit` are let through. Neither rewrites history the run is appending to: pause writes the pause file and status reads state.
+- **Test:** a Chat with a workflow run in flight; Enter on `/workflow pause <id>` returns no refusal notice, and the run settles `Paused` after its current stage.
 
 ---
 
@@ -238,16 +181,12 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 - **Test:** table cases (`src`, `fix the bug`, `--root --model x`) asserting root resolution or a usage error.
 - **Partly fixed on master in `b899773a6`** (part (a)). `ArgvParser::parse()` stays pure and keeps leftovers in the new `ParsedArgs::$positionals`; the new `ArgvParser::resolveOperands()` makes a bare positional that is an existing directory the root, and any other leftover, two roots, or a directory plus `--root` exits 2 with a `-p "<prompt>"` / quote-the-prompt hint. `--root` refuses a flag-shaped or missing value. Help, README and the `bin/sugarcrush` raw-argv scan are updated. **Remaining:** (b) using the leftover words as the TUI's initial prompt, the Claude Code behaviour, is not built; it is a deferred decision (wave plan §3 #15), and `ParsedArgs::$positionals` is kept so it can be added later.
 
-### DOC-1 — Smaller doc/code drift found while cross-checking
-- **Severity:** Low
-- **Confidence:** Verified-by-reading
-- **Items:**
-  1. `docs/TROUBLESHOOTING.md:136-139` says an unknown `type` makes startup "ordering-dependent: servers listed after it were never reached". `McpClient::startServers()` `src/MCP/McpClient.php:116-146` attempts every entry, collects failures, and throws once at the end. `docs/MCP.md:136` describes this correctly. The troubleshooting advice ("move the bad entry") is stale.
-  2. `docs/WORKFLOWS.md:63,81,245-246,255-261` and `examples/workflows/lint-then-fix.yaml:19-20`: timeout and retries semantics that do not exist (WF-1). **Fixed on master in `4fa805970`** with WF-1 (a): `docs/WORKFLOWS.md` has a new section, "`timeout` is a per-stage wall-clock budget", the fallback sentence is corrected, retries are documented as recorded but not enforced, and the example YAML's comment is corrected.
-  3. `docs/WORKFLOWS.md:113`: `{{agentName.results}}` for parallel agents (WF-3).
-  4. Resolved since the audit: the Stdio/HTTP "works" rows in `docs/MCP.md` and the `mcp__git__*: allow` + `Write: deny` example in `docs/PERMISSIONS.md` became true when MCP-1, MCP-2 and GIT-1 were fixed.
-- **Fix:** correct each one alongside its finding. Item 1 stands alone: delete the ordering paragraph.
-- **Remaining:** items 1 and 3 (wave plan w5-mcp-transport and w5-wf-state); item 2 is fixed.
+### DOC-2 — `docs/MCP.md` still says an unknown server `type` makes startup "ordering-dependent"
+- **Severity:** Low (docs) · **Confidence:** Verified-by-reading (found while fixing DOC-1 item 1 in wave 5)
+- **Where:** `docs/MCP.md:97-100`: an unknown `type` "throws, and that throw is ordering-dependent: servers listed *earlier* in the file are already up, servers listed *after* the bad entry are never reached".
+- **Detail:** this is the same stale claim DOC-1 item 1 found in `docs/TROUBLESHOOTING.md`, fixed there in `bc5c3dd3b`. `McpClient::startServers()` attempts every entry, collects the failures, and throws once at the end naming them, so no server is skipped because of a bad entry before it. `docs/MCP.md:136` already describes this correctly, so the page contradicts itself. Optionally, the page could also say that `claude-mcp` uses a fixed 60 s handshake budget (`StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS`, since MCP-3's fix `0ed1b0f70`), because `startTimeout` applies to stdio servers only.
+- **Fix:** delete the ordering sentence, keeping the part about `Bootstrap::mcpClient()` catching the throw and the launch continuing; optionally add the `claude-mcp` handshake budget. Owner: the w7-mcp-oauth group, which owns `docs/MCP.md`.
+- **Test:** extend `tests/Config/McpStartupOrderingDocDriftTest.php` (added with DOC-1 item 1) to scan `docs/MCP.md` as well.
 
 ---
 
@@ -255,14 +194,11 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 
 | ID | Severity | Confidence | Title |
 |---|---|---|---|
-| MCP-3 | Medium | Verified-by-repro | `ClaudeCodeMcpClient` gives up after ~1 s per call; initialize sent as a notification |
 | SES-3 | Medium | Verified-by-reading | No per-session writer lock; two TUIs clobber the transcript; checkpoint index and blob-intern races. Partly fixed (`698a1efff`: `UNIQUE(session_id,"index")`, IMMEDIATE allocation, duplicate-renumbering migration; closes the index and blob-intern races); remaining: (b) writer lock and second-TUI behaviour (deferred decision) |
 | WF-1 | Medium | Verified-by-reading | Workflow/task `timeout` and `retries` are never enforced; stages have no wall-clock bound. Partly fixed (`4fa805970`: per-agent deadline with `killTree()`, `withTimeBudget()`, `Workflow::$timeout` reaches every stage); remaining: (b) retries (deferred decision), synchronous dispatch paths uninterruptible, cancel path SIGTERMs the root only |
-| WF-2 | Medium | Verified-by-repro | `/workflow pause` only snapshots finished runs; resume skips the failed stage and reports "completed"; pause file never cleared |
-| MCP-4 | Low-Med | Verified-by-reading | A stray non-JSON stdout line aborts the MCP request |
 | BG-1 | Low-Med | Verified-by-reading | Background sessions cannot be stopped (STOP has no sender) |
 | TMP-1 | Low-Med | Verified-by-reading | Fixed shared `/tmp` directory names; the first user disables Task resume for others |
-| WF-3 | Low-Med | Verified-by-repro | `{{agent.results}}` never resolves for parallel agents; a context key equal to an agent type crashes the stage |
+| WF-4 | Low-Med | Verified-by-reading | While a workflow runs, Chat refuses every slash command, so a live `/workflow pause` or `/workflow status` only gets through after Esc Esc (residual of WF-2) |
 | AG-2 | Low-Med | Verified-by-repro | One Claude-style preset (`tools: Read, Grep`) disables all presets in every tier |
 | MCP-5 | Low-Med | Verified-by-reading | Project MCP trust is path-bound, not content-bound; a pulled `.mcp.json` change runs new commands without consent |
 | MCP-6 | Low-Med | Verified-by-repro | `mcp auth login` discovery breaks on path-bearing server URLs; registration URL not overridable |
@@ -271,7 +207,7 @@ The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:106
 | CLI-2 | Low-Med | Verified-by-repro | `sugarcrush <dir>` ignores bare directory names; non-path positionals silently dropped. Partly fixed (`b899773a6`: existing-dir positional is the root, other leftovers exit 2 with a `-p` hint); remaining: (b) leftovers as the TUI's initial prompt (deferred decision) |
 | BG-2 | Low | Verified-by-reading | Background IPC directories never cleaned |
 | AG-3 | Low | Verified-by-reading | `AgentManager` never forgets sub-agents; unbounded growth plus a per-frame scan |
-| DOC-1 | Low | Verified-by-reading | Doc drift: TROUBLESHOOTING startup ordering, plus doc halves of WF-1/WF-3. Partly fixed (`4fa805970`: item 2, the WF-1 doc half); remaining: items 1 and 3 |
+| DOC-2 | Low (docs) | Verified-by-reading | `docs/MCP.md:97-100` still says an unknown `type` makes startup "ordering-dependent" (the DOC-1 item 1 claim, fixed in TROUBLESHOOTING only); owner w7-mcp-oauth |
 | AG-5 | Low (dormant) | Verified-by-reading | Dormant `Chat::executeAgents()` fork path and `App::dispatchSkill()` run SubAgents with the default 300 s timeout, which WF-1 (a) now enforces |
 
 ---
@@ -363,3 +299,8 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **SES-6** `getMessages()` ordered by `created_at` with no tiebreak — fixed on master in `698a1efff` (folded into SES-2: `ORDER BY created_at, id`).
 - **SES-4** Checkpoint blobs were garbage-collected only on `/rewind` — fixed on master in `698a1efff` (`pruneOldCheckpoints()` runs the blob GC, and the GC drops only the deleted ids from the intern cache).
 - **SES-5** Checkpoint and meta timestamps mixed local time and UTC — fixed on master in `698a1efff` (checkpoint `created_at` and `last_activity` are written and read as UTC). Residual: rows written in local time before the fix are not converted.
+- **MCP-4** One stray non-JSON stdout line aborted the in-flight MCP request — fixed on master in `e97fe5e5b` (sugar-mcp `StdioMcpServer::readResponse()` skips unparseable lines, banners and blank keep-alives alike, and gives up only on EOF or the deadline; an envelope with our id but neither `result` nor `error` fails the call instead of hanging it; the fork-safety fragment recovery is subsumed by the skip).
+- **MCP-3** `ClaudeCodeMcpClient::callTool()` gave up after about 1 s, and `initialize` was sent as a notification — fixed on master in `0ed1b0f70` (the 100 × 10 ms poll is replaced by a `stream_select` read, `readFrame()`, that ends on the reply, the deadline, EOF or the child's death; `tools/call` has no total deadline; `initialize` and `tools/list` are bounded at 60 s, `StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS`, which a new optional `handshakeTimeoutSeconds` constructor argument can override; `initialize` is a real request followed by `notifications/initialized`; a failed handshake or `tools/list` shuts the child down; id matching is strict and a malformed reply to our own id fails fast; `ExchangeLock` and `RequestIdSequence` fork safety are kept). Measured with `ccmcp.php`: before, the call threw after 1.01 s; after, the 3 s operation completes.
+- **WF-2** `/workflow pause` could not pause a running workflow, resuming a failed run skipped the failed stage and reported success, and the pause file was never cleared — fixed on master in `efdfe79f8` (one pause-file writer saves only the stages that succeeded; a live run can be paused: the file is written at once, the current stage finishes, and the run returns `Paused` before the next one; resume restores the earlier successful stages, tokens, cost and start time, re-runs the failed stage and deletes the pause file, and a second resume throws `WorkflowNotRunningException`; `getStatus()` checks a live run, then the pause file, then a finished run the engine remembers; Chat's `/workflow resume` runs in a Fiber through `driveWorkflowFiber()`, so it no longer freezes the TUI, and its reply says completed, failed or paused). Pausing a completed run is still allowed: resuming it runs nothing and deletes the file. Still open nearby: the TUI refuses `/workflow pause` while the run is in flight (WF-4).
+- **WF-3** `{{agent.results}}` never resolved for a parallel agent, and a run-context key equal to an agent type crashed the stage — fixed on master in `98821a7a2` (results live under a reserved `$context['@results']` key and every stage type writes them, named by the task name, else the stage name, `<stage>_<n>` for a parallel agent (1-based), the step name for a pipeline step, and `<stage>_verifier` for a verifier; parallel results are matched to their agents by SubAgent id, since they come back in completion order; context keys starting with `@` are refused with `InvalidArgumentException`, so the `coder=x` crash is gone, and tokens from agents that ran are kept on a failed stage). Behaviour change: the agent-type alias is gone, so `{{coder.results}}` resolves only for a task named `coder` (nothing in the repository used it).
+- **DOC-1** Smaller doc/code drift: TROUBLESHOOTING's startup-ordering advice and the doc halves of WF-1 and WF-3 — fixed on master in three commits: item 2 (WF-1's timeout and retries semantics in `docs/WORKFLOWS.md` and `examples/workflows/lint-then-fix.yaml`) in `4fa805970` (wave 4); item 1 in `bc5c3dd3b` (the ordering paragraph in `docs/TROUBLESHOOTING.md` is rewritten: every entry is attempted, and the error line names the entries that failed; pinned by the new `McpStartupOrderingDocDriftTest`); item 3 in `98821a7a2` (with WF-3: the Interpolation table in `docs/WORKFLOWS.md` is rewritten, with new sections on how results are named and on pause, resume and status). Item 4 had resolved itself earlier. Residual: `docs/MCP.md:97-100` still makes the same stale "ordering-dependent … never reached" claim (DOC-2, owned by w7-mcp-oauth).

@@ -39,6 +39,13 @@ This report is final. What was read, what was only skimmed, and how each open le
 - **Fix:** add a changelog entry for the move (four monorepo-only skills to the project tier, the destructive `git clean` step removed), leaving the historical entry as it is.
 - **Test:** none; a doc check could assert the changelog mentions the move.
 
+### 15d-27 — `SkillLoader` reads skill files with no size limit
+- **Severity:** Low · **Confidence:** Verified-by-reading (found while fixing 15d-09 and C3 in wave 5)
+- **Where:** `src/Skills/SkillLoader.php:682` (`loadSkillManifest()`), `:977` (`loadSkillBody()`) and `:1042` (the asset read), each an unbounded `file_get_contents()`.
+- **Detail:** since `dd8be915d` (15d-09, C3), enabled skill bodies are held to `CompactorConfig`'s per-skill and combined budgets before they enter the prompt, and instruction documents are stat-checked and read with a bound. The skill budgets cap only what is spliced, not what is read: a repository's multi-megabyte `SKILL.md` is still read whole into memory at launch (the manifest stage reads the whole file to get the frontmatter) and again for its body, then UTF-8-scrubbed and measured before the budget replaces it with a pointer line.
+- **Fix:** read through a bounded reader as `InstructionFileLoader::readBounded()` does: stat first, read the frontmatter with a small cap for the manifest stage, and refuse or defer a body over a ceiling with a skip reason in `skipped()`.
+- **Test:** a project skill whose `SKILL.md` is 50 MB loads its manifest and is deferred, with peak memory well under the file size.
+
 ---
 
 ## B. Memory store
@@ -78,15 +85,6 @@ This report is final. What was read, what was only skimmed, and how each open le
 ---
 
 ## C. Instruction files and prompt-wide encoding/size
-
-### 15d-09 — CLAUDE.md, AGENTS.md and forced instruction files have no size cap; a 3 MB file goes into every request whole
-- **Severity:** Medium · **Confidence:** Verified by repro (`r9.php`: a 3,080,000-byte AGENTS.md gives a 3,085,385-byte system prompt with no notice)
-- **Where:** `src/Context/InstructionFileLoader.php:264`, `:455`, `:543` and `ImportResolver.php:131`, all unbounded `file_get_contents`; `src/Runtime.php:3009-3040`. The docs loop never consults `$standingRemaining`, although rules on either side of it are held to `MAX_STANDING_RULE_BYTES` (65,536) and `RuleLoader::MAX_FILE_BYTES` (65,536).
-- **Failure scenario:** A generated AGENTS.md, an `@import` of a large changelog, or `instructions: ["docs/*.md"]` costs megabytes of tokens per step. On a 1M window that silently consumes most of the budget, and on smaller windows every request returns 400. There is no warning, and `refusedPaths()` stays empty. Claude Code warns above about 40k characters.
-
-  `CompactorConfig::$skillBudgetPerSkill` and `$skillBudgetCombined` exist, but `ContextCompactor::filterSkills()` and `compactSkills()` have no caller (`grep` shows only the self-call at `:467`), so enabled skill bodies are uncapped too.
-- **Fix:** Add a per-document byte ceiling and a combined ceiling for the instruction-document slot. Over budget, emit a pointer in the style of `RulePathNudge::pointer()` ("AGENTS.md is 3.0 MB; read it with Read") and record a refusal. Do the same for enabled skill bodies, using the existing `skillBudget*` values.
-- **Test:** `BaseSystemPromptTest::testAnOversizedInstructionDocumentIsDeferredNotInlined`.
 
 ### 15d-25 — MEMORY.md and PROMPT_ENGINEERING.md do not describe PromptFence's chat-template-token defang
 - **Severity:** Low (docs) · **Confidence:** Verified-by-reading (found while fixing 15d-10)
@@ -151,37 +149,6 @@ Its only entry, 15d-17, was fixed in wave 3; see **Fixed since audit**.
 
 ## G. Findings from the resumed pass
 
-### 15d-19 — Three doc statements are stale and unpinned: rule `paths:` scoping "not applied" (it is), and "only two keys" re-applied per turn (three are)
-- **Severity:** Low · **Confidence:** Verified by reading
-- **Where and what:**
-  - `docs/PROMPT_ENGINEERING.md:229-233` ("Triggers are built but not applied … a path-scoped rule renders into every session") and `:250` ("Triggers. Built per rule, consulted by nobody at assembly").
-  - `docs/SKILLS.md:155-160` ("`rules paths:` scoping is not applied at the splice … Path-conditional splicing is a deferred step (P6.S5b)").
-
-    P6.S5b landed. `Runtime.php:2911-2924` says "the paths half is gated", the splice skips `RulePathNudge::isPathScoped()` rules, and `Bootstrap.php:6863` wires `RulePathNudge` into Read/Edit/Write/Glob/Grep. Only `keywords:` and `description:` remain unapplied: `KeywordTrigger` and `IntentTrigger` have no consumer in `src/`, and the `Rule::$models` field is parsed and never read (covered by known #37).
-  - `docs/SETTINGS.md:600-603` ("only two keys actually change behaviour mid-session … `parallelToolCalls` and `parallelToolDeadlineSeconds`"). `EngineBackend::runTurn()` (`src/Backend/EngineBackend.php:782-789`) also re-reads `maxOutputTokens` from the per-turn config, so a mid-session edit to it takes effect on the next turn.
-- **Why it matters:** These pages call themselves drift-guarded, but none of the three sentences is pinned (`grep -rn "only two keys\|not applied at the splice\|Triggers are built" tests/` returns nothing). A reader of SKILLS.md would expect a `paths:` rule to appear in every prompt and would not look for it in tool output.
-- **Fix:** Correct the three passages. Add each "N keys re-applied per turn" figure to `DocFigureProseDriftTest`, derived from the keys `runTurn()` reads.
-- **Test:** The drift assertion above.
-
-### 15d-20 — A `paths:`-scoped rule added or edited mid-session is never delivered: the splice skips it and the boot-time nudge never learns of it
-- **Severity:** Medium-Low · **Confidence:** Verified by repro (`r16.php` + `proj16/`)
-- **Where:** `src/Cli/Bootstrap.php:6863` (`RulePathNudge::new((new RuleLoader($root))->load(), $rulesState)`, walked **once at boot**); `src/Runtime.php:2950-2970` (the splice re-walks `RuleLoader::load()` on **every build** and skips every `RulePathNudge::isPathScoped()` rule)
-- **Code:**
-  ```php
-  // Bootstrap (boot):  $ruleNudge = RulePathNudge::new((new RuleLoader($root))->load(), $rulesState);
-  // Runtime (every build):
-  if (RulePathNudge::isPathScoped($rule)) { continue; }   // "deliver them at tool time … instead"
-  ```
-- **Failure scenario:** The user says "add a project rule: every PHP file under src/ uses strict_types". The agent writes `.sugar-crush/rules/php.md` with `paths: ["src/**/*.php"]` (the agent can write that directory, known item #9). The next build's splice loads the rule, sees a `PathTrigger`, and skips it as "delivered at tool time". The nudge was built from the boot-time walk and has no candidate for it, so `forPath('src/A/B.php')` returns `null` (`r16.php`). A fresh nudge over the same rules returns the reminder. The rule is in neither channel until restart, which is exactly the "silently-vanishing defect" the Runtime comment at `:2918-2921` says the shared predicate prevents.
-
-  The same split causes two more failures:
-  - **Stale body:** an existing path-scoped rule whose body is edited mid-session keeps announcing the boot-time text.
-  - **Double presentation:** a rule whose `paths:` is removed mid-session is spliced into the prompt and also still nudged if it had not yet been announced.
-
-  `/rules` toggles are honoured live (via `RulesState`), so only the rule *content* is frozen.
-- **Fix:** Have `RulePathNudge` take a loader callable (or a cheap mtime/size fingerprint of the rule directories) and rebuild its candidate list when the fingerprint changes. Alternatively, have `Runtime` hand the per-build rule list to the nudge (`$ruleNudge->withRules($rules)`), so both channels always see the same walk. Keep the `announced` ledger keyed by path across rebuilds.
-- **Test:** `RulePathNudgeTest::testARuleAddedAfterBootIsAnnouncedOnItsFirstMatchingTouch` and `::testAnEditedRuleAnnouncesItsCurrentBody`.
-
 ### 15d-22 — A checkout path containing `[`, `*` or `?` silently drops forced instructions and every repository memory note
 - **Severity:** Low-Medium · **Confidence:** Verified by repro (`r18.php` + `br[1]/`)
 - **Where:** `src/Context/InstructionFileLoader.php:508-509` (`glob($this->repoRoot . '/' . $pattern)`); `src/Memory/MemoryStore.php:118`, `:163`, `:198`, `:231`, `:259`, `:284` (`glob($this->memoryPath . …)` / `glob($dir . '/*.md')`)
@@ -219,18 +186,16 @@ Its only entry, 15d-17, was fixed in wave 3; see **Fixed since audit**.
 |---|---|---|---|---|
 | 15d-03 | Medium | Repro | Project `.sugar-crush/skills` shadows the user's own skills and built-ins silently; contradicts SKILLS.md. Partly fixed (`9105feb48`: every shadowing reported in `skipped()`); remaining: precedence order (deferred), foreign-convention shadowing still silent, skip-notice wording | `SkillLoader.php:721-739` |
 | 15d-05 | Medium | Repro | Home-store `project` notes are global → injected into every repo's prompt | `MemoryBlock.php:213-229`, `Chat.php:12534` |
-| 15d-09 | Medium | Repro | No size cap on CLAUDE.md/AGENTS.md/forced/imports (3 MB inlined); skill budgets inert | `Runtime.php:3009-3040` |
-| 15d-20 | Med-Low | Repro | A `paths:` rule added or edited mid-session is never delivered (splice skips it; nudge built once at boot); stale bodies, double presentation | `Bootstrap.php:6863`, `Runtime.php:2950-2970` |
 | 15d-06 | Med-Low | Repro | Claude memory import slug ignores `.` (and probably `_`/space) → imports nothing | `ForeignMemoryImporter.php:302-307` |
 | 15d-13 | Med-Low | Repro | Subdirectory launch: "not a git repo", git state dropped; `.sugar-crush/*` not found. Partly fixed (`119bc86d2`: `rev-parse --show-toplevel`, "repo root:" line, git section); remaining: (b) `.sugar-crush/*` walk-up (deferred decision) | `EnvironmentBlock.php:929-932` |
 | 15d-15 | Med-Low | Repro | `writeUserConfig()` breaks symlinked config (stale policy); unlocked read-merge-write; overwrites an unparsable file | `Bootstrap.php:3608-3680` |
 | 15d-22 | Low-Med | Repro | Glob metacharacters in the checkout path drop forced instructions and every repo memory note, silently | `InstructionFileLoader.php:509`, `MemoryStore.php:118-284` |
 | 15d-23 | Low | Repro | Memory id shown from frontmatter, looked up by filename → unaddressable notes; repo `MEMORY.md` rewritten with a timestamp on every change | `MemoryStore.php:188-340`, `Chat.php:12894` |
 | 15d-24 | Low | Reading | Trusted project picks `titleModel`/`summaryModel` on the operator's key; unpriced → $0 → spend cap blind | `LayeredSettings.php:584-592`, `Bootstrap.php:7773-7796` |
-| 15d-19 | Low | Reading | Stale, unpinned docs: rule `paths:` "not applied" (it is); "only two keys" re-applied per turn (`maxOutputTokens` too) | `PROMPT_ENGINEERING.md:229-250`, `SKILLS.md:155-160`, `SETTINGS.md:600-603` |
 | 15d-07 | Low | Reading | Repo-shipped memory framed as "notes the user wrote" | `MemoryBlock.php:300-306` |
 | 15d-11 | Low | Reading | Doc says `@~/` imports resolve; containment always blocks them | `ImportResolver.php:104`, `MEMORY.md:231` |
 | 15d-16 | Low | Repro | `(int)` of a huge float wraps negative for `maxToolSteps`/`maxOutputTokens` | `Bootstrap.php:2945`, `EngineBackend.php:1251` |
+| 15d-27 | Low | Reading | `SkillLoader` reads `SKILL.md` and asset files uncapped (the 15d-09 budgets cap only what enters the prompt) | `SkillLoader.php:682, 977, 1042` |
 | 15d-25 | Low (docs) | Reading | MEMORY.md ("touches nothing else") and PROMPT_ENGINEERING.md don't describe the `<\|` / `<｜` control-token defang | `MEMORY.md:199`, `PROMPT_ENGINEERING.md:103` |
 | 15d-26 | Low (docs) | Reading | `CHANGELOG.md` still lists the four moved skills as built-ins | `CHANGELOG.md:389-395` |
 
@@ -315,3 +280,6 @@ These findings were fixed on master after the audit. Their sections and table ro
 - **15d-17** Count caps were applied in readdir order, and the repo-map walk was unbounded for non-PHP files — fixed on master in `7e2e08492` (`RuleLoader` and `RepoMapBlock` walk each directory with `scandir()` + `sort()` and cap after sorting; a visit budget counts every entry, `MAX_WALK_ENTRIES = 4096` for rules and 100,000 for the repo map, and a cut is recorded).
 - **15d-14** The git subprocesses in prompt assembly had no time bound — fixed on master in `6e2df9a26` (`runCaptured()` gains an optional 4th `?float $timeoutSeconds`, default null so Bash and Grep are unchanged; on expiry the group gets SIGTERM then SIGKILL, the result carries `timedOut` and exit 124; the env block bounds each git read at 2 s, renders `unavailable (git timed out after 2s)`, and one timeout skips the rest of the git section; the branch read is bounded through `runCaptured()` too, keeping the `shell_exec` fallback).
 - **15d-12** Env-block git calls honoured the user's git config and took `index.lock` — fixed on master in `da6674686` (every call runs as `git --no-pager --no-optional-locks -c color.ui=false -c core.quotepath=false`; `log` adds `--no-color --no-show-signature`; diffs use the plumbing `diff-index --cached` and `diff-files` with `--no-ext-diff --no-textconv --no-color`, so the index is never written; an unborn HEAD diffs against the empty tree; `GIT_OPTIONAL_LOCKS=0` is set through a new optional 5th `runCaptured()` parameter, `array $envOverrides`; `PromptStabilityTest`'s colour control is rewritten so its fixture must yield zero escapes). Residual: a stat-dirty binary file still counts in the shortstat, and with no stat refresh a heavily stat-dirty tree renders slower (about 0.5 s per 3,000 files) until the user's own git refreshes the index.
+- **15d-20** A `paths:`-scoped rule added or edited mid-session was never delivered: the splice skipped it and the boot-time nudge never learned of it — fixed on master in `d1157349b` (`RulePathNudge::fromLoader()` re-walks the rules on each consult; the announced ledger holds a digest of each rule's body, so a rule added mid-session is delivered, an edited rule is re-announced with its current body, and a rule whose `paths:` is removed is no longer nudged; Bootstrap changes only the construction line).
+- **15d-09** CLAUDE.md, AGENTS.md and forced instruction files had no size cap (a 3 MB file went into every request whole), and enabled skill bodies were uncapped — fixed on master in `dd8be915d` (with 15a C3: instruction documents are priced in framed, escaped bytes against 64 KiB per document and 128 KiB combined; a document or `@import` that does not fit becomes a pointer line and is recorded in `InstructionFileLoader::refusedPaths()`; every document read is stat-checked and bounded at 60 KiB; enabled skill bodies are held to `CompactorConfig`'s per-skill and combined budgets via `TokenEstimate`; a prompt under budget is byte-identical; `ContextCompactor::filterSkills()` is left dormant). Residual: there is no user-visible notice for a deferred instruction file yet, because nothing drains `refusedPaths()`; skill deferrals appear only in the prompt and are recorded nowhere; skill budgets use the `CompactorConfig` defaults, because App carries no compactor config; `SkillLoader` still reads skill files uncapped (15d-27).
+- **15d-19** Stale, unpinned doc statements: rule `paths:` scoping "not applied", and "only two keys" re-applied per turn — fixed on master in `232013284` (`docs/PROMPT_ENGINEERING.md`, `docs/SKILLS.md` and `docs/SETTINGS.md` corrected; SETTINGS.md now names three re-applied keys, adding `maxOutputTokens`; a fourth stale claim, the `<system-reminder>` emitter list, is fixed too; each is pinned by a derived assertion in `DocFigureProseDriftTest`).
