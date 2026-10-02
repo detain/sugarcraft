@@ -76,7 +76,8 @@ final class TerminalSizeFallbackIsolationTest extends TestCase
      * One ordered run through the whole pollution sequence: default viewport
      * renders both shapes whole (the victims' green state); forcing a small
      * viewport — what a null cache + live tty used to hand to them — clips
-     * the earliest exchange and drops the bar's zone (the published red).
+     * the earliest exchange and shrinks the bar's zone (the published red
+     * dropped it whole; since 15b-09 it keeps only the on-screen sliver).
      */
     public function testSizeAgnosticViewsFollowTheSharedCacheNotTheRunnerTerminal(): void
     {
@@ -97,9 +98,10 @@ final class TerminalSizeFallbackIsolationTest extends TestCase
             'at the pinned viewport the earliest exchange is still verbatim',
         );
         $palette->view();
+        $wideZone = Renderer::scanner()->get(Renderer::PANE_ZONE_PREFIX . 'agents');
         self::assertInstanceOf(
             Zone::class,
-            Renderer::scanner()->get(Renderer::PANE_ZONE_PREFIX . 'agents'),
+            $wideZone,
             'and the bar shows through the overlay, so its zone is registered',
         );
 
@@ -113,10 +115,17 @@ final class TerminalSizeFallbackIsolationTest extends TestCase
             $compact->view(),
             'a small ambient viewport clips the earliest exchange off the transcript',
         );
+        // Since audit 15b-09 a zone under an overlay is clipped to the cells
+        // still on screen rather than dropped, so at this viewport the bar
+        // keeps only the sliver left of the palette (it used to fall out of
+        // the render entirely). Either way the forced viewport is what the
+        // render read: the zone is gone or strictly narrower than at 200x60.
         $palette->view();
-        self::assertNull(
-            Renderer::scanner()->get(Renderer::PANE_ZONE_PREFIX . 'agents'),
-            'and the bar falls out of the render, so the chrome zone is never marked',
+        $smallZone = Renderer::scanner()->get(Renderer::PANE_ZONE_PREFIX . 'agents');
+        self::assertTrue(
+            $smallZone === null
+                || ($smallZone->endCol - $smallZone->startCol) < ($wideZone->endCol - $wideZone->startCol),
+            'and the palette covers the bar, so its chrome zone shrinks to what is still on screen',
         );
     }
 

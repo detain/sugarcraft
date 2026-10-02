@@ -171,6 +171,11 @@ use PHPUnit\Framework\TestCase;
  *    => ['pipe', 'r'], …])` — verified by symbol — so that `STDIN` is the
  *    CHILD's pipe. Not this process's descriptor 0, and not affected by
  *    closing it.
+ *  - `sugar-crush/src/Hooks/BuiltIn/BashEscapeDenyHook.php` — NOT A READER
+ *    (audit F-J5, wave 5). `/dev/stdin` is one entry of the `SAFE_DEVICES`
+ *    string list: a redirect target in a shell command the hook JUDGES is
+ *    compared against it, and nothing is opened. Closing this process's
+ *    descriptor 0 cannot change what the hook answers.
  *
  *  - `sugar-crush/src/Cli/NonInteractive.php` — FIXED (E338); the row is
  *    rewritten rather than dropped, because what it records is why the guard
@@ -371,6 +376,7 @@ final class StdinConstantReaderCensusTest extends TestCase
         'candy-mosaic/src/Detect.php' => ['STDIN'],
         'sugar-crush/src/Agents/ProcessExecutor.php' => ['STDIN'],
         'sugar-crush/src/Cli/NonInteractive.php' => ['STDIN'],
+        'sugar-crush/src/Hooks/BuiltIn/BashEscapeDenyHook.php' => ['/dev/stdin'],
     ];
 
     public function testTheReachableDescriptorZeroReaderRosterIsUnchanged(): void
