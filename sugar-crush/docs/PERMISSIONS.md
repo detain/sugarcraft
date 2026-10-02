@@ -97,12 +97,13 @@ attached — while `rm ./src/Main.php` ran unprompted. Now:
 
 - **The `Edit` and `Write` tools run without asking** when their `file_path` is
   strictly inside the project root and not under `.git`, `.sugar-crush` or
-  `.mcp.json` (`Permissions\WritePathScope`). On the live tool loop the gate is
-  handed the root, so the path is resolved the way the tool resolves it: an
-  absolute in-root path is fine, `../x`, `/etc/hosts` and `~/…` ask, and so does
-  a symlink that points out of the project or onto `.git`. A gate with no root
-  (a sub-agent's own gate) can only judge the spelling: a relative path that
-  stays below the working directory is granted, an absolute one asks.
+  `.mcp.json` (`Permissions\WritePathScope`). On the live tool loop and on a
+  sub-agent's gate the gate is handed the root, so the path is resolved the way
+  the tool resolves it: an absolute in-root path is fine, `../x`, `/etc/hosts`
+  and `~/…` ask, and so does a symlink that points out of the project or onto
+  `.git`. A gate with no root (an embedder that builds one without it) can only
+  judge the spelling: a relative path that stays below the working directory
+  is granted, an absolute one asks.
 - **`rm`, `mv` and `cp` ask**, like every other shell command. `rm` deletes
   content and `cp`/`mv` overwrite their destination; use `Edit`/`Write`, whose
   changes are reviewable, or approve the shell command.
@@ -369,9 +370,10 @@ How the argument half is matched:
   `./foo/../.env`, and a relative restrictive pattern matches at any depth
   (`/home/you/proj/.env`).
 - **A path rule judges the file the tool will open** (audit F-J3). The tools
-  resolve a relative path against `--root`, and the gate on the live hook
-  chain is now handed that root, so it also reads the call anchored at the
-  root and resolved on disk (symlinks followed; for a file that does not exist
+  resolve a relative path against `--root`, and both the gate on the live hook
+  chain and a sub-agent's — its session gate and its preset's own
+  `tools` / `disallowedTools` grant (`Agents\AgentManager`) — are handed that
+  root, so each also reads the call anchored at the root and resolved on disk (symlinks followed; for a file that does not exist
   yet, its nearest existing parent). Measured before the fix with
   `Deny Read(/proj/secret.txt)`: `secret.txt` and `./secret.txt` were
   **Allow**, and so was a symlink `notes -> secret.txt`. Now `secret.txt`,
@@ -392,9 +394,11 @@ Its limits, stated because each one is real:
   `bash -c 'rm -rf build'` or `find build -delete`; a path deny does not
   survive a hard link or a bind mount, and only catches a symlink or a
   relative spelling of an absolute pattern where the caller knows the
-  workspace root — the main tool loop does, a sub-agent's own gate and a
-  declaration check do not, and match spellings only. Treat it as a guard
-  rail against an accident.
+  workspace root. The main tool loop and the sub-agent gate do; a gate an
+  embedder builds without one matches spellings only. A declaration check
+  needs none — a declaration has no path to spell — and Chat's own `!` shell
+  checks judge only `Bash` commands, which a root does not re-spell. Treat it
+  as a guard rail against an accident.
 - **A shell `allow` is per rule, and still a glob over arguments.**
   `Allow Bash(git *)` plus `Allow Bash(grep *)` does not grant
   `git log | grep x` — rules are first-match-wins and no single rule covers

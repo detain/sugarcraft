@@ -40,7 +40,7 @@ use SugarCraft\Crush\Tools\PathJail;
  *   a real ancestor — and the protected-segment check runs on BOTH the spelling
  *   and the resolved path relative to the root, so neither `./.git/x` nor a
  *   symlink `notes -> .git` passes as ordinary.
- * - WITHOUT a root (a sub-agent's gate, a bare embedder), only the SPELLING can
+ * - WITHOUT a root (a bare embedder's gate), only the SPELLING can
  *   be judged: a relative path that stays strictly below the working directory
  *   LEXICALLY is inside, and an absolute or `~` path is outside, since nothing
  *   here knows which directory it would have to be inside of. Symlinks are not

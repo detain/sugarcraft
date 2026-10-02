@@ -124,6 +124,17 @@ final class AgentManager
      *        TYPO (refuse) when nothing ever had it. Null — every caller that
      *        cannot produce the ceiling — keeps the old all-or-nothing
      *        refusal: the behaviour that half the truth can support.
+     * @param ?string $projectRoot The workspace root a sub-agent's tools
+     *        resolve a relative path against — the session's `--root`. Handed
+     *        to every path-scoped match this class makes, the session gate's
+     *        ({@see evaluateToolCalls()}) and the agent's own grant's
+     *        ({@see refuseCallOutsideGrant()}), so a sub-agent's call is judged
+     *        as the file the tool will open, the same as the main loop's
+     *        (audit F-J3): `Deny Read(/proj/secret.txt)` also stops
+     *        `secret.txt`, `./secret.txt` and a symlink to it, and a symlink
+     *        cannot launder an `Allow`. Null — every caller that has no root,
+     *        most test doubles — keeps the lexical-only matching, which judges
+     *        a path by its spelling alone.
      */
     public function __construct(
         private ProviderInterface $provider,
@@ -133,6 +144,7 @@ final class AgentManager
         private ?\Closure $permissionApprover = null,
         private ?array $toolRegistry = null,
         private ?array $toolUniverse = null,
+        private ?string $projectRoot = null,
     ) {}
 
     /**
@@ -1013,7 +1025,11 @@ final class AgentManager
                 continue;
             }
 
-            $decision = $subAgent->permissionGate->evaluate($toolCall);
+            // WITH THE ROOT, as the main loop's PermissionGateHook does: a
+            // root-less evaluate() matches a path rule against the spelling
+            // only, so `secret.txt` walked past `Deny Read(/proj/secret.txt)`
+            // here while the same call on the main loop was denied (F-J3).
+            $decision = $subAgent->permissionGate->evaluate($toolCall, $this->projectRoot);
 
             if ($decision === \SugarCraft\Crush\Permissions\PermissionDecision::Deny) {
                 $this->refuseToolCall($toolCall, $subAgent, 'denied by permission gate');
@@ -1499,8 +1515,15 @@ final class AgentManager
         // subject as a UNION for the restrictive actions and an INTERSECTION
         // for `Allow`: a denial must fire when ANY segment of a chain matches,
         // where a grant must require EVERY segment to.
+        //
+        // Both lists are matched WITH the root, for the session gate's reason
+        // ({@see evaluateToolCalls()}): `disallowedTools: ['Read(/proj/.env)']`
+        // must stop `.env` and a symlink to it, and `tools: ['Write(src/*)']`
+        // must not grant `src/link` when the link leaves `src/`. The same
+        // union/intersection split covers paths: a denial fires on ANY
+        // spelling, a grant needs the written AND the resolved one.
         foreach ($denied as $denial) {
-            if ((new PermissionRule((string) $denial, PermissionAction::Deny))->matches($toolCall)) {
+            if ((new PermissionRule((string) $denial, PermissionAction::Deny))->matches($toolCall, true, $this->projectRoot)) {
                 $this->refuseToolCall(
                     $toolCall,
                     $subAgent,
@@ -1520,7 +1543,7 @@ final class AgentManager
         }
 
         foreach ($declarations as $declaration) {
-            if ((new PermissionRule((string) $declaration, PermissionAction::Allow))->matches($toolCall)) {
+            if ((new PermissionRule((string) $declaration, PermissionAction::Allow))->matches($toolCall, true, $this->projectRoot)) {
                 return;
             }
         }

@@ -101,8 +101,10 @@ use SugarCraft\Crush\ToolCall;
  * the inode, which no path resolution can map back), a bind mount, a path
  * swapped between this decision and the tool's open (the gate resolves, the
  * tool resolves again; a race between them is the path jails' problem, and
- * they resolve at use), and every call judged WITHOUT a root — the sub-agent
- * gate and the declaration check still match spellings only.
+ * they resolve at use), and every call judged WITHOUT a root — a gate an
+ * embedder builds without one matches spellings only. (The sub-agent gate is
+ * handed the root since F-J3-rem(a); a declaration check needs none, having no
+ * path to spell.)
  *
  * So treat any `Tool(...)` deny as a guard rail against the model doing
  * something by ACCIDENT, not as a containment boundary against something trying

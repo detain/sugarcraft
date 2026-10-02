@@ -1851,6 +1851,9 @@ final class Bootstrap
             permissionApprover: $approver,
             toolRegistry: self::toolSetUnder($toolUniverse, self::readUserConfig()),
             toolUniverse: $toolUniverse,
+            // The root the tools above resolve against, so a sub-agent's path
+            // rules judge the file the tool opens, not just its spelling (F-J3).
+            projectRoot: $root,
         );
 
         // A snapshot captured at $root for every agent, which is what closes

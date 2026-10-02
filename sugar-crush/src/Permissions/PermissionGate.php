@@ -205,9 +205,12 @@ final class PermissionGate
      *        also matched against the call as the tool will read it — anchored
      *        at the root and resolved through symlinks — so
      *        `Deny Read(/proj/secret.txt)` stops `secret.txt` and a symlink to
-     *        it (audit F-J3; {@see PermissionRule::matches()}). Null keeps the
-     *        lexical-only matching, which is what a caller without a root (the
-     *        sub-agent gate, Chat's `!` shell check) always had.
+     *        it (audit F-J3; {@see PermissionRule::matches()}). The live hook
+     *        chain ({@see \SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook})
+     *        and the sub-agent gate ({@see \SugarCraft\Crush\Agents\AgentManager})
+     *        pass one. Null keeps the lexical-only matching, which judges a
+     *        path by its spelling alone — what a caller without a root (Chat's
+     *        own `!` shell checks, a bare embedder) gets.
      */
     public function evaluate(ToolCall $call, ?string $projectRoot = null): PermissionDecision
     {
@@ -265,6 +268,15 @@ final class PermissionGate
      *   at whichever layer runs the call, through {@see evaluate()}.
      * - `Default` / `AcceptEdits` refuse nothing (they `Ask`), and
      *   `BypassPermissions` refuses nothing by definition.
+     *
+     * TAKES NO PROJECT ROOT, AND NEEDS NONE — not a gap left for later (audit
+     * F-J3 once listed it as one). A root changes how a PATH subject is
+     * spelled, and a declaration has no subject to spell: the only rules that
+     * read a path are argument-scoped, which never match here (above), and
+     * the two evaluators that resolve a write target (`accept-edits`, `auto`)
+     * answer a declaration with `Ask` or nothing at all. Every refusal this
+     * method can return comes from a tool NAME, which no root re-spells.
+     * Pinned by PermissionGateDeclarationRootTest.
      */
     public function refuses(ToolDeclaration $declaration): bool
     {
