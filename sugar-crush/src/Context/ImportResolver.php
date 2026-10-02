@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Context;
 
+use SugarCraft\Crush\Support\HomeDirectory;
+
 /**
  * Recursively expands @-imported .md file references in instruction file content.
  *
  * Resolves "~" paths to the home directory and relative paths against $baseDir.
+ * The resolver itself has no boundary: through {@see InstructionFileLoader},
+ * whose gate confines every import to the importing file's checkout, a `~/`
+ * import resolves and is then refused as `outside-repo-root` unless the home
+ * directory lies inside that checkout (audit 15d-11).
  * Imports are depth-capped at MAX_DEPTH to prevent infinite recursion.
  * Skips @-references inside fenced and inline code spans (backtick-delimited).
  * Returns the original string unchanged when a referenced file is not found.
@@ -74,7 +80,10 @@ final class ImportResolver
      * by backticks (fenced/inline code spans are left untouched).
      *
      * Path resolution:
-     * - Paths starting with "~/" are resolved relative to the home directory.
+     * - Paths starting with "~/" are resolved relative to the home directory,
+     *   as {@see HomeDirectory::owned()} answers it; with no owned home the
+     *   reference is left as written. A $boundaryCheck still judges the result,
+     *   which is why the loader's repo-root gate blocks these (audit 15d-11).
      * - Paths starting with "./" or "../" are resolved relative to $baseDir.
      * - Bare paths (no prefix) are resolved relative to $baseDir.
      *
@@ -143,7 +152,18 @@ final class ImportResolver
 
                 // Resolve ~ (home directory) and relative paths.
                 if (str_starts_with($pathFragment, '~/')) {
-                    $resolved = getenv('HOME') . substr($pathFragment, 1);
+                    // owned(), not getenv('HOME') (audit 15d-11): an unset HOME
+                    // made `getenv()` false and `~/x.md` resolve to `/x.md` at
+                    // the filesystem root, and a relative or world-writable HOME
+                    // named a directory this user does not own — the reads every
+                    // other `~` consumer in this package already refuses. With
+                    // no owned home there is nothing `~` can mean, so the
+                    // reference is left as written, like a missing file.
+                    $home = HomeDirectory::owned();
+                    if ($home === null) {
+                        return $m[0];
+                    }
+                    $resolved = rtrim($home, '/') . substr($pathFragment, 1);
                 } else {
                     // Strip only a leading "./" so "../" sequences survive
                     // intact and are resolved by the OS relative to $baseDir.

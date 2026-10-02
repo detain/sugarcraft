@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Context;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Context\ImportResolver;
+use SugarCraft\Crush\Context\InstructionFileLoader;
 
 /**
  * Tests for ImportResolver — covers new(), expand()'s path resolution,
@@ -91,12 +92,89 @@ final class ImportResolverTest extends TestCase
     public function testExpandResolvesTildeHomeReference(): void
     {
         $this->originalHome = getenv('HOME') ?: '';
+        // `~` is HomeDirectory::owned() (audit 15d-11), which refuses a
+        // world-writable home — so the mode is pinned, not left to the umask.
+        chmod($this->tempDir, 0o755);
         putenv('HOME=' . $this->tempDir);
         $this->write('notes.md', 'HOME NOTES');
 
         $output = (new ImportResolver())->expand('@~/notes.md', '/irrelevant/base');
 
         $this->assertSame('HOME NOTES', $output);
+    }
+
+    /**
+     * Audit 15d-11: `~` was `getenv('HOME')` here while every other home read
+     * in the package goes through HomeDirectory::owned(). A world-writable
+     * HOME is a directory anyone can plant `notes.md` in; owned() refuses it,
+     * so there is no home for `~` to mean and the reference stays as written.
+     */
+    public function testATildeImportResolvesNothingWhenTheHomeIsNotOwned(): void
+    {
+        $this->originalHome = getenv('HOME') ?: '';
+        $shared = $this->tempDir . '/shared-home';
+        mkdir($shared);
+        chmod($shared, 0o777);
+        file_put_contents($shared . '/notes.md', 'PLANTED BY ANYONE');
+        putenv('HOME=' . $shared);
+
+        $output = (new ImportResolver())->expand('see @~/notes.md', '/irrelevant/base');
+
+        $this->assertSame('see @~/notes.md', $output);
+    }
+
+    /**
+     * Audit 15d-11: docs/MEMORY.md said `~/...` imports "resolve against the
+     * home directory", but every caller in production is InstructionFileLoader,
+     * whose gate confines imports to the importing file's checkout — so a
+     * `~/` import from a project CLAUDE.md is always blocked unless home lies
+     * inside the checkout. This renders both outcomes through the loader and
+     * pins the doc to them.
+     */
+    public function testATildeImportThroughTheLoaderIsBlockedAsTheDocsSay(): void
+    {
+        $this->originalHome = getenv('HOME') ?: '';
+        chmod($this->tempDir, 0o755);
+        $home = $this->tempDir . '/home';
+        $repo = $this->tempDir . '/repo';
+        mkdir($home, 0o700);
+        mkdir($repo, 0o755);
+        file_put_contents($home . '/my-conventions.md', 'HOME CONVENTIONS BODY');
+        file_put_contents($repo . '/CLAUDE.md', "Project rules.\n@~/my-conventions.md\n");
+        putenv('HOME=' . $home);
+
+        $loaded = implode("\n", (new InstructionFileLoader($repo))->loadRoot());
+
+        $this->assertStringContainsString(
+            "<import-blocked reason=\"outside-repo-root\">Import '~/my-conventions.md' resolves to '"
+                . realpath($home . '/my-conventions.md') . "'",
+            $loaded,
+        );
+        $this->assertStringNotContainsString('HOME CONVENTIONS BODY', $loaded);
+
+        // The one case the doc carves out: a home that lies inside the checkout.
+        $inside = $repo . '/inner-home';
+        mkdir($inside, 0o700);
+        file_put_contents($inside . '/my-conventions.md', 'INSIDE CONVENTIONS BODY');
+        putenv('HOME=' . $inside);
+        $this->assertStringContainsString(
+            'INSIDE CONVENTIONS BODY',
+            implode("\n", (new InstructionFileLoader($repo))->loadRoot()),
+        );
+
+        $doc = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MEMORY.md');
+        $flat = (string) preg_replace('/\s+/', ' ', $doc);
+        $this->assertStringNotContainsString(
+            '`~/...` resolves against the home directory;',
+            $doc,
+            'MEMORY.md must not promise that ~/ imports are inlined',
+        );
+        $this->assertStringContainsString(
+            'a `~/` import renders `<import-blocked reason="outside-repo-root">` unless the home directory lies '
+                . "inside the importing file's checkout",
+            $flat,
+        );
+        $this->assertStringContainsString('`HomeDirectory::owned()`', $flat);
     }
 
     public function testExpandLeavesUnresolvedReferenceUntouchedWhenFileMissing(): void

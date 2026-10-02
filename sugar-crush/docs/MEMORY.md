@@ -307,7 +307,14 @@ used to fail every turn of the session.
 
 Both file types support `@path` imports, expanded by `ImportResolver`:
 
-- `~/...` resolves against the home directory;
+- `~/...` resolves against the home directory as `HomeDirectory::owned()`
+  answers it — with no home this user owns (unset, relative or world-writable
+  `$HOME`) the reference is left as written — **and is then refused**: the
+  containment gate below judges it like every other import, so a `~/` import
+  renders `<import-blocked reason="outside-repo-root">` unless the home directory
+  lies inside the importing file's checkout. In practice `@~/my-conventions.md`
+  in a project `CLAUDE.md` is always blocked (audit 15d-11;
+  `ImportResolverTest::testATildeImportThroughTheLoaderIsBlockedAsTheDocsSay`);
 - `./...`, `../...` and bare paths resolve against the importing file's
   directory;
 - depth is capped at 4, after which the unresolved `@ref` is left as written;
