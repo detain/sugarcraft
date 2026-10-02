@@ -43,7 +43,116 @@ final readonly class BedrockProvider implements ProviderInterface
     private const REGION_US = 'us-east-1';
     private const REGION_EU = 'eu-west-1';
 
-    private const DEFAULT_MODEL = 'anthropic.claude-sonnet-4-6';
+    /**
+     * An INFERENCE-PROFILE id, not the bare foundation-model id (audit A20).
+     *
+     * Bedrock serves Claude 4.x on-demand throughput only through a
+     * cross-region inference profile (`us.` / `eu.` / `apac.` / `global.` +
+     * the model id, or its ARN); the bare `anthropic.claude-sonnet-4-6` this
+     * used to name is the shape AWS answers with a ValidationException for
+     * on-demand calls. `us.` matches {@see REGION_US}, this class's default
+     * region; an operator in an EU region configures `eu.`/`global.` instead.
+     * UNVERIFIED-live: no AWS credentials exist for this repo, so the refusal
+     * of the bare id and the acceptance of this one rest on AWS's published
+     * inference-profile documentation, not on a call.
+     */
+    private const DEFAULT_MODEL = 'us.anthropic.claude-sonnet-4-6';
+
+    /**
+     * Built-in USD-per-1K rates, keyed by the NORMALISED family id
+     * ({@see family()}) => [input, output].
+     *
+     * A family missing here is UNPRICED: {@see costPer1kTokens()} answers
+     * null and the turn bills the 0.0 lower bound with
+     * {@see Usage::$unpricedModel} set (audit A15). There is deliberately no
+     * `default` row - the old `default => 0.01` invented $0.01/1k both ways
+     * for every model outside the table, which {@see ProviderInterface}
+     * names as the pre-billing-fix bug.
+     *
+     * Claude rows are Anthropic's per-model list prices as of the October
+     * 2026 audit, the same figures {@see VertexProvider}'s table carries.
+     * Bedrock is PARTNER-priced, so they are an approximation: AWS's own
+     * sheet can differ (regional and cross-region profiles may carry a
+     * premium of about 10%). An operator who needs the exact figure declares
+     * it in `$modelPrices`. The Llama rows are the figures this table always
+     * carried.
+     *
+     * The old `anthropic.claude-haiku-4-7` row is gone on purpose: no such
+     * model exists, so the row priced (and sized) an id nobody can call.
+     *
+     * @var array<string, array{0: float, 1: float}>
+     */
+    private const PRICE_TABLE = [
+        'anthropic.claude-fable-5-1' => [0.01, 0.05],
+        'anthropic.claude-fable-5' => [0.01, 0.05],
+        'anthropic.claude-opus-5-5' => [0.004, 0.02],
+        'anthropic.claude-opus-5' => [0.005, 0.025],
+        'anthropic.claude-opus-4-8' => [0.005, 0.025],
+        'anthropic.claude-opus-4-7' => [0.005, 0.025],
+        'anthropic.claude-opus-4-6' => [0.005, 0.025],
+        'anthropic.claude-opus-4-5' => [0.005, 0.025],
+        'anthropic.claude-opus-4-1' => [0.015, 0.075],
+        'anthropic.claude-opus-4' => [0.015, 0.075],
+        'anthropic.claude-3-opus' => [0.015, 0.075],
+        'anthropic.claude-sonnet-5-5' => [0.002, 0.01],
+        'anthropic.claude-sonnet-5' => [0.002, 0.01],
+        'anthropic.claude-sonnet-4-6' => [0.003, 0.015],
+        'anthropic.claude-sonnet-4-5' => [0.003, 0.015],
+        'anthropic.claude-sonnet-4' => [0.003, 0.015],
+        'anthropic.claude-3-7-sonnet' => [0.003, 0.015],
+        'anthropic.claude-3-5-sonnet' => [0.003, 0.015],
+        'anthropic.claude-3-sonnet' => [0.003, 0.015],
+        'anthropic.claude-haiku-4-5' => [0.001, 0.005],
+        'anthropic.claude-3-5-haiku' => [0.0008, 0.004],
+        'anthropic.claude-3-haiku' => [0.00025, 0.00125],
+        'meta.llama3-70b-instruct' => [0.00065, 0.00275],
+        'meta.llama3-8b-instruct' => [0.00022, 0.00088],
+    ];
+
+    /**
+     * Context windows by normalised family id. Unknown answers 0 - the
+     * "unknown" of {@see ProviderInterface::contextWindow()}, so
+     * {@see \SugarCraft\Crush\Context\ContextWindow::resolve()} applies its
+     * one named fallback instead of this class guessing a denominator (the
+     * old `default => 8_192` made Chat's context tiers fire against 8k on a
+     * 200k model: auto-compaction after a few messages, every turn).
+     *
+     * @var array<string, int>
+     */
+    private const CONTEXT_WINDOWS = [
+        'anthropic.claude-fable-5-1' => 1_000_000,
+        'anthropic.claude-fable-5' => 1_000_000,
+        'anthropic.claude-opus-5-5' => 1_000_000,
+        'anthropic.claude-opus-5' => 1_000_000,
+        'anthropic.claude-opus-4-8' => 1_000_000,
+        'anthropic.claude-opus-4-7' => 1_000_000,
+        'anthropic.claude-opus-4-6' => 1_000_000,
+        'anthropic.claude-opus-4-5' => 200_000,
+        'anthropic.claude-opus-4-1' => 200_000,
+        'anthropic.claude-opus-4' => 200_000,
+        'anthropic.claude-3-opus' => 200_000,
+        'anthropic.claude-sonnet-5-5' => 1_000_000,
+        'anthropic.claude-sonnet-5' => 1_000_000,
+        'anthropic.claude-sonnet-4-6' => 1_000_000,
+        'anthropic.claude-sonnet-4-5' => 200_000,
+        'anthropic.claude-sonnet-4' => 200_000,
+        'anthropic.claude-3-7-sonnet' => 200_000,
+        'anthropic.claude-3-5-sonnet' => 200_000,
+        'anthropic.claude-3-sonnet' => 200_000,
+        'anthropic.claude-haiku-4-5' => 200_000,
+        'anthropic.claude-3-5-haiku' => 200_000,
+        'anthropic.claude-3-haiku' => 200_000,
+        'meta.llama3-70b-instruct' => 8_192,
+        'meta.llama3-8b-instruct' => 8_192,
+    ];
+
+    /**
+     * The geography prefixes of Bedrock's cross-region inference profiles
+     * (`us.anthropic.…`, `global.anthropic.…`). Named rather than "any first
+     * segment" so the VENDOR segment (`anthropic.`, `meta.`) is never mistaken
+     * for one.
+     */
+    private const PROFILE_GEO_PREFIX = '/^(?:us|us-gov|eu|apac|global|jp|au|ca|uk)\.(?=[a-z0-9-]+\.)/';
 
     /**
      * Fallback ceiling for a streaming turn.
@@ -72,13 +181,27 @@ final readonly class BedrockProvider implements ProviderInterface
      */
     private const TRUNCATED_STOP_REASONS = ['max_tokens'];
 
+    /**
+     * @param array<string, array{input?: float|int, output?: float|int}> $modelPrices
+     *        Operator-declared USD-per-1M rates, the same shape and rules as
+     *        {@see OpenAIProvider}'s `modelPrices`, keyed by the raw model id
+     *        or its normalised family; overrides/extends {@see PRICE_TABLE}.
+     *        NOT YET FED FROM CONFIG: `ProviderFactory::createBedrock()` does
+     *        not pass the user-tier `modelPrices` map here today, so this
+     *        seam is reachable only by a caller that constructs the provider
+     *        itself - wiring it is a factory change outside this class.
+     */
     public function __construct(
         private BedrockRuntimeClient $client,
         private string $region = self::REGION_US,
         private string $defaultModel = self::DEFAULT_MODEL,
+        private array $modelPrices = [],
     ) {}
 
-    public static function create(string $region = self::REGION_US, ?string $model = null): self
+    /**
+     * @param array<string, array{input?: float|int, output?: float|int}> $modelPrices see {@see __construct()}
+     */
+    public static function create(string $region = self::REGION_US, ?string $model = null, array $modelPrices = []): self
     {
         $region = self::resolveRegion($region);
 
@@ -98,7 +221,7 @@ final readonly class BedrockProvider implements ProviderInterface
             'http' => ['connect_timeout' => self::connectTimeoutSeconds()],
         ]);
 
-        return new self($client, $region, $model ?? self::DEFAULT_MODEL);
+        return new self($client, $region, $model ?? self::DEFAULT_MODEL, $modelPrices);
     }
 
     public function name(): string
@@ -143,29 +266,96 @@ final readonly class BedrockProvider implements ProviderInterface
         return false;
     }
 
+    /**
+     * The configured model's window, looked up by its normalised family
+     * (audit A20: an exact match on the raw id sized every real versioned or
+     * inference-profile id at 8,192). 0 when the family is unknown.
+     */
     public function contextWindow(): int
     {
-        return match ($this->defaultModel) {
-            'anthropic.claude-opus-4-6' => 200_000,
-            'anthropic.claude-sonnet-4-6' => 200_000,
-            'anthropic.claude-haiku-4-7' => 200_000,
-            'meta.llama3-70b-instruct' => 8_192,
-            'meta.llama3-8b-instruct' => 8_192,
-            default => 8_192,
-        };
+        return self::CONTEXT_WINDOWS[self::family($this->defaultModel)] ?? 0;
     }
 
-    public function costPer1kTokens(string $model, string $direction): float
+    /**
+     * @return null|float USD per 1K tokens, or null when neither the operator
+     *         `$modelPrices` map nor {@see PRICE_TABLE} names a rate for the
+     *         model (audit A15/A20: no fabricated $0.01 default).
+     *
+     * Lookup order: the operator's entry for the RAW id, then for the
+     * normalised family, then the built-in family row. Once the operator
+     * NAMES a model (either spelling) that entry is authoritative, exactly as
+     * in {@see OpenAIProvider::costPer1kTokens()}: a rate that fails
+     * validation answers unpriced rather than falling back to the shipped row
+     * it overrode.
+     */
+    public function costPer1kTokens(string $model, string $direction): ?float
     {
-        // Pricing varies by model and region - these are approximations
-        return match ($model) {
-            'anthropic.claude-opus-4-6' => $direction === 'input' ? 0.015 : 0.075,
-            'anthropic.claude-sonnet-4-6' => $direction === 'input' ? 0.003 : 0.015,
-            'anthropic.claude-haiku-4-7' => $direction === 'input' ? 0.00025 : 0.00125,
-            'meta.llama3-70b-instruct' => $direction === 'input' ? 0.00065 : 0.00275,
-            'meta.llama3-8b-instruct' => $direction === 'input' ? 0.00022 : 0.00088,
-            default => 0.01,
-        };
+        if (array_key_exists($model, $this->modelPrices)) {
+            return $this->declaredRate($model, $direction);
+        }
+
+        $family = self::family($model);
+        if (array_key_exists($family, $this->modelPrices)) {
+            return $this->declaredRate($family, $direction);
+        }
+
+        $row = self::PRICE_TABLE[$family] ?? null;
+        if ($row === null) {
+            return null;
+        }
+
+        return $direction === 'input' ? $row[0] : $row[1];
+    }
+
+    /**
+     * The table key a Bedrock model id belongs to (audit A20).
+     *
+     * Real Bedrock ids carry decorations the family does not:
+     * `anthropic.claude-sonnet-4-5-20250929-v1:0` (date + version),
+     * `us.anthropic.claude-sonnet-4-6` / `global.…` (cross-region inference
+     * profile), `arn:aws:bedrock:<region>:<acct>:inference-profile/us.anthropic.…`
+     * or `…::foundation-model/anthropic.…` (ARNs), and a provisioned-throughput
+     * `:200k` tail. Each is stripped once, in a fixed order (ARN path, geo
+     * prefix, `:N`/`:Nk` tails, `-vN`, `-YYYYMMDD`, the `-0` alias); the
+     * vendor segment (`anthropic.`) is kept, and the remainder must EQUAL a
+     * table key. Exact equality, not a prefix match, is the point: a prefix
+     * rule would size and price an unknown `anthropic.claude-sonnet-4-7` as
+     * `anthropic.claude-sonnet-4`, a guess presented as a measurement.
+     */
+    private static function family(string $model): string
+    {
+        $id = strtolower(trim($model));
+
+        if (str_starts_with($id, 'arn:')) {
+            $slash = strrpos($id, '/');
+            $id = $slash === false ? $id : substr($id, $slash + 1);
+        }
+
+        foreach ([self::PROFILE_GEO_PREFIX, '/(?::\d+k?)+$/', '/-v\d+$/', '/-\d{8}$/', '/-0$/'] as $decoration) {
+            $id = (string) preg_replace($decoration, '', $id);
+        }
+
+        return $id;
+    }
+
+    /**
+     * One operator-declared rate, per-1K, for a model the operator NAMED in
+     * `$modelPrices`; null when the declaration fails validation. Zero is
+     * legal (a genuinely free model); sign-flipped or non-finite rates go the
+     * loud unpriced road rather than being floored by {@see Usage} into a
+     * fake-free 0.0.
+     */
+    private function declaredRate(string $key, string $direction): ?float
+    {
+        $entry = $this->modelPrices[$key];
+        $declared = is_array($entry) ? ($entry[$direction] ?? null) : null;
+        if (!is_numeric($declared)) {
+            return null;
+        }
+
+        $rate = ((float) $declared) / 1000; // config speaks USD-per-1M
+
+        return $rate >= 0.0 && is_finite($rate) ? $rate : null;
     }
 
     public function complete(CompleteRequest $request): CompleteResponse
@@ -478,15 +668,20 @@ final readonly class BedrockProvider implements ProviderInterface
         $inputTokens = self::usageInt($usage['inputTokens'] ?? null) ?? 0;
         $outputTokens = self::usageInt($usage['outputTokens'] ?? null) ?? 0;
 
+        // Audit A15: an unpriced model bills the 0.0 lower bound with its
+        // name carried, never an invented rate and never a silent zero.
+        $cost = $this->cost($model, $inputTokens, $outputTokens);
+
         return Usage::new(
             // The exact expression this replaces: the sum of the two sides
             // each defaulted to 0 — see the totalTokens paragraph above.
             $inputTokens + $outputTokens,
-            $this->cost($model, $inputTokens, $outputTokens),
+            $cost ?? 0.0,
             self::usageInt($usage['inputTokens'] ?? null),
             self::usageInt($usage['outputTokens'] ?? null),
             self::usageInt($usage['cacheReadInputTokens'] ?? null),
             self::usageInt($usage['cacheWriteInputTokens'] ?? null),
+            unpricedModel: $cost === null ? $model : null,
         );
     }
 
@@ -557,10 +752,35 @@ final readonly class BedrockProvider implements ProviderInterface
         );
     }
 
-    private function cost(string $model, int $inputTokens, int $outputTokens): float
+    /**
+     * The dollar cost of one usage document, or null when a side that
+     * actually carried tokens has no rate on file.
+     *
+     * A side with no tokens needs no rate, so an empty stream event (every
+     * ConverseStream event before `metadata`) never turns unpriced over
+     * tokens it never carried. Null rather than 0.0 so the caller can set
+     * {@see Usage::$unpricedModel}; the accounting stays at the 0.0 lower
+     * bound. Cache read/write tokens are not priced here: this class sends
+     * no cache points, so those buckets are absent or zero today.
+     */
+    private function cost(string $model, int $inputTokens, int $outputTokens): ?float
     {
-        return ($inputTokens * $this->costPer1kTokens($model, 'input')
-            + $outputTokens * $this->costPer1kTokens($model, 'output')) / 1000;
+        $total = 0.0;
+
+        foreach (['input' => $inputTokens, 'output' => $outputTokens] as $direction => $tokens) {
+            if ($tokens <= 0) {
+                continue;
+            }
+
+            $rate = $this->costPer1kTokens($model, $direction);
+            if ($rate === null) {
+                return null;
+            }
+
+            $total += $tokens * $rate;
+        }
+
+        return $total / 1000;
     }
 
     /**

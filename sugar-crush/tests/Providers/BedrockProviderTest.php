@@ -127,7 +127,8 @@ final class BedrockProviderTest extends TestCase
         $client = $this->createMock(BedrockRuntimeClient::class);
         $provider = new BedrockProvider($client, 'us-east-1', 'anthropic.claude-opus-4-6');
 
-        $this->assertSame(200_000, $provider->contextWindow());
+        // Audit A20: Opus 4.6 is a 1M-token model, not 200k.
+        $this->assertSame(1_000_000, $provider->contextWindow());
     }
 
     public function testContextWindowForClaudeSonnet(): void
@@ -135,13 +136,16 @@ final class BedrockProviderTest extends TestCase
         $client = $this->createMock(BedrockRuntimeClient::class);
         $provider = new BedrockProvider($client, 'us-east-1', 'anthropic.claude-sonnet-4-6');
 
-        $this->assertSame(200_000, $provider->contextWindow());
+        // Audit A20: Sonnet 4.6 is a 1M-token model, not 200k.
+        $this->assertSame(1_000_000, $provider->contextWindow());
     }
 
     public function testContextWindowForClaudeHaiku(): void
     {
         $client = $this->createMock(BedrockRuntimeClient::class);
-        $provider = new BedrockProvider($client, 'us-east-1', 'anthropic.claude-haiku-4-7');
+        // Audit A20: the old fixture named `anthropic.claude-haiku-4-7`, a
+        // model that does not exist; Haiku 4.5 is the real id.
+        $provider = new BedrockProvider($client, 'us-east-1', 'anthropic.claude-haiku-4-5-20251001-v1:0');
 
         $this->assertSame(200_000, $provider->contextWindow());
     }
@@ -163,23 +167,25 @@ final class BedrockProviderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // 8. contextWindow() returns default value 8192 for unknown models
+    // 8. contextWindow() answers 0 ("unknown", per ProviderInterface) for
+    //    unknown models - audit A20: the old 8,192 default fired Chat's
+    //    context tiers against 8k on a 200k model
     // -------------------------------------------------------------------------
 
-    public function testContextWindowForUnknownModelReturnsDefault(): void
+    public function testContextWindowForUnknownModelReturnsUnknown(): void
     {
         $client = $this->createMock(BedrockRuntimeClient::class);
         $provider = new BedrockProvider($client, 'us-east-1', 'unknown-model');
 
-        $this->assertSame(8_192, $provider->contextWindow());
+        $this->assertSame(0, $provider->contextWindow());
     }
 
-    public function testContextWindowForUnknownModelReturnsDefault8192(): void
+    public function testContextWindowForAnotherUnknownModelReturnsUnknown(): void
     {
         $client = $this->createMock(BedrockRuntimeClient::class);
         $provider = new BedrockProvider($client, 'us-east-1', 'completely-fake-model');
 
-        $this->assertSame(8_192, $provider->contextWindow());
+        $this->assertSame(0, $provider->contextWindow());
     }
 
     // -------------------------------------------------------------------------
@@ -191,7 +197,8 @@ final class BedrockProviderTest extends TestCase
         $client = $this->createMock(BedrockRuntimeClient::class);
         $provider = new BedrockProvider($client);
 
-        $this->assertSame(0.015, $provider->costPer1kTokens('anthropic.claude-opus-4-6', 'input'));
+        // Audit A15: Opus 4.6 lists at $5/$25 per 1M, not Opus 4's $15/$75.
+        $this->assertSame(0.005, $provider->costPer1kTokens('anthropic.claude-opus-4-6', 'input'));
     }
 
     public function testCostPer1kTokensForClaudeOpusOutput(): void
@@ -199,7 +206,7 @@ final class BedrockProviderTest extends TestCase
         $client = $this->createMock(BedrockRuntimeClient::class);
         $provider = new BedrockProvider($client);
 
-        $this->assertSame(0.075, $provider->costPer1kTokens('anthropic.claude-opus-4-6', 'output'));
+        $this->assertSame(0.025, $provider->costPer1kTokens('anthropic.claude-opus-4-6', 'output'));
     }
 
     public function testCostPer1kTokensForClaudeSonnetInput(): void
@@ -223,7 +230,8 @@ final class BedrockProviderTest extends TestCase
         $client = $this->createMock(BedrockRuntimeClient::class);
         $provider = new BedrockProvider($client);
 
-        $this->assertSame(0.00025, $provider->costPer1kTokens('anthropic.claude-haiku-4-7', 'input'));
+        // The old fixture priced a non-existent `anthropic.claude-haiku-4-7`.
+        $this->assertSame(0.001, $provider->costPer1kTokens('anthropic.claude-haiku-4-5', 'input'));
     }
 
     public function testCostPer1kTokensForClaudeHaikuOutput(): void
@@ -231,7 +239,7 @@ final class BedrockProviderTest extends TestCase
         $client = $this->createMock(BedrockRuntimeClient::class);
         $provider = new BedrockProvider($client);
 
-        $this->assertSame(0.00125, $provider->costPer1kTokens('anthropic.claude-haiku-4-7', 'output'));
+        $this->assertSame(0.005, $provider->costPer1kTokens('anthropic.claude-haiku-4-5', 'output'));
     }
 
     public function testCostPer1kTokensForLlama70BInput(): void
@@ -267,23 +275,24 @@ final class BedrockProviderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // 10. costPer1kTokens() returns default value for unknown models
+    // 10. costPer1kTokens() answers null (unpriced) for unknown models -
+    //     audit A15: the old `default => 0.01` invented a bill
     // -------------------------------------------------------------------------
 
-    public function testCostPer1kTokensForUnknownModelInputReturnsDefault(): void
+    public function testCostPer1kTokensForUnknownModelInputIsUnpriced(): void
     {
         $client = $this->createMock(BedrockRuntimeClient::class);
         $provider = new BedrockProvider($client);
 
-        $this->assertSame(0.01, $provider->costPer1kTokens('unknown-model', 'input'));
+        $this->assertNull($provider->costPer1kTokens('unknown-model', 'input'));
     }
 
-    public function testCostPer1kTokensForUnknownModelOutputReturnsDefault(): void
+    public function testCostPer1kTokensForUnknownModelOutputIsUnpriced(): void
     {
         $client = $this->createMock(BedrockRuntimeClient::class);
         $provider = new BedrockProvider($client);
 
-        $this->assertSame(0.01, $provider->costPer1kTokens('unknown-model', 'output'));
+        $this->assertNull($provider->costPer1kTokens('unknown-model', 'output'));
     }
 
     // -------------------------------------------------------------------------
