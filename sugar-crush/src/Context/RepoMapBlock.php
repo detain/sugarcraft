@@ -186,8 +186,9 @@ use SugarCraft\Crush\Support\ContainedPath;
  *     here and not `below()`, because a prefix mapped to `""` legitimately
  *     means the package root itself.
  *
- * `RecursiveDirectoryIterator` is not given `FOLLOW_SYMLINKS`, so once a
- * source root is admitted the walk beneath it cannot leave either.
+ * The source walk ({@see phpFileDirectories()}) never enters a symlinked
+ * directory, so once a source root is admitted the walk beneath it cannot
+ * leave either.
  *
  * ON THE MISSING AND THE UNREADABLE
  * ---------------------------------
@@ -379,6 +380,23 @@ final readonly class RepoMapBlock implements PromptSection
      * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheRestatementGuardHasRoomBeforeItsNextFalsePositive()}.
      */
     public const MAX_SOURCE_FILES = 20000;
+
+    /**
+     * Ceiling on directory entries of ANY kind listed across all PSR-4 source
+     * roots (audit 15d-17).
+     *
+     * {@see MAX_SOURCE_FILES} only ticks on `.php` files, so a `psr-4` root of
+     * `""` over a tree of a few million assets, logs or build outputs never
+     * reached it and was listed and stat'ed in full at every capture — the
+     * full-tree crawl that constant was written to prevent, reached by the
+     * door it did not watch. This bound counts every entry the walk lists,
+     * files and directories alike, so the work is bounded whatever the tree
+     * holds. Five times MAX_SOURCE_FILES: a backstop sized so a source tree
+     * that is mostly PHP reaches the file cap first, not a policy on how many
+     * non-PHP files a package may carry. The walk is sorted, so the cut lands
+     * at the same entry on every filesystem.
+     */
+    public const MAX_WALK_ENTRIES = 100000;
 
     /**
      * Appended to a line cut at {@see MAX_ENTRY_BYTES}, and paid for OUT OF
@@ -827,6 +845,7 @@ final readonly class RepoMapBlock implements PromptSection
 
         $rows = [];
         $visited = 0;
+        $walked = 0;
 
         foreach (self::psr4($manifest) as $prefix => $dirs) {
             foreach ((array) $dirs as $dir) {
@@ -855,7 +874,7 @@ final readonly class RepoMapBlock implements PromptSection
                     continue;
                 }
 
-                foreach (self::phpFileDirectories($absolute, $visited) as $sub => $files) {
+                foreach (self::phpFileDirectories($absolute, $visited, $walked) as $sub => $files) {
                     // The prefix is a namespace, so its trailing separator is
                     // kept: a reader can concatenate a class name onto the
                     // rendered string and get a real FQN.
@@ -890,40 +909,74 @@ final readonly class RepoMapBlock implements PromptSection
      * `$visited` is threaded by reference across every source root rather than
      * reset per root, so {@see MAX_SOURCE_FILES} bounds the WHOLE capture and
      * not each root independently — otherwise a manifest with ten roots would
-     * cost ten times the documented ceiling.
+     * cost ten times the documented ceiling. `$walked` is threaded the same way
+     * for {@see MAX_WALK_ENTRIES}, which counts EVERY entry the walk lists.
+     *
+     * THE WALK IS SORTED (audit 15d-17). It used to be a
+     * RecursiveDirectoryIterator, which yields in readdir order — hash order
+     * on ext4, creation order on tmpfs — so once a cap bit, which directories
+     * were counted differed between machines and between clones of one
+     * repository, and so did the rendered map. Each directory's names are now
+     * sorted byte-wise before any is counted, its own entries are visited
+     * before its subdirectories, and those are entered in the same sorted
+     * order; both caps therefore cut the walk at the same entry everywhere.
+     *
+     * Kept from the iterator walk: symlinks are NOT followed (a symlinked
+     * directory is neither entered nor counted, so a self-referential link
+     * cannot turn the walk into a cycle), while a symlink to a `.php` FILE is
+     * counted like the file; {@see isScannableDir()} decides what is entered.
+     * A directory that cannot be listed is passed over, in keeping with this
+     * class's silent-failure stance, where the iterator would have thrown.
      *
      * @return array<string, int>
      */
-    private static function phpFileDirectories(string $base, int &$visited): array
+    private static function phpFileDirectories(string $base, int &$visited, int &$walked = 0): array
     {
         $counts = [];
+        $pending = [$base];
 
-        $walk = new \RecursiveIteratorIterator(
-            new \RecursiveCallbackFilterIterator(
-                // Symlinks are NOT followed (the flag is absent by design):
-                // a self-referential link would otherwise turn the walk into a
-                // cycle bounded only by MAX_SOURCE_FILES.
-                new \RecursiveDirectoryIterator($base, \FilesystemIterator::SKIP_DOTS),
-                static fn(\SplFileInfo $file): bool => !$file->isDir()
-                    || self::isScannableDir($file->getPathname(), $file->getFilename()),
-            ),
-        );
-
-        /** @var \SplFileInfo $file */
-        foreach ($walk as $file) {
-            if ($visited >= self::MAX_SOURCE_FILES) {
-                break;
-            }
-
-            if (!$file->isFile() || strtolower($file->getExtension()) !== 'php') {
+        while ($pending !== []) {
+            $current = array_pop($pending);
+            $names = @scandir($current, SCANDIR_SORT_NONE);
+            if ($names === false) {
                 continue;
             }
+            $names = array_values(array_diff($names, ['.', '..']));
+            sort($names, SORT_STRING);
 
-            ++$visited;
+            $subdirectories = [];
+            foreach ($names as $name) {
+                if ($visited >= self::MAX_SOURCE_FILES || $walked >= self::MAX_WALK_ENTRIES) {
+                    return $counts;
+                }
+                ++$walked;
 
-            $dir = \dirname($file->getPathname());
-            $relative = $dir === $base ? '' : substr($dir, strlen($base) + 1);
-            $counts[$relative] = ($counts[$relative] ?? 0) + 1;
+                $path = $current . '/' . $name;
+                if (is_link($path) && is_dir($path)) {
+                    continue;
+                }
+                if (is_dir($path)) {
+                    if (self::isScannableDir($path, $name)) {
+                        $subdirectories[] = $path;
+                    }
+
+                    continue;
+                }
+                if (!is_file($path) || strtolower(pathinfo($name, PATHINFO_EXTENSION)) !== 'php') {
+                    continue;
+                }
+
+                ++$visited;
+
+                $relative = $current === $base ? '' : substr($current, strlen($base) + 1);
+                $counts[$relative] = ($counts[$relative] ?? 0) + 1;
+            }
+
+            // A stack pops last-in first, so the sorted list goes on reversed
+            // and the first-sorted subdirectory is entered first.
+            foreach (array_reverse($subdirectories) as $subdirectory) {
+                $pending[] = $subdirectory;
+            }
         }
 
         return $counts;

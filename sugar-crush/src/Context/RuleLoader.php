@@ -98,6 +98,9 @@ use SugarCraft\Crush\Support\HomeDirectory;
  * containment refusal - it goes to the skip ledger and NOT to
  * {@see refusedPaths()}, because a cap trip or a parse error is a truncation of
  * the user's own content, not the security event a refusal names.
+ * {@see MAX_WALK_ENTRIES} bounds the walk itself - every entry visited, rule or
+ * not - and every one of these caps is applied in sorted order, never readdir
+ * order, so the files that survive them are the same on every machine.
  *
  * THE AGGREGATE ARITHMETIC OF THE FILE CAP, stated out loud because P6.S3 added a
  * directory to the walk and a reader is entitled to do the sum without opening
@@ -156,6 +159,18 @@ final class RuleLoader
      * rather than a mirror of a sibling value.
      */
     private const MAX_FILES = 64;
+
+    /**
+     * How many directory entries one tier walk may visit, of ANY kind - files
+     * that are not rules, subdirectories, links - before it stops (audit
+     * 15d-17). {@see MAX_FILES} bounds reads, but it only ticks on `*.md`
+     * files, so a cloned repo's project tier holding a few million other
+     * files was still listed and stat'ed in full on every prompt build. Sized
+     * as a backstop, not a policy: 64 times the file cap, far beyond any rules
+     * tree a person writes by hand. A walk that hits it is recorded in
+     * {@see skippedFiles()} under the tier directory's path.
+     */
+    private const MAX_WALK_ENTRIES = 4096;
 
     /**
      * The largest single rules file this loader will read, in bytes, enforced
@@ -500,9 +515,11 @@ final class RuleLoader
      * read to bound and no content to truncate, so it belongs to the refusal
      * ledger ({@see $refusedPaths}) and not the skip ledger. The count cap is consumed by every
      * READ, so malformed and oversized files spend it too rather than forcing
-     * unbounded work. Ordering is filesystem-dependent until the `ksort` at the end, which
-     * is the tree's only sort precedent and what makes tier contents stable
-     * across machines.
+     * unbounded work. Every cap is applied in SORTED order - the walk lists each
+     * directory sorted ({@see sortedLeaves()}) and the candidates are sorted
+     * again before the read-count cap is spent - so which files survive a cap is
+     * the same on every filesystem and clone (audit 15d-17); the `ksort` at the
+     * end then orders the survivors by rule key.
      *
      * @param string      $dir       The tier directory as spelled by the caller.
      * @param string|null $anchoredIn The boundary the directory must live strictly inside; null for a directory no repository chose.
@@ -531,20 +548,37 @@ final class RuleLoader
             return [];
         }
 
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($realDir, \RecursiveDirectoryIterator::SKIP_DOTS)
-        );
-        $iterator->setMaxDepth(self::MAX_DEPTH);
+        // Collect, sort, THEN cap (audit 15d-17). The caps below used to be
+        // applied in RecursiveDirectoryIterator order, which is readdir order:
+        // hash order on ext4, creation order on tmpfs, something else again on
+        // APFS. Past MAX_FILES that decided WHICH rules loaded, so one clone of
+        // a repository followed different standing rules from another even
+        // though the survivors were ksorted afterwards. The walk itself is
+        // sorted too, so the point where MAX_WALK_ENTRIES cuts it off is the
+        // same on every filesystem as well.
+        $exhausted = false;
+        $candidates = array_values(array_filter(
+            $this->sortedLeaves($realDir, $exhausted),
+            static fn(string $path): bool => strtolower(pathinfo($path, PATHINFO_EXTENSION)) === 'md',
+        ));
+        sort($candidates, SORT_STRING);
+
+        if ($exhausted) {
+            $reason = sprintf(
+                'Stopped walking %s rules directory %s after %d entries: its walk budget is spent,'
+                . ' so files sorting after that point were not considered.',
+                $tier,
+                $realDir,
+                self::MAX_WALK_ENTRIES,
+            );
+            $this->report($reason);
+            $this->skippedFiles[$realDir] = $reason;
+        }
 
         $byKey = [];
         $reads = 0;
-        foreach ($iterator as $file) {
-            if (!$file instanceof \SplFileInfo) {
-                continue;
-            }
-            if (strtolower($file->getExtension()) !== 'md') {
-                continue;
-            }
+        foreach ($candidates as $candidate) {
+            $file = new \SplFileInfo($candidate);
 
             // NIT-5 (P6.S3): a `*.md` entry that is not a regular file. Before
             // this branch existed the check above came first and the entry
@@ -627,6 +661,78 @@ final class RuleLoader
         ksort($byKey);
 
         return array_values($byKey);
+    }
+
+    /**
+     * Every non-directory entry beneath `$dir`, in a walk whose order is fixed
+     * by sorting rather than by readdir.
+     *
+     * Each directory is listed and its names sorted byte-wise before anything
+     * is counted, its own entries are visited before its subdirectories, and the
+     * subdirectories are entered in that same sorted order. That is what makes
+     * the {@see MAX_WALK_ENTRIES} cutoff land at the same entry everywhere: a
+     * budget spent in readdir order would only have moved 15d-17's machine-
+     * dependence from the file cap to the walk cap.
+     *
+     * The shape deliberately reproduces the RecursiveDirectoryIterator walk it
+     * replaced (MEASURED against it on PHP 8.3.6): a real directory is entered
+     * while it is shallower than {@see MAX_DEPTH} and never itself returned; a
+     * symlink - to a directory, to a file, or to nothing - is returned as a leaf
+     * and never entered, so a link cycle cannot recurse; dot-entries other than
+     * `.`/`..` are walked like any other. A directory that cannot be listed is
+     * passed over rather than aborting the tier.
+     *
+     * @param bool $exhausted Set to true when the walk stopped on the entry budget.
+     *
+     * @return list<string> Leaf paths, in walk order.
+     */
+    private function sortedLeaves(string $dir, bool &$exhausted): array
+    {
+        $leaves = [];
+        $visited = 0;
+        $pending = [[$dir, 0]];
+
+        while ($pending !== []) {
+            [$current, $depth] = array_pop($pending);
+            $names = @scandir($current, SCANDIR_SORT_NONE);
+            if ($names === false) {
+                continue;
+            }
+            $names = array_values(array_diff($names, ['.', '..']));
+            sort($names, SORT_STRING);
+
+            $subdirectories = [];
+            foreach ($names as $name) {
+                // Every entry spends the budget, not only `*.md` files: the
+                // bound is on the work the walk does, and a tier directory full
+                // of non-rule files is exactly what a file-only count misses.
+                if ($visited >= self::MAX_WALK_ENTRIES) {
+                    $exhausted = true;
+
+                    return $leaves;
+                }
+                ++$visited;
+
+                $path = $current . DIRECTORY_SEPARATOR . $name;
+                if (!is_link($path) && is_dir($path)) {
+                    if ($depth < self::MAX_DEPTH) {
+                        $subdirectories[] = [$path, $depth + 1];
+                    }
+
+                    continue;
+                }
+
+                $leaves[] = $path;
+            }
+
+            // A stack pops last-in first, so the sorted list goes on reversed
+            // and the first-sorted subdirectory is entered first.
+            foreach (array_reverse($subdirectories) as $subdirectory) {
+                $pending[] = $subdirectory;
+            }
+        }
+
+        return $leaves;
     }
 
     /**

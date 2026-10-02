@@ -271,6 +271,12 @@ final class ReadPathCensusTest extends TestCase
                 . 'names can be a symlink out of the tree, so the name is not the gate: each '
                 . 'candidate is refused unless ContainedPath::below() puts it strictly inside the '
                 . 'root, and the manifest read below is gated again at its own sink',
+            // The source walk was a RecursiveDirectoryIterator until audit 15d-17
+            // made it a sorted scandir() walk; the sink moved, the gate did not.
+            'CONTAINED — the one path in this file that CONTENT steers: a manifest\'s '
+                . '`autoload.psr-4` values are written by whoever wrote the repository, and each is '
+                . 'refused by ContainedPath::within() against the root before the sorted walk '
+                . 'lists it; the walk never enters a symlinked directory',
         ],
         'Context/RepoMapBlock.php|glob' => [
             'NAMES_ONLY — expansion of a `repositories: {type: path}` url from the ROOT manifest, '
@@ -286,15 +292,12 @@ final class ReadPathCensusTest extends TestCase
                 . 'ContainedPath::within() sits inside readManifest() itself, at the sink rather '
                 . 'than at its callers, so a third caller cannot ship without it',
         ],
-        'Context/RepoMapBlock.php|new RecursiveDirectoryIterator' => [
-            'CONTAINED — the one path in this file that CONTENT steers: a manifest\'s '
-                . '`autoload.psr-4` values are written by whoever wrote the repository, and each is '
-                . 'refused by ContainedPath::within() against the root before the walk opens it',
-        ],
         'Context/InstructionFileLoader.php|glob' => [
             'NAMES_ONLY — expansion of the configured glob; each match is compared before it is read',
         ],
-        'Context/RuleLoader.php|new RecursiveDirectoryIterator' => [
+        // A RecursiveDirectoryIterator until audit 15d-17 made the tier walk a
+        // sorted scandir() walk; the anchor and per-entry gate are unchanged.
+        'Context/RuleLoader.php|scandir' => [
             'CONTAINED — the tier directory is anchored to its tree (project/root) or to the owned '
                 . 'HOME/.sugar-crush (user), and each `*.md` is confined to the resolved directory '
                 . 'before its bytes are read',
