@@ -377,7 +377,19 @@ never used.
 The model calls the built-in `Skill` tool
 (`src/Tools/BuiltIn/SkillTool.php`), which takes `name` and an optional
 `args` string, and returns the on-disk body. It refuses with an error — not an
-empty success — when the name is unknown or not model-invocable.
+empty success — when the name is unknown or not model-invocable, or when `name`
+or `args` is not a string.
+
+`args` reaches the body the way Claude Code's skills receive theirs
+(`SkillTool::substituteArguments()`): every `$ARGUMENTS` in the body is replaced
+by the trimmed `args` string; a body that names no `$ARGUMENTS` gets a final
+`ARGUMENTS: <args>` line appended; with no `args` a placeholder-free body is
+returned unchanged and a `$ARGUMENTS` expands to nothing. Only `$ARGUMENTS` is
+recognised — unlike a [custom command template](COMMANDS.md), `$1`…`$9`, `$$`,
+`` !`…` `` and `@path` are left as written, because skill bodies carry shell
+snippets that use them. The append is the other deliberate difference from
+custom commands, which send a placeholder-free template unchanged: here the
+arguments come from the model, which passed them for the skill to act on.
 
 `Bootstrap::tools()` and `EngineBackend` are handed the *same* `SkillRegistry`
 instance, so a skill disabled on one is not reachable through the other.
