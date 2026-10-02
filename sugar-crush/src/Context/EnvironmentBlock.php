@@ -353,6 +353,15 @@ final readonly class EnvironmentBlock implements PromptSection
     public const BRANCH_MAX_BYTES = 255;
 
     /**
+     * The ceiling on the ESCAPED `(repo root: …)` value of a subdirectory
+     * launch (audit 15d-13). 4096 is Linux's PATH_MAX, the longest path the
+     * kernel will resolve; the root is an ancestor of the cwd, whose own line
+     * is not capped, so this bounds a git output rather than a new axis of
+     * the block.
+     */
+    public const REPO_ROOT_MAX_BYTES = 4096;
+
+    /**
      * `?` (0x3F) — what an invalid UTF-8 byte sequence in the git output is
      * replaced with before the block leaves {@see render()}.
      *
@@ -697,6 +706,24 @@ final readonly class EnvironmentBlock implements PromptSection
         private bool $writeSinceLastRender = true,
     ) {}
 
+    /**
+     * The `rev-parse --show-toplevel` answer for a cwd with no `.git` of its
+     * own (audit 15d-13), memoised: `root` is the escaped, capped repository
+     * root or null when the cwd is outside any work tree, `timedOut` marks a
+     * probe cut off at {@see GIT_TIMEOUT_SECONDS}.
+     *
+     * Lazily initialised on first need, which a readonly property allows once
+     * from inside this class. Without the memo a non-repository directory
+     * would pay one git subprocess per render for the whole session, and the
+     * answer cannot change unless a repository is created AROUND the cwd —
+     * creating one AT it is still seen, by the `.git` fast path.
+     * {@see withWriteSinceLastRender()} carries it to the copy, because the
+     * Runtime derives a fresh copy on every step.
+     *
+     * @var array{root: ?string, timedOut: bool}
+     */
+    private array $enclosingRepo;
+
     /** Returns the captured working directory. */
     public function cwd(): string
     {
@@ -760,7 +787,12 @@ final readonly class EnvironmentBlock implements PromptSection
      */
     public function withWriteSinceLastRender(bool $writeSinceLastRender): self
     {
-        return new self($this->cwd, $this->modelName, $this->now, $this->platform, $writeSinceLastRender);
+        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $writeSinceLastRender);
+        if (isset($this->enclosingRepo)) {
+            $copy->enclosingRepo = $this->enclosingRepo;
+        }
+
+        return $copy;
     }
 
     /**
@@ -782,8 +814,10 @@ final readonly class EnvironmentBlock implements PromptSection
      * Renders the environment block as an XML-flavoured string for embedding in prompts.
      *
      * Seven lines, in this order: cwd, git-repository flag, platform, OS version,
-     * PHP version, model name, current date. When the cwd is a git repository, a
-     * git section is appended — polled here, on every call, not frozen at capture
+     * PHP version, model name, current date. When the cwd is inside a git work
+     * tree (its root, or since audit 15d-13 any directory below it, where the
+     * first line also names the repo root — see {@see enclosingRepo()}), a git
+     * section is appended — polled here, on every call, not frozen at capture
      * time — and it opens with {@see GIT_STATE_CAVEAT}, the caption that tells
      * the model the state is as of this render rather than a snapshot from
      * conversation start, followed by branch, --porcelain status, recent log,
@@ -802,6 +836,12 @@ final readonly class EnvironmentBlock implements PromptSection
      */
     public function render(): string
     {
+        // Audit 15d-13: a cwd with no `.git` of its own may still sit inside a
+        // work tree (`cd repo/src && sugarcrush`); see enclosingRepo().
+        $atRoot = $this->isGitRepo();
+        $enclosing = $atRoot ? null : $this->enclosingRepo();
+        $inRepo = $atRoot || $enclosing['root'] !== null;
+
         $lines = [
             // P5.S3: the DISPLAYED path is escaped. It is repo-shaped content
             // like every other byte below — a clone can carry a directory
@@ -810,8 +850,16 @@ final readonly class EnvironmentBlock implements PromptSection
             // `</env>` in practice. The shell-argument uses of $this->cwd in
             // gitStatusSnapshot()/gitField() stay raw: they are consumed by
             // escapeshellarg(), not by the model.
-            'Working directory: ' . PromptFence::escape($this->cwd),
-            'Is directory a git repo: ' . ($this->isGitRepo() ? 'Yes' : 'No'),
+            //
+            // The repo root is named only for a subdirectory launch: there
+            // the `Status:` paths and the diff headers are relative to the
+            // root, not to this line's directory. At the root it would
+            // restate this line, so the common case's bytes do not move.
+            'Working directory: ' . PromptFence::escape($this->cwd)
+                . (($enclosing['root'] ?? null) !== null ? " (repo root: {$enclosing['root']})" : ''),
+            // A timed-out probe is neither answer: "No" would claim a reading
+            // that never finished, so the line states the timeout instead.
+            'Is directory a git repo: ' . ($inRepo ? 'Yes' : (($enclosing['timedOut'] ?? false) ? self::gitTimeoutReason() : 'No')),
             'Platform: ' . ($this->platform ?? strtolower(PHP_OS_FAMILY)),
             // Distinct from `Platform:` above, which is PHP_OS_FAMILY - a
             // four-value bucket ("Linux"/"Darwin"/"Windows"/"BSD") that answers
@@ -846,7 +894,7 @@ final readonly class EnvironmentBlock implements PromptSection
             'Current date: ' . ($this->now ?? new DateTimeImmutable())->format('Y-m-d'),
         ];
 
-        if ($this->isGitRepo()) {
+        if ($inRepo) {
             $lines[] = '';
             $lines[] = $this->gitStatusSnapshot();
         }
@@ -975,11 +1023,68 @@ final readonly class EnvironmentBlock implements PromptSection
      * an exit code instead of an empty string.
      *
      * Still the cheapest possible check, which is the requirement: it runs on
-     * every render alongside the git section it gates.
+     * every render alongside the git section it gates. It answers only "is the
+     * cwd a work-tree ROOT"; a subdirectory falls through to
+     * {@see enclosingRepo()}, so this fast path keeps the root case at zero
+     * extra subprocesses.
      */
     private function isGitRepo(): bool
     {
         return file_exists($this->cwd . '/.git');
+    }
+
+    /**
+     * The work tree enclosing a cwd that has no `.git` of its own, resolved by
+     * `git rev-parse --show-toplevel` once per block and memoised.
+     *
+     * WHY ASK GIT (audit 15d-13). `file_exists(cwd/.git)` is false in every
+     * subdirectory of a repository, so `cd repo/src && sugarcrush` used to
+     * render `Is directory a git repo: No` with no git section at all — while
+     * {@see InstructionFileLoader} walks up to that same repository root for
+     * its instruction files, contradicting this block in one prompt. Git's own
+     * discovery is the authority on where a work tree starts, so this asks it,
+     * with the same prefix, environment and time bound as every other read.
+     *
+     * Outcomes: a root (escaped through {@see PromptFence}, since a directory
+     * name can carry `</env>`, then capped at {@see REPO_ROOT_MAX_BYTES});
+     * null for a non-zero exit or empty output (outside any work tree, inside
+     * a `.git` directory, a bare repository); null with `timedOut` when git did
+     * not answer in time. With proc_open disabled there is no bounded spawn,
+     * so the answer stays the `.git` check's — not a repo — and no git runs.
+     *
+     * @return array{root: ?string, timedOut: bool}
+     */
+    private function enclosingRepo(): array
+    {
+        if (isset($this->enclosingRepo)) {
+            return $this->enclosingRepo;
+        }
+
+        if (!\function_exists('proc_open')) {
+            return $this->enclosingRepo = ['root' => null, 'timedOut' => false];
+        }
+
+        $captured = $this->runGit(['rev-parse', '--show-toplevel'], self::REPO_ROOT_MAX_BYTES);
+        if ($captured['timedOut']) {
+            return $this->enclosingRepo = ['root' => null, 'timedOut' => true];
+        }
+
+        // Exactly one trailing newline is git's terminator; anything else is
+        // part of the path.
+        $root = str_ends_with($captured['stdout'], "\n") ? substr($captured['stdout'], 0, -1) : $captured['stdout'];
+        if ($captured['exitCode'] !== 0 || $root === '') {
+            return $this->enclosingRepo = ['root' => null, 'timedOut' => false];
+        }
+
+        return $this->enclosingRepo = [
+            'root' => $this->truncateOutput(
+                PromptFence::escape($root),
+                self::REPO_ROOT_MAX_BYTES,
+                $captured['stdoutDropped'],
+                $captured['stdoutMidLine'],
+            ),
+            'timedOut' => false,
+        ];
     }
 
     /**
