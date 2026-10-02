@@ -9,15 +9,18 @@ namespace SugarCraft\Crush\Permissions;
  *
  * The three replies opencode's permission service offers, and the reason
  * this is not just a bool: `Once` and `Always` both permit the paused call,
- * but only `Always` outlives it, granting every later call of the same tool
- * in this session without re-prompting.
+ * but only `Always` outlives it, granting the same call (same tool, same
+ * arguments) for the rest of this session without re-prompting — and only
+ * when the permission gate was the sole hook that asked; a user hook's ask is
+ * never grantable, so there `Always` acts as `Once` (audit F-P9,
+ * {@see \SugarCraft\Crush\Chat::permissionGrantKey()}).
  */
 enum PermissionReply: string
 {
     /** Permit the paused call, and only that call. */
     case Once = 'once';
 
-    /** Permit the paused call and every later call of the same tool this session. */
+    /** Permit the paused call and, for a gate-only ask, the same call again this session. */
     case Always = 'always';
 
     /** Refuse the paused call; the turn ends without running it. */

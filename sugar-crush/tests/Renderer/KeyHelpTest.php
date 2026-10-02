@@ -19,6 +19,7 @@ use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\KeyBindingRegistry;
+use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookInterface;
@@ -26,6 +27,8 @@ use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Hooks\HookResult;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Permissions\PermissionGate;
+use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Permissions\PermissionPromptStage;
 use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\PermissionReplyMsg;
@@ -2055,7 +2058,12 @@ final class KeyHelpTest extends TestCase
             'a' => [null, null, [], PermissionPromptStage::ConfirmingAlways],
             'and' => [null, null, [], PermissionPromptStage::Disarmed],
             'an' => [null, null, [], PermissionPromptStage::Armed],
-            'aye' => [2, 'y', ['bash' => true], PermissionPromptStage::Armed],
+            // `a` then `y` commits Always, but this fixture's prompt is
+            // hand-dispatched and carries no attributed ask, so it grants
+            // nothing (audit F-P9: only the gate's own question is grantable).
+            // The grant itself is asserted against the real gate in
+            // testTheSessionGrantTakesASecondDeliberateKeystroke().
+            'aye' => [2, 'y', [], PermissionPromptStage::Armed],
         ] as $typed => [$answersAt, $rune, $grants, $stage]) {
             $chat = $this->blockedOnPermission('bash');
             $at = null;
@@ -2121,8 +2129,25 @@ final class KeyHelpTest extends TestCase
 
         [$granted, $cmd] = $confirming->update(new KeyMsg(KeyType::Char, 'y'));
         $this->assertNull($granted->pendingPermission(), '"y" at the confirm commits the grant and releases the call');
-        $this->assertSame(['bash' => true], $granted->permissionGrants());
+        $this->assertSame(
+            [],
+            $granted->permissionGrants(),
+            'a hand-dispatched prompt carries no attributed ask, so even Always grants nothing (F-P9)',
+        );
         $this->assertNotNull($cmd, 'and a released batch hands back the Cmd that runs it');
+
+        // The same two keystrokes at a prompt the REAL permission gate raised:
+        // there `y` at the confirm writes the grant, scoped to this exact call.
+        $gated = $this->promptRaisedByTheRealGate(self::permissionGateHooks());
+        [$gatedConfirming] = $gated->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertSame([], $gatedConfirming->permissionGrants(), '"a" alone grants nothing at the real gate either');
+        [$gatedGranted, $gatedCmd] = $gatedConfirming->update(new KeyMsg(KeyType::Char, 'y'));
+        $this->assertNull($gatedGranted->pendingPermission());
+        $this->assertSame(['bash {"cmd":"rm -rf build/"}' => true], $gatedGranted->permissionGrants());
+        $this->assertInstanceOf(\Closure::class, $gatedCmd);
+        // Reap the released batch: dispatch forks its child eagerly, and only
+        // the Cmd collects the child's IPC payload.
+        $this->reapReleasedBatch($gatedCmd);
 
         foreach ([
             'n' => new KeyMsg(KeyType::Char, 'n'),
@@ -2339,6 +2364,41 @@ final class KeyHelpTest extends TestCase
      * A `PreToolUse` chain that asks about every tool, so a prompt in this file can
      * be raised by the production path instead of by a hand-dispatched Msg.
      */
+    /**
+     * The real {@see PermissionGateHook} in `default` mode, which asks for the
+     * `bash` tool these fixtures register — the one asker whose question a
+     * {@see PermissionReply::Always} grant may answer (audit F-P9).
+     */
+    private static function permissionGateHooks(): HookManager
+    {
+        $hooks = new HookManager(new HookRegistry());
+        $hooks->register(new PermissionGateHook(new PermissionGate(PermissionMode::Default)));
+
+        return $hooks;
+    }
+
+    /** Run a released batch's Cmd to completion so its forked child is reaped. */
+    private function reapReleasedBatch(\Closure $cmd): void
+    {
+        $asyncCmd = $cmd();
+        $this->assertInstanceOf(\SugarCraft\Core\AsyncCmd::class, $asyncCmd);
+
+        $loop = \React\EventLoop\Loop::get();
+        $resolved = null;
+        $asyncCmd->promise->then(function ($msg) use (&$resolved, $loop): void {
+            $resolved = $msg;
+            $loop->stop();
+        });
+
+        if ($resolved === null) {
+            $safety = $loop->addTimer(10.0, static function () use ($loop): void { $loop->stop(); });
+            $loop->run();
+            $loop->cancelTimer($safety);
+        }
+
+        $this->assertInstanceOf(\SugarCraft\Crush\ToolResultsMsg::class, $resolved, 'the released batch did not complete');
+    }
+
     private static function askEveryToolHooks(): HookManager
     {
         $asks = new class implements HookInterface {
@@ -2363,11 +2423,11 @@ final class KeyHelpTest extends TestCase
      * the whole point of the tests that use this one is that the prompt is
      * production-made.
      */
-    private function promptRaisedByTheRealGate(): Chat
+    private function promptRaisedByTheRealGate(?HookManager $hooks = null): Chat
     {
         $chat = (new Chat(history: [], inputBuf: '', backend: new EchoBackend()))
             ->registerTool('bash', static fn(array $args): string => 'total 0')
-            ->withHooks(self::askEveryToolHooks())
+            ->withHooks($hooks ?? self::askEveryToolHooks())
             ->withSize(100, 30);
 
         $typed = $chat;

@@ -18,10 +18,16 @@ use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\App\SelectSkillMsg;
 use SugarCraft\Crush\Backend\EchoBackend;
+use SugarCraft\Crush\AssistantMsg;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\KeyBindingRegistry;
+use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
+use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\PermissionRequestMsg;
+use SugarCraft\Crush\Permissions\PermissionGate;
+use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Permissions\PermissionPromptStage;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Renderer;
@@ -1112,8 +1118,12 @@ final class KeyBindingDriftTest extends TestCase
             // because the key did, and this is the observation that holds the
             // two together. `a` alone must leave the prompt up and the grant
             // map empty; the grant is what the CONFIRM writes.
+            //
+            // Raised by the REAL permission gate, not hand-dispatched: since
+            // audit F-P9 a grant answers only the gate's own question, so a
+            // prompt with no attributed ask behind it grants nothing at all.
             'permission.always' => function (array $k): void {
-                [$confirming] = $this->blockedOnPermission()->update($k[0]);
+                [$confirming] = $this->blockedOnTheGate()->update($k[0]);
 
                 $this->assertNotNull(
                     $confirming->pendingPermission(),
@@ -1126,13 +1136,14 @@ final class KeyBindingDriftTest extends TestCase
                     'and nothing is granted until the confirm is answered',
                 );
 
-                [$granted] = $confirming->update(new KeyMsg(KeyType::Char, 'y'));
+                [$granted, $cmd] = $confirming->update(new KeyMsg(KeyType::Char, 'y'));
                 $this->assertNull($granted->pendingPermission(), 'the confirm answers the prompt');
                 $this->assertSame(
-                    ['Bash' => true],
+                    ['Bash {"command":"make clean"}' => true],
                     $granted->permissionGrants(),
-                    'and THAT is what the row promises: the whole session, once confirmed',
+                    'and THAT is what the row promises: this call, for the whole session, once confirmed',
                 );
+                $this->reapReleasedBatch($cmd);
 
                 // The prose half. Everything above proves `a` no longer grants
                 // on its own; nothing else in this suite reads a description's
@@ -1656,6 +1667,51 @@ final class KeyBindingDriftTest extends TestCase
     }
 
     /** A live, ARMED permission prompt on a `Bash` call. */
+    /**
+     * A prompt the real {@see PermissionGateHook} raised (`default` mode asks
+     * for Bash) over a registered `Bash` tool — the one kind of prompt whose
+     * "always" writes a grant (audit F-P9).
+     */
+    private function blockedOnTheGate(): Chat
+    {
+        $hooks = new HookManager(new HookRegistry());
+        $hooks->register(new PermissionGateHook(new PermissionGate(PermissionMode::Default)));
+
+        [$blocked] = $this->chat([Message::user('clean up')])
+            ->registerTool('Bash', static fn(array $args): string => 'cleaned')
+            ->withHooks($hooks)
+            ->update(new AssistantMsg(Message::assistant('running')->withToolCalls([
+                new ToolCall('Bash', ['command' => 'make clean'], 'call_1'),
+            ])));
+        $this->assertNotNull($blocked->pendingPermission(), 'fixture: the gate must ask');
+        $this->assertSame(PermissionPromptStage::Armed, $blocked->permissionStage());
+
+        return $blocked;
+    }
+
+    /** Run a released batch's Cmd to completion so its forked child is reaped. */
+    private function reapReleasedBatch(?\Closure $cmd): void
+    {
+        $this->assertInstanceOf(\Closure::class, $cmd, 'a released batch hands back the Cmd that runs it');
+        $asyncCmd = $cmd();
+        $this->assertInstanceOf(\SugarCraft\Core\AsyncCmd::class, $asyncCmd);
+
+        $loop = \React\EventLoop\Loop::get();
+        $resolved = null;
+        $asyncCmd->promise->then(function ($msg) use (&$resolved, $loop): void {
+            $resolved = $msg;
+            $loop->stop();
+        });
+
+        if ($resolved === null) {
+            $safety = $loop->addTimer(10.0, static function () use ($loop): void { $loop->stop(); });
+            $loop->run();
+            $loop->cancelTimer($safety);
+        }
+
+        $this->assertInstanceOf(\SugarCraft\Crush\ToolResultsMsg::class, $resolved, 'the released batch did not complete');
+    }
+
     private function blockedOnPermission(): Chat
     {
         [$blocked] = $this->chat([Message::user('clean up')])->update(new PermissionRequestMsg(

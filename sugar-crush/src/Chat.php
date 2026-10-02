@@ -3248,20 +3248,41 @@ final class Chat implements Model
 
         $grants = $this->permissionGrants;
         if ($reply === PermissionReply::Always) {
-            $grants[$request->toolCall->name] = true;
-            $cleared['permissionGrants'] = $grants;
+            // KEYED ON THE CALL, AND ONLY FOR THE GATE'S QUESTION (audit
+            // F-P9). This used to be `$grants[<tool name>] = true`, which
+            // turned "Always" on `Bash ls` into session-wide consent to every
+            // later Bash ask, whatever the command — including asks a user's
+            // hooks.yaml script raised ("confirm before touching prod").
+            // permissionGrantKey() returns null for any ask a hook other than
+            // the gate raised, so "Always" there settles as "Once": the user
+            // hook's question will be put again on the next call.
+            $answeredAsk = null;
+            foreach ($jobs as $job) {
+                if ($job[0] === $request->toolCall) {
+                    $answeredAsk = $job[3];
+                    break;
+                }
+            }
+
+            $grantKey = $answeredAsk === null ? null : self::permissionGrantKey($request->toolCall, $answeredAsk);
+            if ($grantKey !== null) {
+                $grants[$grantKey] = true;
+                $cleared['permissionGrants'] = $grants;
+            }
         }
 
         // Drop the ASK the user just answered (and, under a fresh Always
-        // grant, this tool's other queued asks) - every other entry keeps its
-        // ASK, because consent for one call is not consent for another.
+        // grant, other queued asks the same grant answers) - every other entry
+        // keeps its ASK, because consent for one call is not consent for
+        // another.
         $jobs = array_map(
             static function (array $job) use ($request, $grants): array {
                 if ($job[3] === null) {
                     return $job;
                 }
 
-                $answered = $job[0] === $request->toolCall || ($grants[$job[0]->name] ?? false);
+                $key = self::permissionGrantKey($job[0], $job[3]);
+                $answered = $job[0] === $request->toolCall || ($key !== null && isset($grants[$key]));
 
                 // Drop ONLY the ASK the user just answered; slot 4 (the pre-hook
                 // note) rides across the re-entry so a settled question's
@@ -3609,7 +3630,11 @@ final class Chat implements Model
     }
 
     /**
-     * Tool names granted "always" for this session, as `[name => true]`.
+     * The calls granted "always" for this session, as `[grant key => true]`.
+     *
+     * Each key is a {@see permissionGrantKey()}: the tool name, a space, and
+     * the call's arguments as canonical JSON — so a grant covers one exact
+     * call, never the tool as a whole (audit F-P9).
      *
      * @return array<string, bool>
      */
@@ -4480,9 +4505,11 @@ final class Chat implements Model
      * ASK is the one decision this method cannot settle: the hook defers to
      * the user, so the call is neither run nor reported as denied here - it
      * is handed back in slot 3 for {@see beginToolCalls()} to suspend the
-     * batch on (crush_feat.md §1 E2). A tool the user has already answered
+     * batch on (crush_feat.md §1 E2). A call the user has already answered
      * {@see PermissionReply::Always} for skips that: the ASK becomes plain
-     * permission, with its HookContext intact so `PostToolUse` still runs.
+     * permission, with its HookContext intact so `PostToolUse` still runs —
+     * but only when {@see permissionGrantKey()} matches, i.e. the gate alone
+     * asked and the arguments are the granted ones (audit F-P9).
      *
      * @return array{0: ToolCall, 1: ?ToolResult, 2: ?HookContext, 3: ?\SugarCraft\Crush\Hooks\HookResult, 4: string}
      *     [the call to execute (arguments rewritten by a MODIFY hook), a
@@ -4526,7 +4553,13 @@ final class Chat implements Model
             // user was never shown.
             [$toolCall, $context] = self::applyRewrite($toolCall, $context, $hookResult);
 
-            return ($this->permissionGrants[$toolCall->name] ?? false)
+            // A grant answers only the question it was given for (audit
+            // F-P9): the gate's own ask, for these exact arguments. A user
+            // hook's ask — or a gate ask about a different command — yields
+            // a null key or a key nobody granted, and is put to the user.
+            $grantKey = self::permissionGrantKey($toolCall, $hookResult);
+
+            return $grantKey !== null && isset($this->permissionGrants[$grantKey])
                 ? [$toolCall, null, $context, null, $hookResult->additionalContext]
                 : [$toolCall, null, $context, $hookResult, $hookResult->additionalContext];
         }
@@ -4577,6 +4610,67 @@ final class Chat implements Model
      *
      * @return array{0: ToolCall, 1: HookContext}
      */
+    /**
+     * The identity a {@see PermissionReply::Always} grant is filed under for
+     * this call, or null when no grant may ever answer this ask (audit F-P9).
+     *
+     * NULL UNLESS THE GATE ALONE ASKED ({@see HookResult::askedOnlyBy()},
+     * stamped by the registry, which a hook cannot forge). A user hook's ASK
+     * is a question about this call's content — the reason the hook exists —
+     * and the Chat path used to let one "Always" on any earlier call of the
+     * same tool answer it with no prompt. That is F-P7's defect made
+     * session-wide; opencode deliberately scopes approvals to patterns for
+     * the same reason.
+     *
+     * OTHERWISE `<tool> <canonical JSON arguments>`: the arguments with every
+     * object's keys sorted recursively, so `{"a":1,"b":2}` and `{"b":2,"a":1}`
+     * are one call, encoded as Runtime's hook input is (slashes and unicode
+     * unescaped, invalid UTF-8 substituted). Exact arguments, deliberately not
+     * a command-prefix pattern: a prefix is a judgement about which commands
+     * are equivalent ("git log" ≡ "git log -p"?) that the gate's own rules
+     * already express, and the conservative reading of "always allow this"
+     * is "this call, again". Null if the arguments will not encode, in which
+     * case nothing is granted and the question is put again.
+     */
+    private static function permissionGrantKey(
+        ToolCall $toolCall,
+        \SugarCraft\Crush\Hooks\HookResult $ask,
+    ): ?string {
+        if (!$ask->askedOnlyBy(\SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook::NAME)) {
+            return null;
+        }
+
+        try {
+            $json = json_encode(
+                self::canonicalArguments($toolCall->arguments),
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+                    | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR,
+            );
+        } catch (\JsonException) {
+            return null;
+        }
+
+        return $toolCall->name . ' ' . $json;
+    }
+
+    /**
+     * $value with every string-keyed array's keys sorted, recursively; a
+     * list keeps its order (element order is meaning there).
+     */
+    private static function canonicalArguments(mixed $value): mixed
+    {
+        if (!is_array($value)) {
+            return $value;
+        }
+
+        $value = array_map(self::canonicalArguments(...), $value);
+        if (!array_is_list($value)) {
+            ksort($value, SORT_STRING);
+        }
+
+        return $value;
+    }
+
     private static function applyRewrite(
         ToolCall $toolCall,
         HookContext $context,

@@ -564,7 +564,7 @@ final class KeyBindingRegistry
 
         return [
             KeyBinding::new('permission.once', 'y', 'Allow this one call', $c),
-            KeyBinding::new('permission.always', 'a', 'Ask to allow this tool for the whole session', $c),
+            KeyBinding::new('permission.always', 'a', 'Ask to allow this call for the whole session', $c),
             KeyBinding::new('permission.deny', 'n', 'Refuse the call (or Esc)', $c),
             KeyBinding::new('permission.rearm', 'Enter', 'Make the answer keys live again', $c),
         ];

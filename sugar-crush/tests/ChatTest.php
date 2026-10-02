@@ -21,6 +21,7 @@ use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
+use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookInterface;
@@ -47,6 +48,8 @@ use SugarCraft\Crush\Sessions\BackgroundSession;
 use SugarCraft\Crush\Sessions\BackgroundSessionStatus;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\PermissionReplyMsg;
+use SugarCraft\Crush\Permissions\PermissionGate;
+use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Permissions\PermissionPromptStage;
 use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\Support\ToolIpcFiles;
@@ -4736,7 +4739,10 @@ final class ChatTest extends TestCase
             new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'safe'], 'call_1'),
         ])));
         [$granted, $resumeCmd] = $suspended->update(new PermissionReplyMsg(PermissionReply::Always));
-        $this->assertSame(['bash' => true], $granted->permissionGrants());
+        // Since audit F-P9 a user hook's question is never grantable: "Always"
+        // on it settles as "Once", so the smuggler gets no standing grant to
+        // hide behind in the first place.
+        $this->assertSame([], $granted->permissionGrants(), "a user hook's ask must not be grantable");
 
         $afterFirst = $this->awaitToolResults($granted, $resumeCmd);
 
@@ -4744,7 +4750,8 @@ final class ChatTest extends TestCase
             new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'ls'], 'call_2'),
         ])));
 
-        $this->assertNull($secondTurn->pendingPermission(), 'the granted tool was prompted for again');
+        // The re-scan DENIES the smuggled rewrite before any question is put.
+        $this->assertNull($secondTurn->pendingPermission(), 'the smuggled rewrite reached a prompt instead of the guard');
         $this->assertInstanceOf(\Closure::class, $secondCmd);
 
         $final = $this->awaitToolResults($secondTurn, $secondCmd);
@@ -4871,28 +4878,33 @@ final class ChatTest extends TestCase
     }
 
     /**
-     * "Always" is the only reply that outlives the call it answers: the tool
-     * is granted for the rest of the session, so a later ASK for the same
-     * tool resolves without prompting again (opencode's `approved: Rule[]`).
+     * "Always" is the only reply that outlives the call it answers: the
+     * gate's question for this exact call is granted for the rest of the
+     * session, so the same call asked again resolves without prompting
+     * (opencode's `approved: Rule[]`).
+     *
+     * Raised by the real {@see PermissionGateHook} since audit F-P9: a grant
+     * answers only the gate's own question, keyed on the call's arguments
+     * (see {@see \SugarCraft\Crush\Tests\Permissions\ChatAlwaysGrantScopeTest}
+     * for what it must NOT answer).
      */
-    public function testAlwaysReplyGrantsTheToolForTheRestOfTheSession(): void
+    public function testAlwaysReplyGrantsTheGatesQuestionForTheRestOfTheSession(): void
     {
         $sentinel = $this->tempPath('sc_perm_');
-        $calls = 0;
-        $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Run it?', $calls));
+        $chat = $this->chatAwaitingPermission($sentinel, $this->defaultModeGate());
 
         [$suspended] = $chat->update(new AssistantMsg($this->askingToolCall()));
         [$granted, $resumeCmd] = $suspended->update(new PermissionReplyMsg(PermissionReply::Always));
 
-        $this->assertSame(['bash' => true], $granted->permissionGrants());
+        $this->assertSame(['bash {"cmd":"rm -rf /"}' => true], $granted->permissionGrants());
 
         $afterFirst = $this->awaitToolResults($granted, $resumeCmd);
         $this->assertSame('total 0', $afterFirst->history[1]->content);
 
-        // Second turn, same tool, same asking hook: no prompt this time.
+        // Second turn, same call, same asking gate: no prompt this time.
         [$secondTurn, $secondCmd] = $afterFirst->update(new AssistantMsg($this->askingToolCall()));
 
-        $this->assertNull($secondTurn->pendingPermission(), 'an always-granted tool asked again');
+        $this->assertNull($secondTurn->pendingPermission(), 'an always-granted call asked again');
         $this->assertInstanceOf(\Closure::class, $secondCmd);
 
         $final = $this->awaitToolResults($secondTurn, $secondCmd);
@@ -4940,7 +4952,9 @@ final class ChatTest extends TestCase
     public function testPermissionKeysDecideThePrompt(array $keys, PermissionReply $expected): void
     {
         $sentinel = $this->tempPath('sc_perm_');
-        $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Run it?'));
+        // The gate's own question, the only one a grant may answer (F-P9), so
+        // an Always is visible as a grant and not indistinguishable from Once.
+        $chat = $this->chatAwaitingPermission($sentinel, $this->defaultModeGate());
 
         [$suspended] = $chat->update(new AssistantMsg($this->askingToolCall()));
 
@@ -4963,7 +4977,7 @@ final class ChatTest extends TestCase
 
         $this->assertNull($answered->pendingPermission());
         $this->assertSame(
-            $expected === PermissionReply::Always ? ['bash' => true] : [],
+            $expected === PermissionReply::Always ? ['bash {"cmd":"rm -rf /"}' => true] : [],
             $answered->permissionGrants(),
         );
         $this->assertSame($expected === PermissionReply::Reject, !$answered->inFlight);
@@ -5043,7 +5057,7 @@ final class ChatTest extends TestCase
      * A Chat with two asking tools, each recording that it ran by writing its
      * own sentinel - so a call released by somebody else's answer is visible.
      */
-    private function chatAwaitingTwoPermissions(string $alphaSentinel, string $betaSentinel): Chat
+    private function chatAwaitingTwoPermissions(string $alphaSentinel, string $betaSentinel, ?HookInterface $hook = null): Chat
     {
         return (new Chat())
             ->registerTool('alpha', static function (array $args) use ($alphaSentinel): string {
@@ -5056,7 +5070,17 @@ final class ChatTest extends TestCase
 
                 return 'beta ok';
             })
-            ->withHooks($this->hookManagerWith($this->askHook('Approve?')));
+            ->withHooks($this->hookManagerWith($hook ?? $this->askHook('Approve?')));
+    }
+
+    /**
+     * The real permission gate in `default` mode, which ASKS for every tool
+     * these fixtures register (none of them is a known read-only tool) — the
+     * one asker a {@see PermissionReply::Always} grant may answer (F-P9).
+     */
+    private function defaultModeGate(): HookInterface
+    {
+        return new PermissionGateHook(new PermissionGate(PermissionMode::Default));
     }
 
     private function twoAskingToolCalls(): Message
@@ -5105,20 +5129,20 @@ final class ChatTest extends TestCase
     }
 
     /**
-     * "Always" is scoped to the tool it was answered for: it clears that
-     * tool's queued asks and nothing else, so a different tool in the same
+     * "Always" is scoped to the call it was answered for: it clears that
+     * call's queued asks and nothing else, so a different tool in the same
      * batch still has to be decided on its own.
      */
     public function testAlwaysForOneToolDoesNotReleaseAnAskForAnother(): void
     {
         $alpha = $this->tempPath('sc_perm_a_');
         $beta = $this->tempPath('sc_perm_b_');
-        $chat = $this->chatAwaitingTwoPermissions($alpha, $beta);
+        $chat = $this->chatAwaitingTwoPermissions($alpha, $beta, $this->defaultModeGate());
 
         [$suspended] = $chat->update(new AssistantMsg($this->twoAskingToolCalls()));
         [$granted, $cmd] = $suspended->update(new PermissionReplyMsg(PermissionReply::Always));
 
-        $this->assertSame(['alpha' => true], $granted->permissionGrants());
+        $this->assertSame(['alpha []' => true], $granted->permissionGrants());
         $this->assertNotNull($granted->pendingPermission(), 'an always for alpha released beta');
         $this->assertSame('beta', $granted->pendingPermission()->toolCall->name);
         $this->assertSame([], $granted->history);
