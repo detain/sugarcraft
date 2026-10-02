@@ -10339,7 +10339,11 @@ final class Chat implements Model
         // Counted here, at render time, from the list being rendered - a
         // command count written into a docblock or a test literal is exactly
         // the number that goes stale the next time a row is added.
-        $lines = ['Slash commands (' . count($commands) . '):'];
+        // The heading is clipped like every row below (audit R4): under the old
+        // 20-column floor its 20 columns always fit, which hid that it was the
+        // one line this method never clipped.
+        $budget = max(1, ($this->cols ?? 80) - self::HELP_CHROME_COLS);
+        $lines = [self::clip('Slash commands (' . count($commands) . '):', $budget)];
 
         // GROUPED, not walked in declared order: the registry INTERLEAVES its
         // categories - the 'Session' rows arrive in several separate runs, and
@@ -10361,15 +10365,14 @@ final class Chat implements Model
             $byCategory[$spec->category][] = $spec;
         }
 
-        // max(20, …) is {@see Renderer}'s own floor convention for every box it
-        // sizes, kept rather than invented. It does mean the listing can be
-        // over-wide on a very narrow terminal, and the exact threshold is 26
-        // columns of TERMINAL: below that, the 20-column floor plus the 6
-        // columns of shell chrome it is painted inside exceeds the terminal
-        // itself. Exactly as every other box here can be at that size - and at
-        // that size the status bar is over-wide too, at 54 columns, measured.
-        // Not made worse by this command, not fixed by it.
-        $budget = max(20, ($this->cols ?? 80) - self::HELP_CHROME_COLS);
+        // max(1, …), the floor {@see Renderer} and
+        // {@see Commands\TranscriptTable} now size their boxes by (audit R4).
+        // The old max(20, …) floor made the listing over-wide on any terminal
+        // under 30 columns: 20 columns of rows painted inside 10 of chrome is
+        // wider than the terminal, and an over-wide transcript line collides
+        // with the row below. With a floor of 1 every row is clipped to what
+        // actually fits, down to a lone "…". ($budget is computed above, for
+        // the heading.)
         foreach ($byCategory as $category => $rows) {
             $lines[] = '';
             $lines[] = self::clip($category, $budget);

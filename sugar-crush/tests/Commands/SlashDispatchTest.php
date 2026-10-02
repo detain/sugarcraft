@@ -450,7 +450,7 @@ final class SlashDispatchTest extends TestCase
      * - the listing's natural width is measured at a 400-column terminal, where
      *   nothing clips it (73 columns today - the `/fork <prompt>` row - but the
      *   test never says so);
-     * - the budget restates `handleHelpCommand()`'s own `max(20, cols - chrome)`
+     * - the budget restates `handleHelpCommand()`'s own `max(1, cols - chrome)`
      *   with `chrome` read off the constant by reflection. Restating it is the
      *   point: a change to the chrome arithmetic should have to be made twice,
      *   once in the layout and once in what the layout promises.
@@ -466,8 +466,11 @@ final class SlashDispatchTest extends TestCase
             'fixture: the listing has real width to lose',
         );
 
-        foreach ([20, 30, 40, 60, 80, 100, 120] as $cols) {
-            $budget = max(20, $cols - $chrome);
+        // 8, 12 and 20 are under the old max(20, …) floor's 30-column
+        // threshold, where the listing used to paint wider than the terminal
+        // (audit R4: the renderer and TranscriptTable floor at 1 now too).
+        foreach ([8, 12, 20, 30, 40, 60, 80, 100, 120] as $cols) {
+            $budget = max(1, $cols - $chrome);
 
             $this->assertSame(
                 min($natural, $budget),
