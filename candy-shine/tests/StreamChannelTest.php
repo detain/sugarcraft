@@ -38,7 +38,17 @@ final class StreamChannelTest extends TestCase
             'utf8'          => ["# 見出し\n\n日本語テキスト 🚀 combining: é\n\n# Two\n"],
             'glued-heading' => ["# Top\n\npara\n# glued\n"],
             'table-refuse'  => ["# Top\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n# After\n"],
-            'list-refuse'   => ["# Top\n\n- one\n- two\n\n# After\n"],
+            'list-heading'  => ["# Top\n\n- one\n- two\n\n# After\n"],
+            // A heading after a list item is a cut; every list shape must
+            // still render byte-identically on its own.
+            'list-loose'    => ["# A\n\n- one\n\n- two\n\n# B\n\n- three\n"],
+            'list-ordered'  => ["# A\n\n1. one\n2. two\n\n# B\n\n3) x\n"],
+            'list-nested'   => ["# A\n\n- one\n  - two\n    - three\n\n# B\n\ntext\n"],
+            'list-fenced'   => ["- a\n  ```\n  x\n  ```\n\n# H\n\n- b\n"],
+            'list-tasks'    => ["# A\n\n- [ ] todo\n- [x] done\n\n# B\n\n- [ ] more\n"],
+            'list-ref'      => ["- see [x][a]\n\n# H\n\n- [a]: https://e.x\n\n[a]: https://e.x\n"],
+            'list-lazy'     => ["- a\nlazy\n\n# H\n"],
+            'list-empty'    => ["-\n\n# H\n\n*\n"],
             'indent-refuse' => ["# Top\n\n    code\n\n# After\n"],
             'raw-html'      => ["# Top\n\n<pre>\n# inside\n</pre>\n\n# After\n"],
             'trailing-run'  => ["# Top\n\nbody\n\n\n"],
@@ -164,8 +174,8 @@ final class StreamChannelTest extends TestCase
 
     /**
      * The defensive refusals: a heading preceded by a blank line is NOT cut
-     * when the previous content line was a quote / list / indented-code /
-     * table row. The identity sweep cannot see this (the cut would also be
+     * when the previous content line was a quote / indented-code / table
+     * row. The identity sweep cannot see this (the cut would also be
      * byte-safe), so the chunk SHAPE is the pin that holds the published
      * law of stream().
      *
@@ -176,7 +186,9 @@ final class StreamChannelTest extends TestCase
         return [
             'glued-heading-is-not-a-boundary' => ["# Top\n\npara\n# glued\n", 1],
             'after-quote-refused'             => ["q\n\n> quote\n\n# AfterQuote\n", 1],
-            'after-list-refused'              => ["# Top\n\n- one\n\n# After\n", 1],
+            // A heading after a list item is a cut: a reply whose
+            // sections each end in a list must not stream as one tail.
+            'after-list-cuts'                 => ["# Top\n\n- one\n\n# After\n", 3],
             'after-indented-code-refused'     => ["# Top\n\n    code\n\n# After\n", 1],
             'after-table-refused'             => ["# Top\n\n| a |\n|---|\n| 1 |\n\n# After\n", 1],
             'bare-heading-twin-cuts'          => ["# Top\n\nprose\n\n# After\n", 3],

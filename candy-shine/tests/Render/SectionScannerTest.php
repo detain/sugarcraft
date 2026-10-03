@@ -75,4 +75,22 @@ final class SectionScannerTest extends TestCase
         $this->assertSame(["# A\n\none\n\n"], $scanner->push("# A\n\none\n\n# B\n\ntw"));
         $this->assertSame("# B\n\n", $scanner->openSection());
     }
+
+    public function testAHeadingAfterAListItemIsABoundary(): void
+    {
+        $scanner = new SectionScanner();
+
+        $this->assertSame(
+            ["# A\n\n- one\n- two\n\n"],
+            $scanner->push("# A\n\n- one\n- two\n\n# B\n\n1. three\n\n"),
+        );
+        $this->assertSame(["# B\n\n1. three\n\n"], $scanner->push("## C\n"));
+    }
+
+    public function testAHeadingGluedToAListItemIsStillNotABoundary(): void
+    {
+        $scanner = new SectionScanner();
+
+        $this->assertSame([], $scanner->push("# A\n\n- one\n# B\n"));
+    }
 }

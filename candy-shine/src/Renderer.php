@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shine;
 
+use SugarCraft\Shine\Render\AutolinkMarker;
 use SugarCraft\Shine\Render\BlockContext;
 use SugarCraft\Shine\Render\BlockKind;
 use SugarCraft\Shine\Render\BlockStack;
@@ -19,6 +20,8 @@ use SugarCraft\Sprinkles\Table\Table as SprinklesTable;
 use League\CommonMark\Environment\Environment;
 use League\CommonMark\Event\DocumentPreParsedEvent;
 use League\CommonMark\Extension\Autolink\AutolinkExtension;
+use League\CommonMark\Extension\Autolink\EmailAutolinkParser;
+use League\CommonMark\Extension\CommonMark\Parser\Inline\AutolinkParser;
 use League\CommonMark\Extension\CommonMark\CommonMarkCoreExtension;
 use League\CommonMark\Extension\CommonMark\Node\Block\BlockQuote;
 use League\CommonMark\Extension\CommonMark\Node\Block\FencedCode;
@@ -200,6 +203,11 @@ final class Renderer
             $env->addExtension(new StrikethroughExtension());
             $env->addExtension(new AutolinkExtension());
             $env->addExtension(new DescriptionListExtension());
+            // Tag autolinks so renderLink() can tell `<a@b.c>` from
+            // `[a@b.c](mailto:a@b.c)` — the parser builds both as the same
+            // Link. One priority above each wrapped parser so it runs first.
+            $env->addInlineParser(new AutolinkMarker(new AutolinkParser()), 51);
+            $env->addInlineParser(new AutolinkMarker(new EmailAutolinkParser()), 1);
             // Fires once per parse, before any line is read, on the fresh
             // map the parse resolves references against. Seeded entries go
             // in first, so the section's own duplicates lose to them, which
@@ -283,7 +291,7 @@ final class Renderer
      * Input is buffered only until the next PROVABLE top-level boundary:
      * a column-0 ATX heading outside fenced and raw-HTML blocks, either
      * preceded by a blank line and not directly following a blockquote,
-     * list-item, indented-code, or table row (defensive refusals — such a
+     * indented-code, or table row (defensive refusals — such a
      * heading can never be absorbed across the cut, but the hold keeps the
      * contract airtight against parser subtleties), or straight after a
      * closing code fence. The parser confirms every such boundary before a
@@ -1214,12 +1222,15 @@ final class Renderer
         $blockStyle = $this->styleSheet->for(BlockKind::BlockQuote, $depth);
         $cascadedStyle = StyleCascade::merge($parentStyle, $blockStyle);
 
-        // Blockquote adds 2 cells of indent and 1 margin unit — its own
-        // share only: the stack sums the shares of every enclosing block.
+        // The stack charges every BlockQuote a 2-cell margin, which is the
+        // whole `▎ ` bar column, so the quote's own indent share is 0.
+        // Charging the bar as indent on top of the margin wrapped quoted
+        // text 2 cells short of the width it is given; glamour likewise
+        // charges a quote only its indent, never a margin.
         $newCtx = new BlockContext(
             BlockKind::BlockQuote,
             depth: $depth + 1,
-            accumulatedIndent: 2,
+            accumulatedIndent: 0,
             cascadedStyle: $cascadedStyle,
         );
         $this->blockStack->push($newCtx);
@@ -1348,6 +1359,18 @@ final class Renderer
         $insideTable = $this->inTableCell;
         $hyperlinks  = $this->emitHyperlinks && !($insideTable && !$this->inlineTableLinks);
         $showSuffix  = !$insideTable || $this->inlineTableLinks;
+
+        // glamour shows an email autolink as its address alone, hyperlinked
+        // to the mailto: URL in the link-text style, never with a
+        // `(mailto:...)` suffix: the URL only repeats the visible address.
+        // An explicit `[a@b.c](mailto:a@b.c)` stays a labelled link there.
+        if ($l->data->get(AutolinkMarker::DATA_KEY, false) === true
+            && $text !== '' && $text !== $url
+            && str_starts_with(strtolower($url), 'mailto:')
+        ) {
+            $styledText = $linkText->render($text);
+            return $hyperlinks ? Ansi::hyperlink($url, $styledText) : $styledText;
+        }
 
         $isAutolink = $text === '' || $text === $url;
         if (!$isAutolink && $this->textCase !== null) {

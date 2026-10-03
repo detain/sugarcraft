@@ -559,10 +559,22 @@ final class Theme
         if (!is_file($path)) {
             throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]));
         }
-        $raw = file_get_contents($path);
+        // The read failure is reported by the exception below, so the
+        // warning file_get_contents() raises (an unreadable file, a
+        // directory swapped in after is_file()) is captured for its message
+        // rather than leaked to the caller's error handler or the console.
+        $warning = null;
+        set_error_handler(static function (int $errno, string $message) use (&$warning): bool {
+            $warning = $message;
+            return true;
+        });
+        try {
+            $raw = file_get_contents($path);
+        } finally {
+            restore_error_handler();
+        }
         if ($raw === false) {
-            $error = error_get_last();
-            $msg = $error['message'] ?? 'unknown error';
+            $msg = $warning ?? 'unknown error';
             throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]) . ": {$msg}");
         }
         return self::fromJsonString($raw);

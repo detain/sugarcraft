@@ -188,4 +188,27 @@ final class SectionStreamTest extends TestCase
         $this->assertStringContainsString('https://r.x', $preview[0], 'a cached body is not reused once a later definition exists');
         $this->assertRendersLike($doc, $preview);
     }
+
+    /**
+     * A reply whose sections each end in a list streams section by section:
+     * each one is answered as soon as the next heading arrives, instead of
+     * the whole reply staying one open tail re-rendered every frame.
+     */
+    public function testSectionsEndingInListsAreAnsweredIncrementally(): void
+    {
+        $stream = new SectionStream($this->renderer());
+
+        $this->assertSame([], $stream->push("# A\n\n- one\n- two\n\n"));
+        $first = $stream->push("# B\n\n1. three\n\n");
+        $this->assertCount(1, $first);
+        $this->assertStringContainsString('two', $first[0]);
+        $second = $stream->push("# C\n\n- four\n");
+        $this->assertCount(1, $second);
+        $this->assertStringContainsString('three', $second[0]);
+
+        $this->assertRendersLike(
+            "# A\n\n- one\n- two\n\n# B\n\n1. three\n\n# C\n\n- four\n",
+            [...$first, ...$second, ...$stream->finish()],
+        );
+    }
 }

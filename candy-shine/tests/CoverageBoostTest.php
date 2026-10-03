@@ -203,6 +203,47 @@ final class CoverageBoostTest extends TestCase
         }
     }
 
+    /**
+     * The read failure surfaces only as the exception: the warning
+     * file_get_contents() raises must not reach the caller's error handler
+     * (or the console), and its reason must survive into the message.
+     */
+    #[WithoutErrorHandler]
+    public function testFromJsonUnreadableFileRaisesNoWarningAndKeepsReason(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('chmod(0) does not make files unreadable on Windows.');
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'shine_unreadable');
+        chmod($tmp, 0);
+        if (is_readable($tmp)) {
+            chmod($tmp, 0644);
+            unlink($tmp);
+            $this->markTestSkipped('Running as a user that can read mode-0 files (root).');
+        }
+
+        $warnings = [];
+        set_error_handler(static function (int $errno, string $message) use (&$warnings): bool {
+            $warnings[] = $message;
+            return true;
+        });
+        $caught = null;
+        try {
+            Theme::fromJson($tmp);
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        } finally {
+            restore_error_handler();
+            chmod($tmp, 0644);
+            unlink($tmp);
+        }
+
+        $this->assertNotNull($caught, 'fromJson() must throw on an unreadable file');
+        $this->assertSame([], $warnings, 'no PHP warning may leak to the caller\'s error handler');
+        $this->assertStringContainsString('Permission denied', $caught->getMessage());
+    }
+
     public function testFromJsonRejectsNonFilePath(): void
     {
         $this->expectException(\RuntimeException::class);
