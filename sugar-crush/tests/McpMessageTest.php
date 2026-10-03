@@ -198,6 +198,28 @@ final class McpMessageTest extends TestCase
         $this->assertNull($msg->errorMessage());
     }
 
+    /**
+     * The error envelope is third-party wire data: a server that sends a
+     * non-string `message` must read as "no message", not throw a TypeError
+     * out of a `?string` accessor — ClaudeCodeMcpClient::connect() formats an
+     * initialize refusal through this call, and a TypeError is not the
+     * RuntimeException its callers catch.
+     */
+    public function testErrorMessageIsNullWhenTheServerSendsANonStringMessage(): void
+    {
+        foreach (['5', '1.5', 'true', '["x"]', '{"a":1}', 'null'] as $literal) {
+            $msg = McpMessage::parse('{"jsonrpc":"2.0","id":"1","error":{"code":1,"message":' . $literal . '}}');
+
+            $this->assertNotNull($msg, $literal);
+            $this->assertTrue($msg->isError(), $literal);
+            $this->assertNull($msg->errorMessage(), $literal);
+        }
+
+        $msg = McpMessage::parse('{"jsonrpc":"2.0","id":"1","error":{"code":1,"message":"refused"}}');
+        $this->assertNotNull($msg);
+        $this->assertSame('refused', $msg->errorMessage());
+    }
+
     // --- Helpers for type guards ---
 
     public function testIsRequestTrueForRequestWithId(): void

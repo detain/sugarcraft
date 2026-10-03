@@ -1302,7 +1302,8 @@ final class Renderer
      * The scan is also non-fatal. Of candy-mouse's malformed-markup matrix
      * (the {@see \SugarCraft\Mouse\Scan} class docblock) only a DUPLICATE id
      * throws — an orphan close or an unclosed open is skipped and registers
-     * no zone, and a lone sentinel is measured as text — and this runs inside
+     * no zone, and a lone sentinel's own 3 bytes are skipped as zero cells
+     * while the text after it is measured as ordinary text — and this runs inside
      * `Chat::view()`, where an escaping exception kills the whole TUI.
      * Degrading to "no zones this frame" costs at most an unclickable frame;
      * the alternative is a crash. Untrusted text is sentinel-stripped on the

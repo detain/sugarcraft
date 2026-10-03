@@ -693,4 +693,48 @@ final class BackgroundSupervisorTest extends TestCase
         $updatedSession = $supervisor->getSession('s1');
         $this->assertSame('Hello, World!', $updatedSession->output);
     }
+
+    /**
+     * isProcessRunning() ends in a signal-0 probe, and on a build without
+     * ext-posix that probe does not exist: the liveness check must answer
+     * from procfs instead of fataling on an undefined posix_kill(). `php -n`
+     * loads no shared extensions, which is the posix-less build this guards.
+     * Both polarities run in the same child — a live pid (the child itself)
+     * and a pid the kernel does not list — so "true" is not an accident of a
+     * check that answers true for everything.
+     */
+    public function testLivenessWithoutPosixAnswersFromProcfs(): void
+    {
+        if (!is_readable('/proc/self/stat')) {
+            $this->markTestSkipped('procfs is not mounted; the posix-less witness is procfs');
+        }
+
+        $autoload = \dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $code = 'require ' . var_export($autoload, true) . ';'
+            . '$s = new ' . BackgroundSupervisor::class . '();'
+            . '$m = new ReflectionMethod($s, "isProcessRunning");'
+            . '$gone = 1; while (file_exists("/proc/" . $gone)) { $gone++; }'
+            . 'echo json_encode(["posix" => function_exists("posix_kill"),'
+            . ' "self" => $m->invoke($s, getmypid()), "gone" => $m->invoke($s, $gone)]);';
+
+        $process = proc_open(
+            [PHP_BINARY, '-n', '-r', $code],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($process);
+        fclose($pipes[0]);
+        $out = (string) stream_get_contents($pipes[1]);
+        $err = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exit = proc_close($process);
+
+        $decoded = json_decode($out, true);
+        $this->assertSame(0, $exit, "the posix-less liveness check failed:\n" . $out . $err);
+        $this->assertIsArray($decoded, "the probe reported nothing usable:\n" . $out . $err);
+        $this->assertFalse($decoded['posix'], 'php -n still loaded ext-posix; this probe cannot see the guard');
+        $this->assertTrue($decoded['self'], 'a running process read as not running');
+        $this->assertFalse($decoded['gone'], 'a pid the kernel does not list read as running');
+    }
 }

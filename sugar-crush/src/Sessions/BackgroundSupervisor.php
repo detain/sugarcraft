@@ -1433,6 +1433,14 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
             }
         }
 
+        // A build without ext-posix has no signal-0 probe; procfs is then the
+        // only witness, and the stat read above already answered it. With
+        // neither, nothing on this host can show the pid alive, which is the
+        // same footing stopBySignal() stands on when it refuses to signal.
+        if (!\function_exists('posix_kill')) {
+            return $stat !== null;
+        }
+
         // Send signal 0 — checks if process exists without sending any signal
         return posix_kill($pid, 0);
     }

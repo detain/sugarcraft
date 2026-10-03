@@ -299,6 +299,44 @@ final class SessionTest extends TestCase
     }
 
     /**
+     * With HOME unset, the home lookup falls back past the environment — and
+     * on a build without ext-posix that fallback must degrade to the
+     * documented last resort (the cwd), not fatal on an undefined
+     * posix_geteuid(). `php -n` loads no shared extensions, which is the
+     * posix-less build this guards; the child gets an environment with
+     * neither HOME nor USERPROFILE so the env arm cannot answer first.
+     */
+    public function testHomeFallbackWithoutHomeOrPosixDegradesToTheCwd(): void
+    {
+        $autoload = \dirname(__DIR__) . '/vendor/autoload.php';
+        $code = 'require ' . var_export($autoload, true) . ';'
+            . '$m = new ReflectionMethod(' . var_export(Session::class, true) . ', "homeDirectory");'
+            . 'echo json_encode(["posix" => function_exists("posix_geteuid"), "home" => $m->invoke(null)]);';
+
+        $process = proc_open(
+            [PHP_BINARY, '-n', '-r', $code],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            $this->tempDir,
+            ['PATH' => (string) getenv('PATH')],
+        );
+        $this->assertIsResource($process);
+        fclose($pipes[0]);
+        $out = (string) stream_get_contents($pipes[1]);
+        $err = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exit = proc_close($process);
+
+        $decoded = json_decode($out, true);
+        $this->assertSame(0, $exit, "the posix-less home lookup failed:\n" . $out . $err);
+        $this->assertIsArray($decoded, "the probe reported nothing usable:\n" . $out . $err);
+        // Known-negative for the premise: the child really has no posix.
+        $this->assertFalse($decoded['posix'], 'php -n still loaded ext-posix; this probe cannot see the guard');
+        $this->assertSame(realpath($this->tempDir), realpath((string) $decoded['home']));
+    }
+
+    /**
      * Recursively remove a directory.
      */
     private function removeDirectory(string $dir): void

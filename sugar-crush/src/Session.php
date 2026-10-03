@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush;
 
 use SugarCraft\Core\Util\AtomicJsonFile;
+use SugarCraft\Crush\Support\HomeDirectory;
 
 /**
  * Session persistence for sugar-crush.
@@ -200,23 +201,14 @@ final class Session
 
     /**
      * Return the home directory, falling back to environment detection.
+     *
+     * The env/passwd lookup is {@see HomeDirectory::resolved()}'s, which
+     * guards the posix calls: a build without ext-posix and with HOME unset
+     * reaches the cwd last resort instead of fataling on posix_geteuid().
      */
     private static function homeDirectory(): string
     {
-        // Try environment variable first (Early Exit)
-        $envHome = getenv('HOME');
-        if ($envHome !== false && $envHome !== '') {
-            return $envHome;
-        }
-
-        // Fall back to posix_get_home for POSIX systems
-        $posixHome = posix_getpwuid(posix_geteuid())['dir'] ?? null;
-        if ($posixHome !== null) {
-            return $posixHome;
-        }
-
-        // Last resort: current directory (should rarely happen)
-        return getcwd() ?: '/tmp';
+        return HomeDirectory::resolved() ?? (getcwd() ?: '/tmp');
     }
 
     /**

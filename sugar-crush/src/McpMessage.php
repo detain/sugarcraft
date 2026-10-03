@@ -307,12 +307,19 @@ final class McpMessage
 
     /**
      * Extract error message from error payload, or null if not an error.
+     *
+     * The payload is third-party wire data: a `message` that is not a string
+     * (a number, an object) reads as "no message" rather than escaping this
+     * `?string` accessor as a TypeError — callers format refusals through
+     * here and catch only RuntimeException.
      */
     public function errorMessage(): ?string
     {
         if ($this->error === null) {
             return null;
         }
-        return $this->error['message'] ?? null;
+        $message = $this->error['message'] ?? null;
+
+        return is_string($message) ? $message : null;
     }
 }
