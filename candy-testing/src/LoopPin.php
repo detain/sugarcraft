@@ -101,7 +101,9 @@ final class LoopPin
      * calls `pcntl_async_signals(true)` process-wide, at bootstrap time. A
      * Program does the same in {@see \SugarCraft\Core\Program::run()}, so for
      * most suites this is the production setting arriving earlier rather than a
-     * divergence — but it is not unconditional parity:
+     * divergence. run() hands async delivery back to whatever it found when it
+     * returns, so a pinned process stays async after every Program ends rather
+     * than flipping back and forth. It is not unconditional parity, though:
      * `Program::installSignalHandlers()` returns early under
      * `withoutSignalHandler` or `catchInterrupts: false`, and such a Program
      * never enables async signals at all. A suite built around one of those

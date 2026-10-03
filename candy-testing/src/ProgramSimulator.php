@@ -258,13 +258,16 @@ final class ProgramSimulator
     /**
      * Extract the model from a Program instance.
      *
-     * Uses the Program's public getModel() method rather than Reflection.
+     * Uses the Program's public {@see Program::model()} accessor rather than
+     * Reflection. Not `getModel()`: that is a deprecated delegating alias
+     * candy-core keeps only for external callers, and the harness must not be
+     * the reason it lingers (guarded by tests/DeprecatedCoreApiUsageTest.php).
      *
      * @return Model
      */
     private function getModelFromProgram(): Model
     {
-        return $this->program->getModel();
+        return $this->program->model();
     }
 
     /**
