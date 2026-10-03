@@ -84,6 +84,20 @@ use React\EventLoop\Loop;
  * anything holding a `Chat`. A process-wide sink is what those two constraints
  * leave.
  *
+ * STATIC SURFACE, PER-SESSION STATE (O-2a, Appendix O §4.2). Those two
+ * constraints fix where the EMITTERS write — a static entry point — and say
+ * nothing about where the rows are KEPT, and a process-global queue is the one
+ * thing a host running two sessions cannot have: concurrent turns would write
+ * into one inbox and whichever session drained first would show the other's
+ * warnings. So the inbox is now an instance, {@see NoticeSink}, and this class
+ * is a facade over the one it calls {@see current()}: the process's own sink
+ * ({@see process()}) unless a host routed elsewhere with {@see routeTo()} or
+ * {@see using()}. A turn child pins the sink that was current when it was
+ * forked ({@see enterForkedChild()}), so a parser deep inside that turn writes
+ * to the session that started it with no change at any call site. A TUI never
+ * routes, so for `bin/sugarcrush` every sentence below about "the sink" is
+ * about the process sink, exactly as before.
+ *
  * THE FORK IS THE PART THAT MAKES THIS NON-TRIVIAL, AND IT IS MEASURED, NOT
  * ASSUMED. On the interactive path a turn does not run in this process:
  * {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()} calls
@@ -306,57 +320,29 @@ final class RuntimeNoticeSink
      * bytes against 8,192 — under five times), which is E633's exact shape
      * and was caught by mutating the sentence, not the arithmetic.
      */
-    private const DATAGRAM_BYTES = 8192;
+    public const DATAGRAM_BYTES = 8192;
 
     /**
-     * Whether {@see arm()} has opened the inbox in this process.
+     * The process's own sink — the one a TUI launch arms and every emitter
+     * reaches when nothing more specific is current. Created on first use and
+     * never replaced: {@see reset()} empties it in place, so a
+     * {@see \SugarCraft\Crush\Host\WorkspaceContext} that captured it keeps
+     * pointing at the live inbox across a second `Bootstrap::chat()`.
      *
-     * FALSE IS THE DEFAULT AND IT MEANS "DROP", not "queue for later". See this
-     * class's doc-block: a notice recorded in a process that will never build a
-     * {@see \SugarCraft\Crush\Chat} has no reader, and the `error_log()` half
-     * of {@see warn()} is what that run gets.
+     * UNARMED UNTIL SOMETHING ARMS IT, AND UNARMED MEANS "DROP", not "queue for
+     * later" — see this class's doc-block: a notice recorded in a process that
+     * will never build a {@see \SugarCraft\Crush\Chat} has no reader, and the
+     * `error_log()` half of {@see warn()} is what that run gets.
      */
-    private static bool $armed = false;
-
-    /** @var list<string> The in-process backend. See this class's doc-block. */
-    private static array $queue = [];
-
-    /** Notices the in-process backend refused because {@see NOTICE_LIMIT} was reached. */
-    private static int $dropped = 0;
+    private static ?NoticeSink $process = null;
 
     /**
-     * Whether the per-turn budget (E199) is armed — true from the first
-     * {@see beginTurn()} until {@see reset()}.
-     *
-     * OPT-IN, AND THAT IS THE POINT: until a drain owner says where its turns
-     * begin, {@see drain()} must not start swallowing rows from callers whose
-     * contract predates the cap.
+     * The sink this process routes to instead of {@see $process}, or null for
+     * the process sink (O-2a). Set by {@see routeTo()} / {@see using()} in a host
+     * that runs several sessions, and pinned in a forked turn child by
+     * {@see enterForkedChild()}.
      */
-    private static bool $turnAccounting = false;
-
-    /** Notice rows surfaced to the transcript since {@see beginTurn()}, overflow row excluded. */
-    private static int $turnSurfaced = 0;
-
-    /** Whether this turn has already had its single {@see OVERFLOW_FORMAT} row. */
-    private static bool $turnOverflowAnnounced = false;
-
-    /** @var resource|null The read end of the transport, owned by this process. */
-    private static $transportRead = null;
-
-    /** @var resource|null The write end, inherited by every child forked after {@see arm()}. */
-    private static $transportWrite = null;
-
-    /**
-     * Removes the readable-watcher {@see notifyOnceWhenPending()} installed, or
-     * null when none is installed.
-     *
-     * A CLOSURE AND NOT A BOOL, so the fd and the loop it was registered on
-     * travel with the canceller. {@see reset()} must be able to take the
-     * watcher off the loop BEFORE it closes the stream, and a `removeReadStream`
-     * against `self::$transportRead` read at cancel time would be reaching for a
-     * property the caller may already have nulled.
-     */
-    private static ?\Closure $pendingWatcher = null;
+    private static ?NoticeSink $current = null;
 
     /**
      * Report a warning on BOTH channels: `error_log()` for the complete record,
@@ -419,10 +405,11 @@ final class RuntimeNoticeSink
      */
     public static function warn(string $message): void
     {
-        if (!(self::$transportWrite !== null && TuiErrorLog::destinationIsStderr(ini_get('error_log')))) {
+        $sink = self::current();
+        if (!($sink->hasTransport() && TuiErrorLog::destinationIsStderr(ini_get('error_log')))) {
             error_log($message);
         }
-        self::record($message);
+        $sink->record($message);
     }
 
     /**
@@ -436,38 +423,11 @@ final class RuntimeNoticeSink
      */
     public static function record(string $message): bool
     {
-        if (!self::$armed) {
-            // NOT AN OPTIMISATION AND NOT A GUARD AGAINST MISUSE. Nothing in
-            // this process will ever drain the inbox, so a row put in it is a
-            // row lost with more steps — see this class's doc-block, which
-            // measures what happens when this returns true anyway.
-            return false;
-        }
-
-        $notice = self::clip(trim($message));
-
-        if ($notice === '') {
-            return false;
-        }
-
-        if (self::$transportWrite !== null) {
-            // `@` is load-bearing, not noise — see this class's doc-block on
-            // the measured `errno=111` diagnostic. A datagram is all-or-nothing,
-            // so a short write is impossible and there is no resume loop.
-            $written = @fwrite(self::$transportWrite, $notice);
-
-            return $written !== false && $written > 0;
-        }
-
-        if (count(self::$queue) >= self::NOTICE_LIMIT) {
-            self::$dropped++;
-
-            return false;
-        }
-
-        self::$queue[] = $notice;
-
-        return true;
+        // An unarmed sink drops — NOT AN OPTIMISATION AND NOT A GUARD AGAINST
+        // MISUSE: nothing in this process will ever drain it, so a row put in
+        // it is a row lost with more steps. See this class's doc-block, which
+        // measures what happens when this returns true anyway.
+        return self::current()->record($message);
     }
 
     /**
@@ -486,19 +446,7 @@ final class RuntimeNoticeSink
      */
     public static function hasPending(): bool
     {
-        if (self::$queue !== [] || self::$dropped > 0) {
-            return true;
-        }
-
-        if (self::$transportRead === null) {
-            return false;
-        }
-
-        $read = [self::$transportRead];
-        $write = null;
-        $except = null;
-
-        return @stream_select($read, $write, $except, 0, 0) > 0;
+        return self::current()->hasPending();
     }
 
     /**
@@ -516,77 +464,7 @@ final class RuntimeNoticeSink
      */
     public static function drain(): array
     {
-        if (self::$turnOverflowAnnounced) {
-            // E199: this turn already got its overflow row. Everything after
-            // it is DISCARDED at the read, in this call — not deferred —
-            // because a transport left readable keeps hasPending() true and
-            // Chat's notice subscription firing on rows that will never
-            // surface. The turn's complete record is in the error_log()
-            // copy by construction; the budget protects the transcript, not
-            // the log.
-            self::discardPendingNotices();
-
-            return [];
-        }
-
-        $notices = self::$queue;
-        self::$queue = [];
-        $dropped = self::$dropped;
-        self::$dropped = 0;
-
-        if (self::$transportRead !== null) {
-            // Bounded by NOTICE_LIMIT per drain rather than "until empty": a
-            // child in a loop could otherwise hand one update() an unbounded
-            // batch, and the tick that follows will pick the rest up. The
-            // socket keeps them in the meantime — it is the queue.
-            // (The one exception is E199's truncation path below, where the
-            // rest is deliberately NOT picked up.)
-            for ($i = 0; $i < self::NOTICE_LIMIT; $i++) {
-                $datagram = @stream_socket_recvfrom(self::$transportRead, self::DATAGRAM_BYTES);
-                if ($datagram === false || $datagram === '') {
-                    break;
-                }
-                $notices[] = $datagram;
-            }
-        }
-
-        $unique = [];
-        foreach ($notices as $notice) {
-            if (!in_array($notice, $unique, true)) {
-                $unique[] = $notice;
-            }
-        }
-
-        if (self::$turnAccounting) {
-            $remaining = self::TURN_NOTICE_LIMIT - self::$turnSurfaced;
-
-            if (count($unique) > $remaining) {
-                $excess = count($unique) - max(0, $remaining);
-                $unique = $remaining > 0 ? array_slice($unique, 0, $remaining) : [];
-                self::$turnSurfaced += count($unique);
-                self::$turnOverflowAnnounced = true;
-
-                // ONE row for everything the turn will not surface: this
-                // batch's unique excess, the transport's unread remainder,
-                // and any array-backend refusals taken with it. Within-batch
-                // duplicates are not counted — they were never rows, which is
-                // what the de-duplication paragraph above has always meant.
-                // Not a second row per later drain — the budget is announced,
-                // then it holds.
-                $discarded = $excess + self::discardPendingNotices() + $dropped;
-                $unique[] = self::overflowNotice($discarded);
-
-                return $unique;
-            }
-
-            self::$turnSurfaced += count($unique);
-        }
-
-        if ($dropped > 0) {
-            $unique[] = self::overflowNotice($dropped);
-        }
-
-        return $unique;
+        return self::current()->drain();
     }
 
     /**
@@ -599,7 +477,7 @@ final class RuntimeNoticeSink
      * call site that owns the turn boundary. Since round 70 that call site
      * exists: {@see \SugarCraft\Crush\Chat::scheduleBackendCompletion()},
      * gated on the Chat's appointment flag, so a host with no appointed owner
-     * keeps the pre-E199 per-batch shape (see {@see $turnAccounting}).
+     * keeps the pre-E199 per-batch shape (the budget is opt-in per sink).
      * {@see reset()} takes the arming back off.
      *
      * IDEMPOTENT WITHIN A CALL, and re-calling it per turn is the intended
@@ -608,36 +486,7 @@ final class RuntimeNoticeSink
      */
     public static function beginTurn(): void
     {
-        self::$turnAccounting = true;
-        self::$turnSurfaced = 0;
-        self::$turnOverflowAnnounced = false;
-    }
-
-    /**
-     * Take everything still waiting and throw it away; return how many rows
-     * went (E199).
-     *
-     * Reads the transport DRY, not just up to a bound: this runs from the
-     * saturation paths, where the point is precisely that `hasPending()` must
-     * go false afterwards or Chat repaints on a payload nobody will show.
-     */
-    private static function discardPendingNotices(): int
-    {
-        $discarded = count(self::$queue) + self::$dropped;
-        self::$queue = [];
-        self::$dropped = 0;
-
-        if (self::$transportRead !== null) {
-            while (true) {
-                $datagram = @stream_socket_recvfrom(self::$transportRead, self::DATAGRAM_BYTES);
-                if ($datagram === false || $datagram === '') {
-                    break;
-                }
-                $discarded++;
-            }
-        }
-
-        return $discarded;
+        self::current()->beginTurn();
     }
 
     /**
@@ -646,6 +495,7 @@ final class RuntimeNoticeSink
      * reach the parent's transcript instead of dying with it.
      *
      * MUST BE CALLED BEFORE THE FIRST FORK, which is why the call site is
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::workspace()}, the non-UI half of
      * {@see \SugarCraft\Crush\Cli\Bootstrap::chat()} — a turn cannot start
      * before the `Chat` that runs it exists. Nothing enforces the ordering at
      * runtime because nothing can: a child that inherited no fd is
@@ -674,43 +524,19 @@ final class RuntimeNoticeSink
      */
     public static function arm(bool $crossFork = true): bool
     {
-        if (self::$armed) {
-            return self::$transportWrite !== null;
-        }
-
-        self::$armed = true;
-
-        if (!$crossFork) {
-            return false;
-        }
-
-        $pair = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_DGRAM, 0);
-
-        if ($pair === false) {
-            return false;
-        }
-
-        [self::$transportRead, self::$transportWrite] = $pair;
-        stream_set_blocking(self::$transportRead, false);
-        // Non-blocking on the WRITE end is the half that matters: a child that
-        // blocked here would stall the turn behind a diagnostic nobody is
-        // reading. Overflow degrades to a dropped datagram — measured at 167
-        // in this class's doc-block — and the error_log() copy still has the text.
-        stream_set_blocking(self::$transportWrite, false);
-
-        return true;
+        return self::current()->arm($crossFork);
     }
 
     /** Whether {@see arm()} has run in this process, on either backend. */
     public static function isArmed(): bool
     {
-        return self::$armed;
+        return self::current()->isArmed();
     }
 
     /** Whether {@see arm()} got the cross-fork transport rather than the array. */
     public static function hasTransport(): bool
     {
-        return self::$transportWrite !== null;
+        return self::current()->hasTransport();
     }
 
     /**
@@ -775,25 +601,7 @@ final class RuntimeNoticeSink
      */
     public static function notifyOnceWhenPending(\Closure $notify): bool
     {
-        if (self::$transportRead === null) {
-            return false;
-        }
-
-        self::cancelPendingNotification();
-
-        $loop = Loop::get();
-        $stream = self::$transportRead;
-
-        $loop->addReadStream($stream, static function () use ($notify): void {
-            self::cancelPendingNotification();
-            $notify();
-        });
-
-        self::$pendingWatcher = static function () use ($loop, $stream): void {
-            $loop->removeReadStream($stream);
-        };
-
-        return true;
+        return self::current()->notifyOnceWhenPending($notify);
     }
 
     /**
@@ -805,18 +613,13 @@ final class RuntimeNoticeSink
      */
     public static function cancelPendingNotification(): void
     {
-        $canceller = self::$pendingWatcher;
-        self::$pendingWatcher = null;
-
-        if ($canceller !== null) {
-            $canceller();
-        }
+        self::current()->cancelPendingNotification();
     }
 
     /** Whether a {@see notifyOnceWhenPending()} watcher is installed. */
     public static function isNotificationArmed(): bool
     {
-        return self::$pendingWatcher !== null;
+        return self::current()->isNotificationArmed();
     }
 
     /**
@@ -824,8 +627,8 @@ final class RuntimeNoticeSink
      * fresh arm starts as unbudgeted as a process that never heard of the cap.
      *
      * DISARMS TOO, so a reset sink is a dropping sink until something arms it
-     * again. That is the same statement {@see $armed} makes and not a second
-     * policy: a process that has torn the inbox down has no reader either.
+     * again. That is the same statement an unarmed {@see NoticeSink} makes and
+     * not a second policy: a process that has torn the inbox down has no reader either.
      *
      * THE CALLERS — AND THE PHANTOM THIRD THAT USED TO BE CLAIMED. This
      * paragraph said "for tests, and for
@@ -843,64 +646,103 @@ final class RuntimeNoticeSink
      * than trusting each suite's good behaviour — the explicit resets in the
      * sink's own `setUp`/`tearDown`, which the extension makes redundant but
      * which the files keep as a per-class statement of intent — and
-     * {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}, the only caller in
-     * `src/`, which resets before it arms so a second `chat()` in one process
-     * starts from an empty inbox.
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::workspace()} (the non-UI half of
+     * `Bootstrap::chat()`), the only caller in `src/`, which resets before it
+     * arms so a second `chat()` in one process starts from an empty inbox.
+     *
+     * WHAT IT RESETS SINCE O-2a: the PROCESS sink, in place, plus the route —
+     * a sink a host made and routed to with {@see routeTo()} is that host's to
+     * reset, and this only stops routing to it.
      */
     public static function reset(): void
     {
-        // BEFORE THE fclose() BELOW, not after. A watcher left on the loop over
-        // a closed stream is a resource `stream_select()` will be handed on
-        // every iteration for the rest of the process — and in a 9000-test run
-        // that is every later test's loop, not just this one's.
-        self::cancelPendingNotification();
-
-        self::$armed = false;
-        self::$queue = [];
-        self::$dropped = 0;
-
-        // The per-turn budget (E199) is torn down with the inbox: a fresh
-        // arm starts as unbudgeted as a process that never heard of the cap,
-        // and the drain owner re-arms it with its next beginTurn().
-        self::$turnAccounting = false;
-        self::$turnSurfaced = 0;
-        self::$turnOverflowAnnounced = false;
-
-        foreach ([self::$transportRead, self::$transportWrite] as $handle) {
-            if (is_resource($handle)) {
-                fclose($handle);
-            }
-        }
-
-        self::$transportRead = null;
-        self::$transportWrite = null;
+        // The process sink is emptied IN PLACE rather than replaced, so a
+        // WorkspaceContext that captured it still points at the live inbox.
+        // A routed-to sink belongs to whoever made it (they reset it); this
+        // only drops the route, so the next arm opens the process sink.
+        self::$current = null;
+        self::process()->reset();
     }
 
     /**
-     * Clip to {@see MAX_CHARS}, counting the suffix against the budget.
-     *
-     * `mb_*` and not `substr()`, for the reason
-     * {@see \SugarCraft\Crush\Cli\Bootstrap::warnPermissionConfigInTranscript()}
-     * gives: these messages interpolate tool and parameter names straight out
-     * of a model's generation, and a cut mid-codepoint hands the transcript a
-     * row that is not valid UTF-8 — which `json_encode()`, and therefore the
-     * session store and the `-p` document, refuses outright rather than
-     * degrading.
+     * The process's own sink: the one a TUI launch arms, and the one every
+     * emitter reaches when no host has routed elsewhere.
      */
-    private static function clip(string $message): string
+    public static function process(): NoticeSink
     {
-        if (mb_strlen($message, 'UTF-8') <= self::MAX_CHARS) {
-            return $message;
+        return self::$process ??= NoticeSink::new();
+    }
+
+    /**
+     * The sink this process's emitters write to and its drain owner reads:
+     * whatever {@see routeTo()} routed to, else {@see process()}.
+     */
+    public static function current(): NoticeSink
+    {
+        return self::$current ?? self::process();
+    }
+
+    /**
+     * Route this process's notices to `$sink`; null routes back to
+     * {@see process()}.
+     *
+     * For a host that owns several sessions' sinks (O-2a). Prefer
+     * {@see using()}, which cannot forget to route back.
+     */
+    public static function routeTo(?NoticeSink $sink): void
+    {
+        self::$current = $sink;
+    }
+
+    /**
+     * Run `$body` with `$sink` current, then restore whatever was current.
+     *
+     * THE WAY A HOST STARTS A TURN FOR ONE OF SEVERAL SESSIONS:
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()} forks
+     * synchronously inside the call, so a turn begun inside `$body` belongs to
+     * `$sink` for its whole life even though the promise settles long after
+     * this returns — the child pinned it ({@see enterForkedChild()}).
+     *
+     * @template T
+     *
+     * @param \Closure(): T $body
+     *
+     * @return T
+     */
+    public static function using(NoticeSink $sink, \Closure $body): mixed
+    {
+        $previous = self::$current;
+        self::$current = $sink;
+
+        try {
+            return $body();
+        } finally {
+            self::$current = $previous;
         }
+    }
 
-        $suffix = self::clipSuffix();
-
-        return mb_substr(
-            $message,
-            0,
-            self::MAX_CHARS - mb_strlen($suffix, 'UTF-8'),
-            'UTF-8',
-        ) . $suffix;
+    /**
+     * The forked-turn-child half of the per-session seam: make `$sink` this
+     * process's sink for good, and make the process a WRITER ONLY.
+     *
+     * Called first thing in
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}'s child
+     * branch with the sink that was current in the parent when the turn was
+     * started. Pinning it is what keeps the turn's notices on the session that
+     * started it even if anything in the child consults the route again. And
+     * every read watcher the child inherited is forgotten WITHOUT running its
+     * canceller: the watcher belongs to the parent's loop, the child holds only
+     * a copy of that loop, and a child that ever serviced it would hand the
+     * parent's Chat a wake-up in the wrong process — which, with the drain
+     * that follows, is the parent's inbox read dry by a child. {@see NoticeSink}
+     * refuses that read by pid as well; this drops the trigger.
+     */
+    public static function enterForkedChild(NoticeSink $sink): void
+    {
+        self::process()->forgetInheritedWatcher();
+        self::$current?->forgetInheritedWatcher();
+        $sink->forgetInheritedWatcher();
+        self::$current = $sink;
     }
 
     /**
@@ -931,11 +773,16 @@ final class RuntimeNoticeSink
      * armed and `error_log` still on stderr — no copy is written at all), and
      * an `error_log` on the null device, which is {@see TuiErrorLog}'s R16
      * last resort.
+     *
+     * @param NoticeSink|null $sink whose transport decides the C2a case — the
+     *                              sink clipping the row; null asks about
+     *                              {@see current()}, which is the one
+     *                              {@see warn()} consults
      */
-    public static function fullTextPhrase(): string
+    public static function fullTextPhrase(?NoticeSink $sink = null): string
     {
         $ini = ini_get('error_log');
-        if (self::$transportWrite !== null && TuiErrorLog::destinationIsStderr($ini)) {
+        if (($sink ?? self::current())->hasTransport() && TuiErrorLog::destinationIsStderr($ini)) {
             return self::FULL_TEXT_NOT_KEPT;
         }
 

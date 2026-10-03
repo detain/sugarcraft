@@ -1504,6 +1504,24 @@ final class Chat implements Model
          * this Chat holds; see {@see selectPaletteProvider()}.
          */
         private readonly ?\Closure $backendFactory = null,
+        /**
+         * The project-root collaborators this Chat's session runs in — the
+         * non-UI half of {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}, built by
+         * {@see \SugarCraft\Crush\Cli\Bootstrap::workspace()} (roadmap O-2a).
+         * Null for embedders and tests, which keep every collaborator they
+         * passed above.
+         *
+         * THE LAST CONSTRUCTOR SLOT THE HOST EXTRACTION NEEDS. The `Host\*`
+         * services O-2b…O-2h move out of this class register on the workspace
+         * and are read through
+         * {@see \SugarCraft\Crush\Host\WorkspaceContext::service()}, so a
+         * service that leaves Chat does not arrive back as a parameter here.
+         * Today it is read by {@see selectPaletteProvider()} (its backend
+         * factory, ahead of {@see $backendFactory}) and by the runtime-notice
+         * pump ({@see pumpRuntimeNotices()}, {@see runtimeNoticeWake()}),
+         * which drain the workspace's own inbox.
+         */
+        private readonly ?\SugarCraft\Crush\Host\WorkspaceContext $workspace = null,
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -1678,14 +1696,19 @@ final class Chat implements Model
      */
     private function runtimeNoticeWake(): ?\Closure
     {
-        if (!$this->drainsRuntimeNotices || !RuntimeNoticeSink::hasTransport()) {
+        // O-2a: the workspace's inbox when this Chat runs in one, else the
+        // process's current sink — the same instance on every launch
+        // Bootstrap builds, since workspace() arms the process sink.
+        $sink = $this->workspace?->notices ?? RuntimeNoticeSink::current();
+
+        if (!$this->drainsRuntimeNotices || !$sink->hasTransport()) {
             return null;
         }
 
-        return Cmd::promise(static function (): PromiseInterface {
+        return Cmd::promise(static function () use ($sink): PromiseInterface {
             $deferred = new Deferred();
 
-            $armed = RuntimeNoticeSink::notifyOnceWhenPending(
+            $armed = $sink->notifyOnceWhenPending(
                 static function () use ($deferred): void {
                     $deferred->resolve(new RuntimeNoticePumpMsg());
                 },
@@ -8684,6 +8707,10 @@ final class Chat implements Model
             // Dropped here, a provider switch made after the first keystroke
             // would lose Task and the `/rules` set again (N-P3a).
             'backendFactory' => $this->backendFactory,
+            // By identity, like the collaborators it bundles: a clone that
+            // dropped it would lose the switch factory and the session's
+            // notice inbox on the first keystroke (O-2a).
+            'workspace' => $this->workspace,
         ];
 
         // The two write routes into the draft, kept from fighting.
@@ -17219,7 +17246,15 @@ final class Chat implements Model
             // the skill registry, the set, the manager and a pool rebuilt for
             // the new provider; the embedder fallback carries what this Chat
             // holds.
-            if ($this->backendFactory !== null) {
+            //
+            // THE WORKSPACE FIRST (O-2a): Bootstrap now builds the launch's
+            // factory on the WorkspaceContext, whose backendFor() carries the
+            // manager and the `/rules` set even when it was built without one.
+            // A bare `backendFactory` (N-P3a) is still honoured for embedders
+            // that pass only that.
+            if ($this->workspace !== null) {
+                $backend = $this->workspace->backendFor($name);
+            } elseif ($this->backendFactory !== null) {
                 $backend = ($this->backendFactory)($name);
             } else {
                 $backend = \SugarCraft\Crush\Cli\Bootstrap::backendFor(
@@ -17728,7 +17763,9 @@ final class Chat implements Model
      */
     private function pumpRuntimeNotices(): array
     {
-        $notices = RuntimeNoticeSink::drain();
+        // O-2a: drains the inbox runtimeNoticeWake() watches — the workspace's
+        // own sink, so a host running several sessions shows each its own.
+        $notices = ($this->workspace?->notices ?? RuntimeNoticeSink::current())->drain();
         $rearm = $this->runtimeNoticeWake();
 
         if ($notices === []) {

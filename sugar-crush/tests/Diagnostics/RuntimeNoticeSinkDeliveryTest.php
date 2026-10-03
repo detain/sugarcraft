@@ -12,6 +12,7 @@ use SugarCraft\Core\Kind;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Diagnostics\NoticeSink;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Providers\ToolCallParser\DsmlToolCallParser;
 use SugarCraft\Crush\Role;
@@ -175,7 +176,10 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
     /**
      * Read/write the sink's private per-turn state (E199 wiring pins).
      *
-     * REFLECTION, not a new test-only accessor: the three statics ARE the
+     * On the CURRENT {@see NoticeSink} since O-2a moved the state off the
+     * facade's statics and onto the per-session instance.
+     *
+     * REFLECTION, not a new test-only accessor: the three fields ARE the
      * observable constitution of "armed", the class doc-block refuses to grow
      * accessors that exist only for tests, and snapshot-restore-by-reflection
      * is the established idiom for `Bootstrap`'s statics (round 66, lane ce).
@@ -184,14 +188,15 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
      */
     private static function readTurnState(string $field): mixed
     {
-        return (new \ReflectionProperty(RuntimeNoticeSink::class, $field))->getValue();
+        return (new \ReflectionProperty(NoticeSink::class, $field))->getValue(RuntimeNoticeSink::current());
     }
 
     private static function pinTurnBudgetState(bool $turnAccounting, int $turnSurfaced, bool $turnOverflowAnnounced): void
     {
-        (new \ReflectionProperty(RuntimeNoticeSink::class, 'turnAccounting'))->setValue(null, $turnAccounting);
-        (new \ReflectionProperty(RuntimeNoticeSink::class, 'turnSurfaced'))->setValue(null, $turnSurfaced);
-        (new \ReflectionProperty(RuntimeNoticeSink::class, 'turnOverflowAnnounced'))->setValue(null, $turnOverflowAnnounced);
+        $sink = RuntimeNoticeSink::current();
+        (new \ReflectionProperty(NoticeSink::class, 'turnAccounting'))->setValue($sink, $turnAccounting);
+        (new \ReflectionProperty(NoticeSink::class, 'turnSurfaced'))->setValue($sink, $turnSurfaced);
+        (new \ReflectionProperty(NoticeSink::class, 'turnOverflowAnnounced'))->setValue($sink, $turnOverflowAnnounced);
     }
 
     public function testAParserNoticeRaisedInThisProcessReachesTheTranscript(): void

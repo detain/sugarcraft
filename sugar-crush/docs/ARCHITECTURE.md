@@ -96,6 +96,29 @@ Two consequences worth knowing:
   the alt screen paints over stderr 0.47s later; see
   `Bootstrap::warnPermissionConfigInTranscript()`.
 
+**`Bootstrap::chat()` is two halves.** `Bootstrap::workspace()` builds the
+half that is not a screen — config, gate, skills, command loader, the `/rules`
+set, the agent manager and `Task` pool, the backend and its provider-switch
+factory, memory, hooks, the workflow engine and the runtime-notice inbox — as
+one `Host\WorkspaceContext`. `chat()` calls it first, then opens the session and
+builds the `Chat`, which holds the workspace too. That is the first step of the
+headless-host extraction (server mode): a host without a TUI builds the same
+workspace, so the two cannot drift. Two rules come with it:
+
+- `WorkspaceContext::backendFor()` always threads the agent manager and the
+  `/rules` set, so a provider switch keeps `Task` on every path.
+- Later `Host\*` services register on the workspace (`withService()`) and
+  `Chat` reads them through `WorkspaceContext::service()`, so moving a service
+  out of `Chat` never adds a constructor parameter back.
+
+The runtime-notice inbox is per session as well. `Diagnostics\NoticeSink` holds
+the queue and the cross-fork transport. `RuntimeNoticeSink` keeps its static
+surface as a facade over whichever sink is current — the process sink in a TUI,
+or the one a host selects with `RuntimeNoticeSink::using()`. A forked turn child
+pins the sink it was forked under (`RuntimeNoticeSink::enterForkedChild()`) and
+never reads an inbox, so two sessions in one process cannot see each other's
+warnings.
+
 Refusals are collected rather than only printed:
 `Bootstrap::projectTierRefusals()` (directories a repository chose that this
 launch declined to read) and `Bootstrap::skillSkips()` (per-file skips) are

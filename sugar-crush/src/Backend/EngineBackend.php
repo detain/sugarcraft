@@ -2057,6 +2057,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         }
 
         [$parentSocket, $childSocket] = $sockets;
+        // O-2a: the runtime-notice sink this turn belongs to — the session's,
+        // which a host running several selects with RuntimeNoticeSink::using()
+        // around this call — read HERE, in the parent, at the moment of the
+        // fork, and pinned in the child below.
+        $noticeSink = \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::current();
         // E692 (Phase 9 scope call, lane bc): this pcntl_fork is an exec-free
         // in-process fork, deliberately OUTSIDE ProcessContainment's remit — the
         // choke point contains COMMAND children (spawn→env→detach), while a fork
@@ -2084,6 +2089,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             ProcessContainment::closeOnExec($childSocket);
             // B6: backpressure, not a timed-out half frame - see the constant.
             stream_set_timeout($childSocket, self::CHILD_WRITE_TIMEOUT_SECONDS);
+            // O-2a: before any turn code runs, this process becomes the turn's
+            // notice WRITER. Pinning the sink keeps a parser's warning on the
+            // session that started the turn, and forgetting the inherited read
+            // watcher means nothing in the child can wake the parent's
+            // Chat-side drain here and read the parent's inbox dry (see
+            // RuntimeNoticeSink::enterForkedChild()).
+            \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::enterForkedChild($noticeSink);
             $this->runCompleteInChild($childSocket, $history, $interactive);
         }
 

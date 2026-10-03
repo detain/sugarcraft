@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Diagnostics;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Diagnostics\NoticeSink;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
@@ -592,11 +593,13 @@ final class RuntimeNoticeSinkTest extends TestCase
         });
 
         try {
-            $reader = (new \ReflectionClass(RuntimeNoticeSink::class))->getProperty('transportRead');
-            $handle = $reader->getValue();
+            // O-2a: the transport lives on the current NoticeSink instance.
+            $sink = RuntimeNoticeSink::current();
+            $reader = (new \ReflectionClass(NoticeSink::class))->getProperty('transportRead');
+            $handle = $reader->getValue($sink);
             self::assertIsResource($handle);
-            $writer = (new \ReflectionClass(RuntimeNoticeSink::class))->getProperty('transportWrite');
-            $rawWrite = $writer->getValue();
+            $writer = (new \ReflectionClass(NoticeSink::class))->getProperty('transportWrite');
+            $rawWrite = $writer->getValue($sink);
             fclose($handle);
 
             self::assertFalse(RuntimeNoticeSink::record('nobody is listening'));

@@ -12,6 +12,8 @@ use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Context\RulesState;
+use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Crush\Host\WorkspaceContext;
 use SugarCraft\Crush\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Crush\Tools\BuiltIn\TaskTool;
@@ -72,6 +74,15 @@ final class ProviderSwitchKeepsTaskToolTest extends TestCase
         $chat = Bootstrap::chat($this->tempDir . '/project');
         $rules = $chat->rulesState();
 
+        // O-2a: the launch's collaborators are ONE bundle — the workspace the
+        // Chat holds is the one its rules set, manager and inbox came from.
+        $workspace = (new \ReflectionProperty(Chat::class, 'workspace'))->getValue($chat);
+        $this->assertInstanceOf(WorkspaceContext::class, $workspace);
+        $this->assertSame($rules, $workspace->rulesState);
+        $this->assertSame($chat->agentManager(), $workspace->agentManager);
+        $this->assertSame(RuntimeNoticeSink::process(), $workspace->notices, 'a TUI launch runs on the process inbox');
+        $this->assertTrue($workspace->notices->isArmed(), 'workspace() must arm the inbox before any fork');
+
         // A toggle made BEFORE the switch has to survive it.
         $rules->toggle('focus');
 
@@ -91,14 +102,20 @@ final class ProviderSwitchKeepsTaskToolTest extends TestCase
 
     public function testTheSwitchSurvivesAKeystrokeBetweenLaunchAndSwitch(): void
     {
-        // The factory is Chat state: a mutate() that dropped it would fall
-        // back to the embedder path on the first character typed.
+        // The factory is Chat state — on the workspace since O-2a: a mutate()
+        // that dropped the workspace would fall back to the embedder path on
+        // the first character typed.
         $chat = Bootstrap::chat($this->tempDir . '/project');
         [$typed] = $chat->update(new KeyMsg(KeyType::Char, 'x'));
         $this->assertInstanceOf(Chat::class, $typed);
 
-        $factory = new \ReflectionProperty(Chat::class, 'backendFactory');
-        $this->assertInstanceOf(\Closure::class, $factory->getValue($typed));
+        $workspace = (new \ReflectionProperty(Chat::class, 'workspace'))->getValue($typed);
+        $this->assertInstanceOf(WorkspaceContext::class, $workspace);
+        $this->assertSame(
+            (new \ReflectionProperty(Chat::class, 'workspace'))->getValue($chat),
+            $workspace,
+            'the keystroke clone must carry the launch\'s workspace by identity',
+        );
     }
 
     public function testAnEmbedderSwitchCarriesTheChatsOwnManagerAndRulesSet(): void

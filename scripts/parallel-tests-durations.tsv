@@ -313,6 +313,7 @@ sugar-crush/tests/Support/HookContextFilesTest.php	0.285	18
 sugar-crush/tests/MCP/McpClientStartedSnapshotTest.php	0.268	6
 sugar-crush/tests/RuntimeInitialDispatchOrderTest.php	0.267	3
 sugar-crush/tests/Skills/SkillManagerTest.php	0.261	44
+sugar-crush/tests/Diagnostics/NoticeSinkIsolationTest.php	0.260	6
 sugar-crush/tests/Workflows/WorkflowUserTierContainmentTest.php	0.253	9
 sugar-crush/tests/Tui/MenuBarMouseTest.php	0.252	16
 sugar-crush/tests/Chat/ChatToolCancelKillsCommandTreeTest.php	0.241	1
@@ -385,6 +386,7 @@ sugar-crush/tests/Tools/CapabilityAwareDescriptionTest.php	0.115	11
 sugar-crush/tests/Commands/RulesCommandTest.php	0.113	19
 sugar-crush/tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php	0.111	22
 sugar-crush/tests/Renderer/C1ControlFrameTest.php	0.110	39
+sugar-crush/tests/Host/WorkspaceContextTest.php	0.110	9
 sugar-crush/tests/Memory/ForeignMemoryImporterTest.php	0.109	40
 sugar-crush/tests/MCP/OAuthLoopbackFlowTest.php	0.109	10
 sugar-crush/tests/Context/InstructionBudgetTest.php	0.108	14

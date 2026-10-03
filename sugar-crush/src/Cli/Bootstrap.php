@@ -1191,6 +1191,293 @@ final class Bootstrap
         // clear error rather than handing a path jail a `false`.
         $root ??= getcwd() ?: null;
 
+        // O-2a: EVERYTHING BELOW THAT IS NOT A SCREEN IS BUILT BY workspace() —
+        // config, gate, skills, commands, the `/rules` set, the agent manager and
+        // Task pool, the backend and its provider-switch factory, memory, hooks,
+        // the workflow engine and the runtime-notice inbox — so a host that runs
+        // sessions without a TUI builds exactly what this launch does. What stays
+        // here is the session this window opens and the Chat that paints it.
+        $workspace = self::workspace($root);
+        $userConfig = $workspace->userConfig;
+        $sessionStore = $workspace->sessionStore ?? throw new \LogicException('workspace() builds a session store');
+        $agentManager = $workspace->agentManager;
+        $commandLoader = $workspace->commandLoader ?? throw new \LogicException('workspace() builds a command loader');
+
+        // The `statusLine` command, installed for the whole process before any
+        // frame is painted. Wired HERE rather than in {@see app()} because
+        // `app()` calls this method, so this is the one funnel both interactive
+        // entry points share — and because a standalone `Chat` (the shell-less
+        // path {@see \SugarCraft\Crush\Renderer}'s docblock names as also
+        // live) has to get it too.
+        //
+        // ALWAYS CALLED, including when nothing is configured: the call CLEARS
+        // as well as sets, and a process that builds a second Chat against
+        // different settings must not keep painting the first one's text. In a
+        // test suite that runs many launches in one process this is the only
+        // thing standing between them.
+        //
+        // $root, not `getcwd()`: a `git`-shaped status command must report the
+        // repository the session was launched against. `--root <lib>` in a
+        // monorepo is exactly the case where the two differ.
+        StatusLineCommand::configure($userConfig, $root);
+
+        // The session this window runs in, opened on the workspace's ONE store:
+        // seedSession() is what makes /sessions, the tab strip, /branch and the
+        // auto-title call reachable at all on a real run (crush_feat.md §5 E1).
+        $opened = self::openSession($sessionStore, ...self::selectedProviderLabel());
+        $sessionId = $opened['id'];
+        $sessionName = $opened['name'];
+
+        $chat = new Chat(
+            // The resumed conversation (--continue / --resume <id>), or [] for
+            // a new session.
+            history: $opened['history'],
+            backend: $workspace->backend,
+            memoryStore: $workspace->memoryStore,
+            sessionStore: $sessionStore,
+            currentSessionId: $sessionId,
+            currentSessionName: $sessionName,
+            titleBackend: $workspace->titleBackend,
+            // crush_code.md Phase 5 item 6. Without this argument `/compact`
+            // reaches only the heuristic summarizer, whose stage-2 output for a
+            // long exchange was the literal string "[exchanged information]" —
+            // a compaction that preserved nothing of what a compaction exists to
+            // preserve.
+            summaryBackend: $workspace->summaryBackend,
+            // crush_code.md Phase 5 item 7. Null unless the launch set a cap;
+            // `/budget` can set one at runtime either way.
+            maxCostUsd: $workspace->maxCostUsd,
+            themeName: is_string($userConfig['theme'] ?? null) ? $userConfig['theme'] : 'dark',
+            onConfigChange: static fn(string $key, string $value) => self::writeUserConfig([$key => $value]),
+            mosaic: ToolResult::mosaic(),
+            // The cross-session prompt file ↑/↓ recall walks and Enter appends to.
+            promptHistory: self::promptHistory(),
+            // The same built-in guard chain backend()/backendFor() hand the
+            // engine backend. Without it, Chat's own registerTool() calls
+            // would still be the one unguarded tool path in the live binary
+            // (crush_feat.md §1 E1) - hooks that a call gets gated by on the
+            // engine pipeline would silently not apply on this one.
+            hooks: $workspace->hooks,
+            // Without a supervisor instance /bg answers "Background sessions
+            // not configured" on every real run, which leaves crush_feat.md
+            // §5 E3 (`/bg` dispatching onto BackgroundSupervisor) implemented
+            // everywhere except where a user can reach it. One supervisor per
+            // launch: it owns the spawned sessions' IPC table, and a second
+            // instance would not know about the first's children.
+            backgroundSupervisor: $workspace->backgroundSupervisor,
+            // The same root the tools above are jailed to. Chat's own
+            // pipeline builds hook contexts and spawns background sessions
+            // without an App or Runtime in reach, so it needs its own copy
+            // or `--root` stops at the tool boundary (crush_code.md Phase 0
+            // item 6).
+            projectRoot: $root,
+            // crush_code.md Phase 0 item 13's second half. Every provider on
+            // the engine path already streamed, and {@see Chat} already had a
+            // `$streaming` flag - but nothing ever turned it on, so
+            // {@see Chat::scheduleBackendCompletion()} passed a null $onToken
+            // to the backend on every real run and the reply arrived in one
+            // piece after a silent "thinking…" spinner, having paid the full
+            // SSE-parsing cost for nothing.
+            //
+            // No `onToken:` closure alongside it: that field is an OPTIONAL
+            // extra observer for embedders (see its docblock), and the live
+            // TUI rendering is driven off the shared inbox instead. Passing
+            // one here would only duplicate what the pump already does.
+            streaming: true,
+            // crush_code.md Phase 1 item 1. Until now this argument was never
+            // passed on the one construction path `bin/sugarcrush` runs, so
+            // `/agents`, Ctrl+A, the transcript's agent strip,
+            // AgentDashboardPane's agent rows, PermissionGate (whose only
+            // consumer is the sub-agent path) and the whole
+            // TeamManager/worktree stack downstream of them were built,
+            // tested, and unreachable — `Chat::handleAgentsCommand()` answered
+            // "Agent manager not configured" on every real run.
+            agentManager: $agentManager,
+            // E652: closes the E649 seam — the session's serializable provider
+            // spec rides into Chat's fallback pool so FORKED sub-agent workers
+            // consult the same configured provider the hosted chat uses. When no
+            // provider is derivable the spec stays null and workers FAIL CLOSED
+            // naming the absence; this wiring never substitutes `echo` for an
+            // unconfigured production session.
+            agentPoolConfig: $workspace->agentPoolConfig,
+            // crush_code.md Phase 2 item 3. `/workflow run|pause|resume|status|
+            // list` answered "Workflow engine not configured" on every real run
+            // because this argument was never passed — the 2,200-line
+            // Workflows/ subsystem, the shipped `workflows/deep-research.php`
+            // and `examples/workflows/lint-then-fix.yaml` included, was
+            // reachable only from its own tests.
+            //
+            // Chat's constructor is what links the two: an engine that arrives
+            // without a manager is given this launch's, so a parallel stage's
+            // sub-agents register where the renderer reads telemetry from — and
+            // it can only do that with both in hand. (Both are NAMED arguments
+            // and both are evaluated before the constructor body runs, so the
+            // order they appear in here is style, not mechanism.)
+            workflowEngine: $workspace->workflowEngine,
+            // crush_code.md Phase 2 item 4. Until now nothing in src/ or bin/
+            // constructed a CommandLoader at all, so `~/.sugar-crush/commands`
+            // and `<root>/.sugar-crush/commands` were directories the loader
+            // knew how to walk and no launch ever asked it to — a `*.md` command
+            // file was inert on every real run.
+            //
+            // THE INSTANCE IS HELD, not inlined into the argument, because the
+            // refusals it accumulates are drained off it below. An anonymous
+            // `new CommandLoader()` here would report a commands directory that
+            // resolves outside the checkout to `error_log()` and nowhere else,
+            // which on a full-screen TUI is nowhere the user will look.
+            commandLoader: $commandLoader,
+            // The `` !`cmd` `` gate for the PROJECT tier of that loader. Resolved
+            // here rather than inside Chat so it is answered once, at launch,
+            // from the frozen trust list — see
+            // {@see projectCommandShellIsTrusted()}. A null $root cannot be
+            // trusted by a list of absolute paths, so it is false without asking.
+            projectCommandsTrusted: $workspace->projectCommandsTrusted,
+            // THE APPOINTMENT THAT MAKES THE ARM MEAN SOMETHING (E171).
+            // `RuntimeNoticeSink::arm()` in workspace() opens the inbox; this
+            // is what says WHICH Chat reads it. The two belong together because
+            // `drain()` is destructive — a second Chat that polled would steal
+            // rows rather than duplicate them — and this method (with the
+            // workspace() it calls first) is the only place in `src/` that
+            // does either.
+            drainsRuntimeNotices: true,
+            // The instance the backend above got too — see the block there. This is
+            // the argument that makes `/rules` reach the prompt rather than merely
+            // decorate the transcript.
+            rulesState: $workspace->rulesState,
+            // O-2a: the workspace this Chat's session runs in. A provider switch
+            // builds its replacement backend through it (the N-P3a factory now
+            // lives on the workspace — see workspace()), and the Host\* services
+            // later steps extract are reached through its service() locator, so
+            // none of them adds constructor state here.
+            workspace: $workspace,
+        );
+
+        // Drained AFTER construction for the same reason the workflow registry's
+        // refusals are: the walk happens inside the constructor, so there is
+        // nothing to collect until it has run. Adding this makes commands the
+        // EIGHTH feeder of {@see $projectTierRefusals} — see
+        // `ProjectTierRefusalInventoryTest`, which pins the feeder/gap split so
+        // a directory cannot quietly stop being either.
+        self::$projectTierRefusals = [
+            ...self::$projectTierRefusals,
+            ...$commandLoader->refusedDirectories(),
+        ];
+
+        // And the per-FILE refusals: a command file that tried to take over a
+        // control-plane name ({@see \SugarCraft\Crush\Commands\CommandRegistry::CONTROL_PLANE}).
+        // Path-keyed at the source, so it spreads in like every other feeder,
+        // and it introduces no new repository-chosen DOT-PATH — the file lives
+        // under `.sugar-crush/commands`, already the eighth feeder above.
+        self::$projectTierRefusals = [
+            ...self::$projectTierRefusals,
+            ...$commandLoader->refusedCommands(),
+        ];
+
+        // And the skipped per-FILE refusals — contained-outside and
+        // unparseable `*.md` — which are NOT spread above (E172): that
+        // collector prints one row per entry, and a directory of twenty
+        // malformed files would evict the capability warnings the seam exists
+        // to carry. They hoist onto {@see $commandSkips} instead and surface
+        // as ONE aggregate row below, the shape
+        // {@see reportSkillSkips()} already established for skills.
+        self::$commandSkips = [
+            ...self::$commandSkips,
+            ...$commandLoader->skippedFiles(),
+        ];
+
+        // AFTER the construction above, not beside reportSkillSkips() further
+        // up: the workflow registry that decides whether this project's
+        // `.sugar-crush/workflows` is readable is built inside
+        // workflowEngine(), which is one of the named arguments to the
+        // constructor call. Still construction time, so still before Program
+        // takes the terminal — the requirement reportSkillSkips()'s doc-block
+        // states.
+        self::reportProjectTierRefusals();
+
+        // The command-file skips, immediately after the directory refusals
+        // and for the identical reasons: construction time, deduplicated
+        // per-path against {@see $reportedCommandSkips}, and ONE row whatever
+        // the count (E172 — the drain half of the finding whose feeder half
+        // landed in round 46 and stood dormant behind a pin that pointed here).
+        self::reportCommandSkips();
+
+        // LAST, so every warning the build raised is in hand — including
+        // reportProjectTierRefusals() immediately above, which is one of the
+        // TWENTY-THREE call sites now routed onto the transcript seam. This said
+        // SIXTEEN, counting reportPrunedSessions()'s retention summary (E78,
+        // round 42) as the last one until E86 (round 43) added the sixteenth,
+        // in mcpClient()'s start-then-throw catch, and P7.S3 added the
+        // seventeenth and eighteenth, the two enabled-skill drop notices in
+        // promptEnabledSkills(), plus its nineteenth and twentieth, the two
+        // `enabledSkills` shape notices in that same method; it said twenty
+        // until E653 (round 65) added the twenty-first, the narrowed-grant
+        // drain below; it said twenty-one until E172 (round 70) added the
+        // twenty-second, the command-file skip aggregate just above, and
+        // twenty-two until the audit 15d-02 follow-up added the twenty-third,
+        // the unreadable-memory-note aggregate. All six are the reason
+        // this line is LAST rather than merely tidy: the retention summary is
+        // raised from sessionStore() far EARLIER in this method, and the MCP
+        // one is raised far LATER, transitively through backend() -> tools() ->
+        // mcpTools(), so only a read at the END has both in hand. The count is
+        // a grep of this file for `self::` immediately followed by the seam's
+        // name — deliberately not spelled out here, because a comment quoting
+        // that literal makes itself an extra hit. No line numbers
+        // either, for the same reason one insertion above decays them.
+        // See {@see Chat::withLaunchNotices()}.
+        //
+        // THE ACCESSOR, not the raw list: {@see launchNotices()} appends the
+        // "and N more" row when a launch overflowed {@see LAUNCH_NOTICE_LIMIT},
+        // and reading the property directly here would hand the transcript a
+        // silently truncated list — the exact failure mode the cap was added
+        // with a counter rather than as a bare array_slice().
+        // E653 ADOPTED HERE (round 65) AS AN AGGREGATE, never as a per-warning
+        // seam: narrowedGrantWarnings() is an uncapped per-agent-per-tool list,
+        // and round 62 measured the naive drain flooding this transcript with
+        // a dozen near-identical sentences — the same per-agent-flood defect
+        // round-61 lane A recorded. drainNarrowedGrantWarnings() gives stderr
+        // the complete record exactly as before and gives the transcript at
+        // most two rows: a header packing as many compact grant pairs as fit
+        // inside LAUNCH_NOTICE_MAX_CHARS, and an "and M more" tail when the
+        // pack ran out of room.
+        self::drainNarrowedGrantWarnings($agentManager);
+
+        $chat = $chat->withLaunchNotices(self::launchNotices());
+
+        // The single-writer lock on the session just opened (audit SES-3(b)).
+        // Taken LAST so that, when another TUI already has the session, the
+        // read-only notice and its `/branch` offer are the bottom row of the
+        // first frame rather than buried above the launch warnings. Every
+        // later session switch moves the lock with it inside Chat.
+        $chat = $chat->withSessionLocking();
+
+        // Bare `--resume`: the picker opens over the fresh session so choosing
+        // is the first thing the user does, and Esc leaves a usable chat.
+        return $opened['picker'] ? $chat->withSessionPickerOpen() : $chat;
+    }
+    /**
+     * The non-UI half of {@see chat()}: everything a session needs from its
+     * project root that is not a screen, as one {@see \SugarCraft\Crush\Host\WorkspaceContext}
+     * (roadmap O-2a, Appendix O §4.3).
+     *
+     * EXTRACTED, NOT DUPLICATED. Every statement below used to be inline in
+     * `chat()`, in this order, and the order is load-bearing in the ways the
+     * comments say — the refusal before the side effects, the inbox armed
+     * before any fork, the launch-notice list reset before the first report.
+     * `chat()` now calls this first and keeps the session it opens, the
+     * status-line command and the `Chat` itself; a server builds its sessions
+     * on the same workspace and cannot drift from the TUI.
+     *
+     * One process, one root: the {@see $projectTierRefusals} and launch-notice
+     * lists this resets, and the trust lists it reads, are process statics, so
+     * a second call re-describes the launch rather than adding a second
+     * workspace beside the first (Appendix O §4.1 puts multi-root in a
+     * process per root).
+     */
+    public static function workspace(?string $root = null): \SugarCraft\Crush\Host\WorkspaceContext
+    {
+        $root ??= getcwd() ?: null;
+
+
         // Every entry point that resolves a root names it as THE project for
         // the settings layers, before anything below reads a config — see
         // {@see useProjectRootForSettings()}. Set on all four rather than in
@@ -1224,7 +1511,7 @@ final class Bootstrap
         // THE MID-SESSION HALF OF THE SAME SEAM, armed here and for the same
         // reason the two lines above are reset here (E171). The list above is
         // drained into {@see Chat::withLaunchNotices()} exactly ONCE, at the
-        // end of this method, so a warning raised after that — by a tool-call
+        // end of chat(), so a warning raised after that — by a tool-call
         // parser mid-turn, by a provider that degraded on turn forty — has no
         // reader at all. {@see RuntimeNoticeSink} is that reader's inbox, and
         // {@see Chat::subscriptions()} is what polls it.
@@ -1234,14 +1521,17 @@ final class Bootstrap
         // runs the whole engine loop — provider, parser, tools — inside a
         // `pcntl_fork()`ed child, and a child can only inherit a transport that
         // already existed when it was forked. A turn cannot start before the
-        // `Chat` this method returns, so anywhere in here is before every fork;
-        // anywhere later would not be.
+        // workspace it runs in exists, so anywhere in here is before every
+        // fork; anywhere later would not be. The inbox is the PROCESS sink
+        // (see RuntimeNoticeSink::process()), which is the workspace's
+        // `notices` below: one session per process, so one inbox per process,
+        // exactly as before O-2a split the state onto NoticeSink.
         //
         // AND ARMED HERE RATHER THAN AT THE SINK'S FIRST WRITE, which is the
         // half that keeps the `-p` one-shot out of it. `RuntimeNoticeSink`
         // DROPS until something arms it, and the only reader is
-        // `Chat::subscriptions()` — so the seam opens exactly where a `Chat`
-        // is built and nowhere else. {@see \SugarCraft\Crush\Cli\NonInteractive}
+        // `Chat::subscriptions()` — so the seam opens exactly where a
+        // workspace for a `Chat` is built and nowhere else. {@see \SugarCraft\Crush\Cli\NonInteractive}
         // never reaches this method (it goes straight to `backend()` and
         // `complete()`), so a `-p` run keeps every one of these diagnostics on
         // stderr, where its caller can read them, instead of queueing them in a
@@ -1269,31 +1559,9 @@ final class Bootstrap
 
         $userConfig = self::readUserConfig();
 
-        // The `statusLine` command, installed for the whole process before any
-        // frame is painted. Wired HERE rather than in {@see app()} because
-        // `app()` calls this method, so this is the one funnel both interactive
-        // entry points share — and because a standalone `Chat` (the shell-less
-        // path {@see \SugarCraft\Crush\Renderer}'s docblock names as also
-        // live) has to get it too.
-        //
-        // ALWAYS CALLED, including when nothing is configured: the call CLEARS
-        // as well as sets, and a process that builds a second Chat against
-        // different settings must not keep painting the first one's text. In a
-        // test suite that runs many launches in one process this is the only
-        // thing standing between them.
-        //
-        // $root, not `getcwd()`: a `git`-shaped status command must report the
-        // repository the session was launched against. `--root <lib>` in a
-        // monorepo is exactly the case where the two differ.
-        StatusLineCommand::configure($userConfig, $root);
-
-        // ONE store instance, seeded before the Chat is built: seedSession()
-        // is what makes /sessions, the tab strip, /branch and the auto-title
-        // call reachable at all on a real run (crush_feat.md §5 E1).
+        // ONE store instance for the workspace, so every session this root
+        // opens — chat()'s, or a host's — reads and writes one session.db.
         $sessionStore = self::sessionStore();
-        $opened = self::openSession($sessionStore, ...self::selectedProviderLabel());
-        $sessionId = $opened['id'];
-        $sessionName = $opened['name'];
 
         // ONE registry across the engine and the sub-agents, for the same
         // reason {@see tools()} shares one across Read/Edit/Glob: two
@@ -1416,227 +1684,35 @@ final class Bootstrap
             return $switched instanceof EngineBackend ? $switched->withRulesState($rulesState) : $switched;
         };
 
-        $chat = new Chat(
-            // The resumed conversation (--continue / --resume <id>), or [] for
-            // a new session.
-            history: $opened['history'],
-            backend: $backend,
-            memoryStore: self::memoryStore($root),
-            sessionStore: $sessionStore,
-            currentSessionId: $sessionId,
-            currentSessionName: $sessionName,
-            titleBackend: self::titleBackend(),
-            // crush_code.md Phase 5 item 6. Without this argument `/compact`
-            // reaches only the heuristic summarizer, whose stage-2 output for a
-            // long exchange was the literal string "[exchanged information]" —
-            // a compaction that preserved nothing of what a compaction exists to
-            // preserve.
-            summaryBackend: self::summaryBackend(),
-            // crush_code.md Phase 5 item 7. Null unless the launch set a cap;
-            // `/budget` can set one at runtime either way.
-            maxCostUsd: self::maxCostUsd(),
-            themeName: is_string($userConfig['theme'] ?? null) ? $userConfig['theme'] : 'dark',
-            onConfigChange: static fn(string $key, string $value) => self::writeUserConfig([$key => $value]),
-            mosaic: ToolResult::mosaic(),
-            // The cross-session prompt file ↑/↓ recall walks and Enter appends to.
-            promptHistory: self::promptHistory(),
-            // The same built-in guard chain backend()/backendFor() hand the
-            // engine backend. Without it, Chat's own registerTool() calls
-            // would still be the one unguarded tool path in the live binary
-            // (crush_feat.md §1 E1) - hooks that a call gets gated by on the
-            // engine pipeline would silently not apply on this one.
-            hooks: self::hooks($permissionGate, $root),
-            // Without a supervisor instance /bg answers "Background sessions
-            // not configured" on every real run, which leaves crush_feat.md
-            // §5 E3 (`/bg` dispatching onto BackgroundSupervisor) implemented
-            // everywhere except where a user can reach it. One supervisor per
-            // launch: it owns the spawned sessions' IPC table, and a second
-            // instance would not know about the first's children.
-            backgroundSupervisor: new BackgroundSupervisor(),
-            // The same root the tools above are jailed to. Chat's own
-            // pipeline builds hook contexts and spawns background sessions
-            // without an App or Runtime in reach, so it needs its own copy
-            // or `--root` stops at the tool boundary (crush_code.md Phase 0
-            // item 6).
-            projectRoot: $root,
-            // crush_code.md Phase 0 item 13's second half. Every provider on
-            // the engine path already streamed, and {@see Chat} already had a
-            // `$streaming` flag - but nothing ever turned it on, so
-            // {@see Chat::scheduleBackendCompletion()} passed a null $onToken
-            // to the backend on every real run and the reply arrived in one
-            // piece after a silent "thinking…" spinner, having paid the full
-            // SSE-parsing cost for nothing.
-            //
-            // No `onToken:` closure alongside it: that field is an OPTIONAL
-            // extra observer for embedders (see its docblock), and the live
-            // TUI rendering is driven off the shared inbox instead. Passing
-            // one here would only duplicate what the pump already does.
-            streaming: true,
-            // crush_code.md Phase 1 item 1. Until now this argument was never
-            // passed on the one construction path `bin/sugarcrush` runs, so
-            // `/agents`, Ctrl+A, the transcript's agent strip,
-            // AgentDashboardPane's agent rows, PermissionGate (whose only
-            // consumer is the sub-agent path) and the whole
-            // TeamManager/worktree stack downstream of them were built,
-            // tested, and unreachable — `Chat::handleAgentsCommand()` answered
-            // "Agent manager not configured" on every real run.
-            agentManager: $agentManager,
-            // E652: closes the E649 seam — the session's serializable provider
-            // spec rides into Chat's fallback pool so FORKED sub-agent workers
-            // consult the same configured provider the hosted chat uses. When no
-            // provider is derivable the spec stays null and workers FAIL CLOSED
-            // naming the absence; this wiring never substitutes `echo` for an
-            // unconfigured production session.
-            agentPoolConfig: $agentPoolConfig,
-            // crush_code.md Phase 2 item 3. `/workflow run|pause|resume|status|
-            // list` answered "Workflow engine not configured" on every real run
-            // because this argument was never passed — the 2,200-line
-            // Workflows/ subsystem, the shipped `workflows/deep-research.php`
-            // and `examples/workflows/lint-then-fix.yaml` included, was
-            // reachable only from its own tests.
-            //
-            // Chat's constructor is what links the two: an engine that arrives
-            // without a manager is given this launch's, so a parallel stage's
-            // sub-agents register where the renderer reads telemetry from — and
-            // it can only do that with both in hand. (Both are NAMED arguments
-            // and both are evaluated before the constructor body runs, so the
-            // order they appear in here is style, not mechanism.)
-            workflowEngine: self::workflowEngine($root, $permissionGate, $skills),
-            // crush_code.md Phase 2 item 4. Until now nothing in src/ or bin/
-            // constructed a CommandLoader at all, so `~/.sugar-crush/commands`
-            // and `<root>/.sugar-crush/commands` were directories the loader
-            // knew how to walk and no launch ever asked it to — a `*.md` command
-            // file was inert on every real run.
-            //
-            // THE INSTANCE IS HELD, not inlined into the argument, because the
-            // refusals it accumulates are drained off it below. An anonymous
-            // `new CommandLoader()` here would report a commands directory that
-            // resolves outside the checkout to `error_log()` and nowhere else,
-            // which on a full-screen TUI is nowhere the user will look.
-            commandLoader: $commandLoader,
-            // The `` !`cmd` `` gate for the PROJECT tier of that loader. Resolved
-            // here rather than inside Chat so it is answered once, at launch,
-            // from the frozen trust list — see
-            // {@see projectCommandShellIsTrusted()}. A null $root cannot be
-            // trusted by a list of absolute paths, so it is false without asking.
-            projectCommandsTrusted: $root !== null && self::projectCommandShellIsTrusted(self::configRoot($root)),
-            // THE APPOINTMENT THAT MAKES THE ARM ABOVE MEAN SOMETHING (E171).
-            // `RuntimeNoticeSink::arm()` at the top of this method opens the
-            // inbox; this is what says WHICH Chat reads it. The two belong
-            // together because `drain()` is destructive — a second Chat that
-            // polled would steal rows rather than duplicate them — and this
-            // method is the only place in `src/` that does either.
-            drainsRuntimeNotices: true,
-            // The instance the backend above got too — see the block there. This is
-            // the argument that makes `/rules` reach the prompt rather than merely
-            // decorate the transcript.
+        return \SugarCraft\Crush\Host\WorkspaceContext::new(
+            root: $root,
+            userConfig: $userConfig,
+            // The inbox armed above — the process sink, which is the one every
+            // emitter in a one-session process reaches.
+            notices: RuntimeNoticeSink::current(),
             rulesState: $rulesState,
-            // N-P3a: what a provider switch builds its replacement backend
-            // with — see the closure's own block above.
+            sessionStore: $sessionStore,
+            skills: $skills,
+            permissionGate: $permissionGate,
+            commandLoader: $commandLoader,
+            agentManager: $agentManager,
+            agentPoolConfig: $agentPoolConfig,
+            taskPool: $taskPool,
+            backend: $backend,
             backendFactory: $backendFactory,
+            // From here down, IN THE ORDER chat() used to evaluate them as
+            // constructor arguments: named arguments evaluate in call-site
+            // order, and several of these feed the refusal collector that
+            // chat() reports after the Chat exists.
+            memoryStore: self::memoryStore($root),
+            titleBackend: self::titleBackend(),
+            summaryBackend: self::summaryBackend(),
+            maxCostUsd: self::maxCostUsd(),
+            hooks: self::hooks($permissionGate, $root),
+            backgroundSupervisor: new BackgroundSupervisor(),
+            workflowEngine: self::workflowEngine($root, $permissionGate, $skills),
+            projectCommandsTrusted: $root !== null && self::projectCommandShellIsTrusted(self::configRoot($root)),
         );
-
-        // Drained AFTER construction for the same reason the workflow registry's
-        // refusals are: the walk happens inside the constructor, so there is
-        // nothing to collect until it has run. Adding this makes commands the
-        // EIGHTH feeder of {@see $projectTierRefusals} — see
-        // `ProjectTierRefusalInventoryTest`, which pins the feeder/gap split so
-        // a directory cannot quietly stop being either.
-        self::$projectTierRefusals = [
-            ...self::$projectTierRefusals,
-            ...$commandLoader->refusedDirectories(),
-        ];
-
-        // And the per-FILE refusals: a command file that tried to take over a
-        // control-plane name ({@see \SugarCraft\Crush\Commands\CommandRegistry::CONTROL_PLANE}).
-        // Path-keyed at the source, so it spreads in like every other feeder,
-        // and it introduces no new repository-chosen DOT-PATH — the file lives
-        // under `.sugar-crush/commands`, already the eighth feeder above.
-        self::$projectTierRefusals = [
-            ...self::$projectTierRefusals,
-            ...$commandLoader->refusedCommands(),
-        ];
-
-        // And the skipped per-FILE refusals — contained-outside and
-        // unparseable `*.md` — which are NOT spread above (E172): that
-        // collector prints one row per entry, and a directory of twenty
-        // malformed files would evict the capability warnings the seam exists
-        // to carry. They hoist onto {@see $commandSkips} instead and surface
-        // as ONE aggregate row below, the shape
-        // {@see reportSkillSkips()} already established for skills.
-        self::$commandSkips = [
-            ...self::$commandSkips,
-            ...$commandLoader->skippedFiles(),
-        ];
-
-        // AFTER the construction above, not beside reportSkillSkips() further
-        // up: the workflow registry that decides whether this project's
-        // `.sugar-crush/workflows` is readable is built inside
-        // workflowEngine(), which is one of the named arguments to the
-        // constructor call. Still construction time, so still before Program
-        // takes the terminal — the requirement reportSkillSkips()'s doc-block
-        // states.
-        self::reportProjectTierRefusals();
-
-        // The command-file skips, immediately after the directory refusals
-        // and for the identical reasons: construction time, deduplicated
-        // per-path against {@see $reportedCommandSkips}, and ONE row whatever
-        // the count (E172 — the drain half of the finding whose feeder half
-        // landed in round 46 and stood dormant behind a pin that pointed here).
-        self::reportCommandSkips();
-
-        // LAST, so every warning the build raised is in hand — including
-        // reportProjectTierRefusals() immediately above, which is one of the
-        // TWENTY-THREE call sites now routed onto the transcript seam. This said
-        // SIXTEEN, counting reportPrunedSessions()'s retention summary (E78,
-        // round 42) as the last one until E86 (round 43) added the sixteenth,
-        // in mcpClient()'s start-then-throw catch, and P7.S3 added the
-        // seventeenth and eighteenth, the two enabled-skill drop notices in
-        // promptEnabledSkills(), plus its nineteenth and twentieth, the two
-        // `enabledSkills` shape notices in that same method; it said twenty
-        // until E653 (round 65) added the twenty-first, the narrowed-grant
-        // drain below; it said twenty-one until E172 (round 70) added the
-        // twenty-second, the command-file skip aggregate just above, and
-        // twenty-two until the audit 15d-02 follow-up added the twenty-third,
-        // the unreadable-memory-note aggregate. All six are the reason
-        // this line is LAST rather than merely tidy: the retention summary is
-        // raised from sessionStore() far EARLIER in this method, and the MCP
-        // one is raised far LATER, transitively through backend() -> tools() ->
-        // mcpTools(), so only a read at the END has both in hand. The count is
-        // a grep of this file for `self::` immediately followed by the seam's
-        // name — deliberately not spelled out here, because a comment quoting
-        // that literal makes itself an extra hit. No line numbers
-        // either, for the same reason one insertion above decays them.
-        // See {@see Chat::withLaunchNotices()}.
-        //
-        // THE ACCESSOR, not the raw list: {@see launchNotices()} appends the
-        // "and N more" row when a launch overflowed {@see LAUNCH_NOTICE_LIMIT},
-        // and reading the property directly here would hand the transcript a
-        // silently truncated list — the exact failure mode the cap was added
-        // with a counter rather than as a bare array_slice().
-        // E653 ADOPTED HERE (round 65) AS AN AGGREGATE, never as a per-warning
-        // seam: narrowedGrantWarnings() is an uncapped per-agent-per-tool list,
-        // and round 62 measured the naive drain flooding this transcript with
-        // a dozen near-identical sentences — the same per-agent-flood defect
-        // round-61 lane A recorded. drainNarrowedGrantWarnings() gives stderr
-        // the complete record exactly as before and gives the transcript at
-        // most two rows: a header packing as many compact grant pairs as fit
-        // inside LAUNCH_NOTICE_MAX_CHARS, and an "and M more" tail when the
-        // pack ran out of room.
-        self::drainNarrowedGrantWarnings($agentManager);
-
-        $chat = $chat->withLaunchNotices(self::launchNotices());
-
-        // The single-writer lock on the session just opened (audit SES-3(b)).
-        // Taken LAST so that, when another TUI already has the session, the
-        // read-only notice and its `/branch` offer are the bottom row of the
-        // first frame rather than buried above the launch warnings. Every
-        // later session switch moves the lock with it inside Chat.
-        $chat = $chat->withSessionLocking();
-
-        // Bare `--resume`: the picker opens over the fresh session so choosing
-        // is the first thing the user does, and Esc leaves a usable chat.
-        return $opened['picker'] ? $chat->withSessionPickerOpen() : $chat;
     }
 
     /**
@@ -3142,8 +3218,11 @@ final class Bootstrap
      *        Ctrl+P, gets its tools from THIS method, so a set threaded into
      *        {@see backend()} and not forwarded past here would leave the nudge
      *        unfiltered on exactly the common path. A provider switch reaches here
-     *        through the factory {@see chat()} hands `Chat` (N-P3a), which forwards
-     *        the session's set, so the set survives the switch.
+     *        through the factory {@see workspace()} builds (N-P3a, O-2a), which
+     *        forwards the session's set, so the set survives the switch.
+     * @param AgentManager|null $taskManager The manager `Task` delegates to; null
+     *        ships no `Task`. Given without `$taskPool`, the pool is built here
+     *        for `$providerName`, so no path hands `Task` a manager and no pool.
      *
      * @throws \Throwable
      */
@@ -3182,6 +3261,17 @@ final class Bootstrap
 
         $loader = self::instructionLoader($root);
         $skills ??= self::skillRegistry($root);
+
+        // O-2a: A MANAGER WITHOUT A POOL GETS THE POOL FOR THIS PROVIDER, so
+        // every path that hands `Task` a manager hands it a governed pool too —
+        // the launch, the workspace's switch factory, and an embedder's
+        // WorkspaceContext::backendFor() / Chat fallback alike. Built for
+        // $providerName rather than shared: the pool's `workerProvider` spec is
+        // the provider a forked worker constructs, and a caller that names a
+        // provider here is switching to it.
+        if ($taskManager !== null && $taskPool === null) {
+            $taskPool = self::taskWorkerPool(self::agentPoolConfig($providerName));
+        }
 
         $engine = (new EngineBackend($provider, (string) $model))
             // Boot-once capabilities — see the note at app()'s `tools()` call.
