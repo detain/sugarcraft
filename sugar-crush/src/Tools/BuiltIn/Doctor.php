@@ -8,6 +8,10 @@ use SugarCraft\Crush\ToolResult as BootProbe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Crush\Tools\Catalog\BuildsFromCatalog;
+use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
+use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
+use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
 
 /**
  * Reports the terminal's detected candy-mosaic image-rendering protocol and
@@ -46,8 +50,14 @@ use SugarCraft\Mosaic\Mosaic;
  * ImageOverlay/View::images pixel-rendering pipeline is E3 (crush_feat.md
  * section 9), a separate, later step.
  */
-final class Doctor implements Tool
+#[BuiltInTool(name: 'doctor', permission: ToolPermissionClass::Ask, position: 9, gloss: 'a capability probe the model can call to report what this build/deployment actually supports')]
+final class Doctor implements Tool, BuildsFromCatalog
 {
+    public static function fromCatalog(ToolBuildContext $context): self
+    {
+        return new self();
+    }
+
     /**
      * `doctor`, lowercase on purpose (E10, tracker #78): sibling built-ins
      * answer in TitleCase and this name deliberately stays out of step,

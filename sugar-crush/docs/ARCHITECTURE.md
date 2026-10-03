@@ -577,9 +577,7 @@ behind it. See [`PERMISSIONS.md`](PERMISSIONS.md) and [`HOOKS.md`](HOOKS.md).
 
 ## Tools
 
-`src/Tools/BuiltIn/` holds **twelve** concrete `Tool` classes: `Bash`,
-`Doctor`, `Edit`, `Glob`, `Grep`, `LspTool`, `Read`, `SkillTool`, `TaskTool`,
-`WebFetch`, `WebSearch`, `Write`. `Bootstrap::tools()` ships all twelve —
+`src/Tools/BuiltIn/` holds **twelve** concrete `Tool` classes: <!-- tools:class-list:begin -->`Bash`, `Doctor`, `Edit`, `Glob`, `Grep`, `LspTool`, `Read`, `SkillTool`, `TaskTool`, `WebFetch`, `WebSearch`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` ships all twelve —
 `Task` last, gated on the launch holding an `AgentManager` — plus one
 `McpToolBridge` per advertised MCP tool.
 
@@ -588,13 +586,21 @@ ones.** `LspTool` is reachable and answers every call with a "no language server
 configured" error, because nothing in `src/` reads a server command. A figure
 saying "twelve working tools" would be the wrong claim.
 
-The array and the directory are two hand-maintained halves. They agree because a
-test globs the directory —
+The directory is the list. `Tools\Catalog\ToolCatalog` globs
+`src/Tools/BuiltIn/`, and every concrete `Tool` there carries a `#[BuiltInTool]`
+attribute naming its wire name, its permission class (read-only, write-capable,
+ask or no-ask) and its wire position, plus a `fromCatalog()` factory that picks
+what it needs from the launch's shared `ToolBuildContext`.
+`Bootstrap::unfilteredTools()` builds whatever the catalog finds, the permission
+gate and `ProtectFilesHook` classify by the declared class, and
+`tools/gen-tool-docs.php` regenerates the tool roster, the class lists and the
+counts on these pages. A tool class with no declaration is a hard error, not a
+silent skip (`ToolCatalogTest::testAnUndeclaredToolIsRefusedNotSkipped()`), and
 `BinSugarcrushWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()`
-— not because anything derives one from the other. That mechanism exists because
-`Write` was once written, tested, named in the README, and unreachable from any
-real run. If you add a tool class, the thing that tells you to wire it is a red
-test.
+checks the launch set against the directory: that is the defect that once left `Write` written, tested, named in
+the README, and unreachable from any real run. `Task` is the one exception the
+catalog classifies but does not build, because `Bootstrap::tools()` appends it
+after the `allowedTools`/`disabledTools` filter.
 
 `Grep`, `Glob`, `Read`, `Edit` and `Write` resolve through `Tools\PathJail` and
 refuse a path outside the root — with one read-only exception, the saved tool

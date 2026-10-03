@@ -7,6 +7,10 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Crush\Tools\Catalog\BuildsFromCatalog;
+use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
+use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
+use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
 
 /**
  * Deliberately NOT final, unlike its sibling built-ins: the class performs its
@@ -21,7 +25,8 @@ use SugarCraft\Crush\Tools\ToolResult;
  * function of one host's uptime: they went red in CI the first day the box
  * was unreachable, and cost a 30s connect timeout apiece on every other day.
  */
-class WebSearch implements Tool, ParallelSafe
+#[BuiltInTool(name: 'WebSearch', permission: ToolPermissionClass::Ask, position: 8, gloss: 'against `$SUGARCRUSH_SEARCH_ENDPOINT`')]
+class WebSearch implements Tool, ParallelSafe, BuildsFromCatalog
 {
     private const BLOCKED_HOSTNAMES = [
         'localhost',
@@ -127,6 +132,11 @@ class WebSearch implements Tool, ParallelSafe
     public function isParallelSafe(): bool
     {
         return static::class === self::class;
+    }
+
+    public static function fromCatalog(ToolBuildContext $context): self
+    {
+        return new self();
     }
 
     public function name(): string

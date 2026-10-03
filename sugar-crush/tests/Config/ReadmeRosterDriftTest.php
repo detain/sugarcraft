@@ -184,7 +184,10 @@ final class ReadmeRosterDriftTest extends TestCase
         // writes it and a word is the cheapest thing to leave stale. The
         // sibling figure — "disabled 10 of the 11" in the launch-report sample
         // — is pinned by ReadmeSettingsTierClaimTest and not duplicated here.
-        $spelled = [11 => 'Eleven', 12 => 'Twelve', 13 => 'Thirteen', 10 => 'Ten'];
+        $spelled = [
+            10 => 'Ten', 11 => 'Eleven', 12 => 'Twelve', 13 => 'Thirteen', 14 => 'Fourteen', 15 => 'Fifteen',
+            16 => 'Sixteen', 17 => 'Seventeen', 18 => 'Eighteen', 19 => 'Nineteen', 20 => 'Twenty',
+        ];
         $this->assertArrayHasKey(
             \count($shipped),
             $spelled,

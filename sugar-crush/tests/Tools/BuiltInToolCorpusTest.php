@@ -209,7 +209,13 @@ final class BuiltInToolCorpusTest extends TestCase
         // to wired (`src/Tools/BuiltIn/`); the exemption row is deleted in the same
         // commit, so flat grows by one and dynamic shrinks by one while the
         // assertSame above holds its total at thirteen.
-        $this->assertCount(12, $flat, 'twelve wired built-in tools on this tree');
+        // DH-TOOLS: the wired count is the catalog's, not a literal — a new
+        // built-in is a new file plus its #[BuiltInTool] declaration.
+        $this->assertCount(
+            \count(\SugarCraft\Crush\Tools\Catalog\ToolCatalog::entries()),
+            $flat,
+            'every wired built-in tool on this tree is catalogued',
+        );
 
         // And the recorded exemptions must genuinely live OUTSIDE the wired
         // directory: an entry that has moved into `src/Tools/BuiltIn/` would be

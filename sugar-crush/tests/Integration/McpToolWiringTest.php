@@ -192,7 +192,12 @@ final class McpToolWiringTest extends TestCase
 
         $names = array_map(static fn (object $t): string => $t->name(), Bootstrap::tools($this->repo));
 
-        $builtIns = ['Bash', 'Read', 'Edit', 'Glob', 'Grep', 'Write', 'WebFetch', 'WebSearch', 'doctor', 'Skill', 'Lsp'];
+        // The learned wire order is pinned by ToolCatalogTest; this test is
+        // about where the bridge lands, so it reads the catalog's built set.
+        $builtIns = array_map(
+            static fn (\SugarCraft\Crush\Tools\Catalog\CatalogEntry $e): string => $e->name,
+            \SugarCraft\Crush\Tools\Catalog\ToolCatalog::built(),
+        );
 
         $this->assertSame($builtIns, \array_slice($names, 0, \count($builtIns)));
         $this->assertSame('mcp__fake__ping', $names[\count($builtIns)]);
@@ -212,7 +217,11 @@ final class McpToolWiringTest extends TestCase
         $tools = Bootstrap::tools($this->repo);
 
         $this->assertSame([], array_filter($tools, static fn (object $t): bool => $t instanceof McpToolBridge));
-        $this->assertCount(11, $tools, 'the built-in set alone — eleven since Lsp was wired');
+        $this->assertCount(
+            \count(\SugarCraft\Crush\Tools\Catalog\ToolCatalog::built()),
+            $tools,
+            'the built-in set alone — exactly what the catalog builds',
+        );
         $this->assertFileDoesNotExist($this->callLog);
         $this->assertSame(0, $this->handshakeCount());
     }

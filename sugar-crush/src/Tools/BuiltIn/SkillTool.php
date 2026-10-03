@@ -8,6 +8,10 @@ use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Crush\Tools\Catalog\BuildsFromCatalog;
+use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
+use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
+use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
 
 /**
  * Level-2 on-demand skill loader, exposed to the model as an ordinary tool.
@@ -26,7 +30,8 @@ use SugarCraft\Crush\Tools\ToolResult;
  * this tool to every engine tool list, over the same SkillRegistry it hands
  * EngineBackend, so a real bin/sugarcrush session can invoke it.
  */
-final readonly class SkillTool implements Tool
+#[BuiltInTool(name: 'Skill', permission: ToolPermissionClass::Ask, position: 10, gloss: 'level 2 of the progressive-disclosure design below')]
+final readonly class SkillTool implements Tool, BuildsFromCatalog
 {
     /**
      * The one placeholder a skill body may name, spelled as Claude Code's
@@ -39,6 +44,11 @@ final readonly class SkillTool implements Tool
         private SkillRegistry $registry,
         private ?SkillLoader $loader = null,
     ) {
+    }
+
+    public static function fromCatalog(ToolBuildContext $context): self
+    {
+        return new self($context->skills, new SkillLoader());
     }
 
     public function name(): string

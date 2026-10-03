@@ -14,6 +14,10 @@ use SugarCraft\Crush\Tools\AcceptsWorktreeJail;
 use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Crush\Tools\Catalog\BuildsFromCatalog;
+use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
+use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
+use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
 
 /**
  * Runs a shell command.
@@ -34,7 +38,8 @@ use SugarCraft\Crush\Tools\ToolResult;
  * {@see \SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook}, a heuristic
  * PreToolUse hook that denies commands referencing paths outside `$root`.
  */
-final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, AcceptsHeartbeat
+#[BuiltInTool(name: 'Bash', permission: ToolPermissionClass::Write, position: 1)]
+final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, AcceptsHeartbeat, BuildsFromCatalog
 {
     use CapturesProcessOutput;
     use RebindsWorktreeJail;
@@ -78,6 +83,11 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
             'commitAttribution' => $commitAttribution,
             'prAttribution' => $prAttribution,
         ]));
+    }
+
+    public static function fromCatalog(ToolBuildContext $context): self
+    {
+        return new self($context->root);
     }
 
     public function name(): string

@@ -4901,16 +4901,24 @@ final class DocFigureProseDriftTest extends TestCase
         }
         self::assertNotNull($span, 'Bootstrap::unfilteredTools() no longer exists — this arm and the delegation above both lost their authority');
         $spanText = (string) substr($bootstrap, $span['begin'], $span['end'] - $span['begin']);
-        $wiredCount = preg_match_all('/new (\w+)\((?:(?!new )[^;])*?instructionLoader: \$loader/', $spanText, $wired);
-        self::assertGreaterThan(0, (int) $wiredCount, 'no constructor call in unfilteredTools passes the named loader argument anymore — the page\'s whole threading paragraph became fiction');
-        self::assertSame($documentedTools[1], $wired[1], 'the documented tool list and the constructor calls that actually receive the loader no longer agree in membership or order');
-        foreach ($wired[1] as $tool) {
-            self::assertTrue(class_exists('SugarCraft\Crush\Tools\BuiltIn\\' . $tool), sprintf('%s, listed by the page and wired at Bootstrap, no longer resolves under Tools\BuiltIn', $tool));
+        // DH-TOOLS: unfilteredTools() puts ONE loader into the catalog's shared
+        // build context, and each built-in's factory forwards it — so the
+        // threaded set is the catalog tools (in wire order) whose factory
+        // passes `instructionLoader: $context->loader`.
+        self::assertMatchesRegularExpression('/ToolBuildContext\((?:(?!\)\);)[\s\S])*loader: \$loader/', $spanText, 'unfilteredTools() no longer hands its one loader to the tool catalog\'s build context — the page\'s whole threading paragraph became fiction');
+        $wired = [];
+        foreach (\SugarCraft\Crush\Tools\Catalog\ToolCatalog::built() as $entry) {
+            $factory = self::bodyExcerpt(self::sourceOf('Tools/BuiltIn/' . $entry->fileName()), 'fromCatalog', 400);
+            if (str_contains($factory, 'instructionLoader: $context->loader')) {
+                $wired[] = $entry->name;
+            }
         }
+        self::assertNotSame([], $wired, 'no catalog tool forwards the shared loader anymore — the page\'s whole threading paragraph became fiction');
+        self::assertSame($documentedTools[1], $wired, 'the documented tool list and the tools whose factory receives the loader no longer agree in membership or order');
         self::assertSame(
-            $wiredCount,
+            0,
             substr_count($bootstrap, 'instructionLoader: $loader'),
-            'a second site outside unfilteredTools started threading the loader — the single-thread claim this arm pins needs re-reading',
+            'a site in Bootstrap started threading the loader into a tool directly instead of through the catalog context — the single-thread claim this arm pins needs re-reading',
         );
 
         self::assertSame(
@@ -5165,7 +5173,7 @@ final class DocFigureProseDriftTest extends TestCase
         $segment = self::markdownProse(substr($raw, $start, $end - $start));
 
         self::assertSame(1, preg_match('/ships (\w+) built-in tools and one of them — `Task` — is exactly the delegation seam/', $segment, $word), 'the Task bullet no longer spells its built-in count beside the delegation sentence');
-        $wordNumbers = ['ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13];
+        $wordNumbers = ['ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17, 'eighteen' => 18, 'nineteen' => 19, 'twenty' => 20];
         self::assertArrayHasKey($word[1], $wordNumbers, "the spelled count '{$word[1]}' is outside the pinned word map — extend it deliberately");
 
         $files = array_values(array_filter(scandir($root . '/src/Tools/BuiltIn') ?: [], static fn(string $f): bool => str_ends_with($f, '.php')));
@@ -6241,16 +6249,17 @@ final class DocFigureProseDriftTest extends TestCase
 
         $bootstrap = self::codeOnly(self::sourceOf('Cli/Bootstrap.php'));
         self::assertMatchesRegularExpression('/\$ruleNudge = RulePathNudge::(?:fromLoader|new)\(/', $bootstrap, 'Bootstrap no longer builds the RulePathNudge the pages say it wires');
+        // DH-TOOLS: Bootstrap hands the tracker to the catalog's shared build
+        // context once, and each built-in's own factory passes it on — so the
+        // nudged set is the catalog tools whose factory forwards it.
+        self::assertMatchesRegularExpression('/ToolBuildContext\((?:(?!\)\);)[\s\S])*ruleNudge: \$ruleNudge/', $bootstrap, 'Bootstrap no longer hands $ruleNudge to the tool catalog\'s build context');
         $nudged = [];
-        $offset = 0;
-        while (preg_match('/new (\w+)\(/', $bootstrap, $m, PREG_OFFSET_CAPTURE, $offset) === 1) {
-            $argStart = $m[0][1] + \strlen($m[0][0]);
-            if (str_contains(self::balancedArguments($bootstrap, $argStart), 'ruleNudge: $ruleNudge')) {
-                $nudged[] = $m[1][0];
+        foreach (\SugarCraft\Crush\Tools\Catalog\ToolCatalog::built() as $entry) {
+            $factory = self::bodyExcerpt(self::codeOnly(self::sourceOf('Tools/BuiltIn/' . $entry->fileName())), 'fromCatalog', 400);
+            if (str_contains($factory, 'ruleNudge: $context->ruleNudge')) {
+                $nudged[] = basename($entry->fileName(), '.php');
             }
-            $offset = $argStart;
         }
-        $nudged = array_values(array_unique($nudged));
         sort($nudged);
         self::assertNotSame([], $nudged, 'Bootstrap hands $ruleNudge to no tool — the tool-time channel the pages describe is unwired');
 

@@ -8283,69 +8283,30 @@ final class Bootstrap
             $rulesState,
         );
 
+        // THE BUILT-IN HALF COMES FROM THE CATALOG (DH-TOOLS): every class
+        // under `src/Tools/BuiltIn/` declares its wire name, permission class
+        // and wire position (`#[BuiltInTool]`) and builds itself from this one
+        // shared context, so a new tool is a new file rather than an edit
+        // here. One loader and one pair of nudge trackers for every
+        // path-resolving tool, for the announced-set reason above.
+        //
+        // MCP bridges are APPENDED, so the built-ins keep the wire order the
+        // model has learned and an MCP config can only ever ADD names. Empty
+        // unless this project ships a `.mcp.json` AND the user trusted this
+        // root — see {@see mcpTools()} and {@see mcpClient()}. `Task` is not in
+        // this set: `tools()` appends it after the filter, only when an
+        // AgentManager is bound.
         $tools = [
-            new Bash($root),
-            new Read($root, instructionLoader: $loader, skillNudge: $nudge, ruleNudge: $ruleNudge),
-            new Edit($root, instructionLoader: $loader, skillNudge: $nudge, ruleNudge: $ruleNudge),
-            new Glob($root, instructionLoader: $loader, skillNudge: $nudge, ruleNudge: $ruleNudge, fdAvailable: $fdAvailable),
-            // Same pair as Read/Edit/Glob/Write, and it was the one
-            // path-resolving tool without them: a `CLAUDE.md` governing a
-            // directory stayed unannounced when Grep was what surfaced the
-            // file, and a `paths:`-scoped skill stayed silent on a search that
-            // named every file it covers.
-            //
-            // Taking the pair gives Grep session-scoped state, which is why
-            // it now implements `CarriesSessionState` — see
-            // {@see \SugarCraft\Crush\Tools\BuiltIn\Grep::isParallelSafe()}
-            // for why its concurrency verdict is unchanged but its
-            // justification is not.
-            new Grep($root, instructionLoader: $loader, skillNudge: $nudge, ruleNudge: $ruleNudge, rgAvailable: $rgAvailable),
-            // Write, and it was missing: {@see Edit} refuses a path that does
-            // not exist yet (it requires `file_exists()` AND a non-empty
-            // `old_string`), so with the set at nine the model's ONLY route to
-            // a new file was a `Bash` heredoc — which skips the diff preview
-            // entirely and reaches the permission gate as an opaque shell
-            // command instead of a reviewable write. The class, its jail
-            // routing and its diff rendering were all finished and tested
-            // (`tests/Tools/BuiltIn/WriteTest.php`,
-            // `tests/Tools/WorktreeJailRoutingTest.php`); only this line was
-            // absent, so no real run could reach it. Same three arguments as
-            // Edit deliberately — a write into a skill-scoped or
-            // CLAUDE.md-bearing directory has to announce that context exactly
-            // as touching the path through Read/Edit/Glob would.
-            new Write($root, instructionLoader: $loader, skillNudge: $nudge, ruleNudge: $ruleNudge),
-            new WebFetch(),
-            new WebSearch(),
-            new Doctor(),
-            // Level-2 of the progressive-disclosure design: the system prompt
-            // carries only each skill's name+description, and the model pulls
-            // a full SKILL.md body through this tool only when it decides one
-            // is relevant (crush_feat.md section 7 E1/E2).
-            new SkillTool($skills, new SkillLoader()),
-            // ELEVENTH, and appended to the built-in half rather than inserted:
-            // every position above is a wire position the model has already
-            // learned. Dormant by construction on every launch today — see
-            // {@see lspTool()} for the missing configuration half and for why a
-            // dormant-but-reachable tool is shipped instead of an unreachable
-            // finished subsystem.
-            self::lspTool($root, $lsp),
-            // APPENDED, so the built-ins keep the wire order the model has
-            // learned and an MCP config can only ever ADD names. Empty unless
-            // this project ships a `.mcp.json` AND the user trusted this root —
-            // see {@see mcpTools()} and {@see mcpClient()}.
-            //
-            // This array wires the ELEVEN STATIC built-in positions; the
-            // BUILT-IN set — which is what `README.md`'s figure and
-            // `BinSugarcrushWiringTest`'s scanned assertion are both about —
-            // counts TWELVE since TaskTool (E675) joined it OUTSIDE this
-            // literal, appended to the filtered tool list only when an
-            // AgentManager is bound. What this array returns is its static set
-            // PLUS whatever the project's MCP servers advertise, which is a
-            // per-project number nothing in `src/` can know. The static wiring
-            // said TEN until `LspTool` was added above; if you grow the
-            // built-in set to a thirteenth, the count here, the README figure
-            // and `BuiltInToolCorpusTest`'s wired-count assertion all move
-            // together.
+            ...\SugarCraft\Crush\Tools\Catalog\ToolCatalog::build(new \SugarCraft\Crush\Tools\Catalog\ToolBuildContext(
+                root: $root,
+                loader: $loader,
+                skills: $skills,
+                skillNudge: $nudge,
+                ruleNudge: $ruleNudge,
+                lsp: $lsp,
+                rgAvailable: $rgAvailable,
+                fdAvailable: $fdAvailable,
+            )),
             ...self::mcpTools($root),
         ];
 

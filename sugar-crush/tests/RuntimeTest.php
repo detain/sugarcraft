@@ -3662,22 +3662,16 @@ DOC;
 
         $source = (string) file_get_contents($gate);
 
-        $found = preg_match(
-            // THE PARAMETER NAME IS NOT PART OF THE SHAPE. An earlier revision
-            // spelled `\$call` literally in both halves, so renaming the gate's
-            // parameter - a change with no semantic content at all - reddened
-            // this test under "no longer has the shape this drift test reads".
-            // That is a guard reddening on correct code, which is what the
-            // sort-order comment below already argues against. `\$\w+`
-            // matches any name while still requiring the same structure.
-            '/function isWriteTool\(ToolCall \$\w+\): bool\s*\{\s*if \(in_array\(\$\w+->name, \[([^\]]*)\], true\)\)/',
-            $source,
-            $m,
+        // DH-TOOLS: the gate no longer spells its roster — isWriteTool() reads
+        // the tools that declare the write class in their #[BuiltInTool]
+        // attribute. So the roster is read from the catalog, after checking
+        // that the gate really consults it.
+        $this->assertSame(
+            1,
+            preg_match('/function isWriteTool\(ToolCall \$\w+\): bool\s*\{\s*if \(in_array\(\$\w+->name, ToolCatalog::namesOf\(ToolPermissionClass::Write\), true\)\)/', $source),
+            'PermissionGate::isWriteTool() no longer reads the catalog\'s write class — the shape this drift test reads',
         );
-        $this->assertSame(1, $found, 'PermissionGate::isWriteTool() no longer has the shape this drift test reads');
-
-        preg_match_all("/'([^']+)'/", $m[1], $names);
-        $gateRoster = $names[1];
+        $gateRoster = \SugarCraft\Crush\Tools\Catalog\ToolCatalog::namesOf(\SugarCraft\Crush\Tools\Catalog\ToolPermissionClass::Write);
 
         $this->assertNotEmpty($gateRoster, 'the extraction found no names - the instrument is dead, not the roster empty');
 
@@ -3905,14 +3899,10 @@ DOC;
         // already parses that file. Both sides are derived now.
         $this->assertSame(
             1,
-            preg_match(
-                '/function isReadOnlyTool\(ToolCall \$\w+\): bool\s*\{\s*return in_array\(\$\w+->name, \[([^\]]*)\], true\)/',
-                $source,
-                $readOnlyMatch,
-            ),
-            'PermissionGate::isReadOnlyTool() no longer has the shape this census reads',
+            preg_match('/function isReadOnlyTool\(ToolCall \$\w+\): bool\s*\{\s*return in_array\(\$\w+->name, ToolCatalog::namesOf\(ToolPermissionClass::Read\), true\)/', $source),
+            'PermissionGate::isReadOnlyTool() no longer reads the catalog\'s read class — the shape this census reads',
         );
-        preg_match_all("/'([^']+)'/", $readOnlyMatch[1], $gateReadOnly);
+        $gateReadOnly = [1 => \SugarCraft\Crush\Tools\Catalog\ToolCatalog::namesOf(\SugarCraft\Crush\Tools\Catalog\ToolPermissionClass::Read)];
 
         $this->assertNotEmpty(
             $gateReadOnly[1],

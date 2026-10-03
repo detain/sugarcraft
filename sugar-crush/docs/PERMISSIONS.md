@@ -81,12 +81,14 @@ first — `$(echo rm) -rf /`, `x=-rf; rm $x /`, `bash -c '…'`, `eval`, aliases
 (Before audit F-P1 the quoted-flag spellings, a second target, `/*`, `~/` and
 `$HOME` were all **allowed** under `bypass-permissions`.)
 
-Two name classes drive the evaluators:
+<!-- tools:classes:begin -->
+Two name classes drive the evaluators. Each built-in tool declares its class in its `#[BuiltInTool]` attribute, and `Tools\Catalog\ToolCatalog` reads them:
 
-- **read-only**: `Read`, `Grep`, `Glob`, `Lsp`
+- **read-only**: `Read`, `Glob`, `Grep`, `Lsp`
 - **write-capable**: `Bash`, `Edit`, `Write`, `Task`, and anything starting `mcp__`
 
-Note what is in *neither* list: `WebFetch`, `WebSearch`, `Skill` and `doctor`.
+Note what is in *neither* list: `WebFetch`, `WebSearch`, `doctor` and `Skill`.
+<!-- tools:classes:end -->
 They fall through to each mode's default arm — `Ask` under `default`,
 `accept-edits` and `plan`, `Deny` under `dont-ask`.
 

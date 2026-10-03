@@ -17,6 +17,10 @@ use SugarCraft\Crush\Tools\AcceptsWorktreeJail;
 use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Crush\Tools\Catalog\BuildsFromCatalog;
+use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
+use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
+use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
 
 /**
  * Create a file (crush_code.md Phase 8 item 12).
@@ -41,7 +45,8 @@ use SugarCraft\Crush\Tools\ToolResult;
  * Omitting the interface makes this tool a barrier, executed alone in provider
  * order, which is the correct and safe default.
  */
-final readonly class Write implements Tool, AcceptsWorktreeJail, PromptGuidance
+#[BuiltInTool(name: 'Write', permission: ToolPermissionClass::Write, position: 6)]
+final readonly class Write implements Tool, AcceptsWorktreeJail, PromptGuidance, BuildsFromCatalog
 {
     use BuildsUnifiedDiff;
     use RebindsWorktreeJail;
@@ -74,6 +79,11 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, PromptGuidance
         private int $maxDiffBytes = self::DEFAULT_MAX_DIFF_BYTES,
         private ?\Closure $writeSeam = null,
     ) {}
+
+    public static function fromCatalog(ToolBuildContext $context): self
+    {
+        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge);
+    }
 
     public function name(): string
     {

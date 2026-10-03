@@ -9,6 +9,8 @@ use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookInterface;
 use SugarCraft\Crush\Hooks\HookResult;
 use SugarCraft\Crush\Permissions\ShellWords;
+use SugarCraft\Crush\Tools\Catalog\ToolCatalog;
+use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
 
 final readonly class ProtectFilesHook implements HookInterface
 {
@@ -213,11 +215,6 @@ final readonly class ProtectFilesHook implements HookInterface
         '#(^|/)\.sugar-crush/(?:skills|commands|rules|workflows)(?![\w.-])#',
     ];
 
-    /**
-     * The matched tools that cannot write, and so are judged without
-     * {@see self::WRITE_ONLY_PATTERNS} — see {@see execute()}.
-     */
-    private const READ_ONLY_TOOLS = ['Read', 'Grep', 'Glob', 'Lsp'];
 
     /** @var list<string> */
     private array $protectedPatterns;
@@ -337,7 +334,14 @@ final readonly class ProtectFilesHook implements HookInterface
     {
         $toolName = ucfirst(strtolower($context->toolName));
         $inputs = self::inputsFor($toolName, $context);
-        $readOnly = \in_array($toolName, self::READ_ONLY_TOOLS, true);
+        // The matched tools that cannot write are judged without
+        // WRITE_ONLY_PATTERNS: the built-ins whose catalog declaration is
+        // read-only. Compared case-insensitively, like the matcher.
+        $readOnly = \in_array(
+            strtolower($context->toolName),
+            array_map('strtolower', ToolCatalog::namesOf(ToolPermissionClass::Read)),
+            true,
+        );
 
         foreach ($this->protectedPatterns as $pattern) {
             if ($readOnly && \in_array($pattern, self::WRITE_ONLY_PATTERNS, true)) {

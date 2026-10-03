@@ -12,6 +12,10 @@ use SugarCraft\Crush\Tools\AcceptsWorktreeJail;
 use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Crush\Tools\Catalog\BuildsFromCatalog;
+use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
+use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
+use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
 
 /**
  * The model-facing door onto `src/LSP/` — go-to-definition, find-references,
@@ -52,7 +56,8 @@ use SugarCraft\Crush\Tools\ToolResult;
  * {@see \SugarCraft\Crush\Tools\CarriesSessionState} AND by giving each child its
  * own connection; neither is in scope here.
  */
-final readonly class LspTool implements Tool, AcceptsWorktreeJail
+#[BuiltInTool(name: 'Lsp', permission: ToolPermissionClass::Read, position: 11, gloss: 'definitions/references/hover/symbols/code-actions/diagnostics from a language server')]
+final readonly class LspTool implements Tool, AcceptsWorktreeJail, BuildsFromCatalog
 {
     use RebindsWorktreeJail;
     use TruncatesOutput;
@@ -127,6 +132,11 @@ final readonly class LspTool implements Tool, AcceptsWorktreeJail
     private function jailRoot(): ?string
     {
         return $this->worktreeJail?->root() ?? $this->root;
+    }
+
+    public static function fromCatalog(ToolBuildContext $context): self
+    {
+        return new self($context->lsp, $context->root);
     }
 
     public function name(): string

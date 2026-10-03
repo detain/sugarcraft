@@ -8,6 +8,10 @@ use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Crush\Tools\Catalog\BuildsFromCatalog;
+use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
+use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
+use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
 
 /**
  * Fetches one URL and refuses everything that aims at this machine or its
@@ -64,7 +68,8 @@ use SugarCraft\Crush\Tools\ToolResult;
  * is a plain budget: a non-positive value falls back to the wire bound, since
  * the read stops there whatever the caller asked for.
  */
-final readonly class WebFetch implements Tool, ParallelSafe
+#[BuiltInTool(name: 'WebFetch', permission: ToolPermissionClass::Ask, position: 7)]
+final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
 {
     use TruncatesOutput;
 
@@ -176,6 +181,11 @@ final readonly class WebFetch implements Tool, ParallelSafe
     public function isParallelSafe(): bool
     {
         return true;
+    }
+
+    public static function fromCatalog(ToolBuildContext $context): self
+    {
+        return new self();
     }
 
     public function name(): string

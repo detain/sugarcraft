@@ -200,11 +200,21 @@ final class BinSugarcrushWiringTest extends TestCase
             // learned. `doctor` is lower-case where the other eleven are TitleCase —
             // asserted as it actually is rather than as it ought to be, since
             // renaming a tool the model already knows is not this test's business.
-            // A NEW tool fails the scanned assertion above before it reaches here,
-            // so this list cannot silently go stale.
+            // A SUBSET pin: a new tool adds a name without editing this list,
+            // while a learned name that disappears or is respelled still reds.
             ['Bash', 'Edit', 'Glob', 'Grep', 'Lsp', 'Read', 'Skill', 'Task', 'WebFetch', 'WebSearch', 'Write', 'doctor'],
-            $names,
+            array_values(array_intersect(
+                $names,
+                ['Bash', 'Edit', 'Glob', 'Grep', 'Lsp', 'Read', 'Skill', 'Task', 'WebFetch', 'WebSearch', 'Write', 'doctor'],
+            )),
+            'a wire name the model has learned is gone or respelled',
         );
+
+        // DH-TOOLS: and the launch set is exactly the catalog — a new tool joins
+        // by declaring itself, not by editing this list.
+        $catalogued = \SugarCraft\Crush\Tools\Catalog\ToolCatalog::names();
+        sort($catalogued);
+        $this->assertSame($catalogued, $names);
 
         // The same loader instance Read/Edit/Glob hold, not merely a non-null
         // one: loadForPath()'s "already injected this session" map is

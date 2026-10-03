@@ -20,8 +20,13 @@ use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Tools\PathJail;
+use SugarCraft\Crush\Tools\Catalog\BuildsFromCatalog;
+use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
+use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
+use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
 
-final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, CarriesSessionState, AcceptsHeartbeat
+#[BuiltInTool(name: 'Grep', permission: ToolPermissionClass::Read, position: 5)]
+final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, CarriesSessionState, AcceptsHeartbeat, BuildsFromCatalog
 {
     use CapturesProcessOutput;
     use RebindsWorktreeJail;
@@ -152,6 +157,11 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         if (is_array($rules)) {
             $this->ruleNudge?->markAnnouncedPaths(array_values($rules));
         }
+    }
+
+    public static function fromCatalog(ToolBuildContext $context): self
+    {
+        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge, rgAvailable: $context->rgAvailable);
     }
 
     public function name(): string

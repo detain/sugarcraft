@@ -19,8 +19,13 @@ use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\PathJail;
+use SugarCraft\Crush\Tools\Catalog\BuildsFromCatalog;
+use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
+use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
+use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
 
-final readonly class Edit implements Tool, AcceptsWorktreeJail
+#[BuiltInTool(name: 'Edit', permission: ToolPermissionClass::Write, position: 3)]
+final readonly class Edit implements Tool, AcceptsWorktreeJail, BuildsFromCatalog
 {
     // The unified-diff builder below used to live here; it moved out verbatim
     // so {@see Write} could produce the SAME diff for a new file (a write whose
@@ -50,6 +55,11 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail
         private ?RulePathNudge $ruleNudge = null,
         private ?\Closure $writeSeam = null,
     ) {}
+
+    public static function fromCatalog(ToolBuildContext $context): self
+    {
+        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge);
+    }
 
     public function name(): string
     {
