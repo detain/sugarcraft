@@ -231,17 +231,21 @@ No other provider marks anything: `openai` and `sglang` cache server-side withou
   turn's result frame, so the count spans turns. The buckets are also priced (see `modelPrices`
   in `SETTINGS.md`).
 
-## Session affinity — dormant-id state
+## Session affinity — the request carries the session
 
 `Providers\Concerns\SessionAffinity` declares the `X-SugarCrush-Session` header (full SHA-256 hex
 of the session id, never the raw id — a raw id pins one user's traffic and leaks a persistent
 identifier to every proxy hop; and no header at all rather than an empty one when there is no
 session, so session-less traffic does not concentrate on one warm backend). The trait ships on
-`CustomProvider` and `SglangProvider`, but the id lives on the host classes and **nothing on the
-wired path passes one**: both providers stay at the default null, so the wire carries no affinity
-header and renders byte-identically to the pre-trait shape. The consumer contract for the future
-wiring step is recorded in the trait: the id must be the *current* session's, re-taken across
-`/resume`, `/branch` and session switches.
+`CustomProvider` and `SglangProvider`, and the id is **request-scoped**: `Chat` stamps its current
+session onto the engine on every dispatch (`EngineBackend::withSessionId()`), the engine onto the
+turn's `App`, and `Runtime::run()` onto each `CompleteRequest::$sessionId`, which the two
+providers' completion post sites hash into the header. Because the id rides the request rather
+than the provider, it follows `/resume`, `/branch` and session switches without rebuilding the
+provider. The same per-turn id is what the hook chain now receives as `sessionId` on the engine
+path (it used to be empty). A turn with no session — `-p`, a chat not yet saved — still sends no
+header, and `embeddings()` (whose request names no session) falls back to the provider's
+constructor id, which is null on the wired path.
 
 ## The "do not do this" register
 

@@ -11408,6 +11408,13 @@ final class Chat implements Model
         if ($backend instanceof Backend\EngineBackend && $this->compactorConfig !== null) {
             $backend = $backend->withCompactorConfig($this->compactorConfig);
         }
+        // Step 0.13-a: the session this turn belongs to, read per DISPATCH so
+        // `/resume`, `/branch` and Ctrl+Tab are followed — it reaches the
+        // hooks' `sessionId` and the providers' session-affinity header. A
+        // chat with no session yet dispatches the shared backend untouched.
+        if ($backend instanceof Backend\EngineBackend && $next->currentSessionId !== null) {
+            $backend = $backend->withSessionId($next->currentSessionId);
+        }
         // Only the rows the model may see (audit 15b-03): command echoes and
         // their output, notices and error strings live in the same list for
         // the transcript's sake and never go out as turns.

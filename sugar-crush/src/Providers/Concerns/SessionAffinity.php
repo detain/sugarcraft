@@ -32,13 +32,19 @@ namespace SugarCraft\Crush\Providers\Concerns;
  * null or blank id therefore emits no header at all, the same conditional
  * shape `Authorization` takes when there is no api key.
  *
- * CONSUMER CONTRACT — the wiring step has not landed yet. The id must be the
+ * CONSUMER CONTRACT — WIRED PER REQUEST (step 0.13-a). The id must be the
  * CURRENT session's: `Chat::$currentSessionId` changes under `/resume`,
- * `/branch` and Ctrl+Tab, so a provider built with a stale id keeps hashing
- * the previous session; when the live wiring ships it must pass the id at
- * construction and re-construct (or the factory re-take) on every switch.
- * Until then both providers stay at the default `null` and the wire carries no
- * affinity header — byte-identical to before this trait existed.
+ * `/branch` and Ctrl+Tab, so a provider built with a fixed id would keep
+ * hashing the previous session. The live id therefore rides the REQUEST, not
+ * the provider: `Chat::scheduleBackendCompletion()` stamps it onto the
+ * engine per dispatch (`EngineBackend::withSessionId()`), the engine onto the
+ * turn's App, and `Runtime::run()` onto every
+ * {@see \SugarCraft\Crush\Providers\CompleteRequest::$sessionId}; each
+ * completion post site hands that to {@see sessionAffinityHeaders()}, where a
+ * request id WINS over the constructor's `$sessionAffinityId`. The
+ * constructor id stays as the fallback for a request that names no session
+ * and for `embeddings()`, whose request carries none. A turn with no session
+ * (the `-p` path, a fresh unsaved chat) still sends no header.
  *
  * NOT ROUTED THROUGH THIS TRAIT (enumerated follow-ups, not oversights): the
  * OpenAI-SDK transports, Vertex, Bedrock and the ClaudeCode CLI all carry the
@@ -79,7 +85,8 @@ trait SessionAffinity
 
     /**
      * The per-request `headers` option at a `post()` site: `[]` or the one
-     * affinity header, taken from the host class's `$sessionAffinityId`.
+     * affinity header — for the request's own session id when it names one
+     * (step 0.13-a), else the host class's `$sessionAffinityId`.
      *
      * Returned as per-request options rather than baked into the client
      * defaults because an injected client is a real shape, not a test fiction:
@@ -95,9 +102,11 @@ trait SessionAffinity
      *
      * @return array<string, string>
      */
-    public function sessionAffinityHeaders(): array
+    public function sessionAffinityHeaders(?string $requestSessionId = null): array
     {
-        $value = $this->sessionAffinityHeaderValue($this->sessionAffinityId);
+        $value = $this->sessionAffinityHeaderValue(
+            $requestSessionId !== null && $requestSessionId !== '' ? $requestSessionId : $this->sessionAffinityId,
+        );
 
         if ($value === null) {
             return [];

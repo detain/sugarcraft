@@ -111,6 +111,11 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 static fn(EngineBackend $b): EngineBackend => $b->withMaxConcurrentDelegations(9),
                 ['maxConcurrentDelegations'],
             ],
+            // Step 0.13-a: the session every turn's App and request carry.
+            'withSessionId' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withSessionId('other-session'),
+                ['sessionId'],
+            ],
             // Audit R1: the per-turn App's compaction budgets.
             'withCompactorConfig' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withCompactorConfig(new CompactorConfig(skillBudgetPerSkill: 7)),
@@ -171,6 +176,10 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
         $this->assertSame(1, $this->state($base->withMaxConcurrentDelegations(0))['maxConcurrentDelegations']);
         $this->assertSame(7, $this->state($base->withMaxConcurrentDelegations(7))['maxConcurrentDelegations']);
         $this->assertNull($this->state($base->withMaxConcurrentDelegations(null))['maxConcurrentDelegations']);
+
+        $this->assertSame('s-2', $this->state($base->withSessionId('s-2'))['sessionId']);
+        $this->assertNull($this->state($base->withSessionId(''))['sessionId'], 'a blank id is no session');
+        $this->assertNull($this->state($base->withSessionId(null))['sessionId']);
 
         $s = $this->state($base->withSpendCap(null));
         $this->assertNull($s['spendCapUsd']);
@@ -252,6 +261,7 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
             compactorConfig: new CompactorConfig(skillBudgetPerSkill: 3),
             stepUsageObserver: static function (): void {},
             maxConcurrentDelegations: 3,
+            sessionId: 'populated-session',
         );
     }
 

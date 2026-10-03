@@ -519,6 +519,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
          * default (5). @see withMaxConcurrentDelegations()
          */
         private readonly ?int $maxConcurrentDelegations = null,
+        /**
+         * Step 0.13-a: the session the turns this backend runs belong to,
+         * stamped per dispatch by
+         * {@see \SugarCraft\Crush\Chat::scheduleBackendCompletion()} so it
+         * follows `/resume`, `/branch` and Ctrl+Tab. Forwarded onto every
+         * turn's {@see App::$sessionId}, from where it reaches the hook
+         * chain's `sessionId` and every provider request's
+         * {@see \SugarCraft\Crush\Providers\CompleteRequest::$sessionId}
+         * (the session-affinity header). Null — no session — leaves both
+         * empty, as before. @see withSessionId()
+         */
+        private readonly ?string $sessionId = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -902,6 +914,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     }
 
     /**
+     * The same engine, running its turns as session $sessionId — see
+     * {@see $sessionId}. A blank id is no session.
+     */
+    public function withSessionId(?string $sessionId): self
+    {
+        return $this->mutate(['sessionId' => $sessionId === '' ? null : $sessionId]);
+    }
+
+    /**
      * Confine this backend to a sub-agent's git worktree: every path-resolving
      * tool is re-jailed to `$worktreeRoot`, and BashEscapeDenyHook is
      * registered so Bash commands that name paths outside it are refused.
@@ -1138,6 +1159,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             // Audit R1: the skill budget the prompt splice applies, from the
             // same source the launch notice priced it against.
             ->withCompactorConfig($this->compactorConfig())
+            // Step 0.13-a: before this, every engine-path hook was handed
+            // `sessionId: ''` and no request named its session.
+            ->withSessionId($this->sessionId)
             ->withMessages($messages);
         // @endregion build
 

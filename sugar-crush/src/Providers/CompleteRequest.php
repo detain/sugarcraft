@@ -191,5 +191,18 @@ final readonly class CompleteRequest
          * pre-E493 wire byte-for-byte.
          */
         public ?\Closure $onHeartbeat = null,
+        /**
+         * The session this request belongs to (step 0.13-a), RAW — the
+         * providers that declare {@see Concerns\SessionAffinity} hash it into
+         * the `X-SugarCrush-Session` header at send time, so the wire never
+         * carries it. Request-scoped rather than a provider constructor field
+         * because the session changes under `/resume`, `/branch` and
+         * Ctrl+Tab while the provider instance does not: the engine copies
+         * the current id onto every request it builds
+         * ({@see \SugarCraft\Crush\Runtime::run()}, from the turn's App).
+         * Null — every caller that knows no session — sends no header unless
+         * the provider was itself constructed with an id.
+         */
+        public ?string $sessionId = null,
     ) {}
 }

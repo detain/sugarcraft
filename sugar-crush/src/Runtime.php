@@ -1340,6 +1340,9 @@ final class Runtime
             // Closure::fromCallable() returns an already-Closure callable
             // unchanged, so the child's frame-writer costs nothing here.
             onHeartbeat: $onHeartbeat === null ? null : \Closure::fromCallable($onHeartbeat),
+            // Step 0.13-a: the turn's session, which a SessionAffinity
+            // provider hashes into its routing header per request.
+            sessionId: $app->sessionId,
         );
 
         // foreach-reyield instead of `yield from`: `yield from` preserves

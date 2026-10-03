@@ -1119,7 +1119,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
             // progress closure, so the spread is byte-neutral otherwise.
             $response = $this->httpClient->post('chat/completions', [
                 'json' => $params,
-                'headers' => $this->sessionAffinityHeaders(),
+                'headers' => $this->sessionAffinityHeaders($request->sessionId),
             ] + self::heartbeatOptions($request->onHeartbeat));
 
             $data = json_decode($response->getBody()->getContents(), true);
@@ -1163,7 +1163,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
             $response = $this->httpClient->post('chat/completions', [
                 'json' => $params,
                 'stream' => true,
-                'headers' => $this->sessionAffinityHeaders(),
+                'headers' => $this->sessionAffinityHeaders($request->sessionId),
             ]);
 
             $stream = $response->getBody();

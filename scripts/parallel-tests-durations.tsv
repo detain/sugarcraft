@@ -252,6 +252,7 @@ sugar-crush/tests/MCP/StdioMcpServerToolListRobustnessTest.php	0.486	9
 sugar-crush/tests/Backend/EngineBackendAttachmentsTest.php	0.485	6
 sugar-crush/tests/Renderer/StatusBarModelAndReadOnlyTest.php	0.478	10
 sugar-crush/tests/Chat/ChatPostToolUseBlockTest.php	0.478	7
+sugar-crush/tests/Backend/SessionAffinityWiringTest.php	0.478	6
 sugar-crush/tests/Chat/ChatCancelKeepsLoopLiveTest.php	0.464	2
 sugar-crush/tests/SuiteTempSandboxContractTest.php	0.463	5
 sugar-crush/tests/Chat/BackgroundStopCommandTest.php	0.456	5
