@@ -237,6 +237,14 @@ the turn. When the budget runs out, or the guard ends the turn,
 `summariseStoppedTurn()` makes one more `Runtime::run()` with
 `App::withTools([])` and a user message asking for done / remaining / next, so
 the turn ends in an answer.
+
+The loop's ordinary exit — a step with no tool results — has one more check in
+front of it. A reply with no text is not an answer: a reasoning-only reply gets
+one nudge (a `UserMessage` asking for an answer or a tool call, appended after
+it), and a fully empty reply is re-requested up to twice with nothing appended.
+Each extra call needs a step left and must clear the spend cap; once they run
+out the turn ends as before, so a delegated `Task` still reports "ended without
+a final report".
 (E686 tranche-8: every line-number anchor this paragraph carried had rotted
 within rounds — the page's own rule is to cite symbols by name, never by line.)
 

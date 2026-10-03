@@ -1163,7 +1163,6 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             // `sessionId: ''` and no request named its session.
             ->withSessionId($this->sessionId)
             ->withMessages($messages);
-        // @endregion build
 
         $lastAssistant = null;
         $lastImageBytes = null;
@@ -1214,6 +1213,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // the assistant's TEXT, and a turn that thought but never spoke must
         // still get that fallback.
         $progressSink = $onReasoning;
+
+        // Step 0.10: how many times this turn has already recovered from a
+        // reply that said nothing — see the `no-tools` region below.
+        $reasoningOnlyNudges = 0;
+        $emptyReplyRetries = 0;
+        // @endregion build
 
         // Bounded agentic loop: keep running while the model asks for tools.
         // The Runtime resolves one assistant turn + its tool calls per run();
@@ -1280,6 +1285,45 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
 
             // @region no-tools
             if ($toolResults === []) {
+                // Step 0.10: a reply with no tool calls AND no text is not an
+                // answer — the turn used to end there silently, handing the
+                // operator (or a delegating Task) an empty reply. A reply that
+                // only THOUGHT gets one nudge, appended as a user row so the
+                // model sees why it is asked again (HistorySanitizer drops the
+                // empty assistant row on the wire); a reply with nothing at
+                // all is simply re-requested, up to twice, appending nothing.
+                // Every extra call needs a step left and must clear the spend
+                // cap first — the same `>=` test the after-step check makes.
+                // Once these run out the turn ends exactly as before, so
+                // TaskTool's "ended without a final report" still fires.
+                $replyText = trim($assistant?->content() ?? '');
+                $reasoningOnly = $replyText === '' && trim($assistant?->reasoning() ?? '') !== '';
+                $recover = $replyText === '' && ($reasoningOnly ? $reasoningOnlyNudges < 1 : $emptyReplyRetries < 2);
+
+                if ($recover
+                    && $step + 1 < $this->maxSteps
+                    && ($this->spendCapUsd === null || $spentSoFarUsd() < $this->spendCapUsd)
+                ) {
+                    if ($reasoningOnly) {
+                        $reasoningOnlyNudges++;
+                        $nudge = new UserMessage(
+                            'Your last reply contained only reasoning, with no answer and no tool call. '
+                            . 'Continue the task: call a tool if you need one, or give your final answer now.',
+                        );
+                        $app = $app->withMessages([
+                            ...$app->messages,
+                            ...($assistant !== null ? [$assistant] : []),
+                            $nudge,
+                        ]);
+                        $transcript = $app->messages;
+                    } else {
+                        $emptyReplyRetries++;
+                        $transcript = $app->messages;
+                    }
+
+                    continue;
+                }
+
                 $answeredWithoutTools = true;
                 break; // model answered without calling tools — done
             }

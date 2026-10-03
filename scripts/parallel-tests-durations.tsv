@@ -180,6 +180,7 @@ sugar-crush/tests/Tools/OutputTruncationTest.php	1.283	24
 sugar-crush/tests/Integration/SystemPromptWiringTest.php	1.275	14
 sugar-crush/tests/Integration/ForeignAgentPresetWiringTest.php	1.273	16
 sugar-crush/tests/Chat/ToolChildReapTest.php	1.253	5
+sugar-crush/tests/Backend/EngineBackendEmptyReplyTest.php	1.235	7
 sugar-crush/tests/Tools/TaskToolProgressFramesTest.php	1.216	10
 sugar-crush/tests/Backend/ScaledClockHelperSeamTest.php	1.187	6
 sugar-crush/tests/Support/ProcessReaperEscalationOrderTest.php	1.179	5
