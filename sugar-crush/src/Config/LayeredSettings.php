@@ -421,6 +421,13 @@ final class LayeredSettings
      * do exist are the two named above. Adding `model` would have been surface
      * with no reader — configurable-looking and inert.
      *
+     * ASSERTED EQUAL TO THE SCHEMA, not yet derived from it:
+     * {@see \SugarCraft\Crush\Config\Settings\SettingsSchema::layeredKeys()} names
+     * the same set, and
+     * {@see \SugarCraft\Crush\Tests\Config\Settings\SettingsSchemaTest} reds when
+     * the two disagree — so a key added here without a schema row (or the other
+     * way round) cannot reach the generated docs half-described.
+     *
      * @var list<string>
      */
     public const LAYERED_KEYS = [
@@ -893,6 +900,40 @@ final class LayeredSettings
         }
 
         return $source;
+    }
+
+    /**
+     * Layers 1 and 2 SEPARATELY, keyed by the file each came from (shared
+     * first), each UNFILTERED — or `[]` when this project may not contribute.
+     *
+     * For {@see \SugarCraft\Crush\Config\Settings\SettingsResolver}, which has
+     * to say which file set a key and, for a key this tier may not set, that the
+     * file named it and was ignored — both invisible after {@see projectLayer()}'s
+     * filter and merge. The trust gate and the containment pair are the SAME
+     * walk {@see projectLayer()} takes ({@see projectLayerPaths()}), so the two
+     * cannot disagree about which files a project contributes.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function projectFiles(string $projectRoot, bool $trusted): array
+    {
+        $files = [];
+        foreach (self::projectLayerPaths($projectRoot, $trusted) as $path) {
+            $files[$path] = self::readFile($path);
+        }
+
+        return $files;
+    }
+
+    /**
+     * One settings file decoded with this class's tolerance and NO key filter
+     * — `[]` for a missing, unreadable or non-object file, as {@see readFile()}.
+     *
+     * @return array<string, mixed>
+     */
+    public static function decodedFile(string $path): array
+    {
+        return self::readFile($path);
     }
 
     /**
