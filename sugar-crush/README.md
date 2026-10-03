@@ -1392,16 +1392,21 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**15,229 tests / 275,875 assertions, 0 failures, 1 skipped** — the whole of
+**16,304 tests / 292,129 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-19m14s. Measured 2026-10-02, after audit wave w6 (textual tool-call markup held
+20m02s. Measured 2026-10-02, after the last audit waves w7 to w11 (provider
+gating and MCP OAuth, permission modes, the scrubbed spawn environment, the
+SGLang server limits, the session lock and read-only second window, prompt
+cache marks and pricing, Esc Esc for workflows, and `@file`/image attachments)
+added 1,075 tests. Before that, 15,229/275,875 earlier on 2026-10-02, after
+audit wave w6 (textual tool-call markup held
 back and cut from the assistant text, schema-typed MiniMax parameters, malformed
 tool-call JSON refused, a working claude-code stream path, menu commands that
 keep the draft, `/bg stop` and released background IPC files, a locked and
 symlink-safe settings write, int-range step and token ceilings, a bounded
 WebFetch with non-2xx status, a redirect-refusing WebSearch, and filename-keyed,
-provenance-labelled memory notes) added 308 tests. Before that, 14,921/273,937
+provenance-labelled memory notes) added 308 tests; 14,921/273,937
 earlier on 2026-10-02, after audit wave w5 added 556
 tests; 14,365/188,431 after audit wave w4
 added 336 tests; 14,029/186,454 after audit wave w3 added 366
