@@ -2563,8 +2563,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // the up-front message is the same text the per-stage check emits.
             $checks = [];
             if ($stageType === 'stage') {
-                $first = ($stage['tasks'] ?? [])[0] ?? null;
-                $checks[] = [$first, "Stage '{$stageName}'"];
+                // Every task, labelled as executeStage() labels it: checking
+                // only the first let a later task's refused tool through until
+                // its stage started, after the earlier stages had run.
+                $tasks = array_values($stage['tasks'] ?? []);
+                foreach ($tasks as $i => $task) {
+                    $checks[] = [$task, count($tasks) > 1 ? "Stage '{$stageName}' task #{$i}" : "Stage '{$stageName}'"];
+                }
             } elseif ($stageType === 'parallel') {
                 foreach ($stage['tasks'] ?? [] as $task) {
                     $checks[] = [$task, "Parallel stage '{$stageName}'"];

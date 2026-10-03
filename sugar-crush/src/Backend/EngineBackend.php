@@ -752,18 +752,19 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      *    `/dev/null` from the spawn site — and the ASK becomes an explicit
      *    refusal naming the tool, the mode and the remedies in the session's
      *    log rather than an opaque one.
-     * 2. THE TUI STILL DOES NOT, and that is the limit that remains — a seam
-     *    rather than something papered over. {@see \SugarCraft\Crush\Chat}
-     *    owns the blocking prompt UI, but its prompt is a `Deferred` settled
-     *    by a later `Msg`, not a function that returns a verdict; and
-     *    {@see completeAsync()} runs {@see complete()} inside a
-     *    `pcntl_fork()`ed child whose only channel back to the parent is a
-     *    one-way frame stream, so a closure attached from the TUI could not
-     *    put its question on screen from in there even if the shapes did
-     *    match. That needs a request/response protocol on the socket. Until
-     *    it lands, an ASK raised on the engine path from inside a TUI session
-     *    still settles as {@see Runtime::settleAsk()}'s no-approver refusal —
-     *    which is why the shipped default mode is still
+     * 2. THE TUI STILL DOES NOT, and that is the limit that remains.
+     *    {@see \SugarCraft\Crush\Chat} owns the blocking prompt UI, but its
+     *    prompt is a `Deferred` settled by a later `Msg`, not a function that
+     *    returns a verdict, and {@see completeAsync()} runs {@see complete()}
+     *    inside a `pcntl_fork()`ed child. The socket is no longer one-way:
+     *    {@see completeInteractive()} (roadmap 1.C-1) puts each ASK to the
+     *    parent as a {@see \SugarCraft\Crush\Events\PermissionAsked} frame
+     *    and carries the answer back through a {@see ChildChannel} approver.
+     *    What is missing is the caller: Chat still starts its turns through
+     *    {@see completeAsync()} (wiring it is 1.C-2), so an ASK raised on the
+     *    engine path from inside a TUI session still settles as
+     *    {@see Runtime::settleAsk()}'s no-approver refusal — which is why the
+     *    shipped default mode is still
      *    {@see \SugarCraft\Crush\Permissions\PermissionMode::BypassPermissions}.
      *
      * An attached approver works on every SYNCHRONOUS {@see complete()} caller

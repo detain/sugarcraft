@@ -3141,12 +3141,9 @@ final class Bootstrap
      *        $SUGARCRUSH_PROVIDER set, or with a provider persisted by an earlier
      *        Ctrl+P, gets its tools from THIS method, so a set threaded into
      *        {@see backend()} and not forwarded past here would leave the nudge
-     *        unfiltered on exactly the common path. What this cannot fix from here is
-     *        that {@see \SugarCraft\Crush\Chat::selectPaletteProvider()} builds its
-     *        replacement backend without the session's set, so after a provider
-     *        switch BOTH channels fall back to unfiltered — the splice already did
-     *        that before this argument existed; carrying the set across is a
-     *        `src/Chat.php` change and is reported rather than made here.
+     *        unfiltered on exactly the common path. A provider switch reaches here
+     *        through the factory {@see chat()} hands `Chat` (N-P3a), which forwards
+     *        the session's set, so the set survives the switch.
      *
      * @throws \Throwable
      */
@@ -7593,6 +7590,14 @@ final class Bootstrap
                 $path,
                 implode('; ', $refused),
             );
+        }
+
+        // D3 (0.14-b): a stdio server started without an inherited credential
+        // is named here, or a server that needed one fails with nothing saying
+        // why. Same seam call and the same one-row-per-path bound as above.
+        $scrub = $client->strippedSecretEnvNotice();
+        if ($scrub !== '') {
+            $notices[] = $scrub;
         }
 
         foreach ($notices as $notice) {

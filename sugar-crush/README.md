@@ -742,8 +742,8 @@ curl -sN http://localhost:11434/api/chat -d "$payload" | jq -r '.message.content
 
 Three ways to get off the offline `EchoProvider`, from quickest to most permanent:
 
-1. **One-off, this run only:** `SUGARCRUSH_PROVIDER=dev-sglang ./bin/sugarcrush` — `dev-sglang` is the project's own dev/test SGLang endpoint (declared in `.sugar-crush/config.dev.json`, checked into the repo), useful for trying a real (if smaller) model with zero API keys.
-2. **From inside the TUI:** press **Ctrl+P**, choose **Switch model**, pick any provider from the list (built-in types plus every name declared in `.sugar-crush/config.dev.json`, e.g. `dev-sglang`) — switches immediately, no restart. `/model` opens the same picker and `/model dev-sglang` skips it. **Switch theme** works the same way for color themes.
+1. **One-off, this run only:** `SUGARCRUSH_PROVIDER=dev-sglang ./bin/sugarcrush` — `dev-sglang` is sugar-crush's own dev/test SGLang endpoint (declared in the `.sugar-crush/config.dev.json` that ships inside the sugar-crush package — not a file in the project you run it in), useful for trying a real (if smaller) model with zero API keys.
+2. **From inside the TUI:** press **Ctrl+P**, choose **Switch model**, pick any provider from the list (built-in types plus every name declared in the package's own `.sugar-crush/config.dev.json`, e.g. `dev-sglang`) — switches immediately, no restart. `/model` opens the same picker and `/model dev-sglang` skips it. **Switch theme** works the same way for color themes.
 3. **Persisted across restarts:** either of the above choices — the palette's, or `/model`'s, which goes through the same code path — is written to `~/.sugar-crush/config.json` and read back on the next launch — so picking `dev-sglang` once via Ctrl+P means every future `./bin/sugarcrush` (with no env vars set at all) uses it automatically. `$SUGARCRUSH_PROVIDER`/`$SUGARCRUSH_BACKEND_CMD`/`$SUGARCRUSH_BACKEND_CMD_STREAM` still take priority over the persisted choice when set, for scripting/CI overrides.
 
 ## Using the TUI

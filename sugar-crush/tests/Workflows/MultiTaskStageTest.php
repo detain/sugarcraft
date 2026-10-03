@@ -164,6 +164,34 @@ final class MultiTaskStageTest extends TestCase
         self::assertStringContainsString('Bash', (string) $result->firstFailure()?->error);
     }
 
+    public function testALaterStagesSecondTaskIsRefusedBeforeTheFirstStageRuns(): void
+    {
+        $registry = new WorkflowRegistry($this->tempDir . '/workflows');
+        $registry->register(
+            (new WorkflowBuilder())
+                ->name('late-refusal')
+                ->stage('first', Tasks::agent('reviewer')->prompt('harmless')->tools(['Read']))
+                ->stage('second', [
+                    Tasks::agent('reviewer')->prompt('look')->tools(['Read']),
+                    Tasks::agent('coder')->prompt('shell out')->tools(['Bash']),
+                ])
+                ->build(),
+        );
+
+        $result = (new WorkflowEngine(
+            $registry,
+            new AgentWorkerPool(1, $this->executor()),
+            permissionGate: new PermissionGate(PermissionMode::DontAsk),
+        ))->run('late-refusal');
+
+        self::assertSame(WorkflowStatus::Failed, $result->status);
+        self::assertSame([], $this->prompts, 'no stage may run on the way to a refused task in a later stage');
+        $failure = $result->firstFailure();
+        self::assertSame('second', $failure?->stageName);
+        self::assertStringContainsString("Stage 'second' task #1", (string) $failure?->error);
+        self::assertStringContainsString('Bash', (string) $failure?->error);
+    }
+
     public function testAOneTaskStageIsUnchanged(): void
     {
         $registry = new WorkflowRegistry($this->tempDir . '/workflows');

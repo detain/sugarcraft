@@ -141,6 +141,48 @@ final class BootstrapMcpTrustPinsTest extends TestCase
         self::assertNotNull(McpTrustPins::load($this->home . '/.sugar-crush/' . McpTrustPins::FILENAME)->forRoot($this->root));
     }
 
+    /**
+     * Item 0.14-b (D3): the launch names the inherited credentials a stdio
+     * server was started without, so a server that needed one does not just
+     * fail silently. A server that declares the name in `env` is not named.
+     */
+    public function testAStdioServerStartedWithoutAnInheritedCredentialIsNamedInTheLaunchNotices(): void
+    {
+        $saved = getenv('GITHUB_TOKEN');
+        putenv('GITHUB_TOKEN=ghp_FAKE_w1int');
+
+        try {
+            $this->writeServers([
+                'bare' => ['command' => '/bin/sh', 'args' => ['-c', 'exit 0'], 'startTimeout' => 0.5],
+                'declared' => [
+                    'command' => '/bin/sh',
+                    'args' => ['-c', 'exit 0'],
+                    'env' => ['GITHUB_TOKEN' => '${GITHUB_TOKEN}'],
+                    'startTimeout' => 0.5,
+                ],
+            ]);
+            $this->launch();
+        } finally {
+            $saved === false ? putenv('GITHUB_TOKEN') : putenv('GITHUB_TOKEN=' . $saved);
+        }
+
+        $notice = null;
+        foreach (array_reverse(Bootstrap::launchNotices()) as $candidate) {
+            if (str_starts_with($candidate, 'MCP stdio servers start without inherited credentials')) {
+                $notice = $candidate;
+                break;
+            }
+        }
+
+        self::assertNotNull($notice, 'the stripped-credential notice reaches the launch notices');
+        self::assertMatchesRegularExpression('/\bbare \([^)]*\bGITHUB_TOKEN\b/', $notice);
+        // The developer's own shell may hold other credentials, so `declared`
+        // can still be named for those; it must not be named for the one it
+        // declared.
+        self::assertDoesNotMatchRegularExpression('/\bdeclared \([^)]*\bGITHUB_TOKEN\b/', $notice, 'a server that declared the name kept it');
+        self::assertStringNotContainsString('ghp_FAKE_w1int', $notice, 'names only, never values');
+    }
+
     private function writeConfig(string $mark): void
     {
         $this->writeServers([

@@ -14669,8 +14669,10 @@ final class Chat implements Model
      * same call `/branch` makes — but `currentSessionId` deliberately stays put:
      * `/branch` MOVES the user onto the new branch, whereas `/fork` leaves
      * them where they are and sends the copy away to work (Claude Code's
-     * split between the two). The forked id rides along as a tag so the
-     * background session can be traced back to the transcript it came from.
+     * split between the two). The forked id is handed to the background
+     * daemon, which loads the forked copy as the conversation's history and
+     * saves its reply back into that copy (X-30), so the background session
+     * continues the transcript rather than starting from the bare prompt.
      *
      * @return array{0:Chat,1:?\Closure}
      */
