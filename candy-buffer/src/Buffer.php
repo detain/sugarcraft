@@ -183,9 +183,18 @@ final class Buffer implements \JsonSerializable
      *
      * Handles: 0 (full reset, discarding $carry), 30-37 (fg), 40-47 (bg),
      * 1 (bold), 4 (underline), 90-97 (bright fg), 100-107 (bright bg),
-     * 38;2;r;g;b / 48;2;r;g;b truecolor (the form toAnsi() emits), the
-     * 39/49 default-colour codes, and attributes 2,3,5,7,8,9 (faint,
-     * italic, blink, reverse, invisible, strike).
+     * 38;2;r;g;b / 48;2;r;g;b truecolor (the form toAnsi() emits),
+     * 38;5;n / 48;5;n xterm 256-colour indices, the 39/49 default-colour
+     * codes, and attributes 2,3,5,7,8,9 (faint, italic, blink, reverse,
+     * invisible, strike).
+     *
+     * Out-of-range colour operands are CLAMPED, not bit-masked: a truecolor
+     * component of 300 saturates to 255 (a `& 0xFF` mask would wrap it to
+     * 44 and paint an unrelated colour), and a 256-colour index above 255
+     * saturates to 255. This matches sugar-veil's penFromSgr(), which reads
+     * the same SGR stream. A truncated extended colour (`38;5`, `38;2;1`)
+     * ends the parse rather than letting its operands be misread as
+     * attribute codes.
      *
      * @param string $params Semicolon-separated SGR parameter numbers
      * @param Style|null $carry Style in effect before this sequence
@@ -217,19 +226,27 @@ final class Buffer implements \JsonSerializable
                 $fg = null;
             } elseif ($p === 49) {
                 $bg = null;
-            } elseif (($p === 38 || $p === 48)
-                && $i + 4 < $count
-                && $codes[$i + 1] === 2
-            ) {
-                $rgb = (($codes[$i + 2] & 0xFF) << 16)
-                    | (($codes[$i + 3] & 0xFF) << 8)
-                    | ($codes[$i + 4] & 0xFF);
+            } elseif ($p === 38 || $p === 48) {
+                if ($i + 4 < $count && $codes[$i + 1] === 2) {
+                    $rgb = (self::channel($codes[$i + 2]) << 16)
+                        | (self::channel($codes[$i + 3]) << 8)
+                        | self::channel($codes[$i + 4]);
+                    $i += 4; // consumed 2;r;g;b
+                } elseif ($i + 2 < $count && $codes[$i + 1] === 5) {
+                    $rgb = self::xterm256ToHex($codes[$i + 2]);
+                    $i += 2; // consumed 5;n
+                } else {
+                    // Malformed / truncated extended colour: its trailing
+                    // parameters are colour operands, not SGR codes — a bare
+                    // `38;5` must not set blink, nor `38;2` faint. Stop and
+                    // keep the pen built so far.
+                    break;
+                }
                 if ($p === 38) {
                     $fg = $rgb;
                 } else {
                     $bg = $rgb;
                 }
-                $i += 4; // consumed 2;r;g;b
             } elseif ($p === 1) {
                 $attrs |= Style::ATTR_BOLD;
             } elseif ($p === 2) {
@@ -253,6 +270,43 @@ final class Buffer implements \JsonSerializable
         return $fg !== null || $bg !== null || $attrs !== 0
             ? new Style($fg, $bg, $attrs)
             : null;
+    }
+
+    /**
+     * Clamp one 38;2 / 48;2 colour component into 0-255, the way terminals
+     * saturate an out-of-range value — `300` paints as 255, never as the
+     * `300 & 0xFF = 44` a bit-mask would produce.
+     */
+    private static function channel(int $component): int
+    {
+        return max(0, min(255, $component));
+    }
+
+    /**
+     * Standard xterm 256-colour palette index → 0xRRGGBB: 0-7 and 8-15 map
+     * through ansiColorToHex() (so `38;5;1` and `31` agree), 16-231 the 6×6×6
+     * cube, 232-255 the grayscale ramp. The index is clamped into 0-255 first,
+     * the same saturation channel() applies to truecolor components, so an
+     * out-of-range index can never produce a value outside 0xRRGGBB.
+     */
+    private static function xterm256ToHex(int $n): int
+    {
+        $n = self::channel($n);
+        if ($n < 8) {
+            return self::ansiColorToHex($n);
+        }
+        if ($n < 16) {
+            return self::ansiColorToHex($n - 8, true);
+        }
+        if ($n >= 232) {
+            $gray = 8 + ($n - 232) * 10;
+            return ($gray << 16) | ($gray << 8) | $gray;
+        }
+        $cube = $n - 16;
+        $step = static fn(int $v): int => $v === 0 ? 0 : 55 + $v * 40;
+        return ($step(intdiv($cube, 36)) << 16)
+            | ($step(intdiv($cube % 36, 6)) << 8)
+            | $step($cube % 6);
     }
 
     private static function ansiColorToHex(int $idx, bool $bright = false): int

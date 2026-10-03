@@ -1617,6 +1617,82 @@ final class BufferTest extends TestCase
         $this->assertSame(0x654321, $style->bg());
     }
 
+    public function testFromStringClampsOutOfRangeTruecolorComponents(): void
+    {
+        // A `& 0xFF` mask wrapped 300 to 44 (0x2C) and 256 to 0, painting
+        // an unrelated colour; terminals saturate, so the parse must too.
+        $buf = Buffer::fromString("\x1b[38;2;300;0;128;48;2;0;256;999mX", 1, 1);
+
+        $style = $buf->cellAt(0, 0)->style();
+        $this->assertNotNull($style);
+        $this->assertSame(0xFF0080, $style->fg());
+        $this->assertSame(0x00FFFF, $style->bg());
+    }
+
+    public function testFromStringClampsTruecolorComponentAtExactBoundary(): void
+    {
+        $buf = Buffer::fromString("\x1b[38;2;255;256;0mX", 1, 1);
+
+        $this->assertSame(0xFFFF00, $buf->cellAt(0, 0)->style()->fg());
+    }
+
+    /**
+     * @return iterable<string, array{int, int}>
+     */
+    public static function xterm256Provider(): iterable
+    {
+        yield 'base red agrees with SGR 31' => [1, 0xFF0000];
+        yield 'bright red agrees with SGR 91' => [9, 0xFF0000];
+        yield 'bright black lifts nothing' => [8, 0x000000];
+        yield 'cube origin' => [16, 0x000000];
+        yield 'cube pure red' => [196, 0xFF0000];
+        yield 'cube mixed' => [67, 0x5F87AF];
+        yield 'cube white' => [231, 0xFFFFFF];
+        yield 'gray ramp start' => [232, 0x080808];
+        yield 'gray ramp end' => [255, 0xEEEEEE];
+        yield 'index above 255 saturates to 255' => [300, 0xEEEEEE];
+        yield 'index far above 255 saturates to 255' => [100000, 0xEEEEEE];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('xterm256Provider')]
+    public function testFromStringParses256ColourIndices(int $index, int $expected): void
+    {
+        $buf = Buffer::fromString("\x1b[38;5;{$index};48;5;{$index}mX", 1, 1);
+
+        $style = $buf->cellAt(0, 0)->style();
+        $this->assertNotNull($style);
+        $this->assertSame($expected, $style->fg());
+        $this->assertSame($expected, $style->bg());
+        // The `5` selector must be consumed as an operand, not read as SGR 5.
+        $this->assertFalse($style->hasBlink());
+    }
+
+    public function testFromString256ColourKeepsLaterAttributes(): void
+    {
+        $buf = Buffer::fromString("\x1b[38;5;196;1mX", 1, 1);
+
+        $style = $buf->cellAt(0, 0)->style();
+        $this->assertSame(0xFF0000, $style->fg());
+        $this->assertTrue($style->hasBold());
+        $this->assertFalse($style->hasBlink());
+    }
+
+    public function testFromStringTruncatedExtendedColourSetsNoAttributes(): void
+    {
+        // `38;5` and `38;2;1` carry colour operands, not attribute codes:
+        // previously `5` set blink and `2` set faint. The prior pen survives.
+        $blink = Buffer::fromString("\x1b[1;38;5mX", 1, 1)->cellAt(0, 0)->style();
+        $this->assertNotNull($blink);
+        $this->assertTrue($blink->hasBold());
+        $this->assertFalse($blink->hasBlink());
+        $this->assertNull($blink->fg());
+
+        $faint = Buffer::fromString("\x1b[31m\x1b[38;2;1mX", 1, 1)->cellAt(0, 0)->style();
+        $this->assertNotNull($faint);
+        $this->assertFalse($faint->hasFaint());
+        $this->assertSame(0xFF0000, $faint->fg());
+    }
+
     // ─── copy() negative origin edge case ────────────────────────────────
 
     public function testCopyFullyNegativeOriginUsesAllBlankCells(): void
