@@ -256,14 +256,30 @@ final class Manager
      * Remove candy-mouse's PUA sentinel tags from a rendered frame, leaving
      * the visible content byte-for-byte intact.
      *
-     * Each tag is a `U+E000 … U+E001` span (open: `U+E000 <id> U+E001`,
-     * close: `U+E000 /<id> U+E001`); the content BETWEEN an open and its
-     * matching close is preserved. This mirrors the marker grammar walked by
-     * {@see \SugarCraft\Mouse\Scan::parse()} so the cleaned display string
-     * and the scanned bounds stay in lock-step. An unterminated open sentinel
-     * drops only its 3 sentinel bytes (Scan tolerates the same); a stray
-     * close sentinel is likewise dropped (Scan treats it as a zero-width,
-     * non-content byte).
+     * Applies exactly the tag rule {@see \SugarCraft\Mouse\Scan::parse()}
+     * decodes (candy-mouse commit 15a7f0c9f), so the cleaned display string
+     * and the scanned bounds stay in lock-step:
+     *
+     * - A *tag* is `U+E000 [/] <id> U+E001`, where `<id>` runs to the FIRST
+     *   U+E001 after the sentinel and passes
+     *   {@see \SugarCraft\Mouse\Mark::isValidId()} — the same predicate Mark
+     *   enforces when encoding. The whole tag is removed; the content BETWEEN
+     *   an open and its close is preserved.
+     * - An empty id (`U+E000 U+E001`, `U+E000 / U+E001`) is consumed whole too:
+     *   Scan treats it as zero-width foreign markup, so it must not reach the
+     *   terminal either.
+     * - Any other U+E000 — no U+E001 ahead, or an id with a space, newline,
+     *   CR, escape, non-ASCII byte, or more than
+     *   {@see \SugarCraft\Mouse\Mark::MAX_ID_BYTES} bytes — is a *lone
+     *   sentinel*: only its own 3 bytes are dropped, and the text after it is
+     *   kept, because Scan measures that text as visible cells. Swallowing it
+     *   (the old "everything up to the next U+E001" rule) shifted every zone
+     *   to its right or below it off the cells it actually painted.
+     * - A bare U+E001 is likewise a lone sentinel (3 bytes dropped).
+     *
+     * Orphan closes and unclosed opens with a VALID id are still whole tags
+     * and are removed whole, matching Scan's lenient rows for viewport-clipped
+     * zones.
      */
     private static function stripMarkers(string $rendered): string
     {
@@ -272,33 +288,39 @@ final class Manager
             return $rendered;
         }
 
-        $out      = '';
-        $len      = strlen($rendered);
-        $i        = 0;
-        $runStart = 0;
+        $out       = '';
+        $len       = strlen($rendered);
+        $i         = 0;
+        $runStart  = 0;
+        // Cached offset of the next U+E001 at or after the current id start.
+        // Offsets only grow during the walk, so the cache is refreshed only
+        // once it falls behind — O(n) overall even for a frame full of
+        // unmatched U+E000s (a fresh strpos per sentinel would be O(n^2) on
+        // attacker-influenced text).
+        $nextClose = -1;
         while ($i < $len) {
-            if ($rendered[$i] === "\xEE" && ($rendered[$i + 1] ?? '') === "\x80") {
-                $third = $rendered[$i + 2] ?? '';
+            if ($rendered[$i] === "\xEE" && $i + 2 < $len && $rendered[$i + 1] === "\x80") {
+                $third = $rendered[$i + 2];
 
-                // U+E000 open sentinel (EE 80 80) — start of an open/close tag.
-                if ($third === "\x80") {
+                // Bare U+E001 (EE 80 81) not consumed as a tag terminator.
+                if ($third === "\x81") {
                     $out .= substr($rendered, $runStart, $i - $runStart);
-                    $end  = strpos($rendered, Sentinel::CLOSE, $i + 3);
-                    if ($end === false) {
-                        // Unterminated tag — drop the 3 sentinel bytes only.
-                        $i += 3;
-                        $runStart = $i;
-                        continue;
-                    }
-                    $i        = $end + strlen(Sentinel::CLOSE);
+                    $i += 3;
                     $runStart = $i;
                     continue;
                 }
 
-                // Stray U+E001 close sentinel (EE 80 81) with no opener.
-                if ($third === "\x81") {
-                    $out .= substr($rendered, $runStart, $i - $runStart);
-                    $i += 3;
+                // U+E000 (EE 80 80) — a tag only if a valid id runs from here
+                // to the next U+E001.
+                if ($third === "\x80") {
+                    $out    .= substr($rendered, $runStart, $i - $runStart);
+                    $idStart = ($rendered[$i + 3] ?? '') === '/' ? $i + 4 : $i + 3;
+                    if ($nextClose !== false && $nextClose < $idStart) {
+                        $nextClose = strpos($rendered, Sentinel::CLOSE, $idStart);
+                    }
+                    $i = ($nextClose !== false && self::isTagId($rendered, $idStart, $nextClose))
+                        ? $nextClose + 3   // whole tag
+                        : $i + 3;          // lone sentinel — its own bytes only
                     $runStart = $i;
                     continue;
                 }
@@ -307,5 +329,26 @@ final class Manager
         }
         $out .= substr($rendered, $runStart);
         return $out;
+    }
+
+    /**
+     * Whether the id field [$idStart, $idEnd) makes the preceding U+E000 a
+     * tag: empty (inert foreign markup, consumed whole) or a valid zone id.
+     *
+     * Mirrors candy-mouse `Scan::tagId()` (private there) through the public
+     * {@see Mark::isValidId()} predicate. The length is checked before any
+     * substr so an attacker-sized span between a stray U+E000 and a distant
+     * U+E001 costs O(1) to reject.
+     */
+    private static function isTagId(string $rendered, int $idStart, int $idEnd): bool
+    {
+        $idLen = $idEnd - $idStart;
+        if ($idLen === 0) {
+            return true;
+        }
+        if ($idLen > Mark::MAX_ID_BYTES) {
+            return false;
+        }
+        return Mark::isValidId(substr($rendered, $idStart, $idLen));
     }
 }

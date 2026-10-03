@@ -241,10 +241,15 @@ text-processing component that produces the raw CSI sequence.
 - The PHP port has a synchronous `scan()` (no background worker), so
   `close()` is purely a state reset / disable rather than a thread
   join.
-- An unterminated marker (an open sentinel `U+E000` with no closing
-  `U+E001`) is tolerated: `scan()` drops the dangling sentinel bytes and
-  records no zone for it — but every open/close tag pair should still be
-  properly balanced for a zone's bounds to be discovered.
+- `scan()` strips exactly the tags candy-mouse's `Scan::parse()` decodes:
+  `U+E000 [/] <id> U+E001` where `<id>` passes `Mark::isValidId()` (or is
+  empty) is removed whole. Any other sentinel — an open `U+E000` with no
+  closing `U+E001`, one whose would-be id holds a space/newline/CR/escape/
+  non-ASCII byte or exceeds `Mark::MAX_ID_BYTES`, or a bare `U+E001` — loses
+  only its own 3 bytes, and the text after it is kept, because the scanner
+  measures that text as visible cells. Orphan closes / unclosed opens with a
+  valid id are removed and record no zone, but every open/close tag pair
+  should still be balanced for a zone's bounds to be discovered.
 
 ## API summary
 
