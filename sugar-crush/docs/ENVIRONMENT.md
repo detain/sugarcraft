@@ -204,8 +204,18 @@ names and follow Claude Code's rules (audit R11):
 ## Variables read from any config file
 
 `ProviderFactory` expands `${VAR}` and `${VAR:-default}` placeholders in
-provider config values, so **any** environment variable can be referenced from
-`~/.sugar-crush/config.json` or a project `.sugar-crush/config.dev.json`:
+every string value of a provider block, so **any** environment variable can be
+referenced from one. Today exactly one file supplies provider blocks: the
+`.sugar-crush/config.dev.json` that ships **inside the sugar-crush package**,
+next to `src/` (the repo's copy declares `dev-sglang`). It is not looked up in
+the project you run sugar-crush in, and not under your home directory.
+`~/.sugar-crush/config.json` and a project `.sugar-crush/` are never read for a
+`providers` map, so a block written in either is ignored. User-defined
+providers in those files are planned, not current behaviour. Until then, a built-in type is configured only through the
+credential variables above (`ANTHROPIC_BASE_URL` is the one endpoint override;
+the `sglang` type always targets `http://localhost:30000`). Any other endpoint
+needs an edit to the package's own `config.dev.json` in a checkout you
+control. A block there looks like this:
 
 ```json
 {
@@ -225,8 +235,8 @@ An unset variable with no `:-default` resolves to the empty string.
 `SUGARCRUSH_TOOL_CALL_PARSER` is worth calling out because it appears in
 discussions of SugarCrush's environment surface but is **not** read by any
 direct `getenv()` call. It works only through the placeholder mechanism above,
-and only if you write that placeholder into a config file yourself — no config
-shipped with the repo contains it. Its three valid values are `openai`,
+and only if you write that placeholder into the package's `config.dev.json`
+yourself — the shipped copy does not contain it. Its three valid values are `openai`,
 `minimax-xml-fallback` and `dsml`; an unset variable resolves to the empty
 string, which is treated as "key absent" rather than as a typo.
 
