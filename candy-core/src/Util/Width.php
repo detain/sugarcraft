@@ -291,6 +291,11 @@ final class Width
      * Behaviour mirrors lipgloss's wordwrap algorithm: trailing spaces
      * on a line collapse, but explicit `\n` characters in the input are
      * honored as hard breaks.
+     *
+     * Malformed UTF-8 is kept byte-for-byte (each stray byte a 0-width
+     * cluster, as in {@see truncate()}); a paragraph containing any breaks
+     * only on ASCII whitespace, since Unicode spaces cannot be recognised in
+     * bytes that are not UTF-8.
      */
     public static function wrap(string $s, int $max): string
     {
@@ -444,7 +449,23 @@ final class Width
 
     private static function wrapParagraph(string $s, int $max): string
     {
-        $words = preg_split('/(\s+)/u', $s, -1, PREG_SPLIT_DELIM_CAPTURE) ?: [];
+        $words = preg_split('/(\s+)/u', $s, -1, PREG_SPLIT_DELIM_CAPTURE);
+        if ($words === false) {
+            // `/u` refuses malformed UTF-8 outright. The old `?: []` read that
+            // failure as "no words" and returned '' — silently dropping the
+            // whole paragraph, while truncate()/string() on the same bytes
+            // pass them through as 0-width clusters (graphemes() walks bytes
+            // when ICU cannot). Split on the ASCII whitespace set at byte
+            // level instead — NOT `\s` without `/u`, whose locale tables are
+            // free to claim 0x85/0xA0, both of which are UTF-8 continuation
+            // bytes (`à` is C3 A0) and would cut valid characters in half.
+            $words = preg_split('/([ \t\n\r\x0B\x0C]+)/', $s, -1, PREG_SPLIT_DELIM_CAPTURE);
+            if ($words === false) {
+                throw new \RuntimeException(
+                    'Width::wrap() could not split paragraph: ' . preg_last_error_msg(),
+                );
+            }
+        }
         $line = '';
         $lineWidth = 0;
         $lines = [];
@@ -821,7 +842,18 @@ final class Width
         if (function_exists('grapheme_extract')) {
             $next = 0;
             $cluster = grapheme_extract($s, 1, GRAPHEME_EXTR_COUNT, $i, $next);
-            if (is_string($cluster) && $cluster !== '') {
+            // On malformed UTF-8 ICU does not return the bytes AT `$i`: it
+            // skips a stray lead byte and hands back the NEXT cluster
+            // (`"aaa\xffb"` at 3 yields `"b"`), or substitutes U+FFFD for a
+            // truncated tail (`"ab\xc3"` at 2 yields 3 bytes of EF BF BD).
+            // Every caller advances by strlen() of what comes back and
+            // re-emits it as the input's own bytes, so trusting either answer
+            // duplicated one cluster and dropped the bad byte —
+            // truncate("aaa\xffb", 10) was "aaabb". Accept ICU's cluster only
+            // when it IS the input at `$i`.
+            if (is_string($cluster) && $cluster !== ''
+                && substr_compare($s, $cluster, $i, strlen($cluster)) === 0
+            ) {
                 return $cluster;
             }
         }
@@ -833,6 +865,15 @@ final class Width
             ($b & 0xf8) === 0xf0 => 4,
             default              => 1,
         };
+        // A lead byte only owns the bytes that really are continuations
+        // (10xxxxxx); otherwise it is a stray byte of its own, so a broken
+        // sequence like `\xe2AB` never swallows the ASCII after it.
+        $len = strlen($s);
+        for ($k = 1; $k < $bytes; $k++) {
+            if ($i + $k >= $len || (ord($s[$i + $k]) & 0xc0) !== 0x80) {
+                return $s[$i];
+            }
+        }
         return substr($s, $i, $bytes);
     }
 

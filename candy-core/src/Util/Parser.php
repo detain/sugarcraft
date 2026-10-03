@@ -238,11 +238,11 @@ final class Parser
         while ($j < $len) {
             $b = $buf[$j];
             if ($b === "\x07") {
-                $tokens[] = new Token($type, substr($buf, $bodyStart, $j - $bodyStart));
+                $tokens[] = new Token($type, substr($buf, $bodyStart, $j - $bodyStart), terminator: "\x07");
                 return $j + 1 - $i;
             }
             if ($b === "\x1b" && ($buf[$j + 1] ?? '') === '\\') {
-                $tokens[] = new Token($type, substr($buf, $bodyStart, $j - $bodyStart));
+                $tokens[] = new Token($type, substr($buf, $bodyStart, $j - $bodyStart), terminator: "\x1b\\");
                 return $j + 2 - $i;
             }
             $j++;

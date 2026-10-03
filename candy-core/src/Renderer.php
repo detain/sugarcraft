@@ -322,7 +322,8 @@ final class Renderer
             && $a->data === $b->data
             && $a->intermediate === $b->intermediate
             && $a->params === $b->params
-            && $a->final === $b->final;
+            && $a->final === $b->final
+            && $a->terminator === $b->terminator;
     }
 
     private static function tokenWidth(Token $t): int
@@ -334,13 +335,20 @@ final class Renderer
         };
     }
 
+    /**
+     * Bytes of the source line `$t` was parsed from. String tokens (OSC /
+     * DCS / APC / SOS / PM) count the terminator the parser actually saw:
+     * charging every one a 2-byte ST made a BEL-closed OSC (`ESC ] 0;t BEL`)
+     * one byte too long, so repaintLine() cut its suffix one byte late and
+     * the partial repaint lost the first byte of the change.
+     */
     private static function tokenByteLength(Token $t): int
     {
         return match ($t->type) {
             Token::TEXT, Token::CONTROL => strlen($t->data),
             Token::ESC => 2,
             Token::CSI => 2 + strlen($t->intermediate) + strlen($t->params) + strlen($t->final),
-            default    => 2 + strlen($t->data) + 2,
+            default    => 2 + strlen($t->data) + strlen($t->terminator),
         };
     }
 
@@ -358,6 +366,16 @@ final class Renderer
         if (\count($this->tokenCache) >= self::TOKEN_CACHE_MAX) {
             $this->tokenCache = \array_slice($this->tokenCache, self::TOKEN_CACHE_MAX >> 1, null, true);
         }
-        return $this->tokenCache[$s] = $this->parser->parse($s);
+        // A row is a complete unit, but Parser is a STREAM tokeniser: an
+        // escape left unterminated at the end of `$s` is buffered as pending
+        // and prepended to the NEXT parse() — the next row, the other side of
+        // the diff — whose tokens (and cache entry) then describe bytes that
+        // are not in that row. flush() hands the tail back as TEXT so every
+        // row's tokens cover exactly its own bytes.
+        $tokens = $this->parser->parse($s);
+        foreach ($this->parser->flush() as $tail) {
+            $tokens[] = $tail;
+        }
+        return $this->tokenCache[$s] = $tokens;
     }
 }

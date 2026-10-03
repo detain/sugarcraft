@@ -33,6 +33,14 @@ namespace SugarCraft\Core\Util;
  * - `Sos`      — `$data` is the body between `ESC X` and ST.
  * - `Pm`       — `$data` is the body between `ESC ^` and ST.
  *
+ * `$terminator` is the exact byte run that closed a string token (OSC /
+ * DCS / APC / SOS / PM): `"\x1b\\"` (ST) or `"\x07"` (BEL). It is the only
+ * field that differs between two spellings of the same sequence, and the
+ * one a byte-offset consumer (the renderer's cell-diff) needs: the span a
+ * string token consumed is `2 + strlen($data) + strlen($terminator)`.
+ * Empty for every other type, and for string tokens built by hand rather
+ * than parsed.
+ *
  * Tokens are immutable.
  */
 final class Token
@@ -53,6 +61,7 @@ final class Token
         public readonly string $intermediate = '',
         public readonly string $params = '',
         public readonly string $final = '',
+        public readonly string $terminator = '',
     ) {
     }
 

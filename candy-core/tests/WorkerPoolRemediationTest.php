@@ -178,6 +178,66 @@ final class WorkerPoolRemediationTest extends TestCase
         $pool->stop();
     }
 
+    /**
+     * crush_libs.md candy-core #1: serialize() of a Closure throws \Exception,
+     * not \Error, so the old `catch (\Error)` let it escape dispatch()
+     * synchronously with the job's Deferred already parked in $pending —
+     * the caller got an exception instead of a promise, and the Deferred
+     * could never settle. The dispatch must instead return a promise that is
+     * REJECTED, leave nothing pending, and keep the (healthy) worker usable.
+     */
+    public function testClosureTaskRejectsInsteadOfThrowingOrLeakingPending(): void
+    {
+        $pool = new WorkerPool($this->loop, 1);
+
+        $rejected = null;
+        $promise = $pool->dispatch(static fn (): int => 1);
+        $promise->then(
+            function (): void {
+                $this->fail('a closure task cannot run in a subprocess');
+            },
+            function (\Throwable $e) use (&$rejected): void {
+                $rejected = $e;
+            },
+        );
+
+        $this->assertInstanceOf(\RuntimeException::class, $rejected, 'the promise must already be rejected');
+        $this->assertStringContainsString('serialization failed', $rejected->getMessage());
+        $this->assertStringContainsString("Serialization of 'Closure' is not allowed", $rejected->getMessage());
+
+        $pending = new \ReflectionProperty(WorkerPool::class, 'pending');
+        $this->assertSame([], $pending->getValue($pool), 'no Deferred may be orphaned in $pending');
+
+        // The worker never received anything — it stays alive and serves the next job.
+        $next = $this->waitForResult($pool->dispatch('php_sapi_name'));
+        $this->assertSame('cli', $next->result);
+        $this->assertSame(0, $next->workerId, 'the same worker must be reused, not killed');
+
+        $pool->stop();
+    }
+
+    /**
+     * The same failure on a QUEUED job (handed to the worker from
+     * resolveJob()) must reject that job and still drain the queue behind it.
+     */
+    public function testQueuedClosureTaskRejectsAndQueueKeepsDraining(): void
+    {
+        $pool = new WorkerPool($this->loop, 1);
+
+        $first = $pool->dispatch('php_sapi_name');
+        $closureRejected = null;
+        $pool->dispatch(static fn (): int => 2)->then(null, function (\Throwable $e) use (&$closureRejected): void {
+            $closureRejected = $e;
+        });
+        $last = $pool->dispatch('php_sapi_name');
+
+        $this->waitForResult($first);
+        $this->assertSame('cli', $this->waitForResult($last)->result);
+        $this->assertInstanceOf(\RuntimeException::class, $closureRejected);
+
+        $pool->stop();
+    }
+
     private function waitForResult(\React\Promise\PromiseInterface $promise): WorkerResultMsg
     {
         $result = null;

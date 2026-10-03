@@ -17,10 +17,14 @@ use SugarCraft\Core\Msg\WorkerResultMsg;
  * callables written to stdin and results read from stdout. The pool
  * is non-blocking: I/O is driven by the supplied ReactPHP event loop.
  *
- * Callables are serialized using {@see \Closure::serialize()} and
- * reconstructed in the subprocess. Only stateless or explicitly captured
- * state is preserved; bound objects and internal class refs may not
- * survive cross-process serialization.
+ * Tasks cross the process boundary through PHP's {@see serialize()}:
+ * a string task names a global function the worker calls, any other
+ * callable (e.g. `[Foo::class, 'bar']`, an invokable object) is
+ * serialized and reconstructed in the subprocess. A `Closure` — directly
+ * or captured anywhere inside the callable — cannot be serialized; such
+ * a dispatch() still returns a promise, already REJECTED with a
+ * RuntimeException naming the serialization failure, rather than
+ * throwing or hanging.
  *
  * Mirrors charmbracelet/bubbletea's worker pool for offloading heavy
  * computation off the UI thread.
@@ -276,8 +280,22 @@ final class WorkerPool
                 $payload = ['type' => 'callable', 'callable' => $task];
             }
             $serialized = base64_encode(serialize($payload));
-        } catch (\Error $e) {
-            $this->handleWorkerDeath($worker, 'Closure serialization failed: ' . $e->getMessage(), $jobId);
+        } catch (\Throwable $e) {
+            // \Throwable, not \Error: serialize() of a Closure (directly, or
+            // captured inside an object/array callable) throws \Exception
+            // ("Serialization of 'Closure' is not allowed"). Catching only
+            // \Error let that escape dispatch() synchronously with the job's
+            // Deferred already parked in $pending — a promise nobody could
+            // ever settle (E716: fail loud, never hang).
+            //
+            // The WORKER is healthy — nothing reached its stdin — so this is
+            // a job failure, not a worker death: reject through resolveJob(),
+            // which also hands the free worker the next queued job.
+            $this->resolveJob($worker, new WorkerResultMsg(
+                result: null,
+                error: new \RuntimeException('Task serialization failed: ' . $e->getMessage(), 0, $e),
+                workerId: $worker->id,
+            ));
             return;
         }
 

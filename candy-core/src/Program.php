@@ -22,6 +22,7 @@ use SugarCraft\Core\Util\Tty;
 use SugarCraft\Core\Util\NullLogger;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
+use React\EventLoop\TimerInterface;
 
 /**
  * The Elm-architecture runtime: ties together input, model, render,
@@ -34,7 +35,10 @@ use React\EventLoop\LoopInterface;
  *   3. Run model->init() and dispatch any returned Cmd.
  *   4. Watch the input stream; parse bytes into Msgs and feed update().
  *   5. Render the latest view() at the configured framerate.
- *   6. On QuitMsg / SIGINT / loop stop: tear down and return the model.
+ *   6. On QuitMsg / SIGINT / loop stop: cancel every timer and
+ *      subscription it armed on the loop, hand the signals it took back to
+ *      their previous handlers (and async delivery back to its previous
+ *      mode), tear down the terminal, and return the model.
  */
 final class Program
 {
@@ -49,6 +53,11 @@ final class Program
     private readonly Tty $tty;
     private bool $dirty = true;
     private bool $escapeFlushPending = false;
+    /**
+     * The armed stale-paste timer, re-armed on every read that leaves the
+     * reader inside a paste envelope ({@see schedulePasteIdleFlush()}).
+     */
+    private ?TimerInterface $pasteIdleTimer = null;
     private bool $running = false;
     /** @var list<Msg> */
     private array $pending = [];
@@ -78,8 +87,31 @@ final class Program
      * @var array<int, callable|int>
      */
     private array $prevSignalHandlers = [];
+    /**
+     * Handlers {@see installSignalHandlers()} displaced, keyed by signal
+     * number, restored by {@see restoreSignalHandlers()} when run() ends.
+     * Kept apart from {@see $prevSignalHandlers}: a signal subscription on
+     * SIGWINCH displaces OUR handler, and cancelling it must hand the signal
+     * back to us, not to whatever predated the Program.
+     *
+     * @var array<int, callable|int>
+     */
+    private array $prevProgramSignalHandlers = [];
+    /** pcntl_async_signals() as it was before installSignalHandlers() turned it on; null = untouched. */
+    private ?bool $prevAsyncSignals = null;
     /** True once pcntl async signal delivery has been enabled (see installSignalHandlers()). */
     private bool $asyncSignals = false;
+    /**
+     * One-shot loop timers armed on the model's behalf (TickRequest, the
+     * lone-ESC flush, the stale-paste flush), keyed by spl_object_id. The
+     * loop is usually the process-wide Loop::get(), so a timer still armed
+     * when run() returns
+     * would fire into a Program whose terminal is already restored — run()
+     * cancels whatever is left here on the way out.
+     *
+     * @var array<int, TimerInterface>
+     */
+    private array $oneShotTimers = [];
     /** @var \Closure(\Throwable): void */
     private \Closure $exceptionHandler;
     private float $lastFrameDuration = 0.0;
@@ -311,11 +343,12 @@ final class Program
      * the Cmd ran in, so it loses whatever the Cmd blocked for: measured
      * 5.001s / 2.000s / 0.012s for N = 0 / 3 / 6.
      *
-     * **Exposed: the two timers this class arms synchronously inside a
-     * callback.** The lone-ESC settling timer in `scheduleEscapeFlush()`, and
-     * the subscription timers `startSubscription()` arms from the
+     * **Exposed: the timers this class arms synchronously inside a
+     * callback.** The lone-ESC settling timer in `scheduleEscapeFlush()`, the
+     * stale-paste timer in `schedulePasteIdleFlush()`, and the subscription
+     * timers `startSubscription()` arms from the
      * `reconcileWantedSubscriptions()` call at the end of `dispatch()`. A model
-     * that blocks for seconds inside `update()` shortens both. This is inherent
+     * that blocks for seconds inside `update()` shortens all of them. This is inherent
      * to libuv, not a bug candy-core can fix from here; the cure is the general
      * rule — do not block in a callback.
      *
@@ -360,7 +393,7 @@ final class Program
 
         // Pending dispatch may have already requested quit. Skip the loop.
         if (!$this->running) {
-            $this->cancelAllSubscriptions();
+            $this->releaseRuntime();
             $this->teardownTerminal();
             return $this->model;
         }
@@ -368,28 +401,7 @@ final class Program
         // Stream watcher.
         @stream_set_blocking($this->input, false);
         $this->loop->addReadStream($this->input, function ($stream): void {
-            $bytes = @fread($stream, 4096);
-            if ($bytes === false || $bytes === '') {
-                // Real EOF: drop the watcher so the loop doesn't spin
-                // delivering readable notifications for a closed pipe.
-                if (feof($stream)) {
-                    $this->loop->removeReadStream($stream);
-                }
-                return;
-            }
-            $this->recorder?->recordInputBytes($bytes);
-            foreach ($this->reader->parse($bytes) as $msg) {
-                $this->dispatch($msg);
-                if (!$this->running) {
-                    return;
-                }
-            }
-            // A lone ESC byte is buffered for disambiguation (could be a
-            // CSI / Alt-key prefix). Promote it to a standalone Escape
-            // after a brief delay if no follow-up arrives.
-            if ($this->reader->hasPendingEscape()) {
-                $this->scheduleEscapeFlush();
-            }
+            $this->readInput($stream);
         });
 
         // Render tick.
@@ -433,7 +445,7 @@ final class Program
 
         $this->loop->cancelTimer($tickTimer);
         $this->loop->removeReadStream($this->input);
-        $this->cancelAllSubscriptions();
+        $this->releaseRuntime();
 
         $this->teardownTerminal();
         $this->recorder?->close();
@@ -610,7 +622,7 @@ final class Program
             return;
         }
         if ($msg instanceof TickRequest) {
-            $this->loop->addTimer($msg->seconds, function () use ($msg): void {
+            $this->addOneShotTimer($msg->seconds, function () use ($msg): void {
                 $produced = ($msg->produce)();
                 if ($produced !== null) {
                     $this->dispatch($produced);
@@ -974,14 +986,21 @@ final class Program
         }
 
         $this->teardownTerminal();
-        // Reset SIGTSTP to default and re-raise it on this process.
+        // Reset SIGTSTP to default and re-raise it on this process. Remember
+        // what was installed so the resume puts THAT back: with
+        // withoutSignalHandler/catchInterrupts off nothing of ours was there,
+        // and unconditionally installing a closure here leaked a handler that
+        // no teardown knew to remove.
+        $prevTstp = function_exists('pcntl_signal_get_handler')
+            ? pcntl_signal_get_handler(SIGTSTP)
+            : null;
         pcntl_signal(SIGTSTP, SIG_DFL);
         if (function_exists('posix_getpid')) {
             posix_kill(posix_getpid(), SIGTSTP);
         }
         // When the process resumes (SIGCONT) it picks back up here.
         // Reinstall handlers + terminal state.
-        pcntl_signal(SIGTSTP, function (): void {
+        pcntl_signal(SIGTSTP, $prevTstp ?? function (): void {
             $this->send(new SuspendMsg());
         });
         $this->setupTerminal();
@@ -1005,13 +1024,147 @@ final class Program
             return;
         }
         $this->escapeFlushPending = true;
-        $this->loop->addTimer(0.05, function (): void {
+        $this->addOneShotTimer(0.05, function (): void {
             $this->escapeFlushPending = false;
             $msg = $this->reader->flushPending();
             if ($msg !== null) {
                 $this->dispatch($msg);
             }
         });
+    }
+
+    /**
+     * Drain one read's worth of input into the model.
+     *
+     * @param resource $stream
+     * @return bool true when bytes were read (false on EOF / nothing ready)
+     */
+    private function readInput($stream): bool
+    {
+        $bytes = @fread($stream, 4096);
+        if ($bytes === false || $bytes === '') {
+            // Real EOF: drop the watcher so the loop doesn't spin
+            // delivering readable notifications for a closed pipe.
+            if (feof($stream)) {
+                $this->loop->removeReadStream($stream);
+            }
+            return false;
+        }
+        $this->recorder?->recordInputBytes($bytes);
+        foreach ($this->reader->parse($bytes) as $msg) {
+            $this->dispatch($msg);
+            if (!$this->running) {
+                return true;
+            }
+        }
+        // A lone ESC byte is buffered for disambiguation (could be a
+        // CSI / Alt-key prefix). Promote it to a standalone Escape
+        // after a brief delay if no follow-up arrives.
+        if ($this->reader->hasPendingEscape()) {
+            $this->scheduleEscapeFlush();
+        }
+        // An open paste envelope whose end marker never arrives would
+        // swallow every later keystroke. Each read inside a paste pushes
+        // the deadline out; silence past it closes the paste.
+        if ($this->reader->isPasting()) {
+            $this->schedulePasteIdleFlush();
+        } else {
+            $this->cancelPasteIdleFlush();
+        }
+        return true;
+    }
+
+    /**
+     * (Re-)arm the stale-paste recovery: once input has been silent for
+     * {@see InputReader::PASTE_IDLE_TIMEOUT} with a paste envelope still
+     * open, its end marker is presumed lost and the reader is told to close
+     * it, which hands the keyboard back. A real paste is one burst, so every
+     * read while pasting restarts the window rather than letting an earlier
+     * deadline cut a still-arriving paste short.
+     */
+    private function schedulePasteIdleFlush(float $seconds = InputReader::PASTE_IDLE_TIMEOUT): void
+    {
+        $this->cancelPasteIdleFlush();
+        $armedAt = hrtime(true);
+        $this->pasteIdleTimer = $this->addOneShotTimer($seconds, function () use ($armedAt, $seconds): void {
+            $this->pasteIdleTimer = null;
+            if (!$this->reader->isPasting()) {
+                return;
+            }
+            // Judge staleness on the real clock, not the loop's: under
+            // ext-uv a timer armed after a blocking update() is computed
+            // against a stale cached clock and can fire at once — cutting a
+            // live paste in half and turning its newlines into Enter.
+            $elapsed = (hrtime(true) - $armedAt) / 1e9;
+            if ($elapsed < $seconds) {
+                $this->schedulePasteIdleFlush($seconds - $elapsed);
+                return;
+            }
+            // Bytes can sit unread behind a slow loop iteration even after
+            // a real-time second; that is a paste still arriving, not one
+            // that stopped. Feed them through the normal path, which re-arms
+            // (or cancels, if they closed the envelope).
+            if ($this->readInput($this->input)) {
+                return;
+            }
+            foreach ($this->reader->flushStalePaste() as $msg) {
+                $this->dispatch($msg);
+                if (!$this->running) {
+                    return;
+                }
+            }
+        });
+    }
+
+    private function cancelPasteIdleFlush(): void
+    {
+        if ($this->pasteIdleTimer !== null) {
+            $this->cancelOneShotTimer($this->pasteIdleTimer);
+            $this->pasteIdleTimer = null;
+        }
+    }
+
+    /**
+     * Arm a one-shot timer that {@see releaseRuntime()} can still cancel:
+     * tracked until it fires, forgotten the moment it does.
+     */
+    private function addOneShotTimer(float $seconds, \Closure $callback): TimerInterface
+    {
+        $id = null;
+        $timer = $this->loop->addTimer($seconds, function () use (&$id, $callback): void {
+            unset($this->oneShotTimers[$id]);
+            $callback();
+        });
+        $id = spl_object_id($timer);
+        $this->oneShotTimers[$id] = $timer;
+        return $timer;
+    }
+
+    private function cancelOneShotTimer(TimerInterface $timer): void
+    {
+        $this->loop->cancelTimer($timer);
+        unset($this->oneShotTimers[spl_object_id($timer)]);
+    }
+
+    /**
+     * Undo everything run() armed on process-wide state — the shared loop
+     * and the pcntl signal table — so that nothing of this Program outlives
+     * it: no timer fires into a torn-down terminal, and no handler closure
+     * keeps the Program graph reachable or answers a second Program's signals.
+     * Subscriptions go first so a subscription that displaced one of our
+     * signal handlers hands the signal back to us before we hand it back to
+     * whatever predated the Program.
+     */
+    private function releaseRuntime(): void
+    {
+        $this->cancelAllSubscriptions();
+        foreach ($this->oneShotTimers as $timer) {
+            $this->loop->cancelTimer($timer);
+        }
+        $this->oneShotTimers = [];
+        $this->escapeFlushPending = false;
+        $this->pasteIdleTimer = null;
+        $this->restoreSignalHandlers();
     }
 
     private function scheduleCmd(\Closure $cmd): void
@@ -1333,15 +1486,16 @@ final class Program
         // fallback) timer-driven dispatch can't double-fire. Guarded for
         // builds without this pcntl function.
         if (function_exists('pcntl_async_signals')) {
-            pcntl_async_signals(true);
+            $wasAsync = pcntl_async_signals(true);
+            $this->prevAsyncSignals ??= $wasAsync;
             $this->asyncSignals = true;
         }
-        pcntl_signal(SIGINT, function (): void {
+        $this->installProgramSignal(SIGINT, function (): void {
             $this->running = false;
             $this->loop->stop();
         });
         if (defined('SIGWINCH')) {
-            pcntl_signal(SIGWINCH, function (): void {
+            $this->installProgramSignal(SIGWINCH, function (): void {
                 $size = $this->tty->size();
                 $this->send(new WindowSizeMsg($size['cols'], $size['rows']));
             });
@@ -1350,17 +1504,54 @@ final class Program
         // dispatcher runs the actual suspend/resume cycle inside the
         // event loop.
         if (defined('SIGTSTP')) {
-            pcntl_signal(SIGTSTP, function (): void {
+            $this->installProgramSignal(SIGTSTP, function (): void {
                 $this->send(new SuspendMsg());
             });
         }
         // SIGCONT can fire spuriously (kill -CONT $$) — turn it into a
         // ResumeMsg so models that care can re-emit state.
         if (defined('SIGCONT') === true) {
-            pcntl_signal(SIGCONT, function (): void {
+            $this->installProgramSignal(SIGCONT, function (): void {
                 $this->send(new ResumeMsg());
             });
         }
+    }
+
+    /**
+     * Install one of the Program's own handlers, remembering the handler it
+     * displaces (the FIRST one, if run() ever installs twice) so
+     * {@see restoreSignalHandlers()} can put it back.
+     */
+    private function installProgramSignal(int $signo, \Closure $handler): void
+    {
+        if (!array_key_exists($signo, $this->prevProgramSignalHandlers)) {
+            $this->prevProgramSignalHandlers[$signo] = function_exists('pcntl_signal_get_handler')
+                ? pcntl_signal_get_handler($signo)
+                : (defined('SIG_DFL') ? SIG_DFL : 0);
+        }
+        pcntl_signal($signo, $handler);
+    }
+
+    /**
+     * Counterpart of {@see installSignalHandlers()}: hand every signal back
+     * to the handler it had before run(), and put async delivery back the
+     * way it was. Without this the handler closures (bound to `$this`) kept
+     * the whole Program reachable after run() returned, and a second Program
+     * in the same process inherited the first one's SIGINT/SIGWINCH answers.
+     */
+    private function restoreSignalHandlers(): void
+    {
+        if ($this->prevProgramSignalHandlers !== [] && function_exists('pcntl_signal')) {
+            foreach ($this->prevProgramSignalHandlers as $signo => $prev) {
+                pcntl_signal($signo, $prev);
+            }
+        }
+        $this->prevProgramSignalHandlers = [];
+        if ($this->prevAsyncSignals !== null && function_exists('pcntl_async_signals')) {
+            pcntl_async_signals($this->prevAsyncSignals);
+        }
+        $this->prevAsyncSignals = null;
+        $this->asyncSignals = false;
     }
 
     /**

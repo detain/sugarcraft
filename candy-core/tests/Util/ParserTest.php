@@ -81,6 +81,7 @@ final class ParserTest extends TestCase
         $this->assertCount(1, $tokens);
         $this->assertSame(Token::OSC, $tokens[0]->type);
         $this->assertSame('0;hello', $tokens[0]->data);
+        $this->assertSame("\x07", $tokens[0]->terminator);
     }
 
     public function testOscWithSt(): void
@@ -89,6 +90,14 @@ final class ParserTest extends TestCase
         $this->assertCount(1, $tokens);
         $this->assertSame(Token::OSC, $tokens[0]->type);
         $this->assertSame('52;c;dGVzdA==', $tokens[0]->data);
+        $this->assertSame("\x1b\\", $tokens[0]->terminator);
+    }
+
+    public function testNonStringTokensCarryNoTerminator(): void
+    {
+        foreach ((new Parser())->parse("ab\x1b[1m\x1b7\r") as $token) {
+            $this->assertSame('', $token->terminator, $token->type);
+        }
     }
 
     public function testDcs(): void

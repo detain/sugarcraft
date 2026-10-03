@@ -347,32 +347,6 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             'CORRECT. Same field, applying a termios snapshot.',
         ],
 
-        // candy-pty/Pty. `$masterFd` is `$libc->posix_openpt(...)`.
-        'candy-pty/src/Pty.php::->grantpt($masterFd)' => [
-            DescriptorSinkScanner::VARIABLE,
-            'CORRECT. The posix_openpt() return value.',
-        ],
-        'candy-pty/src/Pty.php::->close($masterFd)' => [
-            DescriptorSinkScanner::VARIABLE,
-            'CORRECT. Error-path cleanup after grantpt() failed.',
-        ],
-        'candy-pty/src/Pty.php::->unlockpt($masterFd)' => [
-            DescriptorSinkScanner::VARIABLE,
-            'CORRECT. Same descriptor.',
-        ],
-        'candy-pty/src/Pty.php::->close($masterFd) #2' => [
-            DescriptorSinkScanner::VARIABLE,
-            'CORRECT. Error-path cleanup after unlockpt() failed.',
-        ],
-        'candy-pty/src/Pty.php::->ptsname_r($masterFd)' => [
-            DescriptorSinkScanner::VARIABLE,
-            'CORRECT. Same descriptor.',
-        ],
-        'candy-pty/src/Pty.php::->close($masterFd) #3' => [
-            DescriptorSinkScanner::VARIABLE,
-            'CORRECT. Error-path cleanup after ptsname_r() failed.',
-        ],
-
         // candy-pty/SizeIoctl. The ioctl pair are the `int $fd` parameters of
         // static helpers that take the FFI handle alongside; the dup/close
         // pair lives inside the Darwin stty(1) read fallback that one of

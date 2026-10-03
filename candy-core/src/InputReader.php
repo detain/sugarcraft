@@ -43,6 +43,33 @@ final class InputReader
 {
     private const PASTE_END   = "\x1b[201~";
 
+    /**
+     * Ceiling on paste bytes held between two surfaced {@see PasteMsg}s.
+     *
+     * A `CSI 200~` whose `CSI 201~` never arrives (a terminal that dropped
+     * the tail, or hostile input) would otherwise park every later byte in
+     * the paste buffer for the life of the process. Past this size the
+     * collected bytes are surfaced as a PasteMsg and collection continues
+     * in a fresh buffer — the envelope is NOT abandoned: treating the rest
+     * of a large but legitimate paste as keystrokes (where a pasted newline
+     * is Enter) is exactly what bracketed paste exists to prevent.
+     */
+    public const MAX_PASTE_BYTES = 1 << 20;
+
+    /**
+     * Read silence, in seconds, after which an open paste envelope is judged
+     * stale: its end marker was lost, so it is closed by
+     * {@see flushStalePaste()} and the keyboard comes back.
+     *
+     * {@see MAX_PASTE_BYTES} bounds memory but not liveness — a short paste
+     * whose `CSI 201~` was dropped never nears the cap, and every key typed
+     * afterwards would vanish into it. A real paste is one back-to-back burst
+     * from the terminal; typing after a lost marker comes after a human pause.
+     * This sits well above any intra-paste gap (a split write over a slow
+     * link) yet short enough that a dead keyboard is barely noticed.
+     */
+    public const PASTE_IDLE_TIMEOUT = 1.0;
+
     private string $buf = '';
     private bool $pasting = false;
     private string $pasteBuf = '';
@@ -81,20 +108,20 @@ final class InputReader
             if ($this->pasting) {
                 $end = strpos($this->buf, self::PASTE_END, $i);
                 if ($end === false) {
-                    $this->pasteBuf .= substr($this->buf, $i);
-                    $i = $len;
+                    // Hold back a tail that could be the START of the end
+                    // marker (`ESC [ 2 0` here, `1 ~` on the next read):
+                    // moving it into pasteBuf meant the next strpos() could
+                    // never see the whole marker, so a paste whose end marker
+                    // straddled a read boundary never closed.
+                    $keep = self::pasteEndPrefixAtTail($this->buf, $i, $len);
+                    $this->pasteBuf .= substr($this->buf, $i, $len - $keep - $i);
+                    $i = $len - $keep;
+                    $this->surfaceOversizePaste($msgs);
                     break;
                 }
                 $this->pasteBuf .= substr($this->buf, $i, $end - $i);
-                // Paste content is attacker-influenced (whatever was on the
-                // clipboard); neutralize embedded escapes/control bytes AND
-                // the candy-mouse zone sentinels (U+E000/U+E001) by default —
-                // sentinels survive a plain ANSI sweep as well-formed text and
-                // would forge click/frame markup once echoed into a marked
-                // frame. Opt out via ProgramOptions::$sanitizePaste.
-                $payload        = $this->sanitizePaste ? Sanitize::untrustedForMarkedFrames($this->pasteBuf) : $this->pasteBuf;
                 $msgs[]         = new PasteEndMsg();
-                $msgs[]         = new PasteMsg($payload);
+                $msgs[]         = new PasteMsg($this->pastePayload($this->pasteBuf));
                 $this->pasteBuf = '';
                 $this->pasting  = false;
                 $i = $end + strlen(self::PASTE_END);
@@ -291,7 +318,10 @@ final class InputReader
 
     public function flushPending(): ?Msg
     {
-        if ($this->buf === '') {
+        // Inside a paste, a buffered ESC is the head of the end marker (or a
+        // pasted byte), never an Escape key: promoting it would both inject a
+        // keystroke into the paste and eat the byte the marker needs.
+        if ($this->buf === '' || $this->pasting) {
             return null;
         }
         if (ord($this->buf[0]) === 0x1b && strlen($this->buf) === 1) {
@@ -308,7 +338,100 @@ final class InputReader
      */
     public function hasPendingEscape(): bool
     {
-        return $this->buf === "\x1b";
+        return !$this->pasting && $this->buf === "\x1b";
+    }
+
+    /**
+     * True while inside a bracketed-paste envelope whose end marker has not
+     * arrived yet. {@see \SugarCraft\Core\Program} polls this after each
+     * read to arm the {@see PASTE_IDLE_TIMEOUT} stale-paste recovery.
+     */
+    public function isPasting(): bool
+    {
+        return $this->pasting;
+    }
+
+    /**
+     * Close a paste envelope whose `CSI 201~` never came, exactly as the
+     * marker would have: a {@see PasteEndMsg} followed by a {@see PasteMsg}
+     * with whatever was collected — including a held-back tail that looked
+     * like the start of the marker, since with the marker gone it was pasted
+     * text. Afterwards the reader is back in key mode, so the next byte is a
+     * keystroke again. Returns an empty list when no paste is open.
+     *
+     * @return list<Msg>
+     */
+    public function flushStalePaste(): array
+    {
+        if (!$this->pasting) {
+            return [];
+        }
+        $raw = $this->pasteBuf . $this->buf;
+        $this->pasteBuf = '';
+        $this->buf      = '';
+        $this->pasting  = false;
+        return [new PasteEndMsg(), new PasteMsg($this->pastePayload($raw))];
+    }
+
+    /**
+     * Paste content is attacker-influenced (whatever was on the clipboard);
+     * neutralize embedded escapes/control bytes AND the candy-mouse zone
+     * sentinels (U+E000/U+E001) by default — sentinels survive a plain ANSI
+     * sweep as well-formed text and would forge click/frame markup once
+     * echoed into a marked frame. Opt out via ProgramOptions::$sanitizePaste.
+     */
+    private function pastePayload(string $raw): string
+    {
+        return $this->sanitizePaste ? Sanitize::untrustedForMarkedFrames($raw) : $raw;
+    }
+
+    /**
+     * Length of the longest proper prefix of {@see PASTE_END} that `$buf`
+     * ends with, looking no further back than `$from`.
+     */
+    private static function pasteEndPrefixAtTail(string $buf, int $from, int $len): int
+    {
+        for ($k = min(strlen(self::PASTE_END) - 1, $len - $from); $k > 0; $k--) {
+            if (substr_compare($buf, substr(self::PASTE_END, 0, $k), $len - $k, $k) === 0) {
+                return $k;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Surface the collected paste bytes as a {@see PasteMsg} once they pass
+     * {@see MAX_PASTE_BYTES}, staying inside the envelope. The cut backs off
+     * an incomplete trailing UTF-8 sequence so a multibyte character is never
+     * split between two messages (which the sanitizer would mangle).
+     *
+     * @param list<Msg> $msgs
+     */
+    private function surfaceOversizePaste(array &$msgs): void
+    {
+        $size = strlen($this->pasteBuf);
+        if ($size < self::MAX_PASTE_BYTES) {
+            return;
+        }
+        $cut = $size;
+        for ($back = 1; $back <= 3 && $back <= $size; $back++) {
+            $b = ord($this->pasteBuf[$size - $back]);
+            if (($b & 0xc0) === 0x80) {
+                continue; // continuation byte — keep looking for its lead
+            }
+            $need = match (true) {
+                ($b & 0xe0) === 0xc0 => 2,
+                ($b & 0xf0) === 0xe0 => 3,
+                ($b & 0xf8) === 0xf0 => 4,
+                default              => 1,
+            };
+            if ($need > $back) {
+                $cut = $size - $back; // lead byte whose sequence is not complete yet
+            }
+            break;
+        }
+        $msgs[] = new PasteMsg($this->pastePayload(substr($this->pasteBuf, 0, $cut)));
+        $this->pasteBuf = substr($this->pasteBuf, $cut);
     }
 
     private function decodeChar(int $code, bool $alt = false): KeyMsg

@@ -667,6 +667,165 @@ final class InputReaderTest extends TestCase
         $this->assertSame('hello world', $msgs[1]->content);
     }
 
+    /**
+     * The END marker straddling a read boundary must still close the paste.
+     * Previously the whole unmatched tail — marker head included — moved
+     * into the paste buffer, so the next read could never see `ESC[201~`
+     * whole: the paste never closed and the keyboard went dead (crush_libs.md
+     * candy-core #5, the realistic way that envelope "never closes").
+     */
+    public function testBracketedPasteEndMarkerSplitAtEveryByte(): void
+    {
+        $end = "\x1b[201~";
+        for ($k = 1; $k < strlen($end); $k++) {
+            $r = new InputReader();
+            $first = $r->parse("\x1b[200~hello" . substr($end, 0, $k));
+            $this->assertCount(1, $first, "split at {$k}");
+            $this->assertInstanceOf(PasteStartMsg::class, $first[0]);
+
+            $msgs = $r->parse(substr($end, $k) . 'q');
+            $this->assertCount(3, $msgs, "split at {$k}");
+            $this->assertInstanceOf(PasteEndMsg::class, $msgs[0]);
+            $this->assertInstanceOf(PasteMsg::class, $msgs[1]);
+            $this->assertSame('hello', $msgs[1]->content, "split at {$k}");
+            $this->assertInstanceOf(KeyMsg::class, $msgs[2]);
+            $this->assertSame('q', $msgs[2]->rune);
+        }
+    }
+
+    public function testHeldBackMarkerLookalikeStaysPasteContent(): void
+    {
+        $r = new InputReader(sanitizePaste: false);
+        $r->parse("\x1b[200~a\x1b[2");
+        $msgs = $r->parse("x\x1b[201~");
+        $this->assertInstanceOf(PasteMsg::class, $msgs[1]);
+        $this->assertSame("a\x1b[2x", $msgs[1]->content);
+    }
+
+    public function testEscBufferedInsideAPasteIsNeverPromotedToAnEscapeKey(): void
+    {
+        $r = new InputReader();
+        $r->parse("\x1b[200~ab\x1b");
+        // Program polls these to turn a lone ESC into KeyType::Escape after
+        // 50 ms — inside a paste that would inject a key AND eat the marker.
+        $this->assertFalse($r->hasPendingEscape());
+        $this->assertNull($r->flushPending());
+
+        $msgs = $r->parse('[201~');
+        $this->assertCount(2, $msgs);
+        $this->assertSame('ab', $msgs[1]->content);
+    }
+
+    /**
+     * crush_libs.md candy-core #5: a `CSI 200~` with no `CSI 201~` grew the
+     * paste buffer without bound. Past MAX_PASTE_BYTES the bytes are surfaced
+     * and collection continues — nothing is lost and nothing pasted is
+     * re-read as keystrokes.
+     */
+    public function testUnclosedPasteSurfacesChunksInsteadOfGrowingForever(): void
+    {
+        $r = new InputReader();
+        $r->parse("\x1b[200~");
+        $max = InputReader::MAX_PASTE_BYTES;
+        $bufProp = new \ReflectionProperty(InputReader::class, 'pasteBuf');
+
+        $surfaced = '';
+        for ($n = 0; $n < 3; $n++) {
+            $msgs = $r->parse(str_repeat('a', $max + 10));
+            $this->assertCount(1, $msgs);
+            $this->assertInstanceOf(PasteMsg::class, $msgs[0]);
+            $surfaced .= $msgs[0]->content;
+            $this->assertLessThan($max, strlen($bufProp->getValue($r)), 'paste buffer must stay bounded');
+        }
+        $this->assertSame(3 * ($max + 10), strlen($surfaced));
+
+        // Still inside the envelope: the close marker ends it normally.
+        $msgs = $r->parse("tail\x1b[201~q");
+        $this->assertInstanceOf(PasteEndMsg::class, $msgs[0]);
+        $this->assertSame('tail', $msgs[1]->content);
+        $this->assertSame('q', $msgs[2]->rune);
+    }
+
+    public function testOversizePasteChunkNeverSplitsAUtf8Character(): void
+    {
+        $r = new InputReader();
+        $r->parse("\x1b[200~");
+        $max = InputReader::MAX_PASTE_BYTES;
+
+        // Byte MAX is the lead of a 2-byte `é` whose continuation is in the next read.
+        $msgs = $r->parse(str_repeat('a', $max - 1) . "\xc3");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(str_repeat('a', $max - 1), $msgs[0]->content);
+
+        $msgs = $r->parse("\xa9\x1b[201~");
+        $this->assertSame("\u{e9}", $msgs[1]->content);
+    }
+
+    /**
+     * crush_libs.md candy-core #5, liveness half: a short paste whose end
+     * marker is lost never nears MAX_PASTE_BYTES, so without a way out every
+     * later keystroke disappeared into it. Program calls flushStalePaste()
+     * after PASTE_IDLE_TIMEOUT of silence; this pins the reader side.
+     */
+    public function testStalePasteFlushClosesTheEnvelopeAndRestoresKeys(): void
+    {
+        $r = new InputReader();
+        $r->parse("\x1b[200~abc");
+        $this->assertTrue($r->isPasting());
+        // Keystrokes after the lost marker are swallowed while the envelope is open.
+        $this->assertSame([], $r->parse('x'));
+
+        $msgs = $r->flushStalePaste();
+        $this->assertCount(2, $msgs);
+        $this->assertInstanceOf(PasteEndMsg::class, $msgs[0]);
+        $this->assertInstanceOf(PasteMsg::class, $msgs[1]);
+        $this->assertSame('abcx', $msgs[1]->content);
+        $this->assertFalse($r->isPasting());
+
+        $msgs = $r->parse('q');
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(KeyMsg::class, $msgs[0]);
+        $this->assertSame('q', $msgs[0]->rune);
+    }
+
+    public function testStalePasteFlushKeepsTheHeldBackMarkerLookalikeAsContent(): void
+    {
+        $r = new InputReader(sanitizePaste: false);
+        $r->parse("\x1b[200~ab\x1b[20");
+
+        $msgs = $r->flushStalePaste();
+        $this->assertSame("ab\x1b[20", $msgs[1]->content);
+
+        // The held tail was moved into the paste, not left for the key
+        // parser to complete into a phantom sequence with the next byte.
+        $msgs = $r->parse('1~');
+        $this->assertSame(['1', '~'], array_map(static fn (KeyMsg $m): string => $m->rune, $msgs));
+    }
+
+    public function testStalePasteFlushSanitizesLikeANormalClose(): void
+    {
+        $r = new InputReader();
+        $r->parse("\x1b[200~ok\x1b]52;c;aGk=\x07");
+        $msgs = $r->flushStalePaste();
+        $this->assertSame('ok', $msgs[1]->content);
+    }
+
+    public function testStalePasteFlushIsANoOpOutsideAPaste(): void
+    {
+        $r = new InputReader();
+        $this->assertFalse($r->isPasting());
+        $this->assertSame([], $r->flushStalePaste());
+
+        $r->parse("\x1b[200~p\x1b[201~");
+        $this->assertFalse($r->isPasting());
+        $this->assertSame([], $r->flushStalePaste());
+
+        // A lone ESC outside a paste is the Escape-flush's business, untouched here.
+        $r->parse("\x1b");
+        $this->assertSame([], $r->flushStalePaste());
+        $this->assertTrue($r->hasPendingEscape());
+    }
+
     public function testBracketedPasteFollowedByKey(): void
     {
         $msgs = (new InputReader())->parse("\x1b[200~paste\x1b[201~q");

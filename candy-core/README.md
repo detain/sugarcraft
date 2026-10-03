@@ -87,7 +87,7 @@ final class Counter implements Model
  - **`ScreenStackPushedMsg`** / **`ScreenStackPoppedMsg`** — infrastructure messages dispatched through `Program::send()`.
  - **`Component`** — interface extending `Model`; adds `onMount(): ?Closure` (fired when mounted into a `Composite`) and `onUnmount(): ?Closure` (fired when removed). Return a `Cmd` to run immediately or `null` for no-op.
   - **`Composite`** — `Model` that manages a list of child `Component`s. Tracks `pendingCmds` and drains them during reconcile, calling child `onMount()`/`onUnmount()` Cmds synchronously. Children are reconciled by ordinal position — reordering triggers lifecycle events on affected children.
-  - **`WorkerPool`** — bounded-concurrency pool (default 4 workers) for offloading CPU-bound tasks to subprocesses via serialized callables.
+  - **`WorkerPool`** — bounded-concurrency pool (default 4 workers) for offloading CPU-bound tasks to subprocesses via serialized callables. Pass a global function name or a serializable callable; a `Closure` cannot cross the process boundary, so dispatching one returns an already-rejected promise.
   - **`WorkerCmd`** — `Cmd` factory: `WorkerCmd::run($pool, $callable)` dispatches a task to the pool and yields a `WorkerResultMsg` when complete.
   - **`WorkerResultMsg`** — result `Msg` carrying `$result`, `$error`, and `$workerId` from a pool worker.
 
