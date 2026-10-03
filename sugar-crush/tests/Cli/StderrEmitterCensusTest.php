@@ -414,7 +414,10 @@ final class StderrEmitterCensusTest extends TestCase
         // strict `--root` value errors (list ended, option given) and
         // resolveOperands()'s three leftover-operand refusals (second project
         // root, word after the prompt, stray word), all pre-launch exit 2.
-        'src/Cli/ArgvParser.php' => 21,
+        // P-A3 took it to twenty-four: the subcommand-scoped flag errors (a
+        // switch given a value, a value flag with none or an empty one), the
+        // same pre-launch exit-2 usage decision.
+        'src/Cli/ArgvParser.php' => 24,
         'src/Cli/Bootstrap.php' => 6,
         'src/Cli/HeadlessPermissionPrompt.php' => 4,
         // +1 in wave 11: noticeAttachment()'s prefix literal (channel 1's note).
@@ -426,7 +429,11 @@ final class StderrEmitterCensusTest extends TestCase
         // read) — sixteen to twenty-two. Same stderr-only decision: malformed
         // CLI usage or an unreadable operand, session never existed, nothing
         // was written anywhere.
-        'src/Cli/Subcommands.php' => 23,
+        // P-A3: the session verbs' usage doors (a flag for another action,
+        // a bad --limit, a stray operand, a missing title, an ambiguous id
+        // prefix) took twenty-three to twenty-eight — same stderr-only
+        // decision, nothing was opened or changed.
+        'src/Cli/Subcommands.php' => 28,
         'src/Commands/CommandLoader.php' => 1,
         'src/Context/RuleLoader.php' => 1,
         'src/Memory/ForeignMemoryImporter.php' => 1,

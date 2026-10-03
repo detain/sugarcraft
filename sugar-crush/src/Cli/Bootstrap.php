@@ -3593,21 +3593,17 @@ final class Bootstrap
      * characters when six are unique). Null when nothing, or more than one
      * prefix match, answers.
      *
+     * Resolved by {@see \SugarCraft\Crush\Session\SessionResolver}, the one
+     * resolver the `sugarcrush session <verb> <target>` subcommands share, over
+     * every kind and archived rows too: the prefix step used to search the
+     * default list, which hides both, so a prefix of an archived session's id
+     * matched nothing while its full id resumed it.
+     *
      * @return array<string, mixed>|null
      */
     private static function findSession(SessionStore|EnhancedSessionStore $store, string $target): ?array
     {
-        $row = $store->getSession($target) ?? $store->getSessionByName($target);
-        if (\is_array($row)) {
-            return $row;
-        }
-
-        $matches = array_values(array_filter(
-            $store->listSessions(PHP_INT_MAX),
-            static fn(array $r): bool => str_starts_with((string) ($r['id'] ?? ''), $target),
-        ));
-
-        return \count($matches) === 1 ? $matches[0] : null;
+        return \SugarCraft\Crush\Session\SessionResolver::find($store, $target)?->toArray();
     }
 
     /**

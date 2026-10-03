@@ -4,10 +4,19 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Cli;
 
+use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Session\EnhancedSessionStore;
+use SugarCraft\Crush\Session\SessionQuery;
+use SugarCraft\Crush\Session\SessionResolver;
+use SugarCraft\Crush\Session\SessionRow;
+use SugarCraft\Crush\Session\TitleSource;
+use SugarCraft\Crush\Util\Exporter;
+
 /**
- * The real CLI subcommands — `mcp list`, `session list`, `session delete <id>`,
- * `models`, `doctor` and `completion bash|zsh|fish` (crush_code.md Phase 4
- * item 6).
+ * The real CLI subcommands — `mcp list`, `session list|show|rename|delete|
+ * pin|unpin|archive|unarchive`, `models`, `doctor` and `completion
+ * bash|zsh|fish` (crush_code.md Phase 4 item 6; the session verbs past
+ * `list`/`delete` are Appendix P §3.4).
  *
  * EVERY ONE ANSWERS WITHOUT A SESSION. `bin/sugarcrush` dispatches these in the
  * same pre-flight place it dispatches `--help` and `--version`, before
@@ -463,43 +472,133 @@ final class Subcommands
     // ---------------------------------------------------------------------
 
     /**
-     * `sugarcrush session list` / `sugarcrush session delete <id>`.
+     * `sugarcrush session list|show|rename|delete|pin|unpin|archive|unarchive`
+     * (Appendix P §3.4).
      *
-     * Both go through {@see Bootstrap::sessionStore()} — the accessor the TUI
-     * and the one-shot path already use — rather than opening
+     * Every verb goes through {@see Bootstrap::sessionStore()} — the accessor
+     * the TUI and the one-shot path already use — rather than opening
      * `~/.sugar-crush/session.db` directly, so the id printed by `list` is
-     * exactly the id `delete` and a resumed session accept. NOTE that accessor
-     * also applies the configured RETENTION sweep on construction, which is the
-     * launch behaviour and is inherited here deliberately: a `session list`
-     * that showed rows the next launch would delete would be lying about what
-     * is stored.
+     * exactly the id the other verbs and a resumed session accept. NOTE that
+     * accessor also applies the configured RETENTION sweep on construction,
+     * which is the launch behaviour and is inherited here deliberately: a
+     * `session list` that showed rows the next launch would delete would be
+     * lying about what is stored.
+     *
+     * A TARGET is an id, a name or a unique id prefix, resolved by
+     * {@see \SugarCraft\Crush\Session\SessionResolver} — the same resolver
+     * `--resume` uses, over every kind and archived rows too. Nothing matching
+     * is exit 1 (`not-found`: the store was asked); an ambiguous prefix is
+     * exit 2 with the candidates listed, because the invocation itself cannot
+     * be carried out as typed.
      */
     private static function session(ParsedArgs $args): int
     {
         $verb = $args->subcommandArgs[0] ?? null;
+        if ($verb === null) {
+            return NonInteractive::failUsage('sugarcrush: session: no action given', $args->outputFormat, self::SESSION_USAGE);
+        }
+        if (!isset(self::SESSION_ACTION_FLAGS[$verb])) {
+            return NonInteractive::failUsage(
+                \sprintf('sugarcrush: session %s: unknown action', $verb),
+                $args->outputFormat,
+                self::SESSION_USAGE,
+            );
+        }
+
+        foreach (\array_keys($args->subcommandFlags) as $flag) {
+            if (!\in_array($flag, self::SESSION_ACTION_FLAGS[$verb], true)) {
+                return NonInteractive::failUsage(
+                    \sprintf('sugarcrush: session %s: %s does not apply to this action', $verb, $flag),
+                    $args->outputFormat,
+                    self::SESSION_ACTION_FLAGS[$verb] === []
+                        ? 'session ' . $verb . ' takes no options.'
+                        : 'session ' . $verb . ' accepts: ' . \implode(', ', self::SESSION_ACTION_FLAGS[$verb]) . '.',
+                );
+            }
+        }
 
         return match ($verb) {
             'list' => self::sessionList($args),
+            'show' => self::sessionShow($args),
+            'rename' => self::sessionRename($args),
             'delete' => self::sessionDelete($args),
-            null => NonInteractive::failUsage(
-                'sugarcrush: session: no action given',
-                $args->outputFormat,
-                'Usage: sugarcrush session list | sugarcrush session delete <id>',
-            ),
-            default => NonInteractive::failUsage(
-                \sprintf('sugarcrush: session %s: unknown action', $verb),
-                $args->outputFormat,
-                'Usage: sugarcrush session list | sugarcrush session delete <id>',
-            ),
+            default => self::sessionFlag($args, $verb),
         };
     }
 
+    /**
+     * One line per verb, for every `session` usage error.
+     */
+    private const SESSION_USAGE = 'Usage: sugarcrush session list [--all|--archived|--children] [--limit N]'
+        . ' | show <target> | rename <target> <title…> | delete <target> [--with-children]'
+        . ' | pin|unpin|archive|unarchive <target> — <target> is an id, a name or a unique id prefix.';
+
+    /**
+     * Each `session` action and the {@see ParsedArgs::SUBCOMMAND_FLAGS} it
+     * accepts. The parser admits any `session` flag after the verb; which
+     * action a flag means something to is decided here, so `session show
+     * --all` is refused rather than silently ignored.
+     *
+     * @var array<string, list<string>>
+     */
+    private const SESSION_ACTION_FLAGS = [
+        'list' => ['--all', '--archived', '--children', '--limit'],
+        'show' => [],
+        'rename' => [],
+        'delete' => ['--with-children'],
+        'pin' => [],
+        'unpin' => [],
+        'archive' => [],
+        'unarchive' => [],
+    ];
+
+    /**
+     * `session list`: the user's own conversations (main and branch rows),
+     * pinned first and newest first, 20 by default. `--children` adds the
+     * sub-agent and background rows that hang under them, `--archived` adds
+     * archived rows, `--all` is both, and `--limit N` changes the page size.
+     *
+     * The text row is `★ id updated kind turns provider/model name`, with
+     * `[archived]` after an archived row's name; the JSON rows are
+     * {@see \SugarCraft\Crush\Session\SessionRow::toArray()}, which carries
+     * every column the store keeps (kind, parent, pinned, archived_at, turns,
+     * cwd, branch, preview).
+     */
     private static function sessionList(ParsedArgs $args): int
     {
-        $rows = Bootstrap::sessionStore()->listSessions(self::SESSION_LIST_LIMIT);
+        if (\count($args->subcommandArgs) > 1) {
+            return self::rejectSessionOperand('list', $args->subcommandArgs[1], $args);
+        }
+
+        $limit = self::SESSION_LIST_LIMIT;
+        if (isset($args->subcommandFlags['--limit'])) {
+            $raw = (string) $args->subcommandFlags['--limit'];
+            if (\preg_match('/^[1-9]\d{0,8}$/', $raw) !== 1) {
+                return NonInteractive::failUsage(
+                    \sprintf('sugarcrush: session list --limit %s: not a positive whole number', $raw),
+                    $args->outputFormat,
+                    'Usage: sugarcrush session list --limit <N>, where N is 1 or more.',
+                );
+            }
+            $limit = (int) $raw;
+        }
+
+        $all = isset($args->subcommandFlags['--all']);
+        $query = SessionQuery::new()->withPinnedFirst()->withLimit($limit);
+        if ($all || isset($args->subcommandFlags['--children'])) {
+            $query = $query->withKinds();
+        }
+        if ($all || isset($args->subcommandFlags['--archived'])) {
+            $query = $query->withIncludeArchived();
+        }
+
+        $rows = Bootstrap::sessionStore()->listSessionsFiltered($query);
 
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
-            self::emitDocument(['result' => ['sessions' => \array_values($rows)]]);
+            self::emitDocument(['result' => ['sessions' => \array_map(
+                static fn(SessionRow $r): array => $r->toArray(),
+                $rows,
+            )]]);
 
             return NonInteractive::EXIT_OK;
         }
@@ -510,56 +609,241 @@ final class Subcommands
             return NonInteractive::EXIT_OK;
         }
 
+        $idWidth = 0;
+        foreach ($rows as $row) {
+            $idWidth = \max($idWidth, \strlen($row->id));
+        }
         foreach ($rows as $row) {
             \printf(
-                "%-36s  %-19s  %-24s  %s\n",
-                (string) ($row['id'] ?? ''),
-                (string) ($row['updated_at'] ?? ''),
-                (string) ($row['provider'] ?? '') . '/' . (string) ($row['model'] ?? ''),
-                (string) ($row['name'] ?? '(unnamed)'),
+                "%s %-{$idWidth}s  %-19s  %-10s  %5s  %-24s  %s\n",
+                $row->pinned ? '★' : ' ',
+                $row->id,
+                $row->updatedAt,
+                $row->kind->value,
+                $row->turns . 't',
+                $row->provider . '/' . $row->model,
+                self::sessionLabel($row) . ($row->archived() ? ' [archived]' : ''),
             );
         }
 
         return NonInteractive::EXIT_OK;
     }
 
-    private static function sessionDelete(ParsedArgs $args): int
+    /**
+     * `session show <target>`: the session's row, then its transcript as
+     * Markdown ({@see Exporter::toMarkdown()}, the
+     * `/export` formatter, so hidden rows stay hidden). Under
+     * `--output-format json` the document is `{"session": <row>, "messages":
+     * <Exporter::toJson() rows>}`.
+     */
+    private static function sessionShow(ParsedArgs $args): int
     {
-        $id = $args->subcommandArgs[1] ?? null;
-        if ($id === null || $id === '') {
+        if (\count($args->subcommandArgs) > 2) {
+            return self::rejectSessionOperand('show', $args->subcommandArgs[2], $args);
+        }
+
+        $store = Bootstrap::sessionStore();
+        $row = self::resolveSessionTarget('show', $args, $store);
+        if (\is_int($row)) {
+            return $row;
+        }
+
+        $messages = Chat::loadTranscript($store, $row->id);
+
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            $decoded = \json_decode(Exporter::toJson($messages), true);
+            self::emitDocument(['result' => [
+                'session' => $row->toArray(),
+                'messages' => \is_array($decoded) ? $decoded : [],
+            ]]);
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        echo '# ' . self::sessionLabel($row) . "\n\n";
+        echo '- id: ' . $row->id . "\n";
+        echo '- kind: ' . $row->kind->value . ($row->parentId !== null ? ' (parent ' . $row->parentId . ')' : '') . "\n";
+        echo '- model: ' . $row->provider . '/' . $row->model . "\n";
+        echo '- updated: ' . $row->updatedAt . ' · ' . $row->turns . " turn(s)\n";
+        if ($row->pinned || $row->archived()) {
+            echo '- flags: ' . \implode(', ', \array_filter([$row->pinned ? 'pinned' : null, $row->archived() ? 'archived ' . $row->archivedAt : null])) . "\n";
+        }
+        echo "\n" . ($messages === [] ? "(no transcript stored)\n" : \rtrim(Exporter::toMarkdown($messages)) . "\n");
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * `session rename <target> <title…>`: every word after the target is the
+     * title, joined with single spaces, so it needs no quoting. Recorded as a
+     * USER title, which the auto-titler never overwrites.
+     */
+    private static function sessionRename(ParsedArgs $args): int
+    {
+        $title = \trim(\implode(' ', \array_slice($args->subcommandArgs, 2)));
+        if (isset($args->subcommandArgs[1]) && $title === '') {
             return NonInteractive::failUsage(
-                'sugarcrush: session delete: no session id given',
+                'sugarcrush: session rename: no title given',
                 $args->outputFormat,
-                'Usage: sugarcrush session delete <id> — run `sugarcrush session list` for the ids.',
+                'Usage: sugarcrush session rename <target> <title…>',
             );
         }
 
         $store = Bootstrap::sessionStore();
-        if ($store->getSession($id) === null) {
+        $row = self::resolveSessionTarget('rename', $args, $store);
+        if (\is_int($row)) {
+            return $row;
+        }
+
+        $store->renameSession($row->id, $title, TitleSource::User);
+
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            self::emitDocument(['result' => ['renamed' => $row->id, 'name' => $title]]);
+        } else {
+            echo 'Renamed session ' . $row->id . ' to "' . $title . "\"\n";
+        }
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * `session delete <target> [--with-children]`. Sub-agent children always
+     * go with their parent; branch and background children are detached and
+     * kept unless `--with-children` deletes every descendant
+     * ({@see \SugarCraft\Crush\Session\SessionStore::deleteSession()}).
+     */
+    private static function sessionDelete(ParsedArgs $args): int
+    {
+        if (\count($args->subcommandArgs) > 2) {
+            return self::rejectSessionOperand('delete', $args->subcommandArgs[2], $args);
+        }
+
+        $store = Bootstrap::sessionStore();
+        $row = self::resolveSessionTarget('delete', $args, $store);
+        if (\is_int($row)) {
+            return $row;
+        }
+
+        $deleted = $store->deleteSession($row->id, isset($args->subcommandFlags['--with-children']));
+
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            self::emitDocument(['result' => ['deleted' => $row->id, 'deletedIds' => $deleted]]);
+        } else {
+            $others = \count($deleted) - 1;
+            echo 'Deleted session ' . $row->id . ($others > 0 ? ' and ' . $others . ' child session(s)' : '') . "\n";
+        }
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * `session pin|unpin|archive|unarchive <target>`. Repeating one is not an
+     * error: the row already is what was asked for, which the message says.
+     * Pinned sessions list first and are exempt from retention; archived ones
+     * leave the default list, the tab strip and `--continue` but keep their
+     * transcript.
+     */
+    private static function sessionFlag(ParsedArgs $args, string $verb): int
+    {
+        if (\count($args->subcommandArgs) > 2) {
+            return self::rejectSessionOperand($verb, $args->subcommandArgs[2], $args);
+        }
+
+        $store = Bootstrap::sessionStore();
+        $row = self::resolveSessionTarget($verb, $args, $store);
+        if (\is_int($row)) {
+            return $row;
+        }
+
+        $changed = match ($verb) {
+            'pin' => !$row->pinned && $store->setPinned($row->id, true),
+            'unpin' => $row->pinned && $store->setPinned($row->id, false),
+            'archive' => $store->archive($row->id),
+            'unarchive' => $store->unarchive($row->id),
+        };
+        $past = match ($verb) {
+            'pin' => 'pinned',
+            'unpin' => 'unpinned',
+            'archive' => 'archived',
+            'unarchive' => 'unarchived',
+        };
+
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            self::emitDocument(['result' => ['session' => $row->id, 'action' => $verb, 'changed' => $changed]]);
+        } else {
+            echo ($changed ? \ucfirst($past) . ' session ' : 'Session ') . $row->id
+                . ($changed ? '' : ' is already ' . $past) . "\n";
+        }
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * The one row `session <verb> <target>` names, or the exit code already
+     * reported: 2 for a missing target or an ambiguous prefix (the candidates
+     * are listed in the hint), 1 for a target nothing matches.
+     */
+    private static function resolveSessionTarget(
+        string $verb,
+        ParsedArgs $args,
+        EnhancedSessionStore $store,
+    ): SessionRow|int {
+        $target = $args->subcommandArgs[1] ?? null;
+        if ($target === null || $target === '') {
+            return NonInteractive::failUsage(
+                \sprintf('sugarcrush: session %s: no session id given', $verb),
+                $args->outputFormat,
+                'Usage: sugarcrush session ' . $verb . ' <id|prefix|name> — run `sugarcrush session list --all` for the ids.',
+            );
+        }
+
+        $matches = SessionResolver::matches($store, $target);
+        if (\count($matches) > 1) {
+            $shown = \array_slice($matches, 0, 10);
+
+            return NonInteractive::failUsage(
+                \sprintf('sugarcrush: session %s %s: ambiguous id prefix, %d sessions match', $verb, $target, \count($matches)),
+                $args->outputFormat,
+                'Candidates: ' . \implode(', ', \array_map(
+                    static fn(SessionRow $r): string => $r->id . ' (' . self::sessionLabel($r) . ')',
+                    $shown,
+                )) . (\count($matches) > \count($shown) ? ', …' : '') . '. Type more of the id.',
+            );
+        }
+
+        if ($matches === []) {
             // EXIT 1, NOT 2, and the distinction is the documented one: the
             // store WAS opened and queried, so something was attempted. Exit 2
-            // means nothing ran — which is what a MISSING id above means, and
-            // is why the two branches of "delete went wrong" report differently.
-            \fwrite(\STDERR, \sprintf("sugarcrush: session %s: no such session\n", $id));
+            // means nothing ran — which is what a MISSING target above means,
+            // and is why the two branches of "the target went wrong" report
+            // differently.
+            \fwrite(\STDERR, \sprintf("sugarcrush: session %s: no such session\n", $target));
             if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
                 self::emitDocument([
                     'result' => null,
-                    'error' => ['type' => 'not-found', 'message' => 'no such session: ' . $id],
+                    'error' => ['type' => 'not-found', 'message' => 'no such session: ' . $target],
                 ]);
             }
 
             return NonInteractive::EXIT_FAILURE;
         }
 
-        $store->deleteSession($id);
+        return $matches[0];
+    }
 
-        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
-            self::emitDocument(['result' => ['deleted' => $id]]);
-        } else {
-            echo 'Deleted session ' . $id . "\n";
-        }
+    private static function rejectSessionOperand(string $verb, string $operand, ParsedArgs $args): int
+    {
+        return NonInteractive::failUsage(
+            \sprintf('sugarcrush: session %s %s: unexpected operand', $verb, $operand),
+            $args->outputFormat,
+            self::SESSION_USAGE,
+        );
+    }
 
-        return NonInteractive::EXIT_OK;
+    /** A row's name, or `(unnamed)` — raw storage, printed to a terminal the user owns. */
+    private static function sessionLabel(SessionRow $row): string
+    {
+        return $row->name ?? '(unnamed)';
     }
 
     // ---------------------------------------------------------------------
@@ -1168,7 +1452,7 @@ final class Subcommands
      * @var array<string, list<string>>
      */
     private const SUBCOMMAND_ACTIONS = [
-        'session' => ['list', 'delete'],
+        'session' => ['list', 'show', 'rename', 'delete', 'pin', 'unpin', 'archive', 'unarchive'],
         'mcp' => ['list', 'auth', 'import', 'trust'],
         'completion' => self::SHELLS,
     ];

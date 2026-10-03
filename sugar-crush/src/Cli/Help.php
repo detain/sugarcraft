@@ -62,9 +62,26 @@ provider, an API key or a terminal):
   models                 List the providers this install can select and the
                          model each one defaults to; "*" marks the selected
                          one.
-  session list           List stored sessions, newest first.
-  session delete <id>    Delete one stored session by id. Exits 1 if no
-                         session has that id.
+  session list [--all|--archived|--children] [--limit N]
+                         List stored sessions, pinned first then newest
+                         first: id, last update, kind, turns, provider/model
+                         and name (★ marks a pinned row). --children adds
+                         sub-agent and background rows, --archived adds
+                         archived ones, --all adds both; 20 rows unless
+                         --limit says otherwise.
+  session show <target>  Print one session's details and transcript.
+  session rename <target> <title…>
+                         Rename a session; the words after the target are
+                         the title.
+  session delete <target> [--with-children]
+                         Delete a session. Sub-agent children go with it;
+                         branches are kept unless --with-children.
+  session pin|unpin|archive|unarchive <target>
+                         Pin a session (listed first, never pruned), or
+                         archive it (hidden from the default list, kept).
+                         <target> is an id, a name or a unique id prefix.
+                         Exits 1 if nothing matches, 2 if a prefix is
+                         ambiguous (the candidates are listed).
   mcp list               List the MCP servers .mcp.json declares, WITHOUT
                          starting any of them. Reports instead when the file
                          is absent, resolves outside the project tree, or is
@@ -239,7 +256,7 @@ Exit codes (one-shot mode and every subcommand):
   1                      Ran and failed: the backend threw (unreachable host,
                          rejected key, model error) — a retry may help — or a
                          subcommand ran and failed (a doctor check came back
-                         FAIL, `session delete` found no such session, an
+                         FAIL, a `session` verb found no such session, an
                          .mcp.json that is trusted could not be parsed)
   2                      Usage or configuration error, nothing was attempted
                          and a retry will not help: no prompt given, an

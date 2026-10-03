@@ -55,6 +55,31 @@ final readonly class ParsedArgs
     public const SUBCOMMANDS = ['completion', 'doctor', 'mcp', 'models', 'session'];
 
     /**
+     * The flags each subcommand verb owns, keyed by verb: `true` when the flag
+     * takes a value (`--limit 5`, `--limit=5`), `false` for a bare switch.
+     *
+     * SCOPED, not global: {@see ArgvParser::parse()} recognises one of these
+     * only once its verb has been seen, so `sugarcrush session list --all` is
+     * a listing of every row while `sugarcrush --all` is still an unknown
+     * option at exit 2. Before this table every `-x` after a verb was recorded
+     * as unknown, which is why `session list --archived` could not exist
+     * (Appendix P §3.4). The parser only checks the SHAPE (a value flag needs
+     * a value); which ACTION a flag applies to is {@see Subcommands}' call,
+     * for the reason {@see self::SUBCOMMANDS} gives.
+     *
+     * @var array<string, array<string, bool>>
+     */
+    public const SUBCOMMAND_FLAGS = [
+        'session' => [
+            '--all' => false,
+            '--archived' => false,
+            '--children' => false,
+            '--limit' => true,
+            '--with-children' => false,
+        ],
+    ];
+
+    /**
      * @param list<string> $unknownFlags Unrecognised `-`-prefixed arguments,
      *   in the order given. Non-empty means the invocation is a usage error.
      * @param bool $promptRequested True when `-p`/`--prompt`/`--prompt=`/`run`
@@ -84,6 +109,9 @@ final readonly class ParsedArgs
      *   {@see Subcommands::dispatch()} before Program is ever constructed.
      * @param list<string> $subcommandArgs The verb's own operands in the order
      *   given (`['delete', '<id>']`), NOT validated here.
+     * @param array<string, string|true> $subcommandFlags The verb's own
+     *   {@see self::SUBCOMMAND_FLAGS} that appeared after it, flag => value
+     *   (`true` for a switch). A repeated flag keeps its last value.
      * @param list<string> $positionals Every bare operand of the invocation
      *   itself (not a subcommand's) that nothing claimed, in the order given:
      *   not a flag's value, not `run`'s prompt, and not the path-shaped
@@ -127,6 +155,7 @@ final readonly class ParsedArgs
          * {@see ArgvParser::resolveOperands()}; null when there were none.
          */
         public ?string $initialPrompt = null,
+        public array $subcommandFlags = [],
     ) {
     }
 
@@ -185,6 +214,7 @@ final readonly class ParsedArgs
      * @param list<string> $unknownFlags
      * @param list<string> $subcommandArgs
      * @param list<string> $positionals
+     * @param array<string, string|true> $subcommandFlags
      *
      * @internal
      */
@@ -207,7 +237,8 @@ final readonly class ParsedArgs
         ?string $resumeSession = null,
         bool $resumeRequested = false,
         array $positionals = [],
+        array $subcommandFlags = [],
     ): self {
-        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals);
+        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags);
     }
 }

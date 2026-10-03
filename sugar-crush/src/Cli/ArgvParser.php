@@ -12,9 +12,11 @@ namespace SugarCraft\Crush\Cli;
  *
  * Supports: -p/--prompt <value>, --help/-h, --version/-v, the real
  * subcommands {@see ParsedArgs::SUBCOMMANDS} names (`mcp list`, `session
- * list|delete <id>`, `models`, `doctor`, `completion bash|zsh|fish` — executed
- * by {@see Subcommands}, dispatched by `bin/sugarcrush` in the same pre-flight
- * place `--help` is), the `run "<prompt>"`
+ * list|show|rename|delete|pin|unpin|archive|unarchive`, `models`, `doctor`,
+ * `completion bash|zsh|fish` — executed by {@see Subcommands}, dispatched by
+ * `bin/sugarcrush` in the same pre-flight place `--help` is) together with
+ * the flags each verb owns ({@see ParsedArgs::SUBCOMMAND_FLAGS}, recognised
+ * only after that verb), the `run "<prompt>"`
  * positional subcommand form (an alias for -p "<prompt>", advertised by
  * {@see Help::screen()} and {@see NonInteractive::run()}'s own usage
  * message), --output-format/--output-format=<value> (advertised by
@@ -129,6 +131,7 @@ final class ArgvParser
         $endOfOptions = false;
         $subcommand = null;
         $subcommandArgs = [];
+        $subcommandFlags = [];
         $continueSession = false;
         $resumeSession = null;
         $resumeRequested = false;
@@ -537,6 +540,64 @@ final class ArgvParser
                 continue;
             }
 
+            // A flag the OPEN verb owns (ParsedArgs::SUBCOMMAND_FLAGS):
+            // `session list --archived`. Checked only once a verb is open and
+            // only against that verb's own table, so the same word before the
+            // verb, or after a different one, still falls to the unknown-flag
+            // recorder below. The global flags above win a name clash because
+            // they are matched first. A value flag is STRICT in the way
+            // --model is: a missing or flag-shaped value is a usage error
+            // rather than silently dropping the flag.
+            if ($subcommand !== null) {
+                $name = \explode('=', $arg, 2)[0];
+                $takesValue = ParsedArgs::SUBCOMMAND_FLAGS[$subcommand][$name] ?? null;
+                if ($takesValue !== null) {
+                    $inline = \str_contains($arg, '=') ? \substr($arg, \strlen($name) + 1) : null;
+                    if (!$takesValue) {
+                        if ($inline !== null) {
+                            if ($usageError === null) {
+                                $usageError = \sprintf('sugarcrush: %s %s takes no value', $subcommand, $name);
+                                $usageHint = \sprintf('Write it as %s alone.', $name);
+                            }
+                        } else {
+                            $subcommandFlags[$name] = true;
+                        }
+                        ++$i;
+                        continue;
+                    }
+                    if ($inline !== null) {
+                        $value = $inline;
+                        ++$i;
+                    } else {
+                        $next = $argv[$i + 1] ?? null;
+                        if ($next === null || self::looksLikeFlag($next)) {
+                            if ($usageError === null) {
+                                $usageError = \sprintf(
+                                    'sugarcrush: %s %s expects a value, but %s',
+                                    $subcommand,
+                                    $name,
+                                    $next === null ? 'the argument list ended' : 'the next argument is the option ' . $next,
+                                );
+                                $usageHint = \sprintf('Write it as %s=<value>; it may not be omitted.', $name);
+                            }
+                            ++$i;
+                            continue;
+                        }
+                        $value = $next;
+                        $i += 2;
+                    }
+                    if ($value === '') {
+                        if ($usageError === null) {
+                            $usageError = \sprintf('sugarcrush: %s %s expects a value, but the value is empty', $subcommand, $name);
+                            $usageHint = \sprintf('Write it as %s=<value>; it may not be omitted.', $name);
+                        }
+                        continue;
+                    }
+                    $subcommandFlags[$name] = $value;
+                    continue;
+                }
+            }
+
             // Unrecognised flag — recorded, never applied. bin/sugarcrush
             // turns a non-empty list into a usage error (exit 2); dropping it
             // here is what let `--version` boot the TUI.
@@ -619,7 +680,7 @@ final class ArgvParser
             $root = \array_shift($positional);
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional));
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags);
     }
 
     /**

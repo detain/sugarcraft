@@ -3921,9 +3921,11 @@ final class DocFigureProseDriftTest extends TestCase
         sort($helpWords);
         self::assertSame($commands, $helpWords, 'the help Subcommands block and ParsedArgs::SUBCOMMANDS diverged — the page quotes both agreeing');
         // E710 grew the mcp row a second verb and audit MCP-5 a third (`mcp
-        // trust`): session holds two second words, mcp three, completion one
-        // line of three shells — eight leaf rows.
-        self::assertSame(8, preg_match_all('/^  (doctor|models|session|mcp|completion)\b/m', $block), 'the block no longer carries the eight leaf rows the code dispatches (session and mcp hold their own second words)');
+        // trust`): session held two second words, mcp three, completion one
+        // line of three shells — eight leaf rows. P-A3 grew session to five
+        // rows (list, show, rename, delete, and one pin|unpin|archive|unarchive
+        // line) — eleven.
+        self::assertSame(11, preg_match_all('/^  (doctor|models|session|mcp|completion)\b/m', $block), 'the block no longer carries the eleven leaf rows the code dispatches (session and mcp hold their own second words)');
         foreach (['doctor', 'models', 'session list', 'session delete', 'mcp list', 'completion bash|zsh|fish'] as $row) {
             self::assertStringContainsString('  ' . $row, $block, "the help block lost the `{$row}` row the page's list quotes");
         }

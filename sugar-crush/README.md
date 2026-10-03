@@ -467,8 +467,12 @@ bogus`, `sugarcrush completion tcsh`).
 ```sh
 sugarcrush doctor                    # check this installation, exit 1 if anything FAILs
 sugarcrush models                    # providers this install can select; * marks the selected one
-sugarcrush session list              # stored sessions, newest first
-sugarcrush session delete <id>       # delete one stored session
+sugarcrush session list              # stored sessions, pinned then newest first
+                                     #   [--children] [--archived] [--all] [--limit N]
+sugarcrush session show <target>     # one session's details + transcript (Markdown)
+sugarcrush session rename <target> <title…>
+sugarcrush session delete <target>   # sub-agent children go too; [--with-children] takes branches
+sugarcrush session pin|unpin|archive|unarchive <target>
 sugarcrush mcp list                  # what .mcp.json declares — without starting anything
 sugarcrush mcp trust                 # approve .mcp.json as it is now (command/args/env pinned per server)
 sugarcrush mcp import claude|opencode <path>
@@ -484,6 +488,17 @@ that may be broken, so it must not require the thing it is diagnosing. A
 config whose `permissionMode` is unusable makes the launch refuse to start
 (exit `2`, above); `doctor` still runs, names that as the failing check, and
 exits `1`.
+
+A session `<target>` is an id, a name or a unique id prefix — the resolver
+`--resume` uses, over every kind and archived rows too. Nothing matching exits
+`1` (`not-found`); an ambiguous prefix exits `2` and lists the candidates. The
+flags after `session list` and `session delete` belong to that verb: before it
+they are unknown options. `list` prints `★ id updated kind turns
+provider/model name` (★ = pinned, `[archived]` after an archived name), and its
+JSON rows carry every stored column (`kind`, `parent_id`, `pinned`,
+`archived_at`, `turns`, …). A pinned session lists first and is never pruned;
+an archived one leaves the default list, the tab strip and `--continue` but
+keeps its transcript.
 
 `doctor` is **read-only**: it counts the rows in the session database through
 `Bootstrap::sessionStore(prune: false)` rather than the plain accessor, so the
@@ -509,8 +524,8 @@ containment and trust decision with `mcpClient()` (both go through
 disagrees with; an untrusted or out-of-tree config is reported rather than
 enumerated.
 
-`--output-format json` applies to `doctor`, `models`, `session list`, `mcp
-list` and `mcp import`, producing the same `{"result": …}` envelope the
+`--output-format json` applies to `doctor`, `models`, every `session` verb,
+`mcp list` and `mcp import`, producing the same `{"result": …}` envelope the
 one-shot path does, and
 the same `{"result":null,"error":{"type":…,"message":…}}` document on any
 failure — an operand error, an unknown session id, or an unreadable trusted

@@ -61,6 +61,7 @@ sugar-crush/tests/Integration/BinSugarcrushWiringTest.php	5.775	460
 sugar-crush/tests/Agents/TaskListTest.php	5.749	46
 sugar-crush/tests/Session/SessionIndexAndRetentionTest.php	5.609	24
 sugar-crush/tests/Cli/HelpTest.php	5.448	68
+sugar-crush/tests/Cli/SessionSubcommandsTest.php	5.420	14
 sugar-crush/tests/Renderer/StatusBarSpendTest.php	5.254	15
 sugar-crush/tests/Integration/ParallelTaskFanOutCapTest.php	5.177	4
 sugar-crush/tests/Chat/ProviderSwitchKeepsTaskToolTest.php	5.132	3
