@@ -26,11 +26,15 @@ use PHPUnit\Framework\TestCase;
  * 3 to 0.
  *
  * AND IT IS NOT ONLY LITTER, which is the part that makes this a harness
- * integrity guard rather than a tidiness one. `Agents/TeamTest` asserts in its
- * `tearDown()` that the real `~/.sugar-crush` is unchanged across each of its
- * tests. Three lanes run this suite concurrently against ONE home directory, so
- * a leak in any lane reds a test in another that did nothing wrong, at a moment
- * nobody can reproduce afterwards. That is a cross-lane flake with a mechanism.
+ * integrity guard rather than a tidiness one. `Agents/TeamTest` used to assert
+ * in its `tearDown()` that the real `~/.sugar-crush` was unchanged across each
+ * of its tests. Three lanes run this suite concurrently against ONE home
+ * directory, so a leak in any lane reddened a test in another that did nothing
+ * wrong, at a moment nobody could reproduce afterwards - a cross-lane flake
+ * with a mechanism. That snapshot is gone (the Team suites now assert on the
+ * sandbox they own, so a live session touching the real directory cannot red
+ * them either), and this census is what still keeps a one-sided file from
+ * writing into a real home at all.
  *
  * THE ROSTER BELOW IS A MIGRATION BACKLOG, NOT AN EXEMPTION LIST, and the
  * difference is that it is checked in BOTH directions. A new one-sided file
@@ -436,8 +440,7 @@ final class OneSidedHomeSandboxTest extends TestCase
                 . 'does not follow putenv(), getenv(\'HOME\') does not follow an assignment to '
                 . 'the superglobal, and $_ENV is read by NOTHING in src/ so moving only that '
                 . 'sandboxes nothing at all. Measured once already - one such file created three '
-                . 'directories per run under the real ~/.sugar-crush/teams/, and reds '
-                . 'Agents/TeamTest in whichever OTHER lane happens to be mid-test. '
+                . 'directories per run under the real ~/.sugar-crush/teams/. '
                 . 'IF A FILE WAS ADDED: move both spellings, or use HomeSandboxTrait, rather '
                 . 'than adding a row - and note that a COMMENT naming the trait is not a use of '
                 . 'it and will not excuse the file. IF A FILE DISAPPEARED: it was fixed - delete '

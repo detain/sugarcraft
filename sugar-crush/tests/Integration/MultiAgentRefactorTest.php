@@ -116,10 +116,12 @@ final class MultiAgentRefactorTest extends TestCase
         // sandbox. At the time this was found the real teams/ held 3,133
         // entries, mtime minutes old.
         //
-        // It is not only litter. Agents/TeamTest asserts in tearDown() that the
-        // real ~/.sugar-crush is unchanged across each of its tests, so this
-        // file leaking into it while another lane's suite is mid-test reds a
-        // test that did nothing wrong - and three lanes run this suite at once.
+        // It was not only litter. Agents/TeamTest used to assert in tearDown()
+        // that the real ~/.sugar-crush was unchanged across each of its tests,
+        // so this file leaking into it while another lane's suite was mid-test
+        // reddened a test that did nothing wrong. The Team suites now assert on
+        // their own sandbox instead; the leak would still be a write into a
+        // developer's home.
         $this->oldHome = $_SERVER['HOME'] ?? '/root';
         $this->oldEnvHome = getenv('HOME');
         $_SERVER['HOME'] = $this->tmpRoot;

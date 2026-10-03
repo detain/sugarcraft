@@ -10,16 +10,24 @@ use SugarCraft\Crush\Agents\TaskStatus;
 use SugarCraft\Crush\Agents\Team;
 use SugarCraft\Crush\Agents\TeamConfig;
 use SugarCraft\Crush\Agents\TeamManager;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * Tests for TeamManager - creates and manages Team aggregate roots.
  *
- * HOME is redirected to a sandbox for the whole class, same convention as
- * EngineBackendParallelConfigTest, so nothing here can write into the real
- * ~/.sugar-crush.
+ * HOME is redirected to a sandbox for the whole class through
+ * {@see HomeSandboxTrait}, so nothing here can write into the real
+ * ~/.sugar-crush. Whether the redirect really reaches the writer is asserted
+ * on the sandbox itself, by
+ * {@see testTeamStateIsPersistedUnderTheSandboxHomeAndNotTheRealOne()} - not by
+ * snapshotting the developer's real ~/.sugar-crush around every test, which is
+ * what this class used to do and which any other process touching that
+ * directory (a live sugarcrush, a sibling worktree's suite) turned red.
  */
 final class TeamManagerTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private ?string $tempDir = null;
 
     /** @var list<string> every dir createTempDir() handed out, all removed in tearDown() */
@@ -31,45 +39,21 @@ final class TeamManagerTest extends TestCase
     /** The sandbox every "~" in this class expands to. */
     private string $homeDir;
 
-    /** The developer's actual home, kept so tearDown() can check it is untouched. */
-    private string $realHome;
-
-    private string $originalHome;
-
-    private ?string $originalServerHome = null;
-
-    /** @var list<string> */
-    private array $realHomeFootprint = [];
-
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->sandboxDir = sys_get_temp_dir() . '/sc_team_manager_' . bin2hex(random_bytes(6));
         $this->homeDir = $this->sandboxDir . '/home';
-        mkdir($this->homeDir, 0o700, true);
 
-        $this->originalHome = getenv('HOME') ?: '';
-        $this->originalServerHome = isset($_SERVER['HOME']) ? (string) $_SERVER['HOME'] : null;
-        $this->realHome = $this->originalServerHome ?? $this->originalHome;
-        $this->realHomeFootprint = $this->realHomeFootprint();
-
-        // BOTH have to move. Bootstrap resolves the config dir off
-        // getenv('HOME'), but Team::basePath() and TeamManager::expandPath()
-        // read $_SERVER['HOME'] instead - and they are the two that persist
-        // here, so redirecting only the env var would leave the leak intact.
-        putenv('HOME=' . $this->homeDir);
-        $_SERVER['HOME'] = $this->homeDir;
+        // BOTH spellings move (the trait's whole point): Team::basePath() and
+        // TeamManager::expandPath() are the two that persist here.
+        $this->useHomeSandbox($this->homeDir);
     }
 
     protected function tearDown(): void
     {
-        if ($this->originalServerHome === null) {
-            unset($_SERVER['HOME']);
-        } else {
-            $_SERVER['HOME'] = $this->originalServerHome;
-        }
-        $this->originalHome === '' ? putenv('HOME') : putenv('HOME=' . $this->originalHome);
+        $this->restoreHomeSandbox();
 
         foreach ($this->tempDirs as $dir) {
             $this->removeDirectory($dir);
@@ -78,55 +62,7 @@ final class TeamManagerTest extends TestCase
         $this->tempDir = null;
         $this->removeDirectory($this->sandboxDir);
 
-        // The sandbox exists to be checked. Every test in this class builds a
-        // Team, and a Team persists under whatever "~" resolves to at the
-        // moment it is constructed - so a redirect that quietly stopped
-        // applying would go unnoticed until the residue was counted by hand.
-        $this->assertSame(
-            $this->realHomeFootprint,
-            $this->realHomeFootprint(),
-            'a Team test wrote into the real ~/.sugar-crush instead of its sandbox HOME',
-        );
-
         parent::tearDown();
-    }
-
-    /**
-     * Everything under the real ~/.sugar-crush that a Team or a TeamManager
-     * could create: the config dir's own entries, so conjuring the directory
-     * itself is caught, plus the names directly under teams/, which is where
-     * one directory per Team appears.
-     *
-     * Deliberately shallow. The residue this guards against is one new entry
-     * per Team, so a recursive walk buys nothing and costs a full tree scan
-     * twice per test - which on a machine that has already accumulated the
-     * residue is slow enough to look like a hang.
-     *
-     * @return list<string>
-     */
-    private function realHomeFootprint(): array
-    {
-        $configDir = $this->realHome . '/.sugar-crush';
-
-        return [
-            ...self::entriesOf($configDir),
-            ...self::entriesOf($configDir . '/teams'),
-        ];
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function entriesOf(string $dir): array
-    {
-        if (!is_dir($dir)) {
-            return [];
-        }
-
-        $entries = array_values(array_diff(scandir($dir) ?: [], ['.', '..']));
-        sort($entries);
-
-        return array_map(static fn(string $entry): string => $dir . '/' . $entry, $entries);
     }
 
     // -------------------------------------------------------------------------
@@ -665,10 +601,12 @@ final class TeamManagerTest extends TestCase
      * directories had accumulated on one machine, invisible to a top-level
      * listing because teams/ already existed.
      *
-     * tearDown() guards every test here by comparing the real config dir
-     * before and after. This states the same claim positively, so a sandbox
-     * that stopped applying fails with the reason spelled out rather than as
-     * an unexplained diff.
+     * tearDown() used to guard every test here by comparing the REAL config
+     * dir before and after, which reddened whenever anything else on the
+     * machine touched it. The claim is now made only positively, on the
+     * sandbox this test owns: the Team's state is either in the sandbox HOME
+     * or somewhere it should not be, and the first is checkable without
+     * reading the developer's home at all.
      */
     public function testTeamStateIsPersistedUnderTheSandboxHomeAndNotTheRealOne(): void
     {
@@ -680,8 +618,11 @@ final class TeamManagerTest extends TestCase
             leadAgentId: 'lead-1',
         );
 
-        $this->assertFileExists($this->homeDir . '/.sugar-crush/teams/' . $teamId . '/tasks.sqlite');
-        $this->assertDirectoryDoesNotExist($this->realHome . '/.sugar-crush/teams/' . $teamId);
+        $this->assertFileExists(
+            $this->homeDir . '/.sugar-crush/teams/' . $teamId . '/tasks.sqlite',
+            'the Team did not persist into the sandbox HOME - "~" resolved somewhere this test '
+                . 'does not own, which on a developer machine is their real ~/.sugar-crush',
+        );
     }
 
     // -------------------------------------------------------------------------

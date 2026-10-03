@@ -12,37 +12,38 @@ use SugarCraft\Crush\Agents\Teammate;
 use SugarCraft\Crush\Agents\Team;
 use SugarCraft\Crush\Agents\WorktreeConfig;
 use SugarCraft\Crush\Agents\WorktreeManager;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * Tests for Team - aggregate root for lead + teammates coordination.
  *
- * HOME is redirected to a sandbox for the whole class, same convention as
- * EngineBackendParallelConfigTest: a Team persists its task list and mailbox
- * under ~/.sugar-crush/teams/{id}/ the moment it is constructed, and every
- * test below constructs one.
+ * HOME is redirected to a sandbox for the whole class through
+ * {@see HomeSandboxTrait}: a Team persists its task list and mailbox under
+ * ~/.sugar-crush/teams/{id}/ the moment it is constructed, and every test
+ * below constructs one.
+ *
+ * Whether that redirect reaches the writer is asserted on the sandbox, by
+ * {@see testAConstructedTeamPersistsIntoTheSandboxHome()}. This class used to
+ * snapshot the DEVELOPER'S real ~/.sugar-crush around every test instead and
+ * assert it unchanged; even narrowed to this process's own team ids, the
+ * config dir's top level stayed in the comparison, so a live sugarcrush or a
+ * sibling worktree's suite touching that directory reddened a test that had
+ * done nothing wrong.
  */
 final class TeamTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     /** @var list<string> temp dirs created by createRealWorktreeManager(), cleaned up in tearDown() */
     private array $tmpDirsToClean = [];
 
     /** The throwaway root holding this test's sandbox HOME. */
     private string $sandboxDir;
 
-    /** The developer's actual home, kept so tearDown() can check it is untouched. */
-    private string $realHome;
-
-    private string $originalHome;
-
-    private ?string $originalServerHome = null;
-
-    /** @var list<string> */
-    private array $realHomeFootprint = [];
-
     /**
-     * Per-process attribution token (E281): every Team fixture id is built
-     * through {@see teamId()} so it starts with this value, and the footprint
-     * guard only counts entries that start with it.
+     * Per-process prefix for every fixture Team id, built through
+     * {@see teamId()}. Ids stay distinct across concurrent lanes and repeated
+     * runs, so no fixture ever meets another run's leftovers by name.
      */
     private string $processToken = '';
 
@@ -51,32 +52,16 @@ final class TeamTest extends TestCase
         parent::setUp();
 
         $this->sandboxDir = sys_get_temp_dir() . '/sc_team_' . bin2hex(random_bytes(6));
-        mkdir($this->sandboxDir . '/home', 0o700, true);
-
-        // BEFORE the snapshot: the very first realHomeFootprint() call already
-        // filters by this token.
         $this->processToken = uniqid((string) getmypid(), true);
 
-        $this->originalHome = getenv('HOME') ?: '';
-        $this->originalServerHome = isset($_SERVER['HOME']) ? (string) $_SERVER['HOME'] : null;
-        $this->realHome = $this->originalServerHome ?? $this->originalHome;
-        $this->realHomeFootprint = $this->realHomeFootprint();
-
-        // BOTH have to move: Team::basePath() reads $_SERVER['HOME'] while
-        // Bootstrap reads getenv('HOME'), so redirecting one leaves the other
-        // pointing at the real home.
-        putenv('HOME=' . $this->sandboxDir . '/home');
-        $_SERVER['HOME'] = $this->sandboxDir . '/home';
+        // BOTH spellings move (the trait's whole point): Team::basePath()
+        // resolves through HomeDirectory while Bootstrap reads getenv('HOME').
+        $this->useHomeSandbox($this->sandboxDir . '/home');
     }
 
     protected function tearDown(): void
     {
-        if ($this->originalServerHome === null) {
-            unset($_SERVER['HOME']);
-        } else {
-            $_SERVER['HOME'] = $this->originalServerHome;
-        }
-        $this->originalHome === '' ? putenv('HOME') : putenv('HOME=' . $this->originalHome);
+        $this->restoreHomeSandbox();
 
         foreach ($this->tmpDirsToClean as $dir) {
             if (is_dir($dir)) {
@@ -85,70 +70,7 @@ final class TeamTest extends TestCase
         }
         $this->removeDirectory($this->sandboxDir);
 
-        $this->assertSame(
-            $this->realHomeFootprint,
-            $this->realHomeFootprint(),
-            'a Team test wrote into the real ~/.sugar-crush instead of its sandbox HOME',
-        );
-
         parent::tearDown();
-    }
-
-    /**
-     * Everything under the real ~/.sugar-crush THIS PROCESS's Teams could
-     * create: the config dir's own entries, so conjuring the directory itself
-     * is caught, plus the names directly under teams/ that carry this
-     * process's token (E281).
-     *
-     * WHY THE TEAMS LEVEL IS ATTRIBUTED AND NOT JUST COUNTED: the home is
-     * shared across concurrent lanes, and siblings leak. MEASURED at the time
-     * of this fix, the real tree carried thousands of leftover team dirs from
-     * non-pid-prefixed fixtures elsewhere (the found origin is
-     * `tests/Integration/MultiAgentRefactorTest.php` writing
-     * `'throwing-' . uniqid('', true)` — a file outside this one's ownership).
-     * An unfiltered before/after diff let any sibling's leak between the two
-     * snapshots redden THIS file for a bug it does not have. Attribution
-     * requires the name: every Team id here now flows through
-     * {@see teamId()}, and only tokens matching this process are compared.
-     *
-     * The `teams/` directory itself is excluded at the config-dir level: its
-     * existence is structural — a sibling creating it concurrently is the
-     * exact false positive this item removes — while anything THIS process
-     * writes under it is caught by token at the leaf.
-     *
-     * Deliberately shallow: the residue is one new entry per Team, so a
-     * recursive walk buys nothing and costs a full tree scan twice per test.
-     *
-     * @return list<string>
-     */
-    private function realHomeFootprint(): array
-    {
-        $configDir = $this->realHome . '/.sugar-crush';
-
-        $entries = array_values(array_filter(
-            self::entriesOf($configDir),
-            static fn(string $path): bool => basename($path) !== 'teams',
-        ));
-
-        foreach (self::entriesOf($configDir . '/teams') as $teamEntry) {
-            if ($this->isOwnTeamsEntry($teamEntry)) {
-                $entries[] = $teamEntry;
-            }
-        }
-
-        return $entries;
-    }
-
-    /**
-     * True when a `teams/<name>` entry is attributed to this process — the
-     * classification decision of {@see realHomeFootprint()}, extracted so the
-     * fixture table below can pin both polarities (E322 rule: a scan is not
-     * tested until a known offender is proven to be caught by it — and its
-     * mirror, until a known foreign name is proven NOT to be).
-     */
-    private function isOwnTeamsEntry(string $path): bool
-    {
-        return str_starts_with(basename($path), $this->processToken);
     }
 
     /**
@@ -163,43 +85,28 @@ final class TeamTest extends TestCase
             : $this->processToken . '-' . $name;
     }
 
-    public function testTheFootprintAttributesOnlyThisProcessesTeamEntries(): void
-    {
-        $teamsDir = $this->realHome . '/.sugar-crush/teams';
-
-        $cases = [
-            // This process's own fixtures, as teamId() builds them.
-            $teamsDir . '/' . $this->teamId('team-alpha')            => true,
-            // The residue shapes this guard used to false-alarm on.
-            $teamsDir . '/throwing-68d1f2a3b4c5d6e7.89012345'        => false,
-            $teamsDir . '/team-alpha'                                => false,
-            $teamsDir . '/team-tasklist-' . uniqid((string) (getmypid() + 1000), true) => false,
-            // (Traversal-shaped ids never reach disk — Team throws first — so
-            // the leaf-basename rule below only ever sees single-segment names.)
-        ];
-
-        foreach ($cases as $path => $expected) {
-            $this->assertSame(
-                $expected,
-                $this->isOwnTeamsEntry($path),
-                'attribution of ' . basename($path) . ' went the wrong way',
-            );
-        }
-    }
-
     /**
-     * @return list<string>
+     * The sandbox is asserted where it is OWNED. Construction alone persists
+     * a Team, so its task list must appear under the sandbox HOME;
+     * a redirect that stopped reaching Team::basePath() leaves the sandbox
+     * empty and reds here with the reason, rather than writing into the
+     * developer's real ~/.sugar-crush/teams/ unobserved.
      */
-    private static function entriesOf(string $dir): array
+    public function testAConstructedTeamPersistsIntoTheSandboxHome(): void
     {
-        if (!is_dir($dir)) {
-            return [];
-        }
+        $team = new Team(
+            id: $this->teamId('sandboxed'),
+            name: 'Sandboxed',
+            leadAgentId: 'lead-001',
+            createdAt: new \DateTimeImmutable(),
+        );
 
-        $entries = array_values(array_diff(scandir($dir) ?: [], ['.', '..']));
-        sort($entries);
-
-        return array_map(static fn(string $entry): string => $dir . '/' . $entry, $entries);
+        $teamDir = $this->sandboxDir . '/home/.sugar-crush/teams/' . $team->id;
+        $this->assertFileExists(
+            $teamDir . '/tasks.sqlite',
+            'the Team did not persist into the sandbox HOME - "~" resolved somewhere this test '
+                . 'does not own, which on a developer machine is their real ~/.sugar-crush',
+        );
     }
 
     // -------------------------------------------------------------------------
