@@ -36,11 +36,15 @@ use SugarCraft\Crush\Tools\ToolCall;
  * | child→parent  | `usage`       | `step`, `usage`                                           |
  * | child→parent  | `step`        | `step`, `maxSteps`                                        |
  *
- * This step builds the channel and the ask round trip. Steering (1.C-3) and
- * the usage/step/soft-cancel frames (1.C-4) consume the same seam: inbound
- * `steer`/`cancel_*` frames are already parsed and BUFFERED here (an ask
- * blocked on its reply must not drop a steer that overtook the reply), and
- * {@see send()} already writes the child→parent kinds.
+ * 1.C-1 built the channel and the ask round trip; the other kinds ride the
+ * same seam. Inbound `steer`/`cancel_*` frames are parsed and BUFFERED here
+ * (an ask blocked on its reply must not drop a steer that overtook the
+ * reply). Since roadmap 1.C-4 every forked turn carries a channel, not only
+ * an interactive one: the turn loop writes a `step` frame before each
+ * provider call and a `usage` frame after each response through
+ * {@see send()}, and asks {@see softCancelRequested()} at each step boundary,
+ * so a `cancel_soft` from the parent ends the turn once the step's tools have
+ * finished. Steering (1.C-3) and `cancel_tool` (1.C-4b) are still to come.
  *
  * ## No deadline in the child
  *
@@ -106,6 +110,9 @@ final class ChildChannel
 
     /** @var list<array<string, mixed>> buffered `cancel_soft` / `cancel_tool` frames */
     private array $controls = [];
+
+    /** Latched once a `cancel_soft` has been read: a soft cancel is never withdrawn. */
+    private bool $softCancelled = false;
 
     /**
      * @var array<string, array<string, mixed>> `ask_reply` frames that arrived
@@ -265,6 +272,36 @@ final class ChildChannel
         $this->controls = [];
 
         return $controls;
+    }
+
+    /**
+     * Whether the parent has asked the turn to stop at its next step boundary
+     * (`cancel_soft`, roadmap 1.C-4). Polls the socket without blocking first,
+     * and takes every `cancel_soft` out of the buffered controls while leaving
+     * any other control (`cancel_tool`) for {@see takeControls()}. Latched:
+     * once true it stays true, however many times it is asked.
+     *
+     * Always false in a process that does not own the socket — a grandchild
+     * that inherited this object has no turn loop to stop.
+     */
+    public function softCancelRequested(): bool
+    {
+        if ((int) getmypid() !== $this->ownerPid) {
+            return false;
+        }
+
+        $this->poll();
+        $kept = [];
+        foreach ($this->controls as $control) {
+            if (($control['kind'] ?? null) === self::CANCEL_SOFT) {
+                $this->softCancelled = true;
+            } else {
+                $kept[] = $control;
+            }
+        }
+        $this->controls = $kept;
+
+        return $this->softCancelled;
     }
 
     /**

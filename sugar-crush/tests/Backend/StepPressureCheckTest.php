@@ -35,8 +35,10 @@ final class StepPressureCheckTest extends TestCase
         EngineBackend::new($provider, 'm')
             ->withTools([self::probe(400)])
             ->withMaxSteps(5)
-            ->completeTranscript([new UserMessage('go')], onStep: static function (StepStarted $e) use (&$events): void {
-                $events[] = $e;
+            ->completeTranscript([new UserMessage('go')], onStep: static function (object $e) use (&$events): void {
+                if ($e instanceof StepStarted) {
+                    $events[] = $e;
+                }
             });
 
         $this->assertSame([1, 2, 3], array_map(static fn (StepStarted $e): int => $e->step, $events));
@@ -53,8 +55,10 @@ final class StepPressureCheckTest extends TestCase
         $probe = self::probe(40);
 
         EngineBackend::new($provider, 'm')->withTools([$probe])->withMaxSteps(5)
-            ->completeTranscript([new UserMessage('go')], onStep: static function (StepStarted $e) use (&$events): void {
-                $events[] = $e;
+            ->completeTranscript([new UserMessage('go')], onStep: static function (object $e) use (&$events): void {
+                if ($e instanceof StepStarted) {
+                    $events[] = $e;
+                }
             });
 
         $first = $events[0]->pressure;
@@ -75,8 +79,10 @@ final class StepPressureCheckTest extends TestCase
         $provider = self::provider($calls, $seen, $events);
 
         EngineBackend::new($provider, 'm')->withTools([self::probe(8_000)])->withMaxSteps(5)
-            ->completeTranscript([new UserMessage('go')], onStep: static function (StepStarted $e) use (&$events): void {
-                $events[] = $e;
+            ->completeTranscript([new UserMessage('go')], onStep: static function (object $e) use (&$events): void {
+                if ($e instanceof StepStarted) {
+                    $events[] = $e;
+                }
             });
 
         $second = $events[1]->pressure;
@@ -97,8 +103,10 @@ final class StepPressureCheckTest extends TestCase
         $provider = self::provider($calls, $seen, $events, window: 8_000, basePrompt: 6_000);
 
         EngineBackend::new($provider, 'm')->withTools([self::probe(4_000)])->withMaxSteps(5)
-            ->completeTranscript([new UserMessage('go')], onStep: static function (StepStarted $e) use (&$events): void {
-                $events[] = $e;
+            ->completeTranscript([new UserMessage('go')], onStep: static function (object $e) use (&$events): void {
+                if ($e instanceof StepStarted) {
+                    $events[] = $e;
+                }
             });
 
         $this->assertSame(6_400, $events[0]->pressure?->threshold);

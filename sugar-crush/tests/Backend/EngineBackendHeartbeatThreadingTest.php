@@ -142,7 +142,7 @@ final class EngineBackendHeartbeatThreadingTest extends TestCase
      */
     public function testTheForkedChildWritesOneBareReasoningFramePerBeat(): void
     {
-        $frames = $this->collectRawChildFrames(new HeartbeatObservingBatchProvider(fireBeats: true));
+        $frames = self::withoutStepFrames($this->collectRawChildFrames(new HeartbeatObservingBatchProvider(fireBeats: true)));
 
         $kinds = array_map(static fn (array $frame): string => (string) ($frame['kind'] ?? '?'), $frames);
         $this->assertSame(
@@ -169,7 +169,7 @@ final class EngineBackendHeartbeatThreadingTest extends TestCase
      */
     public function testAForkedTurnWhoseProviderNeverBeatsCrossesNoHeartbeatFrames(): void
     {
-        $frames = $this->collectRawChildFrames(new HeartbeatObservingBatchProvider(fireBeats: false));
+        $frames = self::withoutStepFrames($this->collectRawChildFrames(new HeartbeatObservingBatchProvider(fireBeats: false)));
 
         $kinds = array_map(static fn (array $frame): string => (string) ($frame['kind'] ?? '?'), $frames);
         $this->assertSame(
@@ -177,6 +177,23 @@ final class EngineBackendHeartbeatThreadingTest extends TestCase
             $kinds,
             'a batch turn whose provider never fires the heartbeat must look EXACTLY like one from before E493',
         );
+    }
+
+    /**
+     * The frames minus roadmap 1.C-4's per-step `step` / `usage` pair, which
+     * every forked turn writes around each provider call whatever its
+     * heartbeat does — `PerStepUsageFrameTest` pins those; this file is
+     * about the heartbeat alone.
+     *
+     * @param list<array<string, mixed>> $frames
+     * @return list<array<string, mixed>>
+     */
+    private static function withoutStepFrames(array $frames): array
+    {
+        return array_values(array_filter(
+            $frames,
+            static fn (array $frame): bool => !\in_array($frame['kind'] ?? null, ['step', 'usage'], true),
+        ));
     }
 
     /**

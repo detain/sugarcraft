@@ -52,6 +52,10 @@ interface InteractiveTurn extends Backend
      *
      * @param callable|null $onEvent `function(object $event): void` — also
      *                               receives PermissionAsked/PermissionResolved
+     * @param callable|null $onStep  `function(StepStarted|UsageUpdated $event): void`
+     *                               — each step's start (number, context
+     *                               pressure) and each response's usage while
+     *                               the turn runs (roadmap 1.C-4); display only
      */
-    public function completeInteractive(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null, ?callable $onReasoning = null): PromiseInterface;
+    public function completeInteractive(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onStep = null): PromiseInterface;
 }

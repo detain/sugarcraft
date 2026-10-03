@@ -1522,6 +1522,20 @@ final class Chat implements Model
          * which drain the workspace's own inbox.
          */
         private readonly ?\SugarCraft\Crush\Host\WorkspaceContext $workspace = null,
+        /**
+         * Roadmap 1.C-4: the latest `step` frame of an engine turn — its step
+         * number and the request's context pressure — read by the status
+         * bar and by the Escape arm (a turn that reports steps can stop at a
+         * boundary, so its first Escape is a soft cancel). Stamped with the
+         * {@see $generation} it arrived under ({@see $liveStepGeneration}), so
+         * a later turn never shows an earlier one's step; read through
+         * {@see liveStep()}.
+         */
+        private readonly ?\SugarCraft\Crush\Events\StepStarted $liveStep = null,
+        /** Roadmap 1.C-4: the latest `usage` frame of that turn — see {@see liveUsage()}. */
+        private readonly ?\SugarCraft\Crush\Events\UsageUpdated $liveUsage = null,
+        /** The generation {@see $liveStep} and {@see $liveUsage} belong to. */
+        private readonly int $liveStepGeneration = -1,
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -2632,10 +2646,25 @@ final class Chat implements Model
             }
 
             $now = microtime(true);
-            $isSecondPress = $this->lastEscapeAt !== null
-                && ($now - $this->lastEscapeAt) <= self::DOUBLE_ESCAPE_WINDOW_SECONDS;
+            // Roadmap 1.C-4: a turn already asked to stop softly is cancelled
+            // HARD by the next Escape, however long after the first it comes
+            // — the status bar says so ("Esc to cancel now") for as long as
+            // the turn takes to reach its boundary.
+            $isSecondPress = ($this->lastEscapeAt !== null
+                && ($now - $this->lastEscapeAt) <= self::DOUBLE_ESCAPE_WINDOW_SECONDS)
+                || $this->stopRequested();
 
             if (!$isSecondPress) {
+                // The first Escape is a SOFT cancel when the turn can take one:
+                // an engine turn that reports its steps lets the step's tools
+                // finish and makes no further provider call (`cancel_soft`).
+                // Anything else — a command backend, a workflow, the window
+                // before a turn's first step — keeps the old rule: only a
+                // second Escape inside the window does anything.
+                if ($this->liveStep() !== null) {
+                    $this->inFlightCancellation?->cancelSoft();
+                }
+
                 return [$this->mutate(['lastEscapeAt' => $now]), null];
             }
 
@@ -8637,6 +8666,28 @@ final class Chat implements Model
     }
 
     /**
+     * The step the turn on screen last reported (roadmap 1.C-4), or null
+     * when no turn is running or the running one reports no steps (a
+     * command backend, a workflow, the echo default).
+     */
+    public function liveStep(): ?\SugarCraft\Crush\Events\StepStarted
+    {
+        return $this->inFlight && $this->liveStepGeneration === $this->generation ? $this->liveStep : null;
+    }
+
+    /** The usage the turn on screen last reported (roadmap 1.C-4); null as for {@see liveStep()}. */
+    public function liveUsage(): ?\SugarCraft\Crush\Events\UsageUpdated
+    {
+        return $this->inFlight && $this->liveStepGeneration === $this->generation ? $this->liveUsage : null;
+    }
+
+    /** Whether the turn on screen has been asked to stop at its next step boundary (first Escape). */
+    public function stopRequested(): bool
+    {
+        return $this->inFlight && ($this->inFlightCancellation?->isSoftCancelled() ?? false);
+    }
+
+    /**
      * Merge changes into a new Chat instance.
      *
      * Only constructor-promoted properties are passed through.
@@ -8768,6 +8819,11 @@ final class Chat implements Model
             // dropped it would lose the switch factory and the session's
             // notice inbox on the first keystroke (O-2a).
             'workspace' => $this->workspace,
+            // 1.C-4: dropped here, the step on the status bar would vanish on
+            // the first keystroke typed mid-turn.
+            'liveStep' => $this->liveStep,
+            'liveUsage' => $this->liveUsage,
+            'liveStepGeneration' => $this->liveStepGeneration,
         ];
 
         // The two write routes into the draft, kept from fighting.

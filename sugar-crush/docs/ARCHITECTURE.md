@@ -248,8 +248,11 @@ big-endian length plus a `serialize()`d array, decoded with
 | child → parent | `result` | the settled reply, usage and flags, the reply's `stepId` and the turn's `transcript` rows; always the last frame |
 | child → parent | `ask` | `askId`, `toolCallId`, `tool`, `arguments` (after any hook rewrite), `reason`, `source`, `mode`, `suggestions`, `alwaysScope` |
 | parent → child | `ask_reply` | `askId`, `reply` (`once`/`always`/`reject`), `note` (≤ 2 KiB) |
-| parent → child | `steer`, `cancel_soft`, `cancel_tool` | reserved: parsed and buffered by the child, not sent yet |
-| child → parent | `steer_ack`, `usage`, `step` | reserved: writable by the child, not sent yet |
+| child → parent | `step` | `step`, `maxSteps`, `context` (the step's `ContextPressure` as an array); written before each provider call |
+| child → parent | `usage` | `step`, `usage` (that response's), `turnUsage` (the turn's running total); written as each response is billed |
+| parent → child | `cancel_soft` | — : stop at the next step boundary, once the step's tools have finished |
+| parent → child | `steer`, `cancel_tool` | reserved: parsed and buffered by the child, not sent yet |
+| child → parent | `steer_ack` | reserved: writable by the child, not sent yet |
 
 - `askId` is the first 16 hex digits of a hash over `{toolCallId, tool, args}`.
   The parent hands each question to `$onEvent` as an `Events\PermissionAsked`
@@ -266,10 +269,24 @@ big-endian length plus a `serialize()`d array, decoded with
 - `Backend\ChildChannel` is bound to the turn child's pid. A parallel Task
   grandchild that inherits it is refused rather than allowed to interleave
   frames on the turn's socket.
-- Plain `completeAsync()` never attaches the channel. Its asks settle in the
-  child exactly as before, through the attached approver or the fail-closed
-  no-approver refusal. Without ext-pcntl, an interactive question can only be
-  answered synchronously, inside the `$onEvent` call that delivers it.
+- Plain `completeAsync()` never attaches the channel's approver. Its asks
+  settle in the child exactly as before, through the attached approver or the
+  fail-closed no-approver refusal. Without ext-pcntl, an interactive question
+  can only be answered synchronously, inside the `$onEvent` call that delivers
+  it.
+- Every forked turn carries the channel for the per-step frames. The turn
+  loop's `$onStep` writes `step` (an `Events\StepStarted`) and `usage` (an
+  `Events\UsageUpdated`), and the parent hands them to `completeAsync()`'s /
+  `completeInteractive()`'s `$onStep`. Chat shows the step, the step's context
+  figure once it is over budget, and the turn's spend so far on the status bar.
+- **Soft cancel.** `CancellationToken::cancelSoft()` asks for a stop at the next
+  step boundary: the parent's cancel poll writes one `cancel_soft`, and the
+  loop, which asks `ChildChannel::softCancelRequested()` after each step's
+  tools have settled, ends the turn there as a deliberate exit — no
+  step-ceiling notice, no summary request — and the turn settles with its
+  reply. In the TUI the first Escape of a turn that reports steps is the soft
+  cancel; the next Escape, or a second one inside the double-press window, is
+  still the hard cancel that kills the whole tree.
 
 ---
 

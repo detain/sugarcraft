@@ -1093,8 +1093,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * shown live ({@see \SugarCraft\Crush\Agents\EngineExecutor::executeStream()}).
      *
      * `$onStep` receives the turn's {@see \SugarCraft\Crush\Events\StepStarted}
-     * at every step boundary (see {@see runTurn()}), which is how a delegated
-     * run can report its step and context pressure while it works.
+     * and {@see \SugarCraft\Crush\Events\UsageUpdated} events (see
+     * {@see runTurn()}), which is how a delegated run can report its step,
+     * context pressure and spend while it works.
      *
      * @param list<TypedMessage> $messages
      *
@@ -1118,17 +1119,25 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * {@see completeTranscript()}. `$transcript` is kept current after every
      * completed step, so it is meaningful even when this throws.
      *
-     * `$onStep`, signature `function(StepStarted $event): void`, is called
-     * once per step, just before that step's provider call (roadmap 1.C-4 /
-     * P-B1). The event carries the step's {@see \SugarCraft\Crush\Context\ContextPressure}
-     * (roadmap 2.1): this loop is where a turn's requests grow, step by step,
-     * so it is the only place pressure can be seen before the request that
-     * overflows is sent.
+     * `$onStep`, signature `function(StepStarted|UsageUpdated $event): void`
+     * (roadmap 1.C-4 / P-B1), is told twice per step: a
+     * {@see \SugarCraft\Crush\Events\StepStarted} just before the step's
+     * provider call, and a {@see \SugarCraft\Crush\Events\UsageUpdated}
+     * the moment its response is billed. StepStarted carries the step's
+     * {@see \SugarCraft\Crush\Context\ContextPressure} (roadmap 2.1): this
+     * loop is where a turn's requests grow, step by step, so it is the only
+     * place pressure can be seen before the request that overflows is sent.
+     *
+     * `$stopRequested` (roadmap 1.C-4, `cancel_soft`) is asked at every step
+     * boundary once the step's tools have settled; true ends the turn there,
+     * as a deliberate exit — no step-ceiling notice and no summary request,
+     * because the person asked it to stop.
      *
      * @param list<TypedMessage> $messages
      * @param list<TypedMessage> $transcript
+     * @param ?\Closure(): bool  $stopRequested
      */
-    private function runTurn(array $messages, ?callable $onToken, ?callable $onEvent, ?callable $onReasoning, ?callable $onHeartbeat, array &$transcript, ?callable $onStep = null): Message
+    private function runTurn(array $messages, ?callable $onToken, ?callable $onEvent, ?callable $onReasoning, ?callable $onHeartbeat, array &$transcript, ?callable $onStep = null, ?\Closure $stopRequested = null): Message
     {
         $transcript = $messages;
 
@@ -1227,6 +1236,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // `maxToolSteps`, the wrong remedy for a loop).
         $stoppedByLoopGuard = false;
 
+        // The fourth: the person asked the turn to stop at the next step
+        // boundary (`cancel_soft`, roadmap 1.C-4) — deliberate, so no
+        // step-ceiling notice and no summary request.
+        $stoppedSoftly = false;
+
         // Whether the runtime managed to emit anything incrementally, so the
         // end-of-turn fallback below stays a FALLBACK rather than a duplicate:
         // firing it after a stream that already delivered the same bytes would
@@ -1309,6 +1323,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                     $this->siblingSpend?->record($assistant->usage());
                     if ($this->stepUsageObserver !== null) {
                         ($this->stepUsageObserver)($assistant->usage());
+                    }
+                    // 1.C-4: the same instant, to the turn's own observer —
+                    // on the forked path this is the `usage` frame, so the
+                    // UI's cost moves while the turn runs.
+                    if ($onStep !== null) {
+                        $onStep(new \SugarCraft\Crush\Events\UsageUpdated($step + 1, $assistant->usage(), Usage::sum($stepUsages)));
                     }
                     // Per PROVIDER RESPONSE, not per turn: the cache buckets
                     // describe one request's prefix, and a turn's sum would
@@ -1489,6 +1509,16 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 $stoppedByLoopGuard = true;
                 break;
             }
+
+            // Roadmap 1.C-4: the soft cancel. Asked HERE, after the step's
+            // tools have all settled and the App carries their results, so
+            // nothing the step started is cut off — the turn stops exactly
+            // where the next provider call would have been made. Hard cancel
+            // (Esc Esc) is still the parent's SIGKILL of the whole tree.
+            if ($stopRequested !== null && $stopRequested()) {
+                $stoppedSoftly = true;
+                break;
+            }
             // @endregion after-step
         }
 
@@ -1497,7 +1527,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // with tool results pending and the ceiling, not the model, ended the
         // turn. One flag on the DTO; the transcript notice is Chat's settle
         // arm's job (sibling of the E707 length-stopped notice).
-        $stepsTruncated = !$answeredWithoutTools && !$stoppedBySpendCap && !$stoppedByLoopGuard;
+        $stepsTruncated = !$answeredWithoutTools && !$stoppedBySpendCap && !$stoppedByLoopGuard && !$stoppedSoftly;
 
         // WAVE_PLAN_2 §5: a turn the harness stopped — budget exhausted or a
         // loop the guard ended — gets ONE more request with tools disabled,
@@ -2095,8 +2125,21 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      *                           parameter here only because this method's
      *                           body is the one place the fork, the socket and
      *                           the timers all live.
+     * @param ?callable $onStep  Roadmap 1.C-4: observer of the turn's `step`
+     *                           and `usage` frames, signature
+     *                           `function(StepStarted|UsageUpdated $event): void`
+     *                           — the step number and context pressure before
+     *                           each provider call, and each response's usage
+     *                           (with the turn's running total) as it is
+     *                           billed. Display only, like $onReasoning.
+     *
+     * Soft cancel (roadmap 1.C-4): once `$cancellation->isSoftCancelled()`,
+     * the parent writes ONE `cancel_soft` frame down to the child, which lets
+     * the step's tools finish and ends the turn at the next step boundary;
+     * the turn then settles normally, with its reply. A hard cancel
+     * (`isCancelled()`) still tears the whole tree down at once.
      */
-    public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null, ?callable $onReasoning = null, bool $interactive = false): PromiseInterface
+    public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null, ?callable $onReasoning = null, bool $interactive = false, ?callable $onStep = null): PromiseInterface
     {
         $interactive = $interactive && $onEvent !== null;
         $deferred = new Deferred();
@@ -2441,16 +2484,27 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // cancellation flag can flip at any point after this call returns,
         // long after the closures below were built, so it has to be polled
         // rather than checked once up front.
-        $cancelTimer = $cancellation === null ? null : $loop->addPeriodicTimer(0.1, function () use ($cancellation, $teardown): void {
+        // 1.C-4: the first Escape is a SOFT cancel. Polled on the same tick:
+        // one `cancel_soft` frame goes down the moment the flag flips, and the
+        // child stops at its next step boundary; a later hard cancel still
+        // wins, through $teardown, whatever the child is doing.
+        $softCancelSent = false;
+        $cancelTimer = $cancellation === null ? null : $loop->addPeriodicTimer(0.1, function () use ($cancellation, $teardown, $sendToChild, &$softCancelSent): void {
             if ($cancellation->isCancelled()) {
                 $teardown('Request cancelled');
+
+                return;
+            }
+            if (!$softCancelSent && $cancellation->isSoftCancelled()) {
+                $softCancelSent = true;
+                $sendToChild(['kind' => ChildChannel::CANCEL_SOFT]);
             }
         });
 
         // Frame dispatch for one chunk off the socket, shared by the read edge
         // below and by $exitTimer's final drain so the two cannot disagree
         // about what a frame means.
-        $consume = function (string $chunk) use (&$buffer, &$result, &$streamed, &$streamCorrupt, &$childReaped, $onToken, $onEvent, $onReasoning, $finalize, $resetTimeout, $teardown, $handleAsk): void {
+        $consume = function (string $chunk) use (&$buffer, &$result, &$streamed, &$streamCorrupt, &$childReaped, $onToken, $onEvent, $onReasoning, $onStep, $finalize, $resetTimeout, $teardown, $handleAsk): void {
             $buffer .= $chunk;
             $corrupt = false;
             $frames = self::drainFrames($buffer, $corrupt);
@@ -2479,6 +2533,20 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 // actually sits between.
                 if (($frame['kind'] ?? null) === ChildChannel::ASK) {
                     $handleAsk($frame);
+
+                    continue;
+                }
+
+                // 1.C-4: the step boundary and the step's bill. A frame too
+                // broken to rebuild is dropped: it is display only, and the
+                // turn's accounting still arrives whole on `result`.
+                if (($frame['kind'] ?? null) === ChildChannel::STEP || ($frame['kind'] ?? null) === ChildChannel::USAGE) {
+                    $stepEvent = $frame['kind'] === ChildChannel::STEP
+                        ? \SugarCraft\Crush\Events\StepStarted::fromArray($frame)
+                        : \SugarCraft\Crush\Events\UsageUpdated::fromArray($frame);
+                    if ($stepEvent !== null && $onStep !== null) {
+                        $onStep($stepEvent);
+                    }
 
                     continue;
                 }
@@ -2607,10 +2675,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * answered through their {@see PendingAsk} (roadmap 1.C-1, Appendix O
      * §5.1). The child attaches a {@see ChildChannel} approver in place of
      * whatever approver this backend carries; the parent owns the policy.
+     * `$onStep` takes the turn's `step`/`usage` frames (roadmap 1.C-4), as on
+     * {@see completeAsync()}.
      */
-    public function completeInteractive(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null, ?callable $onReasoning = null): PromiseInterface
+    public function completeInteractive(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onStep = null): PromiseInterface
     {
-        return $this->completeAsync($history, $onToken, $cancellation, $onEvent, $onReasoning, true);
+        return $this->completeAsync($history, $onToken, $cancellation, $onEvent, $onReasoning, true, $onStep);
     }
 
     /**
@@ -2735,25 +2805,46 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * grandchild that inherits the approver is refused rather than allowed
      * to interleave frames on this stream (see {@see ChildChannel}).
      *
+     * 1.C-4: EVERY forked turn carries the channel, interactive or not. The
+     * turn loop's `$onStep` writes a `step` frame before each provider call
+     * and a `usage` frame after each response, and the loop asks the channel
+     * at each step boundary whether the parent sent `cancel_soft`. Only the
+     * approver stays interactive-only.
+     *
      * @param array<int, Message> $history
      */
     private function runCompleteInChild($childSocket, array $history, bool $interactive = false): never
     {
         try {
             $engine = $this;
+            $channel = ChildChannel::new(
+                $childSocket,
+                static function (array $frame) use ($childSocket): void {
+                    self::writeFrame($childSocket, $frame);
+                },
+                static function (string &$inbound, bool &$corrupt): array {
+                    return self::drainFrames($inbound, $corrupt);
+                },
+                $this->permissionGate?->mode()->value ?? '',
+            );
             if ($interactive) {
-                $channel = ChildChannel::new(
-                    $childSocket,
-                    static function (array $frame) use ($childSocket): void {
-                        self::writeFrame($childSocket, $frame);
-                    },
-                    static function (string &$inbound, bool &$corrupt): array {
-                        return self::drainFrames($inbound, $corrupt);
-                    },
-                    $this->permissionGate?->mode()->value ?? '',
-                );
                 $engine = $this->withPermissionApprover($channel->approver());
             }
+            // 1.C-4: the step boundary and the step's bill, each as its own
+            // frame the moment it happens (Appendix O §5.1 `step` / `usage`).
+            $onStep = static function (\SugarCraft\Crush\Events\StepStarted|\SugarCraft\Crush\Events\UsageUpdated $event) use ($channel): void {
+                $channel->send(
+                    $event instanceof \SugarCraft\Crush\Events\StepStarted ? ChildChannel::STEP : ChildChannel::USAGE,
+                    $event->toArray(),
+                );
+            };
+            $stopRequested = static fn (): bool => $channel->softCancelRequested();
+            // complete()'s body, inlined so the loop gets the channel's two
+            // per-step hooks: complete() is the frozen Backend contract
+            // (BackendContractWideningTest) and cannot grow parameters.
+            $transcript = [];
+            $attachmentNotice = null;
+            $typed = $engine->toTypedMessages($history, $attachmentNotice);
             // This is a forked child, so invoking the caller's callback
             // in-process would write into a copy of its state and vanish on
             // exit - the event has to cross the socket. It goes out
@@ -2761,8 +2852,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             // batch is exactly what made a multi-tool turn look like a silent
             // "thinking" spinner (and what made the parent's single
             // wall-clock timer kill turns that were in fact making progress).
-            $message = $engine->complete(
-                $history,
+            $message = $engine->runTurn(
+                $typed,
                 // Assistant text crosses the fork on the SAME channel and by
                 // the same rule as the tool events: a plain in-process
                 // closure here would write into the child's COPY of the
@@ -2816,7 +2907,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 static function () use ($childSocket): void {
                     self::writeFrame($childSocket, ['kind' => 'reasoning', 'text' => '']);
                 },
-            );
+                $transcript,
+                $onStep,
+                $stopRequested,
+            )->withAttachmentNotice($attachmentNotice);
             $transcriptRows = [];
             foreach ($message->turnTranscript as $row) {
                 $transcriptRows[] = ['usage' => $row->usage?->toArray()] + $row->jsonSerialize();

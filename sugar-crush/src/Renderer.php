@@ -2284,10 +2284,33 @@ final class Renderer
      *
      * Every idle form marks the menu label WHOLE, so dropping a form never
      * splits the zone's sentinel pair.
+     *
+     * An engine turn that reports its steps (roadmap 1.C-4) names the step it
+     * is on, adds the step's context figure once the request is over its step
+     * budget (roadmap 2.1), and offers the soft stop its first Escape is; once
+     * that stop is asked for, the hint says the turn is stopping and that the
+     * next Escape cancels at once. A turn that reports no steps keeps the
+     * original forms.
      */
     private static function fitProcessingHint(Chat $chat, int $room): string
     {
-        if ($chat->inFlight) {
+        $step = $chat->liveStep();
+        if ($chat->inFlight && $chat->stopRequested()) {
+            $after = $step !== null ? ' after step ' . $step->step : '';
+            $forms = ['⠴ stopping' . $after . ' · Esc to cancel now', '⠴ stopping' . $after, '⠴ stopping…', '⠴'];
+        } elseif ($chat->inFlight && $step !== null) {
+            $tag = 'step ' . $step->step;
+            if ($step->pressure?->isOverBudget() === true) {
+                $tag .= ' · ctx ' . $step->pressure->percentOfWindow() . '%';
+            }
+            $forms = [
+                '⠴ ' . $tag . ' · thinking… · Esc to stop, Esc Esc to cancel',
+                '⠴ ' . $tag . ' · Esc to stop, Esc Esc to cancel',
+                '⠴ ' . $tag . ' · Esc Esc to cancel',
+                '⠴ ' . $tag,
+                '⠴',
+            ];
+        } elseif ($chat->inFlight) {
             $forms = ['⠴ thinking… · Esc Esc to cancel', '⠴ Esc Esc to cancel', '⠴ thinking…', '⠴'];
         } else {
             $menu = self::markPane(Pane::Menu, 'Ctrl+P menu');
@@ -2467,16 +2490,23 @@ final class Renderer
     private static function spendIndicator(Chat $chat, int $room): string
     {
         $cap = $chat->maxCostUsd();
-        $reported = $chat->hasReportedSpend();
+        // Roadmap 1.C-4: while an engine turn runs, the steps it has already
+        // been billed for (its `usage` frames, delegated runs included) count
+        // now rather than when the turn settles — the session tracker only
+        // learns them from the settled reply, and liveUsage() is null from
+        // that same update on, so nothing is counted twice.
+        $live = $chat->liveUsage()?->turnUsage;
+        $reported = $chat->hasReportedSpend() || $live !== null;
+        $spentUsd = $chat->spentUsd() + ($live?->costUsd ?? 0.0);
         // Uncapped, a figure only earns its columns once there is money in it:
         // a backend that reports tokens but has no pricing would otherwise
         // print `$0.0000` for the life of the session. With a cap set the
         // figure stays, even at zero — it is the reading against that cap.
-        if ($cap === null && (!$reported || $chat->spentUsd() <= 0.0)) {
+        if ($cap === null && (!$reported || $spentUsd <= 0.0)) {
             return '';
         }
 
-        $spent = $reported ? '$' . number_format($chat->spentUsd(), 4, '.', '') : '$?';
+        $spent = $reported ? '$' . number_format($spentUsd, 4, '.', '') : '$?';
         $forms = $cap === null
             ? [$spent]
             : [

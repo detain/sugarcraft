@@ -19,10 +19,18 @@ namespace SugarCraft\Crush\Backend;
  * that has to ACT the moment the flag flips — `WorkflowEngine` killing the
  * stage's forked agents through `AgentWorkerPool::cancelAll()` — registers
  * with {@see onCancel()}, and {@see cancel()} calls it there and then.
+ *
+ * TWO STRENGTHS (roadmap 1.C-4). {@see cancel()} is the hard stop: kill the
+ * work now. {@see cancelSoft()} asks only that the work stop at its next
+ * natural boundary — a forked engine turn finishes the step's tools and makes
+ * no further provider call. A holder that has no boundary to stop at simply
+ * ignores the soft flag; a later hard cancel always wins.
  */
 final class CancellationToken
 {
     private bool $cancelled = false;
+
+    private bool $softCancelled = false;
 
     /** @var array<int, \Closure(): void> */
     private array $listeners = [];
@@ -50,6 +58,22 @@ final class CancellationToken
     public function isCancelled(): bool
     {
         return $this->cancelled;
+    }
+
+    /**
+     * Ask the work to stop at its next boundary rather than at once. Polled,
+     * like {@see isCancelled()}; it fires no listener, because those are the
+     * hard stop's.
+     */
+    public function cancelSoft(): void
+    {
+        $this->softCancelled = true;
+    }
+
+    /** Whether {@see cancelSoft()} (or the stronger {@see cancel()}) was called. */
+    public function isSoftCancelled(): bool
+    {
+        return $this->softCancelled || $this->cancelled;
     }
 
     /**

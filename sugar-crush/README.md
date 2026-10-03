@@ -1148,7 +1148,15 @@ system-role reminder rides along with the turn, at 85% older exchanges are
 summarized first and the rewrite is reported in the transcript, and at 95% the
 turn is refused rather than spent on a request the provider would reject. A
 refusal is not a dead end — each attempt drops the oldest preserved exchange,
-and `/clear` frees the whole context at once.
+and `/clear` frees the whole context at once. Those tiers judge at submit; inside
+a turn the engine also measures every step's request before sending it — system
+prompt and tool schemas included, anchored on the provider's own count for the
+step before — against a step budget of the smaller of 80% of the window and the
+window less the output ceiling and a reserve. While the turn runs, the status
+bar names the step it is on, adds that step's context figure once the request
+is over budget, and moves the spend readout as each step is billed. On such a
+turn the first `Esc` stops it after the current step's tools finish, with its
+reply kept, and a further `Esc` cancels it at once.
 
 Beside the context readout, a **spend** readout appears once the provider has
 reported something to show — dollars, and the cap if one is set. It is a
