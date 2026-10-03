@@ -516,6 +516,11 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — save() sniffs the paste file it just had the clipboard tool write, under '
                 . 'its own 0700 directory with a random name',
         ],
+        'Support/ClipboardImage.php|scandir' => [
+            'NAMES_ONLY — sweepStale() lists its own per-uid paste directory (audit 15b-15 residual); '
+                . 'no content is read, and only an old regular file this uid owns whose name has '
+                . 'save()\'s exact shape is unlinked',
+        ],
         'Support/SiblingSpendLedger.php|fopen' => [
             'SELF_LOCATED — create()\'s exclusive (`x`, 0600) open of the name ToolIpcFiles::reserve() '
                 . 'just chose in the temp dir; never caller-supplied',

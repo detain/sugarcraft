@@ -40,6 +40,31 @@ final class ClipboardImage
     private const EXIT_POLL_MICROSECONDS = 5_000;
 
     /**
+     * Audit 15b-15 residual: how old a saved paste must be before a later
+     * {@see save()} removes it ({@see sweepStale()}).
+     *
+     * The image's bytes are snapshotted into the message when the prompt is
+     * sent, so a paste file only has to outlive the draft that mentions it.
+     * A day leaves a draft parked over lunch - or across a suspend - still
+     * able to send; anything older is a paste nobody sent, or one already
+     * sent, and the directory would otherwise grow by one screenshot per
+     * Ctrl+V for as long as the temp dir lives.
+     */
+    public const STALE_PASTE_MIN_AGE_SECONDS = 86_400;
+
+    /**
+     * The exact name {@see save()} draws (plus the extensions
+     * {@see withExtension()} may rename to), so the sweep never touches a
+     * file it did not write.
+     */
+    private const PASTE_NAME_PATTERN = '/^paste-\d{8}-\d{6}-[0-9a-f]{8}\.(?:png|jpg|gif|webp)$/';
+
+    /** S_IFMT / S_IFREG, as {@see AtomicFileWriter} spells them. */
+    private const STAT_TYPE_MASK = 0o170000;
+
+    private const STAT_REGULAR_FILE = 0o100000;
+
+    /**
      * Test seam: replaces the spawn. Receives the argv and the destination
      * path, writes whatever it likes there, returns whether the tool
      * succeeded. Null runs the real tool.
@@ -70,6 +95,9 @@ final class ClipboardImage
         if (!is_dir($directory) && !@mkdir($directory, 0700, true) && !is_dir($directory)) {
             return null;
         }
+        // The one moment this class is already in the directory with a
+        // reason to be - AtomicFileWriter's orphan-sweep rule.
+        self::sweepStale();
 
         foreach (self::candidates() as $argv) {
             $path = $directory . '/paste-' . date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.png';
@@ -128,7 +156,7 @@ final class ClipboardImage
      * Where pasted images land: a private per-user directory under the system
      * temp dir. The image's bytes are snapshotted into the message when the
      * prompt is sent ({@see \SugarCraft\Crush\Attachment}), so the file only
-     * has to live until then.
+     * has to live until then; {@see sweepStale()} reclaims it after that.
      */
     public static function directory(): string
     {
@@ -139,6 +167,54 @@ final class ClipboardImage
         $user = function_exists('posix_getuid') ? (string) posix_getuid() : (string) getmypid();
 
         return rtrim(sys_get_temp_dir(), '/') . '/sugarcrush-pastes-' . $user;
+    }
+
+    /**
+     * Remove saved pastes older than {@see STALE_PASTE_MIN_AGE_SECONDS} from
+     * {@see directory()} (audit 15b-15 residual: pastes used to accumulate
+     * there forever). On {@see AtomicFileWriter}'s orphan-sweep terms:
+     *
+     *  - only names of {@see PASTE_NAME_PATTERN}'s shape;
+     *  - only a regular file by `lstat()`, never a symlink or a directory;
+     *  - only one this effective uid owns, when posix can say;
+     *  - only one whose mtime is at least the minimum age in the past - a
+     *    future mtime (clock skew) reads as fresh and is left alone.
+     *
+     * Best effort and silent, and it answers how many files it removed.
+     */
+    public static function sweepStale(?int $now = null): int
+    {
+        $directory = self::directory();
+        $entries = @scandir($directory);
+        if ($entries === false) {
+            return 0;
+        }
+
+        $uid = function_exists('posix_geteuid') ? posix_geteuid() : null;
+        $now ??= time();
+        $removed = 0;
+
+        foreach ($entries as $entry) {
+            if (preg_match(self::PASTE_NAME_PATTERN, $entry) !== 1) {
+                continue;
+            }
+            $path = $directory . '/' . $entry;
+            $stat = @lstat($path);
+            if ($stat === false || ($stat['mode'] & self::STAT_TYPE_MASK) !== self::STAT_REGULAR_FILE) {
+                continue;
+            }
+            if ($uid !== null && $stat['uid'] !== $uid) {
+                continue;
+            }
+            if ($now - (int) $stat['mtime'] < self::STALE_PASTE_MIN_AGE_SECONDS) {
+                continue;
+            }
+            if (@unlink($path)) {
+                $removed++;
+            }
+        }
+
+        return $removed;
     }
 
     /**
