@@ -406,15 +406,23 @@ verticals; row separators off.
 ## Graceful colour degradation
 
 A `Style` carries a `ColorProfile` (TrueColor / Ansi256 / Ansi /
-NoTty). `render()` downsamples every colour to that tier before
-emit:
+Ascii / NoTty). `render()` downsamples every colour to that tier before
+emit, matching what charmbracelet/colorprofile's `Writer` does to
+lipgloss output:
 
 ```
 TrueColor  → SGR 38;2;R;G;B  (24-bit)
 Ansi256    → SGR 38;5;N      (xterm-256 nearest match)
 Ansi       → SGR 30..37 / 90..97  (named slots)
-NoTty      → no SGR at all   (clean text)
+Ascii      → no colour; bold/italic/underline/… and OSC 8 links kept
+NoTty      → no escape sequence at all (clean text, layout kept)
 ```
+
+`Ascii` (what `NO_COLOR` selects) forbids colour, not emphasis, so text
+attributes and hyperlinks survive. `NoTty` means the output is not a
+terminal: like upstream's `ansi.Strip` pass, the whole render — including
+escapes carried in by pre-styled content, a `transform()` callback or a
+border title — is stripped, while padding, borders and alignment stay.
 
 Use `Style::colorProfile(ColorProfile::Ansi)` for a forced
 downgrade or `Renderer::fromEnvironment()` to auto-detect from

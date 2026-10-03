@@ -7,6 +7,10 @@ namespace SugarCraft\Sprinkles\Tests\Layout;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Layout\CassowarySolver;
 use SugarCraft\Layout\GreedySolver;
+use SugarCraft\Sprinkles\Layout\Constraint;
+use SugarCraft\Sprinkles\Layout\Direction;
+use SugarCraft\Sprinkles\Layout\Rect;
+use SugarCraft\Sprinkles\Layout\Solver;
 use SugarCraft\Sprinkles\Layout\SolverFactory;
 
 final class SolverFactoryTest extends TestCase
@@ -24,36 +28,91 @@ final class SolverFactoryTest extends TestCase
         $this->assertInstanceOf(GreedySolver::class, $solver);
     }
 
-    public function testEnvCassowaryReturnsCassowarySolver(): void
+    /**
+     * Run $fn with every E_USER_WARNING / E_USER_DEPRECATED it raises
+     * captured, the once-per-process flag reset first so the outcome does not
+     * depend on test ordering.
+     *
+     * @return array{mixed, list<array{int, string}>}
+     */
+    private static function captureNotices(callable $fn): array
     {
-        putenv('SUGARCRAFT_LAYOUT_SOLVER=cassowary');
-
-        // The factory emits a one-time E_USER_WARNING for the cassowary
-        // opt-in. Capture it (so PHPUnit's failOnWarning doesn't fail the
-        // suite) and assert it actually fired. The once-per-process flag is
-        // reset first so this test is deterministic regardless of ordering.
-        $flag = new \ReflectionProperty(SolverFactory::class, 'cassowaryWarningEmitted');
+        $flag = new \ReflectionProperty(SolverFactory::class, 'cassowaryNoticeEmitted');
         $flag->setValue(null, false);
 
-        $warning = null;
-        set_error_handler(static function (int $errno, string $errstr) use (&$warning): bool {
-            assert($errno === E_USER_WARNING);
-            $warning = $errstr;
+        $raised = [];
+        set_error_handler(static function (int $errno, string $errstr) use (&$raised): bool {
+            $raised[] = [$errno, $errstr];
             return true;
-        }, E_USER_WARNING);
+        }, E_USER_WARNING | E_USER_DEPRECATED);
         try {
-            $solver = SolverFactory::fromEnvironment();
+            $result = $fn();
         } finally {
             restore_error_handler();
         }
+        return [$result, $raised];
+    }
 
-        $this->assertInstanceOf(CassowarySolver::class, $solver);
-        $this->assertIsString($warning);
-        $this->assertStringContainsString('cassowary', strtolower($warning));
-        // The warning names the deprecation/delegation, not the long-fixed
-        // Ratio-returns-0 bug it used to cite.
-        $this->assertStringContainsString('delegates every solve to GreedySolver', $warning);
-        $this->assertStringNotContainsString('Ratio', $warning);
+    public function testEnvCassowaryReturnsCassowarySolverWithOneDeprecationNotice(): void
+    {
+        putenv('SUGARCRAFT_LAYOUT_SOLVER=cassowary');
+
+        [$solvers, $raised] = self::captureNotices(static fn(): array => [
+            SolverFactory::fromEnvironment(),
+            SolverFactory::fromEnvironment(),
+        ]);
+
+        $this->assertInstanceOf(CassowarySolver::class, $solvers[0]);
+        $this->assertInstanceOf(CassowarySolver::class, $solvers[1]);
+        // Exactly one notice across both calls, at DEPRECATION severity: the
+        // opt-in no longer changes any result, so it must not be a warning
+        // (which fails failOnWarning suites and warning-escalating hosts).
+        $this->assertCount(1, $raised);
+        [$errno, $message] = $raised[0];
+        $this->assertSame(E_USER_DEPRECATED, $errno);
+        $this->assertStringContainsString('SUGARCRAFT_LAYOUT_SOLVER=cassowary', $message);
+        $this->assertStringContainsString('delegates every solve to GreedySolver', $message);
+        // Not the long-fixed Ratio-returns-0 bug it used to cite.
+        $this->assertStringNotContainsString('Ratio', $message);
+        $this->assertStringNotContainsString('bug', strtolower($message));
+    }
+
+    public function testCassowaryOptInRaisesNoWarningEvenWhenItSolves(): void
+    {
+        putenv('SUGARCRAFT_LAYOUT_SOLVER=cassowary');
+
+        [, $raised] = self::captureNotices(static fn(): array => Solver::solve(
+            new Rect(0, 0, 30, 1),
+            [Constraint::ratio(1, 3), Constraint::fill()],
+            Direction::Horizontal,
+        ));
+
+        $this->assertNotSame([], $raised);
+        foreach ($raised as [$errno, $message]) {
+            $this->assertSame(E_USER_DEPRECATED, $errno, $message);
+        }
+    }
+
+    /**
+     * The docblock's claim that the cassowary opt-in yields results identical
+     * to the default — Ratio included, the constraint the old warning said
+     * returned 0 — pinned through the public Solver facade.
+     */
+    public function testCassowaryOptInSolvesIdenticallyToGreedyIncludingRatio(): void
+    {
+        $area = new Rect(0, 0, 30, 1);
+        $constraints = [Constraint::ratio(1, 3), Constraint::length(4), Constraint::fill()];
+
+        putenv('SUGARCRAFT_LAYOUT_SOLVER');
+        $greedy = Solver::solve($area, $constraints, Direction::Horizontal);
+
+        putenv('SUGARCRAFT_LAYOUT_SOLVER=cassowary');
+        [$cassowary] = self::captureNotices(
+            static fn(): array => Solver::solve($area, $constraints, Direction::Horizontal),
+        );
+
+        $this->assertEquals($greedy, $cassowary);
+        $this->assertSame(10, $cassowary[0]->width, 'Ratio(1,3) of 30 is 10, not 0');
     }
 
     public function testEnvGreedyReturnsGreedySolver(): void

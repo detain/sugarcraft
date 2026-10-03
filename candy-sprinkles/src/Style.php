@@ -613,6 +613,15 @@ final class Style
         return $this->with(borderSideBg: $sides, propsAdded: ['borderSideBg']);
     }
 
+    /**
+     * Set the terminal capability the render targets. Mirrors what
+     * charmbracelet/colorprofile's Writer does to lipgloss output:
+     * `TrueColor`/`Ansi256`/`Ansi` re-quantise colours to the tier;
+     * `Ascii` drops colour but keeps text attributes (bold, underline, …)
+     * and OSC 8 hyperlinks; `NoTty` emits no escape sequence at all —
+     * including any carried in by pre-styled content — keeping only the
+     * plain-text layout.
+     */
     public function colorProfile(ColorProfile $p): self { return $this->with(profile: $p, propsAdded: ['profile']); }
 
     // ─── Getters ───────────────────────────────────────────────────────
@@ -1160,6 +1169,20 @@ final class Style
 
         $rendered = implode("\n", $out);
 
+        // NoTty: the output is not a terminal, so — like colorprofile's
+        // Writer, which runs every NoTTY write through `ansi.Strip` — the
+        // result carries no escape sequence at all: no SGR attribute (the
+        // style's own are already suppressed in buildContentSgr()), no OSC 8
+        // envelope, and none of the escapes arriving from pre-styled
+        // content, a transform() callback or a border title. Layout
+        // (padding, borders, alignment, margins) is kept, so the plain text
+        // lines up exactly as the styled render did. `Ascii` deliberately
+        // does NOT take this path: upstream drops only colour there and
+        // keeps text attributes and hyperlinks.
+        if ($this->profile === ColorProfile::NoTty) {
+            return Ansi::strip($rendered);
+        }
+
         // Wrap in an OSC 8 hyperlink envelope when set. The Ansi
         // helper builds `ESC ] 8 ; <id> ; <url> ST <text> ESC ] 8 ; ; ST`,
         // so terminals that support it render the styled text as a
@@ -1467,6 +1490,13 @@ final class Style
     {
         if ($this->contentSgrMemo !== null) {
             return $this->contentSgrMemo;
+        }
+        // Text attributes survive every profile down to `Ascii` (colour is
+        // dropped per-colour by Color::toFg()/toBg()), but a NoTty
+        // destination gets no escape sequence at all — colorprofile strips
+        // the whole SGR stream there, not just its colours.
+        if ($this->profile === ColorProfile::NoTty) {
+            return $this->contentSgrMemo = '';
         }
         $codes = [];
         if ($this->bold)      $codes[] = Ansi::BOLD;
