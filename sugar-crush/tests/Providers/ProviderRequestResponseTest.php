@@ -8,6 +8,7 @@ use Aws\BedrockRuntime\BedrockRuntimeClient;
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
 use OpenAI\Contracts\ClientContract;
 use OpenAI\Responses\Chat\CreateStreamedResponse as ChatCreateStreamedResponse;
@@ -21,6 +22,7 @@ use SugarCraft\Crush\Providers\CustomProvider;
 use SugarCraft\Crush\Providers\EmbeddingsRequest;
 use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\OpenAIProvider;
+use SugarCraft\Crush\Providers\ProviderFactory;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Providers\SglangProvider;
 use SugarCraft\Crush\Providers\VertexProvider;
@@ -1060,6 +1062,116 @@ final class ProviderRequestResponseTest extends TestCase
             implode('', $guidedRequest->systemBlocks),
             'the empty-join identity holds on the guided assembly too',
         );
+    }
+
+    // =========================================================================
+    // X-31b: the `anthropic` type key reaches /v1/chat/completions, with tools
+    // =========================================================================
+
+    /**
+     * The factory-built `anthropic` provider with its own Guzzle client's
+     * handler swapped for canned responses and a request recorder - the base
+     * URI, headers and body under test are exactly what the factory built.
+     *
+     * @param array<int, array<string, mixed>> $history filled by reference
+     */
+    private function anthropicOverMock(string $baseUrl, array &$history, Response ...$responses): CustomProvider
+    {
+        $provider = (new ProviderFactory())->create([
+            'type' => 'anthropic',
+            'apiKey' => 'sk-ant-test',
+            'baseUrl' => $baseUrl,
+            'model' => 'claude-sonnet-4-6',
+        ]);
+        $this->assertInstanceOf(CustomProvider::class, $provider);
+
+        $client = (new \ReflectionProperty(CustomProvider::class, 'httpClient'))->getValue($provider);
+        $this->assertInstanceOf(Client::class, $client);
+        $stack = $client->getConfig('handler');
+        $this->assertInstanceOf(HandlerStack::class, $stack);
+        $stack->setHandler(new MockHandler($responses));
+        $stack->push(Middleware::history($history));
+
+        return $provider;
+    }
+
+    public function testTheAnthropicTypeSendsToolsToTheV1ChatCompletionsEndpoint(): void
+    {
+        $history = [];
+        $provider = $this->anthropicOverMock('https://api.anthropic.com', $history, new Response(200, [], (string) json_encode([
+            'choices' => [[
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '',
+                    'tool_calls' => [['id' => 'toolu_1', 'type' => 'function', 'function' => ['name' => 'P10S1GuidanceDouble', 'arguments' => '{}']]],
+                ],
+                'finish_reason' => 'tool_calls',
+            ]],
+            'usage' => ['prompt_tokens' => 3, 'completion_tokens' => 2, 'total_tokens' => 5],
+        ])));
+
+        $this->assertTrue($provider->supportsFunctionCalling(), 'the type key can call tools');
+        $response = $provider->complete(new CompleteRequest(
+            model: 'claude-sonnet-4-6',
+            messages: [new UserMessage('go')],
+            tools: [$this->guidanceTool('x31b')],
+        ));
+
+        $this->assertCount(1, $history);
+        $request = $history[0]['request'];
+        $this->assertSame('https://api.anthropic.com/v1/chat/completions', (string) $request->getUri(), 'the default base was /chat/completions, a 404');
+        $this->assertSame('sk-ant-test', $request->getHeaderLine('x-api-key'));
+        $this->assertSame('2023-06-01', $request->getHeaderLine('anthropic-version'));
+        $body = json_decode((string) $request->getBody(), true);
+        $this->assertSame('P10S1GuidanceDouble', $body['tools'][0]['function']['name'] ?? null, 'the request carries the tools');
+        $this->assertSame(['P10S1GuidanceDouble'], array_map(static fn ($c): string => $c->name(), $response->toolCalls ?? []));
+    }
+
+    public function testTheAnthropicStreamCarriesToolsToo(): void
+    {
+        $history = [];
+        $sse = 'data: ' . json_encode(['choices' => [['index' => 0, 'delta' => ['content' => 'ok'], 'finish_reason' => 'stop']]]) . "\n\n"
+            . "data: [DONE]\n\n";
+        $provider = $this->anthropicOverMock('https://api.anthropic.com', $history, new Response(200, [], $sse));
+
+        iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'claude-sonnet-4-6',
+            messages: [new UserMessage('go')],
+            tools: [$this->guidanceTool('x31b')],
+        )));
+
+        $request = $history[0]['request'];
+        $this->assertSame('https://api.anthropic.com/v1/chat/completions', (string) $request->getUri());
+        $this->assertArrayHasKey('tools', json_decode((string) $request->getBody(), true));
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function anthropicBases(): array
+    {
+        return [
+            'the API root, as the SDKs and claude-code spell it' => ['https://api.anthropic.com', 'https://api.anthropic.com/v1/chat/completions'],
+            'the root with a trailing slash' => ['https://api.anthropic.com/', 'https://api.anthropic.com/v1/chat/completions'],
+            'already /v1' => ['https://api.anthropic.com/v1', 'https://api.anthropic.com/v1/chat/completions'],
+            'already /v1/' => ['https://api.anthropic.com/v1/', 'https://api.anthropic.com/v1/chat/completions'],
+            'a proxy under a path' => ['https://gw.example/anthropic', 'https://gw.example/anthropic/v1/chat/completions'],
+        ];
+    }
+
+    /**
+     * @dataProvider anthropicBases
+     */
+    public function testEveryBaseSpellingResolvesUnderV1(string $baseUrl, string $expected): void
+    {
+        $history = [];
+        $provider = $this->anthropicOverMock($baseUrl, $history, new Response(200, [], (string) json_encode([
+            'choices' => [['message' => ['role' => 'assistant', 'content' => 'hi'], 'finish_reason' => 'stop']],
+        ])));
+
+        $provider->complete(new CompleteRequest(model: 'claude-sonnet-4-6', messages: [new UserMessage('go')]));
+
+        $this->assertSame($expected, (string) $history[0]['request']->getUri());
     }
 
     // ----- P10.S1 harness -----

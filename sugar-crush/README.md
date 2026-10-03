@@ -1160,7 +1160,7 @@ $provider = $factory->create(['type' => 'openai', 'apiKey' => '${OPENAI_API_KEY}
 | Provider        | Type key      | Notes                                                            |
 |-----------------|---------------|------------------------------------------------------------------|
 | OpenAI          | `openai`      | `openai-php/client`; function calling, embeddings, cost table    |
-| Anthropic       | `anthropic`   | `x-api-key` + `anthropic-version` auth, but an OpenAI-shaped `chat/completions` body — see below |
+| Anthropic       | `anthropic`   | `x-api-key` + `anthropic-version` auth, OpenAI-shaped `/v1/chat/completions` body with tool calling — see below |
 | Claude Code CLI | `claude-code` | drives the `claude` binary headless; native cost; JSON schema    |
 | SGLang          | `sglang`      | OpenAI-compatible self-hosted endpoints (Guzzle)                 |
 | AWS Bedrock     | `bedrock`     | Converse API via `aws/aws-sdk-php`; per-model pricing            |
@@ -1168,7 +1168,7 @@ $provider = $factory->create(['type' => 'openai', 'apiKey' => '${OPENAI_API_KEY}
 | Custom          | `custom`      | any OpenAI-compatible HTTP endpoint                              |
 | Echo            | —             | `EchoProvider`: offline, echoes the last turn; default + tests   |
 
-The `anthropic` type key is **not** a native Messages API client. `ProviderFactory::createAnthropic()` builds a `CustomProvider` with Anthropic's `x-api-key`/`anthropic-version` headers, but that class POSTs an OpenAI-shaped body to `chat/completions`, and it is constructed with `supportsFunctionCalling: false` — so this type key cannot do tool calling. For a real Anthropic-native path today, use `claude-code` (which drives the `claude` binary) or point `SUGARCRUSH_BACKEND_CMD` at a shell script. Fixing this is tracked as a known gap.
+The `anthropic` type key is **not** a native Messages API client. `ProviderFactory::createAnthropic()` builds a `CustomProvider` with Anthropic's `x-api-key`/`anthropic-version` headers, and that class POSTs an OpenAI-shaped body to Anthropic's OpenAI-compatibility endpoint, `<ANTHROPIC_BASE_URL>/v1/chat/completions`. Tools go out as OpenAI `tools` and come back as `tool_calls`, streamed or not. For an Anthropic-native path, use `claude-code` (which drives the `claude` binary) or point `SUGARCRUSH_BACKEND_CMD` at a shell script.
 
 The `sglang` type accepts an optional `toolCallParser` key, with three values:
 

@@ -788,7 +788,12 @@ final readonly class ProviderFactory
      */
     private function createAnthropic(array $config): ProviderInterface
     {
-        $baseUrl = $config['baseUrl'] ?? 'https://api.anthropic.com';
+        // X-31b: CustomProvider posts the RELATIVE path `chat/completions`, so
+        // the base has to end in `/v1/` - the bare `https://api.anthropic.com`
+        // this used resolved to `/chat/completions`, a 404 on every default
+        // request. See anthropicCompatBase() for why the configured value
+        // stays the API root.
+        $baseUrl = self::anthropicCompatBase($config['baseUrl'] ?? 'https://api.anthropic.com');
         $apiKey = $config['apiKey'];
         $model = $config['model'] ?? 'claude-sonnet-4-6';
 
@@ -815,13 +820,36 @@ final readonly class ProviderFactory
             $model,
             $apiKey,
             $client,
-            true,
-            false,
+            supportsStreaming: true,
+            // X-31b: this was a positional `false`, so no request ever carried
+            // `tools` and the type key could not call a single tool. Anthropic's
+            // OpenAI-compatibility endpoint accepts OpenAI `tools` and answers
+            // with `tool_calls`, streamed or not.
+            supportsFunctionCalling: true,
             // Audit 15b-15: Anthropic's OpenAI-compatibility endpoint reads
             // base64 `image_url` parts, and every current Claude model has
             // vision, so an attached image goes out as an image.
             supportsVision: true,
         );
+    }
+
+    /**
+     * The base the `anthropic` type's Guzzle client resolves `chat/completions`
+     * against: $baseUrl with `/v1/` appended, unless it already ends in `/v1`.
+     *
+     * The configured value stays the API ROOT (`https://api.anthropic.com`,
+     * no `/v1`) because `ANTHROPIC_BASE_URL` is shared: the `claude-code`
+     * type hands the same variable to the `claude` binary, and Anthropic's
+     * SDKs append `/v1/...` to it themselves. A base already spelled with
+     * `/v1` is accepted as well. The trailing slash is not cosmetic: under
+     * RFC 3986 resolution a base without one drops its last segment, so
+     * `…/v1` + `chat/completions` would lose the `v1` again.
+     */
+    private static function anthropicCompatBase(string $baseUrl): string
+    {
+        $root = rtrim($baseUrl, '/');
+
+        return (preg_match('#/v1$#i', $root) === 1 ? $root : $root . '/v1') . '/';
     }
 
     /**

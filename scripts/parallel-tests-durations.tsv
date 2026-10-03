@@ -284,7 +284,7 @@ sugar-crush/tests/Support/RequirementDirectiveProvenanceTest.php	0.326	18
 sugar-crush/tests/Cli/BootstrapTrustGateSelfGrantTest.php	0.312	8
 sugar-crush/tests/Context/ContextCompactorTest.php	0.311	88
 sugar-crush/tests/Context/SortedWalkCapTest.php	0.303	9
-sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.299	39
+sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.299	46
 sugar-crush/tests/Tui/PaneDragIntegrationTest.php	0.295	21
 sugar-crush/tests/Workflows/WorkflowRetriesTest.php	0.294	10
 sugar-crush/tests/Backend/EngineBackendCancelKeepsLoopLiveTest.php	0.293	1
