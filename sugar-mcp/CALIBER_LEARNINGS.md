@@ -74,3 +74,34 @@
 - pumpStderr() is a caller-pumped seam, never loop-mounted (E537: pipe reads
   are destructive — two readers on one pipe steal each other's bytes).
 - HTTP transport, server side, and the OAuth stack are Phase 2.
+
+## Failure-path rules (crush_libs.md audit, 2026-10-03)
+
+- **Never `(string) json_encode(...)` on the wire.** `false` becomes a blank
+  line every server ignores, and a deadline-less `callTool()` then waits for a
+  reply forever. `toJson()` uses `JSON_THROW_ON_ERROR` and rethrows
+  `InvalidArgumentException`; `callTool()` converts it to `{"error": ...}`.
+- **Every handshake leg gets the same gate.** `tools/list` error / no reply
+  is a start failure, exactly like `initialize` — "up, 0 tools" is the worst
+  failure shape on a long-running TUI.
+- **Pipe EOF is not a liveness signal.** A helper forked by the server keeps
+  the stdout write end open; `readLine()` asks `serverIsRunning()` whenever a
+  poll leaves stdout idle — NOT only when the whole select times out, because
+  a helper that also inherited stderr and logs faster than a poll never lets
+  it time out. The stderr-only pass is rate-limited to one probe per
+  READ_POLL_SECONDS of stdout silence. `writeLine()` carries the same check
+  (a helper holding stdin keeps a full pipe from ever breaking), and a dead
+  child's verdict first drains what stdout already holds (zero-timeout), so a
+  reply written just before exit is not dropped. Pinned in both a silent and a
+  `--chatty` fixture shape.
+- **Signal 0 says a zombie is alive.** From a `pcntl_fork()`ed caller the
+  liveness probe is `posix_kill($pid, 0)`, and a server the owner has not
+  reaped yet (sugar-crush's parent sits in `waitpid()` on the turn, never in
+  `proc_get_status()`) is a zombie that passes it. The non-owner branch reads
+  `/proc/<pid>/stat` too: state `Z`/`X` is dead, and a start time other than
+  the one recorded at `start()` is a reused pid, also dead. Owner-only tests
+  cannot see this; `testAForkedCallerTreatsAnUnreapedDeadServerAsDead` forks
+  the caller and keeps the owner in a pid-specific `waitpid()`.
+- **Lock state writes are checked.** `store()`/`markPhase()` return bool, an
+  unrecorded marker fails the exchange, and an empty lock file loads as
+  `PHASE_READING` (dirty), never clean.

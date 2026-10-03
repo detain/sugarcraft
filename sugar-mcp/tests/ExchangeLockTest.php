@@ -31,7 +31,7 @@ final class ExchangeLockTest extends TestCase
 
     public function testANewLockIsCleanAndEmpty(): void
     {
-        $this->lock = ExchangeLock::create('probe');
+        $this->lock = ExchangeLock::new('probe');
 
         self::assertFileExists($this->lock->path);
         self::assertSame([ExchangeLock::PHASE_CLEAN, ''], $this->lock->load());
@@ -39,7 +39,7 @@ final class ExchangeLockTest extends TestCase
 
     public function testStoreRoundTripsPhaseAndBuffer(): void
     {
-        $this->lock = ExchangeLock::create('probe');
+        $this->lock = ExchangeLock::new('probe');
         self::assertTrue($this->lock->acquire(null, static fn (): bool => true));
 
         $this->lock->store(ExchangeLock::PHASE_CLEAN, "{\"half\":");
@@ -52,7 +52,7 @@ final class ExchangeLockTest extends TestCase
 
     public function testMarkPhaseRewritesOnlyThePhaseByte(): void
     {
-        $this->lock = ExchangeLock::create('probe');
+        $this->lock = ExchangeLock::new('probe');
         $this->lock->store(ExchangeLock::PHASE_CLEAN, 'kept-bytes');
 
         $this->lock->markPhase(ExchangeLock::PHASE_WRITING);
@@ -60,9 +60,53 @@ final class ExchangeLockTest extends TestCase
         self::assertSame([ExchangeLock::PHASE_WRITING, 'kept-bytes'], $this->lock->load());
     }
 
-    public function testAcquireGivesUpWhenTheServerIsGone(): void
+    public function testStateWritesReportSuccess(): void
+    {
+        $this->lock = ExchangeLock::new('probe');
+
+        self::assertTrue($this->lock->store(ExchangeLock::PHASE_CLEAN, 'buffered'));
+        self::assertTrue($this->lock->markPhase(ExchangeLock::PHASE_WRITING));
+        self::assertSame([ExchangeLock::PHASE_WRITING, 'buffered'], $this->lock->load());
+    }
+
+    public function testStateWritesThatFailAreReportedNotAssumed(): void
+    {
+        $this->lock = ExchangeLock::new('probe');
+        self::assertTrue($this->lock->store(ExchangeLock::PHASE_CLEAN, 'kept'));
+
+        // A read-only handle: every write fails the way a full or read-only
+        // temp filesystem fails it.
+        $readOnly = fopen($this->lock->path, 'r');
+        self::assertIsResource($readOnly);
+        (new \ReflectionProperty(ExchangeLock::class, 'handle'))->setValue($this->lock, $readOnly);
+        (new \ReflectionProperty(ExchangeLock::class, 'handlePid'))->setValue($this->lock, (int) getmypid());
+
+        self::assertFalse($this->lock->store(ExchangeLock::PHASE_CLEAN, 'lost'));
+        self::assertFalse($this->lock->markPhase(ExchangeLock::PHASE_WRITING));
+    }
+
+    public function testAnEmptyStateFileReadsAsDirtyNotClean(): void
+    {
+        // new() always writes a phase byte, so an empty file is a store that
+        // failed after its truncate: the stream state is unknown, and only a
+        // dirty reading makes the next holder resynchronise.
+        $this->lock = ExchangeLock::new('probe');
+        file_put_contents($this->lock->path, '');
+
+        self::assertSame([ExchangeLock::PHASE_READING, ''], $this->lock->load());
+    }
+
+    public function testTheDeprecatedCreateNameStillBuildsAWorkingLock(): void
     {
         $this->lock = ExchangeLock::create('probe');
+
+        self::assertStringStartsWith(ExchangeLock::FILE_PREFIX, basename($this->lock->path));
+        self::assertSame([ExchangeLock::PHASE_CLEAN, ''], $this->lock->load());
+    }
+
+    public function testAcquireGivesUpWhenTheServerIsGone(): void
+    {
+        $this->lock = ExchangeLock::new('probe');
         $other = fopen($this->lock->path, 'r+');
         self::assertIsResource($other);
         // A second description in this process stands in for another process.
@@ -81,7 +125,7 @@ final class ExchangeLockTest extends TestCase
 
     public function testDestroyRemovesTheFileInTheOwner(): void
     {
-        $lock = ExchangeLock::create('probe');
+        $lock = ExchangeLock::new('probe');
         $path = $lock->path;
 
         $lock->destroy();
@@ -95,7 +139,7 @@ final class ExchangeLockTest extends TestCase
 
     public function testTheFileNameRecordsTheOwnerAndTheFileIsPrivate(): void
     {
-        $this->lock = ExchangeLock::create('probe', $this->privateDir());
+        $this->lock = ExchangeLock::new('probe', $this->privateDir());
 
         [, $owner] = $this->nameParts($this->lock->path);
         self::assertSame((int) getmypid(), $owner);
@@ -107,7 +151,7 @@ final class ExchangeLockTest extends TestCase
         $dir = $this->privateDir();
         $orphan = $this->fileOwnedBy($this->deadPid(), $dir);
 
-        $this->lock = ExchangeLock::create('probe', $dir);
+        $this->lock = ExchangeLock::new('probe', $dir);
 
         self::assertFileDoesNotExist($orphan, 'the dead owner\'s lock file is reclaimed at the next connection start');
         self::assertFileExists($this->lock->path);
@@ -167,7 +211,7 @@ final class ExchangeLockTest extends TestCase
     /** This process' pid-namespace tag, read off the name create() gives a file. */
     private function namespace(string $dir): string
     {
-        $probe = ExchangeLock::create('ns-probe', $dir);
+        $probe = ExchangeLock::new('ns-probe', $dir);
         [$namespace] = $this->nameParts($probe->path);
         $probe->destroy();
 
@@ -183,7 +227,7 @@ final class ExchangeLockTest extends TestCase
         return [$m[1], (int) $m[2]];
     }
 
-    /** A file shaped exactly as create() would have made it in $owner. */
+    /** A file shaped exactly as new() would have made it in $owner. */
     private function fileOwnedBy(int $owner, string $dir): string
     {
         $path = $dir . '/' . ExchangeLock::FILE_PREFIX . $this->namespace($dir) . '-' . $owner . '-' . bin2hex(random_bytes(6));

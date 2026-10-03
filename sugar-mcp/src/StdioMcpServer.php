@@ -48,8 +48,18 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * E646 discipline: DEFAULT_START_TIMEOUT_SECONDS bounds the HANDSHAKE only.
  * callTool() carries NO deadline on purpose — a tool call is somebody's real
  * work (a build, a fetch) and minutes are legitimate; it is bounded by child
- * liveness (a dead child fails the write or the read) rather than by a
- * wall-clock kill of in-flight work.
+ * liveness rather than by a wall-clock kill of in-flight work. That bound is
+ * ENFORCED, not inferred from pipe EOF: EOF needs every holder of the stdout
+ * write end to close it, and a helper the server forked (or the real server
+ * behind a dying wrapper) keeps it open after the direct child is gone. So
+ * every read or write poll that leaves the pipe idle also asks whether the
+ * direct child still runs — including a pass where only stderr was ready, since
+ * a helper that inherited stderr and logs faster than a poll never lets the
+ * select time out (rate-limited to once per READ_POLL_SECONDS) — and a read
+ * with nothing more pending on a dead child ends the exchange. "Still runs"
+ * holds from a forked caller too: there an unreaped dead server is a zombie
+ * that signal 0 calls alive, so the probe reads its /proc state (see
+ * serverIsRunning()).
  *
  * FORK SAFETY (audit B1 / AG-1). An embedder may start a server in one process
  * and use the object from pcntl_fork()ed children — sugar-crush runs every turn
@@ -130,7 +140,7 @@ final class StdioMcpServer implements McpServer
     /** @var list<McpTool> captured by start(), empty until then */
     private array $tools = [];
 
-    /** @var resource|\ProcOpen|null */
+    /** @var resource|null the proc_open handle */
     private $process = null;
 
     /** @var array<int,resource>|null */
@@ -158,6 +168,13 @@ final class StdioMcpServer implements McpServer
     /** The server's pid, for liveness checks from processes that are not its parent. */
     private int $serverPid = 0;
 
+    /**
+     * The server's /proc start time captured at start() (0 where procfs is
+     * absent), so a forked caller can tell the server from a later process
+     * that reused its pid after the owner reaped it.
+     */
+    private int $serverStartTicks = 0;
+
     /** Tail-bounded capture of everything the server wrote to stderr. */
     private string $stderrTail = '';
 
@@ -180,9 +197,13 @@ final class StdioMcpServer implements McpServer
      *        falls back to DEFAULT_START_TIMEOUT_SECONDS so a bad setting can
      *        never disable the bound entirely
      * @param \Closure|null $spawnPlanner embedder seam deciding the spawn:
-     *        called as ($name, $argv, $env) and returning [command, env] in
-     *        proc_open's own shapes (string|array command, null|array env);
-     *        null spawns plainly. A planner may throw to refuse a launch
+     *        called as ($name, $argv, $env) and returning [command, env],
+     *        where command is a non-empty argv list<string> (NEVER a shell
+     *        string — the shell would be the direct child and stop() would
+     *        orphan the server behind it; a wrapper that truly needs a shell
+     *        spells it ['/bin/sh', '-c', ...]) and env is null|array<string,
+     *        string>; any other shape is an InvalidArgumentException from
+     *        start(). null spawns plainly. A planner may throw to refuse a launch
      *        before any child exists — that refusal is the product's PATH
      *        pre-check living downstream where it belongs.
      * @param array<string,mixed> $clientInfo initialize-handshake identity;
@@ -243,7 +264,13 @@ final class StdioMcpServer implements McpServer
      * pair verbatim after shape validation, so a containment wrapper can own
      * the whole spawn decision (setsid wrap, scrubbed env, or null env).
      *
-     * @return array{0: string|list<string>, 1: ?array<string,string>}
+     * The command must be an argv LIST of strings, never a shell string: a
+     * string spawns /bin/sh with the server as its grandchild, and stop() then
+     * signals the shell and orphans the server (the hazard in the class
+     * docblock). A wrapper that genuinely needs a shell spells it as argv
+     * (`['/bin/sh', '-c', $script]`) and owns that consequence explicitly.
+     *
+     * @return array{0: list<string>, 1: ?array<string,string>}
      */
     private function spawnPlan(): array
     {
@@ -253,12 +280,10 @@ final class StdioMcpServer implements McpServer
             return [$argv, $this->env === [] ? null : array_merge(getenv(), $this->env)];
         }
 
-        /** @var array{0: string|list<string>, 1: ?array<string,string>} $plan */
         $plan = ($this->spawnPlanner)($this->name, $argv, $this->env);
 
         if (!is_array($plan)
             || array_keys($plan) !== [0, 1]
-            || !(is_string($plan[0]) || is_array($plan[0]))
             || !($plan[1] === null || is_array($plan[1]))
         ) {
             throw new \InvalidArgumentException(
@@ -266,6 +291,19 @@ final class StdioMcpServer implements McpServer
             );
         }
 
+        if (!is_array($plan[0])
+            || $plan[0] === []
+            || !array_is_list($plan[0])
+            || array_filter($plan[0], static fn (mixed $part): bool => !is_string($part)) !== []
+        ) {
+            throw new \InvalidArgumentException(
+                "MCP spawnPlanner for {$this->name} must return the command as a non-empty argv list of strings, got "
+                . get_debug_type($plan[0])
+                . ' — a shell-string command makes the server a grandchild of /bin/sh that stop() cannot reach'
+            );
+        }
+
+        /** @var array{0: list<string>, 1: ?array<string,string>} $plan */
         return $plan;
     }
 
@@ -285,7 +323,7 @@ final class StdioMcpServer implements McpServer
 
         // The lock exists before the child does: a server nobody can exchange
         // with safely is not started at all.
-        $this->lock = ExchangeLock::create($this->name);
+        $this->lock = ExchangeLock::new($this->name);
         $this->ownerPid = (int) getmypid();
         $this->ids->claim();
 
@@ -310,6 +348,7 @@ final class StdioMcpServer implements McpServer
         }
 
         $this->serverPid = (int) proc_get_status($this->process)['pid'];
+        $this->serverStartTicks = self::procStat($this->serverPid)['startTicks'] ?? 0;
 
         // stream_set_timeout does not work on proc_open pipes (measured: it
         // returns false and sets nothing), and blocking reads would ignore any
@@ -343,7 +382,7 @@ final class StdioMcpServer implements McpServer
             // stderr capture.
             if ($response === null || $response->error !== null || !$response->resultSet) {
                 $diagnostics = $this->stderrTailForDiagnostics();
-                $refusal = $response?->error !== null ? $this->describeError($response) : '';
+                $refusal = $response?->error !== null ? $this->describeError('initialize', $response) : '';
                 $this->stop();
 
                 throw new \RuntimeException("Failed to start MCP server: {$this->name}" . $refusal . $diagnostics);
@@ -352,14 +391,38 @@ final class StdioMcpServer implements McpServer
             // The spec's method name. A bare `initialized` is ignored by the TS
             // SDK (its oninitialized hook never fires) and only tolerated by
             // others, so a server gating work on initialization never sees it.
-            $this->notify('notifications/initialized', null, $deadline);
+            // A notification that never left (dead pipe, spent budget) means
+            // the server never learnt the session is initialized — a server
+            // gating work on it would then answer tools/list with an error or
+            // not at all, so the failure is named here, where it happened.
+            if (!$this->notify('notifications/initialized', null, $deadline)) {
+                $diagnostics = $this->stderrTailForDiagnostics();
+                $this->stop();
+
+                throw new \RuntimeException(
+                    "Failed to start MCP server: {$this->name} — notifications/initialized could not be delivered" . $diagnostics
+                );
+            }
 
             // params omitted rather than sent as `{}`: tools/list params are
             // optional ({cursor?}) and omission is exactly what the reference
             // TS client puts on the wire, so it is the shape every server has
             // been tested against.
             $listResponse = $this->request('tools/list', null, $deadline);
-            $this->tools = $listResponse === null ? [] : $this->parseTools($listResponse->toArray());
+
+            // The same gate as initialize: an ERROR reply (session- or
+            // capability-gated servers answer -32601 here) or no reply at all
+            // is not "up, 0 tools" — that shape looks connected, exposes
+            // nothing, and throws the server's own diagnosis away.
+            if ($listResponse === null || $listResponse->error !== null || !$listResponse->resultSet) {
+                $diagnostics = $this->stderrTailForDiagnostics();
+                $refusal = $listResponse?->error !== null ? $this->describeError('tools/list', $listResponse) : ' — no tools/list reply';
+                $this->stop();
+
+                throw new \RuntimeException("Failed to start MCP server: {$this->name}" . $refusal . $diagnostics);
+            }
+
+            $this->tools = $this->parseTools($listResponse->toArray());
         } catch (\Throwable $failure) {
             // A throw from any handshake leg — the oversized-frame refusal
             // rides this path — must not leave the spawned child alive on the
@@ -419,6 +482,7 @@ final class StdioMcpServer implements McpServer
         $this->pipes = null;
         $this->lock = null;
         $this->serverPid = 0;
+        $this->serverStartTicks = 0;
         $this->readBuffer = '';
         $this->stderrTail = '';
         $this->stderrOpen = false;
@@ -434,8 +498,17 @@ final class StdioMcpServer implements McpServer
      * Liveness that works from any process. The owner asks proc_get_status();
      * a forked child cannot — waitpid() on a pid that is not its child fails
      * with ECHILD and PHP reports "not running" — so it probes the pid captured
-     * at start with signal 0. Without ext-posix a child assumes the server is
-     * up and lets the pipes report a dead one (write failure / EOF).
+     * at start with signal 0.
+     *
+     * Signal 0 alone is not enough there: a server that died while the owner
+     * is busy elsewhere (sugar-crush's parent blocks in waitpid() on the turn,
+     * never in proc_get_status()) stays an unreaped ZOMBIE, and kill(zombie, 0)
+     * succeeds — so a forked turn would wait out a helper still holding the
+     * pipes. Where /proc exists the probe therefore also reads the pid's state
+     * and treats Z/X as dead, and a start time that no longer matches the one
+     * recorded at start() as a reused pid, i.e. dead too. Without /proc (macOS,
+     * BSD) the signal-0 answer stands; without ext-posix a child assumes the
+     * server is up and lets the pipes report a dead one (write failure / EOF).
      */
     private function serverIsRunning(): bool
     {
@@ -451,7 +524,53 @@ final class StdioMcpServer implements McpServer
             return true;
         }
 
-        return posix_kill($this->serverPid, 0);
+        if (!posix_kill($this->serverPid, 0)) {
+            return false;
+        }
+
+        $stat = self::procStat($this->serverPid);
+        if ($stat === null) {
+            // No procfs here, or the entry went between the signal and the
+            // read: signal 0 said "exists", and a pid that is truly gone will
+            // fail that probe on the next poll.
+            return true;
+        }
+
+        if ($stat['state'] === 'Z' || $stat['state'] === 'X' || $stat['state'] === 'x') {
+            return false;
+        }
+
+        return $this->serverStartTicks === 0 || $stat['startTicks'] === $this->serverStartTicks;
+    }
+
+    /**
+     * The state letter and start time (clock ticks since boot) of $pid from
+     * /proc/<pid>/stat, or null where procfs is absent or unreadable. The
+     * process name (field 2) may itself contain spaces and parentheses, so the
+     * fields are split after its LAST ')'.
+     *
+     * @return array{state: string, startTicks: int}|null
+     */
+    private static function procStat(int $pid): ?array
+    {
+        $path = "/proc/{$pid}/stat";
+        if (!is_readable($path)) {
+            return null;
+        }
+
+        $raw = @file_get_contents($path);
+        $close = is_string($raw) ? strrpos($raw, ')') : false;
+        if (!is_string($raw) || $close === false) {
+            return null;
+        }
+
+        // Field 3 (state) onwards; starttime is field 22 => index 19 here.
+        $fields = preg_split('/\s+/', trim(substr($raw, $close + 1)));
+        if (!is_array($fields) || count($fields) < 20 || $fields[0] === '' || !ctype_digit($fields[19])) {
+            return null;
+        }
+
+        return ['state' => $fields[0], 'startTicks' => (int) $fields[19]];
     }
 
     /**
@@ -495,16 +614,23 @@ final class StdioMcpServer implements McpServer
      */
     public function callTool(string $toolName, array $args): array
     {
-        $response = $this->request('tools/call', [
-            'name' => $toolName,
-            // An argument-less call arrives as PHP `[]`, which would encode as a
-            // JSON array; `arguments` is a JSON object in the schema and the SDK
-            // servers reject the array form ("expected record, received array").
-            // The same loss one level down (`{"filter":{}}` decoded assoc to
-            // `['filter' => []]`, audit MCP-9) is undone against the tool's
-            // own inputSchema — see ArgumentShape.
-            'arguments' => $args === [] ? new \stdClass() : ArgumentShape::conform($args, $this->inputSchemaOf($toolName)),
-        ]);
+        try {
+            $response = $this->request('tools/call', [
+                'name' => $toolName,
+                // An argument-less call arrives as PHP `[]`, which would encode as a
+                // JSON array; `arguments` is a JSON object in the schema and the SDK
+                // servers reject the array form ("expected record, received array").
+                // The same loss one level down (`{"filter":{}}` decoded assoc to
+                // `['filter' => []]`, audit MCP-9) is undone against the tool's
+                // own inputSchema — see ArgumentShape.
+                'arguments' => $args === [] ? new \stdClass() : ArgumentShape::conform($args, $this->inputSchemaOf($toolName)),
+            ]);
+        } catch (\InvalidArgumentException $unencodable) {
+            // Arguments JSON cannot carry (a model's `1e999` decodes to INF):
+            // nothing was written, and the McpServer contract reports a failed
+            // call as a payload the transcript can show, never as a throw.
+            return ['error' => 'Tool call failed: ' . $unencodable->getMessage()];
+        }
 
         if ($response === null || !$response->resultSet) {
             return ['error' => 'Tool call failed'];
@@ -555,6 +681,8 @@ final class StdioMcpServer implements McpServer
      * implements none of it either.
      *
      * @param array<string,mixed>|null $params
+     * @throws \InvalidArgumentException when $params cannot be encoded as JSON
+     *         (see McpMessage::toJson()); nothing is written in that case
      */
     public function request(string $method, ?array $params = null, ?float $deadline = null): ?McpMessage
     {
@@ -566,18 +694,30 @@ final class StdioMcpServer implements McpServer
                 return null;
             }
 
-            $this->lock?->markPhase(ExchangeLock::PHASE_READING);
+            // Same law as the W mark in exchange(): an unrecorded R would let
+            // the next holder trust a stdout this one may die half-way into.
+            if (!($this->lock?->markPhase(ExchangeLock::PHASE_READING) ?? false)) {
+                return null;
+            }
 
             return $this->readResponse($id, $deadline);
         });
     }
 
-    /** Fire-and-forget notification leg of the protocol. */
-    public function notify(string $method, ?array $params = null, ?float $deadline = null): void
+    /**
+     * Notification leg of the protocol: no reply is awaited, but delivery is
+     * reported — true once the whole line went out, false when it did not
+     * (not started, dead pipe, lock or $deadline lost), so an embedder sending
+     * `notifications/cancelled` or `progress` can tell a dropped one.
+     *
+     * @param array<string,mixed>|null $params
+     * @throws \InvalidArgumentException when $params cannot be encoded as JSON
+     */
+    public function notify(string $method, ?array $params = null, ?float $deadline = null): bool
     {
         $json = McpMessage::notification($method, $params)->toJson();
 
-        $this->exchange($deadline, false, fn (string $prefix): ?bool => $this->writeLine($prefix . $json, $deadline) ? true : null);
+        return $this->exchange($deadline, false, fn (string $prefix): ?bool => $this->writeLine($prefix . $json, $deadline) ? true : null) === true;
     }
 
     /**
@@ -616,10 +756,19 @@ final class StdioMcpServer implements McpServer
             // of a line whose tail is still in the pipe. Drop it and let the
             // reader skip the fragment instead.
             $this->readBuffer = $dirty ? '' : $buffer;
-            $lock->markPhase(ExchangeLock::PHASE_WRITING);
 
-            $result = $body($phase === ExchangeLock::PHASE_WRITING ? "\n" : '');
+            // Unrecorded, a W marker cannot tell the next holder that this
+            // one died mid-line — running unprotected is the defect the
+            // marker exists to close, so a failed mark fails the exchange.
+            if ($lock->markPhase(ExchangeLock::PHASE_WRITING)) {
+                $result = $body($phase === ExchangeLock::PHASE_WRITING ? "\n" : '');
+            }
         } finally {
+            // A store that fails leaves the file reading as dirty (see
+            // ExchangeLock::store()), so the next holder resynchronises
+            // instead of trusting state this exchange could not record. The
+            // result itself stands: the reply WAS read, and only what was
+            // past it is lost.
             if ($result === null) {
                 // Keep the marker this exchange reached (W or R); the buffer is
                 // dropped for the same reason a dead holder's is.
@@ -666,7 +815,7 @@ final class StdioMcpServer implements McpServer
         return hrtime(true) / 1_000_000_000.0;
     }
 
-    /** @param resource|\ProcOpen|null $process */
+    /** @param resource|null $process */
     private static function childIsRunning($process): bool
     {
         if (!is_resource($process)) {
@@ -693,6 +842,7 @@ final class StdioMcpServer implements McpServer
 
         $payload = $json . "\n";
         $consecutiveSelectFailures = 0;
+        $livenessCheckedAt = self::nowSeconds();
 
         while ($payload !== '') {
             $remaining = $deadline === null ? null : $deadline - self::nowSeconds();
@@ -732,6 +882,19 @@ final class StdioMcpServer implements McpServer
             }
 
             if ($ready === 0 || $write === []) {
+                // stdin stayed unwritable for this pass. Same liveness law as
+                // readLine(): a helper that inherited stdin keeps the pipe from
+                // ever breaking, so a full pipe to a dead direct child would
+                // stall a deadline-less write (callTool) until the helper
+                // exits — and stderr chatter keeps the select from going idle,
+                // so the check is rate-limited per poll, not gated on idleness.
+                if (self::nowSeconds() - $livenessCheckedAt >= self::READ_POLL_SECONDS) {
+                    if (!$this->serverIsRunning()) {
+                        return false;
+                    }
+                    $livenessCheckedAt = self::nowSeconds();
+                }
+
                 continue;
             }
 
@@ -768,8 +931,8 @@ final class StdioMcpServer implements McpServer
 
     /**
      * Read framed lines until the response for $id arrives, skipping
-     * notifications, foreign ids AND unparseable lines. Only EOF or the
-     * deadline ends the search.
+     * notifications, foreign ids AND unparseable lines. Only EOF, the
+     * deadline, or a stdout-idle poll on a dead child ends the search.
      *
      * Skipping garbage is what the reference SDK clients do (audit MCP-4):
      * real servers print a startup banner or a log line to stdout, or emit a
@@ -846,8 +1009,8 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
-     * Return one newline-terminated frame, or null at EOF/deadline with an
-     * empty buffer. A partial buffer at EOF/deadline is delivered whole
+     * Return one newline-terminated frame, or null at EOF/deadline/dead child
+     * with an empty buffer. A partial buffer at EOF/deadline is delivered whole
      * (drainBuffer) — unterminated tail bytes are the sender's framing bug and
      * deserve the same parse-failure path, not silent discarding.
      *
@@ -861,6 +1024,7 @@ final class StdioMcpServer implements McpServer
     private function readLine(?float $deadline = null): ?string
     {
         $scannedFrom = 0;
+        $livenessCheckedAt = self::nowSeconds();
 
         while (($newline = strpos($this->readBuffer, "\n", $scannedFrom)) === false) {
             if ($this->pipes === null) {
@@ -901,6 +1065,17 @@ final class StdioMcpServer implements McpServer
             }
 
             if ($ready === 0) {
+                // An idle poll is the liveness check (see the class docblock):
+                // pipe EOF never comes while a grandchild holds the write end,
+                // and callTool() has no deadline to fall back on. Nothing was
+                // pending on stdout for a whole poll, so a dead direct child
+                // has nothing more to say — whatever a surviving helper might
+                // write is not an answer from the server we spawned.
+                if (!$this->serverIsRunning()) {
+                    return $this->frameLeftByAnExitedServer();
+                }
+                $livenessCheckedAt = self::nowSeconds();
+
                 continue;
             }
 
@@ -909,7 +1084,19 @@ final class StdioMcpServer implements McpServer
             }
 
             if (!in_array($this->pipes[1], $read, true)) {
-                // stderr-ready-only pass: stdout stayed silent, keep waiting.
+                // stderr-ready-only pass: stdout stayed silent. A helper that
+                // inherited stderr too and logs more often than a poll never
+                // lets the select go idle, so the idle-poll check above would
+                // never run — the liveness check must ride this pass as well,
+                // rate-limited to once per poll's worth of stdout silence so a
+                // chatty LIVE server costs no proc_get_status per log line.
+                if (self::nowSeconds() - $livenessCheckedAt >= self::READ_POLL_SECONDS) {
+                    if (!$this->serverIsRunning()) {
+                        return $this->frameLeftByAnExitedServer();
+                    }
+                    $livenessCheckedAt = self::nowSeconds();
+                }
+
                 continue;
             }
 
@@ -926,6 +1113,7 @@ final class StdioMcpServer implements McpServer
             $scannedFrom = strlen($this->readBuffer);
             $this->readBuffer .= $chunk;
             $this->refuseAnOversizedFrame();
+            $livenessCheckedAt = self::nowSeconds();
         }
 
         $line = substr($this->readBuffer, 0, $newline);
@@ -968,15 +1156,18 @@ final class StdioMcpServer implements McpServer
     }
 
     /** The server's own refusal (code + message) for the start-failure exception. */
-    private function describeError(McpMessage $response): string
+    private function describeError(string $leg, McpMessage $response): string
     {
         $code = $response->errorCode();
         $message = $response->errorMessage();
 
         return sprintf(
-            ' — initialize refused%s: %s',
+            ' — %s refused%s: %s',
+            $leg,
             $code === null ? '' : " ({$code})",
-            $message === null || $message === '' ? (string) json_encode($response->error) : $message,
+            // Partial output: a decoded error may carry INF (a `1e999` on the
+            // wire), and an unencodable diagnosis must still say something.
+            $message === null || $message === '' ? (string) json_encode($response->error, JSON_PARTIAL_OUTPUT_ON_ERROR) : $message,
         );
     }
 
@@ -1016,6 +1207,47 @@ final class StdioMcpServer implements McpServer
             $held,
             self::MAX_FRAME_BYTES,
         ));
+    }
+
+    /**
+     * The read's answer once the direct child is known dead: whatever stdout
+     * already holds, never a further wait. The liveness probe runs AFTER the
+     * poll that saw stdout empty, so a server that wrote its reply and exited
+     * inside that window left the reply in the pipe — it is drained here with
+     * zero-timeout polls instead of being dropped. The drain is bounded by
+     * the frame cap (a surviving helper streaming stdout cannot pin it), and
+     * the first complete frame wins; a partial tail is delivered whole, as
+     * at EOF.
+     */
+    private function frameLeftByAnExitedServer(): ?string
+    {
+        while ($this->pipes !== null && is_resource($this->pipes[1])
+            && strpos($this->readBuffer, "\n") === false
+        ) {
+            $read = [$this->pipes[1]];
+            $write = [];
+            $except = [];
+            if (@stream_select($read, $write, $except, 0, 0) !== 1) {
+                break;
+            }
+
+            $chunk = fread($this->pipes[1], 8192);
+            if ($chunk === false || $chunk === '') {
+                break;
+            }
+            $this->readBuffer .= $chunk;
+            $this->refuseAnOversizedFrame();
+        }
+
+        $newline = strpos($this->readBuffer, "\n");
+        if ($newline === false) {
+            return $this->readBuffer === '' ? null : $this->drainBuffer();
+        }
+
+        $line = substr($this->readBuffer, 0, $newline);
+        $this->readBuffer = substr($this->readBuffer, $newline + 1);
+
+        return trim($line);
     }
 
     private function drainBuffer(): string

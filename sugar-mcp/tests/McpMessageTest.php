@@ -143,4 +143,35 @@ final class McpMessageTest extends TestCase
             self::assertArrayHasKey($key, $array, "toArray() consumers navigate missing keys as null, not absent");
         }
     }
+
+    /**
+     * `(string) false` was the old answer: a BLANK wire line every server
+     * ignores, after which callTool() waited, deadline-less, for a reply to a
+     * request nobody saw.
+     *
+     * @return iterable<string, array{0: McpMessage, 1: string}>
+     */
+    public static function unencodableEnvelopes(): iterable
+    {
+        yield 'INF argument (a model\'s 1e999)' => [McpMessage::request('7', 'tools/call', ['arguments' => ['n' => INF]]), '"tools/call" (id 7)'];
+        yield 'NAN argument' => [McpMessage::request('8', 'tools/call', ['arguments' => ['n' => NAN]]), '"tools/call" (id 8)'];
+        yield 'invalid UTF-8' => [McpMessage::request('9', 'resources/read', ['uri' => "\xff\xfe"]), '"resources/read" (id 9)'];
+        yield 'notification' => [McpMessage::notification('notifications/progress', ['progress' => INF]), '"notifications/progress"'];
+        yield 'success response' => [McpMessage::success('10', INF), 'response (id 10)'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('unencodableEnvelopes')]
+    public function testToJsonRefusesAnUnencodableEnvelopeInsteadOfEmittingABlankLine(McpMessage $message, string $named): void
+    {
+        $raised = null;
+        try {
+            $json = $message->toJson();
+        } catch (\InvalidArgumentException $failure) {
+            $raised = $failure;
+        }
+
+        self::assertNotNull($raised, 'toJson() returned ' . var_export($json ?? null, true) . ' instead of throwing');
+        self::assertStringContainsString($named, $raised->getMessage());
+        self::assertInstanceOf(\JsonException::class, $raised->getPrevious());
+    }
 }

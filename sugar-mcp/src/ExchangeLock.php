@@ -40,8 +40,14 @@ namespace SugarCraft\Mcp;
  * SIGKILLed, OOM-killed or loses its terminal leaves one file per server in
  * the temp dir, forever. The file name therefore records who owns it —
  * `sugar-mcp-lock-<pid-namespace>-<owner-pid>-<random>` — and every
- * {@see create()} first sweeps the files whose owner is gone
+ * {@see new()} first sweeps the files whose owner is gone
  * ({@see sweepStale()}).
+ *
+ * A STATE WRITE THAT FAILS (a full or read-only temp filesystem) is reported,
+ * never assumed: {@see store()} and {@see markPhase()} return false, and a
+ * store that fails leaves the file EMPTY, which {@see load()} reads as dirty —
+ * so the next holder resynchronises rather than trusting a half-written
+ * buffer under a clean phase byte.
  */
 final class ExchangeLock
 {
@@ -80,7 +86,7 @@ final class ExchangeLock
      *         connection without exclusion is the defect this class closes, so
      *         it is refused rather than silently run unlocked
      */
-    public static function create(string $label, ?string $dir = null): self
+    public static function new(string $label, ?string $dir = null): self
     {
         $dir ??= sys_get_temp_dir();
         $pid = (int) getmypid();
@@ -117,6 +123,18 @@ final class ExchangeLock
         }
 
         return new self($path, $pid);
+    }
+
+    /**
+     * Former name of {@see new()}, kept so embedders that still call it (the
+     * sugar-crush ClaudeCodeMcpClient) keep working until they move over; the
+     * repo's factory rule names the default root `::new()`.
+     *
+     * @deprecated use {@see new()}
+     */
+    public static function create(string $label, ?string $dir = null): self
+    {
+        return self::new($label, $dir);
     }
 
     /**
@@ -257,8 +275,15 @@ final class ExchangeLock
     }
 
     /**
-     * The phase and buffer the previous holder left. A missing or empty file
-     * reads as clean.
+     * The phase and buffer the previous holder left.
+     *
+     * An unreadable or EMPTY file reads as {@see PHASE_READING}, not clean:
+     * {@see new()} always writes a phase byte, so an empty file is a store
+     * that failed (or a file recreated under the owner), and its stream state
+     * is unknown. Dirty costs the next reader one skipped fragment; clean
+     * could hand it a stream that starts mid-line. A handle that cannot be
+     * opened at all reads as clean only because no exchange can run on it —
+     * {@see acquire()} fails first.
      *
      * @return array{0: string, 1: string} [phase, buffer]
      */
@@ -272,37 +297,76 @@ final class ExchangeLock
         rewind($handle);
         $raw = stream_get_contents($handle);
         if ($raw === false || $raw === '') {
-            return [self::PHASE_CLEAN, ''];
+            return [self::PHASE_READING, ''];
         }
 
         return [$raw[0], (string) substr($raw, 1)];
     }
 
-    /** Rewrite the whole state: phase byte plus buffer. */
-    public function store(string $phase, string $buffer): void
+    /**
+     * Rewrite the whole state: phase byte plus buffer.
+     *
+     * @return bool false when the state did not land whole. The file is then
+     *         truncated to empty (best-effort), which {@see load()} reads as
+     *         dirty — a partial write would otherwise leave a clean phase byte
+     *         in front of a truncated buffer.
+     */
+    public function store(string $phase, string $buffer): bool
     {
         $handle = $this->handle();
         if ($handle === null) {
-            return;
+            return false;
         }
 
-        ftruncate($handle, 0);
-        rewind($handle);
-        fwrite($handle, $phase . $buffer);
-        fflush($handle);
+        $stored = @ftruncate($handle, 0)
+            && rewind($handle)
+            && self::writeAll($handle, $phase . $buffer)
+            && fflush($handle);
+
+        if (!$stored) {
+            @ftruncate($handle, 0);
+        }
+
+        return $stored;
     }
 
-    /** Overwrite the phase byte alone, leaving the stored buffer as it is. */
-    public function markPhase(string $phase): void
+    /**
+     * Overwrite the phase byte alone, leaving the stored buffer as it is.
+     *
+     * @return bool false when the byte was not written — the marker on disk is
+     *         then whatever the previous write left, and callers must not act
+     *         as if this phase were recorded
+     */
+    public function markPhase(string $phase): bool
     {
         $handle = $this->handle();
         if ($handle === null) {
-            return;
+            return false;
         }
 
-        rewind($handle);
-        fwrite($handle, $phase);
-        fflush($handle);
+        return rewind($handle)
+            && self::writeAll($handle, $phase)
+            && fflush($handle);
+    }
+
+    /**
+     * fwrite() until $bytes are all out; false on an error or a zero-length
+     * write (a full filesystem reports either, depending on the stream).
+     *
+     * @param resource $handle
+     */
+    private static function writeAll($handle, string $bytes): bool
+    {
+        while ($bytes !== '') {
+            $written = @fwrite($handle, $bytes);
+            if ($written === false || $written === 0) {
+                return false;
+            }
+
+            $bytes = (string) substr($bytes, $written);
+        }
+
+        return true;
     }
 
     public function release(): void

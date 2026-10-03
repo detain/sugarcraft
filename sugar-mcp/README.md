@@ -52,13 +52,45 @@ $server->stop();                     // also runs automatically on destruct
 - The handshake runs under **one** monotonic (`hrtime`) deadline
   (`DEFAULT_START_TIMEOUT_SECONDS`, 60s, sized for cold `npx` fetches) shared
   across `initialize`, `notifications/initialized` and `tools/list`.
-- An `initialize` reply carrying `error` is a start failure: `start()` stops
-  the child and throws a `RuntimeException` naming the server's error code and
-  message (plus any captured stderr), rather than reporting "up, 0 tools".
+- Every handshake leg must succeed, or `start()` stops the child and throws a
+  `RuntimeException` (with any captured stderr) rather than reporting "up, 0
+  tools": an `initialize` or `tools/list` reply carrying `error` names the
+  server's error code and message; a leg that gets no reply, or a
+  `notifications/initialized` that cannot be delivered, names that leg.
 - `callTool()` carries **no** deadline: a tool call is somebody's real work and
   is bounded by child liveness, never by a wall-clock kill of in-flight work.
+  Liveness is checked whenever a poll leaves the pipe idle — at most once a
+  second, and also while stderr alone is chatty — on both the read and the
+  write wait, so a server that dies while a forked helper still holds its
+  stdin/stdout open ends the call within about a second instead of waiting for
+  the helper to exit, even when that helper keeps logging to the inherited
+  stderr. Whatever the server wrote before dying is still drained and read.
+  The bound holds from a `pcntl_fork()`ed caller as well: a server the owner
+  has not reaped yet is a zombie, which signal 0 reports as alive, so where
+  `/proc` exists the probe reads `/proc/<pid>/stat` and treats a zombie, or a
+  pid whose start time no longer matches the server's (a reused pid), as dead.
+  Without `/proc` (macOS, BSD) a forked caller falls back to signal 0 and to
+  pipe EOF.
 - Every socket wait is bounded by `stream_select` polls; stderr is absorbed on
   both wait sets so a full 64KiB kernel pipe can never deadlock the child.
+
+## Failure reporting
+
+- `McpMessage::toJson()` throws `InvalidArgumentException` for an envelope
+  JSON cannot carry (INF/NAN — a model's `1e999` decodes to `INF` — or
+  invalid UTF-8) instead of emitting a blank line no server would answer.
+  `request()` and `notify()` let it through, with nothing written;
+  `callTool()` turns it into an `{"error": ...}` payload, per the `McpServer`
+  contract.
+- `notify()` returns `bool`: whether the whole line went out.
+- A spawn planner must return its command as a non-empty argv list of
+  strings; a shell string would make the server a grandchild of `/bin/sh`
+  that `stop()` cannot reach, so it is refused up front.
+- `ExchangeLock::store()`/`markPhase()` return `false` when a state write
+  fails (full or read-only temp filesystem); the exchange then fails rather
+  than running without its recovery marker, and a failed store leaves the file
+  empty, which reads as dirty. The lock's factory is `ExchangeLock::new()`
+  (`create()` remains as a deprecated alias).
 
 ## Wire shape
 

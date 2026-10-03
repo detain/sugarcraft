@@ -151,6 +151,12 @@ final class StdioMcpServerSpawnPlannerTest extends TestCase
             'three elements' => static fn (): array => [[PHP_BINARY, self::mirror()], null, 'extra'],
             'scalar command' => static fn (): array => [5, null],
             'scalar env' => static fn (): array => [[PHP_BINARY, self::mirror()], 'nope'],
+            // A shell string makes the server /bin/sh's grandchild, which
+            // stop() signals past — the orphan the class docblock measured.
+            'shell-string command' => static fn (): array => [escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(self::mirror()), null],
+            'empty argv' => static fn (): array => [[], null],
+            'non-string argv part' => static fn (): array => [[PHP_BINARY, 5], null],
+            'keyed argv' => static fn (): array => [['bin' => PHP_BINARY, 'script' => self::mirror()], null],
         ] as $label => $planner) {
             $server = new StdioMcpServer('probe', PHP_BINARY, [self::mirror()], spawnPlanner: $planner);
 

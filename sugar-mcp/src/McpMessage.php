@@ -179,7 +179,16 @@ final class McpMessage
         );
     }
 
-    /** Wire serialization — one line, no trailing newline, keys only when set. */
+    /**
+     * Wire serialization — one line, no trailing newline, keys only when set.
+     *
+     * @throws \InvalidArgumentException when the envelope cannot be encoded
+     *         (INF/NAN — a model's `1e999` decodes to float(INF) — or a
+     *         string that is not valid UTF-8). The alternative, `(string)
+     *         false`, is an EMPTY line: every server ignores it, so the reply
+     *         the caller then waits for never comes — and callTool() waits
+     *         with no deadline, i.e. forever.
+     */
     public function toJson(): string
     {
         $payload = ['jsonrpc' => self::JSONRPC_VERSION];
@@ -213,7 +222,16 @@ final class McpMessage
             $payload['error'] = $this->error;
         }
 
-        return (string) json_encode($payload);
+        try {
+            return json_encode($payload, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $failure) {
+            throw new \InvalidArgumentException(sprintf(
+                'JSON-RPC %s%s cannot be encoded: %s',
+                $this->method !== null ? "\"{$this->method}\"" : ($this->error !== null ? 'error response' : 'response'),
+                $this->id !== null ? " (id {$this->id})" : '',
+                $failure->getMessage(),
+            ), 0, $failure);
+        }
     }
 
     /**
