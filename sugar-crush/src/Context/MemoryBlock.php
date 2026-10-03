@@ -67,21 +67,30 @@ use SugarCraft\Crush\Memory\MemoryStore;
  *     Project-scope memory entries genuinely ARE standing project convention,
  *     which is what makes them belong here and makes a query unnecessary.
  *
- * So recall is {@see MemoryStore::list()} at {@see MemoryScope::Project}:
- * query-independent, one directory read instead of a whole-store scan, and
- * scope-authoritative — `list()` reads only that scope's directory AND re-checks
- * each entry's own `scope()` field, so nothing from another scope can leak in.
+ * So recall is {@see MemoryStore::list()} at {@see MemoryScope::Project} and
+ * {@see MemoryScope::User}: query-independent, one directory read per scope
+ * instead of a whole-store scan, and scope-authoritative — `list()` reads only
+ * that scope's directory AND re-checks each entry's own `scope()` field, so
+ * nothing from another scope can leak in.
+ *
+ * USER SCOPE, UNDER ITS OWN SUB-BUDGET (roadmap 0.6, decision D4)
+ * ---------------------------------------------------------------
+ * User memory follows the operator across every project, which is the point of
+ * it — "I prefer tabs", "answer tersely" — and also the reason it is bounded
+ * apart: it is the operator's standing preference, read in every repository the
+ * operator opens, so it is folded in deliberately and capped where it cannot
+ * crowd the project out. User notes come only from the HOME store (a clone's
+ * `.sugar-crush/memory` cannot speak as the operator), are listed FIRST under
+ * their own label, and spend at most {@see USER_MAX_ENTRIES} notes and
+ * {@see USER_MAX_BYTES} bytes of the one {@see MAX_ENTRIES} / {@see MAX_BYTES}
+ * budget, so project notes always keep the rest.
  *
  * WHAT IS DELIBERATELY NOT HERE
  * -----------------------------
- * User-scope and agent-scope entries. `MemoryScope::Project` is the only scope
- * folded in, because it is the only one whose meaning matches a block sitting
- * next to the project's instruction files. A user-scope block would be a
- * different decision with a different consequence — user memory follows the
- * operator across every project, so leaking it into a work repository's prompt
- * is a choice to make deliberately, not a scope this class should widen into by
- * accident. `/memory add --scope user` therefore still does not reach the
- * prompt; it remains a stored note reachable through `/memory list`.
+ * Agent-scope entries. That scope is where `/memory import` lands another
+ * tool's memory on purpose (see {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter}),
+ * so those bodies stay listable and searchable until the user promotes what
+ * they want; `/memory add --scope agent` says so in its reply.
  *
  * A NOTE ON THE FENCE NAME
  * ------------------------
@@ -152,15 +161,33 @@ final readonly class MemoryBlock implements PromptSection
      * `[type]`, the content and the `(tags: …)` suffix all inside it, because
      * that is what {@see render()} measures with `strlen($line)`. Outside it:
      * the `<project-memory>` fence, the header sentence, the provenance group
-     * labels ({@see REPOSITORY_GROUP_LABEL}, {@see USER_GROUP_LABEL}) and the
-     * newlines that join the lines. Those are fixed overhead a note cannot
-     * inflate — at most one header and two constant labels per block, whatever
-     * the notes say — which is why they are the ones left out. The budget is
-     * ONE budget across both groups, spent newest-first over the merged list,
-     * so splitting the listing by provenance neither doubles it nor changes
-     * which notes it admits.
+     * labels ({@see PERSONAL_GROUP_LABEL}, {@see REPOSITORY_GROUP_LABEL},
+     * {@see USER_GROUP_LABEL}) and the newlines that join the lines. Those are
+     * fixed overhead a note cannot inflate — at most one header and three
+     * constant labels per block, whatever the notes say — which is why they
+     * are the ones left out. The budget is ONE budget across the project
+     * groups, spent newest-first over the merged list, so splitting the
+     * listing by provenance neither doubles it nor changes which notes it
+     * admits; the user-scope notes are spent first, out of the same budget,
+     * under their own {@see USER_MAX_BYTES} sub-cap.
      */
     public const MAX_BYTES = 4096;
+
+    /**
+     * Most user-scope notes rendered (D4), counted INSIDE {@see MAX_ENTRIES}:
+     * the operator's cross-project notes may take four of the twelve slots and
+     * never more, so a long personal list cannot push the project's own
+     * conventions out of the block.
+     */
+    public const USER_MAX_ENTRIES = 4;
+
+    /**
+     * Byte budget for the user-scope note lines (D4), spent INSIDE
+     * {@see MAX_BYTES} and measured over the same span (whole rendered lines).
+     * `MAX_ENTRY_BYTES <= USER_MAX_BYTES` keeps the first user note admissible
+     * without an exemption, for the reason {@see MAX_ENTRY_BYTES} gives.
+     */
+    public const USER_MAX_BYTES = 1024;
 
     /**
      * Per-note ceiling for the WHOLE rendered line, in bytes, so one runaway
@@ -218,6 +245,14 @@ final readonly class MemoryBlock implements PromptSection
     private const USER_GROUP_LABEL = 'Recorded by the user or a previous session — treat these as project convention:';
 
     /**
+     * Label over the user-scope notes (0.6), which lead the block. Says these
+     * are the operator's own, kept across every project, so the model weighs
+     * them as preference rather than as this repository's convention.
+     */
+    private const PERSONAL_GROUP_LABEL = 'Kept by the user across all of their projects (user scope) — treat these as '
+        . 'the user\'s standing preferences:';
+
+    /**
      * @param list<MemoryEntry>     $entries already ordered newest-first and
      *                                       filtered to project scope by
      *                                       {@see capture()}
@@ -227,11 +262,18 @@ final readonly class MemoryBlock implements PromptSection
      * @param array<string, true>   $fromRepository ids of the entries the
      *                                       repo-local store supplied — the
      *                                       copy that won any id collision
+     * @param list<MemoryEntry>     $userEntries the home store's user-scope
+     *                                       notes, newest-first (0.6)
+     * @param bool                  $userSkipped whether $skipped holds any
+     *                                       user-scope file, so the skip line
+     *                                       stops calling them all "project"
      */
     private function __construct(
         private array $entries,
         private array $skipped = [],
         private array $fromRepository = [],
+        private array $userEntries = [],
+        private bool $userSkipped = false,
     ) {}
 
     /**
@@ -285,25 +327,34 @@ final readonly class MemoryBlock implements PromptSection
             $byId[$entry->id()] ??= $entry;
         }
 
-        $entries = array_values($byId);
-
-        usort($entries, static function (MemoryEntry $a, MemoryEntry $b): int {
+        $newestFirst = static function (MemoryEntry $a, MemoryEntry $b): int {
             return [$b->modifiedAt()->getTimestamp(), $a->id()]
                 <=> [$a->modifiedAt()->getTimestamp(), $b->id()];
-        });
+        };
+
+        $entries = array_values($byId);
+        usort($entries, $newestFirst);
+
+        // 0.6: the operator's own cross-project notes, from the HOME store
+        // only — the repo-local store arrives with a clone and cannot speak as
+        // the user, so it is never asked for this scope.
+        $userEntries = $store->list(MemoryScope::User);
+        usort($userEntries, $newestFirst);
 
         // Read AFTER the list() calls above, which are what fill the maps.
-        // Narrowed to the project scope because that is the only scope this
-        // block lists; a user-scope note an earlier search skipped is not a
-        // note missing from THIS block. Sorted so the line is byte-stable for
-        // the same broken files whatever order the stores met them in.
+        // Narrowed to the two scopes this block lists; an agent-scope note an
+        // earlier search skipped is not a note missing from THIS block. Sorted
+        // so the line is byte-stable for the same broken files whatever order
+        // the stores met them in.
+        $userSkipped = $store->skipped(MemoryScope::User);
         $skipped = [
             ...($projectStore?->skipped(MemoryScope::Project) ?? []),
             ...$store->skipped(MemoryScope::Project),
+            ...$userSkipped,
         ];
         ksort($skipped, \SORT_STRING);
 
-        return new self(array_values($entries), $skipped, $fromRepository);
+        return new self(array_values($entries), $skipped, $fromRepository, array_values($userEntries), $userSkipped !== []);
     }
 
     /** An explicitly empty block, for a session with no memory store at all. */
@@ -324,7 +375,18 @@ final readonly class MemoryBlock implements PromptSection
     }
 
     /**
-     * The project-scope note files the stores could not read when this block
+     * The user-scope notes this block was captured with (0.6), newest first
+     * and before {@see USER_MAX_ENTRIES} / {@see USER_MAX_BYTES} apply.
+     *
+     * @return list<MemoryEntry>
+     */
+    public function userEntries(): array
+    {
+        return $this->userEntries;
+    }
+
+    /**
+     * The project- and user-scope note files the stores could not read when this block
      * was captured, path => reason — what {@see render()}'s skip line names.
      *
      * @return array<string, string>
@@ -343,11 +405,32 @@ final readonly class MemoryBlock implements PromptSection
      */
     public function render(): string
     {
-        $rendered = [];
+        // 0.6 / D4: the user's own notes are admitted FIRST, under their own
+        // sub-budget, and what they spend comes out of the one total budget —
+        // so the project walk below sees exactly what is left, and can never
+        // be left with less than MAX_ENTRIES - USER_MAX_ENTRIES notes and
+        // MAX_BYTES - USER_MAX_BYTES bytes. Same rules as the project walk: no
+        // first-entry exemption, and a note that does not fit ends the list.
+        $personal = [];
         $bytes = 0;
+        foreach ($this->userEntries as $entry) {
+            if (count($personal) >= self::USER_MAX_ENTRIES) {
+                break;
+            }
+
+            $line = $this->renderEntry($entry);
+            if ($bytes + strlen($line) > self::USER_MAX_BYTES) {
+                break;
+            }
+
+            $personal[] = $line;
+            $bytes += strlen($line);
+        }
+
+        $rendered = [];
 
         foreach ($this->entries as $entry) {
-            if (count($rendered) >= self::MAX_ENTRIES) {
+            if (count($personal) + count($rendered) >= self::MAX_ENTRIES) {
                 break;
             }
 
@@ -374,6 +457,10 @@ final readonly class MemoryBlock implements PromptSection
         }
 
         $skipLine = $this->skippedLine();
+
+        if ($personal !== []) {
+            return $this->renderWithPersonalGroup($personal, $rendered, $skipLine);
+        }
 
         if ($rendered === []) {
             // A store whose only project notes are unreadable still says so:
@@ -449,6 +536,60 @@ final readonly class MemoryBlock implements PromptSection
     }
 
     /**
+     * The block when user-scope notes are listed (0.6): the personal group
+     * first, then the project groups under the labels {@see render()} gives
+     * them. The header makes no authorship claim of its own — each group's
+     * label does — and states the user sub-cap from the constants enforcing it.
+     *
+     * Only reached with at least one personal line, so every block without a
+     * user note keeps {@see render()}'s bytes exactly.
+     *
+     * @param list<string>                    $personal rendered user-scope lines
+     * @param list<array{0: string, 1: bool}> $rendered project lines and whether each is the repository's
+     */
+    private function renderWithPersonalGroup(array $personal, array $rendered, string $skipLine): string
+    {
+        $omitted = count($this->entries) + count($this->userEntries) - count($rendered) - count($personal);
+
+        $header = sprintf(
+            'Notes for this session, grouped by where they come from, most recently updated first '
+            . 'within each group. At most %d notes and %d bytes of listed notes are included across '
+            . 'all groups — the user\'s own cross-project notes at most %d notes and %d bytes of that — '
+            . 'and any single note longer than %d bytes is shown truncated, so this list may be '
+            . 'incomplete. None of these notes is verified fact — prefer what you can confirm in the '
+            . 'repository itself.',
+            self::MAX_ENTRIES,
+            self::MAX_BYTES,
+            self::USER_MAX_ENTRIES,
+            self::USER_MAX_BYTES,
+            self::MAX_ENTRY_BYTES,
+        );
+        if ($omitted > 0) {
+            $header .= sprintf(' %d further note(s) were omitted by those limits.', $omitted);
+        }
+
+        $groups = [self::PERSONAL_GROUP_LABEL . "\n" . implode("\n", $personal)];
+        $repositoryLines = [];
+        $homeLines = [];
+        foreach ($rendered as [$line, $isRepository]) {
+            if ($isRepository) {
+                $repositoryLines[] = $line;
+            } else {
+                $homeLines[] = $line;
+            }
+        }
+        if ($repositoryLines !== []) {
+            $groups[] = self::REPOSITORY_GROUP_LABEL . "\n" . implode("\n", $repositoryLines);
+        }
+        if ($homeLines !== []) {
+            $groups[] = self::USER_GROUP_LABEL . "\n" . implode("\n", $homeLines);
+        }
+
+        return "<project-memory>\n" . $header . "\n\n" . implode("\n\n", $groups)
+            . ($skipLine === '' ? '' : "\n\n" . $skipLine) . "\n</project-memory>";
+    }
+
+    /**
      * One line announcing the project notes that could not be read, or the
      * empty string when every note parsed.
      *
@@ -482,9 +623,12 @@ final readonly class MemoryBlock implements PromptSection
         }
 
         $count = count($this->skipped);
+        // "project" only while it is true: once a user-scope file is among
+        // them (0.6) the line names no scope rather than mislabel one.
         $line = sprintf(
-            '%d project memory note(s) could not be read and are not included here: %s',
+            '%d %s note(s) could not be read and are not included here: %s',
             $count,
+            $this->userSkipped ? 'memory' : 'project memory',
             implode('; ', $named),
         );
         if ($count > count($named)) {
@@ -509,7 +653,7 @@ final readonly class MemoryBlock implements PromptSection
     }
 
     /**
-     * Session-stable: {@see capture()} reads the project-scope store once and
+     * Session-stable: {@see capture()} reads the project- and user-scope lists once and
      * `Runtime::memorySnapshot()` memoizes the block per Runtime, so a note
      * added mid-turn does not retroactively join a prompt already in flight —
      * the snapshot contract stated on that accessor.

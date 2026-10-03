@@ -362,6 +362,7 @@ sugar-crush/tests/Providers/BedrockPromptCacheTest.php	0.126	30
 sugar-crush/tests/Cli/NonInteractiveStdinPinTest.php	0.125	8
 sugar-crush/tests/MCP/McpNestedArgumentsWireTest.php	0.125	2
 sugar-crush/tests/App/AppBuilderTest.php	0.124	40
+sugar-crush/tests/Context/MemoryBlockUserScopeTest.php	0.124	8
 sugar-crush/tests/Tools/BuiltIn/GlobTest.php	0.123	68
 sugar-crush/tests/Tui/RendererTest.php	0.118	23
 sugar-crush/tests/Backend/UiOnlyWireFilterTest.php	0.117	5
@@ -408,6 +409,7 @@ sugar-crush/tests/Providers/SglangProviderRequestBuildingTest.php	0.072	87
 sugar-crush/tests/Chat/MouseTextSelectionTest.php	0.072	9
 sugar-crush/tests/Commands/CommandFailureTranscriptTest.php	0.070	7
 sugar-crush/tests/Backend/ChildChannelTest.php	0.070	11
+sugar-crush/tests/Chat/MemoryAddDefaultScopeTest.php	0.070	5
 sugar-crush/tests/Hooks/RuntimeHookInputEncodingTest.php	0.069	6
 sugar-crush/tests/Backend/PendingAskTest.php	0.069	13
 sugar-crush/tests/Providers/ProviderFactoryTest.php	0.067	100

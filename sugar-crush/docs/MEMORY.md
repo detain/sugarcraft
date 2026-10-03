@@ -153,8 +153,8 @@ subdirectory.
 ### `/memory`
 
 ```
-/memory list [scope]                      list one scope (default: user)
-/memory add <content> [--scope <scope>]    scope: user | project | agent
+/memory list [scope]                      list one scope (default: project)
+/memory add <content> [--scope <scope>]    scope: project (default) | user | agent
 /memory search <query>                    substring match, across every scope
 /memory delete <id>
 /memory edit <id> <new_content>
@@ -162,7 +162,9 @@ subdirectory.
 /memory import claude|opencode            one-shot import of a foreign tree
 ```
 
-`--scope` may come before or after the content. `add` creates the entry with
+`--scope` may come before or after the content, and `list` and `add` both
+default to `project`. An `add --scope agent` reply says that agent-scope notes
+are listable but never reach the prompt. `add` creates the entry with
 `type: pattern` and no tags; `MemoryEntry` supports `pattern`, `convention`,
 `decision` and `preference`, but the chat command only ever writes the first.
 
@@ -173,16 +175,23 @@ created or is not writable, which is a real reason for `/memory` to report a
 failure and *not* a reason to refuse to launch. A broken optional input costs
 the feature, never the turn.
 
-### The three tiers, and which one reaches the prompt
+### The three tiers, and which ones reach the prompt
 
 The store has three scopes — `user`, `project` and `agent`. (The enum spells the
 third `MemoryScope::Local`; `MemoryStore::normalizeScope()` maps it onto the
-`agent` directory, per the naming note above.) They are three storage tiers but
-only one prompt tier: **`project` is the only scope that reaches the prompt.**
+`agent` directory, per the naming note above.) They are three storage tiers and
+two prompt tiers: **`user` and `project` reach the prompt; `agent` never does.**
 
 `Runtime::buildSystemPrompt()` folds in a `MemoryBlock`
 (`src/Context/MemoryBlock.php`), captured once per `Runtime` — not once per step —
-from `MemoryStore::list(MemoryScope::Project)`. Since E25 piece 2 project notes
+from `MemoryStore::list(MemoryScope::Project)` and `MemoryStore::list(MemoryScope::User)`.
+User notes come from the home store only (a clone's `.sugar-crush/memory` cannot
+speak as the operator) and are listed **first**, under "Kept by the user across
+all of their projects (user scope) — treat these as the user's standing
+preferences", capped at `USER_MAX_ENTRIES` (4) notes and `USER_MAX_BYTES` (1024)
+bytes spent *inside* the block's one budget below — so a long personal list can
+never leave the project fewer than 8 notes and 3072 bytes
+(`MemoryBlockUserScopeTest`). Since E25 piece 2 project notes
 also have a repo-local home: `ProjectMemoryWriter` (`src/Context/ProjectMemoryWriter.php`)
 persists `/memory add --scope project` into `<repo>/.sugar-crush/memory/` when the
 tree can host one — git-visible, reviewable, like `AGENTS.md` — and `capture()`
@@ -206,12 +215,13 @@ command removes. `/memory list` and `/memory search` read both stores and group 
 rows under a banner naming the store each row lives in; bulk clear remains a home-store
 command and REFUSES, touching nothing, while the repo store holds project notes (E694).
 A root that is empty, missing, or whose `.sugar-crush` resolves outside the
-tree degrades the write to the home store (the `/memory add` reply says so) and contributes nothing to the read. **User-scope and agent-scope
+tree degrades the write to the home store (the `/memory add` reply says so) and contributes nothing to the read. **Agent-scope
 entries never reach the prompt**
-(`MemoryPromptWiringTest::testAUserScopeNoteDoesNotReachThePrompt`,
+(`MemoryPromptWiringTest::testAnAgentScopeNoteDoesNotReachThePrompt`,
+`MemoryPromptWiringTest::testAUserScopeNoteReachesThePrompt`,
 `MemoryPromptWiringTest::testTheMemoryDirectoryIsReadOncePerRuntimeNotOncePerStep`).
-`/memory add` defaults to `user`, so an entry you want the model to see needs
-`--scope project` explicitly.
+`/memory add` defaults to `project`, so a note typed without a scope is one the
+model sees from the next turn on.
 
 The block is bounded, because it is part of the system prompt and therefore paid
 for on every step of the agentic loop:

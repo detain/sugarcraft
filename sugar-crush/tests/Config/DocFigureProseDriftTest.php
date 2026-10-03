@@ -4361,39 +4361,55 @@ final class DocFigureProseDriftTest extends TestCase
             preg_match('/`\/memory add` defaults to `(\w+)`/u', $doc, $default),
             'the add-default sentence is gone',
         );
-        $defaultScope = null;
-        foreach ($store->getMethod('add')->getParameters() as $parameter) {
-            if ($parameter->getName() === 'scope') {
-                $defaultScope = $parameter->getDefaultValue();
-            }
-        }
-        self::assertSame($default[1], $defaultScope, '/memory add no longer defaults to the scope the page names');
+        // The CHAT command's default, read off its own body: roadmap 0.6 moved
+        // `/memory add` to `project` while `MemoryStore::add()` (a library
+        // API with other callers) kept its own default.
+        self::assertSame(
+            1,
+            preg_match("/\\\$scope = '(\\w+)';/", $chatAdd, $chatDefault),
+            'memoryAdd() no longer seeds its scope from one literal default',
+        );
+        self::assertSame($default[1], $chatDefault[1], '/memory add no longer defaults to the scope the page names');
 
         self::assertSame(
             1,
-            preg_match('/\*\*`(\w+)` is the only scope that reaches the prompt\.\*\*/u', $doc, $onlyScope),
-            'the bolded one-prompt-tier policy sentence is gone',
+            preg_match('/\*\*`(\w+)` and `(\w+)` reach the prompt; `(\w+)` never does\.\*\*/u', $doc, $tiers),
+            'the bolded two-prompt-tier policy sentence is gone',
         );
-        $foldCase = null;
-        foreach (MemoryScope::cases() as $case) {
-            if ($case->value === $onlyScope[1]) {
-                $foldCase = $case->name;
+        $caseOf = static function (string $value): ?string {
+            foreach (MemoryScope::cases() as $case) {
+                // `agent` is the on-disk spelling of MemoryScope::Local.
+                if ($case->value === $value || ($value === 'agent' && $case === MemoryScope::Local)) {
+                    return $case->name;
+                }
             }
-        }
-        self::assertNotNull($foldCase, sprintf('the only prompt scope the page names (%s) is no longer an enum value', $onlyScope[1]));
+
+            return null;
+        };
+        $foldCases = [$caseOf($tiers[1]), $caseOf($tiers[2])];
+        $neverCase = $caseOf($tiers[3]);
+        self::assertNotContains(null, $foldCases, sprintf('a prompt scope the page names (%s, %s) is no longer an enum value', $tiers[1], $tiers[2]));
+        self::assertNotNull($neverCase, sprintf('the never-prompted scope the page names (%s) is no longer an enum value', $tiers[3]));
         $captureBody = self::bodyExcerpt(self::sourceOf('Context/MemoryBlock.php'), 'capture');
-        self::assertStringContainsString('list(MemoryScope::' . $foldCase . ')', $captureBody, 'capture() no longer reads the scope list the policy sentence names');
-        // E25 piece 2 grew capture() a SECOND read of the same scope (the
+        foreach ($foldCases as $foldCase) {
+            self::assertStringContainsString('list(MemoryScope::' . $foldCase . ')', $captureBody, 'capture() no longer reads a scope list the policy sentence names');
+        }
+        // E25 piece 2 grew capture() a SECOND read of the project scope (the
         // repo-local store alongside the home one), so the census is of
-        // DISTINCT scopes, not of call shapes — "only one prompt tier" stays
-        // the policy the page states, and any foreign scope joining the fold
+        // DISTINCT scopes, not of call shapes — the two prompt tiers stay the
+        // policy the page states, and any foreign scope joining the fold
         // still reddens here.
         preg_match_all('/MemoryScope::(\w+)/', $captureBody, $foldScopes);
+        $distinct = array_values(array_unique($foldScopes[1]));
+        sort($distinct);
+        $expected = $foldCases;
+        sort($expected);
         self::assertSame(
-            [$foldCase],
-            array_values(array_unique($foldScopes[1])),
-            'capture() reads more than one scope — the page\'s "only one prompt tier" is now a fold policy and its prose must say so',
+            $expected,
+            $distinct,
+            'capture() reads a scope set other than the two prompt tiers the page names — the policy prose must say so',
         );
+        self::assertNotContains($neverCase, $distinct, 'the scope the page says never reaches the prompt is folded by capture()');
 
         self::assertSame(
             1,

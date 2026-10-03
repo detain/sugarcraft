@@ -63,11 +63,13 @@ final class MemoryCommandTest extends TestCase
 
     public function testMemoryListShowsMemories(): void
     {
-        // Add some memories
-        $this->memoryStore->add('Test memory content', 'user');
+        // Add some memories — project scope, the bare `/memory list` default
+        // since roadmap 0.6.
+        $this->memoryStore->add('Test memory content', 'project');
 
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: '/memory list',
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,
@@ -85,6 +87,7 @@ final class MemoryCommandTest extends TestCase
     {
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: '/memory list',
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,
@@ -102,6 +105,9 @@ final class MemoryCommandTest extends TestCase
     {
         $chat = new Chat(
             history: [],
+            // A bare add is a PROJECT note since roadmap 0.6, which lands in
+            // the root's repo-local corner — so the root is the sandbox.
+            projectRoot: $this->tempDir,
             inputBuf: '/memory add This is a new memory',
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,
@@ -689,7 +695,7 @@ final class MemoryCommandTest extends TestCase
         $bad = $this->tempDir . '/user/hand-edited.md';
         file_put_contents($bad, "no frontmatter at all\n");
 
-        $answer = $this->lastAnswer('/memory list');
+        $answer = $this->lastAnswer('/memory list user');
         $this->assertStringContainsString('A readable note', $answer);
         $this->assertStringContainsString("\n\n" . UnreadableNotes::SECTION_HEADER . "\n- `{$bad}` — ", $answer);
 
@@ -712,6 +718,7 @@ final class MemoryCommandTest extends TestCase
     {
         $chat = new Chat(
             history: [],
+            projectRoot: $this->tempDir,
             inputBuf: $input,
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,

@@ -104,23 +104,27 @@ final class MemoryBlockTest extends TestCase
     }
 
     /**
-     * The load-bearing negative. Recall is `MemoryStore::list(Project)`, not
+     * The load-bearing negative. Recall is `MemoryStore::list()` per scope, not
      * `search()`, and `list()` reads one scope directory AND re-checks each
-     * entry's own scope field — so neither of the other two scopes can leak in.
-     * A `search()`-based implementation would have folded all three together.
+     * entry's own scope field — so the agent scope cannot leak in. A
+     * `search()`-based implementation would have folded all three together.
+     * The user scope IS folded since 0.6, into its own list
+     * ({@see \SugarCraft\Crush\Tests\Context\MemoryBlockUserScopeTest}).
      */
-    public function testUserAndAgentScopeNotesAreNotRendered(): void
+    public function testAgentScopeNotesAreNotRendered(): void
     {
         $this->store->add('user-scope preference', MemoryScope::User);
         $this->store->add('agent-scope note', MemoryScope::Local);
         $this->store->add('project-scope convention', MemoryScope::Project);
 
-        $rendered = MemoryBlock::capture($this->store)->render();
+        $block = MemoryBlock::capture($this->store);
+        $rendered = $block->render();
 
         $this->assertStringContainsString('project-scope convention', $rendered);
-        $this->assertStringNotContainsString('user-scope preference', $rendered);
+        $this->assertStringContainsString('user-scope preference', $rendered);
         $this->assertStringNotContainsString('agent-scope note', $rendered);
-        $this->assertCount(1, MemoryBlock::capture($this->store)->entries());
+        $this->assertCount(1, $block->entries(), 'entries() stays the project list');
+        $this->assertCount(1, $block->userEntries());
     }
 
     /**
@@ -896,9 +900,11 @@ final class MemoryBlockTest extends TestCase
 
     public function testASkipInAnotherScopeIsNotAnnouncedInTheProjectBlock(): void
     {
+        // The agent scope: since 0.6 the user scope is listed, so its skips are
+        // announced (MemoryBlockUserScopeTest); agent-scope notes never are.
         $this->store->add('Project note.', MemoryScope::Project);
-        $this->plantBrokenNote('user', 'mine.md');
-        $this->store->list('user');
+        $this->plantBrokenNote('agent', 'mine.md');
+        $this->store->list('agent');
 
         $block = MemoryBlock::capture($this->store);
 

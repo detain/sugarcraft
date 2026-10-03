@@ -24,12 +24,13 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
  * test is the command's two guards — target parsing plus project root, and
  * the `.imported-{target}` sentinel — the refusal surfacing, and one measured
  * scope fact: imports land in the `agent` scope and can NEVER crowd the
- * prompt block, because `MemoryBlock::capture()` folds only the project scope.
+ * prompt block, because `MemoryBlock::capture()` folds only the project and
+ * user scopes.
  *
  * MEASURED and pinned here, not assumed: `importClaudeCode()`/`importOpencode()`
  * write `MemoryScope::Local`, which `MemoryStore::normalizeScope()` persists
  * under the string `'agent'`; `MemoryBlock::capture()` on the other hand lists
- * `MemoryScope::Project` (the `capture()` body), which is why the
+ * `MemoryScope::Project` and `MemoryScope::User` (the `capture()` body), which is why the
  * command applies no entry cap and why its response makes no cap claim. The
  * P7.S6 fix-forward measured the original headroom clamp to be counting agent
  * entries against a project-scope prompt bound they cannot reach, and the
@@ -178,7 +179,7 @@ final class MemoryImportCommandTest extends TestCase
         // N > 12 in the scope the importer writes. The plan's original
         // over-cap constraint assumed imports could crowd the 12-entry
         // prompt block; measured on this tree they cannot — capture() folds
-        // PROJECT scope only (`MemoryBlock::capture()`) — so no clamp is applied,
+        // PROJECT and USER scope only (`MemoryBlock::capture()`) — so no clamp is applied,
         // every readable file lands, and the response must not claim a cap
         // bound it.
         $this->seedAgentEntries(10);

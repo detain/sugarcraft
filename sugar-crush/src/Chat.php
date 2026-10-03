@@ -15159,8 +15159,8 @@ final class Chat implements Model
         }
         $lines[] = '**Available /memory commands:**';
         $lines[] = '';
-        $lines[] = '`/memory list [scope]` — List all memories for a scope (default: user)';
-        $lines[] = '`/memory add <content>` — Add a new memory entry';
+        $lines[] = '`/memory list [scope]` — List all memories for a scope (default: project)';
+        $lines[] = '`/memory add <content> [--scope <scope>]` — Add a new memory entry (default: project)';
         $lines[] = '`/memory search <query>` — Search memories by content';
         $lines[] = '`/memory delete <id>` — Delete a memory by ID';
         $lines[] = '`/memory edit <id> <new_content>` — Edit an existing memory';
@@ -15168,7 +15168,9 @@ final class Chat implements Model
         $lines[] = '`/memory import claude|opencode` — Import foreign memory files (one-shot per tool)';
         $lines[] = '`/memory` — Show this help text';
         $lines[] = '';
-        $lines[] = 'Scopes: `user` (default), `project`, `agent`';
+        $lines[] = 'Scopes: `project` (default), `user`, `agent`. Project and user notes reach the prompt '
+            . '(user notes first, at most ' . \SugarCraft\Crush\Context\MemoryBlock::USER_MAX_ENTRIES . '); '
+            . 'agent-scope notes are listable but never reach the prompt.';
 
         return $this->memoryResponse($inputText, implode("\n", $lines));
     }
@@ -15184,8 +15186,12 @@ final class Chat implements Model
             return $this->memoryHelpResponse($inputText, 'Usage: /memory add <content> [--scope <scope>]');
         }
 
-        // Parse --scope flag if present (can be before or after content)
-        $scope = 'user';
+        // Parse --scope flag if present (can be before or after content).
+        // Defaults to `project` (roadmap 0.6): a note typed without a scope
+        // is almost always about the repository in front of the user, and
+        // the old `user` default sent it to the one scope the prompt did not
+        // read at the time.
+        $scope = 'project';
         $content = $args;
 
         if (preg_match('/^--scope\s+(user|project|agent)\s+(.*)$/s', $args, $m)) {
@@ -15220,6 +15226,11 @@ final class Chat implements Model
                     . 'could not be created or written, or it resolves outside the repository, so the note '
                     . 'is kept on this machine only and is not part of the checkout.';
             }
+            // 0.6: say so when a note lands where the model will never read it.
+            if ($scope === 'agent') {
+                $response .= "\n\nAgent-scope notes are listable but never reach the prompt; "
+                    . 'use `--scope project` or `--scope user` for a note the model should see.';
+            }
         } catch (\Throwable $e) {
             $response = "**Error:** {$e->getMessage()}";
         }
@@ -15241,10 +15252,10 @@ final class Chat implements Model
      *
      * There is deliberately NO entry cap here. Imports land in the `agent`
      * scope (`MemoryScope::Local`, which the store persists under the string
-     * 'agent'), and `MemoryBlock` folds ONLY the project scope into the
-     * prompt — its own docblock lists user/agent scope under "WHAT IS
-     * DELIBERATELY NOT HERE" (src/Context/MemoryBlock.php:73-80) and
-     * `capture()` reads exactly `list(MemoryScope::Project)` (the `capture()` body). No
+     * 'agent'), and `MemoryBlock` folds only the project and user scopes into
+     * the prompt — its own docblock lists the agent scope under "WHAT IS
+     * DELIBERATELY NOT HERE" and `capture()` reads exactly
+     * `list(MemoryScope::Project)` and `list(MemoryScope::User)`. No
      * number of imported entries can therefore crowd the 12-entry prompt
      * block, and agent scope is the point, not an oversight: the provenance-
      * badge attack story in {@see ForeignMemoryImporter}'s class docblock
@@ -15435,7 +15446,9 @@ final class Chat implements Model
      */
     private function memoryList(string $inputText, string $args): array
     {
-        $scope = 'user';
+        // `project`, the same default `/memory add` takes (0.6), so a bare
+        // `/memory add` followed by a bare `/memory list` shows the note.
+        $scope = 'project';
         if ($args !== '') {
             $trimmed = trim($args);
             // Handle --scope <scope> syntax

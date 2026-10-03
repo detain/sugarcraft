@@ -154,11 +154,11 @@ final class MemoryPromptWiringTest extends TestCase
         $this->assertStringNotContainsString('<project-memory>', $prompt);
     }
 
-    public function testAUserScopeNoteDoesNotReachThePrompt(): void
+    public function testAUserScopeNoteReachesThePrompt(): void
     {
-        // The deliberate boundary, asserted rather than only documented: user
-        // memory follows the operator across every project, so leaking it into a
-        // work repository's prompt has to be a separate decision.
+        // Roadmap 0.6 / D4 made this a decision rather than a leak: user memory
+        // follows the operator across every project, so it rides in under its
+        // own label and sub-budget (MemoryBlockUserScopeTest pins the caps).
         $fixture = new PromptFixture();
         $this->fixtures[] = $fixture;
         $fixture->memoryStore()->add('my personal preference', MemoryScope::User);
@@ -169,7 +169,25 @@ final class MemoryPromptWiringTest extends TestCase
             $provider,
         );
 
-        $this->assertStringNotContainsString('my personal preference', $prompt);
+        $this->assertStringContainsString('<project-memory>', $prompt);
+        $this->assertStringContainsString('my personal preference', $prompt);
+    }
+
+    public function testAnAgentScopeNoteDoesNotReachThePrompt(): void
+    {
+        // The boundary that remains: the agent scope is where `/memory import`
+        // lands another tool's notes, listable until the user promotes them.
+        $fixture = new PromptFixture();
+        $this->fixtures[] = $fixture;
+        $fixture->memoryStore()->add('an imported scratch note', MemoryScope::Local);
+
+        $provider = new PromptCapturingProvider();
+        $prompt = $this->promptFor(
+            $fixture->app()->withMessages([new UserMessage('hi')]),
+            $provider,
+        );
+
+        $this->assertStringNotContainsString('an imported scratch note', $prompt);
         $this->assertStringNotContainsString('<project-memory>', $prompt);
     }
 

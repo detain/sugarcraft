@@ -43,8 +43,9 @@ volatile `<env>` block last. Counted from the live method, there are eleven slot
 7. **Project-tier rules** — the same `project-instructions` fence and preamble as the documents,
    because the authorship claim is identical: bytes shipped inside the checkout. A
    `paths:`-scoped project rule is skipped here the same way.
-8. **Memory** (`MemoryBlock`) — fenced `project-memory`; the scope-selected standing notes,
-   memoized per session like the repo map.
+8. **Memory** (`MemoryBlock`) — fenced `project-memory`; the user's own cross-project notes
+   first (at most 4 notes / 1 KB), then the project's standing notes, memoized per session like
+   the repo map. Agent-scope notes never reach it.
 9. **Enabled skill bodies** — every skill in `$app->enabledSkills` contributes its full
    `Skill::systemPromptContribution()` as a PerTurn section, name and body through
    `PromptFence::escape()`. Held to `CompactorConfig`'s `skillBudgetPerSkill` and

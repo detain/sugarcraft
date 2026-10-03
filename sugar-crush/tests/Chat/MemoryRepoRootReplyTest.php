@@ -104,7 +104,7 @@ final class MemoryRepoRootReplyTest extends TestCase
 
     public function testAUserNoteNeverMentionsTheFallback(): void
     {
-        $reply = $this->reply('/memory add remember this', $this->tmp . '/gone');
+        $reply = $this->reply('/memory add --scope user remember this', $this->tmp . '/gone');
 
         self::assertStringNotContainsString('home store', $reply, 'user scope always lives in the home store; there is nothing to fall back from');
     }
