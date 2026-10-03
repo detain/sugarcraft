@@ -14,7 +14,8 @@ Line anchors drift: **re-locate by method/symbol and verify the step is still op
 
 ## Where you work
 - Worktree: `/home/sites/sugarcraft-wt/<wave>-<group>` on branch `fix/<wave>-<group>` (already created from `origin/master`, vendor trees copied, linked mode). Work ONLY there; anchor every command with absolute paths or `cd <worktree>/sugar-crush && …` (Bash CWD does not persist).
-- Scratch: `/home/sites/sugarcraft-wt/.scratch/<wave>-<group>` — `export TMPDIR=` it in every test command.
+- Scratch (notes, logs, HANDOFF.md): `/home/sites/sugarcraft-wt/.scratch/<wave>-<group>`.
+- TMPDIR: use the SHORT dir `/tmp/cr-<wave><group>` (e.g. `/tmp/cr-w2a`; `mkdir -p` it) in every test command — long TMPDIR paths overflow the 108-byte unix-socket path limit and make ~10 /bg, IPC, launch-notice and HOME tests go falsely red.
 - Never touch `/home/sites/sugarcraft` (the main checkout) except to read the briefs/plan.
 
 ## Hard rules
@@ -41,7 +42,7 @@ Line anchors drift: **re-locate by method/symbol and verify the step is still op
 
 ## Testing discipline
 - Targeted only: your new/changed test files + the drift/census/golden tests your steps force (impact rows), by path or `--filter`. **No full suite.**
-- Run independent files concurrently but capped: `printf '%s\n' <files> | xargs -P8 -I{} sh -c 'TMPDIR=<scratch> vendor/bin/phpunit {} >"<scratch>/$(basename {}).log" 2>&1 || echo FAIL {}'` (from `<wt>/sugar-crush`).
+- Run independent files concurrently but capped: `printf '%s\n' <files> | xargs -P8 -I{} sh -c 'TMPDIR=/tmp/cr-<wave><group> vendor/bin/phpunit {} >"<scratch>/$(basename {}).log" 2>&1 || echo FAIL {}'` (from `<wt>/sugar-crush`).
 - Always also run `tests/Config` and `tests/Commands` doc gates relevant to what you touched (e.g. `--filter 'ReadmeRosterDriftTest|EnvRosterDriftTest|KeyBindingDriftTest|DocFigureProseDriftTest|SymbolCitationDriftTest'`), `php tools/check-one-type-per-file.php`, and `php tools/check-child-lifetimes.php` from the worktree root.
 - Cross-lib edits: run that lib's targeted tests too.
 - A red you did not cause: confirm it by running the same test in the pristine main checkout (`cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit <file>` — read-only use) and report it; don't "fix" unrelated tests.
