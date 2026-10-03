@@ -248,20 +248,21 @@ final class ContextCompactorTest extends TestCase
         // against the RAW pre-summarization pairs. Under the original bug, stage 2
         // ran first and (a) collapsed the file content into "[exchanged information]"
         // before stage 4 ever saw it (so the "[file:" marker never appeared), and
-        // (b) folded the raw "cd ..." command into the summary text as
-        // "cd /var/www/project → Now working..." where stage 5's start-of-line nav
-        // pattern no longer matched (so the raw command survived verbatim).
+        // (b) folded the navigation call into the summary text, so stage 5 never
+        // dropped it. Since audit 0.7 both stages key on the tool row (the `tool`
+        // key Chat::compactionWire() stamps), and a user row is never dropped.
         $compactor = new ContextCompactor($this->cfg(recentPreserveCount: 2));
 
-        $fileContent = "config.php\n<?php\n\ndeclare(strict_types=1);\n\nnamespace App;\n\nclass Config\n{\n    public string \$host = 'localhost';\n}\n";
+        $fileContent = "<?php\n\ndeclare(strict_types=1);\n\nnamespace App;\n\nclass Config\n{\n    public string \$host = 'localhost';\n}\n";
 
         $messages = [
             // Old nav exchange — beyond the preserve window.
-            $this->msg('user', 'cd /var/www/project'),
+            $this->msg('user', 'cd into the project'),
+            $this->toolRow('Bash', ['command' => 'cd /var/www/project'], 'NAV-OUTPUT-MARKER'),
             $this->msg('assistant', 'Now working in /var/www/project'),
             // Old file-read exchange — beyond the preserve window.
             $this->msg('user', 'Read the config file'),
-            $this->msg('assistant', $fileContent),
+            $this->toolRow('Read', ['file_path' => 'config.php'], $fileContent),
             // Recent exchanges — within the preserve window (recentPreserveCount = 2).
             $this->msg('user', 'third question'),
             $this->msg('assistant', 'third answer'),
@@ -273,12 +274,14 @@ final class ContextCompactorTest extends TestCase
         $allContent = implode(' ', array_column($result, 'content'));
 
         // Stage 4 must have converted the raw file content into a metadata marker.
-        $this->assertStringContainsString('[file:', $allContent);
+        $this->assertStringContainsString('[file: config.php', $allContent);
         $this->assertStringNotContainsString($fileContent, $allContent);
 
-        // Stage 5 must have stripped the raw nav command while keeping its outcome.
-        $this->assertStringNotContainsString('cd /var/www/project', $allContent);
+        // Stage 5 must have dropped the navigation call while keeping its outcome
+        // and the user's own words.
+        $this->assertStringNotContainsString('NAV-OUTPUT-MARKER', $allContent);
         $this->assertStringContainsString('Now working in /var/www/project', $allContent);
+        $this->assertStringContainsString('cd into the project', $allContent);
 
         // Recent pairs remain preserved verbatim.
         $this->assertStringContainsString('third question', $allContent);
@@ -411,7 +414,7 @@ final class ContextCompactorTest extends TestCase
         $compactor = new ContextCompactor($this->cfg());
         $phpContent = "<?php\n\ndeclare(strict_types=1);\n\nnamespace Test;\n\nclass Foo {}\n";
         $messages = [
-            $this->msg('assistant', $phpContent),
+            $this->toolRow('Read', ['file_path' => 'src/Foo.php'], $phpContent),
         ];
         $result = $compactor->compactFileReferences($messages);
         $this->assertCount(1, $result);
@@ -424,7 +427,7 @@ final class ContextCompactorTest extends TestCase
         $compactor = new ContextCompactor($this->cfg());
         $content = "src/Context/Compactor.php\n<?php\ndeclare(strict_types=1);\nclass Foo {}\n";
         $messages = [
-            $this->msg('assistant', $content),
+            $this->toolRow('Read', ['file_path' => 'src/Context/Compactor.php'], $content),
         ];
         $result = $compactor->compactFileReferences($messages);
         $this->assertCount(1, $result);
@@ -456,7 +459,7 @@ final class ContextCompactorTest extends TestCase
     {
         $compactor = new ContextCompactor($this->cfg());
         $messages = [
-            $this->msg('assistant', 'cd /home/sites/sugarcraft'),
+            $this->toolRow('Bash', ['command' => 'cd /home/sites/sugarcraft'], ''),
             $this->msg('assistant', 'Working in the right directory now'),
         ];
         $result = $compactor->removeNavigationSteps($messages);
@@ -468,42 +471,58 @@ final class ContextCompactorTest extends TestCase
     {
         $compactor = new ContextCompactor($this->cfg());
         $messages = [
-            $this->msg('assistant', 'ls -la'),
+            $this->toolRow('Bash', ['command' => 'ls -la'], "README.md\nsrc"),
             $this->msg('assistant', 'Here are the files...'),
         ];
         $result = $compactor->removeNavigationSteps($messages);
         $this->assertCount(1, $result);
-        $this->assertStringNotContainsString('ls', $result[0]['content']);
+        $this->assertSame('Here are the files...', $result[0]['content']);
     }
 
     public function testRemoveNavigationStepsRemovesPwdCommand(): void
     {
         $compactor = new ContextCompactor($this->cfg());
         $messages = [
-            $this->msg('assistant', 'pwd'),
-            $this->msg('assistant', '/home/sites/sugarcraft'),
+            $this->toolRow('Bash', ['command' => 'pwd'], '/home/sites/sugarcraft'),
+            $this->msg('assistant', 'You are in the repo root.'),
         ];
         $result = $compactor->removeNavigationSteps($messages);
         $this->assertCount(1, $result);
-        $this->assertSame('/home/sites/sugarcraft', $result[0]['content']);
+        $this->assertSame('You are in the repo root.', $result[0]['content']);
     }
 
     public function testRemoveNavigationStepsPreservesNonNavMessages(): void
     {
         $compactor = new ContextCompactor($this->cfg());
         $messages = [
-            $this->msg('assistant', 'cd /tmp'),
+            $this->toolRow('Bash', ['command' => 'cd /tmp'], ''),
             $this->msg('user', 'Tell me about files'),
             $this->msg('assistant', 'I can help you with that'),
-            $this->msg('assistant', 'mkdir newproject'),
+            $this->toolRow('Bash', ['command' => 'mkdir newproject'], ''),
             $this->msg('assistant', 'Created the directory'),
         ];
         $result = $compactor->removeNavigationSteps($messages);
-        // cd and mkdir removed, but user message and assistant responses preserved
-        $this->assertCount(3, $result);
+        // Only the cd row goes: mkdir changes the tree, so its record stays.
+        $this->assertCount(4, $result);
         $this->assertSame('Tell me about files', $result[0]['content']);
         $this->assertSame('I can help you with that', $result[1]['content']);
-        $this->assertSame('Created the directory', $result[2]['content']);
+        $this->assertSame('mkdir newproject', $result[2]['tool']['arguments']['command']);
+        $this->assertSame('Created the directory', $result[3]['content']);
+    }
+
+    /**
+     * A wire row as {@see Chat::compactionWire()} stamps a tool result.
+     *
+     * @param array<string, mixed> $arguments
+     * @return array{role:string,content:string,tool:array{name:string,arguments:array<string,mixed>,error:bool}}
+     */
+    private function toolRow(string $name, array $arguments, string $content, bool $error = false): array
+    {
+        return [
+            'role' => 'assistant',
+            'content' => $content,
+            'tool' => ['name' => $name, 'arguments' => $arguments, 'error' => $error],
+        ];
     }
 
     // ─── shouldCompactForeground() ───────────────────────────────

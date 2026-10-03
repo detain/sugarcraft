@@ -555,16 +555,18 @@ final class ContextCompactor
      * Compact a message array through stages 1-5.
      *
      * Stage 1: Preserve the most recent N full user/assistant PAIRS (recentPreserveCount).
-     * Stage 4: Replace file contents with metadata summaries.
-     * Stage 5: Remove navigation steps while preserving final destination.
+     * Stage 4: Replace a successful `Read` tool row with a metadata line.
+     * Stage 5: Drop a `Bash` tool row whose whole command is a lone `cd`/`ls`/`pwd`.
      * Stage 2: Condense older exchanges into single-line summaries capturing
      *          "what happened and any key decisions made."
      * Stage 3: Group consecutive identical exchanges (e.g., repeated grep searches).
      *
      * Stages 4 and 5 run against the RAW pre-summarization content, before
      * stage 2's summarization has a chance to truncate/collapse it away —
-     * summarizing first would destroy the very file-content and nav-command
-     * patterns stages 4/5 look for, so they must see the originals.
+     * summarizing first would collapse the very tool rows stages 4/5 key on,
+     * so they must see the originals. A tool row is recognised by its `tool`
+     * key (`{name, arguments, error}`, stamped by
+     * {@see \SugarCraft\Crush\Chat::compactionWire()}), never by its text.
      *
      * @param array<array{role:string,content:string}> $messages Wire-format messages.
      * @return array<array{role:string,content:string}> Compacted messages.
@@ -645,8 +647,8 @@ final class ContextCompactor
         $preservePairs = array_slice($pairs, -$preserveCount);
         $toSummarizePairs = array_slice($pairs, 0, count($pairs) - $preserveCount);
 
-        // Stages 4 & 5 need the raw (un-summarized) message content to detect
-        // file reads and navigation commands, so flatten first and run them
+        // Stages 4 & 5 need the raw (un-summarized) tool rows to detect file
+        // reads and navigation commands, so flatten first and run them
         // ahead of stage 2's summarization.
         $rawToSummarize = $this->flattenPairs($toSummarizePairs);
 
@@ -802,7 +804,10 @@ final class ContextCompactor
         $messages = [];
         foreach ($pairs as $pair) {
             if (isset($pair['standalone']) && $pair['standalone'] === true) {
-                $messages[] = ['role' => $pair['role'] ?? 'assistant', 'content' => $pair['assistant'] ?? ''];
+                $messages[] = self::withToolMeta(
+                    ['role' => $pair['role'] ?? 'assistant', 'content' => $pair['assistant'] ?? ''],
+                    $pair['tool'] ?? null,
+                );
                 continue;
             }
 
@@ -811,11 +816,34 @@ final class ContextCompactor
                 $messages[] = $rider;
             }
             if ($pair['assistant'] !== null) {
-                $messages[] = ['role' => 'assistant', 'content' => $pair['assistant']];
+                $messages[] = self::withToolMeta(
+                    ['role' => 'assistant', 'content' => $pair['assistant']],
+                    $pair['assistantTool'] ?? null,
+                );
             }
         }
 
         return $messages;
+    }
+
+    /**
+     * $row with its `tool` key put back when the row came from a tool result.
+     *
+     * Pairing keeps only role and content, so without this a tool row would lose
+     * the one structural fact stages 4 and 5 key on ({@see isFileReadMessage()},
+     * {@see isNavigationRow()}) between {@see groupIntoPairs()} and the stages.
+     *
+     * @param array{role:string,content:string} $row
+     * @param array{name:string,arguments:array<string,mixed>,error?:bool}|null $tool
+     * @return array{role:string,content:string,tool?:array{name:string,arguments:array<string,mixed>,error?:bool}}
+     */
+    private static function withToolMeta(array $row, ?array $tool): array
+    {
+        if ($tool !== null) {
+            $row['tool'] = $tool;
+        }
+
+        return $row;
     }
 
     /**
@@ -898,6 +926,9 @@ final class ContextCompactor
         foreach ($messages as $msg) {
             $role = is_array($msg) ? ($msg['role'] ?? '') : '';
             $content = is_array($msg) ? ($msg['content'] ?? '') : (string) $msg;
+            // Carried, not consumed: a tool row's structural identity has to
+            // survive the pairing so stages 4 and 5 can key on it (audit 0.7).
+            $tool = is_array($msg) && is_array($msg['tool'] ?? null) ? $msg['tool'] : null;
 
             if ($role === 'user') {
                 // Save previous pair if exists
@@ -907,10 +938,13 @@ final class ContextCompactor
                 $currentPair = ['user' => $content, 'assistant' => null];
             } elseif ($role === 'assistant' && $currentPair !== null && $currentPair['assistant'] === null) {
                 $currentPair['assistant'] = $content;
+                if ($tool !== null) {
+                    $currentPair['assistantTool'] = $tool;
+                }
             } elseif ($currentPair !== null && $currentPair['assistant'] === null) {
                 // Directly after an unanswered user turn: see this method's
                 // docblock for why this rides on the pair instead of closing it.
-                $currentPair['interleaved'][] = ['role' => $role, 'content' => $content];
+                $currentPair['interleaved'][] = self::withToolMeta(['role' => $role, 'content' => $content], $tool);
             } else {
                 // Other roles, or an assistant turn with no user turn to pair
                 // with - its own standalone entry.
@@ -918,7 +952,11 @@ final class ContextCompactor
                     $pairs[] = $currentPair;
                     $currentPair = null;
                 }
-                $pairs[] = ['user' => '', 'assistant' => $content, 'standalone' => true, 'role' => $role];
+                $standalone = ['user' => '', 'assistant' => $content, 'standalone' => true, 'role' => $role];
+                if ($tool !== null) {
+                    $standalone['tool'] = $tool;
+                }
+                $pairs[] = $standalone;
             }
         }
 
@@ -995,26 +1033,35 @@ final class ContextCompactor
     }
 
     /**
-     * Stage 4: Replace file read message content with metadata summary.
+     * Stage 4: Replace the output of a successful `Read` call with a metadata
+     * line like "[file: path/to/file.php, N lines]".
      *
-     * Detects "file read" type messages by looking for common file extension
-     * patterns in message content, then replaces the full content with a
-     * metadata summary like "[file: path/to/file.php, N lines]".
+     * KEYED ON THE TOOL ROW, NOT ON THE TEXT (audit 0.7). A row qualifies only when
+     * it carries the `tool` key {@see \SugarCraft\Crush\Chat::compactionWire()}
+     * stamps from the row's {@see \SugarCraft\Crush\ToolResult}, names `Read`, and
+     * did not fail. The content regex this replaces guessed from the bytes — an
+     * opening `<?php`, a leading path, two-space-indented lines ending in `;` —
+     * so a user prompt quoting a snippet, or an assistant reply showing code, was
+     * rewritten into a `[file: …]` line and its text was lost to the summariser,
+     * while a Read of a file with none of those shapes slipped through whole.
+     * The path comes from the call's own `file_path` argument for the same reason.
      *
-     * @param array<array{role:string,content:string}> $messages
-     * @return array<array{role:string,content:string}>
+     * The rewritten row keeps only role and content: by the time it is a metadata
+     * line it is no longer a tool output any later stage needs to recognise.
+     *
+     * @param array<array{role:string,content:string,tool?:array<string,mixed>}> $messages
+     * @return array<array{role:string,content:string,tool?:array<string,mixed>}>
      */
     public function compactFileReferences(array $messages): array
     {
         return array_map(function (array $msg): array {
-            $content = $msg['content'] ?? '';
-
-            if (!$this->isFileReadMessage($content)) {
+            if (!$this->isFileReadMessage($msg)) {
                 return $msg;
             }
 
+            $content = (string) ($msg['content'] ?? '');
             $lines = substr_count($content, "\n") + 1;
-            $metadata = $this->extractFileMetadata($content);
+            $metadata = $this->extractFileMetadata($msg);
 
             return [
                 'role' => $msg['role'] ?? 'assistant',
@@ -1024,59 +1071,41 @@ final class ContextCompactor
     }
 
     /**
-     * Detect if message content represents a file read operation.
+     * Whether $msg is the output of a successful `Read` call — read off the row's
+     * `tool` key, never guessed from its content. A user row is never one, whatever
+     * it carries.
+     *
+     * @param array<string,mixed> $msg
      */
-    private function isFileReadMessage(string $content): bool
+    private function isFileReadMessage(array $msg): bool
     {
-        // Match common file extension patterns that indicate file content
-        // e.g., "<?php\n...class Foo..." or "<?php\ndeclare(strict_types=1);..."
-        $phpPattern = '/<\?php\s*\n/s';
-        if (preg_match($phpPattern, $content)) {
-            return true;
-        }
+        $tool = $msg['tool'] ?? null;
 
-        // Match patterns like "path/to/file.php" or "file.php" appearing as a header
-        // followed by substantial content (file content display)
-        if (preg_match('/^[\w\-\.\/]+\.(php|ts|js|tsx|jsx|json|html|txt|md|css|yaml|yml)\s*\n/s', $content)) {
-            return true;
-        }
-
-        // Match content that starts with common file path patterns
-        if (preg_match('/^\/[\w\-\.\/]+\.(php|ts|js|tsx|jsx|json|html|txt|md|css|yaml|yml)/m', $content)) {
-            return true;
-        }
-
-        // Match content with multiple lines containing typical code patterns
-        // (indentation, brackets, semicolons)
-        if (preg_match('/^\s{2,}[\$\w]\S*\s*[;\{\}]/m', $content) && substr_count($content, "\n") > 3) {
-            return true;
-        }
-
-        return false;
+        return ($msg['role'] ?? '') === 'assistant'
+            && is_array($tool)
+            && ($tool['name'] ?? null) === 'Read'
+            && ($tool['error'] ?? false) !== true;
     }
 
     /**
-     * Extract file path metadata from file read content.
+     * The path a `Read` row read, from the call's `file_path` argument. `file`
+     * when the call carried none a string could name (a resumed row from before
+     * arguments were recorded).
+     *
+     * @param array<string,mixed> $msg
      */
-    private function extractFileMetadata(string $content): string
+    private function extractFileMetadata(array $msg): string
     {
-        // Try to extract file path from the first line
-        if (preg_match('/^([\w\-\.\/]+\.(php|ts|js|tsx|jsx|json|html|txt|md|css|yaml|yml))/', $content, $matches)) {
-            return $matches[1];
-        }
-
-        // Try to find a path-like pattern anywhere in content
-        if (preg_match('/([\w\-\.\/]+\.(php|ts|js|tsx|jsx|json|html|txt|md|css|yaml|yml))/', $content, $matches)) {
-            return $matches[1];
-        }
-
-        // Fallback: return a generic indicator based on content characteristics
-        $firstLine = explode("\n", $content)[0] ?? 'unknown';
-        if (mb_strlen($firstLine) > 50) {
+        $path = $msg['tool']['arguments']['file_path'] ?? null;
+        if (!is_string($path) || trim($path) === '') {
             return 'file';
         }
 
-        return $firstLine;
+        // One line, bounded: the path is model-supplied and lands in a row the
+        // summariser is shown.
+        $path = trim(str_replace(["\r", "\n"], ' ', $path));
+
+        return mb_strlen($path) > 200 ? mb_substr($path, 0, 200) . '…' : $path;
     }
 
     /**
@@ -1101,78 +1130,70 @@ final class ContextCompactor
     }
 
     /**
-     * Navigation command patterns matched by removeNavigationSteps().
+     * A shell command that only looks around: the WHOLE command is one `cd`, `ls`
+     * or `pwd`, with plain words for arguments and nothing a shell would treat as
+     * a second command, a redirect or an expansion. Anchored at both ends, so
+     * `cd src && rm -rf build` or `ls; make` is not navigation.
      *
-     * @var array<string>
+     * `mkdir`, `rm`, `mv` and `cp` are NOT here, though the patterns this replaces
+     * listed them: they change the tree, and a record of a change is exactly what a
+     * summary has to keep.
      */
-    private const NAV_PATTERNS = [
-        '/^cd\s+/m',
-        '/^ls\s*/m',
-        '/^pwd$/m',
-        '/^mkdir\s+/m',
-        '/^rm\s+/m',
-        '/^mv\s+/m',
-        '/^cp\s+/m',
-    ];
+    private const NAV_COMMAND_PATTERN = '/\A(?:cd(?:[ \t]+' . self::NAV_WORD . ')?|pwd|ls(?:[ \t]+' . self::NAV_WORD . ')*)\z/';
 
     /**
-     * Stage 5: Remove navigation steps while preserving final destination or result.
+     * One plain shell word: no whitespace (so no second line), no quoting or
+     * escaping, and no operator, redirect, expansion, glob or grouping character.
+     * The separator between words is a space or tab, never a newline.
+     */
+    private const NAV_WORD = '[^\s;&|<>`$(){}\\\\\'"*?\[\]~!#]+';
+
+    /**
+     * Stage 5: Remove navigation steps — the output of a `Bash` call whose whole
+     * command was a lone `cd`, `ls` or `pwd` ({@see NAV_COMMAND_PATTERN}).
      *
-     * Removes messages whose content indicates navigation commands (e.g., "cd /path/to/dir",
-     * "ls", "pwd") while preserving the final destination or result that follows.
+     * KEYED ON THE TOOL ROW (audit 0.7). The unanchored multi-line patterns this
+     * replaces matched any LINE starting `cd `, `ls`, `rm ` and the like in any
+     * row's content — so a user prompt such as "ls the files\ncd later" was
+     * deleted from the history outright, as was any assistant reply that showed a
+     * command on a line of its own; and the row after a "navigation" one was kept
+     * on the theory that it was that command's result, which is no longer how a
+     * tool call is recorded. A tool row now IS the call and its output together,
+     * so a navigation step is one row and dropping it touches nothing around it.
      *
-     * When a nav-pattern message is removed, the immediate following assistant message
-     * (the result/destination output) is preserved — unless that result message also
-     * represents independent content worth keeping on its own.
+     * A `user` row is never dropped, and neither is a navigation call that failed
+     * (`cd` into a directory that does not exist is a fact worth summarising).
      *
-     * @param array<array{role:string,content:string}> $messages
-     * @return array<array{role:string,content:string}>
+     * @param array<array{role:string,content:string,tool?:array<string,mixed>}> $messages
+     * @return array<array{role:string,content:string,tool?:array<string,mixed>}>
      */
     public function removeNavigationSteps(array $messages): array
     {
-        if ($messages === []) {
-            return [];
+        return array_values(array_filter(
+            $messages,
+            fn(array $msg): bool => !$this->isNavigationRow($msg),
+        ));
+    }
+
+    /**
+     * @param array<string,mixed> $msg
+     */
+    private function isNavigationRow(array $msg): bool
+    {
+        $tool = $msg['tool'] ?? null;
+        if (($msg['role'] ?? '') !== 'assistant' || !is_array($tool)) {
+            return false;
+        }
+        if (($tool['name'] ?? null) !== 'Bash' || ($tool['error'] ?? false) === true) {
+            return false;
         }
 
-        $result = [];
-        $i = 0;
-        $count = count($messages);
-
-        while ($i < $count) {
-            $msg = $messages[$i];
-            $content = $msg['content'] ?? '';
-            $isNavigation = false;
-
-            foreach (self::NAV_PATTERNS as $pattern) {
-                if (preg_match($pattern, $content)) {
-                    $isNavigation = true;
-                    break;
-                }
-            }
-
-            if (!$isNavigation) {
-                $result[] = $msg;
-                $i++;
-                continue;
-            }
-
-            // Navigation message found — skip it, but preserve the following
-            // assistant result message if it describes the outcome of this navigation.
-            $i++;
-            if ($i < $count) {
-                $nextMsg = $messages[$i];
-                $nextRole = $nextMsg['role'] ?? '';
-
-                // Keep the result message if it's an assistant's output describing
-                // the navigation outcome (path, directory listing, etc.).
-                if ($nextRole === 'assistant') {
-                    $result[] = $nextMsg;
-                    $i++;
-                }
-            }
+        $command = $tool['arguments']['command'] ?? null;
+        if (!is_string($command)) {
+            return false;
         }
 
-        return $result;
+        return preg_match(self::NAV_COMMAND_PATTERN, trim($command)) === 1;
     }
 
     /**

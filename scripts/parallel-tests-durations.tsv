@@ -450,6 +450,7 @@ sugar-crush/tests/StreamingDirectoryListerTest.php	0.037	12
 sugar-crush/tests/Permissions/SafetyClassifierPatternTableTest.php	0.036	79
 sugar-crush/tests/App/DockGeometryPlumbingTest.php	0.036	7
 sugar-crush/tests/Providers/VertexApiExceptionTransientTest.php	0.036	37
+sugar-crush/tests/Context/CompactorToolRowKeyingTest.php	0.036	13
 sugar-crush/tests/MCP/GitMcpServerTest.php	0.035	26
 sugar-crush/tests/Chat/ParkedCompactionHookTest.php	0.035	7
 sugar-crush/tests/Config/ReadmeSettingsTierClaimTest.php	0.035	6

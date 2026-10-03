@@ -137,7 +137,13 @@ final class ExchangeSummaryTest extends TestCase
         $body = str_repeat("line of source\n", 40);
         $history = [
             ['role' => 'user', 'content' => 'read the file'],
-            ['role' => 'assistant', 'content' => "/src/Big.php\n" . $body],
+            // A Read tool row as Chat::compactionWire() stamps it: stage 4 keys
+            // on the `tool` key, not on the body's shape (audit 0.7).
+            [
+                'role' => 'assistant',
+                'content' => "/src/Big.php\n" . $body,
+                'tool' => ['name' => 'Read', 'arguments' => ['file_path' => '/src/Big.php'], 'error' => false],
+            ],
             ...$this->history(3),
         ];
 

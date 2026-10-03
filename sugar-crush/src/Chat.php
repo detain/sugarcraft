@@ -18474,13 +18474,33 @@ final class Chat implements Model
      * {@see intraExchangeTruncation()} put them back around whatever the
      * compactor returned ({@see withUiOnlyRowsRestored()}).
      *
+     * A TOOL ROW CARRIES A `tool` KEY here and nowhere else (audit 0.7):
+     * `{name, arguments, error}` from the row's first {@see ToolResult}. The
+     * compactor's file-read and navigation stages key on it instead of
+     * guessing from the text, which deleted user prompts that happened to
+     * start a line with `ls`. It is added on this copy rather than in
+     * {@see Message::toWire()} because that shape is what providers consume.
+     * Content is untouched, so every exchange key is unchanged.
+     *
      * @param list<Message> $history
-     * @return list<array{role:string,content:string}>
+     * @return list<array{role:string,content:string,tool?:array{name:string,arguments:array<string,mixed>,error:bool}}>
      */
     private static function compactionWire(array $history): array
     {
         return array_map(
-            static fn(Message $msg): array => $msg->toWire(),
+            static function (Message $msg): array {
+                $wire = $msg->toWire();
+                $result = $msg->toolResults[0] ?? null;
+                if ($result instanceof ToolResult) {
+                    $wire['tool'] = [
+                        'name' => $result->name,
+                        'arguments' => $result->arguments,
+                        'error' => $result->isError(),
+                    ];
+                }
+
+                return $wire;
+            },
             Message::agentVisible($history),
         );
     }
