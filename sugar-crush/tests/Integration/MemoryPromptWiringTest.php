@@ -443,6 +443,7 @@ final class MemoryPromptWiringTest extends TestCase
             'withSpendCap' => fn(EngineBackend $b): EngineBackend => $b->withSpendCap(1.0, 0.25),
             'withSiblingSpend' => fn(EngineBackend $b): EngineBackend => $b->withSiblingSpend(null),
             'withStepUsageObserver' => fn(EngineBackend $b): EngineBackend => $b->withStepUsageObserver(static function (): void {}),
+            'withSubAgentGrant' => fn(EngineBackend $b): EngineBackend => $b->withSubAgentGrant(null),
             'withMaxConcurrentDelegations' => fn(EngineBackend $b): EngineBackend => $b->withMaxConcurrentDelegations(2),
             'withSessionId' => fn(EngineBackend $b): EngineBackend => $b->withSessionId('memory-session'),
             'withoutHooks' => fn(EngineBackend $b): EngineBackend => $b->withoutHooks(),

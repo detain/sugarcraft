@@ -223,7 +223,7 @@ sugar-crush/tests/Integration/MultiAgentRefactorTest.php	0.999	4
 sugar-crush/tests/SuiteChildStdinPrependResidualTest.php	0.975	1
 sugar-crush/tests/Workflows/WorkflowEngineCancellationTest.php	0.952	6
 sugar-crush/tests/VhsTapeContractTest.php	0.947	118
-sugar-crush/tests/Integration/MemoryPromptWiringTest.php	0.933	16
+sugar-crush/tests/Integration/MemoryPromptWiringTest.php	0.933	17
 sugar-crush/tests/Commands/CommandLoaderRefusalReportingTest.php	0.917	7
 sugar-crush/tests/Renderer/StatusLineSegmentTest.php	0.909	23
 sugar-crush/tests/SuiteSkipRosterTest.php	0.904	25
@@ -574,7 +574,7 @@ sugar-crush/tests/Permissions/ChatBashGateRootTest.php	0.020	2
 sugar-crush/tests/Diagnostics/RuntimeNoticeSinkTest.php	0.020	29
 sugar-crush/tests/Memory/ForeignMemoryImporterContainmentTest.php	0.020	10
 sugar-crush/tests/Providers/SessionAffinityHeaderTest.php	0.020	20
-sugar-crush/tests/Backend/EngineBackendWitherPreservesStateTest.php	0.020	21
+sugar-crush/tests/Backend/EngineBackendWitherPreservesStateTest.php	0.020	24
 sugar-crush/tests/Providers/SglangProviderReasoningReplayTest.php	0.020	7
 sugar-crush/tests/RepoMap/PageRankTest.php	0.020	10
 sugar-crush/tests/RepoMap/SymbolGraphTest.php	0.020	9

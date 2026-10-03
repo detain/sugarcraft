@@ -741,6 +741,32 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
     }
 
     /**
+     * The `--exclude` globs that keep private-key files out of a walk, matching
+     * ProtectFilesHook's key-material deny: `*.pem` and `*.key` with a stem, in
+     * any case, and the SSH identities `id_rsa`/`id_dsa`/`id_ecdsa`/`id_ed25519`
+     * plus their suffixed variants (`id_rsa_work`, `id_ed25519_sk`) — but NOT the
+     * `.pub` half, which exists to be shared.
+     *
+     * "Not ending in `.pub`" is spelled as four positive globs (last byte not
+     * `b`, or the one before it not `u`, …) because a glob cannot negate a
+     * suffix, and the one tool that could — a re-including `--include=*.pub`
+     * — is a whitelist on BSD grep (see `.env.example` above). MEASURED on GNU
+     * grep 3.11: `id_rsa`, `id_rsa_work`, `id_ed25519_sk`, `id_ecdsa.bak`,
+     * `server.key` and `DEPLOY.PEM` are skipped; `id_rsa.pub` and
+     * `id_rsa_work.pub` are still searched.
+     *
+     * @var list<string>
+     */
+    private const KEY_MATERIAL_EXCLUDES = [
+        '?*.[pP][eE][mM]',
+        '?*.[kK][eE][yY]',
+        'id_rsa', 'id_rsa[_.-]*[!b]', 'id_rsa[_.-]*[!u]b', 'id_rsa[_.-]*[!p]ub', 'id_rsa[_.-]*[!.]pub',
+        'id_dsa', 'id_dsa[_.-]*[!b]', 'id_dsa[_.-]*[!u]b', 'id_dsa[_.-]*[!p]ub', 'id_dsa[_.-]*[!.]pub',
+        'id_ecdsa', 'id_ecdsa[_.-]*[!b]', 'id_ecdsa[_.-]*[!u]b', 'id_ecdsa[_.-]*[!p]ub', 'id_ecdsa[_.-]*[!.]pub',
+        'id_ed25519', 'id_ed25519[_.-]*[!b]', 'id_ed25519[_.-]*[!u]b', 'id_ed25519[_.-]*[!p]ub', 'id_ed25519[_.-]*[!.]pub',
+    ];
+
+    /**
      * Flags that keep grep from ever OPENING a secret file, whatever the
      * ignore rules say (audit F-J2).
      *
@@ -779,32 +805,6 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
      * Hits in the CONTENT of other files that merely mention a secret are not
      * this method's business; only the files themselves are kept closed.
      */
-    /**
-     * The `--exclude` globs that keep private-key files out of a walk, matching
-     * ProtectFilesHook's key-material deny: `*.pem` and `*.key` with a stem, in
-     * any case, and the SSH identities `id_rsa`/`id_dsa`/`id_ecdsa`/`id_ed25519`
-     * plus their suffixed variants (`id_rsa_work`, `id_ed25519_sk`) — but NOT the
-     * `.pub` half, which exists to be shared.
-     *
-     * "Not ending in `.pub`" is spelled as four positive globs (last byte not
-     * `b`, or the one before it not `u`, …) because a glob cannot negate a
-     * suffix, and the one tool that could — a re-including `--include=*.pub`
-     * — is a whitelist on BSD grep (see `.env.example` above). MEASURED on GNU
-     * grep 3.11: `id_rsa`, `id_rsa_work`, `id_ed25519_sk`, `id_ecdsa.bak`,
-     * `server.key` and `DEPLOY.PEM` are skipped; `id_rsa.pub` and
-     * `id_rsa_work.pub` are still searched.
-     *
-     * @var list<string>
-     */
-    private const KEY_MATERIAL_EXCLUDES = [
-        '?*.[pP][eE][mM]',
-        '?*.[kK][eE][yY]',
-        'id_rsa', 'id_rsa[_.-]*[!b]', 'id_rsa[_.-]*[!u]b', 'id_rsa[_.-]*[!p]ub', 'id_rsa[_.-]*[!.]pub',
-        'id_dsa', 'id_dsa[_.-]*[!b]', 'id_dsa[_.-]*[!u]b', 'id_dsa[_.-]*[!p]ub', 'id_dsa[_.-]*[!.]pub',
-        'id_ecdsa', 'id_ecdsa[_.-]*[!b]', 'id_ecdsa[_.-]*[!u]b', 'id_ecdsa[_.-]*[!p]ub', 'id_ecdsa[_.-]*[!.]pub',
-        'id_ed25519', 'id_ed25519[_.-]*[!b]', 'id_ed25519[_.-]*[!u]b', 'id_ed25519[_.-]*[!p]ub', 'id_ed25519[_.-]*[!.]pub',
-    ];
-
     private static function secretExcludeFlags(string $searchRoot): string
     {
         $flags = ' --exclude=.env --exclude=.envrc --exclude=' . escapeshellarg('.env.*')

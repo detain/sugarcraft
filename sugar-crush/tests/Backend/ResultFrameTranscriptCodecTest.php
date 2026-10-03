@@ -28,7 +28,7 @@ final class ResultFrameTranscriptCodecTest extends TestCase
 {
     public function testTheForkedReplyCarriesTheSameStepsAsTheInProcessOne(): void
     {
-        $this->requireFork();
+        $this->requireForkedFrame();
 
         $sync = $this->backend('ok')->complete([Message::user('go')]);
         $forked = $this->drainUntilSettled($this->backend('ok')->completeAsync([Message::user('go')]));
@@ -44,7 +44,7 @@ final class ResultFrameTranscriptCodecTest extends TestCase
 
     public function testATurnThatOutgrowsTheFrameBudgetSendsAMarkerNotTheOutput(): void
     {
-        $this->requireFork();
+        $this->requireForkedFrame();
 
         $huge = str_repeat('x', intdiv(EngineBackend::MAX_FRAME_BYTES, 4) + 1024);
         $forked = $this->drainUntilSettled($this->backend($huge)->completeAsync([Message::user('go')]));
@@ -82,7 +82,7 @@ final class ResultFrameTranscriptCodecTest extends TestCase
 
     // ── harness ─────────────────────────────────────────────────────────
 
-    private function requireFork(): void
+    private function requireForkedFrame(): void
     {
         if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
             self::markTestSkipped('completeAsync() takes the blocking fallback without pcntl and the frame never crosses a serialize boundary');
@@ -91,10 +91,13 @@ final class ResultFrameTranscriptCodecTest extends TestCase
 
     private function backend(string $output): EngineBackend
     {
+        // A window far past the output, so 2.8's window-scaled spill
+        // (ToolOutputSpill::forModel) leaves the result whole and it is the
+        // FRAME budget, not the context share, that has to bound it.
         $provider = new ScriptedProvider([
             new CompleteResponse(content: 'looking', toolCalls: [new EngineToolCall('call_1', 'echo', ['q' => 1])], reasoning: 'pondering'),
             new CompleteResponse(content: 'answer'),
-        ]);
+        ], contextWindow: 1_000_000_000);
 
         return EngineBackend::new($provider, 'm')->withTools([self::echoTool($output)]);
     }

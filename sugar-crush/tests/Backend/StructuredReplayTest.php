@@ -273,7 +273,9 @@ final class StructuredReplayTest extends TestCase
     private static function conversation(array $messages): array
     {
         $out = [];
-        foreach ($messages as $message) {
+        // The conversation only: the `<turn-context>` row (step 1.A-1) that
+        // trails a request run inside a git work tree is harness metadata.
+        foreach (\SugarCraft\Crush\Context\TurnContextBlock::strip($messages) as $message) {
             if ($message instanceof UserMessage) {
                 $out[] = ['user', $message->content()];
             } elseif ($message instanceof AssistantMessage) {

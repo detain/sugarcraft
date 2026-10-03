@@ -83,14 +83,16 @@ final class NoticeSinkIsolationTest extends TestCase
         $inner = $this->sink(crossFork: false);
         RuntimeNoticeSink::routeTo($outer);
 
+        $caught = null;
         try {
             RuntimeNoticeSink::using($inner, static function (): never {
                 throw new \RuntimeException('turn setup failed');
             });
-            self::fail('using() swallowed the body\'s exception');
         } catch (\RuntimeException $e) {
-            self::assertSame('turn setup failed', $e->getMessage());
+            $caught = $e;
         }
+        self::assertNotNull($caught, 'using() swallowed the body\'s exception');
+        self::assertSame('turn setup failed', $caught->getMessage());
 
         self::assertSame($outer, RuntimeNoticeSink::current(), 'a throwing body must not leave the route on its sink');
 

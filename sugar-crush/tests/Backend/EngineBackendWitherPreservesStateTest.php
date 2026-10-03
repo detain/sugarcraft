@@ -106,6 +106,13 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 static fn(EngineBackend $b): EngineBackend => $b->withStepUsageObserver(static function (): void {}),
                 ['stepUsageObserver'],
             ],
+            // Step 4.2: a delegated turn's argument-scoped preset grant.
+            'withSubAgentGrant' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withSubAgentGrant(
+                    self::blank(\SugarCraft\Crush\Hooks\BuiltIn\SubAgentGrantHook::class),
+                ),
+                ['subAgentGrant'],
+            ],
             // Step 0.16: the per-turn cap on concurrent delegated runs.
             'withMaxConcurrentDelegations' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withMaxConcurrentDelegations(9),

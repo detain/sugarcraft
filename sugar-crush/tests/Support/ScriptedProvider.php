@@ -29,7 +29,7 @@ final class ScriptedProvider implements ProviderInterface
     /**
      * @param list<CompleteResponse|\Throwable|\Closure(CompleteRequest): CompleteResponse|list<CompleteResponse>> $script
      */
-    public function __construct(private array $script, private bool $streams = false)
+    public function __construct(private array $script, private bool $streams = false, private int $contextWindow = 100000)
     {
     }
 
@@ -69,7 +69,7 @@ final class ScriptedProvider implements ProviderInterface
 
     public function contextWindow(): int
     {
-        return 100000;
+        return $this->contextWindow;
     }
 
     public function costPer1kTokens(string $model, string $direction): float

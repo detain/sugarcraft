@@ -202,7 +202,9 @@ final class TaskToolResumeFinishedRunTest extends TestCase
     {
         return array_map(
             static fn (TypedMessage $message): array => [$message->role(), $message->content()],
-            $request->messages,
+            // The conversation only: the `<turn-context>` row (step 1.A-1)
+            // that trails a request run inside a git work tree is metadata.
+            \SugarCraft\Crush\Context\TurnContextBlock::strip($request->messages),
         );
     }
 
