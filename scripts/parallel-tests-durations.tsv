@@ -721,6 +721,7 @@ sugar-crush/tests/Tools/BuiltIn/SkillToolTest.php	0.005	11
 sugar-crush/tests/Cli/NonInteractiveMentionsTest.php	0.005	5
 sugar-crush/tests/Workflows/StageResultTest.php	0.005	15
 sugar-crush/tests/Support/SiblingSpendLedgerTest.php	0.005	6
+sugar-crush/tests/Context/PromptFenceUnicodeTagTest.php	0.005	5
 sugar-crush/tests/Tui/PaneTest.php	0.004	11
 sugar-crush/tests/Commands/CommandSpecSanitizationTest.php	0.004	5
 sugar-crush/tests/Agents/AgentStatusTest.php	0.004	22

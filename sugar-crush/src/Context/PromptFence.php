@@ -57,6 +57,19 @@ namespace SugarCraft\Crush\Context;
  * boundaries a tokenizer ENCODES — a different layer, but the same forgery
  * (foreign bytes posing as the harness's own structure) through the same
  * splice, so it rides the one authority every construction site already calls.
+ *
+ * UNICODE TAG CHARACTERS ARE DELETED, NOT ESCAPED (step 0.14-a). The Tags block
+ * U+E0000-U+E007F renders as nothing in every terminal and editor a reviewer
+ * uses, yet tokenizers encode it and models read it as ASCII ("ASCII
+ * smuggling"): a README can carry an invisible instruction that no human sees
+ * in review. Unlike a fence tag there is no information to preserve - the
+ * characters have no legitimate use in a prompt payload outside emoji flag
+ * sequences, whose loss degrades to a plain black flag - so this block is the
+ * one exception to "rewrite, never remove". The strip runs BEFORE the `<`
+ * rewrite, so a tag character spliced inside a fence name (`<` U+E0001 `env>`)
+ * cannot hide the name from it. It stays byte-oriented like the rewrite: the
+ * block is the four-byte UTF-8 range F3 A0 80 80 .. F3 A0 81 BF, matched as
+ * bytes, so an invalid-UTF-8 payload is still stripped rather than failed.
  */
 final class PromptFence
 {
@@ -190,6 +203,13 @@ final class PromptFence
      */
     private const CONTROL_TOKEN_PIPES = ['|', "\u{FF5C}"];
 
+    /**
+     * The Unicode Tags block U+E0000-U+E007F as a byte pattern (no `/u`, for
+     * the reason the class doc gives): every code point in the block encodes
+     * as F3 A0 (80|81) xx.
+     */
+    private const UNICODE_TAG_BYTES = '~\xF3\xA0[\x80\x81][\x80-\xBF]~';
+
     private function __construct()
     {
     }
@@ -224,10 +244,15 @@ final class PromptFence
      * {@see self::CONTROL_TOKEN_PIPES} glyph (`<|im_start|>`,
      * `<｜User｜>`) is rewritten the same way.
      *
-     * The guarantee that matters downstream: after this call no `<` in the
-     * payload is followed by `/`?, a roster name and one of those terminators,
-     * nor by `/`? and a control-token pipe — the replacement contains no `<`,
-     * so running it again changes nothing.
+     * Before any of that, every Unicode tag character (U+E0000-U+E007F) is
+     * deleted outright - see the class doc for why this block alone is
+     * removed rather than rewritten.
+     *
+     * The guarantee that matters downstream: after this call the payload holds
+     * no Unicode tag character, and no `<` in it is followed by `/`?, a roster
+     * name and one of those terminators, nor by `/`? and a control-token pipe
+     * — the replacement contains no `<` and no tag character, so running it
+     * again changes nothing.
      */
     public static function escape(string $payload): string
     {
@@ -236,6 +261,18 @@ final class PromptFence
         $pattern ??= '~<(?=/?(?:(?:' . implode('|', self::TAGS) . ')(?:[\s/>]|\z)|'
             . implode('|', array_map(static fn(string $pipe): string => preg_quote($pipe, '~'), self::CONTROL_TOKEN_PIPES))
             . '))~i';
+
+        // The str_contains() pre-check (the block's shared lead bytes) keeps
+        // the common clean payload off the regex engine entirely.
+        if (str_contains($payload, "\xF3\xA0")) {
+            $stripped = preg_replace(self::UNICODE_TAG_BYTES, '', $payload);
+            if ($stripped === null) {
+                throw new \RuntimeException(
+                    'PromptFence::escape(): PCRE failure (' . preg_last_error_msg() . ') while stripping Unicode tag characters',
+                );
+            }
+            $payload = $stripped;
+        }
 
         // Only the `<` itself is consumed (the rest is lookahead), so the
         // rewrite cannot reach past it and adjacent tags each match on their own.
