@@ -65,7 +65,7 @@ use SugarCraft\Crush\Tools\ToolResult;
  * works in the typed {@see \SugarCraft\Crush\Messages\Message} hierarchy.
  * Conversion happens here at the seam.
  */
-final class EngineBackend implements Backend, ReportsContextWindow, ObservesReasoning
+final class EngineBackend implements Backend, ReportsContextWindow, ObservesReasoning, InteractiveTurn
 {
     /**
      * IDLE ceiling on a forked completion child in {@see completeAsync()} -
@@ -1965,9 +1965,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      *                           is reset by the parent whether or not this is
      *                           null. Pass one to PAINT the thinking; leave it
      *                           null and the turn simply survives quietly.
+     * @param bool $interactive  Roadmap 1.C-1: put every ASK the turn raises
+     *                           to `$onEvent` and wait for the answer, rather
+     *                           than settling it in the child. Callers spell
+     *                           this {@see completeInteractive()}, which is
+     *                           the contract ({@see InteractiveTurn}); it is a
+     *                           parameter here only because this method's
+     *                           body is the one place the fork, the socket and
+     *                           the timers all live.
      */
-    public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null, ?callable $onReasoning = null): PromiseInterface
+    public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null, ?callable $onReasoning = null, bool $interactive = false): PromiseInterface
     {
+        $interactive = $interactive && $onEvent !== null;
         $deferred = new Deferred();
 
         // Costs one WNOHANG syscall per tracked straggler and buys back every
@@ -1982,12 +1991,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         }
 
         if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
-            return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent, $onReasoning);
+            return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent, $onReasoning, $interactive);
         }
 
         $sockets = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         if ($sockets === false) {
-            return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent, $onReasoning);
+            return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent, $onReasoning, $interactive);
         }
 
         [$parentSocket, $childSocket] = $sockets;
@@ -2002,7 +2011,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             fclose($parentSocket);
             fclose($childSocket);
 
-            return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent, $onReasoning);
+            return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent, $onReasoning, $interactive);
         }
 
         if ($pid === 0) {
@@ -2018,7 +2027,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             ProcessContainment::closeOnExec($childSocket);
             // B6: backpressure, not a timed-out half frame - see the constant.
             stream_set_timeout($childSocket, self::CHILD_WRITE_TIMEOUT_SECONDS);
-            $this->runCompleteInChild($childSocket, $history);
+            $this->runCompleteInChild($childSocket, $history, $interactive);
         }
 
         self::$unreapedChildren[$pid] = true;
@@ -2056,16 +2065,44 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         $cancelTimer = null;
         $exitTimer = null;
 
+        // 1.C-1: the parent's WRITE half of the channel. Questions the child
+        // has put and nobody has answered yet, by askId — while this is
+        // non-empty the idle ceiling is paused (see $resetTimeout). And the
+        // bytes of parent→child frames not yet accepted by the socket: the
+        // socket is non-blocking, so a reply is buffered and drained by a
+        // write watcher rather than ever stalling the TUI's loop.
+        /** @var array<string, PendingAsk> $pendingAsks */
+        $pendingAsks = [];
+        $outbox = '';
+        $writing = false;
+
+        // Every open question settles before the turn does, as `cancelled`:
+        // the child is being killed or is already gone, so nobody can act on
+        // an answer any more, and the receiver needs the PermissionResolved
+        // to take its prompt down. Called with $settled already true, so no
+        // settlement can write a frame or re-arm a timer.
+        $cancelPendingAsks = static function (string $reason) use (&$pendingAsks): void {
+            foreach ($pendingAsks as $pending) {
+                $pending->cancel($reason);
+            }
+            $pendingAsks = [];
+        };
+
         // Shared teardown for the failure ways this can end (timeout,
         // cancellation): stop watching the socket, cancel BOTH timers
         // (critical for $cancelTimer, a periodic timer that would otherwise
         // keep polling forever after settling via a different path), kill and
         // reap the child so it never zombies.
-        $teardown = function (string $rejectMessage) use (&$settled, $loop, $parentSocket, $pid, $deferred, &$timeoutTimer, &$cancelTimer, &$exitTimer): void {
+        $teardown = function (string $rejectMessage) use (&$settled, $loop, $parentSocket, $pid, $deferred, &$timeoutTimer, &$cancelTimer, &$exitTimer, &$writing, $cancelPendingAsks): void {
             if ($settled) {
                 return;
             }
             $settled = true;
+            $cancelPendingAsks($rejectMessage);
+            if ($writing) {
+                $loop->removeWriteStream($parentSocket);
+                $writing = false;
+            }
             $loop->removeReadStream($parentSocket);
             if (is_resource($parentSocket)) {
                 fclose($parentSocket);
@@ -2105,11 +2142,16 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // or was seen to exit by $exitTimer. Same cleanup as $teardown minus the kill (the child is
         // already on its way out), then settle from whatever result frame
         // arrived - a child that died before writing one is still a failure.
-        $finalize = function () use (&$settled, &$result, &$streamed, &$buffer, &$streamCorrupt, $loop, $parentSocket, $pid, $deferred, $onToken, &$timeoutTimer, &$cancelTimer, &$exitTimer): void {
+        $finalize = function () use (&$settled, &$result, &$streamed, &$buffer, &$streamCorrupt, $loop, $parentSocket, $pid, $deferred, $onToken, &$timeoutTimer, &$cancelTimer, &$exitTimer, &$writing, $cancelPendingAsks): void {
             if ($settled) {
                 return;
             }
             $settled = true;
+            $cancelPendingAsks(ChildChannel::PARENT_GONE);
+            if ($writing) {
+                $loop->removeWriteStream($parentSocket);
+                $writing = false;
+            }
             $loop->removeReadStream($parentSocket);
             if (is_resource($parentSocket)) {
                 fclose($parentSocket);
@@ -2141,18 +2183,125 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // Restart the idle clock. Called once up front and again for every
         // frame the child streams, so the ceiling measures silence rather
         // than total turn length.
-        $resetTimeout = function () use (&$settled, $loop, &$timeoutTimer, $teardown): void {
+        $resetTimeout = function () use (&$settled, $loop, &$timeoutTimer, $teardown, &$pendingAsks): void {
             if ($settled) {
                 return;
             }
             if ($timeoutTimer !== null) {
                 $loop->cancelTimer($timeoutTimer);
+                $timeoutTimer = null;
+            }
+            // 1.C-1: a child blocked on a question is silent BY DESIGN, and
+            // a person reading a diff for two minutes is not a hung
+            // provider. The clock stays stopped until the last open question
+            // is settled, which calls back in here to re-arm it.
+            if ($pendingAsks !== []) {
+                return;
             }
             $timeoutTimer = $loop->addTimer(self::COMPLETE_TIMEOUT_SECONDS, static function () use ($teardown): void {
                 $teardown('Provider request timed out after ' . self::COMPLETE_TIMEOUT_SECONDS . 's without progress');
             });
         };
         $resetTimeout();
+
+        // Drain $outbox into the non-blocking socket, parking a write watcher
+        // for whatever it did not accept. A write that fails outright means
+        // the child's end is gone; the frame is dropped, because the read
+        // edge (EOF) or $exitTimer settles the turn from that same fact.
+        $flush = function () use (&$outbox, &$writing, &$flush, $loop, $parentSocket): void {
+            while ($outbox !== '' && is_resource($parentSocket)) {
+                $n = @fwrite($parentSocket, $outbox);
+                if ($n === false) {
+                    $outbox = '';
+                    break;
+                }
+                if ($n === 0) {
+                    break;
+                }
+                $outbox = (string) substr($outbox, $n);
+            }
+            if (!is_resource($parentSocket)) {
+                $outbox = '';
+            }
+            if ($outbox === '' && $writing) {
+                $loop->removeWriteStream($parentSocket);
+                $writing = false;
+            } elseif ($outbox !== '' && !$writing) {
+                $writing = true;
+                $loop->addWriteStream($parentSocket, static function () use (&$flush): void {
+                    $flush();
+                });
+            }
+        };
+
+        // One parent→child frame, on the same 4-byte length + serialize()
+        // framing the child writes. Nothing is written once the turn has
+        // settled: the socket is closed or about to be.
+        $sendToChild = function (array $frame) use (&$settled, &$outbox, $flush): void {
+            if ($settled) {
+                return;
+            }
+            $body = serialize($frame);
+            $outbox .= pack('N', strlen($body)) . $body;
+            $flush();
+        };
+
+        // Where every question settles, whoever settles it. A reply goes
+        // down to the child as `ask_reply`; a cancellation writes nothing (it
+        // only ever happens as the turn settles). Either way the receiver is
+        // told, and the idle clock restarts once nothing is left open.
+        $settleAsk = function (\SugarCraft\Crush\Events\PermissionResolved $resolution) use (&$pendingAsks, $sendToChild, $resetTimeout, $onEvent, $interactive): void {
+            unset($pendingAsks[$resolution->askId]);
+            if (!$resolution->cancelled) {
+                $sendToChild([
+                    'kind' => ChildChannel::ASK_REPLY,
+                    'askId' => $resolution->askId,
+                    'reply' => $resolution->reply?->value,
+                    'note' => $resolution->note,
+                ]);
+            }
+            if ($interactive && $onEvent !== null) {
+                $onEvent($resolution);
+            }
+            if ($pendingAsks === []) {
+                $resetTimeout();
+            }
+        };
+
+        // An `ask` frame: the child is now blocked until it hears back. Only
+        // an interactive turn attaches the channel in the child, so a
+        // non-interactive one never sends this — but if one ever arrives it
+        // is answered `reject` at once rather than left to hang the turn.
+        // A frame too broken to rebuild still gets a reject when it names
+        // its askId; one that does not cannot be answered, and leaves the
+        // idle ceiling running to bound it.
+        $handleAsk = function (array $frame) use (&$pendingAsks, $settleAsk, $sendToChild, $resetTimeout, $onEvent, $interactive): void {
+            $pending = PendingAsk::fromFrame($frame, $settleAsk);
+            if ($pending === null) {
+                $askId = $frame['askId'] ?? null;
+                if (is_string($askId)) {
+                    $sendToChild([
+                        'kind' => ChildChannel::ASK_REPLY,
+                        'askId' => $askId,
+                        'reply' => \SugarCraft\Crush\Permissions\PermissionReply::Reject->value,
+                        'note' => 'the permission request could not be read',
+                    ]);
+                }
+
+                return;
+            }
+
+            $pendingAsks[$pending->askId] = $pending;
+            $resetTimeout();
+
+            if (!$interactive || $onEvent === null) {
+                $pending->reply(\SugarCraft\Crush\Permissions\PermissionReply::Reject, 'no approver is attached to this run');
+
+                return;
+            }
+
+            $onEvent(new \SugarCraft\Crush\Events\PermissionAsked($pending));
+        };
 
         // Escape-Escape abort (see Chat::update()'s Escape handling): the
         // cancellation flag can flip at any point after this call returns,
@@ -2167,7 +2316,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // Frame dispatch for one chunk off the socket, shared by the read edge
         // below and by $exitTimer's final drain so the two cannot disagree
         // about what a frame means.
-        $consume = function (string $chunk) use (&$buffer, &$result, &$streamed, &$streamCorrupt, &$childReaped, $onToken, $onEvent, $onReasoning, $finalize, $resetTimeout, $teardown): void {
+        $consume = function (string $chunk) use (&$buffer, &$result, &$streamed, &$streamCorrupt, &$childReaped, $onToken, $onEvent, $onReasoning, $finalize, $resetTimeout, $teardown, $handleAsk): void {
             $buffer .= $chunk;
             $corrupt = false;
             $frames = self::drainFrames($buffer, $corrupt);
@@ -2189,6 +2338,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                     $finalize();
 
                     return;
+                }
+
+                // 1.C-1: a question from the child. Handled HERE, in frame
+                // order, so the receiver sees it between the tool events it
+                // actually sits between.
+                if (($frame['kind'] ?? null) === ChildChannel::ASK) {
+                    $handleAsk($frame);
+
+                    continue;
                 }
 
                 // E456. The deadline is already pushed out by $resetTimeout()
@@ -2310,6 +2468,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     }
 
     /**
+     * {@see InteractiveTurn}: {@see completeAsync()} with the turn's ASKs put
+     * to `$onEvent` as {@see \SugarCraft\Crush\Events\PermissionAsked} and
+     * answered through their {@see PendingAsk} (roadmap 1.C-1, Appendix O
+     * §5.1). The child attaches a {@see ChildChannel} approver in place of
+     * whatever approver this backend carries; the parent owns the policy.
+     */
+    public function completeInteractive(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null, ?callable $onReasoning = null): PromiseInterface
+    {
+        return $this->completeAsync($history, $onToken, $cancellation, $onEvent, $onReasoning, true);
+    }
+
+    /**
      * Reaps the forked completion child WITHOUT ever blocking the event loop.
      *
      * `pcntl_waitpid($pid, $status)` with no flags blocks until the child
@@ -2423,11 +2593,33 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * over the socket as its own frame as it fires and the outcome as the
      * final frame, then exit. Never returns.
      *
+     * 1.C-1: on an INTERACTIVE turn the socket also carries questions. The
+     * turn runs on a copy of this backend whose approver is a
+     * {@see ChildChannel}: each ASK goes up as an `ask` frame and the child
+     * blocks for the parent's `ask_reply`. Built here, in the child, so the
+     * channel's owner pid is the turn child's own — a parallel Task
+     * grandchild that inherits the approver is refused rather than allowed
+     * to interleave frames on this stream (see {@see ChildChannel}).
+     *
      * @param array<int, Message> $history
      */
-    private function runCompleteInChild($childSocket, array $history): never
+    private function runCompleteInChild($childSocket, array $history, bool $interactive = false): never
     {
         try {
+            $engine = $this;
+            if ($interactive) {
+                $channel = ChildChannel::new(
+                    $childSocket,
+                    static function (array $frame) use ($childSocket): void {
+                        self::writeFrame($childSocket, $frame);
+                    },
+                    static function (string &$inbound, bool &$corrupt): array {
+                        return self::drainFrames($inbound, $corrupt);
+                    },
+                    $this->permissionGate?->mode()->value ?? '',
+                );
+                $engine = $this->withPermissionApprover($channel->approver());
+            }
             // This is a forked child, so invoking the caller's callback
             // in-process would write into a copy of its state and vanish on
             // exit - the event has to cross the socket. It goes out
@@ -2435,7 +2627,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             // batch is exactly what made a multi-tool turn look like a silent
             // "thinking" spinner (and what made the parent's single
             // wall-clock timer kill turns that were in fact making progress).
-            $message = $this->complete(
+            $message = $engine->complete(
                 $history,
                 // Assistant text crosses the fork on the SAME channel and by
                 // the same rule as the tool events: a plain in-process
@@ -2944,10 +3136,42 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * the old synchronous-under-a-Promise behaviour. Blocks the caller for
      * the duration of the request instead of freezing the whole program
      * silently - a real capability gap, not a bug to hide.
+     *
+     * 1.C-1: an INTERACTIVE turn here has no child to block and no loop to
+     * wait on, so a question can only be answered synchronously, from inside
+     * the `$onEvent` call that delivers its {@see \SugarCraft\Crush\Events\PermissionAsked}.
+     * One left open settles `cancelled` at once and the backend's own
+     * synchronous approver, when one is attached, answers instead; with none
+     * it is refused, exactly as a non-interactive turn's would be.
      */
-    private function completeAsyncBlocking(array $history, ?callable $onToken, Deferred $deferred, ?callable $onEvent = null, ?callable $onReasoning = null): PromiseInterface
+    private function completeAsyncBlocking(array $history, ?callable $onToken, Deferred $deferred, ?callable $onEvent = null, ?callable $onReasoning = null, bool $interactive = false): PromiseInterface
     {
         try {
+            $engine = $this;
+            if ($interactive && $onEvent !== null) {
+                $fallback = $this->permissionApprover;
+                $mode = $this->permissionGate?->mode()->value ?? '';
+                $engine = $this->withPermissionApprover(static function (\SugarCraft\Crush\Tools\ToolCall $call, \SugarCraft\Crush\Hooks\HookResult $ask) use ($onEvent, $fallback, $mode): bool {
+                    $pending = PendingAsk::fromFrame(
+                        PendingAsk::describe($call, $ask, $mode),
+                        static function (\SugarCraft\Crush\Events\PermissionResolved $resolution) use ($onEvent): void {
+                            $onEvent($resolution);
+                        },
+                    );
+                    if ($pending === null) {
+                        return false;
+                    }
+                    $onEvent(new \SugarCraft\Crush\Events\PermissionAsked($pending));
+                    if (!$pending->isSettled()) {
+                        $pending->cancel('this host has no ext-pcntl, so a question can only be answered while it is being asked');
+
+                        return $fallback !== null && $fallback($call, $ask) === true;
+                    }
+
+                    return $pending->resolution()?->permits() === true;
+                });
+            }
+
             // No fork here, so tool events reach the caller LIVE on this path
             // (mid-turn, as each call starts/ends) rather than replayed.
             //
@@ -2965,7 +3189,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                     $onReasoning($delta);
                 }
             };
-            $deferred->resolve($this->complete($history, $onToken, $onEvent, $paintable));
+            $deferred->resolve($engine->complete($history, $onToken, $onEvent, $paintable));
         } catch (\Throwable $e) {
             $deferred->reject($e);
         }

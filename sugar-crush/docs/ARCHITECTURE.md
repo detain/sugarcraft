@@ -207,6 +207,43 @@ socket, which is what keeps the TUI's event loop free. Details that matter:
   actively harmful: `Chat::executeToolsParallel()` and
   `BackgroundSessionRunner` both wait on their *own* PIDs in the same process.
 
+The socket carries frames **both ways**. The child streams the turn up; on a
+turn started with `EngineBackend::completeInteractive()` (the
+`Backend\InteractiveTurn` capability) it can also put a permission question to
+the parent and block until the answer comes back down. Every frame is a 4-byte
+big-endian length plus a `serialize()`d array, decoded with
+`allowed_classes => false`:
+
+| Direction | `kind` | Carries |
+|---|---|---|
+| child → parent | `token`, `reasoning` | assistant text / thinking deltas (an empty `reasoning` is a heartbeat) |
+| child → parent | `started`, `finished`, `subagent`, `spend_cap` | tool and sub-agent events, in turn order |
+| child → parent | `result` | the settled reply, usage and flags; always the last frame |
+| child → parent | `ask` | `askId`, `toolCallId`, `tool`, `arguments` (after any hook rewrite), `reason`, `source`, `mode`, `suggestions`, `alwaysScope` |
+| parent → child | `ask_reply` | `askId`, `reply` (`once`/`always`/`reject`), `note` (≤ 2 KiB) |
+| parent → child | `steer`, `cancel_soft`, `cancel_tool` | reserved: parsed and buffered by the child, not sent yet |
+| child → parent | `steer_ack`, `usage`, `step` | reserved: writable by the child, not sent yet |
+
+- `askId` is the first 16 hex digits of a hash over `{toolCallId, tool, args}`.
+  The parent hands each question to `$onEvent` as an `Events\PermissionAsked`
+  carrying a `Backend\PendingAsk`; `PendingAsk::reply()` writes the
+  `ask_reply` through a non-blocking write buffer. Each question settles once
+  and is reported as `Events\PermissionResolved`.
+- **The idle ceiling is paused while any question is open** and re-armed when
+  the last one is answered: a child waiting on a person is silent by design.
+- The child has no deadline of its own. A cancel or teardown settles every
+  open question `cancelled`, and a reply after that is a no-op. EOF while the
+  child waits is an unanswered question, so the call is refused.
+- `always` is offered only when the permission gate alone asked. The child then
+  remembers it for the same call for the rest of the turn.
+- `Backend\ChildChannel` is bound to the turn child's pid. A parallel Task
+  grandchild that inherits it is refused rather than allowed to interleave
+  frames on the turn's socket.
+- Plain `completeAsync()` never attaches the channel. Its asks settle in the
+  child exactly as before, through the attached approver or the fail-closed
+  no-approver refusal. Without ext-pcntl, an interactive question can only be
+  answered synchronously, inside the `$onEvent` call that delivers it.
+
 ---
 
 ## `Runtime` — the agentic loop
