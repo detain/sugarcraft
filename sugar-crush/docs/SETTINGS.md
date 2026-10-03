@@ -828,6 +828,17 @@ file cost you a setting rather than your session. Your OWN two files — layers
   project-tier subset. (For layer 4 an unlisted key is *not* ignored —
   `merge()` passes your own config through unfiltered, which is exactly what
   "answered by layer 4 alone" above means.)
+- the file is a **project** `.sugar-crush/config.json`. That file is not a
+  settings layer at all, whatever it holds. From a project, only
+  `settings.json` and `settings.local.json` (layers 1 and 2) are read, and the
+  name `config.json` is a layer only under your home (layer 4). In a project
+  that name belongs to the worktree configuration (`worktreeCleanupPeriodDays`,
+  `worktreeIncludeFile`), which only `SugarCraft\Crush\Agents\WorktreeConfig`
+  reads, and nothing constructs that class until worktree support is wired.
+  So the file is inert today. A `trustedProjectMcp` written there grants
+  nothing: MCP trust is read from `~/.sugar-crush/config.json` only (see
+  [`MCP.md`](MCP.md)). SugarCraft's own repository root carries one such
+  file.
 
 ### The loud half
 
