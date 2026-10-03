@@ -44,7 +44,7 @@ final class InProcessTransport implements Transport, ChildSpawner
     /**
      * PTY backend used by `runChild()`. Injected for testability — a
      * stub can satisfy `PtySystem` without touching libc / FFI.
-     * Defaults to {@see PtySystemFactory::default()} on first use.
+     * Defaults to {@see PtySystemFactory::new()} on first use.
      */
     private readonly PtySystem $system;
 
@@ -71,7 +71,7 @@ final class InProcessTransport implements Transport, ChildSpawner
      */
     private $keepaliveCallback = null;
 
-    /** PID of the most recently spawned child, used for signal forwarding. */
+    /** PID of the live child, used for signal forwarding; null once runChild() tears it down. */
     private ?int $childPid = null;
 
     /**
@@ -104,7 +104,7 @@ final class InProcessTransport implements Transport, ChildSpawner
 
     public function __construct(?PtySystem $system = null)
     {
-        $this->system = $system ?? PtySystemFactory::default();
+        $this->system = $system ?? PtySystemFactory::new();
         $this->sigwinchSupported = SignalForwarder::pcntlReady() && \defined('SIGWINCH');
     }
 
@@ -355,9 +355,17 @@ final class InProcessTransport implements Transport, ChildSpawner
             // PTY master does NOT auto-deliver SIGHUP on Linux. Send
             // SIGHUP first (gentle, daemons handle it), then SIGKILL
             // after a brief grace if still alive.
-            if ($child !== null && !$child->exited()) {
-                if (\function_exists('posix_kill')) {
-                    @\posix_kill($child->pid(), \SIGHUP);
+            //
+            // Through Child::kill(), not a function_exists('posix_kill')
+            // guard: candy-pty routes it to posix_kill() or libc kill(2)
+            // over FFI, so ext-posix is optional. The old guard skipped the
+            // whole teardown without ext-posix, and a child that ignores
+            // SIGHUP then held runChild() in wait() for its entire life.
+            // The nested finally keeps the master close unconditional even
+            // if an injected Child::kill() throws.
+            try {
+                if ($child !== null && !$child->exited()) {
+                    $child->kill(\defined('SIGHUP') ? \SIGHUP : 1);
                     $killDeadline = \microtime(true) + 0.2;
                     while (\microtime(true) < $killDeadline) {
                         if ($child->exited()) {
@@ -366,12 +374,19 @@ final class InProcessTransport implements Transport, ChildSpawner
                         \usleep(20_000);
                     }
                     if (!$child->exited()) {
-                        @\posix_kill($child->pid(), \SIGKILL);
+                        $child->kill(\defined('SIGKILL') ? \SIGKILL : 9);
                     }
                 }
-            }
-            if (!$master->isClosed()) {
-                $master->close();
+            } finally {
+                // The child is gone (or SIGKILLed) from here on. Forgetting
+                // its pid keeps signalChild() a no-op once no child is
+                // running, as ChildSpawner promises: a stale pid outlives
+                // the reap and the kernel recycles it, so a late
+                // RFC 4254 signal would otherwise hit an unrelated process.
+                $this->childPid = null;
+                if (!$master->isClosed()) {
+                    $master->close();
+                }
             }
         }
 
@@ -430,9 +445,9 @@ final class InProcessTransport implements Transport, ChildSpawner
         if ($this->childPid === null) {
             return;
         }
-        if (!\function_exists('posix_kill')) {
-            return;
-        }
-        \posix_kill($this->childPid, $signal);
+        // Libc::kill() falls back to libc kill(2) over FFI when ext-posix
+        // is absent; a function_exists('posix_kill') guard here silently
+        // dropped every forwarded RFC 4254 signal on such hosts.
+        Libc::kill($this->childPid, $signal);
     }
 }

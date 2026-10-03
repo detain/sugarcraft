@@ -36,8 +36,8 @@ interface ChildSpawner
      * Forward a signal to the live child process.
      *
      * No-op for transports that do not spawn a child or when no child
-     * is currently running. Guarded with function_exists('posix_kill')
-     * and a null-check on the stored child PID.
+     * is currently running. Delivery must not depend on ext-posix:
+     * candy-pty's Libc::kill() falls back to libc kill(2) over FFI.
      */
     public function signalChild(int $signal): void;
 }

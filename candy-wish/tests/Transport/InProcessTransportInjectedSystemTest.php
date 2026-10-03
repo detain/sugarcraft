@@ -16,7 +16,7 @@ use SugarCraft\Wish\Transport\InProcessTransport;
 /**
  * Pins the P4.2 DI seam: InProcessTransport accepts an injected
  * {@see PtySystem} and routes its master/slave allocation through it
- * instead of the default {@see \SugarCraft\Pty\PtySystemFactory::default()}
+ * instead of the default {@see \SugarCraft\Pty\PtySystemFactory::new()}
  * lookup. Lets test code stub out the libc surface entirely.
  */
 final class InProcessTransportInjectedSystemTest extends TestCase
@@ -69,7 +69,7 @@ final class InProcessTransportInjectedSystemTest extends TestCase
 
     public function testDefaultConstructorResolvesViaFactory(): void
     {
-        // No-arg construction must not throw — PtySystemFactory::default()
+        // No-arg construction must not throw — PtySystemFactory::new()
         // returns PosixPtySystem on every POSIX host (Linux/Darwin/BSD/Solaris).
         if (\PHP_OS_FAMILY === 'Windows') {
             $this->markTestSkipped('Default resolution throws on Windows; covered separately in candy-pty.');
