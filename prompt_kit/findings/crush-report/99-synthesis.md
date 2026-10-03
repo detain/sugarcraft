@@ -70,13 +70,11 @@ Severity is the user impact on the live default path.
 | 11 | Med-High | MCP results uncapped; no per-call MCP timeout | 0.5 |
 | 12 | Med-High | Tool-call ids repeat on the DSML and MiniMax parsers | 0.2 |
 | 13 | Medium | SugarCraft PR cadence sent to every project via Bash guidance | 0.3 |
-| 14 | Medium | `/memory add` defaults to user scope, which is never injected; recall is project-only, newest 12 | 0.6, 5.1 |
 | 15 | Medium | `removeToolResults` no-op; tail not token-budgeted | 2.2-1 |
 | 16 | Medium | `removeNavigationSteps` drops user rows matching `rm`/`mv`/`ls`… *(inferred)* | 0.7 |
 | 17 | Medium | `isFileReadMessage` guesses from content | 0.7 |
 | 18 | Medium | Compaction summary keeps history, not state; no audit | 2.5 |
 | 19 | Medium | Summariser uses a different prompt/prefix (no cache reuse) | 2.4-2 |
-| 20 | Medium | Compaction overwrites displayed/persisted history | 1.B-3 |
 | 21 | Medium | Token estimate ignores system prompt and tool schemas; % thresholds fire too late on 1M windows | 2.1, 2.9, 5.6 |
 | 22 | Medium | Sub-agent output unescaped, no "no authority" framing | 0.15 |
 | 23 | Medium | Preset `model`/`permissionMode`/`effort`/`isolation`/`background` inert; preset grants match by name | 4.1, 4.2, 4.9, 4.3 |
@@ -141,11 +139,6 @@ These are the recommendations from all twelve reports, de-duplicated and grouped
 
 Files: `EngineBackend::runTurn`/`completeAsync`, `Runtime`. **M.** *(CC P0-1, OC P0-3, Goose P0-3, nano R4, dsh P0-1, DCP P1-6.)*
 
-**1.B — Message identity and structured replay.**
-- Compaction *flags* original rows as hidden from the agent instead of deleting them, so scrollback survives.
-
-**M–L.** *(OC P0-2, DCP P0-1/P0-2, Cline P0-3, OH P0-4, Zed R2, Goose P0-4, nano R2, dsh P1-2.)*
-
 **1.C — The parent↔child frame channel.** Turn the socketpair into a two-way protocol.
 
 Frames from parent to child:
@@ -162,7 +155,6 @@ How the pieces connect:
 - A rejection's feedback can be typed in the modal (the verdict already carries a note to the model; a key binding and a note stage are missing).
 - Parallel grandchildren relay asks through the turn child, or return "needs-ask" and re-run sequentially (Goose).
 - An alternative is OpenHands' *resumable stop*: end the turn with pending calls and execute them first on the next dispatch. It is cleaner with respect to the watchdog, but needs 1.B.
-- **Once this is green, change the default mode** from `bypass-permissions` to `default` or `accept-edits`, after Wave 3.A checkpoints land.
 
 **M–L; the highest-leverage item in the whole report.** *(10 reports.)* The same channel later carries server-mode approvals (Part V).
 
@@ -170,13 +162,12 @@ How the pieces connect:
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
-| 2.1 | **Step-level pressure check** in `runTurn` before each `Runtime::run`. Anchor on the provider-reported `usage.prompt_tokens` of the last step plus a delta estimate for new rows. Count the system prompt and tool schemas. Threshold e.g. `min(0.8·W, W − maxOutput − 64k)` (dsh) or 90% (Zed/Cline) | M | 11 reports |
 | 2.2 | **Deterministic tool-output pruning first.** Replace the no-op `removeToolResults` with a projector rule. Older tool results go to a placeholder that keeps tool + main arg (`[r17 Read src/X.php — output pruned; re-run if needed]`). Protect the newest 40k tokens and the last 2 turns; only fire if ≥20k is freed (opencode/Kilo); head-4096/tail-1024 for >8192 (dsh); soft-trim at 30%, hard-clear at 50% (OpenClaw). Never prune Task/Skill results. Batch rewrites (≥64 KB reclaimable) to protect the cache (Cline) | M | OC Kilo DCP Cline Claw dsh |
 | 2.3 | **Path-keyed dedup and stale-read pruning**: newest Read of a path wins; Reads older than an Edit/Write of the same path are pruned; superseded Write `content` arguments are elided; inputs of failed calls older than N turns are blanked (DCP + Cline) | S–M | DCP Cline |
 | 2.4 | **Summarise at step level, reusing the cache.** Same system prompt + tools + history, plus a final user instruction "do not call tools" (CC, dsh, nanobot). Default to the main model; keep `SUGARCRUSH_SUMMARY_MODEL` as an option. Snap cuts to tool-pair boundaries (OpenHands) and keep the unsent tail verbatim (nanobot) | M | CC dsh nano OH Zed |
 | 2.5 | **State-oriented summary template** layered on the existing six-facet records (which are good for security-constraint fidelity). Add a holistic block — Goal / Constraints / Progress (Done / In-progress / Blocked) / Key decisions / Current work / Next step / Pending tasks with ids / Files read & modified (derived mechanically from tool rows) / Errors+fixes verbatim / Latest unresolved user request verbatim. Merge with the previous summary. Cap ~16k chars. Audit required headings and fall back if missing (OpenClaw safeguard). Reject summaries not smaller than their source or cut short by the length limit. After compaction, re-append the latest user prompt verbatim plus "continue if you have next steps" | S–M | CC OC Kilo OH Goose Claw dsh Cline |
 | 2.6 | **Post-compaction re-injection**: the 5 most recently edited/read files (≤5k tokens each) or Cline's "Required Files" (≤8 files/100k chars), invoked skill bodies, fresh git snapshot, todo list, plan | M | CC Cline |
-| 2.7 | **Context-overflow and length-stop recovery**: classify provider context-length 400s as `ContextOverflow`, prune maximally and retry once (twice in goose). On `finish_reason=length` without tool calls, continue with prefill (`continue_final_message` on SGLang) up to 3× (Aider/nanobot/Cline). Retry dropped streams with "Continue where you left off" (Zed/OpenClaw) | M | 9 reports |
+| 2.7 | **Context-overflow and length-stop recovery**: on a provider failure classified as `ContextOverflow`, prune maximally and retry once (twice in goose). On `finish_reason=length` without tool calls, continue with prefill (`continue_final_message` on SGLang) up to 3× (Aider/nanobot/Cline). Retry dropped streams with "Continue where you left off" (Zed/OpenClaw) | M | 9 reports |
 | 2.9 | **Absolute thresholds** in addition to percentages (DCP's 50k/100k "smart zone"; on a 1M window, 70% is far past the point where quality holds); per-model overrides | S | DCP |
 | 2.10 | Ahead-of-need **background summarisation** at 70% so the 85% submit never blocks; splice in if the history fingerprint still matches | M | Aider |
 | 2.11 | **Memory flush before compaction**: one silent tool-enabled turn that writes durable notes to memory, once per compaction cycle | S–M | Claw |
@@ -214,7 +205,6 @@ How the pieces connect:
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
-| 5.1 | **Memory index injection**: the user + project `MEMORY.md` index (`MemoryStore` already builds it within 200 lines/25 KB), not 12 newest bodies, plus standing "when to save / types / don't save what the code says" instructions and a `Memory` tool (view/save/str_replace/delete/recall) | S–M | CC Kilo OH |
 | 5.2 | **Auto-memory consolidation** on `summaryBackend`, throttled: JSON ops plus skip reasons, Kilo's "prefer saving nothing" list and secret redaction; "Memory is context, not instruction" | M | Kilo |
 | 5.3 | **Memory search**: SQLite FTS5 BM25 plus the dormant `embeddings` (0.7 vector / 0.3 keyword, 30-day half-life, MMR); a relevance-ranked snapshot keyed on the latest user message; a mandatory "search memory before answering about prior work" prompt fragment | M | Claw |
 | 5.4 | **Dream pass**: compaction summaries appended to a tagged journal; a periodic restricted-tool pass edits memory/skills; memory dir git-versioned with `/memory log` and `/memory restore` | M–L | nano |
@@ -342,7 +332,7 @@ Keep sugar-crush's richer `<env>` and repo map; only move the volatile parts out
 ## V.1 Settings pane and configurability (Appendix N)
 
 **What exists today:**
-- **A read-only sidebar.** `src/Tui/Components/SettingsPane.php` shows 8 rows with the footer "read-only — /theme, /model". `Ctrl+,` only focuses it.
+- **A read-only settings view.** `/settings` (alias `/config`), the palette, the menu, or Enter on the sidebar open a full-band view of every key: its value, where it came from, and when a change applies. Nothing in it edits yet.
 - **Only three keys are ever written:** `provider` and `theme` through `Chat::onConfigChange`, and `layout` through `App::$onLayoutChange`. A drift test pins the first two (`ConfigWriteProducerDocumentationDriftTest`). An editor therefore needs its **own censused write door**; widening that callback would break the pinned contract.
 - **The current key set:** about 26 config keys, 25 `SUGARCRUSH_*` environment variables and 10 CLI flags. The report has the full inventory table: type, default, allowed tiers, env override, whether a change applies live / next turn / after restart, and how easy each is to edit in a UI.
 - **Next-turn reload is mostly free.** The forked child re-reads the settings files each turn (`EngineBackend.php`), so making a key take effect on the next turn usually needs no new plumbing. Today only `parallelToolCalls`, `parallelToolDeadlineSeconds` and `maxOutputTokens` are re-applied that way. `docs/SETTINGS.md` names only the first two.
@@ -353,7 +343,7 @@ The report lists **about 45 hard-coded constants**, each with file:line and a pr
 - the 120 s idle watchdog, as `turnIdleTimeoutSeconds`;
 - the compaction thresholds 70/85/95 and keep-10;
 - the 64 KiB and 1 MiB output caps;
-- the memory caps of 12 entries, 4 KiB and 512 B;
+- the memory caps of 40 index entries, 4 KiB and 512 B;
 - the private WebSearch default host;
 - sub-agent max turns.
 
@@ -362,7 +352,6 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 **Recommended design:**
 - **The `SettingsSchema` registry** (`SettingDefinition` rows, `src/Config/Settings/`) drives the editor form, and `LayeredSettings`' tier rosters are derived from it.
 - **A full-band `SettingsEditor` view** with category tabs (Model & Provider, Agent loop, Context & Compaction, Permissions, Tools, Memory, Sub-agents, UI/Theme, and read-only Hooks/MCP, plus Server). It has fuzzy search, a provenance panel showing where each value came from, env-locked fields, live/next-turn/restart badges, reset-to-default, and a diff preview before saving.
-  - **Opened by:** `/settings` (alias `/config`), the palette, the menu, or Enter on the sidebar.
   - **Built from libraries already in the dependency tree:** `candy-forms` (fields, groups, validators, `hydrate`), `candy-fuzzy`, `candy-focus`, `candy-mouse`, `sugar-veil`, `candy-sprinkles`, `candy-layout`, `candy-core` (`AtomicJsonFile`, i18n).
   - **Optional additions:** `sugar-diff` for the save preview and `sugar-toast` for feedback. The report advises against `sugar-dash`, because it would pull `candy-pty` into the runtime.
 - **A `SettingsWriter` with four tiers:**
@@ -374,7 +363,6 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
   Edits made mid-turn apply from the next turn. Store keys **flat with dots** (`"compaction.autoPercent"`), because `LayeredSettings::merge` only merges one level deep.
 
 **Phases** (full class, test and doc list in N §5):
-- **P1 — read-only editor (M).**
 - **P2 — editing and writer (M).**
 - **P3 — live apply and session tier (M).**
 - **P4 — promote the hard-coded constants (L, incremental).**
@@ -392,12 +380,11 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
    - Reconnect sends `resume: {sessionId: lastSeq}`.
    - Approvals are events: any client may answer, the first answer wins, and pending asks are re-sent on reconnect.
    - The method and event catalogue (§6) covers sessions, prompting, steering, cancel, tools, diffs, sub-agents, usage, compaction, settings get/set, slash commands, memory, todos and background agents. It also includes a version handshake and backpressure rules (watermarks, 1013 close).
-3. **The keystone is the same parent↔child frame channel as roadmap Wave 1.C.** Frames: `ask`, `ask_reply`, `steer`, `steer_ack`, `cancel_soft`, `usage`, `step`.
+3. **The keystone is the same parent↔child frame channel as roadmap Wave 1.C.** Frames: `ask`, `ask_reply`, `steer`, `steer_ack`; `cancel_soft`, `usage` and `step` already cross it.
    - Building it first fixes TUI approvals **and** gives the server approvals for free.
    - The 120 s watchdog pauses while an ask is pending.
-   - Parallel grandchildren get a per-job socketpair relay, which also fixes the missing live dashboard rows.
    - **Phase 1 is worth shipping even if the server never lands.**
-4. **Headless core.** `Chat.php` (over 19,000 lines) and candy-core `Program::run` own the event loop and the terminal. A strangler-pattern extraction therefore moves non-UI logic into `src/Host/`: `SessionHub`, `SessionHost`, `TurnController`, `TurnRunner`, `TranscriptStore`, `EventLog`, `SpendLedger`, `ContextMeter`, `CompactionService`, `TitleService`. Both `Chat` and the server become clients of it.
+4. **Headless core.** `Chat.php` (over 19,000 lines) and candy-core `Program::run` own the event loop and the terminal. A strangler-pattern extraction therefore moves non-UI logic into `src/Host/`, which already holds `TranscriptStore`, `EventLog`, `SpendLedger`, `ContextMeter` and `TitleService`; still to come are `SessionHub`, `SessionHost`, `TurnController`, `TurnRunner` and `CompactionService`. Both `Chat` and the server become clients of it.
    - `Bootstrap` holds more than 25 static, root-sensitive caches. So one server process handles **one project root**.
    - Multi-root support comes later, with one workspace-host child process per root.
 5. **Background mode:**
@@ -451,21 +438,14 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 ## V.4 Sessions, live agent lines, agent view and direct chat (Appendix P)
 
 **Sessions: listing and renaming already exist, but are thin.**
-- **LIVE today:** `/sessions`, Ctrl+R, `/rename <name>`, auto-titles, the tab strip, `--resume`, `-c`, and `sugarcrush session list|delete`.
+- **LIVE today:** `/sessions`, Ctrl+R, `/rename <name>`, auto-titles, the tab strip, `--resume`, `-c`, and `sugarcrush session list|show|rename|delete|pin|unpin|archive|unarchive`.
 - **Design:**
   - `/rename` with no argument opens inline edit; `--auto` regenerates the title;
-  - Chat honours the stored `TitleSource`, so a title the user set always beats an auto-title in the UI as well as in the store;
-  - CLI `session rename|show|pin|archive`.
+  - Chat honours the stored `TitleSource`, so a title the user set always beats an auto-title in the UI as well as in the store.
 
 **Live agent activity lines.**
-- **Problem:** `TaskTool` already emits `SubAgentActivity` beats as `subagent` frames, but:
-  - they have no parent tool-call id, so they cannot be attached to the right Task row;
-  - they carry only a 4 KB text tail, have no stats, and always report success;
-  - they are **dropped entirely for parallel Task batches**, because the emitter is tied to the turn process and parallel Tasks run in grandchildren (`EngineBackend.php`);
-  - the Task row shows a static `⠴ running:`.
+- **Problem:** the v2 `SubAgentActivity` frames (parent call id, coalesced items, stats, real outcome) reach the parent for every Task, parallel members included, but nothing renders them: the Task row shows a static `⠴ running:`.
 - **Design:**
-  - a v2 frame with structured, coalesced activity items and stats (at most 4 Hz, 8 KB, 32 items);
-  - a **per-grandchild DGRAM socketpair relay** in `Runtime::executeConcurrently`;
   - an `AgentLiveRegistry` in the parent;
   - one width-safe line per running agent under its Task row, e.g. `└ ⠋ Grep "LoginController" · 7 tools · 0:12 · 4.1k tok`;
   - segments drop in a set priority order on narrow terminals;
@@ -494,11 +474,11 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 ## V.5 How the new features fit the Part III roadmap
 
 These features are scheduled in Appendix R together with Part III:
-- The sessions work (P-A3–P-A4) runs W3–W5.
-- The rest of the two-way fork channel, 1.C (= server Phase O-1), runs W3–W5.
-- The grandchild relay and live lines (RELAY, P-B) run W3–W5.
-- The settings editor, writer and live apply (N-P1–N-P3) run W3–W6.
-- The host extraction O-2b–O-2h runs W3–W7, then the protocol (W7), web MVP (W8) and multi-session web (W9).
+- The sessions work (P-A4) runs W5.
+- The rest of the two-way fork channel, 1.C (= server Phase O-1), runs W4–W5.
+- The live lines (P-B2, P-B3) run W4–W5.
+- The settings writer and live apply (N-P2–N-P3) run W4–W6.
+- The host extraction O-2e–O-2h runs W4–W7, then the protocol (W7), web MVP (W8) and multi-session web (W9).
 - The agent view and direct chat (P-C, P-D, P-E) run W6–W10.
 
 ---

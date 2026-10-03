@@ -70,13 +70,11 @@ Severity is the user impact on the live default path.
 | 11 | Med-High | MCP results uncapped; no per-call MCP timeout | 0.5 |
 | 12 | Med-High | Tool-call ids repeat on the DSML and MiniMax parsers | 0.2 |
 | 13 | Medium | SugarCraft PR cadence sent to every project via Bash guidance | 0.3 |
-| 14 | Medium | `/memory add` defaults to user scope, which is never injected; recall is project-only, newest 12 | 0.6, 5.1 |
 | 15 | Medium | `removeToolResults` no-op; tail not token-budgeted | 2.2-1 |
 | 16 | Medium | `removeNavigationSteps` drops user rows matching `rm`/`mv`/`ls`… *(inferred)* | 0.7 |
 | 17 | Medium | `isFileReadMessage` guesses from content | 0.7 |
 | 18 | Medium | Compaction summary keeps history, not state; no audit | 2.5 |
 | 19 | Medium | Summariser uses a different prompt/prefix (no cache reuse) | 2.4-2 |
-| 20 | Medium | Compaction overwrites displayed/persisted history | 1.B-3 |
 | 21 | Medium | Token estimate ignores system prompt and tool schemas; % thresholds fire too late on 1M windows | 2.1, 2.9, 5.6 |
 | 22 | Medium | Sub-agent output unescaped, no "no authority" framing | 0.15 |
 | 23 | Medium | Preset `model`/`permissionMode`/`effort`/`isolation`/`background` inert; preset grants match by name | 4.1, 4.2, 4.9, 4.3 |
@@ -141,11 +139,6 @@ These are the recommendations from all twelve reports, de-duplicated and grouped
 
 Files: `EngineBackend::runTurn`/`completeAsync`, `Runtime`. **M.** *(CC P0-1, OC P0-3, Goose P0-3, nano R4, dsh P0-1, DCP P1-6.)*
 
-**1.B — Message identity and structured replay.**
-- Compaction *flags* original rows as hidden from the agent instead of deleting them, so scrollback survives.
-
-**M–L.** *(OC P0-2, DCP P0-1/P0-2, Cline P0-3, OH P0-4, Zed R2, Goose P0-4, nano R2, dsh P1-2.)*
-
 **1.C — The parent↔child frame channel.** Turn the socketpair into a two-way protocol.
 
 Frames from parent to child:
@@ -162,7 +155,6 @@ How the pieces connect:
 - A rejection's feedback can be typed in the modal (the verdict already carries a note to the model; a key binding and a note stage are missing).
 - Parallel grandchildren relay asks through the turn child, or return "needs-ask" and re-run sequentially (Goose).
 - An alternative is OpenHands' *resumable stop*: end the turn with pending calls and execute them first on the next dispatch. It is cleaner with respect to the watchdog, but needs 1.B.
-- **Once this is green, change the default mode** from `bypass-permissions` to `default` or `accept-edits`, after Wave 3.A checkpoints land.
 
 **M–L; the highest-leverage item in the whole report.** *(10 reports.)* The same channel later carries server-mode approvals (Part V).
 
@@ -170,13 +162,12 @@ How the pieces connect:
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
-| 2.1 | **Step-level pressure check** in `runTurn` before each `Runtime::run`. Anchor on the provider-reported `usage.prompt_tokens` of the last step plus a delta estimate for new rows. Count the system prompt and tool schemas. Threshold e.g. `min(0.8·W, W − maxOutput − 64k)` (dsh) or 90% (Zed/Cline) | M | 11 reports |
 | 2.2 | **Deterministic tool-output pruning first.** Replace the no-op `removeToolResults` with a projector rule. Older tool results go to a placeholder that keeps tool + main arg (`[r17 Read src/X.php — output pruned; re-run if needed]`). Protect the newest 40k tokens and the last 2 turns; only fire if ≥20k is freed (opencode/Kilo); head-4096/tail-1024 for >8192 (dsh); soft-trim at 30%, hard-clear at 50% (OpenClaw). Never prune Task/Skill results. Batch rewrites (≥64 KB reclaimable) to protect the cache (Cline) | M | OC Kilo DCP Cline Claw dsh |
 | 2.3 | **Path-keyed dedup and stale-read pruning**: newest Read of a path wins; Reads older than an Edit/Write of the same path are pruned; superseded Write `content` arguments are elided; inputs of failed calls older than N turns are blanked (DCP + Cline) | S–M | DCP Cline |
 | 2.4 | **Summarise at step level, reusing the cache.** Same system prompt + tools + history, plus a final user instruction "do not call tools" (CC, dsh, nanobot). Default to the main model; keep `SUGARCRUSH_SUMMARY_MODEL` as an option. Snap cuts to tool-pair boundaries (OpenHands) and keep the unsent tail verbatim (nanobot) | M | CC dsh nano OH Zed |
 | 2.5 | **State-oriented summary template** layered on the existing six-facet records (which are good for security-constraint fidelity). Add a holistic block — Goal / Constraints / Progress (Done / In-progress / Blocked) / Key decisions / Current work / Next step / Pending tasks with ids / Files read & modified (derived mechanically from tool rows) / Errors+fixes verbatim / Latest unresolved user request verbatim. Merge with the previous summary. Cap ~16k chars. Audit required headings and fall back if missing (OpenClaw safeguard). Reject summaries not smaller than their source or cut short by the length limit. After compaction, re-append the latest user prompt verbatim plus "continue if you have next steps" | S–M | CC OC Kilo OH Goose Claw dsh Cline |
 | 2.6 | **Post-compaction re-injection**: the 5 most recently edited/read files (≤5k tokens each) or Cline's "Required Files" (≤8 files/100k chars), invoked skill bodies, fresh git snapshot, todo list, plan | M | CC Cline |
-| 2.7 | **Context-overflow and length-stop recovery**: classify provider context-length 400s as `ContextOverflow`, prune maximally and retry once (twice in goose). On `finish_reason=length` without tool calls, continue with prefill (`continue_final_message` on SGLang) up to 3× (Aider/nanobot/Cline). Retry dropped streams with "Continue where you left off" (Zed/OpenClaw) | M | 9 reports |
+| 2.7 | **Context-overflow and length-stop recovery**: on a provider failure classified as `ContextOverflow`, prune maximally and retry once (twice in goose). On `finish_reason=length` without tool calls, continue with prefill (`continue_final_message` on SGLang) up to 3× (Aider/nanobot/Cline). Retry dropped streams with "Continue where you left off" (Zed/OpenClaw) | M | 9 reports |
 | 2.9 | **Absolute thresholds** in addition to percentages (DCP's 50k/100k "smart zone"; on a 1M window, 70% is far past the point where quality holds); per-model overrides | S | DCP |
 | 2.10 | Ahead-of-need **background summarisation** at 70% so the 85% submit never blocks; splice in if the history fingerprint still matches | M | Aider |
 | 2.11 | **Memory flush before compaction**: one silent tool-enabled turn that writes durable notes to memory, once per compaction cycle | S–M | Claw |
@@ -214,7 +205,6 @@ How the pieces connect:
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
-| 5.1 | **Memory index injection**: the user + project `MEMORY.md` index (`MemoryStore` already builds it within 200 lines/25 KB), not 12 newest bodies, plus standing "when to save / types / don't save what the code says" instructions and a `Memory` tool (view/save/str_replace/delete/recall) | S–M | CC Kilo OH |
 | 5.2 | **Auto-memory consolidation** on `summaryBackend`, throttled: JSON ops plus skip reasons, Kilo's "prefer saving nothing" list and secret redaction; "Memory is context, not instruction" | M | Kilo |
 | 5.3 | **Memory search**: SQLite FTS5 BM25 plus the dormant `embeddings` (0.7 vector / 0.3 keyword, 30-day half-life, MMR); a relevance-ranked snapshot keyed on the latest user message; a mandatory "search memory before answering about prior work" prompt fragment | M | Claw |
 | 5.4 | **Dream pass**: compaction summaries appended to a tagged journal; a periodic restricted-tool pass edits memory/skills; memory dir git-versioned with `/memory log` and `/memory restore` | M–L | nano |
@@ -342,7 +332,7 @@ Keep sugar-crush's richer `<env>` and repo map; only move the volatile parts out
 ## V.1 Settings pane and configurability (Appendix N)
 
 **What exists today:**
-- **A read-only sidebar.** `src/Tui/Components/SettingsPane.php` shows 8 rows with the footer "read-only — /theme, /model". `Ctrl+,` only focuses it.
+- **A read-only settings view.** `/settings` (alias `/config`), the palette, the menu, or Enter on the sidebar open a full-band view of every key: its value, where it came from, and when a change applies. Nothing in it edits yet.
 - **Only three keys are ever written:** `provider` and `theme` through `Chat::onConfigChange`, and `layout` through `App::$onLayoutChange`. A drift test pins the first two (`ConfigWriteProducerDocumentationDriftTest`). An editor therefore needs its **own censused write door**; widening that callback would break the pinned contract.
 - **The current key set:** about 26 config keys, 25 `SUGARCRUSH_*` environment variables and 10 CLI flags. The report has the full inventory table: type, default, allowed tiers, env override, whether a change applies live / next turn / after restart, and how easy each is to edit in a UI.
 - **Next-turn reload is mostly free.** The forked child re-reads the settings files each turn (`EngineBackend.php`), so making a key take effect on the next turn usually needs no new plumbing. Today only `parallelToolCalls`, `parallelToolDeadlineSeconds` and `maxOutputTokens` are re-applied that way. `docs/SETTINGS.md` names only the first two.
@@ -353,7 +343,7 @@ The report lists **about 45 hard-coded constants**, each with file:line and a pr
 - the 120 s idle watchdog, as `turnIdleTimeoutSeconds`;
 - the compaction thresholds 70/85/95 and keep-10;
 - the 64 KiB and 1 MiB output caps;
-- the memory caps of 12 entries, 4 KiB and 512 B;
+- the memory caps of 40 index entries, 4 KiB and 512 B;
 - the private WebSearch default host;
 - sub-agent max turns.
 
@@ -362,7 +352,6 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 **Recommended design:**
 - **The `SettingsSchema` registry** (`SettingDefinition` rows, `src/Config/Settings/`) drives the editor form, and `LayeredSettings`' tier rosters are derived from it.
 - **A full-band `SettingsEditor` view** with category tabs (Model & Provider, Agent loop, Context & Compaction, Permissions, Tools, Memory, Sub-agents, UI/Theme, and read-only Hooks/MCP, plus Server). It has fuzzy search, a provenance panel showing where each value came from, env-locked fields, live/next-turn/restart badges, reset-to-default, and a diff preview before saving.
-  - **Opened by:** `/settings` (alias `/config`), the palette, the menu, or Enter on the sidebar.
   - **Built from libraries already in the dependency tree:** `candy-forms` (fields, groups, validators, `hydrate`), `candy-fuzzy`, `candy-focus`, `candy-mouse`, `sugar-veil`, `candy-sprinkles`, `candy-layout`, `candy-core` (`AtomicJsonFile`, i18n).
   - **Optional additions:** `sugar-diff` for the save preview and `sugar-toast` for feedback. The report advises against `sugar-dash`, because it would pull `candy-pty` into the runtime.
 - **A `SettingsWriter` with four tiers:**
@@ -374,7 +363,6 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
   Edits made mid-turn apply from the next turn. Store keys **flat with dots** (`"compaction.autoPercent"`), because `LayeredSettings::merge` only merges one level deep.
 
 **Phases** (full class, test and doc list in N §5):
-- **P1 — read-only editor (M).**
 - **P2 — editing and writer (M).**
 - **P3 — live apply and session tier (M).**
 - **P4 — promote the hard-coded constants (L, incremental).**
@@ -392,12 +380,11 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
    - Reconnect sends `resume: {sessionId: lastSeq}`.
    - Approvals are events: any client may answer, the first answer wins, and pending asks are re-sent on reconnect.
    - The method and event catalogue (§6) covers sessions, prompting, steering, cancel, tools, diffs, sub-agents, usage, compaction, settings get/set, slash commands, memory, todos and background agents. It also includes a version handshake and backpressure rules (watermarks, 1013 close).
-3. **The keystone is the same parent↔child frame channel as roadmap Wave 1.C.** Frames: `ask`, `ask_reply`, `steer`, `steer_ack`, `cancel_soft`, `usage`, `step`.
+3. **The keystone is the same parent↔child frame channel as roadmap Wave 1.C.** Frames: `ask`, `ask_reply`, `steer`, `steer_ack`; `cancel_soft`, `usage` and `step` already cross it.
    - Building it first fixes TUI approvals **and** gives the server approvals for free.
    - The 120 s watchdog pauses while an ask is pending.
-   - Parallel grandchildren get a per-job socketpair relay, which also fixes the missing live dashboard rows.
    - **Phase 1 is worth shipping even if the server never lands.**
-4. **Headless core.** `Chat.php` (over 19,000 lines) and candy-core `Program::run` own the event loop and the terminal. A strangler-pattern extraction therefore moves non-UI logic into `src/Host/`: `SessionHub`, `SessionHost`, `TurnController`, `TurnRunner`, `TranscriptStore`, `EventLog`, `SpendLedger`, `ContextMeter`, `CompactionService`, `TitleService`. Both `Chat` and the server become clients of it.
+4. **Headless core.** `Chat.php` (over 19,000 lines) and candy-core `Program::run` own the event loop and the terminal. A strangler-pattern extraction therefore moves non-UI logic into `src/Host/`, which already holds `TranscriptStore`, `EventLog`, `SpendLedger`, `ContextMeter` and `TitleService`; still to come are `SessionHub`, `SessionHost`, `TurnController`, `TurnRunner` and `CompactionService`. Both `Chat` and the server become clients of it.
    - `Bootstrap` holds more than 25 static, root-sensitive caches. So one server process handles **one project root**.
    - Multi-root support comes later, with one workspace-host child process per root.
 5. **Background mode:**
@@ -451,21 +438,14 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 ## V.4 Sessions, live agent lines, agent view and direct chat (Appendix P)
 
 **Sessions: listing and renaming already exist, but are thin.**
-- **LIVE today:** `/sessions`, Ctrl+R, `/rename <name>`, auto-titles, the tab strip, `--resume`, `-c`, and `sugarcrush session list|delete`.
+- **LIVE today:** `/sessions`, Ctrl+R, `/rename <name>`, auto-titles, the tab strip, `--resume`, `-c`, and `sugarcrush session list|show|rename|delete|pin|unpin|archive|unarchive`.
 - **Design:**
   - `/rename` with no argument opens inline edit; `--auto` regenerates the title;
-  - Chat honours the stored `TitleSource`, so a title the user set always beats an auto-title in the UI as well as in the store;
-  - CLI `session rename|show|pin|archive`.
+  - Chat honours the stored `TitleSource`, so a title the user set always beats an auto-title in the UI as well as in the store.
 
 **Live agent activity lines.**
-- **Problem:** `TaskTool` already emits `SubAgentActivity` beats as `subagent` frames, but:
-  - they have no parent tool-call id, so they cannot be attached to the right Task row;
-  - they carry only a 4 KB text tail, have no stats, and always report success;
-  - they are **dropped entirely for parallel Task batches**, because the emitter is tied to the turn process and parallel Tasks run in grandchildren (`EngineBackend.php`);
-  - the Task row shows a static `⠴ running:`.
+- **Problem:** the v2 `SubAgentActivity` frames (parent call id, coalesced items, stats, real outcome) reach the parent for every Task, parallel members included, but nothing renders them: the Task row shows a static `⠴ running:`.
 - **Design:**
-  - a v2 frame with structured, coalesced activity items and stats (at most 4 Hz, 8 KB, 32 items);
-  - a **per-grandchild DGRAM socketpair relay** in `Runtime::executeConcurrently`;
   - an `AgentLiveRegistry` in the parent;
   - one width-safe line per running agent under its Task row, e.g. `└ ⠋ Grep "LoginController" · 7 tools · 0:12 · 4.1k tok`;
   - segments drop in a set priority order on narrow terminals;
@@ -494,11 +474,11 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 ## V.5 How the new features fit the Part III roadmap
 
 These features are scheduled in Appendix R together with Part III:
-- The sessions work (P-A3–P-A4) runs W3–W5.
-- The rest of the two-way fork channel, 1.C (= server Phase O-1), runs W3–W5.
-- The grandchild relay and live lines (RELAY, P-B) run W3–W5.
-- The settings editor, writer and live apply (N-P1–N-P3) run W3–W6.
-- The host extraction O-2b–O-2h runs W3–W7, then the protocol (W7), web MVP (W8) and multi-session web (W9).
+- The sessions work (P-A4) runs W5.
+- The rest of the two-way fork channel, 1.C (= server Phase O-1), runs W4–W5.
+- The live lines (P-B2, P-B3) run W4–W5.
+- The settings writer and live apply (N-P2–N-P3) run W4–W6.
+- The host extraction O-2e–O-2h runs W4–W7, then the protocol (W7), web MVP (W8) and multi-session web (W9).
 - The agent view and direct chat (P-C, P-D, P-E) run W6–W10.
 
 ---
@@ -9378,7 +9358,7 @@ rmwave() {  # usage: rmwave w3 a b c …
   | Registry | Covers | Single-owner until | Made shareable by |
   |---|---|---|---|
   | **R-KEYS** | `LAYERED_KEYS`, `docs/SETTINGS.md` key table, README layered roster and count words | W4 | **DH-KEYS** (W2 + W4): per-category definition files under `src/Config/Settings/Definitions/`, `LAYERED_KEYS` derived from the schema, SETTINGS table + README roster + counts generated by `tools/gen-settings-doc.php --write` (`--check` in a drift test). Afterwards it is shareable per category file. |
-  | **R-CMDS** | `CommandRegistry::all`, `docs/COMMANDS.md` built-in table, README slash roster, `Chat::dispatchCommand` arms | W3 | **DH-CMDS** (W3): one spec file per command under `src/Commands/Specs/` (glob-discovered, sorted), table-driven dispatch, COMMANDS.md table + README roster generated by `tools/gen-command-docs.php`. Changing an existing command's hint or description is row-scoped and always shareable. |
+  | **R-CMDS** | `CommandRegistry::all`, `docs/COMMANDS.md` built-in table, README slash roster, `Chat::dispatchCommand` arms | W3 | **DH-CMDS** (W3): one spec file per command under `builtin-commands/` (glob-discovered, sorted), table-driven dispatch, COMMANDS.md table + README roster generated by `tools/gen-command-docs.php`. Changing an existing command's hint or description is row-scoped and always shareable. |
   | **R-TOOLS** | `Bootstrap::unfilteredTools` list, `PermissionGate` / `ProtectFilesHook` tool-name lists, `BuiltInToolCorpusTest` count, the tool-count prose in README / ARCHITECTURE / AGENTS_AUTHORING / PERMISSIONS | W3 | **DH-TOOLS** (W3): tools discovered from `src/Tools/BuiltIn/*` through a catalog, each tool declares its permission class (read / write / no-ask), roster prose and counts generated, spelled-number maps extended to "twenty". |
 
 - **Shared docs** (README.md, docs/*.md) may be shared within a wave only by section. The overlaps are listed per group. Generated blocks (settings, commands, tools) are never hand-merged; the integrator re-runs the generator.
@@ -9510,21 +9490,6 @@ Columns:
 - **Hotspot regions**: listed only where another group in the same wave also touches that file.
 - **Order**: the integration cherry-pick order for the wave.
 
-#### W3 (order: a, b, c, d, e, f, g, h, i, j)
-
-| G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
-|---|---|---|---|---|---|---|
-| a | 2.1, 1.C-4a (usage/step/`cancel_soft` frames via ChildChannel; `onStep` param) | `src/Backend/{EngineBackend,ChildChannel}.php`, `src/Runtime.php`, `src/Chat.php`, `src/Renderer.php`, `src/Util/TokenEstimate.php`, new `src/Context/{ContextBudget,ContextPressure}.php`, `src/Events/{UsageUpdated,StepStarted}.php` | EB: `runTurn` `step-top`/`after-step`, `completeAsync`, `runCompleteInChild` (`cancel_soft`), `completeTranscript` signature. RT: `run`. Chat: **CS**, `route` Escape arm. RN: status bar | ARCHITECTURE "Runtime" + frame table; README "What you see" tier sentence | — | M–L |
-| b | RELAY, P-B1 | `src/Runtime.php`, `src/Backend/EngineBackend.php`, `src/Tools/BuiltIn/TaskTool.php`, `src/Events/SubAgentActivity.php`, `src/Agents/AgentManager.php`, new `src/Tools/{StreamsActivity,ActivitySink,DatagramActivitySink}.php`, `src/Agents/Live/{ActivityItem,SubAgentActivityBuffer,ToolSummary}.php` | RT: `executeConcurrently`, `runToolInChild`. EB: `turnTools`, `encodeEvent`/`decodeEvent` | ARCHITECTURE activity relay (frame-table rows distinct from a); TROUBLESHOOTING (pcntl) | — | L |
-| c | 1.B-3 | `src/Chat.php`, `src/Context/ContextCompactor.php`, `src/Renderer.php` | Chat: `compactNow`, `compactionChanges`, `compactionWire`, `applyModelCompaction`. RN: `renderHistory` | MEMORY/ARCHITECTURE compaction paragraph | — | M |
-| d | O-2b | `src/Chat.php`, `src/Session/EnhancedSessionStore.php`, new `src/Host/{TranscriptStore,EventLog}.php` | Chat: `persistTranscript`…`switchToSession`, `reviveCheckpointMessage`. **R-SCHEMA** (`session_events`) | ARCHITECTURE "Sessions and state" (prose, no new row) | — | M |
-| e | O-2c | `src/Chat.php`, new `src/Host/{SpendLedger,ContextMeter}.php` | Chat: meters `shouldPromptIdleCompaction`…`spendCapTurnRefusal`, `appendSpendCapNotice`, budget handlers | — | — | S–M |
-| f | O-2d | `src/Chat.php`, `src/{SessionTitledMsg,PromptSuggestionMsg}.php`, new `src/Host/TitleService.php` | Chat: `scheduleTitleGeneration`…`sanitizePromptSuggestion` | — | — | S |
-| g | P-A3 (+ subcommand-scoped flags), DEF-MODE (D5) | `src/Cli/{Subcommands,Help,ArgvParser,ParsedArgs}.php`, `src/Cli/Bootstrap.php` | BS: `DEFAULT_PERMISSION_MODE`, `permissionGate`. **R-CLI** | README :89/:1304/:1326 (already edited by W2-b; sequential)/:1357, "Subcommands" fence; PERMISSIONS "Setting the mode", :432/:513; ENVIRONMENT `SUGARCRUSH_PERMISSION_MODE`; TROUBLESHOOTING :219; HOOKS :800/:851; AGENTS_AUTHORING :11 | — | M |
-| h | X-37a, 2.7-1a | `src/Cli/Bootstrap.php`, `src/Agents/AgentPresetRegistry.php`, `src/Skills/SkillFrontmatter.php`, `src/Commands/CommandSpec.php`, `src/Context/RuleLoader.php`, `src/Providers/{SglangProvider,CustomProvider,OpenAIProvider,VertexProvider,BedrockProvider}.php`, `src/Providers/{ProviderResponseException,ProviderStreamException}.php`, new `src/Support/FrontmatterKeyAudit.php`, `src/Providers/ContextOverflow.php` | BS: `agentRoster`, `skillRegistry`, command-loader feed. SG/CU: error-mapping methods only | AGENTS_AUTHORING "Which fields reach the roster"; SKILLS field table; COMMANDS frontmatter; README :1307; TROUBLESHOOTING overflow | — | M |
-| i | N-P1 (D7), DH-CMDS | `src/App/App.php`, `src/Tui/Renderer.php`, `src/Tui/KeyboardHandler.php`, `src/Tui/Components/SettingsPane.php`, `src/Commands/{CommandRegistry,KeyBindingRegistry}.php`, new `src/Commands/Specs/*`, `tools/gen-command-docs.php`, `src/Palette/PaletteAction.php`, `src/Chat.php`, new `src/Tui/Settings/*` | Chat: `dispatchCommand` (made table-driven), `runRootPaletteAction`, `submit` docblock. **R-CMDS, R-KEYBIND** | README slash roster (becomes generated), "Keys", "Pane docking"; COMMANDS table (becomes generated) | candy-forms/fuzzy/focus/mouse, sugar-veil (consume) | L |
-| j | 5.1-1, 5.1-2, DH-TOOLS | `src/Runtime.php`, `src/Context/MemoryBlock.php`, `src/Memory/MemoryStore.php`, `src/Chat.php`, `src/Cli/Bootstrap.php`, `src/Permissions/PermissionGate.php`, `src/Hooks/BuiltIn/ProtectFilesHook.php`, new `src/Tools/BuiltIn/MemoryTool.php`, `src/Memory/MemoryWriter.php`, tool catalog | RT: `memorySnapshot`, memory slot. Chat: `memoryAdd`/`memoryImport`. BS: `unfilteredTools`, `memoryStore`. **R-TOOLS** | MEMORY "three tiers", fence, new Memory tool section; PROMPT_ENGINEERING slot 8; README Capabilities Tools (becomes generated); PERMISSIONS "six modes" row (distinct from g's sections) | — | L |
-
 #### W4 (order: a, b, c, d, e, f, g, h, i, j)
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
@@ -9532,7 +9497,7 @@ Columns:
 | a | 1.A-2, 1.C-3 (D6; creates `TurnInbox` + composite) | `src/Backend/EngineBackend.php`, `src/Runtime.php`, `src/Chat.php`, `src/Commands/KeyBindingRegistry.php`, `src/Tui/KeyboardHandler.php`, new `src/Backend/{TurnInbox,CompositeTurnInbox,SocketSteerInbox,QueueMode}.php` | EB: `runTurn` `step-top`/`build`, `completeAsync` (pre-fork memo). RT: `executeToolCalls`, `executeSequentially`. Chat: `submit` busy branch, `enqueuePrompt`, `releaseQueuedPrompts`. **R-KEYBIND** | README "Keys" | — | L |
 | b | O-2e | `src/Chat.php`, `src/Compactor.php`, new `src/Host/CompactionService.php` | Chat: compaction regions (`handleCompactCommand`…`withoutParkedSubmission`, `withCompactionOutcome`…`contextTruncatedMessage`) | ARCHITECTURE compaction | — | M–L |
 | c | P-B2 (+ per-step stats via `onStep`) | `src/Chat.php`, `src/Renderer.php`, `src/Message.php`, `src/Tools/BuiltIn/TaskTool.php`, new `src/Agents/Live/{AgentLiveState,AgentLiveRegistry}.php`, `src/Tui/AgentActivityLine.php` | Chat: `applyBackendToolEvent` arm, `pumpLiveToolEvents` arm, `route` ToolEventPump arm, `subscriptions` (registry via `WorkspaceContext`; no CS). RN: `renderHistory`, `renderPendingToolCall`, `renderToolResults`, `renderView`, zones. TT: `run` | README "What you see while a turn runs"; TROUBLESHOOTING (pcntl) | — | M |
-| d | 3.A-2 | `src/Chat.php`, `src/Session/EnhancedSessionStore.php`, new `src/Commands/Specs/{Undo,Redo,Diff}*.php`, `src/Workspace/CheckpointDiff.php` | Chat: `handleRewindCommand`, new handlers next to it. ESS: `restoreCheckpoint` soft-delete. **R-SCHEMA** | COMMANDS (generated) | — | M |
+| d | 3.A-2 | `src/Chat.php`, `src/Session/EnhancedSessionStore.php`, new `builtin-commands/NNNN-{undo,redo,diff}.php`, `src/Workspace/CheckpointDiff.php` | Chat: `handleRewindCommand`, new handlers next to it. ESS: `restoreCheckpoint` soft-delete. **R-SCHEMA** | COMMANDS (generated) | — | M |
 | e | 0.8b (policy surfaces → always-Ask), 5.8 | `src/Hooks/BuiltIn/ProtectFilesHook.php`, `src/Permissions/{PermissionGate,SafetyClassifier}.php`, `src/Chat.php`, `src/Attachments/FileMentions.php`, `src/Cli/NonInteractive.php`, `src/Messages/UserMessage.php`, `src/AttachmentType.php`, `src/Tools/BuiltIn/WebFetch.php`, `src/Context/EnvironmentBlock.php` (`runGit` → `Workspace/GitRunner`), new `src/Attachments/ContextMentions.php` | Chat: `userTurnMessage` | README "Attachments"; COMMANDS "@file"; PERMISSIONS "hooks that outrank the gate" | — | M |
 | f | 5.10, 5.13a | `src/Runtime.php`, `src/Context/Sections/MaximsSection.php`, `src/Providers/{SglangProvider,CustomProvider,ProviderFactory,OpenAIProvider}.php`, new `src/Providers/{ModelFamily,ModelMetadata}.php`, `src/Context/Sections/FamilyPrompt.php` | RT: `basePrompt`. SG: `modelFamily`. CU: `contextWindow`, `costPer1kTokens` | README "Providers"; ENVIRONMENT (metadata opt-out) | — | M |
 | g | N-P2 (D9; DH-KEYS: derive `LAYERED_KEYS`) | `src/Config/LayeredSettings.php`, `src/Cli/Bootstrap.php`, `src/Chat.php`, `composer.json` (`sugarcraft/sugar-diff`), new `src/Config/Settings/{SettingsWriter,SettingsTier}.php`, `src/Tui/Settings/{SettingsSavePreview,SettingsSavedMsg}.php` | BS: `selectedModelName`, `backendFor`, `selectedProviderLabel`. Chat: **CS** (`onSettingsWrite`) | SETTINGS :67-69/:91/:196/:517-525/:761; README :191/:219/:738; ENVIRONMENT :35 | sugar-diff (consumer) | M |
@@ -9546,9 +9511,9 @@ Columns:
 |---|---|---|---|---|---|---|
 | a | 2.2-1, 2.4-1 | `src/Backend/EngineBackend.php`, `src/Runtime.php`, `src/App/App.php`, `src/Context/ContextCompactor.php`, new `src/Context/Pruning/**`, `src/Context/Compaction/StepSummarizer.php` | EB: `runTurn` `step-top`, `summariseStoppedTurn`. RT: `buildMessages`. ContextCompactor: `removeToolResults`, `stagePairs` | ARCHITECTURE "Runtime" + "Tools"; PROMPT_ENGINEERING placeholder; README :1129-1143 | — | L |
 | b | O-2f (exposes `TurnRunner` + `TranscriptProjector`) | `src/Chat.php`, `src/{ToolEventPumpMsg,BackendToolEventsMsg}.php`, new `src/Host/{TurnRunner,TranscriptProjector,SessionEvent}.php` | Chat: `applyBackendToolEvent`…`toolResultMessage`, `scheduleBackendCompletion`, `drainToolEventInbox`. **TR** | ARCHITECTURE "Chat" | — | M–L |
-| c | 2.12, 2.5 | `src/Host/CompactionService.php`, `src/Hooks/{HookEvent,HookManager,HookDispatcher,HookRegistry}.php`, `src/Backend/EngineBackend.php`, `src/HistoryCompactedMsg.php`, `src/Context/ContextCompactor.php`, `src/Commands/Specs/Compact*.php`, new `src/Context/Compaction/{StateSummaryTemplate,FilesTouched}.php` | EB: `resolveHookManager`. ContextCompactor: `summarizeExchanges`. **R-HOOKS** | HOOKS event table ("twelve"); PROMPT_ENGINEERING summary prompt | — | M |
+| c | 2.12, 2.5 | `src/Host/CompactionService.php`, `src/Hooks/{HookEvent,HookManager,HookDispatcher,HookRegistry}.php`, `src/Backend/EngineBackend.php`, `src/HistoryCompactedMsg.php`, `src/Context/ContextCompactor.php`, `builtin-commands/2000-compact.php`, new `src/Context/Compaction/{StateSummaryTemplate,FilesTouched}.php` | EB: `resolveHookManager`. ContextCompactor: `summarizeExchanges`. **R-HOOKS** | HOOKS event table ("twelve"); PROMPT_ENGINEERING summary prompt | — | M |
 | d | O-5a (scaffold; no protocol types) | new `sugar-crush-web/**` skeleton, root `composer.json`, `PROJECT_NAMES.md`, `docs/MATCHUPS.md`, root `README.md` lib table, `docs/index.html`, `docs/_data/sugar-crush-web.*`, `docs/lib/` (generated), `codecov.yml`, `scripts/bootstrap-org-repos.sh`, `.github/workflows/web.yml`, `media/icons/sugar-crush-web.png` | — | root README lib table only | root force-all; sugar-crush-web | M |
-| e | 5.6, P-A4 | `src/Runtime.php`, `src/Chat.php`, `src/Renderer.php`, `src/Host/TitleService.php`, `src/Palette/PaletteAction.php`, new `src/Commands/Specs/Context*.php`, `src/Context/ContextBreakdown.php`, `src/Commands/ContextCommand.php` | RT: new `promptSectionSizes`. Chat: **CS** (inline title + `TitleSource` latch), `handleRenameCommand`, `runRootPaletteAction`, `selectSessionTab`. RN: tab strip, `renderInput` | README slash roster (generated); COMMANDS (generated; `/rename`, `/sessions` hints row-scoped) | — | M |
+| e | 5.6, P-A4 | `src/Runtime.php`, `src/Chat.php`, `src/Renderer.php`, `src/Host/TitleService.php`, `src/Palette/PaletteAction.php`, new `builtin-commands/NNNN-context.php`, `src/Context/ContextBreakdown.php`, `src/Commands/ContextCommand.php` | RT: new `promptSectionSizes`. Chat: **CS** (inline title + `TitleSource` latch), `handleRenameCommand`, `runRootPaletteAction`, `selectSessionTab`. RN: tab strip, `renderInput` | README slash roster (generated); COMMANDS (generated; `/rename`, `/sessions` hints row-scoped) | — | M |
 | f | N-P3b, 5.4-2 | `src/Chat.php`, `src/Backend/EngineBackend.php`, `src/Palette/PaletteState.php`, `src/Memory/MemoryHistory.php` (new), `tools/check-child-lifetimes.php` roster | Chat: `handleModelCommand`, `selectPaletteProvider`, `handleMemoryCommand`, `memoryHelpResponse`. EB: ctor + withers (`withModel`, also used by 4.1-1) | README "Choosing a backend"; MEMORY "/memory" | — | M |
 | g | 1.C-5, 1.C-4b (`cancel_tool`), P-B3 | `src/Runtime.php`, `src/Backend/EngineBackend.php`, `src/Tools/BuiltIn/TaskTool.php`, `src/Chat.php`, `src/Renderer.php`, `src/Tui/Components/AgentDashboardPane.php`, `src/App/App.php`, `src/Commands/KeyBindingRegistry.php`, `src/Tui/KeyboardHandler.php`, new `src/Tui/AgentStrip.php` | RT: `executeConcurrently` `poll`. EB: `runCompleteInChild`. TT: `setup`. Chat: `route` key arms, `handlePointer` agent arm (strip focus state lives on `App`). RN: `renderView` strip, `renderAgentView`. **R-KEYBIND** | PERMISSIONS (parallel-child caveat); README "Keys" | — | L |
 | h | 5.11-1, 5.5-2, 5.5-4 | `src/Permissions/PermissionGate.php`, `src/MCP/McpTool.php`, `src/Tools/McpToolBridge.php`, `src/Cli/Bootstrap.php`, `src/Tools/BuiltIn/Doctor.php`, new `src/RepoMap/CtagsSymbolExtractor.php`, `src/Tools/BuiltIn/RepoMapTool.php` | BS: capability-probe sites | PERMISSIONS "What auto classifies"; README MCP bullet :1311, "Dependency-free shell-out"; MCP.md | — | M |
@@ -9562,7 +9527,7 @@ Columns:
 | a | 2.7-1b, 2.7-2, 2.7-3 | `src/Backend/EngineBackend.php`, `src/Runtime.php`, `src/Providers/{CompleteRequest,SglangProvider,VertexProvider,BedrockProvider,ProviderStreamException}.php` | EB: `runTurn` `after-step` + run wrapper. RT: `runStreaming`. SG: request params (not `formatMessages`) | README "What you see" (notice wording) | — | L |
 | b | O-2g | `src/Chat.php`, new `src/Host/{TurnController,SessionHost,SessionHub,SubmitOptions,TurnTicket,SessionSnapshot}.php` | Chat: `submit`…`releaseQueuedPrompts`, `userTurnMessage`, `dispatchTurn`, custom-command expansion, turn hooks, `subscriptions` | README "Architecture"; ARCHITECTURE | — | L |
 | c | 2.4-2, 5.4-1, 2.3 | `src/Host/CompactionService.php`, `src/Backend/EngineBackend.php`, `src/Cli/{Bootstrap,Help}.php`, new `src/Backend/SummarisesWithCache.php`, `src/Memory/CompactionJournal.php`, `src/Context/Pruning/Strategies/*` (4 new) | CompactionService: `buildSummarizationRequest`, `scheduleParkedCompaction`, `compactNow`, `applyModelCompaction`. EB: new `summariseAsync`. BS: `summaryBackend`, `toollessBackend`. `Help` env-var wording only | README :1129-1143; ENVIRONMENT `SUGARCRUSH_SUMMARY_MODEL` | — | M–L |
-| d | 2.2-2, 3.B-2 | `src/Backend/EngineBackend.php`, `src/Host/{TurnRunner,TranscriptStore}.php`, `src/Session/EnhancedSessionStore.php`, `src/Runtime.php`, new `src/Context/Pruning/RefTag.php`, `src/Commands/Specs/{Sweep,Pruning}*.php`, `src/Config/Settings/Definitions/Context.php` | EB: `toTypedMessages`, `encodeEvent`/`decodeEvent`, `runCompleteInChild`, `settleFromResultFrame`. RT: `buildMessages`. **TR, R-SCHEMA** | ARCHITECTURE frame table; COMMANDS/SETTINGS (generated); PROMPT_ENGINEERING ref tags | — | L |
+| d | 2.2-2, 3.B-2 | `src/Backend/EngineBackend.php`, `src/Host/{TurnRunner,TranscriptStore}.php`, `src/Session/EnhancedSessionStore.php`, `src/Runtime.php`, new `src/Context/Pruning/RefTag.php`, `builtin-commands/NNNN-{sweep,pruning}.php`, `src/Config/Settings/Definitions/Context.php` | EB: `toTypedMessages`, `encodeEvent`/`decodeEvent`, `runCompleteInChild`, `settleFromResultFrame`. RT: `buildMessages`. **TR, R-SCHEMA** | ARCHITECTURE frame table; COMMANDS/SETTINGS (generated); PROMPT_ENGINEERING ref tags | — | L |
 | e | 4.1-1, 4.1-2, P-C1 | `src/Tools/BuiltIn/TaskTool.php`, `src/Backend/EngineBackend.php`, `src/Runtime.php`, `src/Cli/Bootstrap.php`, `src/App/App.php`, `src/Agents/{AgentPreset,Agent,AgentPresetRegistry,AgentManager,SuspendedDelegations}.php`, `src/Permissions/PermissionMode.php`, `src/Host/TranscriptProjector.php`, new `src/Agents/Live/{SubAgentTranscriptLog,AgentTranscriptTail}.php`, `src/Config/Settings/Definitions/Subagents.php` | TT: `schema`, `setup`. EB: `runTurn` `build`, `withReasoningEffort`, `resolveHookManager`. RT: `run`. BS: `agentManager`. **R-STATE** (subagents dir) | AGENTS_AUTHORING intro, provenance; PERMISSIONS (sub-agent mode); ARCHITECTURE "Sessions and state" | — | L |
 | f | 5.3-2, 5.5-5 | `src/Runtime.php`, `src/Backend/EngineBackend.php`, `src/Context/{MemoryBlock,RepoMapBlock}.php`, new `src/Memory/{HybridMemoryRanker,EmbeddingCache}.php`, `src/Context/{MemoryRecallBlock,SymbolMapBlock}.php`, `src/Config/Settings/Definitions/Memory.php` | RT: `systemPromptSections` (fragment, repo-map slot), `repoMapSnapshot`. EB: `completeAsync` (pre-fork snapshot) | MEMORY "Recall"; PROMPT_ENGINEERING slots | — | M |
 | g | 3.F, 3.G | `src/Cli/Bootstrap.php`, `src/LSP/LspClient.php`, `src/Tools/BuiltIn/{LspTool,Read}.php`, `src/Chat.php`, new `src/LSP/LspLauncher.php`, `src/Hooks/BuiltIn/{PostEditDiagnosticsHook,AutoCommitHook}.php`, `src/Workspace/{AutoCommitter,CommitMessageWriter}.php`, `src/Config/Settings/Definitions/{Lsp,Git}.php` | BS: `lspTool`, `tools` callers, `lspClient`, `hooks`. Chat: `route` AssistantMsg arm, `/undo` handler. **R-HOOKS** | README Capabilities Tools (`Lsp` paragraph); ARCHITECTURE "Tools"; HOOKS built-ins | — | L |
@@ -9589,7 +9554,7 @@ Columns:
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
 |---|---|---|---|---|---|---|
-| a | 3.B-4 | `src/Backend/EngineBackend.php`, `src/Host/Commands/Compact*.php`, `src/Renderer.php`, new `src/Tools/BuiltIn/Compress.php`, `src/Context/Pruning/NudgePolicy.php`, `src/Commands/Specs/{Compress,Decompress,Recompress}*.php` | EB: `runTurn` `step-top`. RN: collapsed block row, status bar | PROMPT_ENGINEERING reminder text | sugar-veil (modal) | L |
+| a | 3.B-4 | `src/Backend/EngineBackend.php`, `src/Host/Commands/Compact*.php`, `src/Renderer.php`, new `src/Tools/BuiltIn/Compress.php`, `src/Context/Pruning/NudgePolicy.php`, `builtin-commands/NNNN-{compress,decompress,recompress}.php` | EB: `runTurn` `step-top`. RN: collapsed block row, status bar | PROMPT_ENGINEERING reminder text | sugar-veil (modal) | L |
 | b | 2.10 | `src/Host/{CompactionService,TurnController}.php`, `src/Chat.php`, `src/HistoryCompactedMsg.php`, new `src/Context/Compaction/HistoryFingerprint.php` | CompactionService: `applyModelCompaction`, `buildSummarizationRequest`. TC: `submit` tier block, `dispatchTurn` reminder. Chat: `route` HistoryCompacted arm | README :1112-1117 tiers | — | M |
 | c | O-5b | `sugar-crush-web/src-web/**`, `sugar-crush-web/e2e/**`, `sugar-crush-web/dist/**`, `src/Providers/EchoProvider.php` | — | sugar-crush-web README; SERVER.md "Web UI" | sugar-crush-web | L |
 | d | O-8a, O-7 | `src/Cli/{Attach,ParsedArgs,Subcommands,Help}.php`, `src/Cli/Bootstrap.php`, `src/Chat.php`, `tools/check-child-lifetimes.php`, new `src/Backend/RemoteBackend.php`, `src/Host/RemoteSessionHost.php`, `src/Server/Workspace/**` | BS: `openSession`. Chat: `relockedForCurrentSession`. **R-CLI** | README "Subcommands"; SERVER.md | — | L |
@@ -9598,7 +9563,7 @@ Columns:
 | g | O-4b (calls `reconnect()`; no edit to `BackgroundSupervisor`) | `src/Chat.php`, new `src/Host/BackgroundEvents.php`, `src/Protocol/Methods/BgMethods.php` | Chat: `pumpBackgroundSessions` | SERVER.md `bg.*` | — | S–M |
 | h | P-D2, P-D3 | `src/Chat.php`, `src/Renderer.php`, `src/App/App.php`, `src/Tui/KeyboardHandler.php`, `src/Commands/KeyBindingRegistry.php`, `src/Tools/BuiltIn/TaskTool.php`, `src/Agents/AgentManager.php`, `src/Message.php`, new `src/Host/AgentResume.php`, `src/{AgentMessageSentMsg,AgentControlMsg}.php` | Chat: `submit` delegator (route to `AgentInbox`), `route` AgentControlMsg arm. RN: `renderInput` placeholder. TT: `run` (`onProgress` control). **R-KEYBIND** | README Limitations (inert-commands bullet), "Keys", "What you see"; AGENTS_AUTHORING | — | L |
 | i | 3.H | new `src/Hooks/BuiltIn/AutoTestHook.php`, `src/Lint/TestRunner.php`, `src/Cli/Bootstrap.php`, `src/Config/Settings/Definitions/Tools.php` | BS: `hooks`. **R-HOOKS** | HOOKS built-ins | — | M |
-| j | 3.D-3 (`/goal`, `/grind`), 5.14a, 5.14b | `src/Chat.php`, `src/Host/TurnController.php`, new `src/Goal/GoalJudge.php`, `src/GoalJudgedMsg.php`, `src/Commands/Specs/{Goal,Grind,Btw}*.php`, `src/Config/Settings/Definitions/Ui.php` | Chat: `route` AssistantMsg arm, `requestPermission` (bell). TC: `refuseWhileInFlight` | COMMANDS/README slash roster (generated) | — | M |
+| j | 3.D-3 (`/goal`, `/grind`), 5.14a, 5.14b | `src/Chat.php`, `src/Host/TurnController.php`, new `src/Goal/GoalJudge.php`, `src/GoalJudgedMsg.php`, `builtin-commands/NNNN-{goal,grind,btw}.php`, `src/Config/Settings/Definitions/Ui.php` | Chat: `route` AssistantMsg arm, `requestPermission` (bell). TC: `refuseWhileInFlight` | COMMANDS/README slash roster (generated) | — | M |
 
 #### W9 (order: a, b, c, d, e, f, g, h, i, j)
 
@@ -9623,7 +9588,7 @@ Columns:
 | b | 5.7-2 | new `src/Tools/BuiltIn/{PlanExitTool,AskUserTool}.php`, `src/Cli/NonInteractive.php` | — | PERMISSIONS "`Ask` needs somewhere to ask" | — | M |
 | c | 4.5 | `src/Runtime.php`, `src/Tools/BuiltIn/TaskTool.php` (new `withBoard` method), new `src/Agents/Board/**`, `src/Tools/BuiltIn/{BoardReadTool,BoardPostTool}.php`, `src/Hooks/BuiltIn/BoardNoticeHook.php`, `src/Tools/SharesBoard.php`, `src/Cli/Bootstrap.php` | RT: `executeConcurrently` `ledger`. TT: class (new method only). BS: `hooks` (BoardNoticeHook). **R-STATE** (board dir), **R-HOOKS** | ARCHITECTURE "Sessions and state" | — | M |
 | d | P-E3 | `src/Chat.php`, `src/Tools/BuiltIn/TaskTool.php`, `src/Commands/KeyBindingRegistry.php` | Chat: `route` Ctrl+X b arm. TT: `execute`. **R-KEYBIND** | README "Keys" | — | M |
-| e | 5.14c, 5.14d | new `src/Host/Commands/{Handoff,NewRule}*.php`, `src/Commands/Specs/{Handoff,NewRule}*.php`, `src/Commands/RulesCommand.php`, `src/Chat.php` | Chat: `handlePaletteNewSession` | COMMANDS "`/rules`" | — | M |
+| e | 5.14c, 5.14d | new `src/Host/Commands/{Handoff,NewRule}*.php`, `builtin-commands/NNNN-{handoff,new-rule}.php`, `src/Commands/RulesCommand.php`, `src/Chat.php` | Chat: `handlePaletteNewSession` | COMMANDS "`/rules`" | — | M |
 | f | 5.14i, 5.14l | `src/Chat.php`, `src/Host/TurnController.php`, `src/Skills/SkillRegistry.php`, new `src/Support/AiCommentWatcher.php`, `src/Skills/SkillMentions.php` | Chat: `subscriptions`, `completeMention`. TC: `userTurnMessage` | SKILLS "Invoking a skill"; SETTINGS (generated) | — | M |
 | g | N-P5 | `src/Tui/Settings/**`, `src/Config/Settings/SettingsWriter.php` | — | README "Settings files" (project-shared tier) | — | S |
 | h | 5.9-1, 5.9-2 (D12) | `src/Cli/{ParsedArgs,Subcommands,Help}.php`, `src/McpMessage.php`, `src/ToolResult.php`, new `src/Acp/**`, `src/Cli/Acp.php` | **R-CLI** | README "Subcommands"; SERVER.md "ACP" | — | L |
@@ -9658,26 +9623,20 @@ LIVE-A15v and LIVE-A21b need GCP credentials, and this host has none. If credent
    - reassemble.
 7. Push.
 
-### 5. Step index (140 steps)
+### 5. Step index (124 steps)
 
 Fields are: ID · size · depends on (besides same-region predecessors) · wave-group.
 
 **Wave-0 fixes**
 - 0.8b S · 1.C-2, DEF-MODE · W4-e
-- X-37a M · — · W3-h
 
 **Foundations**
 - 1.A-2 M · 1.A-1, 1.B-2 · W4-a
-- 1.B-3 M · 1.B-2 · W3-c
 - 1.C-3 M · 1.C-1 · W4-a
-- 1.C-4a S–M · 1.C-1 · W3-a
 - 1.C-4b S · 1.C-1, RELAY · W5-g
 - 1.C-5 S–M · 1.C-2, RELAY · W5-g
-- RELAY M · 0.16 · W3-b
-- DEF-MODE S/M · 1.C-2, 3.A-1, D5 · W3-g
 
 **Context engine**
-- 2.1 M · — · W3-a
 - 2.2-1 M · 2.1, 0.2 · W5-a
 - 2.2-2 M · 2.2-1, 1.B-2 · W6-d
 - 2.3 S–M · 2.2-1 · W6-c
@@ -9685,7 +9644,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 2.4-2 M · 2.4-1, O-2e · W6-c
 - 2.5 S–M · 1.B-3, O-2e · W5-c
 - 2.6 M · 1.A-2, 2.5 · W9-a
-- 2.7-1a S · — · W3-h
 - 2.7-1b M · 2.7-1a, 2.4-1 · W6-a
 - 2.7-2 M · 2.7-1b · W6-a
 - 2.7-3 S · 2.7-2 · W6-a
@@ -9726,8 +9684,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 4.10-2 M · 4.10-1, 4.2, RELAY · W8-f
 
 **Memory, codebase understanding, UX, integrations**
-- 5.1-1 S–M · 0.6, 1.A-1 · W3-j
-- 5.1-2 M · 5.1-1 · W3-j
 - 5.2 M · 5.1-2 · W4-h
 - 5.3-1 M · 5.1-2 · W4-h
 - 5.3-2 M · 5.3-1, 1.A-2 · W6-f
@@ -9759,8 +9715,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 
 **Settings**
 - DH-KEYS S–M · N-P2 (derived keys) · W4-g
-- N-P1 M · N-P0-1, D7 · W3-i
-- DH-CMDS M · — · W3-i
 - N-P2 M · N-P0, N-P1, D9 · W4-g
 - N-P3b S–M · N-P2, N-P3a · W5-f
 - N-P3 M · N-P2, N-P3a · W6-j
@@ -9774,9 +9728,7 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - N-P5 S · N-P1, N-P2, N-P3 · W10-g
 
 **Sessions and agent view**
-- P-A3 S–M · P-A1 · W3-g
 - P-A4 S–M · P-A1, O-2d · W5-e
-- P-B1 M · — · W3-b
 - P-B2 M · P-B1, 1.C-4a · W4-c
 - P-B3 S–M · P-B2 · W5-g
 - P-C1 M · P-B1, RELAY, O-2f · W6-e
@@ -9789,9 +9741,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - P-E3 M · 4.3-2, P-D3 · W10-d
 
 **Server and web**
-- O-2b M · O-2a, P-A1 · W3-d
-- O-2c S–M · O-2a · W3-e
-- O-2d S · O-2a, B2 · W3-f
 - O-2e M–L · O-2c, 1.B-3 · W4-b
 - O-2f M–L · O-2b, 1.C-2, 1.C-4a · W5-b
 - O-2g L · O-2f · W6-b
