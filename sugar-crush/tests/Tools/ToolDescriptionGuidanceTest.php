@@ -249,18 +249,21 @@ final class ToolDescriptionGuidanceTest extends TestCase
 
     /**
      * Each clause asserted here is enforced in {@see Edit::execute()} and was
-     * previously discoverable only from the error string it produces:
-     * byte-exact matching, the >1-match rejection and its `replace_all`
-     * escape, the 0-match rejection, and the file-must-exist requirement that
-     * makes `Write` the route to a new file.
+     * previously discoverable only from the error string it produces: the
+     * one-place rule and the matcher chain behind it (roadmap 3.I-1 replaced
+     * byte-exact matching), the >1-match rejection and its `replace_all`
+     * escape, the 0-match rejection, the all-or-nothing `edits` list, and the
+     * file-must-exist requirement that makes `Write` the route to a new file.
      */
     public function testEditDescriptionStatesTheWholeMatchContract(): void
     {
         $description = (new Edit())->description();
 
-        $this->assertStringContainsString('bytes on disk exactly', $description);
+        $this->assertStringContainsString('must match exactly one place', $description);
+        $this->assertStringContainsString('the result names the stage that matched', $description);
         $this->assertStringContainsString('replace_all', $description);
-        $this->assertStringContainsString('zero times is rejected', $description);
+        $this->assertStringContainsString('zero matches', $description);
+        $this->assertStringContainsString('if any fails none is written', $description);
         $this->assertStringContainsString('left untouched', $description);
         $this->assertStringContainsString('must already exist', $description);
         $this->assertStringContainsString('Write', $description);

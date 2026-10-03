@@ -399,6 +399,10 @@ final class BaseSystemPromptTest extends TestCase
         $base = $this->basePrompt();
 
         $this->assertStringContainsString('byte for byte', $base);
+        // Roadmap 3.I-1: the prompt names the matcher chain rather than
+        // promising a byte-exact match the tool no longer requires.
+        $this->assertStringContainsString('the result names the stage that matched', $base);
+        $this->assertStringContainsString('through `edits`', $base);
         $this->assertStringContainsString('left untouched', $base);
         $this->assertStringContainsString('Edit cannot create a file', $base);
     }
@@ -918,8 +922,19 @@ final class BaseSystemPromptTest extends TestCase
         // whole git section (blank line + caveat through the unstaged diff)
         // leaving the system prompt for the <turn-context> row, where
         // tests/Prompt/PromptSnapshotDriftTest pins it byte-for-byte.
+        // MEASURED 2026-10-03 at roadmap 3.I-1 (alone): 8,504 -> 8,831, one REPLACE
+        // of the # Tool use paragraph's Edit sentences (golden lines 18-21,
+        // 4 lines -> 9): "Edit replaces an exact, unique run of bytes" became
+        // the matcher-chain wording (exact first, then indentation shift,
+        // trimmed lines, collapsed spaces, first/last-line anchor, folded
+        // quotes and dashes; the stage is named; `edits` is all or nothing).
+        // Every byte before line 18 and after the old line 21 is identical.
+        // MEASURED 2026-10-03 at the W2 integration (1.A-1 + 3.I-1 on one
+        // tree): 8,086 = 8,504 - 745 (1.A-1's git-section deletion) + 327
+        // (3.I-1's Edit-paragraph replace); the two edits sit in disjoint
+        // regions, so the merged golden is both edits applied verbatim.
         self::assertSame(
-            7759,
+            8086,
             strlen($golden),
             'the system-prompt golden is not its committed length - it has been truncated or padded '
             . 'somewhere the absence assertions below would scan straight past',

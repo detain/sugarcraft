@@ -109,16 +109,28 @@ final class EditUniformIndentTest extends TestCase
         self::assertStringContainsString('old_string not found', $content);
     }
 
-    public function testANonUniformShiftIsNotGuessed(): void
+    /**
+     * A shift that differs per line is not this stage's to guess — and since
+     * roadmap 3.I-1 the line-trimmed stage after it takes the block instead,
+     * placing new_string at the file's indentation for the first line and
+     * SAYING which stage matched. (Before 3.I-1 this edit was refused with the
+     * closest-window hint.)
+     */
+    public function testANonUniformShiftFallsThroughToTheLineTrimmedStage(): void
     {
         // The file's second line is indented one more than old_string's relative layout.
         $contents = "  a();\n      b();\n";
 
+        self::assertNotSame(
+            EditMatcher::STAGE_UNIFORM_INDENT,
+            EditMatcher::new()->match($contents, "a();\n  b();", "a();\n  c();")?->stage,
+        );
+
         [$content, $error, $after] = $this->edit($contents, "a();\n  b();", "a();\n  c();");
 
-        self::assertTrue($error);
-        self::assertSame($contents, $after);
-        self::assertStringContainsString('Did you mean lines 1-2', $content);
+        self::assertFalse($error, $content);
+        self::assertSame("  a();\n    c();\n", $after);
+        self::assertStringContainsString('line-trimmed match', $content);
     }
 
     public function testANewStringShallowerThanTheBlockIsNotReindented(): void

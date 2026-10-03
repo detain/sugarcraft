@@ -72,32 +72,51 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail
      */
     public function description(): string
     {
-        return 'Edit a file by replacing text: one exact, unique occurrence of old_string '
-            . 'becomes new_string. Read the file first — old_string must match the bytes on '
-            . 'disk exactly, indentation and line endings included. Matching more than once '
-            . 'is rejected unless replace_all is set, and matching zero times is rejected '
-            . 'too; either way the file is left untouched, never partially edited, and the '
-            . 'error names the line of every match, or the closest lines of the file. An '
-            . 'old_string that differs from the file only by one indentation shift for every '
-            . 'line is applied re-indented, new_string shifted the same way, and the result '
-            . 'says so. Leave out the "N: " line numbers Read prefixes. The file '
-            . 'must already exist — use Write to create one. On success the result names the '
-            . 'path and counts the lines added and removed, as "(+2 -1 lines)"; it does not '
-            . 'echo the new file contents back, so Read the file again if you need to see '
-            . 'the edit in context.';
+        return 'Edit a file by replacing text: old_string, which must match exactly one place, becomes '
+            . 'new_string. Read the file first and copy old_string from it. When the exact bytes are not '
+            . 'there, a chain of stricter-to-looser matches is tried, each of which must find exactly one '
+            . 'place: the same lines under one indentation shift, then with each line\'s outer whitespace '
+            . 'ignored, then with runs of spaces and tabs inside lines treated as one, then a block of 3+ '
+            . 'lines found by its exact first and last lines with the lines between mostly alike, then with '
+            . 'curly quotes, dashes and Unicode look-alikes folded. new_string is re-indented to the file '
+            . 'where the match was shifted, and the result names the stage that matched. A match in several '
+            . 'places is rejected (exact matches can set replace_all to change every one; looser matches '
+            . 'never apply to more than one), as is zero matches or a loose match far larger or smaller '
+            . 'than old_string; the file is then left untouched, never partially edited, and the error '
+            . 'names the line of every match or the closest lines of the file. Leave out the "N: " line '
+            . 'numbers Read prefixes. To make several changes to one file at once, put the first in '
+            . 'old_string/new_string and the rest in edits, in order: each applies to the text the previous '
+            . 'ones produced, and if any fails none is written. The file must already exist — use Write to '
+            . 'create one. On success the result names the path and counts the lines added and removed, as '
+            . '"(+2 -1 lines)"; it does not echo the new file contents back, so Read the file again if you '
+            . 'need to see the edit in context.';
     }
+
     public function inputSchema(): array
     {
         return [
         'type' => 'object',
         'properties' => [
             'file_path' => ['type' => 'string', 'description' => 'Path to the file to edit. It must already exist; use Write to create a new file.'],
-            'old_string' => ['type' => 'string', 'description' => 'The text to replace, matched byte-for-byte against the file on disk. Must occur exactly once unless replace_all is set.'],
+            'old_string' => ['type' => 'string', 'description' => 'The text to replace, copied from the file. Matched exactly first, then by the looser stages the tool description lists; must match exactly one place unless replace_all is set (exact matches only).'],
             'new_string' => ['type' => 'string', 'description' => 'The replacement text. May be empty to delete old_string.'],
             // `boolean`, not `bool`: JSON Schema has no `bool` type, and a
             // guided-decoding backend (SGLang outlines/xgrammar) can reject
             // or mis-constrain a field whose declared type it cannot resolve.
-            'replace_all' => ['type' => 'boolean', 'description' => 'Replace every occurrence instead of requiring old_string to be unique.'],
+            'replace_all' => ['type' => 'boolean', 'description' => 'Replace every exact occurrence instead of requiring old_string to be unique.'],
+            'edits' => [
+                'type' => 'array',
+                'description' => 'Further replacements in the same file, applied in order after old_string/new_string, each to the text the previous ones produced. All or nothing: if any fails to match, none is written.',
+                'items' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'old_string' => ['type' => 'string', 'description' => 'The text to replace, as for the top-level old_string.'],
+                        'new_string' => ['type' => 'string', 'description' => 'The replacement text.'],
+                        'replace_all' => ['type' => 'boolean', 'description' => 'Replace every exact occurrence.'],
+                    ],
+                    'required' => ['old_string', 'new_string'],
+                ],
+            ],
             'description' => [
                 'type' => 'string',
                 'description' => 'Clear, concise 5-10 word description in active voice of what this edit does (e.g. "Rename the legacy config helper", not "edits a file").',
@@ -118,6 +137,17 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
                 content: 'Error: old_string cannot be empty',
+                isError: true,
+            );
+        }
+
+        // Roadmap 3.I-1: the top-level pair is edit 1, `edits` the rest. Parsed
+        // before the file is touched, so a malformed list costs nothing.
+        $edits = self::editList($oldString, $newString, $replaceAll, $args['edits'] ?? null);
+        if (is_string($edits)) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: $edits,
                 isError: true,
             );
         }
@@ -233,39 +263,49 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail
 
         $nestedContent = $this->instructionLoader?->loadForPath($path);
 
-        // Which text to replace, found by the staged matcher (audit 0.11):
-        // the exact bytes first, then the same lines under one indentation
-        // shift. On a miss or an ambiguity the error says WHERE — every
-        // match's line, or the closest windows of the file — instead of a
-        // bare "not unique" / "not found" that left the model guessing.
-        $match = EditMatcher::new()->match($originalContent, $oldString, $newString);
+        // Which text to replace, found by the staged matcher chain (audit
+        // 0.11, roadmap 3.I-1): exact bytes first, then ever looser stages,
+        // each of which must find exactly one place. On a miss, an ambiguity
+        // or a refusal the error says WHERE — every match's line, or the
+        // closest windows of the file — and nothing is written: with several
+        // edits, every one is matched against the text the ones before it
+        // produced, IN MEMORY, and the file is written once, after the last,
+        // so a failure at edit 3 leaves edits 1 and 2 unwritten too.
+        $content = $originalContent;
+        $notes = [];
+        $total = \count($edits);
+        $matcher = EditMatcher::new();
+        foreach ($edits as $k => $edit) {
+            $match = $matcher->match($content, $edit['old'], $edit['new']);
 
-        if ($match !== null && $match->count > 1 && !$replaceAll) {
-            return new ToolResult(
-                toolCallId: $args['id'] ?? '',
-                content: EditFailureHints::ambiguous($originalContent, $oldString, $match->count),
-                isError: true,
-            );
+            $failure = match (true) {
+                $match === null => EditFailureHints::notFound($content, $edit['old'], $edit['new'], $path),
+                $match->isRefused() => "Error: old_string not found as written in {$path}; {$match->refusal}; file left unchanged",
+                // A zero-match edit is a FAILED edit, not a silent no-op (the
+                // arm above): str_replace() would rewrite the file byte for
+                // byte and report "File updated". Several exact matches need
+                // replace_all; a looser stage never reaches here with more than
+                // one, because the matcher refuses that itself.
+                $match->count > 1 && !$edit['replaceAll'] => EditFailureHints::ambiguous($content, $edit['old'], $match->count),
+                default => null,
+            };
+
+            if ($failure !== null) {
+                return new ToolResult(
+                    toolCallId: $args['id'] ?? '',
+                    content: $total === 1 ? $failure : self::inEdit($failure, $k + 1, $total),
+                    isError: true,
+                );
+            }
+
+            /** @var \SugarCraft\Crush\Tools\Edit\EditMatch $match */
+            $content = $match->applyTo($content);
+            if ($match->note !== null) {
+                $notes[] = ($total === 1 ? '' : 'edit ' . ($k + 1) . ': ') . $match->note;
+            }
         }
 
-        // A zero-match edit is a FAILED edit, not a silent no-op: str_replace()
-        // would happily rewrite the file with byte-identical content and we'd
-        // report "File updated", telling the model its edit landed when it
-        // did not. Bail out before touching the file so the model sees the
-        // real outcome and can retry with a correct old_string.
-        if ($match === null) {
-            return new ToolResult(
-                toolCallId: $args['id'] ?? '',
-                content: EditFailureHints::notFound($originalContent, $oldString, $newString, $path),
-                isError: true,
-            );
-        }
-
-        // A re-indented match replaces the file's own spelling of the block.
-        $oldString = $match->oldString;
-        $newString = $match->newString;
-
-        $newContent = str_replace($oldString, $newString, $originalContent);
+        $newContent = $content;
 
         // Temp-then-rename, not file_put_contents() (audit F-T7): that
         // truncated the file first, so a SIGKILL of the turn fork (Esc-Esc,
@@ -294,7 +334,8 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail
 
         $message = "File updated: $path"
             . ($preview['omitted'] ? self::omittedDiffNote($preview) : self::changeSummary($diff))
-            . ($match->note === null ? '' : " ({$match->note})");
+            . ($total === 1 ? '' : " ({$total} edits applied)")
+            . implode('', array_map(static fn (string $note): string => " ({$note})", $notes));
         // Bounded by the standalone default rather than by a fraction of a
         // cap, because this tool has no output cap to take a fraction OF: its
         // result is one line ("File updated: <path>"), so nothing here was
@@ -342,6 +383,64 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail
             isError: false,
             diff: $diff === '' ? null : $diff,
         );
+    }
+
+    /**
+     * The edits one call asks for: the top-level pair first, then `edits` in
+     * order, or the error string for a malformed list.
+     *
+     * @return list<array{old: string, new: string, replaceAll: bool}>|string
+     */
+    private static function editList(mixed $old, mixed $new, mixed $replaceAll, mixed $extra): array|string
+    {
+        if (!is_string($old) || !is_string($new)) {
+            return 'Error: old_string and new_string must be strings';
+        }
+
+        // Truthiness, as the single-edit path always read replace_all.
+        $edits = [['old' => $old, 'new' => $new, 'replaceAll' => (bool) $replaceAll]];
+        if ($extra === null || $extra === []) {
+            return $edits;
+        }
+        if (!is_array($extra) || !array_is_list($extra)) {
+            return 'Error: edits must be a list of {old_string, new_string} objects; file left unchanged';
+        }
+
+        foreach ($extra as $i => $edit) {
+            $n = $i + 2;
+            if (!is_array($edit) || !is_string($edit['old_string'] ?? null) || !is_string($edit['new_string'] ?? null)) {
+                return "Error: edit {$n} needs string old_string and new_string; file left unchanged";
+            }
+            if ($edit['old_string'] === '') {
+                return "Error: edit {$n}'s old_string cannot be empty; file left unchanged";
+            }
+            $edits[] = [
+                'old' => $edit['old_string'],
+                'new' => $edit['new_string'],
+                'replaceAll' => (bool) ($edit['replace_all'] ?? false),
+            ];
+        }
+
+        return $edits;
+    }
+
+    /**
+     * A single-edit error re-labelled for edit $n of $total: the matcher and
+     * hint text is unchanged, and the head says which edit failed and that the
+     * earlier ones were not written either. Line numbers in it refer to the
+     * text as the earlier edits left it.
+     */
+    private static function inEdit(string $failure, int $n, int $total): string
+    {
+        $head = sprintf(
+            'Error in edit %d of %d (none of the %d edits was written%s): ',
+            $n,
+            $total,
+            $total,
+            $n === 1 ? '' : sprintf('; line numbers below are in the text as edit%s left it', $n === 2 ? ' 1' : 's 1-' . ($n - 1)),
+        );
+
+        return $head . (str_starts_with($failure, 'Error: ') ? substr($failure, 7) : $failure);
     }
 
     /**

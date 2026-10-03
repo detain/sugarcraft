@@ -4631,10 +4631,15 @@ final class Runtime
             walked". That annotation is not exhaustive — Grep names only the excluded
             directories it finds within three levels of the path you gave it — so when
             the distinction decides your next step, point path straight at the
-            directory. Read a file before you edit it — Edit replaces an exact, unique
-            run of bytes, so `old_string` has to match what is on disk byte for byte,
-            and an old_string matching zero times or ambiguously is rejected with the
-            file left untouched. Edit cannot create a file; use Write for a path that
+            directory. Read a file before you edit it, and copy `old_string` from what
+            you read byte for byte. Edit tries those exact bytes first, then a chain of
+            looser matches — one indentation shift, lines with outer whitespace
+            trimmed, runs of spaces collapsed, a block anchored by its first and last
+            lines, curly quotes and dashes folded — each of which must land on exactly
+            one place, and the result names the stage that matched. Edit rejects
+            zero matches, or several, with the file left untouched; several
+            changes to one file go in one call through `edits`, all or nothing.
+            Edit cannot create a file; use Write for a path that
             does not exist yet. Read-only calls that do not depend on each other
             (several Reads, a Grep alongside a Glob) can be issued as one batch. They
             are run concurrently where this build can fork, and one after another where
