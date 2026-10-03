@@ -86,20 +86,41 @@ final class StyleGuide
     }
 
     /**
-     * Parse a glamour JSON file. An unreadable path raises
-     * `InvalidArgumentException` before any decode: the door probes
-     * readability, then the read itself is guarded `@` + `=== false` — the
-     * r83-s2 idiom keeping the probe→read race net silent-but-fatal rather
-     * than warning-emitting.
+     * Parse a glamour JSON file.
+     *
+     * A path that is not a regular file (missing, or a directory — which
+     * `is_readable()` accepts and `file_get_contents()` reads as an empty
+     * string, surfacing as a misleading "invalid JSON") raises
+     * `RuntimeException` before any read. The read itself runs under a
+     * scoped error handler rather than `@`: the warning PHP raises (an
+     * unreadable file, a path swapped out after the probe) is captured into
+     * the exception message instead of being suppressed or leaked to the
+     * caller's error handler — the same contract as {@see Theme::fromJson()}.
+     *
+     * @throws \RuntimeException        when the file cannot be read
+     * @throws \InvalidArgumentException when its contents are not a JSON object
      */
     public static function fromFile(string $path): self
     {
-        if (is_readable($path) === false) {
-            throw new \InvalidArgumentException(Lang::t('theme.read_failed', ['path' => $path]));
+        if (!is_file($path)) {
+            throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]));
         }
-        $raw = @file_get_contents($path);
-        if ($raw === false) {
-            throw new \InvalidArgumentException(Lang::t('theme.read_failed', ['path' => $path]));
+        $warning = null;
+        set_error_handler(static function (int $errno, string $message) use (&$warning): bool {
+            $warning = $message;
+            return true;
+        });
+        try {
+            $raw = file_get_contents($path);
+        } finally {
+            restore_error_handler();
+        }
+        // A read that warned is untrustworthy even when it returned a string
+        // (a short read yields the bytes before the failure), so either
+        // signal fails the load.
+        if ($raw === false || $warning !== null) {
+            $msg = $warning ?? 'unknown error';
+            throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]) . ": {$msg}");
         }
 
         return self::fromJsonString($raw);

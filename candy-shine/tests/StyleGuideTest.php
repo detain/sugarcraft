@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shine\Tests;
 
+use PHPUnit\Framework\Attributes\WithoutErrorHandler;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Shine\StyleGuide;
@@ -228,16 +229,93 @@ final class StyleGuideTest extends TestCase
 
     public function testFromFileDoorThrowsOnMissingPath(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('/definitely/not/here/y4-style.json');
         StyleGuide::fromFile('/definitely/not/here/y4-style.json');
     }
 
-    public function testFromFileDoorThrowsWhenReadFailsAfterProbePasses(): void
+    /**
+     * A directory passes is_readable() and file_get_contents() reads it as
+     * '' (with only a notice), which used to surface as a misleading
+     * "invalid JSON" InvalidArgumentException. It is a read failure.
+     */
+    #[WithoutErrorHandler]
+    public function testFromFileDirectoryIsAReadFailureNotInvalidJson(): void
     {
-        // A directory passes is_readable() but never file_get_contents():
-        // exercises the @ + === false race net independently of the probe,
-        // on every platform and every uid.
-        $this->expectException(\InvalidArgumentException::class);
-        StyleGuide::fromFile(sys_get_temp_dir());
+        $warnings = [];
+        set_error_handler(static function (int $errno, string $message) use (&$warnings): bool {
+            $warnings[] = $message;
+            return true;
+        });
+        $caught = null;
+        try {
+            StyleGuide::fromFile(sys_get_temp_dir());
+        } catch (\Throwable $e) {
+            $caught = $e;
+        } finally {
+            restore_error_handler();
+        }
+
+        $this->assertInstanceOf(\RuntimeException::class, $caught);
+        $this->assertStringContainsString('could not read theme file', $caught->getMessage());
+        $this->assertSame([], $warnings);
+    }
+
+    /**
+     * The read failure surfaces only as the exception: the warning
+     * file_get_contents() raises must not reach the caller's error handler,
+     * and its reason must survive into the message (no `@` suppression).
+     */
+    #[WithoutErrorHandler]
+    public function testFromFileUnreadableFileRaisesNoWarningAndKeepsReason(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('chmod(0) does not make files unreadable on Windows.');
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'y4guide_unreadable');
+        $this->assertIsString($tmp);
+        file_put_contents($tmp, self::FULL_DOC);
+        chmod($tmp, 0);
+        clearstatcache();
+        if (is_readable($tmp)) {
+            chmod($tmp, 0644);
+            unlink($tmp);
+            $this->markTestSkipped('Running as a user that can read mode-0 files (root).');
+        }
+
+        $warnings = [];
+        set_error_handler(static function (int $errno, string $message) use (&$warnings): bool {
+            $warnings[] = $message;
+            return true;
+        });
+        $caught = null;
+        try {
+            StyleGuide::fromFile($tmp);
+        } catch (\Throwable $e) {
+            $caught = $e;
+        } finally {
+            restore_error_handler();
+            chmod($tmp, 0644);
+            unlink($tmp);
+        }
+
+        $this->assertInstanceOf(\RuntimeException::class, $caught, 'fromFile() must throw on an unreadable file');
+        $this->assertSame([], $warnings, 'no PHP warning may leak to the caller\'s error handler');
+        $this->assertStringContainsString('could not read theme file', $caught->getMessage());
+        $this->assertStringContainsString('Permission denied', $caught->getMessage());
+    }
+
+    public function testFromFileInvalidJsonStillRaisesInvalidArgument(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'y4guide');
+        $this->assertIsString($path);
+        try {
+            file_put_contents($path, '{not json');
+            $this->expectException(\InvalidArgumentException::class);
+            StyleGuide::fromFile($path);
+        } finally {
+            @unlink($path);
+        }
     }
 }
