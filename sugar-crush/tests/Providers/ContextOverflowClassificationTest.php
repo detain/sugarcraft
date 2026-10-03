@@ -126,13 +126,16 @@ final class ContextOverflowClassificationTest extends TestCase
             '{"object":"error","message":"The input (135000 tokens) is longer than the model\'s context length (131072 tokens).","type":"BadRequestError","code":400}',
         )));
 
+        $caught = null;
         try {
-            $provider->complete(self::request());
-            self::fail('a 400 must throw');
+            $provider->complete(self::bareRequest());
         } catch (\RuntimeException $e) {
-            self::assertStringStartsWith('SGLANG request failed: The input', $e->getMessage());
-            self::assertTrue(ContextOverflow::matches($e));
+            $caught = $e;
         }
+
+        self::assertNotNull($caught, 'a 400 must throw');
+        self::assertStringStartsWith('SGLANG request failed: The input', $caught->getMessage());
+        self::assertTrue(ContextOverflow::matches($caught));
     }
 
     public function testOpenAiErrorExceptionIsClassifiedOnStatusAndCode(): void
@@ -172,12 +175,15 @@ final class ContextOverflowClassificationTest extends TestCase
             'us.anthropic.claude-sonnet-4-6',
         );
 
+        $caught = null;
         try {
-            $provider->complete(self::request());
-            self::fail('a ValidationException must throw');
+            $provider->complete(self::bareRequest());
         } catch (\RuntimeException $e) {
-            self::assertTrue(ContextOverflow::matches($e));
+            $caught = $e;
         }
+
+        self::assertNotNull($caught, 'a ValidationException must throw');
+        self::assertTrue(ContextOverflow::matches($caught));
 
         self::assertFalse(ContextOverflow::matches(new \RuntimeException('bedrock failed', 0, $throttle)));
         self::assertTrue(ContextOverflow::matches(
@@ -219,7 +225,7 @@ final class ContextOverflowClassificationTest extends TestCase
             '{"error":{"message":"This model\'s maximum context length is 8192 tokens.","type":"invalid_request_error","code":"context_length_exceeded"}}',
         )), true, true);
 
-        $response = $provider->complete(self::request());
+        $response = $provider->complete(self::bareRequest());
 
         self::assertTrue($response->isError);
         self::assertSame(
@@ -239,7 +245,7 @@ final class ContextOverflowClassificationTest extends TestCase
             '{"error":{"message":"Incorrect API key provided"}}',
         )), true, true);
 
-        $response = $provider->complete(self::request());
+        $response = $provider->complete(self::bareRequest());
 
         self::assertTrue($response->isError);
         self::assertStringContainsString('401 Unauthorized', (string) $response->errorMessage);
@@ -262,7 +268,7 @@ final class ContextOverflowClassificationTest extends TestCase
             'type' => 'error',
             'error' => ['type' => 'invalid_request_error', 'message' => 'prompt is too long: 210000 tokens > 200000 maximum'],
         ]);
-        $response = $tooLong->complete(self::request());
+        $response = $tooLong->complete(self::bareRequest());
         self::assertSame(ContextOverflow::describe('prompt is too long: 210000 tokens > 200000 maximum'), $response->errorMessage);
         self::assertTrue(ContextOverflow::matches($response));
 
@@ -270,12 +276,12 @@ final class ContextOverflowClassificationTest extends TestCase
             'type' => 'error',
             'error' => ['type' => 'overloaded_error', 'message' => 'Overloaded'],
         ]);
-        self::assertFalse(ContextOverflow::matches($overloaded->complete(self::request())));
+        self::assertFalse(ContextOverflow::matches($overloaded->complete(self::bareRequest())));
 
         $thrown = new VertexProvider('p', 'us-central1', 'gemini-2.5-pro', static function (): array {
             throw new \RuntimeException('The input token count (1200000) exceeds the maximum number of tokens allowed (1048576).');
         });
-        $response = $thrown->complete(self::request());
+        $response = $thrown->complete(self::bareRequest());
         self::assertStringStartsWith(ContextOverflow::MESSAGE_PREFIX, (string) $response->errorMessage);
         self::assertTrue(ContextOverflow::matches($response));
     }
@@ -295,7 +301,7 @@ final class ContextOverflowClassificationTest extends TestCase
         self::assertSame(ContextOverflow::MESSAGE_PREFIX . 'x', $once);
     }
 
-    private static function request(): CompleteRequest
+    private static function bareRequest(): CompleteRequest
     {
         return new CompleteRequest(model: '', messages: [new UserMessage('hi')]);
     }

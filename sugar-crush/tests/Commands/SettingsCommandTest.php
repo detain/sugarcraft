@@ -45,13 +45,13 @@ final class SettingsCommandTest extends TestCase
         exec('rm -rf ' . escapeshellarg($this->sandbox));
     }
 
-    private function chat(string $draft = ''): Chat
+    private function chat(string $draft = '', int $cols = 100): Chat
     {
         return (new Chat(
             history: [Message::user('hello'), Message::assistant('hi')],
             inputBuf: $draft,
             backend: new EchoBackend(),
-        ))->withSize(100, 30);
+        ))->withSize($cols, 30);
     }
 
     private function app(?Chat $chat = null): App

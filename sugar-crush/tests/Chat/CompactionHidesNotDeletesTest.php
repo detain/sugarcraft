@@ -67,7 +67,7 @@ final class CompactionHidesNotDeletesTest extends TestCase
         return $history;
     }
 
-    private static function chat(array $history, string $draft = '/compact', ?Backend $summaryBackend = null): Chat
+    private static function chat(?Backend $summaryBackend, array $history, string $draft = '/compact'): Chat
     {
         return new Chat(
             history: $history,
@@ -151,7 +151,7 @@ final class CompactionHidesNotDeletesTest extends TestCase
     public function testTheHeuristicCompactHidesTheCondensedRowsInsteadOfDeletingThem(): void
     {
         $handed = self::history();
-        [$next, $cmd] = self::chat($handed)->update(new KeyMsg(KeyType::Enter, ''));
+        [$next, $cmd] = self::chat(null, $handed)->update(new KeyMsg(KeyType::Enter, ''));
 
         $this->assertNull($cmd, 'no summarizer: /compact answers synchronously');
         $this->assertHiddenNotDeleted($handed, $next->history, 6);
@@ -165,7 +165,7 @@ final class CompactionHidesNotDeletesTest extends TestCase
     public function testTheModelSummaryLandingHidesTheCondensedRowsInsteadOfDeletingThem(): void
     {
         $handed = self::history();
-        $chat = self::chat($handed, '/compact', self::summarizer("1.\nasked: one\n2.\nasked: two\n3.\nasked: three"));
+        $chat = self::chat(self::summarizer("1.\nasked: one\n2.\nasked: two\n3.\nasked: three"), $handed);
 
         [$scheduled, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
         $this->assertNotNull($cmd, 'the summarizer is asked off the render loop');
@@ -215,14 +215,14 @@ final class CompactionHidesNotDeletesTest extends TestCase
     public function testASecondCompactionKeepsTheFirstOnesRowsAndBoundary(): void
     {
         $handed = self::history();
-        [$once] = self::chat($handed)->update(new KeyMsg(KeyType::Enter, ''));
+        [$once] = self::chat(null, $handed)->update(new KeyMsg(KeyType::Enter, ''));
 
         $more = $once->history;
         for ($i = 6; $i <= 8; $i++) {
             $more[] = Message::user("question {$i}");
             $more[] = Message::assistant("answer {$i} " . str_repeat('more ', 60));
         }
-        [$twice] = self::chat($more)->update(new KeyMsg(KeyType::Enter, ''));
+        [$twice] = self::chat(null, $more)->update(new KeyMsg(KeyType::Enter, ''));
 
         // Every original row of both rounds is still in the transcript, in order.
         $contents = array_map(static fn(Message $m): string => $m->content, $twice->history);
@@ -253,7 +253,7 @@ final class CompactionHidesNotDeletesTest extends TestCase
         $handed[0] = $handed[0]->withIdentity('m_s_1', 1);
         $handed[1] = $handed[1]->withIdentity('m_s_2', 2)->withStepId('step-1');
 
-        [$next] = self::chat($handed)->update(new KeyMsg(KeyType::Enter, ''));
+        [$next] = self::chat(null, $handed)->update(new KeyMsg(KeyType::Enter, ''));
 
         $this->assertTrue($next->history[0]->uiOnly);
         $this->assertSame(['m_s_1', 1], [$next->history[0]->id, $next->history[0]->ref]);
@@ -263,7 +263,7 @@ final class CompactionHidesNotDeletesTest extends TestCase
 
     public function testTheHiddenAndReplacementFlagsSurviveASaveAndResume(): void
     {
-        [$next] = self::chat(self::history())->update(new KeyMsg(KeyType::Enter, ''));
+        [$next] = self::chat(null, self::history())->update(new KeyMsg(KeyType::Enter, ''));
 
         $resumed = array_map(
             static fn(Message $m): Message => Message::fromArray(json_decode(json_encode($m, JSON_THROW_ON_ERROR), true, 512, JSON_THROW_ON_ERROR)),
@@ -279,7 +279,7 @@ final class CompactionHidesNotDeletesTest extends TestCase
 
     public function testTheTranscriptPaintsTheCondensedRowsTheBoundaryAndNotTheSummaries(): void
     {
-        [$next] = self::chat(self::history())->update(new KeyMsg(KeyType::Enter, ''));
+        [$next] = self::chat(null, self::history())->update(new KeyMsg(KeyType::Enter, ''));
 
         $theme = Theme::default();
         $painted = $this->renderHistory($next->history, $theme, 60);

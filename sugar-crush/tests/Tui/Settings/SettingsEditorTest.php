@@ -34,7 +34,9 @@ final class SettingsEditorTest extends TestCase
 
     protected function tearDown(): void
     {
-        exec('rm -rf ' . escapeshellarg($this->dir));
+        // `2>&1` into exec()'s output array: a bare exec() inherits fd 2 onto
+        // the suite's stderr (ChildStderrCaptureTest).
+        exec('rm -rf ' . escapeshellarg($this->dir) . ' 2>&1', $cleanup);
     }
 
     private function sources(?bool $trusted = null, array $env = []): SettingsSources

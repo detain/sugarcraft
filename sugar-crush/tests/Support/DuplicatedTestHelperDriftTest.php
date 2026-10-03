@@ -184,10 +184,22 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             . 'from reading each other\'s file. The `-F`/`-f` defect that made the copies '
             . 'differ in BEHAVIOUR was fixed in both, one round apart, which is the event this '
             . 'guard exists to make visible next time.',
+        'package' =>
+            'The generated-doc drift suites each locate the package root from their own '
+            . 'directory: `tests/Commands/` is two levels down, `tests/Config/Settings/` and '
+            . '`tests/Tools/Catalog/` are three. The depth is where the file lives, not drift.',
+        'pages' =>
+            'The generated-doc drift suites (commands, settings, tools) each read the pages '
+            . 'their OWN generator targets; the generator class is the one token that differs, '
+            . 'and it is the point of each copy.',
         'readme' =>
             'One copy calls a helper named `document()`, the other one named `repoFile()`. Two '
             . 'different accessors in two different classes, reached by helpers that happen to '
             . 'share a name.',
+        'requireFork' =>
+            'Each fork-driving suite says in its own skip message WHICH crossing of '
+            . '`completeAsync()`\'s fork it needs (an engine ask, a cancel_soft frame); the '
+            . 'message is the only token that differs.',
         'resetTaskListConnectionCache' =>
             'A fully-qualified class name against the imported short name, as with '
             . '`createAskHook` above.',
@@ -2586,6 +2598,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'DSML' => 'The suites that parse the DSML delimiter feed the same string to their fixtures.',
         'FIXTURE_LIFETIME_SECONDS' => 'The frame-cap pair and the shutdown pair each pin one lifetime; the odd values are the drift polity.',
         'FLOODING_STDERR_BYTES' => 'The two shutdown suites flood the same byte count.',
+        'GENERATION' => 'The two live-inbox suites (engine asks, live step frames) stamp their fixture events with the same turn generation; any value works, and the shared one keeps the fixtures reading alike.',
         'HANDSHAKE_BOUND_SECONDS' => 'The two LSP handshake-waiting suites pin the same bound.',
         'INTO_SHELL' => 'Both permission-gate suites feed the same command string to the classifier.',
         'LIB_SCOPE' => 'The census suites scope their walks to the same vendor path.',

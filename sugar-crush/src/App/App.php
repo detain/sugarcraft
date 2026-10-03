@@ -506,14 +506,6 @@ final class App implements Model
         return $this->mutate(rulesState: $v);
     }
 
-    /**
-     * The docked-pane layout in force, with the default folded in.
-     *
-     * The DEFAULT reproduces the pre-docking frame exactly: `files` docked
-     * left — the pane `Tui\Renderer::leftSidebar()` has always painted when
-     * nothing else was on — and nothing docked right, where today's sidebar
-     * only ever renders while its pane has focus.
-     */
     /** @param ?\Closure(): SettingsSources $v what the settings view reads when it opens */
     public function withSettingsSources(?\Closure $v): self
     {
@@ -543,6 +535,14 @@ final class App implements Model
         return $this->settingsEditor === null ? $this : $this->mutate(settingsEditor: null);
     }
 
+    /**
+     * The docked-pane layout in force, with the default folded in.
+     *
+     * The DEFAULT reproduces the pre-docking frame exactly: `files` docked
+     * left — the pane `Tui\Renderer::leftSidebar()` has always painted when
+     * nothing else was on — and nothing docked right, where today's sidebar
+     * only ever renders while its pane has focus.
+     */
     public function dock(): DockLayout
     {
         return $this->dock ?? self::defaultDock();

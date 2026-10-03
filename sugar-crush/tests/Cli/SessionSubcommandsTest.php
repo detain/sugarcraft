@@ -14,6 +14,7 @@ use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\SessionKind;
 use SugarCraft\Crush\Session\SessionResolver;
 use SugarCraft\Crush\Session\TitleSource;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * P-A3 — `sugarcrush session list|show|rename|delete|pin|unpin|archive|
@@ -28,8 +29,9 @@ use SugarCraft\Crush\Session\TitleSource;
  */
 final class SessionSubcommandsTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private string $home;
-    private string|false $originalHome;
     private string|false $originalRetention;
     private EnhancedSessionStore $store;
     private string $kid;
@@ -39,9 +41,8 @@ final class SessionSubcommandsTest extends TestCase
         $this->home = (string) realpath(sys_get_temp_dir()) . '/pa3-' . uniqid((string) getmypid(), true);
         self::assertTrue(mkdir($this->home . '/.sugar-crush', 0700, true));
         chmod($this->home, 0700);
-        $this->originalHome = getenv('HOME');
         $this->originalRetention = getenv('SUGARCRUSH_SESSION_RETENTION_DAYS');
-        putenv('HOME=' . $this->home);
+        $this->useHomeSandbox($this->home);
         putenv('SUGARCRUSH_SESSION_RETENTION_DAYS');
 
         $this->store = new EnhancedSessionStore($this->home . '/.sugar-crush/session.db');
@@ -54,7 +55,7 @@ final class SessionSubcommandsTest extends TestCase
 
     protected function tearDown(): void
     {
-        putenv($this->originalHome === false ? 'HOME' : 'HOME=' . $this->originalHome);
+        $this->restoreHomeSandbox();
         putenv($this->originalRetention === false
             ? 'SUGARCRUSH_SESSION_RETENTION_DAYS'
             : 'SUGARCRUSH_SESSION_RETENTION_DAYS=' . $this->originalRetention);
