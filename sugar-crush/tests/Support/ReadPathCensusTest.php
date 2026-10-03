@@ -551,10 +551,7 @@ final class ReadPathCensusTest extends TestCase
             'PATH_JAIL — probes for excluded directories under the jailed search root',
         ],
         'Tools/BuiltIn/Read.php|fopen' => [
-            'PATH_JAIL — the streaming arm of the read tool',
-        ],
-        'Tools/BuiltIn/Read.php|file_get_contents' => [
-            'PATH_JAIL — the whole-file arm',
+            'PATH_JAIL — the read tool\'s one arm, streaming every read a page at a time (0.11)',
         ],
         'Tools/BuiltIn/WebFetch.php|fopen' => [
             'NOT_A_FILESYSTEM_PATH — a pinned HTTP(S) URL through a stream context',

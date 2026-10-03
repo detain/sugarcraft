@@ -172,6 +172,10 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'createAskHook' =>
             'A fully-qualified interface name against the imported short name. Same class, two '
             . 'spellings, decided by whether the file already imports it.',
+        'executor' =>
+            'The fake executor hands each dispatch back to its own test class, so the '
+            . 'constructor\'s parameter type names that class - MultiTaskStageTest in one '
+            . 'copy, WorkflowAgentResultsTest in the other. The body is otherwise one helper.',
         'isRaw' =>
             'THE HELPER THIS WHOLE FILE EXISTS BECAUSE OF, and what is left of the divergence '
             . 'is now deliberate: the two copies differ only in the PREFIX of the temp file '
@@ -2588,6 +2592,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'MARKER' => 'The two image suites use the same private-use-area sentinel; the unrelated MARKER strings are the drift polity.',
         'MAX_COLS' => 'The two status-bar suites (spend segment, and the served-model segment with the read-only marker) sweep the same bar over the same 1..200 widths; the widest width is one statement about the bar, so the copies must move together.',
         'MODEL' => 'The SGLang suites exercising MiniMax behaviour (Q5 system-row merge, A9 schema-aware XML recovery) send the same deployed model id; it is a request label the provider forwards, not a fixture either suite asserts on. The DeepSeek id is the drift polity.',
+        'OK_BODY' => 'The SGLang request-shape suites (Q5 system-row merge, 0.1 reasoning replay) answer every request with the same minimal completion body; neither asserts on it, it only lets the request be captured.',
         'OVERSIZED_BYTES' => 'The oversized-write bound several stdio families test is shared verbatim.',
         'QUIET_STDERR_BYTES' => 'The quiet-side byte count the two shutdown suites assert.',
         'README' => 'The documentation-census suites point at the same repository file path.',

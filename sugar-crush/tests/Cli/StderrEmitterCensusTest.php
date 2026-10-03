@@ -127,8 +127,8 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — TWENTY-FIVE
- *     of them, in EIGHT files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — TWENTY-SEVEN
+ *     of them, in NINE files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -503,6 +503,10 @@ final class StderrEmitterCensusTest extends TestCase
         // Round 49, lane b (E345): the once-per-process notice for a refused audit
         // write. One call site behind a latch, so it is one row and stays one.
         'src/Hooks/BuiltIn/AuditHook.php' => 1,
+        // X-31a: the shared streamed tool-call reassembly OpenAIProvider now
+        // uses carries the same two drop warnings as CustomProvider's flush,
+        // decided the same way (a call the model asked for will not run).
+        'src/Providers/Concerns/ReassemblesStreamedToolCalls.php' => 2,
         // Audit 15a A4: the end-of-stream tool-call flush's two drop warnings
         // (never-streamed payload on a truncated end; arguments that are not
         // a complete JSON object). Each one is a call the model asked for that

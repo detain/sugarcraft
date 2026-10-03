@@ -2998,7 +2998,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/declared in a project `\.sugar-crush\/config\.dev\.json` \(the repo ships `([^`]+)`\)\. That block points at `([^`]+)` serving `([^`]+)` with no auth/', $env, $row),
+            preg_match('/declared in the `\.sugar-crush\/config\.dev\.json` that ships inside the sugar-crush package \(the repo\'s copy declares `([^`]+)`\)\. That block points at `([^`]+)` serving `([^`]+)` with no auth/', $env, $row),
             'the row no longer names the shipped provider, its URL and its model in one breath',
         );
         $name = $row[1];
