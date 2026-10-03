@@ -1112,6 +1112,35 @@ final class EnhancedSessionStore
     }
 
     /**
+     * The transcript schema {@see saveTranscript()} writes, stored as `v` in
+     * the transcript state (roadmap 1.B-1). A state without `v` is version 1:
+     * rows with no identity, migrated on load by {@see loadTranscript()}.
+     */
+    public const TRANSCRIPT_SCHEMA_VERSION = 2;
+
+    /**
+     * One row-identity allocator per session this store has saved or loaded
+     * a transcript for, primed from the persisted `nextRef` - see
+     * {@see transcriptAllocator()}.
+     *
+     * @var array<string, \SugarCraft\Crush\Support\MessageIdAllocator>
+     */
+    private array $transcriptAllocators = [];
+
+    /**
+     * The identity each {@see Message} INSTANCE was given by a save, so the
+     * same in-memory row is saved under the same id every time even though
+     * Chat - immutable, a new instance per change - never holds a stamped
+     * copy. Store-wide rather than per session: a `/branch` fork's rows are
+     * its parent's rows and keep their parent's identities. Weak, so a row
+     * dropped from every history takes its entry with it (its ref stays
+     * spent). Created lazily: the constructor is not this region's.
+     *
+     * @var \WeakMap<Message, array{0: string, 1: int}>|null
+     */
+    private ?\WeakMap $givenIdentities = null;
+
+    /**
      * Store $messages as the session's current transcript, replacing the last
      * one, and mark the session as just used.
      *
@@ -1124,6 +1153,20 @@ final class EnhancedSessionStore
      * client by {@see pruneEmptySessions()} while this one sat idle — because
      * the foreign key would otherwise refuse the write and the conversation
      * the user is still having would never be saved.
+     *
+     * EVERY SAVED ROW HAS AN IDENTITY (roadmap 1.B-1, schema
+     * {@see TRANSCRIPT_SCHEMA_VERSION}). A row that already carries its
+     * `id`/`ref` keeps them; one that does not is given the next ref from the
+     * session's {@see \SugarCraft\Crush\Support\MessageIdAllocator} - the
+     * same one for the same {@see Message} instance on every save, see
+     * {@see $givenIdentities} - and that identity is written to
+     * the state's `identities` map, by position, instead of into the row. The
+     * row's own bytes are left alone on purpose: its blob is the one the
+     * checkpoints of the same history already share, and stamping the id into
+     * it would store every message of the session twice. {@see loadTranscript()}
+     * folds the map back into the rows, so a resumed row carries its identity
+     * from then on. The state also records `nextRef`, the high-water mark, so a
+     * ref is never handed out twice however many rows are later dropped.
      *
      * @param list<Message|array<string, mixed>> $messages
      *
@@ -1143,13 +1186,43 @@ final class EnhancedSessionStore
                 $this->sessionStore->createSession($sessionId, 'sugarcrush', 'unknown');
             }
 
+            $messages = array_values($messages);
+            $allocator = $this->transcriptAllocator($sessionId);
+            $given = $this->givenIdentities ??= new \WeakMap();
+            // Every ref already held - carried, or given by an earlier save -
+            // is observed BEFORE any is allocated, so a fresh row early in the
+            // list cannot take a ref a later row holds.
+            foreach ($messages as $message) {
+                $allocator->observe(
+                    ($message instanceof Message ? ($given[$message][1] ?? null) : null)
+                        ?? self::carriedIdentity($message)[1],
+                );
+            }
+            $identities = [];
+            foreach ($messages as $i => $message) {
+                [$id, $ref] = self::carriedIdentity($message);
+                if ($id !== null && $ref !== null) {
+                    continue;
+                }
+                if ($message instanceof Message) {
+                    $identities[$i] = $given[$message] ??= $allocator->identityFor($id, $ref);
+                } elseif (\is_array($message)) {
+                    $identities[$i] = $allocator->identityFor($id, $ref);
+                }
+            }
+
             $stmt = $this->pdo->prepare('
                 INSERT OR REPLACE INTO session_transcripts (session_id, state_data, updated_at)
                 VALUES (?, ?, ?)
             ');
             $stmt->execute([
                 $sessionId,
-                $this->encodeCheckpoint($sessionId, ['messages' => array_values($messages)]),
+                $this->encodeCheckpoint($sessionId, [
+                    'v' => self::TRANSCRIPT_SCHEMA_VERSION,
+                    'nextRef' => $allocator->nextRef(),
+                    'identities' => $identities,
+                    'messages' => $messages,
+                ]),
                 gmdate('Y-m-d H:i:s'),
             ]);
 
@@ -1165,6 +1238,16 @@ final class EnhancedSessionStore
      * checkpoint stands in for it: that loses the final reply (a checkpoint
      * is taken as a turn is sent) but keeps every earlier exchange, which is
      * better than resuming such a session empty.
+     *
+     * Every row comes back with an `id` and a `ref` (roadmap 1.B-1). A
+     * version-2 transcript has its `identities` map folded back in; a
+     * version-1 one - and the checkpoint stand-in, which never had a version -
+     * is migrated in order, refs 1, 2, 3, … and `nextRef` one past the last.
+     * The migration is deterministic, so a legacy session read twice without
+     * a save between reads the same identities, and the first save after a
+     * resume persists them. A migrated legacy tool row gets no `stepId`: there
+     * is no recorded step to rebuild a `tool_calls`/`tool` pair from, so it
+     * stays the prose row it always was (see {@see Message::$stepId}).
      *
      * @return list<array<string, mixed>>|null
      */
@@ -1186,7 +1269,103 @@ final class EnhancedSessionStore
             return null;
         }
 
-        return array_values(array_filter($messages, '\\is_array'));
+        $versioned = self::transcriptVersion($state) >= 2;
+        $allocator = \SugarCraft\Crush\Support\MessageIdAllocator::new(
+            $sessionId,
+            $versioned && \is_int($state['nextRef'] ?? null) ? $state['nextRef'] : 1,
+        );
+        $identities = $versioned && \is_array($state['identities'] ?? null) ? $state['identities'] : [];
+
+        $rows = [];
+        foreach (array_values($messages) as $i => $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $identity = $identities[$i] ?? null;
+            if (\is_array($identity) && \is_string($identity[0] ?? null) && \is_int($identity[1] ?? null)) {
+                $row['id'] ??= $identity[0];
+                $row['ref'] ??= $identity[1];
+            }
+            $rows[] = $row;
+        }
+        foreach ($rows as $row) {
+            $allocator->observe(self::carriedIdentity($row)[1]);
+        }
+        foreach ($rows as $i => $row) {
+            [$rows[$i]['id'], $rows[$i]['ref']] = $allocator->identityFor(...self::carriedIdentity($row));
+        }
+
+        // A save already pending from this process may have allocated past
+        // what is on disk; the higher mark wins, so no ref is reissued.
+        $cached = $this->transcriptAllocators[$sessionId] ?? null;
+        if ($cached !== null) {
+            $cached->observe($allocator->nextRef() - 1);
+        } else {
+            $this->transcriptAllocators[$sessionId] = $allocator;
+        }
+
+        return $rows;
+    }
+
+    /**
+     * $sessionId's allocator, primed on first use from the `nextRef` its
+     * stored transcript records (1 when it has none, or a version-1 one - whose
+     * rows the save in hand is replacing anyway). Primed once per process: the
+     * single-writer session lock ({@see lockSession()}) is what keeps another
+     * process from allocating under this one.
+     */
+    private function transcriptAllocator(string $sessionId): \SugarCraft\Crush\Support\MessageIdAllocator
+    {
+        if (isset($this->transcriptAllocators[$sessionId])) {
+            return $this->transcriptAllocators[$sessionId];
+        }
+
+        $stmt = $this->pdo->prepare('SELECT state_data FROM session_transcripts WHERE session_id = ?');
+        $stmt->execute([$sessionId]);
+        $stateData = $stmt->fetchColumn();
+        $stmt->closeCursor();
+
+        // Only the envelope is decoded - its blob ids are integers - never
+        // the message bodies: the mark is all this needs.
+        $decoded = \is_string($stateData) ? json_decode($stateData, true) : null;
+        $state = \is_array($decoded) && \is_array($decoded[self::CHECKPOINT_ENVELOPE_STATE] ?? null)
+            ? $decoded[self::CHECKPOINT_ENVELOPE_STATE]
+            : (\is_array($decoded) ? $decoded : []);
+        $nextRef = self::transcriptVersion($state) >= 2 && \is_int($state['nextRef'] ?? null) ? $state['nextRef'] : 1;
+
+        return $this->transcriptAllocators[$sessionId] = \SugarCraft\Crush\Support\MessageIdAllocator::new($sessionId, $nextRef);
+    }
+
+    /**
+     * The transcript schema a stored state was written with: its `v`, or 1
+     * when it has none.
+     *
+     * @param array<string, mixed> $state
+     */
+    private static function transcriptVersion(array $state): int
+    {
+        return \is_int($state['v'] ?? null) ? $state['v'] : 1;
+    }
+
+    /**
+     * The `[id, ref]` a transcript row already carries, each null when absent
+     * or malformed.
+     *
+     * @return array{0: ?string, 1: ?int}
+     */
+    private static function carriedIdentity(mixed $row): array
+    {
+        if ($row instanceof Message) {
+            return [$row->id, $row->ref];
+        }
+        if (!\is_array($row)) {
+            return [null, null];
+        }
+
+        return [
+            \is_string($row['id'] ?? null) && $row['id'] !== '' ? $row['id'] : null,
+            \is_int($row['ref'] ?? null) && $row['ref'] >= 1 ? $row['ref'] : null,
+        ];
     }
 
     /**

@@ -368,6 +368,11 @@ final class UsageWiringTest extends TestCase
             // Audit 15b-15: the attachment-degradation report rides the same
             // result frame, so it must not cost the turn its bill either.
             'withAttachmentNotice' => $base->withAttachmentNotice('probe'),
+            // Roadmap 1.B-1: a row's identity, step and user visibility are
+            // stamped onto rows that already carry their bill.
+            'withIdentity' => $base->withIdentity('m_s_1', 1),
+            'withStepId' => $base->withStepId('step-1'),
+            'withUserVisible' => $base->withUserVisible(false),
         ];
 
         $reflected = [];

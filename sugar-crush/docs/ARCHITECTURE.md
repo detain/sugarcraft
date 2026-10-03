@@ -505,6 +505,20 @@ completion can legitimately run for tens of minutes.
 | `~/.sugar-crush/teams/` | `Agents\TeamManager` | team state |
 | `<workflowsPath>/.running/` | `Workflows\WorkflowEngine` | pause files |
 
+**Transcript rows have an identity.** `EnhancedSessionStore::saveTranscript()`
+writes transcript schema version 2: every row has an id, `m_<session>_<ref>`, and a
+ref, a short number that is monotonic per session and never reused, from
+`Support\MessageIdAllocator`. The state also records `nextRef`, the high-water
+mark, so a ref dropped by compaction or `/rewind` is never given out again. A row
+that already carries its identity keeps it. For a row that does not, the identity
+goes into the state's `identities` map instead of the row's bytes, so the row
+still shares its checkpoint blob. `loadTranscript()` folds the map back in. It
+migrates a version-1 transcript, or the checkpoint a pre-transcript session
+resumes from, in order (refs 1, 2, 3, …), and the first save after the resume
+persists those refs. `Message` also carries `stepId`, the engine step a row came
+from, and `userVisible`, which hides a row from the transcript without hiding it
+from the model (the twin of `uiOnly`). Legacy rows have no `stepId`.
+
 `Sessions\Background*` runs a task in a detached session (`/bg`, `/fork`) with
 its own runner and supervisor. `Context\ContextCompactor` +
 `IdleCompactionPolicy` drive `/compact` and automatic compaction against

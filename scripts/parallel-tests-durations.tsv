@@ -116,6 +116,7 @@ sugar-crush/tests/Support/NonBlockingVocabularyTest.php	2.569	25
 sugar-crush/tests/Integration/ParallelDeadlineExemptionTest.php	2.542	1
 sugar-crush/tests/Tools/CapturedProcessDeadlineTest.php	2.539	5
 sugar-crush/tests/Backend/ProviderErrorSurfacingTest.php	2.506	10
+sugar-crush/tests/Session/TranscriptSchemaV2MigrationTest.php	2.500	10
 sugar-crush/tests/Context/GlobDialectDifferentialTest.php	2.497	13
 sugar-crush/tests/Workflows/WorkflowAgentResultsTest.php	2.494	13
 sugar-crush/tests/Tools/BuiltIn/UnifiedDiffBoundedMemoryTest.php	2.416	5
@@ -462,6 +463,7 @@ sugar-crush/tests/Permissions/PermissionGateAcceptEditsTest.php	0.030	27
 sugar-crush/tests/Tui/TerminalBackgroundSprinklesAgreementTest.php	0.030	16
 sugar-crush/tests/Skills/TruncatesOutputNudgeMarginDocTest.php	0.030	4
 sugar-crush/tests/Hooks/BashEscapeDenyHookTest.php	0.030	55
+sugar-crush/tests/Messages/MessageIdentityTest.php	0.030	13
 sugar-crush/tests/Tools/McpToolBridgeTest.php	0.029	54
 sugar-crush/tests/Skills/SkillFileReaderTest.php	0.029	14
 sugar-crush/tests/ThemeTest.php	0.029	8

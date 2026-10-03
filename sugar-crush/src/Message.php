@@ -178,6 +178,44 @@ final class Message implements \JsonSerializable
          * Display-only: never part of {@see toWire()}.
          */
         public readonly ?string $pendingToolName = null,
+        /**
+         * This row's storage id, `m_<session>_<ref>` ({@see
+         * \SugarCraft\Crush\Support\MessageIdAllocator}), or null on a row
+         * that has not been persisted yet (roadmap 1.B-1). Stable once given:
+         * {@see \SugarCraft\Crush\Session\EnhancedSessionStore::saveTranscript()}
+         * records it the first time the row is saved, the row carries it from
+         * the next {@see \SugarCraft\Crush\Session\EnhancedSessionStore::loadTranscript()}
+         * on, and every later save keeps it - so checkpoints, `/rewind`, server
+         * events and pruning ledgers can name one row without counting
+         * positions, which shift as soon as anything is compacted, inserted or
+         * rewound.
+         */
+        public readonly ?string $id = null,
+        /**
+         * The short, model-facing number of this row - monotonic per session
+         * and never reused, even after the row is gone (roadmap 1.B-1, the
+         * `r17` a pruning tool names). Assigned with $id; null until then.
+         */
+        public readonly ?int $ref = null,
+        /**
+         * The engine step that produced this row: the assistant step's text
+         * and every tool result that step's calls returned share it (roadmap
+         * 1.B-1; filled from the fork result frame from 1.B-2 on). Null on a
+         * user or notice row, and on every row of a transcript written before
+         * steps were recorded - which is how a structured replay tells a
+         * legacy tool row (replayable only as prose) from one it can rebuild
+         * into a `tool_calls`/`tool` pair.
+         */
+        public readonly ?string $stepId = null,
+        /**
+         * Whether the transcript shows this row (Goose's `userVisible`,
+         * roadmap 1.B-1). The twin of $uiOnly, which hides a row from the
+         * MODEL: a row with this false still reaches the model but is not
+         * painted - the structured per-step rows 1.B-2 stores beside the
+         * display rows the user reads. True on every row written before the
+         * flag existed.
+         */
+        public readonly bool $userVisible = true,
     ) {}
 
     public static function user(string $content, ?int $now = null): self
@@ -377,26 +415,9 @@ final class Message implements \JsonSerializable
      */
     public function attachFile(string $path, ?string $contents = null): self
     {
-        return new self(
-            role: $this->role,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            attachments: [...$this->attachments, new Attachment($path, AttachmentType::File, $contents)],
-            toolCalls: $this->toolCalls,
-            toolResults: $this->toolResults,
-            pendingToolCallId: $this->pendingToolCallId,
-            reasoning: $this->reasoning,
-            imageBytes: $this->imageBytes,
-            imageProtocol: $this->imageProtocol,
-            usage: $this->usage,
-            lengthStopped: $this->lengthStopped,
-            stepsTruncated: $this->stepsTruncated,
-            pendingToolArguments: $this->pendingToolArguments,
-            pendingToolName: $this->pendingToolName,
-            uiOnly: $this->uiOnly,
-            loopGuardStoppedBy: $this->loopGuardStoppedBy,
-            attachmentNotice: $this->attachmentNotice,
-        );
+        return $this->mutate([
+            'attachments' => [...$this->attachments, new Attachment($path, AttachmentType::File, $contents)],
+        ]);
     }
 
     /**
@@ -405,26 +426,9 @@ final class Message implements \JsonSerializable
      */
     public function attachImage(string $path, ?string $bytes = null, ?string $mimeType = null): self
     {
-        return new self(
-            role: $this->role,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            attachments: [...$this->attachments, new Attachment($path, AttachmentType::Image, $bytes, $mimeType)],
-            toolCalls: $this->toolCalls,
-            toolResults: $this->toolResults,
-            pendingToolCallId: $this->pendingToolCallId,
-            reasoning: $this->reasoning,
-            imageBytes: $this->imageBytes,
-            imageProtocol: $this->imageProtocol,
-            usage: $this->usage,
-            lengthStopped: $this->lengthStopped,
-            stepsTruncated: $this->stepsTruncated,
-            pendingToolArguments: $this->pendingToolArguments,
-            pendingToolName: $this->pendingToolName,
-            uiOnly: $this->uiOnly,
-            loopGuardStoppedBy: $this->loopGuardStoppedBy,
-            attachmentNotice: $this->attachmentNotice,
-        );
+        return $this->mutate([
+            'attachments' => [...$this->attachments, new Attachment($path, AttachmentType::Image, $bytes, $mimeType)],
+        ]);
     }
 
     /**
@@ -434,26 +438,7 @@ final class Message implements \JsonSerializable
      */
     public function withToolCalls(array $toolCalls): self
     {
-        return new self(
-            role: $this->role,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            attachments: $this->attachments,
-            toolCalls: $toolCalls,
-            toolResults: $this->toolResults,
-            pendingToolCallId: $this->pendingToolCallId,
-            reasoning: $this->reasoning,
-            imageBytes: $this->imageBytes,
-            imageProtocol: $this->imageProtocol,
-            usage: $this->usage,
-            lengthStopped: $this->lengthStopped,
-            stepsTruncated: $this->stepsTruncated,
-            pendingToolArguments: $this->pendingToolArguments,
-            pendingToolName: $this->pendingToolName,
-            uiOnly: $this->uiOnly,
-            loopGuardStoppedBy: $this->loopGuardStoppedBy,
-            attachmentNotice: $this->attachmentNotice,
-        );
+        return $this->mutate(['toolCalls' => $toolCalls]);
     }
 
     /**
@@ -462,30 +447,19 @@ final class Message implements \JsonSerializable
      * non-empty $toolResults to render a distinct "tool call" marker instead
      * of a plain assistant bubble.
      *
+     * The row stops being a "running" placeholder: the pending-call fields are
+     * cleared, everything else - identity included - is kept.
+     *
      * @param list<ToolResult> $toolResults
      */
     public function withToolResults(array $toolResults): self
     {
-        return new self(
-            role: $this->role,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            attachments: $this->attachments,
-            toolCalls: $this->toolCalls,
-            toolResults: $toolResults,
-            pendingToolCallId: null,
-            reasoning: $this->reasoning,
-            imageBytes: $this->imageBytes,
-            imageProtocol: $this->imageProtocol,
-            usage: $this->usage,
-            lengthStopped: $this->lengthStopped,
-            stepsTruncated: $this->stepsTruncated,
-            pendingToolArguments: [],
-            pendingToolName: null,
-            uiOnly: $this->uiOnly,
-            loopGuardStoppedBy: $this->loopGuardStoppedBy,
-            attachmentNotice: $this->attachmentNotice,
-        );
+        return $this->mutate([
+            'toolResults' => $toolResults,
+            'pendingToolCallId' => null,
+            'pendingToolArguments' => [],
+            'pendingToolName' => null,
+        ]);
     }
 
     /**
@@ -498,26 +472,7 @@ final class Message implements \JsonSerializable
      */
     public function withReasoning(?string $reasoning): self
     {
-        return new self(
-            role: $this->role,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            attachments: $this->attachments,
-            toolCalls: $this->toolCalls,
-            toolResults: $this->toolResults,
-            pendingToolCallId: $this->pendingToolCallId,
-            reasoning: $reasoning,
-            imageBytes: $this->imageBytes,
-            imageProtocol: $this->imageProtocol,
-            usage: $this->usage,
-            lengthStopped: $this->lengthStopped,
-            stepsTruncated: $this->stepsTruncated,
-            pendingToolArguments: $this->pendingToolArguments,
-            pendingToolName: $this->pendingToolName,
-            uiOnly: $this->uiOnly,
-            loopGuardStoppedBy: $this->loopGuardStoppedBy,
-            attachmentNotice: $this->attachmentNotice,
-        );
+        return $this->mutate(['reasoning' => $reasoning]);
     }
 
     /**
@@ -529,26 +484,7 @@ final class Message implements \JsonSerializable
      */
     public function withImage(?string $imageBytes, ?string $imageProtocol): self
     {
-        return new self(
-            role: $this->role,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            attachments: $this->attachments,
-            toolCalls: $this->toolCalls,
-            toolResults: $this->toolResults,
-            pendingToolCallId: $this->pendingToolCallId,
-            reasoning: $this->reasoning,
-            imageBytes: $imageBytes,
-            imageProtocol: $imageProtocol,
-            usage: $this->usage,
-            lengthStopped: $this->lengthStopped,
-            stepsTruncated: $this->stepsTruncated,
-            pendingToolArguments: $this->pendingToolArguments,
-            pendingToolName: $this->pendingToolName,
-            uiOnly: $this->uiOnly,
-            loopGuardStoppedBy: $this->loopGuardStoppedBy,
-            attachmentNotice: $this->attachmentNotice,
-        );
+        return $this->mutate(['imageBytes' => $imageBytes, 'imageProtocol' => $imageProtocol]);
     }
 
     /**
@@ -561,26 +497,7 @@ final class Message implements \JsonSerializable
      */
     public function withUsage(?Usage $usage): self
     {
-        return new self(
-            role: $this->role,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            attachments: $this->attachments,
-            toolCalls: $this->toolCalls,
-            toolResults: $this->toolResults,
-            pendingToolCallId: $this->pendingToolCallId,
-            reasoning: $this->reasoning,
-            imageBytes: $this->imageBytes,
-            imageProtocol: $this->imageProtocol,
-            usage: $usage,
-            lengthStopped: $this->lengthStopped,
-            stepsTruncated: $this->stepsTruncated,
-            pendingToolArguments: $this->pendingToolArguments,
-            pendingToolName: $this->pendingToolName,
-            uiOnly: $this->uiOnly,
-            loopGuardStoppedBy: $this->loopGuardStoppedBy,
-            attachmentNotice: $this->attachmentNotice,
-        );
+        return $this->mutate(['usage' => $usage]);
     }
 
     /**
@@ -592,26 +509,7 @@ final class Message implements \JsonSerializable
      */
     public function withLengthStopped(bool $lengthStopped): self
     {
-        return new self(
-            role: $this->role,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            attachments: $this->attachments,
-            toolCalls: $this->toolCalls,
-            toolResults: $this->toolResults,
-            pendingToolCallId: $this->pendingToolCallId,
-            reasoning: $this->reasoning,
-            imageBytes: $this->imageBytes,
-            imageProtocol: $this->imageProtocol,
-            usage: $this->usage,
-            lengthStopped: $lengthStopped,
-            stepsTruncated: $this->stepsTruncated,
-            pendingToolArguments: $this->pendingToolArguments,
-            pendingToolName: $this->pendingToolName,
-            uiOnly: $this->uiOnly,
-            loopGuardStoppedBy: $this->loopGuardStoppedBy,
-            attachmentNotice: $this->attachmentNotice,
-        );
+        return $this->mutate(['lengthStopped' => $lengthStopped]);
     }
 
     /**
@@ -622,26 +520,7 @@ final class Message implements \JsonSerializable
      */
     public function withStepsTruncated(bool $stepsTruncated): self
     {
-        return new self(
-            role: $this->role,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            attachments: $this->attachments,
-            toolCalls: $this->toolCalls,
-            toolResults: $this->toolResults,
-            pendingToolCallId: $this->pendingToolCallId,
-            reasoning: $this->reasoning,
-            imageBytes: $this->imageBytes,
-            imageProtocol: $this->imageProtocol,
-            usage: $this->usage,
-            lengthStopped: $this->lengthStopped,
-            stepsTruncated: $stepsTruncated,
-            pendingToolArguments: $this->pendingToolArguments,
-            pendingToolName: $this->pendingToolName,
-            uiOnly: $this->uiOnly,
-            loopGuardStoppedBy: $this->loopGuardStoppedBy,
-            attachmentNotice: $this->attachmentNotice,
-        );
+        return $this->mutate(['stepsTruncated' => $stepsTruncated]);
     }
 
     /**
@@ -652,26 +531,7 @@ final class Message implements \JsonSerializable
      */
     public function withUiOnly(bool $uiOnly = true): self
     {
-        return new self(
-            role: $this->role,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            attachments: $this->attachments,
-            toolCalls: $this->toolCalls,
-            toolResults: $this->toolResults,
-            pendingToolCallId: $this->pendingToolCallId,
-            reasoning: $this->reasoning,
-            imageBytes: $this->imageBytes,
-            imageProtocol: $this->imageProtocol,
-            usage: $this->usage,
-            lengthStopped: $this->lengthStopped,
-            stepsTruncated: $this->stepsTruncated,
-            pendingToolArguments: $this->pendingToolArguments,
-            pendingToolName: $this->pendingToolName,
-            uiOnly: $uiOnly,
-            loopGuardStoppedBy: $this->loopGuardStoppedBy,
-            attachmentNotice: $this->attachmentNotice,
-        );
+        return $this->mutate(['uiOnly' => $uiOnly]);
     }
 
     /**
@@ -683,26 +543,7 @@ final class Message implements \JsonSerializable
      */
     public function withLoopGuardStoppedBy(?string $toolName): self
     {
-        return new self(
-            role: $this->role,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            attachments: $this->attachments,
-            toolCalls: $this->toolCalls,
-            toolResults: $this->toolResults,
-            pendingToolCallId: $this->pendingToolCallId,
-            reasoning: $this->reasoning,
-            imageBytes: $this->imageBytes,
-            imageProtocol: $this->imageProtocol,
-            usage: $this->usage,
-            lengthStopped: $this->lengthStopped,
-            stepsTruncated: $this->stepsTruncated,
-            pendingToolArguments: $this->pendingToolArguments,
-            pendingToolName: $this->pendingToolName,
-            uiOnly: $this->uiOnly,
-            loopGuardStoppedBy: $toolName === '' ? null : $toolName,
-            attachmentNotice: $this->attachmentNotice,
-        );
+        return $this->mutate(['loopGuardStoppedBy' => $toolName === '' ? null : $toolName]);
     }
 
     /**
@@ -713,26 +554,77 @@ final class Message implements \JsonSerializable
      */
     public function withAttachmentNotice(?string $notice): self
     {
-        return new self(
-            role: $this->role,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            attachments: $this->attachments,
-            toolCalls: $this->toolCalls,
-            toolResults: $this->toolResults,
-            pendingToolCallId: $this->pendingToolCallId,
-            reasoning: $this->reasoning,
-            imageBytes: $this->imageBytes,
-            imageProtocol: $this->imageProtocol,
-            usage: $this->usage,
-            lengthStopped: $this->lengthStopped,
-            stepsTruncated: $this->stepsTruncated,
-            pendingToolArguments: $this->pendingToolArguments,
-            pendingToolName: $this->pendingToolName,
-            uiOnly: $this->uiOnly,
-            loopGuardStoppedBy: $this->loopGuardStoppedBy,
-            attachmentNotice: $notice === '' ? null : $notice,
-        );
+        return $this->mutate(['attachmentNotice' => $notice === '' ? null : $notice]);
+    }
+
+    /**
+     * Give this row its storage id and model-facing ref - see $id's and
+     * $ref's docblocks. Written by
+     * {@see \SugarCraft\Crush\Session\EnhancedSessionStore::loadTranscript()}'s
+     * rows (through {@see fromArray()}) and, from 1.B-2 on, wherever a row is
+     * minted. An empty id clears it; a ref below 1 clears it.
+     */
+    public function withIdentity(?string $id, ?int $ref): self
+    {
+        return $this->mutate([
+            'id' => $id === '' ? null : $id,
+            'ref' => $ref !== null && $ref >= 1 ? $ref : null,
+        ]);
+    }
+
+    /**
+     * Tag (or clear, via null) the engine step that produced this row - see
+     * $stepId's docblock.
+     */
+    public function withStepId(?string $stepId): self
+    {
+        return $this->mutate(['stepId' => $stepId === '' ? null : $stepId]);
+    }
+
+    /**
+     * Show (true) or hide (false) this row in the transcript the user reads -
+     * see $userVisible's docblock. The agent-side twin is {@see withUiOnly()}.
+     */
+    public function withUserVisible(bool $userVisible = true): self
+    {
+        return $this->mutate(['userVisible' => $userVisible]);
+    }
+
+    /**
+     * The one copier every wither goes through: this row's fields with
+     * $changes laid over them, by constructor parameter name. One list means a
+     * field added to the constructor cannot be silently dropped by a wither
+     * that forgot it - which is exactly how $uiOnly and $pendingToolName used
+     * to need a line in each of eleven hand-written copies.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): self
+    {
+        return new self(...array_replace([
+            'role' => $this->role,
+            'content' => $this->content,
+            'createdAt' => $this->createdAt,
+            'attachments' => $this->attachments,
+            'toolCalls' => $this->toolCalls,
+            'toolResults' => $this->toolResults,
+            'pendingToolCallId' => $this->pendingToolCallId,
+            'reasoning' => $this->reasoning,
+            'imageBytes' => $this->imageBytes,
+            'imageProtocol' => $this->imageProtocol,
+            'usage' => $this->usage,
+            'lengthStopped' => $this->lengthStopped,
+            'stepsTruncated' => $this->stepsTruncated,
+            'pendingToolArguments' => $this->pendingToolArguments,
+            'uiOnly' => $this->uiOnly,
+            'loopGuardStoppedBy' => $this->loopGuardStoppedBy,
+            'attachmentNotice' => $this->attachmentNotice,
+            'pendingToolName' => $this->pendingToolName,
+            'id' => $this->id,
+            'ref' => $this->ref,
+            'stepId' => $this->stepId,
+            'userVisible' => $this->userVisible,
+        ], $changes));
     }
 
     /**
@@ -849,6 +741,13 @@ final class Message implements \JsonSerializable
             // pre-flag transcript holds - serialises byte-for-byte as before.
             ...($this->uiOnly ? ['uiOnly' => true] : []),
             ...($this->pendingToolName !== null ? ['pendingToolName' => $this->pendingToolName] : []),
+            // Identity (1.B-1) on the same only-when-set rule: an id-less row
+            // encodes exactly as it did before, so the checkpoint blobs it
+            // shares with older saves keep their hash.
+            ...($this->id !== null ? ['id' => $this->id] : []),
+            ...($this->ref !== null ? ['ref' => $this->ref] : []),
+            ...($this->stepId !== null ? ['stepId' => $this->stepId] : []),
+            ...($this->userVisible ? [] : ['userVisible' => false]),
         ];
     }
 
@@ -950,6 +849,12 @@ final class Message implements \JsonSerializable
             pendingToolName: $string($row['pendingToolName'] ?? null),
             uiOnly: ($row['uiOnly'] ?? false) === true,
             loopGuardStoppedBy: $string($row['loopGuardStoppedBy'] ?? null),
+            id: ($string($row['id'] ?? null) ?? '') === '' ? null : $row['id'],
+            ref: \is_int($row['ref'] ?? null) && $row['ref'] >= 1 ? $row['ref'] : null,
+            stepId: ($string($row['stepId'] ?? null) ?? '') === '' ? null : $row['stepId'],
+            // Strictly `false` hides: a missing or mistyped value is the
+            // pre-flag default, shown.
+            userVisible: ($row['userVisible'] ?? true) !== false,
         );
     }
 }
