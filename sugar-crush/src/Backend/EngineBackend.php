@@ -573,6 +573,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     }
 
     /**
+     * The model id this backend was BUILT with — the configured one, which
+     * {@see servedModel()} overrides when the provider has learned it talks to
+     * another. Read by `Renderer`'s status-bar model segment as the fallback,
+     * the same order `Tui\Renderer::modelLabel()` applies (audit 15b-35).
+     */
+    public function model(): string
+    {
+        return $this->model;
+    }
+
+    /**
      * The provider this engine completes against — read by
      * {@see \SugarCraft\Crush\Agents\EngineExecutor} to refuse a workflow stage
      * on the offline echo fallback rather than pass echoed text off as work.

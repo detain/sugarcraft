@@ -163,7 +163,8 @@ another sugarcrush already has open — `--continue` in a second terminal, the
 same `--resume` twice, or picking it in the picker — opens it **read-only**: the
 transcript is shown, but prompts and the commands that would change the session
 (`/clear`, `/compact`, `/rename`, `/rewind`, `/workflow run|resume`, any custom
-command) are refused and nothing is saved. `/branch` forks the session into a
+command) are refused and nothing is saved, and the status bar leads with
+`read-only: /branch to fork` (narrowing to `RO` on a small terminal). `/branch` forks the session into a
 new one this window owns and carries on there, and the refused draft comes back
 in the box;
 commands that only read or change the window itself (`/help`, `/sessions`,
@@ -1193,7 +1194,11 @@ still wins). When the reads fail, per-family figures stand in: 262144 output
 tokens for DeepSeek-V4 and Qwen3.8, 4096 for anything else. The same read
 names the served model and its `--tool-call-parser`: a served model of another
 family than `model`, or a server with no tool-call parser while no textual
-fallback is armed, raises a one-time transcript notice. Set
+fallback is armed, raises a one-time transcript notice. The chat's status bar
+ends with the served model's id (the configured `model` until the server has
+named one) whenever the row has room left over — it is the bar's
+lowest-priority piece, shortened to the part after the last `/` and then
+ellipsised before it is dropped. Set
 `"discoverServerInfo": false` in the provider block to skip the reads.
 
 That default exists because an *absent* `reasoning_effort` is not neutral. On

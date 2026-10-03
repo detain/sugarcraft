@@ -1132,6 +1132,25 @@ final class Renderer
     ];
 
     /**
+     * The status bar's read-only marker ({@see readOnlyMarker()}), widest
+     * first, each carrying its own trailing separator. The long form names
+     * the way out, `/branch`, which is the one thing the read-only notice
+     * says that the marker would otherwise lose once it scrolls away.
+     */
+    private const READ_ONLY_MARKER_FORMS = [
+        'read-only: /branch to fork · ',
+        'read-only · ',
+        'RO · ',
+    ];
+
+    /**
+     * The narrowest room the model segment ({@see modelIndicator()}) is
+     * ellipsised into rather than dropped: five columns of an id and the
+     * ellipsis. Narrower, the stub names no model anyone could recognise.
+     */
+    private const MODEL_SEGMENT_MIN_COLS = 6;
+
+    /**
      * How far the LAST rendered keybinding reference overflowed its box,
      * in lines. Static for the same reason {@see $maxScrollOffset} is: the
      * keystroke that scrolls arrives between frames, so the only content
@@ -1907,6 +1926,18 @@ final class Renderer
             );
         }
 
+        // The read-only marker (audit SES-3 residual): HIGHEST priority of
+        // everything on the bar, so it is claimed before any other piece is
+        // sized and the rest of the bar is fitted into what it leaves ($cols
+        // below, not $chat->cols()). It is also the bar's FIRST text, so the
+        // backstop cut in fitStatusBar(), which takes from the end, removes
+        // it last. A window that silently refuses every prompt is the state
+        // most worth a permanent cue: the notice that explains it scrolls
+        // away, this does not. Absent on a writable session, so every bar
+        // width the sweeps pin is unchanged there.
+        $marker = $chat->isReadOnlySession() ? self::readOnlyMarker($chat) : '';
+        $cols = $chat->cols() - Width::of($marker);
+
         // The "Ctrl+P menu" hint is the live path's only affordance for
         // Pane::Menu (the palette is what the disconnected App system's
         // MenuBar pane would have been), so it is the region that carries
@@ -1922,7 +1953,7 @@ final class Renderer
         // the full bar fitted, it is still the full bar.
         $processing = self::fitProcessingHint(
             $chat,
-            $chat->cols() - Width::of(' · ') - Width::of(self::contextIndicator($chat, 0)),
+            $cols - Width::of(' · ') - Width::of(self::contextIndicator($chat, 0)),
         );
         // Messages the user sent while this turn was running
         // ({@see Chat::enqueuePrompt()}). The transcript notice each one wrote
@@ -1955,7 +1986,7 @@ final class Renderer
         if ($queued > 0) {
             $segment = sprintf(' · %d queued', $queued);
             $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2;
-            if ($floor <= $chat->cols()) {
+            if ($floor <= $cols) {
                 $processing .= $segment;
             }
         }
@@ -1967,7 +1998,7 @@ final class Renderer
         if ($selection !== null && $selection->settled) {
             $segment = sprintf(' · ✓ copied %d chars', $selection->copiedChars);
             $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2;
-            if ($floor <= $chat->cols()) {
+            if ($floor <= $cols) {
                 $processing .= $segment;
             }
         }
@@ -1995,10 +2026,16 @@ final class Renderer
         // Reserving (1) before sizing (2), (3) and (4) is what stops a later
         // piece crowding an earlier one off the row: each one is measured
         // against what its seniors have already claimed, never the reverse.
+        //
+        // Two more pieces bracket these four. The read-only marker ranks
+        // ABOVE all of them: it was claimed before the processing hint, and
+        // $cols is what it left. The served-model segment ranks BELOW all of
+        // them and below the `statusLine` command too: it is fitted last, at
+        // the end of this method.
         $separator = ' · ';
         $indicators = self::scrollIndicators($chat);
         $scrollReserve = $indicators === [] ? 0 : Width::of($indicators[0]);
-        $room = $chat->cols()
+        $room = $cols
             - Width::of(self::stripZoneMarkers($processing))
             - Width::of($separator)
             - $scrollReserve;
@@ -2016,7 +2053,7 @@ final class Renderer
         // for the reason stated below: the bar may not wrap.
         $spend = self::spendIndicator(
             $chat,
-            $chat->cols() - Width::of(self::stripZoneMarkers($bar)) - $scrollReserve - Width::of($separator),
+            $cols - Width::of(self::stripZoneMarkers($bar)) - $scrollReserve - Width::of($separator),
         );
         if ($spend !== '') {
             $bar = $context . $separator . $spend . $separator . $processing;
@@ -2032,7 +2069,7 @@ final class Renderer
         // `tests/Renderer/StatusBarSpendTest.php` measures today.
         $cache = self::cacheIndicator(
             $chat,
-            $chat->cols() - Width::of(self::stripZoneMarkers($bar)) - $scrollReserve - Width::of($separator),
+            $cols - Width::of(self::stripZoneMarkers($bar)) - $scrollReserve - Width::of($separator),
             $now,
         );
         if ($cache !== '') {
@@ -2070,7 +2107,7 @@ final class Renderer
         // makes Scan::parse() throw and costs the WHOLE frame its click zones
         // (same failure mode markPaneHeader() documents). The sentinels are
         // invisible on screen, so they come off before measuring.
-        $room = $chat->cols() - Width::of(self::stripZoneMarkers($bar));
+        $room = $cols - Width::of(self::stripZoneMarkers($bar));
         foreach ($indicators as $indicator) {
             if (Width::of($indicator) <= $room) {
                 $bar = $indicator . $bar;
@@ -2097,7 +2134,87 @@ final class Renderer
         // substitution) but it is not "every path". The rewrite is what earns
         // the `break` its place: the reason for it is the scroll-readout path,
         // not a universal one.
-        return self::fitStatusBar(self::withStatusLineCommand($bar, $chat->cols()), $chat->cols());
+        //
+        // The served-model segment (audit 15b-35 follow-up) is fitted after
+        // the `statusLine` command, which makes it the LOWEST-priority piece
+        // on the bar: see modelIndicator().
+        $bar = self::withStatusLineCommand($bar, $cols);
+        $model = self::modelIndicator($chat, $cols - Width::of(self::stripZoneMarkers($bar)) - Width::of($separator));
+        if ($model !== '') {
+            $bar .= $separator . $model;
+        }
+
+        return self::fitStatusBar($marker . $bar, $chat->cols());
+    }
+
+    /**
+     * The read-only marker that leads the bar while another TUI owns this
+     * session ({@see Chat::isReadOnlySession()}, audit SES-3 residual), with
+     * its trailing separator, at the widest of {@see READ_ONLY_MARKER_FORMS}
+     * that still leaves the rest of the bar its floor: the separator, the
+     * context readout's bare percentage and the processing hint's narrowest
+     * form. The narrowest form is taken when none does, and
+     * {@see fitStatusBar()}'s cut then takes the rest of the row from the
+     * end — the marker, being first, outlives everything else on it.
+     */
+    private static function readOnlyMarker(Chat $chat): string
+    {
+        $restFloor = Width::of(' · ')
+            + Width::of(self::contextIndicator($chat, 0))
+            + Width::of(self::stripZoneMarkers(self::fitProcessingHint($chat, 0)));
+
+        return self::firstFitting(self::READ_ONLY_MARKER_FORMS, $chat->cols() - $restFloor);
+    }
+
+    /**
+     * The model this chat's requests go to, at the widest form that fits
+     * $room columns, or '' — the bar's LOWEST-priority segment (audit 15b-35
+     * follow-up): fitted after every other piece, `statusLine` included, so
+     * it can never be what crowds a readout off the row.
+     *
+     * THE SAME RULE AS {@see \SugarCraft\Crush\Tui\Renderer::modelLabel()}:
+     * the served model the backend learned (an SGLang launch on its default
+     * id adopts the server's) before the configured id, both I/O-free. Only
+     * an {@see EngineBackend} can say either; the echo and command backends
+     * name no model, and get no segment.
+     *
+     * The served id is a string a REMOTE SERVER chose, so it goes through
+     * {@see oneLine()} ({@see untrusted()} plus the fold to one row): no
+     * escape, control byte or line break reaches the bar, and no zone
+     * sentinel reaches the one row that carries a real zone.
+     *
+     * Forms, widest first: the whole id; the part after its last `/` (an
+     * organisation prefix like `Qwen/` is the least informative part); that
+     * part ellipsised, while at least {@see MODEL_SEGMENT_MIN_COLS} columns
+     * are left — a stub shorter than that names no model; then nothing.
+     */
+    private static function modelIndicator(Chat $chat, int $room): string
+    {
+        $backend = $chat->backend();
+        if (!$backend instanceof \SugarCraft\Crush\Backend\EngineBackend || $room < 1) {
+            return '';
+        }
+
+        $id = trim(self::oneLine($backend->servedModel() ?? $backend->model()));
+        if ($id === '') {
+            return '';
+        }
+
+        if (Width::of($id) <= $room) {
+            return $id;
+        }
+
+        $slash = strrpos($id, '/');
+        $short = $slash === false ? $id : substr($id, $slash + 1);
+        if ($short !== '' && Width::of($short) <= $room) {
+            return $short;
+        }
+
+        if ($short === '' || $room < self::MODEL_SEGMENT_MIN_COLS) {
+            return '';
+        }
+
+        return Width::truncate($short, $room - 1) . '…';
     }
 
     /**
