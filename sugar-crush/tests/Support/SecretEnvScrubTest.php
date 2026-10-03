@@ -106,9 +106,11 @@ final class SecretEnvScrubTest extends TestCase
     }
 
     /**
-     * The scrub is for the MODEL-VISIBLE paths only. MCP stdio, LSP, the
-     * claude-code client and the command backends authenticate as the
-     * operator through env(), and must keep doing so.
+     * The scrub is for the MODEL-VISIBLE paths only. LSP, the claude-code
+     * client and the command backends authenticate as the operator through
+     * env(), and must keep doing so. (MCP stdio left this list in 0.14-b: it
+     * spawns through ProcessContainment::mcpEnv() — see
+     * tests/MCP/StdioMcpEnvScrubTest.php.)
      */
     public function testTheSharedEnvBlockItselfIsNotScrubbed(): void
     {

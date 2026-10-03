@@ -54,6 +54,14 @@ final class StdioMcpServer implements McpServer
     private readonly \SugarCraft\Mcp\StdioMcpServer $transport;
 
     /**
+     * Credential-shaped names the last spawn plan withheld from the server
+     * (item 0.14-b) — names only, for the launch notice.
+     *
+     * @var list<string>
+     */
+    private array $strippedSecretEnv = [];
+
+    /**
      * @param array<int, string> $args argv AFTER the program name — the argv
      *        form, never a shell string; see the library's start() doc-block
      *        for the measured process-tree reason
@@ -96,6 +104,11 @@ final class StdioMcpServer implements McpServer
      * from `.mcp.json` is exactly the untrusted command class containment is
      * for; the entry's own env rides as overrides so configured keys still win.
      *
+     * 0.14-b (decision D3): the env is {@see ProcessContainment::mcpEnv()} —
+     * inherited credentials are SCRUBBED unless the entry declares them in
+     * its `env` block or `secretEnvAllowlist` releases them. The names held
+     * back are recorded for {@see strippedSecretEnv()}.
+     *
      * @param list<string> $argv
      * @param array<string, string> $env
      * @return array{0: string|array<int,string>, 1: ?array<string,string>}
@@ -110,7 +123,21 @@ final class StdioMcpServer implements McpServer
             throw new \RuntimeException("Failed to start MCP server: {$name}");
         }
 
-        return [ProcessContainment::spawnSpec($argv), ProcessContainment::env($env)];
+        $this->strippedSecretEnv = ProcessContainment::strippedSecretEnvNames($env);
+
+        return [ProcessContainment::spawnSpec($argv), ProcessContainment::mcpEnv($env)];
+    }
+
+    /**
+     * The inherited credential-shaped variables the last start() withheld
+     * from this server, sorted — what a launch notice names so a server that
+     * then fails to authenticate is explainable. Empty before start().
+     *
+     * @return list<string>
+     */
+    public function strippedSecretEnv(): array
+    {
+        return $this->strippedSecretEnv;
     }
 
     /**

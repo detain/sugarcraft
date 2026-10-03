@@ -283,6 +283,21 @@ empty string also takes the default.
 This is a *different* mechanism from the `${VAR}` expansion `ProviderFactory`
 performs on provider config — see [`ENVIRONMENT.md`](ENVIRONMENT.md#variables-read-from-any-config-file).
 
+**Inherited credentials must be declared.** A `stdio` server inherits your
+environment **minus** every variable named like a credential (`*_API_KEY`,
+`*_TOKEN`, `*_SECRET`, `AWS_*`, case-insensitive) — the same scrub Bash, Grep
+and script hooks get (`ProcessContainment::mcpEnv()`). `.mcp.json` is
+repository content, and a server you trusted for one job used to receive every
+token in your shell. A server that needs one names it in its own `env` map,
+which is applied after the scrub and is the grant:
+`"env": { "GITHUB_TOKEN": "${GITHUB_TOKEN}" }` passes your `GITHUB_TOKEN` to
+that server and to no other. A name listed in `secretEnvAllowlist` (user tier,
+see [`SETTINGS.md`](SETTINGS.md)) reaches every server. Everything that is not
+credential-shaped — `PATH`, `HOME`, `LANG`, proxy settings — is inherited as
+before. `McpClient::strippedSecretEnv()` records, per server, the names it
+was started without (never the values), so a server that then fails to
+authenticate can be told apart from a broken one.
+
 ### Adding servers
 
 The `/mcp` panel opens empty in a fresh project and both hint lines there point

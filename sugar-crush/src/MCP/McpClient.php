@@ -40,6 +40,16 @@ final class McpClient
      */
     private array $refusedServers = [];
 
+    /**
+     * Per stdio server attempted in the last {@see startServers()} run, the
+     * inherited credentials its spawn withheld (item 0.14-b, decision D3).
+     * Recorded whether or not the server came up — a server that failed its
+     * handshake for want of a token is exactly the one worth naming.
+     *
+     * @var array<string, list<string>>
+     */
+    private array $strippedSecretEnv = [];
+
     private Client $httpClient;
 
     /**
@@ -134,6 +144,7 @@ final class McpClient
         $failures = [];
         $this->disabledServers = [];
         $this->refusedServers = [];
+        $this->strippedSecretEnv = [];
 
         foreach ($config['mcpServers'] ?? [] as $name => $serverConfig) {
             $failure = $this->startServer($name, $serverConfig);
@@ -179,6 +190,42 @@ final class McpClient
     public function refusedServers(): array
     {
         return $this->refusedServers;
+    }
+
+    /**
+     * The inherited credential-shaped variables each stdio server was started
+     * WITHOUT in the last {@see startServers()} run, keyed by server name;
+     * servers that lost nothing are absent. Names only, never values. The
+     * launch notice reads this: a server needing one declares it in its
+     * `env` block (`"GITHUB_TOKEN": "${GITHUB_TOKEN}"`) or the operator lists
+     * it in `secretEnvAllowlist`.
+     *
+     * @return array<string, list<string>>
+     */
+    public function strippedSecretEnv(): array
+    {
+        return $this->strippedSecretEnv;
+    }
+
+    /**
+     * The one-sentence launch notice for {@see strippedSecretEnv()}, or the
+     * empty string when no server lost anything.
+     */
+    public function strippedSecretEnvNotice(): string
+    {
+        if ($this->strippedSecretEnv === []) {
+            return '';
+        }
+
+        $parts = [];
+        foreach ($this->strippedSecretEnv as $server => $names) {
+            $parts[] = sprintf('%s (%s)', $server, implode(', ', $names));
+        }
+
+        return sprintf(
+            'MCP stdio servers start without inherited credentials: %s. A server that needs one declares it in its .mcp.json "env" block, e.g. "GITHUB_TOKEN": "${GITHUB_TOKEN}", or list the name in secretEnvAllowlist.',
+            implode('; ', $parts),
+        );
     }
 
     /**
@@ -388,12 +435,22 @@ final class McpClient
         try {
             $server->start();
         } catch (\Throwable) {
+            $this->recordStrippedSecretEnv($name, $server);
+
             return null;
         }
 
+        $this->recordStrippedSecretEnv($name, $server);
         $this->servers[$name] = $server;
 
         return null;
+    }
+
+    private function recordStrippedSecretEnv(string $name, McpServer $server): void
+    {
+        if ($server instanceof StdioMcpServer && $server->strippedSecretEnv() !== []) {
+            $this->strippedSecretEnv[$name] = $server->strippedSecretEnv();
+        }
     }
 
     /**

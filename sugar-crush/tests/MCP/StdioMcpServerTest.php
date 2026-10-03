@@ -178,9 +178,9 @@ final class StdioMcpServerTest extends TestCase
             'the planner stopped handing the transport the containment-wrapped argv',
         );
         $this->assertSame(
-            ProcessContainment::env(['MCP_ONLY' => 'wins']),
+            ProcessContainment::mcpEnv(['MCP_ONLY' => 'wins']),
             $plan[1],
-            'the planner stopped handing the transport the scrubbed environment',
+            'the planner stopped handing the transport the scrubbed environment (0.14-b: mcpEnv, credentials withheld)',
         );
 
         if (ProcessContainment::detachedSpawnBinary() !== '') {

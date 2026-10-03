@@ -300,9 +300,13 @@ for a `gh` workflow, `["NPM_*"]` for a publish script. A glob never releases a
 key SugarCrush itself authenticates with (`ANTHROPIC_API_KEY`,
 `ANTHROPIC_AUTH_TOKEN`, `OPENAI_API_KEY`, `SGLANG_API_KEY`,
 `CUSTOM_PROVIDER_API_KEY`); only that exact name does. Anything but a list of
-strings scrubs everything. MCP and LSP servers, the `claude-code` provider and
-the command backends are not scrubbed — they are processes you configured to
-authenticate as you, and their output is a protocol, not text the model reads.
+strings scrubs everything. MCP `stdio` servers get the same scrub, plus the
+credentials their own `.mcp.json` `env` map declares — a repository chose
+that command, so it gets only what it names (see
+[`MCP.md`](MCP.md#var-interpolation--exactly-where-it-works)). LSP servers, the
+`claude-code` provider and the command backends are not scrubbed — they are
+processes you configured to authenticate as you, and their output is a
+protocol, not text the model reads.
 The key is read when the tool set and the hook chain are built
 (`Bootstrap::tools()` and `Bootstrap::hooks()`), and it is user-tier only for
 the plainest reason on this page: a project-tier `["*"]` would let a cloned

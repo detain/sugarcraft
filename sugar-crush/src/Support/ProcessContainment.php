@@ -253,10 +253,12 @@ final class ProcessContainment
      * own required keys (a hook's `CRUSH_*` payload, EnvironmentBlock's git
      * lock switch) are never caught by a pattern.
      *
-     * env() ITSELF STAYS UNSCRUBBED, deliberately: MCP stdio servers, LSP
-     * servers, the claude-code client and the command backends are processes
-     * the OPERATOR configured to authenticate as them, and their output is a
-     * protocol this package parses, not text handed to the model verbatim.
+     * env() ITSELF STAYS UNSCRUBBED, deliberately: LSP servers, the
+     * claude-code client and the command backends are processes the OPERATOR
+     * configured to authenticate as them, and their output is a protocol this
+     * package parses, not text handed to the model verbatim. MCP stdio
+     * servers USED to be on that list and no longer are — see
+     * {@see mcpEnv()} (item 0.14-b, decision D3).
      *
      * @param array<string, string> $overrides
      * @return array<string, string>
@@ -271,6 +273,61 @@ final class ProcessContainment
         }
 
         return \array_merge($env, $overrides);
+    }
+
+    /**
+     * The environment for an MCP stdio server (item 0.14-b, decision D3):
+     * {@see scrubbedEnv()} with the server's own `.mcp.json` `env` block —
+     * `${VAR}` already resolved — applied LAST.
+     *
+     * WHY MCP MOVED OFF THE UNSCRUBBED LIST. The command is chosen by the
+     * REPOSITORY, not the operator: `.mcp.json` is checked-in content, trust
+     * is granted per root, and a server the user approved for one purpose
+     * inherited every credential in the shell — the GitHub token, the cloud
+     * keys, the provider keys — whether it needed them or not, and a tool
+     * result is text the model reads. Least privilege inverts the default:
+     * a server gets the credentials its entry DECLARES
+     * (`"env": {"GITHUB_TOKEN": "${GITHUB_TOKEN}"}`) or that the operator's
+     * `secretEnvAllowlist` releases, and nothing else credential-shaped.
+     * Everything not credential-shaped (PATH, HOME, LANG, proxies) is still
+     * inherited, so an `npx` launcher keeps working.
+     *
+     * A declared name wins even when it is credential-shaped, because the
+     * declaration IS the grant; {@see strippedSecretEnvNames()} names what was
+     * withheld so the launch can say so instead of a server failing to
+     * authenticate in silence.
+     *
+     * @param array<string, string> $declared the entry's resolved `env` block
+     * @return array<string, string>
+     */
+    public static function mcpEnv(array $declared = []): array
+    {
+        return self::scrubbedEnv($declared);
+    }
+
+    /**
+     * The inherited credential-shaped names {@see mcpEnv()} withholds for a
+     * server declaring $declared — sorted, for a launch notice. Names only,
+     * never values.
+     *
+     * @param array<string, string> $declared
+     * @return list<string>
+     */
+    public static function strippedSecretEnvNames(array $declared = []): array
+    {
+        $stripped = [];
+        foreach (\array_keys(self::env()) as $name) {
+            $name = (string) $name;
+            if (\array_key_exists($name, $declared)) {
+                continue;
+            }
+            if (self::isSecretEnvName($name) && !self::secretEnvAllowed($name)) {
+                $stripped[] = $name;
+            }
+        }
+        \sort($stripped, \SORT_STRING);
+
+        return $stripped;
     }
 
     /**
