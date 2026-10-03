@@ -618,7 +618,7 @@ sugar-crush/tests/MCP/McpForeignTranslateTest.php	0.005	12
 sugar-crush/tests/Agents/AgentStatusTest.php	0.005	22
 sugar-crush/tests/Workflows/StageResultTest.php	0.005	15
 sugar-crush/tests/Agents/AgentPoolConfigTest.php	0.005	20
-sugar-crush/tests/Chat/MidTurnSpendCapTranscriptTest.php	0.005	8
+sugar-crush/tests/Chat/MidTurnSpendCapTranscriptTest.php	0.005	10
 sugar-crush/tests/Tools/ToolCallTest.php	0.005	14
 sugar-crush/tests/Tools/BuiltIn/SkillToolTest.php	0.005	11
 sugar-crush/tests/Providers/SseDataNoSpaceTest.php	0.005	7
@@ -743,3 +743,14 @@ sugar-crush/tests/Commands/CommandsTableTakesColumnDriftTest.php	0.050	3
 sugar-crush/tests/Hooks/PostToolUseAttributionTest.php	0.050	12
 sugar-crush/tests/Chat/WorkflowAttemptsReportTest.php	0.040	2
 sugar-crush/tests/Messages/LoopGuardStoppedFieldTest.php	0.040	14
+sugar-crush/tests/Agents/AgentWorkerPoolCancelKeepsLoopLiveTest.php	2.400	5
+sugar-crush/tests/Chat/ReadOnlySessionTest.php	2.400	14
+sugar-crush/tests/Session/DebouncedTranscriptPersistenceTest.php	1.400	8
+sugar-crush/tests/Backend/EngineBackendCompactorConfigTest.php	0.200	3
+sugar-crush/tests/Backend/EngineBackendServedModelTest.php	0.200	5
+sugar-crush/tests/Providers/BedrockPromptCacheTest.php	0.200	29
+sugar-crush/tests/Session/SessionLockTest.php	0.200	8
+sugar-crush/tests/Chat/InitialPromptTest.php	0.200	5
+sugar-crush/tests/Cli/BootstrapLaunchNoticeCapCensusTest.php	0.100	4
+sugar-crush/tests/Backend/EngineBackendWorktreeJailTest.php	0.060	6
+sugar-crush/tests/Providers/VertexPromptCacheTest.php	0.040	25
