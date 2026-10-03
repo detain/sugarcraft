@@ -315,6 +315,11 @@ final class Width
      * sequences across line breaks: a colour set on line N stays active
      * on line N+1 (no SGR reset is auto-emitted; callers wanting that
      * should append `Ansi::reset()` themselves).
+     *
+     * Hard breaks are honoured the way {@see wrap()} honours them: `\n`
+     * and `\r\n` both end the line, and the output separator is always a
+     * bare `\n`. No returned line is wider than `$max` unless it is a
+     * single grapheme that is itself wider than the whole budget.
      */
     public static function wrapAnsi(string $s, int $max): string
     {
@@ -333,6 +338,24 @@ final class Width
             $lines[] = rtrim($line);
             $line = '';
             $lineWidth = 0;
+        };
+        // Every place a finished word joins the line must ask whether it
+        // still fits. The `\n` branch and the over-wide-cluster branch used
+        // to append unconditionally, so the last word before a hard break
+        // rode onto a line that had no room for it — `"aaaa bbbb x\ny"` at
+        // 10 came back with an 11-cell first line, breaking the renderer's
+        // one-row-per-line invariant.
+        $commitWord = static function () use (&$line, &$lineWidth, &$word, &$wordWidth, $max, $flushLine): void {
+            if ($word === '') {
+                return;
+            }
+            if ($lineWidth + $wordWidth > $max && $line !== '') {
+                $flushLine();
+            }
+            $line .= $word;
+            $lineWidth += $wordWidth;
+            $word = '';
+            $wordWidth = 0;
         };
 
         while ($i < $len) {
@@ -371,26 +394,20 @@ final class Width
                 continue;
             }
 
-            if ($b === "\n") {
-                $line .= $word;
-                $lineWidth += $wordWidth;
-                $word = '';
-                $wordWidth = 0;
+            // `\r\n` is one hard break, as in wrap(). Left to nextCluster()
+            // it came back as a single 0-width grapheme glued into the
+            // running word: the CR leaked into the output and the column
+            // count never reset, so the next row was measured as a
+            // continuation of the previous one.
+            if ($b === "\n" || ($b === "\r" && ($s[$i + 1] ?? '') === "\n")) {
+                $commitWord();
                 $flushLine();
-                $i++;
+                $i += $b === "\r" ? 2 : 1;
                 continue;
             }
 
             if ($b === ' ' || $b === "\t") {
-                if ($word !== '') {
-                    if ($lineWidth + $wordWidth > $max && $line !== '') {
-                        $flushLine();
-                    }
-                    $line .= $word;
-                    $lineWidth += $wordWidth;
-                    $word = '';
-                    $wordWidth = 0;
-                }
+                $commitWord();
                 // E69: this charged a tab 1 cell — a THIRD tab measure, after
                 // string()'s 0 and Style::render()'s TAB_WIDTH. Route it
                 // through graphemeWidth() so there is only one.
@@ -409,12 +426,7 @@ final class Width
             $cw = self::graphemeWidth($cluster);
             // If even the running word would overflow, hard-break it.
             if ($cw > $max) {
-                if ($word !== '') {
-                    $line .= $word;
-                    $lineWidth += $wordWidth;
-                    $word = '';
-                    $wordWidth = 0;
-                }
+                $commitWord();
                 if ($line !== '') {
                     $flushLine();
                 }
@@ -435,12 +447,7 @@ final class Width
             }
             $i += strlen($cluster);
         }
-        if ($word !== '') {
-            if ($lineWidth + $wordWidth > $max && $line !== '') {
-                $flushLine();
-            }
-            $line .= $word;
-        }
+        $commitWord();
         if ($line !== '') {
             $lines[] = rtrim($line);
         }

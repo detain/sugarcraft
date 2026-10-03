@@ -243,8 +243,11 @@ final class Program
 
     /**
      * @deprecated since the bare-accessor naming sweep — use {@see model()}.
-     *             Kept as a delegating alias because candy-testing's
-     *             ProgramSimulator still calls this name across the monorepo.
+     *             Nothing in the monorepo calls this name any more
+     *             (candy-testing's ProgramSimulator moved to model(), and its
+     *             DeprecatedCoreApiUsageTest keeps it there). The delegating
+     *             alias stays for external consumers that track dev-master
+     *             and may still call it; do not remove it.
      */
     public function getModel(): Model
     {

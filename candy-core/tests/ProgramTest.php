@@ -88,6 +88,25 @@ final class ProgramTest extends TestCase
         );
     }
 
+    /**
+     * `getModel()` is a deprecated alias kept for external consumers: it must
+     * keep forwarding to `model()`, stay tagged `@deprecated` (candy-testing's
+     * DeprecatedCoreApiUsageTest derives its roster from that tag), and its
+     * rationale must not cite an in-monorepo caller that no longer exists.
+     */
+    public function testGetModelIsADeprecatedForwarderToModel(): void
+    {
+        [$in, $out] = $this->pipes();
+        $program = new Program(new RecordingModel(), $this->makeOptions($in, $out, new StreamSelectLoop()));
+
+        $this->assertSame($program->model(), $program->getModel());
+
+        $doc = (string) (new \ReflectionMethod(Program::class, 'getModel'))->getDocComment();
+        $this->assertStringContainsString('@deprecated', $doc);
+        $this->assertStringContainsString('{@see model()}', $doc);
+        $this->assertStringNotContainsString('still calls this name', $doc, 'stale rationale: ProgramSimulator calls model() now');
+    }
+
     public function testInitialWindowSizeAndQuit(): void
     {
         [$in, $out, $writer] = $this->pipes();
