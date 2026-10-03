@@ -71,6 +71,7 @@ sugar-crush/tests/Workflows/WorkflowLivePaneTest.php	4.417	11
 sugar-crush/tests/Support/AssertionSwallowingCatchTest.php	4.327	6
 sugar-crush/tests/Chat/ExecuteAgentsTimeoutTest.php	4.287	2
 sugar-crush/tests/Tools/InteractivePromptContainmentTest.php	4.247	13
+sugar-crush/tests/Tools/BuiltIn/BashTimeoutTest.php	4.110	17
 sugar-crush/tests/Backend/EngineBackendPermissionGateTest.php	4.101	20
 sugar-crush/tests/Session/EnhancedSessionStoreTest.php	4.051	17
 sugar-crush/tests/TtyStreamArgumentCensusTest.php	4.048	46

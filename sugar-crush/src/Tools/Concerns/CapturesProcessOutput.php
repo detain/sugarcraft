@@ -119,8 +119,8 @@ trait CapturesProcessOutput
      *
      * $timeoutSeconds is an OPTIONAL wall-clock bound (audit 15d-14), and
      * null — the default — keeps the historical unbounded wait byte for
-     * byte, so Bash and Grep behave exactly as before (Bash's own timeout is
-     * a separate item). A caller that cannot afford to wait, the prompt
+     * byte for callers that pass none (Grep). Bash passes its `timeout`
+     * parameter (default 120 s, item 0.4). A caller that cannot afford to wait, the prompt
      * assembly's git reads above all, passes one: the drain stops at the
      * deadline, and a child that closed its pipes but has not exited is
      * waited on only until the same deadline, because bounding the drain
@@ -363,15 +363,22 @@ trait CapturesProcessOutput
      *  - the program EXITS: transcript + its real status (pty children
      *    report through the same 0/signal-number convention the captured
      *    path already keeps);
-     *  - it goes SILENT past the idle ceiling while alive: run the reaper's
-     *    signal-15→9 ladder over its group, reap, exit 124, stderr names
-     *    the refusal — the transcript up to
-     *    the freeze still arrives so the model can read WHY (usually its
-     *    own "[sudo] password" prompt);
+     *  - it goes SILENT past the idle ceiling while alive, OR outlives the
+     *    wall bound while still painting: run the reaper's signal-15→9
+     *    ladder over its group, reap, exit 124, stderr names which bound
+     *    fired — the transcript up to the stop still arrives so the model
+     *    can read WHY (usually its own "[sudo] password" prompt);
      *  - the host CANNOT give a pty (or allocation itself fails): refusal
      *    before anything starts, exit 126, stdout empty. A degraded
      *    pipe-mode answer to an explicit interactive request would be the
      *    schema-flag lie the absent-pin was guarding against, in costume.
+     *
+     * $timeoutSeconds is the WALL bound beside the idle ceiling — Bash's
+     * `timeout` parameter, so one model-chosen number bounds both modes. The
+     * idle ceiling answers "is anyone going to type?", the wall bound "how
+     * long may this run at all?"; a program that keeps repainting a progress
+     * bar never trips the first. Null keeps the historical 3x-idle bound.
+     * `timedOut` is true whichever bound fired, matching runCaptured().
      *
      * @return array{
      *     stdout: string,
@@ -382,9 +389,10 @@ trait CapturesProcessOutput
      *     stderrDropped: int,
      *     stdoutMidLine: bool,
      *     stderrMidLine: bool,
+     *     timedOut: bool,
      * }
      */
-    private function runCapturedInteractive(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $idleCeilingSec = null): array
+    private function runCapturedInteractive(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $idleCeilingSec = null, ?float $timeoutSeconds = null): array
     {
         $idle = $idleCeilingSec ?? self::INTERACTIVE_IDLE_CEILING_SECONDS;
 
@@ -414,8 +422,10 @@ trait CapturesProcessOutput
         $transcript = '';
         $dropped = 0;
         $stuck = false;
+        $wallExpired = false;
         $lastProgressAt = \microtime(true);
-        $hardDeadline = $lastProgressAt + (3.0 * $idle);
+        $wall = $timeoutSeconds !== null && $timeoutSeconds > 0.0 ? $timeoutSeconds : 3.0 * $idle;
+        $hardDeadline = $lastProgressAt + $wall;
 
         try {
             while (true) {
@@ -424,7 +434,11 @@ trait CapturesProcessOutput
                     $transcript = self::appendBounded($transcript, $chunk, $maxBytes, $dropped);
                     $lastProgressAt = \microtime(true);
 
-                    continue;
+                    // A program that never stops painting never reaches the
+                    // idle check below, so the wall bound is checked here too.
+                    if ($lastProgressAt < $hardDeadline) {
+                        continue;
+                    }
                 }
 
                 if ($child->exited()) {
@@ -434,6 +448,7 @@ trait CapturesProcessOutput
                 $now = \microtime(true);
                 if ($now - $lastProgressAt >= $idle || $now >= $hardDeadline) {
                     $stuck = true;
+                    $wallExpired = $now >= $hardDeadline;
 
                     // THE REAPER'S LADDER, not a lone TERM: the old shape
                     // signalled 15 and then called `wait()` — an UNBOUNDED
@@ -476,12 +491,17 @@ trait CapturesProcessOutput
         }
 
         $exitCode = $stuck ? 124 : ($child->exitCode() ?? 0);
-        $stderr = $stuck
-            ? sprintf(
+        $stderr = match (true) {
+            !$stuck => '',
+            $wallExpired => sprintf(
+                'the interactive program was still running after %gs and was terminated at its timeout',
+                round($wall, 3),
+            ),
+            default => sprintf(
                 'the interactive program went silent for %gs and was terminated — it was waiting for input on a terminal no one can type at, and no password is ever accepted here',
                 round($idle, 3),
-            )
-            : '';
+            ),
+        };
 
         return [
             'stdout' => \rtrim($transcript, "\r\n"),
@@ -492,6 +512,7 @@ trait CapturesProcessOutput
             'stderrDropped' => 0,
             'stdoutMidLine' => $dropped > 0 && !\str_ends_with($transcript, "\n"),
             'stderrMidLine' => false,
+            'timedOut' => $stuck,
         ];
     }
 
@@ -523,7 +544,7 @@ trait CapturesProcessOutput
      * shell's own number for this exact complaint), empty stdout, reason on
      * stderr so mergeCapturedOutput() surfaces it on the non-zero branch.
      *
-     * @return array{stdout:string,stderr:string,exitCode:int,truncatedBytes:int,stdoutDropped:int,stderrDropped:int,stdoutMidLine:bool,stderrMidLine:bool}
+     * @return array{stdout:string,stderr:string,exitCode:int,truncatedBytes:int,stdoutDropped:int,stderrDropped:int,stdoutMidLine:bool,stderrMidLine:bool,timedOut:bool}
      */
     private static function interactiveRefusal(string $reason): array
     {
@@ -536,6 +557,7 @@ trait CapturesProcessOutput
             'stderrDropped' => 0,
             'stdoutMidLine' => false,
             'stderrMidLine' => false,
+            'timedOut' => false,
         ];
     }
 

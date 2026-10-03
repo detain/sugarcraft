@@ -106,7 +106,14 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance
             . 'terminal, `interactive: true` attaches a private pseudo-terminal it '
             . 'can paint on and its screen comes back as the transcript; no one '
             . 'types answers there and no password is ever accepted, so a program '
-            . 'that waits for input is terminated at its idle deadline.';
+            . 'that waits for input is terminated at its idle deadline. '
+            . sprintf(
+                'Every command is bounded by `timeout` seconds (default %d, max %d): past it the '
+                . 'command and everything it started are killed, and the output it produced so far '
+                . 'comes back with a line saying it timed out — raise it for a long build or test run.',
+                self::DEFAULT_TIMEOUT_SECONDS,
+                self::MAX_TIMEOUT_SECONDS,
+            );
     }
 
     /**
@@ -185,6 +192,16 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance
                 'type' => 'boolean',
                 'description' => 'Run the command attached to a private pseudo-terminal it can paint on, for programs that refuse to run without a terminal. Default false. There is no human at this terminal and no password is ever accepted: a program that blocks waiting for input is terminated once its output stops, with its screen returned as the transcript.',
             ],
+            'timeout' => [
+                'type' => 'integer',
+                'description' => sprintf(
+                    'Seconds the command may run before it and every process it started are killed. Default %d, maximum %d; larger values are clamped.',
+                    self::DEFAULT_TIMEOUT_SECONDS,
+                    self::MAX_TIMEOUT_SECONDS,
+                ),
+                'minimum' => 1,
+                'maximum' => self::MAX_TIMEOUT_SECONDS,
+            ],
         ],
         'required' => ['command', 'description'],
         ];
@@ -229,10 +246,25 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance
         // never the policy: both branches carry ProcessContainment's
         // fail-fast env, the default branch is untouched layer-A behaviour,
         // and neither branch accepts secrets.
+        //
+        // `timeout` (item 0.4-a) bounds BOTH mechanisms: runCaptured() kills
+        // the setsid group at the deadline, and the interactive path takes it
+        // as the wall bound beside its idle ceiling. The timed-out line rides
+        // stderr so mergeCapturedOutput() files it as the failure's tail —
+        // the part truncateMerged() budgets first, so a megabyte of output
+        // before it cannot push the reason off the end.
         $maxBytes = $this->maxOutputBytes > 0 ? $this->maxOutputBytes : null;
+        $timeout = self::timeoutSeconds($args['timeout'] ?? null);
         $run = ($args['interactive'] ?? false) === true
-            ? $this->runCapturedInteractive($cmd, null, $maxBytes)
-            : $this->runCaptured($cmd, null, $maxBytes);
+            ? $this->runCapturedInteractive($cmd, null, $maxBytes, null, (float) $timeout)
+            : $this->runCaptured($cmd, null, $maxBytes, (float) $timeout);
+        if (($run['timedOut'] ?? false) === true) {
+            $run['stderr'] = ltrim($run['stderr'] . "\n" . sprintf(
+                '[timed out after %d s: the command and its process group were killed; pass a larger `timeout` (max %d) if it needs longer]',
+                $timeout,
+                self::MAX_TIMEOUT_SECONDS,
+            ), "\n");
+        }
 
         // The merge can concatenate stdout AND stderr, so each being within
         // the bound is not the same as the result being within it — the final
@@ -249,5 +281,39 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance
             ),
             isError: $run['exitCode'] !== 0,
         );
+    }
+
+    /**
+     * The `timeout` parameter's bounds (item 0.4-a). The default is the
+     * figure a model would otherwise have to guess, and the ceiling stops
+     * one call from holding a turn for longer than any build here takes; a
+     * value outside the range is CLAMPED rather than refused, because a
+     * model asking for 900 s wants "as long as allowed", not an error.
+     */
+    public const DEFAULT_TIMEOUT_SECONDS = 120;
+    public const MAX_TIMEOUT_SECONDS = 600;
+
+    /**
+     * The model's `timeout` as the seconds this call may run: a positive
+     * number (or a numeric string, the shape a lax tool-call parser hands
+     * over) rounded up and clamped to MAX; zero, a negative or anything
+     * non-numeric is the default — never "no bound".
+     */
+    private static function timeoutSeconds(mixed $raw): int
+    {
+        if (is_string($raw) && preg_match('/^\s*\d+(\.\d+)?\s*$/', $raw) === 1) {
+            $raw = (float) $raw;
+        }
+        if (!is_int($raw) && !is_float($raw)) {
+            return self::DEFAULT_TIMEOUT_SECONDS;
+        }
+        if (is_nan((float) $raw) || $raw <= 0) {
+            return self::DEFAULT_TIMEOUT_SECONDS;
+        }
+        if (is_infinite((float) $raw)) {
+            return self::MAX_TIMEOUT_SECONDS;
+        }
+
+        return min(self::MAX_TIMEOUT_SECONDS, (int) ceil((float) $raw));
     }
 }
