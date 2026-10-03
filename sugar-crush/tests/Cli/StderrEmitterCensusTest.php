@@ -52,18 +52,21 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  * project already had —
  * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushAutoloadGuardTest}'s
  * doc-block, "the real census of raw `fwrite(STDERR, …)` call sites across
- * `src/` and `bin/` is FIFTEEN" — is CORRECT, and this file asserts that it
+ * `src/` and `bin/` is SIXTEEN" — is CORRECT, and this file asserts that it
  * stays correct ({@see testTheInheritedCensusStillAgreesWithTheScan()}).
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — fifteen sites. The channel that census describes.
+ *  1. `fwrite(STDERR, …)` — sixteen sites. The channel that census describes.
  *     (E710: `Subcommands::mcpImportLine()` joined it — the import verb's
  *     notes and post-read failures, one funnel site, stderr-only by design.
  *     Audit MCP-5: `Subcommands::mcpTrust()`'s one failure line, stderr-only
  *     because the verb runs no session to carry a transcript row.
  *     Audit C2a: `bin/sugarcrush`'s TUI fatal-error line, the one notice left
- *     on the tty once PHP's own diagnostics go to the log file.)
+ *     on the tty once PHP's own diagnostics go to the log file.
+ *     Audit 15b-15: `NonInteractive::noticeAttachment()`, the `-p` path's
+ *     mention and unseen-image notices, stderr-only because stdout is the
+ *     answer.)
  *  2. `STDERR` captured into a variable or property and written through later —
  *     ONE site, {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt}, whose
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
@@ -280,7 +283,11 @@ final class StderrEmitterCensusTest extends TestCase
     private const DIRECT_SITES = [
         'bin/sugarcrush' => 2,
         'src/Cli/Bootstrap.php' => 2,
-        'src/Cli/NonInteractive.php' => 7,
+        // +1 in wave 11 (audit 15b-15 residual): noticeAttachment(), the
+        // headless twin of the TUI's UI-only attachment notices - a `-p`
+        // mention that matched nothing, a refused file, an image the model
+        // could not see. Stderr alone: stdout is the answer.
+        'src/Cli/NonInteractive.php' => 8,
         'src/Cli/Subcommands.php' => 4,
     ];
 
@@ -410,7 +417,8 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Cli/ArgvParser.php' => 21,
         'src/Cli/Bootstrap.php' => 6,
         'src/Cli/HeadlessPermissionPrompt.php' => 4,
-        'src/Cli/NonInteractive.php' => 7,
+        // +1 in wave 11: noticeAttachment()'s prefix literal (channel 1's note).
+        'src/Cli/NonInteractive.php' => 8,
         // E701: mcpAuth's five failUsage shapes (no action, unknown action,
         // JSON refusal, bad --timeout, missing server) took eleven to sixteen.
         // E710: mcpImport adds the funnel prefix literal plus its five door
@@ -738,6 +746,7 @@ final class StderrEmitterCensusTest extends TestCase
         'one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5,
         'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10,
         'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15,
+        'sixteen' => 16,
         'eighteen' => 18, 'nineteen' => 19,
         'twenty-one' => 21, 'twenty-two' => 22, 'twenty-three' => 23, 'twenty-four' => 24,
         'twenty-five' => 25,

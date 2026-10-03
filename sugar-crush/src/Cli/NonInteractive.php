@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Cli;
 
+use SugarCraft\Crush\Attachments\FileMentions;
+use SugarCraft\Crush\AttachmentType;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Message;
@@ -214,7 +216,21 @@ final class NonInteractive
             Bootstrap::reportProjectTierRefusals();
         }
 
-        $history = self::historyFrom($args->prompt, self::readStdinIfPiped());
+        // Audit 15b-15 residual: `@` mentions resolve from the typed prompt
+        // against the same root the TUI's Chat uses (`--root`, else the cwd)
+        // - and NEVER from piped stdin, which is context of unknown origin: a
+        // `cat untrusted.txt | sugarcrush -p '...'` must not attach whatever
+        // file that text happens to name.
+        $mentionNotices = [];
+        $history = self::historyFrom(
+            $args->prompt,
+            self::readStdinIfPiped(),
+            $args->root ?? (getcwd() ?: ''),
+            $mentionNotices,
+        );
+        foreach ($mentionNotices as $notice) {
+            self::noticeAttachment($notice);
+        }
 
         // E173, THEN E219. A refusal this turn raises reached the JSON consumer
         // nowhere at all: the document said `{"result": "<the answer>"}` for a
@@ -285,6 +301,12 @@ final class NonInteractive
             self::emitErrorDocument($outputFormat, 'encoding', $e->getMessage(), null, $refusals);
 
             return self::EXIT_FAILURE;
+        }
+
+        // The TUI shows this as a UI-only notice after the reply: an image the
+        // active model cannot see went out as a text placeholder.
+        if ($message->attachmentNotice !== null) {
+            self::noticeAttachment($message->attachmentNotice);
         }
 
         echo $rendered . "\n";
@@ -674,15 +696,54 @@ final class NonInteractive
      * stdin is context prepended to the prompt rather than a separate
      * message.
      *
+     * @param string|null $mentionRoot Where the prompt's `@` mentions
+     *   resolve; null resolves none.
+     * @param list<string>|null $mentionNotices Set to the mention notices
+     *   ({@see FileMentions::resolve()}) for the caller to show.
      * @return list<Message>
      */
-    public static function historyFrom(string $prompt, ?string $stdinContext): array
-    {
+    public static function historyFrom(
+        string $prompt,
+        ?string $stdinContext,
+        ?string $mentionRoot = null,
+        ?array &$mentionNotices = null,
+    ): array {
         $content = ($stdinContext !== null && $stdinContext !== '')
             ? $stdinContext . "\n\n" . $prompt
             : $prompt;
 
-        return [Message::user($content)];
+        $message = Message::user($content);
+        $mentionNotices = [];
+        // Audit 15b-15 residual: `@file` mentions, the TUI's rule. Only
+        // $prompt is scanned - the words the user typed on the command line -
+        // never $stdinContext, which can be anything a pipeline produced. A
+        // null root keeps the pre-attachment behaviour for a caller that
+        // does not ask.
+        if ($mentionRoot !== null && str_contains($prompt, '@')) {
+            $resolved = FileMentions::resolve($prompt, $mentionRoot);
+            foreach ($resolved['attachments'] as $attachment) {
+                $message = $attachment->type === AttachmentType::Image
+                    ? $message->attachImage($attachment->path, $attachment->data, $attachment->mimeType)
+                    : $message->attachFile($attachment->path, $attachment->data);
+            }
+            $mentionNotices = $resolved['notices'];
+        }
+
+        return [$message];
+    }
+
+    /**
+     * One attachment notice on stderr (audit 15b-15 residual): a mention that
+     * matched nothing, a refused file, or an image the model could not see.
+     * The TUI posts these as UI-only transcript rows; headless, the one
+     * channel that is not the answer is fd 2, and stdout stays the answer
+     * alone. The text comes from {@see FileMentions} and
+     * {@see \SugarCraft\Crush\Backend\EngineBackend}, which already
+     * flatten the user's path to one line.
+     */
+    private static function noticeAttachment(string $notice): void
+    {
+        \fwrite(\STDERR, 'sugarcrush: ' . $notice . "\n");
     }
 
     /**
