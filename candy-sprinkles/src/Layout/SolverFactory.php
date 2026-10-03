@@ -61,4 +61,15 @@ final class SolverFactory
         }
         return new GreedySolver();
     }
+
+    /**
+     * Alias of {@see fromEnvironment()}, kept so callers written before the
+     * rename keep working (external consumers track dev-master).
+     *
+     * @deprecated Use {@see fromEnvironment()}, which names what it does.
+     */
+    public static function default(): LayoutSolver
+    {
+        return self::fromEnvironment();
+    }
 }

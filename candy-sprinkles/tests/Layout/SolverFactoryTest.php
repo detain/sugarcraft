@@ -136,10 +136,27 @@ final class SolverFactoryTest extends TestCase
         $this->assertInstanceOf(GreedySolver::class, $solver);
     }
 
-    public function testDefaultFactoryNameIsGone(): void
+    public function testDeprecatedDefaultAliasForwardsToFromEnvironment(): void
     {
-        // Playbook: never `::default()`; the env-sniffing factory says what it does.
-        $this->assertFalse(method_exists(SolverFactory::class, 'default'));
-        $this->assertTrue(method_exists(SolverFactory::class, 'fromEnvironment'));
+        // fromEnvironment() is the canonical name; default() survives the
+        // rename as a @deprecated forwarder so dev-master consumers that
+        // still call it do not fatal.
+        putenv('SUGARCRAFT_LAYOUT_SOLVER');
+        $this->assertInstanceOf(GreedySolver::class, SolverFactory::default());
+
+        putenv('SUGARCRAFT_LAYOUT_SOLVER=cassowary');
+        [[$viaAlias, $viaCanonical], $raised] = self::captureNotices(static fn(): array => [
+            SolverFactory::default(),
+            SolverFactory::fromEnvironment(),
+        ]);
+        $this->assertInstanceOf(CassowarySolver::class, $viaAlias);
+        $this->assertInstanceOf(CassowarySolver::class, $viaCanonical);
+        // Same once-per-process notice state: the alias shares it, not a copy.
+        $this->assertCount(1, $raised);
+        $this->assertSame(E_USER_DEPRECATED, $raised[0][0]);
+
+        $doc = (string) (new \ReflectionMethod(SolverFactory::class, 'default'))->getDocComment();
+        $this->assertStringContainsString('@deprecated', $doc);
+        $this->assertStringContainsString('fromEnvironment()', $doc);
     }
 }
