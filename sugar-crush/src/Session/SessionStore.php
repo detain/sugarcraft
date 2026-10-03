@@ -560,6 +560,51 @@ final class SessionStore
         return $stmt->rowCount() > 0;
     }
 
+    /**
+     * The branch checked out in the git work tree containing $dir, or null
+     * outside a repository or on a detached HEAD — what a new session records
+     * as `git_branch` (audit B1: the picker's Ctrl+B filter compared against a
+     * column nothing ever wrote).
+     *
+     * Read from `HEAD` rather than by running git: it is called on the launch
+     * path, a file read cannot hang, and it spawns no child to account for.
+     * The answer matches `git branch --show-current`, which is what the
+     * picker compares it with. A linked worktree's `.git` FILE is followed to
+     * its own gitdir, whose HEAD is that worktree's.
+     */
+    public static function gitBranchAt(string $dir): ?string
+    {
+        $dir = rtrim($dir, '/');
+        for ($depth = 0; $dir !== '' && $depth < 64; $depth++) {
+            $dotGit = $dir . '/.git';
+            $gitDir = null;
+            if (is_dir($dotGit)) {
+                $gitDir = $dotGit;
+            } elseif (is_file($dotGit)) {
+                $pointer = @file_get_contents($dotGit, false, null, 0, 4096);
+                if (\is_string($pointer) && preg_match('/^gitdir:\s*(.+?)\s*$/m', $pointer, $m) === 1) {
+                    $gitDir = str_starts_with($m[1], '/') ? $m[1] : $dir . '/' . $m[1];
+                }
+            }
+            if ($gitDir !== null) {
+                $head = @file_get_contents($gitDir . '/HEAD', false, null, 0, 4096);
+                if (!\is_string($head) || preg_match('#^ref:\s*refs/heads/(\S+)\s*$#', $head, $m) !== 1) {
+                    return null;
+                }
+
+                return $m[1];
+            }
+
+            $parent = \dirname($dir);
+            if ($parent === $dir) {
+                break;
+            }
+            $dir = $parent;
+        }
+
+        return null;
+    }
+
     private static function blankToNull(?string $value): ?string
     {
         return $value === null || $value === '' ? null : $value;

@@ -114,6 +114,38 @@ final class SessionLaunchFlagsTest extends TestCase
         $this->assertNotNull($store->getSession($opened['id']));
     }
 
+    /**
+     * A fresh row records where it was opened (audit B1): the picker's Ctrl+B
+     * filter compares against `git_branch`, which nothing used to write.
+     */
+    public function testAFreshSessionRecordsItsWorkingDirectoryAndBranch(): void
+    {
+        $repo = $this->tmpHome . '/repo';
+        mkdir($repo . '/.git', 0700, true);
+        file_put_contents($repo . '/.git/HEAD', "ref: refs/heads/feature-b1\n");
+        $store = $this->store();
+        $expectedCwd = realpath($repo);
+
+        $previous = getcwd();
+        chdir($repo);
+        try {
+            $opened = Bootstrap::openSession($store);
+            [$seeded] = Bootstrap::seedSession(new EnhancedSessionStore($this->tmpHome . '/.sugar-crush/seed.db'));
+        } finally {
+            chdir((string) $previous);
+            @unlink($repo . '/.git/HEAD');
+            @rmdir($repo . '/.git');
+            @rmdir($repo);
+        }
+
+        $row = $store->getSession($opened['id']);
+        $this->assertSame($expectedCwd, $row['cwd']);
+        $this->assertSame('feature-b1', $row['git_branch']);
+
+        $seedRow = (new EnhancedSessionStore($this->tmpHome . '/.sugar-crush/seed.db'))->getSession($seeded);
+        $this->assertSame('feature-b1', $seedRow['git_branch']);
+    }
+
     public function testContinueReopensTheMostRecentSessionWithItsTranscript(): void
     {
         $store = $this->store();

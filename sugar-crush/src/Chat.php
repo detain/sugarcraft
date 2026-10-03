@@ -14272,7 +14272,9 @@ final class Chat implements Model
                     'sessionId' => $id,
                     'sessionName' => $name !== '' ? $name : $id,
                     'summary' => self::sanitizeSessionField((string) ($row['system_prompt'] ?? '')),
-                    'gitBranch' => null,
+                    // The branch the row was opened on (audit B1); null when
+                    // none was recorded, which Ctrl+B's filter leaves out.
+                    'gitBranch' => self::sanitizeSessionField((string) ($row['git_branch'] ?? '')) ?: null,
                     'lastActivity' => (string) ($row['updated_at'] ?? ''),
                 ];
             },

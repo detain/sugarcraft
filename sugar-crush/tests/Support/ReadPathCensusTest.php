@@ -453,6 +453,13 @@ final class ReadPathCensusTest extends TestCase
         'Session/SessionLock.php|fopen' => [
             'SELF_LOCATED — the same lock file, opened c+e and flock()ed to hold the session (audit SES-3(b))',
         ],
+        'Session/SessionStore.php|file_get_contents' => [
+            'CALLER_SUPPLIED — gitBranchAt(): a linked worktree\'s `.git` pointer file in or above the '
+                . 'directory Bootstrap::openSession()/seedSession() passes (the process cwd); 4 KB, only a '
+                . '`gitdir:` line is taken (audit B1)',
+            'CALLER_SUPPLIED — gitBranchAt(): that gitdir\'s HEAD, the same file `git branch --show-current` '
+                . 'reads; 4 KB, and only a `ref: refs/heads/<name>` line is kept, as the session\'s branch',
+        ],
         'Sessions/BackgroundSessionRunner.php|file_get_contents' => [
             'SELF_LOCATED — the per-spawn token file the supervisor minted in its 0700 '
                 . 'IPC dir, read to authenticate the daemon\'s handshake (audit M5)',

@@ -3528,7 +3528,11 @@ final class Bootstrap
         }
 
         $id = bin2hex(random_bytes(8));
-        $store->createSession($id, $provider, $model);
+        // Where the session was opened, for the picker's footer and its
+        // Ctrl+B branch filter (audit B1), which compares against the process
+        // working directory's branch.
+        $cwd = getcwd() ?: null;
+        $store->createSession($id, $provider, $model, null, null, $cwd, $cwd === null ? null : SessionStore::gitBranchAt($cwd));
         if ($store instanceof EnhancedSessionStore) {
             try {
                 $store->pruneEmptySessions($id);
@@ -8709,7 +8713,9 @@ final class Bootstrap
         }
 
         $sessionId = bin2hex(random_bytes(8));
-        $store->createSession($sessionId, $provider, $model);
+        // Same origin record as openSession()'s fresh row (audit B1).
+        $cwd = getcwd() ?: null;
+        $store->createSession($sessionId, $provider, $model, null, null, $cwd, $cwd === null ? null : SessionStore::gitBranchAt($cwd));
 
         return [$sessionId, null];
     }
