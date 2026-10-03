@@ -21,7 +21,8 @@ use SugarCraft\Crush\Support\ToolIpcFiles;
  * was unreachable from configuration.
  *
  *   0  ALLOW   — stdout becomes the result message. ON THIS CLASS ONLY; see
- *                below.
+ *                below. A stdout that is a JSON ENVELOPE is read as one
+ *                instead (step 3.D-1, {@see allowOrEnvelope()}).
  *   1  DENY    — non-blocking deny. See the note below.
  *   2  DENY    — hard block.
  *   3  ASK     — stdout is the question put to the user, clipped at
@@ -265,6 +266,28 @@ final readonly class ScriptHook implements BoundedHookInterface
      * `max(16384, len(the model's own arguments))` however many passes it takes.
      */
     private const MIN_REWRITE_BYTES = 16384;
+
+    /**
+     * The keys that make an exit-0 stdout a JSON ENVELOPE rather than a note
+     * (step 3.D-1) — at least one must sit at the top level of the object.
+     * See {@see allowOrEnvelope()} for why the bar is this high.
+     */
+    private const ENVELOPE_KEYS = [
+        'decision',
+        'reason',
+        'continue',
+        'stopReason',
+        'additionalContext',
+        'updatedInput',
+        'hookSpecificOutput',
+    ];
+
+    /**
+     * Every `decision` / `permissionDecision` an envelope may name, compared
+     * case-insensitively. `approve`/`block` are Claude Code's older spellings
+     * of `allow`/`deny` and are still emitted by hooks written against it.
+     */
+    private const ENVELOPE_DECISIONS = ['allow', 'approve', 'deny', 'block', 'ask'];
 
     /**
      * A GUESS AT the longest `NAME=VALUE\0` one environment entry may be, used
@@ -696,10 +719,11 @@ final readonly class ScriptHook implements BoundedHookInterface
             // \SugarCraft\Crush\Support\HookContextFiles::bound()}) — a hook that
             // prints 200,000 bytes and exits 0 now yields a bounded, non-empty
             // context naming where the rest lives, instead of 0 bytes.
-            self::EXIT_ALLOW => HookResult::allow(
-                '',
-                HookContextFiles::bound($output, HookResult::MAX_ADDITIONAL_CONTEXT_BYTES),
-            ),
+            //
+            // Unless the stdout is a JSON ENVELOPE (step 3.D-1), in which case
+            // it is read as one — see allowOrEnvelope() for what qualifies and
+            // why only exit 0 is parsed.
+            self::EXIT_ALLOW => $this->allowOrEnvelope($output, strlen($context->toolInput)),
             self::EXIT_ASK => HookResult::ask(
                 $output !== ''
                     ? self::clip($output, self::MAX_ASK_PROMPT_BYTES)
@@ -1196,6 +1220,221 @@ final readonly class ScriptHook implements BoundedHookInterface
         }
 
         return HookResult::modify($output);
+    }
+
+    /**
+     * An exit-0 stdout as a note — or, when it is a JSON envelope, as the
+     * verdict the envelope asks for (step 3.D-1).
+     *
+     * THE SHAPE IS CLAUDE CODE'S, so a hook written for that tool carries over:
+     * `decision` (`allow`/`approve`, `deny`/`block`, `ask`), `reason`,
+     * `continue` + `stopReason`, `additionalContext` and `updatedInput`, each
+     * also accepted under `hookSpecificOutput` (where `permissionDecision` /
+     * `permissionDecisionReason` spell the first two, and win over the
+     * top-level spelling — Claude Code's own precedence). Every field is the
+     * JSON twin of an exit code this class already honours, so the envelope
+     * adds no verdict the exit codes could not reach: `deny` is exit 2,
+     * `ask` exit 3, `updatedInput` exit 4, `additionalContext` exit 0's note.
+     * What it adds is saying several at once — a rewrite AND a note, a
+     * question AND a rewrite — and `continue: false`, which no exit code
+     * spells ({@see HookResult::stop()}).
+     *
+     * WHAT QUALIFIES, AND WHY THE BAR IS HIGH: the whole trimmed stdout must
+     * be one JSON OBJECT carrying at least one of {@see ENVELOPE_KEYS}.
+     * Before this, every exit-0 stdout was a note, and a hook that prints
+     * JSON-as-context (a linter's `{"errors":[…]}`) must keep reaching the
+     * model as exactly that — so an object with none of the known keys, a
+     * list, or JSON surrounded by any other text stays a note, byte for byte.
+     *
+     * ONLY EXIT 0 IS PARSED. Claude Code reads JSON on exit 0 only and takes a
+     * blocking exit's reason from stderr; exit 4's stdout is already a JSON
+     * object with a different meaning (the arguments themselves), so parsing
+     * an envelope there would make an argument named `decision` a verdict.
+     *
+     * AN ENVELOPE THAT CARRIES A KNOWN KEY BUT CANNOT BE HONOURED DENIES
+     * ({@see malformedEnvelope()}): the hook evidently meant to steer the
+     * call, and guessing which way — `"decision": "Block"` read as
+     * unrecognised and therefore allowed — is the fail-open this class's
+     * MODIFY handling already refuses.
+     *
+     * A JSON ALLOW IS NOT PERMISSION OVER THE GATE. `decision: allow` from a
+     * Claude Code PreToolUse hook skips that tool's permission prompt; here it
+     * is one hook not objecting, and {@see HookRegistry::executeHooks()} still
+     * reaches {@see BuiltIn\PermissionGateHook} after it. A user's hook file
+     * cannot widen the session's permission mode by printing a word.
+     */
+    private function allowOrEnvelope(string $output, int $replacedBytes): HookResult
+    {
+        $envelope = self::envelope($output);
+
+        if ($envelope === null) {
+            return HookResult::allow(
+                '',
+                HookContextFiles::bound($output, HookResult::MAX_ADDITIONAL_CONTEXT_BYTES),
+            );
+        }
+
+        return $this->fromEnvelope($envelope, $replacedBytes);
+    }
+
+    /**
+     * $output as a JSON envelope, or null when it is not one — see
+     * {@see allowOrEnvelope()} for the bar.
+     *
+     * Decoded to OBJECTS, not arrays, because the arrays form throws away the
+     * one distinction `updatedInput` needs: `{}` (run with no arguments) and
+     * `[]` (not an argument map) both decode to `[]` — the same reason
+     * {@see modifyOrDeny()} reads the opening brace.
+     */
+    private static function envelope(string $output): ?\stdClass
+    {
+        if (!str_starts_with($output, '{')) {
+            return null;
+        }
+
+        try {
+            $decoded = json_decode($output, false, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+
+        if (!$decoded instanceof \stdClass) {
+            return null;
+        }
+
+        foreach (self::ENVELOPE_KEYS as $key) {
+            if (property_exists($decoded, $key)) {
+                return $decoded;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The verdict a JSON envelope asks for. Precedence, strongest first:
+     * `continue: false` (stop — refuses the call too), a refusing `decision`,
+     * `ask` (carrying any `updatedInput` as a PROPOSAL the chain re-scans,
+     * {@see HookResult::ask()}), then `updatedInput` (a MODIFY), then a plain
+     * allow carrying `additionalContext`.
+     *
+     * Every byte that crosses is bounded by the figure its exit-code twin
+     * already uses: the refusal reason at {@see MAX_DENY_REASON_BYTES}, the
+     * question at {@see MAX_ASK_PROMPT_BYTES}, the note at
+     * {@see HookResult::MAX_ADDITIONAL_CONTEXT_BYTES}, and the rewrite through
+     * {@see modifyOrDeny()}'s ceiling — refused, never truncated. A refusal
+     * carries no note, exactly as exit 2 does.
+     */
+    private function fromEnvelope(\stdClass $envelope, int $replacedBytes): HookResult
+    {
+        $specific = $envelope->hookSpecificOutput ?? null;
+        if ($specific !== null && !$specific instanceof \stdClass) {
+            return $this->malformedEnvelope('"hookSpecificOutput" must be an object');
+        }
+
+        $field = static function (string $specificKey, string $topKey) use ($envelope, $specific): mixed {
+            if ($specific !== null && isset($specific->{$specificKey})) {
+                return $specific->{$specificKey};
+            }
+
+            return $envelope->{$topKey} ?? null;
+        };
+
+        $continue = $envelope->continue ?? null;
+        $stopReason = $envelope->stopReason ?? null;
+        $decision = $field('permissionDecision', 'decision');
+        $reason = $field('permissionDecisionReason', 'reason');
+        $note = $field('additionalContext', 'additionalContext');
+        $updated = $field('updatedInput', 'updatedInput');
+
+        $typed = [
+            'continue' => [$continue, 'bool'],
+            'stopReason' => [$stopReason, 'string'],
+            'decision' => [$decision, 'string'],
+            'reason' => [$reason, 'string'],
+            'additionalContext' => [$note, 'string'],
+        ];
+        foreach ($typed as $key => [$value, $type]) {
+            if ($value !== null && get_debug_type($value) !== $type) {
+                return $this->malformedEnvelope(sprintf(
+                    '"%s" must be a %s, not %s',
+                    $key,
+                    $type === 'bool' ? 'boolean' : 'string',
+                    get_debug_type($value),
+                ));
+            }
+        }
+
+        if ($updated !== null && !$updated instanceof \stdClass) {
+            return $this->malformedEnvelope('"updatedInput" must be a JSON object of tool arguments');
+        }
+
+        $reason = trim((string) $reason);
+        $verdict = $decision === null ? 'allow' : strtolower(trim($decision));
+        if (!in_array($verdict, self::ENVELOPE_DECISIONS, true)) {
+            return $this->malformedEnvelope(sprintf(
+                '"decision" must be one of %s, not "%s"',
+                implode(', ', self::ENVELOPE_DECISIONS),
+                self::clip($decision, 60),
+            ));
+        }
+
+        if ($continue === false) {
+            $stopReason = trim((string) $stopReason);
+
+            return HookResult::stop(
+                self::clip(
+                    $stopReason !== '' ? $stopReason
+                        : ($reason !== '' ? $reason : "Hook {$this->name} stopped the turn"),
+                    self::MAX_DENY_REASON_BYTES,
+                ),
+                self::clip($stopReason, self::MAX_DENY_REASON_BYTES),
+            );
+        }
+
+        if ($verdict === 'deny' || $verdict === 'block') {
+            return HookResult::deny(
+                $reason !== '' ? self::clip($reason, self::MAX_DENY_REASON_BYTES)
+                    : "Hook {$this->name} blocked the call",
+            );
+        }
+
+        $context = HookContextFiles::bound(trim((string) $note), HookResult::MAX_ADDITIONAL_CONTEXT_BYTES);
+
+        $rewrite = null;
+        if ($updated !== null) {
+            $rewrite = $this->modifyOrDeny(
+                json_encode($updated, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR),
+                $replacedBytes,
+            );
+            if (!$rewrite->isModified()) {
+                return $rewrite;
+            }
+        }
+
+        if ($verdict === 'ask') {
+            return HookResult::ask(
+                $reason !== '' ? self::clip($reason, self::MAX_ASK_PROMPT_BYTES) : $this->defaultQuestion(),
+                $rewrite?->modifiedInput,
+                $context,
+            );
+        }
+
+        return $rewrite !== null
+            ? $rewrite->withContextSet($context)
+            : HookResult::allow('', $context);
+    }
+
+    /**
+     * The refusal an envelope that carried a known key but cannot be honoured
+     * settles to — see {@see allowOrEnvelope()} for why it fails closed.
+     */
+    private function malformedEnvelope(string $why): HookResult
+    {
+        return HookResult::deny(
+            "Hook {$this->name} printed a JSON hook envelope that cannot be honoured ({$why}); "
+            . 'a hook that meant to steer the call has not approved it.',
+        );
     }
 
     /**

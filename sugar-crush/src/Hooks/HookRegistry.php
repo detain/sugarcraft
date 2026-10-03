@@ -24,6 +24,18 @@ final class HookRegistry
         'TaskCompleted' => [],
     ];
 
+    /**
+     * Each reserved hook name, keyed to the one built-in class that may
+     * register under it and the words a refusal names it by — see
+     * {@see self::isReserved()}.
+     *
+     * @var array<string, array{0: class-string<HookInterface>, 1: string}>
+     */
+    private const RESERVED = [
+        BuiltIn\PermissionGateHook::NAME => [BuiltIn\PermissionGateHook::class, 'the permission gate'],
+        BuiltIn\SubAgentGrantHook::NAME => [BuiltIn\SubAgentGrantHook::class, "a sub-agent's tool grant"],
+    ];
+
     /** @var array<string, bool> disabled hooks */
     private array $disabled = [];
 
@@ -31,8 +43,8 @@ final class HookRegistry
     private array $matcherFailures = [];
 
     /**
-     * @throws \InvalidArgumentException when a hook that is not the permission
-     *         gate claims the gate's reserved name — see
+     * @throws \InvalidArgumentException when a hook claims a reserved name
+     *         without being the built-in that owns it — see
      *         {@see self::isReserved()}
      */
     public function register(HookInterface $hook): void
@@ -40,9 +52,9 @@ final class HookRegistry
         $event = $hook->event()->value;
         $name = $hook->name();
 
-        if (self::isReserved($name) && !$hook instanceof BuiltIn\PermissionGateHook) {
+        if (self::isReserved($name) && !$hook instanceof (self::RESERVED[$name][0])) {
             throw new \InvalidArgumentException(
-                "'{$name}' is reserved for the permission gate and cannot be used as a hook name.",
+                "'{$name}' is reserved for " . self::RESERVED[$name][1] . ' and cannot be used as a hook name.',
             );
         }
 
@@ -97,7 +109,8 @@ final class HookRegistry
     }
 
     /**
-     * True for the one hook name a user-supplied hook may not claim.
+     * True for the hook names a user-supplied hook may not claim: the
+     * permission gate's and {@see BuiltIn\SubAgentGrantHook}'s.
      *
      * This registry keys hooks by `name()` and {@see disable()} takes a bare
      * string, so without the reservation a YAML entry called `permission-gate`
@@ -110,10 +123,21 @@ final class HookRegistry
      * which additionally refuses a config hook that would displace ANY
      * already-registered hook — this reservation is the part that cannot be
      * bypassed by loading order.
+     *
+     * THE SUB-AGENT GRANT HAS THE SAME HOLE, ONE CHAIN DOWN.
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::resolveHookManager()}
+     * registers the grant on a COPY of the launch's chain for each `Task`
+     * turn, so the file guard above never sees it: a launch-time hook named
+     * `subagent-grant` would sit in the copy under the grant's key and the
+     * per-turn registration would REPLACE it (a user hook silently gone), or a
+     * `disable('subagent-grant')` would switch off the one check that holds a
+     * preset to its own `tools` declaration. Reserving the name makes both
+     * impossible in either order; only a {@see BuiltIn\SubAgentGrantHook}
+     * may register under it.
      */
     public static function isReserved(string $name): bool
     {
-        return $name === BuiltIn\PermissionGateHook::NAME;
+        return isset(self::RESERVED[$name]);
     }
 
     /**

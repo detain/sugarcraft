@@ -118,6 +118,26 @@ final readonly class HookResult
          * configured hooks did it. Read through {@see self::refusingHook()}.
          */
         public ?string $refusedBy = null,
+        /**
+         * False when a hook asked the RUN to stop, not merely this call —
+         * a script hook's JSON stdout `"continue": false` (step 3.D-1,
+         * {@see ScriptHook}). Only ever false on a DENY built by
+         * {@see self::stop()}: a hook that wants the turn to end has, a
+         * fortiori, not approved the call in front of it, so the call is
+         * refused whatever else the envelope said and the flag rides the
+         * refusal. {@see HookRegistry::executeHooks()} returns a refusal
+         * verbatim, so the flag reaches the gate that asked. Read through
+         * {@see self::haltsTurn()}.
+         */
+        public bool $continue = true,
+        /**
+         * The user-facing reason a {@see self::$continue}-false hook gave
+         * (`stopReason`), bounded by its producer. Empty on every other
+         * verdict. Kept apart from {@see self::$message}, which is the
+         * MODEL-facing refusal: the two audiences are different and Claude
+         * Code's envelope keeps them apart for the same reason.
+         */
+        public string $stopReason = '',
     ) {}
 
     public static function allow(string $message = '', string $additionalContext = ''): self
@@ -133,6 +153,29 @@ final readonly class HookResult
     public static function modify(string $newInput, string $message = '', string $additionalContext = ''): self
     {
         return new self(self::MODIFY, $message, $newInput, $additionalContext);
+    }
+
+    /**
+     * Refuse the call AND ask the run to stop — the verdict a script hook's
+     * JSON stdout `"continue": false` settles to (step 3.D-1).
+     *
+     * A DENY, never a softer action: ending the turn is a stronger statement
+     * than refusing one call, so it cannot be weaker than a refusal at the
+     * call it was raised on. $message is what the model reads in the
+     * "Hook denied: …" line; $stopReason is the operator-facing reason.
+     */
+    public static function stop(string $message, string $stopReason = ''): self
+    {
+        return new self(self::DENY, $message, null, '', [], null, false, $stopReason);
+    }
+
+    /**
+     * True when a hook in the chain asked the run to stop (`"continue":
+     * false`) — see {@see self::$continue}.
+     */
+    public function haltsTurn(): bool
+    {
+        return !$this->continue;
     }
 
     /**
@@ -244,6 +287,8 @@ final readonly class HookResult
             $context,
             $this->askedBy,
             $this->refusedBy,
+            $this->continue,
+            $this->stopReason,
         );
     }
 
@@ -264,6 +309,8 @@ final readonly class HookResult
             $this->additionalContext,
             array_values(array_unique($names)),
             $this->refusedBy,
+            $this->continue,
+            $this->stopReason,
         );
     }
 
@@ -287,6 +334,8 @@ final readonly class HookResult
             $this->additionalContext,
             $this->askedBy,
             $name,
+            $this->continue,
+            $this->stopReason,
         );
     }
 

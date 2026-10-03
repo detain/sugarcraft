@@ -302,8 +302,10 @@ anybody checked it.)
 | `4` | **modify** | a JSON **object** replacing the tool's arguments, **refused** over its ceiling rather than clipped |
 | `1`, `2`, or **any** other non-zero | **deny** | — (stderr is the reason, clipped at 16 KiB; stdout is discarded) |
 
-**Where an exit-0 hook's stdout goes.** `ScriptHook::execute()`'s `EXIT_ALLOW`
-arm returns `HookResult::allow('', HookContextFiles::bound($output,
+**Where an exit-0 hook's stdout goes.** Unless it is a JSON envelope (see
+[JSON on stdout](#json-on-stdout)), `ScriptHook::execute()`'s `EXIT_ALLOW` arm
+hands it to `ScriptHook::allowOrEnvelope()`, which returns
+`HookResult::allow('', HookContextFiles::bound($output,
 HookResult::MAX_ADDITIONAL_CONTEXT_BYTES))` — the *message* stays empty, and the
 stdout travels in the third payload channel, `additionalContext`. It is the
 **model-visible** one, and `HookRegistry::executeHooks()` collects it across the
@@ -419,6 +421,53 @@ Notes that matter in practice:
 - **A hook that could not run denies.** `proc_open()` refuses a `cwd` that does
   not exist, so a mistyped `--root` used to turn a *denying* hook into an allow.
   The hook now inherits the process directory rather than not running.
+
+### JSON on stdout
+
+An exit-`0` hook may print a **JSON envelope** instead of a note, in Claude
+Code's shape, so a hook written for that tool carries over.
+`ScriptHook::allowOrEnvelope()` reads it; every field is the JSON twin of an
+exit code above, so it adds no verdict the exit codes could not reach — it lets
+one hook say several things at once:
+
+```json
+{"decision": "ask", "reason": "Touches prod config — run it?", "updatedInput": {"command": "make deploy DRY_RUN=1"}, "additionalContext": "deploy target is staging"}
+```
+
+| Key | Twin of | Effect |
+|---|---|---|
+| `decision` | exit `2` / `3` | `deny` or `block` refuses the call (`reason` is the refusal), `ask` puts `reason` to the user, `allow` or `approve` (or no `decision`) permits |
+| `reason` | stderr on exit `2`, stdout on exit `3` | the refusal or the question, bounded exactly as its exit-code twin is |
+| `updatedInput` | exit `4` | a JSON object replacing the tool's arguments, refused over the same ceiling; with `ask` it rides the question as a proposal the chain re-scans |
+| `additionalContext` | stdout on exit `0` | the model-visible note, capped at 10,000 bytes |
+| `continue` + `stopReason` | — | `"continue": false` refuses the call and marks the verdict as asking the run to stop (`HookResult::haltsTurn()`); `stopReason` is the operator-facing reason |
+
+The same keys are accepted under `hookSpecificOutput`, where
+`permissionDecision` and `permissionDecisionReason` spell `decision` and
+`reason`. The nested spelling wins when both are present, as in Claude Code.
+
+Rules worth knowing before you rely on it:
+
+- **Only exit `0` is parsed.** A blocking exit takes its reason from stderr, as
+  in Claude Code, and exit `4`'s stdout is already a JSON object meaning the
+  arguments themselves.
+- **The bar is a whole-stdout JSON object carrying at least one key from the
+  table.** Anything else is a note, unchanged: a hook that prints
+  `{"errors": […]}` as context, a JSON list, or JSON with other text around it
+  reaches the model exactly as before.
+- **An envelope with a known key that cannot be honoured denies**: a
+  `"decision": "maybe"`, a `"continue": "no"`, an `updatedInput` that is not an
+  object. The hook evidently meant to steer the call, and guessing which way is
+  the fail-open the exit-`4` rule already refuses.
+- **`allow` is one hook not objecting, not permission.** In Claude Code a
+  `PreToolUse` `allow` skips that tool's permission prompt. Here the chain still
+  reaches the permission gate after your hook, so a hook file cannot widen the
+  session's permission mode by printing a word.
+- **`continue: false` refuses the call today; ending the turn rides the `Stop`
+  hook work.** The refusal carries the flag through `HookRegistry::executeHooks()`
+  unchanged, and the model reads the stop reason in the `"Hook denied: …"`
+  line. No consumer ends the turn on the flag yet.
+- `suppressOutput` and `systemMessage` are not read.
 
 ### Environment handed to the script
 
@@ -781,7 +830,10 @@ Five more exist and are **not** registered by default:
   and on a `withoutHooks()` turn too. It denies a call outside the preset's
   `tools` grant or matched by its `disallowedTools`, argument halves included,
   so `Bash(git *)` refuses `rm x`. See
-  [`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#how-a-grant-is-enforced).
+  [`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#how-a-grant-is-enforced). Its
+  name, `subagent-grant`, is reserved like the gate's
+  (`HookRegistry::isReserved()`): no other hook may register under it, and a
+  disable naming it is ignored.
 
 `ConfirmRemoveHook` and `BashEscapeDenyHook` are both documented in their own
 source as **heuristics, not security boundaries**. Neither can see through
