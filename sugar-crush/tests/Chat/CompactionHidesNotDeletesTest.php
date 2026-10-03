@@ -327,7 +327,7 @@ final class CompactionHidesNotDeletesTest extends TestCase
 
     /**
      * W2-a handoff: the intra-exchange rescue's copy dropped id, ref, stepId,
-     * userVisible and turnTranscript. Compared against Message's constructor,
+     * userVisible and turnTranscript (and, since O-2b, the rowKey token). Compared against Message's constructor,
      * so a field added later fails here until the copy carries it.
      */
     public function testTheTruncationCopyCarriesEveryFieldButContent(): void
@@ -356,6 +356,7 @@ final class CompactionHidesNotDeletesTest extends TestCase
             'stepId' => 'step-3',
             'userVisible' => false,
             'turnTranscript' => [Message::assistant('row')],
+            'rowKey' => new \stdClass(),
         ];
         $parameters = array_map(
             static fn(\ReflectionParameter $p): string => $p->getName(),
@@ -369,6 +370,12 @@ final class CompactionHidesNotDeletesTest extends TestCase
         $this->assertSame('shorter', $copy->content);
         foreach ($parameters as $name) {
             if ($name === 'content') {
+                continue;
+            }
+            // Not a promoted property (it is not public state): read it the
+            // way the store does.
+            if ($name === 'rowKey') {
+                $this->assertSame($original->rowKey(), $copy->rowKey(), 'the copy keeps its row identity');
                 continue;
             }
             $this->assertSame($original->{$name}, $copy->{$name}, "the copy keeps {$name}");

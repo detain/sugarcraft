@@ -460,6 +460,10 @@ final class KeyBindingRegistry
             // screen is up and this table describes the keyboard behind it.
             // Chat::handleKeyHelpKey() is where they live and why.
             KeyBinding::new('chat.keys', '?', 'Show this reference (empty input box)', $c),
+            // Roadmap 1.C-4a: on an engine turn that reports its steps the
+            // first Esc asks for a soft stop at the step boundary, and any
+            // later Esc cancels hard; a turn with no steps keeps Esc Esc.
+            KeyBinding::new('chat.stop', 'Esc', 'Stop the turn after the current step', $c),
             KeyBinding::new('chat.cancel', 'Esc Esc', 'Cancel the turn in flight — twice, quickly', $c),
             // E744: with a draft selection held this chord COPIES first and the
             // next press quits (Chat's Ctrl+C arm). The nuance stays out of the

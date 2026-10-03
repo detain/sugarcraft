@@ -518,10 +518,12 @@ final class SessionStartHookWireTest extends TestCase
         // BaseSystemPromptTest; the pinned bytes are still pinned exactly.
         // 1.A-1 moved them 8,504 -> 7,759: the git section left the system
         // prompt for the <turn-context> row; 3.I-1's Edit-paragraph rewrite
-        // then added 327, landing at 8,086.)
-        $this->assertSame(8086, filesize($fixtures . 'golden-system-prompt.txt'));
+        // then added 327, landing at 8,086. 5.1-1/5.1-2 then added the memory
+        // index header, note ids, the standing save instructions and the
+        // Memory tool's entry: 9,533.)
+        $this->assertSame(9533, filesize($fixtures . 'golden-system-prompt.txt'));
         $this->assertSame(1060, filesize($fixtures . 'golden-agent-prompt.txt'));
-        $this->assertSame('5e215a4a5ca1eab1b3e1084c128549ac', md5_file($fixtures . 'golden-system-prompt.txt'));
+        $this->assertSame('ba23c901096daae2873faee87d00aacf', md5_file($fixtures . 'golden-system-prompt.txt'));
         $this->assertSame('ef0326dd38535aaa2f1d715919bff26e', md5_file($fixtures . 'golden-agent-prompt.txt'));
 
         // And a hooked turn changes neither.
@@ -530,7 +532,7 @@ final class SessionStartHookWireTest extends TestCase
             $this->noteHook('ss', HookEvent::SessionStart, self::SESSION_NOTE),
         ]), 'a turn with a session note attached');
 
-        $this->assertSame('5e215a4a5ca1eab1b3e1084c128549ac', md5_file($fixtures . 'golden-system-prompt.txt'));
+        $this->assertSame('ba23c901096daae2873faee87d00aacf', md5_file($fixtures . 'golden-system-prompt.txt'));
         $this->assertSame('ef0326dd38535aaa2f1d715919bff26e', md5_file($fixtures . 'golden-agent-prompt.txt'));
     }
 

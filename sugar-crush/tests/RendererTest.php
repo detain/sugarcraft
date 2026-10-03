@@ -1651,7 +1651,7 @@ final class RendererTest extends TestCase
 
         $out = Renderer::render($confirming);
 
-        $this->assertStringContainsString('Allow every later Bash call this session?', $out);
+        $this->assertStringContainsString('Allow Bash calls like this one for the rest of this session?', $out);
         $this->assertStringContainsString('back to the question', $out);
         $this->assertStringNotContainsString(
             'allow once',

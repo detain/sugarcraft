@@ -61,7 +61,6 @@ use SugarCraft\Crush\Support\TimedFileLock;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Tools\BuiltIn\Bash;
-use SugarCraft\Crush\Tools\BuiltIn\Doctor;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Glob;
 use SugarCraft\Crush\Tools\BuiltIn\Grep;
@@ -70,7 +69,6 @@ use SugarCraft\Crush\Tools\BuiltIn\Read;
 use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
 use SugarCraft\Crush\Tools\BuiltIn\TaskTool;
 use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
-use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
 use SugarCraft\Crush\Tools\BuiltIn\Write;
 use SugarCraft\Crush\Tools\Concerns\DetectsCapabilities;
 use SugarCraft\Crush\Tools\McpToolBridge;
@@ -1742,7 +1740,7 @@ final class Bootstrap
             return $switched instanceof EngineBackend ? $switched->withRulesState($rulesState) : $switched;
         };
 
-        return \SugarCraft\Crush\Host\WorkspaceContext::new(
+        $workspace = \SugarCraft\Crush\Host\WorkspaceContext::new(
             root: $root,
             userConfig: $userConfig,
             // The inbox armed above — the process sink, which is the one every
@@ -1771,6 +1769,25 @@ final class Bootstrap
             workflowEngine: self::workflowEngine($root, $permissionGate, $skills),
             projectCommandsTrusted: $root !== null && self::projectCommandShellIsTrusted(self::configRoot($root)),
         );
+
+        // THE HOST SERVICES (Appendix O §4.3), registered where the workspace
+        // is built so the TUI and any host built on this workspace share ONE
+        // instance per root — the transcript store's event log above all, which
+        // is per session store and must not be opened twice. Chat resolves each
+        // through WorkspaceContext::service() and falls back to a default only
+        // when none is registered.
+        $transcripts = \SugarCraft\Crush\Host\TranscriptStore::new($sessionStore);
+        $workspace = $workspace
+            ->withService(\SugarCraft\Crush\Host\TitleService::class, \SugarCraft\Crush\Host\TitleService::new())
+            ->withService(\SugarCraft\Crush\Host\SpendLedger::class, \SugarCraft\Crush\Host\SpendLedger::new())
+            ->withService(\SugarCraft\Crush\Host\ContextMeter::class, \SugarCraft\Crush\Host\ContextMeter::new())
+            ->withService(\SugarCraft\Crush\Host\TranscriptStore::class, $transcripts);
+
+        $events = $transcripts->events();
+
+        return $events === null
+            ? $workspace
+            : $workspace->withService(\SugarCraft\Crush\Host\EventLog::class, $events);
     }
 
     /**
@@ -2895,7 +2912,20 @@ final class Bootstrap
             ->withDock(self::dockFromUserConfig())
             ->withOnLayoutChange(
                 static fn(array $manifest) => self::writeUserConfig(['layout' => $manifest]),
-            );
+            )
+            // N-P1: the settings view explains THIS launch's layers — its
+            // project-trust answer, its environment and its flags — rather
+            // than SettingsSources::bestEffort()'s guess, which cannot know
+            // the trust answer and so hides a trusted project's values. A
+            // closure because the view resolves when it is opened, not here.
+            ->withSettingsSources(static fn (): \SugarCraft\Crush\Tui\Settings\SettingsSources => \SugarCraft\Crush\Tui\Settings\SettingsSources::fromLaunch(
+                $root,
+                $root === null ? null : self::projectSettingsTrusted($root),
+                self::userSettingsDirOrNull(),
+                self::userConfigPath(),
+                array_filter(getenv(), 'is_string'),
+                self::$permissionModeOverride === null ? [] : ['--permission-mode' => self::$permissionModeOverride],
+            ));
     }
 
     /**

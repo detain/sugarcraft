@@ -106,6 +106,39 @@ final class SettingsCommandTest extends TestCase
         self::assertInstanceOf(OpenSettingsMsg::class, self::sent($cmd));
     }
 
+    /**
+     * Like Exit, the palette row is let through while a turn runs — the view
+     * writes nothing — and the draft typed meanwhile stays in the box.
+     */
+    public function testThePaletteRowOpensTheViewWhileATurnRunsAndKeepsTheDraft(): void
+    {
+        [$busy] = $this->chat('hello there')->update(new KeyMsg(KeyType::Enter));
+        self::assertTrue($busy->inFlight, 'fixture: a turn is running');
+        foreach (mb_str_split('next question') as $rune) {
+            [$busy] = $busy->update(new KeyMsg(KeyType::Char, $rune));
+        }
+        self::assertSame('next question', $busy->inputBuf, 'fixture: a draft typed mid-turn');
+        $before = \count($busy->history);
+
+        [$viaShell, $cmd] = $busy->runPaletteAction(PaletteAction::OpenSettings->label());
+        self::assertInstanceOf(OpenSettingsMsg::class, self::sent($cmd));
+        self::assertSame('next question', $viaShell->inputBuf);
+        self::assertCount($before, $viaShell->history, 'no refusal notice');
+        self::assertTrue($viaShell->inFlight);
+
+        // Enter on the row in an open palette takes the same exemption.
+        $typed = $busy;
+        [$typed] = $typed->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        foreach (mb_str_split('View settings') as $rune) {
+            [$typed] = $typed->update(new KeyMsg(KeyType::Char, $rune));
+        }
+        [$picked, $cmd] = $typed->update(new KeyMsg(KeyType::Enter));
+        self::assertInstanceOf(OpenSettingsMsg::class, self::sent($cmd));
+        self::assertSame('next question', $picked->inputBuf);
+        self::assertNull($picked->palette());
+        self::assertCount($before, $picked->history, 'no refusal notice');
+    }
+
     public function testTheShellOpensTheViewOnTheMessage(): void
     {
         [$app] = $this->app()->update(new OpenSettingsMsg('trusted'));

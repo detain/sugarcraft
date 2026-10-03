@@ -409,30 +409,19 @@ final class Chat implements Model
     public const DEBUG_STREAM_ENV = 'SUGARCRUSH_DEBUG_STREAM';
 
     /**
-     * Floor of the E17 calibration factor — 1.0, ON PURPOSE: an observation
-     * implying the provider counts FEWER tokens than the raw proxy (possible:
-     * the +10-per-message overhead dominates a history of short messages,
-     * and an unreported-usage streak paired wrongly could produce anything)
-     * must not make the blocking tier LOUDER about fitting than the raw
-     * proxy already was. Fail-open keeps the pre-E17 behaviour as the floor.
+     * Floor of the E17 calibration factor — an alias: the clamp and the
+     * argument for 1.0 live on {@see \SugarCraft\Crush\Host\ContextMeter::CALIBRATION_MIN}
+     * since O-2c moved the meter there. Kept so the constructor docblock's
+     * citation resolves to the one value.
      */
-    private const TOKEN_CALIBRATION_MIN = 1.0;
+    private const TOKEN_CALIBRATION_MIN = \SugarCraft\Crush\Host\ContextMeter::CALIBRATION_MIN;
 
     /**
-     * Ceiling of the E17 calibration factor. The entry's own direction is
-     * that the raw proxy runs LOW ("code and CJK tokenize worse than
-     * chars/4"), so the legitimate span above 1.0 is real but bounded; the
-     * observation meanwhile carries the whole turn's BILLED TOTAL against a
-     * PROMPT-only estimate (the split is not crossed onto the carrier yet —
-     * see {@see \SugarCraft\Crush\Providers\CompleteResponse::$usage}), which
-     * inflates it further by every completion's worth of tokens. 3.0 caps
-     * that bundled error: the tier may fire up to a third early — the safe
-     * direction against an overflow — and no single chatty turn can triple
-     * the session's estimate. Widening this bound is a real decision, not a
-     * tuning knob: at 1.0 the estimator is the raw proxy, at higher clamps the
-     * total-vs-prompt inflation dominates.
+     * Ceiling of the E17 calibration factor — an alias of
+     * {@see \SugarCraft\Crush\Host\ContextMeter::CALIBRATION_MAX}, which
+     * carries the argument for 3.0.
      */
-    private const TOKEN_CALIBRATION_MAX = 3.0;
+    private const TOKEN_CALIBRATION_MAX = \SugarCraft\Crush\Host\ContextMeter::CALIBRATION_MAX;
 
     /**
      * Whether {@see DEBUG_STREAM_ENV} asks for the observer-failure report —
@@ -3960,7 +3949,7 @@ final class Chat implements Model
      * reason a second Ctrl+P closes the palette rather than reopening it on
      * top of itself. Up/Down and PageUp/PageDown scroll, because the list is
      * taller than a terminal ({@see \SugarCraft\Crush\Commands\KeyBindingRegistry}
-     * declares 81 live rows across 9 contexts — 85 in all, four of them
+     * declares 89 live rows across 10 contexts — 93 in all, four of them
      * dormant and therefore unlisted) and clipping it with no way to reach the
      * rest would hide exactly the bindings this screen exists to disclose.
      *
@@ -9635,7 +9624,7 @@ final class Chat implements Model
     private const READ_ONLY_COMMANDS = [
         'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share',
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
-        'mcp', 'websearch', 'pane', 'layout', 'model', 'editor',
+        'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config',
     ];
 
     /**
@@ -9841,9 +9830,10 @@ final class Chat implements Model
      * palette closed by the handler), and leaves the draft alone.
      *
      * Mid-turn it is refused exactly as Enter on that palette row is
-     * ({@see runSelectedPaletteActionWhileInFlight()}): Exit quits, anything
-     * else gets {@see refuseInFlightAction()}'s notice, which closes the
-     * palette and claims nothing about the draft.
+     * ({@see runSelectedPaletteActionWhileInFlight()}): Exit quits, View
+     * settings opens the read-only view, anything else gets
+     * {@see refuseInFlightAction()}'s notice, which closes the palette and
+     * claims nothing about the draft.
      *
      * @return array{0: self, 1: ?\Closure}
      */
@@ -9861,9 +9851,11 @@ final class Chat implements Model
         ]);
 
         if ($this->inFlight) {
-            return $action === PaletteAction::Exit
-                ? [$opened->mutate(['palette' => null]), Cmd::quit()]
-                : $opened->refuseInFlightAction($label);
+            return match ($action) {
+                PaletteAction::Exit => [$opened->mutate(['palette' => null]), Cmd::quit()],
+                PaletteAction::OpenSettings => $opened->mutate(['palette' => null])->openSettingsView(),
+                default => $opened->refuseInFlightAction($label),
+            };
         }
 
         return $opened->rememberPaletteUse($label)->runRootPaletteAction($label);
@@ -10730,10 +10722,19 @@ final class Chat implements Model
      */
     private function handleSettingsCommand(string $text): array
     {
-        return [
-            $this->withInputBuf(''),
-            Cmd::send(new \SugarCraft\Crush\Tui\Settings\OpenSettingsMsg(self::commandArgument($text))),
-        ];
+        return $this->withInputBuf('')->openSettingsView(self::commandArgument($text));
+    }
+
+    /**
+     * Ask the shell for the settings view, leaving the draft alone — the
+     * palette row's path, which (unlike the typed command) put nothing in
+     * the box to clear.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function openSettingsView(string $query = ''): array
+    {
+        return [$this, Cmd::send(new \SugarCraft\Crush\Tui\Settings\OpenSettingsMsg($query))];
     }
 
     /**
@@ -17125,7 +17126,7 @@ final class Chat implements Model
      * report — Ctrl+P did nothing at all before this bundle), but Enter on a row
      * is refused rather than dispatched.
      *
-     * BLANKET, WITH ONE EXCEPTION, and the reason it is blanket is measured
+     * BLANKET, WITH TWO EXCEPTIONS, and the reason it is blanket is measured
      * rather than assumed: every root action other than Exit delegates to a
      * handler that writes `inFlight` ({@see handleShareCommand()},
      * {@see handleAgentsCommand()}, {@see handleSessionsCommand()},
@@ -17133,9 +17134,10 @@ final class Chat implements Model
      * ({@see handlePaletteNewSession()}), or swaps the backend the running
      * agentic loop is about to make its NEXT provider call on
      * ({@see selectPaletteProvider()} — {@see finishToolCalls()} re-enters the
-     * backend mid-turn, so this one is not hypothetical). `Exit` is the exception
+     * backend mid-turn, so this one is not hypothetical). `Exit` is an exception
      * for exactly the reason bare `/exit` is one in {@see submit()}: it ends the
-     * process, so there is nothing left to corrupt.
+     * process, so there is nothing left to corrupt. `View settings` is the
+     * other: it opens a read-only view the shell holds and writes no turn state.
      *
      * The two submenu transitions (Switch Model, Switch Theme) are refused too,
      * even though transitioning the palette's own mode is harmless: refusing the
@@ -17156,11 +17158,13 @@ final class Chat implements Model
 
         $label = $matches[min($this->palette->selectedIndex, count($matches) - 1)];
 
-        if (PaletteAction::byLabel($label) === PaletteAction::Exit) {
-            return [$this->mutate(['palette' => null]), Cmd::quit()];
-        }
-
-        return $this->refuseInFlightAction($label);
+        return match (PaletteAction::byLabel($label)) {
+            PaletteAction::Exit => [$this->mutate(['palette' => null]), Cmd::quit()],
+            // N-P1: the settings view only reads, and it is shell state, so a
+            // running turn has nothing it could corrupt.
+            PaletteAction::OpenSettings => $this->mutate(['palette' => null])->openSettingsView(),
+            default => $this->refuseInFlightAction($label),
+        };
     }
 
     private function withPaletteQuery(string $query, ?int $queryCursor = null): self
@@ -17347,7 +17351,7 @@ final class Chat implements Model
             PaletteAction::DockPaneRight => $closed->handlePaneCommand('/pane dock right'),
             PaletteAction::LayoutReset => $closed->handleLayoutCommand('/layout reset'),
             // N-P1: the settings view is the shell's; this only asks for it.
-            PaletteAction::OpenSettings => $closed->handleSettingsCommand('/settings'),
+            PaletteAction::OpenSettings => $closed->openSettingsView(),
             PaletteAction::Exit => [$closed, Cmd::quit()],
             default => [$closed, null],
         };
@@ -19454,6 +19458,9 @@ final class Chat implements Model
             stepId: $message->stepId,
             userVisible: $message->userVisible,
             turnTranscript: $message->turnTranscript,
+            // O-2b: the live-row identity token, so the store sees the same
+            // row and does not spend a fresh ref on the truncated copy.
+            rowKey: $message->rowKey(),
         );
     }
 

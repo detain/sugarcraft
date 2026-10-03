@@ -386,6 +386,10 @@ final class SettingsDocGenerator
 
     private static function defaultCell(SettingDefinition $d): string
     {
+        if ($d->defaultText !== null) {
+            return $d->defaultText;
+        }
+
         $default = $d->default;
 
         return match (true) {

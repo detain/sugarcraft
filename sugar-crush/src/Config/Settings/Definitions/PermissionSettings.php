@@ -41,6 +41,9 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withOptionsSource(OptionsSource::PermissionModes)
                 ->withLabel('Permission mode')
                 ->withHelp('How tool calls are gated. Never taken from a project file.')
+                // D5: the TUI asks by default; `-p` and the daemon have nobody
+                // to ask, so they keep the schema default.
+                ->withDefaultText('`default` (TUI); `bypass-permissions` (`-p`, daemon)')
                 ->withReaderSymbol(Bootstrap::class . '::permissionGate'),
             SettingDefinition::new('permissionRules', SettingType::Json, [])
                 ->withCategory(SettingCategory::Permissions)

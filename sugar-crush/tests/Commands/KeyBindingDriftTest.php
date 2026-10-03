@@ -255,7 +255,7 @@ final class KeyBindingDriftTest extends TestCase
      * missed" claim was true and unasserted, so the tightening could be reverted
      * to its loose pre-fix form without a single test going red.
      *
-     * Zero false positives across all 92 declared rows — and THAT is the domain
+     * Zero false positives across all 93 declared rows — and THAT is the domain
      * of the zero. It says nothing about prose not yet written; it says those 92
      * rows are clean under this pattern.
      *
@@ -925,6 +925,25 @@ final class KeyBindingDriftTest extends TestCase
                 // (Chat::handleKeyHelpKey()). If this row ever starts typing as
                 // well, the shortcut has stopped being a shortcut.
                 $this->assertSame('', $next->inputBuf);
+            },
+            // An engine turn that has reported a step (1.C-4a): one press
+            // asks the fork to stop at the step boundary and the turn runs on.
+            'chat.stop' => function (array $k): void {
+                $token = new \SugarCraft\Crush\Backend\CancellationToken();
+                $chat = (new Chat(
+                    history: [Message::user('go')],
+                    backend: new EchoBackend(),
+                    inFlight: true,
+                    generation: 1,
+                    inFlightCancellation: $token,
+                    liveStep: new \SugarCraft\Crush\Events\StepStarted(2, 1000, null),
+                    liveStepGeneration: 1,
+                ))->withSize(120, 20);
+                $this->assertCount(1, $k, 'the label names one press');
+                [$asked] = $chat->update($k[0]);
+                $this->assertTrue($token->isSoftCancelled(), 'the press asks for a soft stop');
+                $this->assertFalse($token->isCancelled(), 'and kills nothing');
+                $this->assertTrue($asked->inFlight, 'the turn runs on to its step boundary');
             },
             'chat.cancel' => function (array $k): void {
                 [$busy] = $this->chat([], 'hello')->update(new KeyMsg(KeyType::Enter));

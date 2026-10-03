@@ -123,6 +123,26 @@ final class BinSugarcrushWiringTest extends TestCase
         $this->assertFileExists($this->tempDir . '/home/.sugar-crush/session.db');
     }
 
+    /**
+     * The O-2b..O-2d host services are registered where the workspace is
+     * built, so every consumer of one root shares one instance — and the
+     * transcript store and its event log sit over THE workspace's session store.
+     */
+    public function testWorkspaceRegistersTheHostServicesOverItsOwnSessionStore(): void
+    {
+        $workspace = Bootstrap::workspace($this->tempDir . '/repo');
+
+        $this->assertInstanceOf(\SugarCraft\Crush\Host\TitleService::class, $workspace->service(\SugarCraft\Crush\Host\TitleService::class));
+        $this->assertInstanceOf(\SugarCraft\Crush\Host\SpendLedger::class, $workspace->service(\SugarCraft\Crush\Host\SpendLedger::class));
+        $this->assertInstanceOf(\SugarCraft\Crush\Host\ContextMeter::class, $workspace->service(\SugarCraft\Crush\Host\ContextMeter::class));
+
+        $transcripts = $workspace->service(\SugarCraft\Crush\Host\TranscriptStore::class);
+        $this->assertInstanceOf(\SugarCraft\Crush\Host\TranscriptStore::class, $transcripts);
+        $this->assertSame($workspace->sessionStore, $transcripts->store());
+        $this->assertSame($transcripts->events(), $workspace->service(\SugarCraft\Crush\Host\EventLog::class));
+        $this->assertNotNull($transcripts->events());
+    }
+
     public function testMemoryStoreDirectoryIsCreatedUnderTheUserConfigDir(): void
     {
         Bootstrap::chat($this->tempDir . '/repo');
@@ -624,6 +644,28 @@ final class BinSugarcrushWiringTest extends TestCase
 
         $this->assertNotNull($app->availableSkills->get('bin-wiring-marker'));
         $this->assertNotNull($app->availableSkills->get('security-audit'));
+    }
+
+    /**
+     * N-P1: the settings view the shell opens is built from THIS launch's
+     * trust answer — a project the launch did not trust is listed "ignored",
+     * never "not shown" (bestEffort()'s answer when it was not told).
+     */
+    public function testBootstrapAppHandsTheSettingsViewTheLaunchsTrustAnswer(): void
+    {
+        $root = $this->tempDir . '/repo';
+        mkdir($root . '/.sugar-crush', 0755, true);
+        file_put_contents($root . '/.sugar-crush/settings.json', '{}');
+
+        $app = Bootstrap::app($root);
+
+        $this->assertNotNull($app->settingsSources);
+        $sources = ($app->settingsSources)();
+        $statuses = [];
+        foreach ($sources->files as $file) {
+            $statuses[$file->path] = $file->status;
+        }
+        $this->assertSame('ignored', $statuses[$root . '/.sugar-crush/settings.json'] ?? null);
     }
 
     /**

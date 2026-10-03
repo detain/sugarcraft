@@ -169,6 +169,26 @@ final class ReadOnlySessionTest extends TestCase
     }
 
     /**
+     * N-P1: the settings view only reads, so both of its names open it in a
+     * read-only window too.
+     */
+    public function testTheSettingsViewOpensInAReadOnlyWindow(): void
+    {
+        $writer = $this->open();
+        foreach (['/settings', '/config'] as $command) {
+            $reader = self::typed($this->open(), $command);
+            self::assertTrue($reader->isReadOnlySession(), 'fixture: the writer holds the session');
+
+            [$answered, $cmd] = $reader->update(new KeyMsg(KeyType::Enter));
+
+            self::assertSame('', $answered->inputBuf, "{$command} ran and consumed the draft");
+            self::assertInstanceOf(\SugarCraft\Crush\Tui\Settings\OpenSettingsMsg::class, $cmd === null ? null : $cmd());
+        }
+
+        self::assertFalse($writer->isReadOnlySession());
+    }
+
+    /**
      * THE FORK OFFER: `/branch` copies the session into a new one this window
      * owns, and from then on the window writes — to the branch, never to the
      * session the other window has.

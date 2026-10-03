@@ -62,6 +62,7 @@ final class SettingDefinition
         public readonly ?string $readerSymbol,
         public readonly ?string $readBy,
         public readonly array $validators,
+        public readonly ?string $defaultText = null,
     ) {
     }
 
@@ -227,6 +228,16 @@ final class SettingDefinition
     public function withValidators(SettingValidator ...$validators): self
     {
         return $this->mutate(validators: array_values($validators));
+    }
+
+    /**
+     * What the docs and the settings view print as the default when one value
+     * cannot say it — `permissionMode`'s default depends on the entry point
+     * (decision D5). {@see $default} stays the value a reader falls back to.
+     */
+    public function withDefaultText(?string $defaultText): self
+    {
+        return $this->mutate(defaultText: $defaultText);
     }
 
     /** `Class::method()` with the namespace dropped, for prose and tables. */

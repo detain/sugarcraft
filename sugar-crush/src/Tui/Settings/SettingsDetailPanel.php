@@ -53,7 +53,9 @@ final class SettingsDetailPanel
 
         $out[] = ['', ''];
         $out[] = ['value', self::value($definition, $resolved->value)];
-        $out[] = ['default', self::value($definition, $definition->default)];
+        $out[] = ['default', $definition->defaultText !== null
+            ? PaneLabel::of(str_replace('`', '', $definition->defaultText))
+            : self::value($definition, $definition->default)];
         $out[] = ['source', self::sourceLabel($resolved->source)];
         if ($resolved->sourcePath !== null) {
             $out[] = [self::CONTINUED, PaneLabel::of($resolved->sourcePath)];

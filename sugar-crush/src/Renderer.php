@@ -527,7 +527,7 @@ final class Renderer
      */
     private const PERMISSION_OPTIONS = [
         ['y', 'allow once'],
-        ['a', 'allow always (this session) — asks first'],
+        ['a', 'allow calls like this one (this session) — asks first'],
         ['n / Esc', 'reject'],
     ];
 
@@ -542,7 +542,7 @@ final class Renderer
      * constants exists to prevent.
      */
     private const PERMISSION_CONFIRM_OPTIONS = [
-        ['y', 'yes — every later call to this tool, this session'],
+        ['y', 'yes — calls like this one, this session'],
         ['n / Esc', 'no — back to the question'],
     ];
 
@@ -5636,7 +5636,10 @@ final class Renderer
             $lines[] = '';
             $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render(
                 self::wrapPermissionText(
-                    'Allow every later ' . self::permissionVisibleOneLine($call->name) . ' call this session?',
+                    // The grant is a PATTERN on the engine path (SessionPermissionMemo)
+                    // and the exact call on Chat's own — never "every later call to
+                    // this tool", which is what this used to say.
+                    'Allow ' . self::permissionVisibleOneLine($call->name) . ' calls like this one for the rest of this session?',
                     $inner,
                 ),
             );

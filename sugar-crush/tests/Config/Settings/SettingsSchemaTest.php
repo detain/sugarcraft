@@ -124,6 +124,14 @@ final class SettingsSchemaTest extends TestCase
 
         $mode = (new \ReflectionClassConstant(Bootstrap::class, 'DEFAULT_PERMISSION_MODE'))->getValue();
         self::assertSame($mode->value, SettingsSchema::byKey('permissionMode')?->default);
+
+        // D5: the printed default names both entry points, each by the
+        // constant its gate falls back to.
+        $interactive = (new \ReflectionClassConstant(Bootstrap::class, 'INTERACTIVE_DEFAULT_PERMISSION_MODE'))->getValue();
+        self::assertSame(
+            '`' . $interactive->value . '` (TUI); `' . $mode->value . '` (`-p`, daemon)',
+            SettingsSchema::byKey('permissionMode')?->defaultText,
+        );
     }
 
     /**
