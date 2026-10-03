@@ -125,4 +125,67 @@ final class SectionStreamTest extends TestCase
 
         $this->assertRendersLike($doc, $bodies);
     }
+
+    public function testABracketWithNoOpenerHoldsNothing(): void
+    {
+        // A `]` with no `[` before it in its block can never become a link,
+        // so it must not stall every section behind it (crush_libs shine #1).
+        $doc = "# A\n\nx] and y]\n\n# B\n\ntwo\n\n# C\n";
+        $stream = new SectionStream($this->renderer());
+
+        $released = $stream->push($doc);
+        $this->assertCount(2, $released);
+        $this->assertRendersLike($doc, [...$released, ...$stream->finish()]);
+    }
+
+    public function testABracketPairAcrossInlineNodesStillHolds(): void
+    {
+        // `[a *b*]` splits into Text `[a `, Emphasis, Text `]`: still a
+        // shortcut-reference candidate a later definition can resolve.
+        $stream = new SectionStream($this->renderer());
+
+        $this->assertSame([], $stream->push("See [a *b*].\n\n# H\n\n"));
+        $released = $stream->push("[a *b*]: https://e.x\n\n# I\n");
+        $this->assertCount(2, $released);
+        $this->assertStringContainsString('https://e.x', $released[0]);
+    }
+
+    public function testBracketsInSeparateBlocksDoNotPair(): void
+    {
+        $doc = "# A\n\nopen [ here\n\nclose ] there\n\n# B\n";
+        $stream = new SectionStream($this->renderer());
+
+        $this->assertCount(1, $stream->push($doc));
+    }
+
+    public function testAHeldSectionIsRenderedOnceNotPerPreview(): void
+    {
+        // A held section keeps its body: a preview (clone + finish) of a
+        // long reply must not re-render it, and every section queued
+        // behind it, on every frame (crush_libs shine #1).
+        $doc = "# A\n\nsee array[0]\n\n# B\n\ntwo\n\n# C\n";
+        $stream = new SectionStream($this->renderer());
+        $this->assertSame([], $stream->push($doc));
+
+        $queue = (new \ReflectionProperty(SectionStream::class, 'queue'))->getValue($stream);
+        $this->assertCount(2, $queue);
+        $this->assertTrue($queue[0]['held']);
+        $this->assertSame(
+            $this->renderer()->renderSection("# A\n\nsee array[0]\n\n"),
+            $queue[0]['body'],
+            'the held body is rendered when the section is confirmed',
+        );
+        $this->assertRendersLike($doc, (clone $stream)->finish());
+    }
+
+    public function testADefinitionInTheOpenTailResolvesAHeldSection(): void
+    {
+        $doc = "# A\n\nsee [r]\n\n# B\n\n[r]: https://r.x";
+        $stream = new SectionStream($this->renderer());
+        $this->assertSame([], $stream->push($doc));
+
+        $preview = (clone $stream)->finish();
+        $this->assertStringContainsString('https://r.x', $preview[0], 'a cached body is not reused once a later definition exists');
+        $this->assertRendersLike($doc, $preview);
+    }
 }

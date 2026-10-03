@@ -408,9 +408,8 @@ MD;
         $out = $this->plain()
             ->withPreservedNewLines(true)
             ->render($md);
-        $this->assertStringContainsString('first', $out);
-        $this->assertStringContainsString('last',  $out);
-        $this->assertGreaterThan(2, substr_count($out, "\n"));
+        // Four blank lines in the source stay four blank lines.
+        $this->assertSame("first\n\n\n\n\nlast", $out);
     }
 
     public function testPreservedNewLinesOffByDefault(): void
@@ -863,9 +862,7 @@ MD;
         $out = $this->plain()
             ->withPreservedNewLines(true)
             ->render($md);
-        // The preserved runs should result in more than default output.
-        $this->assertStringContainsString('first', $out);
-        $this->assertStringContainsString('last', $out);
+        $this->assertSame("first\n\n\nlast", $out);
     }
 
     public function testTableSeparatorGlyphsOverride(): void

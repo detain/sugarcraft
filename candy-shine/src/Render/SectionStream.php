@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Shine\Render;
 
 use League\CommonMark\Extension\CommonMark\Node\Block\Heading;
+use League\CommonMark\Node\Block\AbstractBlock;
 use League\CommonMark\Node\Block\Document;
 use League\CommonMark\Node\Inline\Text;
+use League\CommonMark\Node\Node;
 use League\CommonMark\Reference\ReferenceMap;
 use SugarCraft\Shine\Renderer;
 
@@ -33,10 +35,18 @@ use SugarCraft\Shine\Renderer;
  *  - **Link reference definitions** (audit 15b-30). A definition applies to
  *    the whole document. Every section is parsed with the definitions of
  *    the sections before it, so a reference to an earlier definition
- *    resolves. A section whose text still holds a bracket the parser left
- *    unresolved could change if a later section defines it, so it is held
- *    back, not answered, until a later definition resolves it or the
- *    document ends. The first definition of a label wins, as in CommonMark.
+ *    resolves. A section whose text still holds an unresolved `[...]` pair
+ *    could change if a later section defines its label (`array[0]` becomes
+ *    a link once `[0]: /u` arrives), so it is held back, not answered, until
+ *    a later definition resolves it or the document ends. A `]` with no `[`
+ *    before it in the same block can never become a link and holds nothing.
+ *    The first definition of a label wins, as in CommonMark.
+ *
+ * A held section is still rendered once, when it is confirmed, against the
+ * definitions known then; the body is reused until a later definition
+ * arrives. So a stream whose early section holds a stray `[1]` costs a
+ * {@see finish()} preview no more than one without it: only the open tail
+ * is parsed and rendered per frame, never the held sections behind it.
  *
  * Cloning is cheap and gives an independent copy, so a caller can render a
  * preview of the open tail with `(clone $stream)->finish()` and keep
@@ -53,10 +63,13 @@ final class SectionStream
     private string $unconfirmed = '';
 
     /**
-     * Confirmed sections not answered yet: a held one (null body) and every
-     * section after it, which must wait so bodies leave in order.
+     * Confirmed sections not answered yet: a held one and every section
+     * after it, which must wait so bodies leave in order. Every entry carries
+     * its rendered body; `defs` is the size of {@see $known} that body was
+     * rendered against, so a held body stays valid until a definition is
+     * learned after it ({@see $known} only grows).
      *
-     * @var list<array{source: string, body: ?string}>
+     * @var list<array{source: string, body: string, held: bool, defs: int}>
      */
     private array $queue = [];
 
@@ -112,14 +125,20 @@ final class SectionStream
             // Parsed first: its definitions apply to the held sections too.
             $document = $this->renderer->parseSection($tail, $this->known);
             $this->learn($document);
-            $this->queue[] = ['source' => $tail, 'body' => $this->renderer->renderParsedSection($document)];
+            $this->queue[] = [
+                'source' => $tail,
+                'body' => $this->renderer->renderParsedSection($document),
+                'held' => false,
+                'defs' => \count($this->known),
+            ];
         }
 
+        $defs = \count($this->known);
         $bodies = [];
         foreach ($this->queue as $entry) {
-            $bodies[] = $entry['body'] ?? $this->renderer->renderParsedSection(
-                $this->renderer->parseSection($entry['source'], $this->known),
-            );
+            $bodies[] = $entry['held'] && $entry['defs'] !== $defs
+                ? $this->renderer->renderParsedSection($this->renderer->parseSection($entry['source'], $this->known))
+                : $entry['body'];
         }
         $this->queue = [];
 
@@ -151,21 +170,30 @@ final class SectionStream
         $this->learn($document);
         $this->queue[] = [
             'source' => $source,
-            'body' => self::hasUnresolvedBracket($document) ? null : $this->renderer->renderParsedSection($document),
+            'body' => $this->renderer->renderParsedSection($document),
+            'held' => self::hasUnresolvedReference($document),
+            'defs' => \count($this->known),
         ];
     }
 
-    /** A later definition can resolve a held section: render the ones it now can. */
+    /**
+     * Definitions were learned: re-render every held section against them,
+     * releasing the ones they resolved and refreshing the rest.
+     */
     private function retryHeld(): void
     {
+        $defs = \count($this->known);
         foreach ($this->queue as $i => $entry) {
-            if ($entry['body'] !== null) {
+            if (!$entry['held'] || $entry['defs'] === $defs) {
                 continue;
             }
             $document = $this->renderer->parseSection($entry['source'], $this->known);
-            if (!self::hasUnresolvedBracket($document)) {
-                $this->queue[$i]['body'] = $this->renderer->renderParsedSection($document);
-            }
+            $this->queue[$i] = [
+                'source' => $entry['source'],
+                'body' => $this->renderer->renderParsedSection($document),
+                'held' => self::hasUnresolvedReference($document),
+                'defs' => $defs,
+            ];
         }
     }
 
@@ -177,7 +205,7 @@ final class SectionStream
     private function release(): array
     {
         $bodies = [];
-        while ($this->queue !== [] && $this->queue[0]['body'] !== null) {
+        while ($this->queue !== [] && !$this->queue[0]['held']) {
             $bodies[] = array_shift($this->queue)['body'];
         }
 
@@ -195,20 +223,48 @@ final class SectionStream
     }
 
     /**
-     * True when the parser left a `]` as text. A bracket it resolved became a
-     * link or image, a code span or block is not Text, and a task-list
-     * marker is its own node, so a literal `]` is the only place a later
-     * definition could still make a link. Over-matching (an escaped `\]`, a
-     * stray bracket) only holds a section longer.
+     * True when the parser left a `[` and a later `]` of the same block as
+     * text: the only shape a later definition can still turn into a link. A
+     * bracket it resolved became a link or image, a code span or block is
+     * not Text, and a task-list marker is its own node. Brackets pair only
+     * inside one block's inline content, so a `]` with no `[` before it in
+     * its block (`x]`, `1) item]`) can never become a link. Over-matching (an
+     * escaped `\[`, a pair holding a link) only holds a section longer.
      */
-    private static function hasUnresolvedBracket(Document $document): bool
+    private static function hasUnresolvedReference(Document $document): bool
     {
+        /** @var \SplObjectStorage<AbstractBlock, true> $opened blocks whose text already holds a `[` */
+        $opened = new \SplObjectStorage();
         foreach ($document->iterator() as $node) {
-            if ($node instanceof Text && str_contains($node->getLiteral(), ']')) {
+            if (!$node instanceof Text) {
+                continue;
+            }
+            $literal = $node->getLiteral();
+            $open = strpos($literal, '[');
+            $close = strrpos($literal, ']');
+            if ($open === false && $close === false) {
+                continue;
+            }
+            $block = self::blockOf($node) ?? $document;
+            if ($close !== false && ($opened->contains($block) || ($open !== false && $open < $close))) {
                 return true;
+            }
+            if ($open !== false) {
+                $opened->attach($block, true);
             }
         }
 
         return false;
+    }
+
+    /** The block whose inline content holds $node. */
+    private static function blockOf(Node $node): ?AbstractBlock
+    {
+        $parent = $node->parent();
+        while ($parent !== null && !$parent instanceof AbstractBlock) {
+            $parent = $parent->parent();
+        }
+
+        return $parent;
     }
 }

@@ -187,7 +187,7 @@ new Renderer($theme)
     ->withBaseURL('https://docs.example.com/')  // prefix relative links
     ->withTableWrap(true)            // wrap text inside table cells
     ->withInlineTableLinks(false)    // suppress (url) suffix in cells
-    ->withPreservedNewLines(true)    // keep `\n\n+` runs from source
+    ->withPreservedNewLines(true)    // keep source blank-line runs between blocks
     ->withStandardStyle('dracula')   // re-pick the stock theme
     ->withEmoji(true);               // expand `:smile:` shortcodes
 ```

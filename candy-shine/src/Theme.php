@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shine;
 
-use SugarCraft\Shine\Lang;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Palettes;
 use SugarCraft\Sprinkles\Style;

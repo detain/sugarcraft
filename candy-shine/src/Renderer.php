@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shine;
 
-use SugarCraft\Shine\Lang;
 use SugarCraft\Shine\Render\BlockContext;
 use SugarCraft\Shine\Render\BlockKind;
 use SugarCraft\Shine\Render\BlockStack;
@@ -48,6 +47,7 @@ use League\CommonMark\Extension\DescriptionList\DescriptionList as MdDescription
 use League\CommonMark\Extension\DescriptionList\DescriptionListExtension;
 use League\CommonMark\Extension\DescriptionList\Node\Description;
 use League\CommonMark\Extension\DescriptionList\Node\DescriptionTerm;
+use League\CommonMark\Node\Block\AbstractBlock;
 use League\CommonMark\Node\Block\Document;
 use League\CommonMark\Node\Block\Paragraph;
 use League\CommonMark\Node\Inline\Newline;
@@ -132,6 +132,22 @@ final class Renderer
     private readonly bool $sanitize;
     private readonly bool $textIsPlain;
     private bool $inTableCell = false;
+
+    /**
+     * The theme's `headingCase` while a heading's inline content renders,
+     * null elsewhere. Applied per Text node by {@see renderText()}, before
+     * styling, so the transform never reaches SGR or OSC-8 bytes.
+     */
+    private ?string $textCase = null;
+
+    /**
+     * The source lines of the document {@see render()} is rendering when
+     * {@see withPreservedNewLines()} is on, null otherwise. Read by
+     * {@see renderChildren()} to restore the blank lines between blocks.
+     *
+     * @var list<string>|null
+     */
+    private ?array $sourceLines = null;
 
     /** Active block context stack for indent/width computation. */
     private ?BlockStack $blockStack = null;
@@ -424,8 +440,9 @@ final class Renderer
      * does.
      *
      * A throwaway copy renders each section so every section starts from a
-     * fresh Document block context; the shared per-instance lazy stack (the
-     * plan-1.1 pending trap) is never touched by the stream channel.
+     * fresh Document block context and the instance's own block state
+     * (which {@see render()} resets per call) is never touched by the
+     * stream channel.
      *
      * @internal the stream family's primitive ({@see SectionStream}).
      */
@@ -574,9 +591,12 @@ final class Renderer
 
     /**
      * Preserve consecutive blank lines in source markdown. By default
-     * CommonMark collapses runs of blank lines; with this on, every
-     * `\n\n+` in the source survives into the output. Mirrors glamour's
-     * `WithPreservedNewLines`.
+     * CommonMark collapses runs of blank lines; with this on, every run of
+     * blank lines between two blocks survives into {@see render()}'s output
+     * at the position it held in the source (runs between the items of a
+     * list excepted: lists render tight). Mirrors glamour's
+     * `WithPreservedNewLines`. The stream family buffers while it is on
+     * ({@see defersStreaming()}).
      */
     public function withPreservedNewLines(bool $on = true): self
     {
@@ -696,12 +716,11 @@ final class Renderer
             }
         }
 
-        // Lazy-initialize block stack with root Document context.
-        // Using null check ensures fresh state when Renderer is reused via copy().
-        if ($this->blockStack === null) {
-            $this->blockStack = new BlockStack();
-            $this->styleSheet = StyleSheet::base();
-        }
+        // Fresh block state per render: a reused instance must not keep the
+        // previous document's root context (one leaked per call otherwise,
+        // inflating every depth-keyed StyleSheet lookup).
+        $this->blockStack = new BlockStack();
+        $this->styleSheet = StyleSheet::base();
 
         $document = $this->parser()->parse($markdown);
         $this->blockStack->push(new BlockContext(
@@ -711,7 +730,17 @@ final class Renderer
             cascadedStyle: $this->theme->paragraph ?? Style::new(),
         ));
 
-        $rendered = $this->renderChildren($document);
+        // The parser numbers lines of exactly this string from 1, ending
+        // one at \r\n, \r or \n; every preparation step above is
+        // byte-local and never crosses a newline.
+        $this->sourceLines = $this->preservedNewLines
+            ? (preg_split('/\r\n|\r|\n/', $markdown) ?: [])
+            : null;
+        try {
+            $rendered = $this->renderChildren($document);
+        } finally {
+            $this->sourceLines = null;
+        }
         $rendered = rtrim($rendered, "\n");
         // Block prefix / suffix wrap the entire document body (mirrors
         // glamour's StylePrimitive BlockPrefix / BlockSuffix slots).
@@ -728,17 +757,6 @@ final class Renderer
         if ($this->theme->documentMargin > 0) {
             $margin = str_repeat("\n", $this->theme->documentMargin);
             $rendered = $margin . $rendered . $margin;
-        }
-        if ($this->preservedNewLines) {
-            // CommonMark collapses `\n\n+` to one blank-line break;
-            // re-inflate by counting source blank lines and padding the
-            // output. We approximate by matching `\n{3,}` runs in the
-            // source and copying the count into the output where the
-            // first single blank line lives.
-            $sourceRuns = self::extractBlankRuns($markdown);
-            if ($sourceRuns !== []) {
-                $rendered = self::reapplyBlankRuns($rendered, $sourceRuns);
-            }
         }
         return $rendered;
     }
@@ -758,48 +776,6 @@ final class Renderer
             self::EMOJI_SHORTCODE_PATTERN,
             static fn (array $m): string => $map[strtolower($m[1])] ?? $m[0],
             $markdown,
-        );
-    }
-
-    /**
-     * Extract sequences of 3+ consecutive newlines from the source,
-     * recording the count for each match. Used by
-     * {@see withPreservedNewLines()} to re-inflate runs that CommonMark
-     * collapses on parse.
-     *
-     * @return list<int> list of blank-line counts, in source order
-     */
-    private static function extractBlankRuns(string $source): array
-    {
-        $out = [];
-        if (preg_match_all('/\n{3,}/', $source, $m) === false) {
-            return $out;
-        }
-        foreach ($m[0] as $run) {
-            $out[] = strlen($run) - 1; // n newlines = n-1 blank lines
-        }
-        return $out;
-    }
-
-    /**
-     * Replace the first `len(runs)` `\n\n` separators in `$rendered`
-     * with `\n` repeated by the matching run count.
-     *
-     * @param list<int> $runs
-     */
-    private static function reapplyBlankRuns(string $rendered, array $runs): string
-    {
-        $i = 0;
-        return (string) preg_replace_callback(
-            '/\n{2,}/',
-            static function (array $m) use (&$i, $runs) {
-                if ($i < count($runs)) {
-                    $blanks = $runs[$i++];
-                    return str_repeat("\n", $blanks);
-                }
-                return $m[0];
-            },
-            $rendered,
         );
     }
 
@@ -946,6 +922,9 @@ final class Renderer
         if ($this->sanitize) {
             $literal = self::stripControls($literal);
         }
+        if ($this->textCase !== null) {
+            $literal = self::applyCase($literal, $this->textCase);
+        }
         return $this->textIsPlain ? $literal : $this->theme->text->render($literal);
     }
 
@@ -1059,10 +1038,12 @@ final class Renderer
         $blockStyle = $this->styleSheet->for(BlockKind::Paragraph, $depth);
         $cascadedStyle = StyleCascade::merge($parentStyle, $blockStyle);
 
+        // A paragraph prefixes nothing; the stack sums every context's own
+        // indent, so copying the parent's here would charge it twice.
         $newCtx = new BlockContext(
             BlockKind::Paragraph,
             depth: $depth + 1,
-            accumulatedIndent: $parentCtx?->accumulatedIndent ?? 0,
+            accumulatedIndent: 0,
             cascadedStyle: $cascadedStyle,
         );
         $this->blockStack->push($newCtx);
@@ -1084,9 +1065,46 @@ final class Renderer
     {
         $parts = [];
         foreach ($parent->children() as $child) {
-            $parts[] = $this->renderNode($child);
+            $part = $this->renderNode($child);
+            if ($this->sourceLines !== null && $child instanceof AbstractBlock) {
+                $next = $child->next();
+                if ($next instanceof AbstractBlock) {
+                    $part = $this->padBlankLines($part, $child, $next);
+                }
+            }
+            $parts[] = $part;
         }
         return implode('', $parts);
+    }
+
+    /**
+     * {@see withPreservedNewLines()}: grow the blank lines a rendered block
+     * ends with to the longest run of blank lines between it and the next
+     * block in the source. CommonMark keeps no blank lines in the tree, but
+     * every block carries its source lines, so each run is restored where it
+     * stood. Only ever adds: a block already followed by enough blank lines
+     * is left alone. (A run inside a list item does not survive: a list
+     * renders its items tight.)
+     */
+    private function padBlankLines(string $rendered, AbstractBlock $block, AbstractBlock $next): string
+    {
+        $from = $block->getEndLine();
+        $to = $next->getStartLine();
+        if ($from === null || $to === null) {
+            return $rendered;
+        }
+        $longest = 0;
+        $run = 0;
+        // Lines are 1-based; the gap is the lines strictly between the two.
+        // Inside a blockquote a blank line still carries its `>` markers.
+        for ($line = $from + 1; $line < $to; $line++) {
+            $text = (string) preg_replace('/^(?:[ \t]{0,3}>[ \t]?)+/', '', $this->sourceLines[$line - 1] ?? '');
+            $run = trim($text, " \t") === '' ? $run + 1 : 0;
+            $longest = max($longest, $run);
+        }
+        $have = max(0, strlen($rendered) - strlen(rtrim($rendered, "\n")) - 1);
+
+        return $longest > $have ? $rendered . str_repeat("\n", $longest - $have) : $rendered;
     }
 
     private function renderFencedCode(FencedCode $node): string
@@ -1136,7 +1154,7 @@ final class Renderer
         $newCtx = new BlockContext(
             BlockKind::Heading,
             depth: $depth + 1,
-            accumulatedIndent: $parentCtx?->accumulatedIndent ?? 0,
+            accumulatedIndent: 0,
             cascadedStyle: $cascadedStyle,
         );
         $this->blockStack->push($newCtx);
@@ -1153,7 +1171,13 @@ final class Renderer
             $prefix = $this->theme->headingPrefix
                 ?? (str_repeat('#', $h->getLevel()) . ' ');
             $suffix = (string) $this->theme->headingSuffix;
-            $body   = $this->applyCase($this->renderChildren($h), $this->theme->headingCase);
+            $outerCase = $this->textCase;
+            $this->textCase = strtolower($this->theme->headingCase) === 'none' ? null : $this->theme->headingCase;
+            try {
+                $body = $this->renderChildren($h);
+            } finally {
+                $this->textCase = $outerCase;
+            }
             return $style->render($prefix . $body . $suffix) . "\n\n";
         } finally {
             $this->blockStack->pop();
@@ -1161,13 +1185,17 @@ final class Renderer
     }
 
     /**
-     * Apply a case transform to a heading body.
+     * Apply a heading's case transform to one Text node's literal.
      *
      * Mirrors glamour's `Upper` / `Lower` / `Title` flags collapsed
      * into a single `case` selector. `none` (default) is identity;
-     * unknown selectors fall through to identity.
+     * unknown selectors fall through to identity. It runs on source text
+     * only, never on rendered output: code spans, link URLs (including an
+     * autolink's visible URL text, see renderLink()) and the escape
+     * bytes of inline styling keep their case. Title case therefore starts
+     * a word at every Text node, as glamour's per-element transform does.
      */
-    private function applyCase(string $text, string $case): string
+    private static function applyCase(string $text, string $case): string
     {
         return match (strtolower($case)) {
             'upper' => mb_strtoupper($text, 'UTF-8'),
@@ -1186,12 +1214,12 @@ final class Renderer
         $blockStyle = $this->styleSheet->for(BlockKind::BlockQuote, $depth);
         $cascadedStyle = StyleCascade::merge($parentStyle, $blockStyle);
 
-        // Blockquote adds 2 cells of indent and 1 margin unit.
-        $parentIndent = $parentCtx?->accumulatedIndent ?? 0;
+        // Blockquote adds 2 cells of indent and 1 margin unit — its own
+        // share only: the stack sums the shares of every enclosing block.
         $newCtx = new BlockContext(
             BlockKind::BlockQuote,
             depth: $depth + 1,
-            accumulatedIndent: $parentIndent + 2,
+            accumulatedIndent: 2,
             cascadedStyle: $cascadedStyle,
         );
         $this->blockStack->push($newCtx);
@@ -1213,9 +1241,16 @@ final class Renderer
         }
     }
 
-    private function renderListItem(ListItem $item): string
+    /**
+     * Render a list item's blocks inside its own context, so everything in
+     * it wraps at the width left after the marker column {@see renderList()}
+     * prefixes to its lines. $markerWidth is that column in cells (0 for an
+     * item rendered outside a list). The stack charges every ListItem a
+     * 2-cell margin — the stock `• ` column — so the item's own indent is
+     * the rest of the column.
+     */
+    private function renderListItem(ListItem $item, int $markerWidth = 0): string
     {
-        // Push ListItem context onto the stack.
         $parentCtx = $this->blockStack->peek();
         $depth = $this->blockStack->depth();
         $parentStyle = $parentCtx?->cascadedStyle ?? ($this->theme->paragraph ?? Style::new());
@@ -1225,7 +1260,7 @@ final class Renderer
         $newCtx = new BlockContext(
             BlockKind::ListItem,
             depth: $depth + 1,
-            accumulatedIndent: ($parentCtx?->accumulatedIndent ?? 0),
+            accumulatedIndent: max(0, $markerWidth - 2),
             cascadedStyle: $cascadedStyle,
         );
         $this->blockStack->push($newCtx);
@@ -1249,7 +1284,7 @@ final class Renderer
         $newCtx = new BlockContext(
             BlockKind::List,
             depth: $depth + 1,
-            accumulatedIndent: $parentCtx?->accumulatedIndent ?? 0,
+            accumulatedIndent: 0,
             cascadedStyle: $cascadedStyle,
         );
         $this->blockStack->push($newCtx);
@@ -1271,7 +1306,15 @@ final class Renderer
             $i   = $start;
             foreach ($list->children() as $item) {
                 $bullet = $ordered ? sprintf($orderedFmt, $i) : $unorderedGlyph;
-                $body   = rtrim($this->renderChildren($item), "\n");
+                // Continuation indent: max of the bullet's cell width + 1
+                // and the theme's listLevelIndent (default 0: the bullet
+                // column alone), so nested lists indent uniformly per theme.
+                // Known before the body renders, so the body wraps at the
+                // width this column leaves (the first line's `bullet ` is
+                // never wider than it).
+                $indentN = max(Width::string($bullet) + 1, $levelIndent);
+                $indent  = str_repeat(' ', $indentN);
+                $body   = rtrim($this->renderListItem($item, $indentN), "\n");
                 // Paragraphs inside list items emit a trailing blank line for
                 // top-level separation; collapse those runs so nested lists
                 // sit directly under their parent rather than after a gap.
@@ -1279,11 +1322,6 @@ final class Renderer
 
                 $lines  = explode("\n", $body);
                 $first  = array_shift($lines) ?? '';
-                // Continuation indent: max of bullet width and configured
-                // listLevelIndent so nested lists indent uniformly per
-                // theme. Default levelIndent (4) matches glamour stock.
-                $indentN = max(mb_strlen($bullet, 'UTF-8') + 1, $levelIndent);
-                $indent  = str_repeat(' ', $indentN);
 
                 // CommonMark softbreaks leave trailing whitespace on the
                 // preceding Text node; rtrim every emitted line so item
@@ -1311,7 +1349,22 @@ final class Renderer
         $hyperlinks  = $this->emitHyperlinks && !($insideTable && !$this->inlineTableLinks);
         $showSuffix  = !$insideTable || $this->inlineTableLinks;
 
-        if ($text === '' || $text === $url) {
+        $isAutolink = $text === '' || $text === $url;
+        if (!$isAutolink && $this->textCase !== null) {
+            // A heading's case transform has already reached the link text,
+            // so `HTTPS://EX.COM/A` no longer equals its own URL. Decide
+            // autolink-ness from the uncased text instead; the autolink
+            // branch prints the URL itself, which keeps its case.
+            $outerCase = $this->textCase;
+            $this->textCase = null;
+            try {
+                $isAutolink = $this->renderChildren($l) === $url;
+            } finally {
+                $this->textCase = $outerCase;
+            }
+        }
+
+        if ($isAutolink) {
             // Autolink case: bare URL rendered as link text.
             // Prefer the dedicated autolink slot; fall back to link style.
             $style = $this->theme->autolink ?? $this->theme->link;
