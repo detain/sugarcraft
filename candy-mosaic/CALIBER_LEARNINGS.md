@@ -171,9 +171,10 @@ kept as design rationale for what shipped._
    every committed GIF fixture plus encoder-shaped 255-byte-sub-block and LCT GIFs: if
    flip's walk changes again that test goes red first. Remaining flip quirks the clone
    mirrors: blind fixed-8-byte GCE skip, one-byte advance on an unknown block, 256-frame
-   slice. Known sibling bug (out of mosaic's reach): flip's `assembleFrameGif()` writes
-   a frame's LCT BEFORE its image descriptor, so GD rejects LCT frames — mosaic then
-   fails loud (`gif_decode_failed`), never with a layout-mismatch.
+   slice. flip's `assembleFrameGif()` once wrote a frame's LCT BEFORE its image
+   descriptor, so GD rejected every LCT frame; fixed in candy-flip `9da784a81`, and
+   `testGifWithLocalColourTablesPassesLayoutGate` now asserts LCT GIFs decode to every
+   frame with the same pixels as a GCT control — no try/catch tolerance left.
       mosaic walks GIF image descriptors TWICE with byte-only structural passes (no
       LZW decode), each returning the ORDERED LIST of descriptor byte offsets:
       `ImageSource::gifHonestDescriptorOffsets()` — the spec-correct walk (skips the

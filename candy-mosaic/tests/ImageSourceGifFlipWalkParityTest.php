@@ -55,6 +55,11 @@ final class ImageSourceGifFlipWalkParityTest extends TestCase
         self::assertSame([100, 100, 100], $anim->delaysMs);
     }
 
+    /**
+     * A GIF whose frames carry only LOCAL colour tables must clear the layout gate and
+     * decode to every frame with its true colours — flip's walk, the clone and flip's
+     * per-frame re-assembly all have to handle the LCT that follows each descriptor.
+     */
     public function testGifWithLocalColourTablesPassesLayoutGate(): void
     {
         $gif = $this->noiseGif(2, localTables: true);
@@ -64,18 +69,24 @@ final class ImageSourceGifFlipWalkParityTest extends TestCase
         self::assertCount(2, $honest);
         self::assertSame($honest, $this->flipWalk($gif), 'clone must skip the LCT exactly as flip\'s walk does');
 
-        // candy-flip's walk lands on the right descriptors, but its per-frame
-        // re-assembly (`Decoder::assembleFrameGif()`) currently writes the LCT BEFORE
-        // the image descriptor, so GD rejects every LCT frame and flip returns none.
-        // Whatever flip materialises, the layout gate must NOT be what refuses this
-        // valid file: either the whole animation loads or flip's own decode failure (or the
-        // frame-COUNT defence in depth) is what surfaces.
-        try {
-            self::assertSame(2, ImageSource::fromAnimatedFile($this->write($gif))->frameCount());
-        } catch (\InvalidArgumentException $e) {
-            self::assertStringNotContainsString('disagrees with the container', $e->getMessage());
-            self::assertMatchesRegularExpression('/carries 2 frames|could not be decoded/', $e->getMessage());
+        // flip re-assembles each frame as GCE → descriptor → LCT → LZW (candy-flip
+        // 9da784a81), so every LCT frame decodes, and the walk + count gates agree.
+        $this->assertWalksAgreeWithFlip($gif, 2);
+
+        // The colours must be the real ones, not a mis-assembled frame GD happened
+        // to accept: the same pixels carried in a GLOBAL table are the control.
+        $control = $this->noiseGif(2, localTables: false);
+        $lctFrames = FlipDecoder::decode($this->write($gif), 32, 32);
+        $gctFrames = FlipDecoder::decode($this->write($control), 32, 32);
+        self::assertCount(2, $lctFrames);
+        foreach ($lctFrames as $i => $frame) {
+            self::assertSame($gctFrames[$i]->cells, $frame->cells, "LCT frame {$i} must decode to the GCT control's pixels");
         }
+        self::assertNotSame($lctFrames[0]->cells, $lctFrames[1]->cells, 'fixture frames must differ so a repeated frame cannot pass');
+
+        $anim = ImageSource::fromAnimatedFile($this->write($gif));
+        self::assertSame(2, $anim->frameCount());
+        self::assertSame([100, 100], $anim->delaysMs);
     }
 
     /**
