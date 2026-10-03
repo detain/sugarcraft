@@ -52,7 +52,7 @@ final class LayeredSettingsTest extends TestCase
     public function testTheUserTierOnlyKeysAreExactlyTheLayeredKeysNoProjectMaySet(): void
     {
         self::assertSame(
-            ['provider', 'titleModel', 'summaryModel', 'instructions', 'disabledRules', 'maxOutputTokens', 'modelPrices', 'allowedTools', 'statusLine', 'layout', 'maxToolSteps', 'secretEnvAllowlist', 'contextWindow', 'extraBody', 'thinkingBudget', 'promptCache', 'attribution'],
+            ['provider', 'titleModel', 'summaryModel', 'instructions', 'disabledRules', 'maxOutputTokens', 'modelPrices', 'allowedTools', 'statusLine', 'layout', 'maxToolSteps', 'secretEnvAllowlist', 'contextWindow', 'extraBody', 'thinkingBudget', 'promptCache', 'attribution', 'enabledSkills'],
             LayeredSettings::userTierOnlyKeys(),
         );
 
@@ -306,6 +306,39 @@ final class LayeredSettingsTest extends TestCase
         self::assertSame(
             ['terse'],
             LayeredSettings::userLayer($this->userDir)['disabledRules'],
+        );
+    }
+
+    /**
+     * N-DOC-2: `enabledSkills` is layered at the USER tier — the user's
+     * `settings.json` now reaches it, as it always reached `disabledSkills` —
+     * and refused at the project tier at any trust level, because a name there
+     * makes a skill's body standing system-prompt text. The user config still
+     * outranks `settings.json` for it, like every layered key.
+     */
+    public function testEnabledSkillsIsLayeredAtTheUserTierAndRefusedAtTheProjectTier(): void
+    {
+        self::assertContains('enabledSkills', LayeredSettings::LAYERED_KEYS);
+        self::assertNotContains('enabledSkills', LayeredSettings::PROJECT_TIER_KEYS);
+
+        $this->writeProject(LayeredSettings::SHARED_PATH, ['enabledSkills' => ['planted'], 'disabledSkills' => ['terraform']]);
+        foreach ([true, false] as $trusted) {
+            self::assertArrayNotHasKey('enabledSkills', LayeredSettings::projectLayer($this->projectRoot, $trusted));
+        }
+
+        self::assertSame(['terraform'], LayeredSettings::projectLayer($this->projectRoot, true)['disabledSkills']);
+
+        file_put_contents(
+            $this->userDir . '/' . LayeredSettings::USER_FILE,
+            (string) json_encode(['enabledSkills' => ['from-settings']]),
+        );
+        $userSettings = LayeredSettings::userLayer($this->userDir);
+        self::assertSame(['from-settings'], $userSettings['enabledSkills']);
+
+        self::assertSame(['from-settings'], LayeredSettings::merge([], $userSettings, [])['enabledSkills']);
+        self::assertSame(
+            ['from-config'],
+            LayeredSettings::merge(['enabledSkills' => ['from-config']], $userSettings, [])['enabledSkills'],
         );
     }
 

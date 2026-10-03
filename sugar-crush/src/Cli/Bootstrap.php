@@ -4449,8 +4449,9 @@ final class Bootstrap
     /**
      * The skills whose FULL BODIES the system prompt carries every turn.
      *
-     * Reads the `enabledSkills` key of the persisted user config — a list of
-     * names resolved against the SAME registry {@see skillRegistry()} built,
+     * Reads the `enabledSkills` key of the merged user tier
+     * ({@see readUserConfig()}: `config.json` over `~/.sugar-crush/settings.json`,
+     * never a project file) — a list of names resolved against the SAME registry {@see skillRegistry()} built,
      * so discovery tiers and the `disabledSkills` list decide what a name can
      * mean before it can mean a body. THE DEFAULT IS THE EMPTY LIST: no user
      * gets standing skill instructions they did not ask for, and the channel
@@ -4477,11 +4478,16 @@ final class Bootstrap
      * the same standing instructions in every turn of the session. The
      * exactly-once guarantee the bodies carry is decided here, not downstream.
      *
-     * Config.json-level ON PURPOSE: growing LayeredSettings::LAYERED_KEYS is
-     * a documented-roster change (README + SETTINGS.md drift guards) that
-     * belongs to a settings-surface step, not this wiring one — so this key
-     * is NOT settings.json/project-tier layered, only read through
-     * {@see readUserConfig()} like `providers` before it.
+     * LAYERED, USER TIER ONLY, since settings step N-DOC-2. This paragraph
+     * used to say the key was config.json-level on purpose, deferring the
+     * roster growth to "a settings-surface step"; that step has landed, so
+     * `enabledSkills` is in {@see LayeredSettings::LAYERED_KEYS} and a
+     * `~/.sugar-crush/settings.json` value now reaches this read the way its
+     * sibling `disabledSkills` always did. No PROJECT file may set it (it is
+     * absent from {@see LayeredSettings::PROJECT_TIER_KEYS}): a name here
+     * makes a body standing prompt text, which is `instructions`' argument.
+     * Nothing in this method changed — {@see readUserConfig()} already
+     * answers the merge; only the merge's whitelist grew.
      *
      * Registry entries are STAGE-1 manifests — `SkillManager::loadAll()`
      * deliberately never reads a body off disk — so each resolved name gets

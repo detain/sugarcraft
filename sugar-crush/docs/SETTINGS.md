@@ -177,6 +177,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `titleModel` | `Bootstrap::titleBackend()` | **no** |
 | `summaryModel` | `Bootstrap::summaryBackend()` | **no** |
 | `disabledSkills` | `Bootstrap::chat()` → `skillRegistry()` | yes |
+| `enabledSkills` | `Bootstrap::backend()`, `backendFor()` → `promptEnabledSkills()` | **no** |
 | `disabledRules` | `Bootstrap::chat()` → `RulesState::new()` | **no** |
 | `disabledTools` | `Bootstrap::tools()` → `filterToolSet()` | yes |
 | `parallelToolCalls` | `EngineBackend::complete()` | yes |
@@ -195,7 +196,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `attribution` | `Bootstrap::tools()` → `Bash::withGitGuidance()` | **no** |
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these twenty-three, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these twenty-four, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. A key nothing reads is worse than
@@ -817,7 +818,7 @@ project-settable.
 | `instructions` | Memory & Rules | list | `[]` | U C | — | restart | prompt |
 | `disabledRules` | Memory & Rules | list | `[]` | U C | — | restart | prompt |
 | `disabledSkills` | Skills | list | `[]` | P U C | — | restart | narrowing |
-| `enabledSkills` | Skills | list | `[]` | C | — | restart | prompt |
+| `enabledSkills` | Skills | list | `[]` | U C | — | restart | prompt |
 | `includeGitInstructions` | Git & Automation | bool | `true` | P U C | — | restart | narrowing |
 | `attribution` | Git & Automation | object | unset | U C | — | restart | prompt |
 | `theme` | Interface | enum | `dark` | P U C | — | live | cosmetic |
@@ -925,12 +926,12 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   all four `trustedProject*` grants.
 - [`MEMORY.md`](MEMORY.md) — the rest of the `~/.sugar-crush/` layout.
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
-  this stack. They do not cover it: only six of the twenty-three layered keys have an
+  this stack. They do not cover it: only six of the twenty-four layered keys have an
   env override (`provider`, `titleModel`, `summaryModel`, `parallelToolCalls`,
   `parallelToolDeadlineSeconds`, `promptCache`). `theme`, `instructions`, `disabledSkills`,
   `disabledRules`, `allowedTools`, `disabledTools`, `maxOutputTokens`,
   `modelPrices`, `statusLine`, `layout`, `maxToolSteps`, `secretEnvAllowlist`,
-  `contextWindow`, `extraBody`, `thinkingBudget`, `includeGitInstructions` and
-  `attribution` have none.
+  `contextWindow`, `extraBody`, `thinkingBudget`, `includeGitInstructions`,
+  `attribution` and `enabledSkills` have none.
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.)

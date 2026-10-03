@@ -389,6 +389,7 @@ final class SettingsSchema
             SettingDefinition::new('enabledSkills', SettingType::StringList, [])
                 ->withCategory(SettingCategory::Skills)
                 ->withRiskClass(RiskClass::Prompt)
+                ->withLayered()
                 ->withUi(UiEditability::List)
                 ->withOptionsSource(OptionsSource::Skills)
                 ->withLabel('Enabled skills')

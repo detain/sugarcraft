@@ -499,7 +499,7 @@ sugar-crush/tests/Cli/BootstrapSecretEnvAllowlistTest.php	0.032	9
 sugar-crush/tests/PaneClickTest.php	0.031	13
 sugar-crush/tests/Skills/ForeignSkillDiscoveryTest.php	0.031	20
 sugar-crush/tests/Agents/AgentWorkerPoolForkFailureTest.php	0.031	4
-sugar-crush/tests/Config/LayeredSettingsTest.php	0.031	26
+sugar-crush/tests/Config/LayeredSettingsTest.php	0.031	27
 sugar-crush/tests/Permissions/PermissionGateAcceptEditsTest.php	0.030	27
 sugar-crush/tests/Tui/TerminalBackgroundSprinklesAgreementTest.php	0.030	16
 sugar-crush/tests/Skills/TruncatesOutputNudgeMarginDocTest.php	0.030	4

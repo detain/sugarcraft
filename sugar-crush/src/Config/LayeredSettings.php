@@ -315,6 +315,19 @@ final class LayeredSettings
      *                 on every commit it makes under the operator's identity,
      *                 and a checkout choosing that text would be a repository
      *                 writing into the operator's own history.
+     *  - `enabledSkills`
+     *                 the skills whose FULL BODIES ride the system prompt every
+     *                 turn, read by
+     *                 {@see \SugarCraft\Crush\Cli\Bootstrap::promptEnabledSkills()}
+     *                 at both composition sites. It was answered by `config.json`
+     *                 alone until settings step N-DOC-2 — a surprise beside its
+     *                 sibling `disabledSkills`, which IS layered — and is now
+     *                 read from `~/.sugar-crush/settings.json` too. USER-TIER
+     *                 ONLY, on `instructions`' argument: a name here makes a
+     *                 skill's body standing, authoritative prompt text, so a
+     *                 project value would let a checkout promote any skill it
+     *                 ships into every turn. `disabledSkills`, which a project
+     *                 MAY set, only ever removes one.
      *
      * `statusLine` IS THE ONLY KEY HERE WHOSE VALUE IS A COMMAND, and that is
      * why it is user-tier only ({@see PROJECT_TIER_KEYS} does not list it).
@@ -454,6 +467,7 @@ final class LayeredSettings
         'promptCache',
         'includeGitInstructions',
         'attribution',
+        'enabledSkills',
     ];
 
     /**
@@ -689,7 +703,7 @@ final class LayeredSettings
      * `titleModel`, `summaryModel`, `instructions`, `disabledRules`,
      * `maxOutputTokens`, `modelPrices`, `allowedTools`, `statusLine`, `layout`,
      * `maxToolSteps`, `secretEnvAllowlist`, `contextWindow`, `extraBody`,
-     * `thinkingBudget`, `promptCache` and `attribution`, in
+     * `thinkingBudget`, `promptCache`, `attribution` and `enabledSkills`, in
      * {@see LAYERED_KEYS} order — named rather than numbered
      * here, because the
      * ordinals this sentence used to carry went stale the moment a fifth key

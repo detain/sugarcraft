@@ -230,9 +230,10 @@ rather than letting "skills go into the prompt" blur three behaviours.
 
 ### The canonical path: the `enabledSkills` key
 
-The key is `enabledSkills`, a list of skill names in the persisted user config —
-`Bootstrap::userConfigPath()`, which is `~/.sugar-crush/config.json` unless
-`--config` names another file. **Its default is the empty list**:
+The key is `enabledSkills`, a list of skill names in your own settings —
+`Bootstrap::userConfigPath()` (`~/.sugar-crush/config.json` unless `--config`
+names another file) or `~/.sugar-crush/settings.json`, the former winning when
+both set it. **Its default is the empty list**:
 `Bootstrap::promptEnabledSkills()` returns nothing at all when the key is absent,
 so the standing prompt of an existing user changed by nothing on the day this
 shipped. A body enters every turn only where the user asked for it by name.
@@ -254,11 +255,14 @@ resolution are load-bearing, and all three are stated in its own doc-block:
   not downstream.
 - **Opting out beats opting in.** A name that `disabledSkills` also lists
   resolves to null (`SkillRegistry::get()` honours the disable) and stays out of
-  the prompt; a stale or unknown name stays out the same way. And unlike
-  `disabledSkills`, `enabledSkills` is not in `LayeredSettings::LAYERED_KEYS`, so
-  the user config file is its only contributor — no `settings.json` tier and no
-  project tier, at any trust level. Growing that roster is a documented-roster
-  change belonging to a settings-surface step, not to this wiring one.
+  the prompt; a stale or unknown name stays out the same way. Like
+  `disabledSkills`, `enabledSkills` is in `LayeredSettings::LAYERED_KEYS`, so
+  `~/.sugar-crush/settings.json` and `config.json` both contribute (the latter
+  wins) — but unlike `disabledSkills` it is **never** taken from a project file,
+  at any trust level: a name here makes a skill's body standing system-prompt
+  text, which is the `instructions` argument, whereas a project disabling a
+  skill only ever removes one. (Until settings step N-DOC-2 this bullet said the
+  key was `config.json`-only; that exception is gone.)
 - **A bad skill is a bounded notice, never a launch crash.** A non-list value, a
   non-string element, a disabled or unknown name, or a source file that vanished
   between discovery and launch each produce one notice through
