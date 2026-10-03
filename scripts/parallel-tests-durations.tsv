@@ -462,6 +462,7 @@ sugar-crush/tests/Tools/BuiltIn/GitignoreAwarenessTest.php	0.085	26
 sugar-crush/tests/Providers/BedrockProviderTest.php	0.085	61
 sugar-crush/tests/Hooks/RuntimePostToolUseBlockTest.php	0.083	7
 sugar-crush/tests/Tui/MenuDropdownTest.php	0.083	2
+sugar-crush/tests/Context/AbsoluteThresholdTest.php	0.083	20
 sugar-crush/tests/Providers/ProviderConnectTimeoutTest.php	0.081	106
 sugar-crush/tests/Backend/ReasoningPaintTest.php	0.080	23
 sugar-crush/tests/Skills/CompiledPatternCacheBoundTest.php	0.080	6

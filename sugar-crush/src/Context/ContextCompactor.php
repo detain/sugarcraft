@@ -38,7 +38,11 @@ use SugarCraft\Crush\Util\TokenEstimate;
  *
  * The limit itself is resolved by {@see ContextWindow} — the model's real
  * context window when the backend can report one — so these percentages land on
- * a different absolute token count per provider.
+ * a different absolute token count per provider. Each tier may also carry an
+ * absolute token cap (roadmap 2.9, {@see CompactorConfig::withReminderTokens()}
+ * and its siblings, per model through {@see CompactorConfig::forModel()}); a
+ * capped tier fires at whichever of the two is lower, so on a 1M-token window a
+ * cap is what keeps the tiers inside the size a model still works well at.
  *
  * Token counting is {@see TokenEstimate}'s script-weighted estimate plus 10
  * per message - the same figure {@see \SugarCraft\Crush\Chat}'s own estimate
@@ -151,8 +155,9 @@ final class ContextCompactor
      * Determine whether compaction should run based on current token usage.
      *
      * Returns true when context usage reaches or exceeds the background
-     * compaction threshold (85% by default), on {@see countTokens()}'s
-     * script-weighted estimate.
+     * compaction threshold (85% by default, or its absolute cap when that is
+     * lower — {@see CompactorConfig::backgroundCompactionTokenThreshold()}), on
+     * {@see countTokens()}'s script-weighted estimate.
      *
      * @param array<array{role:string,content:string}> $messages Wire-format messages.
      * @param int $tokenLimit Maximum tokens allowed in context window.
@@ -164,7 +169,7 @@ final class ContextCompactor
         }
 
         $tokenCount = $this->countTokens($messages);
-        $threshold = (int) ($tokenLimit * $this->config->backgroundCompactionThreshold / 100);
+        $threshold = $this->config->backgroundCompactionTokenThreshold($tokenLimit);
 
         return $tokenCount >= $threshold;
     }
@@ -173,8 +178,9 @@ final class ContextCompactor
      * Determine whether foreground blocking compaction is needed.
      *
      * Returns true when context usage reaches or exceeds the foreground
-     * blocking threshold (95% by default). At this threshold, new input
-     * is blocked until space is freed by compaction.
+     * blocking threshold (95% by default, or its absolute cap when that is
+     * lower — {@see CompactorConfig::foregroundBlockingTokenThreshold()}). At
+     * this threshold, new input is blocked until space is freed by compaction.
      *
      * Mirrors charmbracelet/bubbletea ContextCompactor.shouldCompactForeground.
      *
@@ -188,7 +194,7 @@ final class ContextCompactor
         }
 
         $tokenCount = $this->countTokens($messages);
-        $threshold = (int) ($tokenLimit * $this->config->foregroundBlockingThreshold / 100);
+        $threshold = $this->config->foregroundBlockingTokenThreshold($tokenLimit);
 
         return $tokenCount >= $threshold;
     }
@@ -288,7 +294,7 @@ final class ContextCompactor
             return $messages;
         }
 
-        $threshold = (int) ($tokenLimit * $this->config->foregroundBlockingThreshold / 100);
+        $threshold = $this->config->foregroundBlockingTokenThreshold($tokenLimit);
         $total = $this->countTokens($messages);
 
         // HONEST SCOPE, measured at ddd0a5c83 (review cycle 3): this early
@@ -456,7 +462,8 @@ final class ContextCompactor
      * Determine whether a soft reminder should be sent to the lead agent.
      *
      * Returns true when context usage reaches or exceeds the reminder
-     * threshold (70% by default). This is a soft warning surfaced to the
+     * threshold (70% by default, or its absolute cap when that is lower —
+     * {@see CompactorConfig::reminderTokenThreshold()}). This is a soft warning surfaced to the
      * lead agent before the harder 85%/95% compaction tiers kick in.
      *
      * PURE AND STATELESS — a bare `$tokenCount >= $threshold`, no latch, no
@@ -494,7 +501,7 @@ final class ContextCompactor
         }
 
         $tokenCount = $this->countTokens($messages);
-        $threshold = (int) ($tokenLimit * $this->config->reminderThreshold / 100);
+        $threshold = $this->config->reminderTokenThreshold($tokenLimit);
 
         return $tokenCount >= $threshold;
     }

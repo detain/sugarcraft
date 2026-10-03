@@ -1211,7 +1211,13 @@ such as the offline echo default, falls back to 100,000 estimated tokens). That
 budget also drives compaction, per turn and without an idle gate: at 70% a
 system-role reminder rides along with the turn, at 85% older exchanges are
 summarized first and the rewrite is reported in the transcript, and at 95% the
-turn is refused rather than spent on a request the provider would reject. A
+turn is refused rather than spent on a request the provider would reject. Each
+tier can also carry an **absolute** token cap beside its percentage, firing at
+whichever is lower, so a 1M-token window need not reach 700,000 tokens before
+the first reminder: `CompactorConfig::withReminderTokens()` and its two
+siblings set them, `withModelTokenOverride()` sets them per model (`model` or
+`provider/model`), and `CompactorConfig::smartZone()` is DCP's 50,000 / 100,000
+pair. The caps are unset by default and no settings key reaches them yet. A
 refusal is not a dead end — each attempt drops the oldest preserved exchange,
 and `/clear` frees the whole context at once. Those tiers judge at submit; inside
 a turn the engine also measures every step's request before sending it — system
