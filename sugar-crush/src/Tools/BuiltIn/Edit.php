@@ -11,6 +11,8 @@ use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Support\AtomicFileWriter;
 use SugarCraft\Crush\Tools\Concerns\BuildsUnifiedDiff;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
+use SugarCraft\Crush\Tools\Edit\EditFailureHints;
+use SugarCraft\Crush\Tools\Edit\EditMatcher;
 use SugarCraft\Crush\Tools\AcceptsWorktreeJail;
 use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Crush\Tools\Tool;
@@ -73,7 +75,11 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail
             . 'becomes new_string. Read the file first — old_string must match the bytes on '
             . 'disk exactly, indentation and line endings included. Matching more than once '
             . 'is rejected unless replace_all is set, and matching zero times is rejected '
-            . 'too; either way the file is left untouched, never partially edited. The file '
+            . 'too; either way the file is left untouched, never partially edited, and the '
+            . 'error names the line of every match, or the closest lines of the file. An '
+            . 'old_string that differs from the file only by one indentation shift for every '
+            . 'line is applied re-indented, new_string shifted the same way, and the result '
+            . 'says so. Leave out the "N: " line numbers Read prefixes. The file '
             . 'must already exist — use Write to create one. On success the result names the '
             . 'path and counts the lines added and removed, as "(+2 -1 lines)"; it does not '
             . 'echo the new file contents back, so Read the file again if you need to see '
@@ -215,11 +221,17 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail
 
         $nestedContent = $this->instructionLoader?->loadForPath($path);
 
-        $count = substr_count($originalContent, $oldString);
-        if ($count > 1 && !$replaceAll) {
+        // Which text to replace, found by the staged matcher (audit 0.11):
+        // the exact bytes first, then the same lines under one indentation
+        // shift. On a miss or an ambiguity the error says WHERE — every
+        // match's line, or the closest windows of the file — instead of a
+        // bare "not unique" / "not found" that left the model guessing.
+        $match = EditMatcher::new()->match($originalContent, $oldString, $newString);
+
+        if ($match !== null && $match->count > 1 && !$replaceAll) {
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
-                content: "Error: old_string is not unique ($count matches); include more context",
+                content: EditFailureHints::ambiguous($originalContent, $oldString, $match->count),
                 isError: true,
             );
         }
@@ -229,13 +241,17 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail
         // report "File updated", telling the model its edit landed when it
         // did not. Bail out before touching the file so the model sees the
         // real outcome and can retry with a correct old_string.
-        if ($count === 0) {
+        if ($match === null) {
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
-                content: "Error: old_string not found in $path; file left unchanged",
+                content: EditFailureHints::notFound($originalContent, $oldString, $newString, $path),
                 isError: true,
             );
         }
+
+        // A re-indented match replaces the file's own spelling of the block.
+        $oldString = $match->oldString;
+        $newString = $match->newString;
 
         $newContent = str_replace($oldString, $newString, $originalContent);
 
@@ -265,7 +281,8 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail
         $diff = $preview['diff'];
 
         $message = "File updated: $path"
-            . ($preview['omitted'] ? self::omittedDiffNote($preview) : self::changeSummary($diff));
+            . ($preview['omitted'] ? self::omittedDiffNote($preview) : self::changeSummary($diff))
+            . ($match->note === null ? '' : " ({$match->note})");
         // Bounded by the standalone default rather than by a fraction of a
         // cap, because this tool has no output cap to take a fraction OF: its
         // result is one line ("File updated: <path>"), so nothing here was

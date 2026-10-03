@@ -381,6 +381,7 @@ sugar-crush/tests/Support/ManifestDependencyReachTest.php	0.099	3
 sugar-crush/tests/Providers/SglangProviderServerLimitsTest.php	0.094	35
 sugar-crush/tests/ChatScrollTest.php	0.091	13
 sugar-crush/tests/Tools/BuiltIn/GrepOptionInjectionTest.php	0.087	16
+sugar-crush/tests/Tools/BuiltIn/EditUniformIndentTest.php	0.087	10
 sugar-crush/tests/Tools/BuiltIn/GitignoreAwarenessTest.php	0.085	26
 sugar-crush/tests/Providers/BedrockProviderTest.php	0.085	61
 sugar-crush/tests/Hooks/RuntimePostToolUseBlockTest.php	0.083	7
@@ -427,6 +428,7 @@ sugar-crush/tests/Chat/BudgetCommandTest.php	0.054	48
 sugar-crush/tests/Tools/UndecidableIgnoreRuleNoteTest.php	0.052	6
 sugar-crush/tests/Tools/BuiltIn/UnifiedDiffEquivalenceTest.php	0.052	44
 sugar-crush/tests/Tui/McpPanelTest.php	0.052	17
+sugar-crush/tests/Tools/BuiltIn/EditFailureHintsTest.php	0.052	10
 sugar-crush/tests/MCP/OAuthClientRegistrationTest.php	0.051	46
 sugar-crush/tests/Context/PromptFenceAttributeTagTest.php	0.050	141
 sugar-crush/tests/Agents/AgentDefinitionTest.php	0.050	40
