@@ -206,7 +206,11 @@ final class Chat implements Model
      * this", "the model said this" and "the model called that tool" is the
      * story of an agentic turn and three queues could not preserve it.
      *
-     * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|TokenDelta|ReasoningDelta}>
+     * Since roadmap 1.C-4 an engine turn's {@see \SugarCraft\Crush\Events\StepStarted}
+     * and {@see \SugarCraft\Crush\Events\UsageUpdated} ride it too, for the
+     * status bar; they never reach a {@see BackendToolEventsMsg}.
+     *
+     * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|TokenDelta|ReasoningDelta|\SugarCraft\Crush\Events\StepStarted|\SugarCraft\Crush\Events\UsageUpdated}>
      */
     private readonly \ArrayObject $liveToolEvents;
 
@@ -4622,6 +4626,19 @@ final class Chat implements Model
 
         if ($generation !== $this->generation) {
             return [$this, $more];
+        }
+
+        // Roadmap 1.C-4: the running turn's step and bill, for the status bar
+        // and the Escape arm. Stamped with the generation, so the pair always
+        // describes one turn: the first event of a new turn clears the other.
+        if ($event instanceof \SugarCraft\Crush\Events\StepStarted || $event instanceof \SugarCraft\Crush\Events\UsageUpdated) {
+            $sameTurn = $this->liveStepGeneration === $generation;
+
+            return [$this->mutate([
+                'liveStep' => $event instanceof \SugarCraft\Crush\Events\StepStarted ? $event : ($sameTurn ? $this->liveStep : null),
+                'liveUsage' => $event instanceof \SugarCraft\Crush\Events\UsageUpdated ? $event : ($sameTurn ? $this->liveUsage : null),
+                'liveStepGeneration' => $generation,
+            ]), $more];
         }
 
         if ($text !== null) {
@@ -11902,9 +11919,17 @@ final class Chat implements Model
             // {@see Backend\InteractiveTurn} is the promise to answer every
             // ASK the turn raises, which this Chat keeps through the modal. A
             // plain backend keeps settling its own asks, as before.
+            // Roadmap 1.C-4: the turn's `step` / `usage` frames ride the same
+            // inbox, in turn order, for the live pump to put on the status bar
+            // (the step, its context pressure, the spend so far) — and to tell
+            // the Escape arm this turn can take a soft cancel.
+            $onStep = static function (\SugarCraft\Crush\Events\StepStarted|\SugarCraft\Crush\Events\UsageUpdated $event) use ($inbox, $generation): void {
+                $inbox[] = [$generation, $event];
+            };
+
             $promise = match (true) {
                 $backend instanceof Backend\InteractiveTurn
-                    => $backend->completeInteractive($history, $onToken, $cancellation, $onEvent, $onReasoning),
+                    => $backend->completeInteractive($history, $onToken, $cancellation, $onEvent, $onReasoning, $onStep),
                 $backend instanceof ObservesReasoning
                     => $backend->completeAsync($history, $onToken, $cancellation, $onEvent, $onReasoning),
                 default => $backend->completeAsync($history, $onToken, $cancellation, $onEvent),
@@ -11923,6 +11948,11 @@ final class Chat implements Model
                     if ($entry[1] instanceof \SugarCraft\Crush\Events\PermissionAsked
                         || $entry[1] instanceof \SugarCraft\Crush\Events\PermissionResolved) {
                         $held[] = $entry;
+                    } elseif ($entry[1] instanceof \SugarCraft\Crush\Events\StepStarted
+                        || $entry[1] instanceof \SugarCraft\Crush\Events\UsageUpdated) {
+                        // Live-only (1.C-4): the settled reply carries the
+                        // turn's real usage, and a finished turn has no step.
+                        continue;
                     } else {
                         $rest[] = $entry;
                     }

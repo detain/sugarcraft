@@ -210,6 +210,7 @@ sugar-crush/tests/Tools/BuiltIn/GrepInstructionWiringTest.php	1.132	19
 sugar-crush/tests/Support/ReapsForkedChildrenTraitTest.php	1.114	7
 sugar-crush/tests/Support/ProcessTreeKillAsyncTest.php	1.112	5
 sugar-crush/tests/Cli/RefusalStderrSurfaceTest.php	1.108	4
+sugar-crush/tests/Chat/LiveStepWiringTest.php	1.100	3
 sugar-crush/tests/Cli/ProjectTierRefusalInventoryTest.php	1.095	15
 sugar-crush/tests/Chat/SessionStartHookWireTest.php	1.095	14
 sugar-crush/tests/Integration/UsageWiringTest.php	1.085	43
