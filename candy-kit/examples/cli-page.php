@@ -20,8 +20,8 @@ use SugarCraft\Kit\Theme;
 
 // An explicit theme renders as given; downgrade it to what STDOUT can show
 // so `php examples/cli-page.php | less` gets plain text, not escape bytes.
-// (With NO_COLOR set, candy-core's ColorProfile::detect() answers Ascii
-// before it checks tty-ness, so a pipe still gets bold/faint — no colour.)
+// (tty-ness is checked before NO_COLOR, as in upstream colorprofile: a pipe
+// gets plain text either way; NO_COLOR on a terminal keeps bold/faint only.)
 $theme = Theme::dracula()->withColorProfile(ColorProfile::detect(null, STDOUT));
 
 echo Banner::title('myapp', 'A demo CLI built with CandyKit', $theme) . "\n\n";

@@ -62,19 +62,18 @@ final class Theme
      * passed.
      *
      * The capability comes from candy-core's {@see ColorProfile::detect()},
-     * which owns the whole convention order (NO_COLOR, non-tty output,
-     * CLICOLOR_FORCE / FORCE_COLOR, COLORTERM, TERM, ...), and is applied via
+     * which owns the whole convention order (non-tty output, TERM=dumb,
+     * NO_COLOR, CLICOLOR_FORCE / FORCE_COLOR, COLORTERM, TERM, ...), and is
+     * applied via
      * {@see withColorProfile()}. Detection runs on every call: no result is
      * cached, so a process that changes its environment or output stream is
      * never served a stale answer.
      *
      * Mirrors charmbracelet/fang, which renders through
-     * `colorprofile.Detect(w, os.Environ())`. One known divergence lives in
-     * candy-core, not here: core checks NO_COLOR before tty-ness, so a
-     * non-tty stream with NO_COLOR set resolves to Ascii (bold/faint kept)
-     * where upstream resolves it to NoTTY (no escape bytes at all). The
-     * guarantee that holds either way is "no colour"; this class inherits
-     * the upstream order as soon as core adopts it.
+     * `colorprofile.Detect(w, os.Environ())`: tty-ness is checked before
+     * NO_COLOR, so a non-tty stream resolves to NoTty (no escape bytes at
+     * all) whether or not NO_COLOR is set, and NO_COLOR on a terminal
+     * resolves to Ascii (colour dropped, bold/faint kept).
      *
      * @param array<string,string>|null $env    environment to inspect;
      *                                          null = the process environment
@@ -111,7 +110,8 @@ final class Theme
      * terminal behind it — that is "output is not a tty", so it is detected
      * exactly as any non-tty stream would be, against a throwaway in-memory
      * stream. That keeps candy-core the sole owner of the convention order
-     * (NO_COLOR, CLICOLOR_FORCE / FORCE_COLOR, ...) instead of copying it.
+     * (tty-ness, TERM=dumb, NO_COLOR, CLICOLOR_FORCE / FORCE_COLOR, ...)
+     * instead of copying it.
      *
      * With no STDOUT constant at all (non-CLI SAPI) there is no stream to
      * ask, so tty detection is skipped and the environment decides.

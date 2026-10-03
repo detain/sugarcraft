@@ -43,11 +43,10 @@ echo StatusLine::error('connection refused'), "\n";
   `Theme::detect()` is the `ansi()` palette downgraded to what the output
   can show, via candy-core's `ColorProfile::detect()`: no escape bytes at
   all when STDOUT is not a tty (`myapp --help | less`), colour dropped but
-  bold kept under `NO_COLOR`, full colour forced by `CLICOLOR_FORCE` /
-  `FORCE_COLOR`. Known gap: candy-core checks `NO_COLOR` *before* tty-ness
-  (upstream `colorprofile` checks tty-ness first), so a pipe with
-  `NO_COLOR` set still gets bold/faint SGR — never colour — until that
-  order is fixed in candy-core. **Every presenter called without a theme uses
+  bold kept under `NO_COLOR` on a terminal, full colour forced by
+  `CLICOLOR_FORCE` / `FORCE_COLOR`. As in upstream `colorprofile`, tty-ness
+  is checked before `NO_COLOR`, so a pipe gets plain text whether or not
+  `NO_COLOR` is set. **Every presenter called without a theme uses
   `Theme::detect()`**; an explicitly passed theme is rendered as given —
   apply the same downgrade to any preset with
   `$theme->withColorProfile(ColorProfile::detect(null, STDOUT))`.

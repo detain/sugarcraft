@@ -100,13 +100,12 @@ final class DefaultThemeTest extends TestCase
     }
 
     /**
-     * NO_COLOR on a non-tty stream: never any colour, on every presenter.
+     * NO_COLOR on a non-tty stream: no escape byte at all, on every presenter.
      *
-     * Pins the CURRENT attribute behaviour too. candy-core's
-     * ColorProfile::detect() checks NO_COLOR before tty-ness and so answers
-     * Ascii (bold/faint kept) where upstream charmbracelet/colorprofile
-     * answers NoTTY (no escape bytes). When core adopts the upstream order
-     * this expectation must deliberately change to `$render(Theme::plain())`.
+     * candy-core's ColorProfile::detect() follows charmbracelet/colorprofile:
+     * tty-ness is checked before NO_COLOR, so a pipe resolves NoTty and the
+     * theme renders exactly as Theme::plain(). (It used to check NO_COLOR
+     * first and answer Ascii, which still wrote bold/faint into the pipe.)
      */
     #[DataProvider('presenters')]
     public function testDetectNoColorOnNonTtyStreamDropsColour(\Closure $render): void
@@ -116,33 +115,40 @@ final class DefaultThemeTest extends TestCase
         fclose($pipe);
 
         $out = $render($theme);
-        $this->assertDoesNotMatchRegularExpression('/\x1b\[(?:[0-9;]*;)?(?:3[0-9]|4[0-9]|9[0-7]|10[0-7])(?:[;m])/', $out, 'no colour SGR');
-        $this->assertSame(
-            $render(Theme::ansi()->withColorProfile(ColorProfile::Ascii)),
-            $out,
-            'candy-core ColorProfile::detect() resolves NO_COLOR before tty-ness (Ascii); '
-            . 'once it matches upstream (non-tty => NoTty) expect $render(Theme::plain()) here',
-        );
+        $this->assertStringNotContainsString("\x1b", $out);
+        $this->assertSame($render(Theme::plain()), $out);
     }
 
-    /** Exact bytes of the gap the test above describes, for one presenter. */
-    public function testDetectNoColorOnNonTtyStreamCurrentlyKeepsBold(): void
+    /** Exact bytes for one presenter: no bold survives into the pipe. */
+    public function testDetectNoColorOnNonTtyStreamEmitsPlainText(): void
     {
         $pipe = fopen('php://memory', 'w+');
         $out = StatusLine::success('done', Theme::detect(['NO_COLOR' => '1'], $pipe));
         fclose($pipe);
 
-        $this->assertSame("\x1b[1m✓\x1b[0m done", $out);
+        $this->assertSame('✓ done', $out);
     }
 
-    /** The no-theme fallback goes through detect(): NO_COLOR in the process env applies. */
+    /**
+     * The no-theme fallback goes through detect() against STDOUT with the
+     * process env: NO_COLOR set there never lets colour through.
+     *
+     * Whether emphasis survives depends on STDOUT itself — a terminal with
+     * NO_COLOR resolves Ascii (bold/faint kept), a pipe resolves NoTty (plain)
+     * — and PHPUnit's STDOUT is a tty when run interactively but a pipe in
+     * CI, so the exact bytes are pinned against detect() on the same stream,
+     * and to Theme::plain() whenever that stream is not a terminal.
+     */
     #[DataProvider('presenters')]
     public function testNullThemeHonoursNoColorEnv(\Closure $render): void
     {
         putenv('NO_COLOR=1');
         $out = $render(null);
-        $this->assertSame($render(Theme::ansi()->withColorProfile(ColorProfile::Ascii)), $out);
+        $this->assertSame($render(Theme::detect(null, \STDOUT)), $out);
         $this->assertDoesNotMatchRegularExpression('/\x1b\[(?:3[0-9]|9[0-7]|38;)/', $out, 'no foreground colour SGR');
+        if (!stream_isatty(\STDOUT)) {
+            $this->assertSame($render(Theme::plain()), $out);
+        }
     }
 
     /** ...and FORCE_COLOR in the process env restores the full palette, tty or not. */
