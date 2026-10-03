@@ -80,6 +80,13 @@ final readonly class SglangServerInfo
          * missing key is only an older server that does not report it.
          */
         public bool $reportsToolCallParser,
+        /**
+         * Audit 15b-15: `/model_info`'s `has_image_understanding` - whether
+         * the served model reads image content parts - or null when the
+         * server did not say (an older SGLang). Feeds
+         * {@see SglangProvider::supportsVision()}.
+         */
+        public ?bool $imageUnderstanding = null,
     ) {
     }
 
@@ -94,6 +101,7 @@ final readonly class SglangServerInfo
         ?string $toolCallParser = null,
         ?string $reasoningParser = null,
         bool $reportsToolCallParser = false,
+        ?bool $imageUnderstanding = null,
     ): self {
         return new self(
             self::nonEmptyString($servedModelName),
@@ -102,6 +110,7 @@ final readonly class SglangServerInfo
             self::nonEmptyString($toolCallParser),
             self::nonEmptyString($reasoningParser),
             $reportsToolCallParser || self::nonEmptyString($toolCallParser) !== null,
+            $imageUnderstanding,
         );
     }
 
@@ -143,6 +152,9 @@ final readonly class SglangServerInfo
             self::firstString($modelInfo, $serverInfo, 'tool_call_parser'),
             self::firstString($modelInfo, $serverInfo, 'reasoning_parser'),
             $reportsParser,
+            // A strict bool or nothing: a server that answers some other
+            // shape has not said the model sees images.
+            is_bool($modelInfo['has_image_understanding'] ?? null) ? $modelInfo['has_image_understanding'] : null,
         );
 
         return $info->isEmpty() ? null : $info;
@@ -247,7 +259,8 @@ final readonly class SglangServerInfo
             && $this->maxReqInputLen === null
             && $this->toolCallParser === null
             && $this->reasoningParser === null
-            && !$this->reportsToolCallParser;
+            && !$this->reportsToolCallParser
+            && $this->imageUnderstanding === null;
     }
 
     /**

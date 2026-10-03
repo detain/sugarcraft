@@ -365,6 +365,9 @@ final class UsageWiringTest extends TestCase
             'withUiOnly' => $base->withUiOnly(),
             // The loop guard's turn-ending verdict, the third harness stop.
             'withLoopGuardStoppedBy' => $base->withLoopGuardStoppedBy('probe'),
+            // Audit 15b-15: the attachment-degradation report rides the same
+            // result frame, so it must not cost the turn its bill either.
+            'withAttachmentNotice' => $base->withAttachmentNotice('probe'),
         ];
 
         $reflected = [];

@@ -368,7 +368,9 @@ final readonly class OpenAIProvider implements ProviderInterface
     {
         return array_map(function (Message $msg) {
             return match (true) {
-                $msg instanceof UserMessage => ['role' => 'user', 'content' => $msg->content()],
+                // Audit 15b-15: inlined files, plus image_url parts when an
+                // image was attached (only ever handed to a vision provider).
+                $msg instanceof UserMessage => ['role' => 'user', 'content' => AttachmentEncoding::openAiContent($msg)],
                 $msg instanceof AssistantMessage => array_filter([
                     'role' => 'assistant',
                     'content' => $msg->content(),

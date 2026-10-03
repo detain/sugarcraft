@@ -629,6 +629,13 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
          * @var (\Closure(): ?SglangServerInfo)|null
          */
         private ?\Closure $serverInfoLoader = null,
+        /**
+         * Audit 15b-15: the `sglang` provider block's `supportsVision` key -
+         * true/false overrides what discovery says, null (the default) defers
+         * to {@see SglangServerInfo::$imageUnderstanding}. See
+         * {@see supportsVision()}.
+         */
+        private ?bool $supportsVision = null,
     ) {
         if ($this->reasoningEffort !== null) {
             self::validatedReasoningEffort($this->reasoningEffort, 'provider config');
@@ -655,6 +662,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
         array $extraTemplateKwargs = [],
         ?string $sessionAffinityId = null,
         bool $discoverServerInfo = false,
+        ?bool $supportsVision = null,
     ): self {
         $headers = [
             'Content-Type' => 'application/json',
@@ -691,6 +699,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
             $extraTemplateKwargs,
             $sessionAffinityId,
             $serverInfoLoader,
+            $supportsVision,
         );
     }
 
@@ -948,9 +957,25 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
         return true;
     }
 
+    /**
+     * Audit 15b-15: whether an attached image may go out as an `image_url`
+     * part. The provider block's `supportsVision` wins when set; otherwise the
+     * SERVER answers - `/model_info`'s `has_image_understanding`, read by the
+     * same memoised discovery as the context window - and a server that did
+     * not say (discovery off, failed, or an older SGLang) counts as no
+     * vision. Erring that way costs an image its pixels, never the turn: the
+     * image becomes a named text placeholder and the user is told
+     * ({@see \SugarCraft\Crush\Backend\EngineBackend::toTypedMessages()}),
+     * where a guessed "yes" would send a text-only model a part its chat
+     * template rejects.
+     */
     public function supportsVision(): bool
     {
-        return false;
+        if ($this->supportsVision !== null) {
+            return $this->supportsVision;
+        }
+
+        return $this->serverInfo()?->imageUnderstanding === true;
     }
 
     /**
@@ -2295,7 +2320,9 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
         // exactly as before.
         $rows = array_map(function (Message $msg) {
             return match (true) {
-                $msg instanceof UserMessage => ['role' => 'user', 'content' => $msg->content()],
+                // Audit 15b-15: inlined files, plus image_url parts when an
+                // image was attached (only ever handed to a vision provider).
+                $msg instanceof UserMessage => ['role' => 'user', 'content' => AttachmentEncoding::openAiContent($msg)],
                 $msg instanceof AssistantMessage => array_filter([
                     'role' => 'assistant',
                     'content' => $msg->content(),

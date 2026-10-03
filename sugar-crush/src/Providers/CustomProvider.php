@@ -105,6 +105,17 @@ final readonly class CustomProvider implements ProviderInterface
          * @var array<string, mixed>
          */
         private array $extraBody = [],
+        /**
+         * Audit 15b-15: whether this endpoint's model reads `image_url`
+         * content parts. Off by default because a custom server is an unknown
+         * model and a strict text-only one answers an image part with a 400;
+         * the `custom` provider block's `supportsVision` key turns it on, and
+         * the `anthropic` type (whose OpenAI-compatibility endpoint reads
+         * base64 `image_url` parts) is built with it on. When false, an
+         * attached image reaches the model as a named text placeholder and the
+         * user gets a transcript notice ({@see \SugarCraft\Crush\Backend\EngineBackend::toTypedMessages()}).
+         */
+        private bool $supportsVision = false,
     ) {
         foreach (array_keys($extraBody) as $key) {
             if (!is_string($key) || $key === '') {
@@ -143,6 +154,7 @@ final readonly class CustomProvider implements ProviderInterface
         bool $supportsFunctionCalling = true,
         ?string $sessionAffinityId = null,
         array $extraBody = [],
+        bool $supportsVision = false,
     ): self {
         $headers = [
             'Content-Type' => 'application/json',
@@ -173,6 +185,7 @@ final readonly class CustomProvider implements ProviderInterface
             supportsFunctionCalling: $supportsFunctionCalling,
             sessionAffinityId: $sessionAffinityId,
             extraBody: $extraBody,
+            supportsVision: $supportsVision,
         );
     }
 
@@ -213,7 +226,7 @@ final readonly class CustomProvider implements ProviderInterface
 
     public function supportsVision(): bool
     {
-        return false;
+        return $this->supportsVision;
     }
 
     public function supportsJsonSchema(): bool
@@ -627,7 +640,9 @@ final readonly class CustomProvider implements ProviderInterface
     {
         return array_map(function (Message $msg) {
             return match (true) {
-                $msg instanceof UserMessage => ['role' => 'user', 'content' => $msg->content()],
+                // Audit 15b-15: inlined files, plus image_url parts when an
+                // image was attached (only ever handed to a vision provider).
+                $msg instanceof UserMessage => ['role' => 'user', 'content' => AttachmentEncoding::openAiContent($msg)],
                 $msg instanceof AssistantMessage => array_filter([
                     'role' => 'assistant',
                     'content' => $msg->content(),

@@ -50,6 +50,88 @@ final readonly class UserMessage implements Message
         return $this->withAttachment(new Attachment($path, AttachmentType::Image));
     }
 
+    /**
+     * The text a provider sends for this turn: the prompt, then every FILE
+     * attachment inlined as a `<file>` block (audit 15b-15).
+     *
+     * Files travel as text on every provider - none of the wire formats this
+     * app speaks has a portable "file" part, and an `@src/x.php` mention means
+     * "read this", which is what the inlined snapshot lets the model do. A
+     * file attachment with no snapshot (built from a bare path, or persisted
+     * before snapshots existed) is NAMED rather than dropped, so the model is
+     * never told about a file it was silently not shown.
+     *
+     * Images are not part of this text; a vision-capable encoder sends
+     * {@see images()} as their own content parts, and a text-only one uses
+     * {@see textOnly()}.
+     */
+    public function wireText(): string
+    {
+        $blocks = [];
+        foreach ($this->attachments as $attachment) {
+            $path = self::attributeValue($attachment->path);
+            if ($attachment->type === AttachmentType::Image) {
+                // An image with no captured bytes can ride no wire at all, so
+                // it is named here, where EVERY encoder reads.
+                if (!self::isSendableImage($attachment)) {
+                    $blocks[] = "[Attached image {$path} could not be included: its bytes were not captured.]";
+                }
+
+                continue;
+            }
+            $blocks[] = $attachment->data === null
+                ? "[Attached file {$path} could not be included: its contents were not captured.]"
+                : "<file path=\"{$path}\">\n" . rtrim($attachment->data, "\n") . "\n</file>";
+        }
+
+        if ($blocks === []) {
+            return $this->content;
+        }
+
+        return ($this->content === '' ? '' : $this->content . "\n\n") . implode("\n\n", $blocks);
+    }
+
+    /**
+     * {@see wireText()} plus one line per image, for an encoder that can only
+     * send text. The NEVER-SILENT rule of audit 15b-15 at the last seam: an
+     * image reaching a text-only wire is named in the text it does send.
+     */
+    public function textOnly(): string
+    {
+        $text = $this->wireText();
+        foreach ($this->attachments as $attachment) {
+            if (self::isSendableImage($attachment)) {
+                $line = '[Image attachment ' . self::attributeValue($attachment->path)
+                    . ' was not sent: this request carries text only.]';
+                $text = $text === '' ? $line : $text . "\n\n" . $line;
+            }
+        }
+
+        return $text;
+    }
+
+    /**
+     * The image attachments whose bytes were captured, in attach order - what
+     * a vision-capable encoder sends as image parts.
+     *
+     * @return list<Attachment>
+     */
+    public function images(): array
+    {
+        return array_values(array_filter(
+            $this->attachments,
+            self::isSendableImage(...),
+        ));
+    }
+
+    private static function isSendableImage(Attachment $a): bool
+    {
+        return $a->type === AttachmentType::Image
+            && $a->data !== null
+            && $a->data !== ''
+            && $a->mimeType !== null;
+    }
+
     public function toArray(): array
     {
         $array = ['role' => 'user', 'content' => $this->content];
@@ -64,5 +146,14 @@ final readonly class UserMessage implements Message
         }
 
         return $array;
+    }
+
+    /**
+     * A path as it is quoted inside the wire text: one line, no `"` to break
+     * the `<file path="…">` attribute out of.
+     */
+    private static function attributeValue(string $path): string
+    {
+        return str_replace(['"', "\r", "\n"], ["'", ' ', ' '], $path);
     }
 }

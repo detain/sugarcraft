@@ -156,6 +156,20 @@ final class Message implements \JsonSerializable
          * model's no-tools summary to mention. Never part of {@see toWire()}.
          */
         public readonly ?string $loopGuardStoppedBy = null,
+        /**
+         * Audit 15b-15: what happened to an attachment of the turn's own
+         * prompt that could NOT reach the model as attached - an image sent to
+         * a provider without vision went as a text placeholder - or null when
+         * every attachment went out as attached. Decided where the request is
+         * built ({@see \SugarCraft\Crush\Backend\EngineBackend::toTypedMessages()},
+         * in the forked turn child), carried across the fork result frame on
+         * the same rule as $loopGuardStoppedBy, and turned into ONE transcript
+         * notice by the settle arm in {@see \SugarCraft\Crush\Chat}, so a
+         * degraded attachment is never a silent drop. Transport only: never
+         * part of {@see toWire()} and not persisted (the notice row it becomes
+         * is).
+         */
+        public readonly ?string $attachmentNotice = null,
     ) {}
 
     public static function user(string $content, ?int $now = null): self
@@ -346,13 +360,17 @@ final class Message implements \JsonSerializable
         return $flattened;
     }
 
-    public function attachFile(string $path): self
+    /**
+     * Attach a file. `$contents` is the snapshot {@see Attachment::$data} the
+     * wire inlines; see {@see Attachment} for why it is captured once.
+     */
+    public function attachFile(string $path, ?string $contents = null): self
     {
         return new self(
             role: $this->role,
             content: $this->content,
             createdAt: $this->createdAt,
-            attachments: [...$this->attachments, new Attachment($path, AttachmentType::File)],
+            attachments: [...$this->attachments, new Attachment($path, AttachmentType::File, $contents)],
             toolCalls: $this->toolCalls,
             toolResults: $this->toolResults,
             pendingToolCallId: $this->pendingToolCallId,
@@ -365,16 +383,21 @@ final class Message implements \JsonSerializable
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
+            attachmentNotice: $this->attachmentNotice,
         );
     }
 
-    public function attachImage(string $path): self
+    /**
+     * Attach an image. `$bytes`/`$mimeType` are the snapshot a vision-capable
+     * provider is sent ({@see \SugarCraft\Crush\Providers\AttachmentEncoding}).
+     */
+    public function attachImage(string $path, ?string $bytes = null, ?string $mimeType = null): self
     {
         return new self(
             role: $this->role,
             content: $this->content,
             createdAt: $this->createdAt,
-            attachments: [...$this->attachments, new Attachment($path, AttachmentType::Image)],
+            attachments: [...$this->attachments, new Attachment($path, AttachmentType::Image, $bytes, $mimeType)],
             toolCalls: $this->toolCalls,
             toolResults: $this->toolResults,
             pendingToolCallId: $this->pendingToolCallId,
@@ -387,6 +410,7 @@ final class Message implements \JsonSerializable
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
+            attachmentNotice: $this->attachmentNotice,
         );
     }
 
@@ -414,6 +438,7 @@ final class Message implements \JsonSerializable
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
+            attachmentNotice: $this->attachmentNotice,
         );
     }
 
@@ -444,6 +469,7 @@ final class Message implements \JsonSerializable
             pendingToolArguments: [],
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
+            attachmentNotice: $this->attachmentNotice,
         );
     }
 
@@ -474,6 +500,7 @@ final class Message implements \JsonSerializable
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
+            attachmentNotice: $this->attachmentNotice,
         );
     }
 
@@ -503,6 +530,7 @@ final class Message implements \JsonSerializable
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
+            attachmentNotice: $this->attachmentNotice,
         );
     }
 
@@ -533,6 +561,7 @@ final class Message implements \JsonSerializable
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
+            attachmentNotice: $this->attachmentNotice,
         );
     }
 
@@ -562,6 +591,7 @@ final class Message implements \JsonSerializable
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
+            attachmentNotice: $this->attachmentNotice,
         );
     }
 
@@ -590,6 +620,7 @@ final class Message implements \JsonSerializable
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
+            attachmentNotice: $this->attachmentNotice,
         );
     }
 
@@ -618,6 +649,7 @@ final class Message implements \JsonSerializable
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
+            attachmentNotice: $this->attachmentNotice,
         );
     }
 
@@ -647,6 +679,36 @@ final class Message implements \JsonSerializable
             pendingToolArguments: $this->pendingToolArguments,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $toolName === '' ? null : $toolName,
+            attachmentNotice: $this->attachmentNotice,
+        );
+    }
+
+    /**
+     * Attach (or clear, via null) the attachment-degradation report - see
+     * $attachmentNotice's docblock (audit 15b-15). Written by
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::complete()} and
+     * carried across the fork result frame beside $loopGuardStoppedBy.
+     */
+    public function withAttachmentNotice(?string $notice): self
+    {
+        return new self(
+            role: $this->role,
+            content: $this->content,
+            createdAt: $this->createdAt,
+            attachments: $this->attachments,
+            toolCalls: $this->toolCalls,
+            toolResults: $this->toolResults,
+            pendingToolCallId: $this->pendingToolCallId,
+            reasoning: $this->reasoning,
+            imageBytes: $this->imageBytes,
+            imageProtocol: $this->imageProtocol,
+            usage: $this->usage,
+            lengthStopped: $this->lengthStopped,
+            stepsTruncated: $this->stepsTruncated,
+            pendingToolArguments: $this->pendingToolArguments,
+            uiOnly: $this->uiOnly,
+            loopGuardStoppedBy: $this->loopGuardStoppedBy,
+            attachmentNotice: $notice === '' ? null : $notice,
         );
     }
 
@@ -711,7 +773,17 @@ final class Message implements \JsonSerializable
             // JsonSerializable itself, and a checkpoint is no place to throw.
             'attachments' => array_map(
                 static fn(mixed $a): mixed => $a instanceof Attachment
-                    ? ['path' => $a->path, 'type' => $a->type->name]
+                    ? [
+                        'path' => $a->path,
+                        'type' => $a->type->name,
+                        // Audit 15b-15: the snapshot the wire is built from.
+                        // base64 for the same reason imageBytesBase64 is - an
+                        // image is binary, and a file snapshot may hold bytes
+                        // json_encode() would refuse - and only when present,
+                        // so a path-only row persists exactly as it always did.
+                        ...($a->data === null ? [] : ['dataBase64' => base64_encode($a->data)]),
+                        ...($a->mimeType === null ? [] : ['mimeType' => $a->mimeType]),
+                    ]
                     : $a,
                 $this->attachments,
             ),
@@ -793,7 +865,12 @@ final class Message implements \JsonSerializable
                 default => null,
             };
             if ($type !== null) {
-                $attachments[] = new Attachment($a['path'], $type);
+                $attachments[] = new Attachment(
+                    $a['path'],
+                    $type,
+                    $bytes($a['dataBase64'] ?? null),
+                    $string($a['mimeType'] ?? null),
+                );
             }
         }
 

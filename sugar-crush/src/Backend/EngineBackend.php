@@ -27,6 +27,8 @@ use SugarCraft\Crush\Hooks\BuiltIn\RepeatCallCountHook;
 use SugarCraft\Crush\Hooks\BuiltIn\RepeatCallGuardHook;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
+use SugarCraft\Crush\Attachment;
+use SugarCraft\Crush\AttachmentType;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\Message as TypedMessage;
@@ -974,8 +976,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onHeartbeat = null): Message
     {
         $transcript = [];
+        $attachmentNotice = null;
+        $typed = $this->toTypedMessages($history, $attachmentNotice);
 
-        return $this->runTurn($this->toTypedMessages($history), $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript);
+        // Audit 15b-15: an attachment the provider could not carry is reported
+        // on the reply itself, so it reaches Chat's settle arm on BOTH paths -
+        // returned here in-process, or across the fork's result frame
+        // ({@see runCompleteInChild()}'s `attachmentNotice` key).
+        return $this->runTurn($typed, $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript)
+            ->withAttachmentNotice($attachmentNotice);
     }
 
     /**
@@ -2381,6 +2390,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 // Plain ?string on the same rule; a frame without it settles
                 // "the guard did not end this turn".
                 'loopGuardStoppedBy' => $message->loopGuardStoppedBy,
+                // Audit 15b-15: plain ?string on the same rule; a frame
+                // without it settles "every attachment went out as attached".
+                'attachmentNotice' => $message->attachmentNotice,
             ];
         } catch (\Throwable $e) {
             $payload = ['kind' => 'result', 'ok' => false, 'error' => $e->getMessage()];
@@ -2578,6 +2590,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 // F2: strict `=== true`, same pre-key tolerance as above.
                 ->withStepsTruncated(($data['stepsTruncated'] ?? false) === true)
                 ->withLoopGuardStoppedBy(is_string($data['loopGuardStoppedBy'] ?? null) ? $data['loopGuardStoppedBy'] : null)
+                // Audit 15b-15: same ?string rule as the line above.
+                ->withAttachmentNotice(is_string($data['attachmentNotice'] ?? null) ? $data['attachmentNotice'] : null)
         );
     }
 
@@ -2823,20 +2837,105 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * backend a raw transcript - an embedder, a test, a future dispatch site -
      * still cannot put `/help`'s output or a queued-prompt notice on the wire.
      *
+     * ATTACHMENTS REACH THE WIRE HERE (audit 15b-15). Every attachment a
+     * user row carries is mapped onto the typed message with
+     * {@see UserMessage::withAttachment()}; the provider's encoder then sends
+     * files as inlined text and images as its own image part
+     * ({@see \SugarCraft\Crush\Providers\AttachmentEncoding}). The one
+     * decision made HERE rather than in each encoder is whether an image may
+     * go as an image at all: a provider whose
+     * {@see ProviderInterface::supportsVision()} answers false is never handed
+     * one. Its image becomes a named text placeholder on that turn - so the
+     * model knows something was attached and the conversation still reads -
+     * and, for the turn's OWN prompt (the last user row; older turns were
+     * reported when they were sent), `$attachmentNotice` says so for the
+     * user. Never a silent drop.
+     *
+     * The capability is asked lazily, once, and only when an image is
+     * present: SGLang answers it from the server's `/model_info`, and a turn
+     * with no image has no reason to wait on that.
+     *
      * @param array<int, Message> $history
      * @return array<int, TypedMessage>
      */
-    private function toTypedMessages(array $history): array
+    private function toTypedMessages(array $history, ?string &$attachmentNotice = null): array
     {
+        $attachmentNotice = null;
+        $visible = Message::agentVisible($history);
+        $lastUser = null;
+        foreach ($visible as $i => $msg) {
+            if ($msg->role->value === 'user') {
+                $lastUser = $i;
+            }
+        }
+
+        $vision = null;
         $out = [];
-        foreach (Message::agentVisible($history) as $msg) {
-            $out[] = match ($msg->role->value) {
-                'user' => new UserMessage($msg->content),
-                'assistant' => new AssistantMessage($msg->content),
-                default => new SystemMessage($msg->content),
-            };
+        foreach ($visible as $i => $msg) {
+            if ($msg->role->value === 'user') {
+                $rowNotice = null;
+                $out[] = $this->typedUserMessage($msg, $vision, $rowNotice);
+                if ($i === $lastUser) {
+                    $attachmentNotice = $rowNotice;
+                }
+
+                continue;
+            }
+            $out[] = $msg->role->value === 'assistant'
+                ? new AssistantMessage($msg->content)
+                : new SystemMessage($msg->content);
         }
 
         return $out;
+    }
+
+    /**
+     * One user row as a {@see UserMessage}, its attachments carried - see
+     * {@see toTypedMessages()}.
+     */
+    private function typedUserMessage(Message $msg, ?bool &$vision, ?string &$notice): UserMessage
+    {
+        $content = $msg->content;
+        $kept = [];
+        $withheld = [];
+        foreach ($msg->attachments as $attachment) {
+            if (!$attachment instanceof Attachment) {
+                continue;
+            }
+            if ($attachment->type === AttachmentType::Image && $attachment->data !== null) {
+                $vision ??= $this->provider->supportsVision();
+                if (!$vision) {
+                    // One line however the file was named: the notice is a
+                    // transcript row, and a name is whatever a filename holds.
+                    $withheld[] = trim((string) preg_replace('/[\p{C}\s]+/u', ' ', $attachment->name())) ?: '(unnamed)';
+                    $content .= ($content === '' ? '' : "\n\n") . '[Image attachment '
+                        . str_replace(['"', "\r", "\n"], ["'", ' ', ' '], $attachment->path)
+                        . ' was not sent: the active model does not accept images.]';
+
+                    continue;
+                }
+            }
+            $kept[] = $attachment;
+        }
+
+        $typed = new UserMessage($content);
+        foreach ($kept as $attachment) {
+            $typed = $typed->withAttachment($attachment);
+        }
+
+        if ($withheld !== []) {
+            $notice = sprintf(
+                '%s %s not sent: %s does not accept images, so the model was told %s attached but cannot see %s. '
+                . 'Switch to a vision-capable model to send %s.',
+                count($withheld) === 1 ? 'Image' : 'Images',
+                implode(', ', $withheld) . (count($withheld) === 1 ? ' was' : ' were'),
+                $this->provider->name() . ' (' . ($this->servedModel() ?? $this->model) . ')',
+                count($withheld) === 1 ? 'it was' : 'they were',
+                count($withheld) === 1 ? 'it' : 'them',
+                count($withheld) === 1 ? 'it' : 'them',
+            );
+        }
+
+        return $typed;
     }
 }

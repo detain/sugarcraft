@@ -335,9 +335,15 @@ final class VertexProviderTest extends TestCase
         $this->assertFalse($provider->supportsFunctionCalling());
     }
 
-    public function testSupportsVisionReturnsFalse(): void
+    /**
+     * Audit 15b-15: Claude and Gemini read images (image blocks / inlineData
+     * parts); the legacy PaLM envelope does not, and gets them as text.
+     */
+    public function testSupportsVisionOnTheClaudeAndGeminiArmsOnly(): void
     {
-        $this->assertFalse($this->providerWithPredictor()->supportsVision());
+        $this->assertTrue($this->providerWithPredictor()->supportsVision());
+        $this->assertTrue($this->providerWithPredictor([], $unused, self::GEMINI_MODEL)->supportsVision());
+        $this->assertFalse($this->providerWithPredictor([], $unused, self::LEGACY_GOOGLE_MODEL)->supportsVision());
     }
 
     public function testSupportsJsonSchemaReturnsFalse(): void

@@ -814,6 +814,10 @@ final readonly class ProviderFactory
             $client,
             true,
             false,
+            // Audit 15b-15: Anthropic's OpenAI-compatibility endpoint reads
+            // base64 `image_url` parts, and every current Claude model has
+            // vision, so an attached image goes out as an image.
+            supportsVision: true,
         );
     }
 
@@ -902,7 +906,43 @@ final readonly class ProviderFactory
             // transcription of it. On by default; `"discoverServerInfo":
             // false` turns it off for a proxy that blocks the root endpoints.
             discoverServerInfo: $discover,
+            // Audit 15b-15: null leaves the answer to discovery's
+            // `has_image_understanding`; the block's key overrides it.
+            supportsVision: self::configuredSupportsVision($config['supportsVision'] ?? null),
         );
+    }
+
+    /**
+     * Normalises a provider block's optional `supportsVision` flag (audit
+     * 15b-15): null when the block does not say, so the provider's own answer
+     * stands (SGLang's discovered `has_image_understanding`, Custom's off).
+     *
+     * Absent, null and `''` (an unset `${VAR}` placeholder) all mean "not
+     * said"; a JSON boolean is taken as is, and the string spellings
+     * {@see configuredDiscoverServerInfo()} accepts are accepted too. Anything
+     * else throws, so a typo cannot silently leave images off - or on.
+     */
+    private static function configuredSupportsVision(mixed $value): ?bool
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_string($value) || is_int($value)) {
+            $parsed = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($parsed !== null) {
+                return $parsed;
+            }
+        }
+
+        throw new \InvalidArgumentException(sprintf(
+            'supportsVision must be true or false, got %s',
+            is_scalar($value) ? var_export($value, true) : get_debug_type($value),
+        ));
     }
 
     /**
@@ -1258,6 +1298,8 @@ final readonly class ProviderFactory
             // map wins; else the user-tier setting, which a project may not
             // set - a field such as `n` multiplies what every request bills.
             extraBody: self::configuredExtraBody($config['extraBody'] ?? self::userTierSetting('extraBody')),
+            // Audit 15b-15: opt-in, per provider block - see the constructor.
+            supportsVision: self::configuredSupportsVision($config['supportsVision'] ?? null) ?? false,
         );
     }
 }

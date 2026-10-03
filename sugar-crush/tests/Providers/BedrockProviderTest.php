@@ -95,15 +95,46 @@ final class BedrockProviderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // 5. supportsVision() returns false
+    // 5. supportsVision() follows the model family (audit 15b-15)
     // -------------------------------------------------------------------------
 
-    public function testSupportsVisionReturnsFalse(): void
+    /**
+     * The default model is a Claude 4.6 inference profile, and every Claude
+     * from the 3 generation on reads Converse `image` blocks.
+     */
+    public function testSupportsVisionForTheDefaultClaudeModel(): void
     {
         $client = $this->createMock(BedrockRuntimeClient::class);
         $provider = new BedrockProvider($client);
 
-        $this->assertFalse($provider->supportsVision());
+        $this->assertTrue($provider->supportsVision());
+    }
+
+    /**
+     * A text-only family must answer false, or toTypedMessages() would hand
+     * it an image block Converse rejects with a ValidationException.
+     *
+     * @return iterable<string, array{0: string, 1: bool}>
+     */
+    public static function visionFamilies(): iterable
+    {
+        yield 'claude 3 haiku' => ['anthropic.claude-3-haiku-20240307-v1:0', true];
+        yield 'claude sonnet 4.5 profile' => ['us.anthropic.claude-sonnet-4-5-20250929-v1:0', true];
+        yield 'claude opus arn' => ['arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-opus-4-1-20250805-v1:0', true];
+        yield 'nova pro' => ['amazon.nova-pro-v1:0', true];
+        yield 'nova micro' => ['amazon.nova-micro-v1:0', false];
+        yield 'claude v2' => ['anthropic.claude-v2:1', false];
+        yield 'claude instant' => ['anthropic.claude-instant-v1', false];
+        yield 'llama text' => ['meta.llama3-70b-instruct-v1:0', false];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('visionFamilies')]
+    public function testSupportsVisionFollowsTheModelFamily(string $model, bool $vision): void
+    {
+        $client = $this->createMock(BedrockRuntimeClient::class);
+        $provider = new BedrockProvider($client, defaultModel: $model);
+
+        $this->assertSame($vision, $provider->supportsVision());
     }
 
     // -------------------------------------------------------------------------

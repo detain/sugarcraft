@@ -498,7 +498,8 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
 
         foreach ($messages as $msg) {
             $parts[] = match (true) {
-                $msg instanceof UserMessage => "User: {$msg->content()}",
+                // Audit 15b-15: the CLI prompt is text only - files inlined, images named.
+                $msg instanceof UserMessage => "User: {$msg->textOnly()}",
                 $msg instanceof AssistantMessage => "Assistant: {$msg->content()}",
                 $msg instanceof SystemMessage => "System: {$msg->content()}",
                 $msg instanceof ToolResultMessage => "Tool Result: {$msg->content()}",

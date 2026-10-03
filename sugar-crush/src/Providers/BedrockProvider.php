@@ -382,9 +382,23 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
         return false; // Depends on model
     }
 
+    /**
+     * Audit 15b-15: whether Converse may be sent this model an `image` block
+     * ({@see AttachmentEncoding::bedrockBlocks()}). Every Claude from the 3
+     * generation on reads images, as do Nova Lite/Pro/Premier; Claude 2,
+     * Instant, Nova Micro and the text-only families do not, and a Converse
+     * image block to one of those is a ValidationException that fails the
+     * whole turn. So the rule is a family allow-list over the same
+     * normalised id {@see family()} prices by, and anything else gets the
+     * image as a named text placeholder plus a transcript notice
+     * ({@see \SugarCraft\Crush\Backend\EngineBackend::toTypedMessages()}).
+     */
     public function supportsVision(): bool
     {
-        return false;
+        $family = self::family($this->defaultModel);
+
+        return preg_match('/^anthropic\.claude-(?:3|opus|sonnet|haiku|fable)-/', $family) === 1
+            || preg_match('/^amazon\.nova-(?:lite|pro|premier)/', $family) === 1;
     }
 
     public function supportsJsonSchema(): bool
@@ -719,7 +733,10 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
 
             return [
                 'role' => $role,
-                'content' => [['text' => $msg->content()]],
+                // Audit 15b-15: a user turn's inlined files and image blocks.
+                'content' => $msg instanceof UserMessage
+                    ? AttachmentEncoding::bedrockBlocks($msg)
+                    : [['text' => $msg->content()]],
             ];
         }, $messages);
     }
@@ -757,9 +774,10 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
         $turns = [];
 
         foreach ($this->formatMessages($this->withoutSystemMessages($messages)) as $row) {
+            // An image block has no `text`; it is never blank.
             $blocks = array_values(array_filter(
                 $row['content'],
-                static fn (array $block): bool => trim($block['text']) !== '',
+                static fn (array $block): bool => !isset($block['text']) || trim($block['text']) !== '',
             ));
 
             if ($blocks === []) {

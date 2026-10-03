@@ -431,12 +431,16 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
         return $this->isAnthropicModel($this->defaultModel);
     }
 
+    /**
+     * Audit 15b-15: Claude and Gemini both read images, as `image` blocks
+     * ({@see anthropicBlocks()}) and `inlineData` parts
+     * ({@see formatGeminiContents()}) - the request-side image block this used
+     * to wait for. The legacy PaLM envelope does not, and gets the attachment
+     * as named text instead.
+     */
     public function supportsVision(): bool
     {
-        // Claude-on-Vertex accepts image blocks, but no Message in this
-        // library carries image bytes into a request, so nothing would ever
-        // build one. Stays false until a request-side image block exists.
-        return false;
+        return $this->isAnthropicModel($this->defaultModel) || $this->isGeminiModel($this->defaultModel);
     }
 
     public function supportsJsonSchema(): bool
@@ -1128,6 +1132,11 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
             }
 
             return [$block];
+        }
+
+        // Audit 15b-15: a user turn's inlined files and its image blocks.
+        if ($msg instanceof UserMessage) {
+            return AttachmentEncoding::anthropicBlocks($msg);
         }
 
         $blocks = [];
@@ -2022,14 +2031,17 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
                 continue;
             }
 
-            $text = $msg->content();
-            if ($text === '') {
+            // Audit 15b-15: a user turn's inlined files and inlineData images.
+            $parts = $msg instanceof UserMessage
+                ? AttachmentEncoding::geminiParts($msg)
+                : ($msg->content() === '' ? [] : [['text' => $msg->content()]]);
+            if ($parts === []) {
                 continue;
             }
 
             $contents[] = [
                 'role' => $msg instanceof AssistantMessage ? 'model' : 'user',
-                'parts' => [['text' => $text]],
+                'parts' => $parts,
             ];
         }
 
@@ -2579,7 +2591,9 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
                     $msg instanceof AssistantMessage => 'assistant',
                     default => 'user',
                 },
-                'content' => $msg->content(),
+                // Audit 15b-15: the legacy PaLM envelope is text only, so an
+                // attachment rides as text - files inlined, images named.
+                'content' => $msg instanceof UserMessage ? $msg->textOnly() : $msg->content(),
             ];
         }, $messages);
     }
