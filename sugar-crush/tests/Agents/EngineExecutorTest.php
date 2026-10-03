@@ -11,6 +11,7 @@ use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\EngineExecutor;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Context\TurnContextBlock;
 use SugarCraft\Crush\Messages\Message as TypedMessage;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CompleteResponse;
@@ -432,7 +433,12 @@ final class EngineExecutorTest extends TestCase
      */
     private static function turns(CompleteRequest $request): array
     {
-        return array_map(static fn (TypedMessage $m): array => [$m->role(), $m->content()], $request->messages);
+        // The `<turn-context>` row (step 1.A-1) carries the host checkout's
+        // git state; it is not part of the conversation these tests pin.
+        return array_values(array_map(
+            static fn (TypedMessage $m): array => [$m->role(), $m->content()],
+            array_filter($request->messages, static fn (TypedMessage $m): bool => !TurnContextBlock::isTurnContext($m)),
+        ));
     }
 
     /**

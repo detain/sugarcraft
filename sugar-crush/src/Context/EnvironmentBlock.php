@@ -128,6 +128,22 @@ use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
  * The full line set is enumerated on {@see render()}, which is the method that
  * emits it — one list, in one place, so the two cannot drift apart again.
  *
+ * STATIC AND VOLATILE HALVES (step 1.A-1)
+ * ---------------------------------------
+ * Being the LAST layer bounded the blast radius but did not remove it: every
+ * write still re-prefilled the `<env>` tail of message 0, and on SGLang every
+ * byte after the first differing one — the whole conversation — with it. The
+ * block now splits along the line that matters for caching. The STATIC half
+ * (the seven lines: cwd, git-repo flag, platform, OS, PHP, model, date) is
+ * frozen at capture or constant, and stays in the system prompt through the
+ * static-only copy {@see withVolatile()} derives. The VOLATILE half — the git
+ * section, {@see renderVolatile()} — travels as the appended user-role
+ * `<turn-context>` row built by {@see TurnContextBlock}, so a write changes
+ * bytes at the TAIL of the request instead of inside message 0. The full
+ * block ({@see render()} in the default mode) is unchanged for the Agent path
+ * and every direct caller. Everything said above about live polling, caps and
+ * the write signal applies to the volatile half unchanged.
+ *
  * AS A PROMPT SECTION (P5.S2)
  * ---------------------------
  * This class implements {@see PromptSection} directly: `Runtime`'s memoized
@@ -697,6 +713,10 @@ final readonly class EnvironmentBlock implements PromptSection
      *                                               caller explicitly derives FALSE. The signal and
      *                                               the caller's state machine are documented on
      *                                               {@see withWriteSinceLastRender()}.
+     * @param bool               $volatile           Whether {@see render()} appends the git section.
+     *                                               Defaults to TRUE (the full block); Runtime
+     *                                               derives the static-only copy for the system
+     *                                               prompt — see {@see withVolatile()}.
      */
     public function __construct(
         private string $cwd,
@@ -704,6 +724,7 @@ final readonly class EnvironmentBlock implements PromptSection
         private ?DateTimeImmutable $now = null,
         private ?string $platform = null,
         private bool $writeSinceLastRender = true,
+        private bool $volatile = true,
     ) {}
 
     /**
@@ -787,7 +808,7 @@ final readonly class EnvironmentBlock implements PromptSection
      */
     public function withWriteSinceLastRender(bool $writeSinceLastRender): self
     {
-        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $writeSinceLastRender);
+        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $writeSinceLastRender, $this->volatile);
         if (isset($this->enclosingRepo)) {
             $copy->enclosingRepo = $this->enclosingRepo;
         }
@@ -835,6 +856,80 @@ final readonly class EnvironmentBlock implements PromptSection
      * application has no multi-root concept for such a line to describe.
      */
     public function render(): string
+    {
+        [$lines, $inRepo] = $this->staticLines();
+
+        // Step 1.A-1: a block in static-only mode stops here — the git section
+        // is the volatile half, delivered as the `<turn-context>` row instead
+        // (see withVolatile() and TurnContextBlock).
+        if ($inRepo && $this->volatile) {
+            $lines[] = '';
+            $lines[] = $this->gitStatusSnapshot();
+        }
+
+        return "<env>\n" . $this->utf8Safe(implode("\n", $lines)) . "\n</env>";
+    }
+
+    /**
+     * The volatile half alone (step 1.A-1): the git section — caveat, branch,
+     * `--porcelain` status, recent log and, after a write, both diffs — exactly
+     * as {@see render()} appends it in full mode, UTF-8-scrubbed the same way,
+     * and without the `<env>` fence: {@see TurnContextBlock} frames it.
+     *
+     * Empty outside a work tree, where the full block has no git section
+     * either. Independent of {@see withVolatile()}: the mode decides what
+     * render() — the system-prompt section — emits, and this is the other
+     * half's one source, so the two halves of one block can never disagree
+     * about the git reads they share. Every call re-polls git, like render().
+     */
+    public function renderVolatile(): string
+    {
+        [, $inRepo] = $this->staticLines();
+
+        return $inRepo ? $this->utf8Safe($this->gitStatusSnapshot()) : '';
+    }
+
+    /**
+     * Whether {@see render()} appends the git section (the full, pre-1.A-1
+     * block) or stops after the seven static lines.
+     */
+    public function includesVolatile(): bool
+    {
+        return $this->volatile;
+    }
+
+    /**
+     * A copy whose {@see render()} carries ($volatile = true) or omits
+     * ($volatile = false) the git section.
+     *
+     * WHY A MODE AND NOT A SECOND CLASS (step 1.A-1). The system prompt keeps
+     * the static half — cwd, git-repo flag, platform, OS, PHP, model, date,
+     * all frozen at capture or constant — so its bytes stop moving when the
+     * agent writes a file, and the cache prefix survives every step of the
+     * session. The volatile half moves to the `<turn-context>` user row
+     * ({@see TurnContextBlock}). Both halves read the same capture and the same
+     * memoised repo probe, so they come from ONE block; the mode only picks
+     * what the PromptSection face of it renders, and {@see stability()}
+     * follows the mode. The default stays full, so the Agent path (which has no
+     * turn-context channel) and every direct render keep their bytes.
+     */
+    public function withVolatile(bool $volatile): self
+    {
+        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $this->writeSinceLastRender, $volatile);
+        if (isset($this->enclosingRepo)) {
+            $copy->enclosingRepo = $this->enclosingRepo;
+        }
+
+        return $copy;
+    }
+
+    /**
+     * The seven orientation lines every mode renders, and whether the cwd sits
+     * in a work tree (the gate on the git section).
+     *
+     * @return array{0: list<string>, 1: bool}
+     */
+    private function staticLines(): array
     {
         // Audit 15d-13: a cwd with no `.git` of its own may still sit inside a
         // work tree (`cd repo/src && sugarcrush`); see enclosingRepo().
@@ -894,12 +989,7 @@ final readonly class EnvironmentBlock implements PromptSection
             'Current date: ' . ($this->now ?? new DateTimeImmutable())->format('Y-m-d'),
         ];
 
-        if ($inRepo) {
-            $lines[] = '';
-            $lines[] = $this->gitStatusSnapshot();
-        }
-
-        return "<env>\n" . $this->utf8Safe(implode("\n", $lines)) . "\n</env>";
+        return [$lines, $inRepo];
     }
 
     /**
@@ -928,7 +1018,10 @@ final readonly class EnvironmentBlock implements PromptSection
      */
     public function stability(): Stability
     {
-        return Stability::PerTurn;
+        // Step 1.A-1: without the git section every remaining line is frozen
+        // at capture (cwd, model, date) or constant for the process, so the
+        // static-only block is session-stable.
+        return $this->volatile ? Stability::PerTurn : Stability::PerSession;
     }
 
     /**

@@ -33,7 +33,9 @@ final class EngineBackendEmptyReplyTest extends TestCase
 
         $this->assertSame('the answer', $reply->content);
         $this->assertCount(2, $provider->requests);
-        $last = $provider->requests[1]->messages[array_key_last($provider->requests[1]->messages)];
+        // The newest CONVERSATION row: the `<turn-context>` row (step 1.A-1) trails it.
+        $rows = \SugarCraft\Crush\Context\TurnContextBlock::strip($provider->requests[1]->messages);
+        $last = $rows[array_key_last($rows)];
         $this->assertInstanceOf(UserMessage::class, $last, 'the nudge is the newest row of the second request');
         $this->assertStringContainsString('only reasoning', $last->content());
     }

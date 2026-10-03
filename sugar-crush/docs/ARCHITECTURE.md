@@ -334,7 +334,7 @@ names it:
    `PromptGuidance`, ordered by `name()`; the slot appears only when at least
    one fragment is non-empty;
 4. `RepoMapBlock` — a `<repo-map>` of the workspace's Composer sub-packages and
-   its PSR-4 source directories, memoized per `Runtime`;
+   its PSR-4 source directories, memoized per session;
 5. `<user-rules>` — the user-tier rule files `RuleLoader` returns, each in its
    own fence behind the authority preamble;
 6. `<project-instructions>` documents — `CLAUDE.md` / `AGENTS.md`, with
@@ -347,8 +347,9 @@ names it:
 10. `SkillMatcher::listForPrompt()` — name + description for every discovered
     auto-invocable skill, each line badged with its tier (`[built-in]`,
     `[user]`, `[project]`), fenced `<available-skills>` behind its preamble;
-11. `EnvironmentBlock` LAST — cwd, model, git status and diff, date; memoized
-    per `Runtime` because `render()` shells out to git once per build.
+11. `EnvironmentBlock` LAST — its static half: cwd, git-repo flag, platform,
+    OS, PHP, model, date, memoized per session. The git status, log and diffs
+    left the system prompt at step 1.A-1 for the `<turn-context>` row below.
 
 Item 10 is what makes the `Skill` tool worth having: without the listing, the
 model has no reason to call it, and a populated registry would still be
@@ -371,11 +372,31 @@ records that decision and what it costs.
 The ordering is a caching decision, not a stylistic one, and it is the P3.S1
 invariant recorded in `Runtime::buildSystemPrompt()` and restated in
 `MemoryBlock`'s own source: sections run stable-first, by mutation frequency,
-and the volatile env block sits **last**. `EnvironmentBlock::render()` polls
-`git status --porcelain` on every call, so any earlier position would void the
-cacheable prefix of every layer behind it from the first edit of a session; at
-the very end there is nothing downstream left to void. The rationale behind
-these placement decisions is written up in
+and the env block sits **last**. It sat last because it polled
+`git status --porcelain` on every call, and any earlier position would have
+voided the cacheable prefix of every layer behind it from the first edit of a
+session. Step 1.A-1 removed the volatility instead: the system prompt is now
+byte-identical across the steps of a session, and what changes while the agent
+works travels outside it.
+
+- **`<turn-context>`** — `Runtime::turnContext()` renders the git section
+  (`EnvironmentBlock::renderVolatile()`), the files the agent's Edit/Write
+  calls touched and, from 60%, the context-window share, and `Runtime::run()`
+  appends it as the request's LAST row, user-role, only when its bytes differ
+  from the latest such row in the history. Persisting it into the history is
+  step 1.A-2.
+- **In-place notices** — `SglangProvider` and `CustomProvider` keep one leading
+  `system` row (the prompt plus any history system rows ahead of the first
+  conversation row) and render every later history system row where it
+  happened, as a user-role `<system-notice>` row, instead of hoisting it into
+  message 0.
+- **Per-session memo** — the PerSession layers (static `<env>`, repo map,
+  memory, the standing instruction slab) are memoised per session through
+  `Context\SessionPromptMemo`, frozen until the session is forgotten
+  (`/clear`, compaction, another session).
+
+The rationale behind these placement decisions, and the one freshness policy
+for `CLAUDE.md` and the other standing layers, is written up in
 [`PROMPT_ENGINEERING.md`](PROMPT_ENGINEERING.md).
 
 ### Parallel tool dispatch

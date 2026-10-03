@@ -272,9 +272,12 @@ final class PromptSectionTest extends TestCase
         self::assertSame('', $first->fence());
         self::assertSame(Stability::Static, $first->stability());
 
+        // Step 1.A-1: <env> is still LAST, but it is the static half now —
+        // the git section moved to the <turn-context> row — so it is
+        // session-stable rather than per-turn.
         $last = $sections[count($sections) - 1];
         self::assertSame('<env>', $last->fence());
-        self::assertSame(Stability::PerTurn, $last->stability());
+        self::assertSame(Stability::PerSession, $last->stability());
 
         foreach ($sections as $section) {
             self::assertSame(\PHP_INT_MAX, $section->byteBudget());
@@ -529,7 +532,11 @@ final class PromptSectionTest extends TestCase
                 "---\nname: pinned\n---\nOne planted user rule.\n",
             );
 
-            $ruleSections = $method->invoke($runtime, App::new($provider, 'gpt-4')->withRoot($root));
+            // A FRESH Runtime: since step 1.A-1 the standing rule slab is
+            // memoised per session (SessionPromptMemo's freshness policy), so
+            // the Runtime that already built once keeps its frozen slab.
+            $freshRuntime = new Runtime($provider, new HookManager(new HookRegistry()));
+            $ruleSections = $method->invoke($freshRuntime, App::new($provider, 'gpt-4')->withRoot($root));
             $withRule = $distinct;
 
             foreach ($ruleSections as $section) {

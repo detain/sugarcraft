@@ -85,7 +85,10 @@ final class UiOnlyWireFilterTest extends TestCase
         }
         $conversation = array_values(array_filter(
             json_decode($body, true, flags: JSON_THROW_ON_ERROR)['messages'],
-            static fn(array $m): bool => $m['role'] !== 'system',
+            // Neither the system prompt nor the `<turn-context>` row (step
+            // 1.A-1) is a history row this filter is about.
+            static fn(array $m): bool => $m['role'] !== 'system'
+                && !str_starts_with((string) $m['content'], '<turn-context>' . "\n"),
         ));
         $this->assertSame(
             self::EXPECTED,

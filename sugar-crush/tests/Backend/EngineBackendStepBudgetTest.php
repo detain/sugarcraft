@@ -55,7 +55,8 @@ final class EngineBackendStepBudgetTest extends TestCase
         }
         $summaryRequest = $provider->requests[3];
         $this->assertNull($summaryRequest->tools, 'tools are disabled for the summary');
-        $ask = $summaryRequest->messages[array_key_last($summaryRequest->messages)];
+        $asked = \SugarCraft\Crush\Context\TurnContextBlock::strip($summaryRequest->messages);
+        $ask = $asked[array_key_last($asked)];
         $this->assertInstanceOf(UserMessage::class, $ask);
         $this->assertStringContainsString('whole budget of 3 tool steps', $ask->content());
         $this->assertStringContainsString('what has been done, what remains', $ask->content());
@@ -85,7 +86,7 @@ final class EngineBackendStepBudgetTest extends TestCase
         // The summary request: the 8th call's turn-ending refusal, then the ask.
         $summaryRequest = $provider->requests[ToolCallLoopGuard::END_TURN_AT];
         $this->assertNull($summaryRequest->tools);
-        $messages = array_values($summaryRequest->messages);
+        $messages = \SugarCraft\Crush\Context\TurnContextBlock::strip($summaryRequest->messages);
         $this->assertStringContainsString('identical call #8 to probe', $messages[count($messages) - 2]->content());
         $this->assertStringContainsString('The turn is being ended', $messages[count($messages) - 2]->content());
         $this->assertStringContainsString('called probe with identical arguments and got the identical result 8 times', self::lastContent($summaryRequest));
@@ -203,7 +204,9 @@ final class EngineBackendStepBudgetTest extends TestCase
 
     private static function lastContent(CompleteRequest $request): string
     {
-        $last = $request->messages[array_key_last($request->messages)];
+        // The newest conversation row; the `<turn-context>` row (step 1.A-1) trails it.
+        $rows = \SugarCraft\Crush\Context\TurnContextBlock::strip($request->messages);
+        $last = $rows[array_key_last($rows)];
 
         return is_object($last) && method_exists($last, 'content') ? (string) $last->content() : '';
     }

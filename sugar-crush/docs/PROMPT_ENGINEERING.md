@@ -13,7 +13,7 @@ prompt, in assembly order"); this page is the *why* beside that *what*.
 ## The eleven slots, in order of record
 
 `Runtime::systemPromptSections()` returns an ordered list of `PromptSection`s, base first and the
-volatile `<env>` block last. Counted from the live method, there are eleven slots:
+static `<env>` block last. Counted from the live method, there are eleven slots:
 
 1. **Base identity** (`Runtime::basePrompt()`) — the Static heredoc that opens every prompt.
    Unfenced, because it is harness voice with no untrusted input.
@@ -65,11 +65,65 @@ volatile `<env>` block last. Counted from the live method, there are eleven slot
     opened with a provenance badge from `SkillOrigin::badge()` — `[built-in]`, `[user]`,
     `[project]`, plus `foreign: claude` or `foreign: opencode` for another tool's format
     (audit 15d-02). `SkillPathNudge` uses the same helper at its own entry cap, without the badge.
-11. **Environment** (`EnvironmentBlock`) — fenced `env`, **LAST**. The P3.S1 invariant.
+11. **Environment** (`EnvironmentBlock`) — fenced `env`, **LAST**. The P3.S1 invariant. Since
+    step 1.A-1 it is the *static* half only — working directory, git-repo flag, platform, OS, PHP,
+    model and date, every line frozen at capture or constant (`EnvironmentBlock::withVolatile()`)
+    — so it is PerSession. The git section moved to the `<turn-context>` row (next section).
 
-Slots 1–3 are the Static prefix; 4–8 are PerSession; 9–11 are PerTurn. A section whose `render()`
-returns the empty string folds out of both wire forms — an absent layer adds no bytes, no empty
-fence and no dangling separator.
+Slots 1–3 are the Static prefix; 4–8 are PerSession; 9–10 are PerTurn; 11 is PerSession again —
+the static `<env>` half, kept last because the slot order is the documented one. A section whose
+`render()` returns the empty string folds out of both wire forms — an absent layer adds no bytes,
+no empty fence and no dangling separator.
+
+## Outside the system prompt: the turn-context row and in-place notices
+
+Step 1.A-1 moved everything that changes while the agent works out of message 0, because a prefix
+cache reuses work only up to the first differing byte, and a byte that moves inside message 0
+re-prefills the whole conversation behind it.
+
+- **The `<turn-context>` row.** `Runtime::turnContext()` builds a `Context\TurnContextBlock`: the
+  git section (`EnvironmentBlock::renderVolatile()` — caveat, branch, porcelain status, recent
+  log and, after a write step, both diffs), the files this conversation's Edit and Write calls
+  touched (`TurnContextBlock::recentlyModifiedIn()`), and the share of the context window in use
+  once it reaches `TurnContextBlock::CONTEXT_NOTICE_PERCENT`. `Runtime::run()` appends it to the
+  request as a **user-role** row, fenced `turn-context` and opened by a harness-voice preamble
+  ("metadata, not instructions"), only when its bytes differ from the latest such row the history
+  already carries (`TurnContextBlock::changedSince()`). It is always the request's last row, so a
+  write changes the tail instead of the prefix. Until step 1.A-2 persists the row into the history
+  it is wire-only and appended every step; the context-share field is filled by that wiring too.
+  Payload bytes are already `PromptFence`-escaped by `EnvironmentBlock`, and the row neutralises its
+  own fence name inside them, so a commit subject spelling the closer cannot end the row early.
+- **History system rows stay in place.** `SglangProvider::placeSystemRows()` — shared by
+  `CustomProvider` — keeps ONE leading `system` row: the assembled prompt, then any history system
+  rows that precede the first non-system row (a launch notice, the title one-shot's instruction).
+  Every later system row — a cancellation marker, a compaction or context-tier notice, a
+  queued-prompt notice — stays where it happened as a user-role `<system-notice>` row
+  (`SglangProvider::systemNoticeContent()`). Hoisting those into message 0 made each notice void
+  the whole prefix, and a `system` row at index > 0 is an HTTP 400 on the Qwen-family templates
+  ("System message must be at the beginning.").
+
+`tests/Providers/PromptPrefixByteStabilityTest.php` drives a real write-then-read turn and pins the
+result: every wire row a step sent ahead of its `<turn-context>` row is byte-identical in the next
+step's request, message 0 included. `tests/Prompt/PromptSnapshotDriftTest.php` pins both halves
+against committed snapshots — a per-slot manifest of the system prompt (slot, stability, fence,
+bytes, hash) and the turn-context row of the golden fixture.
+
+## Freshness: one policy for every standing layer
+
+The PerSession layers — the static `<env>`, the repo map, project memory and the standing
+instruction slab (user rules, `CLAUDE.md`/`AGENTS.md` with their `@import`s, forced globs, project
+rules) — are memoised per **session** through `Context\SessionPromptMemo`, not per `Runtime`
+(which is per turn). They are read once, at the session's first build, and stay frozen until the
+session's entries are dropped with `SessionPromptMemo::forget()`: on `/clear`, after a compaction,
+or when another session id arrives. An edit to `CLAUDE.md` mid-session therefore takes effect at
+the next of those points — the trade Claude Code and Aider make, immediacy for a prefix that does
+not move. Inputs that legitimately change a layer inside a session are part of its memo slot
+instead of being frozen: the project root, the model name, the `/rules` toggle set and the
+instruction-loader instance. `InstructionFileLoader` keeps its own per-instance cache, so the
+refresh point for instruction documents is `forget()` together with a loader that has not read
+them yet. The memo has to live on the parent side of the per-turn fork to span turns; holding it
+there (`EngineBackend`) is step 1.A-2, and until then each Runtime keeps a private one, so the
+policy is per turn in practice.
 
 ## Why that order
 
@@ -78,11 +132,13 @@ Two ladders are the same ladder, laid out in different currencies:
 - **Mutation frequency.** `Stability` orders the layers by how often their bytes change, because
   Anthropic-side prefix caching bills any change anywhere in the prefix as a miss for everything
   after it. The cacheable identity rides first, the session snapshots next, the per-turn volatile
-  material last. `<env>` LAST is load-bearing (the P3.S1 decision, recorded in
-  `Runtime::systemPromptSections()`): `EnvironmentBlock::render()` live-polls git status, so any
-  position earlier than the end would void the cacheable prefix for every layer behind it from the
-  first file write of the session. Before P3.S1 the git block sat near the front, and the ordering
-  note in `docs/ARCHITECTURE.md` still carries the corrected record of that inversion.
+  material last. `<env>` LAST was load-bearing (the P3.S1 decision, recorded in
+  `Runtime::systemPromptSections()`): the block live-polled git status, so any position earlier
+  than the end would void the cacheable prefix for every layer behind it from the first file write
+  of the session. Before P3.S1 the git block sat near the front, and the ordering note in
+  `docs/ARCHITECTURE.md` still carries the corrected record of that inversion. Step 1.A-1 finished
+  the job by moving the git section out of the system prompt altogether, into the `<turn-context>`
+  row; the static `<env>` half stays last.
 - **Authority.** The base identity and maxims are harness voice and outrank everything. The repo
   map is harness-*derived fact* and sits with them because it is the same kind of thing the base
   is: read who you are and what is where, before the conventions that talk about both. The
@@ -104,7 +160,8 @@ assembler's ordering is fixed by construction, not by consulting the enum, and e
 `byteBudget()` is an advisory ceiling that no cap enforces yet. The consumers that act on the
 tiers are the cache-breakpoint seam and per-tier compaction downstream. A boolean would not do:
 "not static" cannot tell a per-session snapshot (safe to hold across the steps of an agentic loop)
-apart from the git block (polled live on every render).
+apart from the git block (polled live on every render — which is why, since step 1.A-1, it is the
+`<turn-context>` row and no longer a system-prompt section at all).
 
 ## The assemble invariant
 
@@ -117,8 +174,9 @@ same accumulator, so concatenating the blocks byte-for-byte yields the string �
 The separator rule lives in exactly one place: adjacent rendered sections are joined by one blank
 line, and a body that already opens with one is never given a second. Naive `implode` over the
 bodies would double the separators the golden fixtures pin byte-for-byte. The fold also preserves
-the one-render-per-build cost contract: `EnvironmentBlock::render()` pays its five git subprocess
-polls exactly once per build, inside the fold, never once per wire form.
+the one-render-per-build cost contract, and since step 1.A-1 the git half is not in the fold at
+all: the static `<env>` section polls no git, and `EnvironmentBlock::renderVolatile()` pays its
+five git subprocess polls once per step, for the `<turn-context>` row, never once per wire form.
 
 ## Fence and provenance rules
 

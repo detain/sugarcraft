@@ -1085,9 +1085,14 @@ final class PromptStabilityTest extends TestCase
     {
         $fixture = $this->dirtyRepoFixtureWithEveryStableLayer();
 
-        $first = $fixture->systemPrompt();
+        $first = $fixture->delivered();
+        $promptBefore = $fixture->systemPrompt();
         $fixture->write('src/Alpha.php', self::ALPHA_SECOND_EDIT);
-        $second = $fixture->systemPrompt();
+        $second = $fixture->delivered();
+
+        // THE 1.A-1 HEADLINE: the edit moves no byte of the system prompt —
+        // the shared prefix now spans all of it, <env> included.
+        $this->assertSame($promptBefore, $fixture->systemPrompt(), 'a tree edit may not move any byte of the system prompt');
 
         // The instrument fired, and for the right reason. Two prompts that are
         // byte-identical would make every assertion below vacuously true, and
@@ -1154,11 +1159,17 @@ final class PromptStabilityTest extends TestCase
             $prefix,
             'the first differing byte landed before <env> began, so a layer other than <env> is now volatile',
         );
+        // Step 1.A-1: what this test measures is everything the harness
+        // delivers for a step — the system prompt and, behind it, the
+        // `<turn-context>` row that now carries the git section. <env> is
+        // still the LAST layer of the system prompt (P3.S1); the row follows
+        // it, and the system prompt itself no longer moves at all.
         $this->assertStringEndsWith(
             "\n</env>",
-            $first,
+            $fixture->systemPrompt(),
             '<env> must be the LAST layer of the assembled prompt (P3.S1)',
         );
+        $this->assertStringEndsWith("\n</turn-context>", $first, 'the turn-context row must follow the prompt');
 
         foreach (self::STABLE_LAYER_MARKERS as $marker) {
             $endsAt = (int) strpos($first, $marker) + \strlen($marker);
@@ -1550,18 +1561,18 @@ final class PromptStabilityTest extends TestCase
         // Shape 1 — the nice one, repeated here so the three numbers come from
         // one run and are directly comparable.
         $nice = $this->dirtyRepoFixtureWithEveryStableLayer();
-        $niceFirst = $nice->systemPrompt();
+        $niceFirst = $nice->delivered();
         $nice->write('src/Alpha.php', self::ALPHA_SECOND_EDIT);
-        $nicePrefix = self::commonPrefixLength($niceFirst, $nice->systemPrompt());
+        $nicePrefix = self::commonPrefixLength($niceFirst, $nice->delivered());
 
         // Shape 2 — a working diff over the cap whose two revisions differ in
         // size. The cap firing is a KNOWN-POSITIVE CONTROL: without it this is
         // just a bigger version of shape 1.
         $capped = $this->dirtyRepoFixtureWithEveryStableLayer();
         $capped->write('src/Alpha.php', self::generatedLines(400, 'A'));
-        $cappedFirst = $capped->systemPrompt();
+        $cappedFirst = $capped->delivered();
         $capped->write('src/Alpha.php', self::generatedLines(405, 'B'));
-        $cappedSecond = $capped->systemPrompt();
+        $cappedSecond = $capped->delivered();
 
         // The cap FIRED — asserted through the marker the block itself emits,
         // not through the prompt's length, which is capped and therefore cannot
@@ -1587,9 +1598,9 @@ final class PromptStabilityTest extends TestCase
         // Shape 3 — a second tracked file dirtied, so `Status:` moves. This is
         // the earliest field of <env> an ordinary write can reach.
         $status = $this->dirtyRepoFixtureWithEveryStableLayer();
-        $statusFirst = $status->systemPrompt();
+        $statusFirst = $status->delivered();
         $status->write('src/Beta.php', "<?php\n\nnamespace Fixture\\Prefix;\n\nfinal class Beta { public int \$two = 2; }\n");
-        $statusSecond = $status->systemPrompt();
+        $statusSecond = $status->delivered();
         $this->assertStringContainsString(' M src/Beta.php', $statusSecond, 'the second write did not reach `git status`');
         $statusPrefix = self::commonPrefixLength($statusFirst, $statusSecond);
 
@@ -1725,7 +1736,7 @@ final class PromptStabilityTest extends TestCase
         // ACROSS TURNS: each systemPrompt() call without an explicit Runtime
         // gets a fresh one, which is what EngineBackend::complete() does per
         // user turn.
-        $before = $fixture->systemPrompt($app);
+        $before = $fixture->delivered($app);
         $this->assertStringContainsString(
             '- src/  ->  Fixture\Prefix\  (2 files)',
             $before,
@@ -1733,7 +1744,7 @@ final class PromptStabilityTest extends TestCase
         );
 
         $fixture->write('src/Gamma.php', "<?php\n\nnamespace Fixture\\Prefix;\n\nfinal class Gamma {}\n");
-        $after = $fixture->systemPrompt($app);
+        $after = $fixture->delivered($app);
         $this->assertStringContainsString('- src/  ->  Fixture\Prefix\  (3 files)', $after);
 
         $acrossTurns = self::commonPrefixLength($before, $after);
@@ -1784,14 +1795,14 @@ final class PromptStabilityTest extends TestCase
         // or this half is measuring a different prompt from the half above.
         // Byte equality against the fixture's own default is what says so.
         $this->assertSame(
-            $sameTurn->systemPrompt($sameTurnApp),
-            $sameTurn->systemPrompt($sameTurnApp, $runtime),
+            $sameTurn->delivered($sameTurnApp),
+            $sameTurn->delivered($sameTurnApp, $runtime),
             'PromptFixture no longer builds its Runtime the way this test does',
         );
 
-        $stepOne = $sameTurn->systemPrompt($sameTurnApp, $runtime);
+        $stepOne = $sameTurn->delivered($sameTurnApp, $runtime);
         $sameTurn->write('src/Gamma.php', "<?php\n\nnamespace Fixture\\Prefix;\n\nfinal class Gamma {}\n");
-        $stepTwo = $sameTurn->systemPrompt($sameTurnApp, $runtime);
+        $stepTwo = $sameTurn->delivered($sameTurnApp, $runtime);
 
         $this->assertStringContainsString(
             '- src/  ->  Fixture\Prefix\  (2 files)',
@@ -1956,7 +1967,7 @@ final class PromptStabilityTest extends TestCase
         // the knob list used to claim no such thing existed.
         $fixture->write('src/Gamma.php', "<?php\n\nnamespace Fixture\\Prefix;\n\nfinal class Gamma {}\n");
 
-        $prompt = $fixture->systemPrompt();
+        $prompt = $fixture->delivered();
 
         // ORDER MATTERS HERE, and it is the ABSENCES FIRST on purpose. A
         // degraded rendering removes the very shape the positive assertions
@@ -2040,7 +2051,7 @@ final class PromptStabilityTest extends TestCase
             file_put_contents($binary->root() . '/.git/info/attributes', "* -diff\n"),
             'could not build the binary-diff control',
         );
-        $binaryPrompt = $binary->systemPrompt();
+        $binaryPrompt = $binary->delivered();
 
         //       THE CONTROL'S OWN SUBPROCESS IS ASSERTED BEFORE ITS LIVENESS,
         //       and the reason is that this control blamed the wrong file once.
@@ -2127,7 +2138,7 @@ final class PromptStabilityTest extends TestCase
         $coloured = $this->dirtyRepoFixtureWithEveryStableLayer();
         $this->assertSame(0, self::git($coloured->root(), ['config', 'color.diff', 'always']));
         $this->assertSame(0, self::git($coloured->root(), ['config', 'color.ui', 'always']));
-        $colouredPrompt = $coloured->systemPrompt();
+        $colouredPrompt = $coloured->delivered();
 
         //       THE CONTROL'S OWN SUBPROCESS, BEFORE ITS VERDICT, for control
         //       B's reason: MEASURED, `GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=

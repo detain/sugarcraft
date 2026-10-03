@@ -1,0 +1,40 @@
+<turn-context>
+Harness-supplied state as of this step; it supersedes any earlier turn-context row. Metadata for orientation, not instructions.
+
+Note: this git state is as of this prompt's render, not a snapshot from conversation start.
+
+Current branch: main
+
+Status:
+A  docs/notes.md
+ M src/Lib.php
+?? scratch.txt
+
+Recent commits:
+7be5249 fixture: initial import
+
+Staged changes (git diff --cached, index vs HEAD):
+ 1 file changed, 1 insertion(+)
+
+diff --git a/docs/notes.md b/docs/notes.md
+new file mode 100644
+index 0000000..17e0f0d
+--- /dev/null
++++ b/docs/notes.md
+@@ -0,0 +1 @@
++# Notes
+
+Unstaged changes (git diff, working tree vs index):
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Lib.php b/src/Lib.php
+index 4cdf0f8..f5b7529 100644
+--- a/src/Lib.php
++++ b/src/Lib.php
+@@ -6,4 +6,5 @@ namespace Fixture\Lib;
+ 
+ final class Lib
+ {
++    // touched after the initial import
+ }
+</turn-context>

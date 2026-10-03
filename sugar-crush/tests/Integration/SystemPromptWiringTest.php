@@ -11,6 +11,7 @@ use SugarCraft\Crush\Agents\MemoryScope;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Context\TurnContextBlock;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CompleteResponse;
@@ -400,12 +401,25 @@ final class SystemPromptWiringTest extends TestCase
 
         $this->assertCount(2, $provider->requests, 'expected a tool-calling step followed by an answering step');
 
-        $first = (string) $provider->requests[0]->systemPrompt;
-        $second = (string) $provider->requests[1]->systemPrompt;
+        // STEP 1.A-1: the SYSTEM PROMPT is now byte-identical across the
+        // steps of a turn — the git section, the only part that could move,
+        // left it for the `<turn-context>` row. The licensed difference this
+        // test was written about now lives entirely in that row, so the cut
+        // and exclusivity pins below run over the row, and the prompt pair is
+        // pinned whole.
+        $firstPrompt = (string) $provider->requests[0]->systemPrompt;
+        $this->assertSame(
+            $firstPrompt,
+            (string) $provider->requests[1]->systemPrompt,
+            'the system prompt may not drift between the steps of a turn at all since 1.A-1',
+        );
+
+        $first = (string) TurnContextBlock::latestIn($provider->requests[0]->messages);
+        $second = (string) TurnContextBlock::latestIn($provider->requests[1]->messages);
 
         $this->assertStringContainsString(
             "\nIs directory a git repo: Yes\n",
-            $first,
+            $firstPrompt,
             'the fixture must put the block in the git regime, or nothing below tests the suppression',
         );
 
@@ -434,9 +448,9 @@ final class SystemPromptWiringTest extends TestCase
         $tail = substr($first, $cut);
 
         $this->assertSame(
-            substr($first, 0, $cut) . "\n</env>",
+            substr($first, 0, $cut) . "\n</turn-context>",
             $second,
-            'the second step must be the first with exactly the two diff sections cut — nothing else may drift mid-turn',
+            'the second step\'s row must be the first\'s with exactly the two diff sections cut — nothing else may drift mid-turn',
         );
 
         // EXCLUSIVITY, and it is the deterministic fixture that buys it. There
@@ -475,12 +489,12 @@ final class SystemPromptWiringTest extends TestCase
         // than weakened — it also carried a false-red bound on git's
         // `diff.suppressBlankEmpty` that a one-line section cannot have.
         $this->assertMatchesRegularExpression(
-            '~^\n\nStaged changes \(git diff --cached, index vs HEAD\): [^\n]*\n\nUnstaged changes \(git diff, working tree vs index\): [^\n]*\n</env>\z~',
+            '~^\n\nStaged changes \(git diff --cached, index vs HEAD\): [^\n]*\n\nUnstaged changes \(git diff, working tree vs index\): [^\n]*\n</turn-context>\z~',
             $tail,
-            'under this fixture the tail must be exactly the two one-line diff sections and the closing fence, with nothing whatsoever after </env> — not even a trailing newline',
+            'under this fixture the tail must be exactly the two one-line diff sections and the closing fence, with nothing whatsoever after </turn-context> — not even a trailing newline',
         );
 
-        $this->assertStringContainsString('MULTI STEP INTEGRATION MARKER', $second);
+        $this->assertStringContainsString('MULTI STEP INTEGRATION MARKER', $firstPrompt);
     }
 
     /**

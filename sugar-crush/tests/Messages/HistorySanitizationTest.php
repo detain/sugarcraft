@@ -587,8 +587,9 @@ final class HistorySanitizationTest extends TestCase
      * toTypedMessages flattens that to [assistant, system, bare assistant];
      * the bare row is the LIVE producer op (4) exists for, and after the
      * sanitizer the OpenAI-shape wire has no bare row while the denial note
-     * survives (hoisted into the merged system row on this provider — the
-     * R-C leak recorded for its own follow-up step, not fixed here).
+     * survives — in place, as a user-role `<system-notice>` row since step
+     * 1.A-1 (it sits behind the first non-system row, so it is no longer
+     * hoisted into the merged system row).
      */
     public function testRefusalCommitHistoryHasNoBareAssistantRowAfterSanitize(): void
     {
@@ -640,7 +641,13 @@ final class HistorySanitizationTest extends TestCase
                 'op (4) neutered? a bare assistant row reached the OpenAI-shape wire',
             );
         }
-        $this->assertStringContainsString('was not run', (string) ($wire[0]['content'] ?? ''));
+        $notices = array_values(array_filter(
+            $wire,
+            static fn (array $row): bool => ($row['role'] ?? '') === 'user'
+                && str_starts_with((string) ($row['content'] ?? ''), '<system-notice>'),
+        ));
+        $this->assertCount(1, $notices, 'the denial note rides in place as one user-role notice');
+        $this->assertStringContainsString('was not run', (string) $notices[0]['content']);
     }
 
     /**

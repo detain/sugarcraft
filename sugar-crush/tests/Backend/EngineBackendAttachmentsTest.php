@@ -251,7 +251,8 @@ final class EngineBackendAttachmentsTest extends TestCase
             {
                 $this->users = array_values(array_filter(
                     $request->messages,
-                    static fn (mixed $m): bool => $m instanceof UserMessage,
+                    // The `<turn-context>` row (step 1.A-1) is harness metadata, not a user turn.
+                    static fn (mixed $m): bool => $m instanceof UserMessage && !\SugarCraft\Crush\Context\TurnContextBlock::isTurnContext($m),
                 ));
 
                 return new CompleteResponse(content: 'ok');

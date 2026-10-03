@@ -1323,6 +1323,17 @@ final class Runtime
         // "build the blocks FROM the section list").
         [$systemPrompt, $systemBlocks] = self::assembleSections($this->systemPromptSections($app));
 
+        // Step 1.A-1: the volatile half of the environment rides the TAIL of
+        // the request as a user-role `<turn-context>` row, never message 0 —
+        // a write then changes the last row instead of the prefix every
+        // provider caches. Appended only when the history does not already
+        // end its turn-context trail with the same bytes, so once step 1.A-2
+        // persists the row into the history an unchanged step sends nothing.
+        $turnContext = $this->turnContext($app);
+        if ($turnContext->changedSince($messages)) {
+            $messages[] = $turnContext->message();
+        }
+
         $request = new CompleteRequest(
             model: $app->model,
             messages: $messages,
@@ -3612,13 +3623,13 @@ final class Runtime
      * heredoc, <repo-map>, the <project-instructions> documents,
      * <project-memory>, the enabled skills and the skill listing are all
      * content that does not change between the steps of a turn, so they sit
-     * in the cacheable prefix. <env> — whose git status and diff bodies
-     * change on every file write — is emitted LAST, the position Claude Code
-     * gives its own git block (prompt_expand.md §4.4, §9.2): a volatile
-     * block earlier in the prompt voids the prefix for everything after it
-     * from the first edit of a session (§3.4). The model still receives the
-     * same orientation facts (cwd, git state, platform, model, date); only
-     * their position changed.
+     * in the cacheable prefix. <env> is emitted LAST (P3.S1), and since step
+     * 1.A-1 it is the static half only: the git status and diff bodies that
+     * change on every write travel as the `<turn-context>` user row
+     * {@see run()} appends (see {@see turnContext()}), so a write no longer
+     * touches message 0 at all. The model still receives the same orientation
+     * facts (cwd, git state, platform, model, date); only their position
+     * changed.
      */
     private function buildSystemPrompt(App $app): string
     {
@@ -3638,11 +3649,20 @@ final class Runtime
      * sections — §17.2 invariant 9's per-Runtime identity is therefore the
      * identity the assembled list carries, not just the accessor's. A block's
      * render() then runs exactly once per build, inside the fold
-     * ({@see assembleSections()}): for the {@see EnvironmentBlock}, whose render()
-     * polls git five times, one call per build is the cost contract that held
-     * before the migration and holds after it. An empty map or memory block is
+     * ({@see assembleSections()}). An empty map or memory block is
      * no longer guarded away HERE — its render() returning '' IS the
      * absence, which the assembler folds away under its documented rule.
+     *
+     * STEP 1.A-1 — THE PROMPT NO LONGER CARRIES VOLATILE STATE. The `<env>`
+     * section is the STATIC half of the environment block (cwd, git-repo
+     * flag, platform, OS, PHP, model, date; {@see EnvironmentBlock::withVolatile()}),
+     * so its render() polls no git at all; the git section is the volatile
+     * half, sent by {@see run()} as the `<turn-context>` user row
+     * ({@see turnContext()}). The PerSession layers — static `<env>`, repo
+     * map, project memory and the standing instruction slab — are memoised
+     * per SESSION through {@see sessionPromptMemo()}, under the one
+     * freshness policy {@see Context\SessionPromptMemo} documents. What still
+     * varies per turn is the skill layers, whose set the App carries.
      *
      * @return list<PromptSection>
      */
@@ -3692,213 +3712,235 @@ final class Runtime
         // note above).
         $sections[] = $this->repoMapSnapshot($app);
 
-        // P6.S2 (rulings D1 + D2): the three-tier rules surface, framed by
-        // provenance. RuleLoader owns the walk (user ~/.sugar-crush/rules,
-        // project <root>/.sugar-crush/rules, root <root>/RULES.md); load() is
-        // its single deduplicated, filename-ordered, enabled-only entry point
-        // (OD3), so the tiers are consulted ONCE here and a rule reached by
-        // two tiers can never be rendered twice or in two framings. The tier
-        // value then picks the VOICE, not another walk: operator-chosen bytes
-        // ride the <user-rules> fence with USER_RULES_AUTHORITY_PREAMBLE,
-        // repository-shipped bytes join the same <project-instructions>
-        // framing the instruction documents below use, because "written by
-        // this repository's maintainers and committed alongside its code" is
-        // equally true of them. Loading here and nowhere else is the
-        // no-bypass-path property: this is the one construction site, like
-        // the inline instruction splice it stands beside, so no second
-        // caller can render rules without the escape and the framing.
-        //
-        // Position is the authority ladder made physical: the user tier sits
-        // above every project-voiced layer because the operator outranks the
-        // repository, and below base, maxims and repo-map because those are
-        // harness voice and harness-derived fact. That ordering is exactly
-        // what the two preambles assert in prose, so a reader never has to
-        // reconcile a claim against a position.
-        //
-        // The bodies route through PromptFence::escape() like every other
-        // dynamic byte entering the prompt, and the roster now includes
-        // `user-rules` itself (widened at P6.S2 fix): a user-tier body
-        // spelling its own closer arrives at the model as the inert
-        // `&lt;/user-rules>`, never as a live early fence end. The property
-        // is pinned by BaseSystemPromptTest's forged-user-rule guard -
-        // deleting either the roster entry or this escape call turns that
-        // test red - and the roster-wide semantics by the forged-instruction
-        // guard's neutralised-copy counts above it.
-        //
-        // WHAT THIS SAID: "TRIGGERS ARE NOT YET APPLIED … a rule scoped with
-        // `paths: ["src/**"]` renders into EVERY session until the P6.S5 / P7.S4
-        // wiring gates it".
-        // WHAT IS TRUE NOW: the paths half is gated, by P6.S5b, and the
-        // keywords/description half is not. Both loops below skip exactly the rules
-        // whose trigger list carries a PathTrigger, and deliver them at tool time
-        // through {@see RulePathNudge::forPaths()} instead, via the one shared
-        // predicate {@see RulePathNudge::isPathScoped()} that the tracker itself
-        // filters on — so the splice and the nudge cannot disagree about which rules
-        // are scoped, and a scoped rule is never both spliced and nudged (the
-        // double-presentation defect) and never neither (the silently-vanishing
-        // defect). A `keywords:`- or `description:`-only rule still renders into
-        // every session and always will until the dormant matcher P7.S4 measured
-        // (52-prompt battery, substring precision 0.162) is revived by its own step.
-        // WHY THE PREDICATE IS `instanceof PathTrigger` AND NOT "has triggers": a
-        // rule carrying a `description:` already carries an IntentTrigger, including
-        // the committed fixture rule behind the golden prompt, so the looser test
-        // would defer a standing rule out of the prompt and move frozen bytes.
-        // Framing and escape are tier-blind here as they were before, so this was a
-        // scoping property and never a safety one; the aggregate bound that stood as
-        // the open follow-up now exists: both loops below spend ONE per-build budget
-        // of {@see self::MAX_STANDING_RULE_BYTES} framed bytes in loader order, and a
-        // standing rule that no longer fits is rendered as exactly one
-        // {@see RulePathNudge::pointer()} line inside its tier's deferral fence —
-        // never clipped, and never silently gone.
-        // P6.S3: the loader is handed the session's rulebook toggle set, which is
-        // the ONLY thing here that can subtract a pack. It travels on the App for
-        // the same reason the memory store below does - this method assembles the
-        // prompt off that object and nothing else - and the subtraction happens
-        // inside RuleLoader::load() rather than in a filter here, so the `/rules`
-        // listing and the prompt cannot disagree about which packs are on. A null
-        // set (every App that predates rulebooks, every embedder) loads exactly
-        // what it always did.
-        //
-        // The user tier now covers TWO directories - ~/.sugar-crush/rules and
-        // ~/.sugar-crush/rulebooks - both walked by the loader and both rendered
-        // behind this same fence with this same preamble, because both are the
-        // operator's own bytes: see the provenance note on
-        // RuleLoader::loadUserRulebooks() for why a rulebook is a tier `user` rule
-        // rather than a fourth tier.
-        $rules = (new RuleLoader(
-            $app->root ?? (getcwd() ?: ''),
-            rulesState: $app->rulesState,
-        ))->load();
+        // Step 1.A-1: the standing instruction slab — user rules, the
+        // instruction documents (CLAUDE.md/AGENTS.md and forced globs) and the
+        // repository's rule tiers — is session-stable and memoised per
+        // SESSION ({@see SessionPromptMemo}), under the one freshness policy
+        // that class documents: read at the session's first build, frozen
+        // until the session's entries are forgotten. The slot key carries
+        // every input that may legitimately change mid-session (root, the
+        // `/rules` toggle set, the loader instance), so toggling a rulebook
+        // rebuilds this slab and nothing else. The assembly inside the
+        // closure, and every note on its framing and budget, is unchanged —
+        // only its indentation moved. One unit, because the standing-rule
+        // budget runs across all of it.
+        array_push($sections, ...$this->sessionPromptMemo()->remember(
+            $app->sessionId,
+            self::standingSlot($app),
+            function () use ($app): array {
+                $sections = [];
 
-        // FU5: one running budget for both standing loops, in loader order — the
-        // user loop spends it first, so the operator's bytes outrank the
-        // repository's when the sum is tight, exactly as the fences already do by
-        // position. The pointer channel's worst-case framing is RESERVED up front
-        // rather than competed for, because a deferred rule must be able to name
-        // itself unconditionally: a pointer that found no room would be the silent
-        // vanishing the whole design refuses.
-        $standingRemaining = self::MAX_STANDING_RULE_BYTES - self::standingDeferReserve();
-        $userDeferred = [];
-        $userOverflow = 0;
+            // P6.S2 (rulings D1 + D2): the three-tier rules surface, framed by
+            // provenance. RuleLoader owns the walk (user ~/.sugar-crush/rules,
+            // project <root>/.sugar-crush/rules, root <root>/RULES.md); load() is
+            // its single deduplicated, filename-ordered, enabled-only entry point
+            // (OD3), so the tiers are consulted ONCE here and a rule reached by
+            // two tiers can never be rendered twice or in two framings. The tier
+            // value then picks the VOICE, not another walk: operator-chosen bytes
+            // ride the <user-rules> fence with USER_RULES_AUTHORITY_PREAMBLE,
+            // repository-shipped bytes join the same <project-instructions>
+            // framing the instruction documents below use, because "written by
+            // this repository's maintainers and committed alongside its code" is
+            // equally true of them. Loading here and nowhere else is the
+            // no-bypass-path property: this is the one construction site, like
+            // the inline instruction splice it stands beside, so no second
+            // caller can render rules without the escape and the framing.
+            //
+            // Position is the authority ladder made physical: the user tier sits
+            // above every project-voiced layer because the operator outranks the
+            // repository, and below base, maxims and repo-map because those are
+            // harness voice and harness-derived fact. That ordering is exactly
+            // what the two preambles assert in prose, so a reader never has to
+            // reconcile a claim against a position.
+            //
+            // The bodies route through PromptFence::escape() like every other
+            // dynamic byte entering the prompt, and the roster now includes
+            // `user-rules` itself (widened at P6.S2 fix): a user-tier body
+            // spelling its own closer arrives at the model as the inert
+            // `&lt;/user-rules>`, never as a live early fence end. The property
+            // is pinned by BaseSystemPromptTest's forged-user-rule guard -
+            // deleting either the roster entry or this escape call turns that
+            // test red - and the roster-wide semantics by the forged-instruction
+            // guard's neutralised-copy counts above it.
+            //
+            // WHAT THIS SAID: "TRIGGERS ARE NOT YET APPLIED … a rule scoped with
+            // `paths: ["src/**"]` renders into EVERY session until the P6.S5 / P7.S4
+            // wiring gates it".
+            // WHAT IS TRUE NOW: the paths half is gated, by P6.S5b, and the
+            // keywords/description half is not. Both loops below skip exactly the rules
+            // whose trigger list carries a PathTrigger, and deliver them at tool time
+            // through {@see RulePathNudge::forPaths()} instead, via the one shared
+            // predicate {@see RulePathNudge::isPathScoped()} that the tracker itself
+            // filters on — so the splice and the nudge cannot disagree about which rules
+            // are scoped, and a scoped rule is never both spliced and nudged (the
+            // double-presentation defect) and never neither (the silently-vanishing
+            // defect). A `keywords:`- or `description:`-only rule still renders into
+            // every session and always will until the dormant matcher P7.S4 measured
+            // (52-prompt battery, substring precision 0.162) is revived by its own step.
+            // WHY THE PREDICATE IS `instanceof PathTrigger` AND NOT "has triggers": a
+            // rule carrying a `description:` already carries an IntentTrigger, including
+            // the committed fixture rule behind the golden prompt, so the looser test
+            // would defer a standing rule out of the prompt and move frozen bytes.
+            // Framing and escape are tier-blind here as they were before, so this was a
+            // scoping property and never a safety one; the aggregate bound that stood as
+            // the open follow-up now exists: both loops below spend ONE per-build budget
+            // of {@see self::MAX_STANDING_RULE_BYTES} framed bytes in loader order, and a
+            // standing rule that no longer fits is rendered as exactly one
+            // {@see RulePathNudge::pointer()} line inside its tier's deferral fence —
+            // never clipped, and never silently gone.
+            // P6.S3: the loader is handed the session's rulebook toggle set, which is
+            // the ONLY thing here that can subtract a pack. It travels on the App for
+            // the same reason the memory store below does - this method assembles the
+            // prompt off that object and nothing else - and the subtraction happens
+            // inside RuleLoader::load() rather than in a filter here, so the `/rules`
+            // listing and the prompt cannot disagree about which packs are on. A null
+            // set (every App that predates rulebooks, every embedder) loads exactly
+            // what it always did.
+            //
+            // The user tier now covers TWO directories - ~/.sugar-crush/rules and
+            // ~/.sugar-crush/rulebooks - both walked by the loader and both rendered
+            // behind this same fence with this same preamble, because both are the
+            // operator's own bytes: see the provenance note on
+            // RuleLoader::loadUserRulebooks() for why a rulebook is a tier `user` rule
+            // rather than a fourth tier.
+            $rules = (new RuleLoader(
+                $app->root ?? (getcwd() ?: ''),
+                rulesState: $app->rulesState,
+            ))->load();
 
-        foreach ($rules as $rule) {
-            if ($rule->tier !== 'user' || trim($rule->body) === '') {
-                continue;
-            }
+            // FU5: one running budget for both standing loops, in loader order — the
+            // user loop spends it first, so the operator's bytes outrank the
+            // repository's when the sum is tight, exactly as the fences already do by
+            // position. The pointer channel's worst-case framing is RESERVED up front
+            // rather than competed for, because a deferred rule must be able to name
+            // itself unconditionally: a pointer that found no room would be the silent
+            // vanishing the whole design refuses.
+            $standingRemaining = self::MAX_STANDING_RULE_BYTES - self::standingDeferReserve();
+            $userDeferred = [];
+            $userOverflow = 0;
 
-            // P6.S5b: a `paths:`-scoped rule is deferred to the tool-time channel
-            // rather than rendered into every session. See the trigger note above
-            // for why the predicate is a PathTrigger and not merely "has triggers".
-            if (RulePathNudge::isPathScoped($rule)) {
-                continue;
-            }
-
-            // Same opener + preamble + blank line + escaped body +
-            // closer geometry as the instruction fence below it, so the
-            // two framings differ in exactly one thing: their voice.
-            $framed = "<user-rules>\n" . self::USER_RULES_AUTHORITY_PREAMBLE . "\n\n"
-                . PromptFence::escape($rule->body) . "\n</user-rules>";
-
-            if (strlen($framed) > $standingRemaining) {
-                // Over budget, so the body is NOT delivered — the same indivisibility
-                // the tool-time channel rules by. One pointer line takes its place.
-                if (count($userDeferred) < self::MAX_STANDING_POINTERS) {
-                    $userDeferred[] = RulePathNudge::pointer($rule);
-                } else {
-                    ++$userOverflow;
+            foreach ($rules as $rule) {
+                if ($rule->tier !== 'user' || trim($rule->body) === '') {
+                    continue;
                 }
 
-                continue;
+                // P6.S5b: a `paths:`-scoped rule is deferred to the tool-time channel
+                // rather than rendered into every session. See the trigger note above
+                // for why the predicate is a PathTrigger and not merely "has triggers".
+                if (RulePathNudge::isPathScoped($rule)) {
+                    continue;
+                }
+
+                // Same opener + preamble + blank line + escaped body +
+                // closer geometry as the instruction fence below it, so the
+                // two framings differ in exactly one thing: their voice.
+                $framed = "<user-rules>\n" . self::USER_RULES_AUTHORITY_PREAMBLE . "\n\n"
+                    . PromptFence::escape($rule->body) . "\n</user-rules>";
+
+                if (strlen($framed) > $standingRemaining) {
+                    // Over budget, so the body is NOT delivered — the same indivisibility
+                    // the tool-time channel rules by. One pointer line takes its place.
+                    if (count($userDeferred) < self::MAX_STANDING_POINTERS) {
+                        $userDeferred[] = RulePathNudge::pointer($rule);
+                    } else {
+                        ++$userOverflow;
+                    }
+
+                    continue;
+                }
+
+                $standingRemaining -= strlen($framed);
+                $sections[] = $this->section('<user-rules>', Stability::PerSession, $framed);
             }
 
-            $standingRemaining -= strlen($framed);
-            $sections[] = $this->section('<user-rules>', Stability::PerSession, $framed);
-        }
-
-        if ($userDeferred !== []) {
-            $sections[] = $this->section(
-                '<user-rules>',
-                Stability::PerSession,
-                self::standingDeferFence('user-rules', self::USER_RULES_AUTHORITY_PREAMBLE, $userDeferred, $userOverflow),
-            );
-        }
-
-        if ($app->instructionLoader !== null) {
-            // Audit 15d-09 / C3: priced by {@see planInstructionDocuments()}, the
-            // one definition of which documents inline and which defer — shared
-            // with the launch notice that tells the user what was left out
-            // (audit R1), so the two cannot disagree on a verdict.
-            $plan = self::planInstructionDocuments($app->instructionLoader);
-
-            foreach ($plan['inline'] as $framed) {
+            if ($userDeferred !== []) {
                 $sections[] = $this->section(
-                    '<project-instructions>',
+                    '<user-rules>',
                     Stability::PerSession,
-                    $framed,
+                    self::standingDeferFence('user-rules', self::USER_RULES_AUTHORITY_PREAMBLE, $userDeferred, $userOverflow),
                 );
             }
 
-            if ($plan['pointers'] !== []) {
+            if ($app->instructionLoader !== null) {
+                // Audit 15d-09 / C3: priced by {@see planInstructionDocuments()}, the
+                // one definition of which documents inline and which defer — shared
+                // with the launch notice that tells the user what was left out
+                // (audit R1), so the two cannot disagree on a verdict.
+                $plan = self::planInstructionDocuments($app->instructionLoader);
+
+                foreach ($plan['inline'] as $framed) {
+                    $sections[] = $this->section(
+                        '<project-instructions>',
+                        Stability::PerSession,
+                        $framed,
+                    );
+                }
+
+                if ($plan['pointers'] !== []) {
+                    $sections[] = $this->section(
+                        '<project-instructions>',
+                        Stability::PerSession,
+                        self::standingDeferFence(
+                            'project-instructions',
+                            self::INSTRUCTIONS_AUTHORITY_PREAMBLE,
+                            $plan['pointers'],
+                            $plan['overflow'],
+                            self::INSTRUCTION_DEFERRED_NOTE,
+                        ),
+                    );
+                }
+            }
+
+            // The repository's own two rule tiers (P6.S2): same fence, same
+            // preamble as the instruction documents immediately above, because
+            // same authorship - these are bytes shipped inside the checkout -
+            // and they land behind the docs so a plain listing of the
+            // project-voiced layers reads instructions first, then the rules
+            // files that specialise them, each rule in its own fence the way
+            // each document is.
+            $projectDeferred = [];
+            $projectOverflow = 0;
+            foreach ($rules as $rule) {
+                if ($rule->tier === 'user' || trim($rule->body) === '') {
+                    continue;
+                }
+
+                // P6.S5b: same skip as the user tier above, and for the same reason —
+                // the project and root tiers are where a repository can ship a
+                // `paths:`-scoped rule at all, so deferring only the user half would
+                // leave a scoped project rule rendering into every session.
+                if (RulePathNudge::isPathScoped($rule)) {
+                    continue;
+                }
+
+                $framed = "<project-instructions>\n" . self::INSTRUCTIONS_AUTHORITY_PREAMBLE . "\n\n"
+                    . PromptFence::escape($rule->body) . "\n</project-instructions>";
+
+                if (strlen($framed) > $standingRemaining) {
+                    if (count($projectDeferred) < self::MAX_STANDING_POINTERS) {
+                        $projectDeferred[] = RulePathNudge::pointer($rule);
+                    } else {
+                        ++$projectOverflow;
+                    }
+
+                    continue;
+                }
+
+                $standingRemaining -= strlen($framed);
+                $sections[] = $this->section('<project-instructions>', Stability::PerSession, $framed);
+            }
+
+            if ($projectDeferred !== []) {
                 $sections[] = $this->section(
                     '<project-instructions>',
                     Stability::PerSession,
-                    self::standingDeferFence(
-                        'project-instructions',
-                        self::INSTRUCTIONS_AUTHORITY_PREAMBLE,
-                        $plan['pointers'],
-                        $plan['overflow'],
-                        self::INSTRUCTION_DEFERRED_NOTE,
-                    ),
+                    self::standingDeferFence('project-instructions', self::INSTRUCTIONS_AUTHORITY_PREAMBLE, $projectDeferred, $projectOverflow),
                 );
             }
-        }
 
-        // The repository's own two rule tiers (P6.S2): same fence, same
-        // preamble as the instruction documents immediately above, because
-        // same authorship - these are bytes shipped inside the checkout -
-        // and they land behind the docs so a plain listing of the
-        // project-voiced layers reads instructions first, then the rules
-        // files that specialise them, each rule in its own fence the way
-        // each document is.
-        $projectDeferred = [];
-        $projectOverflow = 0;
-        foreach ($rules as $rule) {
-            if ($rule->tier === 'user' || trim($rule->body) === '') {
-                continue;
-            }
-
-            // P6.S5b: same skip as the user tier above, and for the same reason —
-            // the project and root tiers are where a repository can ship a
-            // `paths:`-scoped rule at all, so deferring only the user half would
-            // leave a scoped project rule rendering into every session.
-            if (RulePathNudge::isPathScoped($rule)) {
-                continue;
-            }
-
-            $framed = "<project-instructions>\n" . self::INSTRUCTIONS_AUTHORITY_PREAMBLE . "\n\n"
-                . PromptFence::escape($rule->body) . "\n</project-instructions>";
-
-            if (strlen($framed) > $standingRemaining) {
-                if (count($projectDeferred) < self::MAX_STANDING_POINTERS) {
-                    $projectDeferred[] = RulePathNudge::pointer($rule);
-                } else {
-                    ++$projectOverflow;
-                }
-
-                continue;
-            }
-
-            $standingRemaining -= strlen($framed);
-            $sections[] = $this->section('<project-instructions>', Stability::PerSession, $framed);
-        }
-
-        if ($projectDeferred !== []) {
-            $sections[] = $this->section(
-                '<project-instructions>',
-                Stability::PerSession,
-                self::standingDeferFence('project-instructions', self::INSTRUCTIONS_AUTHORITY_PREAMBLE, $projectDeferred, $projectOverflow),
-            );
-        }
+                return $sections;
+            },
+        ));
 
         // After the instruction documents and before the skills, because it is
         // the same KIND of thing as an instruction document - standing project
@@ -3972,19 +4014,35 @@ final class Runtime
                     . ltrim($listing, "\n") . "\n</available-skills>",
         );
 
-        // Volatile content LAST, ordered by mutation frequency
-        // (prompt_expand.md §9.2): the git status and diff bodies render()
-        // shells out for change on every file write, so a block earlier in the
-        // prompt would void the cache prefix for every layer after it from the
-        // first edit of a session. Claude Code places its git block "at the
-        // very end of the system prompt" (§4.4); this is the same decision.
-        // Since P5.S2 the appended value is the memoized block ITSELF — it
-        // implements PromptSection — so the per-Runtime identity §17.2
-        // invariant 9 pins is the identity the assembled list carries, and
-        // render() runs exactly once per build, inside assembleSections().
+        // <env> LAST (P3.S1). Since step 1.A-1 the appended block is the
+        // STATIC half only — the git status and diff bodies that change on
+        // every write left message 0 for the `<turn-context>` row run()
+        // appends — so this tail no longer moves when the agent edits; it
+        // stays last because the slot order is documented and test-pinned.
+        // The appended value is the memoized block ITSELF — it implements
+        // PromptSection — so the per-Runtime identity §17.2 invariant 9 pins
+        // is the identity the assembled list carries, and render() runs
+        // exactly once per build, inside assembleSections().
         $sections[] = $this->environmentSnapshot($app);
 
         return $sections;
+    }
+
+    /**
+     * The {@see SessionPromptMemo} slot of the standing slab: every input
+     * that may change it inside one session, so a change rebuilds it instead
+     * of serving a frozen copy built from different inputs.
+     */
+    private static function standingSlot(App $app): string
+    {
+        $disabled = $app->rulesState?->disabled() ?? [];
+        sort($disabled);
+
+        return 'standing:' . hash('xxh128', implode("\0", [
+            self::projectRoot($app),
+            $app->rulesState === null ? '-' : implode(',', $disabled),
+            $app->instructionLoader === null ? '-' : (string) spl_object_id($app->instructionLoader),
+        ]));
     }
 
     /**
@@ -4634,7 +4692,23 @@ final class Runtime
      */
     private function environmentSnapshot(App $app): EnvironmentBlock
     {
-        $block = $this->environmentBlock ??= EnvironmentBlock::capture(self::projectRoot($app), $app->model);
+        // Step 1.A-1: the capture is memoised per SESSION (the static lines —
+        // cwd, model, date — are what it freezes), keyed by root and model so
+        // a `/model` switch re-captures. An injected block skips the memo: its
+        // owner already holds the session-wide snapshot.
+        $block = $this->environmentBlock ??= $this->sessionPromptMemo()->remember(
+            $app->sessionId,
+            'env:' . hash('xxh128', self::projectRoot($app) . "\0" . $app->model),
+            static fn(): EnvironmentBlock => EnvironmentBlock::capture(self::projectRoot($app), $app->model),
+        );
+
+        // The system prompt carries the static half only; the git section is
+        // the volatile half, sent as the `<turn-context>` row by run() (see
+        // turnContext()). Normalised once, so the held block keeps its
+        // identity across builds exactly as before.
+        if ($block->includesVolatile()) {
+            $block = $this->environmentBlock = $block->withVolatile(false);
+        }
 
         if ($this->writeSinceLastRender === null || $block->writeSinceLastRender() === $this->writeSinceLastRender) {
             return $block;
@@ -4642,6 +4716,58 @@ final class Runtime
 
         return $this->environmentBlock = $block->withWriteSinceLastRender($this->writeSinceLastRender);
     }
+
+    /**
+     * The volatile per-step context (step 1.A-1): the git section of this
+     * Runtime's environment snapshot — so the write signal
+     * {@see markWriteSinceLastRender()} sets still decides whether the diffs
+     * render — plus the files this conversation's Edit/Write calls touched.
+     *
+     * Public so the owner that persists the row into the history (step 1.A-2,
+     * EngineBackend::runTurn) builds it from the same source {@see run()}
+     * does. The context-window share is not filled here: the usage it needs
+     * is the engine loop's, and that wiring is step 1.A-2 / 2.1
+     * ({@see Context\TurnContextBlock::withContextPercent()}).
+     */
+    public function turnContext(App $app): Context\TurnContextBlock
+    {
+        return Context\TurnContextBlock::new()
+            ->withGitState($this->environmentSnapshot($app)->renderVolatile())
+            ->withRecentlyModifiedFiles(Context\TurnContextBlock::recentlyModifiedIn($app->messages));
+    }
+
+    /**
+     * Share one {@see Context\SessionPromptMemo} with this Runtime, so its
+     * PerSession layers (static `<env>`, repo map, project memory, standing
+     * instruction slab) are read from — and filled into — a memo that
+     * outlives the turn. Without one the Runtime keeps a private memo, which
+     * is the pre-1.A-1 per-Runtime memoisation exactly.
+     *
+     * A clone, not a mutation: the memo is a construction-time choice and a
+     * Runtime already handed to a loop keeps the one it was built with.
+     */
+    public function withSessionPromptMemo(Context\SessionPromptMemo $memo): self
+    {
+        $copy = clone $this;
+        $copy->sessionPromptMemo = $memo;
+
+        return $copy;
+    }
+
+    /**
+     * The session memo this Runtime reads its PerSession layers through:
+     * the shared one {@see withSessionPromptMemo()} installed, else a private
+     * one created on first use.
+     */
+    private function sessionPromptMemo(): Context\SessionPromptMemo
+    {
+        return $this->sessionPromptMemo ??= Context\SessionPromptMemo::new();
+    }
+
+    /**
+     * See {@see withSessionPromptMemo()}; null until a build needs one.
+     */
+    private ?Context\SessionPromptMemo $sessionPromptMemo = null;
 
     /**
      * Resolve the project-memory block folded into every system prompt.
@@ -4660,9 +4786,15 @@ final class Runtime
      */
     private function memorySnapshot(App $app): MemoryBlock
     {
+        // Step 1.A-1: per SESSION through the memo, keyed by root; a store-less
+        // App renders nothing and needs no slot.
         return $this->memoryBlock ??= $app->memoryStore === null
             ? MemoryBlock::empty()
-            : MemoryBlock::capture($app->memoryStore, $this->projectMemoryStore($app));
+            : $this->sessionPromptMemo()->remember(
+                $app->sessionId,
+                'memory:' . hash('xxh128', self::projectRoot($app) . "\0" . spl_object_id($app->memoryStore)),
+                fn(): MemoryBlock => MemoryBlock::capture($app->memoryStore, $this->projectMemoryStore($app)),
+            );
     }
 
     /**
@@ -4703,7 +4835,12 @@ final class Runtime
      */
     private function repoMapSnapshot(App $app): RepoMapBlock
     {
-        return $this->repoMapBlock ??= RepoMapBlock::capture(self::projectRoot($app));
+        // Step 1.A-1: per SESSION through the memo, keyed by root.
+        return $this->repoMapBlock ??= $this->sessionPromptMemo()->remember(
+            $app->sessionId,
+            'repo-map:' . hash('xxh128', self::projectRoot($app)),
+            static fn(): RepoMapBlock => RepoMapBlock::capture(self::projectRoot($app)),
+        );
     }
 
     /**

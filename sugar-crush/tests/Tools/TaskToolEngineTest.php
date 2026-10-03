@@ -384,9 +384,11 @@ final class TaskToolEngineTest extends TestCase
      */
     private static function turns(CompleteRequest $request): array
     {
+        // Without the `<turn-context>` row (step 1.A-1): it carries the host
+        // checkout's git state, not the conversation these tests pin.
         return array_map(
             static fn (TypedMessage $message): array => [$message->role(), $message->content()],
-            $request->messages,
+            \SugarCraft\Crush\Context\TurnContextBlock::strip($request->messages),
         );
     }
 

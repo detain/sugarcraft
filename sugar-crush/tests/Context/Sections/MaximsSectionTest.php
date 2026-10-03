@@ -304,9 +304,10 @@ final class MaximsSectionTest extends TestCase
 
         $this->assertSame('<repo-map>', $sections[2]->fence());
 
+        // Step 1.A-1: the prompt's <env> is the static half, session-stable.
         $last = $sections[count($sections) - 1];
         $this->assertSame('<env>', $last->fence());
-        $this->assertSame(Stability::PerTurn, $last->stability());
+        $this->assertSame(Stability::PerSession, $last->stability());
     }
 
     /**

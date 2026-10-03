@@ -203,11 +203,7 @@ final class PromptFixture
     public function systemPrompt(?App $app = null, ?Runtime $runtime = null): string
     {
         $app ??= $this->app();
-        $runtime ??= new Runtime(
-            $app->provider,
-            new HookManager(new HookRegistry()),
-            new EnvironmentBlock($this->root, $app->model, $this->now, $this->platform),
-        );
+        $runtime ??= $this->runtime($app);
 
         $build = \Closure::bind(
             static fn(Runtime $runtime, App $app): string => $runtime->buildSystemPrompt($app),
@@ -216,6 +212,45 @@ final class PromptFixture
         );
 
         return $build($runtime, $app);
+    }
+
+    /**
+     * The `<turn-context>` row (step 1.A-1) the same Runtime would append to
+     * a step's request for `$app` — the volatile half of the environment (the
+     * git section) that left the system prompt. '' when there is nothing to
+     * say (no work tree, no writes). Same Runtime construction as
+     * {@see systemPrompt()}.
+     */
+    public function turnContext(?App $app = null, ?Runtime $runtime = null): string
+    {
+        $app ??= $this->app();
+        $runtime ??= $this->runtime($app);
+
+        return $runtime->turnContext($app)->render();
+    }
+
+    /**
+     * Everything the harness itself tells the model for one step: the
+     * system prompt, then the `<turn-context>` row, through ONE Runtime —
+     * the surface a fence-forgery guard must hold over since step 1.A-1 split
+     * the environment across the two.
+     */
+    public function delivered(?App $app = null, ?Runtime $runtime = null): string
+    {
+        $app ??= $this->app();
+        $runtime ??= $this->runtime($app);
+
+        return $this->systemPrompt($app, $runtime) . "\n\n" . $this->turnContext($app, $runtime);
+    }
+
+    /** The Runtime {@see systemPrompt()} builds when none is passed. */
+    private function runtime(App $app): Runtime
+    {
+        return new Runtime(
+            $app->provider,
+            new HookManager(new HookRegistry()),
+            new EnvironmentBlock($this->root, $app->model, $this->now, $this->platform),
+        );
     }
 
     /**

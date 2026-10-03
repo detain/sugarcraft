@@ -3212,9 +3212,9 @@ DOC;
         $cut = strpos($prompts[0], "\n\nStaged changes (");
         $this->assertIsInt($cut, 'the emitting prompt must carry the staged-diff section');
         $this->assertSame(
-            substr($prompts[0], 0, $cut) . "\n</env>",
+            substr($prompts[0], 0, $cut) . "\n</turn-context>",
             $prompts[1],
-            'the suppressed prompt must be the emitting one with exactly the two diff sections cut out',
+            'the suppressed row must be the emitting one with exactly the two diff sections cut out',
         );
 
         // The three cheap git fields and P3.S3's caveat survive the
@@ -3316,15 +3316,18 @@ DOC;
 
         $staged = 'Staged changes (git diff --cached, index vs HEAD)';
 
-        $first = $this->invokePrivateMethod($runtime, 'buildSystemPrompt', [$app]);
+        // Step 1.A-1: the diffs ride the <turn-context> row now, and the
+        // system prompt carries none of them in any polarity.
+        $first = $runtime->turnContext($app)->render();
         $this->assertSame(1, substr_count($first, $staged), 'an unmarked Runtime emits, exactly as before P3.S5');
+        $this->assertSame(0, substr_count($this->invokePrivateMethod($runtime, 'buildSystemPrompt', [$app]), $staged));
 
         $runtime->markWriteSinceLastRender(false);
-        $quiet = $this->invokePrivateMethod($runtime, 'buildSystemPrompt', [$app]);
+        $quiet = $runtime->turnContext($app)->render();
         $this->assertSame(0, substr_count($quiet, $staged));
 
         $runtime->markWriteSinceLastRender(true);
-        $loud = $this->invokePrivateMethod($runtime, 'buildSystemPrompt', [$app]);
+        $loud = $runtime->turnContext($app)->render();
         $this->assertSame(1, substr_count($loud, $staged));
 
         // The re-armed prompt is the ORIGINAL prompt, byte for byte: the flip
@@ -3386,16 +3389,20 @@ DOC;
 
         $runtime = new Runtime($this->provider, $this->hookManager, $block);
 
+        // Step 1.A-1: the injected block is normalised ONCE to its static
+        // form for the system prompt; its suppression decision carries over
+        // untouched, and the held instance is stable from then on.
         $held = $this->invokePrivateMethod($runtime, 'environmentSnapshot', [$app]);
-        $this->assertSame($block, $held, 'the injected instance must be handed back untouched');
-        $this->assertFalse($held->writeSinceLastRender());
+        $this->assertFalse($held->includesVolatile(), 'the prompt holds the static half only');
+        $this->assertFalse($held->writeSinceLastRender(), 'the injected suppression must survive the normalisation');
+        $this->assertSame($held, $this->invokePrivateMethod($runtime, 'environmentSnapshot', [$app]));
 
-        $prompt = $this->invokePrivateMethod($runtime, 'buildSystemPrompt', [$app]);
+        $prompt = $runtime->turnContext($app)->render();
         $this->assertSame(0, substr_count($prompt, 'Staged changes (git diff --cached, index vs HEAD)'));
 
         // ...and the loop still owns it once it speaks.
         $runtime->markWriteSinceLastRender(true);
-        $armed = $this->invokePrivateMethod($runtime, 'buildSystemPrompt', [$app]);
+        $armed = $runtime->turnContext($app)->render();
         $this->assertSame(1, substr_count($armed, 'Staged changes (git diff --cached, index vs HEAD)'));
     }
 
@@ -9206,8 +9213,9 @@ DOC;
     }
 
     /**
-     * A non-streaming provider that records the `systemPrompt` of every
-     * request it is handed and answers with the next scripted response.
+     * A non-streaming provider that records the `<turn-context>` row of every
+     * request it is handed (the system prompt's git section until step 1.A-1
+     * moved it there) and answers with the next scripted response.
      *
      * Non-streaming on purpose: `Runtime::run()` assembles the prompt BEFORE
      * it branches on `supportsStreaming()`, so both paths see the identical
@@ -9265,7 +9273,10 @@ DOC;
 
             public function complete(CompleteRequest $request): CompleteResponse
             {
-                $this->prompts[] = (string) $request->systemPrompt;
+                // Step 1.A-1: the git section the write signal governs left
+                // the system prompt for the `<turn-context>` row, so that row
+                // is what each step records.
+                $this->prompts[] = (string) \SugarCraft\Crush\Context\TurnContextBlock::latestIn($request->messages);
 
                 if (!isset($this->script[$this->next])) {
                     throw new \LogicException('the engine loop asked for step ' . $this->next . '; the script has ' . count($this->script));

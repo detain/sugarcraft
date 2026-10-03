@@ -2309,24 +2309,29 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
      * at index > 0 - or a second system row anywhere - is an HTTP 400
      * "System message must be at the beginning.", and even where a server
      * tolerates it, only messages[0]'s system content is ever rendered. So
-     * every system source collapses into exactly one leading row: the
-     * request-level assembled prompt FIRST, then history SystemMessages in
-     * message order, non-empty contents joined with "\n\n", empty-string rows
-     * dropped. That joiner and empty-drop rule conform to
-     * VertexProvider::systemInstruction(); BedrockProvider::systemBlocks()
-     * matches the prompt-first ordering only (it keeps separate blocks
-     * instead of joining or dropping empties) (E-11); sugar-crush points
-     * its baseUrl straight at the server, so it
-     * cannot lean on opencode's out-of-band merge proxy (E-12).
+     * the body carries at most ONE `system` row, at index 0: the
+     * request-level assembled prompt FIRST, then the history SystemMessages
+     * that precede the first non-system row, non-empty contents joined with
+     * "\n\n", empty-string rows dropped. That joiner and empty-drop rule
+     * conform to VertexProvider::systemInstruction() (E-11); sugar-crush
+     * points its baseUrl straight at the server, so it cannot lean on
+     * opencode's out-of-band merge proxy (E-12).
+     *
+     * IN PLACE, NOT HOISTED (step 1.A-1). Until 1.A-1 every history system
+     * row was hoisted into that leading row, so each cancellation marker,
+     * compaction notice or queued-prompt notice rewrote message 0 and voided
+     * the RadixAttention prefix for the whole conversation. A system row
+     * BEHIND the first non-system row now stays where it happened, as a
+     * user-role `<system-notice>` row — the placement rule and its reasons
+     * live on {@see placeSystemRows()}, which {@see CustomProvider} shares.
      *
      * Non-system rows are untouched, in order. A single-system-at-index-0
      * history and a prompt-only request both produce byte-identical output to
-     * the pre-Q5 prepend block this replaces - which is what lets the E-14
-     * pins (SglangProviderTest's formatMessages legs, MatrixTest's Sglang
-     * rows) survive the change unedited. (Historical note carried from that
-     * block: this provider once never read $systemPrompt at all - the whole
-     * prompt silently dropped every turn, prompt_expand.md §1.1. It must stay
-     * read; the merge may reorder, never omit.)
+     * the pre-Q5 prepend block - which is what lets the E-14 pins
+     * (SglangProviderTest's formatMessages legs, MatrixTest's Sglang rows)
+     * survive. (Historical note carried from that block: this provider once
+     * never read $systemPrompt at all - the whole prompt silently dropped
+     * every turn, prompt_expand.md §1.1. It must stay read.)
      *
      * REASONING REPLAY (step 0.1): an assistant row that carries tool calls
      * also carries its `reasoning_content` when $model names a family whose
@@ -2379,26 +2384,92 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
             };
         }, $messages);
 
-        $systemParts = [];
+        return self::placeSystemRows($rows, $systemPrompt);
+    }
+
+    /**
+     * The one placement rule for system content on an OpenAI-shaped wire
+     * (step 1.A-1), shared with {@see CustomProvider}: rows already formatted
+     * by a provider's `formatMessages()`, the request-level prompt, out comes
+     * the body's `messages` list.
+     *
+     *  - ONE leading `system` row: the prompt first, then every history system
+     *    row that comes BEFORE the first non-system row (a launch notice, the
+     *    title one-shot's instruction), non-empty contents joined with
+     *    "\n\n". Omitted when all of that is empty.
+     *  - Every LATER system row stays IN PLACE as a user-role
+     *    `<system-notice>` row ({@see systemNoticeContent()}).
+     *  - Empty system rows are dropped wherever they sit.
+     *
+     * WHY IN PLACE. Hoisting a mid-history row (a cancellation marker, a
+     * compaction or context-tier notice, a queued-prompt notice) into
+     * message 0 rewrote the FIRST message whenever one arrived, so every such
+     * notice voided the cache prefix for the whole conversation. Left where it
+     * happened, it changes only the bytes from its own position on. And it
+     * cannot stay a `system` row there: the deployed Qwen template answers a
+     * system row at index > 0 with HTTP 400 "System message must be at the
+     * beginning." (E-10), and templates that tolerate one render only
+     * messages[0]'s system content — so a user-role notice, fenced and
+     * labelled as the harness speaking, is the shape every template accepts
+     * and renders.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    public static function placeSystemRows(array $rows, ?string $systemPrompt): array
+    {
+        $leading = [];
         if ($systemPrompt !== null && $systemPrompt !== '') {
-            $systemParts[] = $systemPrompt;
+            $leading[] = $systemPrompt;
         }
-        foreach ($messages as $msg) {
-            if ($msg instanceof SystemMessage && $msg->content() !== '') {
-                $systemParts[] = $msg->content();
+
+        $placed = [];
+        $inLeadingRun = true;
+        foreach ($rows as $row) {
+            if (($row['role'] ?? null) !== 'system') {
+                $inLeadingRun = false;
+                $placed[] = $row;
+
+                continue;
+            }
+
+            $content = \is_string($row['content'] ?? null) ? $row['content'] : '';
+            if ($content === '') {
+                continue;
+            }
+
+            if ($inLeadingRun) {
+                $leading[] = $content;
+            } else {
+                $placed[] = ['role' => 'user', 'content' => self::systemNoticeContent($content)];
             }
         }
 
-        $rows = array_values(array_filter(
-            $rows,
-            static fn(array $row): bool => $row['role'] !== 'system',
-        ));
-
-        if ($systemParts !== []) {
-            array_unshift($rows, ['role' => 'system', 'content' => implode("\n\n", $systemParts)]);
+        if ($leading !== []) {
+            array_unshift($placed, ['role' => 'system', 'content' => implode("\n\n", $leading)]);
         }
 
-        return $rows;
+        return $placed;
+    }
+
+    /**
+     * A mid-history system row's content as the user-role notice that
+     * carries it: fenced in `<system-notice>` so the model reads it as the
+     * harness speaking, not the user. The notice's own fence name is
+     * neutralised inside the payload (same terminator rule as
+     * {@see \SugarCraft\Crush\Context\PromptFence::escape()}), so quoted
+     * text — a queued prompt, an error message — cannot close it early.
+     */
+    public static function systemNoticeContent(string $content): string
+    {
+        $escaped = preg_replace('~<(?=/?system-notice(?:[\s/>]|\z))~i', '&lt;', $content);
+        if ($escaped === null) {
+            throw new \RuntimeException(
+                'SglangProvider::systemNoticeContent(): PCRE failure (' . preg_last_error_msg() . ') while escaping a notice',
+            );
+        }
+
+        return "<system-notice>\n" . $escaped . "\n</system-notice>";
     }
 
     /**
@@ -3372,6 +3443,11 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
 
         $batch = [];
         foreach (array_reverse($messages) as $message) {
+            // Step 1.A-1: the `<turn-context>` row Runtime appends behind the
+            // results is harness metadata, not the end of the batch.
+            if (\SugarCraft\Crush\Context\TurnContextBlock::isTurnContext($message)) {
+                continue;
+            }
             if (!$message instanceof ToolResultMessage) {
                 break;
             }

@@ -694,7 +694,13 @@ final class CustomProviderTest extends TestCase
         );
     }
 
-    public function testCompleteKeepsHistoricalSystemMessageInPlaceWhenPromptIsPrepended(): void
+    /**
+     * Step 1.A-1: a LEADING history system row joins the prompt in the one
+     * leading system row - before 1.A-1 it became a second `system` row at
+     * index 1, which Qwen-family templates answer with HTTP 400 (E-10). The
+     * in-place half of the rule is CustomProviderSystemInPlaceTest's.
+     */
+    public function testALeadingHistoricalSystemMessageJoinsThePromptInOneLeadingRow(): void
     {
         $mock = new MockHandler([
             new Response(200, [], json_encode([
@@ -741,8 +747,7 @@ final class CustomProviderTest extends TestCase
 
         $this->assertSame(
             [
-                ['role' => 'system', 'content' => 'assembled prompt'],
-                ['role' => 'system', 'content' => 'historical system message'],
+                ['role' => 'system', 'content' => "assembled prompt\n\nhistorical system message"],
                 ['role' => 'user', 'content' => 'hi'],
             ],
             $payload['messages']

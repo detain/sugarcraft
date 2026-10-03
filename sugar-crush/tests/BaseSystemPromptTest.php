@@ -911,8 +911,15 @@ final class BaseSystemPromptTest extends TestCase
         // landing at new offset 1,733, single insert op, zero deletes - the
         // Task-batching sentence folded into the # Tool use paragraph right
         // after the read-only batching clause.
+        // MEASURED 2026-10-03 at 1.A-1: 8,504 -> 7,759, exactly ONE pure
+        // deletion of 745 B at offset 7,753 - proven by difflib: single delete
+        // op, zero insert/replace ops, old bytes [0:7753] identical, old tail
+        // [8498:] (the closing "\n</env>") identical at new offset 7,753 - the
+        // whole git section (blank line + caveat through the unstaged diff)
+        // leaving the system prompt for the <turn-context> row, where
+        // tests/Prompt/PromptSnapshotDriftTest pins it byte-for-byte.
         self::assertSame(
-            8504,
+            7759,
             strlen($golden),
             'the system-prompt golden is not its committed length - it has been truncated or padded '
             . 'somewhere the absence assertions below would scan straight past',
@@ -2017,7 +2024,9 @@ final class BaseSystemPromptTest extends TestCase
      * 0644 AFTER writing so a mode change cannot leak `old mode`/`new mode`
      * lines into the pinned diffs.
      *
-     * The final state exercises every git field the <env> block renders:
+     * The final state exercises every git field the volatile half of the
+     * environment renders (since step 1.A-1 that half is the <turn-context>
+     * row, pinned by tests/Prompt/PromptSnapshotDriftTest):
      * branch (main), a three-line --porcelain status (one staged add, one
      * unstaged edit, one untracked file), one recent commit, a staged diff
      * and an unstaged diff. The memory fixture is deliberately NOT inside

@@ -5462,11 +5462,19 @@ final class DocFigureProseDriftTest extends TestCase
         preg_match_all('/^(\d+)\. /m', substr($archRaw, $archStart, $archEnd - $archStart), $archOrdinals);
         self::assertCount(count($ordinals[1]), $archOrdinals[1], 'the two slot lists no longer carry the same number of items — one page was updated and the mirror left behind');
 
-        self::assertSame(1, preg_match('/Slots (\d+).*?(\d+) are the Static prefix; (\d+).*?(\d+) are PerSession; (\d+).*?(\d+) are PerTurn\./s', $window, $split), 'the stability partition sentence lost its shape — the volatility story has no arithmetic left to check');
+        // Step 1.A-1: the last slot (the static <env> half) is PerSession again,
+        // so the partition is four contiguous bands, the fourth one slot wide.
+        self::assertSame(1, preg_match('/Slots (\d+).*?(\d+) are the Static prefix; (\d+).*?(\d+) are PerSession; (\d+).*?(\d+) are PerTurn; (\d+) is PerSession again/s', $window, $split), 'the stability partition sentence lost its shape — the volatility story has no arithmetic left to check');
         self::assertSame(1, (int) $split[1], 'the Static prefix no longer starts at slot 1');
         self::assertSame((int) $split[2] + 1, (int) $split[3], 'the PerSession band does not open where the Static prefix closes');
         self::assertSame((int) $split[4] + 1, (int) $split[5], 'the PerTurn band does not open where PerSession closes');
-        self::assertSame($words[$word[1]], (int) $split[6], 'the bands do not close on the spelled slot count');
+        self::assertSame((int) $split[6] + 1, (int) $split[7], 'the trailing PerSession slot does not follow the PerTurn band');
+        self::assertSame($words[$word[1]], (int) $split[7], 'the bands do not close on the spelled slot count');
+        self::assertSame(
+            \SugarCraft\Crush\Context\Stability::PerSession,
+            (new \SugarCraft\Crush\Context\EnvironmentBlock('/tmp', 'm'))->withVolatile(false)->stability(),
+            'the page calls the last slot (the static <env> half) PerSession — the block no longer reports it',
+        );
         self::assertCount(3, \SugarCraft\Crush\Context\Stability::cases(), 'Stability grew a tier — every per-item stability label in the list needs re-reading, starting with this partition');
 
         self::assertSame(1, preg_match('/^11\. \*\*Environment\*\* \(`EnvironmentBlock`\).*\*\*LAST\*\*/m', $window), 'item eleven is no longer Environment LAST — the P3.S1 invariant this page exists to carry has moved');

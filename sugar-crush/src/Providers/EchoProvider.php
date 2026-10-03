@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Providers;
 
+use SugarCraft\Crush\Context\TurnContextBlock;
 use SugarCraft\Crush\Messages\Message;
 
 /**
@@ -110,7 +111,9 @@ final class EchoProvider implements ProviderInterface
     {
         $lastUser = '';
         foreach ($messages as $msg) {
-            if ($msg instanceof Message && $msg->role() === 'user') {
+            // Step 1.A-1: the harness's `<turn-context>` row is user-ROLE but
+            // not the user's turn, so it is never the thing echoed.
+            if ($msg instanceof Message && $msg->role() === 'user' && !TurnContextBlock::isTurnContext($msg)) {
                 $lastUser = $msg->content();
             }
         }

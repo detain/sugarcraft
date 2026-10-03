@@ -248,7 +248,11 @@ final readonly class CustomProvider implements ProviderInterface
     {
         $params = [
             'model' => $request->model,
-            'messages' => $this->formatMessages($request->messages),
+            // Step 1.A-1: formatMessages() owns the single leading system row
+            // (the prompt, then any leading history system rows; '' counts as
+            // unset, so an empty prompt earns no wire turn) and renders later
+            // system rows in place - see SglangProvider::placeSystemRows().
+            'messages' => $this->formatMessages($request->messages, $request->systemPrompt),
             'temperature' => $request->temperature ?? 0.7,
             'max_tokens' => $request->maxTokens ?? 4096,
             // No reasoning-splitting flag by default (audit 15a A10): the old
@@ -267,15 +271,6 @@ final readonly class CustomProvider implements ProviderInterface
             $params['tools'] = $this->formatTools($request->tools);
         }
 
-        // Only a non-blank assembled prompt earns a wire turn: an empty
-        // system message would hand the backend an empty `system` role to
-        // reconcile against the real history, so '' is treated like null.
-        if ($request->systemPrompt !== null && $request->systemPrompt !== '') {
-            $params['messages'] = array_merge(
-                [['role' => 'system', 'content' => $request->systemPrompt]],
-                $params['messages']
-            );
-        }
 
         try {
             // 'headers' here (not client defaults) so the affinity header also
@@ -331,7 +326,11 @@ final readonly class CustomProvider implements ProviderInterface
 
         $params = [
             'model' => $request->model,
-            'messages' => $this->formatMessages($request->messages),
+            // Step 1.A-1: formatMessages() owns the single leading system row
+            // (the prompt, then any leading history system rows; '' counts as
+            // unset, so an empty prompt earns no wire turn) and renders later
+            // system rows in place - see SglangProvider::placeSystemRows().
+            'messages' => $this->formatMessages($request->messages, $request->systemPrompt),
             'temperature' => $request->temperature ?? 0.7,
             'max_tokens' => $request->maxTokens ?? 4096,
             'stream' => true,
@@ -349,15 +348,6 @@ final readonly class CustomProvider implements ProviderInterface
             $params['tools'] = $this->formatTools($request->tools);
         }
 
-        // Only a non-blank assembled prompt earns a wire turn: an empty
-        // system message would hand the backend an empty `system` role to
-        // reconcile against the real history, so '' is treated like null.
-        if ($request->systemPrompt !== null && $request->systemPrompt !== '') {
-            $params['messages'] = array_merge(
-                [['role' => 'system', 'content' => $request->systemPrompt]],
-                $params['messages']
-            );
-        }
 
         try {
             $response = $this->httpClient->post('chat/completions', [
@@ -633,12 +623,28 @@ final readonly class CustomProvider implements ProviderInterface
     }
 
     /**
+     * Formats the transcript and places its system content (step 1.A-1).
+     *
+     * Before 1.A-1 the request-level prompt was prepended by complete() and
+     * completeStream() and every history SystemMessage stayed a `system` row
+     * where it sat - so a cancellation marker or compaction notice produced a
+     * `system` row at index > 0, which the Qwen-family templates this class
+     * is pointed at answer with HTTP 400 "System message must be at the
+     * beginning." (E-10), and a launch notice produced a SECOND leading
+     * system row. Now the placement is
+     * {@see SglangProvider::placeSystemRows()}'s, shared on purpose so the
+     * two OpenAI-shaped self-hosted providers cannot disagree: one leading
+     * system row (the prompt, then the history system rows ahead of the first
+     * non-system row), every later system row in place as a user-role
+     * `<system-notice>`, empty system rows dropped.
+     *
      * @param array<Message> $messages
-     * @return array<array{role: string, content: string}|array{role: string, content: string, tool_calls?: array}|array{role: string, tool_call_id: string, content: string}>
+     * @param ?string $systemPrompt the request-level assembled prompt; '' counts as unset.
+     * @return list<array<string, mixed>>
      */
-    private function formatMessages(array $messages): array
+    private function formatMessages(array $messages, ?string $systemPrompt = null): array
     {
-        return array_map(function (Message $msg) {
+        return SglangProvider::placeSystemRows(array_map(function (Message $msg) {
             return match (true) {
                 // Audit 15b-15: inlined files, plus image_url parts when an
                 // image was attached (only ever handed to a vision provider).
@@ -656,7 +662,7 @@ final readonly class CustomProvider implements ProviderInterface
                 ],
                 default => ['role' => 'user', 'content' => $msg->content()],
             };
-        }, $messages);
+        }, array_values($messages)), $systemPrompt);
     }
 
     /**

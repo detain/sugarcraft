@@ -1030,7 +1030,13 @@ final class EngineBackendTest extends TestCase
         // the loop still stops at maxSteps, and the turn ends in an answer.
         $this->assertSame(4, $provider->calls, 'loop must stop at maxSteps, plus the one summary request');
         $this->assertNull($provider->requests[3]->tools, 'the summary request advertises no tools');
-        $summaryAsk = $provider->requests[3]->messages[array_key_last($provider->requests[3]->messages)];
+        // The last row the LOOP appended; the `<turn-context>` row Runtime
+        // adds behind it (step 1.A-1) is harness metadata, not the ask.
+        $asked = array_values(array_filter(
+            $provider->requests[3]->messages,
+            static fn ($m): bool => !\SugarCraft\Crush\Context\TurnContextBlock::isTurnContext($m),
+        ));
+        $summaryAsk = $asked[array_key_last($asked)];
         $this->assertStringContainsString('whole budget of 3 tool steps', $summaryAsk->content());
         $this->assertStringContainsString('step 4', $reply->content, 'the reply is the summary, not the last tool step\'s prose');
         $this->assertTrue($reply->stepsTruncated, 'F2: the very exit this test already proves — exhaustion with tool results pending — must be the loud one, not the silent one');
