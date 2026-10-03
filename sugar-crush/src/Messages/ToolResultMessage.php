@@ -46,6 +46,23 @@ final readonly class ToolResultMessage implements Message
         return $this->toolCallId;
     }
 
+    /**
+     * The same result answering the call $toolCallId - how
+     * {@see HistorySanitizer} keeps a result paired with its call when it
+     * renames a call id an older transcript used twice (step 0.2).
+     */
+    public function withToolCallId(string $toolCallId): self
+    {
+        return new self(
+            $toolCallId,
+            $this->content,
+            $this->isError,
+            $this->imageBytes,
+            $this->imageProtocol,
+            $this->usage,
+        );
+    }
+
     public function isError(): bool
     {
         return $this->isError;

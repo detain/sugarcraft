@@ -222,7 +222,7 @@ big-endian length plus a `serialize()`d array, decoded with
 |---|---|---|
 | child → parent | `token`, `reasoning` | assistant text / thinking deltas (an empty `reasoning` is a heartbeat) |
 | child → parent | `started`, `finished`, `subagent`, `spend_cap` | tool and sub-agent events, in turn order |
-| child → parent | `result` | the settled reply, usage and flags; always the last frame |
+| child → parent | `result` | the settled reply, usage and flags, the reply's `stepId` and the turn's `transcript` rows; always the last frame |
 | child → parent | `ask` | `askId`, `toolCallId`, `tool`, `arguments` (after any hook rewrite), `reason`, `source`, `mode`, `suggestions`, `alwaysScope` |
 | parent → child | `ask_reply` | `askId`, `reply` (`once`/`always`/`reject`), `note` (≤ 2 KiB) |
 | parent → child | `steer`, `cancel_soft`, `cancel_tool` | reserved: parsed and buffered by the child, not sent yet |
@@ -293,6 +293,30 @@ The two type worlds meet at the `EngineBackend` seam: the chassis works in the
 root `Message`/`ToolCall` value objects, the engine in the typed
 `Messages\*`/`Tools\*` hierarchy, and lossless adapters live on the chassis side
 only so no dependency cycle is created.
+
+**A finished turn is replayed as it happened.** `runTurn()` returns the reply
+with `Message::$turnTranscript`: the rows the turn added, one step at a time.
+Each step's assistant row carries its tool calls, its narration and its
+reasoning; each tool result follows under its call id; a harness-written prompt
+(the reasoning-only nudge, the summary request) rides along. Every row carries a
+`stepId` that is fresh per turn. When the last step is a tool-free answer, the
+reply itself is that step and carries its `stepId`. On the forked path the rows
+cross the `result` frame as `Message::jsonSerialize()` arrays; past a quarter of
+the frame cap, the tool output stays behind and a marker crosses instead, since
+the `finished` frames already carried it. Chat's settle arm calls
+`Message::settleTurnTranscript()`. It matches each result to the tool row the
+live events drew, by call id inside the turn's window, and stamps that row with
+its step. The step's assistant row goes in just before it with `userVisible`
+false, so the transcript the user reads does not change. When the reply is not
+the last step (a spend-cap or step-ceiling stop), the reply becomes `uiOnly`, so
+its words are not sent twice. `EngineBackend::toTypedMessages()` then rebuilds
+each step as an `AssistantMessage` with its calls, followed by one
+`ToolResultMessage` per result. It follows Zed's rules: an empty result is sent
+as `<Tool returned an empty string>`, and a call nothing answers as
+`Tool canceled by user`. A row without a `stepId`, such as one from an older
+transcript, still replays as prose. `Messages\HistorySanitizer` renames a call
+id that an earlier step of an older transcript already used, and moves the
+results that answer it, so each result stays paired with its own call.
 
 ### The system prompt, in assembly order
 

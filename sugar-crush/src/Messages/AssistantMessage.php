@@ -81,6 +81,22 @@ final readonly class AssistantMessage implements Message
     }
 
     /**
+     * The same step carrying $toolCalls instead (null for none) - how
+     * {@see HistorySanitizer} renames a call id an older transcript used
+     * twice (step 0.2). Everything else, accounting included, is kept.
+     */
+    public function withToolCalls(?array $toolCalls): self
+    {
+        return new self(
+            $this->content,
+            $toolCalls,
+            $this->reasoning,
+            $this->usage,
+            $this->lengthStopped,
+        );
+    }
+
+    /**
      * The wire shape a provider is sent. Deliberately carries NO `usage` key:
      * this is what goes back INTO the next request, and a turn's cost is
      * engine-side accounting rather than conversation content. Adding it here

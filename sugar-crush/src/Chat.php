@@ -2136,7 +2136,13 @@ final class Chat implements Model
                 return [$this, null];
             }
 
-            $message = $msg->message;
+            // Roadmap 1.B-2: an engine turn comes back with the rows it added,
+            // step by step. Folded in here - the tool rows the live events drew
+            // stamped with their step, the model's own record of each step
+            // hidden beside them - so the next request replays the turn as
+            // calls and results instead of tool output read back as prose.
+            // Every other reply carries none and passes through untouched.
+            [$turnHistory, $message] = Message::settleTurnTranscript($this->history, $msg->message);
 
             // The settled Message supersedes whatever was streamed: it is what
             // the provider actually committed to, and on the failure path
@@ -2192,7 +2198,7 @@ final class Chat implements Model
             // stopped turn and survives re-render.
             [$done, $doneCmd] = self::releaseQueuedPrompts([$settled->mutate([
                 'history' => [
-                    ...$this->history,
+                    ...$turnHistory,
                     $message,
                     ...($message->lengthStopped ? [$this->outputLengthStoppedNotice()] : []),
                     // F2, same append shape as the two lines around it: a turn
@@ -4658,8 +4664,10 @@ final class Chat implements Model
     private static function toolResultMessage(ToolResult $result, ?string $reasoning = null): Message
     {
         // $reasoning is display-only here: EngineBackend::toTypedMessages()
-        // re-sends a history entry's content alone, so a thought parked on a
-        // tool row never reaches the model as something the assistant said.
+        // replays a tool row as its result alone - paired with its call once
+        // the settled turn stamps the row with its step (roadmap 1.B-2), as
+        // prose before that - so a thought parked on a tool row never reaches
+        // the model from here. The step's hidden assistant row carries it.
         return Message::assistant($result->isError() ? "Tool error: {$result->error}" : $result->result, reasoning: $reasoning)
             ->withToolResults([$result]);
     }

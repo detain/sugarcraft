@@ -373,6 +373,9 @@ final class UsageWiringTest extends TestCase
             'withIdentity' => $base->withIdentity('m_s_1', 1),
             'withStepId' => $base->withStepId('step-1'),
             'withUserVisible' => $base->withUserVisible(false),
+            // Roadmap 1.B-2: the turn's rows ride the reply that carries the
+            // turn's bill.
+            'withTurnTranscript' => $base->withTurnTranscript([Message::user('nudge')]),
         ];
 
         $reflected = [];

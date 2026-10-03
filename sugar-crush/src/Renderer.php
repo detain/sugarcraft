@@ -3628,6 +3628,9 @@ final class Renderer
      */
     private static function renderHistory(array $history, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
     {
+        // Roadmap 1.B-2: a row the model reads but the user does not - a
+        // turn's step record ({@see Message::$userVisible}) - is not painted.
+        $history = array_filter($history, static fn(Message $msg): bool => $msg->userVisible);
         if ($history === []) {
             return '_(empty conversation — type a question and press Enter)_';
         }

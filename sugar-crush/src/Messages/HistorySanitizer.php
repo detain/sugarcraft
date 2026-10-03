@@ -34,18 +34,22 @@ use SugarCraft\Crush\Tools\ToolCall;
  * §1.12 HONESTY — which operations carry live value on which path. Operation
  * (4), dropping empty assistant rows, is the LIVE-value operation: the
  * refusal shape above reaches a provider today. Operations (2) and (3), the
- * orphan-result drop and the unanswered-call synthesis, are disclosed
- * defense-in-depth: on the Chat path the structure is lost upstream —
- * toTypedMessages strips tool calls and results before they could arrive
- * mismatched — and every engine-loop producer pairs correctly (the settle
- * echo reuses the original id, Runtime.php :2048-2054, and every failure
- * branch returns a paired result, Runtime.php :2402). They are
- * dormant-not-dead, in the E31 doctrine's words: a send is exactly where
- * these invariants must hold even if every producer today pairs correctly,
- * and a checkpoint revival or a future wire path that keeps the structure
- * makes them load-bearing without warning.
+ * orphan-result drop and the unanswered-call synthesis, became load-bearing
+ * on the Chat path with roadmap 1.B-2: toTypedMessages now rebuilds each
+ * recorded step as calls + results, so a compaction that drops one half of a
+ * pair, or a resumed transcript whose rows were cut, reaches this pass with
+ * the structure intact and mismatched. toTypedMessages answers a step's
+ * missing results itself (`Tool canceled by user`); this pass is what still
+ * holds when any other producer, or a resumed delegation's transcript, does
+ * not. Every engine-loop producer pairs correctly (the settle echo reuses
+ * the original id, and every failure branch of
+ * {@see \SugarCraft\Crush\Runtime} returns a paired result). Operation
+ * (0) matters only for history saved before step 0.2.
  *
- * Operations run in ONE pass over the list, in this order:
+ * Operations run over the list in this order:
+ *  (0) rename a call id an EARLIER assistant row already issued, and the
+ *      results that answer it, so every call names itself (step 0.2's
+ *      transcript half - see {@see renameRepeatedCallIds()});
  *  (1) collect every call id from every AssistantMessage's toolCalls;
  *  (2) drop a ToolResultMessage whose toolCallId matches no collected call;
  *  (3) synthesize, immediately after an assistant row, an error result under
@@ -79,6 +83,8 @@ final class HistorySanitizer
      */
     public static function sanitize(array $messages): array
     {
+        $messages = self::renameRepeatedCallIds($messages);
+
         $callIds = [];
         $answeredIds = [];
 
@@ -130,6 +136,89 @@ final class HistorySanitizer
                         );
                     }
                 }
+
+                continue;
+            }
+
+            $out[] = $msg;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Operation (0): give every call an id no earlier call in the list used,
+     * and move the results that answer it along with it.
+     *
+     * WHY: before step 0.2 the text-fallback parsers numbered calls from zero
+     * on every response (`dsml_call_0`), so a transcript saved then - a
+     * suspended delegation's, or a session resumed with the structured
+     * replay of roadmap 1.B-2 - can hold two different calls under one id.
+     * Pairing by id then answers both with whichever result a converter finds
+     * first, and Anthropic and Bedrock refuse the request outright. New turns
+     * cannot produce this ({@see \SugarCraft\Crush\Support\ToolCallIdAllocator}
+     * is seeded with every id already on the conversation); only history
+     * written before it can.
+     *
+     * A result answers the newest assistant row before it that issued its id,
+     * which is the order every producer writes. The first call to use an id
+     * keeps it; a repeat becomes `<id>_r<n>`, the first such name no call in
+     * the list holds. Two calls sharing an id inside ONE row are told apart
+     * by order: the results answer them in turn.
+     *
+     * @param array<array-key, Message> $messages
+     *
+     * @return list<Message>
+     */
+    private static function renameRepeatedCallIds(array $messages): array
+    {
+        $taken = [];
+        foreach ($messages as $msg) {
+            if ($msg instanceof AssistantMessage) {
+                foreach ($msg->toolCalls() ?? [] as $call) {
+                    $id = self::callId($call);
+                    if ($id !== null) {
+                        $taken[$id] = true;
+                    }
+                }
+            }
+        }
+
+        $issued = [];
+        /** @var array<string, list<string>> $answering id as written => the ids its next results answer */
+        $answering = [];
+        $out = [];
+        foreach ($messages as $msg) {
+            if ($msg instanceof AssistantMessage) {
+                $calls = $msg->toolCalls() ?? [];
+                $renamed = false;
+                $answering = [];
+                foreach ($calls as $k => $call) {
+                    $id = self::callId($call);
+                    if ($id === null) {
+                        continue;
+                    }
+                    $final = $id;
+                    if (isset($issued[$id])) {
+                        for ($n = 2; isset($taken[$final = substr($id, 0, 48) . '_r' . $n]); $n++) {
+                        }
+                        $taken[$final] = true;
+                        $calls[$k] = $call instanceof ToolCall ? $call->withId($final) : ['id' => $final] + $call;
+                        $renamed = true;
+                    }
+                    $issued[$final] = true;
+                    $answering[$id][] = $final;
+                }
+                $out[] = $renamed ? $msg->withToolCalls($calls) : $msg;
+
+                continue;
+            }
+
+            if ($msg instanceof ToolResultMessage && ($answering[$msg->toolCallId()] ?? []) !== []) {
+                $queue = &$answering[$msg->toolCallId()];
+                $target = \count($queue) > 1 ? array_shift($queue) : $queue[0];
+                unset($queue);
+                $out[] = $target === $msg->toolCallId() ? $msg : $msg->withToolCallId($target);
 
                 continue;
             }

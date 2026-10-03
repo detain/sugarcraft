@@ -200,10 +200,12 @@ final class Message implements \JsonSerializable
         /**
          * The engine step that produced this row: the assistant step's text
          * and every tool result that step's calls returned share it (roadmap
-         * 1.B-1; filled from the fork result frame from 1.B-2 on). Null on a
-         * user or notice row, and on every row of a transcript written before
-         * steps were recorded - which is how a structured replay tells a
-         * legacy tool row (replayable only as prose) from one it can rebuild
+         * 1.B-1; written by {@see \SugarCraft\Crush\Backend\EngineBackend}
+         * and folded into the history by {@see settleTurnTranscript()}, 1.B-2).
+         * Null on a user or notice row, and on every row of a transcript
+         * written before steps were recorded - which is how
+         * {@see \SugarCraft\Crush\Backend\EngineBackend::toTypedMessages()}
+         * tells a legacy tool row (replayed as prose) from one it rebuilds
          * into a `tool_calls`/`tool` pair.
          */
         public readonly ?string $stepId = null,
@@ -216,6 +218,23 @@ final class Message implements \JsonSerializable
          * flag existed.
          */
         public readonly bool $userVisible = true,
+        /**
+         * The rows a finished engine turn adds to the conversation, step by
+         * step (roadmap 1.B-2): each step's assistant row with its tool calls,
+         * its interim narration and its reasoning, each tool result under its
+         * call id, and any harness-written user row (a nudge, the stopped-turn
+         * summary request). Every row carries its {@see $stepId}, and every
+         * row except a tool result is {@see $userVisible} false.
+         *
+         * Set only on the reply {@see \SugarCraft\Crush\Backend\EngineBackend}
+         * returns, and carried across the fork result frame as arrays. It
+         * ends at {@see settleTurnTranscript()}, which folds it into the
+         * history; the stored reply does not keep it. Transport only: never
+         * part of {@see toWire()} and never persisted.
+         *
+         * @var list<Message>
+         */
+        public readonly array $turnTranscript = [],
     ) {}
 
     public static function user(string $content, ?int $now = null): self
@@ -561,8 +580,10 @@ final class Message implements \JsonSerializable
      * Give this row its storage id and model-facing ref - see $id's and
      * $ref's docblocks. Written by
      * {@see \SugarCraft\Crush\Session\EnhancedSessionStore::loadTranscript()}'s
-     * rows (through {@see fromArray()}) and, from 1.B-2 on, wherever a row is
-     * minted. An empty id clears it; a ref below 1 clears it.
+     * rows (through {@see fromArray()}). A row minted in this process gets
+     * its identity from the store's first save of it instead (by instance, so
+     * a wither's copy is a new row to it). An empty id clears it; a ref below
+     * 1 clears it.
      */
     public function withIdentity(?string $id, ?int $ref): self
     {
@@ -588,6 +609,127 @@ final class Message implements \JsonSerializable
     public function withUserVisible(bool $userVisible = true): self
     {
         return $this->mutate(['userVisible' => $userVisible]);
+    }
+
+    /**
+     * Attach (or clear, via []) the rows the turn added - see
+     * $turnTranscript's docblock. Anything that is not a Message is dropped.
+     *
+     * @param array<array-key, mixed> $rows
+     */
+    public function withTurnTranscript(array $rows): self
+    {
+        return $this->mutate(['turnTranscript' => array_values(array_filter(
+            $rows,
+            static fn(mixed $row): bool => $row instanceof self,
+        ))]);
+    }
+
+    /**
+     * Fold a settled engine reply's {@see $turnTranscript} into the history
+     * the turn ran over (roadmap 1.B-2), so the next request replays the turn
+     * as it happened - each step's assistant row with its `tool_calls`, its
+     * narration and its reasoning, each result paired to its call - instead
+     * of every tool result read back as something the assistant said.
+     *
+     * THE TRANSCRIPT THE USER READS DOES NOT CHANGE. The tool rows the live
+     * events already put on screen ARE the turn's tool results: each is
+     * matched to its result by call id (in order, inside the turn's window -
+     * every row after its prompt) and only stamped with its step id. The rows
+     * with no such counterpart - each step's assistant row and any
+     * harness-written user row - go in hidden ({@see $userVisible} false),
+     * immediately before the first tool row of their step, so the model reads
+     * every call before its result. A tool result with no tool row on screen
+     * goes in as the child sent it, shown, rather than dropped.
+     *
+     * The reply itself keeps its place as the turn's last row. When it IS the
+     * turn's last step (a reply with no tool calls) the engine gave it that
+     * step's id and it stays as it is. When it is not - a turn the spend cap or
+     * the step ceiling stopped, whose reply is the last tool-calling step's
+     * prose - that step's hidden row already carries those words to the
+     * model, so the reply becomes {@see $uiOnly}: shown, never sent twice.
+     *
+     * A reply with no transcript (any non-engine backend, an error notice) is
+     * returned as it came, over the history as it was.
+     *
+     * @param array<int, Message> $history the history as the turn left it
+     *
+     * @return array{0: list<Message>, 1: Message} the history to append the reply to, and the reply
+     */
+    public static function settleTurnTranscript(array $history, Message $reply): array
+    {
+        $history = array_values($history);
+        $rows = $reply->turnTranscript;
+        if ($rows === []) {
+            return [$history, $reply];
+        }
+        $reply = $reply->withTurnTranscript([]);
+
+        // The turn's window opens after its prompt: the newest row the user
+        // typed and the model was sent. A hidden harness row is not one.
+        $start = 0;
+        for ($i = \count($history) - 1; $i >= 0; $i--) {
+            $row = $history[$i];
+            if ($row->role === Role::User && !$row->uiOnly && $row->userVisible && $row->stepId === null) {
+                $start = $i + 1;
+                break;
+            }
+        }
+
+        // The window's finished tool rows, oldest first per call id.
+        $shown = [];
+        for ($i = $start, $n = \count($history); $i < $n; $i++) {
+            $row = $history[$i];
+            $result = $row->toolResults[0] ?? null;
+            if (\count($row->toolResults) === 1 && $result instanceof ToolResult
+                && $row->stepId === null && !$row->uiOnly && $row->pendingToolCallId === null
+            ) {
+                $shown[$result->id ?? $result->name][] = $i;
+            }
+        }
+
+        /** @var array<int, int> $shownAt turn row => history index */
+        $shownAt = [];
+        /** @var array<int, int> $turnRowAt history index => turn row */
+        $turnRowAt = [];
+        foreach ($rows as $j => $row) {
+            $result = $row->toolResults[0] ?? null;
+            if (!$result instanceof ToolResult || $row->stepId === null) {
+                continue;
+            }
+            $key = $result->id ?? $result->name;
+            $at = isset($shown[$key]) ? array_shift($shown[$key]) : null;
+            if ($at !== null) {
+                $shownAt[$j] = $at;
+                $turnRowAt[$at] = $j;
+            }
+        }
+
+        $out = \array_slice($history, 0, $start);
+        $next = 0;
+        $count = \count($rows);
+        for ($i = $start, $n = \count($history); $i < $n; $i++) {
+            if (!isset($turnRowAt[$i])) {
+                $out[] = $history[$i];
+
+                continue;
+            }
+            $j = $turnRowAt[$i];
+            for (; $next < $j; $next++) {
+                if (!isset($shownAt[$next])) {
+                    $out[] = $rows[$next];
+                }
+            }
+            $next = max($next, $j + 1);
+            $out[] = $history[$i]->withStepId($rows[$j]->stepId);
+        }
+        for (; $next < $count; $next++) {
+            if (!isset($shownAt[$next])) {
+                $out[] = $rows[$next];
+            }
+        }
+
+        return [$out, $reply->stepId === null ? $reply->withUiOnly() : $reply];
     }
 
     /**
@@ -624,6 +766,7 @@ final class Message implements \JsonSerializable
             'ref' => $this->ref,
             'stepId' => $this->stepId,
             'userVisible' => $this->userVisible,
+            'turnTranscript' => $this->turnTranscript,
         ], $changes));
     }
 

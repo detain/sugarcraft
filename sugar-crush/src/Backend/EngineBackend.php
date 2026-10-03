@@ -1486,6 +1486,60 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             $onToken($content);
         }
 
+        // Roadmap 1.B-2: the rows this turn added to the conversation, step by
+        // step, so the NEXT turn can replay it as it happened. Before this the
+        // reply below was all that came back: every step's narration was lost
+        // and Chat replayed each tool result as prose the assistant had said.
+        // Each assistant row opens a step; its results share its id. The step
+        // ids are fresh per turn, so no two turns of a session share one.
+        // The last step travels as the reply itself when it IS the reply (a
+        // tool-free answer), so the transcript never carries it twice. Tool
+        // results stay shown (Chat matches them to the rows its live events
+        // drew); everything else is the model's record and hidden.
+        $turnKey = bin2hex(random_bytes(4));
+        $stepNumber = 0;
+        $stepId = null;
+        $replyStepId = null;
+        $callNames = [];
+        $turnRows = [];
+        $added = \array_slice($transcript, \count($messages));
+        $lastAdded = $added === [] ? null : $added[array_key_last($added)];
+        foreach ($added as $row) {
+            if ($row instanceof AssistantMessage) {
+                $stepId = sprintf('s_%s_%d', $turnKey, ++$stepNumber);
+                if ($row === $lastAdded && $row === $lastAssistant && ($row->toolCalls() ?? []) === []) {
+                    $replyStepId = $stepId;
+
+                    continue;
+                }
+                $calls = [];
+                foreach ($row->toolCalls() ?? [] as $call) {
+                    if ($call instanceof \SugarCraft\Crush\Tools\ToolCall) {
+                        $callNames[$call->id()] = $call->name();
+                        $calls[] = \SugarCraft\Crush\ToolCall::fromEngineCall($call);
+                    }
+                }
+                $turnRows[] = Message::assistant($row->content(), reasoning: $row->reasoning())
+                    ->withToolCalls($calls)
+                    ->withStepId($stepId)
+                    ->withUserVisible(false);
+            } elseif ($row instanceof ToolResultMessage) {
+                $id = $row->toolCallId();
+                $name = $callNames[$id] ?? 'tool';
+                $turnRows[] = Message::assistant($row->isError() ? 'Tool error: ' . $row->content() : $row->content())
+                    ->withToolResults([$row->isError()
+                        ? new \SugarCraft\Crush\ToolResult($name, '', $row->content(), $id)
+                        : new \SugarCraft\Crush\ToolResult($name, $row->content(), null, $id)])
+                    ->withStepId($stepId);
+            } elseif ($row instanceof UserMessage) {
+                // A harness-written prompt: the reasoning-only nudge, or the
+                // stopped turn's summary request.
+                $turnRows[] = Message::user($row->content())->withUserVisible(false);
+            } elseif ($row instanceof SystemMessage) {
+                $turnRows[] = Message::system($row->content())->withUserVisible(false);
+            }
+        }
+
         // Thread the reasoning ReasoningExtractor already split out (§12 D3)
         // across the typed-Message -> root-Message seam instead of dropping
         // it here - it's the last point in this call path that still has
@@ -1498,7 +1552,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             ->withLengthStopped($lengthStopped)
             ->withStepsTruncated($stepsTruncated)
             // The guard's own exit, named so Chat can say which loop it ended.
-            ->withLoopGuardStoppedBy($stoppedByLoopGuard ? $loopGuard->endedBy() : null);
+            ->withLoopGuardStoppedBy($stoppedByLoopGuard ? $loopGuard->endedBy() : null)
+            ->withStepId($replyStepId)
+            ->withTurnTranscript($turnRows);
         // @endregion return
     }
 
@@ -2684,6 +2740,28 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                     self::writeFrame($childSocket, ['kind' => 'reasoning', 'text' => '']);
                 },
             );
+            $transcriptRows = [];
+            foreach ($message->turnTranscript as $row) {
+                $transcriptRows[] = ['usage' => $row->usage?->toArray()] + $row->jsonSerialize();
+            }
+            // Every tool result in it already crossed once, on its `finished`
+            // frame, and the parent pairs these rows with the rows those drew
+            // (Message::settleTurnTranscript()). So past a quarter of the frame
+            // cap the result text stays behind and a marker crosses instead: a
+            // turn long enough to hit MAX_FRAME_BYTES must not lose its whole
+            // result frame to the copy it does not need.
+            if (\strlen(serialize($transcriptRows)) > intdiv(self::MAX_FRAME_BYTES, 4)) {
+                foreach ($transcriptRows as $k => $row) {
+                    $result = $row['toolResults'][0] ?? null;
+                    if (!\is_array($result)) {
+                        continue;
+                    }
+                    $omitted = '[tool output not carried: this turn outgrew the result frame]';
+                    $result[($result['error'] ?? null) === null ? 'result' : 'error'] = $omitted;
+                    $transcriptRows[$k]['toolResults'] = [$result];
+                    $transcriptRows[$k]['content'] = $omitted;
+                }
+            }
             // imageBytes/imageProtocol survive this fork boundary too - PHP's
             // serialize()/unserialize() (unlike JSON) round-trip arbitrary
             // binary strings natively, so no base64 step is needed here the
@@ -2714,6 +2792,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 // Audit 15b-15: plain ?string on the same rule; a frame
                 // without it settles "every attachment went out as attached".
                 'attachmentNotice' => $message->attachmentNotice,
+                // Roadmap 1.B-2: the step the reply is (or null), and the rows
+                // the turn added, each in Message::jsonSerialize()'s shape -
+                // plain arrays the parent rebuilds with Message::fromArray(),
+                // usage included as its own array (see 'usage' above).
+                'stepId' => $message->stepId,
+                'transcript' => $transcriptRows,
             ];
         } catch (\Throwable $e) {
             $payload = ['kind' => 'result', 'ok' => false, 'error' => $e->getMessage()];
@@ -2894,6 +2978,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         $reasoning = $data['reasoning'] ?? null;
         $imageBytes = $data['imageBytes'] ?? null;
         $imageProtocol = $data['imageProtocol'] ?? null;
+
+        // Roadmap 1.B-2: the turn's rows, rebuilt with the tolerant reader the
+        // transcript store uses. A frame without the key (an older child) or
+        // with garbage in it settles "no transcript", which is the reply
+        // replayed as it always was; a row that is not an array is skipped.
+        $turnRows = [];
+        foreach (\is_array($data['transcript'] ?? null) ? $data['transcript'] : [] as $row) {
+            if (\is_array($row)) {
+                $turnRows[] = Message::fromArray($row);
+            }
+        }
+
         $deferred->resolve(
             Message::assistant($content, reasoning: is_string($reasoning) ? $reasoning : null)
                 ->withImage(
@@ -2913,6 +3009,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 ->withLoopGuardStoppedBy(is_string($data['loopGuardStoppedBy'] ?? null) ? $data['loopGuardStoppedBy'] : null)
                 // Audit 15b-15: same ?string rule as the line above.
                 ->withAttachmentNotice(is_string($data['attachmentNotice'] ?? null) ? $data['attachmentNotice'] : null)
+                ->withStepId(is_string($data['stepId'] ?? null) ? $data['stepId'] : null)
+                ->withTurnTranscript($turnRows)
         );
     }
 
@@ -3279,6 +3377,20 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * present: SGLang answers it from the server's `/model_info`, and a turn
      * with no image has no reason to wait on that.
      *
+     * TOOL HISTORY IS REPLAYED AS IT HAPPENED (roadmap 1.B-2). Every row a
+     * finished turn recorded carries its step's id ({@see Message::$stepId},
+     * folded in by {@see Message::settleTurnTranscript()}), and the rows of
+     * one step are rebuilt together, at the step's first row: its assistant
+     * row as an {@see AssistantMessage} with its tool calls, narration and
+     * reasoning, then one {@see ToolResultMessage} per result under its call
+     * id. Zed's two rules keep the pairing valid: an empty result is sent as
+     * `<Tool returned an empty string>`, and a call no row answers (a cancel,
+     * a row since compacted) as `Tool canceled by user`. A result whose step
+     * has no assistant row left, or whose call that row does not make, is
+     * read back as prose rather than sent as an orphan. A row with no step id
+     * - every row of a transcript saved before steps were recorded - is
+     * replayed exactly as before: tool output as assistant prose.
+     *
      * @param array<int, Message> $history
      * @return array<int, TypedMessage>
      */
@@ -3287,14 +3399,32 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         $attachmentNotice = null;
         $visible = Message::agentVisible($history);
         $lastUser = null;
+        // Each recorded step's assistant row and results, gathered first so a
+        // step is rebuilt whole wherever its rows sit.
+        $steps = [];
         foreach ($visible as $i => $msg) {
             if ($msg->role->value === 'user') {
-                $lastUser = $i;
+                // A harness-written prompt (hidden) never owns the turn's
+                // attachment notice; the prompt the user typed does.
+                if ($msg->userVisible) {
+                    $lastUser = $i;
+                }
+
+                continue;
+            }
+            if ($msg->stepId === null || $msg->role->value !== 'assistant') {
+                continue;
+            }
+            if ($msg->toolResults !== []) {
+                $steps[$msg->stepId]['results'][] = $msg;
+            } else {
+                $steps[$msg->stepId]['assistant'] ??= $msg;
             }
         }
 
         $vision = null;
         $out = [];
+        $replayed = [];
         foreach ($visible as $i => $msg) {
             if ($msg->role->value === 'user') {
                 $rowNotice = null;
@@ -3305,9 +3435,63 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
 
                 continue;
             }
-            $out[] = $msg->role->value === 'assistant'
-                ? new AssistantMessage($msg->content)
-                : new SystemMessage($msg->content);
+            if ($msg->role->value !== 'assistant') {
+                $out[] = new SystemMessage($msg->content);
+
+                continue;
+            }
+            if ($msg->stepId === null) {
+                $out[] = new AssistantMessage($msg->content);
+
+                continue;
+            }
+            if (isset($replayed[$msg->stepId])) {
+                continue;
+            }
+            $replayed[$msg->stepId] = true;
+
+            $step = $steps[$msg->stepId];
+            $assistant = $step['assistant'] ?? null;
+            $calls = [];
+            foreach ($assistant?->toolCalls ?? [] as $call) {
+                if ($call instanceof \SugarCraft\Crush\ToolCall) {
+                    $calls[] = $call->toEngineCall();
+                }
+            }
+            $made = [];
+            foreach ($calls as $call) {
+                $made[$call->id()] = true;
+            }
+
+            $answers = [];
+            $answered = [];
+            foreach ($step['results'] ?? [] as $row) {
+                foreach ($row->toolResults as $result) {
+                    $id = $result->id ?? $result->name;
+                    if (!isset($made[$id])) {
+                        $answers[] = new AssistantMessage($row->content);
+
+                        continue;
+                    }
+                    $content = $result->isError() ? (string) $result->error : $result->result;
+                    $answers[] = new ToolResultMessage(
+                        $id,
+                        $content === '' ? '<Tool returned an empty string>' : $content,
+                        $result->isError(),
+                    );
+                    $answered[$id] = true;
+                }
+            }
+            foreach ($calls as $call) {
+                if (!isset($answered[$call->id()])) {
+                    $answers[] = new ToolResultMessage($call->id(), 'Tool canceled by user', true);
+                }
+            }
+
+            if ($assistant !== null) {
+                $out[] = new AssistantMessage($assistant->content, $calls === [] ? null : $calls, $assistant->reasoning);
+            }
+            array_push($out, ...$answers);
         }
 
         return $out;
