@@ -226,21 +226,6 @@ Columns:
 - **Hotspot regions**: listed only where another group in the same wave also touches that file.
 - **Order**: the integration cherry-pick order for the wave.
 
-### W1 (order: a, c, b, d, e, g, f, h, i, j)
-
-| G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
-|---|---|---|---|---|---|---|
-| a | 0.16, 0.2, 0.13-a, 0.10, 0.13-b (+ runTurn/executeConcurrently anchors) | `src/Backend/EngineBackend.php`, `src/Runtime.php`, `src/Chat.php`, `src/Cli/Bootstrap.php`, `src/Renderer.php`, `src/Providers/{SglangProvider,CustomProvider}.php`, `src/Providers/CompleteRequest.php`, `src/Providers/Concerns/SessionAffinity.php`, `src/Tools/ToolCall.php`, `src/Messages/HistorySanitizer.php`, `src/Agents/AgentPoolConfig.php` (read) | EB: `runTurn`, ctor + withers. RT: ctor, `run`, `runStreaming`/`runBatch` yields, `executeConcurrently`. Chat: `scheduleBackendCompletion` (withSessionId only). BS: `backendFor`. RN: `cacheIndicator`. SG/CU: post sites only | ARCHITECTURE "Parallel tool dispatch", "Runtime — the agentic loop"; PROMPT_ENGINEERING "Session affinity"; README "The agent loop" | — | M |
-| b | 1.B-1, X-31a, X-31b | `src/Message.php`, `src/Session/EnhancedSessionStore.php`, `src/Backend/EngineBackend.php`, `src/Chat.php`, `src/Providers/OpenAIProvider.php`, `src/Providers/ProviderFactory.php` | EB: `toTypedMessages`. Chat: `persistTranscript`. ESS: `saveTranscript`/`loadTranscript` | ARCHITECTURE session/transcript paragraph; ENVIRONMENT `ANTHROPIC_BASE_URL`; README "Providers" anthropic row | — | M |
-| c | 1.C-1 (+ D1 frame vocabulary, `PendingAsk`) | `src/Backend/EngineBackend.php`, new `src/Backend/{ChildChannel,PendingAsk,InteractiveTurn}.php`, `src/Events/{PermissionAsked,PermissionResolved}.php` | EB: `completeAsync`, `runCompleteInChild`, `drainFrames`, `encodeEvent`/`decodeEvent`, `completeAsyncBlocking` | ARCHITECTURE "EngineBackend forks" frame table (also edited by d: d edits the idle-ceiling sentence only) | candy-testing (LoopPin, unchanged) | M |
-| d | 0.4-a, 0.4-b, 0.5, 0.14-b | `src/Tools/BuiltIn/{Bash,Grep}.php`, `src/Tools/Concerns/CapturesProcessOutput.php`, `src/Runtime.php`, `src/Tools/McpToolBridge.php`, `src/MCP/{StdioMcpServer,McpClient,McpTrustPins}.php`, `src/Support/ProcessContainment.php`, `../sugar-mcp/src/StdioMcpServer.php` | RT: `executeToolCalls`, `executeSequentially`. Bash: `inputSchema`, `execute`, `description` | README :1321 MCP and :1292 Bash bullets; MCP.md (trust pins, `.mcp.json` table, `${VAR}`); ENVIRONMENT `secretEnvAllowlist` row; ARCHITECTURE "EngineBackend forks" idle sentence | **sugar-mcp** | M–L |
-| e | 0.7 → 0.12 → 0.11 | `src/Context/ContextCompactor.php`, `src/Chat.php`, `src/Tools/BuiltIn/{Read,Edit}.php`, new `src/Tools/Edit/*` | Chat: `compactionWire` | SKILLS.md :176 (1.375x figure) | — | M |
-| f | B2 → P-A1 (store side; the Chat TitleSource latch moves to P-A4) → B1 → B3 | `src/Session/{SessionStore,EnhancedSessionStore}.php`, new `src/Session/{SessionKind,TitleSource,SessionQuery,SessionRow}.php`, `src/Chat.php`, `src/Cli/Bootstrap.php`, `src/Tui/SessionPicker.php` (footer) | Chat: `scheduleTitleGeneration`, `route` SessionTitledMsg arm, `sanitizeSessionRows`, `dispatchTurn` checkpoint block, `handleBranchCommand`. ESS: resumable/prune/list API. BS: `openSession`/`seedSession`. **R-SCHEMA, R-STATE** | README "Sessions" :137, Capabilities "Sessions" :1322; ARCHITECTURE "Sessions and state" (prose) | — | M–L |
-| g | 0.1, 0.14-a, 0.15 (+ TaskTool anchors), 0.3, 0.8, 0.14-c | `src/Providers/SglangProvider.php`, `src/Context/PromptFence.php`, `src/Tools/BuiltIn/{TaskTool,Bash}.php`, `src/Cli/Bootstrap.php`, `src/Config/LayeredSettings.php`, `src/Hooks/BuiltIn/ProtectFilesHook.php`, `/home/sites/sugarcraft/AGENTS.md` (check only) | SG: `buildParams`, `formatMessages`. Bash: `promptGuidance` + ctor. BS: `tools` (reads settings; no `backendFor` edit). **R-KEYS** | README layered roster (count 21→23); SETTINGS "Which keys are layered"; PERMISSIONS ProtectFiles table; HOOKS "What protect-files covers" | — | M |
-| h | N-P3a, 0.6, X-35a (=5.14f) | `src/Chat.php`, `src/Cli/Bootstrap.php`, `src/Context/MemoryBlock.php`, `src/Commands/{ShareCommand,CommandRegistry}.php`, `src/Share/*`, `src/Util/Exporter.php` | Chat: **CS** (backend factory), `selectPaletteProvider`, `handleModelCommand`, memory handlers, `handleShareCommand`/`shareResponse`. BS: `chat` (factory closure), `taskWorkerPool`, `agentPoolConfig`. **R-CMDS** | MEMORY "/memory", "three tiers"; ARCHITECTURE :271; PROMPT_ENGINEERING :46; SKILLS :201-205; COMMANDS `/share` row; ENVIRONMENT share rows | — | M |
-| i | X-30, 4.6-1, 4.10-1 | `src/Chat.php`, `src/Sessions/{BackgroundSupervisor,BackgroundSessionRunner}.php`, `src/Agents/TaskList.php`, `src/Workflows/{WorkflowEngine,WorkflowRegistry,WorkflowBuilder}.php` | Chat: `scheduleBackgroundSpawn`. WE: `executeStage` | WORKFLOWS "Three limits"; COMMANDS `/fork` row | — | M |
-| j | O-0 (findings note only), 5.5-1, N-DOC-1, N-DOC-3, 5.14k | new `src/RepoMap/{PhpSymbolExtractor,TagCache,Tag}.php`, `src/Skills/{SkillFrontmatter,Skill,SkillRegistry}.php`, `prompt_kit/findings/crush-report/o0-spikes.md` | — | ENVIRONMENT "Variables read from any config file"; SETTINGS "When a file is ignored"; SKILLS "Frontmatter", "Diagnostics" | candy-core only if spike (d) is adopted | M |
-
 ### W2 (order: a, c, b, e, d, g, h, i, f, j)
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
@@ -404,44 +389,19 @@ LIVE-A15v and LIVE-A21b need GCP credentials, and this host has none. If credent
    - reassemble.
 7. Push.
 
-## 5. Step index (194 steps)
+## 5. Step index (157 steps)
 
 Fields are: ID · size · depends on (besides same-region predecessors) · wave-group.
 
 **Wave-0 fixes**
-- 0.1 S · — · W1-g
-- 0.2 S · — · W1-a
-- 0.3 S · — · W1-g
-- 0.4-a S · — · W1-d
-- 0.4-b S–M · 0.4-a · W1-d
-- 0.5 S–M · D2 · W1-d
-- 0.6 S–M · D4 · W1-h
-- 0.7 S · — · W1-e
-- 0.8 S · — · W1-g
 - 0.8b S · 1.C-2, DEF-MODE · W4-e
-- 0.10 S · — · W1-a
-- 0.11 S–M · 0.12 · W1-e
-- 0.12 S–M · 0.7 · W1-e
-- 0.13-a S · — · W1-a
-- 0.13-b S · — · W1-a
-- 0.14-a S · — · W1-g
-- 0.14-b S · D3 · W1-d
-- 0.14-c S · — · W1-g
-- 0.15 S · 0.14-a · W1-g
-- 0.16 S · D10 · W1-a
-- X-30 S · — · W1-i
-- X-31a S–M · — · W1-b
-- X-31b S · — · W1-b
-- X-35a S · — · W1-h
 - X-37a M · — · W3-h
 
 **Foundations**
 - 1.A-1 M · 0.1 · W2-c
 - 1.A-2 M · 1.A-1, 1.B-2 · W4-a
-- 1.B-1 S–M · — · W1-b
 - 1.B-2 M · 1.B-1 · W2-a
 - 1.B-3 M · 1.B-2 · W3-c
-- 1.C-1 M · D1 · W1-c
 - 1.C-2 M · 1.C-1 · W2-b
 - 1.C-3 M · 1.C-1 · W4-a
 - 1.C-4a S–M · 1.C-1 · W3-a
@@ -497,13 +457,11 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 4.3-3 M · 4.3-1 · W5-i
 - 4.4 M–L · P-D1, P-D3, 4.3-2, 4.7-1 · W10-j
 - 4.5 M · RELAY · W10-c
-- 4.6-1 S–M · — · W1-i
 - 4.6-2 M–L · 4.6-1, 4.3-2, P-D1 · W9-g
 - 4.7-1 S · — · W2-g
 - 4.7-2 S–M · 1.C-4a · W9-a
 - 4.7-3 M · 4.1-1 · W8-e
 - 4.9 M · 4.1-1, 4.3-2 · W9-b
-- 4.10-1 S–M · — · W1-i
 - 4.10-2 M · 4.10-1, 4.2, RELAY · W8-f
 
 **Memory, codebase understanding, UX, integrations**
@@ -515,7 +473,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 5.4-1 S · 5.1-2, O-2e · W6-c
 - 5.4-2 M · 5.1-2 · W5-f
 - 5.4-3 M · 5.4-1, 5.4-2, 5.2 · W7-i
-- 5.5-1 M · — · W1-j
 - 5.5-2 S–M · 5.5-1 · W5-h
 - 5.5-3 M · 5.5-1 · W2-j
 - 5.5-4 S · 5.5-3, DH-TOOLS · W5-h
@@ -541,21 +498,16 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 5.14h S · — · W2-j
 - 5.14i M · 1.A-2 · W10-f
 - 5.14j S–M · — · W2-j
-- 5.14k S · — · W1-j
 - 5.14l S–M · O-2g · W10-f
-- (5.14f = X-35a)
 
 **Settings**
 - N-P0-1 S · — · W2-d
 - N-P0-2 S · N-P0-1 · W2-d
-- N-DOC-1 S · — · W1-j
 - N-DOC-2 S · N-P0-1 · W2-d
-- N-DOC-3 S · — · W1-j
 - DH-KEYS S–M · N-P0-2 (generated docs), N-P2 (derived keys) · W2-d / W4-g
 - N-P1 M · N-P0-1, D7 · W3-i
 - DH-CMDS M · — · W3-i
 - N-P2 M · N-P0, N-P1, D9 · W4-g
-- N-P3a S · — · W1-h
 - N-P3b S–M · N-P2, N-P3a · W5-f
 - N-P3 M · N-P2, N-P3a · W6-j
 - N-P4a M · N-P3, 1.C-1 · W7-j
@@ -568,10 +520,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - N-P5 S · N-P1, N-P2, N-P3 · W10-g
 
 **Sessions and agent view**
-- B1 S · P-A1 · W1-f
-- B2 S · — · W1-f
-- B3 S · P-A1 · W1-f
-- P-A1 M · — · W1-f
 - P-A2 M · P-A1 · W2-f
 - P-A3 S–M · P-A1 · W3-g
 - P-A4 S–M · P-A1, O-2d · W5-e
@@ -588,7 +536,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - P-E3 M · 4.3-2, P-D3 · W10-d
 
 **Server and web**
-- O-0 S · — · W1-j
 - O-2a M · 1.B-1, N-P3a · W2-e
 - O-2b M · O-2a, P-A1 · W3-d
 - O-2c S–M · O-2a · W3-e
@@ -635,16 +582,12 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 | 5.8 "wire the dormant `Message::attachFile()`" | Attachments (`@file`, image paste, drag-drop) are LIVE. Only `@diff`/`@session`/`@url` remain, and the wire uses `<file path>` blocks, not `<context>`. |
 | 13-settings "maxToolSteps default 8", "sub-agent max turns 50" | 1000 and 200 respectively. |
 | V.1 / Part II #35 "WebSearch private default host", "no default endpoint" as a defect | No default endpoint by design (audit F-W3(b)); only the settings key remains (N-P4e). |
-| VI / 0.13 "wire the session-affinity header", "show cached %" | Trait and readout exist. The header is unwired, and the readout is unreachable on OpenAI-shaped providers (no cache-write count). |
-| 0.4 "SIGTERM→SIGKILL the setsid group" | Built (`runCaptured` timeout, `terminateGroup`). Only the Bash parameter and the sequential heartbeat remain. |
-| 0.3 "move the cadence into AGENTS.md" | It is already there; the work is deleting it from `Bash::promptGuidance`. |
 | 0.8, 0.14 ".env*"/"settings protection" as all-new | `.env*` and `.sugar-crush/{hooks.yaml,config.json,agents/}` are already protected. |
 | 1.B "give Message `uiOnly`" | Done (`Message::$uiOnly`, `agentVisible()`). |
 | 1.C "always-allow", "rejection feedback" as new | Exact-call session grants and `HookManager::resolveAsk($feedback)` exist; pattern grants and the widened verdict type are new. |
 | 3.C "dormant `TaskList`" | `TaskList` is the team queue; only `SessionMeta::$tasks` fits a todo. |
 | 3.D JSON hook stdout as wholly new | Exit-code equivalents and `refusedBy` exist (3.D is PARTIAL). |
 | 4.3 "wire `reconnect()`" | Wiring alone is a no-op: it reads in-memory sessions and the IPC dir is per-process random (4.3-3). |
-| 4.10 "fix only the first task of a stage runs" | Intentional and unreachable from YAML; it is a prerequisite only for multi-task plans (4.10-1). |
 | 5.1 "index ≤200 lines/25 KB" as new | `MemoryStore` already builds that index; only injection is missing. |
 | 5.6 status bar `ctx % · tokens · cache % · $` | Done; only `/context` and the system-prompt + tools basis (2.1) remain. |
 | 5.7 "command guard", "Shift+Tab toggle" | The guard exists (`evaluatePlan`). Shift+Tab is `shell.pane-prev` (D8). |
@@ -658,6 +601,4 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 | README :966-968 "`/bg` result comes back"; :1307 "`context: fork` enforced"; :1139-1143 "85% tier is heuristic-only" | All three are false today; fixed by 4.3-1, X-37a and 2.4-2 respectively. |
 
 **New defects found during research:**
-- The default `anthropic` base URL lacks `/v1` (X-31b).
-- Engine-path hooks receive an empty `sessionId` (fixed by 0.13-a).
 - A preset `Bash(git *)` grant does not restrict Bash on the live Task path (4.2, a security gap).

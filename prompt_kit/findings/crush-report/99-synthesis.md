@@ -131,21 +131,7 @@ These are the recommendations from all twelve reports, de-duplicated and grouped
 
 | # | Item | Where | Effort | Sources |
 |---|---|---|---|---|
-| 0.1 | Send `reasoning_content` back on assistant tool-call messages (DeepSeek-V4 and Qwen3 family flags); verify with `cached_tokens` | `SglangProvider::buildParams`/`formatMessages` | S | dsh |
-| 0.2 | Unique tool-call ids: `ToolCallIdAllocator` rewrites `dsml_call_N`/`minimax_xml_call_N`/empty ids to `tc_<session>_<seq>` before execution | new `src/Support/ToolCallIdAllocator.php`; `Runtime` before `executeToolCalls` | S | DCP |
-| 0.3 | Replace the SugarCraft PR cadence in Bash guidance with generic git-safety rules (the cadence already lives in the repo's AGENTS.md); add `includeGitInstructions` + `attribution` settings | `Bash::promptGuidance`; `LayeredSettings` | S | CC OC Kilo nano Claw dsh |
-| 0.4 | Bash `timeout` parameter (default 120 s, max 600 s; `runCaptured` already kills the setsid group) + **heartbeat frames** from sequential tools so the 120 s watchdog measures silence, not work | `Bash.php`, `CapturesProcessOutput`, `Runtime::executeSequentially` | S | 10 reports |
-| 0.5 | Cap MCP results and add a per-call MCP `toolTimeout` (30 s default) | `McpToolBridge::renderContent`; `StdioMcpServer` (+ sugar-mcp) | S | 9 reports |
-| 0.6 | `/memory add` defaults to project scope; inject user scope too (user first); warn when a memory lands in a scope that is never injected | `MemoryBlock::capture`; `Chat::memoryAdd` | S | CC Kilo OH nano Claw |
-| 0.7 | Fix `removeNavigationSteps` (anchor patterns, never touch User rows) and `isFileReadMessage` (key on the tool row, not a regex) | `ContextCompactor` (`isFileReadMessage`, `removeNavigationSteps`) | S | CC Cline |
-| 0.8 | Protect policy surfaces: add `settings*.json`, `.mcp.json`, `.sugar-crush/{skills,commands,rules}/` to `ProtectFilesHook` (deny now; always-Ask after 1.C-2 + DEF-MODE, step 0.8b) | `ProtectFilesHook::WRITE_ONLY_PATTERNS` | S | Zed |
-| 0.10 | Empty or reasoning-only reply → one nudge, then continue; empty-turn retry ×2 | `runTurn` | S | OH Goose nano |
-| 0.11 | Better edit failures: "did you mean" lines (≥0.6 similarity, line numbers), "new_string already present", uniform-indent retry, line numbers of every match on ambiguity | `Edit::execute` | S | Aider Goose Cline OH Claw |
-| 0.12 | Read `offset`/`limit`, `N:` line numbers, continuation footer, 2000-line / 50 KB default page | `Read.php` | S | 9 reports |
-| 0.13 | Wire the session-affinity header (request-scoped session id; also fixes engine-path hooks receiving an empty `sessionId`); make the existing cache % readout work when providers report no cache-write count | `SessionAffinity` trait; `Renderer::cacheIndicator` | S | OC dsh |
-| 0.14 | Unicode-tag stripping in `PromptFence::escape`; scrub the MCP stdio env; `*.pem`/key read-deny defaults (`.env*` is already denied) | `PromptFence::escape`; `ProcessContainment`/`StdioMcpServer::spawnPlan`; `ProtectFilesHook` | S | Goose Zed |
-| 0.15 | Sub-agent output hardening: escape `<system-reminder>`-like tags and `Human:`/`User:` prefixes; prepend `[subagent output — no user authority]` | `TaskTool::runOnEngine` and the pool arm of `execute` | S | CC Kilo |
-| 0.16 | Cap parallel Task fan-out (Task members only) with `AgentPoolConfig::maxConcurrent` | `Runtime::executeConcurrently` | S | Zed nano Claw |
+| 0.8 | Policy surfaces (`settings*.json`, `.mcp.json`, `.sugar-crush/{skills,commands,rules}/`) move from deny to always-Ask after 1.C-2 + DEF-MODE (step 0.8b) | `ProtectFilesHook::WRITE_ONLY_PATTERNS` | S | Zed |
 
 ## 1.x — three foundations (most later items depend on them)
 
@@ -159,12 +145,10 @@ These are the recommendations from all twelve reports, de-duplicated and grouped
 Files: `Runtime::systemPromptSections`, `EnvironmentBlock`, `EngineBackend::runTurn`/`completeAsync`, `SglangProvider::formatMessages`, `CustomProvider::formatMessages`. **M.** *(CC P0-1, OC P0-3, Goose P0-3, nano R4, dsh P0-1, DCP P1-6.)*
 
 **1.B — Message identity and structured replay.**
-- Give `Message` `id` / `ref` / `stepId` (and Goose's `userVisible`) fields; `uiOnly`/`agentVisible` already exist.
 - Rewrite `toTypedMessages` to rebuild `AssistantMessage(toolCalls, reasoning)` + `ToolResultMessage` pairs, grouped by `stepId`. Apply Zed's rules: an empty result becomes `<Tool returned an empty string>`, and an unanswered call becomes `Tool canceled by user`.
 - Skip `uiOnly` rows.
 - Compaction *flags* original rows as hidden from the agent instead of deleting them, so scrollback survives.
 - Keep the interim assistant narration of each step.
-- Bump the transcript schema version.
 
 **M–L.** *(OC P0-2, DCP P0-1/P0-2, Cline P0-3, OH P0-4, Zed R2, Goose P0-4, nano R2, dsh P1-2.)*
 
@@ -179,8 +163,7 @@ Frames from parent to child:
 Frames from child to parent: `permission_request{id,toolCall,ask}`.
 
 How the pieces connect:
-- The child's `permissionApprover` closure (already accepted by `EngineBackend::withPermissionApprover`) writes the request and blocks on the reply.
-- The parent turns it into the **existing** Veil y/n/a modal (`Chat::requestPermission`) and **pauses the 120 s watchdog** while it is open.
+- The parent turns each ask into the **existing** Veil y/n/a modal (`Chat::requestPermission`).
 - Steer frames are drained at each step boundary and before each sequential tool. Unstarted calls get the synthetic result `"Skipped to process an incoming message."` (OpenClaw).
 - Queue modes: `steer | followup | interrupt`. Bind Enter-while-busy to steer, with a modifier to queue instead (nanobot, Cline, Zed).
 - "Always allow" stores a pattern (exact-call session grants already exist). A rejection can carry feedback the model sees (`HookManager::resolveAsk` already takes it; the approver's `bool` verdict must widen).
@@ -230,11 +213,11 @@ How the pieces connect:
 | 4.3 | **Background Task** (`background:true` / preset `background`): returns `{agent_id}` at once ("DO NOT sleep or poll"). Runs via `BackgroundSupervisor` or `AgentWorkerPool`. On settle, a user-role announce row (`[Subagent '<label>' completed] … status from the runtime outcome (ok/error/timeout), stats line: runtime, tokens, cost, resume id`) is appended, and a turn is auto-dispatched if idle or injected via steer if busy. An "Active subagents" block appears in each turn context. Make `BackgroundSupervisor::reconnect` useful (persist a per-uid session index; today it reads only in-memory sessions) and give it a caller. Also fixes `/bg` results never returning | M–L | Claw nano dsh Goose Kilo OC |
 | 4.4 | **Messaging tools** on the dormant `Mailbox`: `SendMessage{to, text, mode: steer\|followup\|note}` (steer a running child, wake an idle one, cold-resume a stored one via `SuspendedDelegations`), child→parent replies, `Subagents{list\|wait\|cancel}`, `InterruptAgent`; delivery at step boundaries through the 1.C seam; untrusted-peer framing | M–L | Claw dsh Kilo Goose nano |
 | 4.5 | **Shared board** for parallel children (Kilo): `BoardRead`/`BoardPost` with INFO/ASK/RESULT/HOLD/VETO, notice appended to the next tool result | M | Kilo |
-| 4.6 | **Teams**: construct `TeamManager` (`AgentManager::setTeamManager`), `team_*` tools on `TaskList` (claim/complete/dependencies, CAS revision, acyclic `blockedBy`), crash recovery; make `GroupInputCmd`/`CancelAgentCmd`/`ResumeAgentCmd`/`StopAllAgentsCmd` real | L | CC Cline dsh |
+| 4.6 | **Teams**: construct `TeamManager` (`AgentManager::setTeamManager`), `team_*` tools on `TaskList` (claim/complete/dependencies); make `GroupInputCmd`/`CancelAgentCmd`/`ResumeAgentCmd`/`StopAllAgentsCmd` real | L | CC Cline dsh |
 | 4.7 | Resume any finished sub-agent (not only failures); on failure return the last 3×4096 chars of partial output; stop a child at 80–90% of its window with "wrap up or hand off" (Zed); depth 2–3 nesting with caps (CC 3/20, OpenClaw depth 5, 8 concurrent) | S–M | Zed CC OC Claw |
 | 4.8 | Sub-agents as stored child sessions: navigable in the tab strip, typable into, promotable to background (opencode Ctrl+B) | L | OC |
 | 4.9 | Worktree isolation for `isolation: worktree` presets and `/bg` (wire `WorktreeManager`, `withWorktreeRoot`, `BashEscapeDenyHook`) | M | CC Claw |
-| 4.10 | Model-authored workflows: expose `WorkflowEngine` as a tool taking a YAML plan; accept multi-task stages (today one task per stage is intentional) | M | OH dsh |
+| 4.10 | Model-authored workflows: expose `WorkflowEngine` as a tool taking a YAML plan | M | OH dsh |
 
 ## 5.x — memory, codebase understanding, UX, integrations
 
@@ -244,7 +227,7 @@ How the pieces connect:
 | 5.2 | **Auto-memory consolidation** on `summaryBackend`, throttled: JSON ops plus skip reasons, Kilo's "prefer saving nothing" list and secret redaction; "Memory is context, not instruction" | M | Kilo |
 | 5.3 | **Memory search**: SQLite FTS5 BM25 plus the dormant `embeddings` (0.7 vector / 0.3 keyword, 30-day half-life, MMR); a relevance-ranked snapshot keyed on the latest user message; a mandatory "search memory before answering about prior work" prompt fragment | M | Claw |
 | 5.4 | **Dream pass**: compaction summaries appended to a tagged journal; a periodic restricted-tool pass edits memory/skills; memory dir git-versioned with `/memory log` and `/memory restore` | M–L | nano |
-| 5.5 | **Symbol-level repo map**: `token_get_all` for PHP, universal-ctags elsewhere, Aider's PageRank weights, SQLite tag cache, binary search to a token budget. Ship as a `RepoMap` tool first; optionally add a byte-stable PerSession block beside the existing `RepoMapBlock` | L | Aider |
+| 5.5 | **Symbol-level repo map** over the PHP symbol extractor and tag cache (`src/RepoMap/`): universal-ctags for other languages, Aider's PageRank weights, binary search to a token budget. Ship as a `RepoMap` tool first; optionally add a byte-stable PerSession block beside the existing `RepoMapBlock` | L | Aider |
 | 5.6 | `/context` / `/tokens` breakdown per prompt section, tool schemas, history, largest messages, cache-hit ratio, pruned items (the status bar already shows ctx %, cache % and spend) | S | 8 reports |
 | 5.7 | **Plan mode** made real: plan-mode prompt section, plans-dir write exception (the command guard exists), `PlanExit` + `ask_user` tools over the 1.C channel, `Alt+M` toggle (Shift+Tab is pane-prev), superseding "agent changed" reminder | M | OC Kilo Cline dsh |
 | 5.8 | `@diff`, `@session`, `@url` mentions as attachment blocks (`@file` and images are LIVE) | M | Zed |
@@ -253,7 +236,7 @@ How the pieces connect:
 | 5.11 | LLM exec reviewer / smart-approve for `auto` mode (title backend, JSON verdict, untrusted transcript; the 3-strike breaker exists); MCP `readOnlyHint`; security findings force Ask even in auto | M | Goose Claw dsh OH |
 | 5.12 | Optional bubblewrap sandbox for Bash on Linux | M–L | Zed |
 | 5.13 | Model metadata DB (litellm JSON, 24 h TTL) replacing the fixed 128k / $0 Custom defaults; `FallbackProvider` with `fallbackModels` | M | Aider nano |
-| 5.14 | Small UX: bell/OSC 9 notifications on turn end or approval wait; `/btw` side question; `/handoff` (new session seeded with a summary); `/newrule`; `/init` (AGENTS.md generator); `/share` local Markdown/HTML export; `!cmd`; `/editor`; watch-files `AI!` comments; personal `~/.sugar-crush/AGENTS.md` + `.cursorrules`/`GEMINI.md`/`.clinerules` aliases; skill `requires` gating; `$skill` per-turn injection (a session-scoped Ctrl+S picker exists) | S each | many |
+| 5.14 | Small UX: bell/OSC 9 notifications on turn end or approval wait; `/btw` side question; `/handoff` (new session seeded with a summary); `/newrule`; `/init` (AGENTS.md generator); `!cmd`; `/editor`; watch-files `AI!` comments; personal `~/.sugar-crush/AGENTS.md` + `.cursorrules`/`GEMINI.md`/`.clinerules` aliases; `$skill` per-turn injection (a session-scoped Ctrl+S picker exists) | S each | many |
 | 5.15 | Settings pane, configurable behaviours, server mode, web UI, session management, live agent lines and agent view | — | **Part V** |
 
 ---
@@ -372,10 +355,7 @@ Keep sugar-crush's richer `<env>` and repo map; only move the volatile parts out
 - **Only three keys are ever written:** `provider` and `theme` through `Chat::onConfigChange`, and `layout` through `App::$onLayoutChange`. A drift test pins the first two (`ConfigWriteProducerDocumentationDriftTest`). An editor therefore needs its **own censused write door**; widening that callback would break the pinned contract.
 - **The current key set:** about 26 config keys, 25 `SUGARCRUSH_*` environment variables and 10 CLI flags. The report has the full inventory table: type, default, allowed tiers, env override, whether a change applies live / next turn / after restart, and how easy each is to edit in a UI.
 - **Next-turn reload is mostly free.** The forked child re-reads the settings files each turn (`EngineBackend.php`), so making a key take effect on the next turn usually needs no new plumbing. Today only `parallelToolCalls`, `parallelToolDeadlineSeconds` and `maxOutputTokens` are re-applied that way. `docs/SETTINGS.md` names only the first two.
-- **Documentation mismatches found along the way:**
-  - providers configured in `~/.sugar-crush/config.json` are never read;
-  - `enabledSkills` is read only from `config.json`;
-  - the repo-root `.sugar-crush/config.json` is read only by dormant worktree code.
+- **Documentation mismatch found along the way:** `enabledSkills` is read only from `config.json`.
 
 **Behaviour that should become settings.**
 
@@ -385,7 +365,6 @@ The report lists **about 45 hard-coded constants**, each with file:line and a pr
 - the 64 KiB and 1 MiB output caps;
 - the memory caps of 12 entries, 4 KiB and 512 B;
 - the private WebSearch default host;
-- the SugarCraft-specific git guidance in the Bash tool;
 - sub-agent max turns.
 
 It adds **about 30 future knobs** that the Part III roadmap will create: Bash timeout, doom-loop thresholds, steering mode, `contextPruning.*`, `autoCommit`, `lintCommands`, `testCommand`, sub-agent model and concurrency, and notifications.
@@ -413,7 +392,7 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 - **P0 — schema and truth (S):** the schema, the resolver, invariant tests, and the generated doc table.
 - **P1 — read-only editor (M).**
 - **P2 — editing and writer (M).**
-- **P3 — live apply and session tier (M).** This includes **fixing `Bootstrap::backendFor` dropping the Task tool**, which must land before any provider or model field is exposed.
+- **P3 — live apply and session tier (M).**
 - **P4 — promote the hard-coded constants (L, incremental).**
 - **P5 — polish (S).**
 
@@ -487,20 +466,14 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 
 ## V.4 Sessions, live agent lines, agent view and direct chat (Appendix P)
 
-**Sessions: listing and renaming already exist, but are thin, with three bugs.**
+**Sessions: listing and renaming already exist, but are thin.**
 - **LIVE today:** `/sessions`, Ctrl+R, `/rename <name>`, auto-titles, the tab strip, `--resume`, `-c`, and `sugarcrush session list|delete`.
-- **Bugs:**
-  - **B1:** the picker's Ctrl+B branch filter is always empty, because the branch is hard-coded to null (`Chat.php`).
-  - **B2:** a `/rename` typed while the first auto-title is still being generated gets overwritten (`Chat.php`).
-  - **B3:** the "summary" column shows the session's system prompt (`Chat.php`).
 - **Design:**
   - a revamped `SessionPicker` with `/`-filter fuzzy search and useful columns (title, updated, turns, model, status);
   - grouping, plus inline rename, delete (double press), pin, archive and fork, and a toggle for child sessions;
   - `/rename` with no argument opens inline edit; `--auto` regenerates the title;
-  - a schema migration adding `kind`, `parent_id`, `pinned`, `archived_at`, `title_source` and more;
-  - a `TitleSource` enum, so a title the user set always beats an auto-title;
-  - CLI `session rename|show|pin|archive`;
-  - the tab strip and `--continue` exclude sub-agent sessions.
+  - Chat honours the stored `TitleSource`, so a title the user set always beats an auto-title in the UI as well as in the store;
+  - CLI `session rename|show|pin|archive`.
 
 **Live agent activity lines.**
 - **Problem:** `TaskTool` already emits `SubAgentActivity` beats as `subagent` frames, but:
@@ -539,8 +512,8 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 ## V.5 How the new features fit the Part III roadmap
 
 These features are scheduled in Appendix R together with Part III:
-- The sessions work (B1–B3, P-A) starts in W1.
-- The two-way fork channel is 1.C (= server Phase O-1), W1–W5.
+- The sessions work (P-A2–P-A4) runs W2–W5.
+- The rest of the two-way fork channel, 1.C (= server Phase O-1), runs W2–W5.
 - The grandchild relay and live lines (RELAY, P-B) run W3–W5.
 - The settings schema, editor, writer and live apply (N-P0–N-P3) run W2–W6.
 - The host extraction O-2a–O-2h runs W2–W7, then the protocol (W7), web MVP (W8) and multi-session web (W9).
@@ -560,8 +533,8 @@ The five code audits have one open finding (Appendix Q): **15b-14**, sugar-crush
 
 | ID | Check | Status |
 |---|---|---|
-| LIVE-0.1 | `cached_tokens` before/after a write step on skynet2 (SGLang `--enable-cache-report`) | runnable after W1 |
-| LIVE-X31b | one tool-calling `anthropic` request after the `/v1` fix | runnable after W1 |
+| LIVE-0.1 | `cached_tokens` before/after a write step on skynet2 (SGLang `--enable-cache-report`) | runnable |
+| LIVE-X31b | one tool-calling `anthropic` request after the `/v1` fix | runnable |
 | LIVE-A15b | Bedrock prompt-cache marks: creation tokens > 0, then read tokens > 0 | `~/.aws/credentials` present; model access unverified |
 | LIVE-A15v | Vertex prompt-cache marks (override the outdated default model) | blocked: no GCP credentials |
 | LIVE-A21b | Gemini 2.5 output budget with `thinkingConfig` | blocked: no GCP credentials |

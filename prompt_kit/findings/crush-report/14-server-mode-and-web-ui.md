@@ -1074,13 +1074,6 @@ Calendar estimate for one engineer: **≈ 7-9 weeks** to Phase 6, **≈ 9-11 wee
 
 ---
 
-## 10. Open question and checks owed
+## 10. Open question
 
 **Still open (Part V decision 7):** is non-loopback via a reverse proxy enough for v1, or is built-in TLS wanted?
-
-**Checks owed before implementation (O-0 spikes):**
-
-1. **Pin dependency versions.** Verify `ratchet/rfc6455` latest (claimed `^0.4`) and `react/http`/`react/socket` versions with `composer show -a ratchet/rfc6455 react/http react/socket` in a scratch dir. Confirm react/http's 101-upgrade-with-duplex-body pattern against current `react/http` source: grep `101` / `Upgrade` in `vendor/react/http/src/Io/StreamingServer.php`.
-2. **Audit provider static caches** (§4.4 says "not audited"): `grep -rn 'static \$' sugar-crush/src/Providers`.
-3. **Check headless setup.** Confirm whether candy-core `Program::setupTerminal()` honours `withoutRenderer`/`openTty=false` cleanly (relevant only to the Phase 0 `ModelRuntime` spike): `candy-core/src/Program.php` `setupTerminal`.
-4. **Check sequential Task.** Verify that a single (non-batched) Task call runs in the turn child rather than a grandchild (affects §5.1's "single Task can use the back-channel"): `Runtime::executeToolCalls`, segment-of-one handling.
