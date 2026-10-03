@@ -3519,8 +3519,13 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
      * empty body, non-JSON body, and absent/blank/non-string message keys all
      * return null, so the catch sites fall back to the pre-Q8
      * `$e->getMessage()` byte-for-byte.
+     *
+     * PUBLIC since roadmap 2.7-1a: {@see CustomProvider} speaks the same
+     * OpenAI-compatible error dialect and words a context overflow with the
+     * server's own message too, so the two cannot drift on which body shapes
+     * carry one.
      */
-    private static function errorBodyMessage(GuzzleException $e): ?string
+    public static function errorBodyMessage(GuzzleException $e): ?string
     {
         if (!$e instanceof RequestException || !$e->hasResponse()) {
             return null;

@@ -635,7 +635,9 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
             return new CompleteResponse(
                 content: '',
                 isError: true,
-                errorMessage: $e->getMessage(),
+                // 2.7-1a: classified while the exception (status, body) still
+                // exists, and carried in the text — see ContextOverflow::describe().
+                errorMessage: ContextOverflow::matches($e) ? ContextOverflow::describe($e->getMessage()) : $e->getMessage(),
                 // Classified here, where the exception still exists: this
                 // provider reports a failure as a response rather than by
                 // throwing, so the verdict has to be carried rather than
@@ -737,7 +739,9 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
             yield new CompleteResponse(
                 content: '',
                 isError: true,
-                errorMessage: $e->getMessage(),
+                // 2.7-1a: classified while the exception (status, body) still
+                // exists, and carried in the text — see ContextOverflow::describe().
+                errorMessage: ContextOverflow::matches($e) ? ContextOverflow::describe($e->getMessage()) : $e->getMessage(),
                 // See complete()'s catch. This catch sits OUTSIDE the chunk
                 // loop, so it can fire after real deltas have already been
                 // yielded - which is precisely the case
@@ -1260,10 +1264,16 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
         if (isset($data['error'])) {
             $message = $data['error']['message'] ?? 'Vertex rawPredict returned an error';
 
+            $message = is_string($message) ? $message : 'Vertex rawPredict returned an error';
+
             return new CompleteResponse(
                 content: '',
                 isError: true,
-                errorMessage: is_string($message) ? $message : 'Vertex rawPredict returned an error',
+                // 2.7-1a: an overflow is named in the text, the only verdict
+                // channel an error response has (see ContextOverflow::describe()).
+                errorMessage: ContextOverflow::errorObjectOverflows($data['error'])
+                    ? ContextOverflow::describe($message)
+                    : $message,
                 // A rawPredict error arrives as a 200 carrying an error object,
                 // not as an HTTP status, so this is the only place its
                 // transience is visible. See
@@ -1673,10 +1683,14 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
         if ($type === 'error') {
             $message = $event['error']['message'] ?? 'Vertex streamRawPredict returned an error';
 
+            $message = is_string($message) ? $message : 'Vertex streamRawPredict returned an error';
+
             return new CompleteResponse(
                 content: '',
                 isError: true,
-                errorMessage: is_string($message) ? $message : 'Vertex streamRawPredict returned an error',
+                errorMessage: ContextOverflow::errorObjectOverflows($event['error'] ?? null)
+                    ? ContextOverflow::describe($message)
+                    : $message,
                 // THE case this classification exists for: an overloaded
                 // Anthropic-on-Vertex backend does not answer 503, it opens a
                 // successful 200 SSE stream and puts

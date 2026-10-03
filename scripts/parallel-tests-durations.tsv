@@ -403,6 +403,7 @@ sugar-crush/tests/Backend/UiOnlyWireFilterTest.php	0.117	5
 sugar-crush/tests/Integration/SkillPathScopingWiringTest.php	0.117	6
 sugar-crush/tests/Skills/BuiltInSkillsTest.php	0.116	116
 sugar-crush/tests/Tools/CapabilityAwareDescriptionTest.php	0.115	11
+sugar-crush/tests/Providers/ContextOverflowClassificationTest.php	0.115	35
 sugar-crush/tests/Commands/RulesCommandTest.php	0.113	19
 sugar-crush/tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php	0.111	22
 sugar-crush/tests/Renderer/C1ControlFrameTest.php	0.110	39

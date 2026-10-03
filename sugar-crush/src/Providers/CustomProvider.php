@@ -292,7 +292,7 @@ final readonly class CustomProvider implements ProviderInterface
             return new CompleteResponse(
                 content: '',
                 isError: true,
-                errorMessage: $e->getMessage(),
+                errorMessage: self::failureText($e),
                 // Classified here, where the exception still exists: this
                 // provider reports a failure as a response rather than by
                 // throwing, so the verdict has to be carried rather than
@@ -301,6 +301,29 @@ final readonly class CustomProvider implements ProviderInterface
                 errorTransient: TransientFailure::isTransient($e),
             );
         }
+    }
+
+    /**
+     * The text of a transport failure's error response, and — roadmap 2.7-1a —
+     * the overflow verdict inside it.
+     *
+     * This provider reports a failure as an `isError` {@see CompleteResponse},
+     * which has no field for "the prompt did not fit"; the verdict is decided
+     * here, while the exception still carries its status and whole body
+     * ({@see ContextOverflow::matches()}), and rides in the text via
+     * {@see ContextOverflow::describe()} so it is still recognisable once the
+     * exception is gone. For an overflow the server's own message is used
+     * rather than Guzzle's status-line-plus-clipped-body dump (the reading
+     * SglangProvider settled on, E-56); every other failure keeps
+     * `$e->getMessage()` byte for byte.
+     */
+    private static function failureText(GuzzleException $e): string
+    {
+        if (!ContextOverflow::matches($e)) {
+            return $e->getMessage();
+        }
+
+        return ContextOverflow::describe(SglangProvider::errorBodyMessage($e) ?? $e->getMessage());
     }
 
     /**
@@ -425,7 +448,9 @@ final readonly class CustomProvider implements ProviderInterface
                             yield new CompleteResponse(
                                 content: '',
                                 isError: true,
-                                errorMessage: $streamError->getMessage(),
+                                errorMessage: $streamError->contextOverflow
+                                    ? ContextOverflow::describe($streamError->getMessage())
+                                    : $streamError->getMessage(),
                                 errorTransient: TransientFailure::isTransient($streamError),
                             );
 
@@ -546,7 +571,7 @@ final readonly class CustomProvider implements ProviderInterface
             yield new CompleteResponse(
                 content: '',
                 isError: true,
-                errorMessage: $e->getMessage(),
+                errorMessage: self::failureText($e),
                 // See complete()'s catch: same reason, and this one can fire
                 // after real content chunks have already been yielded, which is
                 // what makes the retry decision at the consumer conditional

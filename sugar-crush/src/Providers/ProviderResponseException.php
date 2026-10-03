@@ -43,11 +43,21 @@ final class ProviderResponseException extends \RuntimeException
     /** Used when the provider flagged an error but supplied no text for it. */
     public const FALLBACK_MESSAGE = 'The provider returned an error response without a message.';
 
+    /**
+     * Whether the response said the prompt did not fit the context window
+     * (roadmap 2.7-1a), decided from the response by
+     * {@see ContextOverflow::matches()} when the exception is built — the one
+     * permanent failure a smaller retry can fix, carried as a verdict because
+     * this exception has no status to decide it from later.
+     */
+    public readonly bool $contextOverflow;
+
     public function __construct(
         string $message,
         public readonly CompleteResponse $response,
     ) {
         parent::__construct($message);
+        $this->contextOverflow = ContextOverflow::matches($response);
     }
 
     /**

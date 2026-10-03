@@ -13,6 +13,7 @@ use PHPUnit\Framework\TestCase;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Providers\ContextOverflow;
 use SugarCraft\Crush\Providers\CustomProvider;
 use SugarCraft\Crush\Providers\ProviderResponseException;
 use SugarCraft\Crush\Providers\ProviderStreamException;
@@ -181,6 +182,7 @@ final class ProviderErrorSurfacingTest extends TestCase
         } catch (ProviderStreamException $e) {
             $this->assertStringContainsString(self::OVERFLOW, $e->getMessage());
             $this->assertFalse(TransientFailure::isTransient($e));
+            $this->assertTrue(ContextOverflow::matches($e), 'roadmap 2.7-1a: the 400 frame is an overflow');
         }
 
         $this->assertSame(2, $mock->count(), 'a 400 error frame is permanent: exactly one request, no retry');
@@ -200,8 +202,11 @@ final class ProviderErrorSurfacingTest extends TestCase
             $reply = EngineBackend::new($provider, 'm')->withoutHooks()->complete([Message::user('hi')]);
             $this->fail('an in-stream error must not come back as a reply; got content ' . var_export($reply->content, true));
         } catch (ProviderResponseException $e) {
-            $this->assertSame(self::OVERFLOW, $e->getMessage());
+            // Roadmap 2.7-1a: the overflow verdict rides in the text, the only
+            // channel an error response has, and survives into the exception.
+            $this->assertSame(ContextOverflow::describe(self::OVERFLOW), $e->getMessage());
             $this->assertTrue($e->response->isError);
+            $this->assertTrue($e->contextOverflow);
         }
 
         $this->assertSame(2, $mock->count(), 'a 400 error frame is permanent: exactly one request, no retry');

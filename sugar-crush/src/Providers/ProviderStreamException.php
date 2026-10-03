@@ -69,11 +69,17 @@ final class ProviderStreamException extends \RuntimeException
      *                             sent a numeric one; null otherwise
      * @param bool     $transient  whether a retry could succeed - read by
      *                             {@see TransientFailure::isTransient()}
+     * @param bool     $contextOverflow whether the server said the prompt did
+     *                             not fit its context window - read by
+     *                             {@see ContextOverflow::matches()}, for the
+     *                             same reason $transient is explicit: no
+     *                             HTTP status is left to decide it
      */
     private function __construct(
         string $message,
         public readonly ?int $serverCode,
         public readonly bool $transient,
+        public readonly bool $contextOverflow = false,
         ?\Throwable $previous = null,
     ) {
         parent::__construct($message, 0, $previous);
@@ -87,6 +93,12 @@ final class ProviderStreamException extends \RuntimeException
      * (5xx, 408, 429). No code, or a non-numeric one such as OpenAI's
      * `"context_length_exceeded"`, is UNCLASSIFIED and therefore permanent -
      * the allow-list rule {@see TransientFailure} applies everywhere.
+     *
+     * A context overflow (roadmap 2.7-1a) is the one permanent failure a
+     * smaller request fixes, so it is classified HERE, with the frame in hand:
+     * the server's message, its string `code`/`type` (OpenAI's
+     * `context_length_exceeded` is a code the message need not repeat) and its
+     * numeric code go through {@see ContextOverflow::describesOverflow()}.
      *
      * @param string $prefix prepended to the server's message, so a provider
      *                       can keep its established wording
@@ -109,12 +121,17 @@ final class ProviderStreamException extends \RuntimeException
             return null;
         }
 
+        $wording = implode("\n", array_filter(
+            [$message, $code, is_array($error) ? ($error['type'] ?? null) : ($frame['type'] ?? null)],
+            'is_string',
+        ));
         $code = self::numericCode($code);
 
         return new self(
             $prefix . self::displayMessage($message),
             $code,
             $code !== null && TransientFailure::statusIsTransient($code),
+            ContextOverflow::describesOverflow($wording, $code),
         );
     }
 

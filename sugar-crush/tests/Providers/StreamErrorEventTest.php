@@ -13,6 +13,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CompleteResponse;
+use SugarCraft\Crush\Providers\ContextOverflow;
 use SugarCraft\Crush\Providers\CustomProvider;
 use SugarCraft\Crush\Providers\ProviderStreamException;
 use SugarCraft\Crush\Providers\SglangProvider;
@@ -93,6 +94,10 @@ final class StreamErrorEventTest extends TestCase
             $this->assertSame('SGLANG request failed: ' . self::CONTEXT_OVERFLOW, $e->getMessage());
             $this->assertSame($code, $e->serverCode);
             $this->assertSame($transient, TransientFailure::isTransient($e));
+            // 2.7-1a: the 400 is the overflow; a 5xx/429 with the same text is
+            // the server's failure, and a smaller request would not fix it.
+            $this->assertSame($code === 400, $e->contextOverflow);
+            $this->assertSame($code === 400, ContextOverflow::matches($e));
         }
 
         $this->assertSame(['Hel'], $contents, 'text before the error still streamed; nothing after it was read');
@@ -113,7 +118,13 @@ final class StreamErrorEventTest extends TestCase
         $error = $chunks[1];
         $this->assertTrue($error->isError);
         $this->assertSame('', $error->content);
-        $this->assertSame(self::CONTEXT_OVERFLOW, $error->errorMessage);
+        // 2.7-1a: an overflow carries its verdict in the text, the only channel
+        // an error response has; every other failure keeps the server's words.
+        $this->assertSame(
+            $code === 400 ? ContextOverflow::describe(self::CONTEXT_OVERFLOW) : self::CONTEXT_OVERFLOW,
+            $error->errorMessage,
+        );
+        $this->assertSame($code === 400, ContextOverflow::matches($error));
         $this->assertSame($transient, $error->errorTransient);
         $this->assertSame($transient, TransientFailure::responseIsTransient($error));
     }

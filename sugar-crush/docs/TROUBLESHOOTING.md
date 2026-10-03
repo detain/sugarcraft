@@ -336,6 +336,18 @@ sugarcrush models          # every selectable provider, "*" marks the selected o
   `curl -s <root>/server_info | jq '{context_length, max_req_input_len, served_model_name, tool_call_parser}'`.
   `"discoverServerInfo": false` in the provider block turns the reads off; a
   `maxOutputTokens` setting replaces the derived `max_tokens` either way.
+- **A turn fails with "Context window exceeded", "maximum context length",
+  "prompt is too long" or "is longer than the model's context length".** The
+  conversation no longer fits the model's window. Every provider's wording of
+  this — an HTTP 400 or 413, an error frame inside a streamed 200, an error
+  response — is recognised as one failure, `Providers\ContextOverflow`, and
+  never retried as is, because the identical request cannot fit the second
+  time either. The providers that report a failure as a response (`custom`,
+  `anthropic`, `vertex`) put `Context window exceeded:` in front of the
+  server's own message. A rate limit that mentions tokens ("tokens per min"),
+  or a `max_tokens` larger than the model allows, is not this: dropping history
+  would not fix either. Automatic prune-and-retry is not wired yet, so make
+  room yourself: `/compact`, then send the message again.
 - **A transcript notice says the SGLang server "serves" a different model.**
   The server's `served_model_name` is of another model family than your
   configured `model`. Sampling, reasoning effort, the default tool-call parser
