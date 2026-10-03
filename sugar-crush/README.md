@@ -184,6 +184,22 @@ Launches that were quit without typing leave empty sessions behind; the next
 launch deletes the ones older than an hour (unnamed, with no transcript and no
 checkpoint — nothing that could be wanted back).
 
+**Each turn also snapshots your files.** Just before a prompt is sent, the
+project's files are recorded with the turn's checkpoint, so a turn's edits can
+be undone later. In a git repository the snapshot is a hidden commit under
+`refs/sugar-crush/checkpoints/<session>/<n>`. Your branch, index and stash list
+are not touched, and `git stash list` does not show it. Outside a repository it
+goes into a private git directory under `~/.sugar-crush/checkpoints/`, and
+nothing is written into the project. Untracked files over 2 MiB, dependency and
+build directories (`node_modules/`, `vendor/`, `dist/`, …), media, archives,
+binaries, databases, logs and `.env*` files are left out. No snapshot is taken
+in your home directory itself, a directory above it, or `~/Desktop`,
+`~/Documents` and `~/Downloads`. A snapshot that cannot be taken never holds up
+the turn. The refs are deleted with their checkpoints: old ones past the
+per-session limit, the ones `/rewind` discards, and a deleted session's.
+`/branch` keeps its own copy. `/rewind` itself still restores only the
+conversation.
+
 ### Settings files
 
 Four files are read, and the **highest one that mentions a key wins** for that

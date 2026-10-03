@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Session;
 
 use PDO;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Workspace\WorkspaceCheckpointer;
 
 /**
  * SQLite session persistence with enhanced metadata tracking and checkpointing.
@@ -180,12 +181,22 @@ final class EnhancedSessionStore
      */
     public function forkSession(string $id, SessionKind $kind = SessionKind::Branch): string
     {
-        return $this->writeTransaction(function () use ($id, $kind): string {
-            $newId = $this->sessionStore->forkSession($id, $kind);
-            $this->copySessionState($id, $newId);
+        try {
+            $newId = $this->writeTransaction(function () use ($id, $kind): string {
+                $newId = $this->sessionStore->forkSession($id, $kind);
+                $this->copySessionState($id, $newId);
 
-            return $newId;
-        });
+                return $newId;
+            });
+        } catch (\Throwable $e) {
+            $this->discardWorkspaceRefOps();
+            throw $e;
+        }
+        // The fork's checkpoints name refs of their own (see
+        // copySessionState()); they are created once the rows are committed.
+        $this->flushWorkspaceRefOps();
+
+        return $newId;
     }
 
     /**
@@ -225,12 +236,22 @@ final class EnhancedSessionStore
             INSERT INTO checkpoints (session_id, "index", state_data, created_at) VALUES (?, ?, ?, ?)
         ');
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $stateData = $this->remapEnvelope((string) $row['state_data'], $idMap);
+            // A workspace snapshot is pinned per session (item 3.A-1): the
+            // branch gets its own ref to the same commit, so deleting or
+            // rewinding either session never unpins the other's files.
+            $workspace = $this->workspaceOf($stateData);
+            if (WorkspaceCheckpointer::isCaptured($workspace)) {
+                $ref = WorkspaceCheckpointer::refFor($toId, (int) $row['index']);
+                $this->pendingRefCopies[] = [$workspace, $ref];
+                $stateData = $this->withWorkspace($stateData, ['ref' => $ref] + $workspace);
+            }
             // Index and created_at are kept: the branch's `/rewind` steps back
             // through the same turns, taken when they were taken.
             $insert->execute([
                 $toId,
                 (int) $row['index'],
-                $this->remapEnvelope((string) $row['state_data'], $idMap),
+                $stateData,
                 $row['created_at'],
             ]);
         }
@@ -317,7 +338,14 @@ final class EnhancedSessionStore
      */
     public function deleteSession(string $id, bool $withChildren = false): array
     {
+        // Read before the delete: the FK cascade takes the checkpoint rows,
+        // and with them the only record of which refs pin their snapshots.
+        $workspaces = $this->workspaceRefsBySession();
         $deleted = $this->sessionStore->deleteSession($id, $withChildren);
+        foreach ($deleted as $deletedId) {
+            array_push($this->pendingRefDrops, ...($workspaces[$deletedId] ?? []));
+        }
+        $this->flushWorkspaceRefOps();
         // The FK cascade took these sessions' checkpoint_blobs rows with them,
         // so every id this instance had interned for them is now dangling.
         // See internMessages(): ANY blob deletion has to invalidate the cache,
@@ -357,11 +385,26 @@ final class EnhancedSessionStore
 
     public function pruneSessions(int $daysOld = 30, ?string $exemptSessionId = null): int
     {
+        $workspaces = $this->workspaceRefsBySession();
         $pruned = $this->sessionStore->pruneSessions($daysOld, $exemptSessionId);
         if ($pruned > 0) {
             // Same cascade as deleteSession(), for a set of ids the caller
             // never named.
             $this->blobIds = [];
+            // The same goes for the refs pinning the pruned sessions'
+            // workspace snapshots: whichever sessions are gone now drop theirs.
+            if ($workspaces !== []) {
+                $placeholders = implode(',', array_fill(0, \count($workspaces), '?'));
+                $stmt = $this->pdo->prepare("SELECT id FROM sessions WHERE id IN ({$placeholders})");
+                $stmt->execute(array_map('strval', array_keys($workspaces)));
+                $alive = array_flip(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN)));
+                foreach ($workspaces as $sessionId => $refs) {
+                    if (!isset($alive[(string) $sessionId])) {
+                        array_push($this->pendingRefDrops, ...$refs);
+                    }
+                }
+                $this->flushWorkspaceRefOps();
+            }
         }
 
         return $pruned;
@@ -627,6 +670,33 @@ final class EnhancedSessionStore
     private const MAX_CHECKPOINTS_PER_SESSION = 100;
 
     /**
+     * Checkpoint-state key holding the workspace snapshot taken for that turn
+     * (item 3.A-1): a {@see WorkspaceCheckpointer} outcome — the pinned
+     * commit and the ref pinning it, or why none was taken. Its ref follows
+     * its row: pruned, rewound and deleted rows drop theirs, and a `/branch`
+     * copy gets one of its own.
+     */
+    public const CHECKPOINT_WORKSPACE_KEY = 'workspaceRef';
+
+    /** Directory beside the database that holds shadow repositories. */
+    public const SHADOW_DIRECTORY = 'checkpoints';
+
+    /**
+     * Snapshot refs of rows the current write deleted, dropped once it
+     * commits — never inside the write lock, and never for a rolled-back one.
+     *
+     * @var list<array<string, mixed>>
+     */
+    private array $pendingRefDrops = [];
+
+    /**
+     * `[snapshot, new ref]` pairs a `/branch` copy needs pinned once it commits.
+     *
+     * @var list<array{0: array<string, mixed>, 1: string}>
+     */
+    private array $pendingRefCopies = [];
+
+    /**
      * Envelope key marking a `state_data` payload as message-referencing
      * rather than a full inline snapshot. Its presence is what distinguishes
      * the two on read; rows written before this existed have no such key and
@@ -814,7 +884,81 @@ final class EnhancedSessionStore
         // write lock is held from the MAX() read to the INSERT, so a second
         // writer cannot take the same index (audit SES-3), and the blob
         // interning inside costs one commit, not one per message (15b-21).
-        return $this->writeTransaction(fn (): int => $this->insertCheckpoint($sessionId, $chatState));
+        try {
+            $index = $this->writeTransaction(fn (): int => $this->insertCheckpoint($sessionId, $chatState));
+        } catch (\Throwable $e) {
+            $this->discardWorkspaceRefOps();
+            throw $e;
+        }
+        // Refs of checkpoints the prune just deleted go only once that delete
+        // is committed, and outside the write lock.
+        $this->flushWorkspaceRefOps();
+
+        return $index;
+    }
+
+    /**
+     * A {@see WorkspaceCheckpointer} for the project at $root whose shadow
+     * repositories (non-git projects) live beside this database, in
+     * {@see SHADOW_DIRECTORY} — the same place-follows-the-store rule the lock
+     * files follow. An in-memory database keeps none, so a non-git project is
+     * refused there.
+     */
+    public function workspaceCheckpointer(string $root): WorkspaceCheckpointer
+    {
+        $shadow = $this->lockDirectory() === null ? null : \dirname($this->dbPath) . '/' . self::SHADOW_DIRECTORY;
+
+        return WorkspaceCheckpointer::new($root)->withShadowBase($shadow);
+    }
+
+    /**
+     * Snapshot the files of the project at $root for checkpoint $index of
+     * $sessionId and record the outcome in that checkpoint row (item 3.A-1).
+     *
+     * Called from the turn's Cmd, after {@see saveCheckpoint()} wrote the row
+     * and before the turn starts writing files. A row that is gone by then
+     * (rewound or pruned in between) keeps no snapshot, so the ref just
+     * created is dropped again rather than leaked.
+     *
+     * @return array<string, mixed> the stored outcome
+     */
+    public function captureWorkspace(string $sessionId, int $index, string $root): array
+    {
+        $workspace = $this->workspaceCheckpointer($root)->capture($sessionId, $index);
+        if (!$this->attachWorkspaceRef($sessionId, $index, $workspace)) {
+            WorkspaceCheckpointer::dropRefs([$workspace]);
+        }
+
+        return $workspace;
+    }
+
+    /**
+     * Store $workspace under {@see CHECKPOINT_WORKSPACE_KEY} in checkpoint
+     * $index of $sessionId; false when there is no such row.
+     *
+     * The row is rewritten through `stdClass`, as {@see remapEnvelope()} does,
+     * so every byte outside the one key round-trips unchanged.
+     *
+     * @param array<string, mixed> $workspace
+     */
+    public function attachWorkspaceRef(string $sessionId, int $index, array $workspace): bool
+    {
+        return $this->writeTransaction(function () use ($sessionId, $index, $workspace): bool {
+            $stmt = $this->pdo->prepare('SELECT id, state_data FROM checkpoints WHERE session_id = ? AND "index" = ?');
+            $stmt->execute([$sessionId, $index]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt->closeCursor();
+            if (!\is_array($row)) {
+                return false;
+            }
+
+            $this->pdo->prepare('UPDATE checkpoints SET state_data = ? WHERE id = ?')->execute([
+                $this->withWorkspace((string) $row['state_data'], $workspace),
+                (int) $row['id'],
+            ]);
+
+            return true;
+        });
     }
 
     /**
@@ -1603,25 +1747,38 @@ final class EnhancedSessionStore
     {
         // Read, delete and collect under one write lock, so another writer
         // cannot add a checkpoint between the read and the delete.
-        return $this->writeTransaction(function () use ($sessionId, $index): ?array {
-            // First verify the checkpoint exists
-            $state = $this->getCheckpoint($sessionId, $index);
-            if ($state === null) {
-                return null;
-            }
+        try {
+            $state = $this->writeTransaction(function () use ($sessionId, $index): ?array {
+                // First verify the checkpoint exists
+                $state = $this->getCheckpoint($sessionId, $index);
+                if ($state === null) {
+                    return null;
+                }
 
-            // Delete all checkpoints with index >= the restored index (they are now invalid)
-            $deleteStmt = $this->pdo->prepare('
-                DELETE FROM checkpoints WHERE session_id = ? AND "index" >= ?
-            ');
-            $deleteStmt->execute([$sessionId, $index]);
+                $this->queueWorkspaceRefDrops('session_id = ? AND "index" >= ?', [$sessionId, $index]);
 
-            // A rewind explicitly discards state, so the messages only that
-            // state referenced stop being worth keeping.
-            $this->collectCheckpointBlobs($sessionId);
+                // Delete all checkpoints with index >= the restored index (they are now invalid)
+                $deleteStmt = $this->pdo->prepare('
+                    DELETE FROM checkpoints WHERE session_id = ? AND "index" >= ?
+                ');
+                $deleteStmt->execute([$sessionId, $index]);
 
-            return $state;
-        });
+                // A rewind explicitly discards state, so the messages only that
+                // state referenced stop being worth keeping.
+                $this->collectCheckpointBlobs($sessionId);
+
+                return $state;
+            });
+        } catch (\Throwable $e) {
+            $this->discardWorkspaceRefOps();
+            throw $e;
+        }
+        // The deleted rows' snapshot refs go too — including the restored
+        // row's own: its state, returned above, still names the commit, which
+        // stays in the object store for a file restore to use.
+        $this->flushWorkspaceRefOps();
+
+        return $state;
     }
 
     /**
@@ -1695,6 +1852,10 @@ final class EnhancedSessionStore
 
         // Delete oldest checkpoints to bring count down to maxCheckpoints
         $deleteCount = $count - $maxCheckpoints;
+        $this->queueWorkspaceRefDrops(
+            'id IN (SELECT id FROM checkpoints WHERE session_id = ? ORDER BY "index" ASC LIMIT ?)',
+            [$sessionId, $deleteCount],
+        );
         $deleteStmt = $this->pdo->prepare('
             DELETE FROM checkpoints
             WHERE session_id = ? AND id IN (
@@ -1716,5 +1877,109 @@ final class EnhancedSessionStore
         // SES-4). The scan reads this session's ≤ MAX_CHECKPOINTS_PER_SESSION
         // envelopes plus its transcript, inside the save's transaction.
         $this->collectCheckpointBlobs($sessionId);
+    }
+
+    /**
+     * Queue the snapshot refs of the checkpoint rows matching $where for
+     * deletion once the current write commits.
+     *
+     * @param list<mixed> $params
+     */
+    private function queueWorkspaceRefDrops(string $where, array $params): void
+    {
+        $stmt = $this->pdo->prepare("SELECT state_data FROM checkpoints WHERE {$where}");
+        $stmt->execute($params);
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $stateData) {
+            $workspace = $this->workspaceOf((string) $stateData);
+            if (WorkspaceCheckpointer::isCaptured($workspace)) {
+                $this->pendingRefDrops[] = $workspace;
+            }
+        }
+    }
+
+    /**
+     * Every pinned snapshot this database records, by session. A substring
+     * pre-filter keeps the scan to rows that can hold one; each match is
+     * decoded and checked, so a false positive costs a decode, never a drop.
+     *
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function workspaceRefsBySession(): array
+    {
+        $stmt = $this->pdo->prepare('SELECT session_id, state_data FROM checkpoints WHERE instr(state_data, ?) > 0');
+        $stmt->execute(['"' . self::CHECKPOINT_WORKSPACE_KEY . '"']);
+        $bySession = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $workspace = $this->workspaceOf((string) $row['state_data']);
+            if (WorkspaceCheckpointer::isCaptured($workspace)) {
+                $bySession[(string) $row['session_id']][] = $workspace;
+            }
+        }
+
+        return $bySession;
+    }
+
+    /**
+     * The workspace outcome stored in a raw `state_data` payload, envelope or
+     * inline, without loading any message blob.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function workspaceOf(string $stateData): ?array
+    {
+        if (!str_contains($stateData, '"' . self::CHECKPOINT_WORKSPACE_KEY . '"')) {
+            return null;
+        }
+        $decoded = json_decode($stateData, true);
+        if (!\is_array($decoded)) {
+            return null;
+        }
+        $state = ($decoded[self::CHECKPOINT_ENVELOPE_VERSION] ?? null) === 1
+            ? ($decoded[self::CHECKPOINT_ENVELOPE_STATE] ?? null)
+            : $decoded;
+        $workspace = \is_array($state) ? ($state[self::CHECKPOINT_WORKSPACE_KEY] ?? null) : null;
+
+        return \is_array($workspace) ? $workspace : null;
+    }
+
+    /**
+     * $stateData with {@see CHECKPOINT_WORKSPACE_KEY} set to $workspace.
+     *
+     * @param array<string, mixed> $workspace
+     */
+    private function withWorkspace(string $stateData, array $workspace): string
+    {
+        $decoded = json_decode($stateData, false);
+        if (!$decoded instanceof \stdClass) {
+            return $stateData;
+        }
+        $envelope = ($decoded->{self::CHECKPOINT_ENVELOPE_VERSION} ?? null) === 1;
+        $state = $envelope ? ($decoded->{self::CHECKPOINT_ENVELOPE_STATE} ?? null) : $decoded;
+        if (!$state instanceof \stdClass) {
+            return $stateData;
+        }
+        $state->{self::CHECKPOINT_WORKSPACE_KEY} = $workspace;
+
+        return self::encodeJson($decoded);
+    }
+
+    /** Apply the queued ref deletions and copies, then forget them. */
+    private function flushWorkspaceRefOps(): void
+    {
+        [$drops, $copies] = [$this->pendingRefDrops, $this->pendingRefCopies];
+        $this->discardWorkspaceRefOps();
+        if ($copies !== []) {
+            WorkspaceCheckpointer::copyRefs($copies);
+        }
+        if ($drops !== []) {
+            WorkspaceCheckpointer::dropRefs($drops);
+        }
+    }
+
+    /** Forget the queued ref operations of a write that rolled back. */
+    private function discardWorkspaceRefOps(): void
+    {
+        $this->pendingRefDrops = [];
+        $this->pendingRefCopies = [];
     }
 }

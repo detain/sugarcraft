@@ -606,6 +606,37 @@ its branches. Retention spares named and pinned rows. `title_source`
 auto-titler, and the titler never overwrites a user's name. The columns are
 added to an older database the next time it is opened.
 
+**Checkpoints snapshot the files too.** Each turn's checkpoint row also records
+a snapshot of the project's files, taken by `Workspace\WorkspaceCheckpointer`
+under the key `EnhancedSessionStore::CHECKPOINT_WORKSPACE_KEY`.
+`Chat::dispatchTurn()` saves the row in `update()`, but the snapshot runs at
+the head of the turn's own Cmd, after the frame is painted and before the
+turn can fork and write a file, because `git stash create` on a large
+repository is not something `update()` may wait for. Only a `Chat` given an
+explicit project root takes one, and every launch passes one. In a git work
+tree the snapshot is a stash-shaped commit: `git stash create` for the
+tracked files, plus a commit of the untracked files built in a scratch
+`GIT_INDEX_FILE`. It is pinned at `refs/sugar-crush/checkpoints/<session>/<n>`,
+so `git gc` keeps it and `git stash list` never shows it, and the user's
+index, stash list and branch are not touched. Outside a work tree the
+snapshot goes into a `Workspace\ShadowRepo`, a private git directory under
+the `checkpoints/` directory beside `session.db`, with the project as its
+work tree. Untracked files over 2 MiB, build and dependency directories,
+media, archives, binaries, databases, logs and `.env*` files are left out.
+The home directory, any directory above it, and `~/Desktop`, `~/Documents`
+and `~/Downloads` are refused. Every git child goes through
+`Workspace\GitRunner`, which runs on the bounded `runCaptured()` spawn, with
+the inherited `GIT_DIR` family unset and signing and hooks switched off. A
+refusal or failure is stored in the row with its reason and never fails the
+turn. A capture that runs out of its 15-second budget switches snapshots off
+for that directory for the rest of the process. **A ref lives as long as its
+row does.** Pruning past the per-session cap, `/rewind` and deleting or
+retention-pruning a session drop the refs of the rows they remove, after the
+write commits. `/branch` pins its own copy under the new session's id.
+`WorkspaceCheckpointer::restore()` and `changes()` are the primitives a file
+restore is built on. A restore is refused once HEAD has moved since the
+checkpoint. Files the snapshot never recorded are never deleted.
+
 `Sessions\Background*` runs a task in a detached session (`/bg`, `/fork`) with
 its own runner and supervisor. `Context\ContextCompactor` +
 `IdleCompactionPolicy` drive `/compact` and automatic compaction against

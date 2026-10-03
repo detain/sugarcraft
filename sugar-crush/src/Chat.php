@@ -10167,6 +10167,7 @@ final class Chat implements Model
         ]);
 
         // Auto-save checkpoint before processing prompt
+        $workspaceCapture = null;
         if ($this->sessionStore !== null && $this->currentSessionId !== null && method_exists($this->sessionStore, 'saveCheckpoint')) {
             $chatState = [
                 // The state BEFORE the prompt (audit SES-1; see the docblock), so
@@ -10198,7 +10199,31 @@ final class Chat implements Model
                 ],
             ];
             try {
-                $this->sessionStore->saveCheckpoint($this->currentSessionId, $chatState);
+                $checkpointIndex = $this->sessionStore->saveCheckpoint($this->currentSessionId, $chatState);
+
+                // THE FILES, TOO (item 3.A-1): the same checkpoint gets a git
+                // snapshot of the workspace, pinned under
+                // refs/sugar-crush/checkpoints/<session>/<n> and recorded in
+                // this row by EnhancedSessionStore::captureWorkspace(). NOT
+                // here: `git stash create` on a large repository would stall
+                // update(). It runs at the head of the turn's own Cmd below,
+                // after the frame is painted and before the turn can fork and
+                // write a file. Only for a Chat given an explicit project root
+                // — every launch passes one — never the getcwd() fallback a
+                // bare embedder's Chat reads, so a library user's process
+                // directory is not snapshotted behind its back.
+                $store = $this->sessionStore;
+                $sessionId = $this->currentSessionId;
+                $root = $this->projectRoot;
+                if ($store instanceof EnhancedSessionStore && $root !== null && $root !== '') {
+                    $workspaceCapture = static function () use ($store, $sessionId, $checkpointIndex, $root): void {
+                        try {
+                            $store->captureWorkspace($sessionId, $checkpointIndex, $root);
+                        } catch (\Throwable) {
+                            // A snapshot never costs the turn; the row simply has none.
+                        }
+                    };
+                }
             } catch (\Throwable) {
                 // Ignore checkpoint save errors - don't block the prompt
             }
@@ -10226,6 +10251,16 @@ final class Chat implements Model
         }
 
         $completion = $this->scheduleBackendCompletion($next, $cancellation, $generation);
+        if ($workspaceCapture !== null) {
+            // Same Cmd, capture first: the snapshot is complete before the
+            // completion forks the turn that may edit the files.
+            $turn = $completion;
+            $completion = static function () use ($workspaceCapture, $turn): mixed {
+                $workspaceCapture();
+
+                return $turn();
+            };
+        }
         $titleCmd = $this->scheduleTitleGeneration($next);
 
         // Batched, not sequenced: the title call must never delay the reply
