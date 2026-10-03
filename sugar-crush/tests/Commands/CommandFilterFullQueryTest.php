@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Fuzzy\MatchResult;
+use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
 /**
  * The "/" popup's filter on candy-fuzzy's `requireFullQuery` mode, plus its
@@ -74,6 +75,88 @@ final class CommandFilterFullQueryTest extends TestCase
 
         // And back: the registry list is recomputed, not answered from the custom set.
         self::assertSame(['rename', 'rewind', 'rules'], self::names(CommandRegistry::filter('re')));
+    }
+
+    /**
+     * The anchor is a property of the name, not of the one alignment the
+     * matcher reports: for "/ab" the adjacent "ab" run at [3, 4] of "a__ab"
+     * outscores the spread-out [0, 4], and reading only that best alignment
+     * dropped a name that plainly starts with "a" and has a "b" after it.
+     */
+    public function testANameWithAnAnchoredPlacementSurvivesALaterHigherScoringRun(): void
+    {
+        $rows = [CommandSpec::new('a__ab', 'Anchored but outscored', 'Custom')];
+
+        self::assertSame(['a__ab'], self::names(CommandRegistry::filter('ab', $rows)));
+
+        $results = CommandRegistry::filterMatchResults('ab', $rows);
+        self::assertCount(1, $results);
+        self::assertSame([0, 4], $results[0]->matchedIndices, 'the popup highlights the anchored placement it admitted the name by');
+        self::assertSame('ab', $results[0]->needle);
+    }
+
+    public function testTheAnchoredPlacementCoversAMultiCharacterRestAndFoldsCase(): void
+    {
+        $rows = [
+            CommandSpec::new('a_bc_abc', 'Anchored, rest spread', 'Custom'),
+            CommandSpec::new('A__ab', 'Upper-case anchor', 'Custom'),
+        ];
+
+        $abc = CommandRegistry::filterMatchResults('abc', $rows);
+        self::assertSame(['a_bc_abc'], array_map(static fn (MatchResult $r): string => $r->haystack, $abc));
+        self::assertSame([0, 2, 3], $abc[0]->matchedIndices);
+
+        $ab = CommandRegistry::filterMatchResults('ab', $rows);
+        self::assertContains('A__ab', array_map(static fn (MatchResult $r): string => $r->haystack, $ab));
+        foreach ($ab as $result) {
+            self::assertCount(2, $result->matchedIndices, $result->haystack);
+            self::assertSame(0, $result->matchedIndices[0], $result->haystack);
+        }
+    }
+
+    public function testANameWithNoAnchoredPlacementStaysOut(): void
+    {
+        $rows = [
+            CommandSpec::new('xab', 'Contains it, does not start with it', 'Custom'),
+            CommandSpec::new('ba__b', 'Starts with the wrong character', 'Custom'),
+            CommandSpec::new('a__ba', 'Anchor, then a later b', 'Custom'),
+            CommandSpec::new('a', 'Shorter than the query', 'Custom'),
+        ];
+
+        // "a__ba": the "b" after the anchor exists, so it stays; the others
+        // either do not start with "a" or have no "b" after their first "a".
+        self::assertSame(['a__ba'], self::names(CommandRegistry::filter('ab', $rows)));
+        self::assertSame([], CommandRegistry::filter('abz', $rows));
+    }
+
+    public function testRecoveringAnAnchoredNameKeepsTheMatchersScoreAndOrder(): void
+    {
+        $rows = [
+            CommandSpec::new('a-b', 'Best alignment already anchored', 'Custom'),
+            CommandSpec::new('a__ab', 'Recovered by its anchored placement', 'Custom'),
+            CommandSpec::new('abc', 'Literal prefix', 'Custom'),
+        ];
+        $names = array_map(static fn (CommandSpec $spec): string => $spec->name, $rows);
+
+        $ranked = SmithWatermanMatcher::new(requireFullQuery: true)->matchAll('ab', $names);
+        $results = CommandRegistry::filterMatchResults('ab', $rows);
+
+        self::assertSame(
+            array_map(static fn (MatchResult $r): array => [$r->haystack, $r->score], $ranked),
+            array_map(static fn (MatchResult $r): array => [$r->haystack, $r->score], $results),
+            'admission changes, ranking does not: same order, same scores as the matcher',
+        );
+    }
+
+    public function testARecoveredResultIsMemoizedLikeAnyOther(): void
+    {
+        $rows = [CommandSpec::new('a__ab', 'Recovered', 'Custom')];
+
+        $first = CommandRegistry::filterMatchResults('ab', $rows);
+        $again = CommandRegistry::filterMatchResults('ab', $rows);
+
+        self::assertCount(1, $first);
+        self::assertSame($first[0], $again[0]);
     }
 
     /**

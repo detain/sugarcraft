@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Commands;
 
 use SugarCraft\Crush\Palette\PaletteAction;
 use SugarCraft\Fuzzy\MatchResult;
+use SugarCraft\Fuzzy\Matcher\CharFold;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
 /**
@@ -410,24 +411,87 @@ final class CommandRegistry
 
         $names = array_map(static fn(CommandSpec $spec): string => $spec->name, $commands);
 
+        return self::fuzzyMatches($prefix, $names);
+    }
+
+    /**
+     * The anchored survivors of one full-query ranking, in the matcher's order.
+     *
+     * The matcher runs in requireFullQuery mode, so every result already
+     * carries one matched index per query character - the LOCAL-alignment
+     * partial hit (query "re" scoring against "agents" on the "e" alone) never
+     * reaches here. What is left to check is the anchor: the first query
+     * character must land on the command's first character. A slash command
+     * is typed from its start, so anchoring is what makes the popup narrow as
+     * the user types instead of widening.
+     *
+     * The anchor is a property of the NAME, not of the one alignment the
+     * matcher happened to report: "/ab" against "a__ab" reports the adjacent
+     * "ab" run at [3, 4] because it outscores the spread-out [0, 4], yet the
+     * name plainly starts with "a" and carries a "b" after it. Reading only
+     * the reported alignment dropped such a name, so a result whose best
+     * covering alignment is unanchored is re-placed by {@see anchoredPlacement()}
+     * and kept when ANY covering alignment starts at index 0.
+     *
+     * Ranking is untouched: the result keeps the matcher's score for the name
+     * and its slot in the matcher's order (score desc, then name); only its
+     * indices change, to the anchored placement the popup admits it by and
+     * highlights.
+     *
+     * @param list<MatchResult> $ranked
+     * @return list<MatchResult>
+     */
+    private static function anchored(string $prefix, array $ranked, SmithWatermanMatcher $matcher): array
+    {
         $matches = [];
-        foreach (self::fuzzyMatches($prefix, $names) as $result) {
-            // The matcher runs in requireFullQuery mode, so every survivor
-            // already carries one matched index per query character - the
-            // LOCAL-alignment partial hit (query "re" scoring against
-            // "agents" on the "e" alone) never reaches here. What is left to
-            // check is the anchor: the first query character must land on
-            // the command's first character. A slash command is typed from
-            // its start, so anchoring is what makes the popup narrow as the
-            // user types instead of widening.
-            if (($result->matchedIndices[0] ?? -1) !== 0) {
+        foreach ($ranked as $result) {
+            if (($result->matchedIndices[0] ?? -1) === 0) {
+                $matches[] = $result;
                 continue;
             }
 
-            $matches[] = $result;
+            $indices = self::anchoredPlacement($prefix, $result->haystack, $matcher);
+            if ($indices !== null) {
+                $matches[] = new MatchResult($result->needle, $result->haystack, $result->score, $indices);
+            }
         }
 
         return $matches;
+    }
+
+    /**
+     * A full-query placement of $prefix in $name whose first index is 0, or
+     * null when none exists.
+     *
+     * One exists exactly when the first characters fold equal and the rest of
+     * the query is an in-order subsequence of the rest of the name. The rest
+     * is placed by the same full-query matcher (so it carries one index per
+     * remaining query character, positioned the way the matcher would
+     * highlight them) and shifted past the anchor. Folding is candy-fuzzy's
+     * {@see CharFold}, the matcher's own, so this test and the matcher never
+     * disagree about which characters are equal; both index spaces are code
+     * points of the original string.
+     *
+     * @return list<int>|null
+     */
+    private static function anchoredPlacement(string $prefix, string $name, SmithWatermanMatcher $matcher): ?array
+    {
+        $head = CharFold::foldSplit(mb_substr($prefix, 0, 1, 'UTF-8'));
+        if ($head === [] || $head !== CharFold::foldSplit(mb_substr($name, 0, 1, 'UTF-8'))) {
+            return null;
+        }
+
+        $restQuery = mb_substr($prefix, 1, null, 'UTF-8');
+        if ($restQuery === '') {
+            return [0];
+        }
+
+        $rest = $matcher->match($restQuery, mb_substr($name, 1, null, 'UTF-8'));
+        if ($rest === null) {
+            return null;
+        }
+
+        return [0, ...array_map(static fn(int $index): int => $index + 1, $rest->matchedIndices)];
     }
 
     /**
@@ -444,8 +508,8 @@ final class CommandRegistry
     private static ?SmithWatermanMatcher $matcher = null;
 
     /**
-     * Ranked matches per prefix for the name list they were computed over
-     * (candy-fuzzy #2). The popup asks for its rows several times per
+     * Ranked, anchored matches ({@see anchored()}) per prefix for the name
+     * list they were computed over (candy-fuzzy #2). The popup asks for its rows several times per
      * keystroke - the key arms, the menu-visibility guard, the renderer -
      * over a name list that does not change between keystrokes, so each
      * (prefix, names) pair is aligned once. A different name list (a custom
@@ -476,6 +540,10 @@ final class CommandRegistry
 
         self::$matcher ??= SmithWatermanMatcher::new(requireFullQuery: true);
 
-        return self::$matchMemo['results'][$prefix] = array_values(self::$matcher->matchAll($prefix, $names));
+        return self::$matchMemo['results'][$prefix] = self::anchored(
+            $prefix,
+            array_values(self::$matcher->matchAll($prefix, $names)),
+            self::$matcher,
+        );
     }
 }
