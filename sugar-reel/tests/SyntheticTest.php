@@ -51,6 +51,130 @@ final class SyntheticTest extends TestCase
     }
 
     /**
+     * Every frame must decode to the gradient Synthetic drew for it. Frames
+     * 1..n carry the palette GD quantised them to as a Local Color Table;
+     * dropping it repaints them through frame 0's palette.
+     */
+    public function testEachFrameDecodesThroughItsOwnPalette(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD not available');
+        }
+        $w = 8;
+        $h = 8;
+        $n = 4;
+        $path = $this->scratchDir() . '/palette.gif';
+        Synthetic::generate($path, $w, $h, $n, 5);
+
+        $frames = Decoder::decode($path, $w, $h);
+        $this->assertCount($n, $frames);
+        foreach ($frames as $f => $frame) {
+            $this->assertSame(5, $frame->delay, "frame $f delay");
+            $err = 0;
+            $worst = 0;
+            for ($y = 0; $y < $h; $y++) {
+                for ($x = 0; $x < $w; $x++) {
+                    $want = [
+                        (int) min(255, 255 * $x / $w),
+                        (int) min(255, 255 * $y / $h),
+                        (int) min(255, 255 * (($x + $y + intdiv($f * $w, $n)) % $w) / $w),
+                    ];
+                    $got = $frame->cells[$y][$x];
+                    $this->assertNotNull($got, "frame $f ($x,$y) transparent");
+                    foreach ([0, 1, 2] as $c) {
+                        $d = abs($want[$c] - $got[$c]);
+                        $err += $d;
+                        $worst = max($worst, $d);
+                    }
+                }
+            }
+            // GD quantises truecolor to a palette, so single channels drift
+            // (MEASURED: mean ~3.3, worst 29 per frame). Repainting a frame
+            // through frame 0's palette instead gives mean ~40, worst ~195.
+            $this->assertLessThan(8, $err / ($w * $h * 3), "frame $f mean channel error");
+            $this->assertLessThan(48, $worst, "frame $f worst channel error");
+        }
+    }
+
+    /**
+     * The stream must be a single GIF89a (extensions are not GIF87a) with
+     * exactly one trailer, at the end.
+     */
+    public function testStreamIsGif89aWithSingleTrailer(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD not available');
+        }
+        $path = $this->scratchDir() . '/stream.gif';
+        Synthetic::generate($path, 8, 8, 3, 4);
+        $bytes = (string) file_get_contents($path);
+
+        $this->assertStringStartsWith('GIF89a', $bytes);
+        $this->assertSame("\x3B", substr($bytes, -1));
+        $this->assertSame(3, substr_count($bytes, "\x21\xF9\x04"), 'one GCE per frame');
+    }
+
+    /**
+     * More frames than pixel columns must still animate: the phase step used
+     * to be (int)(w/frames), which is 0 for 8 px x 16 frames.
+     */
+    public function testFramesDifferWhenFrameCountExceedsWidth(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD not available');
+        }
+        $path = $this->scratchDir() . '/phase.gif';
+        Synthetic::generate($path, 8, 8, 16, 4);
+        $frames = Decoder::decode($path, 8, 8);
+
+        $this->assertCount(16, $frames);
+        $this->assertNotEquals($frames[0]->cells, $frames[2]->cells);
+    }
+
+    /**
+     * When the pid-suffixed temp file already exists, the tempnam() fallback
+     * must be used and renamed into place, not leaked beside the output.
+     */
+    public function testTempCollisionLeavesNoStrayFile(): void
+    {
+        $dir = $this->scratchDir();
+        $path = $dir . '/collide.gif';
+        $blocker = $path . '.' . getmypid() . '.tmp';
+        touch($blocker);
+
+        Synthetic::generate($path, 4, 4, 2, 4);
+
+        $left = array_values(array_diff((array) scandir($dir), ['.', '..']));
+        sort($left);
+        $this->assertSame(['collide.gif', basename($blocker)], $left);
+        $this->assertStringStartsWith('GIF8', (string) file_get_contents($path));
+    }
+
+    private ?string $scratch = null;
+
+    private function scratchDir(): string
+    {
+        if ($this->scratch === null) {
+            $this->scratch = sys_get_temp_dir() . '/sugar-reel-synth-' . bin2hex(random_bytes(6));
+            mkdir($this->scratch, 0700);
+        }
+        return $this->scratch;
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->scratch !== null) {
+            foreach ((array) glob($this->scratch . '/{,.}*', GLOB_BRACE) as $f) {
+                if (is_file((string) $f)) {
+                    unlink((string) $f);
+                }
+            }
+            @rmdir($this->scratch);
+            $this->scratch = null;
+        }
+    }
+
+    /**
      * Verify the GD-absent fallback produces a valid tiny GIF file.
      */
     public function testGenerateFallbackWhenGdAbsent(): void

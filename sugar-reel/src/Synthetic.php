@@ -60,12 +60,15 @@ final class Synthetic
                 continue;
             }
             // Phase-shifted hue sweep: B channel varies with x+y+frame offset
-            // so each frame is a different moment in the color cycle.
+            // so each frame is a different moment in the color cycle. The
+            // offset is f*w/frames rather than f*(int)(w/frames): with more
+            // frames than pixel columns the latter steps by 0, and every
+            // "animated" frame came out identical.
             for ($y = 0; $y < $h; $y++) {
                 for ($x = 0; $x < $w; $x++) {
                     $r = (int) min(255, 255 * $x / $w);
                     $g = (int) min(255, 255 * $y / $h);
-                    $b = (int) min(255, 255 * (($x + $y + $f * (int) ($w / $frames)) % $w) / $w);
+                    $b = (int) min(255, 255 * (($x + $y + intdiv($f * $w, $frames)) % $w) / $w);
                     $col = @imagecolorallocate($im, $r, $g, $b);
                     if ($col !== false) {
                         imagesetpixel($im, $x, $y, $col);
@@ -89,41 +92,36 @@ final class Synthetic
         }
 
         // ── Assemble GIF89a ──────────────────────────────────────────────────
-        // Header (first frame) gives us the Logical Screen Descriptor + GCT.
-        $gif = $frameBytes[0];
-
-        // Inject NETSCAPE2.0 looping app extension so the player restarts.
-        // Bytes: 0x21 0xFF 0x0B "NETSCAPE2.0" 0x03 0x01 <loop_count_lo> <loop_count_hi> 0x00
-        // loop_count 0x0000 means "loop forever".
-        $loopExt = "\x21\xFF\x0BNETSCAPE2.0\x03\x01\x00\x00\x00";
-        // Insert after the 13-byte header + GCT (if present).
-        // The header is always 13 bytes; GCT follows at byte 13.
-        // We need to find where the first frame's Image Descriptor starts
-        // so we can splice the loop extension in front of it.
-        $firstImgDescOffset = 13 + self::gctSizeFromHeader($gif);
-        $gif = substr($gif, 0, $firstImgDescOffset)
-            . $loopExt
-            . substr($gif, $firstImgDescOffset);
-
-        // Walk remaining frames: extract GCE + Image Descriptor + LZW data,
-        // and append to the main gif.  The trailer from each individual frame
-        // is discarded; we will write a single trailer at the end.
+        // Every frame GD emitted is a complete standalone GIF: signature,
+        // Logical Screen Descriptor, its OWN quantised Global Color Table, one
+        // Image Descriptor + LZW data, and a 0x3B trailer. Concatenating them
+        // naively goes wrong three ways, all of which this assembly avoids:
+        //   - frame 0's trailer left in place ends the stream after one frame,
+        //     so every decoder (candy-flip's included) sees a still image;
+        //   - each frame's indices point into that frame's palette, so frames
+        //     1..n must carry their palette along as a Local Color Table —
+        //     dropping it repaints them through frame 0's palette;
+        //   - GD signs its output GIF87a, which has no extension blocks, but
+        //     the stream carries NETSCAPE2.0 + Graphic Control Extensions.
         $delayLo = $delayCs & 0xFF;
         $delayHi = ($delayCs >> 8) & 0xFF;
+        // disposal=1 (do not dispose: every frame is full-screen and opaque).
+        $gce = "\x21\xF9\x04\x04" . chr($delayLo) . chr($delayHi) . "\x00\x00";
 
-        for ($f = 1; $f < $frames; $f++) {
-            $frame = $frameBytes[$f];
-            // Skip the 13-byte header and any GCT in this frame.
-            $frameDataOffset = 13 + self::gctSizeFromHeader($frame);
-            // The trailer (0x3B) is the last byte; strip it.
-            $frameData = substr($frame, $frameDataOffset, -1);
+        $first = $frameBytes[0];
+        $firstGct = self::gctSizeFromHeader($first);
+        // NETSCAPE2.0 looping app extension; loop count 0x0000 = forever.
+        $loopExt = "\x21\xFF\x0BNETSCAPE2.0\x03\x01\x00\x00\x00";
+        $gif = 'GIF89a'
+            . substr($first, 6, 7 + $firstGct)
+            . $loopExt;
 
-            // Build a Graphic-Control-Extension for this frame.
-            $gce = "\x21\xF9\x04\x00" // disposal=0, transparent=0
-                . chr($delayLo) . chr($delayHi)
-                . "\x00\x00";
-
-            $gif .= $gce . $frameData;
+        foreach ($frameBytes as $index => $frame) {
+            $image = self::extractImage($frame, localPalette: $index > 0);
+            if ($image === null) {
+                continue;
+            }
+            $gif .= $gce . $image;
         }
 
         // Close with a single GIF trailer.
@@ -151,20 +149,92 @@ final class Synthetic
         if ($fp === false) {
             // Path already exists or O_EXCL failed — fall back to tempnam.
             $tmp = (string) @tempnam($dir, 'reel');
-            if ($tmp === '' || $fp === false) {
+            // Only tempnam()'s own result decides the fallback here: $fp is
+            // necessarily false on this branch, so testing it as well sent
+            // every collision to the direct write and left the fresh tempnam
+            // file behind in $dir.
+            if ($tmp === '') {
                 // tempnam also failed — last resort: direct write (non-atomic, but better than fatal).
                 file_put_contents($path, $data);
                 return;
             }
             $fp = fopen($tmp, 'wb');
             if ($fp === false) {
+                @unlink($tmp);
                 file_put_contents($path, $data);
                 return;
             }
         }
         fwrite($fp, $data);
         fclose($fp);
-        rename($tmp, $path);
+        if (!@rename($tmp, $path)) {
+            @unlink($tmp);
+            file_put_contents($path, $data);
+        }
+    }
+
+    /**
+     * Pull the Image Descriptor, its colour table and its LZW data out of a
+     * standalone single-image GIF, ready to append to an animation stream.
+     *
+     * With $localPalette the frame's Global Color Table is moved into a
+     * Local Color Table on the descriptor (unless it already carries one),
+     * because the frame's pixel indices are only meaningful against the
+     * palette GD quantised that frame to. Extension blocks GD may emit ahead
+     * of the descriptor are skipped — the caller writes its own GCE.
+     *
+     * Returns null when the frame holds no Image Descriptor.
+     */
+    private static function extractImage(string $frame, bool $localPalette): ?string
+    {
+        $len = strlen($frame);
+        $gctBytes = self::gctSizeFromHeader($frame);
+        $i = 13 + $gctBytes;
+        while ($i < $len) {
+            $block = ord($frame[$i]);
+            if ($block === 0x21) {
+                // Extension: introducer, label, then sub-blocks to 0x00.
+                $i = self::skipSubBlocks($frame, $i + 2);
+                continue;
+            }
+            if ($block !== 0x2C || $i + 10 > $len) {
+                return null;
+            }
+            $packed = ord($frame[$i + 9]);
+            $lctBytes = ($packed & 0x80) ? 3 * (1 << (($packed & 0x07) + 1)) : 0;
+            $dataStart = $i + 10 + $lctBytes;
+            // +1 skips the LZW minimum-code-size byte ahead of the sub-blocks.
+            $dataEnd = self::skipSubBlocks($frame, $dataStart + 1);
+            $descriptor = substr($frame, $i, 10);
+            $table = substr($frame, $i + 10, $lctBytes);
+            if ($localPalette && $lctBytes === 0 && $gctBytes > 0) {
+                // Same size field as the GCT; set the LCT flag, keep
+                // interlace, clear sort/reserved bits.
+                $gctSizeBits = ord($frame[10]) & 0x07;
+                $descriptor[9] = chr(0x80 | ($packed & 0x40) | $gctSizeBits);
+                $table = substr($frame, 13, $gctBytes);
+            }
+            return $descriptor . $table . substr($frame, $dataStart, $dataEnd - $dataStart);
+        }
+        return null;
+    }
+
+    /**
+     * Walk length-prefixed sub-blocks from $j and return the offset just past
+     * the 0x00 block terminator (or the end of the string when truncated).
+     */
+    private static function skipSubBlocks(string $bytes, int $j): int
+    {
+        $len = strlen($bytes);
+        while ($j < $len) {
+            $subLen = ord($bytes[$j]);
+            $j++;
+            if ($subLen === 0) {
+                break;
+            }
+            $j += $subLen;
+        }
+        return min($j, $len);
     }
 
     /**
