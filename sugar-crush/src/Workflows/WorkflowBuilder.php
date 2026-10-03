@@ -48,14 +48,44 @@ final class WorkflowBuilder
     }
 
     /**
-     * Add a sequential stage with a single task.
+     * Add a sequential stage: one task, or a list of tasks run one after
+     * another (roadmap 4.10-1).
+     *
+     * In a multi-task stage each task after the first sees the previous one's
+     * output as `{{prevResult}}`, the tasks share the stage's timeout, and the
+     * first task that fails stops the stage — see
+     * {@see WorkflowEngine} `executeStage()`. For tasks that should run at the
+     * same time use {@see parallel()} instead.
+     *
+     * @param TaskBuilder|list<TaskBuilder> $tasks
+     *
+     * @throws \InvalidArgumentException When $tasks is an empty list or holds
+     *         something other than TaskBuilders.
      */
-    public function stage(string $name, TaskBuilder $task): self
+    public function stage(string $name, TaskBuilder|array $tasks): self
     {
+        $tasks = $tasks instanceof TaskBuilder ? [$tasks] : array_values($tasks);
+        if ($tasks === []) {
+            throw new \InvalidArgumentException("Stage '{$name}' needs at least one task");
+        }
+
+        $built = [];
+        foreach ($tasks as $i => $task) {
+            if (!$task instanceof TaskBuilder) {
+                throw new \InvalidArgumentException(sprintf(
+                    "Stage '%s' task #%d must be a TaskBuilder, got %s",
+                    $name,
+                    $i,
+                    get_debug_type($task),
+                ));
+            }
+            $built[] = $task->build();
+        }
+
         $this->stages[] = [
             'name' => $name,
             'type' => 'stage',
-            'tasks' => [$task->build()],
+            'tasks' => $built,
         ];
 
         return $this;

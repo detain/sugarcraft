@@ -345,15 +345,31 @@ permission prompt. See [`PERMISSIONS.md`](PERMISSIONS.md) — and note that a ba
 
 ## Three limits to know before you design around this
 
-**1. A stage runs its first task only.** `WorkflowEngine::executeStage()`:
+**1. A stage's tasks run one after another, never at once.** A regular stage
+may hold several tasks — a list in PHP, `->stage('work', [Tasks::agent('architect')->name('plan'), Tasks::agent('coder')])`,
+or a `tasks:` list in YAML, whose entries take the one-task stage's keys
+(`agent`, `name`, `prompt`, `tools`, `retries`):
 
-```php
-// For now, execute only the first task (sequential within a stage is not yet implemented)
-$task = $tasks[0];
+```yaml
+- name: fix
+  tasks:
+    - name: lint
+      prompt: Lint the tree and list the problems.
+      tools: [Read, Grep]
+    - prompt: "Fix what this found: {{prevResult}}"
+      tools: [Read, Edit]
 ```
 
-A regular YAML stage builds exactly one task, so this is invisible from YAML. It
-bites a PHP workflow that puts several tasks in one stage.
+`WorkflowEngine::executeStage()` runs them in order. Each task after the first
+sees the previous task's output as `{{prevResult}}` and every earlier task's as
+`{{<name>.results}}` (an unnamed task is recorded as `<stage>_<n>`, counting
+from 1), the tasks share the stage's one `timeout`, and the first task that does
+not complete fails the stage without starting the rest. Every task's `tools:`
+is checked before the first one runs. The stage's `{{<stage>.output}}` is the
+tasks' outputs, one per line. A `tasks:` stage takes everything from its
+entries, so a stage-level `agent`/`prompt`/`tools`/`retries` beside it is
+refused, as is an empty list. For tasks that should run at the same time, use
+`parallel: true` with `agents:`.
 
 **2. `agent:` / `type:` is a LABEL, not a preset reference.** `WorkflowEngine`
 contains no reference to `AgentPreset` or `AgentDefinition` at all. A stage
@@ -371,8 +387,8 @@ want a preset's prompt in a stage, paste it into the stage's `prompt:`.
 **3. `pipeline` and verification stages are PHP-only.** `WorkflowBuilder` offers
 `pipeline()` and `withVerification()`, and the engine implements
 `executePipelineStage()` and `executeVerificationStage()` — but
-`parseYamlStage()` recognises exactly two stage shapes, regular and
-`parallel: true`. There is no YAML spelling for either. They are reachable from
+`parseYamlStage()` recognises only three stage shapes: one task, a `tasks:`
+list, and `parallel: true`. There is no YAML spelling for either. They are reachable from
 a user-tier `.php` workflow and from an embedder, not from a `.yaml` file.
 
 ---

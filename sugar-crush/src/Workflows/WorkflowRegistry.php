@@ -1182,7 +1182,8 @@ final class WorkflowRegistry
                     // WorkflowBuilder, Workflow, WorkflowRegistry, AgentWorkerPool.
                     $builder = $builder->parallel($stageName, $parsed);
                 } else {
-                    // $parsed is a single TaskBuilder for regular stages
+                    // $parsed is a single TaskBuilder for a regular stage, or
+                    // a list of them for a `tasks:` stage run in sequence.
                     $builder = $builder->stage($stageName, $parsed);
                 }
             }
@@ -1333,10 +1334,16 @@ final class WorkflowRegistry
     /**
      * Map a parsed YAML stage to a TaskBuilder or array of TaskBuilders.
      *
-     * Returns an array of TaskBuilders for parallel stages, or a single
-     * TaskBuilder for regular stages.
+     * Returns an array of TaskBuilders for parallel stages and for a regular
+     * stage that lists `tasks:` (run one after another, roadmap 4.10-1), or a
+     * single TaskBuilder for a regular stage written in the one-task form.
      *
-     * @param array{name: string, agent?: string, prompt?: string, tools?: array, parallel?: bool, agents?: array} $stage
+     * A `tasks:` stage takes everything from its entries, so a stage-level
+     * `agent`/`prompt`/`tools`/`retries` beside it is refused rather than
+     * guessed at (does it apply to every task? to none?), as is `tasks:` on a
+     * parallel stage, whose list is `agents:`.
+     *
+     * @param array{name: string, agent?: string, prompt?: string, tools?: array, parallel?: bool, agents?: array, tasks?: array} $stage
      * @param bool $isParallel Already decided by {@see requireParallelFlag()}
      *        and PASSED IN rather than re-derived here, so this method and its
      *        caller cannot disagree about what the stage is — which is exactly
@@ -1346,6 +1353,16 @@ final class WorkflowRegistry
     private function parseYamlStage(array $stage, string $stageName, string $yamlPath, bool $isParallel): TaskBuilder|array
     {
         $where = "Workflow file {$yamlPath} stage '{$stageName}'";
+
+        if ($isParallel && array_key_exists('tasks', $stage)) {
+            throw new WorkflowLoadException(
+                "{$where} is parallel, so it lists \"agents\", not \"tasks\" (a \"tasks\" stage runs its tasks in sequence)"
+            );
+        }
+
+        if (!$isParallel && array_key_exists('tasks', $stage)) {
+            return $this->parseYamlTaskList($stage, $where);
+        }
 
         if ($isParallel) {
             $agents = array_key_exists('agents', $stage) ? $stage['agents'] : [];
@@ -1397,6 +1414,65 @@ final class WorkflowRegistry
         }
 
         return $b;
+    }
+
+    /**
+     * A regular stage's `tasks:` list, one TaskBuilder per entry, in order.
+     *
+     * Each entry is the one-task stage's shape — `agent` (a label, default
+     * `coder`), `name`, `prompt`, `tools`, `retries` — so moving a stage's
+     * body into a list entry changes nothing about how it is read.
+     *
+     * @param array<array-key, mixed> $stage
+     * @return list<TaskBuilder>
+     *
+     * @throws WorkflowLoadException When the list is empty or not a list, an
+     *         entry is not a map, or the stage also carries task keys itself.
+     */
+    private function parseYamlTaskList(array $stage, string $where): array
+    {
+        foreach (['agent', 'prompt', 'tools', 'retries'] as $key) {
+            if (array_key_exists($key, $stage)) {
+                throw new WorkflowLoadException(
+                    "{$where} lists \"tasks\", so \"{$key}\" belongs on each task, not on the stage"
+                );
+            }
+        }
+
+        $tasks = $stage['tasks'];
+        if (!is_array($tasks) || !array_is_list($tasks)) {
+            throw new WorkflowLoadException(
+                "{$where} \"tasks\" must be a list, got " . (is_array($tasks) ? 'a map' : get_debug_type($tasks))
+            );
+        }
+        if ($tasks === []) {
+            throw new WorkflowLoadException("{$where} \"tasks\" must list at least one task");
+        }
+
+        $builders = [];
+        foreach ($tasks as $taskIndex => $task) {
+            $at = "{$where} task #{$taskIndex}";
+            if (!is_array($task)) {
+                throw new WorkflowLoadException("{$at} must be a map, got " . get_debug_type($task));
+            }
+
+            $b = Tasks::agent($this->requireString($task, 'agent', 'coder', $at));
+            if (array_key_exists('name', $task)) {
+                $b = $b->name($this->requireString($task, 'name', '', $at));
+            }
+            if (array_key_exists('prompt', $task)) {
+                $b = $b->prompt($this->requireString($task, 'prompt', '', $at));
+            }
+            if (array_key_exists('tools', $task)) {
+                $b = $b->tools($this->requireToolList($task['tools'], $at));
+            }
+            if (array_key_exists('retries', $task)) {
+                $b = $b->retries($this->requireRetryCount($task['retries'], $at));
+            }
+            $builders[] = $b;
+        }
+
+        return $builders;
     }
 
     /**

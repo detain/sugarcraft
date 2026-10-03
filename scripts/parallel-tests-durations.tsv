@@ -221,6 +221,7 @@ sugar-crush/tests/Integration/MemoryPromptWiringTest.php	0.933	16
 sugar-crush/tests/Commands/CommandLoaderRefusalReportingTest.php	0.917	7
 sugar-crush/tests/Renderer/StatusLineSegmentTest.php	0.909	23
 sugar-crush/tests/SuiteSkipRosterTest.php	0.904	25
+sugar-crush/tests/Workflows/MultiTaskStageTest.php	0.900	13
 sugar-crush/tests/Cli/PermissionWarningDrainTest.php	0.886	6
 sugar-crush/tests/Backend/EngineBackendSpendCapTest.php	0.864	11
 sugar-crush/tests/Workflows/WorkflowToolsHandoffTest.php	0.861	11

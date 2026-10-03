@@ -1586,17 +1586,32 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
-     * Execute a single 'stage' type stage and return its StageResult.
+     * Execute a 'stage' type stage and return its StageResult.
      *
-     * Builds a SubAgent from the stage's task and calls AgentWorkerPool::executeOne().
+     * Builds a SubAgent from each of the stage's tasks and dispatches it
+     * through {@see dispatchOne()}.
+     *
+     * A stage with several tasks (roadmap 4.10-1) runs them ONE AFTER ANOTHER,
+     * in declaration order: each task after the first sees the previous one's
+     * output as `{{prevResult}}` and every earlier task's as
+     * `{{<name>.results}}`, all tasks share the stage's one wall-clock budget
+     * (each gets what the ones before it left, as a pipeline's steps do), and
+     * the first task that does not complete fails the stage without starting
+     * the rest. Every task's declared tools are permission-checked before the
+     * first one is dispatched. The stage's output is the tasks' outputs, one
+     * per line, and it carries every task's agent so tokens and cost add up.
+     * (This used to run `$tasks[0]` and silently drop the rest.)
      *
      * The agent's result is named by its task name, falling back to the STAGE
      * name — never to the agent type: two stages on the default `coder` agent
-     * used to overwrite each other's `{{coder.results}}` (AUDIT WF-3).
+     * used to overwrite each other's `{{coder.results}}` (AUDIT WF-3). In a
+     * multi-task stage an unnamed task falls back to `<stage>_<n>` (1-based),
+     * as a parallel stage's agents do, so its tasks cannot overwrite each
+     * other either.
      *
      * @param array $stage        Stage array from Workflow::$stages.
      * @param array $context      Current workflow context for interpolation.
-     * @param list<array{key: string, result: AgentResult}> $dispatched Out: the agent this stage ran, once it settles.
+     * @param list<array{key: string, result: AgentResult}> $dispatched Out: each agent this stage ran, as it settles.
      * @param int   $stageTimeout Workflow::$timeout — this stage's wall-clock budget, in seconds.
      * @return StageResult
      */
@@ -1606,7 +1621,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $stageStartedAt = new \DateTimeImmutable();
         $stageClock = hrtime(true);
 
-        $tasks = $stage['tasks'] ?? [];
+        $tasks = array_values($stage['tasks'] ?? []);
         if (empty($tasks)) {
             return new StageResult(
                 stageName: $stageName,
@@ -1617,54 +1632,109 @@ final class WorkflowEngine implements WorkflowEngineInterface
             );
         }
 
-        // For now, execute only the first task (sequential within a stage is not yet implemented)
+        $multi = count($tasks) > 1;
+        $where = static fn (int $i): string => $multi
+            ? "Stage '{$stageName}' task #{$i}"
+            : "Stage '{$stageName}'";
+
+        // Every task's declaration up front, for executePipelineStage()'s
+        // reason: a refusal is knowable from the definition alone, so finding
+        // it at task 3 would mean two tasks' worth of real work done first.
+        foreach ($tasks as $i => $task) {
+            if (!$task instanceof WorkflowTask) {
+                return new StageResult(
+                    stageName: $stageName,
+                    status: WorkflowStatus::Failed,
+                    error: $where($i) . ' is not a WorkflowTask',
+                    startedAt: $stageStartedAt,
+                    completedAt: new \DateTimeImmutable(),
+                );
+            }
+            $this->refuseDeniedTools($task, $where($i));
+        }
+
+        $taskContext = $context;
+        $outputs = [];
+        $agents = [];
+        $failed = null;
+
         /** @var WorkflowTask $task */
-        $task = $tasks[0];
+        foreach ($tasks as $i => $task) {
+            if ($i > 0) {
+                $taskContext['prevResult'] = $outputs[$i - 1];
+            }
 
-        $this->refuseDeniedTools($task, "Stage '{$stageName}'");
+            // Interpolate prompt with context
+            $interpolatedPrompt = $this->interpolateContext($task->prompt, $taskContext);
 
-        // Interpolate prompt with context
-        $interpolatedPrompt = $this->interpolateContext($task->prompt, $context);
+            // Build SubAgent
+            $agent = new Agent(
+                name: $task->name ?? $task->agentType,
+                description: $interpolatedPrompt,
+                prompt: '', // system prompt is set via CompleteRequest
+                model: $this->model,
+                provider: $this->provider,
+                tools: $task->tools,
+                skillNames: [],
+                hooks: [],
+                isActive: true,
+                environmentRoot: $this->environmentRoot,
+            );
 
-        // Build SubAgent
-        $agent = new Agent(
-            name: $task->name ?? $task->agentType,
-            description: $interpolatedPrompt,
-            prompt: '', // system prompt is set via CompleteRequest
-            model: $this->model,
-            provider: $this->provider,
-            tools: $task->tools,
-            skillNames: [],
-            hooks: [],
-            isActive: true,
-            environmentRoot: $this->environmentRoot,
+            $subAgent = new SubAgent(
+                id: $stageName . ($multi ? '-' . ($i + 1) : '') . '-' . uniqid(getmypid() . '_', true),
+                agent: $agent,
+                task: $interpolatedPrompt,
+                timeout: $task->timeout ?? $stageTimeout,
+                maxRetries: $task->retries ?? 0,
+                isolation: $task->isolation ?? \SugarCraft\Crush\Agents\Isolation::None,
+                permissionGate: $this->permissionGate,
+            );
+
+            // Build CompleteRequest
+            $request = new CompleteRequest(
+                model: $agent->model,
+                messages: [
+                    ['role' => 'user', 'content' => $interpolatedPrompt],
+                ],
+                tools: $this->resolveRequestTools($task->tools),
+                systemPrompt: $agent->systemPrompt(),
+            );
+
+            // Execute via pool, on what is left of the stage's budget
+            $agentResult = $this->dispatchOne($subAgent, $request, $this->stagePool($stageTimeout, $stageClock));
+            $record = [
+                'key' => self::resultKey($task->name, $multi ? $stageName . '_' . ($i + 1) : $stageName),
+                'result' => $agentResult,
+            ];
+            $dispatched[] = $record;
+
+            if (!$multi) {
+                return $this->buildStageResult($stageName, $agentResult, $stageStartedAt);
+            }
+
+            $taskContext = self::withResults($taskContext, [$record]);
+            $outputs[] = $agentResult->output ?? '';
+            $agents[] = $agentResult;
+
+            // Fail fast: a task that did not complete stops the stage.
+            if ($agentResult->status !== AgentStatus::Completed) {
+                $failed = $agentResult;
+                break;
+            }
+        }
+
+        return new StageResult(
+            stageName: $stageName,
+            status: $failed === null ? WorkflowStatus::Completed : WorkflowStatus::Failed,
+            output: implode("\n", $outputs),
+            error: $failed === null
+                ? null
+                : ($failed->error?->getMessage() ?? $where(count($agents) - 1) . ' did not complete'),
+            agents: $agents,
+            startedAt: $agents[0]->startedAt ?? $stageStartedAt,
+            completedAt: $agents[count($agents) - 1]->completedAt ?? new \DateTimeImmutable(),
         );
-
-        $subAgent = new SubAgent(
-            id: $stageName . '-' . uniqid(getmypid() . '_', true),
-            agent: $agent,
-            task: $interpolatedPrompt,
-            timeout: $task->timeout ?? $stageTimeout,
-            maxRetries: $task->retries ?? 0,
-            isolation: $task->isolation ?? \SugarCraft\Crush\Agents\Isolation::None,
-            permissionGate: $this->permissionGate,
-        );
-
-        // Build CompleteRequest
-        $request = new CompleteRequest(
-            model: $agent->model,
-            messages: [
-                ['role' => 'user', 'content' => $interpolatedPrompt],
-            ],
-            tools: $this->resolveRequestTools($task->tools),
-            systemPrompt: $agent->systemPrompt(),
-        );
-
-        // Execute via pool
-        $agentResult = $this->dispatchOne($subAgent, $request, $this->stagePool($stageTimeout, $stageClock));
-        $dispatched[] = ['key' => self::resultKey($task->name, $stageName), 'result' => $agentResult];
-
-        return $this->buildStageResult($stageName, $agentResult, $stageStartedAt);
     }
 
     /**
