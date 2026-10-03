@@ -11,6 +11,7 @@ use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Providers\Concerns\ReasoningExtractor;
+use SugarCraft\Crush\Providers\Concerns\ReassemblesStreamedToolCalls;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Providers\Concerns\ToolSchema;
@@ -21,6 +22,8 @@ final readonly class OpenAIProvider implements ProviderInterface
     use ToolSchema;
 
     use ReasoningExtractor;
+
+    use ReassemblesStreamedToolCalls;
 
     /**
      * E707 (round 81): the chat-completions `finish_reason` values that mean
@@ -395,6 +398,16 @@ final readonly class OpenAIProvider implements ProviderInterface
 
         $streamUsage = null;
 
+        // X-31a: `delta.tool_calls[]` fragments, buffered across chunks until
+        // the stream declares the calls complete (see
+        // {@see ReassemblesStreamedToolCalls}). A local, not a property: this
+        // is a readonly class and the buffer lives exactly one stream.
+        $toolCallBuffer = [];
+
+        // The LAST non-null finish_reason, read after the loop to decide how
+        // fragments a stream left buffered are flushed (audit 15a A4's rule).
+        $streamFinishReason = null;
+
         foreach ($stream as $chunk) {
             $data = $chunk->toArray();
 
@@ -408,7 +421,30 @@ final readonly class OpenAIProvider implements ProviderInterface
                 continue;
             }
 
-            yield $this->parseChunk($data);
+            $finishReason = $data['choices'][0]['finish_reason'] ?? null;
+            $streamFinishReason = is_string($finishReason) ? $finishReason : $streamFinishReason;
+
+            yield $this->parseChunk($data, $toolCallBuffer);
+        }
+
+        // Fragments still buffered were never declared complete: the stream
+        // ended on `stop`, on `length`, or with no finish at all. Flushed
+        // decode-or-drop, BEFORE the usage carrier so the bill stays the
+        // stream's last event; an `error` end flushes nothing.
+        if ($toolCallBuffer !== [] && $streamFinishReason !== 'error') {
+            $truncated = $streamFinishReason === null
+                || in_array($streamFinishReason, self::TRUNCATED_FINISH_REASONS, true);
+            $flushed = self::flushStreamedToolCalls($toolCallBuffer, $truncated, $streamFinishReason, 'OpenAIProvider');
+
+            if ($flushed !== null) {
+                yield new CompleteResponse(
+                    content: '',
+                    toolCalls: $flushed,
+                    tokensUsed: 0,
+                    costUsd: 0.0,
+                    truncated: $truncated,
+                );
+            }
         }
 
         if ($streamUsage !== null) {
@@ -665,12 +701,22 @@ final readonly class OpenAIProvider implements ProviderInterface
      * applies here via `CreateStreamedResponseDelta` - see that method's
      * docblock.
      *
+     * Tool calls (X-31a): this chunk's `delta.tool_calls[]` fragments go into
+     * $toolCallBuffer, and the chunk whose `finish_reason` is `tool_calls`
+     * carries every call they assembled. Until X-31a this hard-coded
+     * `toolCalls: null`, and since {@see supportsStreaming()} is always true
+     * no OpenAI tool call ever reached Runtime.
+     *
      * @param array<string, mixed> $data the chunk's decoded array form
+     * @param array<int, array{id?: ?string, name?: ?string, arguments?: string}> $toolCallBuffer
      */
-    private function parseChunk(array $data): CompleteResponse
+    private function parseChunk(array $data, array &$toolCallBuffer = []): CompleteResponse
     {
         $choice = $data['choices'][0] ?? [];
-        $delta = $choice['delta'] ?? [];
+        $delta = is_array($choice['delta'] ?? null) ? $choice['delta'] : [];
+        $finishReason = $choice['finish_reason'] ?? null;
+
+        $toolCalls = $this->reassembleStreamedToolCalls($delta, is_string($finishReason) ? $finishReason : null, $toolCallBuffer);
 
         [$reasoning, $content] = $this->extractReasoning($delta);
 
@@ -682,10 +728,10 @@ final readonly class OpenAIProvider implements ProviderInterface
         return new CompleteResponse(
             content: $content,
             reasoning: $reasoning,
-            toolCalls: null,
+            toolCalls: $toolCalls,
             tokensUsed: 0,
             costUsd: 0.0,
-            truncated: in_array($choice['finish_reason'] ?? null, self::TRUNCATED_FINISH_REASONS, true),
+            truncated: in_array($finishReason, self::TRUNCATED_FINISH_REASONS, true),
         );
     }
 
