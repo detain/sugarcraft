@@ -115,4 +115,18 @@ final class FuzzyMatcherFactoryTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         FuzzyMatcherFactory::create('sahilm', ScoringProfile::strict());
     }
+
+    /**
+     * Parameter names are API under named arguments: the deprecated
+     * `create()` shipped as `create(string $type, ?ScoringProfile $profile)`,
+     * so a dev-master consumer's `profile:` call must keep resolving.
+     */
+    #[Test]
+    public function testDeprecatedCreateKeepsProfileNamedArgument(): void
+    {
+        $this->assertEquals(
+            FuzzyMatcherFactory::named('smith-waterman', ScoringProfile::strict()),
+            FuzzyMatcherFactory::create(type: 'smith-waterman', profile: ScoringProfile::strict()),
+        );
+    }
 }

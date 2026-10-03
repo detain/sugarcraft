@@ -48,11 +48,16 @@ final class FuzzyMatcherFactory
      * Former spelling of {@see self::named()} (`::create()` is a banned
      * factory name under the repo naming rule). Same contract, same throws.
      *
+     * The second parameter keeps its original name `$profile` (not
+     * `named()`'s `$scoring`): PHP parameter names are API under named
+     * arguments, and existing `create('smith-waterman', profile: $p)` calls
+     * must keep resolving.
+     *
      * @deprecated Use {@see self::named()}.
      * @throws \InvalidArgumentException If the type is unknown, or the weights belong to the other matcher
      */
-    public static function create(string $type, ScoringProfile|SahilmScoring|null $scoring = null): FuzzyMatcher
+    public static function create(string $type, ScoringProfile|SahilmScoring|null $profile = null): FuzzyMatcher
     {
-        return self::named($type, $scoring);
+        return self::named($type, $profile);
     }
 }
