@@ -103,6 +103,32 @@ final class AgentsPaneLiveRowsTest extends TestCase
         $this->assertStringNotContainsString('(no active agents)', $out, 'a working session must never claim emptiness');
     }
 
+    /**
+     * A batch of Task calls is usually several runs of ONE roster agent. The
+     * rows used to be per agent, so five `reviewer` audits showed as a single
+     * `reviewer` line; each run is its own row now, carrying its own task.
+     */
+    public function testSeveralRunsOfOneAgentAreOneRowEach(): void
+    {
+        $manager = $this->manager([$this->agent('reviewer', isActive: false)]);
+        foreach (['candy-core', 'candy-ansi', 'candy-layout'] as $i => $lib) {
+            $manager->projectRemoteSubAgent(self::beat(SubAgentActivity::OP_STARTED, 'rid-' . $i, 'reviewer', 'Audit ' . $lib));
+        }
+        $manager->projectRemoteSubAgent(self::beat(SubAgentActivity::OP_FINISHED, 'rid-2', 'reviewer', '', 2, 'report'));
+
+        $app = $this->app(new Chat(agentManager: $manager));
+        $rows = \SugarCraft\Crush\Tui\Components\AgentDashboardPane::entries($app);
+
+        $this->assertCount(3, $rows, 'one row per run, the finished one included until the next dispatch');
+        $this->assertSame(['reviewer', 'reviewer', 'reviewer'], array_map(static fn ($r): string => $r->name, $rows));
+        $this->assertSame(['Audit candy-core', 'Audit candy-ansi', 'Audit candy-layout'], array_map(static fn ($r): string => $r->operation, $rows));
+        $this->assertSame(['working', 'working', 'completed'], array_map(static fn ($r): string => $r->status, $rows));
+        $this->assertSame(['report'], $rows[2]->outputBuffer, 'a row shows its own run\'s output, not its siblings\'');
+
+        $manager->clearProjectedSubAgents();
+        $this->assertSame([], \SugarCraft\Crush\Tui\Components\AgentDashboardPane::entries($app), 'the next dispatch clears them');
+    }
+
     public function testTheRowBudgetTruncatesWithAnExplicitOverflowTrailer(): void
     {
         $names = ['alpha', 'beta', 'gamma', 'delta', 'epsilon'];
@@ -116,13 +142,14 @@ final class AgentsPaneLiveRowsTest extends TestCase
             $manager->projectRemoteSubAgent(self::beat(SubAgentActivity::OP_STARTED, 'cid-' . $i, $name, 'task', 1, 'running'));
         }
 
-        // rows=4 → CHROME_ROWS=2 leaves a budget of 2 of the 5 entries.
+        // rows=4 → CHROME_ROWS=2 leaves a budget of 2 rows: one entry and
+        // the trailer, which takes a row of the budget rather than one past it.
         $out = AgentsPane::render($this->app(new Chat(agentManager: $manager)), 40, 4);
 
         $this->assertStringContainsString('alpha', $out);
-        $this->assertStringContainsString('beta', $out);
-        $this->assertStringNotContainsString('gamma', $out, 'over-budget rows do not silently displace the frame');
-        $this->assertStringContainsString('+3 more', $out, 'the hidden count is stated, never dropped');
+        $this->assertStringNotContainsString('beta', $out, 'over-budget rows do not silently displace the frame');
+        $this->assertStringContainsString('+4 more', $out, 'the hidden count is stated, never dropped');
+        $this->assertSame(4, substr_count($out, "\n") + 1, 'the box is exactly the rows it was given');
     }
 
     public function testANarrowSidebarTruncatesRowsWithoutFatal(): void

@@ -90,7 +90,47 @@ final class AgentSplitColumn
         int $width,
         int $rows,
     ): string {
-        if ($liveOutputs === [] || $width <= 0 || $rows <= 0) {
+        $states = [];
+        foreach ($liveOutputs as $name => $output) {
+            $states[] = self::state((string) $name, $output, $manager);
+        }
+
+        return self::stack($states, $theme, $width, $rows);
+    }
+
+    /**
+     * Render the live-agent column with one tile per RUN — the shape the
+     * shell uses, since a batch of Task calls is typically several runs of
+     * one roster agent and {@see render()}'s name-keyed map folds them into
+     * a single tile. Same budgets, same all-or-nothing tiles.
+     *
+     * $skip scrolls the column: that many tiles from the top are left out
+     * (clamped to keep the last one on screen) and a muted "↑ N earlier"
+     * line says so.
+     *
+     * @param list<\SugarCraft\Crush\Agents\SubAgent> $runs as {@see AgentManager::liveRuns()} returns them
+     */
+    public static function renderRuns(array $runs, Theme $theme, int $width, int $rows, int $skip = 0): string
+    {
+        $skip = max(0, min($skip, count($runs) - 1));
+        if ($skip === 0) {
+            return self::stack(array_map(self::runState(...), $runs), $theme, $width, $rows);
+        }
+
+        $marker = Style::new()->foreground($theme->shellMuted)->render('  ↑ ' . $skip . ' earlier agent(s)');
+        $rest = self::stack(array_map(self::runState(...), array_slice($runs, $skip)), $theme, $width, max(1, $rows - 1));
+
+        return self::clip($marker . "\n" . $rest, $width, $rows);
+    }
+
+    /**
+     * Stack tiles until the row budget is spent; see {@see render()}.
+     *
+     * @param list<AgentOutputState> $states
+     */
+    private static function stack(array $states, Theme $theme, int $width, int $rows): string
+    {
+        if ($states === [] || $width <= 0 || $rows <= 0) {
             return '';
         }
 
@@ -99,9 +139,9 @@ final class AgentSplitColumn
         $used = 0;
         $shown = 0;
 
-        foreach ($liveOutputs as $name => $output) {
+        foreach ($states as $state) {
             $tile = AgentOutputPane::render(
-                self::state((string) $name, $output, $manager),
+                $state,
                 $inner,
                 $rows,
                 $theme,
@@ -126,7 +166,7 @@ final class AgentSplitColumn
             }
         }
 
-        $hidden = count($liveOutputs) - $shown;
+        $hidden = count($states) - $shown;
         if ($hidden > 0 && $used < $rows) {
             $tiles[] = Style::new()
                 ->foreground($theme->shellMuted)
@@ -134,6 +174,31 @@ final class AgentSplitColumn
         }
 
         return self::clip(implode("\n", $tiles), $width, $rows);
+    }
+
+    /**
+     * One run's display state: its roster agent's name and model, but the
+     * run's OWN task, status, telemetry and output.
+     */
+    private static function runState(\SugarCraft\Crush\Agents\SubAgent $run): AgentOutputState
+    {
+        return AgentOutputState::fromDisplayState(
+            AgentDisplayState::new(
+                name: self::safe($run->agent->name),
+                // Every run here is live by construction (liveRuns() filters),
+                // and a live tile reads `working`, as the name-keyed one did.
+                status: 'working',
+                operation: self::safe($run->task),
+                elapsedSeconds: $run->elapsedSeconds(),
+                tokensUsed: $run->tokensUsed,
+                costUsd: $run->costUsd,
+                contextTokens: $run->contextTokens,
+            ),
+            model: self::safe($run->model()),
+            outputBuffer: self::tail($run->output),
+            totalLines: $run->outputLineCount(),
+            key: $run->id,
+        );
     }
 
     /**
@@ -172,6 +237,7 @@ final class AgentSplitColumn
             ),
             model: self::safe($agent->model ?? ''),
             outputBuffer: self::tail($output),
+            totalLines: self::lineCount($output),
         );
     }
 
@@ -203,6 +269,12 @@ final class AgentSplitColumn
             self::safe(...),
             array_values(array_slice($lines, -self::TAIL_LINES)),
         );
+    }
+
+    /** Lines in a whole buffer — the figure its tail alone cannot give. */
+    private static function lineCount(string $output): int
+    {
+        return $output === '' ? 0 : substr_count(rtrim($output, "\n"), "\n") + 1;
     }
 
     /** This column's untrusted-text boundary; see the class docblock. */

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\Theme;
@@ -85,7 +86,16 @@ final class AgentOutputPane
         $lines = $state->outputBuffer;
 
         if ($mode === Mode::Peek) {
-            return self::renderPeek($header, $lines, $borderColor, $state->name, $width, $theme);
+            // What this worker is doing: with several runs of one agent side
+            // by side, the task is the only thing that tells their tiles apart.
+            if (trim($state->operation) !== '') {
+                // One row, cut to the tile: a wrapped task would grow the
+                // tile past the height its stacker budgeted for.
+                $header .= "\n" . Style::new()->foreground($theme->shellMuted)
+                    ->render(Width::truncate($state->operation, max(1, $width)));
+            }
+
+            return self::renderPeek($header, $lines, $state->lineCount(), $borderColor, $state->name, $width, $theme);
         }
 
         return self::renderAttach($header, $lines, $borderColor, $state->name, $width, $height, $theme);
@@ -94,17 +104,21 @@ final class AgentOutputPane
     /**
      * Peek mode: compact tile showing header + last N buffer lines.
      */
-    private static function renderPeek(string $header, array $lines, Color $borderColor, string $agentName, int $width, Theme $theme): string
+    private static function renderPeek(string $header, array $lines, int $totalLines, Color $borderColor, string $agentName, int $width, Theme $theme): string
     {
         // Show last PEEK_LINES lines (most recent at bottom).
         $peekLines = array_slice($lines, -self::PEEK_LINES);
         $bodyLines = array_merge([$header], $peekLines);
 
-        // Preview label when buffer exceeds peek window.
-        if (count($lines) > self::PEEK_LINES) {
+        // Preview label when the agent has produced more than the peek shows.
+        // Counted against EVERYTHING it produced, not the buffer handed in:
+        // that is a bounded tail, and counting it pinned this at the tail's
+        // size ("+ 4 more") however long the agent kept working.
+        $hidden = max($totalLines, count($lines)) - count($peekLines);
+        if ($hidden > 0) {
             $bodyLines[] = Style::new()
                 ->foreground($theme->shellMuted)
-                ->render('  + ' . (count($lines) - self::PEEK_LINES) . ' more line(s)…');
+                ->render('  + ' . $hidden . ' more line(s)…');
         }
 
         $body = implode("\n", $bodyLines);

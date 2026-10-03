@@ -185,7 +185,7 @@ final class AgentManagerWiringTest extends TestCase
      * as useless as no manager, hence the roster assertion; and the roster is
      * registered IDLE, which is the property that keeps this wiring from being
      * a UX regression — `Agent::$isActive` is rendered as the literal word
-     * "working" by both `Renderer::agentDisplayState()` and
+     * "working" by both `AgentDashboardPane::agentEntry()` and
      * {@see AgentDashboardPane}, so six agents registered active would make
      * every launch claim six agents were working on a session where nothing had
      * been delegated.
@@ -220,6 +220,9 @@ final class AgentManagerWiringTest extends TestCase
         $this->assertStringNotContainsString('[working]', LiveRenderer::render($chat));
 
         $subAgent = $manager->createSubAgent('reviewer', 'review the diff');
+        // Started, as a dispatched run is: the strip lists runs now, and one
+        // still queued reads `pending`.
+        $subAgent->status = \SugarCraft\Crush\Agents\SubAgent::STATUS_RUNNING;
 
         try {
             $frame = LiveRenderer::render($chat);
@@ -227,6 +230,33 @@ final class AgentManagerWiringTest extends TestCase
             $this->assertStringContainsString('reviewer', $frame);
         } finally {
             $manager->removeSubAgent($subAgent->id);
+        }
+    }
+
+    /**
+     * The strip under the input lists every run, not one line per agent: a
+     * batch of audits all run by `reviewer` used to show as a single
+     * `reviewer` row while the Agents pane listed each.
+     */
+    public function testTheAgentStripListsEachRunOfOneAgent(): void
+    {
+        $chat = $this->chat();
+        $manager = $this->manager();
+        $runs = [];
+        foreach (['candy-core', 'candy-ansi'] as $lib) {
+            $run = $manager->createSubAgent('reviewer', 'Audit ' . $lib);
+            $run->status = \SugarCraft\Crush\Agents\SubAgent::STATUS_RUNNING;
+            $runs[] = $run;
+        }
+
+        try {
+            $frame = LiveRenderer::render($chat);
+            $this->assertStringContainsString('Audit candy-core', $frame);
+            $this->assertStringContainsString('Audit candy-ansi', $frame);
+        } finally {
+            foreach ($runs as $run) {
+                $manager->removeSubAgent($run->id);
+            }
         }
     }
 
@@ -251,6 +281,9 @@ final class AgentManagerWiringTest extends TestCase
         $this->assertSame([], AgentDashboardPane::entries($app), 'no work delegated yet');
 
         $subAgent = $manager->createSubAgent('debugger', 'trace it');
+        // Started, as a dispatched run is: rows are per run now, so a run
+        // still queued reads `pending`, not the agent-wide `working`.
+        $subAgent->status = \SugarCraft\Crush\Agents\SubAgent::STATUS_RUNNING;
         $subAgent->output = "checking stack\nfound the frame";
 
         try {

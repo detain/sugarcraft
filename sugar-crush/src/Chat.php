@@ -7932,7 +7932,7 @@ final class Chat implements Model
      * directly. The manager registers each SubAgent and mirrors the pool's
      * per-result usage back onto it, which is the only thing that makes
      * {@see AgentManager::elapsedSeconds()}/tokensUsed()/costUsd() -- and so
-     * Renderer::agentDisplayState()'s status line -- observe real work instead
+     * AgentDashboardPane::agentEntry()'s status line -- observe real work instead
      * of zeros (crush_feat.md section 5 E6). Dispatch stays single-pass: the
      * manager accumulates with `+=`, so the pool must never also be iterated
      * for the same SubAgent instances or usage would be counted twice.
@@ -18885,6 +18885,7 @@ final class Chat implements Model
             // F2: the harness's own ceiling verdict rides the same seam.
             stepsTruncated: $message->stepsTruncated,
             pendingToolArguments: $message->pendingToolArguments,
+            pendingToolName: $message->pendingToolName,
             uiOnly: $message->uiOnly,
             loopGuardStoppedBy: $message->loopGuardStoppedBy,
             attachmentNotice: $message->attachmentNotice,

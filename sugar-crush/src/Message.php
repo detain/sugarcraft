@@ -170,6 +170,14 @@ final class Message implements \JsonSerializable
          * is).
          */
         public readonly ?string $attachmentNotice = null,
+        /**
+         * The tool a "running" placeholder stands in for — set only alongside
+         * {@see $pendingToolCallId}. Lets a surface tell a still-running call
+         * apart by kind before its result names it: the tools sidebar leaves
+         * `Task` delegations to the Agents pane, which lists each run itself.
+         * Display-only: never part of {@see toWire()}.
+         */
+        public readonly ?string $pendingToolName = null,
     ) {}
 
     public static function user(string $content, ?int $now = null): self
@@ -236,6 +244,7 @@ final class Message implements \JsonSerializable
             createdAt: $now ?? time(),
             pendingToolCallId: $call->id ?? $call->name,
             pendingToolArguments: $call->arguments,
+            pendingToolName: $call->name,
         );
     }
 
@@ -296,9 +305,11 @@ final class Message implements \JsonSerializable
 
     /**
      * Readable unicode, and invalid UTF-8 substituted with U+FFFD instead of
-     * failing the whole encode (audit 15b-27).
+     * failing the whole encode (audit 15b-27). Slashes unescaped: nearly
+     * every argument worth showing is a path, and `src\/Foo.php` is noise —
+     * `/` is not a character any sink here interprets.
      */
-    private const ARGUMENT_JSON_FLAGS = JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE;
+    private const ARGUMENT_JSON_FLAGS = JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
 
     /**
      * One argument value as a JSON string literal for the one-liner.
@@ -381,6 +392,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            pendingToolName: $this->pendingToolName,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
             attachmentNotice: $this->attachmentNotice,
@@ -408,6 +420,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            pendingToolName: $this->pendingToolName,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
             attachmentNotice: $this->attachmentNotice,
@@ -436,6 +449,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            pendingToolName: $this->pendingToolName,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
             attachmentNotice: $this->attachmentNotice,
@@ -467,6 +481,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: [],
+            pendingToolName: null,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
             attachmentNotice: $this->attachmentNotice,
@@ -498,6 +513,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            pendingToolName: $this->pendingToolName,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
             attachmentNotice: $this->attachmentNotice,
@@ -528,6 +544,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            pendingToolName: $this->pendingToolName,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
             attachmentNotice: $this->attachmentNotice,
@@ -559,6 +576,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            pendingToolName: $this->pendingToolName,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
             attachmentNotice: $this->attachmentNotice,
@@ -589,6 +607,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            pendingToolName: $this->pendingToolName,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
             attachmentNotice: $this->attachmentNotice,
@@ -618,6 +637,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            pendingToolName: $this->pendingToolName,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
             attachmentNotice: $this->attachmentNotice,
@@ -647,6 +667,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            pendingToolName: $this->pendingToolName,
             uiOnly: $uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
             attachmentNotice: $this->attachmentNotice,
@@ -677,6 +698,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            pendingToolName: $this->pendingToolName,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $toolName === '' ? null : $toolName,
             attachmentNotice: $this->attachmentNotice,
@@ -706,6 +728,7 @@ final class Message implements \JsonSerializable
             lengthStopped: $this->lengthStopped,
             stepsTruncated: $this->stepsTruncated,
             pendingToolArguments: $this->pendingToolArguments,
+            pendingToolName: $this->pendingToolName,
             uiOnly: $this->uiOnly,
             loopGuardStoppedBy: $this->loopGuardStoppedBy,
             attachmentNotice: $notice === '' ? null : $notice,
@@ -825,6 +848,7 @@ final class Message implements \JsonSerializable
             // Only when set, so every agent-visible row - i.e. every row a
             // pre-flag transcript holds - serialises byte-for-byte as before.
             ...($this->uiOnly ? ['uiOnly' => true] : []),
+            ...($this->pendingToolName !== null ? ['pendingToolName' => $this->pendingToolName] : []),
         ];
     }
 
@@ -923,6 +947,7 @@ final class Message implements \JsonSerializable
             lengthStopped: ($row['lengthStopped'] ?? false) === true,
             stepsTruncated: ($row['stepsTruncated'] ?? false) === true,
             pendingToolArguments: \is_array($row['pendingToolArguments'] ?? null) ? $row['pendingToolArguments'] : [],
+            pendingToolName: $string($row['pendingToolName'] ?? null),
             uiOnly: ($row['uiOnly'] ?? false) === true,
             loopGuardStoppedBy: $string($row['loopGuardStoppedBy'] ?? null),
         );

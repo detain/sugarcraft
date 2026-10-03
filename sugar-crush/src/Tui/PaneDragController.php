@@ -46,6 +46,7 @@ final class PaneDragController
     private const KIND_IDLE = 'idle';
     private const KIND_RESIZE = 'resize';
     private const KIND_DOCK = 'dock';
+    private const KIND_SPLIT = 'split';
 
     private function __construct(
         private readonly string $kind,
@@ -126,6 +127,45 @@ final class PaneDragController
         );
     }
 
+    /**
+     * A press landed on the seam between the band and the live-agent column
+     * (`splitdiv:r<row>`) — the pointer now owns that column's width until
+     * the release. Armed at the press, like a side resize.
+     */
+    public function beginSplitResize(int $grabCol): self
+    {
+        return $this->mutate(
+            kind: self::KIND_SPLIT,
+            side: null,
+            sideSet: true,
+            grabCol: $grabCol,
+            paneId: null,
+            paneIdSet: true,
+            armed: true,
+        );
+    }
+
+    public function isSplitResizing(): bool
+    {
+        return $this->kind === self::KIND_SPLIT;
+    }
+
+    /**
+     * The live-agent column width the pointer asks for, clamped to
+     * [$min, $max]. Delta from the grab, like {@see resizeColumns()}: the
+     * column sits right of the seam, so dragging LEFT by n grows it by n.
+     *
+     * @throws \LogicException when asked outside a split resize
+     */
+    public function splitColumns(int $pointerX, int $originCols, int $min, int $max): int
+    {
+        if ($this->kind !== self::KIND_SPLIT) {
+            throw new \LogicException('splitColumns() asked outside a split resize.');
+        }
+
+        return max($min, min($originCols + ($this->grabCol - $pointerX), max($min, $max)));
+    }
+
     public function isResizing(): bool
     {
         return $this->kind === self::KIND_RESIZE;
@@ -167,7 +207,7 @@ final class PaneDragController
      */
     public function withMotion(int $x, int $y): self
     {
-        if ($this->kind === self::KIND_RESIZE) {
+        if ($this->kind === self::KIND_RESIZE || $this->kind === self::KIND_SPLIT) {
             return $this->previewed ? $this : $this->mutate(previewed: true);
         }
 

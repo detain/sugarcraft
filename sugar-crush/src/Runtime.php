@@ -33,12 +33,14 @@ use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\SiblingSpendLedger;
+use SugarCraft\Crush\Support\SubAgentActivityRelay;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\Tools\CarriesSessionState;
 use SugarCraft\Crush\Tools\ExemptFromParallelDeadline;
 use SugarCraft\Crush\Tools\McpToolBridge;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\PromptGuidance;
+use SugarCraft\Crush\Tools\RelaysSubAgentActivity;
 use SugarCraft\Crush\Tools\SharesSiblingSpend;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
@@ -2135,6 +2137,11 @@ final class Runtime
                 // side of the fork below.
                 $tool = self::sharingSpend($job);
                 $file = (string) $job['file'];
+                // A delegated run's Agents-pane beats: its bound emitter only
+                // writes from THIS process, so the child gets a relay instead
+                // and phase 3 replays what arrives (RelaysSubAgentActivity).
+                $emitter = $tool instanceof RelaysSubAgentActivity ? $tool->subAgentEmitter() : null;
+                $relay = $emitter !== null ? SubAgentActivityRelay::open() : null;
                 $pid = pcntl_fork();
 
                 if ($pid === -1) {
@@ -2176,6 +2183,7 @@ final class Runtime
                     // something DOES read `file` on a settled-in-process job.
                     // Left in rather than trimmed to what the tests can see.
                     ToolIpcFiles::discard($file);
+                    $relay?->close();
                     $jobs[$index]['file'] = null;
                     $jobs[$index]['result'] = $this->executeGuarded($tool, $job['call'], $job['args']);
                     $jobs[$index]['settled'] = true;
@@ -2184,10 +2192,18 @@ final class Runtime
                 }
 
                 if ($pid === 0) {
+                    if ($relay !== null && $tool instanceof RelaysSubAgentActivity) {
+                        $tool = $tool->withSubAgentEmitter($relay->childEmitter());
+                    }
                     $this->runToolInChild($file, $tool, $job['call'], $job['args']);
                 }
 
                 $jobs[$index]['pid'] = $pid;
+                if ($relay !== null) {
+                    $relay->becomeReader();
+                    $jobs[$index]['relay'] = $relay;
+                    $jobs[$index]['emitter'] = $emitter;
+                }
             }
 
             // Phase 3 — reap, then release in provider order.
@@ -2208,8 +2224,17 @@ final class Runtime
                     }
                 }
 
+                // After the exit check, so a member that just exited has its
+                // last beats (its finished frame) replayed before its
+                // ToolFinished is released below.
+                self::relaySubAgentActivity($jobs);
+
                 $released = false;
                 while ($next < $total && $jobs[$next]['settled']) {
+                    if (isset($jobs[$next]['relay'])) {
+                        $jobs[$next]['relay']->close();
+                        unset($jobs[$next]['relay']);
+                    }
                     yield $this->release($jobs[$next], $onEvent);
                     $next++;
                     $released = true;
@@ -2292,11 +2317,39 @@ final class Runtime
                 }
             }
 
+            foreach ($jobs as $job) {
+                if (isset($job['relay'])) {
+                    $job['relay']->close();
+                }
+            }
+
             // Every member that will ever be released has been by now (or the
             // consumer walked away), so nothing reads the ledger again. A
             // member still running finds the file gone and records nothing —
             // SiblingSpendLedger::record() never recreates it.
             $ledger?->discard();
+        }
+    }
+
+    /**
+     * Replay every beat a forked member has relayed since the last pass
+     * through the emitter its tool was bound with — in this process, the one
+     * that emitter may write from. Display-only: a member whose relay broke
+     * simply stops updating its row.
+     *
+     * @param list<array<string, mixed>> $jobs
+     */
+    private static function relaySubAgentActivity(array $jobs): void
+    {
+        foreach ($jobs as $job) {
+            $relay = $job['relay'] ?? null;
+            $emitter = $job['emitter'] ?? null;
+            if (!$relay instanceof SubAgentActivityRelay || !$emitter instanceof \Closure) {
+                continue;
+            }
+            foreach ($relay->drain() as $beat) {
+                $emitter($beat);
+            }
         }
     }
 

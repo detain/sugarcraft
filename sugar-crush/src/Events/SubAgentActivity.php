@@ -40,6 +40,14 @@ final readonly class SubAgentActivity
     /** The ops a frame may carry — decodeEvent() validates against this. */
     public const OPS = [self::OP_STARTED, self::OP_PROGRESS, self::OP_FINISHED];
 
+    /** A tool call's state in {@see $calls}. */
+    public const CALL_RUNNING = 'running';
+    public const CALL_OK = 'ok';
+    public const CALL_ERROR = 'error';
+
+    /** Most recent calls a beat carries; older ones fall off the front. */
+    public const MAX_CALLS = 20;
+
     /**
      * @param string $op   one of the OP_* constants.
      * @param string $id   the delegated run's SubAgent id, minted in the child.
@@ -49,6 +57,22 @@ final readonly class SubAgentActivity
      * @param int    $seq  1-based counter, strictly increasing per run — the
      *                     reader's staleness ordering within one $id.
      * @param string $tail bounded output tail as of this beat.
+     * @param int    $tokensUsed the run's provider-counted tokens so far —
+     *                     a running total, not a delta, so a dropped beat
+     *                     costs the row nothing the next one cannot restore.
+     * @param float  $costUsd    the run's spend so far, same rule.
+     * @param int    $lines      trail lines the run has produced so far;
+     *                     $tail is clipped, so this is what an "N more
+     *                     lines" count reads.
+     * @param string $model      the model the run really executes on (the
+     *                     session's own — a preset's `model:` is a request a
+     *                     Task run does not honour); '' when unknown.
+     * @param int    $contextTokens the run's CURRENT context: what its latest
+     *                     request carried, not a running total; 0 when unknown.
+     * @param list<array{id: string, label: string, state: string, at: int}> $calls
+     *                     the run's most recent tool calls, newest last,
+     *                     bounded by the emitter — the whole recent list on
+     *                     every beat, so the latest beat is the truth.
      */
     public function __construct(
         public string $op,
@@ -57,5 +81,11 @@ final readonly class SubAgentActivity
         public string $task,
         public int $seq,
         public string $tail,
+        public int $tokensUsed = 0,
+        public float $costUsd = 0.0,
+        public int $lines = 0,
+        public string $model = '',
+        public int $contextTokens = 0,
+        public array $calls = [],
     ) {}
 }

@@ -414,9 +414,9 @@ final class WorkflowLivePaneTest extends TestCase
      * All three of them are scoped: two name THIS agent, one names
      * `[working]`. That is narrower than "no tile is open", and measurably so
      * — injecting `['other-agent' => 'zzz mutant filler']` into
-     * {@see Renderer::liveAgentOutputs()} leaves a stopped tile standing in
+     * {@see Renderer::liveAgentRuns()} leaves a stopped tile standing in
      * the frame and reds none of them. The unscoped statement is the
-     * `liveAgentOutputs()` assertion added below them, which is the
+     * `liveAgentRuns()` assertion added below them, which is the
      * compositor's actual source for the split.
      *
      * The probe negation is also deliberately FRAME-wide rather than
@@ -465,12 +465,12 @@ final class WorkflowLivePaneTest extends TestCase
         // They are all scoped to THIS agent's name or to `[working]`, so a
         // compositor that left a DIFFERENT agent's tile up in a non-working
         // state satisfies every one of them — measured: injecting
-        // `['other-agent' => 'zzz mutant filler']` into liveAgentOutputs() left
+        // `['other-agent' => 'zzz mutant filler']` into the live-agent source left
         // this test green. This reads the renderer's own source for the split,
         // which is a different method from the `liveOutputs()` asserted above.
         $this->assertSame(
             [],
-            (new \ReflectionMethod(Renderer::class, 'liveAgentOutputs'))->invoke(null, $app),
+            (new \ReflectionMethod(Renderer::class, 'liveAgentRuns'))->invoke(null, $app),
             'The renderer still has a live-agent map, so the split column opens for '
             . 'whatever is in it — including an agent this test never names.',
         );

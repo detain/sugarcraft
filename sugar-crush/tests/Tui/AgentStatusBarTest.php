@@ -85,7 +85,25 @@ final class AgentStatusBarTest extends TestCase
             costUsd: 0.0042,
         );
 
-        $this->assertSame('1,234 tok | $0.0042', $state->usageDisplay());
+        $this->assertSame('1.2K tok | $0.0042', $state->usageDisplay());
+    }
+
+    /**
+     * Counts are compact, and a run shows its CURRENT context beside the
+     * total it has burned — 2.1M spent can sit at a 200K context.
+     */
+    public function testUsageDisplayShowsCompactTotalsAndTheCurrentContext(): void
+    {
+        $state = AgentDisplayState::new('a', 'working', 'op', 5, 2_100_000, 0.0, 200_000);
+
+        $this->assertSame('2.1M tok · 200K ctx', $state->usageDisplay());
+    }
+
+    public function testUsageDisplayLeavesOutACostThatIsZero(): void
+    {
+        $state = AgentDisplayState::new('a', 'working', 'op', 5, 1234, 0.0);
+
+        $this->assertSame('1.2K tok', $state->usageDisplay(), 'an unpriced backend bills nothing, so no `| $0.0000`');
     }
 
     // =========================================================================
@@ -222,7 +240,7 @@ final class AgentStatusBarTest extends TestCase
 
         $line = AgentStatusBar::renderAgentLine($agent, self::theme());
 
-        $this->assertStringContainsString('1,234 tok', $line);
+        $this->assertStringContainsString('1.2K tok', $line);
         $this->assertStringContainsString('$0.0042', $line);
     }
 

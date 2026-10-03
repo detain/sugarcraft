@@ -25,6 +25,7 @@ use SugarCraft\Crush\Tools\DelegatesToEngine;
 use SugarCraft\Crush\Tools\ExemptFromParallelDeadline;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\PromptGuidance;
+use SugarCraft\Crush\Tools\RelaysSubAgentActivity;
 use SugarCraft\Crush\Tools\SharesSiblingSpend;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -142,14 +143,17 @@ use SugarCraft\Crush\Usage;
  * file ({@see SharesSiblingSpend}, audit B4-rem): each run records its steps as
  * it bills them and its cap check counts the others', so a batch cannot spend
  * the remaining budget once per sibling; and a run whose child dies before it
- * reports is still billed for the steps it recorded.
+ * reports is still billed for the steps it recorded. Each sibling's
+ * {@see SubAgentActivity} beats reach the Agents pane through a per-member
+ * relay the forking parent drains ({@see RelaysSubAgentActivity}), since the
+ * bound emitter only writes from the turn process.
  *
  * Mirrors the delegation role of sugar-crush's plan P8.13 (`Task` tool) over
  * the in-tree {@see AgentManager}/{@see AgentWorkerPool} machinery; see
  * {@see AgentWorkerPool::executeAll()} for what a dispatched worker actually
  * carries across the fork.
  */
-final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine, PromptGuidance, SharesSiblingSpend
+final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine, PromptGuidance, SharesSiblingSpend, RelaysSubAgentActivity
 {
     /**
      * Step cap for a preset that declares no `maxTurns`. 200 since
@@ -158,6 +162,12 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * the workflow path's copy of the same default.
      */
     public const DEFAULT_MAX_TURNS = 200;
+
+    /**
+     * The tool's wire name — also how a display surface recognises a
+     * delegation (the tools sidebar leaves them to the Agents pane).
+     */
+    public const NAME = 'Task';
 
     /** The instruction a resume continues with when the caller gives no better one. */
     public const DEFAULT_RESUME_PROMPT = 'Continue the task from where you stopped. When it is done, reply with your final report.';
@@ -222,6 +232,16 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         return new self($this->agentManager, $this->workerPool, $this->engine, $this->heartbeat, $this->suspended, $this->subAgentEmitter, $ledger);
     }
 
+    public function subAgentEmitter(): ?\Closure
+    {
+        return $this->subAgentEmitter;
+    }
+
+    public function withSubAgentEmitter(\Closure $emitter): self
+    {
+        return new self($this->agentManager, $this->workerPool, $this->engine, $this->heartbeat, $this->suspended, $emitter, $this->siblingSpend);
+    }
+
     /**
      * Only the engine path forks safely: it bounds itself and watches for its
      * parent's death. The unbound pool path keeps the barrier it always had.
@@ -233,7 +253,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
 
     public function name(): string
     {
-        return 'Task';
+        return self::NAME;
     }
 
     public function description(): string
@@ -515,6 +535,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         };
 
         $emit = $this->subAgentEmitter;
+        // The run executes on THIS engine's model whatever the preset's
+        // `model:` says, so that is the model its row names.
+        $subAgent->runModel = $engine->model();
         $subAgent->status = SubAgent::STATUS_RUNNING;
         $subAgent->startedAt = new \DateTimeImmutable();
 
@@ -524,15 +547,40 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         $seq = 0;
         $lastBeat = 0.0;
         $think = '';
+        // Whether the trail's last line is part of an open thought: the
+        // `thinking:` label goes on a thought's first line only, so one long
+        // burst reads as one block instead of a label per folded line.
+        $thinking = false;
+        // Trail lines produced, for the row's "N more lines" count — the
+        // output itself is clipped to ACTIVITY_TAIL_BYTES.
+        $lines = 0;
+
+        // The row counts tokens as each step is billed, not only once the
+        // run settles. The baseline is whatever the row carried before this
+        // run (a resumed run keeps counting from it); bill() later replaces
+        // the live figure with the settled one.
+        $baseTokens = $subAgent->tokensUsed;
+        $baseCost = $subAgent->costUsd;
+        $observeUsage = static function (?Usage $usage) use ($subAgent): void {
+            $subAgent->tokensUsed += $usage?->totalTokens ?? 0;
+            $subAgent->costUsd += $usage?->costUsd ?? 0.0;
+            // One response's total is its prompt plus its reply — the size
+            // of the context that request carried, which is what "current
+            // context" means for a row.
+            if (($usage?->totalTokens ?? 0) > 0) {
+                $subAgent->contextTokens = $usage->totalTokens;
+            }
+        };
 
         // The run's visible trail. Every line lands on the row's rolling
         // output; $immediate lines (tool boundaries) also go out as a progress
         // frame at once, while reasoning-driven beats share the heartbeat's
         // one-a-second budget — the dashboard is a monitor, not a tape deck.
         $record = static function (string $line, bool $immediate) use (
-            $subAgent, $agentName, $emit, &$seq, &$lastBeat,
+            $subAgent, $agentName, $emit, &$seq, &$lastBeat, &$lines,
         ): void {
             $subAgent->output = self::appendActivity($subAgent->output, $line);
+            $lines++;
             if ($emit === null) {
                 return;
             }
@@ -548,19 +596,27 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 '',
                 ++$seq,
                 self::tailClip($subAgent->output, self::ACTIVITY_TAIL_BYTES),
+                $subAgent->tokensUsed,
+                $subAgent->costUsd,
+                $lines,
+                '',
+                $subAgent->contextTokens,
+                $subAgent->recentCalls,
             ));
         };
 
-        // A reasoning burst becomes ONE trail line, folded at
-        // THINK_LINE_BYTES so a long thought streams as a sequence of lines
-        // instead of never appearing until the burst ends.
-        $foldThink = static function () use (&$think, $record): void {
+        // A reasoning burst becomes trail lines folded at THINK_LINE_BYTES,
+        // so a long thought streams instead of never appearing until it ends.
+        // Only the burst's first line carries the label; the rest continue
+        // under it, indented, until a tool boundary closes the thought.
+        $foldThink = static function () use (&$think, &$thinking, $record): void {
             if ($think === '') {
                 return;
             }
-            $line = $think;
+            $line = self::tailClip($think, self::THINK_LINE_BYTES);
             $think = '';
-            $record('thinking: '.self::tailClip($line, self::THINK_LINE_BYTES), false);
+            $record(($thinking ? '  ' : 'thinking: ') . $line, false);
+            $thinking = true;
         };
 
         if ($emit !== null) {
@@ -571,6 +627,10 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 self::snippet($subAgent->task, self::TASK_SNIPPET_BYTES),
                 ++$seq,
                 '',
+                $subAgent->tokensUsed,
+                $subAgent->costUsd,
+                0,
+                $subAgent->runModel,
             ));
         }
 
@@ -580,7 +640,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // rather than going blank on the dashboard at exactly the moment a
         // human looks.
         $finish = function (string $status, string $report, ?string $error) use (
-            $subAgent, $agentName, $emit, &$seq, $foldThink,
+            $subAgent, $agentName, $emit, &$seq, &$lines, $foldThink,
         ): void {
             $foldThink();
             // Report wins; without one the trail IS the row's story.
@@ -595,6 +655,12 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 '',
                 ++$seq,
                 self::tailClip($subAgent->output, self::ACTIVITY_TAIL_BYTES),
+                $subAgent->tokensUsed,
+                $subAgent->costUsd,
+                $lines,
+                '',
+                $subAgent->contextTokens,
+                $subAgent->recentCalls,
             ));
         };
 
@@ -608,6 +674,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 ->withTools($tools)
                 ->withMaxSteps($maxTurns)
                 ->withSiblingSpend($this->siblingSpend)
+                ->withStepUsageObserver($observeUsage)
                 ->completeTranscript(
                     $messages,
                     // SubAgentActivity is deliberately NOT in this signature:
@@ -617,22 +684,30 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                     // SpendCapBreached IS: the run's own cap check emits it, and
                     // a narrower type here made that emit a TypeError that
                     // surfaced as an unexplained "failed" (audit B4).
-                    onEvent: static function (ToolStarted|ToolFinished|SpendCapBreached $event) use ($onProgress, $record, $foldThink, &$capStop): void {
+                    onEvent: static function (ToolStarted|ToolFinished|SpendCapBreached $event) use ($onProgress, $record, $foldThink, &$capStop, &$thinking, $subAgent): void {
                         $onProgress();
+                        // A tool boundary ends the thought before it: the
+                        // next burst opens under a fresh label.
+                        $closeThought = static function () use ($foldThink, &$thinking): void {
+                            $foldThink();
+                            $thinking = false;
+                        };
                         if ($event instanceof SpendCapBreached) {
                             $capStop = $event;
-                            $foldThink();
+                            $closeThought();
                             $record(sprintf('stopped: spend cap $%.4f reached ($%.4f spent)', $event->capUsd, $event->spentUsd), true);
 
                             return;
                         }
                         if ($event instanceof ToolStarted) {
-                            $foldThink();
-                            $record('-> '.$event->toolName, true);
+                            $closeThought();
+                            self::trackCall($subAgent, $event);
+                            $record('-> '.self::describeCall($event), true);
 
                             return;
                         }
-                        $foldThink();
+                        $closeThought();
+                        self::trackCall($subAgent, $event);
                         $record('<- '.$event->toolName.($event->result->isError() ? ' (error)' : ''), true);
                     },
                     onReasoning: static function (string $delta) use ($onProgress, &$think, $foldThink): void {
@@ -656,7 +731,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             // each with its own usage; the opening $messages are skipped so a
             // resumed run's earlier, already-billed steps are not counted twice.
             $spent = self::spentSince($failure->transcript, count($messages));
-            self::bill($subAgent, $spent);
+            self::bill($subAgent, $spent, $baseTokens, $baseCost);
             $why = sprintf('sub-agent "%s" failed: %s', $agentName, $failure->getMessage());
             $finish(SubAgent::STATUS_FAILED, '', $why);
 
@@ -670,7 +745,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
 
         $reply = $turn->reply;
         $spent = $reply->usage;
-        self::bill($subAgent, $spent);
+        self::bill($subAgent, $spent, $baseTokens, $baseCost);
 
         if ($capStop !== null) {
             $why = sprintf(
@@ -752,11 +827,64 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         return Usage::sum($usages);
     }
 
-    /** Mirror the run's spend onto its row (the Agents dashboard reads it). */
-    private static function bill(SubAgent $subAgent, ?Usage $spent): void
+    /**
+     * Settle the run's spend onto its row (the Agents dashboard reads it):
+     * the baseline the row carried before the run plus what the run billed,
+     * REPLACING the live count {@see runOnEngine()}'s usage observer kept, so
+     * the settled figure is the authority and nothing is counted twice.
+     */
+    private static function bill(SubAgent $subAgent, ?Usage $spent, int $baseTokens = 0, float $baseCost = 0.0): void
     {
-        $subAgent->tokensUsed += $spent?->totalTokens ?? 0;
-        $subAgent->costUsd += $spent?->costUsd ?? 0.0;
+        $subAgent->tokensUsed = $baseTokens + ($spent?->totalTokens ?? 0);
+        $subAgent->costUsd = $baseCost + ($spent?->costUsd ?? 0.0);
+    }
+
+    /**
+     * Keep the run's recent-call list current: a started call is appended
+     * as running, its finish marks the SAME entry (matched by call id) ok or
+     * error, and only the newest {@see SubAgentActivity::MAX_CALLS} are kept.
+     * The list is what the Tools pane shows for this run.
+     */
+    private static function trackCall(SubAgent $subAgent, ToolStarted|ToolFinished $event): void
+    {
+        $calls = $subAgent->recentCalls;
+        if ($event instanceof ToolStarted) {
+            $calls[] = [
+                'id' => $event->toolCallId,
+                'label' => self::describeCall($event),
+                'state' => SubAgentActivity::CALL_RUNNING,
+                'at' => time(),
+            ];
+            $subAgent->recentCalls = array_slice($calls, -SubAgentActivity::MAX_CALLS);
+
+            return;
+        }
+
+        for ($i = count($calls) - 1; $i >= 0; $i--) {
+            if ($calls[$i]['id'] === $event->toolCallId && $calls[$i]['state'] === SubAgentActivity::CALL_RUNNING) {
+                $calls[$i]['state'] = $event->result->isError() ? SubAgentActivity::CALL_ERROR : SubAgentActivity::CALL_OK;
+                $subAgent->recentCalls = $calls;
+
+                return;
+            }
+        }
+    }
+
+    /**
+     * One tool call as a trail line: the model's own description when it
+     * gave one (`Bash: List files`), else the call's argument dump
+     * (`Read(path: "src/x.php")`) — the same one-liner the chat shows, so a
+     * sub-agent's trail reads like the transcript rather than a bare name.
+     */
+    private static function describeCall(ToolStarted $event): string
+    {
+        $described = \SugarCraft\Crush\Message::describeToolCall(
+            new \SugarCraft\Crush\ToolCall($event->toolName, $event->arguments),
+        );
+
+        return str_starts_with($described, $event->toolName . '(')
+            ? $described
+            : $event->toolName . ': ' . $described;
     }
 
     /**

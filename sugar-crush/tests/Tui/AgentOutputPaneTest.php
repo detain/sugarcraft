@@ -109,6 +109,33 @@ final class AgentOutputPaneTest extends TestCase
         $this->assertStringContainsString('4', $output); // 8 - 4 = 4 more lines.
     }
 
+    /**
+     * The buffer handed in is a bounded tail, so the "more" figure has to
+     * count what the agent produced in ALL: counting the tail pinned it at
+     * "+ 4 more" for every long-running agent, however much it wrote.
+     */
+    public function testRenderPeekCountsHiddenLinesAgainstEverythingProducedNotTheTail(): void
+    {
+        $tail = array_map(static fn (int $i): string => "line {$i}", range(93, 100));
+        $state = new AgentOutputState(
+            name: 'coder-1',
+            status: 'streaming',
+            operation: 'Generating code',
+            elapsedSeconds: 120,
+            tokensUsed: 2_500,
+            costUsd: 0.0,
+            model: 'claude-sonnet-4-6',
+            outputBuffer: $tail,
+            totalLines: 100,
+        );
+
+        $output = AgentOutputPane::render($state, 60, 10, self::theme(), Mode::Peek);
+
+        $this->assertStringContainsString('+ 96 more line(s)', $output, '100 produced, 4 shown');
+        $this->assertStringContainsString('line 100', $output);
+        $this->assertStringContainsString('Generating code', $output, 'a peek tile names what the agent is doing');
+    }
+
     // ─────────────────────────────────────────────────────────────────
     // render() — Mode::Attach
     // ─────────────────────────────────────────────────────────────────

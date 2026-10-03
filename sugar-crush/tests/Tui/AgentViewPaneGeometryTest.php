@@ -358,7 +358,7 @@ final class AgentViewPaneGeometryTest extends TestCase
      *
      * **What this test does NOT establish, said plainly.** It generalises over
      * ONE axis. The width moves; the name (`abc`), the status (`working`) and
-     * the metrics (`42s  1,234 tok | $0.0042`) are pinned, and the operation
+     * the metrics (`42s  1.2K tok | $0.0042`) are pinned, and the operation
      * is drawn from four hand-picked payloads. That is the same
      * fixture-shaped-like-the-property trap this file names elsewhere, moved
      * one axis over, and it is stated rather than fixed because the honest
@@ -403,7 +403,7 @@ final class AgentViewPaneGeometryTest extends TestCase
      * left to "it fits now".
      *
      * 20 content columns cannot hold `● abc [working]` (15 cells), a 5-cell
-     * operation and 24 cells of `42s  1,234 tok | $0.0042`. Something has to
+     * operation and 24 cells of `42s  1.2K tok | $0.0042`. Something has to
      * give, and the choice is that the METRICS give first: a row that cannot
      * say which agent it is has nothing left to say, while elapsed without
      * usage is still a whole reading. Below even that, the label itself is
@@ -420,13 +420,15 @@ final class AgentViewPaneGeometryTest extends TestCase
         };
 
         // Wide: everything is there.
-        $this->assertStringContainsString('1,234 tok | $0.0042', $body(80));
+        $this->assertStringContainsString('1.2K tok | $0.0042', $body(80));
         $this->assertStringContainsString('compiling', $body(80));
 
-        // 40 columns: usage will not fit beside the identity, elapsed still does.
-        $this->assertStringNotContainsString('tok', $body(40));
-        $this->assertStringContainsString('42s', $body(40));
-        $this->assertStringContainsString('abc [working]', $body(40));
+        // 36 columns: usage will not fit beside the identity, elapsed still
+        // does. (This was 40 while counts were exact; the compact `1.2K tok`
+        // is short enough to fit at 40 now.)
+        $this->assertStringNotContainsString('tok', $body(36));
+        $this->assertStringContainsString('42s', $body(36));
+        $this->assertStringContainsString('abc [working]', $body(36));
 
         // 20 columns: the label itself is cut, and the identity is what
         // survives longest.
@@ -653,10 +655,20 @@ final class AgentViewPaneGeometryTest extends TestCase
 
         $render = new \ReflectionMethod(Renderer::class, 'renderAgentView');
 
-        foreach (self::preChangeFrames() as $cols => $expected) {
+        foreach (self::preChangeFrames() as $cols => $historical) {
             if ($cols < 80) {
                 continue;
             }
+
+            // The zero-cost change (an unpriced `| $0.0000` is no longer
+            // drawn) is the one move since the historical capture: its
+            // header row is that capture's with exactly that suffix gone.
+            $expected = self::zeroCostFrames()[$cols];
+            $this->assertSame(
+                str_replace(' | $0.0000', '', explode("\n", (string) base64_decode($historical))[0]),
+                explode("\n", (string) base64_decode($expected))[0],
+                "the {$cols}-column header moved only by the unpriced cost suffix",
+            );
 
             $chat = (new Chat(agentManager: $manager))->withSize($cols, 40);
 
@@ -675,10 +687,12 @@ final class AgentViewPaneGeometryTest extends TestCase
             base64_encode($at60),
             'the 60-column strip is back to its pre-E54 bytes — the 61-cell status bar must be cut',
         );
-        $this->assertSame(
+        // It used to be CUT to exactly 60; without the unpriced cost it is
+        // 51 cells and fits as drawn. The invariant is the bound, not the cut.
+        $this->assertLessThanOrEqual(
             60,
             Width::string(self::unmarked(explode("\n", $at60)[0])),
-            'the cut 60-column header should sit exactly on the pane width',
+            'the 60-column header must never be wider than the pane',
         );
     }
 
@@ -804,15 +818,21 @@ final class AgentViewPaneGeometryTest extends TestCase
             $actual,
             'the 44-column strip is back to its pre-E64 bytes',
         );
-        $this->assertSame(self::postE54Frame44(), $actual, 'the 44-column strip moved again');
+        $this->assertNotSame(self::postE54Frame44(), $actual, 'the 44-column strip is back to its post-E54 bytes');
+        // A third move: with no unpriced `| $0.0000` to carry, the boxed row
+        // has room for its usage column again (`0s  0 tok`).
+        $this->assertSame(self::zeroCostFrames()[44], $actual, 'the 44-column strip moved again');
 
         // The E64 half, on the BOXED row: exactly one agent row, identity
-        // kept, usage column dropped, row still exactly one pane wide.
+        // kept, row still exactly one pane wide. E64 dropped the usage column
+        // it could not fit; without the unpriced cost it is short enough to
+        // fit again, and it is drawn whole — never clipped mid-token.
         $lines = explode("\n", self::plain(base64_decode($actual, true) ?: ''));
         $boxed = array_values(array_filter($lines, static fn(string $l): bool => str_contains($l, "\u{2502}")));
         $this->assertCount(1, $boxed, 'the pane draws exactly one agent row here');
         $this->assertStringContainsString('reviewer [working]', $boxed[0]);
-        $this->assertStringNotContainsString('tok', $boxed[0], 'the usage column does not fit 40 content cells');
+        $this->assertStringContainsString('0s  0 tok', $boxed[0], 'the cost-free usage column fits 40 content cells');
+        $this->assertStringNotContainsString('$', $boxed[0], 'no unpriced cost is drawn');
         $this->assertSame(44, Width::string($boxed[0]));
 
         // The E54 half, on the HEADER row — the row the old comment above
@@ -823,6 +843,23 @@ final class AgentViewPaneGeometryTest extends TestCase
         $this->assertStringContainsString('reviewer [working]', $head);
         $this->assertStringNotContainsString('tok', $head, 'E54 cut the over-long header, usage tail and all');
         $this->assertSame(44, Width::string(self::unmarked($head)));
+    }
+
+    /**
+     * `Renderer::renderAgentView()` once an unpriced cost stopped being drawn
+     * (`0 tok` instead of `0 tok | $0.0000`), captured from the tree on the
+     * same fixture as the frames below. Kept beside them, not over them, so
+     * each earlier move stays provable against its own capture.
+     *
+     * @return array<int, string>
+     */
+    private static function zeroCostFrames(): array
+    {
+        return [
+            44 => '7oCAcGFuZTphZ2VudHPugIEbWzM4OzI7MTYwOzIxNjsxNjBt4pePG1swbSAbWzFtG1szODsyOzE2MDsyMTY7MTYwbXJldmlld2VyG1swbSAbWzM4OzI7MTYwOzIxNjsxNjBtW3dvcmtpbmddG1swbSAbWzM4OzI7MTk3OzIwMTsyMTJtUmV2aWV3cyBjb2RlIGZvciBidWdzG1swbSAbWzM4OzI7MTM5OzE0MzsxNjhtMBtbMG0bWzM4OzI7MTM5OzE0MzsxNjhtG1swbe6AgC9wYW5lOmFnZW50c+6AgQrila0gYWdlbnRzIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKVrgrilIIgG1szODsyOzEzOTsxNDM7MTY4bRtbMzg7MjsxNjA7MjE2OzE2MG3il48bWzBtIHJldmlld2VyIFt3b3JraW5nXSAgUmV2aeKApiAgIBtbMG0bWzM4OzI7MTM5OzE0MzsxNjhtMHMgIDAgdG9rG1swbSAg4pSCCuKVsOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKVrw==',
+            80 => '7oCAcGFuZTphZ2VudHPugIEbWzM4OzI7MTYwOzIxNjsxNjBt4pePG1swbSAbWzFtG1szODsyOzE2MDsyMTY7MTYwbXJldmlld2VyG1swbSAbWzM4OzI7MTYwOzIxNjsxNjBtW3dvcmtpbmddG1swbSAbWzM4OzI7MTk3OzIwMTsyMTJtUmV2aWV3cyBjb2RlIGZvciBidWdzG1swbSAbWzM4OzI7MTM5OzE0MzsxNjhtMHMbWzBtIBtbMzg7MjsxMzk7MTQzOzE2OG0wIHRvaxtbMG3ugIAvcGFuZTphZ2VudHPugIEK4pWtIGFnZW50cyDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDila4K4pSCIBtbMzg7MjsxMzk7MTQzOzE2OG0bWzM4OzI7MTYwOzIxNjsxNjBt4pePG1swbSByZXZpZXdlciBbd29ya2luZ10gIFJldmlld3PigKYgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAbWzBtG1szODsyOzEzOTsxNDM7MTY4bTBzICAwIHRvaxtbMG0gIOKUggrilbDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDila8=',
+            120 => '7oCAcGFuZTphZ2VudHPugIEbWzM4OzI7MTYwOzIxNjsxNjBt4pePG1swbSAbWzFtG1szODsyOzE2MDsyMTY7MTYwbXJldmlld2VyG1swbSAbWzM4OzI7MTYwOzIxNjsxNjBtW3dvcmtpbmddG1swbSAbWzM4OzI7MTk3OzIwMTsyMTJtUmV2aWV3cyBjb2RlIGZvciBidWdzG1swbSAbWzM4OzI7MTM5OzE0MzsxNjhtMHMbWzBtIBtbMzg7MjsxMzk7MTQzOzE2OG0wIHRvaxtbMG3ugIAvcGFuZTphZ2VudHPugIEK4pWtIGFnZW50cyDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDila4K4pSCIBtbMzg7MjsxMzk7MTQzOzE2OG0bWzM4OzI7MTYwOzIxNjsxNjBt4pePG1swbSByZXZpZXdlciBbd29ya2luZ10gIFJldmlld3MgY29kZSBmb3IgYnVncyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIBtbMG0bWzM4OzI7MTM5OzE0MzsxNjhtMHMgIDAgdG9rG1swbSAg4pSCCuKVsOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKVrw==',
+        ];
     }
 
     /**

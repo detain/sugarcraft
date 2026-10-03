@@ -145,4 +145,40 @@ final class AgentManagerProjectionTest extends TestCase
 
         $this->assertSame("A2\nB1", $manager->liveOutput('coder'), 'creation order, newest last, both runs rolled up');
     }
+
+    public function testVisibleRunsListLiveRunsAndThisTurnsFinishedMirrorsButNotFinishedLocalRuns(): void
+    {
+        $manager = $this->manager();
+        $manager->projectRemoteSubAgent(self::beat(SubAgentActivity::OP_STARTED, 'live', 'coder', 'still going', 1, ''));
+        $manager->projectRemoteSubAgent(self::beat(SubAgentActivity::OP_STARTED, 'done', 'coder', 'finished', 1, ''));
+        $manager->projectRemoteSubAgent(self::beat(SubAgentActivity::OP_FINISHED, 'done', 'coder', '', 2, 'report'));
+        $queued = $manager->createSubAgent('coder', 'queued locally');
+        $settled = $manager->createSubAgent('coder', 'finished locally');
+        $settled->status = SubAgent::STATUS_COMPLETE;
+
+        $ids = array_map(static fn (SubAgent $run): string => $run->id, $manager->visibleRunsOf('coder'));
+
+        $this->assertSame(['live', 'done', $queued->id], $ids, 'a finished local run has no clearing point, so it is not listed');
+        $this->assertSame([], $manager->visibleRunsOf('nobody'));
+    }
+
+    /**
+     * A beat's running totals land on the mirror row as it works — tokens,
+     * cost and the trail's real line count — and a late, older beat can never
+     * wind them backwards.
+     */
+    public function testBeatsCarryRunningTotalsOntoTheMirrorRowAndNeverLowerThem(): void
+    {
+        $manager = $this->manager();
+        $manager->projectRemoteSubAgent(new SubAgentActivity(SubAgentActivity::OP_STARTED, 'cid-1', 'coder', 'task', 1, ''));
+        $manager->projectRemoteSubAgent(new SubAgentActivity(SubAgentActivity::OP_PROGRESS, 'cid-1', 'coder', '', 3, "a\nb", 800, 0.02, 40));
+        $manager->projectRemoteSubAgent(new SubAgentActivity(SubAgentActivity::OP_PROGRESS, 'cid-1', 'coder', '', 2, 'a', 300, 0.01, 10));
+
+        $row = $manager->getSubAgent('cid-1');
+        $this->assertNotNull($row);
+        $this->assertSame(800, $row->tokensUsed);
+        $this->assertSame(0.02, $row->costUsd);
+        $this->assertSame(40, $row->outputLineCount(), 'the tail holds 1 line, the run produced 40');
+        $this->assertSame(800, $manager->tokensUsed('coder'), 'the agent roll-up reads the live figure too');
+    }
 }

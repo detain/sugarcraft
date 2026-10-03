@@ -27,16 +27,16 @@ use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Veil\Position;
 use SugarCraft\Veil\Veil;
-use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Commands\KeyBindingRegistry;
 use SugarCraft\Crush\Permissions\PermissionPromptStage;
-use SugarCraft\Crush\Tui\AgentDisplayState;
 use SugarCraft\Crush\Tui\AgentStatusBar;
 use SugarCraft\Crush\Tui\AgentViewPane;
 use SugarCraft\Crush\Tui\DiffGutter;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\SessionPicker;
+use SugarCraft\Crush\Tui\Components\AgentDashboardPane;
+use SugarCraft\Crush\Util\TokenCount;
 use SugarCraft\Crush\Tui\Components\PaneLabel;
 
 /**
@@ -98,8 +98,9 @@ use SugarCraft\Crush\Tui\Components\PaneLabel;
  * `Chat` does not hold (it holds the unrelated `Backend` interface), so
  * satisfying that constructor here would mean fabricating a fake provider
  * purely to appease a type signature we don't otherwise need. This class
- * builds `AgentDisplayState` values directly from
- * `Chat::agentManager()->active()` (real `Agent` registrations) instead.
+ * takes its rows straight from the Chat's manager instead, through
+ * {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane::managerEntries()}
+ * — one row per run, the same rows the Agents pane lists.
  *
  * ### R20.fix, CLOSED: `agentManager` IS populated in production
  *
@@ -184,7 +185,7 @@ use SugarCraft\Crush\Tui\Components\PaneLabel;
  * `Chat` without a manager.
  *
  * `elapsedSeconds`/`tokensUsed`/`costUsd` have been real per-agent telemetry
- * since W3.S5b (see {@see agentDisplayState()}), and Phase 1 item 1 added the
+ * since W3.S5b (see {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane::managerEntries()}), and Phase 1 item 1 added the
  * missing fourth: `AgentManager::liveOutput()`/`liveOutputs()`, the public
  * "current live output buffer" accessor this note used to say had to exist
  * before {@see \SugarCraft\Crush\Tui\AgentOutputPane} or the P5.S7/S8
@@ -662,6 +663,14 @@ final class Renderer
     public const PANE_ZONE_PREFIX = 'pane:';
 
     /**
+     * Click-zone prefix for one ROW of a docked side pane:
+     * `siderow:<paneId>:<key>`, where the key is the row's own — a tool
+     * call's expansion key in the Tools pane, a run id in the Agents pane.
+     * {@see \SugarCraft\Crush\App\App} dispatches it (chrome, not chat).
+     */
+    public const SIDE_ROW_ZONE_PREFIX = 'siderow:';
+
+    /**
      * One open or close zone sentinel as {@see \SugarCraft\Mouse\Mark} emits it,
      * matched byte-wise against Mark's id charset (plus the closing `/`).
      */
@@ -771,6 +780,25 @@ final class Renderer
 
         if (preg_match(self::ZONE_ID_CHARSET, $id) !== 1 || strlen($id) > Mark::MAX_ID_BYTES) {
             return str_repeat(' ', $width);
+        }
+
+        return Mark::zone($id, str_repeat(' ', $width));
+    }
+
+    /**
+     * A `siderow:<paneId>:<key>` grab span of $width blanks for the scanner
+     * scratch row — or plain blanks when clicks are off or the id cannot be
+     * marked. Same validation as {@see markDockedPaneHeader()}: a key is
+     * provider- or model-authored (a tool-call id), and a bad one must cost
+     * its row the click, never the frame its zones.
+     */
+    public static function markSideRow(string $paneId, string $key, int $absRow, int $frameRows, int $width): string
+    {
+        $id = self::SIDE_ROW_ZONE_PREFIX . $paneId . ':' . $key;
+
+        if (!Chat::mouseClicksEnabled() || $absRow < 0 || $absRow >= $frameRows || $width < 1
+            || $key === '' || preg_match(self::ZONE_ID_CHARSET, $id) !== 1 || strlen($id) > Mark::MAX_ID_BYTES) {
+            return str_repeat(' ', max(0, $width));
         }
 
         return Mark::zone($id, str_repeat(' ', $width));
@@ -2412,7 +2440,11 @@ final class Renderer
     {
         $cap = $chat->maxCostUsd();
         $reported = $chat->hasReportedSpend();
-        if ($cap === null && !$reported) {
+        // Uncapped, a figure only earns its columns once there is money in it:
+        // a backend that reports tokens but has no pricing would otherwise
+        // print `$0.0000` for the life of the session. With a cap set the
+        // figure stays, even at zero — it is the reading against that cap.
+        if ($cap === null && (!$reported || $chat->spentUsd() <= 0.0)) {
             return '';
         }
 
@@ -2635,6 +2667,13 @@ final class Renderer
      */
     private static function formatTokenCount(int $tokens): string
     {
+        // Always K below a million — the bar's `~0K / 100K` reads as one
+        // unit — and the shared spelling above it, so a 1M window is "1M",
+        // not "1000K".
+        if ($tokens >= 999_950) {
+            return TokenCount::compact($tokens);
+        }
+
         $thousands = number_format($tokens / 1000, 1, '.', '');
 
         return rtrim(rtrim($thousands, '0'), '.') . 'K';
@@ -2682,7 +2721,7 @@ final class Renderer
      * no AgentManager or the manager has no active agents. See the "R20
      * wiring decision" note on this class's docblock for why AgentOutputPane
      * / the split-pane renderer are not called here; the elapsed/token/cost
-     * columns are real as of W3.S5b — see {@see agentDisplayState()}.
+     * columns are real as of W3.S5b — see {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane::managerEntries()}.
      *
      * This is the in-transcript strip. The full-pane dashboard the same data
      * feeds is {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane},
@@ -2695,15 +2734,12 @@ final class Renderer
             return '';
         }
 
-        $agents = $manager->active();
-        if ($agents === []) {
+        // The dashboard's own rows — one per run, so a batch of Task calls
+        // of one roster agent is listed whole here too, not as one line.
+        $states = AgentDashboardPane::managerEntries($manager);
+        if ($states === []) {
             return '';
         }
-
-        $states = array_map(
-            static fn(Agent $agent): AgentDisplayState => self::agentDisplayState($agent, $manager),
-            $agents,
-        );
 
         $cols = $chat->cols();
         // `render()` is handed a CONTENT width and draws its border and
@@ -2735,30 +2771,6 @@ final class Renderer
                 . "\n" . AgentViewPane::render($states, -1, $width, self::AGENT_VIEW_MAX_ROWS, $theme),
                 $cols,
             ),
-        );
-    }
-
-    /**
-     * Map a real registered {@see Agent} to the display-state shape
-     * AgentStatusBar/AgentViewPane render.
-     *
-     * W3.S5b: elapsedSeconds/tokensUsed/costUsd are now read off
-     * {@see AgentManager}'s real per-agent telemetry (added by W3.F2, which
-     * stamps `startedAt` and accumulates tokens/cost per streamed chunk in
-     * `executeSubAgent()`), replacing the literal `0, 0, 0.0` this method
-     * previously reported. They still read 0 for an agent that has never
-     * spawned a sub-agent — that is a genuine "no work done yet", not a
-     * placeholder.
-     */
-    private static function agentDisplayState(Agent $agent, AgentManager $manager): AgentDisplayState
-    {
-        return AgentDisplayState::new(
-            name: $agent->name,
-            status: $agent->isActive ? 'working' : 'stopped',
-            operation: $agent->description,
-            elapsedSeconds: $manager->elapsedSeconds($agent->name),
-            tokensUsed: $manager->tokensUsed($agent->name),
-            costUsd: $manager->costUsd($agent->name),
         );
     }
 

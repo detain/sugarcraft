@@ -156,6 +156,24 @@ final class MessageTest extends TestCase
         $this->assertArrayNotHasKey('pendingToolArguments', $placeholder->toWire());
     }
 
+    /**
+     * The placeholder names its tool, so a surface can tell a running Task
+     * from a running Bash before the result does; the name goes when the
+     * result replaces the placeholder, survives a resume, and never reaches
+     * a model.
+     */
+    public function testToolRunningNamesItsToolUntilTheResultReplacesIt(): void
+    {
+        $placeholder = Message::toolRunning(new \SugarCraft\Crush\ToolCall('Task', ['agent' => 'reviewer'], 'call_1'));
+
+        $this->assertSame('Task', $placeholder->pendingToolName);
+        $this->assertSame('Task', $placeholder->withReasoning('hmm')->pendingToolName);
+        $this->assertNull($placeholder->withToolResults([\SugarCraft\Crush\ToolResult::ok('Task', 'x')])->pendingToolName);
+        $this->assertSame('Task', Message::fromArray($placeholder->jsonSerialize())->pendingToolName);
+        $this->assertArrayNotHasKey('pendingToolName', Message::user('hi')->jsonSerialize(), 'other rows serialise exactly as before');
+        $this->assertArrayNotHasKey('pendingToolName', $placeholder->toWire());
+    }
+
     public function testDescribeToolCallFallsBackWhenDescriptionIsMissingOrUnusable(): void
     {
         $noDescription = new \SugarCraft\Crush\ToolCall('bash', ['command' => 'ls -la']);

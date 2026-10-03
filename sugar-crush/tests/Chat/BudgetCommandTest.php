@@ -108,6 +108,21 @@ final class BudgetCommandTest extends TestCase
     }
 
     /**
+     * The status bar's spend figure on a free backend: tokens are reported,
+     * cost never is, so an uncapped session draws nothing rather than a
+     * permanent `$0.0000`; a capped one keeps the reading against its cap;
+     * and a real spend is shown either way.
+     */
+    public function testTheStatusBarDrawsNoSpendFigureForAnUnpricedUncappedSession(): void
+    {
+        $indicator = static fn (Chat $chat): string => (string) (new \ReflectionMethod(\SugarCraft\Crush\Renderer::class, 'spendIndicator'))->invoke(null, $chat, 80);
+
+        $this->assertSame('', $indicator($this->bill($this->chat(), 900, 0.0)), 'free tokens are not worth $0.0000 of columns');
+        $this->assertStringContainsString('$0.0000', $indicator($this->bill($this->chat(cap: 5.0), 900, 0.0)), 'a cap keeps its reading, even at zero');
+        $this->assertStringContainsString('$0.0300', $indicator($this->bill($this->chat(), 1500, 0.03)), 'a real spend is always shown');
+    }
+
+    /**
      * A turn whose provider reported nothing must not be recorded as a
      * zero-dollar call. `hasReportedSpend()` staying false is what keeps the
      * status bar silent on an offline run instead of printing `$0.0000`.

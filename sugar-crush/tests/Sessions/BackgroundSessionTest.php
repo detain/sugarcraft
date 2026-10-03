@@ -292,7 +292,7 @@ final class BackgroundSessionTest extends TestCase
             task: 't', workingDirectory: '/tmp',
         );
         $session->tokensUsed = 1234;
-        $this->assertSame('1,234 tokens', $session->usageDisplay());
+        $this->assertSame('1.2K tokens', $session->usageDisplay());
     }
 
     public function testToAgentResult(): void

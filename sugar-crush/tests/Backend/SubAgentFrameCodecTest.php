@@ -59,7 +59,7 @@ final class SubAgentFrameCodecTest extends TestCase
         }
     }
 
-    public function testTheWireShapeIsTheDocumentedSevenKeyFrame(): void
+    public function testTheWireShapeIsTheDocumentedThirteenKeyFrame(): void
     {
         $frame = self::encodeFrame(new SubAgentActivity(
             SubAgentActivity::OP_PROGRESS,
@@ -68,6 +68,12 @@ final class SubAgentFrameCodecTest extends TestCase
             '',
             3,
             'thinking: check auth',
+            1234,
+            0.5,
+            7,
+            'qwen3-coder',
+            900,
+            [['id' => 'c1', 'label' => 'Read(path: "a")', 'state' => 'ok', 'at' => 1700000000]],
         ));
 
         $this->assertSame([
@@ -78,7 +84,44 @@ final class SubAgentFrameCodecTest extends TestCase
             'task' => '',
             'seq' => 3,
             'tail' => 'thinking: check auth',
+            'tokens' => 1234,
+            'cost' => 0.5,
+            'lines' => 7,
+            'model' => 'qwen3-coder',
+            'context' => 900,
+            'calls' => [['id' => 'c1', 'label' => 'Read(path: "a")', 'state' => 'ok', 'at' => 1700000000]],
         ], $frame, 'the literal wire keys are the protocol — renaming one silently orphans the other side');
+    }
+
+    /**
+     * The running totals are display-only, so a frame that lacks them (or
+     * carries a nonsense figure) still decodes — the row loses its count,
+     * never the beat.
+     */
+    public function testRunningTotalsRoundTripAndDegradeToZeroWhenAbsentOrBad(): void
+    {
+        $decoded = self::decodeFrame(self::encodeFrame(new SubAgentActivity(
+            SubAgentActivity::OP_PROGRESS, 'subagent_1_x', 'coder', '', 2, '-> Read', 900, 0.25, 12,
+        )));
+        $this->assertInstanceOf(SubAgentActivity::class, $decoded);
+        $this->assertSame([900, 0.25, 12], [$decoded->tokensUsed, $decoded->costUsd, $decoded->lines]);
+        $this->assertSame(['', 0], [$decoded->model, $decoded->contextTokens], 'absent model/context degrade to unknown');
+
+        $bare = ['kind' => 'subagent', 'op' => 'progress', 'id' => 'subagent_1_x', 'name' => 'coder', 'task' => '', 'seq' => 2, 'tail' => ''];
+
+        $calls = [
+            ['id' => 'c1', 'label' => 'Read(path: "a")', 'state' => 'running', 'at' => 5],
+            ['id' => 'c2', 'label' => 'x', 'state' => 'exploded', 'at' => 5],
+            'not a call',
+        ];
+        $decoded = self::decodeFrame($bare + ['calls' => $calls]);
+        $this->assertInstanceOf(SubAgentActivity::class, $decoded);
+        $this->assertSame([$calls[0]], $decoded->calls, 'a malformed call entry is dropped, the beat survives');
+        foreach ([$bare, $bare + ['tokens' => -5, 'cost' => 'lots', 'lines' => 1.5]] as $frame) {
+            $decoded = self::decodeFrame($frame);
+            $this->assertInstanceOf(SubAgentActivity::class, $decoded);
+            $this->assertSame([0, 0.0, 0], [$decoded->tokensUsed, $decoded->costUsd, $decoded->lines]);
+        }
     }
 
     public function testTaskRidesEveryOpAndIsLegallyEmptyAfterStarted(): void

@@ -500,6 +500,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
          * result frame.
          */
         private readonly CacheHealthWatch $cacheHealth = new CacheHealthWatch(),
+        /**
+         * Told each provider response's usage the moment {@see runTurn()}
+         * bills it — the same instant {@see $siblingSpend} records it. Set
+         * only on a delegated run, by
+         * {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}, so its Agents
+         * row can count tokens while the run works instead of reading 0 until
+         * it ends. Display-only: nothing it does feeds a cap decision.
+         *
+         * @var (\Closure(?Usage): void)|null
+         */
+        private readonly ?\Closure $stepUsageObserver = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -861,6 +872,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     }
 
     /**
+     * The same engine, reporting each step's usage to $observer as it is
+     * billed — see {@see $stepUsageObserver}. Null takes it off.
+     *
+     * @param (\Closure(?Usage): void)|null $observer
+     */
+    public function withStepUsageObserver(?\Closure $observer): self
+    {
+        return $this->mutate(['stepUsageObserver' => $observer]);
+    }
+
+    /**
      * Confine this backend to a sub-agent's git worktree: every path-resolving
      * tool is re-jailed to `$worktreeRoot`, and BashEscapeDenyHook is
      * registered so Bash commands that name paths outside it are refused.
@@ -1167,6 +1189,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                     // sibling's next cap check sees it — and so it survives
                     // this process dying before the run reports (B4-rem).
                     $this->siblingSpend?->record($assistant->usage());
+                    if ($this->stepUsageObserver !== null) {
+                        ($this->stepUsageObserver)($assistant->usage());
+                    }
                     // Per PROVIDER RESPONSE, not per turn: the cache buckets
                     // describe one request's prefix, and a turn's sum would
                     // hide a zero step behind a cached one.
@@ -1426,6 +1451,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 $assistant = $message;
                 $stepUsages[] = $assistant->usage();
                 $this->siblingSpend?->record($assistant->usage());
+                if ($this->stepUsageObserver !== null) {
+                    ($this->stepUsageObserver)($assistant->usage());
+                }
                 // A request like any other step's, carrying the same marks.
                 $this->observeCacheHealth($assistant->usage());
             } elseif ($message instanceof ToolResultMessage) {
@@ -2625,6 +2653,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 'task' => $event->task,
                 'seq' => $event->seq,
                 'tail' => $event->tail,
+                'tokens' => $event->tokensUsed,
+                'cost' => $event->costUsd,
+                'lines' => $event->lines,
+                'model' => $event->model,
+                'context' => $event->contextTokens,
+                'calls' => $event->calls,
             ];
         }
 
@@ -2658,6 +2692,63 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             // under allowed_classes => false.
             'denial' => $event->result->denial()?->value,
         ];
+    }
+
+    /**
+     * A beat's running totals, each 0 when absent or out of shape: they are
+     * display-only, so a bad figure costs the row its count, never the beat.
+     *
+     * @param array<string, mixed> $encoded
+     * @return array{tokensUsed: int, costUsd: float, lines: int, model: string, contextTokens: int, calls: list<array{id: string, label: string, state: string, at: int}>}
+     */
+    public static function subAgentTotals(array $encoded): array
+    {
+        $tokens = $encoded['tokens'] ?? 0;
+        $cost = $encoded['cost'] ?? 0.0;
+        $lines = $encoded['lines'] ?? 0;
+        $model = $encoded['model'] ?? '';
+        $context = $encoded['context'] ?? 0;
+
+        return [
+            'tokensUsed' => is_int($tokens) && $tokens >= 0 ? $tokens : 0,
+            'costUsd' => (is_float($cost) || is_int($cost)) && $cost >= 0 ? (float) $cost : 0.0,
+            'lines' => is_int($lines) && $lines >= 0 ? $lines : 0,
+            'model' => is_string($model) ? $model : '',
+            'contextTokens' => is_int($context) && $context >= 0 ? $context : 0,
+            'calls' => self::subAgentCalls($encoded['calls'] ?? []),
+        ];
+    }
+
+    /**
+     * A beat's recent-call list, keeping only well-formed entries, at most
+     * {@see SubAgentActivity::MAX_CALLS} of the newest — display-only, so a
+     * bad entry is dropped rather than failing the beat.
+     *
+     * @return list<array{id: string, label: string, state: string, at: int}>
+     */
+    private static function subAgentCalls(mixed $calls): array
+    {
+        if (!is_array($calls)) {
+            return [];
+        }
+
+        $states = [SubAgentActivity::CALL_RUNNING, SubAgentActivity::CALL_OK, SubAgentActivity::CALL_ERROR];
+        $kept = [];
+        foreach ($calls as $call) {
+            if (!is_array($call)) {
+                continue;
+            }
+            $id = $call['id'] ?? null;
+            $label = $call['label'] ?? null;
+            $state = $call['state'] ?? null;
+            $at = $call['at'] ?? null;
+            if (!is_string($id) || !is_string($label) || !in_array($state, $states, true) || !is_int($at)) {
+                continue;
+            }
+            $kept[] = ['id' => $id, 'label' => $label, 'state' => $state, 'at' => $at];
+        }
+
+        return array_slice($kept, -SubAgentActivity::MAX_CALLS);
     }
 
     /**
@@ -2708,7 +2799,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 return null;
             }
 
-            return new SubAgentActivity($op, $id, $name, $task, $seq, $tail);
+            return new SubAgentActivity(
+                $op,
+                $id,
+                $name,
+                $task,
+                $seq,
+                $tail,
+                ...self::subAgentTotals($encoded),
+            );
         }
 
         $id = is_string($encoded['id'] ?? null) ? $encoded['id'] : null;

@@ -288,7 +288,7 @@ final class AgentManager
      * Get active agents.
      *
      * "Active" is what every renderer keys off — {@see
-     * \SugarCraft\Crush\Renderer::agentDisplayState()} and {@see
+     * \SugarCraft\Crush\Tui\Components\AgentDashboardPane::agentEntry()} and {@see
      * \SugarCraft\Crush\Tui\Components\AgentDashboardPane::agentEntry()} both
      * map it onto the literal status string "working" — so an agent with a
      * live sub-agent is active here even when its registration says
@@ -433,6 +433,7 @@ final class AgentManager
             $row->status = SubAgent::STATUS_RUNNING;
             $row->startedAt = new \DateTimeImmutable();
             $row->output = $activity->tail;
+            self::applyTotals($row, $activity);
 
             $this->subAgents[$row->id] = $row;
             $this->projectedSubAgentIds[$row->id] = true;
@@ -444,6 +445,8 @@ final class AgentManager
         if ($row === null || !isset($this->projectedSubAgentIds[$activity->id]) || !$row->isRunning()) {
             return;
         }
+
+        self::applyTotals($row, $activity);
 
         if ($activity->op === SubAgentActivity::OP_PROGRESS) {
             $row->output = $activity->tail;
@@ -460,6 +463,32 @@ final class AgentManager
         $row->output = $activity->tail;
         $row->status = SubAgent::STATUS_COMPLETE;
         $row->completedAt = new \DateTimeImmutable();
+    }
+
+    /**
+     * Carry a beat's running totals onto its mirror row. They are totals,
+     * not deltas, so the row simply takes them — but never lets them fall:
+     * beats can arrive out of order, and an older one must not wind a
+     * token count backwards.
+     */
+    private static function applyTotals(SubAgent $row, SubAgentActivity $activity): void
+    {
+        $row->tokensUsed = max($row->tokensUsed, $activity->tokensUsed);
+        $row->costUsd = max($row->costUsd, $activity->costUsd);
+        $row->outputLines = max($row->outputLines, $activity->lines);
+        if ($activity->model !== '') {
+            $row->runModel = $activity->model;
+        }
+        // Not a total, so not max()'d: a context legitimately shrinks
+        // (compaction), and the latest figure is the true one.
+        if ($activity->contextTokens > 0) {
+            $row->contextTokens = $activity->contextTokens;
+        }
+        // The whole recent list rides every beat; an empty one is a beat
+        // from before the run called anything, never a reason to forget.
+        if ($activity->calls !== []) {
+            $row->recentCalls = $activity->calls;
+        }
     }
 
     /**
@@ -541,6 +570,17 @@ final class AgentManager
     }
 
     /**
+     * Every run this manager knows of — spawned here or mirrored from a
+     * forked turn — in creation order.
+     *
+     * @return list<SubAgent>
+     */
+    public function runs(): array
+    {
+        return array_values($this->subAgents);
+    }
+
+    /**
      * Every sub-agent spawned from a given registered agent.
      *
      * The live agent view renders one row per registered {@see Agent}, but
@@ -554,6 +594,30 @@ final class AgentManager
         return array_values(array_filter(
             $this->subAgents,
             fn(SubAgent $subAgent) => $subAgent->agent->name === $agentName,
+        ));
+    }
+
+    /**
+     * The named agent's runs a live surface lists one row EACH: every run not
+     * yet terminal, plus the projected mirrors of runs that just finished.
+     *
+     * One row per run, not per agent, because a batch of Task calls is
+     * usually several runs of the SAME roster agent — five `reviewer` audits
+     * rolled up into one `reviewer` row read as one agent working, which is
+     * not what was launched. Finished mirrors stay listed because
+     * {@see clearProjectedSubAgents()} already bounds them to the turn that
+     * ran them, and the dashboard between turns is where a report is read;
+     * a local run's finished row is left out, since nothing clears those
+     * short of the retention cap.
+     *
+     * @return list<SubAgent>
+     */
+    public function visibleRunsOf(string $agentName): array
+    {
+        return array_values(array_filter(
+            $this->subAgentsOf($agentName),
+            fn(SubAgent $subAgent) => (!$subAgent->isComplete() && !$subAgent->isStopped())
+                || isset($this->projectedSubAgentIds[$subAgent->id]),
         ));
     }
 
@@ -601,7 +665,7 @@ final class AgentManager
      * Tokens consumed across every sub-agent spawned from the named agent.
      *
      * Note: no renderer reads this yet. The status line still shows hardcoded
-     * zeros until W3.S5b swaps Renderer::agentDisplayState() onto these
+     * zeros until W3.S5b swaps AgentDashboardPane::agentEntry() onto these
      * accessors — the numbers here are real, the display is not yet wired.
      */
     public function tokensUsed(string $agentName): int
@@ -718,6 +782,25 @@ final class AgentManager
         }
 
         return $outputs;
+    }
+
+    /**
+     * Every run producing text RIGHT NOW, in creation order — the per-run
+     * shape of {@see liveOutputs()}, and the same predicate: not terminal,
+     * output non-empty, registered or not.
+     *
+     * {@see liveOutputs()} keys by agent NAME, so a batch of Task calls to one
+     * roster agent folded into a single split-pane tile holding every run's
+     * text; the compositor lists these instead, one tile per run.
+     *
+     * @return list<SubAgent>
+     */
+    public function liveRuns(): array
+    {
+        return array_values(array_filter(
+            $this->subAgents,
+            fn(SubAgent $subAgent) => !$subAgent->isComplete() && !$subAgent->isStopped() && $subAgent->output !== '',
+        ));
     }
 
     /**

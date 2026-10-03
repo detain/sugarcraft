@@ -642,10 +642,11 @@ final class KeyBindingRegistry
         $c = self::CONTEXT_MOUSE;
 
         return [
-            KeyBinding::new('mouse.wheel', 'Wheel', 'Scroll the transcript', $c),
+            KeyBinding::new('mouse.wheel', 'Wheel', 'Scroll the transcript, or the pane under it', $c),
             KeyBinding::new('mouse.tab', 'Click tab', 'Switch to that session', $c),
             KeyBinding::new('mouse.pane', 'Click pane', 'Open the pane menu (palette)', $c),
             KeyBinding::new('mouse.tool-call', 'Click tool', 'Expand or collapse that call\'s output', $c),
+            KeyBinding::new('mouse.side-row', 'Click side row', 'Expand or collapse that Tools or Agents pane row', $c),
             KeyBinding::new('mouse.palette-row', 'Click row', 'Run that palette row', $c),
         ];
     }

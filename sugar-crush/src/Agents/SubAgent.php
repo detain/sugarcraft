@@ -44,6 +44,33 @@ final class SubAgent
     public float $costUsd = 0.0;
     /** Error message if the task failed. */
     public ?string $error = null;
+    /**
+     * Lines of output produced so far when that is known to exceed what
+     * {@see $output} still holds — a delegated run's trail is clipped to a
+     * tail before it crosses the wire, so its mirror row is told the real
+     * count. 0 means "count {@see $output}", which is right for every row
+     * whose buffer is whole. Read through {@see outputLineCount()}.
+     */
+    public int $outputLines = 0;
+    /**
+     * The model this run really executes on, when that differs from what its
+     * preset asked for: a Task run always uses the session's engine, so a
+     * preset's `model: sonnet` is a request it never honours. '' means
+     * "the preset's model is the truth". Read through {@see model()}.
+     */
+    public string $runModel = '';
+    /**
+     * The run's CURRENT context in tokens — its latest request's size — as
+     * opposed to the running {@see $tokensUsed}. 0 when unknown.
+     */
+    public int $contextTokens = 0;
+    /**
+     * The run's most recent tool calls, newest last — what the Tools pane
+     * lists for it beside the session's own calls.
+     *
+     * @var list<array{id: string, label: string, state: string, at: int}>
+     */
+    public array $recentCalls = [];
 
     /**
      * @param int $timeout    Wall-clock bound in seconds, enforced by
@@ -79,6 +106,24 @@ final class SubAgent
     ) {
         $this->status = self::STATUS_PENDING;
         $this->output = '';
+    }
+
+    /**
+     * How many lines this run has produced: {@see $outputLines} when it
+     * reports more than the buffer holds, else the buffer's own count — what
+     * an "N more lines" figure has to read, since the buffer may be a tail.
+     */
+    public function outputLineCount(): int
+    {
+        $held = $this->output === '' ? 0 : substr_count(rtrim($this->output, "\n"), "\n") + 1;
+
+        return max($held, $this->outputLines);
+    }
+
+    /** The model to show for this run — see {@see $runModel}. */
+    public function model(): string
+    {
+        return $this->runModel !== '' ? $this->runModel : $this->agent->model;
     }
 
     public function isRunning(): bool

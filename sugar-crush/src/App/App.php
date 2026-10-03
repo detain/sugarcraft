@@ -79,6 +79,9 @@ use DateTimeImmutable;
  */
 final class App implements Model
 {
+    /** Rows a wheel notch scrolls a docked pane — the transcript's own step. */
+    private const PANE_WHEEL_ROWS = 3;
+
     private function __construct(
         public readonly ProviderInterface $provider,
         public readonly string $model,
@@ -223,6 +226,29 @@ final class App implements Model
          * Runtime reads the prompt's inputs off the App it is handed.
          */
         public readonly ?CompactorConfig $compactorConfig = null,
+        /**
+         * Delegated runs whose row the user expanded with a click (by
+         * {@see \SugarCraft\Crush\Agents\SubAgent::$id}), value always
+         * true — the same shape as {@see \SugarCraft\Crush\Chat::expanded()}.
+         * View state, so it lives here beside the dashboard's selection.
+         *
+         * @var array<string, bool>
+         */
+        public readonly array $expandedAgents = [],
+        /**
+         * Rows (or tiles) a scrollable side surface is scrolled down by, keyed
+         * by surface id — `pane:tools`, `pane:agents`, `split`. Absent means
+         * the top; a renderer clamps an offset that outgrew its content.
+         *
+         * @var array<string, int>
+         */
+        public readonly array $paneScroll = [],
+        /**
+         * The live-agent column's width as the user last dragged its seam to,
+         * in cells; null means the renderer's own proportion. Session view
+         * state — the renderer clamps it to what the terminal can hold.
+         */
+        public readonly ?int $agentSplitCols = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -318,6 +344,58 @@ final class App implements Model
     public function withSelectedAgentIndex(int $v): self
     {
         return $this->mutate(selectedAgentIndex: $v);
+    }
+
+    /** Expand a delegated run's row, or collapse it if it was expanded. */
+    public function toggleAgentExpanded(string $runId): self
+    {
+        $expanded = $this->expandedAgents;
+        if (isset($expanded[$runId])) {
+            unset($expanded[$runId]);
+        } else {
+            $expanded[$runId] = true;
+        }
+
+        return $this->mutate(expandedAgents: $expanded);
+    }
+
+    public function isAgentExpanded(string $runId): bool
+    {
+        return isset($this->expandedAgents[$runId]);
+    }
+
+    /** How far the surface $id is scrolled down; 0 is the top. */
+    public function paneScroll(string $id): int
+    {
+        return $this->paneScroll[$id] ?? 0;
+    }
+
+    /**
+     * Scroll the surface $id by $delta (positive = down), never above the
+     * top. The bottom bound is the renderer's: it knows the content height
+     * and clamps an offset that outgrew it.
+     */
+    public function withPaneScroll(string $id, int $delta, ?int $max = null): self
+    {
+        $offset = max(0, $this->paneScroll($id) + $delta);
+        if ($max !== null) {
+            $offset = min($offset, max(0, $max));
+        }
+
+        $scroll = $this->paneScroll;
+        if ($offset === 0) {
+            unset($scroll[$id]);
+        } else {
+            $scroll[$id] = $offset;
+        }
+
+        return $this->mutate(paneScroll: $scroll);
+    }
+
+    /** Set (or with null, release) the live-agent column's dragged width. */
+    public function withAgentSplitCols(?int $cols): self
+    {
+        return $this->mutate(agentSplitCols: $cols === null ? null : max(1, $cols));
     }
 
     public function withAgentViewMode(AgentViewMode $v): self
@@ -1193,6 +1271,15 @@ final class App implements Model
      */
     private static ?DockLayout $paneDragOrigin = null;
 
+    /**
+     * A split-seam drag's snapshot from its press: the column width the
+     * pointer's travel is measured against, and the override to hand back
+     * on Escape (which may be null — the default proportion).
+     *
+     * @var ?array{cols: int, override: ?int}
+     */
+    private static ?array $splitDragOrigin = null;
+
     /** @see $paneDrag */
     public static function paneDragController(): PaneDragController
     {
@@ -1208,6 +1295,7 @@ final class App implements Model
     {
         self::$paneDrag = null;
         self::$paneDragOrigin = null;
+        self::$splitDragOrigin = null;
     }
 
     /**
@@ -1245,6 +1333,26 @@ final class App implements Model
         // click, leaving the selection neither copied nor finished.
         if (!$msg instanceof MouseClickMsg && Chat::textSelectionInProgress()) {
             return $this->delegateToChat($msg);
+        }
+
+        // The wheel scrolls whatever scrollable surface is under the pointer —
+        // a docked pane, or the live-agent column — and only there; anywhere
+        // else it stays the transcript's, as it always was. Down shows more
+        // (older calls, later agents), up goes back toward the top.
+        if ($msg instanceof MouseWheelMsg) {
+            $region = TuiRenderer::scrollRegionAt($msg->x, $msg->y);
+            $notch = match ($msg->button) {
+                MouseButton::WheelDown => 1,
+                MouseButton::WheelUp => -1,
+                default => 0,
+            };
+            if ($region !== null && $notch !== 0) {
+                // A tile is a whole agent; a pane row is a line, so a notch
+                // moves a pane the transcript's usual three.
+                $step = $region['id'] === TuiRenderer::SPLIT_SCROLL_ID ? 1 : self::PANE_WHEEL_ROWS;
+
+                return [$this->withPaneScroll($region['id'], $notch * $step, $region['max']), null];
+            }
         }
 
         $press = $msg instanceof MouseClickMsg;
@@ -1325,6 +1433,20 @@ final class App implements Model
             return [$this, null];
         }
 
+        // The live-agent column's seam: the column takes the width the
+        // pointer asks for, measured from the width it was painted at.
+        if (str_starts_with($zoneId, TuiRenderer::SPLIT_DIVIDER_ZONE_PREFIX)) {
+            $cols = TuiRenderer::lastDockFrame()['agentCols'] ?? 0;
+            if ($cols < 1) {
+                return null;
+            }
+
+            self::$paneDrag = self::paneDragController()->beginSplitResize($pressX);
+            self::$splitDragOrigin = ['cols' => $cols, 'override' => $this->agentSplitCols];
+
+            return [$this, null];
+        }
+
         if (str_starts_with($zoneId, Renderer::STACK_DIVIDER_ZONE_PREFIX)) {
             // Consumed, no state: pressing a gap row today did nothing
             // either (dispatchChromeClick fell through), so the frame's only
@@ -1388,6 +1510,10 @@ final class App implements Model
         if ($msg instanceof MouseMotionMsg) {
             self::$paneDrag = $drag->withMotion($msg->x, $msg->y);
 
+            if ($drag->isSplitResizing()) {
+                return [$this->previewSplitResize($drag, $msg->x), null];
+            }
+
             if ($drag->isResizing()) {
                 return [$this->previewColumnResize($drag, $msg->x), null];
             }
@@ -1397,6 +1523,16 @@ final class App implements Model
 
         if (!($msg instanceof MouseReleaseMsg)) {
             return [$this, null];
+        }
+
+        // A seam release commits whatever the last preview set; a press and
+        // release with no motion between is a click that changes nothing.
+        if ($drag->isSplitResizing()) {
+            $next = $drag->isPreviewed() ? $this->previewSplitResize($drag, $msg->x) : $this;
+            self::$paneDrag = null;
+            self::$splitDragOrigin = null;
+
+            return [$next, null];
         }
 
         if ($drag->isResizing()) {
@@ -1447,6 +1583,25 @@ final class App implements Model
         }
 
         return [$this->commitDockDrop($drag, $msg->x, $msg->y), null];
+    }
+
+    /**
+     * The live-agent column at the width the pointer asks for: the grab's
+     * snapshot width plus the travel (left grows it), inside the bounds the
+     * renderer will hold it to anyway.
+     */
+    private function previewSplitResize(PaneDragController $drag, int $pointerX): self
+    {
+        $origin = self::$splitDragOrigin;
+        $frame = TuiRenderer::lastDockFrame();
+        if ($origin === null || $frame === null) {
+            return $this;
+        }
+
+        [$min, $max] = TuiRenderer::agentSplitBounds($frame['cols']);
+        $cols = $drag->splitColumns($pointerX, $origin['cols'], $min, $max);
+
+        return $cols === $this->agentSplitCols ? $this : $this->withAgentSplitCols($cols);
     }
 
     /**
@@ -1636,6 +1791,32 @@ final class App implements Model
             return $selected === null ? [$this, null] : $this->consumeShellCmd($selected);
         }
 
+        // A completed click on a docked side pane's ROW expands or collapses
+        // it: a Tools row toggles the transcript's own expansion entry for
+        // that call (one state, so the row opens in both places), an Agents
+        // row toggles the run's inline activity. Refused while an overlay owns
+        // the screen — chrome clicks never pass through Chat's modal guard,
+        // so this arm carries its own: the key-help sheet and a permission
+        // prompt both cover the panes the click landed on.
+        $rows = Renderer::SIDE_ROW_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $rows)) {
+            $chat = $this->chat;
+            if ($chat !== null && ($chat->keyHelp() !== null || $chat->pendingPermission() !== null)) {
+                return [$this, null];
+            }
+
+            [$paneId, $key] = array_pad(explode(':', substr($zoneId, strlen($rows)), 2), 2, '');
+            if ($key === '') {
+                return [$this, null];
+            }
+
+            return match ($paneId) {
+                Pane::Tools->value => [$chat === null ? $this : $this->withChat($chat->toggleToolOutput($key)), null],
+                Pane::Agents->value => [$this->toggleAgentExpanded($key), null],
+                default => [$this, null],
+            };
+        }
+
         // A completed click on a docked pane's header (the drag phase handed
         // it here because the pointer never armed a move) focuses that pane —
         // the same selection `tab`/`shift+tab` cycle, routed through
@@ -1701,6 +1882,14 @@ final class App implements Model
         // (that preview IS the live feedback candy-core's repaint tick
         // shows), so cancelling hands back the snapshot: zero state change,
         // zero disk write — the release is the only path that persists.
+        if (!self::paneDragController()->isIdle() && $msg->type === KeyType::Escape && self::paneDragController()->isSplitResizing()) {
+            $origin = self::$splitDragOrigin;
+            self::$paneDrag = null;
+            self::$splitDragOrigin = null;
+
+            return [$origin === null ? $this : $this->mutate(agentSplitCols: $origin['override']), null];
+        }
+
         if (!self::paneDragController()->isIdle() && $msg->type === KeyType::Escape) {
             $origin = self::$paneDragOrigin;
             self::$paneDrag = null;
@@ -2287,6 +2476,9 @@ final class App implements Model
             dock: array_key_exists('dock', $changes) ? $changes['dock'] : $this->dock,
             onLayoutChange: array_key_exists('onLayoutChange', $changes) ? $changes['onLayoutChange'] : $this->onLayoutChange,
             compactorConfig: array_key_exists('compactorConfig', $changes) ? $changes['compactorConfig'] : $this->compactorConfig,
+            expandedAgents: array_key_exists('expandedAgents', $changes) ? $changes['expandedAgents'] : $this->expandedAgents,
+            paneScroll: array_key_exists('paneScroll', $changes) ? $changes['paneScroll'] : $this->paneScroll,
+            agentSplitCols: array_key_exists('agentSplitCols', $changes) ? $changes['agentSplitCols'] : $this->agentSplitCols,
         );
     }
 }

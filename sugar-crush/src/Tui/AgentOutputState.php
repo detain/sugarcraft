@@ -35,6 +35,21 @@ final class AgentOutputState extends AgentDisplayState
         public array $outputBuffer,
         /** Stall warning when the agent's output has stalled, null otherwise. */
         public ?StallWarning $stallWarning = null,
+        /**
+         * Lines the agent has produced in all, when that is more than
+         * $outputBuffer holds — the buffer is a bounded tail, so counting it
+         * would pin an "N more lines" figure at the tail's size forever.
+         * Null means the buffer is the whole story.
+         */
+        public ?int $totalLines = null,
+        /** See {@see AgentDisplayState::$contextTokens}. */
+        int $contextTokens = 0,
+        /**
+         * The run this row shows ({@see \SugarCraft\Crush\Agents\SubAgent::$id}),
+         * so a click can name it; null for a row that is not one run (a
+         * per-agent roll-up, a background session).
+         */
+        public ?string $key = null,
     ) {
         parent::__construct(
             name: $name,
@@ -43,13 +58,22 @@ final class AgentOutputState extends AgentDisplayState
             elapsedSeconds: $elapsedSeconds,
             tokensUsed: $tokensUsed,
             costUsd: $costUsd,
+            contextTokens: $contextTokens,
         );
+    }
+
+    /**
+     * Lines produced in all: never fewer than the buffer holds.
+     */
+    public function lineCount(): int
+    {
+        return max(count($this->outputBuffer), $this->totalLines ?? 0);
     }
 
     /**
      * Wrap an existing AgentDisplayState with output-specific fields.
      */
-    public static function fromDisplayState(AgentDisplayState $display, string $model, array $outputBuffer = [], ?StallWarning $stallWarning = null): self
+    public static function fromDisplayState(AgentDisplayState $display, string $model, array $outputBuffer = [], ?StallWarning $stallWarning = null, ?int $totalLines = null, ?string $key = null): self
     {
         return new self(
             name: $display->name,
@@ -61,6 +85,9 @@ final class AgentOutputState extends AgentDisplayState
             model: $model,
             outputBuffer: $outputBuffer,
             stallWarning: $stallWarning,
+            totalLines: $totalLines,
+            contextTokens: $display->contextTokens,
+            key: $key,
         );
     }
 }

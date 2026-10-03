@@ -121,6 +121,76 @@ final class PaneDataWiringTest extends TestCase
     }
 
     /**
+     * @testdox ToolsPane::render() labels a finished call with what it did, not only the tool's name
+     */
+    public function testToolsPaneLabelsFinishedCallsWithTheirDescription(): void
+    {
+        $app = $this->appWithHistory(Pane::Tools, [
+            Message::assistant('a')->withToolResults([ToolResult::ok('Bash', 'x', 'c1')->withDescription('List files')]),
+            Message::assistant('b')->withToolResults([ToolResult::ok('Read', 'x', 'c2')->withDescription('Read(path: "src/Foo.php")')]),
+            Message::assistant('c')->withToolResults([ToolResult::ok('Grep', 'x', 'c3')]),
+        ]);
+
+        $output = ToolsPane::render($app, 60, 20);
+
+        $this->assertStringContainsString('Bash: List files', $output);
+        $this->assertStringContainsString('Read(path: "src/Foo.php")', $output, 'an argument dump already names its tool');
+        $this->assertStringContainsString('✔ Grep', $output, 'no description, the bare name as before');
+    }
+
+    /**
+     * @testdox ToolsPane::render() lists a delegated run's tool calls too, labelled with its agent, newest first
+     */
+    public function testToolsPaneListsDelegatedRunsCallsBesideTheSessionsOwn(): void
+    {
+        $manager = new \SugarCraft\Crush\Agents\AgentManager($this->provider, new \SugarCraft\Crush\Skills\SkillRegistry());
+        $manager->register(\SugarCraft\Crush\Tests\Support\RosterAgent::named('reviewer')->withActive(false));
+        $manager->projectRemoteSubAgent(new \SugarCraft\Crush\Events\SubAgentActivity(
+            'started', 'run-1', 'reviewer', 'Audit candy-core', 1, '', 0, 0.0, 0, '', 0,
+            [
+                ['id' => 'a', 'label' => 'Read(path: "src/Foo.php")', 'state' => 'ok', 'at' => 2_000_000_000],
+                ['id' => 'b', 'label' => 'Bash: Run the tests', 'state' => 'running', 'at' => 2_000_000_001],
+            ],
+        ));
+        $chat = new Chat(
+            [Message::assistant('read it')->withToolResults([ToolResult::ok('Grep', 'x', 'c1')])],
+            agentManager: $manager,
+        );
+        $app = App::new($this->provider, 'test-model')->withPane(Pane::Tools)->withChat($chat);
+
+        $output = ToolsPane::render($app, 60, 20);
+
+        $this->assertStringContainsString('reviewer › Read(path: "src/Foo.php")', $output);
+        $this->assertStringContainsString('◌ reviewer › Bash: Run the tests', $output, 'a run\'s call still running');
+        $this->assertStringContainsString('Grep', $output, 'the session\'s own calls stay listed');
+        $this->assertLessThan(
+            strpos($output, 'Read(path'),
+            strpos($output, 'Run the tests'),
+            'newest first across the run\'s calls',
+        );
+    }
+
+    /**
+     * @testdox ToolsPane::render() leaves Task delegations, running or finished, to the Agents pane
+     */
+    public function testToolsPaneLeavesTaskDelegationsToTheAgentsPane(): void
+    {
+        $app = $this->appWithHistory(Pane::Tools, [
+            Message::assistant('audits')->withToolResults([ToolResult::ok('Task', 'report', 'c1')]),
+            Message::assistant('read it')->withToolResults([ToolResult::ok('Read', 'contents', 'c2')]),
+            Message::toolRunning(new ToolCall('Task', ['description' => 'Audit candy-core', 'agent' => 'reviewer'], 'c3')),
+            Message::toolRunning(new ToolCall('Bash', ['description' => 'List files'], 'c4')),
+        ]);
+
+        $output = ToolsPane::render($app, 40, 20);
+
+        $this->assertStringContainsString('Read', $output);
+        $this->assertStringContainsString('List files', $output);
+        $this->assertStringNotContainsString('Task', $output, 'a finished delegation is listed by the Agents pane, not here');
+        $this->assertStringNotContainsString('Audit candy-core', $output, 'nor is a running one');
+    }
+
+    /**
      * @testdox ToolsPane::render() never emits more rows than the pane was given
      */
     public function testToolsPaneRespectsRowBudget(): void

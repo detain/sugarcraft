@@ -102,6 +102,10 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 static fn(EngineBackend $b): EngineBackend => $b->withSiblingSpend(self::blank(SiblingSpendLedger::class)),
                 ['siblingSpend'],
             ],
+            'withStepUsageObserver' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withStepUsageObserver(static function (): void {}),
+                ['stepUsageObserver'],
+            ],
             // Audit R1: the per-turn App's compaction budgets.
             'withCompactorConfig' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withCompactorConfig(new CompactorConfig(skillBudgetPerSkill: 7)),
@@ -237,6 +241,7 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
             sessionSpendAtStartUsd: 0.75,
             siblingSpend: self::blank(SiblingSpendLedger::class),
             compactorConfig: new CompactorConfig(skillBudgetPerSkill: 3),
+            stepUsageObserver: static function (): void {},
         );
     }
 

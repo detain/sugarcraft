@@ -1086,8 +1086,8 @@ final class KeyHelpTest extends TestCase
         // does. It grew again to 100x95 with the attachment rows: 90 rows gave
         // a body of 85 against 86 lines. The 0 below is what measures that, so
         // the "fits" half of this test cannot quietly become a second overflow
-        // case.
-        foreach ([[100, 30, 61], [100, 95, 0]] as [$cols, $rows, $expectedOverflow]) {
+        // case. The side-row click binding added one more row (61 -> 62).
+        foreach ([[100, 30, 62], [100, 95, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(

@@ -51,6 +51,16 @@ final class Renderer
     /** The one-cell divider {@see SplitLayout} draws between the two panes. */
     private const SPLIT_DIVIDER_COLS = 1;
 
+    /** The {@see \SugarCraft\Crush\App\App::paneScroll()} id of the live-agent column. */
+    public const SPLIT_SCROLL_ID = 'split';
+
+    /**
+     * Click-zone prefix for the seam between the content band and the
+     * live-agent column: `splitdiv:r<absRow>`, one per band row, so the
+     * column can be dragged wider or narrower like any side.
+     */
+    public const SPLIT_DIVIDER_ZONE_PREFIX = 'splitdiv:';
+
     /**
      * Narrowest terminal that gets a split content band at all.
      *
@@ -330,6 +340,58 @@ final class Renderer
     private static ?array $lastDockFrame = null;
 
     /**
+     * Each docked pane's per-body-line click keys as last painted, by pane
+     * id — what {@see renderView()} zones into `siderow:` targets. Written by
+     * {@see renderPane()} so the keys always describe the block that was
+     * actually painted (a measured-then-repainted pane overwrites them).
+     *
+     * @var array<string, list<?string>>
+     */
+    private static array $paneRowKeys = [];
+
+    /**
+     * How far each docked pane can scroll, and how many rows its block
+     * painted, by pane id — both as last painted ({@see renderPane()}).
+     *
+     * @var array<string, int>
+     */
+    private static array $paneScrollMax = [];
+
+    /** @var array<string, int> */
+    private static array $paneBlockRows = [];
+
+    /**
+     * The surfaces a wheel notch scrolls, as painted on the last frame:
+     * `id` is the {@see \SugarCraft\Crush\App\App::paneScroll()} key, the
+     * box is in terminal cells (0-based, inclusive), and `max` is the
+     * furthest that surface can scroll. Rectangles, not mouse zones, on
+     * purpose: the wheel keeps working with clicks disabled, when the zone
+     * scanner is cleared. Empty when the frame lost rows off its top — a
+     * box measured against a frame that is not on screen would scroll the
+     * wrong thing.
+     *
+     * @var list<array{id: string, x0: int, x1: int, y0: int, y1: int, max: int}>
+     */
+    private static array $scrollRegions = [];
+
+    /**
+     * The scrollable surface under the pointer, or null — then the wheel is
+     * the transcript's, as it always was.
+     *
+     * @return ?array{id: string, x0: int, x1: int, y0: int, y1: int, max: int}
+     */
+    public static function scrollRegionAt(int $col, int $row): ?array
+    {
+        foreach (self::$scrollRegions as $region) {
+            if ($col >= $region['x0'] && $col <= $region['x1'] && $row >= $region['y0'] && $row <= $region['y1']) {
+                return $region;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @return ?array{cols: int, bandTop: int, bandCols: int, paneRows: int, centerFrom: int, centerTo: int}
      */
     public static function lastDockFrame(): ?array
@@ -505,8 +567,8 @@ final class Renderer
         // band is laid out because it changes the band's width. See
         // {@see agentSplitWidth()} for the policy; 0 means "no split", and
         // every measurement below then reduces to what it was before.
-        $liveAgents = self::liveAgentOutputs($a);
-        $agentCols = self::agentSplitWidth($liveAgents, $cols);
+        $liveAgents = self::liveAgentRuns($a);
+        $agentCols = self::agentSplitWidth($liveAgents, $cols, $a->agentSplitCols);
         $bandCols = $agentCols > 0 ? $cols - $agentCols - self::SPLIT_DIVIDER_COLS : $cols;
 
         [$leftPane, $leftMeta, $leftHeaders] = self::renderSide($a, Side::Left, $bandCols, $paneRows);
@@ -533,6 +595,9 @@ final class Renderer
             'paneRows' => $paneRows,
             'centerFrom' => self::blockWidth($leftPane),
             'centerTo' => self::blockWidth($leftPane) + $paneCols - 1,
+            // The live-agent column's width this frame (0 = no split): what a
+            // seam drag measures its travel against.
+            'agentCols' => $agentCols,
         ];
 
         [$chatPane, $images] = ChatPane::renderView($a, $paneCols, $paneRows);
@@ -568,6 +633,10 @@ final class Renderer
 
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
+        self::$scrollRegions = $dropped > 0
+            ? []
+            : self::scrollRegions($leftHeaders, $rightHeaders, self::blockWidth($leftPane) + $paneCols, $bandTop, $bandCols, $cols, $paneRows, count($liveAgents), $agentCols);
+
         // An armed dock drag outlines where its release would land, painted
         // last so nothing composed above can cover it.
         $frame = self::overlayDropTarget($a, $frame, $bandTop - $dropped, $paneRows);
@@ -585,10 +654,11 @@ final class Renderer
         // marked/plain pair.
         $dockRows = [];
         if (Chat::mouseClicksEnabled()
-            && ($leftMeta !== null || $rightMeta !== null || $leftHeaders !== [] || $rightHeaders !== [])) {
+            && ($leftMeta !== null || $rightMeta !== null || $leftHeaders !== [] || $rightHeaders !== [] || $agentCols > 0)) {
             $frameRowsTotal = self::lineCount($frame);
             $rightStartX = self::blockWidth($leftPane) + $paneCols;
             $byRow = self::dividerZones($leftMeta, Side::Left, 0, $bandTop, $cols, $frameRowsTotal, $paneRows);
+            $seenRowKeys = [];
 
             foreach (self::dividerZones($rightMeta, Side::Right, $rightStartX, $bandTop, $cols, $frameRowsTotal, $paneRows) as $absRow => $spans) {
                 $byRow[$absRow] = array_merge($byRow[$absRow] ?? [], $spans);
@@ -609,6 +679,41 @@ final class Renderer
                         $to,
                         LiveRenderer::markDockedPaneHeader($header['paneId'], $absRow, $frameRowsTotal, $to - $from),
                     ];
+
+                    // The pane's body rows, under the same column span as
+                    // its header (which already stays clear of every resize
+                    // seam): body line i sits one row below the top border.
+                    // First wins on a repeated key — a duplicate id makes the
+                    // scan throw, which would cost the frame every zone.
+                    foreach (self::$paneRowKeys[$header['paneId']] ?? [] as $i => $key) {
+                        $rowAbs = $absRow + 1 + $i;
+                        if ($key === null || $rowAbs >= $frameRowsTotal || isset($seenRowKeys[$header['paneId'] . ':' . $key])) {
+                            continue;
+                        }
+                        $seenRowKeys[$header['paneId'] . ':' . $key] = true;
+                        $byRow[$rowAbs][] = [
+                            $from,
+                            $to,
+                            LiveRenderer::markSideRow($header['paneId'], $key, $rowAbs, $frameRowsTotal, $to - $from),
+                        ];
+                    }
+                }
+            }
+
+            // The live-agent column's seam: the divider cell SplitLayout paints
+            // at $bandCols plus the tile's own left border beside it, on every
+            // band row — a one-cell target is a guessing game, and the box
+            // border is the line the eye reads as the edge. Nothing else zones
+            // these columns: every side and header span ends inside the band.
+            if ($agentCols > 0) {
+                for ($r = 0; $r < $paneRows; $r++) {
+                    $absRow = $bandTop + $r;
+                    if ($absRow >= $frameRowsTotal) {
+                        break;
+                    }
+                    $to = min($cols, $bandCols + self::SPLIT_DIVIDER_COLS + 1);
+                    $id = self::SPLIT_DIVIDER_ZONE_PREFIX . 'r' . $absRow;
+                    $byRow[$absRow][] = [$bandCols, $to, \SugarCraft\Mouse\Mark::zone($id, str_repeat(' ', $to - $bandCols))];
                 }
             }
 
@@ -789,15 +894,17 @@ final class Renderer
     }
 
     /**
-     * Every agent producing text right now, keyed by name — registered or not:
-     * {@see \SugarCraft\Crush\Agents\AgentManager::liveOutputs()} derives
+     * Every run producing text right now, registered or not:
+     * {@see \SugarCraft\Crush\Agents\AgentManager::liveRuns()} derives
      * from the sub-agent map, which is where a workflow's ad-hoc agents live.
+     * Per run, not per agent name, so a batch of Task calls to one roster
+     * agent gets a tile each rather than one tile holding all their text.
      *
-     * @return array<string, string>
+     * @return list<\SugarCraft\Crush\Agents\SubAgent>
      */
-    private static function liveAgentOutputs(App $a): array
+    private static function liveAgentRuns(App $a): array
     {
-        return $a->chat?->agentManager()?->liveOutputs() ?? [];
+        return $a->chat?->agentManager()?->liveRuns() ?? [];
     }
 
     /**
@@ -901,18 +1008,25 @@ final class Renderer
      * relationship. Declining is always safe: the caller falls back to the
      * full-width band.
      *
-     * @param array<string, string> $liveAgents as {@see liveAgentOutputs()} returns it
+     * @param list<\SugarCraft\Crush\Agents\SubAgent> $liveAgents as {@see liveAgentRuns()} returns it
      */
-    private static function agentSplitWidth(array $liveAgents, int $cols): int
+    private static function agentSplitWidth(array $liveAgents, int $cols, ?int $override = null): int
     {
         if ($liveAgents === [] || $cols < self::SPLIT_MIN_TOTAL_COLS) {
             return 0;
         }
 
-        $width = min(
-            self::SPLIT_MAX_AGENT_COLS,
-            max(self::SPLIT_MIN_AGENT_COLS, intdiv($cols, self::SPLIT_AGENT_DIVISOR)),
-        );
+        // A width the user dragged the seam to wins over the proportion, held
+        // inside the same bounds a drag is clamped to (agentSplitBounds()) —
+        // so a terminal that shrank since cannot starve the band. The 60-cell
+        // cap is the DEFAULT's: a column dragged wider means it.
+        [$min, $max] = self::agentSplitBounds($cols);
+        $width = $override !== null
+            ? max($min, min($override, $max))
+            : min(
+                self::SPLIT_MAX_AGENT_COLS,
+                max(self::SPLIT_MIN_AGENT_COLS, intdiv($cols, self::SPLIT_AGENT_DIVISOR)),
+            );
 
         if ($cols - $width - self::SPLIT_DIVIDER_COLS < self::SPLIT_MIN_BAND_COLS) {
             return 0;
@@ -950,7 +1064,7 @@ final class Renderer
      * {@see MultiplexerSplitPane} first — under tmux or iTerm2 the same call
      * is the seam a future native-pane implementation takes over.
      *
-     * @param array<string, string> $liveAgents as {@see liveAgentOutputs()} returns it
+     * @param list<\SugarCraft\Crush\Agents\SubAgent> $liveAgents as {@see liveAgentRuns()} returns it
      */
     private static function composeAgentSplit(
         App $a,
@@ -961,12 +1075,12 @@ final class Renderer
         int $cols,
         int $rows,
     ): string {
-        $column = AgentSplitColumn::render(
+        $column = AgentSplitColumn::renderRuns(
             $liveAgents,
-            $a->chat?->agentManager(),
             $a->theme(),
             $agentCols,
             $rows,
+            $a->paneScroll(self::SPLIT_SCROLL_ID),
         );
 
         // Unreachable by construction — agentSplitWidth() returned non-zero, so
@@ -1098,12 +1212,7 @@ final class Renderer
             return [$block, $meta, self::paneHeaders($a, $panes, [0], $headerFrom, $headerTo)];
         }
 
-        $heights = self::stackHeights($a, $panes, $cols, $rows);
-        $blocks = [];
-
-        foreach ($panes as $i => $pane) {
-            $blocks[] = self::renderPane($a, $pane, $width, max(1, $heights[$i]));
-        }
+        $blocks = self::fitStack($a, $panes, $width, self::stackHeights($a, $panes, $cols, $rows));
 
         // Pane widgets paint their own box chrome, so a rendered block can be
         // a few columns wider than the requested content `$width`. The gap
@@ -1293,6 +1402,89 @@ final class Renderer
     }
 
     /**
+     * Paint a stacked side's panes, letting a pane that overflows its share
+     * take the rows a neighbour's share leaves blank.
+     *
+     * The dock's weights split the column evenly, but side panes are only as
+     * tall as their content: a Tools pane with two calls in a half-height slot
+     * left most of that half blank while the Agents pane below it was cut
+     * off at its own half with "+N more". So each pane is measured at the
+     * whole budget (its natural height, capped there), then:
+     *
+     *  1. every pane gets min(natural, share) — a weight is still a floor for
+     *     any pane that wants it, so an overflowing neighbour can never eat
+     *     into another overflowing pane's share;
+     *  2. the rows that frees are handed to the panes still cut short, in
+     *     proportion to their shares, never past what each one wants; and
+     *     repeated until nobody is short or nothing is left.
+     *
+     * The total never exceeds the shares' total, so the side keeps the exact
+     * height the dock gave it. A pane whose natural height fits is painted
+     * once (the measurement IS its paint); only a pane that grew or shrank
+     * from the measured height is painted again, at its final size.
+     *
+     * @param list<Pane> $panes
+     * @param list<int>  $shares
+     *
+     * @return list<string>
+     */
+    private static function fitStack(App $a, array $panes, int $width, array $shares): array
+    {
+        $budget = max(1, array_sum($shares));
+        $measured = [];
+        $demand = [];
+        foreach ($panes as $i => $pane) {
+            $measured[$i] = self::renderPane($a, $pane, $width, $budget);
+            $demand[$i] = min($budget, self::lineCount($measured[$i]));
+        }
+
+        $alloc = [];
+        foreach ($panes as $i => $_) {
+            $alloc[$i] = max(1, min($demand[$i], $shares[$i] ?? 1));
+        }
+
+        $left = $budget - array_sum($alloc);
+        while ($left > 0) {
+            $short = array_keys(array_filter($alloc, static fn (int $h, int $i): bool => $h < $demand[$i], ARRAY_FILTER_USE_BOTH));
+            if ($short === []) {
+                break;
+            }
+
+            $weight = 0;
+            foreach ($short as $i) {
+                $weight += max(1, $shares[$i] ?? 1);
+            }
+
+            $given = 0;
+            foreach ($short as $n => $i) {
+                $want = $demand[$i] - $alloc[$i];
+                // Proportional, rounded down; the last short pane takes the
+                // rounding remainder so a single row is never stranded.
+                $slice = $n === count($short) - 1
+                    ? $left - $given
+                    : intdiv($left * max(1, $shares[$i] ?? 1), $weight);
+                $take = min($want, max(0, $slice));
+                $alloc[$i] += $take;
+                $given += $take;
+            }
+
+            if ($given === 0) {
+                break;
+            }
+            $left -= $given;
+        }
+
+        $blocks = [];
+        foreach ($panes as $i => $pane) {
+            $blocks[] = $alloc[$i] >= $demand[$i]
+                ? $measured[$i]
+                : self::renderPane($a, $pane, $width, $alloc[$i]);
+        }
+
+        return $blocks;
+    }
+
+    /**
      * @return list<int>
      */
     private static function evenStackHeights(int $n, int $rows): array
@@ -1306,18 +1498,103 @@ final class Renderer
     }
 
     /**
+     * The narrowest and widest the live-agent column may be on a $cols-wide
+     * terminal: never under its floor, and never so wide the content band
+     * falls under ITS floor.
+     *
+     * @return array{0: int, 1: int}
+     */
+    public static function agentSplitBounds(int $cols): array
+    {
+        return [
+            self::SPLIT_MIN_AGENT_COLS,
+            max(self::SPLIT_MIN_AGENT_COLS, $cols - self::SPLIT_DIVIDER_COLS - self::SPLIT_MIN_BAND_COLS),
+        ];
+    }
+
+    /**
+     * The wheel's targets for this frame — see {@see $scrollRegions}. Each
+     * docked pane that reports a scroll range is one box (its header's
+     * column span, its painted rows); the live-agent column is another,
+     * scrolling one tile per notch.
+     *
+     * @param list<array{paneId: string, row: int, from: int, to: int}> $leftHeaders
+     * @param list<array{paneId: string, row: int, from: int, to: int}> $rightHeaders
+     * @return list<array{id: string, x0: int, x1: int, y0: int, y1: int, max: int}>
+     */
+    private static function scrollRegions(
+        array $leftHeaders,
+        array $rightHeaders,
+        int $rightStartX,
+        int $bandTop,
+        int $bandCols,
+        int $cols,
+        int $paneRows,
+        int $liveRuns,
+        int $agentCols,
+    ): array {
+        $regions = [];
+        foreach ([[$leftHeaders, 0], [$rightHeaders, $rightStartX]] as [$headers, $startX]) {
+            foreach ($headers as $header) {
+                $paneId = $header['paneId'];
+                $rows = self::$paneBlockRows[$paneId] ?? 0;
+                if (!isset(self::$paneScrollMax[$paneId]) || $rows < 1) {
+                    continue;
+                }
+                $regions[] = [
+                    'id' => LiveRenderer::PANE_ZONE_PREFIX . $paneId,
+                    'x0' => $startX + $header['from'],
+                    'x1' => min($cols - 1, $startX + $header['to']),
+                    'y0' => $bandTop + $header['row'],
+                    'y1' => $bandTop + $header['row'] + $rows - 1,
+                    'max' => self::$paneScrollMax[$paneId],
+                ];
+            }
+        }
+
+        if ($agentCols > 0 && $liveRuns > 0) {
+            $regions[] = [
+                'id' => self::SPLIT_SCROLL_ID,
+                'x0' => $bandCols + self::SPLIT_DIVIDER_COLS,
+                'x1' => $cols - 1,
+                'y0' => $bandTop,
+                'y1' => $bandTop + $paneRows - 1,
+                'max' => $liveRuns - 1,
+            ];
+        }
+
+        return $regions;
+    }
+
+    /**
+     * Keep a layout's row keys for the zone pass and hand back its block.
+     *
+     * @param array{0: string, 1: list<?string>, 2?: int} $layout
+     */
+    private static function keyed(Pane $pane, array $layout): string
+    {
+        self::$paneRowKeys[$pane->value] = $layout[1];
+        self::$paneScrollMax[$pane->value] = $layout[2] ?? 0;
+        self::$paneBlockRows[$pane->value] = self::lineCount($layout[0]);
+
+        return $layout[0];
+    }
+
+    /**
      * Paint one sidebar pane at the given box size. The five component
      * renderers share this signature; anything else has no sidebar form and
      * paints nothing.
      */
     private static function renderPane(App $a, Pane $pane, int $width, int $rows): string
     {
+        unset(self::$paneRowKeys[$pane->value], self::$paneScrollMax[$pane->value], self::$paneBlockRows[$pane->value]);
+
         return match ($pane) {
             Pane::Files => FilesPane::render($a, $width, $rows),
-            Pane::Tools => ToolsPane::render($a, $width, $rows),
+            Pane::Tools => self::keyed($pane, ToolsPane::layout($a, $width, $rows)),
             Pane::Skills => SkillsPane::render($a, $width, $rows),
             Pane::Settings => SettingsPane::render($a, $width, $rows),
-            Pane::Agents => AgentsPane::render($a, $width, $rows),
+            Pane::Agents => self::keyed($pane, AgentsPane::layout($a, $width, $rows)),
             default => '',
         };
     }

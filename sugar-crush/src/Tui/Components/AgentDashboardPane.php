@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tui\Components;
 
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Sessions\BackgroundSession;
 use SugarCraft\Crush\Sessions\BackgroundSessionStatus;
@@ -28,8 +29,8 @@ use SugarCraft\Veil\Veil;
  * The full-pane agent dashboard — sugar-crush's answer to `claude agents`
  * (crush_feat.md §5 E5).
  *
- * Renders every live worker in ONE ordered list: the {@see Agent}s registered
- * on {@see \SugarCraft\Crush\Agents\AgentManager} followed by the
+ * Renders every live worker in ONE ordered list: each run of the {@see Agent}s
+ * registered on {@see \SugarCraft\Crush\Agents\AgentManager} followed by the
  * {@see BackgroundSession}s owned by
  * {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor}, grouped for display
  * into Working / Needs input / Ready / Completed.
@@ -95,8 +96,11 @@ final class AgentDashboardPane
     /**
      * Every live worker as a display state, in stable slot order.
      *
-     * Registered agents come first (registration order), then background
-     * sessions (spawn order). The index into this list IS the stable index:
+     * Registered agents' runs come first (agent registration order, then run
+     * creation order — one row per run, see
+     * {@see \SugarCraft\Crush\Agents\AgentManager::visibleRunsOf()}), then
+     * background sessions (spawn order). The index into this list IS the
+     * stable index:
      * a session keeps its slot for as long as it stays in the supervisor's
      * active set, so `Alt+3` means the same session between two frames.
      *
@@ -104,13 +108,13 @@ final class AgentDashboardPane
      * AgentManager nor a BackgroundSupervisor — an honest empty dashboard,
      * not a fabricated one.
      *
-     * Disclosure about the Completed group: both sources are ACTIVE-only —
-     * `AgentManager::active()` filters to `isActive`, and
-     * `BackgroundSupervisor::getActiveSessions()` drops Completed/Failed/
-     * Stopped. So the only worker that reaches the Completed group today is a
-     * timed-out session, which the supervisor still counts as active. A
-     * finished-session history would need a retention list on the supervisor,
-     * which is not this step's file scope.
+     * Disclosure about the Completed group: it holds the delegated runs that
+     * finished this turn (projected mirrors, cleared at the next dispatch)
+     * and timed-out sessions, which the supervisor still counts as active.
+     * Every other finished worker drops out — local runs once terminal, and
+     * `BackgroundSupervisor::getActiveSessions()` skips Completed/Failed/
+     * Stopped sessions. A finished-session history would need a retention
+     * list on the supervisor.
      *
      * @return list<AgentOutputState>
      */
@@ -121,14 +125,8 @@ final class AgentDashboardPane
             return [];
         }
 
-        $entries = [];
-
         $manager = $chat->agentManager();
-        if ($manager !== null) {
-            foreach ($manager->active() as $agent) {
-                $entries[] = self::agentEntry($agent, $manager);
-            }
-        }
+        $entries = $manager !== null ? self::managerEntries($manager) : [];
 
         $supervisor = $chat->backgroundSupervisor();
         if ($supervisor !== null) {
@@ -143,6 +141,39 @@ final class AgentDashboardPane
                 // Keyed by session id because that is the key
                 // BackgroundSupervisor::onSessionStreaming() tracks under.
                 $entries[] = self::sessionEntry($session, $warnings[$session->id] ?? null);
+            }
+        }
+
+        return $entries;
+    }
+
+    /**
+     * The manager's half of {@see entries()}: one row per RUN, in agent
+     * registration order then run creation order.
+     *
+     * Per run, not per agent, because a batch of Task calls is typically
+     * several runs of one roster agent, and a per-agent row folded them all
+     * into a single line. An agent flagged active with no run of its own
+     * keeps the per-agent row it always had. Public because the
+     * in-transcript strip ({@see \SugarCraft\Crush\Renderer}) lists the same
+     * rows, and two builders are how the two surfaces came to disagree.
+     *
+     * @return list<AgentOutputState>
+     */
+    public static function managerEntries(\SugarCraft\Crush\Agents\AgentManager $manager): array
+    {
+        $entries = [];
+        foreach ($manager->all() as $agent) {
+            $runs = $manager->visibleRunsOf($agent->name);
+            if ($runs !== []) {
+                foreach ($runs as $run) {
+                    $entries[] = self::runEntry($run);
+                }
+
+                continue;
+            }
+            if ($agent->isActive) {
+                $entries[] = self::agentEntry($agent, $manager);
             }
         }
 
@@ -411,8 +442,50 @@ final class AgentDashboardPane
             // Phase 1 item 1). Before it existed this was necessarily `[]`,
             // so a delegating agent's row was a header with no body while a
             // background session's row showed a live tail.
-            outputBuffer: self::outputTail($manager->liveOutput($agent->name)),
+            outputBuffer: self::outputTail($live = $manager->liveOutput($agent->name)),
+            totalLines: self::lineCount($live),
         );
+    }
+
+    /**
+     * One delegated run's display state: named after its roster agent, with
+     * the run's own task, telemetry and output — never the agent-wide
+     * roll-ups {@see agentEntry()} reports, which would show every sibling's
+     * tokens on each row.
+     */
+    private static function runEntry(SubAgent $run): AgentOutputState
+    {
+        return AgentOutputState::fromDisplayState(
+            AgentDisplayState::new(
+                name: self::safe($run->agent->name),
+                status: self::runStatus($run->status),
+                operation: self::safe($run->task),
+                elapsedSeconds: $run->elapsedSeconds(),
+                tokensUsed: $run->tokensUsed,
+                costUsd: $run->costUsd,
+                contextTokens: $run->contextTokens,
+            ),
+            model: self::safe($run->model()),
+            outputBuffer: self::outputTail($run->output),
+            totalLines: $run->outputLineCount(),
+            key: $run->id,
+        );
+    }
+
+    /**
+     * Map a run's lifecycle status onto {@see AgentStatusBar}'s vocabulary,
+     * so a run and a background session in the same state colour alike.
+     */
+    private static function runStatus(string $status): string
+    {
+        return match ($status) {
+            SubAgent::STATUS_PENDING   => 'pending',
+            SubAgent::STATUS_RUNNING   => 'working',
+            SubAgent::STATUS_STREAMING => 'streaming',
+            SubAgent::STATUS_FAILED    => 'failed',
+            SubAgent::STATUS_STOPPED   => 'stopped',
+            default                    => 'completed',
+        };
     }
 
     /**
@@ -441,6 +514,7 @@ final class AgentDashboardPane
             model: self::safe($session->agent->model),
             outputBuffer: self::outputTail($session->output),
             stallWarning: $stall,
+            totalLines: self::lineCount($session->output),
         );
     }
 
@@ -463,6 +537,12 @@ final class AgentDashboardPane
             BackgroundSessionStatus::Failed,
             BackgroundSessionStatus::TimedOut  => 'failed',
         };
+    }
+
+    /** Lines in a whole buffer — the figure its byte-bounded tail cannot give. */
+    private static function lineCount(string $output): int
+    {
+        return $output === '' ? 0 : substr_count(rtrim($output, "\n"), "\n") + 1;
     }
 
     /**

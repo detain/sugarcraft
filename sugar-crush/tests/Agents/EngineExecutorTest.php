@@ -132,7 +132,7 @@ final class EngineExecutorTest extends TestCase
         }
         // describeToolCall() JSON-encodes values, so the newline arrives as
         // the two characters `\n` and the tool line stays one line.
-        $this->assertSame("looking first\n▸ probe(path: \"src\\/\\nA.php\")\nthe answer", $streamed);
+        $this->assertSame("looking first\n▸ probe(path: \"src/\\nA.php\")\nthe answer", $streamed);
     }
 
     public function testTokenDeltasAreCoalescedRatherThanAppendedOneByOne(): void

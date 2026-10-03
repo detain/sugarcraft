@@ -146,6 +146,42 @@ final class DockGeometryPlumbingTest extends TestCase
         }
     }
 
+    /**
+     * A stacked side shares its height by CONTENT, not only by weight: an
+     * Agents pane that needs a few rows leaves the rest of its half to a
+     * Tools pane that overflows, instead of both stopping at half and the
+     * spare rows sitting blank under the stack. The side keeps its exact
+     * height, and a pane that fits its share is untouched.
+     */
+    public function testAStackedSideGivesTheRowsAShortPaneLeavesToTheOneThatOverflows(): void
+    {
+        $manager = new \SugarCraft\Crush\Agents\AgentManager($this->provider, new \SugarCraft\Crush\Skills\SkillRegistry());
+        $manager->register(\SugarCraft\Crush\Tests\Support\RosterAgent::named('reviewer')->withActive(false));
+        for ($i = 0; $i < 3; $i++) {
+            $manager->projectRemoteSubAgent(new \SugarCraft\Crush\Events\SubAgentActivity('started', 'r' . $i, 'reviewer', 'Audit ' . $i, 1, ''));
+        }
+        $history = [];
+        for ($i = 0; $i < 60; $i++) {
+            $history[] = \SugarCraft\Crush\Message::assistant('x')->withToolResults([\SugarCraft\Crush\ToolResult::ok('Read', 'x', 'c' . $i)]);
+        }
+        $dock = DockLayout::new('chat')->withSlotAdded(Side::Right, 'tools')->withSlotAdded(Side::Right, 'agents');
+        $app = $this->app()->withDock($dock)->withPane(Pane::Chat)->withChat(new Chat($history, agentManager: $manager));
+
+        [$block] = self::invoke('renderSide', $app, Side::Right, 160, 48);
+        $lines = explode("\n", Ansi::strip($block));
+        $agentsTop = null;
+        foreach ($lines as $n => $line) {
+            if (str_contains($line, ' agents ')) {
+                $agentsTop = $n;
+            }
+        }
+
+        self::assertNotNull($agentsTop);
+        self::assertSame(48, count($lines), 'the side keeps exactly the height the dock gave it');
+        self::assertSame(5, count($lines) - $agentsTop, 'the agents pane is as tall as its 3 runs need, plus its border');
+        self::assertGreaterThan(24, $agentsTop, 'the tools pane took the rows the agents pane did not need');
+    }
+
     private function app(): App
     {
         return App::new($this->provider, 'test-model');

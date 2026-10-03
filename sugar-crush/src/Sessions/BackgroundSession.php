@@ -197,7 +197,7 @@ final class BackgroundSession
         if ($this->tokensUsed === 0) {
             return '';
         }
-        return number_format($this->tokensUsed) . ' tokens';
+        return \SugarCraft\Crush\Util\TokenCount::compact($this->tokensUsed) . ' tokens';
     }
 
     /**

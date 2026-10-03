@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui;
 
+use SugarCraft\Crush\Util\TokenCount;
+
 /**
  * Represents the live display state of a single agent in the status bar.
  *
@@ -27,6 +29,13 @@ class AgentDisplayState
         public int $tokensUsed,
         /** Total cost in USD so far. */
         public float $costUsd,
+        /**
+         * The agent's CURRENT context — what its latest request carried —
+         * as opposed to $tokensUsed, every token it has burned in all. A long
+         * run can have spent 2M tokens while sitting at a 200K context, and
+         * the two answer different questions. 0 when unknown.
+         */
+        public int $contextTokens = 0,
     ) {}
 
     /**
@@ -41,8 +50,9 @@ class AgentDisplayState
         int $elapsedSeconds,
         int $tokensUsed,
         float $costUsd,
+        int $contextTokens = 0,
     ): self {
-        return new self($name, $status, $operation, $elapsedSeconds, $tokensUsed, $costUsd);
+        return new self($name, $status, $operation, $elapsedSeconds, $tokensUsed, $costUsd, $contextTokens);
     }
 
     /**
@@ -65,13 +75,25 @@ class AgentDisplayState
     }
 
     /**
-     * Formatted token + cost summary, e.g. "1,234 tok | $0.0042".
+     * Formatted token + cost summary, e.g. "2.1M tok · 200K ctx | $0.0042":
+     * the tokens used in all, the current context when it is known, and the
+     * cost only when something was billed. Counts are compact
+     * ({@see TokenCount}) — exact figures cost columns nobody reads.
      */
     public function usageDisplay(): string
     {
-        $tok = number_format($this->tokensUsed);
-        $cost = number_format($this->costUsd, 4);
+        $tok = TokenCount::compact($this->tokensUsed) . ' tok';
+        if ($this->contextTokens > 0) {
+            $tok .= ' · ' . TokenCount::compact($this->contextTokens) . ' ctx';
+        }
 
-        return "{$tok} tok | \${$cost}";
+        // No dollar figure when nothing was billed: a backend with no pricing
+        // (a self-hosted SGLang) reports tokens but never cost, and a
+        // permanent `| $0.0000` on every row spends columns saying nothing.
+        if ($this->costUsd <= 0.0) {
+            return $tok;
+        }
+
+        return $tok . ' | $' . number_format($this->costUsd, 4);
     }
 }

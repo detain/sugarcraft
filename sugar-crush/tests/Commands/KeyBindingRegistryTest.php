@@ -255,11 +255,14 @@ final class KeyBindingRegistryTest extends TestCase
      * 67 -> 69 live (71 -> 73 all) with attachments (audit 15b-15):
      * `chat.mention-complete` (Tab completes an `@file` path) and
      * `chat.paste-image` (Ctrl+V attaches the clipboard's image).
+     *
+     * 69 -> 70 live (73 -> 74 all) when `mouse.side-row` was declared: a
+     * click on a docked Tools or Agents pane row expands it in place.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(73, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(69, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(74, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(70, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(4, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(9, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

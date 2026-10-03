@@ -1379,6 +1379,34 @@ final class KeyBindingDriftTest extends TestCase
                 $collapsed = $this->clickZone($expanded, Renderer::TOOL_CALL_ZONE_PREFIX . 'call-1');
                 $this->assertArrayNotHasKey('call-1', $collapsed->expanded(), 'a second click must collapse it');
             },
+            // A docked Tools row, through the live chrome routing: the zone
+            // the painted frame published, pressed and released through
+            // App::update(). Both halves of "Expand or collapse".
+            'mouse.side-row' => function (): void {
+                \SugarCraft\Crush\Tui\Renderer::chromeScanner()->clear();
+                (new \ReflectionProperty(App::class, 'chromeClickTracker'))->setValue(null, null);
+                $call = Message::assistant('done')->withToolResults([ToolResult::ok('Bash', 'output', 'call-1')]);
+                $dock = \SugarCraft\Layout\Dock\DockLayout::new('chat')
+                    ->withSlotAdded(\SugarCraft\Layout\Dock\Side::Right, 'tools');
+                [$app] = $this->app()->withDock($dock)->withChat($this->chat([$call]))
+                    ->update(new \SugarCraft\Core\Msg\WindowSizeMsg(160, 40));
+
+                $click = static function (App $app): App {
+                    \SugarCraft\Crush\Tui\Renderer::renderView($app, 160, 40);
+                    $zone = \SugarCraft\Crush\Tui\Renderer::chromeScanner()->get(Renderer::SIDE_ROW_ZONE_PREFIX . 'tools:call-1');
+                    self::assertInstanceOf(Zone::class, $zone, 'the docked Tools row is a click target');
+                    [$app] = $app->update(new MouseClickMsg($zone->startCol, $zone->startRow, MouseButton::Left, MouseAction::Press));
+                    [$app] = $app->update(new MouseReleaseMsg($zone->startCol, $zone->startRow, MouseButton::Left, MouseAction::Release));
+
+                    return $app;
+                };
+
+                $expanded = $click($app);
+                $this->assertArrayHasKey('call-1', $expanded->chat?->expanded() ?? []);
+                $collapsed = $click($expanded);
+                $this->assertArrayNotHasKey('call-1', $collapsed->chat?->expanded() ?? [], 'a second click must collapse it');
+                \SugarCraft\Crush\Tui\Renderer::chromeScanner()->clear();
+            },
             // "RUN that palette row", which the old form could not see: it
             // asserted only that the click produced a different Chat, and a
             // click that merely moved the highlight does that too. The row
@@ -1864,6 +1892,7 @@ final class KeyBindingDriftTest extends TestCase
         'mouse.tab',
         'mouse.pane',
         'mouse.tool-call',
+        'mouse.side-row',
         'mouse.palette-row',
     ];
 

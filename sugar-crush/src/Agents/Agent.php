@@ -28,7 +28,7 @@ final readonly class Agent
      *
      *  - NONE of them changes this process's behaviour yet. `Agent` is what
      *    {@see AgentManager::register()} stores and what
-     *    {@see \SugarCraft\Crush\Renderer::agentDisplayState()} renders;
+     *    {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane::agentEntry()} renders;
      *    neither reads any of the ten. `$permissionMode`'s downstream
      *    consumer is {@see AgentManager::createSubAgent()}, which takes the
      *    mode as its OWN argument and has no `src/` caller at all — the
@@ -167,7 +167,7 @@ final readonly class Agent
      * {@see AgentManager::register()}, which takes an Agent.
      *
      * `isActive` defaults to false: on this class, active means *currently
-     * doing work* — {@see \SugarCraft\Crush\Renderer::agentDisplayState()}
+     * doing work* — {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane::agentEntry()}
      * renders it as the literal string "working" — and a template nobody has
      * delegated to yet is not working. {@see AgentManager::active()} derives
      * the live value from running sub-agents.

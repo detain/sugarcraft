@@ -105,6 +105,71 @@ final class AgentSplitCompositorTest extends TestCase
         self::assertStringContainsString('reviewer', $frame);
     }
 
+    /**
+     * A batch of Task calls is typically several runs of ONE roster agent.
+     * The column was keyed by agent name, so every `reviewer` run shared one
+     * tile holding all of their text; each run gets its own tile now, with
+     * its own task and output.
+     */
+    public function testEachLiveRunOfOneAgentGetsItsOwnTile(): void
+    {
+        $manager = new AgentManager($this->createMock(ProviderInterface::class), new SkillRegistry());
+        $reviewer = new Agent(
+            name: 'reviewer',
+            description: 'Reviews code',
+            prompt: '',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: false,
+        );
+        $runs = [];
+        foreach (['core' => 'core findings', 'ansi' => 'ansi findings'] as $lib => $output) {
+            $run = new SubAgent(id: 'run-' . $lib, agent: $reviewer, task: 'Audit candy-' . $lib);
+            $run->status = SubAgent::STATUS_STREAMING;
+            $run->output = $output;
+            $runs[$run->id] = $run;
+        }
+        (new \ReflectionProperty(AgentManager::class, 'subAgents'))->setValue($manager, $runs);
+
+        $this->assertSame(['run-core', 'run-ansi'], array_map(static fn (SubAgent $r): string => $r->id, $manager->liveRuns()));
+
+        $column = Ansi::strip(AgentSplitColumn::renderRuns($manager->liveRuns(), Theme::default(), 40, 30));
+
+        self::assertSame(2, substr_count($column, '╭ reviewer '), 'one tile per run, not one per agent name');
+        self::assertStringContainsString('core findings', $column);
+        self::assertStringContainsString('ansi findings', $column);
+        self::assertStringContainsString('Audit candy-core', $column);
+        self::assertStringContainsString('Audit candy-ansi', $column);
+    }
+
+    /**
+     * Scrolling the column skips whole tiles from the top and says how many,
+     * and never scrolls the last tile out of view.
+     */
+    public function testScrollingTheColumnSkipsWholeTilesAndSaysSo(): void
+    {
+        $agent = new Agent(name: 'reviewer', description: 'r', prompt: '', model: 'm', provider: 'p', tools: [], skillNames: [], hooks: [], isActive: false);
+        $runs = [];
+        foreach (['one', 'two', 'three'] as $name) {
+            $run = new SubAgent(id: 'run-' . $name, agent: $agent, task: 'Audit ' . $name);
+            $run->status = SubAgent::STATUS_STREAMING;
+            $run->output = $name . ' output';
+            $runs[] = $run;
+        }
+
+        $column = Ansi::strip(AgentSplitColumn::renderRuns($runs, Theme::default(), 40, 30, 1));
+        self::assertStringContainsString('↑ 1 earlier', $column);
+        self::assertStringNotContainsString('one output', $column);
+        self::assertStringContainsString('two output', $column);
+
+        $clamped = Ansi::strip(AgentSplitColumn::renderRuns($runs, Theme::default(), 40, 30, 99));
+        self::assertStringContainsString('three output', $clamped, 'the last tile always stays on screen');
+        self::assertStringContainsString('↑ 2 earlier', $clamped);
+    }
+
     public function testNoSplitWhenEveryRegisteredAgentIsSilent(): void
     {
         // The agent exists and has a sub-agent; the sub-agent has produced
@@ -548,7 +613,7 @@ final class AgentSplitCompositorTest extends TestCase
         return $method->invoke(
             null,
             $app,
-            $app->chat?->agentManager()?->liveOutputs() ?? [],
+            $app->chat?->agentManager()?->liveRuns() ?? [],
             $band,
             $bandCols,
             $agentCols,
