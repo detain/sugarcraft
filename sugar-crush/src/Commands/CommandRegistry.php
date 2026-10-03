@@ -19,7 +19,7 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  * this, the two surfaces kept independent lists and drifted - a command
  * added to one was silently missing from the other.
  *
- * The rows come from one spec file per command under `src/Commands/Specs/`
+ * The rows come from one spec file per command under `builtin-commands/`
  * ({@see BuiltInCommands}), and the same file names the private `Chat` handler
  * the row dispatches to, so a row and its dispatch can no longer be added
  * apart: `Chat::dispatchCommand()` routes through the spec table rather than
@@ -80,7 +80,7 @@ final class CommandRegistry
 
     /**
      * Every command known to either surface, in display order: the rows of the
-     * spec files under `src/Commands/Specs/`, in file order (DH-CMDS). A command
+     * spec files under `builtin-commands/`, in file order (DH-CMDS). A command
      * is added by adding its spec file, not by editing this method — see
      * {@see BuiltInCommands} for the file shape and why it is one file per row.
      *

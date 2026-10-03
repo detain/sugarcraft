@@ -291,7 +291,7 @@ columns are the same two derivations read off the same source: **S** marks a row
 `CommandRegistry::slashCommands()` advertises, **CP** marks a reserved name.
 *Takes* is the row's own `argumentHint`, verbatim where it has one and `—` where
 it does not; the *What the row says* column is its `description`. Each row is one
-spec file under `src/Commands/Specs/` (`NNNN-<name>.php`, listed in file-name
+spec file under `builtin-commands/` (`NNNN-<name>.php`, listed in file-name
 order), which also names the handler the row dispatches to, and the table is
 generated from those files by `php tools/gen-command-docs.php --write` — never
 edit it by hand.

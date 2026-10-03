@@ -10616,7 +10616,7 @@ final class Chat implements Model
      * `/name` for every `slashVisible` row in {@see CommandRegistry} and fails
      * when the turn reaches the backend, so a registry row with no handler
      * reds the suite. Since DH-CMDS the handler is named by the command's own
-     * spec file under `src/Commands/Specs/` ({@see
+     * spec file under `builtin-commands/` ({@see
      * \SugarCraft\Crush\Commands\Specs\BuiltInCommands}), together with its
      * aliases and what it is handed, so this method has no per-command arm.
      *
@@ -10668,7 +10668,7 @@ final class Chat implements Model
         }
 
         // TABLE-DRIVEN (DH-CMDS): the spelling is looked up in the spec files
-        // under src/Commands/Specs/, which name each command's handler, its
+        // under builtin-commands/, which name each command's handler, its
         // aliases and what it is handed. There is no per-command arm here any
         // more, so a row and its dispatch cannot be added apart.
         //

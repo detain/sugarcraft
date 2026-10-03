@@ -14,7 +14,7 @@ use SugarCraft\Crush\Commands\Specs\CommandArguments;
 
 /**
  * DH-CMDS: the built-in commands are one spec file each under
- * `src/Commands/Specs/`, discovered and sorted, and `Chat::dispatchCommand()`
+ * `builtin-commands/`, discovered and sorted, and `Chat::dispatchCommand()`
  * routes through the handler each file names. These are the table's own
  * invariants; the routing itself is driven end to end by {@see SlashDispatchTest}.
  */
@@ -22,7 +22,7 @@ final class BuiltInCommandsTest extends TestCase
 {
     private static function specDir(): string
     {
-        return \dirname(__DIR__, 2) . '/src/Commands/Specs';
+        return \dirname(__DIR__, 2) . '/builtin-commands';
     }
 
     public function testEverySpecFileIsDiscoveredInFileNameOrder(): void
@@ -43,23 +43,16 @@ final class BuiltInCommandsTest extends TestCase
         self::assertSame($expected, array_map(static fn (CommandSpec $s): string => $s->name, CommandRegistry::all()));
     }
 
-    public function testNoOtherFileInTheDirectoryIsASpecFile(): void
+    public function testEveryFileInTheDirectoryIsASpecFile(): void
     {
-        foreach (glob(self::specDir() . '/*.php') ?: [] as $path) {
-            $file = basename($path);
-            if (preg_match(BuiltInCommands::FILE_PATTERN, $file) === 1) {
-                continue;
-            }
-
-            // Everything else must be a PSR-4 class of the Specs namespace —
-            // a misnamed spec file would otherwise be silently skipped.
-            self::assertMatchesRegularExpression('/^[A-Z][A-Za-z]+\.php$/', $file, "{$file} is neither a spec file nor a class");
-            self::assertTrue(
-                class_exists('SugarCraft\\Crush\\Commands\\Specs\\' . basename($file, '.php'))
-                || enum_exists('SugarCraft\\Crush\\Commands\\Specs\\' . basename($file, '.php')),
-                "{$file} declares no type of its name",
-            );
+        // The specs live outside src/ precisely so no class shares their
+        // directory; a misnamed spec would be skipped, so the loader refuses it.
+        $files = glob(self::specDir() . '/*') ?: [];
+        self::assertNotSame([], $files);
+        foreach ($files as $path) {
+            self::assertMatchesRegularExpression(BuiltInCommands::FILE_PATTERN, basename($path), basename($path) . ' is not a spec file');
         }
+        self::assertSame(self::specDir(), BuiltInCommands::specDir());
     }
 
     public function testEveryHandlerIsAChatMethodTakingWhatItsSpecHandsIt(): void

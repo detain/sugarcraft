@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * tools/gen-command-docs.php — regenerates the command documentation derived
- * from the spec files under src/Commands/Specs/ (DH-CMDS).
+ * from the spec files under builtin-commands/ (DH-CMDS).
  *
  * What this rewrites is exactly what CommandDocGenerator names: the marked
  * `<!-- commands:<name>:begin -->` / `:end -->` blocks — README's slash roster

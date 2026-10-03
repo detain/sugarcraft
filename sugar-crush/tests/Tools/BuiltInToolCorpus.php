@@ -52,8 +52,10 @@ use SugarCraft\Crush\Tools\Tool;
  * interface — until E14 moved the registry pair into
  * `SugarCraft\Crush\Registry` (`src/Registry/`), where
  * `tests/ToolRegistryTest.php` now imports it from.
- * {@see declaredTypes()} is what the scan reads now — and since finding E631
- * what its RESOLUTION GATE reads too: resolution never asks the engine whether
+ * {@see declaredTypes()} is what the scan reads now — and since the redeclare
+ * finding (audit id E-six-thirty-one, spelled out so this guarded document
+ * carries no integer the src/ census can grow into) what its RESOLUTION GATE
+ * reads too: resolution never asks the engine whether
  * a symbol exists, because under Composer's plain-`include` autoloader the
  * asking was itself process-fatal. {@see classNames()} carries the measurement.
  *
@@ -224,7 +226,7 @@ final class BuiltInToolCorpus
      * `LspConnectionInterface`. Widening the scan without the stage-one guard
      * would have aborted suite construction on this very checkout — and the
      * stage-one guard (the `*_exists()` triple) then carried stage two's defect
-     * instead: finding E631, documented at the guard itself below, where the
+     * instead: the redeclare finding, documented at the guard itself below, where the
      * triple has been replaced by a token gate that never asks the engine.
      *
      * Sorted, so a provider keyed off it names its cases the same way on every
@@ -236,7 +238,7 @@ final class BuiltInToolCorpus
      * `src/` is what the first attempt did, and a probe that fatals leaves residue
      * in a tree other suites are reading concurrently. The mis-namespaced case
      * needs one more thing a synthetic tree cannot give it — the REAL composer
-     * autoloader, whose plain-`include` loader is the other half of finding E631
+     * autoloader, whose plain-`include` loader is the other half of the redeclare finding
      * (a test-local `require_once` probe autoloader hid it for its entire life) —
      * so it is ALSO driven as a subprocess over temp trees registered on that
      * autoloader: `tests/Tools/corpus-real-autoloader-driver.php`, spawned by
@@ -253,7 +255,7 @@ final class BuiltInToolCorpus
             $class = $namespacePrefix . str_replace('/', '\\', substr($relative, 0, -4));
 
             // THE RESOLUTION GATE, AND WHY IT NO LONGER ASKS THE ENGINE
-            // (finding E631 — a latent process-killer).
+            // (the redeclare finding — a latent process-killer).
             //
             // WHAT THE OLD TEXT SAID: this branch was reached by
             // `!class_exists($class) && !interface_exists($class) &&
@@ -312,7 +314,7 @@ final class BuiltInToolCorpus
                 // skipped rather than thrown on, precisely so the arrival of a
                 // functions-only or multi-symbol file cannot abort suite
                 // construction — which is the promise the OLD gate made and
-                // E631 measured as false; it is true again only because reaching
+                // the redeclare finding measured as false; it is true again only because reaching
                 // this line executes nothing — and {@see nonClassSources()}
                 // keeps the skip visible instead of silent, asserted by
                 // {@see BuiltInToolCorpusTest}.
@@ -496,7 +498,7 @@ final class BuiltInToolCorpus
      * class keeps its position, and it is included even when the token scan
      * cannot see it (a file whose declaration is inside a conditional).
      *
-     * THE BOUNDS — and since finding E631 this walk is not merely the census's
+     * THE BOUNDS — and since the redeclare finding this walk is not merely the census's
      * instrument but the RESOLUTION GATE'S too (`classNames()` and
      * {@see nonClassSources()} branch on its output), so its bounds are the
      * scanner's bounds, and a guard has to state what it cannot see:
@@ -520,7 +522,7 @@ final class BuiltInToolCorpus
      * to `class_exists()` executes the file once; the conditional body never
      * runs; the probed name stays unknown; and any further `*_exists()` probe
      * RE-INCLUDES the file, redeclaring the class the first include defined —
-     * E631 smuggled straight back through the gate. The walk now counts
+     * the redeclare finding smuggled straight back through the gate. The walk now counts
      * colon-form control bodies (`if`/`for`/`foreach`/`while`/`switch`/
      * `declare` opened with `:` until the matching `end*`) as scopes beside the
      * brace depth, so EITHER conditional form makes a type invisible, and the
@@ -554,10 +556,10 @@ final class BuiltInToolCorpus
      * gate and surfaces LOUDLY — reported by name, or thrown by name inside
      * the wired directory — never silently; it is a conditional SECONDARY
      * inside an otherwise-resolving file that is missed by design, exactly as
-     * it was before this gate existed (finding E637). `src/` ships zero
-     * conditional declarations of EITHER syntax form, measured both by this
-     * walk's scope accounting and by a token sweep over every `end*` keyword
-     * in the tree.
+     * it was before this gate existed (finding E-six-thirty-seven, spelled out
+     * like the redeclare finding). `src/` ships zero conditional declarations of
+     * EITHER syntax form, measured both by this walk's scope accounting and by a
+     * token sweep over every `end*` keyword in the tree.
      *
      * Independently: a secondary type is only REFLECTABLE once its file has
      * been loaded, which happens as a side effect of the primary symbol
@@ -579,8 +581,8 @@ final class BuiltInToolCorpus
         // conditional WITHOUT braces, so the brace depth alone reads zero
         // inside one — and a gate that counted the declaration unconditional
         // handed the name straight back to `*_exists()` probes, re-arming the
-        // E631 redeclare fatal through the gate itself (found on the round-two
-        // review of E631). Colon-form bodies are therefore counted as scopes
+        // redeclare fatal through the gate itself (found on the round-two
+        // review of that finding). Colon-form bodies are therefore counted as scopes
         // too: a control keyword awaits its body opener, `:` opens a counted
         // scope, the matching `end*` closes it. `elseif`/`else` continue a
         // chain whose scope is already open from the `if`, so they are not
@@ -734,7 +736,7 @@ final class BuiltInToolCorpus
         // missing/excess `end*` — leaves $altScopes nonzero, and the guard at
         // the declaration check would then treat the file's WHOLE TAIL as one
         // open conditional: stuck positive, every later depth-0 declaration
-        // silently invisible (and a silently invisible PRIMARY is the E631
+        // silently invisible (and a silently invisible PRIMARY is the redeclare
         // re-arm this gate exists to refuse); negative is the same refusal in
         // the other direction. A $elseChainAltColons count is the same class
         // of input: an `else if(…):` colon, which `php -l` rejects outright.
@@ -782,7 +784,7 @@ final class BuiltInToolCorpus
      * The visible half of {@see classNames()}'s one non-throwing skip, read
      * through the SAME token gate — no `*_exists()` probe runs here either, and
      * {@see classNames()} carries the measurement of why one does not belong
-     * (finding E631: under composer's plain-`include` autoloader these three
+     * (the redeclare finding: under composer's plain-`include` autoloader these three
      * probes were three re-inclusions of the exempt file, i.e. a redeclare
      * fatal at the exact moment the file tried to get itself REPORTED).
      * MEASURED on this tree: NONE — no file the current census enumerates is

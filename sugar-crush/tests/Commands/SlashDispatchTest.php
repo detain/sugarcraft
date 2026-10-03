@@ -128,7 +128,7 @@ final class SlashDispatchTest extends TestCase
                 $next->inFlight,
                 "/{$spec->name} is advertised in the \"/\" popup but no dispatch arm claims it, so submitting "
                 . 'it sends the command text to the MODEL as a prompt. Give its spec file under '
-                . 'src/Commands/Specs/ a withHandler(), or take the row out of the popup with slashVisible: false',
+                . 'builtin-commands/ a withHandler(), or take the row out of the popup with slashVisible: false',
             );
         }
     }
@@ -171,7 +171,7 @@ final class SlashDispatchTest extends TestCase
      * full suite green).
      *
      * Since DH-CMDS that method has no arms: it dispatches only the spellings
-     * the spec files under `src/Commands/Specs/` declare, so a spelling is
+     * the spec files under `builtin-commands/` declare, so a spelling is
      * either a row's name or an alias written on that row. What is left to
      * check is that every dispatching NAME is advertised (a handler on a
      * palette-only row would be a command no surface names) and that the

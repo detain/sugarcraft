@@ -5278,7 +5278,7 @@ final class DocFigureProseDriftTest extends TestCase
         preg_match_all('/^\| `\/([a-z-]+)` \| ?(✓)? ?\| ?(✓)? ?\|/m', $raw, $rows, PREG_SET_ORDER);
         self::assertNotEmpty($rows, 'the surface table shape changed — this arm parses name + S + P cells');
 
-        // DH-CMDS: the rows are spec files under src/Commands/Specs/ and the
+        // DH-CMDS: the rows are spec files under builtin-commands/ and the
         // table is generated from them, so the live registry is read rather
         // than a literal `CommandSpec::new(` walk over CommandRegistry.php.
         $live = [];

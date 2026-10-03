@@ -258,7 +258,7 @@ final class ReadmeRosterDriftTest extends TestCase
      * the roster — "they dispatch, but they have no `CommandRegistry` row of
      * their own" — which is a checkable claim in both directions.
      *
-     * The alias census comes from the spec files under `src/Commands/Specs/`,
+     * The alias census comes from the spec files under `builtin-commands/`,
      * the one table `Chat::dispatchCommand()` routes through (DH-CMDS) and the
      * same source {@see \SugarCraft\Crush\Tests\Commands\SlashDispatchTest}
      * derives its inventory from, rather than from a list retyped here.

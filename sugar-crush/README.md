@@ -958,7 +958,7 @@ taken as written. `Tab` completes the path under the cursor.
 
 The parenthesised spellings are aliases: they dispatch, but they have no
 `CommandRegistry` row of their own, so no surface advertises them. The roster is
-generated from the one-file-per-command specs under `src/Commands/Specs/` by
+generated from the one-file-per-command specs under `builtin-commands/` by
 `php tools/gen-command-docs.php --write`.
 
 `/permissions` answers, in the transcript, what this session is actually gated

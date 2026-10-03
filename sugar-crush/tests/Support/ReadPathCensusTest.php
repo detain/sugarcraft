@@ -253,12 +253,12 @@ final class ReadPathCensusTest extends TestCase
                 . 'file\'s own ContainedPath::within() compare against the checkout',
         ],
         'Commands/Specs/BuiltInCommands.php|glob' => [
-            'PROCESS_DERIVED — lists `__DIR__/*.php`, the installation\'s own shipped spec files '
+            'PROCESS_DERIVED — lists `builtin-commands/*.php`, located from `__DIR__`: the installation\'s own shipped spec files '
                 . '(DH-CMDS); no config, project or $HOME path reaches it',
         ],
         'Commands/Specs/BuiltInCommands.php|require' => [
             'PROCESS_DERIVED — the `NNNN-<name>.php` spec files the glob above listed, in the '
-                . 'installation\'s own src/Commands/Specs/ located from `__DIR__`; each must return a '
+                . 'installation\'s own builtin-commands/ located from `__DIR__`; each must return a '
                 . 'BuiltInCommand. Nothing outside the shipped source can name one',
         ],
         'Commands/EditorCommand.php|file_get_contents' => [
@@ -580,6 +580,11 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Tools/BuiltIn/Write.php|file_get_contents' => [
             'PATH_JAIL — reads the existing file to diff before writing, same jailed path',
+        ],
+        'Tools/Catalog/ToolCatalog.php|glob' => [
+            'PROCESS_DERIVED — lists the installation\'s own `src/Tools/BuiltIn/*.php` located from '
+                . '`__DIR__` (DH-TOOLS); it reads names only and resolves each through the autoloader. '
+                . 'The one other caller is the catalog\'s own test, over a fixture tree it wrote',
         ],
         'Tools/IgnoreRules.php|file_get_contents' => [
             'CALLER_SUPPLIED — a `.gitignore`-shaped file inside the walk the calling tool jailed',
