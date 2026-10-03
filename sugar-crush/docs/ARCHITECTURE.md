@@ -328,6 +328,13 @@ the preset's `maxTurns` and abandons its run once the turn that forked it is
 gone. While a group is outstanding the parent keeps writing heartbeat frames,
 so the turn's own idle ceiling does not kill a long delegation either.
 
+Delegations are the one member a group caps: at most
+`AgentPoolConfig::$maxConcurrent` (5 by default) `ExemptFromParallelDeadline`
+members are alive at once, and the rest wait queued and are forked in provider
+order as running ones exit (`Runtime::executeConcurrently()`). A queue costs a
+delegation nothing because the group deadline never kills it; seconds-scale
+siblings are never queued, so they keep the whole deadline for themselves.
+
 A delegation that ends without a report — step cap reached, or a failure
 part-way — is resumable: its typed transcript is saved on disk
 (`Agents\SuspendedDelegations`; memory would not survive, since every turn and

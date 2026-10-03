@@ -742,6 +742,14 @@ final class Runtime
      *                                default exactly as before: the key is
      *                                opt-in precisely because raising a paid
      *                                ceiling is the operator's call.
+     * @param ?int $maxConcurrentDelegations step 0.16: how many delegated
+     *                                runs ({@see ExemptFromParallelDeadline}
+     *                                members, i.e. `Task`) one concurrent
+     *                                group may have alive at once; the rest
+     *                                queue in {@see executeConcurrently()}.
+     *                                Null — the default — takes
+     *                                {@see \SugarCraft\Crush\Agents\AgentPoolConfig::$maxConcurrent}'s
+     *                                default (5); values below 1 clamp to 1.
      */
     public function __construct(
         private ProviderInterface $provider,
@@ -750,6 +758,7 @@ final class Runtime
         private bool $parallelToolCalls = true,
         private int $parallelToolDeadlineSeconds = self::PARALLEL_TOOL_DEADLINE_SECONDS,
         private ?int $maxOutputTokens = null,
+        private ?int $maxConcurrentDelegations = null,
     ) {}
 
     /**
@@ -1959,17 +1968,26 @@ final class Runtime
      *     does sequentially — hooks accumulate state and an order that
      *     depended on which `Read` won a race would be untestable.
      *
-     * Group width is deliberately UNCAPPED — one child per call, however many
-     * the provider asked for. A slot-limited scheduler was considered and
-     * rejected: this group carries ONE wall-clock budget, so a call held in a
-     * queue would spend that budget waiting and could be killed at the
-     * deadline without ever having run, which a cap would have to fix by
-     * giving every call its own deadline. That is a materially different
-     * design, bought against a pressure the OS already reports honestly — a
-     * fork past the process limit returns -1 and that call degrades to running
-     * in-process, right where the fan-out loop stands. An operator who does
-     * hit trouble has the whole-feature switch (see the constructor's
-     * $parallelToolCalls) rather than a width knob nobody can tune blind.
+     * Group width is UNCAPPED FOR SECONDS-SCALE TOOLS — one child per `Read`,
+     * `Grep` or `WebFetch` call, however many the provider asked for. A slot
+     * cap there was considered and rejected: the group carries ONE wall-clock
+     * budget, so a call held in a queue would spend that budget waiting and
+     * could be killed at the deadline without ever having run. A fork past the
+     * process limit returns -1 and that call degrades to running in-process,
+     * right where the fan-out loop stands.
+     *
+     * DELEGATED RUNS ARE CAPPED (step 0.16). That argument does not apply to an
+     * {@see ExemptFromParallelDeadline} member (a `Task`): the deadline never
+     * kills one, so waiting in a queue costs it nothing but time. What it does
+     * cost to run them all at once is real — every member is a whole agentic
+     * run billing the provider in parallel, and a model that asks for twenty
+     * Tasks in one step would otherwise get twenty concurrent sub-agents. So at
+     * most {@see $maxConcurrentDelegations} of them run at a time (default
+     * {@see \SugarCraft\Crush\Agents\AgentPoolConfig::$maxConcurrent}, 5); the
+     * rest wait queued in phase 3 and are forked, in provider order, as running
+     * ones exit. Non-delegated siblings are never queued behind them. An
+     * operator who hits trouble with the rest has the whole-feature switch
+     * (see the constructor's $parallelToolCalls).
      *
      * Why not reuse {@see \SugarCraft\Crush\Chat::waitForToolChildrenAsync()}:
      * it collects through `Loop::get()` periodic timers and returns a promise.
@@ -2108,6 +2126,7 @@ final class Runtime
         $total = count($jobs);
         $next = 0;
 
+        // @region ledger
         // SIBLING SPEND (audit B4-rem). A member that bills a provider itself
         // (a delegated Task run) records each step onto one file the whole
         // group shares, so its siblings' cap checks can see it while they all
@@ -2126,12 +2145,30 @@ final class Runtime
             }
             $jobs[$index]['ledger'] = $ledger->forMember((string) $index);
         }
+        // @endregion ledger
 
         try {
-            foreach ($jobs as $index => $job) {
-                if ($job['settled']) {
-                    continue;
+            // @region fork
+            // DELEGATION SLOTS (step 0.16). At most this many delegated runs
+            // (ExemptFromParallelDeadline members) are alive at once; the rest
+            // are marked `queued` here and forked by phase 3 as slots free.
+            // Seconds-scale siblings never wait on a slot — see the docblock.
+            $delegationSlots = max(1, $this->maxConcurrentDelegations ?? (new \SugarCraft\Crush\Agents\AgentPoolConfig())->maxConcurrent);
+            $runningDelegations = static function (array $jobs): int {
+                $running = 0;
+                foreach ($jobs as $job) {
+                    if (!$job['settled'] && $job['pid'] !== null && $job['tool'] instanceof ExemptFromParallelDeadline) {
+                        $running++;
+                    }
                 }
+
+                return $running;
+            };
+
+            // One member's fork (or in-process fallback), shared by the
+            // fan-out below and by phase 3's start of a queued delegation.
+            $launch = function (int $index) use (&$jobs): void {
+                $job = $jobs[$index];
 
                 // The copy that records onto the group ledger, run on either
                 // side of the fork below.
@@ -2188,7 +2225,7 @@ final class Runtime
                     $jobs[$index]['result'] = $this->executeGuarded($tool, $job['call'], $job['args']);
                     $jobs[$index]['settled'] = true;
 
-                    continue;
+                    return;
                 }
 
                 if ($pid === 0) {
@@ -2204,8 +2241,24 @@ final class Runtime
                     $jobs[$index]['relay'] = $relay;
                     $jobs[$index]['emitter'] = $emitter;
                 }
-            }
+            };
 
+            foreach ($jobs as $index => $job) {
+                if ($job['settled']) {
+                    continue;
+                }
+
+                if ($job['tool'] instanceof ExemptFromParallelDeadline && $runningDelegations($jobs) >= $delegationSlots) {
+                    $jobs[$index]['queued'] = true;
+
+                    continue;
+                }
+
+                $launch($index);
+            }
+            // @endregion fork
+
+            // @region poll
             // Phase 3 — reap, then release in provider order.
             $deadline = microtime(true) + $this->parallelToolDeadlineSeconds;
             $lastBeat = microtime(true);
@@ -2222,6 +2275,21 @@ final class Runtime
                     if (self::parallelJobHasExited($job['pid'])) {
                         $jobs[$index]['settled'] = true;
                     }
+                }
+
+                // A delegation slot freed by the exit check above goes to the
+                // next queued member in provider order (step 0.16). Started
+                // here, before the release pass, so the cursor never waits a
+                // poll interval longer than it must on a member at its head.
+                foreach ($jobs as $index => $job) {
+                    if (!($job['queued'] ?? false)) {
+                        continue;
+                    }
+                    if ($runningDelegations($jobs) >= $delegationSlots) {
+                        break;
+                    }
+                    $jobs[$index]['queued'] = false;
+                    $launch($index);
                 }
 
                 // After the exit check, so a member that just exited has its
@@ -2282,7 +2350,9 @@ final class Runtime
                     usleep(self::PARALLEL_TOOL_POLL_MICROSECONDS);
                 }
             }
+            // @endregion poll
         } finally {
+            // @region drain
             // EVERY EXIT PATH, including the ones that are not a `return`.
             // This is a Generator: a consumer that stops iterating part-way
             // through a group (a `break`, or an exception unwinding through
@@ -2315,6 +2385,14 @@ final class Runtime
                 if ($jobs[$i]['settled'] && $jobs[$i]['file'] !== null) {
                     ToolIpcFiles::discard((string) $jobs[$i]['file']);
                 }
+
+                // A delegation still QUEUED for a slot (step 0.16) was never
+                // forked, so nothing will ever write its reserved name: hand
+                // it back now rather than strand it for the sweeper. It is
+                // never started after this either — the generator is gone.
+                if (($jobs[$i]['queued'] ?? false) && $jobs[$i]['pid'] === null && $jobs[$i]['file'] !== null) {
+                    ToolIpcFiles::discard((string) $jobs[$i]['file']);
+                }
             }
 
             foreach ($jobs as $job) {
@@ -2328,6 +2406,7 @@ final class Runtime
             // member still running finds the file gone and records nothing —
             // SiblingSpendLedger::record() never recreates it.
             $ledger?->discard();
+            // @endregion drain
         }
     }
 

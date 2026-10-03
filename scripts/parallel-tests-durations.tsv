@@ -61,6 +61,7 @@ sugar-crush/tests/Agents/TaskListTest.php	5.749	46
 sugar-crush/tests/Session/SessionIndexAndRetentionTest.php	5.609	24
 sugar-crush/tests/Cli/HelpTest.php	5.448	68
 sugar-crush/tests/Renderer/StatusBarSpendTest.php	5.254	15
+sugar-crush/tests/Integration/ParallelTaskFanOutCapTest.php	5.177	4
 sugar-crush/tests/Integration/ParallelToolCallsTest.php	4.957	27
 sugar-crush/tests/Workflows/WorkflowStageTimeoutTest.php	4.951	4
 sugar-crush/tests/Backend/EngineBackendTest.php	4.743	35

@@ -106,6 +106,11 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 static fn(EngineBackend $b): EngineBackend => $b->withStepUsageObserver(static function (): void {}),
                 ['stepUsageObserver'],
             ],
+            // Step 0.16: the per-turn cap on concurrent delegated runs.
+            'withMaxConcurrentDelegations' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withMaxConcurrentDelegations(9),
+                ['maxConcurrentDelegations'],
+            ],
             // Audit R1: the per-turn App's compaction budgets.
             'withCompactorConfig' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withCompactorConfig(new CompactorConfig(skillBudgetPerSkill: 7)),
@@ -162,6 +167,10 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
         $this->assertSame(1, $this->state($base->withMaxSteps(0))['maxSteps']);
         $this->assertSame(1, $this->state($base->withMaxSteps(-5))['maxSteps']);
         $this->assertSame(3, $this->state($base->withMaxSteps(3))['maxSteps']);
+
+        $this->assertSame(1, $this->state($base->withMaxConcurrentDelegations(0))['maxConcurrentDelegations']);
+        $this->assertSame(7, $this->state($base->withMaxConcurrentDelegations(7))['maxConcurrentDelegations']);
+        $this->assertNull($this->state($base->withMaxConcurrentDelegations(null))['maxConcurrentDelegations']);
 
         $s = $this->state($base->withSpendCap(null));
         $this->assertNull($s['spendCapUsd']);
@@ -242,6 +251,7 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
             siblingSpend: self::blank(SiblingSpendLedger::class),
             compactorConfig: new CompactorConfig(skillBudgetPerSkill: 3),
             stepUsageObserver: static function (): void {},
+            maxConcurrentDelegations: 3,
         );
     }
 

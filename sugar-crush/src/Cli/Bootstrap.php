@@ -3174,7 +3174,11 @@ final class Bootstrap
             // Without this the Phase 5 item 9 memory block is unreachable from a
             // real run: the store would exist, /memory would still write to it,
             // and nothing the user recorded would ever reach the model.
-            ->withMemoryStore(self::memoryStoreOrNull($root));
+            ->withMemoryStore(self::memoryStoreOrNull($root))
+            // Step 0.16: a parallel group runs at most the pool's width of
+            // delegated Tasks at once, from the same config the Chat's
+            // workflow lanes get; the rest queue for a slot.
+            ->withMaxConcurrentDelegations(self::agentPoolConfig()->maxConcurrent);
 
         // F2: the settings ceiling lands before the approver, after every
         // with*() that ships in this chain — and `toollessBackend()`s engines

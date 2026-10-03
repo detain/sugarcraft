@@ -511,6 +511,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
          * @var (\Closure(?Usage): void)|null
          */
         private readonly ?\Closure $stepUsageObserver = null,
+        /**
+         * Step 0.16: how many delegated runs (`Task` members of one parallel
+         * group) each turn's {@see Runtime} may have alive at once — the rest
+         * queue for a slot. Null takes
+         * {@see \SugarCraft\Crush\Agents\AgentPoolConfig::$maxConcurrent}'s
+         * default (5). @see withMaxConcurrentDelegations()
+         */
+        private readonly ?int $maxConcurrentDelegations = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -883,6 +891,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     }
 
     /**
+     * The same engine, capping each turn's concurrent delegated runs at
+     * $slots (clamped to at least 1) — see {@see $maxConcurrentDelegations}.
+     * Null restores the {@see \SugarCraft\Crush\Agents\AgentPoolConfig}
+     * default.
+     */
+    public function withMaxConcurrentDelegations(?int $slots): self
+    {
+        return $this->mutate(['maxConcurrentDelegations' => $slots === null ? null : max(1, $slots)]);
+    }
+
+    /**
      * Confine this backend to a sub-agent's git worktree: every path-resolving
      * tool is re-jailed to `$worktreeRoot`, and BashEscapeDenyHook is
      * registered so Bash commands that name paths outside it are refused.
@@ -1089,6 +1108,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // file at most one time however many settings are resolved off it.
         $userConfig = self::userConfig();
 
+        // @region build
         // One ledger per turn: a new turn is a new plan, so repeats are
         // never carried across the user's prompts (see ToolCallLoopGuard).
         $loopGuard = ToolCallLoopGuard::new();
@@ -1099,6 +1119,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             parallelToolCalls: self::parallelToolCallsEnabled($userConfig),
             parallelToolDeadlineSeconds: self::parallelToolDeadlineSeconds($userConfig),
             maxOutputTokens: self::maxOutputTokens($userConfig),
+            maxConcurrentDelegations: $this->maxConcurrentDelegations,
         );
 
         $app = App::new($this->provider, $this->model)
@@ -1118,6 +1139,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             // same source the launch notice priced it against.
             ->withCompactorConfig($this->compactorConfig())
             ->withMessages($messages);
+        // @endregion build
 
         $lastAssistant = null;
         $lastImageBytes = null;
@@ -1175,6 +1197,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // tools — or we hit the step ceiling (guards against runaway loops,
         // which neither sugar-crush nor candy-crush had).
         for ($step = 0; $step < $this->maxSteps; $step++) {
+            // @region step-top
             $assistant = null;
             $toolResults = [];
 
@@ -1229,10 +1252,16 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 $lengthStopped = $lengthStopped || $assistant->lengthStopped();
             }
 
+            // @endregion step-top
+
+            // @region no-tools
             if ($toolResults === []) {
                 $answeredWithoutTools = true;
                 break; // model answered without calling tools — done
             }
+            // @endregion no-tools
+
+            // @region after-step
 
             // E20: THE MID-TURN SPEND CAP, checked HERE and nowhere else —
             // this is the only point in the app that stands between a step
@@ -1326,8 +1355,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 $stoppedByLoopGuard = true;
                 break;
             }
+            // @endregion after-step
         }
 
+        // @region return
         // F2: neither deliberate break fired, so the LAST step still ended
         // with tool results pending and the ceiling, not the model, ended the
         // turn. One flag on the DTO; the transcript notice is Chat's settle
@@ -1399,6 +1430,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             ->withStepsTruncated($stepsTruncated)
             // The guard's own exit, named so Chat can say which loop it ended.
             ->withLoopGuardStoppedBy($stoppedByLoopGuard ? $loopGuard->endedBy() : null);
+        // @endregion return
     }
 
     /**
