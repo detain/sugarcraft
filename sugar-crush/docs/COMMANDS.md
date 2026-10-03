@@ -302,6 +302,7 @@ it does not; the *What the row says* column is its `description`.
 | `/layout` | ✓ | | `reset` | Reset the pane layout to the launch default |
 | `/pane-dock-left` | | | — | Dock the focused pane to the left |
 | `/pane-dock-right` | | | — | Dock the focused pane to the right |
+| `/editor` | ✓ | | `[text]` | Compose the prompt in $VISUAL or $EDITOR |
 | `/compact` | ✓ | | — | Manually compact chat history to save context |
 | `/clear` | ✓ | ✓ | — | Clear the transcript, keeping this session |
 | `/budget` | ✓ | ✓ | `[amount\|off]` | Show this session's reported spend, or cap it |
@@ -335,7 +336,7 @@ In a **read-only** window — a session another sugarcrush already has open
 (see *Sessions* in the README) — only the commands that leave the session alone
 run: `/exit`, `/keys`, `/help`, `/permissions`, `/notices`, `/rules`, `/budget`,
 `/share`, `/agents`, `/memory`, `/bg`, `/fork`, `/branch`, `/sessions`, `/theme`,
-`/mcp`, `/websearch`, `/pane`, `/layout`, `/model` and `/workflow list|status`.
+`/mcp`, `/websearch`, `/pane`, `/layout`, `/model`, `/editor` and `/workflow list|status`.
 Everything else, a custom command included, is refused; the box is cleared so
 `/branch` can be typed at once, and the refused draft comes back once `/branch`
 has forked the session into one this window owns.
@@ -418,6 +419,16 @@ ordinary `Write`/`Edit` tools under this session's permission mode. Anything
 after the name (`/init focus on the test setup`) is appended as a focus
 instruction. The new file reaches the system prompt from the next session on;
 see [`MEMORY.md`](MEMORY.md#instruction-files).
+
+`/editor` composes the next prompt in your own editor: `$VISUAL`, else
+`$EDITOR`, else `vi` (`notepad` on Windows), run as a shell command line with
+an owner-only temporary `.md` file as its last argument. The TUI hands the
+terminal over while the editor runs and takes it back when it exits; what you
+saved lands in the draft box as one paste — at the caret, not sent — and the
+file is deleted. Text after the name (`/editor draft to start from`) is what the
+editor opens on. An editor that fails to start or exits non-zero leaves the
+draft unchanged and says so in the status line, and so does an empty file. It
+has no key binding: Ctrl+G is already the shell's group-input chord.
 
 What keeps the table honest is not this page — no guard counts the rows here. It
 is `Commands\SlashDispatchTest::testEverySlashVisibleRegistryRowHasALiveDispatchHandler()`,

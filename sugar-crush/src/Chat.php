@@ -9591,7 +9591,7 @@ final class Chat implements Model
     private const READ_ONLY_COMMANDS = [
         'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share',
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
-        'mcp', 'websearch', 'pane', 'layout', 'model',
+        'mcp', 'websearch', 'pane', 'layout', 'model', 'editor',
     ];
 
     /**
@@ -10703,6 +10703,15 @@ final class Chat implements Model
             'init' => $this->withInputBuf(
                 \SugarCraft\Crush\Commands\InitCommand::prompt(self::commandArgument($text)),
             )->submit(),
+            // Roadmap 5.14h. Hands the terminal to $VISUAL/$EDITOR through
+            // candy-core's Cmd::exec; what the editor saves comes back as one
+            // PasteMsg into the emptied box and is NOT sent. The argument, if
+            // any, is the text the editor opens on. Allowed in a read-only
+            // window: it edits the draft, never the session.
+            'editor' => [
+                $this->withInputBuf(''),
+                \SugarCraft\Crush\Commands\EditorCommand::new()->cmd(self::commandArgument($text)),
+            ],
             default => null,
         };
     }

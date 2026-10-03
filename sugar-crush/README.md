@@ -929,7 +929,7 @@ taken as written. `Tab` completes the path under the cursor.
 ### Slash commands
 
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/budget` `/clear`
-`/compact` `/fork` `/help` `/init` `/keys` `/layout` `/mcp` `/memory` `/model` `/notices` `/pane` `/permissions`
+`/compact` `/editor` `/fork` `/help` `/init` `/keys` `/layout` `/mcp` `/memory` `/model` `/notices` `/pane` `/permissions`
 `/rename` `/rewind` `/rules` `/sessions` `/share` `/theme` `/websearch` `/workflow`
 `/exit` (`/quit`).
 

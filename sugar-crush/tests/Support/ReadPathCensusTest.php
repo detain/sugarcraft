@@ -252,6 +252,10 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED — includeFile() reads an `@path` written inside a command file, behind this '
                 . 'file\'s own ContainedPath::within() compare against the checkout',
         ],
+        'Commands/EditorCommand.php|file_get_contents' => [
+            'SELF_LOCATED — the `/editor` temp file: tempnam() created it owner-only in the system temp '
+                . 'directory, it is read back once after the user\'s editor exits, and unlinked',
+        ],
         'Config/LayeredSettings.php|file_get_contents' => [
             // NOT `CONTAINED`, which is what this row said first and is true of only ONE of the two '
             // callers — the recurring defect in a single word. readFile() is private and both of its

@@ -262,6 +262,14 @@ final class CommandRegistry
                 paletteLabel: 'Dock pane right',
                 slashVisible: false,
             ),
+            // No key binding: Ctrl+G, the usual chord for this, is
+            // `shell.group-input` here, so the command is the one door.
+            CommandSpec::new(
+                'editor',
+                'Compose the prompt in $VISUAL or $EDITOR',
+                'App',
+                argumentHint: '[text]',
+            ),
             CommandSpec::new('compact', 'Manually compact chat history to save context', 'Session'),
             // Deliberately NOT `/new`: this wipes the transcript and keeps the
             // session id, so the session file on disk keeps accumulating the
