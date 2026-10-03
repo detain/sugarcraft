@@ -7,6 +7,8 @@ namespace SugarCraft\Crush\Agents;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookDispatcher;
 use SugarCraft\Crush\Hooks\HookDispatchResult;
+use SugarCraft\Crush\Sessions\BackgroundSupervisor;
+use SugarCraft\Crush\Support\ProcessTree;
 use SugarCraft\Crush\Support\TimedFileLock;
 
 /**
@@ -21,6 +23,20 @@ use SugarCraft\Crush\Support\TimedFileLock;
  * - TaskCompleted: dispatched after a task completes; block with continueOnBlock
  *                  marks the completion as contested
  * - TeammateIdle: dispatched when a teammate has no more tasks to work on
+ *
+ * Concurrency (roadmap 4.6-1):
+ * - Every write bumps the row's `revision`, and {@see claimTask()} /
+ *   {@see releaseTask()} are compare-and-swap on it: the UPDATE only lands
+ *   when the row is still at the revision the decision was made on, so a
+ *   complete/fail/status write from another process between the read and the
+ *   write turns the claim into a refusal instead of being silently undone.
+ *   Callers that read first can pass the {@see revision()} they saw.
+ * - Dependencies stay acyclic: {@see addTask()} and {@see addDependency()}
+ *   refuse an edge that would close a loop (a loop is a set of tasks none of
+ *   which can ever be claimed).
+ * - A claim records the claiming process (pid + kernel start time), and
+ *   {@see releaseOrphanedClaims()} puts the tasks of a claimant that died
+ *   mid-task back to pending.
  */
 final class TaskList
 {
@@ -76,10 +92,30 @@ final class TaskList
                 claimed_at      TEXT,
                 completed_at    TEXT,
                 depends_on      TEXT    NOT NULL DEFAULT '[]',
-                contested       INTEGER NOT NULL DEFAULT 0
+                contested       INTEGER NOT NULL DEFAULT 0,
+                revision        INTEGER NOT NULL DEFAULT 0,
+                claim_pid       INTEGER,
+                claim_started   INTEGER
             );
             SQL
         );
+
+        // A database created before these columns existed gets them added in
+        // place; CREATE TABLE IF NOT EXISTS leaves an existing table alone.
+        $present = [];
+        $info = $this->db->query('PRAGMA table_info(tasks)');
+        while ($info !== false && ($column = $info->fetchArray(\SQLITE3_ASSOC)) !== false) {
+            $present[(string) $column['name']] = true;
+        }
+        foreach ([
+            'revision' => 'INTEGER NOT NULL DEFAULT 0',
+            'claim_pid' => 'INTEGER',
+            'claim_started' => 'INTEGER',
+        ] as $name => $type) {
+            if (!isset($present[$name])) {
+                $this->db->exec("ALTER TABLE tasks ADD COLUMN {$name} {$type}");
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -94,6 +130,9 @@ final class TaskList
      *
      * @return string The task ID (same as $task->id)
      * @throws TaskBlockedException When a TaskCreated hook blocks the insertion
+     * @throws \InvalidArgumentException When $task's dependencies would close a
+     *         cycle (an id may be depended on before it exists, so a later task
+     *         can complete a loop the earlier ones started)
      */
     public function addTask(Task $task): string
     {
@@ -107,6 +146,16 @@ final class TaskList
         }
 
         $handle = $this->openForWrite();
+
+        try {
+            foreach ($task->dependsOn as $dependency) {
+                $this->refuseCycle($task->id, (string) $dependency);
+            }
+        } catch (\InvalidArgumentException $cycle) {
+            $this->closeForWrite($handle);
+
+            throw $cycle;
+        }
 
         $stmt = $this->db->prepare(
             <<<'SQL'
@@ -151,7 +200,7 @@ final class TaskList
         $handle = $this->openForWrite();
 
         $stmt = $this->db->prepare(
-            'UPDATE tasks SET status = :status WHERE id = :id'
+            'UPDATE tasks SET status = :status, revision = revision + 1 WHERE id = :id'
         );
         $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
         $stmt->bindValue(':status', $status->value, \SQLITE3_TEXT);
@@ -180,7 +229,8 @@ final class TaskList
         $stmt = $this->db->prepare(
             <<<'SQL'
             UPDATE tasks
-            SET status = :status, result = :result, completed_at = :completed_at
+            SET status = :status, result = :result, completed_at = :completed_at,
+                revision = revision + 1
             WHERE id = :id
             SQL
         );
@@ -218,7 +268,8 @@ final class TaskList
         $stmt = $this->db->prepare(
             <<<'SQL'
             UPDATE tasks
-            SET status = :status, error = :error, completed_at = :completed_at
+            SET status = :status, error = :error, completed_at = :completed_at,
+                revision = revision + 1
             WHERE id = :id
             SQL
         );
@@ -244,7 +295,7 @@ final class TaskList
     {
         $handle = $this->openForWrite();
 
-        $stmt = $this->db->prepare('UPDATE tasks SET contested = 1 WHERE id = :id');
+        $stmt = $this->db->prepare('UPDATE tasks SET contested = 1, revision = revision + 1 WHERE id = :id');
         $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
         $stmt->execute();
         $stmt->close();
@@ -361,10 +412,21 @@ final class TaskList
      *   1. It exists and is in 'pending' status
      *   2. All of its dependencies have been completed
      *   3. It is either unassigned or assigned to the claiming teammate
+     *   4. Its revision is still the one read here — and $expectedRevision,
+     *      when the caller passes the {@see revision()} it decided on
+     *
+     * The per-task lock only serialises CLAIMS; complete/fail/status writes
+     * take the database lock instead. The revision compare-and-swap is what
+     * keeps one of those landing between the read and the write from being
+     * overwritten by a stale claim.
+     *
+     * The claim records $ownerPid (default: this process) with its kernel
+     * start time, so {@see releaseOrphanedClaims()} can tell a claimant that
+     * died from one still working.
      *
      * @return bool true if the claim succeeded, false if the task is not claimable
      */
-    public function claimTask(string $taskId, string $teammateId): bool
+    public function claimTask(string $taskId, string $teammateId, ?int $expectedRevision = null, ?int $ownerPid = null): bool
     {
         // Per-task lock file prevents concurrent claim attempts on the same task
         $lockPath = $this->lockPathFor($taskId);
@@ -372,6 +434,11 @@ final class TaskList
 
         try {
             $task = $this->getTaskWithoutLock($taskId);
+            $revision = $this->revision($taskId);
+
+            if ($revision === null || ($expectedRevision !== null && $revision !== $expectedRevision)) {
+                return false;
+            }
 
             // Task must exist and be pending
             if ($task === null || $task->status !== TaskStatus::Pending) {
@@ -388,10 +455,9 @@ final class TaskList
                 return false;
             }
 
-            // Claim the task — update status and assignee atomically
-            $this->claimTaskInner($taskId, $teammateId);
-
-            return true;
+            // Claim the task — update status and assignee atomically, and only
+            // if nothing moved the row since it was read.
+            return $this->claimTaskInner($taskId, $teammateId, $revision, $ownerPid ?? (int) \getmypid());
         } finally {
             $this->releaseTaskLock($lockFp);
         }
@@ -407,44 +473,137 @@ final class TaskList
      * teammate the task still names). E136 gives Team::claimTask()'s rollback
      * a path that cannot touch a task some other teammate has since moved.
      *
+     * Compare-and-swap on the row's revision like {@see claimTask()}: a
+     * write that lands between the read and the release wins, and this call
+     * reports false.
+     *
      * @return bool true if this call released the claim; false when the task
-     *         is gone, no longer in progress, or no longer theirs — the
-     *         bookkeeping was someone else's to change by then.
+     *         is gone, no longer in progress, no longer theirs, or no longer at
+     *         $expectedRevision / the revision read here — the bookkeeping was
+     *         someone else's to change by then.
      */
-    public function releaseTask(string $taskId, string $teammateId): bool
+    public function releaseTask(string $taskId, string $teammateId, ?int $expectedRevision = null): bool
     {
         $lockPath = $this->lockPathFor($taskId);
         $lockFp = $this->acquireTaskLock($lockPath);
 
         try {
             $task = $this->getTaskWithoutLock($taskId);
+            $revision = $this->revision($taskId);
 
             if ($task === null
+                || $revision === null
+                || ($expectedRevision !== null && $revision !== $expectedRevision)
                 || $task->status !== TaskStatus::InProgress
                 || $task->assignedTo !== $teammateId
             ) {
                 return false;
             }
 
-            $handle = $this->openForWrite();
+            return $this->releaseClaimAt($taskId, $revision);
+        } finally {
+            $this->releaseTaskLock($lockFp);
+        }
+    }
 
+    /**
+     * Put every in-progress task whose claiming process has died back to
+     * pending and unassigned (crash recovery), and return their ids.
+     *
+     * A claim is orphaned when the pid it recorded is gone, is a zombie, or
+     * now belongs to a different process (its kernel start time no longer
+     * matches — a recycled pid is not the claimant come back). Claims made
+     * before claimants were recorded carry no pid and are left alone: there
+     * is nothing to judge them by. Each release is the same compare-and-swap
+     * as {@see releaseTask()}, so a task that finishes while this runs keeps
+     * its result.
+     *
+     * $isAlive is the liveness probe, `fn(int $pid, ?int $startTime): bool`;
+     * null uses procfs + signal 0.
+     *
+     * @param (callable(int, ?int): bool)|null $isAlive
+     * @return list<string>
+     */
+    public function releaseOrphanedClaims(?callable $isAlive = null): array
+    {
+        $isAlive ??= self::processAlive(...);
+
+        $stmt = $this->db->prepare(
+            'SELECT id, revision, claim_pid, claim_started FROM tasks WHERE status = :status AND claim_pid IS NOT NULL'
+        );
+        $stmt->bindValue(':status', TaskStatus::InProgress->value, \SQLITE3_TEXT);
+        $result = $stmt->execute();
+        $candidates = [];
+        while ($result !== false && ($row = $result->fetchArray(\SQLITE3_ASSOC)) !== false) {
+            $candidates[] = $row;
+        }
+        $stmt->close();
+
+        $released = [];
+        foreach ($candidates as $row) {
+            $started = $row['claim_started'] === null ? null : (int) $row['claim_started'];
+            if ($isAlive((int) $row['claim_pid'], $started)) {
+                continue;
+            }
+
+            $id = (string) $row['id'];
+            $lockFp = $this->acquireTaskLock($this->lockPathFor($id));
+            try {
+                if ($this->releaseClaimAt($id, (int) $row['revision'])) {
+                    $released[] = $id;
+                }
+            } finally {
+                $this->releaseTaskLock($lockFp);
+            }
+        }
+
+        return $released;
+    }
+
+    /**
+     * The task's current revision — bumped by every write — or null when the
+     * task does not exist. Pass it back to {@see claimTask()} /
+     * {@see releaseTask()} to make them conditional on nothing having changed
+     * since it was read.
+     */
+    public function revision(string $taskId): ?int
+    {
+        $stmt = $this->db->prepare('SELECT revision FROM tasks WHERE id = :id');
+        $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
+        $result = $stmt->execute();
+        $row = $result === false ? false : $result->fetchArray(\SQLITE3_ASSOC);
+        $stmt->close();
+
+        return \is_array($row) ? (int) $row['revision'] : null;
+    }
+
+    /**
+     * Set an in-progress task back to pending/unassigned iff it is still at
+     * $revision. Caller holds the task lock.
+     */
+    private function releaseClaimAt(string $taskId, int $revision): bool
+    {
+        $handle = $this->openForWrite();
+
+        try {
             $stmt = $this->db->prepare(
                 <<<'SQL'
                 UPDATE tasks
-                SET status = :status, assigned_to = NULL, claimed_at = NULL
-                WHERE id = :id
+                SET status = :pending, assigned_to = NULL, claimed_at = NULL,
+                    claim_pid = NULL, claim_started = NULL, revision = revision + 1
+                WHERE id = :id AND revision = :revision AND status = :in_progress
                 SQL
             );
             $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
-            $stmt->bindValue(':status', TaskStatus::Pending->value, \SQLITE3_TEXT);
+            $stmt->bindValue(':pending', TaskStatus::Pending->value, \SQLITE3_TEXT);
+            $stmt->bindValue(':in_progress', TaskStatus::InProgress->value, \SQLITE3_TEXT);
+            $stmt->bindValue(':revision', $revision, \SQLITE3_INTEGER);
             $stmt->execute();
             $stmt->close();
 
-            $this->closeForWrite($handle);
-
-            return true;
+            return $this->db->changes() === 1;
         } finally {
-            $this->releaseTaskLock($lockFp);
+            $this->closeForWrite($handle);
         }
     }
 
@@ -452,8 +611,12 @@ final class TaskList
      * Add a dependency to a task.
      *
      * The dependent task will not be claimable until the dependency is completed.
+     * $dependsOn may name a task that does not exist yet.
      *
      * @throws \SQLite3Exception When the task does not exist
+     * @throws \InvalidArgumentException When the edge would close a cycle
+     *         (including a task depending on itself): every task on a cycle
+     *         waits on another, so none of them could ever be claimed
      */
     public function addDependency(string $taskId, string $dependsOn): void
     {
@@ -471,13 +634,21 @@ final class TaskList
             throw new \SQLite3Exception("Task not found: {$taskId}");
         }
 
+        try {
+            $this->refuseCycle($taskId, $dependsOn);
+        } catch (\InvalidArgumentException $cycle) {
+            $this->closeForWrite($handle);
+
+            throw $cycle;
+        }
+
         $deps = json_decode($row['depends_on'], true, 512, JSON_THROW_ON_ERROR);
         if (!in_array($dependsOn, $deps, true)) {
             $deps[] = $dependsOn;
         }
 
         // Update the depends_on array
-        $updateStmt = $this->db->prepare('UPDATE tasks SET depends_on = :depends_on WHERE id = :id');
+        $updateStmt = $this->db->prepare('UPDATE tasks SET depends_on = :depends_on, revision = revision + 1 WHERE id = :id');
         $updateStmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
         $updateStmt->bindValue(':depends_on', json_encode($deps, JSON_THROW_ON_ERROR), \SQLITE3_TEXT);
         $updateStmt->execute();
@@ -638,24 +809,112 @@ final class TaskList
 
     /**
      * Perform the actual claim update — caller must hold the task lock.
+     *
+     * @return bool false when the row is no longer at $revision (lost the CAS)
      */
-    private function claimTaskInner(string $taskId, string $teammateId): void
+    private function claimTaskInner(string $taskId, string $teammateId, int $revision, int $ownerPid): bool
     {
         $now = (new \DateTimeImmutable())->format(\DateTimeImmutable::ATOM);
+        $started = BackgroundSupervisor::procStartTime($ownerPid);
 
         $stmt = $this->db->prepare(
             <<<'SQL'
             UPDATE tasks
-            SET status = :status, assigned_to = :assigned_to, claimed_at = :claimed_at
-            WHERE id = :id
+            SET status = :status, assigned_to = :assigned_to, claimed_at = :claimed_at,
+                claim_pid = :claim_pid, claim_started = :claim_started, revision = revision + 1
+            WHERE id = :id AND revision = :revision
             SQL
         );
         $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
         $stmt->bindValue(':status', TaskStatus::InProgress->value, \SQLITE3_TEXT);
         $stmt->bindValue(':assigned_to', $teammateId, \SQLITE3_TEXT);
         $stmt->bindValue(':claimed_at', $now, \SQLITE3_TEXT);
+        $stmt->bindValue(':claim_pid', $ownerPid, \SQLITE3_INTEGER);
+        $stmt->bindValue(':claim_started', $started, $started === null ? \SQLITE3_NULL : \SQLITE3_INTEGER);
+        $stmt->bindValue(':revision', $revision, \SQLITE3_INTEGER);
         $stmt->execute();
         $stmt->close();
+
+        return $this->db->changes() === 1;
+    }
+
+    /**
+     * Throw when adding the edge $taskId → $dependsOn would close a cycle,
+     * i.e. when $taskId is already reachable from $dependsOn (or is it).
+     *
+     * Walks the stored depends_on lists breadth-first; ids with no row yet
+     * end their branch. Caller holds the database write lock, so the graph
+     * cannot change under the walk.
+     *
+     * @throws \InvalidArgumentException naming the loop
+     */
+    private function refuseCycle(string $taskId, string $dependsOn): void
+    {
+        $edges = [];
+        $result = $this->db->query('SELECT id, depends_on FROM tasks');
+        while ($result !== false && ($row = $result->fetchArray(\SQLITE3_ASSOC)) !== false) {
+            $deps = json_decode((string) $row['depends_on'], true);
+            $edges[(string) $row['id']] = \is_array($deps) ? array_map('strval', $deps) : [];
+        }
+
+        // $via[x] = the task x was reached from, to print the loop.
+        $via = [$dependsOn => null];
+        $queue = [$dependsOn];
+        while ($queue !== []) {
+            $current = array_shift($queue);
+            if ($current === $taskId) {
+                $chain = [];
+                for ($node = $current; $node !== null; $node = $via[$node]) {
+                    $chain[] = $node;
+                }
+                $path = [$taskId, ...array_reverse($chain)];
+
+                throw new \InvalidArgumentException(sprintf(
+                    'Task dependency would create a cycle: %s',
+                    implode(' -> ', $path),
+                ));
+            }
+            foreach ($edges[$current] ?? [] as $next) {
+                if (!\array_key_exists($next, $via)) {
+                    $via[$next] = $current;
+                    $queue[] = $next;
+                }
+            }
+        }
+    }
+
+    /**
+     * The default {@see releaseOrphanedClaims()} probe: is $pid alive and,
+     * when a start time was recorded, still the same process?
+     *
+     * A zombie counts as dead (it will do no more work). When procfs cannot
+     * answer the start time, signal 0 decides, so an unreadable /proc errs
+     * toward "alive" — a claim held a little longer, never one stolen from a
+     * claimant still working.
+     */
+    private static function processAlive(int $pid, ?int $startTime): bool
+    {
+        if ($pid <= 0) {
+            return false;
+        }
+
+        $stat = ProcessTree::stat($pid);
+        if ($stat !== null && ($stat['state'] === 'Z' || $stat['state'] === 'X')) {
+            return false;
+        }
+
+        if ($startTime !== null) {
+            $observed = BackgroundSupervisor::procStartTime($pid);
+            if ($observed !== null) {
+                return $observed === $startTime;
+            }
+        }
+
+        if (!\function_exists('posix_kill')) {
+            return $stat !== null;
+        }
+
+        return \posix_kill($pid, 0) || \posix_get_last_error() === 1; // EPERM: alive, another uid
     }
 
     /**

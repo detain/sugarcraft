@@ -212,6 +212,7 @@ sugar-crush/tests/MCP/ClaudeCodeMcpServerTest.php	1.034	12
 sugar-crush/tests/Runtime/ToolCallIdUniquenessTest.php	1.025	2
 sugar-crush/tests/Backend/BackendSignatureNullabilityTest.php	1.013	37
 sugar-crush/tests/Providers/RuntimeLengthStopFoldTest.php	1.012	5
+sugar-crush/tests/Agents/TaskListCasAndCycleTest.php	1.000	11
 sugar-crush/tests/Integration/MultiAgentRefactorTest.php	0.999	4
 sugar-crush/tests/SuiteChildStdinPrependResidualTest.php	0.975	1
 sugar-crush/tests/Workflows/WorkflowEngineCancellationTest.php	0.952	6
