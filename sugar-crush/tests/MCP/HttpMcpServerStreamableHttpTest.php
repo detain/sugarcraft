@@ -454,12 +454,15 @@ final class HttpMcpServerStreamableHttpTest extends TestCase
             new Response(200),
         ]);
 
+        $caught = null;
         try {
             $server->start();
-            self::fail('a tools/list reply without a result started the server');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('tools/list returned no result', $e->getMessage());
+            $caught = $e;
         }
+
+        self::assertNotNull($caught, 'a tools/list reply without a result started the server');
+        self::assertStringContainsString('tools/list returned no result', $caught->getMessage());
 
         self::assertCount(4, $this->history, 'the failed start must end the session the server issued');
         $this->assertSessionDelete(3);
@@ -496,12 +499,15 @@ final class HttpMcpServerStreamableHttpTest extends TestCase
     {
         $server = $this->server([self::initReply(), new Response(400, [], 'Bad Request'), new Response(200)]);
 
+        $caught = null;
         try {
             $server->start();
-            self::fail('a refused notifications/initialized started the server');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('HTTP 400 Bad Request: Bad Request', $e->getMessage());
+            $caught = $e;
         }
+
+        self::assertNotNull($caught, 'a refused notifications/initialized started the server');
+        self::assertStringContainsString('HTTP 400 Bad Request: Bad Request', $caught->getMessage());
 
         self::assertCount(3, $this->history, 'the failed start must end the session the server issued');
         $this->assertSessionDelete(2);

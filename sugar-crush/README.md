@@ -1392,16 +1392,20 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**16,404 tests / 316,385 assertions, 0 failures, 1 skipped** — the whole of
+**16,416 tests / 316,514 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-20m49s. Measured 2026-10-03, after the library-fix round against
-`crush_libs.md` and its sugar-crush follow-ups (full-query palette and slash-command
+21m07s. Measured 2026-10-03, after the second library-fix round against
+`crush_libs.md` (slash commands admitted on any anchored full-query alignment,
+MCP error codes, `/proc` starttime reads, the LSP note journal, and ending the
+HTTP MCP session when a start fails after the handshake) added 12 tests. Before
+that, 16,404/316,385 earlier on 2026-10-03, after the first library-fix round
+and its sugar-crush follow-ups (full-query palette and slash-command
 matching, `TextSelection` on candy-mouse, malformed zone markup in `scanRoot`,
 the terminal-background agreement with candy-sprinkles, MCP/LSP exchange-lock
 hardening with the `tools/list` gate and liveness probes, and posix-less
 fallbacks for the home directory and background-session liveness) added 54
-tests. Before that, 16,350/292,129 later on 2026-10-02, after audit waves w7 to
+tests, in 20m49s; 16,350/292,129 later on 2026-10-02, after audit waves w7 to
 w11 (provider gating and MCP OAuth, permission modes, the scrubbed spawn
 environment, the SGLang server limits, the session lock and read-only second
 window, prompt cache marks and pricing, Esc Esc for workflows, and
