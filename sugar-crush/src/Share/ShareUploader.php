@@ -14,6 +14,12 @@ use RuntimeException;
  * lied to the user about what /share had actually done. Until a real
  * backend is configured, this reports the honest failure instead.
  *
+ * DORMANT, OPT-IN (roadmap X-35a). `/share` writes a local file by default;
+ * it reaches this class only when `SUGARCRUSH_SHARE_UPLOAD_URL` (or the
+ * deprecated `SUGAR_CRUSH_SHARE_UPLOAD_URL`) names a host, and then still
+ * writes the local file and says the upload did not happen. Kept, not
+ * deleted, so a real backend has one seam to land in.
+ *
  * @mirrors charmbracelet/<repo>.ShareUploader
  */
 final class ShareUploader

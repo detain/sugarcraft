@@ -1524,27 +1524,33 @@ final class ChatTest extends TestCase
         }
         $this->assertSame('Share session', $current->paletteMatches()[0]);
 
-        // A bare Chat() has no session store, so the real ShareCommand this
-        // dispatches through legitimately has nothing to share and exits
-        // non-zero. The claim here is unchanged -- dispatch reached the REAL
-        // handler and closed the palette, not that it succeeded -- but the
-        // evidence for it moved, because the thing it used to cite was a bug.
+        // The REAL ShareCommand runs: since X-35a it writes a local export
+        // under the sandboxed HOME and its reply names the file. The claim is
+        // unchanged -- dispatch reached the real handler and closed the
+        // palette -- and the evidence is the reply it left behind.
         //
         // This asserted `assertNotNull($cmd)` and its comment named "the
         // print-closure path", so it was pinning `fn() => print $output` as the
         // proof of dispatch. That closure was a Cmd evaluating to `int 1`, which
         // Program::dispatch() rejects with a TypeError -- a user hit it on a bare
-        // `/websearch` and the app died. A failing command now reports in the
+        // `/websearch` and the app died. A command now reports in the
         // transcript and returns NO Cmd, so the evidence that the handler ran is
         // the message it left behind.
         [$next, $cmd] = $current->update(new KeyMsg(KeyType::Enter, ''));
         $this->assertNull($next->palette());
-        $this->assertNull($cmd, 'a failing command must not hand the program a Cmd');
+        $this->assertNull($cmd, 'a slash command must not hand the program a Cmd');
 
         $added = array_slice($next->history, \count($chat->history));
         $this->assertNotSame([], $added, 'the real handler ran, so it must have reported something');
-        $this->assertSame(Role::System, $added[\count($added) - 1]->role);
-        $this->assertStringContainsString('not yet implemented', $added[\count($added) - 1]->content);
+        $reply = $added[\count($added) - 1];
+        $this->assertSame(Role::Assistant, $reply->role);
+        $this->assertSame(1, preg_match('/to `([^`]+)`/', $reply->content, $written), 'the reply names the written file');
+        $this->assertFileExists($written[1]);
+
+        // Leave the sandboxed HOME empty, so tearDown()'s rmdir() can take it.
+        @unlink($written[1]);
+        @rmdir(\dirname($written[1]));
+        @rmdir(\dirname($written[1], 2));
     }
 
     public function testPaletteSwitchModelTransitionsToProviderListWithoutClosing(): void

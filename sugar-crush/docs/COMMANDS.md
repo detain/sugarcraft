@@ -287,7 +287,7 @@ it does not; the *What the row says* column is its `description`.
 | `/new` | | | — | Start a fresh session |
 | `/sessions` | ✓ | | — | List all sessions |
 | `/model` | ✓ | ✓ | `[provider]` | Switch the active model provider |
-| `/share` | ✓ | | `[format] [expiry]` | Share the current session |
+| `/share` | ✓ | | `[md\|html\|json] [path]` | Export the session to a file |
 | `/docs` | | | — | Open the documentation |
 | `/exit` | ✓ | ✓ | — | Quit the app |
 | `/theme` | ✓ | | — | Switch the color theme |

@@ -12189,7 +12189,8 @@ final class Chat implements Model
     }
 
     /**
-     * Handle /share command locally.
+     * Handle /share: export the session to a local file (roadmap X-35a). The
+     * reply is {@see ShareCommand}'s own output, which names the written path.
      *
      * @return array{0:Chat,1:?\Closure}
      */
@@ -12210,7 +12211,7 @@ final class Chat implements Model
             return $this->commandFailureResponse($inputBuf, $output, $exitCode);
         }
 
-        return $this->shareResponse($inputBuf, $output);
+        return $this->shareResponse($inputBuf, trim((string) $output));
     }
 
     /**

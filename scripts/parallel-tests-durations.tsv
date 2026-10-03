@@ -437,6 +437,7 @@ sugar-crush/tests/Tools/UndecidableIgnoreRuleNoteTest.php	0.052	6
 sugar-crush/tests/Tools/BuiltIn/UnifiedDiffEquivalenceTest.php	0.052	44
 sugar-crush/tests/Tui/McpPanelTest.php	0.052	17
 sugar-crush/tests/Tools/BuiltIn/EditFailureHintsTest.php	0.052	10
+sugar-crush/tests/Commands/ShareLocalExportTest.php	0.052	8
 sugar-crush/tests/MCP/OAuthClientRegistrationTest.php	0.051	46
 sugar-crush/tests/Context/PromptFenceAttributeTagTest.php	0.050	141
 sugar-crush/tests/Agents/AgentDefinitionTest.php	0.050	40

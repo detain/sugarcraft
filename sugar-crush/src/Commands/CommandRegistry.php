@@ -111,11 +111,13 @@ final class CommandRegistry
             ),
             CommandSpec::new(
                 'share',
-                'Share the current session',
+                'Export the session to a file',
                 'Session',
                 paletteAction: PaletteAction::ShareSession,
                 paletteLabel: 'Share session',
-                argumentHint: '[format] [expiry]',
+                // X-35a: a local export, `~/.sugar-crush/exports/` by default
+                // or a path inside the project. See ShareCommand.
+                argumentHint: '[md|html|json] [path]',
             ),
             CommandSpec::new(
                 'docs',

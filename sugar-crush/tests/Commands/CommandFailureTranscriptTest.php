@@ -78,14 +78,19 @@ final class CommandFailureTranscriptTest extends TestCase
         $this->assertStringContainsString('Usage: /websearch', $added[1]->content);
     }
 
-    public function testShareWithNoArgumentsReportsInTheTranscriptAndReturnsNoCmd(): void
+    /**
+     * A bare `/share` SUCCEEDS since X-35a (it writes a local export), so the
+     * failing branch is reached with a path outside the project — refused
+     * before anything is written.
+     */
+    public function testShareWithAPathOutsideTheProjectReportsInTheTranscriptAndReturnsNoCmd(): void
     {
-        [$added, $cmd] = $this->submit('/share');
+        [$added, $cmd] = $this->submit('/share ../outside-the-project.md');
 
         $this->assertNull($cmd);
         $this->assertCount(2, $added);
         $this->assertSame(Role::System, $added[1]->role);
-        $this->assertStringContainsString('not yet implemented', $added[1]->content);
+        $this->assertStringContainsString('must stay inside the project root', $added[1]->content);
     }
 
     public function testShareWithAnInvalidFormatReportsInTheTranscriptAndReturnsNoCmd(): void
@@ -127,7 +132,7 @@ final class CommandFailureTranscriptTest extends TestCase
      */
     public function testTheFailureNoticeIsNeverAnAssistantTurn(): void
     {
-        foreach (['/websearch', '/share', '/share bogusformat'] as $draft) {
+        foreach (['/websearch', '/share ../outside-the-project.md', '/share bogusformat'] as $draft) {
             [$added] = $this->submit($draft);
             // Counted BEFORE indexing, and that is the point rather than
             // defensiveness: against the unfixed code these handlers appended

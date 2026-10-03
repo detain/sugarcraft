@@ -12,19 +12,29 @@ use SugarCraft\Crush\Util\Exporter;
  * Represents a session prepared for sharing.
  *
  * Extracts and serializes the conversation history from a Chat instance
- * into shareable export formats (Markdown, JSON, plain text).
+ * into shareable export formats (Markdown, self-contained HTML, JSON, plain
+ * text). `/share` writes the result to a local file (roadmap X-35a); the
+ * upload path through {@see ShareUploader} is a dormant opt-in.
+ *
+ * WHAT IS EXPORTED: the rows a backend may be shown
+ * ({@see Message::agentVisible()}'s rule — not `uiOnly`) plus the tool rows
+ * (a message carrying tool results), so a reader sees what the model saw and
+ * what its tools answered. App chrome — notices, command echoes, the
+ * transient "tool is running" placeholders — is left out.
  *
  * @mirrors charmbracelet/<repo>.ShareSession
  */
 final class ShareSession
 {
     public const FORMAT_MARKDOWN = 'markdown';
+    public const FORMAT_HTML = 'html';
     public const FORMAT_JSON = 'json';
     public const FORMAT_TEXT = 'text';
 
     /** @var list<string> Supported export formats */
     public const SUPPORTED_FORMATS = [
         self::FORMAT_MARKDOWN,
+        self::FORMAT_HTML,
         self::FORMAT_JSON,
         self::FORMAT_TEXT,
     ];
@@ -49,7 +59,9 @@ final class ShareSession
         // (not the SugarCraft\Crush\Messages\Message interface).
         $this->messages = array_values(array_filter(
             $messages,
-            static fn(mixed $m): bool => $m instanceof Message,
+            static fn(mixed $m): bool => $m instanceof Message
+                && $m->pendingToolCallId === null
+                && (!$m->uiOnly || $m->toolResults !== []),
         ));
     }
 
@@ -95,6 +107,7 @@ final class ShareSession
         // Use wire format (toWire()) for export - handles the concrete Message type
         return match ($this->format) {
             self::FORMAT_JSON => Exporter::toJson($this->messages),
+            self::FORMAT_HTML => Exporter::toHtml($this->messages),
             self::FORMAT_TEXT => Exporter::toText($this->messages),
             default => Exporter::toMarkdown($this->messages),
         };
@@ -115,6 +128,7 @@ final class ShareSession
     {
         return match ($this->format) {
             self::FORMAT_JSON => 'application/json',
+            self::FORMAT_HTML => 'text/html',
             self::FORMAT_TEXT => 'text/plain',
             default => 'text/markdown',
         };
@@ -127,6 +141,7 @@ final class ShareSession
     {
         return match ($this->format) {
             self::FORMAT_JSON => 'json',
+            self::FORMAT_HTML => 'html',
             self::FORMAT_TEXT => 'txt',
             default => 'md',
         };

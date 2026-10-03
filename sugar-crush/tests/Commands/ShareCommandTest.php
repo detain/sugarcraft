@@ -12,143 +12,99 @@ use SugarCraft\Crush\Message;
 /**
  * @see ShareCommand
  *
- * No real /share upload backend exists yet. ShareUploader::upload() always
- * throws, so ShareCommand must report that honestly and must never print a
- * fabricated success URL or hash.
+ * Argument parsing and the opt-in upload host. The local export itself is
+ * pinned by {@see ShareLocalExportTest}. ShareUploader still has no backend,
+ * so no test here may ever see a fabricated success URL.
  */
 final class ShareCommandTest extends TestCase
 {
     /** @var array<string, string|false> Original values of every variable a test overrode. */
     private array $envBackup = [];
 
+    private string $exportsDir = '';
+
     // =========================================================================
-    // Honest failure path
+    // Argument parsing
     // =========================================================================
 
-    public function testExecuteReportsNotImplemented(): void
+    public function testExecuteWithInvalidFormat(): void
     {
-        $chat = $this->createChatWithMessages();
-        $command = new ShareCommand();
-
-        ob_start();
-        $exitCode = $command->execute($chat, []);
-        $output = ob_get_clean();
+        [$exitCode, $output] = $this->share(['invalid_format']);
 
         $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('not yet implemented', $output);
-        $this->assertStringContainsString('No data was uploaded', $output);
+        $this->assertStringContainsString("Invalid format 'invalid_format'", $output);
+        $this->assertStringContainsString('Usage: /share [md|html|json|text] [path]', $output);
+        $this->assertFalse(is_dir($this->exportsDir), 'a refused command writes nothing');
     }
 
-    public function testExecuteNeverFabricatesUrlOrHash(): void
+    public function testExecuteWithTooManyArgumentsIsRefused(): void
     {
-        $chat = $this->createChatWithMessages();
-        $command = new ShareCommand();
+        [$exitCode, $output] = $this->share(['json', 'out.json', 'extra_arg']);
 
-        ob_start();
-        $command->execute($chat, ['markdown', '1h']);
-        $output = ob_get_clean();
-
-        // The old behaviour claimed success and printed a signed-looking
-        // URL even though nothing was ever uploaded. None of that may
-        // appear anywhere in the output now.
-        $this->assertStringNotContainsString('Session shared successfully', $output);
-        $this->assertStringNotContainsString('URL:', $output);
-        $this->assertStringNotContainsString('share.sugarcraft.dev', $output);
-        $this->assertStringNotContainsString('https://', $output);
-        $this->assertStringNotContainsString('Expires:', $output);
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Too many arguments', $output);
     }
 
     /**
      * @dataProvider formatProvider
      */
-    public function testExecuteReportsNotImplementedForEveryFormat(string $formatArg): void
+    public function testEveryFormatWordExportsWithItsExtension(string $formatArg, string $extension): void
     {
-        $chat = $this->createChatWithMessages();
-        $command = new ShareCommand();
+        $this->setEnv('SUGARCRUSH_SHARE_UPLOAD_URL', null);
+        $this->setEnv('SUGAR_CRUSH_SHARE_UPLOAD_URL', null);
 
-        ob_start();
-        $exitCode = $command->execute($chat, [$formatArg]);
-        $output = ob_get_clean();
+        [$exitCode, $output] = $this->share([$formatArg]);
 
-        // The fabrication bug was independent of format; the honest
-        // failure path must be too.
-        $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('not yet implemented', $output);
+        $this->assertSame(0, $exitCode);
+        $this->assertSame(1, preg_match('/to `([^`]+)`/', $output, $written));
+        $this->assertStringEndsWith('.' . $extension, $written[1]);
+        $this->assertFileExists($written[1]);
     }
 
     /**
-     * @return array<string, list<string>>
+     * @return array<string, array{0: string, 1: string}>
      */
     public static function formatProvider(): array
     {
         return [
-            'markdown' => ['markdown'],
-            'md alias' => ['md'],
-            'json' => ['json'],
-            'text' => ['text'],
-            'plain alias' => ['plain'],
+            'markdown' => ['markdown', 'md'],
+            'md alias' => ['md', 'md'],
+            'html' => ['html', 'html'],
+            'json' => ['json', 'json'],
+            'text' => ['text', 'txt'],
+            'plain alias' => ['plain', 'txt'],
         ];
     }
 
-    public function testExecuteWithEmptyChatAlsoReportsNotImplemented(): void
+    public function testNoUploadHostMeansNoUploadLine(): void
     {
-        $chat = new Chat([]);
-        $command = new ShareCommand();
+        $this->setEnv('SUGARCRUSH_SHARE_UPLOAD_URL', null);
+        $this->setEnv('SUGAR_CRUSH_SHARE_UPLOAD_URL', null);
 
-        ob_start();
-        $exitCode = $command->execute($chat, ['markdown']);
-        $output = ob_get_clean();
+        [$exitCode, $output] = $this->share([]);
 
-        $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('not yet implemented', $output);
+        $this->assertSame(0, $exitCode);
+        $this->assertStringNotContainsString('Upload', $output);
+        $this->assertStringNotContainsString('https://', $output);
     }
 
-    public function testExecuteWithCustomExpiryStillReportsNotImplemented(): void
+    /**
+     * The opt-in path reaches the dormant uploader, which still always fails:
+     * the export is written anyway and the reply says the upload did not
+     * happen. The old fabricated "shared successfully" URL must never appear.
+     */
+    public function testAnUploadHostStillWritesLocallyAndSaysTheUploadDidNotHappen(): void
     {
-        $chat = $this->createChatWithMessages();
-        $command = new ShareCommand();
+        $this->setEnv('SUGARCRUSH_SHARE_UPLOAD_URL', 'https://private.example');
 
-        ob_start();
-        $exitCode = $command->execute($chat, ['markdown', '30m']);
-        $output = ob_get_clean();
+        [$exitCode, $output] = $this->share(['markdown']);
 
-        $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('not yet implemented', $output);
-    }
-
-    // =========================================================================
-    // Format Parsing Tests (unaffected by the upload path)
-    // =========================================================================
-
-    public function testExecuteWithInvalidFormat(): void
-    {
-        $chat = $this->createChatWithMessages();
-        $command = new ShareCommand();
-
-        ob_start();
-        $exitCode = $command->execute($chat, ['invalid_format']);
-        $output = ob_get_clean();
-
-        $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('Invalid format', $output);
-        // A format error is a different failure than "not implemented" —
-        // must not be conflated with the upload failure message.
-        $this->assertStringNotContainsString('not yet implemented', $output);
-    }
-
-    public function testExecuteWithMultipleArgsStillParsesButReportsNotImplemented(): void
-    {
-        $chat = $this->createChatWithMessages();
-        $command = new ShareCommand();
-
-        ob_start();
-        $exitCode = $command->execute($chat, ['json', '24h', 'extra_arg']);
-        $output = ob_get_clean();
-
-        // Should still parse args correctly and only use the first two,
-        // but the honest failure path still applies.
-        $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('not yet implemented', $output);
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('Exported ', $output);
+        $this->assertStringContainsString('Upload to https://private.example did not happen', $output);
+        $this->assertStringContainsString('No data was uploaded', $output);
+        $this->assertStringNotContainsString('Session shared successfully', $output);
+        $this->assertStringNotContainsString('Share URL:', $output);
     }
 
     // =========================================================================
@@ -157,6 +113,13 @@ final class ShareCommandTest extends TestCase
     // (crush_code.md Phase 4 item 4).
     // =========================================================================
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->exportsDir = sys_get_temp_dir() . '/share_command_' . bin2hex(random_bytes(6));
+    }
+
     protected function tearDown(): void
     {
         foreach ($this->envBackup as $name => $original) {
@@ -164,15 +127,21 @@ final class ShareCommandTest extends TestCase
         }
         $this->envBackup = [];
 
+        foreach (glob($this->exportsDir . '/*') ?: [] as $file) {
+            @unlink($file);
+        }
+        @rmdir($this->exportsDir);
+
         parent::tearDown();
     }
 
-    public function testUploadBaseUrlDefaultsWhenNeitherVariableIsSet(): void
+    /** X-35a: no public default host — unset means "do not upload". */
+    public function testUploadBaseUrlIsNullWhenNeitherVariableIsSet(): void
     {
         $this->setEnv('SUGARCRUSH_SHARE_UPLOAD_URL', null);
         $this->setEnv('SUGAR_CRUSH_SHARE_UPLOAD_URL', null);
 
-        $this->assertSame('https://share.sugarcraft.dev', $this->uploadBaseUrl());
+        $this->assertNull($this->uploadBaseUrl());
     }
 
     public function testCanonicalVariableSetsTheUploadBaseUrl(): void
@@ -220,15 +189,31 @@ final class ShareCommandTest extends TestCase
     // =========================================================================
 
     /**
-     * The resolved upload base URL. Read directly because the only production
+     * The resolved upload host. Read directly because the only production
      * caller hands it to ShareUploader, which always throws while no upload
-     * backend exists — so the value never reaches any observable output.
+     * backend exists.
      */
-    private function uploadBaseUrl(): string
+    private function uploadBaseUrl(): ?string
     {
         $method = new \ReflectionMethod(ShareCommand::class, 'getUploadBaseUrl');
 
-        return (string) $method->invoke(new ShareCommand());
+        return $method->invoke(new ShareCommand());
+    }
+
+    /**
+     * Run the command against the fixture chat, exporting into this test's
+     * own directory.
+     *
+     * @param list<string> $args
+     * @return array{0: int, 1: string}
+     */
+    private function share(array $args): array
+    {
+        ob_start();
+        $exitCode = (new ShareCommand($this->exportsDir))->execute($this->createChatWithMessages(), $args);
+        $output = (string) ob_get_clean();
+
+        return [$exitCode, $output];
     }
 
     /**
