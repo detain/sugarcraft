@@ -238,6 +238,11 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      * the real agent turn for $task and appends its answer to the session
      * buffer file while the daemon keeps servicing HEARTBEAT/RESUME/STOP.
      *
+     * $forkedSessionId names the stored session a `/fork` copied: the runner
+     * loads its transcript as the turn's history and writes the reply back
+     * into it. Only the id reaches the daemon — see
+     * {@see buildSessionDaemonCode()} for why never the transcript itself.
+     *
      * @return BackgroundSession The newly spawned session
      * @throws \RuntimeException If the private IPC directory or files cannot be
      *         created, or the child fails to authenticate within the handshake
@@ -250,6 +255,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         string $workingDirectory,
         int $timeoutSeconds = 3600,
         ?array $tags = null,
+        ?string $forkedSessionId = null,
     ): BackgroundSession {
         $sessionId = $this->generateSessionId();
         // All four files live inside a 0700 per-process directory rather than
@@ -308,6 +314,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
                 $agent->provider,
                 $agent->model,
                 $timeoutSeconds,
+                $forkedSessionId,
             ),
         ];
 
@@ -493,6 +500,11 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      * keeps appending to the buffer, and every file it creates from here on
      * should be owner-only for its whole life, not merely inside a 0700
      * directory that a wider mode would keep leaning on.
+     *
+     * For the same argv reason a `/fork` passes the forked session's ID and
+     * never its transcript: the runner reads the rows from the 0600 session
+     * store itself ({@see BackgroundSessionRunner::executeTask()}). The key is
+     * left out entirely for a plain `/bg`.
      */
     public function buildSessionDaemonCode(
         string $socketPath,
@@ -504,6 +516,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         string $provider,
         string $model,
         int $timeoutSeconds,
+        ?string $forkedSessionId = null,
     ): string {
         $config = [
             'sessionId' => $sessionId,
@@ -516,6 +529,9 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             'model' => $model,
             'timeoutSeconds' => $timeoutSeconds,
         ];
+        if ($forkedSessionId !== null && $forkedSessionId !== '') {
+            $config['forkedSessionId'] = $forkedSessionId;
+        }
 
         return sprintf(
             '

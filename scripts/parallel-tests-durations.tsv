@@ -66,6 +66,7 @@ sugar-crush/tests/Integration/ParallelTaskFanOutCapTest.php	5.177	4
 sugar-crush/tests/Chat/ProviderSwitchKeepsTaskToolTest.php	5.132	3
 sugar-crush/tests/Integration/ParallelToolCallsTest.php	4.957	27
 sugar-crush/tests/Workflows/WorkflowStageTimeoutTest.php	4.951	4
+sugar-crush/tests/Sessions/ForkCarriesHistoryTest.php	4.800	8
 sugar-crush/tests/Backend/EngineBackendTest.php	4.743	35
 sugar-crush/tests/SwallowingCatchCensusTest.php	4.709	2
 sugar-crush/tests/ChatTest.php	4.663	254

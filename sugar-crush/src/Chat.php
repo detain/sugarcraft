@@ -14747,7 +14747,7 @@ final class Chat implements Model
      * transcript line needs.
      *
      * @param string      $command         '/bg' or '/fork', echoed back in the transcript line.
-     * @param string|null $forkedSessionId Transcript clone this session continues, tagged onto it; null for a plain /bg.
+     * @param string|null $forkedSessionId Transcript clone this session continues (the daemon loads it as history and saves the reply into it); null for a plain /bg.
      */
     private function scheduleBackgroundSpawn(string $command, string $name, string $task, ?string $forkedSessionId): \Closure
     {
@@ -14779,7 +14779,7 @@ final class Chat implements Model
         $workingDirectory = $this->projectRoot() ?: '.';
         $tags = $forkedSessionId === null ? null : ['fork', 'session:' . $forkedSessionId];
 
-        return Cmd::promise(static function () use ($supervisor, $command, $name, $task, $agent, $workingDirectory, $tags): PromiseInterface {
+        return Cmd::promise(static function () use ($supervisor, $command, $name, $task, $agent, $workingDirectory, $tags, $forkedSessionId): PromiseInterface {
             try {
                 $session = $supervisor->spawnSession(
                     name: $name,
@@ -14787,6 +14787,7 @@ final class Chat implements Model
                     task: $task,
                     workingDirectory: $workingDirectory,
                     tags: $tags,
+                    forkedSessionId: $forkedSessionId,
                 );
 
                 return \React\Promise\resolve(new BackgroundSessionSpawnedMsg($command, $name, $session->id));

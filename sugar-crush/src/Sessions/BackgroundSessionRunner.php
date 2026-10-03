@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Sessions;
 
 use SugarCraft\Crush\Backend;
+use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Cli\PermissionConfigException;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\ToolRefusal;
+use SugarCraft\Crush\Session\EnhancedSessionStore;
+use SugarCraft\Crush\Session\SessionLock;
 use SugarCraft\Crush\Support\ProcessReaper;
 
 /**
@@ -185,6 +188,7 @@ final class BackgroundSessionRunner
         public readonly string $model = '',
         public readonly int $timeoutSeconds = 3600,
         public readonly string $tokenPath = '',
+        public readonly string $forkedSessionId = '',
     ) {}
 
     /**
@@ -204,6 +208,7 @@ final class BackgroundSessionRunner
             model: (string) ($config['model'] ?? ''),
             timeoutSeconds: (int) ($config['timeoutSeconds'] ?? 3600),
             tokenPath: (string) ($config['tokenPath'] ?? ''),
+            forkedSessionId: (string) ($config['forkedSessionId'] ?? ''),
         );
     }
 
@@ -357,15 +362,39 @@ final class BackgroundSessionRunner
      * {@see self::noticeRefusal()} carries the measurement of where the line
      * had to go.
      *
+     * A `/fork` session ({@see self::$forkedSessionId} set) CONTINUES the
+     * transcript `/fork` copied rather than starting from nothing (Part II
+     * #30): the copy's agent-visible rows go to the backend ahead of the task,
+     * and the task plus the reply are written back into the copy, so the fork
+     * is a real session `/sessions` can open and continue. The copy is read
+     * from the store by id — the daemon config is argv, which is world-readable,
+     * so the transcript bytes never travel through it. A copy that cannot be
+     * read fails the task loudly: running the prompt against an empty history
+     * is exactly the silent bug this replaced. $store is injectable for the
+     * same reason $backend is; production opens the launch's own store.
+     *
      * @return int 0 when the turn completed, 1 when it failed
      */
-    public function executeTask(?Backend $backend = null): int
+    public function executeTask(?Backend $backend = null, ?EnhancedSessionStore $store = null): int
     {
         if ($this->workingDirectory !== '' && \is_dir($this->workingDirectory)) {
             @\chdir($this->workingDirectory);
         }
 
         $this->log('[session:task:start]');
+
+        $fork = null;
+        if ($this->forkedSessionId !== '') {
+            try {
+                $fork = $this->openFork($store ?? Bootstrap::sessionStore(false));
+            } catch (\Throwable $e) {
+                $this->log('[session:task:failed] could not load forked session '
+                    . $this->oneLine($this->forkedSessionId) . ': ' . $this->oneLine($e->getMessage()));
+
+                return 1;
+            }
+        }
+        $prior = $fork === null ? [] : Message::agentVisible($fork['history']);
 
         if ($backend === null) {
             try {
@@ -390,9 +419,10 @@ final class BackgroundSessionRunner
             $pending = \substr($pending, $lastNewline + 1);
         };
 
+        $user = Message::user($this->task);
         try {
             $message = $backend->complete(
-                [Message::user($this->task)],
+                [...$prior, $user],
                 $onToken,
                 function (object $event): void {
                     $this->noticeRefusal($event);
@@ -403,6 +433,7 @@ final class BackgroundSessionRunner
                 $this->append($pending . "\n");
             }
             $this->log('[session:task:failed] ' . $this->oneLine($e->getMessage()));
+            $this->saveFork($fork, [$user, Message::notice('Background task failed: ' . $this->oneLine($e->getMessage()))]);
 
             return 1;
         }
@@ -414,9 +445,67 @@ final class BackgroundSessionRunner
             $this->append($pending . "\n");
         }
 
+        $this->saveFork($fork, [$user, $message]);
         $this->log('[session:task:complete]');
 
         return 0;
+    }
+
+    /**
+     * Load the `/fork` copy this session continues and take its single-writer
+     * lock for the life of the turn.
+     *
+     * The lock is what keeps a TUI that opens the copy mid-turn read-only
+     * instead of letting it and this worker each rewrite the whole transcript
+     * ({@see \SugarCraft\Crush\Session\SessionLock}). It dies with this
+     * worker's descriptor. Nobody should hold it — the copy was minted a moment
+     * ago for this session alone — so a held lock still runs the turn on the
+     * copy's history, but leaves the stored transcript to its holder and says
+     * so in the buffer.
+     *
+     * @return array{store: EnhancedSessionStore, lock: ?SessionLock, history: list<Message>}
+     * @throws \RuntimeException when the copy no longer exists
+     */
+    private function openFork(EnhancedSessionStore $store): array
+    {
+        if ($store->getSession($this->forkedSessionId) === null) {
+            throw new \RuntimeException('it is not in the session store');
+        }
+
+        $lock = $store->lockSession($this->forkedSessionId);
+        if ($lock === null) {
+            $this->log('[session:fork:locked] another process has the forked session open; its transcript is left unchanged');
+        }
+
+        $rows = $store->loadTranscript($this->forkedSessionId) ?? [];
+
+        return [
+            'store' => $store,
+            'lock' => $lock,
+            'history' => \array_map(static fn(array $row): Message => Chat::reviveTranscriptMessage($row), $rows),
+        ];
+    }
+
+    /**
+     * Append $turn to the `/fork` copy's stored transcript, so the fork reads
+     * as the conversation it continued. A no-op for a plain `/bg` session or
+     * when another process holds the copy. A write failure is recorded but does
+     * not fail the task: the answer is already in the buffer.
+     *
+     * @param array{store: EnhancedSessionStore, lock: ?SessionLock, history: list<Message>}|null $fork
+     * @param list<Message> $turn
+     */
+    private function saveFork(?array $fork, array $turn): void
+    {
+        if ($fork === null || $fork['lock'] === null) {
+            return;
+        }
+
+        try {
+            $fork['store']->saveTranscript($this->forkedSessionId, [...$fork['history'], ...$turn]);
+        } catch (\Throwable $e) {
+            $this->log('[session:fork:save-failed] ' . $this->oneLine($e->getMessage()));
+        }
     }
 
     /**
