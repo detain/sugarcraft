@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Context;
 
 use SugarCraft\Crush\Support\ContainedPath;
+use SugarCraft\Crush\Support\FrontmatterKeyAudit;
 use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Support\ProjectRoot;
 
@@ -227,6 +228,17 @@ final class RuleLoader
      * @var array<string, string>
      */
     private array $skippedFiles = [];
+
+    /**
+     * Rules that loaded while declaring a frontmatter key {@see Rule} does not
+     * read, rule key => {@see FrontmatterKeyAudit::inspect()} labels. Rules have
+     * no inert fields, so every entry is an unknown key — and the typo case is
+     * the one that matters: `enable: false` is not `enabled: false`, and the
+     * rule it was meant to switch off stays in every prompt.
+     *
+     * @var array<string, list<string>>
+     */
+    private array $ignoredFrontmatter = [];
 
     /**
      * @param string           $repoRoot       The checkout these tiers are anchored to - the project and root tiers resolve inside it, the user tier does not use it.
@@ -518,6 +530,19 @@ final class RuleLoader
     }
 
     /**
+     * Accessor - every rule this loader read that declares a frontmatter key no
+     * reader acts on, rule key => display labels (with a did-you-mean for a
+     * near miss). Cumulative like {@see skippedFiles()}; the file still loads.
+     * {@see \SugarCraft\Crush\Cli\Bootstrap} reports it as one launch row.
+     *
+     * @return array<string, list<string>>
+     */
+    public function ignoredFrontmatter(): array
+    {
+        return $this->ignoredFrontmatter;
+    }
+
+    /**
      * Walk one tier directory into a filename-ordered rule list.
      *
      * The whole method is the containment contract in one place: realpath the
@@ -802,7 +827,7 @@ final class RuleLoader
         $content = Utf8Scrub::announced($content, "rules file {$key}.md");
 
         try {
-            return Rule::new($realPath, $tier, $content, fallbackName: Utf8Scrub::clean($key), key: $key);
+            $rule = Rule::new($realPath, $tier, $content, fallbackName: Utf8Scrub::clean($key), key: $key);
         } catch (\Throwable $e) {
             $reason = sprintf('Failed to load rule from %s: %s', $realPath, $e->getMessage());
             $this->report($reason);
@@ -810,6 +835,16 @@ final class RuleLoader
 
             return null;
         }
+
+        // After the parse succeeded, so only a rule that LOADED is audited: a
+        // skipped file is already reported as skipped. Re-reading the block from
+        // the content in hand costs no I/O.
+        $ignored = FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::RULE, FrontmatterKeyAudit::metaOf($content));
+        if ($ignored !== []) {
+            $this->ignoredFrontmatter[$key] = $ignored;
+        }
+
+        return $rule;
     }
 
     /**

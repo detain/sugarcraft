@@ -186,6 +186,34 @@ two cannot drift apart. The launch's own permission mode is still decided by
 whether any surface renders it differently is a `/agents` question, not a
 wiring one.
 
+### Which fields act
+
+Reaching the roster is not the same as changing what a delegated run does.
+`Task` runs every sub-agent on the session's provider and model and under the
+session's permission gate (`TaskTool`), and several fields are carried onto
+the `Agent` row and read by nothing after that:
+
+| Field | Effect today |
+|---|---|
+| `name`, `description`, `initialPrompt` | Live: the roster entry and the sub-agent's prompt. |
+| `tools`, `disallowedTools` | Live: see [How a grant is enforced](#how-a-grant-is-enforced). |
+| `skills`, `mcpServers`, `maxTurns` | Live on the delegated run. |
+| `model` | **Inert.** `Task` uses the session's model; `inherit` is what happens anyway. |
+| `permissionMode` | **Inert.** The session's gate judges every call; `default` is what happens anyway. |
+| `effort` | **Inert.** Carried, never sent with a request. |
+| `memory` | **Inert.** Carried; no memory tier is selected by it. |
+| `background` | **Inert.** `false` is what happens anyway. |
+| `isolation` | **Inert.** `none` is what happens anyway; see [Teams and worktrees](#teams-and-worktrees). |
+| `color` | **Inert.** Carried; no surface renders it. |
+
+The **Inert** rows are `FrontmatterKeyAudit::INERT`, which
+`InertFrontmatterDocumentationDriftTest` holds this table to, so the change
+that honours one of them deletes its entry there and this row together. A
+preset that sets an inert field to anything but its no-op value — or declares
+a key outside this table, such as a misspelt `permisionMode` — is still
+loaded, and the launch names it in one aggregated row (stderr and transcript)
+with a did-you-mean for a near miss.
+
 ### How a grant is enforced
 
 `tools` and `disallowedTools` use the permission-rule dialect
@@ -258,10 +286,11 @@ here rather than marketed as delegation.
 launched install. `SUGARCRUSH_WORKTREES_DIR` re-points the worktree base path
 (default `.sugar-crush/worktrees/`) — see [`ENVIRONMENT.md`](ENVIRONMENT.md).
 
-An `isolation: worktree` preset field parses into `Isolation::Worktree`, and
-`SubAgent` accepts an `Isolation`, but the roster path drops the field (table
-above), so setting it in a preset has no effect on anything a chat command
-reaches today.
+An `isolation: worktree` preset field parses into `Isolation::Worktree` and
+rides onto the roster row, and `SubAgent` accepts an `Isolation`, but nothing
+hands the row's value to a `SubAgent` (see [Which fields act](#which-fields-act)),
+so setting it in a preset has no effect on anything a chat command reaches
+today.
 
 ## See also
 

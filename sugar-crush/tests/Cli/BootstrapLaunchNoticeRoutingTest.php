@@ -899,6 +899,59 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
     }
 
     /**
+     * X-37a: a key that a file which LOADED declares and nothing acts on is
+     * named at launch — one aggregated row per format, on both channels — and
+     * the file is never refused for it. One fixture per format: a preset with
+     * an inert `permissionMode:` and a misspelt key, a skill with
+     * `allowed-tools` and `context: fork`, a command with `subtask: true`,
+     * and a rule whose `enable: false` silently leaves it enabled.
+     */
+    public function testIgnoredFrontmatterReachesBothChannelsAsOneRowPerFormat(): void
+    {
+        $sc = $this->projectRoot . '/.sugar-crush';
+        mkdir($sc . '/agents', 0o700, true);
+        file_put_contents($sc . '/agents/rev.md', "---\ndescription: Reviews.\npermissionMode: plan\npermisionMode: plan\n---\nReview.\n");
+        mkdir($sc . '/skills/fork-me', 0o700, true);
+        file_put_contents($sc . '/skills/fork-me/SKILL.md', "---\ndescription: Forks.\nallowed-tools: Read\ncontext: fork\n---\nbody\n");
+        mkdir($sc . '/commands', 0o700, true);
+        file_put_contents($sc . '/commands/iso.md', "---\ndescription: Isolated.\nsubtask: true\n---\nDo it.\n");
+        mkdir($sc . '/rules', 0o700, true);
+        file_put_contents($sc . '/rules/style.md', "---\nenable: false\n---\nUse tabs.\n");
+
+        [$stderr, $notices] = $this->launch(
+            '\\SugarCraft\\Crush\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        $rows = array_values(array_filter(
+            $notices,
+            static fn (string $n): bool => str_contains($n, 'frontmatter sugar-crush ignores'),
+        ));
+        self::assertCount(4, $rows, implode("\n", $notices));
+        self::assertContains(
+            '1 agent preset declares frontmatter sugar-crush ignores: `permissionMode: plan` is not acted on (rev); '
+            . '`permisionMode` is not an agent preset field (did you mean `permissionMode`?) (rev)',
+            $rows,
+        );
+        self::assertContains(
+            '1 skill declares frontmatter sugar-crush ignores: `allowed-tools` is not acted on (fork-me); '
+            . '`context: fork` is not acted on (fork-me)',
+            $rows,
+        );
+        self::assertContains(
+            '1 command declares frontmatter sugar-crush ignores: `subtask: true` is not acted on (/iso)',
+            $rows,
+        );
+        self::assertContains(
+            '1 rule declares frontmatter sugar-crush ignores: `enable` is not a rule field (did you mean `enabled`?) (style)',
+            $rows,
+        );
+
+        foreach ($rows as $row) {
+            self::assertSame(1, substr_count($stderr, $row), "stderr did not carry the row once: {$row}");
+        }
+    }
+
+    /**
      * E156: the per-spawn redirection below is LOAD-BEARING, not tidiness.
      * WHAT WAS SAID: the file should stop leaking sixty-odd `sugarcrush:`
      * notices onto the suite's stderr. TRUE NOW: it cannot — every child this

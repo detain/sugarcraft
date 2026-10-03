@@ -207,13 +207,13 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 36 is that sum, 31, plus five rows of headroom. A launch that does hit
+     * 40 is that sum, 35, plus five rows of headroom. A launch that does hit
      * the cap loses nothing silently: the overflow is COUNTED and reported as
      * one trailing row — see {@see launchNotices()} — and stderr carries every
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    private const LAUNCH_NOTICE_LIMIT = 36;
+    private const LAUNCH_NOTICE_LIMIT = 40;
 
     /**
      * Every method that raises launch notices onto the transcript seam, with
@@ -252,6 +252,7 @@ final class Bootstrap
         'reportTuiErrorLogFallback' => 1,
         'drainNarrowedGrantWarnings' => 2,
         'mcpClient' => 2,
+        'reportIgnoredFrontmatter' => 4,
     ];
 
     /**
@@ -972,6 +973,29 @@ final class Bootstrap
     private static array $reportedCommandSkips = [];
 
     /**
+     * Frontmatter keys the launch's files declare and nothing acts on, per
+     * format ({@see \SugarCraft\Crush\Support\FrontmatterKeyAudit::AGENT} …),
+     * keyed by an identity that includes where the file came from =>
+     * [display name, labels].
+     *
+     * Hoisted for {@see $commandSkips}'s reason — the registries and loaders
+     * that found them do not outlive the construction — and keyed per file so
+     * {@see reportIgnoredFrontmatter()} reports each one once per process.
+     * Fed by {@see agentPresets()}, {@see skillRegistry()} and {@see chat()}'s
+     * command and rule drain (X-37a).
+     *
+     * @var array<string, array<string, array{0: string, 1: list<string>}>>
+     */
+    private static array $ignoredFrontmatter = [];
+
+    /**
+     * The subset of {@see $ignoredFrontmatter} already reported, same keys.
+     *
+     * @var array<string, array<string, true>>
+     */
+    private static array $reportedIgnoredFrontmatter = [];
+
+    /**
      * Every directory this launch refused to read, keyed by the path as
      * configured — see {@see reportProjectTierRefusals()}.
      *
@@ -1408,6 +1432,32 @@ final class Bootstrap
         // the count (E172 — the drain half of the finding whose feeder half
         // landed in round 46 and stood dormant behind a pin that pointed here).
         self::reportCommandSkips();
+
+        // X-37a: frontmatter keys every format's files declare and nothing
+        // acts on, one aggregated row per format. The command rows are read off
+        // the Chat (the loader hands its specs only to the constructor) and the
+        // rules are walked here, quietly — their loader is otherwise built per
+        // prompt inside the backend, which never reaches this process.
+        $audit = \SugarCraft\Crush\Support\FrontmatterKeyAudit::class;
+        foreach ($chat->customCommands() as $name => $spec) {
+            if ($spec->ignoredFrontmatter !== []) {
+                self::$ignoredFrontmatter[$audit::COMMAND][(string) json_encode([$root, $spec->tier, $name])]
+                    = ['/' . $name, $spec->ignoredFrontmatter];
+            }
+        }
+        if ($root !== null) {
+            // Never fatal: the audit is a notice about files that loaded, and a
+            // walk that fails here fails again, reported, on the first turn.
+            try {
+                $rules = new RuleLoader($root, reportRefusals: false);
+                $rules->load();
+                foreach ($rules->ignoredFrontmatter() as $key => $labels) {
+                    self::$ignoredFrontmatter[$audit::RULE][(string) json_encode([$root, $key])] = [$key, $labels];
+                }
+            } catch (\Throwable) {
+            }
+        }
+        self::reportIgnoredFrontmatter();
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
@@ -2568,6 +2618,14 @@ final class Bootstrap
 
         try {
             $presets = $registry->list();
+
+            // X-37a: what the presets that DID load declare and nothing acts on
+            // (`permissionMode:` under `Task`, a misspelt key). Collected here,
+            // reported once with the other formats by reportIgnoredFrontmatter().
+            foreach ($registry->ignoredFrontmatter() as $name => $labels) {
+                $format = \SugarCraft\Crush\Support\FrontmatterKeyAudit::AGENT;
+                self::$ignoredFrontmatter[$format][(string) json_encode([$root, $name])] = [$name, $labels];
+            }
 
             // The skipped preset files, NAMED: a launch has a handful of
             // presets rather than a directory of twenty commands, and "which
@@ -4441,6 +4499,32 @@ final class Bootstrap
         // an earlier one found.
         self::$skillSkips = [...self::$skillSkips, ...$manager->skipped()];
 
+        // X-37a: the skills that loaded and declare keys nothing acts on
+        // (`allowed-tools`, `context: fork`, a typo). The registry keeps typed
+        // fields only, so each file's frontmatter head is re-read — once per
+        // path per process, and never for a built-in, which the user did not
+        // write and cannot edit.
+        $audit = \SugarCraft\Crush\Support\FrontmatterKeyAudit::class;
+        foreach ($registry->all() as $skill) {
+            $identity = $skill->sourcePath;
+            if ($skill->origin === \SugarCraft\Crush\Skills\SkillOrigin::BuiltIn
+                || isset(self::$ignoredFrontmatter[$audit::SKILL][$identity])
+            ) {
+                continue;
+            }
+
+            try {
+                [$head] = \SugarCraft\Crush\Skills\SkillFileReader::head($skill->sourcePath, 'SKILL.md');
+            } catch (\Throwable) {
+                continue;
+            }
+
+            self::$ignoredFrontmatter[$audit::SKILL][$identity] = [
+                $skill->name,
+                $audit::inspect($audit::SKILL, $audit::metaOf($head)),
+            ];
+        }
+
         // The skills half of the project-tier refusal — a repository that
         // committed `.sugar-crush/skills`, `.claude/skills` or `.opencode/skills`
         // as a link out of the checkout gets the tree dropped, and said so
@@ -5125,6 +5209,44 @@ final class Bootstrap
             CommandLoader::DEBUG_REFUSALS_ENV,
             $count === 1 ? 'it' : 'them',
         ));
+    }
+
+    /**
+     * Tell the user, at launch, which frontmatter keys their agent presets,
+     * skills, commands and rules declare that nothing acts on (X-37a).
+     *
+     * ONE ROW PER FORMAT, at most four, built by
+     * {@see \SugarCraft\Crush\Support\FrontmatterKeyAudit::notice()}: an
+     * inert key (`context: fork`, a preset's `permissionMode:` under `Task`)
+     * and an unknown one (a typo, with a did-you-mean) are grouped by label
+     * with up to three file names each. A file is never refused for this — the row is how an author learns
+     * that a key they wrote changes nothing. Only files not reported before in
+     * this process, for {@see reportCommandSkips()}'s reason. Construction
+     * time only, before Program takes the terminal.
+     */
+    private static function reportIgnoredFrontmatter(): void
+    {
+        $rows = [];
+        foreach (self::$ignoredFrontmatter as $format => $files) {
+            $new = array_diff_key($files, self::$reportedIgnoredFrontmatter[$format] ?? []);
+            foreach (array_keys($new) as $identity) {
+                self::$reportedIgnoredFrontmatter[$format][$identity] = true;
+            }
+
+            $findings = [];
+            foreach ($new as [$name, $labels]) {
+                if ($labels !== []) {
+                    $findings[$name] = [...($findings[$name] ?? []), ...$labels];
+                }
+            }
+
+            $row = \SugarCraft\Crush\Support\FrontmatterKeyAudit::notice($format, $findings);
+            if ($row !== null) {
+                $rows[] = $row;
+            }
+        }
+
+        self::warnLaunchRows($rows);
     }
 
     /**

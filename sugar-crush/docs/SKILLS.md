@@ -213,11 +213,18 @@ os: [linux, darwin]       # the platform must be listed
 | `paths` | `[]` | `SkillRegistry::getForPaths()`, `SkillPathNudge` | Live. Glob patterns (see [What a `paths:` glob matches](#what-a-paths-glob-matches) for the semantics — they are not `FNM_PATHNAME`); touching a matching file nudges the skill into view once per session. Read from the Stage-1 manifest, so it costs no body read. The nudge is bounded (E66): at most 8 entries, each at most 300 bytes, and where it is spent depends on the tool: `Grep` and `Glob` subtract it from their own `maxOutputBytes`, so it is spent INSIDE the cap; `Read` takes an eighth BESIDE its cap (hence its stated 1.375x `maxBytes` total, a ceiling: the page `Read` returns is itself at most `maxBytes`, and 50 KiB by default, while the eighth is still figured from `maxBytes`); `Edit` and `Write` have no output cap at all, so the class ceiling of 2,636 bytes is the whole bound there. A `description` too long for an entry is clipped and marked, and a skill held back is announced by a later call rather than dropped. Only model-invocable skills are ever nudged — a `disable-model-invocation: true` skill is filtered out of the nudge (E72), because telling the model to open a skill it may not invoke is a dead instruction. |
 | `allowed-tools` | `null` | nothing | **Inert.** Parsed, carried on the `Skill` object, copied by `ForeignSkillDiscovery`, and read by no tool-scoping code in `src/`. Writing it does not restrict anything. |
 | `disallowed-tools` | `null` | nothing | **Inert**, same as above. |
-| `model` | `null` | `App::dispatchSkill()` only | **Not reachable on any live path.** `App::dispatchSkill()` reads it (`$skill->model ?? $this->model`) and that method has no production caller; `ForeignSkillDiscovery` merely copies the value onto the imported object. See [`context: fork`](#the-context-field-today). |
+| `model` | `null` | `App::dispatchSkill()` only | **Inert.** Not reachable on any live path: `App::dispatchSkill()` reads it (`$skill->model ?? $this->model`) and that method has no production caller; `ForeignSkillDiscovery` merely copies the value onto the imported object. See [`context: fork`](#the-context-field-today). |
 | `effort` | `medium` | nothing acts on it | **Inert.** Parsed and carried; the only read of `Skill::$effort` in `src/` is `ForeignSkillDiscovery` copying it onto the imported object. No execution path consults it. |
 | `requires` | none | `SkillRegistry::unmetRequirements()` via `SkillFrontmatter::fromParsed()` and `SkillRegistry::register()` | Live. An unmet requirement keeps the skill out of the registry, with the reason on `SkillManager::skipped()`. See above. |
 | `os` | any platform | same | Live, same as `requires`. |
-| `context` | `thread` | `SkillRegistry::isContextFork()` via `App::applySkillsToSystemPrompt()`, `App::dispatchSkill()`, `App::handleSelectSkill()` | See below — `fork` is implemented nowhere; the one live consulter only words a status message, and the standing-body splice does not consult the field at all. |
+| `context` | `thread` | `SkillRegistry::isContextFork()` via `App::applySkillsToSystemPrompt()`, `App::dispatchSkill()`, `App::handleSelectSkill()` | **Inert** for `fork` (`thread` is what happens anyway). See below — `fork` is implemented nowhere; the one live consulter only words a status message, and the standing-body splice does not consult the field at all. |
+
+The **Inert** rows are not a judgement written once and left: they are
+`FrontmatterKeyAudit::INERT`, which `InertFrontmatterDocumentationDriftTest`
+holds this table to, and a launch names every skill that declares one — see
+[Diagnostics](#diagnostics). Keys other than the ones above (and the
+agentskills.io spec's descriptive `name`, `license`, `compatibility` and
+`metadata`) are not read at all.
 
 ## How a skill reaches the model
 
@@ -523,6 +530,20 @@ refused directory from `refusedDirectories()`, the launch prints one bounded
 summary line (to stderr **and** to the session transcript, so it survives the
 alt screen), and `SUGARCRUSH_DEBUG_SKILLS=1` puts the per-file lines back on
 stderr. See [`ENVIRONMENT.md`](ENVIRONMENT.md).
+
+**A skill that loads but declares a key nothing acts on is named too.** The
+launch adds one aggregated row (stderr and transcript) for every skill that
+sets an inert field — `allowed-tools`, `disallowed-tools`, `model`, `effort`,
+`context: fork` — or a key this reader does not know, with a did-you-mean for a
+near miss:
+
+```text
+4 skills declare frontmatter sugar-crush ignores: `allowed-tools` is not acted on (pdf, review, gh-pr); `user_invocable` is not a skill field (did you mean `user-invocable`?) (gh-pr); `context: fork` is not acted on (deep-dive)
+```
+
+The skill is never refused for it: an imported Claude Code skill keeps its
+`allowed-tools`, and the row is how you learn that the restriction it asks for
+is not applied here. Built-in skills are not audited.
 
 A skill left out because the host lacks what its `requires` or `os` names is a
 skip like any other. Its reason starts with `is unavailable on this host` and

@@ -86,8 +86,17 @@ is a valid command whose body is the whole prompt.
 |---|---|
 | `description` | shown in the "/" popup and `/help`; defaults to `Custom command: <name>` |
 | `argument-hint` | placeholder shown after the name in the popup |
-| `model` | pins this command to one model |
-| `subtask` | `true` runs it in an isolated subagent |
+| `model` | **Inert.** Parsed and carried on the row; the expanded prompt still goes to the session's current model |
+| `subtask` | **Inert.** Parsed and carried on the row; `true` does not isolate anything — the prompt still expands into the current conversation |
+
+`model` and `subtask` are written the way opencode and Claude Code write them,
+so a command copied from either tool loads unchanged, but nothing in
+`Chat` reads them yet. The launch says so instead of leaving it to be
+discovered: one aggregated row (stderr and transcript) names every command
+that sets an inert key or a key outside these four, with a did-you-mean for a
+near miss (`argument_hint` → `argument-hint`). The file still loads. The inert
+pair is `FrontmatterKeyAudit::INERT`, which `InertFrontmatterDocumentationDriftTest`
+holds this table to.
 
 `CommandSpec::fromFile()` **fails closed**: an unreadable file, unparseable
 YAML, a wrongly typed frontmatter value, a frontmatter block that is not a

@@ -46,6 +46,14 @@ use InvalidArgumentException;
  * the model finding out halfway through a task that `gh` is not installed. The
  * check runs once per launch per skill, and only for a skill that declares
  * requirements: the rest pay nothing.
+ *
+ * TYPED IS NOT HONOURED. `allowed-tools`, `disallowed-tools`, `model`,
+ * `effort` and `context: fork` are typed here so a wrong shape is caught, and
+ * nothing on a live path acts on them. That list is
+ * {@see \SugarCraft\Crush\Support\FrontmatterKeyAudit::INERT}, not this
+ * comment: the launch names every skill that sets one (or a key this class
+ * does not read at all), and the step that wires a field deletes its entry
+ * there.
  */
 final readonly class SkillFrontmatter
 {

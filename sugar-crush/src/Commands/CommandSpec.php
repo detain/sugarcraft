@@ -8,6 +8,7 @@ use Symfony\Component\Yaml\Exception\ParseException;
 use SugarCraft\Crush\Palette\PaletteAction;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\Frontmatter;
+use SugarCraft\Crush\Support\FrontmatterKeyAudit;
 use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Tui\Components\PaneLabel;
 
@@ -195,9 +196,15 @@ final class CommandSpec
          * PHP in `Chat::submit()` rather than text.
          */
         public readonly ?string $template = null,
-        /** Frontmatter `model:` - pins this command to one model. */
+        /**
+         * Frontmatter `model:`. INERT: parsed and carried, and nothing pins the
+         * expanded prompt to it — see {@see FrontmatterKeyAudit::INERT}.
+         */
         public readonly ?string $model = null,
-        /** Frontmatter `subtask: true` - run in an isolated subagent. */
+        /**
+         * Frontmatter `subtask: true`. INERT: the template still expands into
+         * the current conversation — see {@see FrontmatterKeyAudit::INERT}.
+         */
         public readonly bool $subtask = false,
         /**
          * WHICH DISK TIER this row was read from: `'user'` for
@@ -214,6 +221,17 @@ final class CommandSpec
          * treatment by accident.
          */
         public readonly ?string $tier = null,
+        /**
+         * The file's frontmatter keys nothing acts on — the inert `model` /
+         * `subtask` and any unknown key — as
+         * {@see FrontmatterKeyAudit::inspect()} labels. Empty for a built-in
+         * row. Carried on the row because the loader that reads the file
+         * hands back only rows, and the launch reports these as one
+         * aggregated notice rather than letting the keys vanish.
+         *
+         * @var list<string>
+         */
+        public readonly array $ignoredFrontmatter = [],
     ) {}
 
     public static function new(
@@ -229,6 +247,7 @@ final class CommandSpec
         ?string $model = null,
         bool $subtask = false,
         ?string $tier = null,
+        array $ignoredFrontmatter = [],
     ): self {
         return new self(
             $name,
@@ -243,13 +262,14 @@ final class CommandSpec
             $model,
             $subtask,
             $tier,
+            $ignoredFrontmatter,
         );
     }
 
     /**
      * Build a row from a user-authored command file: YAML frontmatter
-     * (`description`, `argument-hint`, `model`, `subtask`) plus a template
-     * body. Frontmatter is optional - a bare markdown file is a valid command
+     * (`description`, `argument-hint`, `model`, `subtask` — the last two
+     * inert) plus a template body. Frontmatter is optional - a bare markdown file is a valid command
      * whose body is the whole prompt.
      *
      * Everything here is user-controlled input, so it fails closed: any
@@ -326,6 +346,9 @@ final class CommandSpec
             // DIRECTORY the file came out of. A `tier: user` line in a cloned
             // repository's `*.md` would otherwise be a one-line self-promotion.
             tier: $tier,
+            // Audited LAST, after every field above typed cleanly: a file the
+            // loader skips has no keys worth reporting as ignored.
+            ignoredFrontmatter: FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::COMMAND, $meta),
         );
     }
 

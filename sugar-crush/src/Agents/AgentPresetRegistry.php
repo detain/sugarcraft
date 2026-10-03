@@ -8,6 +8,7 @@ use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\EnumSpelling;
 use SugarCraft\Crush\Support\Frontmatter;
+use SugarCraft\Crush\Support\FrontmatterKeyAudit;
 
 /**
  * Registry for loading and resolving agent presets from the filesystem.
@@ -57,6 +58,22 @@ final class AgentPresetRegistry
      * @var array<string, string>
      */
     private array $skippedFiles = [];
+
+    /**
+     * Frontmatter keys the most recent {@see list()} found declared and
+     * ignored, preset name => labels — see {@see ignoredFrontmatter()}.
+     *
+     * @var array<string, list<string>>
+     */
+    private array $ignoredFrontmatter = [];
+
+    /**
+     * The mapping {@see parsePresetFile()} read last, so {@see list()} can
+     * audit the keys of a file that parsed without re-reading it.
+     *
+     * @var array<mixed>
+     */
+    private array $lastFrontmatter = [];
 
     /** @var list<string> */
     private readonly array $searchPaths;
@@ -192,6 +209,7 @@ final class AgentPresetRegistry
     {
         $presets = [];
         $this->skippedFiles = [];
+        $this->ignoredFrontmatter = [];
 
         foreach ($this->readableSearchPaths() as $path) {
             if (!is_dir($path)) {
@@ -233,6 +251,10 @@ final class AgentPresetRegistry
                 // so a genuine programming error still surfaces.
                 try {
                     $presets[$name] = $this->parsePresetFile($file);
+                    $ignored = FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::AGENT, $this->lastFrontmatter);
+                    if ($ignored !== []) {
+                        $this->ignoredFrontmatter[$name] = $ignored;
+                    }
                 } catch (\RuntimeException | \InvalidArgumentException | \TypeError $e) {
                     $this->skippedFiles[$file] = $e->getMessage();
                 }
@@ -262,6 +284,27 @@ final class AgentPresetRegistry
     public function skippedFiles(): array
     {
         return $this->skippedFiles;
+    }
+
+    /**
+     * Keys the presets {@see list()} returned declare and nothing acts on —
+     * inert fields and unknown keys — preset name => display labels from
+     * {@see FrontmatterKeyAudit::inspect()}.
+     *
+     * The third per-file seam beside {@see skippedFiles()}, for the file that
+     * DID load: `permissionMode: plan` on a preset is accepted, carried onto
+     * the roster row, and then `Task` runs under the session's mode, so the
+     * author's request is dropped as silently as a malformed file used to be.
+     * Nothing here refuses the preset — an imported Claude Code agent with an
+     * unknown key is still the agent its author wanted.
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::agentPresets()} reports it as
+     * one aggregated launch row. Recomputed by every {@see list()}.
+     *
+     * @return array<string, list<string>>
+     */
+    public function ignoredFrontmatter(): array
+    {
+        return $this->ignoredFrontmatter;
     }
 
     /**
@@ -426,6 +469,7 @@ final class AgentPresetRegistry
         if (!is_array($data)) {
             throw new \RuntimeException("Invalid YAML frontmatter in: {$filePath}");
         }
+        $this->lastFrontmatter = $data;
 
         // Everything after the closing `---` is the preset's prompt. $matches[0]
         // is the whole delimited block, so slicing by its length is what leaves
