@@ -62,6 +62,27 @@ use SugarCraft\Core\Util\Width;
  * opened on unless they painted it — and a zone that paints again after the
  * `\r` widens its bbox to start at column 1.
  *
+ * A zone still open at a `\n` that has painted NOTHING yet (its content
+ * starts with `\n`, possibly behind SGR) owns no cell of the row being
+ * ended, so it is re-anchored at column 1 of the next row — the bbox it
+ * would get had its zero-width open tag sat there.  This applies whatever
+ * column the zone opened on, column 1 included: `'123456789' .
+ * zone("\nabc")` and a bare `zone("\nabc")` are both cols 1-3 of row 2.
+ * It deliberately departs from upstream bubblezone, which keeps the open
+ * position (column AND row) as Start (measured against bubblezone v2
+ * 9615dc0, 0-based coordinates):
+ *
+ * | Input                          | bubblezone                 | port            |
+ * |--------------------------------|----------------------------|-----------------|
+ * | `'123456789' . zone("\nabc")`  | Start(9,0) End(2,1): StartX > EndX, so InBounds() never matches | cols 1-3, row 2 |
+ * | `'12' . zone("\nabcdef")`      | Start(2,0) End(5,1): claims unpainted cols 3-6 of row 1, misses painted cols 1-2 of row 2 | cols 1-6, row 2 |
+ * | `zone("\nabc")` (opened at column 1) | Start(0,0) End(2,1): claims unpainted cols 1-3 of row 1 | cols 1-3, row 2 |
+ *
+ * Copying any of these upstream shapes would emit a zone that can never be
+ * hit or that claims cells it never painted (a neighbour's, or blank ones);
+ * the port reports the cells the zone actually painted instead (the same
+ * rule as the leading lone `\r`).
+ *
  * Design note — streaming/chunked parsing: for large terminals or
  * streaming renderers, a ScanIterator (implementing IteratorAggregate)
  * could yield zones incrementally as each chunk is scanned, avoiding
@@ -271,6 +292,29 @@ final class Scan
             if ($b === "\n") {
                 $colAtEol = $width !== null ? min($col - 1, $width) : $col - 1;
                 foreach ($open as $id => $bounds) {
+                    if ($painted === $bounds['painted']) {
+                        // Nothing painted yet: the row being ended holds no
+                        // cell of this zone, and its open column is no
+                        // evidence of where the content lands (the same reason
+                        // a leading lone CR drops it).  Re-anchor the zone at
+                        // column 1 of the next row, exactly as if its zero-width
+                        // open tag sat there — what bubblezone itself reports
+                        // for that placement, instead of the inverted (never
+                        // hittable) rectangle it reports for this one:
+                        // `'123456789' . zone("\nabc")` paints cols 1-3 of
+                        // row 2, not a sliver at col 10 of rows 1-2.
+                        $open[$id] = [
+                            'startCol' => 1,
+                            'startRow' => $row + 1,
+                            'maxCol'   => 0,
+                            'maxRow'   => $row + 1,
+                            'painted'  => $painted,
+                            'segStart' => $painted,
+                            'afterCr'  => false,
+                            'fromCol1' => false,
+                        ];
+                        continue;
+                    }
                     $bounds['maxCol'] = max($bounds['maxCol'], $colAtEol);
                     $bounds['maxRow'] = max($bounds['maxRow'], $row);
                     $open[$id] = $bounds;

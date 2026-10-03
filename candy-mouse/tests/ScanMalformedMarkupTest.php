@@ -180,6 +180,87 @@ final class ScanMalformedMarkupTest extends TestCase
         self::assertSame([1, 1, 2, 2], self::box($zones['z']));
     }
 
+    public function testZoneOpeningMidRowWithLeadingNewlineCoversOnlyItsPaintedRow(): void
+    {
+        // z opens at col 10 of row 1 but paints nothing there: its first cell
+        // is col 1 of row 2.  It used to keep the open column, giving a
+        // 1-col sliver at col 10 of rows 1-2 that missed 'abc' entirely.
+        $zones = (new Scan())->parse('123456789' . Mark::zone('z', "\nabc"));
+
+        self::assertSame([1, 2, 3, 2], self::box($zones['z']));
+    }
+
+    public function testLeadingNewlineZoneOpenedShortOfItsContentWidthCoversOnlyItsPaintedRow(): void
+    {
+        // Opened at col 3 of row 1, content wider than that on row 2.  The
+        // open column used to survive as startCol (cols 3-6, rows 1-2 —
+        // bubblezone's Start(2,0) End(5,1)), claiming unpainted row-1 cells
+        // and missing the painted 'ab' at cols 1-2 of row 2.
+        $scanner = Scanner::new()->scan(Mark::zone('n', '12') . Mark::zone('z', "\nabcdef"));
+
+        self::assertSame([1, 2, 6, 2], self::box($scanner->get('z')));
+        self::assertNull($scanner->hit(3, 1), 'z painted nothing on row 1');
+        self::assertSame('z', $scanner->hit(1, 2)?->id);
+    }
+
+    public function testLeadingNewlineZoneOpenedAtColumnOneCoversOnlyItsPaintedRow(): void
+    {
+        // The re-anchor is not limited to mid-row opens: opened at column 1,
+        // z still paints nothing on row 1.  It used to span rows 1-2 (cols
+        // 1-3 — bubblezone's Start(0,0) End(2,1)), claiming blank row-1 cells.
+        $zones = (new Scan())->parse(Mark::zone('z', "\nabc"));
+        self::assertSame([1, 2, 3, 2], self::box($zones['z']));
+
+        // Column 1 of a later row, behind SGR: same rule.
+        $zones = (new Scan())->parse("XY\n" . Mark::zone('z', "\x1b[1m\nabc"));
+        self::assertSame([1, 3, 3, 3], self::box($zones['z']));
+    }
+
+    public function testLeadingNewlineZoneMatchesZoneOpenedWhereItsContentLands(): void
+    {
+        // Moving the zero-width open tag across the paint-free "\n" must not
+        // change the bbox — the anchor is the first painted cell.
+        $leading = (new Scan())->parse('123456789' . Mark::zone('z', "\nabc"));
+        $moved   = (new Scan())->parse("123456789\n" . Mark::zone('z', 'abc'));
+
+        self::assertSame(self::box($moved['z']), self::box($leading['z']));
+    }
+
+    public function testLeadingNewlineZoneDoesNotStealNeighbourCells(): void
+    {
+        $scanner = Scanner::new()->scan(
+            Mark::zone('n', '123456789') . Mark::zone('z', "\nabc") . 'X'
+        );
+
+        self::assertSame('n', $scanner->hit(9, 1)?->id);
+        self::assertNull($scanner->hit(10, 1), 'z painted nothing on row 1');
+        self::assertNull($scanner->hit(10, 2), "col 10 of row 2 is beyond 'abc'");
+        self::assertSame('z', $scanner->hit(2, 2)?->id);
+        self::assertNull($scanner->hit(4, 2), 'col 4 of row 2 is the trailing X');
+    }
+
+    public function testSeveralLeadingNewlinesAndZeroWidthBytesSkipToFirstPaintedRow(): void
+    {
+        // SGR and blank rows paint nothing; the zone starts on row 3.
+        $zones = (new Scan())->parse('12345' . Mark::zone('z', "\x1b[1m\n\nab\ncdef\x1b[0m"));
+
+        self::assertSame([1, 3, 4, 4], self::box($zones['z']));
+    }
+
+    public function testLeadingNewlineZoneOpenedPastViewportEdgeStaysInside(): void
+    {
+        $zones = (new Scan())->parse('123456789' . Mark::zone('z', "\nab"), 5);
+
+        self::assertSame([1, 2, 2, 2], self::box($zones['z']));
+    }
+
+    public function testLeadingNewlineOnlyZoneIsStillNotEmitted(): void
+    {
+        $zones = (new Scan())->parse('12345' . Mark::zone('z', "\n\n") . 'B');
+
+        self::assertSame([], $zones);
+    }
+
     // ─── empty-content zones ────────────────────────────────────────────────
 
     public function testEmptyContentZoneIsNotEmitted(): void

@@ -83,7 +83,15 @@ Line endings: `\n` and `\r\n` both start a new row. A lone `\r` returns to
 column 1 on the same row, as a terminal does; a zone that paints again after
 it widens its bounding box to start at column 1, and a zone that opened
 mid-row but painted nothing before the `\r` (a progress-bar redraw) covers only
-the cells it painted after it.
+the cells it painted after it. The same holds for a leading `\n`: a zone
+that painted nothing before the newline starts on the first row it paints,
+at column 1, whatever column it opened on — `'123456789' . zone("\nabc")`
+and a bare `zone("\nabc")` opened at column 1 are both cols 1-3 of row 2.
+This departs from upstream bubblezone, which keeps the open position: opened
+past the content's last column it reports an inverted rectangle no click
+ever matches; opened short of it (`'12' . zone("\nabcdef")`) a box that
+claims unpainted cols 3-6 of row 1 while missing the painted cols 1-2 of
+row 2; and opened at column 1 a box that also spans the unpainted row 1.
 
 ## Multi-row zones
 
