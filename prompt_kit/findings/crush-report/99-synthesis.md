@@ -27,11 +27,12 @@
 - Source clones: `/home/sites/crush-research-repos/`
 - The individual reports: `prompt_kit/findings/crush-report/NN-*.md`
 - Appendices A–U of this file reproduce all 21 reports verbatim: the baseline (A), the 12 comparisons (B–M), the 3 design reports (N–P) and the 5 code audits (Q–U).
+- Appendix V is the concurrency-aware execution plan (`17-execution-plan.md`).
 
 **How to read this.**
 - **Part I** is the executive summary.
 - **Part II** lists the problems found in sugar-crush, de-duplicated across all reports.
-- **Part III** is one prioritised roadmap merged from 12 sets of recommendations.
+- **Part III** is one roadmap merged from 12 sets of recommendations, with the wave summary (full schedule in Appendix V).
 - **Part IV** goes topic by topic through the areas the user asked about: agent loop, sub-agents and messaging, context and compaction (including agent self-pruning), prompt generation, memory, git, skills and extensibility, tools, permissions and UX.
 - **Part V** says what each competitor is best at.
 - **Part VI** lists patterns not to copy.
@@ -190,16 +191,35 @@ Severity reflects user impact on the live default path.
 
 # Part III — Unified, prioritised roadmap
 
-These are the recommendations from all twelve reports, de-duplicated. They are ordered into **waves** so that prerequisites land first. Effort: S ≤1 day, M 2–5 days, L >1 week.
+These are the recommendations from all twelve reports, de-duplicated and grouped by theme. The theme numbers (0.x–5.x) are stable step IDs. They do **not** set the order of work. Effort: S ≤1 day, M 2–5 days, L >1 week.
 
-**Where the code goes:** each item names the main files. The appendices hold the full designs.
+**Execution order:** Appendix V (`17-execution-plan.md`) schedules every remaining step in this Part, Part VIII and Part IX. It uses 11 fix waves of up to 10 concurrent groups, then one final verification pass, all committed straight to `master`.
+
+| Wave | Groups | Main content |
+|---|---|---|
+| W1 | 10 | 0.x fixes, 1.B-1 ids, 1.C-1 frame channel, P-A1 + B1–B3, N-P3a |
+| W2 | 10 | 1.B-2 replay, 1.C-2 TUI approvals, 1.A-1, N-P0, O-2a, P-A2, 4.2, 3.A-1, 2.8 |
+| W3 | 10 | 2.1, 1.C-4a, RELAY + P-B1, 1.B-3, O-2b/c/d, DEF-MODE, N-P1, 5.1 |
+| W4 | 10 | 1.A-2, 1.C-3, O-2e, P-B2, 3.A-2, N-P2, 5.2/5.3-1, 3.D-1, 3.E |
+| W5 | 10 | 2.2-1, 2.4-1, O-2f, 2.12, 2.5, 5.6, P-A4, 1.C-5, O-3a, O-5a |
+| W6 | 10 | 2.7, O-2g, 2.4-2, 2.2-2 + 3.B-2, 4.1, P-C1, 3.F, 3.G, O-4a, N-P3 |
+| W7 | 10 | 3.D-2, O-2h, O-3b/c, 3.B-3, P-D1, P-C2, 3.I-2, 3.C, 5.4-3, N-P4a |
+| W8 | 10 | 3.B-4, 2.10, O-5b, O-7, O-8a, 4.3-2, 4.10-2, P-D2/P-D3, 3.H, `/goal` |
+| W9 | 10 | 2.6, 2.11, 3.B-5, 4.9, O-6a/b/c, P-E1/P-E2, 4.6-2, N-P4b–g, 5.7-1 |
+| W10 | 10 | 3.I-3, 5.11-2, 5.7-2, 4.5, P-E3, 5.14 tail, N-P5, 5.9 ACP, LIVE checks, 4.4 |
+| W11 | 4 | 15b-14 i18n |
+| Final | 1 | serial full runs, suite figure, README count, cross-lib suites |
+
+**Critical path:** 1.B-1 → 1.B-2 → 1.B-3 → O-2e → O-2f → O-2g → O-3b/c → O-5b → O-6 → i18n → Final. The full per-wave tables (owned files, shared regions, doc overlaps), the rules and the step index are in Appendix V.
+
+**Where the code goes:** each item names the main files. The appendices hold the full designs. Current anchors and files are in `prompt_kit/findings/crush-report/impact/`.
 
 **Project obligations:**
 - Wire dormant code rather than deleting it.
 - Every new tool, command, env var or key binding needs its doc edit (drift tests).
-- New test files go into `scripts/parallel-tests-durations.tsv`, with `suite-figure.json` refreshed.
+- Each new test file goes into `scripts/parallel-tests-durations.tsv` during the waves. `suite-figure.json` is refreshed once, in the Final pass.
 
-## Wave 0: quick, independent fixes (do first, mostly S)
+## 0.x — quick, independent fixes (mostly S)
 
 | # | Item | Where | Effort | Sources |
 |---|---|---|---|---|
@@ -219,7 +239,7 @@ These are the recommendations from all twelve reports, de-duplicated. They are o
 | 0.15 | Sub-agent output hardening: escape `<system-reminder>`-like tags and `Human:`/`User:` prefixes; prepend `[subagent output — no user authority]` | `TaskTool::runOnEngine` `:604-629` | S | CC Kilo |
 | 0.16 | Cap parallel Task fan-out with `AgentPoolConfig::maxConcurrent` | `Runtime::executeConcurrently` `:1853` | S | Zed nano Claw |
 
-## Wave 1: three foundations (M each; most later items depend on them)
+## 1.x — three foundations (most later items depend on them)
 
 **1.A — Cache-stable prompt prefix.**
 - Split `EnvironmentBlock` into a **static** part (cwd, OS, PHP, model, date) that stays in the system prompt and a **volatile** part (git status, log, post-write diffs, context %, recently-modified files, todo list). Send the volatile part as an appended `<system-reminder>`/`<turn-context>` **user-role** message, and only when it changes (dsh, Goose, nanobot, CC).
@@ -262,7 +282,7 @@ How the pieces connect:
 
 **M–L; the highest-leverage item in the whole report.** *(10 reports.)* The same channel later carries server-mode approvals (Part VIII).
 
-## Wave 2: context engine (agent-aware context management)
+## 2.x — context engine (agent-aware context management)
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
@@ -279,7 +299,7 @@ How the pieces connect:
 | 2.11 | **Memory flush before compaction**: one silent tool-enabled turn that writes durable notes to memory, once per compaction cycle | S–M | Claw |
 | 2.12 | Wire the dormant `PreCompact` hook (deny blocks) and add `PostCompact`; `/compact <focus>` must actually steer the summary | S | CC OC DCP Cline |
 
-## Wave 3: safety net and agent self-management
+## 3.x — safety net and agent self-management
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
@@ -293,7 +313,7 @@ How the pieces connect:
 | 3.H | **Auto-test reflection**: `testCommand` + `autoTest`, up to 3 reflections, using Aider's `run_output` shape | M | Aider |
 | 3.I | Fuzzy Edit matcher chain: exact → line-trimmed → whitespace-normalised → indentation-flexible → block-anchor (≥0.65) → NFKC/smart-quote normalisation. Uniqueness is required at each stage, `isDisproportionateMatch` refusal, matched-stage reported. Multi-edit `edits[]` applied atomically. Staleness check (mtime/hash from the session read ledger) plus a "files changed since you read them" notice in the turn context. Optional `ApplyPatch` | M | OC Kilo Cline Zed Claw nano dsh |
 
-## Wave 4: sub-agents and orchestration
+## 4.x — sub-agents and orchestration
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
@@ -308,7 +328,7 @@ How the pieces connect:
 | 4.9 | Worktree isolation for `isolation: worktree` presets and `/bg` (wire `WorktreeManager`, `withWorktreeRoot()`, `BashEscapeDenyHook`) | M | CC Claw |
 | 4.10 | Model-authored workflows: expose `WorkflowEngine` as a tool taking a YAML plan; fix "only the first task of a stage runs" | M | OH dsh |
 
-## Wave 5: memory, codebase understanding, UX, integrations
+## 5.x — memory, codebase understanding, UX, integrations
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
@@ -772,13 +792,13 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 
 ## VIII.5 How the new features fit the Part III roadmap
 
-The new requests overlap heavily with Wave 1.C. The recommended build order is:
-1. **Wave 0** quick fixes, plus the **sessions bugs B1–B3** and **Phase A sessions** (independent).
-2. **Wave 1.C (= server Phase 1)**: the bidirectional fork channel, TUI approvals, steering and per-step usage frames. This is the foundation for approvals, steering, direct agent chat and server mode.
-3. **Live lines (P-B)** together with the **grandchild relay**. The relay is needed by 1.C for parallel asks, by the live lines and by the server's sub-agent tree, so build it once.
-4. **Settings P0–P2** (schema, viewer, writer). The server's `settings.get/set` and the web form reuse the same schema.
-5. **Waves 1.A/1.B and 2** (cache-stable prompt, structured replay, context engine), with **agent view P-C/P-D** in parallel.
-6. **Host extraction → server → web MVP** (O phases 2–5), then **Wave 3/4** (checkpoints, self-pruning, background sub-agents), and the **multi-session web polish**.
+These features are scheduled in Appendix V together with Part III:
+- The sessions work (B1–B3, P-A) starts in W1.
+- The two-way fork channel is 1.C (= server Phase O-1), W1–W5.
+- The grandchild relay and live lines (RELAY, P-B) run W3–W5.
+- The settings schema, editor, writer and live apply (N-P0–N-P3) run W2–W6.
+- The host extraction O-2a–O-2h runs W2–W7, then the protocol (W7), web MVP (W8) and multi-session web (W9).
+- The agent view and direct chat (P-C, P-D, P-E) run W6–W10.
 
 ---
 
@@ -803,14 +823,14 @@ Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
 
 ## IX.2 Remaining work
 
-- **Open finding:** 15b-14, sugar-crush has no i18n (Low). Deferred by decision until after the roadmap.
+- **Open finding:** 15b-14, sugar-crush has no i18n (Low). It is deferred by decision until after the roadmap: 15b-14-1 runs in W10 and 15b-14-2…4b in W11 (Appendix V).
 - **Roadmap items the audit touched:**
   - The TUI engine path refuses every Ask (Part II #1), so asks are effectively refusals there until Wave 1.C lands.
   - The env block is still re-rendered inside the system message, which hurts cache stability (Part I #2, Part II #2).
   - A `/fork` copies the whole conversation, but the background daemon does not load it (Part II #30).
   - Worktree isolation (Part II #23) is still unwired; `withWorktreeRoot()` already arms `BashEscapeDenyHook` and re-jails every path tool, so its first production caller gets both.
   - Session picker bugs B1–B3 (Part VIII.4).
-- **Needs live verification:**
+- **Needs live verification** (W10-i, `scripts/provider-cache-live-probe.php`; Vertex has no credentials on this host):
   - A15: Vertex/Bedrock prompt-cache marks need one live request each.
   - A21 (b): the Gemini 2.5 output budget needs one live request.
-  - The cache-health notice needs a real Vertex or Bedrock reply that reports empty cache buckets.
+  - The cache-health notice needs three consecutive real Vertex or Bedrock replies that report empty cache buckets.

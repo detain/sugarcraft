@@ -27,6 +27,7 @@ declare -a MAP=(
   "S|15c-audit-tools-permissions.md|Audit: tools, permissions and hooks"
   "T|15d-audit-context-memory-config.md|Audit: context, memory, skills and config"
   "U|15e-audit-agents-sessions-mcp-cli.md|Audit: agents, sessions, MCP and CLI"
+  "V|17-execution-plan.md|Execution plan: concurrency-aware waves"
 )
 {
   cat "$D/99-synthesis.md"
