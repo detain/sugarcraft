@@ -127,6 +127,7 @@ sugar-crush/tests/MCP/GitCommandHandlersProcessTest.php	2.395	14
 sugar-crush/tests/Agents/AgentWorkerPoolCancelKeepsLoopLiveTest.php	2.363	5
 sugar-crush/tests/Agents/WorkerExitCodeAttributionTest.php	2.313	2
 sugar-crush/tests/RendererImageTest.php	2.305	17
+sugar-crush/tests/MCP/StdioMcpServerToolTimeoutTest.php	2.254	11
 sugar-crush/tests/Tools/ToolDescriptionSentenceFloorTest.php	2.233	13
 sugar-crush/tests/LSP/LspCacheTest.php	2.207	18
 sugar-crush/tests/Context/EnvironmentBlockSubdirectoryTest.php	2.193	5
@@ -244,6 +245,7 @@ sugar-crush/tests/App/AppModelTest.php	0.623	60
 sugar-crush/tests/ClaudeCodeMcpClientTest.php	0.609	21
 sugar-crush/tests/DenialPrefixRosterTest.php	0.605	17
 sugar-crush/tests/Chat/CallbackAuthoredRefusalTest.php	0.602	8
+sugar-crush/tests/Tools/McpToolBridgeResultCapTest.php	0.587	4
 sugar-crush/tests/Tools/IgnoreRulesBacktrackingTest.php	0.564	112
 sugar-crush/tests/Agents/TaskListHooksTest.php	0.555	10
 sugar-crush/tests/Commands/SlashDispatchTest.php	0.550	18

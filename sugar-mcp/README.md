@@ -57,7 +57,7 @@ $server->stop();                     // also runs automatically on destruct
   tools": an `initialize` or `tools/list` reply carrying `error` names the
   server's error code and message; a leg that gets no reply, or a
   `notifications/initialized` that cannot be delivered, names that leg.
-- `callTool()` carries **no** deadline: a tool call is somebody's real work and
+- `callTool()` carries **no** deadline by default: a tool call is somebody's real work and
   is bounded by child liveness, never by a wall-clock kill of in-flight work.
   Liveness is checked whenever a poll leaves the pipe idle — at most once a
   second, and also while stderr alone is chatty — on both the read and the
@@ -71,6 +71,17 @@ $server->stop();                     // also runs automatically on destruct
   pid whose start time no longer matches the server's (a reused pid), as dead.
   Without `/proc` (macOS, BSD) a forked caller falls back to signal 0 and to
   pipe EOF.
+- A caller that DOES want a bound opts in per call:
+  `callTool($name, $args, timeoutSeconds: 30.0)` abandons the wait at the
+  deadline (time queued for the exchange lock counts), sends
+  `notifications/cancelled` naming the request, and returns
+  `{"error": "Tool call timed out after 30s …"}`; the connection stays usable
+  and the late reply is skipped by id. Null, zero, a negative or a non-finite
+  value leaves the call unbounded.
+- `callTool($name, $args, onWait: $beat)` calls `$beat` at least once a second
+  for as long as the call waits, so an embedder whose own watchdog measures
+  silence can keep a long unbounded call visibly alive. Throttle it yourself;
+  it may fire far more often.
 - Every socket wait is bounded by `stream_select` polls; stderr is absorbed on
   both wait sets so a full 64KiB kernel pipe can never deadlock the child.
 

@@ -65,7 +65,7 @@ call, with no new consent. The grant now binds to each server:
 - **What is pinned.** Every entry as the client would build it — after the
   foreign-spelling normalisation (`environment`, a whole-argv `command` array,
   `type: local`/`remote`) — minus the keys that only bound or describe it
-  (`enabled`, `startTimeout`, `timeout`, `description`). So `command`, `args`,
+  (`enabled`, `startTimeout`, `toolTimeout`, `timeout`, `description`). So `command`, `args`,
   `env`, `url`, `headers`, `path` and `type` are covered, and so is any key
   nobody anticipated. `env` is pinned as written: `${VAR}` stays unresolved, so
   your own environment moving re-prompts nothing and no secret value is
@@ -105,7 +105,8 @@ whose entries `proc_open()` arbitrary commands. Its absence is a decision.
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "/srv/data"],
       "env": { "API_TOKEN": "${MY_TOKEN}" },
-      "startTimeout": 120
+      "startTimeout": 120,
+      "toolTimeout": 300
     },
     "issues": {
       "type": "http",
@@ -125,7 +126,7 @@ Four types, and they are the four `McpClient::startServer()` constructs:
 
 | `type` | Class | Keys |
 |---|---|---|
-| `stdio` (the default when `type` is absent) | `StdioMcpServer` | `command`, `args`, `env`, `startTimeout` |
+| `stdio` (the default when `type` is absent) | `StdioMcpServer` | `command`, `args`, `env`, `startTimeout`, `toolTimeout` |
 | `http` | `HttpMcpServer` | `url`, `headers` |
 | `git` | `GitMcpServer` | `path` (omitted → this project), `timeout` |
 | `claude-mcp` | `ClaudeCodeMcpServer` | none — the repository names nothing |
@@ -166,7 +167,7 @@ census, table first:
 
 | Transport | Works here | Config it takes | How it runs |
 |---|---|---|---|
-| Stdio | yes | `command`, `args` (+ optional `env`, `startTimeout`) | spawned child, JSON-RPC over pipes |
+| Stdio | yes | `command`, `args` (+ optional `env`, `startTimeout`, `toolTimeout`) | spawned child, JSON-RPC over pipes |
 | HTTP | yes | `url` (+ optional `headers`) | Streamable HTTP: one POST per message accepting `application/json, text/event-stream`, the `Mcp-Session-Id` from `initialize` echoed on every later request, replies read from a JSON body or SSE `data:` frames; a stored OAuth bearer attaches per request, and a static `Authorization` you set in the config wins over the store |
 | Git | yes | `path` (omit → this project) (+ optional `timeout`) | in-process — no transport, no child, no socket |
 | Claude-mcp | yes | operator-tier `claudeMcpBinary` (+ optional `claudeMcpArgs`, `claudeMcpEnv`; never the entry) | spawned child under process containment, JSON-RPC over pipes |
@@ -204,10 +205,27 @@ execution the tiers gate — the PreToolUse chain sees calls, never the
 the trust list controls rather than inside it.
 
 `startTimeout` is **seconds, per server, and bounds the handshake only** — a
-`tools/call` is unbounded. Only a positive number is honoured; a string, `0` or
+`tools/call` is unbounded unless the entry opts in with `toolTimeout` (below).
+Only a positive number is honoured; a string, `0` or
 a negative falls back to `StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS`, which
 is `60.0`. A hand-edited config must not be able to turn the bound off by
-accident. `startTimeout` is read for `stdio` entries only: a `claude-mcp`
+accident.
+
+`toolTimeout` is **seconds, per server, per `tools/call`, and opt-in**. Unset
+means unbounded — there is no global default, because a tool call is somebody's
+real work (a build, a crawl) and minutes are legitimate. While a call runs
+alone in a turn it sends the turn a heartbeat, so the 120 s idle watchdog does
+not kill a long call; a slow server costs its own wait, not the turn. When a
+`toolTimeout` is set and passes, the client stops waiting, sends the server
+`notifications/cancelled` naming the request, and the model gets an error
+result (`Tool call timed out after 300s (toolTimeout) …`); the connection stays
+usable and the late reply, if any, is discarded. Only a positive JSON number
+opts in: a string, `0` or a negative leaves the call unbounded rather than
+setting a zero bound. Like `startTimeout` it is left out of the trust
+fingerprint, so tuning it re-prompts nothing. It is read for `stdio` entries
+only; an `http` call is bounded by the client's fixed 30 s request timeout.
+Every answer, bounded or not, is capped at 65,536 bytes before the model sees
+it, with a marker naming how much was cut. `startTimeout` is read for `stdio` entries only: a `claude-mcp`
 server's `initialize` and start-time `tools/list` each wait the same fixed
 `StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS` budget, and nothing in the
 entry or the operator tier changes it.

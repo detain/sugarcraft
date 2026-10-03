@@ -54,7 +54,7 @@ final class McpTrustPins
      * Entry keys left out of a fingerprint: they bound or describe a server,
      * they do not choose what runs or where it connects.
      */
-    public const UNPINNED_KEYS = ['enabled', 'startTimeout', 'timeout', 'description'];
+    public const UNPINNED_KEYS = ['enabled', 'startTimeout', 'toolTimeout', 'timeout', 'description'];
 
     private const VERSION = 1;
 

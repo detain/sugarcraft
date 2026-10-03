@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tools;
 
 use SugarCraft\Crush\MCP\McpClient;
 use SugarCraft\Crush\MCP\McpTool;
+use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 
 /**
  * One MCP server-side tool, presented to the model as an ordinary {@see Tool}.
@@ -77,6 +78,8 @@ use SugarCraft\Crush\MCP\McpTool;
  */
 final class McpToolBridge implements Tool, AcceptsHeartbeat
 {
+    use TruncatesOutput;
+
     /**
      * The model-facing name prefix. `mcp__<server>__<tool>` is the convention
      * {@see \SugarCraft\Crush\Permissions\PermissionRule},
@@ -87,9 +90,18 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat
      */
     public const NAME_PREFIX = 'mcp__';
 
+    /**
+     * $maxOutputBytes bounds what one server answer can push into the context
+     * window (item 0.5): the same 64 KiB default the built-in open-ended
+     * tools take, clipped with the trait's announced marker. Before it, an
+     * MCP result was the one tool output nothing capped — a server returning
+     * a whole database dump went into every later request of the turn
+     * verbatim. Zero or negative disables the cap.
+     */
     public function __construct(
         private McpClient $client,
         private McpTool $descriptor,
+        private int $maxOutputBytes = self::DEFAULT_MAX_OUTPUT_BYTES,
     ) {}
 
     /**
@@ -442,7 +454,10 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat
 
         return new ToolResult(
             toolCallId: $id,
-            content: self::announceUnreadableErrorFlag($raw) . self::renderContent($raw),
+            content: $this->truncateOutput(
+                self::announceUnreadableErrorFlag($raw) . self::renderContent($raw),
+                $this->maxOutputBytes,
+            ),
             isError: self::isError($raw),
             durationMs: self::elapsedMs($start),
         );

@@ -414,8 +414,14 @@ final class McpClient
             // (a string, 0, a negative) falls back to
             // {@see StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS}, because a
             // hand-edited config must not be able to turn the bound OFF by
-            // accident. It bounds the HANDSHAKE only; `tools/call` stays
-            // unbounded, see {@see StdioMcpServer::callTool()}.
+            // accident. It bounds the HANDSHAKE only.
+            //
+            // `toolTimeout` (seconds, item 0.5, decision D2) is the OPT-IN
+            // bound on each `tools/call`. Unset is UNBOUNDED, not a default
+            // number: a tool call is somebody's real work (E646), and a sequential
+            // call keeps the turn alive with wait beats instead (0.4-b). Only
+            // a positive finite number opts in — a string, 0 or a negative
+            // leaves the call unbounded rather than inventing a zero bound.
             'stdio' => new StdioMcpServer(
                 name: $name,
                 command: $config['command'] ?? '',
@@ -424,6 +430,7 @@ final class McpClient
                 startTimeoutSeconds: is_numeric($config['startTimeout'] ?? null)
                     ? (float) $config['startTimeout']
                     : null,
+                toolTimeoutSeconds: self::toolTimeout($config['toolTimeout'] ?? null),
             ),
             'http' => new HttpMcpServer(
                 name: $name,
@@ -644,6 +651,21 @@ final class McpClient
         }
 
         return $data;
+    }
+
+    /**
+     * A stdio entry's `toolTimeout` as seconds, or null for "unbounded":
+     * only a positive, finite JSON number opts in (see buildServer()).
+     */
+    public static function toolTimeout(mixed $raw): ?float
+    {
+        if (!is_int($raw) && !is_float($raw)) {
+            return null;
+        }
+
+        $seconds = (float) $raw;
+
+        return is_finite($seconds) && $seconds > 0.0 ? $seconds : null;
     }
 
     /**

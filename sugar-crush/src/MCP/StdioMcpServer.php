@@ -60,6 +60,9 @@ final class StdioMcpServer implements McpServer
      * @param array<string, string> $env
      * @param float|null $startTimeoutSeconds handshake budget in seconds; null
      *        takes {@see DEFAULT_START_TIMEOUT_SECONDS}
+     * @param float|null $toolTimeoutSeconds the `.mcp.json` `toolTimeout`
+     *        (item 0.5, decision D2): an OPT-IN bound on each `tools/call`;
+     *        null — the default — keeps every call unbounded
      */
     public function __construct(
         public readonly string $name,
@@ -67,6 +70,7 @@ final class StdioMcpServer implements McpServer
         array $args,
         array $env,
         ?float $startTimeoutSeconds = null,
+        private readonly ?float $toolTimeoutSeconds = null,
     ) {
         $this->transport = new \SugarCraft\Mcp\StdioMcpServer(
             name: $name,
@@ -161,15 +165,23 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
-     * DELIBERATELY UNBOUNDED, unlike {@see start()}'s handshake — see the
-     * library's callTool(). $onWait is the library's wait beat (item 0.4-b):
-     * an unbounded call is kept visibly alive rather than given a deadline.
+     * UNBOUNDED BY DEFAULT, unlike {@see start()}'s handshake — see the
+     * library's callTool(). A server whose entry sets `toolTimeout` opts in
+     * to a per-call bound (the library cancels the request at it); without
+     * one, $onWait — the library's wait beat (item 0.4-b) — keeps a long
+     * call visibly alive instead of giving it a deadline.
      *
      * @param (\Closure(): void)|null $onWait
      * @return array<mixed>
      */
     public function callTool(string $toolName, array $args, ?\Closure $onWait = null): array
     {
-        return $this->transport->callTool($toolName, $args, $onWait);
+        return $this->transport->callTool($toolName, $args, $onWait, $this->toolTimeoutSeconds);
+    }
+
+    /** The configured per-call bound in seconds, or null when unbounded. */
+    public function toolTimeoutSeconds(): ?float
+    {
+        return $this->toolTimeoutSeconds;
     }
 }

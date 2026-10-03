@@ -46,9 +46,13 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * each leg bounds the exchange as a unit instead.
  *
  * E646 discipline: DEFAULT_START_TIMEOUT_SECONDS bounds the HANDSHAKE only.
- * callTool() carries NO deadline on purpose — a tool call is somebody's real
+ * callTool() carries NO deadline by default — a tool call is somebody's real
  * work (a build, a fetch) and minutes are legitimate; it is bounded by child
- * liveness rather than by a wall-clock kill of in-flight work. That bound is
+ * liveness rather than by a wall-clock kill of in-flight work. An embedder
+ * that wants a bound OPTS IN per call (`$timeoutSeconds`, which sugar-crush
+ * reads from a server's `toolTimeout`): the wait is abandoned at the deadline,
+ * the server is told with `notifications/cancelled`, and the late reply is
+ * skipped by the strict id match like any foreign one. That liveness bound is
  * ENFORCED, not inferred from pipe EOF: EOF needs every holder of the stdout
  * write end to close it, and a helper the server forked (or the real server
  * behind a dying wrapper) keeps it open after the direct child is gone. So
@@ -614,8 +618,19 @@ final class StdioMcpServer implements McpServer
         return $this->tools;
     }
 
+    /** Budget for delivering `notifications/cancelled` after a timed-out call. */
+    private const CANCEL_NOTICE_SECONDS = 2.0;
+
     /**
-     * Invoke a tool. No deadline by design (E646): see the class docblock.
+     * Invoke a tool. No deadline by default (E646): see the class docblock.
+     *
+     * $timeoutSeconds is the opt-in bound: a positive number abandons the
+     * wait that many seconds after the call starts (lock wait included —
+     * time queued behind another process's exchange is time the caller
+     * spent), sends `notifications/cancelled` naming the request so the
+     * server can stop the work, and answers `['error' => 'Tool call timed
+     * out …']`. Null, zero, a negative or a non-finite value keeps the
+     * call unbounded — a bad setting can never invent a bound of zero.
      *
      * $onWait is the caller's liveness beat: it is called at least once per
      * READ_POLL_SECONDS for as long as this call waits — for the exchange
@@ -630,13 +645,13 @@ final class StdioMcpServer implements McpServer
      * @param (\Closure(): void)|null $onWait
      * @return array<string,mixed>
      */
-    public function callTool(string $toolName, array $args, ?\Closure $onWait = null): array
+    public function callTool(string $toolName, array $args, ?\Closure $onWait = null, ?float $timeoutSeconds = null): array
     {
         $previous = $this->onWait;
         $this->onWait = $onWait;
 
         try {
-            return $this->callToolWaiting($toolName, $args);
+            return $this->callToolWaiting($toolName, $args, $timeoutSeconds);
         } finally {
             $this->onWait = $previous;
         }
@@ -646,10 +661,14 @@ final class StdioMcpServer implements McpServer
      * @param array<string,mixed> $args
      * @return array<string,mixed>
      */
-    private function callToolWaiting(string $toolName, array $args): array
+    private function callToolWaiting(string $toolName, array $args, ?float $timeoutSeconds): array
     {
+        $bounded = $timeoutSeconds !== null && is_finite($timeoutSeconds) && $timeoutSeconds > 0.0;
+        $deadline = $bounded ? self::nowSeconds() + $timeoutSeconds : null;
+        $id = (string) $this->ids->next();
+
         try {
-            $response = $this->request('tools/call', [
+            $response = $this->requestAs($id, 'tools/call', [
                 'name' => $toolName,
                 // An argument-less call arrives as PHP `[]`, which would encode as a
                 // JSON array; `arguments` is a JSON object in the schema and the SDK
@@ -658,12 +677,21 @@ final class StdioMcpServer implements McpServer
                 // `['filter' => []]`, audit MCP-9) is undone against the tool's
                 // own inputSchema — see ArgumentShape.
                 'arguments' => $args === [] ? new \stdClass() : ArgumentShape::conform($args, $this->inputSchemaOf($toolName)),
-            ]);
+            ], $deadline);
         } catch (\InvalidArgumentException $unencodable) {
             // Arguments JSON cannot carry (a model's `1e999` decodes to INF):
             // nothing was written, and the McpServer contract reports a failed
             // call as a payload the transcript can show, never as a throw.
             return ['error' => 'Tool call failed: ' . $unencodable->getMessage()];
+        }
+
+        if ($response === null && $deadline !== null && self::nowSeconds() >= $deadline) {
+            $this->cancelAbandoned($id);
+
+            return ['error' => sprintf(
+                'Tool call timed out after %ss (toolTimeout) and was cancelled; the server may still finish the work',
+                rtrim(rtrim(sprintf('%.3F', $timeoutSeconds), '0'), '.'),
+            )];
         }
 
         if ($response === null || !$response->resultSet) {
@@ -689,6 +717,28 @@ final class StdioMcpServer implements McpServer
         }
 
         return $response->result;
+    }
+
+    /**
+     * Tell the server to stop a call this side gave up on (MCP
+     * `notifications/cancelled`). Best effort and bounded: a server that has
+     * died or wedged its stdin costs CANCEL_NOTICE_SECONDS, never a hang, and
+     * a lost notice loses nothing this side depends on — the late reply, if
+     * one comes, is skipped by id.
+     */
+    private function cancelAbandoned(string $id): void
+    {
+        $previous = $this->onWait;
+        $this->onWait = null;
+
+        try {
+            $this->notify('notifications/cancelled', [
+                'requestId' => $id,
+                'reason' => 'client timeout (toolTimeout)',
+            ], self::nowSeconds() + self::CANCEL_NOTICE_SECONDS);
+        } finally {
+            $this->onWait = $previous;
+        }
     }
 
     /**
@@ -720,7 +770,17 @@ final class StdioMcpServer implements McpServer
      */
     public function request(string $method, ?array $params = null, ?float $deadline = null): ?McpMessage
     {
-        $id = (string) $this->ids->next();
+        return $this->requestAs((string) $this->ids->next(), $method, $params, $deadline);
+    }
+
+    /**
+     * {@see request()} under an id the caller already drew — callTool() needs
+     * it to name the request in a `notifications/cancelled`.
+     *
+     * @param array<string,mixed>|null $params
+     */
+    private function requestAs(string $id, string $method, ?array $params, ?float $deadline): ?McpMessage
+    {
         $json = McpMessage::request($id, $method, $params)->toJson();
 
         return $this->exchange($deadline, true, function (string $prefix) use ($json, $id, $deadline): ?McpMessage {
