@@ -165,4 +165,12 @@ final class ScaleTest extends TestCase
         $this->assertLessThan(4, \count($lines), 'At 50% progress, fewer than all lines should be visible');
         $this->assertNotEmpty($lines[0]);
     }
+
+    public function testTrailingNewlineDoesNotAddARevealRow(): void
+    {
+        // A trailing "\n" closes the last line (as Veil::splitLines() reads
+        // it) — it is not a fifth, empty line in the reveal budget.
+        $scale = new Scale();
+        $this->assertSame($scale->apply("A\nB\nC\nD", 0.5), $scale->apply("A\nB\nC\nD\n", 0.5));
+    }
 }

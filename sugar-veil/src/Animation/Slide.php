@@ -6,6 +6,7 @@ namespace SugarCraft\Veil\Animation;
 
 use SugarCraft\Bounce\Easing\CubicBezier;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Veil\Lines;
 use SugarCraft\Veil\Position;
 
 /**
@@ -57,7 +58,9 @@ final class Slide
     ): array {
         $eased = $this->easing()->evaluate($progress);
 
-        $lines = \explode("\n", $foreground);
+        // Measure exactly as Veil::composite() does, so a trailing "\n"
+        // does not add a phantom row to the travel distance.
+        $lines = Lines::split($foreground);
         $fgHeight = \count($lines);
         $fgWidth = $this->maxWidth($lines);
 

@@ -179,12 +179,15 @@ final class VeilStack implements \Countable
     }
 
     /**
-     * Get the highest z-index in the stack.
+     * Get the highest z-index in the stack, or null when the stack is empty.
+     *
+     * Null rather than 0 because 0 is a real z-index — the default of every
+     * Veil::new() — so "empty" and "one default veil" must stay distinguishable.
      */
-    public function maxZIndex(): int
+    public function maxZIndex(): ?int
     {
         if ($this->veils === []) {
-            return 0;
+            return null;
         }
         $max = $this->veils[0]->zIndex();
         foreach ($this->veils as $veil) {
@@ -196,12 +199,14 @@ final class VeilStack implements \Countable
     }
 
     /**
-     * Get the lowest z-index in the stack.
+     * Get the lowest z-index in the stack, or null when the stack is empty.
+     *
+     * @see maxZIndex() for why empty is null, not 0
      */
-    public function minZIndex(): int
+    public function minZIndex(): ?int
     {
         if ($this->veils === []) {
-            return 0;
+            return null;
         }
         $min = $this->veils[0]->zIndex();
         foreach ($this->veils as $veil) {

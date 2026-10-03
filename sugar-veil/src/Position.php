@@ -22,7 +22,7 @@ enum Position
     case TOP_LEFT;
 
     /**
-     * Resolve the vertical pixel offset for this position
+     * Resolve the vertical cell offset (rows from the top) for this position
      * given the foreground and background heights.
      */
     public function yOffset(int $fgHeight, int $bgHeight): int
@@ -41,7 +41,7 @@ enum Position
     }
 
     /**
-     * Resolve the horizontal pixel offset for this position
+     * Resolve the horizontal cell offset (columns from the left) for this position
      * given the foreground and background widths.
      */
     public function xOffset(int $fgWidth, int $bgWidth): int

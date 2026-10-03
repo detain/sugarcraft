@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Veil\Animation;
 
 use SugarCraft\Bounce\Easing\CubicBezier;
+use SugarCraft\Veil\Lines;
 
 /**
  * Scale animation — foreground "grows" from center outward.
@@ -46,7 +47,9 @@ final class Scale
 
         $eased = $this->easing()->evaluate($progress);
 
-        $lines = \explode("\n", $foreground);
+        // Count lines exactly as Veil::composite() does, so a trailing "\n"
+        // does not add a phantom row to the reveal budget.
+        $lines = Lines::split($foreground);
         $totalLines = \count($lines);
 
         if ($totalLines === 0) {

@@ -255,6 +255,25 @@ final class VeilAnimationTest extends TestCase
         $this->assertNotEmpty($result);
     }
 
+    public function testAnimateFadeRendersVisibleProgress(): void
+    {
+        // FADE used to be a visual no-op (the overlay popped in at full
+        // brightness); mid-progress it must now paint the faded gray pen,
+        // and at progress 0 paint nothing of the overlay at all.
+        $v = Veil::new()->withAnimation(AnimationKind::FADE);
+        $bg = "..........";
+
+        $mid = $v->withoutSession()->animate('X', $bg, Position::TOP, Position::LEFT, 0.5);
+        $this->assertMatchesRegularExpression('/\e\[38;2;(\d+);\1;\1mX\e\[39m/', $mid);
+        $this->assertNotSame(
+            Veil::new()->composite('X', $bg, Position::TOP, Position::LEFT),
+            $mid,
+        );
+
+        $start = $v->withoutSession()->animate('X', $bg, Position::TOP, Position::LEFT, 0.0);
+        $this->assertSame($bg, $start);
+    }
+
     public function testAnimateFadeAtMidProgressReturnsComposited(): void
     {
         $v = Veil::new()->withAnimation(AnimationKind::FADE);

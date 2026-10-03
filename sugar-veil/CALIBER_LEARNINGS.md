@@ -28,13 +28,14 @@
 
 ### Fade Animation
 
-- Terminal emulators do not support true per-character alpha blending
-- `Fade::apply()` returns the foreground unchanged; `opacity(float $progress)` returns 0–100 for external use
-- The easing calculation is still performed so callers can implement their own opacity handling
+- Terminal emulators do not support true per-character alpha blending, so `Fade::apply()` renders opacity as a truecolor gray pen (`\e[38;2;L;L;Lm`, L = 255 × opacity/100), the same blend the backdrop dim uses
+- The pen is re-applied after every SGR sequence inside a line so content colours / resets cannot punch through; background colours and attributes are untouched
+- Opacity 0 → `''` (nothing painted, like Scale at 0); opacity 100 → foreground byte-for-byte
 
 ### Scale Animation
 
 - Reveals lines from the center of the foreground outward
+- Slide and Scale count lines with `Lines::split()` — the same rule as `Veil::splitLines()` — so a trailing `\n` never adds a phantom row to travel distance or reveal budget
 - `round($eased * $totalLines)` clamped to `[1, totalLines]` ensures at least one line shows above 0%
 
 ## Z-Index and Stacking
@@ -69,6 +70,7 @@
 - `animate()` delegates to `composite()` after applying animation transforms
 - All state held in `readonly` private properties
 - `mutate()` accepts nulls for optional parameters and falls back to `$this->property`
+- The scanner is carried forward by `mutate()` (`$scanner ?? $this->scanner`) together with `lastRendered`; dropping it made any `with*()` after `scan()` answer hit-tests from an empty zone set while the unscanned guard stayed muted
 
 ## Mouse hit-testing
 

@@ -18,12 +18,12 @@ final class FadeTest extends TestCase
         $this->assertIsString($result);
     }
 
-    public function testApplyAtProgressZeroReturnsUnchanged(): void
+    public function testApplyAtProgressZeroIsFullyTransparent(): void
     {
+        // Opacity 0: nothing of the overlay is painted (Scale does the same
+        // at progress 0), so the compositor shows only the backdrop.
         $fade = new Fade();
-        $result = $fade->apply('X', 0.0);
-
-        $this->assertSame('X', $result);
+        $this->assertSame('', $fade->apply('X', 0.0));
     }
 
     public function testApplyAtProgressOneReturnsUnchanged(): void
@@ -34,13 +34,47 @@ final class FadeTest extends TestCase
         $this->assertSame('X', $result);
     }
 
-    public function testApplyAtMidProgressReturnsUnchanged(): void
+    public function testApplyAtMidProgressDrawsInTheFadedGrayPen(): void
+    {
+        // Linear easing at 0.5 → opacity 50 → gray level round(255 * 0.5) = 128.
+        $fade = new Fade(CubicBezier::linear());
+        $this->assertSame("\e[38;2;128;128;128mX\e[39m", $fade->apply('X', 0.5));
+    }
+
+    public function testApplyGrayLevelTracksOpacity(): void
+    {
+        $fade = new Fade(CubicBezier::linear());
+        $this->assertSame("\e[38;2;64;64;64mX\e[39m", $fade->apply('X', 0.25));
+        $this->assertSame("\e[38;2;191;191;191mX\e[39m", $fade->apply('X', 0.75));
+    }
+
+    public function testApplyRepinsThePenAfterEveryContentSgr(): void
+    {
+        // A content colour or reset inside the line must not punch through
+        // the fade: the gray pen is re-applied right after each SGR.
+        $fade = new Fade(CubicBezier::linear());
+        $pen = "\e[38;2;128;128;128m";
+        $this->assertSame(
+            $pen . "\e[31m" . $pen . 'A' . "\e[0m" . $pen . 'B' . "\e[39m",
+            $fade->apply("\e[31mA\e[0mB", 0.5),
+        );
+    }
+
+    public function testApplyLeavesEmptyLinesEmpty(): void
+    {
+        $fade = new Fade(CubicBezier::linear());
+        $pen = "\e[38;2;128;128;128m";
+        $this->assertSame(
+            $pen . "A\e[39m\n\n" . $pen . "C\e[39m\n",
+            $fade->apply("A\n\nC\n", 0.5),
+        );
+    }
+
+    public function testApplyAtFullOpacityReturnsOriginalBytes(): void
     {
         $fade = new Fade();
-        $result = $fade->apply('X', 0.5);
-
-        // Fade returns foreground unchanged due to terminal limitations
-        $this->assertSame('X', $result);
+        $styled = "\e[1;31mBold red\e[0m";
+        $this->assertSame($styled, $fade->apply($styled, 1.0));
     }
 
     public function testApplyWithCustomEasing(): void

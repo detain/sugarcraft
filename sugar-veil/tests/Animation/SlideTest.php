@@ -108,4 +108,16 @@ final class SlideTest extends TestCase
         $this->assertIsInt($result1['horizontalOffset']);
         $this->assertIsInt($result2['horizontalOffset']);
     }
+
+    public function testTrailingNewlineDoesNotAddATravelRow(): void
+    {
+        // Veil::composite() counts "a\nb\n" as two rows; the slide must too,
+        // or the overlay travels one row further than it is tall.
+        $slide = new Slide();
+        $withNewline = $slide->apply("a\nb\n", 0.0, Position::TOP, Position::CENTER);
+        $without = $slide->apply("a\nb", 0.0, Position::TOP, Position::CENTER);
+
+        $this->assertSame(-2, $withNewline['verticalOffset']);
+        $this->assertSame($without['verticalOffset'], $withNewline['verticalOffset']);
+    }
 }

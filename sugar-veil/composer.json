@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-veil",
-    "description": "PHP port of rmhubbert/bubbletea-overlay \u2014 modal/overlay compositing for terminal UIs. Composite foreground content over a background at any position (Top/Right/Bottom/Left/Center) with optional pixel offsets.",
+    "description": "PHP port of rmhubbert/bubbletea-overlay \u2014 modal/overlay compositing for terminal UIs. Composite foreground content over a background at any position (Top/Right/Bottom/Left/Center) with optional cell (column/row) offsets.",
     "type": "library",
     "license": "MIT",
     "keywords": [

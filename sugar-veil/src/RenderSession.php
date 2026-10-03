@@ -42,10 +42,6 @@ final class RenderSession
     /** @var bool Tracks whether diff() was called since last rememberFull() */
     private bool $diffWasCalled = false;
 
-    public function __construct()
-    {
-    }
-
     /**
      * Returns true when there is no prior output or the dimensions differ,
      * meaning the next composite must emit a full frame.
@@ -80,15 +76,22 @@ final class RenderSession
      */
     public function rememberFull(string $output, int $width, int $height): void
     {
-        $this->previousOutput = $output;
-        $this->prevWidth = $width;
-        $this->prevHeight = $height;
-        $this->previousFrame = null;
         // Only set justClearedFrame if dimensions MATCH and diff was called since
         // last rememberFull. When dimensions changed, shouldEmitFull returns true
         // due to dimension check (no need for justClearedFrame). When dimensions
         // match, justClearedFrame forces full emission to clear diff state.
+        // Compared BEFORE the new dimensions overwrite the remembered ones —
+        // afterwards the comparison is trivially true.
+        //
+        // Veil::composite() never arms this: it reaches rememberFull() only
+        // after shouldEmitFull() said true, and each of those paths has already
+        // cleared diffWasCalled. The grant is for direct session drivers that
+        // interleave diff() with their own full-frame emission.
         $sameDimensions = ($this->prevWidth === $width && $this->prevHeight === $height);
+        $this->previousOutput = $output;
+        $this->prevWidth = $width;
+        $this->prevHeight = $height;
+        $this->previousFrame = null;
         $this->justClearedFrame = $this->diffWasCalled && $sameDimensions;
         $this->diffWasCalled = false;
     }

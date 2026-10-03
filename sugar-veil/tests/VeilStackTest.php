@@ -116,12 +116,21 @@ final class VeilStackTest extends TestCase
 
     public function testEmptyStackMaxZIndex(): void
     {
-        $this->assertSame(0, VeilStack::new()->maxZIndex());
+        // null, not 0: 0 is the default z-index of every Veil::new().
+        $this->assertNull(VeilStack::new()->maxZIndex());
     }
 
     public function testEmptyStackMinZIndex(): void
     {
-        $this->assertSame(0, VeilStack::new()->minZIndex());
+        $this->assertNull(VeilStack::new()->minZIndex());
+    }
+
+    public function testDefaultVeilZIndexIsDistinguishableFromEmpty(): void
+    {
+        $stack = VeilStack::new()->add(Veil::new());
+        $this->assertSame(0, $stack->maxZIndex());
+        $this->assertSame(0, $stack->minZIndex());
+        $this->assertNotSame(VeilStack::new()->maxZIndex(), $stack->maxZIndex());
     }
 
     public function testFilter(): void

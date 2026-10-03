@@ -10,12 +10,12 @@
 
 # SugarVeil
 
-PHP port of [rmhubbert/bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay) — modal/overlay compositing for terminal UIs. Composite one string (foreground) over another (background) at any position with optional pixel offsets.
+PHP port of [rmhubbert/bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay) — modal/overlay compositing for terminal UIs. Composite one string (foreground) over another (background) at any position with optional cell (column/row) offsets.
 
 ## Features
 
 - **9 position modes**: Top, Right, Bottom, Left, Center, and the 4 corners (TopRight, BottomRight, BottomLeft, TopLeft)
-- **Pixel-precise offsets**: X/Y offsets fine-tune any position
+- **Cell-precise offsets**: X/Y offsets (in columns/rows) fine-tune any position
 - **Pure rendering**: composites any background + foreground strings
 - **Works with any TUI framework**: render your models first, then composite
 - **Backdrop dimming**: truecolor opacity blend (0–100) applied to plain background lines during assembly
@@ -98,7 +98,7 @@ Overlay transitions can be animated using `withAnimation(AnimationKind)`. The `a
 | Kind   | Behavior |
 |--------|----------|
 | `SLIDE` | Foreground enters from the anchor direction (no-op when anchored at `CENTER` on both axes — there is no edge to enter from) |
-| `FADE`  | Foreground opacity increases from 0 to 1 (terminal-dependent) |
+| `FADE`  | Foreground brightens in from black via a truecolor gray pen (needs a truecolor terminal) |
 | `SCALE` | Lines appear from the center outward |
 
 ```php
@@ -119,7 +119,7 @@ for ($p = 0.0; $p <= 1.0; $p += 0.1) {
 }
 ```
 
-The `animate()` method composes the overlay with the animation applied at the given progress value. For `SLIDE`, the foreground starts displaced off-screen toward the anchored edge and eases into its final position — anchored at `CENTER` on an axis that axis contributes no displacement. For `SCALE`, lines are revealed from the center outward. For `FADE`, the foreground is returned unchanged but the easing progress is calculated for external use.
+The `animate()` method composes the overlay with the animation applied at the given progress value. For `SLIDE`, the foreground starts displaced off-screen toward the anchored edge and eases into its final position — anchored at `CENTER` on an axis that axis contributes no displacement. For `SCALE`, lines are revealed from the center outward. For `FADE`, terminals cannot alpha-blend, so the overlay is drawn in a truecolor gray pen blended toward black by the eased opacity (`Fade::opacity()`), the same blend the backdrop dim uses: nothing is painted at opacity 0, every glyph is gray while the fade runs (the overlay's own foreground colours are suppressed; background colours and attributes are kept), and the original bytes return at opacity 100.
 
 ## Z-Index Stacking
 
@@ -173,8 +173,8 @@ $output = $stack->composite($background, Position::CENTER, Position::CENTER);
 | `compositeAll($background): string` | Composite all with their own positions |
 | `sorted(): list<Veil>` | Veils sorted by z-index ascending |
 | `all(): list<Veil>` | All veils in insertion order |
-| `maxZIndex(): int` | Highest z-index in stack (0 if empty) |
-| `minZIndex(): int` | Lowest z-index in stack (0 if empty) |
+| `maxZIndex(): ?int` | Highest z-index in stack (`null` if empty — 0 is a real z-index) |
+| `minZIndex(): ?int` | Lowest z-index in stack (`null` if empty) |
 | `isEmpty(): bool` | True if stack has no veils |
 | `count(): int` | Number of veils in stack |
 
@@ -238,6 +238,8 @@ Accessors: `clickOutsideDismiss(): bool`
 
 The `isClickOutside(MouseMsg $mouse): bool` method returns `true` when `clickOutsideDismiss` is enabled, a rendered output has been scanned, and the click falls outside all tracked zones. Returns `false` when `clickOutsideDismiss` is disabled. When dismissal is enabled but `scan()` has not run yet, it throws a `RuntimeException` rather than silently answering "inside" — a dismiss handler built on an unscanned veil would never fire, so the miss is surfaced loudly.
 
+The scanned zones travel with the veil: a `with*()` call made after `scan()` (say `withContent()` because the dialog body changed between the render and the click) keeps the scanned hit-test state, so the click is still judged against the frame that was on screen. Only the next `scan()` replaces it.
+
 ## Buffer diffing
 
 The `composite()` method maintains a `?Buffer $previousFrame` across calls. On each
@@ -259,6 +261,17 @@ Over an SSH session this means far less per-frame data on the wire and
 eliminates the full-screen flicker of rewrite-based terminals. The first render
 after startup or a resize still emits a full Buffer (no diff possible), so
 behaviour is always correct.
+
+A background with no cells (the empty string, or rows of zero width) is no canvas
+to clip the overlay against, so `composite()` returns the overlay itself as the
+frame — mirroring upstream's `bg == ""` early return — and records that frame in the
+session like any other. A frame with no cells at all resets the session, so the next
+non-empty composite is emitted in full rather than diffed against a frame the
+terminal no longer shows.
+
+Truecolor SGR components outside 0–255 (`38;2;300;0;0`) are clamped to 255 / 0 when
+the diff pen is built, so a delta repaints a cell in the colour the terminal showed
+for the full frame rather than a bit-masked wrap-around.
 
 ## Shared foundations
 

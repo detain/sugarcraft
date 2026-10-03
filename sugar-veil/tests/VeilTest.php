@@ -160,8 +160,70 @@ final class VeilTest extends TestCase
 
     public function testEmptyBackground(): void
     {
+        // No canvas to clip against → the overlay is the frame (upstream:
+        // `if bg == "" { return fg }`), rather than silently vanishing.
         $result = $this->veil->composite('X', '', Position::CENTER, Position::CENTER);
-        $this->assertSame('', $result);
+        $this->assertSame('X', $result);
+    }
+
+    public function testZeroWidthBackgroundRowsYieldTheOverlay(): void
+    {
+        $result = Veil::new()->composite("AB\nCD\n", "\n\n\n", Position::CENTER, Position::CENTER);
+        $this->assertSame("AB\nCD", $result);
+    }
+
+    public function testEmptyBackgroundAndEmptyForegroundReturnTheBackground(): void
+    {
+        $this->assertSame('', Veil::new()->composite('', '', Position::CENTER, Position::CENTER));
+    }
+
+    public function testEmptyBackgroundOverlayAppliesAutoSizeBorder(): void
+    {
+        $v = Veil::new()->withAutoSize()->withBorder(Border::normal());
+        $this->assertSame($v->applyBorderChrome('X'), $v->composite('X', '', Position::CENTER, Position::CENTER));
+    }
+
+    public function testEmptyCanvasFrameResetsTheDiffSession(): void
+    {
+        // A session-reusing consumer: frame 1 full, frame 2 has no cells at
+        // all, frame 3 must be FULL — diffing it against frame 1 would emit a
+        // delta for a screen the terminal no longer shows.
+        $v = Veil::new();
+        $bg = "abc\nabc";
+        $v->composite('X', $bg, Position::CENTER, Position::CENTER);
+        $this->assertSame('', $v->composite('', '', Position::CENTER, Position::CENTER));
+
+        $third = $v->composite('X', "abc\nabd", Position::CENTER, Position::CENTER);
+        $this->assertSame("aXc\nabd", $third);
+    }
+
+    public function testOverlayOnEmptyBackgroundIsRememberedByTheSession(): void
+    {
+        // The overlay-as-frame is what the terminal painted, so a same-sized
+        // composite afterwards diffs against IT (not against the stale frame
+        // from before): only the changed cell is re-sent.
+        $v = Veil::new();
+        $v->composite('X', "......\n......", Position::CENTER, Position::CENTER);
+        $this->assertSame("AB\nCD", $v->composite("AB\nCD", '', Position::CENTER, Position::CENTER));
+
+        $delta = $v->composite("AB\nCE", "..\n..", Position::CENTER, Position::CENTER);
+        $this->assertStringContainsString('E', $delta);
+        $this->assertStringNotContainsString('A', $delta);
+        $this->assertStringNotContainsString('.', $delta);
+    }
+
+    public function testTruecolorComponentsAreClampedInTheDiffPen(): void
+    {
+        // 300 must saturate to 255 like a terminal does — the old `& 0xFF`
+        // wrapped it to 44, so the delta repainted the cell in a colour the
+        // full frame never showed.
+        $v = Veil::new();
+        $bg = "....\n....";
+        $v->composite("\e[38;2;10;0;0mAB\e[0m", $bg, Position::TOP, Position::LEFT);
+        $delta = $v->composite("\e[38;2;300;0;0mAB\e[0m", $bg, Position::TOP, Position::LEFT);
+
+        $this->assertStringContainsString('38;2;255;0;0', $delta);
+        $this->assertStringNotContainsString('38;2;44;0;0', $delta);
     }
 
     public function testEmptyForeground(): void
@@ -558,6 +620,38 @@ final class VeilTest extends TestCase
         $zone = $veiled->hit(1, 1);
         $this->assertNotNull($zone);
         $this->assertSame('test-zone', $zone->id);
+    }
+
+    public function testWithCallsAfterScanKeepTheScannedZones(): void
+    {
+        // A model update between the render and the click (new content, a
+        // z-index bump, …) must not wipe the hit-test state: the old mutate()
+        // dropped the scanner while carrying lastRendered, so every click
+        // read as outside and the unscanned guard never fired.
+        $scanned = $this->veil->withClickOutsideDismiss()->scan($this->veil->mark('modal', 'HELLO'));
+        $inside = new MouseMsg(2, 1, MouseButton::Left, MouseAction::Press);
+
+        $this->assertFalse($scanned->isClickOutside($inside));
+        foreach ([
+            $scanned->withZIndex(5),
+            $scanned->withContent('updated body'),
+            $scanned->withBackdrop(40),
+            $scanned->withAnimation(null),
+            $scanned->withPosition(Position::TOP, Position::LEFT),
+            $scanned->withoutSession(),
+        ] as $updated) {
+            $this->assertSame('modal', $updated->hit(2, 1)?->id);
+            $this->assertFalse($updated->isClickOutside($inside));
+        }
+    }
+
+    public function testRescanAfterWithReplacesTheZones(): void
+    {
+        $first = $this->veil->scan($this->veil->mark('old', 'XY'));
+        $second = $first->withZIndex(1)->scan($this->veil->mark('new', 'XY'));
+
+        $this->assertSame('new', $second->hit(1, 1)?->id);
+        $this->assertSame('old', $first->hit(1, 1)?->id, 'rescanning a clone must not retro-change the original');
     }
 
     public function testHitWithoutScanReturnsNull(): void

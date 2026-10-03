@@ -23,7 +23,7 @@ use SugarCraft\Veil\Animation\Slide;
  * Terminal overlay compositor.
  *
  * Composites a foreground string over a background string at a given
- * position with optional pixel offsets. Supports backdrop dimming
+ * position with optional cell offsets (columns / rows). Supports backdrop dimming
  * and animated transitions via honey-bounce CubicBezier easing.
  *
  * Port of rmhubbert/bubbletea-overlay.
@@ -343,9 +343,12 @@ final class Veil
      * Uses candy-mouse Scanner internally — no external Manager needed.
      *
      * The clone carries a FRESH scanner holding only this render's zones:
-     * Scanner::scan() replaces zones wholesale, so reusing the shared
-     * instance would only smuggle hidden state across with*() clones
-     * (scanning a clone would retro-change the original's hit-testing).
+     * Scanner::scan() replaces zones wholesale, so scanning the shared
+     * instance in place would retro-change the hit-testing of every other
+     * clone. Later with*() calls carry this scanned instance forward
+     * together with lastRendered, so hit-testing survives model updates
+     * (e.g. withContent()) made between the render and the click; only a
+     * subsequent scan() replaces it.
      */
     public function scan(string $rendered): self
     {
@@ -444,6 +447,14 @@ final class Veil
      * On subsequent composites with the same dimensions, emits only the
      * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
      *
+     * The background is the canvas and the overlay is clipped to it. A
+     * background with no cells (the empty string, or rows of zero width)
+     * offers no canvas, so the overlay itself is returned as the frame
+     * (mirroring upstream's `bg == ""` early return). That frame still goes
+     * through the diff session like any other, so the next composite diffs
+     * against what was actually emitted; a frame with no cells at all resets
+     * the session, forcing the next one out in full.
+     *
      * @param string    $foreground  The overlay content (e.g. a modal)
      * @param string    $background   The base content
      * @param Position $vertical     Vertical position anchor
@@ -474,7 +485,16 @@ final class Veil
         $fgWidth  = $this->maxLineWidth($fgLines);
 
         if ($bgHeight === 0 || $bgWidth === 0) {
-            return $background;
+            // A background with no cells is no canvas to clip against, so the
+            // overlay itself is the frame — mirrors upstream Composite()'s
+            // `if bg == "" { return fg }` early return. It still goes through
+            // the session bookkeeping: a skipped rememberFull() would let the
+            // next composite diff against a frame from before this one.
+            if ($fgHeight === 0 || $fgWidth === 0) {
+                return $this->emitFrame($background, 0, 0);
+            }
+
+            return $this->emitFrame(\implode("\n", $fgLines), $fgWidth, $fgHeight);
         }
 
         // Resolve base position
@@ -537,17 +557,35 @@ final class Veil
             $output[$row] = $this->dimLine($prefix) . $fgLine . $this->dimLine($suffix);
         }
 
-        $fullOutput = \implode("\n", $output);
+        return $this->emitFrame(\implode("\n", $output), $bgWidth, $bgHeight);
+    }
 
-        if ($this->session->shouldEmitFull($bgWidth, $bgHeight) === TRUE) {
-            $this->session->rememberFull($fullOutput, $bgWidth, $bgHeight);
+    /**
+     * Route one composited frame through the diff session: a full frame on
+     * the first call or after a resize, otherwise the delta against the
+     * previous frame.
+     *
+     * A zero-area frame has no cells to diff, so it is emitted as-is and the
+     * session is reset — the next non-empty frame must be emitted full, since
+     * whatever the terminal shows no longer matches the remembered frame.
+     */
+    private function emitFrame(string $fullOutput, int $width, int $height): string
+    {
+        if ($width === 0 || $height === 0) {
+            $this->session->reset();
+
+            return $fullOutput;
+        }
+
+        if ($this->session->shouldEmitFull($width, $height) === TRUE) {
+            $this->session->rememberFull($fullOutput, $width, $height);
             return $fullOutput;
         }
 
         return $this->session->diff(
             $fullOutput,
-            $bgWidth,
-            $bgHeight,
+            $width,
+            $height,
             fn(string $out, int $w, int $h): Buffer => $this->bufferFromOutput($out, $w, $h),
         );
     }
@@ -595,16 +633,14 @@ final class Veil
     /**
      * Split a multi-line string into an array of lines.
      *
+     * A trailing "\n" closes the last line rather than opening an empty one;
+     * the Slide and Scale animations measure with the same rule (Lines).
+     *
      * @return list<string>
      */
     public function splitLines(string $text): array
     {
-        $lines = \explode("\n", $text);
-        // Remove trailing empty line from final \n
-        if (\end($lines) === '') {
-            \array_pop($lines);
-        }
-        return $lines;
+        return Lines::split($text);
     }
 
     /**
@@ -664,7 +700,11 @@ final class Veil
             clickOutsideDismiss: $clickOutsideDismiss ?? $this->clickOutsideDismiss,
             autoSize: $autoSize ?? $this->autoSize,
             border: $borderSet ? $border : $this->border,
-            scanner: $scanner,
+            // Carry the scanned zones forward: lastRendered rides every clone,
+            // so dropping the scanner here would leave isClickOutside()'s
+            // "forgot to scan" guard muted while hit() answered from an
+            // empty zone set — every click would read as outside.
+            scanner: $scanner ?? $this->scanner,
             lastRendered: $lastRenderedSet ? $lastRendered : $this->lastRendered,
             session: $this->session,
             vPosition: $vPositionSet ? $vPosition : $this->vPosition,
@@ -875,6 +915,11 @@ final class Veil
      * pen and candy-buffer's own parse agree on what a style means.
      * SGR reset deliberately does NOT clear the link pen (xterm scopes
      * links to the OSC 8 protocol).
+     *
+     * One deliberate divergence: truecolor components are CLAMPED into
+     * 0–255 (see channel()), where candy-buffer masks them with `& 0xFF`.
+     * The pen is re-encoded into every delta, so a wrapped component would
+     * repaint a cell in a colour the full frame never showed.
      */
     private static function penFromSgr(string $params, ?BufferStyle $carry): ?BufferStyle
     {
@@ -905,9 +950,9 @@ final class Veil
                 $bg = null;
             } elseif (($p === 38 || $p === 48) && $i + 1 < $count) {
                 if ($codes[$i + 1] === 2 && $i + 4 < $count) {
-                    $rgb = (($codes[$i + 2] & 0xFF) << 16)
-                        | (($codes[$i + 3] & 0xFF) << 8)
-                        | ($codes[$i + 4] & 0xFF);
+                    $rgb = (self::channel($codes[$i + 2]) << 16)
+                        | (self::channel($codes[$i + 3]) << 8)
+                        | self::channel($codes[$i + 4]);
                     if ($p === 38) {
                         $fg = $rgb;
                     } else {
@@ -947,6 +992,16 @@ final class Veil
         return $fg !== null || $bg !== null || $attrs !== 0
             ? new BufferStyle($fg, $bg, $attrs)
             : null;
+    }
+
+    /**
+     * Clamp one 38;2 / 48;2 colour component into 0–255, the way terminals
+     * saturate an out-of-range value — `300` paints as 255, never as the
+     * `300 & 0xFF = 44` a bit-mask would produce.
+     */
+    private static function channel(int $component): int
+    {
+        return \max(0, \min(255, $component));
     }
 
     /** Base-16 palette hexes, matching Buffer::ansiColorToHex(). */

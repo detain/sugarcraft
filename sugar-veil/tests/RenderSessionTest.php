@@ -174,4 +174,60 @@ final class RenderSessionTest extends TestCase
         $session = new RenderSession();
         $this->assertTrue($session->shouldEmitFull(80, 24));
     }
+
+    // ─── justClearedFrame one-shot grant ─────────────────────────────────────────────
+
+    public function testRememberFullAfterDiffAtSameDimensionsForcesOneFullFrame(): void
+    {
+        // Veil::composite() never arms this grant (it only reaches
+        // rememberFull() after shouldEmitFull() said true, which already
+        // cleared diffWasCalled), so drive the session directly.
+        $session = new RenderSession();
+        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+
+        $session->rememberFull('frame1', 10, 2);
+        $session->diff('frame2', 10, 2, $factory);
+        $session->rememberFull('frame3', 10, 2);
+
+        $this->assertTrue($session->shouldEmitFull(10, 2), 'armed: next same-size frame is full');
+        $this->assertFalse($session->shouldEmitFull(10, 2), 'one-shot: the grant is consumed');
+    }
+
+    public function testRememberFullAtNewDimensionsDoesNotArmTheGrant(): void
+    {
+        // The arming check must compare against the PREVIOUS dimensions; it
+        // used to compare after overwriting them, so it was always true and a
+        // resize-time rememberFull() forced a redundant second full frame.
+        $session = new RenderSession();
+        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+
+        $session->rememberFull('frame1', 10, 2);
+        $session->diff('frame2', 10, 2, $factory);
+        $session->rememberFull('resized', 20, 4);
+
+        $this->assertFalse($session->shouldEmitFull(20, 4));
+    }
+
+    public function testRememberFullWithoutPriorDiffDoesNotArmTheGrant(): void
+    {
+        $session = new RenderSession();
+        $session->rememberFull('frame1', 10, 2);
+        $session->rememberFull('frame2', 10, 2);
+
+        $this->assertFalse($session->shouldEmitFull(10, 2));
+    }
+
+    public function testResetDisarmsThePendingGrant(): void
+    {
+        $session = new RenderSession();
+        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+
+        $session->rememberFull('frame1', 10, 2);
+        $session->diff('frame2', 10, 2, $factory);
+        $session->rememberFull('frame3', 10, 2);
+        $session->reset();
+        $session->rememberFull('frame4', 10, 2);
+
+        $this->assertFalse($session->shouldEmitFull(10, 2));
+    }
 }
