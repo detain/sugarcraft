@@ -10,11 +10,13 @@ use SugarCraft\Core\Msg;
  * Internal Msg dispatched once the background title call for a session
  * has produced (and persisted) an auto-generated title.
  *
- * Carried by the Cmd {@see Chat::scheduleTitleGeneration()} schedules
- * alongside — never instead of — the turn's own backend completion, so
- * the prompt is never blocked on the extra call. {@see Chat::update()}
- * folds the title into `currentSessionName` so the UI can show it live
- * without re-reading the session store.
+ * What {@see \SugarCraft\Crush\Host\TitleService::titleCall()}'s request
+ * resolves to (O-2d). `Chat` schedules that request as a Cmd alongside —
+ * never instead of — the turn's own backend completion, so the prompt is
+ * never blocked on the extra call, and {@see Chat::update()} folds the
+ * title into `currentSessionName` so the UI can show it live without
+ * re-reading the session store. A headless host reads the same Msg as its
+ * `session.titled` event (Appendix O §6.5).
  *
  * The title is model-authored, i.e. untrusted text bound for a tab
  * strip; `Chat::update()` re-sanitises it rather than trusting whatever

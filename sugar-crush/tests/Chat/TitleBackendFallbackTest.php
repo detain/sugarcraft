@@ -160,7 +160,7 @@ final class TitleBackendFallbackTest extends TestCase
      */
     private static function titleCalls(Backend $backend): array
     {
-        $instruction = (new \ReflectionClassConstant(Chat::class, 'TITLE_PROMPT'))->getValue();
+        $instruction = \SugarCraft\Crush\Host\TitleService::TITLE_PROMPT;
 
         return array_values(array_filter(
             $backend->calls,

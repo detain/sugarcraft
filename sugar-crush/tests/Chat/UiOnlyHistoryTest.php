@@ -110,7 +110,7 @@ final class UiOnlyHistoryTest extends TestCase
 
         // The title backend also answers prompt suggestions, so pick the
         // title call out by its instruction rather than by position.
-        $instruction = (new \ReflectionClassConstant(Chat::class, 'TITLE_PROMPT'))->getValue();
+        $instruction = \SugarCraft\Crush\Host\TitleService::TITLE_PROMPT;
         $titleCalls = array_values(array_filter(
             $titler->calls,
             static fn(array $h): bool => ($h[0] ?? null)?->content === $instruction,

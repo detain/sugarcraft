@@ -8,8 +8,9 @@ use SugarCraft\Core\Msg;
 
 /**
  * Internal Msg carrying the answer to the background "what will the user
- * most likely type next?" call {@see Chat::schedulePromptSuggestion()} makes
- * once a turn settles.
+ * most likely type next?" call {@see \SugarCraft\Crush\Host\TitleService::suggestionCall()}
+ * builds and {@see Chat::schedulePromptSuggestion()} schedules once a turn
+ * settles (O-2d).
  *
  * {@see Chat::update()} latches the text as the input box's grayed ghost
  * suggestion (→ on an empty box accepts it), but only while the chat is

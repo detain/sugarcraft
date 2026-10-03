@@ -393,45 +393,6 @@ final class Chat implements Model
     private const PARK_NOTICE_PREFIX = 'Context reached the automatic-compaction tier at ~';
 
     /**
-     * One-shot prompt for the background title call. Deliberately terse:
-     * opencode's title agent sends barely more than "Generate a title for
-     * this conversation" and a cheap model does worse, not better, with an
-     * elaborate system prompt.
-     */
-    private const TITLE_PROMPT = 'Generate a session title in 4-8 words summarising this conversation. Reply with the title only: one line, no quotes, no trailing punctuation.';
-
-    /**
-     * Longest auto-title we keep. Matches opencode's own 100-char cap; a
-     * tab strip has nowhere to put more than that anyway.
-     */
-    private const TITLE_MAX_CHARS = 100;
-
-    /**
-     * The guess-the-next-prompt call's framing ({@see schedulePromptSuggestion()}).
-     * The request rides as a final USER turn, after the conversation, so a
-     * provider that wants the last word to be the user's gets it.
-     */
-    private const PROMPT_SUGGESTION_PROMPT = 'You predict what the user of a coding assistant will type next. '
-        . 'You are shown the recent conversation between the user and the assistant.';
-
-    private const PROMPT_SUGGESTION_REQUEST = 'Write the single message I (the user) am most likely to send next, '
-        . 'in my voice, as I would type it: one short line, under 15 words, no quotes, no explanation. '
-        . 'Prefer a concrete next step that follows from the last reply. '
-        . 'If there is no useful next message, reply with exactly: NONE';
-
-    /** The model's "nothing to suggest" answer; {@see sanitizePromptSuggestion()} maps it to ''. */
-    private const PROMPT_SUGGESTION_NONE = 'NONE';
-
-    /** Messages of recent history the suggestion call is shown. */
-    private const PROMPT_SUGGESTION_HISTORY = 12;
-
-    /** Characters of each of those messages it is shown. */
-    private const PROMPT_SUGGESTION_MESSAGE_CHARS = 2000;
-
-    /** Longest suggestion kept - it is one line of the input box. */
-    private const PROMPT_SUGGESTION_MAX_CHARS = 200;
-
-    /**
      * Set to any value other than empty or `0` to keep the "onToken observer
      * threw, detaching it for this turn" line on stderr (E175). The DETACH is
      * never gated — the environment decides whether anyone is TOLD about a
@@ -11446,159 +11407,57 @@ final class Chat implements Model
     }
 
     /**
-     * Build the fire-and-forget Cmd that asks a small model to name the
-     * session, or null when this turn shouldn't trigger one.
+     * The title service this session titles itself through (O-2d): the one
+     * registered on the workspace when this Chat runs in one, else a default —
+     * so an embedder with no workspace titles exactly as before.
+     */
+    private function titleService(): \SugarCraft\Crush\Host\TitleService
+    {
+        $service = $this->workspace?->service(\SugarCraft\Crush\Host\TitleService::class);
+
+        return $service instanceof \SugarCraft\Crush\Host\TitleService ? $service : \SugarCraft\Crush\Host\TitleService::new();
+    }
+
+    /**
+     * The fire-and-forget Cmd that asks the tool-less {@see $titleBackend} to
+     * name the session, or null when this turn shouldn't trigger one.
      *
-     * Fires at most once per session, on the first real user turn, and
-     * only when there is a store to persist into and no name yet (manual
-     * `/rename` or a prior auto-title both latch `currentSessionName`).
-     * Mirrors opencode's `ensureTitle()` gating.
+     * The gating, the request and the conditional store write live in
+     * {@see \SugarCraft\Crush\Host\TitleService::titleCall()} — once per session, on the first
+     * agent-visible user turn, only with a store, a session, no name yet and a
+     * title backend (audit 15b-12: never the main backend); the write is
+     * {@see SessionStore::renameSessionIfUnnamed()}, so a `/rename` typed while
+     * the request is in flight wins in the store (audit B2) and the
+     * {@see SessionTitledMsg} arm keeps it in the UI. Every answer, usable or
+     * not, still dispatches that Msg to carry the call's cost.
      *
-     * Only ever the TOOL-LESS {@see $titleBackend}, never a fallback to the
-     * main conversation backend (audit 15b-12). The main backend may be
-     * agentic or tool-armed: on the `SUGARCRUSH_BACKEND_CMD[_STREAM]` tier it
-     * is an external command - often an agentic CLI - that would receive the
-     * first prompt a SECOND time and could act on it twice (side effects,
-     * double billing), and a {@see Backend\EngineBackend} would run a full
-     * tool-enabled turn in a fork under the default bypass mode, all to
-     * produce four to eight words. `Bootstrap::titleBackend()` is null on
-     * exactly those runs (no selected provider, a provider default with no
-     * model, a construction failure), so such a session is simply never
-     * auto-titled; `/rename` still names it. No title backend, no title -
-     * the same rule {@see schedulePromptSuggestion()} follows.
-     *
-     * The request is built here and nowhere else, on its own Backend, with
-     * no `$onToken`/`$onEvent`/cancellation threaded through: opencode's
-     * #20269 was a main-turn parameter leaking into this cheap side-call
-     * via a shared builder and silently killing titling.
-     *
-     * Failure is silent TO THE USER by design — a session that stays unnamed is
-     * a non-event, and surfacing a title-generation error mid-turn is worse than
-     * no title. It is no longer silent to the SPEND TRACKER: an unusable title
-     * and a refused rename both still dispatch a {@see SessionTitledMsg} whose
-     * only remaining job is to carry the call's cost. Only a rejected promise
-     * dispatches nothing, because a rejection carries no figure to report.
-     *
-     * NOT SEPARATELY GATED BY THE SPEND CAP, and that is a measured claim rather
-     * than an omission. This is only ever scheduled from {@see submit()}'s
-     * turn-dispatch tail, which sits AFTER {@see spendCapRefusal()} — so a
-     * session already at its cap has its turn refused and never reaches here.
-     * The one window is the turn that CROSSES the cap, whose own cost is not
-     * known until it settles, i.e. after this call has already gone out. A gate
-     * here could therefore only ever refuse a call the turn-level gate had
-     * already let through, and it fires at most once per session in any case.
-     * `/compact` is different and IS gated — see
+     * NOT SEPARATELY GATED BY THE SPEND CAP: this is only ever scheduled from
+     * {@see submit()}'s turn-dispatch tail, which sits AFTER
+     * {@see spendCapRefusal()}. `/compact` is different and IS gated — see
      * {@see scheduleModelCompaction()} — because it is reachable by a user
      * typing it at a session that is already over.
      */
     private function scheduleTitleGeneration(self $next): ?\Closure
     {
-        $store = $this->sessionStore;
-        $sessionId = $next->currentSessionId;
-        if ($store === null || $sessionId === null || $next->currentSessionName !== null) {
-            return null;
-        }
+        $call = $this->titleService()->titleCall(
+            $next->titleBackend,
+            $this->sessionStore,
+            $next->currentSessionId,
+            $next->currentSessionName,
+            $next->history,
+        );
 
-        // Counted over what the model sees (audit 15b-03): a `/permissions`
-        // echo is a user ROW but not a user TURN, and counting it meant a
-        // session whose first input was a command was never titled at all.
-        $visible = Message::agentVisible($next->history);
-        $userTurns = 0;
-        foreach ($visible as $message) {
-            if ($message->role === Role::User) {
-                ++$userTurns;
-            }
-        }
-        if ($userTurns !== 1) {
-            return null;
-        }
-
-        // No title backend, no title (audit 15b-12) - the same gate
-        // {@see schedulePromptSuggestion()} applies, for the same reason.
-        $backend = $next->titleBackend;
-        if ($backend === null) {
-            return null;
-        }
-        $titlePrompt = [Message::system(self::TITLE_PROMPT), ...$visible];
-
-        return Cmd::promise(static function () use ($backend, $titlePrompt, $sessionId, $store): PromiseInterface {
-            return $backend->completeAsync($titlePrompt)->then(
-                static function (Message $msg) use ($store, $sessionId): ?Msg {
-                    // Every exit from here dispatches a Msg, including the two
-                    // that produce no title, because the Msg is also what
-                    // carries the call's COST to the tracker. Silence used to be
-                    // the answer on both, which meant an unusable title or a
-                    // failed rename made the call free in the readout. An empty
-                    // $title is dropped by update()'s arm; the usage is not.
-                    $title = self::sanitizeSessionTitle($msg->content);
-                    if ($title === '') {
-                        return new SessionTitledMsg($sessionId, '', $msg->usage);
-                    }
-                    try {
-                        // Conditional (audit B2): a `/rename` typed while this
-                        // request was in flight already named the row, and the
-                        // user's name wins. A refused write is reported like an
-                        // unusable title — usage only, nothing to latch.
-                        if (!$store->renameSessionIfUnnamed($sessionId, $title)) {
-                            return new SessionTitledMsg($sessionId, '', $msg->usage);
-                        }
-                    } catch (\Throwable) {
-                        // AN HONEST GAP: this exit is the same construction as the
-                        // empty-title one above, which IS pinned
-                        // (ChatTest::testAnEmptyGeneratedTitleIsNeverPersistedButItsCostStillIs),
-                        // but it has no test of its own. Both store classes are
-                        // `final`, so a throwing store cannot be substituted, and
-                        // provoking a real PDO write failure mid-suite (a chmod'd
-                        // sqlite file) is not deterministic across the users CI
-                        // runs as. Named rather than faked with a presence check.
-                        return new SessionTitledMsg($sessionId, '', $msg->usage);
-                    }
-                    return new SessionTitledMsg($sessionId, $title, $msg->usage);
-                },
-                // Still nothing on a rejection, and still deliberately silent
-                // (see this method's docblock): there is no Message, so no
-                // figure, and nothing for the user to be told about.
-                static fn(\Throwable $e): ?Msg => null,
-            );
-        });
+        return $call === null ? null : Cmd::promise($call);
     }
 
     /**
-     * Reduce raw model output to something safe to persist and to paint
-     * into a one-line-per-tab strip.
-     *
-     * A title is untrusted text from a model: left alone it can carry an
-     * ESC sequence that repaints the chrome around the tab, or embedded
-     * newlines that blow the strip's single-row layout apart. Reasoning
-     * models additionally prefix a `<think>` block that is not the answer.
+     * {@see \SugarCraft\Crush\Host\TitleService::sanitizeTitle()}: model output reduced to one safe
+     * line for the tab strip. Kept here because `/rename`, the session picker
+     * and `/bg` names reuse the same rule.
      */
     private static function sanitizeSessionTitle(string $raw): string
     {
-        $text = preg_replace('#<think>.*?</think>#is', '', $raw) ?? $raw;
-        // Route the whole ECMA-48 escape family through the canonical, C1-aware
-        // sanitizer (`Ansi::strip()` + a C0/DEL sweep), the same hardened source
-        // {@see reportField()} and {@see sanitizeSessionField()} in this class
-        // already call. The pre-hardening regexes this replaces matched only
-        // \x1b-led OSC/CSI plus the C0 block, so an 8-bit C1 introducer (`\x9b`
-        // CSI, `\x9d` OSC, `\x90` DCS, `\x9f` APC) or an unterminated DCS/APC
-        // payload — a `DCS`-led sixel, a `\x9b` cursor-move, a nested `\x1b]0;`
-        // title re-wrap — slid straight through the guard into the tab strip,
-        // where a real terminal repaints it. `Sanitize::untrusted()` is a strict
-        // superset: strip every escape in 7-bit AND 8-bit form (fail-closed on
-        // truncation), then drop C0/DEL while keeping \t \n \r. Newlines survive
-        // only to be split on below, so the single-line-title contract is
-        // byte-for-byte unchanged; see docs/research/ansi-tmux-ansicode-audit.md
-        // #9 for the escape-family taxonomy this closes against.
-        $text = Sanitize::untrusted($text);
-
-        foreach (preg_split('/\r\n|\r|\n/', $text) ?: [] as $line) {
-            $line = trim($line);
-            if ($line !== '') {
-                return trim(mb_substr($line, 0, self::TITLE_MAX_CHARS));
-            }
-        }
-
-        return '';
+        return \SugarCraft\Crush\Host\TitleService::sanitizeTitle($raw);
     }
 
     /**
@@ -11623,91 +11482,29 @@ final class Chat implements Model
     }
 
     /**
-     * Build the fire-and-forget Cmd that asks the cheap title model to guess
-     * the user's next message, or null when this settle should not ask.
-     *
-     * Only ever the TOOL-LESS {@see $titleBackend}, never a fallback to the
-     * main conversation backend: that one carries tools, hooks and the
-     * permission gate, and a guess at a prompt must not be able to run Bash
-     * or raise a permission question. No title backend, no suggestion.
-     *
-     * Skipped once the spend cap is reached - unlike the once-per-session
-     * title this fires after every turn, so it is exactly the kind of
-     * call-on-the-app's-initiative a cap exists to stop - and when
-     * `SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS` is set. Only the last
-     * {@see PROMPT_SUGGESTION_HISTORY} messages go out, each clipped to
-     * {@see PROMPT_SUGGESTION_MESSAGE_CHARS}: the guess needs the drift of
-     * the conversation, not the whole of every tool dump in it.
+     * The fire-and-forget Cmd that asks the tool-less {@see $titleBackend} to
+     * guess the user's next message, or null when this settle should not ask
+     * — no title backend, suggestions off on the {@see \SugarCraft\Crush\Host\TitleService} or by
+     * `SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS`, the spend cap reached, or no
+     * assistant reply to follow up. See {@see \SugarCraft\Crush\Host\TitleService::suggestionCall()}.
      */
     private function schedulePromptSuggestion(): ?\Closure
     {
-        $backend = $this->titleBackend;
-        if ($backend === null || self::envFlag('SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS') || $this->spendCapReached()) {
-            return null;
-        }
+        $call = $this->titleService()->suggestionCall(
+            $this->titleBackend,
+            $this->history,
+            $this->generation,
+            $this->currentSessionId,
+            $this->spendCapReached(),
+        );
 
-        // Agent-visible rows only (audit 15b-03): a guess at the next prompt
-        // should follow the conversation, not `/help`'s listing, and a command's
-        // output landing last is not a model reply to suggest a follow-up to.
-        $visible = Message::agentVisible($this->history);
-        $last = $visible[count($visible) - 1] ?? null;
-        if ($last === null || $last->role !== Role::Assistant || trim($last->content) === '') {
-            return null;
-        }
-
-        $tail = [];
-        foreach (array_slice($visible, -self::PROMPT_SUGGESTION_HISTORY) as $message) {
-            if ($message->role === Role::System) {
-                continue;
-            }
-            $content = mb_substr($message->content, 0, self::PROMPT_SUGGESTION_MESSAGE_CHARS);
-            $tail[] = $message->role === Role::User ? Message::user($content) : Message::assistant($content);
-        }
-        $prompt = [
-            Message::system(self::PROMPT_SUGGESTION_PROMPT),
-            ...$tail,
-            Message::user(self::PROMPT_SUGGESTION_REQUEST),
-        ];
-        $generation = $this->generation;
-        $historyCount = count($this->history);
-        $sessionId = $this->currentSessionId;
-
-        return Cmd::promise(static function () use ($backend, $prompt, $generation, $historyCount, $sessionId): PromiseInterface {
-            return $backend->completeAsync($prompt)->then(
-                static fn(Message $msg): Msg => new PromptSuggestionMsg($msg->content, $generation, $historyCount, $sessionId, $msg->usage),
-                // Silent, like the titler: a missing suggestion is a
-                // non-event, and a rejection carries no cost to report.
-                static fn(\Throwable $e): ?Msg => null,
-            );
-        });
+        return $call === null ? null : Cmd::promise($call);
     }
 
-    /**
-     * Reduce the model's guess to one safe line for the input box: `<think>`
-     * blocks dropped, every escape and control byte stripped, the first
-     * non-empty line only, a `User:` label or wrapping quotes peeled off, and
-     * the model's "nothing to suggest" answer turned into ''.
-     */
+    /** {@see \SugarCraft\Crush\Host\TitleService::sanitizeSuggestion()}: the guess as one safe input-box line. */
     private static function sanitizePromptSuggestion(string $raw): string
     {
-        $text = preg_replace('#<think>.*?</think>#is', '', $raw) ?? $raw;
-        $text = Sanitize::untrusted($text);
-
-        foreach (preg_split('/\r\n|\r|\n/', $text) ?: [] as $line) {
-            $line = trim($line);
-            if ($line === '') {
-                continue;
-            }
-            $line = trim((string) preg_replace('/^(?:user|me)\s*:\s*/i', '', $line));
-            $line = trim($line, " \"'`“”‘’");
-            if ($line === '' || strcasecmp($line, self::PROMPT_SUGGESTION_NONE) === 0) {
-                return '';
-            }
-
-            return trim(mb_substr($line, 0, self::PROMPT_SUGGESTION_MAX_CHARS));
-        }
-
-        return '';
+        return \SugarCraft\Crush\Host\TitleService::sanitizeSuggestion($raw);
     }
 
     /**
