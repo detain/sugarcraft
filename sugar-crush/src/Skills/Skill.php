@@ -31,6 +31,12 @@ final readonly class Skill
         // to the least-trusted tier — see SkillOrigin::Project for why an
         // untiered skill must not be labelled anything friendlier.
         public SkillOrigin $origin = SkillOrigin::Project,
+        // What the host must provide for the skill to work (`requires` and
+        // `os` frontmatter, normalized by SkillFrontmatter). A skill read from
+        // a SKILL.md only gets this far when the host meets it; the copy kept
+        // here is what SkillRegistry re-checks and what toArray() reports.
+        /** @var array{bins?:list<string>,anyBins?:list<string>,env?:list<string>,os?:list<string>} */
+        public array $requires = [],
     ) {}
 
     /**
@@ -65,6 +71,8 @@ final readonly class Skill
      *
      * @throws \InvalidArgumentException when a frontmatter field has the wrong
      *         type ({@see SkillFrontmatter::fromParsed()}).
+     * @throws \RuntimeException when the skill declares `requires`/`os` this
+     *         host does not meet (same method).
      */
     public static function parse(string $content, string $name, string $sourcePath = ''): self
     {
@@ -102,6 +110,7 @@ final readonly class Skill
             paths: $meta->paths,
             content: trim($body),
             sourcePath: $sourcePath,
+            requires: $meta->requires,
         );
     }
 
@@ -167,6 +176,7 @@ final readonly class Skill
             'effort' => $this->effort,
             'context' => $this->context,
             'paths' => $this->paths,
+            'requires' => $this->requires,
             'source_path' => $this->sourcePath,
         ];
     }
@@ -188,6 +198,7 @@ final readonly class Skill
             sourcePath: $this->sourcePath,
             source: $this->source,
             origin: $this->origin,
+            requires: $this->requires,
         );
     }
 
@@ -212,6 +223,7 @@ final readonly class Skill
             sourcePath: $this->sourcePath,
             source: $this->source,
             origin: $origin,
+            requires: $this->requires,
         );
     }
 }

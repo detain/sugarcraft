@@ -33,6 +33,19 @@ use InvalidArgumentException;
  * date where text belongs is refused rather than stringified: `42` or
  * `1704067200` is never the description anyone wrote, and the error tells them
  * to quote it.
+ *
+ * REQUIREMENTS GATE THE SKILL HERE TOO (roadmap 5.14k). A skill may declare
+ * what the host needs for it to work: `requires: {bins, anyBins, env}` and
+ * `os`. The same block is also read from `metadata.openclaw` /
+ * `metadata.nanobot`, the vendor bags those agents' SKILL.md files carry, when
+ * the top-level keys are absent. A skill whose requirements this host does
+ * not meet is refused with a reason naming every missing piece
+ * ({@see SkillRegistry::unmetRequirements()}). Both readers already turn a
+ * refusal into a recorded skip, so an unavailable skill never reaches the
+ * prompt listing, and the reason is on `SkillManager::skipped()` instead of
+ * the model finding out halfway through a task that `gh` is not installed. The
+ * check runs once per launch per skill, and only for a skill that declares
+ * requirements: the rest pay nothing.
  */
 final readonly class SkillFrontmatter
 {
@@ -42,8 +55,28 @@ final readonly class SkillFrontmatter
         'false' => false, 'no' => false, 'off' => false,
     ];
 
+    /** Keys a top-level `requires:` block may hold, mapped to the normalized key. */
+    private const REQUIRES_KEYS = [
+        'bins' => 'bins', 'anyBins' => 'anyBins', 'any-bins' => 'anyBins', 'env' => 'env',
+    ];
+
+    /** The vendor bags under `metadata:` whose `requires`/`os` are honoured, in precedence order. */
+    private const METADATA_VENDORS = ['openclaw', 'nanobot'];
+
+    /**
+     * Platform names `os:` accepts, mapped to {@see SkillRegistry::currentPlatform()}'s
+     * spelling (Node's `process.platform`, which both upstream formats use).
+     */
+    public const OS_NAMES = [
+        'linux' => 'linux', 'darwin' => 'darwin', 'macos' => 'darwin', 'win32' => 'win32',
+        'windows' => 'win32', 'freebsd' => 'freebsd', 'openbsd' => 'openbsd',
+        'netbsd' => 'netbsd', 'sunos' => 'sunos',
+    ];
+
     /**
      * @param list<string> $paths
+     * @param array{bins?:list<string>,anyBins?:list<string>,env?:list<string>,os?:list<string>} $requires
+     *        Empty when the skill declares no requirement.
      */
     private function __construct(
         public string $description,
@@ -55,6 +88,7 @@ final readonly class SkillFrontmatter
         public string $effort,
         public string $context,
         public array $paths,
+        public array $requires,
     ) {}
 
     /**
@@ -68,6 +102,8 @@ final readonly class SkillFrontmatter
      * @param string $name The skill's name, for the `description` default.
      *
      * @throws InvalidArgumentException naming the offending field.
+     * @throws \RuntimeException when the skill declares requirements this host
+     *         does not meet, naming each one.
      */
     public static function fromParsed(mixed $parsed, string $name): self
     {
@@ -81,7 +117,7 @@ final readonly class SkillFrontmatter
             ));
         }
 
-        return new self(
+        $meta = new self(
             description: self::stringField($parsed, 'description') ?? "Skill: $name",
             userInvocable: self::boolField($parsed, 'user-invocable') ?? true,
             disableModelInvocation: self::boolField($parsed, 'disable-model-invocation') ?? false,
@@ -91,7 +127,139 @@ final readonly class SkillFrontmatter
             effort: self::stringField($parsed, 'effort') ?? 'medium',
             context: self::stringField($parsed, 'context') ?? 'thread',
             paths: self::pathsField($parsed),
+            requires: self::requiresField($parsed),
         );
+
+        // After every field is typed, so a mistyped skill reports the typo
+        // (fixable) rather than a missing binary.
+        $unmet = SkillRegistry::unmetRequirements($meta->requires);
+        if ($unmet !== []) {
+            throw new \RuntimeException(SkillRegistry::unavailableReason($name, $unmet));
+        }
+
+        return $meta;
+    }
+
+    /**
+     * The skill's `requires`/`os` declaration, normalized: only the non-empty
+     * lists appear, so a skill with no requirement reads as `[]`.
+     *
+     * Top-level keys win. Only when neither `requires` nor `os` is written at
+     * the top level is the first `metadata.<vendor>` bag that has either read
+     * instead, and there unknown `requires` keys (OpenClaw's `config`, which
+     * names that agent's own config paths) are ignored rather than refused:
+     * the bag is another tool's format, and its extras are not typos here.
+     *
+     * @param array<mixed> $meta
+     *
+     * @return array{bins?:list<string>,anyBins?:list<string>,env?:list<string>,os?:list<string>}
+     */
+    private static function requiresField(array $meta): array
+    {
+        $prefix = '';
+        $strict = true;
+        if (!array_key_exists('requires', $meta) && !array_key_exists('os', $meta)) {
+            $bag = self::vendorMetadata($meta);
+            if ($bag === null) {
+                return [];
+            }
+            [$prefix, $meta] = $bag;
+            $strict = false;
+        }
+
+        $out = [];
+        $requires = $meta['requires'] ?? null;
+        if ($requires !== null) {
+            if (!is_array($requires) || ($requires !== [] && array_is_list($requires))) {
+                throw self::refuse($prefix . 'requires', 'a mapping of bins / anyBins / env', $requires);
+            }
+            foreach ($requires as $key => $value) {
+                $normalized = self::REQUIRES_KEYS[$key] ?? null;
+                if ($normalized === null) {
+                    if ($strict) {
+                        throw new InvalidArgumentException(sprintf(
+                            'SKILL.md frontmatter "requires" has an unknown key "%s"; expected bins, anyBins or env.',
+                            $key,
+                        ));
+                    }
+                    continue;
+                }
+                $list = self::stringListField($value, "{$prefix}requires.{$key}");
+                if ($list !== []) {
+                    $out[$normalized] = array_values(array_unique([...($out[$normalized] ?? []), ...$list]));
+                }
+            }
+        }
+
+        $os = self::stringListField($meta['os'] ?? null, $prefix . 'os');
+        if ($os !== []) {
+            $platforms = [];
+            foreach ($os as $i => $platform) {
+                $known = self::OS_NAMES[strtolower(trim($platform))] ?? null;
+                if ($known === null) {
+                    throw new InvalidArgumentException(sprintf(
+                        'SKILL.md frontmatter "%sos[%d]" names an unknown platform "%s"; expected one of %s.',
+                        $prefix,
+                        $i,
+                        $platform,
+                        implode(', ', array_keys(self::OS_NAMES)),
+                    ));
+                }
+                $platforms[] = $known;
+            }
+            $out['os'] = array_values(array_unique($platforms));
+        }
+
+        return $out;
+    }
+
+    /**
+     * The first `metadata.<vendor>` bag declaring `requires` or `os`, with the
+     * key prefix its errors are reported under.
+     *
+     * @param array<mixed> $meta
+     *
+     * @return array{0: string, 1: array<mixed>}|null
+     */
+    private static function vendorMetadata(array $meta): ?array
+    {
+        $metadata = $meta['metadata'] ?? null;
+        if (!is_array($metadata)) {
+            return null;
+        }
+        foreach (self::METADATA_VENDORS as $vendor) {
+            $bag = $metadata[$vendor] ?? null;
+            if (is_array($bag) && (array_key_exists('requires', $bag) || array_key_exists('os', $bag))) {
+                return ["metadata.{$vendor}.", $bag];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * A string (a one-element list) or a list of non-empty strings.
+     *
+     * @return list<string>
+     */
+    private static function stringListField(mixed $value, string $key): array
+    {
+        if ($value === null) {
+            return [];
+        }
+        if (is_string($value)) {
+            $value = [$value];
+        }
+        if (!is_array($value) || !array_is_list($value)) {
+            throw self::refuse($key, 'a string or a list of strings', $value);
+        }
+        foreach ($value as $i => $item) {
+            if (!is_string($item) || trim($item) === '') {
+                throw self::refuse("{$key}[{$i}]", 'a non-empty string', $item);
+            }
+        }
+
+        return array_map('trim', $value);
     }
 
     /**

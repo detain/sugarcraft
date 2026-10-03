@@ -427,6 +427,7 @@ sugar-crush/tests/Permissions/PermissionRulePatternTest.php	0.061	59
 sugar-crush/tests/Permissions/PathRuleRespellingTest.php	0.061	42
 sugar-crush/tests/Tui/Components/SettingsPaneTest.php	0.060	18
 sugar-crush/tests/Providers/OpenAIProviderStreamedToolCallsTest.php	0.060	7
+sugar-crush/tests/Skills/SkillRequiresGatingTest.php	0.060	19
 sugar-crush/tests/Permissions/PermissionGateTest.php	0.059	165
 sugar-crush/tests/SessionTest.php	0.059	18
 sugar-crush/tests/Context/ProjectMemoryWriterTest.php	0.058	10

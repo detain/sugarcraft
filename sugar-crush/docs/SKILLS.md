@@ -167,6 +167,43 @@ it; the other skills load as usual. What is coerced and what is refused:
   an unquoted date (`description: 2024-01-01`, which YAML reads as an integer
   timestamp) is refused rather than turned into text. Quote it.
 - A frontmatter block that is not a mapping of fields is refused.
+- `requires` must be a mapping of `bins` / `anyBins` (or `any-bins`) / `env`,
+  each a string or a list of non-empty strings. Any other key under it is
+  refused, so a typo cannot silently drop a requirement. `os` is a string or a
+  list of platform names (`linux`, `darwin` or `macos`, `win32` or `windows`,
+  `freebsd`, `openbsd`, `netbsd`, `sunos`). An unknown platform is refused.
+
+**A skill can say what the host must provide, and is left out when it is
+missing.**
+
+```yaml
+---
+description: Opens GitHub pull requests with gh.
+requires:
+  bins: [gh]              # every one must be on PATH
+  anyBins: [rg, grep]     # at least one must be on PATH
+  env: [GITHUB_TOKEN]     # each must be set and non-empty
+os: [linux, darwin]       # the platform must be listed
+---
+```
+
+- **When it is checked.** The check runs when the skill is read, once per
+  launch, and only for a skill that declares requirements.
+- **What happens when it fails.** A skill whose requirements this host does
+  not meet is not registered, so it is neither listed to the model nor
+  loadable by name. It is recorded on `SkillManager::skipped()` with every
+  missing piece named, for example
+  `skill "gh-pr" is unavailable on this host: needs CLI gh; needs env GITHUB_TOKEN`
+  (see [Diagnostics](#diagnostics)).
+- **How binaries are found.** The `PATH` lookup is a stat walk, never a
+  subprocess: a file must exist and be executable.
+- **Other agents' formats.** SKILL.md files written for OpenClaw or nanobot
+  carry the same block under `metadata.openclaw` / `metadata.nanobot`. That is
+  read when the top-level `requires` and `os` are both absent. There, keys this
+  reader does not evaluate (OpenClaw's `requires.config`) are ignored rather
+  than refused, because they belong to the other agent's format.
+- **Order of checks.** A mistyped field is reported before a missing binary,
+  so the error you see is the one you can fix in the file.
 
 | Key | Default | Read by | Effect today |
 |---|---|---|---|
@@ -178,6 +215,8 @@ it; the other skills load as usual. What is coerced and what is refused:
 | `disallowed-tools` | `null` | nothing | **Inert**, same as above. |
 | `model` | `null` | `App::dispatchSkill()` only | **Not reachable on any live path.** `App::dispatchSkill()` reads it (`$skill->model ?? $this->model`) and that method has no production caller; `ForeignSkillDiscovery` merely copies the value onto the imported object. See [`context: fork`](#the-context-field-today). |
 | `effort` | `medium` | nothing acts on it | **Inert.** Parsed and carried; the only read of `Skill::$effort` in `src/` is `ForeignSkillDiscovery` copying it onto the imported object. No execution path consults it. |
+| `requires` | none | `SkillRegistry::unmetRequirements()` via `SkillFrontmatter::fromParsed()` and `SkillRegistry::register()` | Live. An unmet requirement keeps the skill out of the registry, with the reason on `SkillManager::skipped()`. See above. |
+| `os` | any platform | same | Live, same as `requires`. |
 | `context` | `thread` | `SkillRegistry::isContextFork()` via `App::applySkillsToSystemPrompt()`, `App::dispatchSkill()`, `App::handleSelectSkill()` | See below — `fork` is implemented nowhere; the one live consulter only words a status message, and the standing-body splice does not consult the field at all. |
 
 ## How a skill reaches the model
@@ -480,6 +519,14 @@ refused directory from `refusedDirectories()`, the launch prints one bounded
 summary line (to stderr **and** to the session transcript, so it survives the
 alt screen), and `SUGARCRUSH_DEBUG_SKILLS=1` puts the per-file lines back on
 stderr. See [`ENVIRONMENT.md`](ENVIRONMENT.md).
+
+A skill left out because the host lacks what its `requires` or `os` names is a
+skip like any other. Its reason starts with `is unavailable on this host` and
+lists every missing CLI, environment variable and platform, so the summary
+line counts it and `SUGARCRUSH_DEBUG_SKILLS=1` prints it. Installing the tool
+or setting the variable brings the skill back on the next launch. A skill
+handed to the registry by code rather than read from a SKILL.md gets the same
+check, and its reason is on `SkillRegistry::unavailable()`.
 
 ## See also
 

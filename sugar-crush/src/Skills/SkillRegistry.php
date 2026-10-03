@@ -4,12 +4,25 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Skills;
 
+use SugarCraft\Crush\Tools\Concerns\DetectsCapabilities;
 use SugarCraft\Crush\Util\PathGlob;
 
 final class SkillRegistry
 {
+    // The PATH probe for `requires.bins` — the same stat walk (never a
+    // subprocess) and per-binary memo the boot factory uses for `rg`/`fd`.
+    use DetectsCapabilities;
+
     /** @var array<string, Skill> */
     private array $skills = [];
+
+    /**
+     * Skills refused because this host does not meet their `requires`/`os`,
+     * name => reason ({@see unavailable()}).
+     *
+     * @var array<string, string>
+     */
+    private array $unavailable = [];
 
     /** @var array<string, true> disabled skills */
     private array $disabledSkills = [];
@@ -201,8 +214,126 @@ final class SkillRegistry
     public function register(array $skills): void
     {
         foreach ($skills as $skill) {
+            if ($this->refuseUnavailable($skill->name, $skill->requires)) {
+                continue;
+            }
             $this->skills[$skill->name] = $skill;
         }
+    }
+
+    /**
+     * Skills this registry refused because the host does not meet their
+     * declared requirements, name => reason.
+     *
+     * The frontmatter reader already refuses such a skill before it gets here
+     * ({@see SkillFrontmatter::fromParsed()}), so a skill read from a SKILL.md
+     * lands on `SkillManager::skipped()` instead. This is the second check for
+     * a skill that reaches the registry by any other route, the same
+     * re-check-at-the-door that `disable-model-invocation` gets in `SkillTool`.
+     *
+     * @return array<string, string>
+     */
+    public function unavailable(): array
+    {
+        return $this->unavailable;
+    }
+
+    /**
+     * Every requirement in $requires that this host does not meet, as
+     * human-readable items (`CLI gh`, `env GITHUB_TOKEN`, ...). Empty means
+     * the skill is available.
+     *
+     * - `bins`: every name must be an executable on `PATH`.
+     * - `anyBins`: at least one must be.
+     * - `env`: every variable must be set to a non-empty value.
+     * - `os`: the current platform must be listed.
+     *
+     * The three trailing parameters exist so tests can ask about a PATH, an
+     * environment and a platform the process does not have; null means the
+     * real one.
+     *
+     * Mirrors nanobot's `SkillsLoader._get_missing_requirements()` and
+     * OpenClaw's skill gating.
+     *
+     * @param array{bins?:list<string>,anyBins?:list<string>,env?:list<string>,os?:list<string>} $requires
+     * @param \Closure(string):(string|false)|null $env
+     *
+     * @return list<string>
+     */
+    public static function unmetRequirements(array $requires, ?string $pathList = null, ?\Closure $env = null, ?string $platform = null): array
+    {
+        if ($requires === []) {
+            return [];
+        }
+
+        $env ??= static fn (string $name): string|false => getenv($name);
+        $present = static fn (string $bin): bool => self::capabilityPresent($bin, $pathList);
+        $unmet = [];
+
+        foreach ($requires['bins'] ?? [] as $bin) {
+            if (!$present($bin)) {
+                $unmet[] = "CLI {$bin}";
+            }
+        }
+
+        $anyBins = $requires['anyBins'] ?? [];
+        if ($anyBins !== [] && array_filter($anyBins, $present) === []) {
+            $unmet[] = 'any CLI of ' . implode(', ', $anyBins);
+        }
+
+        foreach ($requires['env'] ?? [] as $name) {
+            $value = $env($name);
+            if ($value === false || $value === '') {
+                $unmet[] = "env {$name}";
+            }
+        }
+
+        $os = $requires['os'] ?? [];
+        $platform ??= self::currentPlatform();
+        if ($os !== [] && !in_array($platform, $os, true)) {
+            $unmet[] = 'OS ' . implode(' or ', $os) . " (this is {$platform})";
+        }
+
+        return $unmet;
+    }
+
+    /**
+     * The one-line reason a skill with unmet requirements is left out.
+     *
+     * @param list<string> $unmet {@see unmetRequirements()}
+     */
+    public static function unavailableReason(string $name, array $unmet): string
+    {
+        return sprintf('skill "%s" is unavailable on this host: needs %s', $name, implode('; needs ', $unmet));
+    }
+
+    /**
+     * This host's platform in `process.platform` spelling (`linux`, `darwin`,
+     * `win32`, `freebsd` ...), which is what `os:` lists are written in.
+     */
+    public static function currentPlatform(): string
+    {
+        return PHP_OS_FAMILY === 'Windows' ? 'win32' : strtolower(PHP_OS);
+    }
+
+    /**
+     * Record and report a skill whose requirements are unmet; false when it
+     * may be registered.
+     *
+     * @param array{bins?:list<string>,anyBins?:list<string>,env?:list<string>,os?:list<string>} $requires
+     */
+    private function refuseUnavailable(int|string $name, array $requires): bool
+    {
+        $unmet = self::unmetRequirements($requires);
+        if ($unmet === []) {
+            unset($this->unavailable[$name]);
+
+            return false;
+        }
+
+        $this->unavailable[$name] = self::unavailableReason((string) $name, $unmet);
+
+        return true;
     }
 
     /**
@@ -361,10 +492,19 @@ final class SkillRegistry
      * would silently break every path-scoped skill loaded via the lazy
      * manifest path (crush_feat.md section 7 E3/E4).
      *
-     * @param array{name:string,description:string,disableModelInvocation:bool,userInvocable:bool,context:string,paths:array<string>,sourcePath:string,origin?:SkillOrigin} $manifest
+     * `requires` is optional for the same reason `origin` is: the Stage-1
+     * reader refuses an unavailable skill before building the manifest, so a
+     * manifest that carries the key is one built by some other route, and it
+     * gets the same check {@see register()} applies.
+     *
+     * @param array{name:string,description:string,disableModelInvocation:bool,userInvocable:bool,context:string,paths:array<string>,sourcePath:string,origin?:SkillOrigin,requires?:array{bins?:list<string>,anyBins?:list<string>,env?:list<string>,os?:list<string>}} $manifest
      */
     public function registerFromManifest(array $manifest): void
     {
+        if ($this->refuseUnavailable($manifest['name'], $manifest['requires'] ?? [])) {
+            return;
+        }
+
         $skill = new Skill(
             name: $manifest['name'],
             description: $manifest['description'],
@@ -381,6 +521,7 @@ final class SkillRegistry
             // Absent from a hand-built manifest: such a skill keeps Skill's
             // least-trusted default rather than claiming a tier nobody stated.
             origin: $manifest['origin'] ?? SkillOrigin::Project,
+            requires: $manifest['requires'] ?? [],
         );
 
         $this->skills[$manifest['name']] = $skill;
