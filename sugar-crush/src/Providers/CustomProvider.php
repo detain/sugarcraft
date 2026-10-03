@@ -6,7 +6,6 @@ namespace SugarCraft\Crush\Providers;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
-use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\UserMessage;
@@ -14,6 +13,7 @@ use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Providers\Concerns\HttpClientDefaults;
 use SugarCraft\Crush\Providers\Concerns\ReasoningExtractor;
+use SugarCraft\Crush\Providers\Concerns\ReassemblesStreamedToolCalls;
 use SugarCraft\Crush\Providers\Concerns\SessionAffinity;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
@@ -31,6 +31,13 @@ final readonly class CustomProvider implements ProviderInterface
     use SessionAffinity;
 
     /**
+     * Streamed tool-call reassembly and the end-of-stream flush (audits W1.A1,
+     * 15a A4, A11, A23), shared with OpenAIProvider and SglangProvider since
+     * X-31a instead of the copy this class carried.
+     */
+    use ReassemblesStreamedToolCalls;
+
+    /**
      * E707 (round 81): the `finish_reason` strings on this OpenAI-compatible
      * wire that mark a capacity cut rather than a clean end. `length` is the
      * protocol's own; `abort` is what the vLLM/SGLang-family servers this
@@ -42,9 +49,6 @@ final readonly class CustomProvider implements ProviderInterface
      * @var list<string>
      */
     private const TRUNCATED_FINISH_REASONS = ['length', 'abort'];
-
-    /** Bytes of a dropped call's raw arguments quoted in its warning. */
-    private const WARNING_EXCERPT_LIMIT = 200;
 
     /**
      * Audit 15a A10: the body keys complete()/completeStream() write
@@ -508,7 +512,7 @@ final readonly class CustomProvider implements ProviderInterface
             if ($toolCallBuffer !== [] && $streamFinishReason !== 'error') {
                 $streamEndedTruncated = $streamFinishReason === null
                     || in_array($streamFinishReason, self::TRUNCATED_FINISH_REASONS, true);
-                $flushed = self::flushBufferedToolCalls($toolCallBuffer, $streamEndedTruncated, $streamFinishReason);
+                $flushed = self::flushStreamedToolCalls($toolCallBuffer, $streamEndedTruncated, $streamFinishReason, 'CustomProvider');
 
                 if ($flushed !== null) {
                     // Empty content: the fragments streamed as tool deltas,
@@ -819,7 +823,7 @@ final readonly class CustomProvider implements ProviderInterface
 
     /**
      * Composes two independent per-chunk concerns: W1.A1 (§12 D2) tool-call
-     * fragment reassembly via {@see resolveStreamedToolCalls()}, and W1.A2
+     * fragment reassembly via {@see reassembleStreamedToolCalls()}, and W1.A2
      * (§12 D3) reasoning/content splitting via {@see extractReasoning()}.
      * Kept as separate methods (rather than one inlined rewrite) so each
      * plan step's logic stays a single, independently reviewable unit - see
@@ -833,7 +837,9 @@ final readonly class CustomProvider implements ProviderInterface
         $delta = is_array($data['choices'][0]['delta'] ?? null) ? $data['choices'][0]['delta'] : [];
         $finishReason = $data['choices'][0]['finish_reason'] ?? null;
 
-        $toolCalls = $this->resolveStreamedToolCalls($delta, $finishReason, $toolCallBuffer);
+        // W1.A1 (§12 D2) fragment reassembly, shared with Sglang/OpenAI since
+        // X-31a: see ReassemblesStreamedToolCalls::reassembleStreamedToolCalls().
+        $toolCalls = $this->reassembleStreamedToolCalls($delta, $finishReason, $toolCallBuffer);
 
         // W1.A2 (§12 D3), applied per chunk here - see
         // SglangProvider::parseChunk()'s docblock for the same per-chunk
@@ -855,137 +861,4 @@ final readonly class CustomProvider implements ProviderInterface
         );
     }
 
-    /**
-     * W1.A1 (§12 D2): mirrors the OpenAI streaming tool-call shape -
-     * `delta.tool_calls[]` arrives as successive fragments keyed by `index`,
-     * with `function.arguments` streamed as string pieces that only form
-     * valid JSON once the call is complete. Fragments accumulate into
-     * `$toolCallBuffer` (by reference, one buffer per completeStream() call
-     * - see the call site) until `finish_reason === 'tool_calls'`, at which
-     * point the buffered calls are assembled into ToolCall objects and the
-     * buffer is drained.
-     *
-     * Previously this always returned `toolCalls: null` - byte-for-byte the
-     * same bug as SglangProvider::parseChunk() - so a delta chunk carrying
-     * only `tool_calls` (no `content`) had its fragments read then
-     * discarded here every time - `completeStream()` could never deliver a
-     * tool call, only `complete()` (non-streaming) could.
-     *
-     * On any other end the buffer is deliberately left intact here:
-     * {@see flushBufferedToolCalls()} drains it at the generator's terminal
-     * seam (audit 15a A4).
-     *
-     * @param array<string, mixed> $delta
-     * @param array<int, array{id?: ?string, name?: ?string, arguments?: string}> $toolCallBuffer
-     * @return ?array<int, ToolCall>
-     */
-    private function resolveStreamedToolCalls(array $delta, ?string $finishReason, array &$toolCallBuffer): ?array
-    {
-        foreach ($delta['tool_calls'] ?? [] as $tc) {
-            $idx = $tc['index'] ?? 0;
-            $toolCallBuffer[$idx]['id'] ??= $tc['id'] ?? null;
-            $toolCallBuffer[$idx]['name'] ??= $tc['function']['name'] ?? null;
-            $toolCallBuffer[$idx]['arguments'] =
-                ($toolCallBuffer[$idx]['arguments'] ?? '') . ($tc['function']['arguments'] ?? '');
-        }
-
-        if ($finishReason !== 'tool_calls' || $toolCallBuffer === []) {
-            return null;
-        }
-
-        $toolCalls = array_map(
-            fn (array $tc): ToolCall => ToolCall::fromArray([
-                'id' => $tc['id'] ?? '',
-                'name' => $tc['name'] ?? '',
-                'arguments' => is_array($decoded = json_decode($tc['arguments'] ?? '{}', true)) ? $decoded : [],
-                // Audit A11: the server declared this call complete, so it is
-                // emitted - but a payload that did not decode is carried as an
-                // error for Runtime to report, never run as `[]`.
-                'argumentsError' => ToolCall::argumentsErrorFor($tc['arguments'] ?? null),
-                // Audit A23: the concatenated fragments, replayed verbatim.
-                'rawArguments' => $tc['arguments'] ?? null,
-            ]),
-            $toolCallBuffer
-        );
-        $toolCallBuffer = [];
-
-        return $toolCalls;
-    }
-
-    /**
-     * Audit 15a A4: drains tool-call fragments a stream left buffered because
-     * it never sent a `finish_reason: "tool_calls"` - it ended on `stop`, on
-     * a truncating reason, or on `[DONE]` alone.
-     *
-     * Decode-or-drop, never half-decoded: in none of these ends did the
-     * server declare the calls complete, so a payload that is not a complete
-     * JSON object may be a call that was never finished, and executing it is
-     * the silent-corruption failure the drop prevents. Each drop names itself
-     * through {@see RuntimeNoticeSink::warn()}. An EMPTY payload is a genuine
-     * zero-argument call on a clean end (every fragment the server meant to
-     * send arrived) and is emitted with `[]`; on a truncated end it is
-     * indistinguishable from an opener whose argument deltas were cut off,
-     * so it drops.
-     *
-     * @param array<int, array{id?: ?string, name?: ?string, arguments?: mixed}> $toolCallBuffer
-     * @return ?list<ToolCall> null when nothing survived, so no frame is yielded
-     */
-    private static function flushBufferedToolCalls(array $toolCallBuffer, bool $truncated, ?string $finishReason): ?array
-    {
-        $why = $truncated
-            ? 'the stream was truncated before its arguments completed'
-            : sprintf(
-                'the stream ended with finish_reason "%s" without declaring its tool calls complete',
-                (string) $finishReason,
-            );
-        $calls = [];
-
-        foreach ($toolCallBuffer as $tc) {
-            $name = (string) ($tc['name'] ?? '');
-            $raw = $tc['arguments'] ?? '';
-            $rawString = is_string($raw) ? $raw : '';
-
-            if (is_array($raw)) {
-                $arguments = $raw;
-            } elseif (trim($rawString) === '') {
-                if ($truncated) {
-                    RuntimeNoticeSink::warn(sprintf(
-                        'CustomProvider: tool call "%s" arguments never streamed (empty payload); '
-                        . 'the call is being DROPPED, not executed, because %s.',
-                        $name,
-                        $why,
-                    ));
-                    continue;
-                }
-                $arguments = [];
-            } else {
-                $decoded = json_decode($rawString, true);
-                if (!is_array($decoded)) {
-                    RuntimeNoticeSink::warn(sprintf(
-                        'CustomProvider: tool call "%s" arguments are not a complete JSON object (%s); '
-                        . 'the call is being DROPPED, not executed, because %s. Raw payload: %s',
-                        $name,
-                        json_last_error() === JSON_ERROR_NONE ? 'decoded to ' . get_debug_type($decoded) : json_last_error_msg(),
-                        $why,
-                        strlen($rawString) <= self::WARNING_EXCERPT_LIMIT
-                            ? $rawString
-                            : substr($rawString, 0, self::WARNING_EXCERPT_LIMIT) . ' [...]',
-                    ));
-                    continue;
-                }
-                $arguments = $decoded;
-            }
-
-            $calls[] = ToolCall::fromArray([
-                'id' => $tc['id'] ?? '',
-                'name' => $name,
-                'arguments' => $arguments,
-                // Audit A23: replayed verbatim; ToolCall drops it for the
-                // pre-decoded and blank arms, which have no wire object.
-                'rawArguments' => $rawString,
-            ]);
-        }
-
-        return $calls === [] ? null : $calls;
-    }
 }

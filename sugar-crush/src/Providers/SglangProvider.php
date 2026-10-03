@@ -15,6 +15,7 @@ use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Providers\Concerns\HttpClientDefaults;
 use SugarCraft\Crush\Providers\Concerns\ReasoningExtractor;
+use SugarCraft\Crush\Providers\Concerns\ReassemblesStreamedToolCalls;
 use SugarCraft\Crush\Providers\ToolCallParser\DsmlToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\EnvelopeAware;
@@ -39,6 +40,15 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
     use HttpClientDefaults;
 
     use SessionAffinity;
+
+    /**
+     * Streamed tool-call fragment buffering and assembly, shared with
+     * CustomProvider and OpenAIProvider since X-31a. The end-of-stream flush
+     * stays {@see flushTruncatedToolCalls()}: its drop diagnostics are this
+     * provider's own (head+tail excerpts, the malformed-payload taxonomy),
+     * not the trait's.
+     */
+    use ReassemblesStreamedToolCalls;
 
     /**
      * The literal substring at the heart of the MiniMax-M2.x tool-call
@@ -2503,7 +2513,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
      * {@see supportsStreaming()} returns true, so the production consumers
      * ({@see \SugarCraft\Crush\Runtime}, {@see \SugarCraft\Crush\Agents\AgentManager})
      * route this provider through `completeStream()` instead, and that path's
-     * `parseChunk()`/`resolveStreamedToolCalls()` reassembly builds its own
+     * `parseChunk()`/`reassembleStreamedToolCalls()` reassembly builds its own
      * tool calls from `delta.tool_calls[]`.
      *
      * THAT IS NO LONGER THE WHOLE STORY, and this paragraph used to end by
@@ -2778,7 +2788,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
      * production consumers branch on it ({@see \SugarCraft\Crush\Runtime} and
      * {@see \SugarCraft\Crush\Agents\AgentManager}), so the live TUI chat loop
      * takes `completeStream()`. Until now that path reassembled tool calls
-     * itself, in {@see resolveStreamedToolCalls()}, and never consulted
+     * itself, in {@see reassembleStreamedToolCalls()}, and never consulted
      * {@see ToolCallParser\ToolCallParserInterface} at all - so selecting a
      * text-scanning fallback armed it on the one path nobody takes. A parser
      * wired only into {@see parseResponse()} would have recovered nothing in
@@ -2872,7 +2882,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
 
     /**
      * Composes two independent per-chunk concerns: W1.A1 (§12 D2) tool-call
-     * fragment reassembly via {@see resolveStreamedToolCalls()}, and W1.A2
+     * fragment reassembly via {@see reassembleStreamedToolCalls()}, and W1.A2
      * (§12 D3) reasoning/content splitting via {@see extractReasoning()}.
      * Kept as separate methods (rather than one inlined rewrite) so each
      * plan step's logic stays a single, independently reviewable unit.
@@ -2887,7 +2897,26 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
         $delta = is_array($data['choices'][0]['delta'] ?? null) ? $data['choices'][0]['delta'] : [];
         $finishReason = $data['choices'][0]['finish_reason'] ?? null;
 
-        $toolCalls = $this->resolveStreamedToolCalls($delta, $finishReason, $toolCallBuffer);
+        // W1.A1 (§12 D2) fragment reassembly through the trait shared with
+        // CustomProvider and OpenAIProvider (X-31a). The fragments are
+        // buffered FIRST (a null finish only accumulates) so the raw payloads
+        // are still in hand when the server declares the calls complete: the
+        // trait decodes them quietly, and W1.A4's truncation-aware diagnostics
+        // ({@see decodeToolArguments()}, MiniMax-specific) are this provider's
+        // to emit. The `arguments` both decodes produce are identical - the
+        // object, else [] - and an undecodable payload still rides as
+        // `argumentsError` (audit A11) with its raw string (A23).
+        //
+        // ON ANY OTHER END the buffer is intentionally left intact (§Q7/A4):
+        // abandoning it was E-32's silent-loss bug, and
+        // {@see flushTruncatedToolCalls()} drains it at the generator's
+        // terminal seam for every end except `error`.
+        $this->reassembleStreamedToolCalls($delta, null, $toolCallBuffer);
+        $declared = $finishReason === 'tool_calls' ? $toolCallBuffer : [];
+        $toolCalls = $this->reassembleStreamedToolCalls([], $finishReason, $toolCallBuffer);
+        foreach ($declared as $fragment) {
+            self::decodeToolArguments($fragment['arguments'] ?? '', (string) ($fragment['name'] ?? ''));
+        }
 
         // W1.A2 (§12 D3), applied per chunk here: Case 1 (delta.reasoning_content
         // present) is unambiguous per chunk. Case 2 (raw <think> markup inline in
@@ -2976,77 +3005,8 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
 
 
     /**
-     * W1.A1 (§12 D2): mirrors the OpenAI streaming tool-call shape -
-     * `delta.tool_calls[]` arrives as successive fragments keyed by `index`,
-     * with `function.arguments` streamed as string pieces that only form
-     * valid JSON once the call is complete (SGLang's `/v1/chat/completions`
-     * SSE docs). Fragments accumulate into `$toolCallBuffer` (by reference,
-     * one buffer per completeStream() call - see the call site) until
-     * `finish_reason === 'tool_calls'`, at which point the buffered calls
-     * are assembled into ToolCall objects and the buffer is drained.
-     *
-     * Previously this always returned `toolCalls: null`, so a delta chunk
-     * carrying only `tool_calls` (no `content`) had its fragments read then
-     * discarded here every time - `completeStream()` could never deliver a
-     * tool call, only `complete()` (non-streaming) could.
-     *
-     * §Q7/A4 note for the gate below: on a NON-`tool_calls` end the buffer
-     * is intentionally left intact here - abandoning it was E-32's
-     * silent-loss bug (truncated ends) and audit 15a A4's (`stop`-labelled
-     * ends), and {@see flushTruncatedToolCalls()} is what now drains it at
-     * the generator's terminal seam for every end except `error`. Do not
-     * "clean up" the buffer on other finish reasons: the flush guard reads it
-     * exactly as this method leaves it.
-     *
-     * @param array<string, mixed> $delta
-     * @param array<int, array{id?: ?string, name?: ?string, arguments?: string}> $toolCallBuffer
-     * @return ?array<int, ToolCall>
-     */
-    private function resolveStreamedToolCalls(array $delta, ?string $finishReason, array &$toolCallBuffer): ?array
-    {
-        foreach ($delta['tool_calls'] ?? [] as $tc) {
-            $idx = $tc['index'] ?? 0;
-            $toolCallBuffer[$idx]['id'] ??= $tc['id'] ?? null;
-            $toolCallBuffer[$idx]['name'] ??= $tc['function']['name'] ?? null;
-            $toolCallBuffer[$idx]['arguments'] =
-                ($toolCallBuffer[$idx]['arguments'] ?? '') . ($tc['function']['arguments'] ?? '');
-        }
-
-        if ($finishReason !== 'tool_calls' || $toolCallBuffer === []) {
-            return null;
-        }
-
-        $toolCalls = array_map(
-            fn (array $tc): ToolCall => ToolCall::fromArray([
-                'id' => $tc['id'] ?? '',
-                'name' => $tc['name'] ?? '',
-                // W1.A4 (§12 D5): a streamed call is the likelier truncation
-                // victim of the two - the fragments were concatenated here, so
-                // a payload that stops mid-value is exactly what the bug looks
-                // like from the client side.
-                'arguments' => self::decodeToolArguments(
-                    $tc['arguments'] ?? '',
-                    (string) ($tc['name'] ?? ''),
-                ),
-                // Audit A11: a `tool_calls` finish declares the call complete,
-                // so it is still emitted - but undecodable arguments ride on
-                // it as an error, and Runtime answers the model with that
-                // instead of running the tool with the `[]` above.
-                'argumentsError' => ToolCall::argumentsErrorFor($tc['arguments'] ?? null),
-                // Audit A23: the concatenated fragments ARE the wire string;
-                // history replays them verbatim (see ToolCall::rawArguments()).
-                'rawArguments' => $tc['arguments'] ?? null,
-            ]),
-            $toolCallBuffer
-        );
-        $toolCallBuffer = [];
-
-        return $toolCalls;
-    }
-
-    /**
      * §Q7 (qwen.md; E-32): the truncation twin of
-     * {@see resolveStreamedToolCalls()}'s `tool_calls` assembly. Called by
+     * {@see reassembleStreamedToolCalls()}'s `tool_calls` assembly. Called by
      * {@see completeStream()} once per stream, whenever fragments are still
      * buffered at the end - after a truncated end (see
      * `TRUNCATED_FINISH_REASONS`) and, since audit 15a A4, after a clean end
