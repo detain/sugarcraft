@@ -1991,14 +1991,24 @@ final class LspConnection implements LspConnectionInterface
      * process sharing the server, then dispatch it here. Outside an exchange
      * (no lock) it is only dispatched, as it always was.
      *
+     * A journal entry that did not land ({@see LspExchangeLock::appendNote()}
+     * returns null) is dispatched here and NOT published: no sequence number
+     * is recorded, in this process or in the shared state. The other sharers
+     * miss this one notification — it is in no file they could read — but
+     * publishing a number for it would cost them more: they would step past
+     * it, and the next append would reuse that number for an entry that DID
+     * land, which they would then skip too.
+     *
      * @param array<mixed>|null $params
      */
     private function receiveNotification(string $method, ?array $params): void
     {
         if ($this->lock !== null && $this->exchangeState !== null) {
             $seq = $this->lock->appendNote($method, $params);
-            $this->notesSeen = $seq;
-            $this->storeExchangeState($this->exchangeState->withNoteSeq($seq));
+            if ($seq !== null) {
+                $this->notesSeen = $seq;
+                $this->storeExchangeState($this->exchangeState->withNoteSeq($seq));
+            }
         }
 
         $this->handleNotification($method, $params);

@@ -321,6 +321,56 @@ final class LspConnectionForkSafetyTest extends TestCase
         self::assertSame('test/note:A', $this->reap($later), 'a process forked after the replay must not see it twice');
     }
 
+    /**
+     * A notification whose journal entry does not land is dispatched to the
+     * process that read it and NOT published. It used to be published anyway,
+     * under the sequence number appendNote() handed out regardless: every
+     * sharer then counted that entry as seen, and the next entry — which DID
+     * land — was journaled under the very same number, so they skipped it
+     * too. Here the owner reads A while its journal write fails, a forked
+     * turn then reads B into a working journal, and the owner must still get B.
+     */
+    public function testANotificationWhoseJournalWriteFailsDoesNotHideTheNextOne(): void
+    {
+        $connection = $this->connection();
+        $lock = (new \ReflectionProperty(LspConnection::class, 'lock'))->getValue($connection);
+        self::assertInstanceOf(LspExchangeLock::class, $lock);
+
+        /** @var list<string> $seen */
+        $seen = [];
+        $connection->onNotification(static function (string $method, ?array $params) use (&$seen): void {
+            $seen[] = $method . ':' . ($params['n'] ?? '?');
+        });
+
+        // A directory where the journal goes: the temp-then-rename that every
+        // journal write needs fails on it (EISDIR), for root as well, while
+        // the state file beside it keeps taking writes.
+        $notes = $lock->path . '.notes';
+        self::assertFileDoesNotExist($notes, 'nothing was journaled yet');
+        mkdir($notes, 0700);
+        try {
+            self::assertSame('A', self::n($connection->sendRequest('test/echo', ['n' => 'A', 'note' => true])));
+        } finally {
+            rmdir($notes);
+        }
+        self::assertSame(['test/note:A'], $seen, 'the process that read the notification still gets it');
+        self::assertSame(0, $this->sharedState()->noteSeq, 'a journal entry that never landed was published');
+
+        $reader = $this->forkReporting(static function () use ($connection, &$seen): string {
+            self::n($connection->sendRequest('test/echo', ['n' => 'B', 'note' => true]));
+
+            return implode(',', $seen);
+        });
+        self::assertSame('test/note:A,test/note:B', $this->reap($reader));
+
+        self::assertSame('P', self::n($connection->sendRequest('test/echo', ['n' => 'P'])));
+        self::assertSame(
+            ['test/note:A', 'test/note:B'],
+            $seen,
+            'the owner must get the notification another process journaled after the failed write',
+        );
+    }
+
     public function testAServerRequestReusingOurIdIsAnsweredAndNotTakenForTheResponse(): void
     {
         $connection = $this->connection();

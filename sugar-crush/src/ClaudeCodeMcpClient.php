@@ -8,6 +8,7 @@ use RuntimeException;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\ProcessReaper;
+use SugarCraft\Crush\Support\ProcessTree;
 use SugarCraft\Mcp\ExchangeLock;
 use SugarCraft\Mcp\RequestIdSequence;
 
@@ -414,11 +415,12 @@ final class ClaudeCodeMcpClient
     private int $serverPid = 0;
 
     /**
-     * The child's /proc start time captured at {@see connect()} (0 where
-     * procfs is absent), so a forked caller can tell the server from a later
-     * process that reused its pid after the owner reaped it.
+     * The child's /proc start time captured at {@see connect()} (null where
+     * procfs is absent or did not carry it), so a forked caller can tell the
+     * server from a later process that reused its pid after the owner reaped
+     * it. Read through {@see ProcessTree::stat()}, the one /proc stat parser.
      */
-    private int $serverStartTicks = 0;
+    private ?int $serverStartTicks = null;
 
     /** Seconds {@see connect()} and {@see listTools()} may each wait; see {@see HANDSHAKE_TIMEOUT_SECONDS}. */
     private readonly float $handshakeTimeoutSeconds;
@@ -515,7 +517,7 @@ final class ClaudeCodeMcpClient
         $this->lock = $lock;
         $this->ownerPid = (int) getmypid();
         $this->serverPid = (int) proc_get_status($processHandles)['pid'];
-        $this->serverStartTicks = self::procStat($this->serverPid)['startTicks'] ?? 0;
+        $this->serverStartTicks = ProcessTree::stat($this->serverPid)['startTicks'] ?? null;
         $this->ids->claim();
         $this->process = $processHandles;
         $this->pipes = $pipes;
@@ -989,7 +991,7 @@ final class ClaudeCodeMcpClient
             return false;
         }
 
-        $stat = self::procStat($this->serverPid);
+        $stat = ProcessTree::stat($this->serverPid);
         if ($stat === null) {
             // No procfs here, or the entry went between the signal and the
             // read: signal 0 said "exists", and a pid that is truly gone fails
@@ -1001,41 +1003,11 @@ final class ClaudeCodeMcpClient
             return false;
         }
 
-        return $this->serverStartTicks === 0 || $stat['startTicks'] === $this->serverStartTicks;
-    }
-
-    /**
-     * The state letter and start time (clock ticks since boot) of $pid from
-     * /proc/<pid>/stat, or null where procfs is absent or unreadable. The
-     * process name (field 2) may itself contain spaces and parentheses, so the
-     * fields are split after its LAST ')'.
-     *
-     * @return array{state: string, startTicks: int}|null
-     */
-    private static function procStat(int $pid): ?array
-    {
-        if ($pid <= 0) {
-            return null;
-        }
-
-        $path = "/proc/{$pid}/stat";
-        if (!is_readable($path)) {
-            return null;
-        }
-
-        $raw = @file_get_contents($path);
-        $close = is_string($raw) ? strrpos($raw, ')') : false;
-        if (!is_string($raw) || $close === false) {
-            return null;
-        }
-
-        // Field 3 (state) onwards; starttime is field 22, index 19 here.
-        $fields = preg_split('/\s+/', trim(substr($raw, $close + 1)));
-        if (!is_array($fields) || count($fields) < 20 || $fields[0] === '' || !ctype_digit($fields[19])) {
-            return null;
-        }
-
-        return ['state' => $fields[0], 'startTicks' => (int) $fields[19]];
+        // Either start time unknown (no field at connect, or none now): the
+        // state check above is all /proc can say, and signal 0 stands.
+        return $this->serverStartTicks === null
+            || $stat['startTicks'] === null
+            || $stat['startTicks'] === $this->serverStartTicks;
     }
 
     /**
@@ -1430,7 +1402,7 @@ final class ClaudeCodeMcpClient
             $this->lock = null;
             $this->process = null;
             $this->serverPid = 0;
-            $this->serverStartTicks = 0;
+            $this->serverStartTicks = null;
             $this->pipes = null;
             $this->connected = false;
             $this->readBuffer = '';
@@ -1464,7 +1436,7 @@ final class ClaudeCodeMcpClient
 
         $this->process = null;
         $this->serverPid = 0;
-        $this->serverStartTicks = 0;
+        $this->serverStartTicks = null;
         $this->pipes = null;
         $this->connected = false;
         // The half-line and the unterminated fragment both belong to a session

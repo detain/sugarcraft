@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\MCP;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
+use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
@@ -335,6 +337,7 @@ final class HttpMcpServerStreamableHttpTest extends TestCase
                 'id' => 1,
                 'error' => ['code' => -32601, 'message' => 'tools are session-gated'],
             ])),
+            new Response(200),
         ]);
 
         $caught = null;
@@ -350,6 +353,74 @@ final class HttpMcpServerStreamableHttpTest extends TestCase
         self::assertStringContainsString('tools are session-gated', $caught->getMessage());
         self::assertFalse($server->isUp());
         self::assertSame([], $server->listTools());
+        self::assertCount(4, $this->history, 'the refused start must end the session the server issued');
+        $this->assertSessionDelete(3);
+    }
+
+    /**
+     * A start that fails AFTER the server issued a session id ends that
+     * session with the same best-effort DELETE stop() sends. Forgetting it
+     * only locally left it open on the server for good: stop() then finds no
+     * session to end, and a retried start() opens a second one.
+     */
+    public function testAStartThatFailsAfterTheHandshakeDeletesTheSession(): void
+    {
+        $server = $this->server([
+            self::initReply(),
+            new Response(202),
+            new Response(500, [], 'boom'),
+            new Response(200),
+        ]);
+
+        $caught = null;
+        try {
+            $server->start();
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        self::assertNotNull($caught);
+        self::assertStringContainsString('HTTP 500', $caught->getMessage());
+        self::assertCount(4, $this->history);
+        $this->assertSessionDelete(3);
+
+        $server->stop();
+        self::assertCount(4, $this->history, 'the session was already ended; stop() has nothing left to delete');
+    }
+
+    /**
+     * The DELETE is best-effort here exactly as in stop(): a refused or failed
+     * one must not replace the start failure's own diagnosis.
+     */
+    public function testAFailedSessionDeleteDoesNotMaskTheStartFailure(): void
+    {
+        $server = $this->server([
+            self::initReply(),
+            new Response(202),
+            new Response(200, ['Content-Type' => 'application/json'], '{"jsonrpc":"2.0","id":1}'),
+            new ConnectException('host went away', new Request('DELETE', self::URL)),
+        ]);
+
+        $caught = null;
+        try {
+            $server->start();
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        self::assertNotNull($caught);
+        self::assertStringContainsString('tools/list returned no result', $caught->getMessage());
+        self::assertCount(4, $this->history);
+        $this->assertSessionDelete(3);
+        self::assertFalse($server->isUp());
+    }
+
+    private function assertSessionDelete(int $index): void
+    {
+        $delete = $this->request($index);
+        self::assertSame('DELETE', $delete->getMethod());
+        self::assertSame(self::URL, (string) $delete->getUri());
+        self::assertSame(self::SESSION, $delete->getHeaderLine('Mcp-Session-Id'));
     }
 
     /**
@@ -380,12 +451,18 @@ final class HttpMcpServerStreamableHttpTest extends TestCase
             self::initReply(),
             new Response(202),
             new Response(200, ['Content-Type' => 'application/json'], '{"jsonrpc":"2.0","id":1}'),
+            new Response(200),
         ]);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('tools/list returned no result');
+        try {
+            $server->start();
+            self::fail('a tools/list reply without a result started the server');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('tools/list returned no result', $e->getMessage());
+        }
 
-        $server->start();
+        self::assertCount(4, $this->history, 'the failed start must end the session the server issued');
+        $this->assertSessionDelete(3);
     }
 
     public function testAnInitializeReplyWithoutResultFailsStart(): void
@@ -417,12 +494,17 @@ final class HttpMcpServerStreamableHttpTest extends TestCase
 
     public function testARefusedInitializedNotificationFailsStart(): void
     {
-        $server = $this->server([self::initReply(), new Response(400, [], 'Bad Request')]);
+        $server = $this->server([self::initReply(), new Response(400, [], 'Bad Request'), new Response(200)]);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('HTTP 400 Bad Request: Bad Request');
+        try {
+            $server->start();
+            self::fail('a refused notifications/initialized started the server');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('HTTP 400 Bad Request: Bad Request', $e->getMessage());
+        }
 
-        $server->start();
+        self::assertCount(3, $this->history, 'the failed start must end the session the server issued');
+        $this->assertSessionDelete(2);
     }
 
     public function testProtocolVersionHeaderIsOmittedForA2024Session(): void

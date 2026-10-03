@@ -58,7 +58,8 @@ namespace SugarCraft\Crush\LSP;
  * the old contents are then STALE, and a caller that acted as if its phase or
  * frame record had landed would leave the next holder trusting a stream this
  * one may die half-way into. A state file that is missing outright loads as
- * dirty for the same reason (see {@see load()}).
+ * dirty for the same reason (see {@see load()}). A journal entry that does
+ * not land is reported the same way: {@see appendNote()} returns null.
  */
 final class LspExchangeLock
 {
@@ -425,9 +426,21 @@ final class LspExchangeLock
      * {@see LspExchangeState::$noteSeq} is only the hint that lets a process
      * skip reading this file when nothing is new.
      *
+     * A JOURNAL WRITE THAT FAILS is reported like a failed {@see store()}:
+     * this returns null, and the file still holds the previous journal. The
+     * number it would have returned was handed out anyway before, and that
+     * was worse than losing the one entry: published as the
+     * {@see LspExchangeState::$noteSeq} hint it told every other process an
+     * entry existed that the journal never got, they advanced past it — and
+     * the NEXT append, counting from the file, minted that same number again
+     * for a real entry, which they then skipped as already seen.
+     *
      * @param array<mixed>|null $params
+     *
+     * @return int|null null when the entry did not land — callers must not
+     *         publish or record a sequence number for it
      */
-    public function appendNote(string $method, ?array $params): int
+    public function appendNote(string $method, ?array $params): ?int
     {
         [$seq, $notes] = $this->journal();
         $seq++;
@@ -440,9 +453,7 @@ final class LspExchangeLock
             $encoded = serialize(['seq' => $seq, 'notes' => $notes]);
         }
 
-        $this->replace($this->notesPath(), $encoded);
-
-        return $seq;
+        return $this->replace($this->notesPath(), $encoded) ? $seq : null;
     }
 
     /**

@@ -40,7 +40,14 @@ final class ProcessTree
      * a legal comm), so splitting the whole line on spaces would misnumber
      * every later field for exactly the process a hostile command named.
      *
-     * @return array{pid: int, state: string, ppid: int, pgid: int, sid: int}|null
+     * `startTicks` is field 22 (`starttime`, clock ticks since boot): what
+     * tells a pid from a later process the kernel handed the same number to.
+     * It is null — not 0, which is a real value for a process started at boot
+     * — on a line too short to carry it or whose field is not a number; the
+     * other fields still parse, since a caller asking only for the state has
+     * no use for a refusal.
+     *
+     * @return array{pid: int, state: string, ppid: int, pgid: int, sid: int, startTicks: int|null}|null
      */
     public static function parseStat(string $line): ?array
     {
@@ -56,19 +63,23 @@ final class ProcessTree
             return null;
         }
 
+        // Field 3 (state) is index 0 here, so starttime (field 22) is index 19.
+        $startTicks = $rest[19] ?? null;
+
         return [
             'pid' => (int) $pid,
             'state' => (string) $rest[0],
             'ppid' => (int) $rest[1],
             'pgid' => (int) $rest[2],
             'sid' => (int) $rest[3],
+            'startTicks' => \is_string($startTicks) && \ctype_digit($startTicks) ? (int) $startTicks : null,
         ];
     }
 
     /**
      * One pid's parsed stat, or null when it is gone (or /proc is absent).
      *
-     * @return array{pid: int, state: string, ppid: int, pgid: int, sid: int}|null
+     * @return array{pid: int, state: string, ppid: int, pgid: int, sid: int, startTicks: int|null}|null
      */
     public static function stat(int $pid): ?array
     {
@@ -87,7 +98,7 @@ final class ProcessTree
      * and its stat read is simply absent — the scan is a snapshot, and its
      * caller ({@see ProcessContainment::killTree()}) re-scans until stable.
      *
-     * @return array<int, array{pid: int, state: string, ppid: int, pgid: int, sid: int}>|null
+     * @return array<int, array{pid: int, state: string, ppid: int, pgid: int, sid: int, startTicks: int|null}>|null
      */
     public static function snapshot(): ?array
     {
@@ -120,7 +131,7 @@ final class ProcessTree
      * caller can pair the walk with the states of the same scan), from a fresh
      * {@see snapshot()} otherwise; empty when /proc is absent.
      *
-     * @param array<int, array{pid: int, state: string, ppid: int, pgid: int, sid: int}>|null $snapshot
+     * @param array<int, array{pid: int, state: string, ppid: int, pgid: int, sid: int, startTicks: int|null}>|null $snapshot
      * @return list<int>
      */
     public static function descendants(int $pid, ?array $snapshot = null): array

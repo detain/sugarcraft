@@ -177,6 +177,43 @@ final class LspExchangeLockTest extends TestCase
         self::assertSame([], $lock->notesAfter(2));
     }
 
+    /**
+     * A journal entry that does not land is reported, never numbered: the
+     * sequence number appendNote() used to return anyway was published as the
+     * shared noteSeq hint, every sharer stepped past it, and the next append —
+     * counting from the file — minted the same number again for an entry that
+     * DID land, which they then skipped as already seen.
+     */
+    public function testAJournalWriteThatDoesNotLandIsReportedAndItsNumberIsNotSpent(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root writes through a read-only directory');
+        }
+
+        $dir = $this->privateDir();
+        $lock = LspExchangeLock::new('journal', $dir);
+
+        try {
+            self::assertSame(1, $lock->appendNote('kept', null));
+
+            chmod($dir, 0500);
+            try {
+                self::assertNull($lock->appendNote('lost', ['n' => 2]), 'a journal entry that did not land was given a sequence number');
+            } finally {
+                chmod($dir, 0700);
+            }
+
+            self::assertSame(
+                [['seq' => 1, 'method' => 'kept', 'params' => null]],
+                $lock->notesAfter(0),
+                'the journal keeps its previous contents whole',
+            );
+            self::assertSame(2, $lock->appendNote('next', null), 'the next entry takes the number the failed one never had');
+        } finally {
+            $lock->destroy();
+        }
+    }
+
     public function testTheJournalIsBounded(): void
     {
         $lock = $this->lock();

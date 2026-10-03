@@ -61,7 +61,7 @@ final class HttpMcpServer implements McpServer
     private const TRANSPORT_OWNED_HEADERS = ['accept', 'content-type', 'mcp-session-id', 'mcp-protocol-version'];
 
     /**
-     * Bound for the best-effort session DELETE in {@see stop()}: teardown must
+     * Bound for the best-effort session DELETE ({@see endSession()}): teardown must
      * not hold an exiting process for the client's full request timeout.
      */
     private const DELETE_TIMEOUT_SECONDS = 5.0;
@@ -138,8 +138,12 @@ final class HttpMcpServer implements McpServer
 
             $this->tools = $this->parseTools($data);
         } catch (\Exception $e) {
-            $this->sessionId = null;
-            $this->negotiatedVersion = null;
+            // A failure AFTER the server issued a session id (the
+            // notifications/initialized leg, the tools/list gate) leaves that
+            // session open on the server unless it is ended here: nothing
+            // else ever will, since stop() finds no session to end once it is
+            // forgotten locally. Ended the way stop() ends one — best-effort.
+            $this->endSession();
 
             throw new \RuntimeException("Failed to start MCP server {$this->name}: {$e->getMessage()}");
         }
@@ -159,6 +163,18 @@ final class HttpMcpServer implements McpServer
      */
     public function stop(): void
     {
+        $this->endSession();
+        $this->initialized = false;
+    }
+
+    /**
+     * Send the session DELETE (see {@see stop()}) when this process owns a
+     * session, then forget the session locally either way. Best-effort: a
+     * refusal, a network error or a dead host is swallowed, so neither a
+     * shutdown nor a failed {@see start()}'s own diagnosis is replaced by it.
+     */
+    private function endSession(): void
+    {
         // A forked process shares the owner's session: ending it here would cut
         // the session out from under the parent and every sibling. Forget it
         // locally instead.
@@ -176,7 +192,6 @@ final class HttpMcpServer implements McpServer
 
         $this->sessionId = null;
         $this->negotiatedVersion = null;
-        $this->initialized = false;
     }
 
     /**

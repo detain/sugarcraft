@@ -220,6 +220,31 @@ final class McpMessageTest extends TestCase
         $this->assertSame('refused', $msg->errorMessage());
     }
 
+    /**
+     * JSON-RPC 2.0 requires an integer `code`. A server that sends anything
+     * else must read as "no code" — the errorMessage() rule — not as a number
+     * an `(int)` cast made up: `"abc"` was 0, `true` and `[1]` were 1.
+     */
+    public function testErrorCodeIsNullWhenTheServerSendsANonIntegerCode(): void
+    {
+        foreach (['"abc"', '"-32601"', 'true', 'false', '1.5', '-32601.0', '["x"]', '{"a":1}', 'null'] as $literal) {
+            $msg = McpMessage::parse('{"jsonrpc":"2.0","id":"1","error":{"code":' . $literal . ',"message":"m"}}');
+
+            $this->assertNotNull($msg, $literal);
+            $this->assertTrue($msg->isError(), $literal);
+            $this->assertNull($msg->errorCode(), $literal);
+            $this->assertSame('m', $msg->errorMessage(), $literal);
+        }
+
+        $msg = McpMessage::parse('{"jsonrpc":"2.0","id":"1","error":{"message":"m"}}');
+        $this->assertNotNull($msg);
+        $this->assertNull($msg->errorCode(), 'an absent code is no code');
+
+        $msg = McpMessage::parse('{"jsonrpc":"2.0","id":"1","error":{"code":0,"message":"m"}}');
+        $this->assertNotNull($msg);
+        $this->assertSame(0, $msg->errorCode(), 'a real zero code is still a code');
+    }
+
     // --- Helpers for type guards ---
 
     public function testIsRequestTrueForRequestWithId(): void

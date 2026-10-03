@@ -202,9 +202,9 @@ final class ClaudeCodeMcpServer implements McpServer
             $this->client->disconnect();
 
             // Read off the envelope directly: the server is third-party, and
-            // the code has no lossless accessor — McpMessage::errorCode()
-            // int-casts it, turning a string or non-numeric code into a
-            // fabricated number — so both members are type-checked here.
+            // McpMessage::errorCode() answers only a conforming INTEGER code —
+            // a string code is still worth naming in this diagnosis, so both
+            // members are type-checked here rather than read through it.
             $code = $response->error['code'] ?? null;
             $code = is_int($code) || is_string($code) ? $code : null;
             $message = $response->error['message'] ?? null;

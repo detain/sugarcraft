@@ -296,13 +296,23 @@ final class McpMessage
 
     /**
      * Extract error code from error payload, or null if not an error.
+     *
+     * JSON-RPC 2.0 requires `code` to be an integer, and the payload is
+     * third-party wire data: a `code` that is anything else (a string, a
+     * float, a bool, an object) reads as "no code", the same rule
+     * {@see errorMessage()} applies to a non-string `message`. An `(int)`
+     * cast here fabricated one instead — `"abc"` became 0, `true` and `[1]`
+     * became 1, `1.5` became 1 — and a made-up code is worse than none: it
+     * reads as the server's own diagnosis.
      */
     public function errorCode(): ?int
     {
         if ($this->error === null) {
             return null;
         }
-        return isset($this->error['code']) ? (int) $this->error['code'] : null;
+        $code = $this->error['code'] ?? null;
+
+        return is_int($code) ? $code : null;
     }
 
     /**

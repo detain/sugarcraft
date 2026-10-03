@@ -218,10 +218,6 @@ final class ReadPathCensusTest extends TestCase
             'USER_TYPED — pastedImagePath() sniffs 16 bytes of a path the user pasted or dropped, to '
                 . 'tell an image from text',
         ],
-        'ClaudeCodeMcpClient.php|file_get_contents' => [
-            'PROCESS_DERIVED — `/proc/<pid>/stat`, a kernel interface named by a '
-                . 'literal, read so a forked caller can tell the MCP server from a zombie or a reused pid',
-        ],
         'Cli/Bootstrap.php|file_get_contents' => [
             'CONTAINED_UPSTREAM:Providers/ProviderFactory.php — the dev provider config, whose '
                 . 'two boundaries live in readableDefaultConfigPath()',

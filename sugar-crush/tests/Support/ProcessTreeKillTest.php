@@ -64,8 +64,40 @@ final class ProcessTreeKillTest extends TestCase
     {
         $stat = ProcessTree::parseStat('4242 (evil) (S 1 2 3) R 77 88 99 0 -1');
 
-        self::assertSame(['pid' => 4242, 'state' => 'R', 'ppid' => 77, 'pgid' => 88, 'sid' => 99], $stat);
+        self::assertSame(['pid' => 4242, 'state' => 'R', 'ppid' => 77, 'pgid' => 88, 'sid' => 99, 'startTicks' => null], $stat);
         self::assertNull(ProcessTree::parseStat('garbage'));
+    }
+
+    /**
+     * Field 22 (`starttime`) is what ClaudeCodeMcpClient compares to tell its
+     * server from a later process that reused the pid; it reads it through this
+     * parser rather than a second private one. Counted after the LAST `)` like
+     * every other field, so a comm that looks like more fields cannot shift it.
+     */
+    public function testParseStatReadsTheStartTimeFromField22(): void
+    {
+        // Fields 3..21 are `S` and 18 numbers, then starttime 123456, then more.
+        $line = '4242 (a) b (c) S 1 2 3 ' . \implode(' ', \range(7, 21)) . ' 123456 9 9';
+
+        self::assertSame(123456, ProcessTree::parseStat($line)['startTicks'] ?? null);
+        $garbled = ProcessTree::parseStat('4242 (x) S 1 2 3 ' . \implode(' ', \range(7, 21)) . ' 12x 9');
+        self::assertNotNull($garbled, 'the fields before starttime still parse');
+        self::assertArrayHasKey('startTicks', $garbled);
+        self::assertNull($garbled['startTicks'], 'a starttime field that is not a number is unknown, not 0');
+    }
+
+    public function testStatOfALiveProcessCarriesItsStartTime(): void
+    {
+        if (!ProcessTree::available()) {
+            self::markTestSkipped('needs a readable /proc');
+        }
+
+        $self = ProcessTree::stat((int) \getmypid());
+
+        self::assertNotNull($self);
+        self::assertIsInt($self['startTicks']);
+        self::assertGreaterThan(0, $self['startTicks']);
+        self::assertSame($self['startTicks'], ProcessTree::stat((int) \getmypid())['startTicks'] ?? null, 'the start time is stable');
     }
 
     public function testDescendantsFollowsTheParentRelationOnly(): void
