@@ -277,28 +277,30 @@ final class ScriptedInputTest extends TestCase
         $this->assertSame(MouseAction::Press, $msg->action);
     }
 
-    public function testPasteAppendsPasteMsg(): void
+    public function testPasteAppendsTheRuntimeEnvelope(): void
     {
         $input = ScriptedInput::new()->paste('hello world');
 
         $messages = $input->build();
 
-        $this->assertCount(1, $messages);
-        $this->assertInstanceOf(\SugarCraft\Core\Msg\PasteMsg::class, $messages[0]);
+        $this->assertCount(3, $messages);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\PasteStartMsg::class, $messages[0]);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\PasteEndMsg::class, $messages[1]);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\PasteMsg::class, $messages[2]);
         /** @var \SugarCraft\Core\Msg\PasteMsg */
-        $msg = $messages[0];
+        $msg = $messages[2];
         $this->assertSame('hello world', $msg->content);
     }
 
     public function testPastePreservesNewlinesAndControls(): void
     {
-        $content = "line1\nline2\r\nline3";
+        $content = "line1\nline2\r\nline3\tend";
         $input = ScriptedInput::new()->paste($content);
 
         $messages = $input->build();
 
         /** @var \SugarCraft\Core\Msg\PasteMsg */
-        $msg = $messages[0];
+        $msg = $messages[2];
         $this->assertSame($content, $msg->content);
     }
 
@@ -363,11 +365,13 @@ final class ScriptedInputTest extends TestCase
             ->keyboardEnhancements(0xFF)
             ->build();
 
-        $this->assertCount(5, $input);
+        $this->assertCount(7, $input);
         $this->assertInstanceOf(\SugarCraft\Core\Msg\KeyMsg::class, $input[0]);
         $this->assertInstanceOf(\SugarCraft\Core\Msg\MouseWheelMsg::class, $input[1]);
-        $this->assertInstanceOf(\SugarCraft\Core\Msg\PasteMsg::class, $input[2]);
-        $this->assertInstanceOf(\SugarCraft\Core\Msg\ClipboardMsg::class, $input[3]);
-        $this->assertInstanceOf(\SugarCraft\Core\Msg\KeyboardEnhancementsMsg::class, $input[4]);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\PasteStartMsg::class, $input[2]);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\PasteEndMsg::class, $input[3]);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\PasteMsg::class, $input[4]);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\ClipboardMsg::class, $input[5]);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\KeyboardEnhancementsMsg::class, $input[6]);
     }
 }

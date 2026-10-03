@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Testing\Input;
 
+use SugarCraft\Core\InputReader;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
@@ -31,20 +32,49 @@ use SugarCraft\Testing\Lang;
  *       ->key('q')
  *       ->build();
  *
+ * Terminal-shaped input — {@see paste()} and {@see bytes()} — is not
+ * re-implemented here: the bytes are fed through candy-core's real
+ * {@see InputReader}, the same parser {@see \SugarCraft\Core\Program}
+ * reads stdin with, so a script sees exactly the message sequence the live
+ * runtime would deliver (bracketed-paste envelope, chunking past
+ * {@see InputReader::MAX_PASTE_BYTES}, sanitized payload, stale-paste close).
+ *
  * @readonly
  * @see Mirrors charmbracelet/bubbletea — scripted input pattern (issue #1654)
  */
 final readonly class ScriptedInput
 {
+    /**
+     * Bytes per read {@see bytes()} hands the parser — the `fread()` size
+     * {@see \SugarCraft\Core\Program} drains stdin with. It matters: the
+     * reader only surfaces an oversized paste chunk between reads, so one
+     * giant parse() would hide the chunking the runtime really produces.
+     */
+    public const READ_SIZE = 4096;
+
+    /** Bracketed-paste start marker a terminal sends after `CSI ?2004h`. */
+    public const PASTE_START = "\x1b[200~";
+
+    /** Bracketed-paste end marker. */
+    public const PASTE_END = "\x1b[201~";
+
     /** @var list<Msg> */
     private array $messages;
 
     /**
+     * Parser state carried between {@see bytes()} calls. Never mutated in
+     * place — every call works on a clone — so builders that branch from a
+     * shared prefix stay independent, as the rest of this class's API does.
+     */
+    private InputReader $reader;
+
+    /**
      * @param list<Msg> $messages
      */
-    private function __construct(array $messages)
+    private function __construct(array $messages, ?InputReader $reader = null)
     {
         $this->messages = $messages;
+        $this->reader = $reader ?? new InputReader();
     }
 
     /**
@@ -53,6 +83,21 @@ final readonly class ScriptedInput
     public static function new(): self
     {
         return new self([]);
+    }
+
+    /**
+     * Mirror {@see \SugarCraft\Core\ProgramOptions::$sanitizePaste} for the
+     * pastes this script builds. On (the default, as in the runtime) a
+     * pasted payload is neutralized by
+     * {@see \SugarCraft\Core\Util\Sanitize::untrustedForMarkedFrames()};
+     * off, it reaches the model verbatim.
+     *
+     * Starts a fresh parser, so call it before {@see bytes()} — an
+     * incomplete sequence buffered by an earlier call is discarded.
+     */
+    public function withSanitizePaste(bool $sanitize): self
+    {
+        return new self($this->messages, new InputReader($sanitize));
     }
 
     /**
@@ -168,7 +213,7 @@ final readonly class ScriptedInput
         for ($i = 0; $i < $count; $i++) {
             $messages[] = new TickMsg($seconds);
         }
-        return new self($messages);
+        return new self($messages, $this->reader);
     }
 
     /**
@@ -224,7 +269,7 @@ final readonly class ScriptedInput
      */
     public function push(Msg $msg): self
     {
-        return new self([...$this->messages, $msg]);
+        return new self([...$this->messages, $msg], $this->reader);
     }
 
     /**
@@ -267,14 +312,67 @@ final readonly class ScriptedInput
     }
 
     /**
-     * Append a paste message with the given text content.
+     * Append the messages a terminal paste of `$content` produces.
      *
-     * @param string $content Raw pasted text (newlines/controls preserved)
+     * The content is wrapped in the bracketed-paste envelope and fed through
+     * the real {@see InputReader} ({@see bytes()}), so the model receives
+     * what the runtime delivers: {@see \SugarCraft\Core\Msg\PasteStartMsg},
+     * then — for a paste past {@see InputReader::MAX_PASTE_BYTES} — leading
+     * {@see PasteMsg} chunks, {@see \SugarCraft\Core\Msg\PasteEndMsg}, and a
+     * final PasteMsg. Payloads are sanitized unless
+     * {@see withSanitizePaste()} turned that off; newlines, CR and tab
+     * survive either way. Content that itself contains {@see PASTE_END}
+     * closes the envelope there, exactly as it would on a real terminal.
+     *
+     * To hand a model one bare PasteMsg with no envelope, use
+     * `push(new PasteMsg($content))`.
+     *
+     * @param string $content Raw pasted text
      * @return self
      */
     public function paste(string $content): self
     {
-        return $this->push(new PasteMsg($content));
+        return $this->bytes(self::PASTE_START . $content . self::PASTE_END);
+    }
+
+    /**
+     * Append the messages raw terminal input decodes to.
+     *
+     * Each argument is one read from the terminal (split further into
+     * {@see READ_SIZE}-byte reads, the runtime's `fread()` size) and is
+     * parsed by the real {@see InputReader}. Several arguments model a
+     * sequence split across reads with no pause between them — e.g. a paste
+     * end marker straddling two reads.
+     *
+     * After the last read the input goes silent, and the runtime's idle
+     * recovery runs as {@see \SugarCraft\Core\Program} would run it: a
+     * lone buffered ESC becomes an Escape key, and a paste whose end marker
+     * never arrived is closed after {@see InputReader::PASTE_IDLE_TIMEOUT}
+     * (PasteEndMsg + PasteMsg), handing the keyboard back. Any other
+     * incomplete sequence stays buffered for the next call, as it does in
+     * the runtime.
+     *
+     * @param string ...$reads Raw bytes, one string per read
+     * @return self
+     */
+    public function bytes(string ...$reads): self
+    {
+        $reader = clone $this->reader;
+        $messages = $this->messages;
+        foreach ($reads as $read) {
+            foreach (str_split($read, self::READ_SIZE) as $chunk) {
+                array_push($messages, ...$reader->parse($chunk));
+            }
+        }
+        if ($reader->hasPendingEscape()) {
+            $escape = $reader->flushPending();
+            if ($escape !== null) {
+                $messages[] = $escape;
+            }
+        }
+        array_push($messages, ...$reader->flushStalePaste());
+
+        return new self($messages, $reader);
     }
 
     /**

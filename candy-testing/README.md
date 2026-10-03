@@ -93,6 +93,29 @@ $input = ScriptedInput::new()
     ->build();
 ```
 
+Terminal-shaped input is decoded by candy-core's real `InputReader` — the parser
+`Program` reads stdin with — so a script sees what the live runtime delivers:
+
+```php
+ScriptedInput::new()
+    ->paste("line 1\nline 2")         // PasteStartMsg, PasteEndMsg, PasteMsg (sanitized)
+    ->bytes("\x1b[200~ab\x1b[20", "1~") // raw reads: an end marker split across two reads
+    ->bytes("\x1b")                    // a lone ESC becomes Escape after the silence
+    ->build();
+
+ScriptedInput::new()->withSanitizePaste(false)->paste($raw); // mirrors ProgramOptions::$sanitizePaste
+```
+
+`paste()` follows the runtime exactly: payloads are sanitized by default, a paste past
+`InputReader::MAX_PASTE_BYTES` arrives as several `PasteMsg`s (concatenate every one
+between `PasteStartMsg` and the one after `PasteEndMsg`), and a paste whose end marker
+never arrives is closed after the runtime's idle timeout. For a bare `PasteMsg` with no
+envelope, `push(new PasteMsg($text))`.
+
+`ProgramSimulator` fires each subscription once after `init()` and once after every sent
+message, delivering what it produces before the next sent message; `run()` replays from
+the Program's model each time, so repeated runs give the same result.
+
 ### LoopPin
 
 If your suite arms a **safety timer** to bound a wait — `addTimer(5.0, fn () => $loop->stop())`

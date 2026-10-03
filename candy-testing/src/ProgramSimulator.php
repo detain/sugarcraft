@@ -127,9 +127,18 @@ final class ProgramSimulator
      * The program loop is not used — we call the Model's methods directly
      * so tests remain deterministic and side-effect-free.
      *
-     * Subscriptions are pumped after each update cycle: each subscription's
-     * produce closure is invoked and any returned messages are enqueued for
-     * processing. This keeps tests deterministic (no real timers are started).
+     * Subscriptions stand in for the runtime's timers on a virtual clock:
+     * each one fires once after init() and once after every {@see send()}
+     * message, and what it produces is delivered right then, before the next
+     * sent message — the runtime delivers every subscription message it
+     * produces, so none may be dropped here either. Messages a subscription
+     * produces do not themselves fire subscriptions again: a subscription
+     * that produces on every call would otherwise never let run() return,
+     * where the runtime spaces those fires out by its interval.
+     *
+     * run() is repeatable: every call replays init() and the sent messages
+     * from the Program's model, and nothing a previous run produced leaks
+     * into the next.
      *
      * @return TestResult
      */
@@ -148,18 +157,13 @@ final class ProgramSimulator
             [$model, ] = $this->applyMsg($model, $initMsg);
         }
 
-        // Pump subscriptions after init to collect any startup messages.
-        $model = $this->pumpSubscriptions($model);
+        // Fire subscriptions once after init to collect startup messages.
+        $model = $this->fireSubscriptions($model);
 
-        // Process queued messages in order.
-        // Use index pointer so subscription-pumped messages (appended
-        // mid-loop) are also processed in the same run cycle.
-        $queueCount = count($this->queue);
-        for ($i = 0; $i < $queueCount; $i++) {
-            $msg = $this->queue[$i];
+        // Process the sent messages in order; subscriptions fire after each.
+        foreach ($this->queue as $msg) {
             [$model, ] = $this->applyMsg($model, $msg);
-            // Pump subscriptions after each message to capture produce output.
-            $model = $this->pumpSubscriptions($model);
+            $model = $this->fireSubscriptions($model);
         }
 
         // Final view call.
@@ -178,30 +182,47 @@ final class ProgramSimulator
     }
 
     /**
-     * Pump subscriptions and enqueue any produced messages.
+     * Fire every subscription the model currently wants and deliver what
+     * they produce through update(), in subscription order.
      *
-     * Calls $model->subscriptions(), iterates over the returned subscription
-     * set, and enqueues any messages produced by the subscription closures.
-     * This mirrors how Program reconciles subscriptions after each update cycle.
-     *
-     * @param Model $model
-     * @return Model The same model (subscriptions are processed for side-effects only)
+     * The set is read once, from the model as it stands now; the produced
+     * messages are then applied in turn. They are applied here rather than
+     * appended to the send() queue: a fixed-length drain of that queue left
+     * them unprocessed, and the queue outlived run(), so the next run()
+     * replayed them on top of its own.
      */
-    private function pumpSubscriptions(Model $model): Model
+    private function fireSubscriptions(Model $model): Model
     {
-        $subs = $model->subscriptions();
-        if ($subs === null) {
-            return $model;
-        }
-
-        foreach ($subs->all() as $subscription) {
-            $msg = ($subscription->produce)();
-            if ($msg !== null) {
-                $this->queue[] = $msg;
-            }
+        foreach ($this->pumpSubscriptions($model) as $msg) {
+            [$model, ] = $this->applyMsg($model, $msg);
         }
 
         return $model;
+    }
+
+    /**
+     * Invoke each subscription's produce closure once and collect the
+     * messages they return.
+     *
+     * @param Model $model
+     * @return list<Msg>
+     */
+    private function pumpSubscriptions(Model $model): array
+    {
+        $subs = $model->subscriptions();
+        if ($subs === null) {
+            return [];
+        }
+
+        $produced = [];
+        foreach ($subs->all() as $subscription) {
+            $msg = ($subscription->produce)();
+            if ($msg !== null) {
+                $produced[] = $msg;
+            }
+        }
+
+        return $produced;
     }
 
     /**
