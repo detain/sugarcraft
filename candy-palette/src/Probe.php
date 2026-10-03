@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Palette;
 
+use SugarCraft\Palette\Probe\InfocmpBinary;
+
 /**
  * Static probe for terminal color profile and environment-based color detection.
  *
@@ -137,11 +139,12 @@ final class Probe
         }
 
         // Check if infocmp binary exists
-        if (!self::infocmpAvailable()) {
+        $binary = InfocmpBinary::path();
+        if ($binary === null) {
             return $profile;
         }
 
-        $output = @shell_exec(self::$infocmpPath . ' -1 ' . escapeshellarg($term) . ' 2>/dev/null');
+        $output = @shell_exec($binary . ' -1 ' . escapeshellarg($term) . ' 2>/dev/null');
         if ($output === null) {
             return $profile;
         }
@@ -154,18 +157,6 @@ final class Probe
         return $profile;
     }
 
-    private static ?string $infocmpPath = null;
-
-    private static function infocmpAvailable(): bool
-    {
-        if (self::$infocmpPath !== null) {
-            return self::$infocmpPath !== '';
-        }
-        self::$infocmpPath = is_file('/usr/bin/infocmp') ? '/usr/bin/infocmp'
-            : (is_file('/bin/infocmp') ? '/bin/infocmp' : '');
-        return self::$infocmpPath !== '';
-    }
-
     /**
      * Reset internal static state (for testing only).
      *
@@ -173,6 +164,6 @@ final class Probe
      */
     public static function _reset(): void
     {
-        self::$infocmpPath = null;
+        InfocmpBinary::reset();
     }
 }

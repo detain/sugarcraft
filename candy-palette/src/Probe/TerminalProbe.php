@@ -429,14 +429,13 @@ class TerminalProbe
 
     /**
      * Check if infocmp binary is available.
+     *
+     * Delegates to the single shared sniff ({@see InfocmpBinary::path()});
+     * the method stays a protected seam so tests can override the answer.
      */
     protected function infocmpAvailable(): bool
     {
-        static $available = null;
-        if ($available === null) {
-            $available = is_file('/usr/bin/infocmp') || is_file('/bin/infocmp');
-        }
-        return $available;
+        return InfocmpBinary::path() !== null;
     }
 
     /**

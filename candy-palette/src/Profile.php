@@ -10,6 +10,11 @@ namespace SugarCraft\Palette;
  * Ordered from richest to simplest so that {@see Profile::degradedTo()} can walk
  * the chain downwards.
  *
+ * Renderer-facing vocabulary (Palette, ProfileWriter). The detection chain
+ * speaks {@see ColorProfile} instead; the two enums mirror each other under
+ * different case spellings and consolidation is deferred as a multi-library
+ * BREAKING change (see ColorProfile's note).
+ *
  * @see https://github.com/charmbracelet/colorprofile
  */
 enum Profile: string

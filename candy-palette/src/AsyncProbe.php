@@ -9,6 +9,7 @@ use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use SugarCraft\Palette\Probe\InfocmpBinary;
 
 /**
  * Asynchronous terminal color profile probe using ReactPHP ChildProcess.
@@ -18,15 +19,16 @@ use React\Promise\PromiseInterface;
  *
  * Falls back to the synchronous {@see Probe::colorProfile()} if:
  * - The event loop is not available
- * - The ChildProcess fails to spawn
- * - The promise is cancelled before resolution
+ * - The infocmp binary is not present
+ * - The child process errors before exiting
+ *
+ * The returned promise carries no cancellation handler — cancelling it
+ * does not fall back, it only detaches the caller from the result.
  *
  * @see Probe::colorProfile() for the synchronous baseline detection
  */
 final class AsyncProbe
 {
-    private static ?string $infocmpPath = null;
-
     /**
      * Detect the terminal color profile asynchronously.
      *
@@ -42,8 +44,8 @@ final class AsyncProbe
 
         $deferred = new Deferred();
 
-        $infocmpPath = self::findInfocmpPath();
-        if ($infocmpPath === '') {
+        $infocmpPath = InfocmpBinary::path();
+        if ($infocmpPath === null) {
             $deferred->resolve(Probe::colorProfile());
 
             return $deferred->promise();
@@ -101,20 +103,5 @@ final class AsyncProbe
     {
         $term = $_ENV['TERM'] ?? (getenv('TERM') ?: null);
         return $term === false ? null : $term;
-    }
-
-    /**
-     * Find the infocmp binary path, with caching.
-     */
-    private static function findInfocmpPath(): string
-    {
-        if (self::$infocmpPath !== null) {
-            return self::$infocmpPath;
-        }
-
-        self::$infocmpPath = is_file('/usr/bin/infocmp') ? '/usr/bin/infocmp'
-            : (is_file('/bin/infocmp') ? '/bin/infocmp' : '');
-
-        return self::$infocmpPath;
     }
 }

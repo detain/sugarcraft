@@ -55,10 +55,10 @@ final class Color
     {
         $hex = \ltrim($hex, '#');
         if (\strlen($hex) !== 3 && \strlen($hex) !== 6) {
-            throw new \InvalidArgumentException("invalid hex color: {$hex}");
+            throw new \InvalidArgumentException(Lang::t('color.invalid_hex', ['hex' => $hex]));
         }
         if (!\ctype_xdigit($hex)) {
-            throw new \InvalidArgumentException("invalid hex color: {$hex}");
+            throw new \InvalidArgumentException(Lang::t('color.invalid_hex', ['hex' => $hex]));
         }
         if (\strlen($hex) === 3) {
             $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];

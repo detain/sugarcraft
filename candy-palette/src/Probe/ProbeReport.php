@@ -8,10 +8,12 @@ namespace SugarCraft\Palette\Probe;
  * Readonly value object holding the result of a terminal capability probe.
  *
  * Each detected capability is stored with its source string indicating
- * how it was discovered: "env:VAR", "terminfo:cap", "escape:OSCn", "fallback".
+ * how it was discovered: "env:VAR", "terminfo:cap" or "fallback".
  *
  * Internally uses string keys (the Capability enum's string value) for
- * PHP compatibility, but exposes enum-based accessor methods.
+ * PHP compatibility, but exposes enum-based accessor methods. Keys are
+ * parsed into the enum at construction — an unknown key is a boundary
+ * error, never a value that survives to surprise {@see all()} later.
  *
  * @readonly
  */
@@ -20,11 +22,27 @@ final readonly class ProbeReport
     /**
      * @param array<string, string>  $capabilities  Map of capability string key to its source string
      * @param \DateTimeImmutable     $detectedAt    Timestamp of probe execution
+     *
+     * @throws \InvalidArgumentException when a key is not a known Capability value
      */
     public function __construct(
         public array $capabilities,
         public \DateTimeImmutable $detectedAt = new \DateTimeImmutable(),
-    ) {}
+    ) {
+        $unknown = [];
+        foreach (array_keys($this->capabilities) as $key) {
+            try {
+                Capability::from((string) $key);
+            } catch (\ValueError) {
+                $unknown[] = (string) $key;
+            }
+        }
+        if ($unknown !== []) {
+            throw new \InvalidArgumentException(
+                'unknown capability key(s): ' . implode(', ', $unknown),
+            );
+        }
+    }
 
     /**
      * Check if a capability was detected.
@@ -38,7 +56,7 @@ final readonly class ProbeReport
      * Get the source string for a detected capability.
      *
      * Returns null if the capability was not detected.
-     * Source format: "env:VAR", "terminfo:cap", "escape:OSCn", "fallback"
+     * Source format: "env:VAR", "terminfo:cap" or "fallback".
      */
     public function source(Capability $cap): ?string
     {
@@ -54,7 +72,8 @@ final readonly class ProbeReport
     {
         $result = [];
         foreach (array_keys($this->capabilities) as $key) {
-            $result[] = Capability::from($key);
+            // Safe: the constructor already rejected unknown keys.
+            $result[] = Capability::from((string) $key);
         }
         return $result;
     }

@@ -22,11 +22,13 @@
     ],
     "support": {
         "issues": "https://github.com/sugarcraft/candy-palette/issues",
-        "source": "https://github.com/sugarcraft/candy-palette"
+        "source": "https://github.com/sugarcraft/candy-palette",
+        "docs": "https://sugarcraft.github.io/lib/candy-palette.html"
     },
     "require": {
         "php": "^8.3",
         "react/child-process": "^0.6",
+        "react/promise": "^3.3",
         "sugarcraft/candy-core": "dev-master"
     },
     "require-dev": {

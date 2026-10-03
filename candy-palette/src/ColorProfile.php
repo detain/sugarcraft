@@ -7,8 +7,15 @@ namespace SugarCraft\Palette;
 /**
  * Terminal color capability profile detected from environment variables.
  *
- * Mirrors the research-driven detection hierarchy from H1-H5 + M1-M3.
- * Ordered from richest to simplest — walking degradedTo() walks downward.
+ * Ordered from richest to simplest (TrueColor → ANSI256 → ANSI → ASCII → NoTTY).
+ *
+ * This enum is the detection-chain vocabulary consumed by Probe, AsyncProbe,
+ * DetectionChain and most sibling libraries. {@see Profile} is the renderer-
+ * facing vocabulary used by Palette and ProfileWriter; the two carry the same
+ * five levels under different case spellings (Ansi256 vs ANSI256). PHP enums
+ * cannot alias cases, so consolidating them is a multi-library BREAKING
+ * rename deliberately deferred to the findings#1 API-planning pass rather
+ * than being smuggled into a fix commit.
  */
 enum ColorProfile: string
 {
