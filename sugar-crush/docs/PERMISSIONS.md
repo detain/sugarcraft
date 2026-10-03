@@ -82,15 +82,23 @@ first — `$(echo rm) -rf /`, `x=-rf; rm $x /`, `bash -c '…'`, `eval`, aliases
 `$HOME` were all **allowed** under `bypass-permissions`.)
 
 <!-- tools:classes:begin -->
-Two name classes drive the evaluators. Each built-in tool declares its class in its `#[BuiltInTool]` attribute, and `Tools\Catalog\ToolCatalog` reads them:
+Three name classes drive the evaluators. Each built-in tool declares its class in its `#[BuiltInTool]` attribute, and `Tools\Catalog\ToolCatalog` reads them:
 
 - **read-only**: `Read`, `Glob`, `Grep`, `Lsp`
 - **write-capable**: `Bash`, `Edit`, `Write`, `Task`, and anything starting `mcp__`
+- **no-ask** (allowed in every mode; they write only harness-owned state): `Memory`
 
-Note what is in *neither* list: `WebFetch`, `WebSearch`, `doctor` and `Skill`.
+Note what is in *none* of these lists: `WebFetch`, `WebSearch`, `doctor` and `Skill`.
 <!-- tools:classes:end -->
 They fall through to each mode's default arm — `Ask` under `default`,
 `accept-edits` and `plan`, `Deny` under `dont-ask`.
+
+A **no-ask** tool is allowed before the mode is consulted, so it runs in every
+mode, `plan` and `dont-ask` included: `Memory` writes only the memory
+directories the harness owns (`~/.sugar-crush/memory` and the repository's
+`.sugar-crush/memory/`), its note ids cannot name any other path, and a prompt
+would protect nothing `/memory` cannot undo. Rules still come first, so
+`{"pattern": "Memory", "action": "deny"}` turns it off.
 
 **`WebFetch` is not a read** (audit F-P6). It writes nothing locally, but
 "read-only" here means "safe to run unasked", and a fetch is an outbound request

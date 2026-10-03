@@ -19,8 +19,9 @@ use SugarCraft\Crush\Config\Settings\SettingsDocGenerator;
  *
  * - marked blocks, `<!-- tools:NAME:begin -->` … `<!-- tools:NAME:end -->`,
  *   whose whole content is generated;
- * - count anchors, a pattern that matches exactly once with the spelled count
- *   as group 1 (a capitalised word stays capitalised);
+ * - count anchors, a pattern that matches exactly once with the count as
+ *   group 1 — spelled, or digits where the page writes digits (a capitalised
+ *   word stays capitalised);
  * - the fenced `(disabledTools)` launch-report sample, re-rendered from the
  *   launcher's own format constants.
  */
@@ -91,6 +92,7 @@ final class ToolDocGenerator
             [self::SETTINGS, '/names none of the (\w+) tools it\s+removes/', $built - 1],
             [self::SETTINGS, '/never reaches the merge — all (\w+) tools survive/', $built],
             [self::ARCHITECTURE, '/holds \*\*(\w+)\*\* concrete `Tool` classes/', $wired],
+            [self::ARCHITECTURE, '/Tools\\\\\*\s+(\d+) built-ins \+ MCP bridges/', $wired],
             [self::ARCHITECTURE, '/`Bootstrap::tools\(\)` ships all (\w+) —/', $wired],
             [self::ARCHITECTURE, '/\*\*(\w+) is the count of \*wired\* tools/', $wired],
             [self::ARCHITECTURE, '/saying "(\w+) working tools"/', $wired],
@@ -279,7 +281,7 @@ final class ToolDocGenerator
         }
 
         [$word, $offset] = $m[1][0];
-        $spelled = SettingsDocGenerator::spell($count);
+        $spelled = ctype_digit($word) ? (string) $count : SettingsDocGenerator::spell($count);
         if (ctype_upper($word[0])) {
             $spelled = ucfirst($spelled);
         }

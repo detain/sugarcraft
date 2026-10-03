@@ -15561,21 +15561,18 @@ final class Chat implements Model
         }
 
         try {
-            // E25 piece 2: a project-scope note belongs with the project, so
-            // it goes to the repo-local `.sugar-crush/memory/` whenever the
-            // tree can host one. The degradation to the shared home store is
-            // deliberate — a headless `--root ''`, a read-only checkout, or a
-            // `.sugar-crush` planted as a symlink out of the tree should cost
-            // the user their note, not their command. The reply SAYS when the
-            // note fell back (15d-05 residual): a project note in the home store
-            // is not in the repository, so a teammate's checkout never sees it,
-            // and a silent fallback let the user believe otherwise.
-            $repoWriter = $scope === 'project' ? ProjectMemoryWriter::createForRoot($this->projectRoot()) : null;
-            $id = $repoWriter !== null
-                ? $repoWriter->write($content)
-                : $this->memoryStore->add($content, $scope);
-            $response = "Memory created with ID: `{$id}` (scope: {$scope})";
-            if ($scope === 'project' && $repoWriter === null) {
+            // Routed through MemoryWriter (roadmap 5.1-2), the same router the
+            // `Memory` tool uses, so a note typed here and a note the model
+            // saves land in the same place. E25 piece 2: a project note goes to
+            // the repo-local `.sugar-crush/memory/` whenever the tree can host
+            // one, and degrades to the home store otherwise — a headless
+            // `--root ''`, a read-only checkout, or a `.sugar-crush` planted as a
+            // symlink out of the tree should cost the user their note, not their
+            // command. The reply SAYS when the note fell back (15d-05 residual).
+            $saved = \SugarCraft\Crush\Memory\MemoryWriter::new($this->memoryStore, $this->projectRoot())
+                ->save($content, $scope);
+            $response = "Memory created with ID: `{$saved->id}` (scope: {$scope})";
+            if ($saved->fellBackToHome) {
                 $response .= "\n\nSaved in the home store, not this repository: its `.sugar-crush/memory/` "
                     . 'could not be created or written, or it resolves outside the repository, so the note '
                     . 'is kept on this machine only and is not part of the checkout.';
@@ -15610,8 +15607,8 @@ final class Chat implements Model
      * the prompt — its own docblock lists the agent scope under "WHAT IS
      * DELIBERATELY NOT HERE" and `capture()` reads exactly
      * `list(MemoryScope::Project)` and `list(MemoryScope::User)`. No
-     * number of imported entries can therefore crowd the 12-entry prompt
-     * block, and agent scope is the point, not an oversight: the provenance-
+     * number of imported entries can therefore crowd the prompt's memory
+     * index, and agent scope is the point, not an oversight: the provenance-
      * badge attack story in {@see ForeignMemoryImporter}'s class docblock
      * (:106-124) is why another tool's memory bodies do not get direct
      * prompt access — they stay listable and searchable until the user

@@ -28,7 +28,7 @@ bin/sugarcrush                argv → pre-flight → dispatch
                                   │
                                   └─ Runtime        the agentic loop
                                          ├─ Providers\*          the model call
-                                         ├─ Tools\*              12 built-ins + MCP bridges
+                                         ├─ Tools\*              13 built-ins + MCP bridges
                                          ├─ Hooks\*              the PreToolUse chain
                                          └─ Permissions\*        the gate, last in that chain
 ```
@@ -578,14 +578,14 @@ behind it. See [`PERMISSIONS.md`](PERMISSIONS.md) and [`HOOKS.md`](HOOKS.md).
 
 ## Tools
 
-`src/Tools/BuiltIn/` holds **twelve** concrete `Tool` classes: <!-- tools:class-list:begin -->`Bash`, `Doctor`, `Edit`, `Glob`, `Grep`, `LspTool`, `Read`, `SkillTool`, `TaskTool`, `WebFetch`, `WebSearch`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` ships all twelve —
+`src/Tools/BuiltIn/` holds **thirteen** concrete `Tool` classes: <!-- tools:class-list:begin -->`Bash`, `Doctor`, `Edit`, `Glob`, `Grep`, `LspTool`, `MemoryTool`, `Read`, `SkillTool`, `TaskTool`, `WebFetch`, `WebSearch`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` ships all thirteen —
 `Task` last, gated on the launch holding an `AgentManager` — plus one
 `McpToolBridge` per advertised MCP tool.
 
-Domain matters here: **twelve is the count of *wired* tools, not of *usable*
+Domain matters here: **thirteen is the count of *wired* tools, not of *usable*
 ones.** `LspTool` is reachable and answers every call with a "no language server
 configured" error, because nothing in `src/` reads a server command. A figure
-saying "twelve working tools" would be the wrong claim.
+saying "thirteen working tools" would be the wrong claim.
 
 The directory is the list. `Tools\Catalog\ToolCatalog` globs
 `src/Tools/BuiltIn/`, and every concrete `Tool` there carries a `#[BuiltInTool]`
@@ -896,7 +896,7 @@ Four patterns worth recognising, because they explain otherwise-odd code:
    `Bootstrap::mcpConfigDecision()` for the MCP verdict. Two implementations of
    one rule is how the two answers drift apart, and each of those classes exists
    because they had.
-4. **A count carries its domain.** "Twelve tools" means wired built-ins.
+4. **A count carries its domain.** "Thirteen tools" means wired built-ins.
    "Twelve skills" means directories under `src/Skills/BuiltIn/` that load.
    "Nine probes" means `doctor`. Numbers in this codebase's comments are
    written next to the thing they were measured on, and several of them are

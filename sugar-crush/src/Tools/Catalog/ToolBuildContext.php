@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tools\Catalog;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\RulePathNudge;
 use SugarCraft\Crush\LSP\LspClient;
+use SugarCraft\Crush\Memory\MemoryWriter;
 use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Skills\SkillRegistry;
 
@@ -18,6 +19,9 @@ use SugarCraft\Crush\Skills\SkillRegistry;
  * loader and nudge trackers: the "already announced" sets are per instance,
  * so one tool with its own copy would re-announce a CLAUDE.md or a scoped
  * skill another tool had already shown the model.
+ *
+ * `memory` is the launch's {@see MemoryWriter}, the router `/memory add` uses
+ * too; null leaves the `Memory` tool answering that no store is configured.
  */
 final readonly class ToolBuildContext
 {
@@ -30,6 +34,7 @@ final readonly class ToolBuildContext
         public ?LspClient $lsp = null,
         public bool $rgAvailable = false,
         public bool $fdAvailable = false,
+        public ?MemoryWriter $memory = null,
     ) {
     }
 }

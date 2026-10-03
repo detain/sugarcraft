@@ -218,7 +218,7 @@ final readonly class MemoryBlock implements PromptSection
 
         Do not save what the code says. Anything you can read from the files, the git history or the docs is already remembered, and a note that restates it goes stale the moment the code changes. Do not save secrets, one-off task details or the transcript of this conversation. Prefer updating an existing note to adding a near-duplicate.
 
-        The user manages notes with the memory slash command (list, add, search, edit, delete); ask them to save or show a note when you need one.
+        Use the `Memory` tool when it is available: `view` a note by id (or the whole index), `recall` to search, `save` a new note, `str_replace` to correct one, `delete` one that is wrong. The user manages the same notes with the memory slash command.
         TXT;
 
     /**

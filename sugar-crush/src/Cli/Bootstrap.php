@@ -8306,6 +8306,12 @@ final class Bootstrap
                 lsp: $lsp,
                 rgAvailable: $rgAvailable,
                 fdAvailable: $fdAvailable,
+                // Lazy: the home store is opened on the Memory tool's first
+                // call, so building the tool set creates nothing on disk.
+                memory: \SugarCraft\Crush\Memory\MemoryWriter::new(
+                    static fn (): ?MemoryStore => self::memoryStoreOrNull($root),
+                    $root,
+                ),
             )),
             ...self::mcpTools($root),
         ];

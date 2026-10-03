@@ -373,6 +373,8 @@ sugar-crush/tests/RepoMap/TagCacheTest.php	0.150	12
 sugar-crush/tests/Chat/InitCommandTest.php	0.150	6
 sugar-crush/tests/Chat/CompactionHidesNotDeletesTest.php	0.150	10
 sugar-crush/tests/Commands/CommandDocsDriftTest.php	0.150	6
+sugar-crush/tests/Tools/BuiltIn/MemoryToolTest.php	0.150	8
+sugar-crush/tests/Memory/MemoryWriterTest.php	0.150	10
 sugar-crush/tests/Integration/RulePathScopingWiringTest.php	0.149	16
 sugar-crush/tests/Cli/NonInteractiveProviderFailureTest.php	0.148	21
 sugar-crush/tests/Tools/ToolDescriptionGuidanceTest.php	0.147	23
@@ -442,6 +444,7 @@ sugar-crush/tests/Skills/CompiledPatternCacheBoundTest.php	0.080	6
 sugar-crush/tests/Tools/BashGitGuidanceSettingTest.php	0.080	9
 sugar-crush/tests/Chat/EditorCommandTest.php	0.080	8
 sugar-crush/tests/Context/MemoryIndexInjectionTest.php	0.080	9
+sugar-crush/tests/Permissions/MemoryToolClassificationTest.php	0.080	34
 sugar-crush/tests/Providers/BedrockModelIdTest.php	0.079	30
 sugar-crush/tests/Support/ProjectRootTest.php	0.079	6
 sugar-crush/tests/Support/SubAgentActivityRelayTest.php	0.078	6

@@ -166,7 +166,8 @@ subdirectory.
 default to `project`. An `add --scope agent` reply says that agent-scope notes
 are listable but never reach the prompt. `add` creates the entry with
 `type: pattern` and no tags; `MemoryEntry` supports `pattern`, `convention`,
-`decision` and `preference`, but the chat command only ever writes the first.
+`decision` and `preference`, but the chat command only ever writes the first
+(the `Memory` tool's `save` takes any of the four, and tags).
 
 If no store was wired, `/memory` answers "Memory store not configured" rather
 than failing. `Bootstrap::memoryStoreOrNull()` exists for the same asymmetry:
@@ -174,6 +175,33 @@ than failing. `Bootstrap::memoryStoreOrNull()` exists for the same asymmetry:
 created or is not writable, which is a real reason for `/memory` to report a
 failure and *not* a reason to refuse to launch. A broken optional input costs
 the feature, never the turn.
+
+### The `Memory` tool
+
+The model reads and writes the same notes through the `Memory` tool
+(`src/Tools/BuiltIn/MemoryTool.php`, roadmap 5.1-2). One `action` per call:
+
+| Action | Arguments | Does |
+|---|---|---|
+| `view` | `id` (optional) | the note in full, with its type, scope and store; without an `id`, the whole index grouped by scope and store |
+| `save` | `content`, `scope` (`project` default, or `user`), `type` (`pattern` default, `convention`, `decision`, `preference`), `tags` | a new note; content over `ProjectMemoryWriter::MAX_CONTENT_BYTES` (8192) is refused |
+| `str_replace` | `id`, `old_str`, `new_str` | replaces the one occurrence of `old_str`; zero or several occurrences are refused |
+| `delete` | `id` | removes the note |
+| `recall` | `query` | the notes whose content, type or tags contain the text, at most 20 |
+
+Every write goes through `Memory\MemoryWriter`, the router `/memory add` uses
+too, so a note the model saves lands exactly where the user's would: a
+`project` note in the repository's `.sugar-crush/memory/` when the tree can
+host one, otherwise the home store (and the reply says so). An id resolves in
+the repository store first, the same precedence the prompt's index gives a
+shared id, so `view`, `str_replace` and `delete` reach the note the index
+shows. The tool cannot write `agent` scope; that scope is for imports.
+
+The tool is **no-ask** in the permission gate: it is allowed in every mode,
+`plan` and `dont-ask` included, because it writes only the memory directories
+and its ids cannot name another path (`MemoryStore` validates every id before
+building a file name from it). A `permissionRules` Deny for `Memory` still
+turns it off — see [PERMISSIONS](PERMISSIONS.md#the-six-modes).
 
 ### The three tiers, and which ones reach the prompt
 

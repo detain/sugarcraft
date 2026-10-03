@@ -937,9 +937,11 @@ final class BaseSystemPromptTest extends TestCase
         // <project-memory> section only: the header now describes an index
         // wording, each note line carries its id (`note-2: `, `note-1: `), and the
         // standing memory instructions follow the fence. Every byte before the
-        // fence and after the instructions is identical.
+        // fence and after the instructions is identical. MEASURED at 5.1-2:
+        // 9,426 -> 9,533, the instructions' last paragraph now names the
+        // `Memory` tool's actions.
         self::assertSame(
-            9426,
+            9533,
             strlen($golden),
             'the system-prompt golden is not its committed length - it has been truncated or padded '
             . 'somewhere the absence assertions below would scan straight past',

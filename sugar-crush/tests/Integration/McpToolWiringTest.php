@@ -295,7 +295,11 @@ final class McpToolWiringTest extends TestCase
         $tools = Bootstrap::tools($this->repo);
 
         $this->assertNull(Bootstrap::mcpClient($this->repo));
-        $this->assertCount(11, $tools, 'no bridges, because no server was started');
+        $this->assertCount(
+            \count(\SugarCraft\Crush\Tools\Catalog\ToolCatalog::built()),
+            $tools,
+            'no bridges, because no server was started',
+        );
         // The load-bearing one. A short settle first: the payload writes and exits
         // immediately, so if it ran at all the file is already there.
         usleep(200_000);

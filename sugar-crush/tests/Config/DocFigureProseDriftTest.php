@@ -4358,7 +4358,14 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString("type: '" . $addShape[1] . "'", $addBody, 'MemoryStore::add() no longer stamps the type the page quotes');
 
         $chatAdd = self::bodyExcerpt(self::sourceOf('Chat.php'), 'memoryAdd');
-        self::assertStringContainsString('->add($content, $scope)', $chatAdd, 'the chat command no longer calls add() in the two-argument no-tags shape the page states');
+        // 5.1-2: the chat command saves through MemoryWriter, whose save()
+        // defaults are the add() shape the page states — type pattern, no tags.
+        self::assertStringContainsString('->save($content, $scope)', $chatAdd, 'the chat command no longer calls MemoryWriter::save() in the two-argument no-tags shape the page states');
+        self::assertStringContainsString(
+            "string \$scope = 'project', string \$type = '" . $addShape[1] . "', array \$tags = []",
+            self::sourceOf('Memory/MemoryWriter.php'),
+            'MemoryWriter::save() no longer defaults to the type the page quotes with no tags',
+        );
         self::assertStringNotContainsString('->add($content, $scope,', $chatAdd, 'the chat command started passing tags — the "and no tags" sentence needs rewriting in the same change');
 
         self::assertSame(
