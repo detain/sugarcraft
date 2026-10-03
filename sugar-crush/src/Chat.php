@@ -4778,14 +4778,10 @@ final class Chat implements Model
      */
     private function appendSpendCapNotice(SpendCapBreached $event): self
     {
-        return $this->mutate(['history' => [...$this->history, Message::notice(
-            sprintf(
-                '_Spend cap reached mid-turn: aborted after provider call %d — $%.4f of the $%.4f cap spent. No further calls were made this turn; /budget raises the cap._',
-                $event->completedCalls,
-                $event->spentUsd,
-                $event->capUsd,
-            ),
-        )]]);
+        return $this->mutate(['history' => [
+            ...$this->history,
+            Message::notice($this->spendLedger()->midTurnNotice($event)),
+        ]]);
     }
 
     /**
@@ -12949,51 +12945,13 @@ final class Chat implements Model
      */
     private function handleBudgetCommand(string $inputText): array
     {
-        $argument = self::commandArgument($inputText);
-
-        if ($argument === '') {
-            return $this->budgetResponse($inputText, $this->budgetStatusLine(), null);
-        }
-
-        if (in_array(strtolower($argument), ['off', 'none', 'clear'], true)) {
-            return $this->budgetResponse(
-                $inputText,
-                $this->maxCostUsd === null
-                    ? 'No spend cap was set. ' . $this->budgetStatusLine()
-                    : 'Spend cap cleared. ' . $this->budgetStatusLine(),
-                null,
-                clearCap: true,
-            );
-        }
-
-        // A leading `$` is what a human types; accepted rather than rejected,
-        // and stripped before the numeric test so `$5` and `5` mean the same.
-        $amount = ltrim($argument, '$');
-        // is_numeric() is not enough on its own, and the gap was reachable:
-        // `/budget 1e309` is numeric and casts to INF, which is `> 0.0` and so
-        // used to install a cap that rendered as `$inf` and — every comparison
-        // against INF being false — refused nothing. isUsableSpendCap() is the
-        // one definition of a cap this app will act on; see its docblock.
-        if (!is_numeric($amount) || !self::isUsableSpendCap((float) $amount)) {
-            return $this->budgetResponse(
-                $inputText,
-                'Usage: /budget <amount> to cap this session\'s spend (e.g. /budget 5 or /budget $2.50), '
-                . '/budget off to clear it, /budget on its own to see where you are. '
-                . 'The amount must be a real number greater than zero — a cap of 0 and no cap are opposite '
-                . 'requests, so `0` is refused rather than guessed at, and a figure too large to represent '
-                . '(`1e309`, which is infinity) is refused rather than accepted as a cap that would then '
-                . 'never trigger.',
-                null,
-            );
-        }
-
-        $cap = (float) $amount;
-
-        return $this->budgetResponse(
-            $inputText,
-            sprintf('Spend cap set to $%.4f. ', $cap) . $this->budgetStatusLine($cap),
-            $cap,
+        $reply = $this->spendLedger()->budgetReply(
+            self::commandArgument($inputText),
+            $this->tokenTracker,
+            $this->maxCostUsd,
         );
+
+        return $this->budgetResponse($inputText, $reply['response'], $reply['cap'], clearCap: $reply['clearCap']);
     }
 
     /**
@@ -13007,25 +12965,7 @@ final class Chat implements Model
      */
     private function budgetStatusLine(?float $cap = null): string
     {
-        $cap ??= $this->maxCostUsd;
-        $capText = $cap === null ? 'no cap' : sprintf('cap $%.4f', $cap);
-
-        if (!$this->hasReportedSpend()) {
-            return 'Spend so far: not reported by this provider (' . $capText
-                . '). Streamed turns and self-hosted providers commonly report no usage at all, '
-                . 'and an unreported session is never refused by the cap.';
-        }
-
-        return sprintf('Spend so far: $%.4f (%s). %s', $this->spentUsd(), $capText, $this->usageSummary())
-            // Billing fix: the figure above is what the app COULD price. Once
-            // any turn arrived from a model with no rate on file, it is a
-            // lower bound, and a spend readout that presents a bound as a
-            // bill is the same class of dishonesty as the fabricated fallback
-            // it replaced — so the line says so whenever the blind bit is set.
-            . ($this->tokenTracker->hasUnpricedUsage()
-                ? ' At least one model this session used has no price on file, so this is a LOWER BOUND: '
-                    . 'declare rates under "modelPrices" in ~/.sugar-crush/config.json to bill them.'
-                : '');
+        return $this->spendLedger()->statusLine($this->tokenTracker, $cap ?? $this->maxCostUsd);
     }
 
     /**
@@ -18279,7 +18219,35 @@ final class Chat implements Model
      */
     public function shouldPromptIdleCompaction(int $tokenCount, ?\DateTimeImmutable $lastActivityAt = null): bool
     {
-        return IdleCompactionPolicy::shouldPrompt($tokenCount, $lastActivityAt, $this->contextTokenLimit());
+        return $this->contextMeter()->shouldPromptIdleCompaction($tokenCount, $lastActivityAt, $this->contextTokenLimit());
+    }
+
+    /**
+     * The workspace's {@see \SugarCraft\Crush\Host\ContextMeter} (roadmap
+     * O-2c): every context figure below is its arithmetic over this session's
+     * state. Read through {@see \SugarCraft\Crush\Host\WorkspaceContext::service()}
+     * so the extraction adds no constructor state; a Chat with no workspace,
+     * or one that registered none, gets a fresh meter — it is stateless, so
+     * the two cannot measure differently.
+     */
+    private function contextMeter(): \SugarCraft\Crush\Host\ContextMeter
+    {
+        $meter = $this->workspace?->service(\SugarCraft\Crush\Host\ContextMeter::class);
+
+        return $meter instanceof \SugarCraft\Crush\Host\ContextMeter ? $meter : \SugarCraft\Crush\Host\ContextMeter::new();
+    }
+
+    /**
+     * The workspace's {@see \SugarCraft\Crush\Host\SpendLedger} (roadmap
+     * O-2c) — the spend decisions and notices below, over this session's
+     * {@see $tokenTracker} and {@see $maxCostUsd}. Same locator and the same
+     * stateless fallback as {@see contextMeter()}.
+     */
+    private function spendLedger(): \SugarCraft\Crush\Host\SpendLedger
+    {
+        $ledger = $this->workspace?->service(\SugarCraft\Crush\Host\SpendLedger::class);
+
+        return $ledger instanceof \SugarCraft\Crush\Host\SpendLedger ? $ledger : \SugarCraft\Crush\Host\SpendLedger::new();
     }
 
     /**
@@ -18312,25 +18280,8 @@ final class Chat implements Model
      */
     private function estimateTokenCount(array $history): int
     {
-        $total = $this->rawTokenProxy($history);
-
-        if ($this->tokenEstimateCalibration === null) {
-            return $total;
-        }
-
-        return max(1, (int) round($total * $this->tokenEstimateCalibration));
+        return $this->contextMeter()->estimate($history, $this->tokenEstimateCalibration);
     }
-
-    /**
-     * Audit 15b-15: what one attached image is counted as by
-     * {@see rawTokenProxy()}. Anthropic bills an image at roughly
-     * width×height/750 tokens and downscales anything past ~1.15 megapixels,
-     * which caps one image near 1,600; OpenAI's high-detail tiling lands in the
-     * same range for a typical screenshot. The cap is the honest flat figure:
-     * an estimate that errs high fires a tier a little early, one that errs
-     * low lets a session of screenshots overrun the window.
-     */
-    private const IMAGE_ATTACHMENT_TOKEN_ESTIMATE = 1600;
 
     /**
      * The PRE-calibration proxy — {@see TokenEstimate::ofText()} (chars/4
@@ -18350,32 +18301,9 @@ final class Chat implements Model
      */
     private function rawTokenProxy(array $history): int
     {
-        $total = 0;
-        foreach ($history as $msg) {
-            // A UI-only row is never sent (audit 15b-03), so it occupies none
-            // of the window this estimates.
-            if ($msg->uiOnly) {
-                continue;
-            }
-            // Script-weighted, not codepoints/4 (audit 15b-13): CJK/emoji ran
-            // 3-6x under, past what the [1.0, 3.0] calibration can correct.
-            $total += TokenEstimate::ofText($msg->content);
-            $total += 10; // role overhead
-            // Audit 15b-15: an attached file is inlined into the request and
-            // an image billed as image tokens, so both occupy the window - a
-            // 256 KiB `@file` must reach the tiers, not hide behind a short
-            // prompt.
-            foreach ($msg->attachments as $attachment) {
-                if (!$attachment instanceof Attachment || $attachment->data === null) {
-                    continue;
-                }
-                $total += $attachment->type === AttachmentType::Image
-                    ? self::IMAGE_ATTACHMENT_TOKEN_ESTIMATE
-                    : TokenEstimate::ofText($attachment->data);
-            }
-        }
-
-        return $total;
+        // Audit 15b-15's attachment and image weights live with the rest of
+        // the arithmetic: {@see \SugarCraft\Crush\Host\ContextMeter::rawTokens()}.
+        return $this->contextMeter()->rawTokens($history);
     }
 
     /**
@@ -18467,7 +18395,7 @@ final class Chat implements Model
      */
     public function contextTokenLimit(): int
     {
-        return ContextWindow::ofBackend($this->backend);
+        return $this->contextMeter()->limit($this->backend);
     }
 
     /**
@@ -18485,7 +18413,7 @@ final class Chat implements Model
      */
     public function spentUsd(): float
     {
-        return $this->tokenTracker->totalCost();
+        return $this->spendLedger()->spent($this->tokenTracker);
     }
 
     /**
@@ -18518,19 +18446,7 @@ final class Chat implements Model
      */
     private function accountUsage(?Usage $usage): void
     {
-        if ($usage === null) {
-            return;
-        }
-
-        $this->tokenTracker->addTotalUsage($usage->totalTokens, $usage->costUsd);
-
-        // Billing fix: a 0-cost call arrives here either genuinely free or
-        // UNPRICED, and the two are different claims. The carrier says which;
-        // the tracker remembers that this session's dollar figure is a lower
-        // bound from here on ({@see Util\TokenTracker::hasUnpricedUsage()}).
-        if ($usage->unpricedModel !== null) {
-            $this->tokenTracker->noteUnpricedUsage();
-        }
+        $this->spendLedger()->account($this->tokenTracker, $usage);
     }
 
     /**
@@ -18564,8 +18480,8 @@ final class Chat implements Model
      * keeps the existing factor. Both distortions push
      * the same way — observed HIGH — so the calibrated estimate fires the
      * tier EARLIER than the raw proxy, the safe direction against an
-     * overflow, and {@see TOKEN_CALIBRATION_MAX} bounds how early;
-     * {@see TOKEN_CALIBRATION_MIN} refuses to let any pairing loosen the
+     * overflow, and {@see \SugarCraft\Crush\Host\ContextMeter::CALIBRATION_MAX} bounds how early;
+     * {@see \SugarCraft\Crush\Host\ContextMeter::CALIBRATION_MIN} refuses to let any pairing loosen the
      * proxy below itself. When the carrier is wired the first expression
      * starts answering and the inflation stops by itself — that is why the
      * prompt half is preferred wherever both exist.
@@ -18584,24 +18500,15 @@ final class Chat implements Model
      */
     private function turnEstimateObservation(?Usage $usage): array
     {
-        $estimate = $this->promptEstimateAtDispatch;
-        // ownTokens(), not totalTokens: since B4 a turn's total also carries
-        // the tokens its Task sub-agents billed, and a sub-agent's fifty steps
-        // are no part of THIS conversation's prompt (audit B4-rem(iii)).
-        $observed = $usage?->promptTokens() ?? $usage?->ownTokens();
+        $calibration = $this->contextMeter()->calibrationFrom($this->promptEstimateAtDispatch, $usage);
 
-        if ($estimate === null || $estimate <= 0 || $observed === null || $observed <= 0) {
+        if ($calibration === null) {
             return ['promptEstimateAtDispatch' => null];
         }
 
-        $ratio = $observed / $estimate;
-
         return [
             'promptEstimateAtDispatch' => null,
-            'tokenEstimateCalibration' => min(
-                self::TOKEN_CALIBRATION_MAX,
-                max(self::TOKEN_CALIBRATION_MIN, $ratio),
-            ),
+            'tokenEstimateCalibration' => $calibration,
         ];
     }
 
@@ -18631,7 +18538,7 @@ final class Chat implements Model
      */
     public function hasReportedSpend(): bool
     {
-        return $this->tokenTracker->totalTokens() > 0 || $this->tokenTracker->totalCost() > 0.0;
+        return $this->spendLedger()->hasReported($this->tokenTracker);
     }
 
     /**
@@ -18689,9 +18596,7 @@ final class Chat implements Model
      */
     private function spendCapReached(): bool
     {
-        $cap = $this->maxCostUsd;
-
-        return $cap !== null && $this->spentUsd() >= $cap;
+        return $this->spendLedger()->capReached($this->tokenTracker, $this->maxCostUsd);
     }
 
     /**
@@ -18711,7 +18616,7 @@ final class Chat implements Model
      */
     public static function isUsableSpendCap(float $cap): bool
     {
-        return is_finite($cap) && $cap > 0.0;
+        return \SugarCraft\Crush\Host\SpendLedger::isUsableCap($cap);
     }
 
     /**
@@ -18756,10 +18661,7 @@ final class Chat implements Model
             return null;
         }
 
-        return $this->spendCapTurnRefusal(
-            'The turn that crossed the cap ran to completion; the cap refuses the NEXT turn rather than '
-            . 'aborting one in flight.'
-        );
+        return $this->spendCapTurnRefusal(\SugarCraft\Crush\Host\SpendLedger::CROSSED_BY_PREVIOUS_TURN);
     }
 
     /**
@@ -18787,18 +18689,7 @@ final class Chat implements Model
      */
     private function spendCapTurnRefusal(string $crossing): array
     {
-        $spent = $this->spentUsd();
-        $cap = (float) $this->maxCostUsd;
-
-        $notice = sprintf(
-            'Spend cap reached — this turn was not sent. $%.4f of the $%.4f cap has been reported spent. '
-            . '%s Raise it with /budget %.2f, clear it with /budget off, or restart '
-            . 'without $SUGARCRUSH_MAX_COST.',
-            $spent,
-            $cap,
-            $crossing,
-            $spent * 2,
-        );
+        $notice = $this->spendLedger()->refusalNotice($this->tokenTracker, (float) $this->maxCostUsd, $crossing);
 
         return [$this->mutate([
             // The draft is KEPT: the user's prompt was never sent, and clearing

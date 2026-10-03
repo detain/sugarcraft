@@ -301,6 +301,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Context/RuleLoader.php|.sugar-crush/rulebooks' => self::USER,
         'Cli/Help.php|.sugar-crush/config.json' => self::USER,
         'Cli/Help.php|.sugar-crush/config.json.' => self::USER,
+        // The `/budget` readout's LOWER BOUND sentence, telling the operator
+        // where to declare `modelPrices` — moved out of `Chat` with the rest of
+        // the spend accounting (roadmap O-2c). Never read or built here; rooted
+        // at `~`, so user-tier like the `Chat.php` row above.
+        'Host/SpendLedger.php|.sugar-crush/config.json' => self::USER,
         // The install path `sugarcrush completion fish` PRINTS, in a comment.
         // Rooted at `~`, so it is user-tier by the same rule as every entry
         // around it -- and it is never read: nothing in src/ opens it, the
@@ -363,7 +368,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FORTY-THREE occurrences — one per entry
+     * APPEARS IN. On this tree that is FORTY-FOUR occurrences — one per entry
      * in {@see DOT_PATHS} — of THIRTY distinct paths. NINETEEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
@@ -554,7 +559,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR', 35 => 'THIRTY-FIVE',
             36 => 'THIRTY-SIX', 37 => 'THIRTY-SEVEN', 38 => 'THIRTY-EIGHT',
             39 => 'THIRTY-NINE', 40 => 'FORTY', 41 => 'FORTY-ONE',
-            42 => 'FORTY-TWO', 43 => 'FORTY-THREE'];
+            42 => 'FORTY-TWO', 43 => 'FORTY-THREE', 44 => 'FORTY-FOUR', 45 => 'FORTY-FIVE',
+            46 => 'FORTY-SIX', 47 => 'FORTY-SEVEN', 48 => 'FORTY-EIGHT'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
             28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY'];

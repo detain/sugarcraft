@@ -311,6 +311,7 @@ sugar-crush/tests/Context/EnvironmentBlockGitConfigIsolationTest.php	0.358	4
 sugar-crush/tests/Skills/SkillLoaderTest.php	0.353	61
 sugar-crush/tests/Backend/StructuredReplayTest.php	0.350	11
 sugar-crush/tests/Integration/TaskToolWiringTest.php	0.343	4
+sugar-crush/tests/Host/ContextMeterTest.php	0.338	12
 sugar-crush/tests/Support/RequirementDirectiveProvenanceTest.php	0.326	18
 sugar-crush/tests/Cli/BootstrapTrustGateSelfGrantTest.php	0.312	8
 sugar-crush/tests/Context/ContextCompactorTest.php	0.311	88
@@ -506,6 +507,7 @@ sugar-crush/tests/Providers/CustomProviderTest.php	0.040	41
 sugar-crush/tests/Tools/Edit/EditMatcherChainTest.php	0.040	15
 sugar-crush/tests/Context/InstructionAliasTest.php	0.040	9
 sugar-crush/tests/Context/ContextBudgetTest.php	0.040	11
+sugar-crush/tests/Host/SpendLedgerTest.php	0.039	8
 sugar-crush/tests/Hooks/AuditHookDenialAndEscapingTest.php	0.038	10
 sugar-crush/tests/Context/InstructionFileLoaderContainmentTest.php	0.037	29
 sugar-crush/tests/Agents/AgentPresetHomeRootTest.php	0.037	16
