@@ -288,6 +288,30 @@ big-endian length plus a `serialize()`d array, decoded with
   cancel; the next Escape, or a second one inside the double-press window, is
   still the hard cancel that kills the whole tree.
 
+**Sub-agent activity relay.** A lone `Task` call runs inside the turn child,
+so its `subagent` beats go straight onto the turn socket. Several `Task` calls
+in one step run as a concurrent group: each member is forked again by
+`Runtime::executeConcurrently()`, and the emitter `EngineBackend::turnTools()`
+binds is pinned to the turn child's pid, so it drops anything a grandchild
+writes. The relay carries those beats instead:
+
+- Before forking a member whose tool implements `Tools\StreamsActivity`, the
+  turn child opens a unix datagram pair (`Support\SubAgentActivityRelay`). The
+  grandchild rebinds the tool with `withActivitySink()` onto a
+  `Tools\DatagramActivitySink`, one `serialize()`d beat per datagram, written
+  non-blocking and dropped rather than stall the run. The pid pin stays, so a
+  grandchild can never write the turn socket by accident.
+- The turn child's reap loop waits on every member's relay with
+  `stream_select()` (bounded by the same 2 ms poll), decodes each datagram with
+  `allowed_classes => false` and replays it through the original emitter, so it
+  reaches the parent as an ordinary `subagent` frame.
+- A member's relay is drained after its process exits and before its
+  `ToolFinished` is released, so the `finished` beat always lands first. If the
+  process exited without one (killed, a fatal error, a dropped datagram), the
+  turn child sends a `finished` for it, so the row does not stay "running".
+- Every relay is closed in `executeConcurrently()`'s `finally` block. No
+  process is added, only file descriptors.
+
 ---
 
 ## `Runtime` — the agentic loop

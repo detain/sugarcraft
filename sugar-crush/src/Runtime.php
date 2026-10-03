@@ -40,7 +40,7 @@ use SugarCraft\Crush\Tools\ExemptFromParallelDeadline;
 use SugarCraft\Crush\Tools\McpToolBridge;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\PromptGuidance;
-use SugarCraft\Crush\Tools\RelaysSubAgentActivity;
+use SugarCraft\Crush\Tools\StreamsActivity;
 use SugarCraft\Crush\Tools\SharesSiblingSpend;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
@@ -2263,9 +2263,9 @@ final class Runtime
                 $tool = self::sharingSpend($job);
                 $file = (string) $job['file'];
                 // A delegated run's Agents-pane beats: its bound emitter only
-                // writes from THIS process, so the child gets a relay instead
-                // and phase 3 replays what arrives (RelaysSubAgentActivity).
-                $emitter = $tool instanceof RelaysSubAgentActivity ? $tool->subAgentEmitter() : null;
+                // writes from THIS process, so the child gets a datagram relay
+                // instead and phase 3 replays what arrives (StreamsActivity).
+                $emitter = $tool instanceof StreamsActivity ? $tool->subAgentEmitter() : null;
                 $relay = $emitter !== null ? SubAgentActivityRelay::open() : null;
                 $pid = pcntl_fork();
 
@@ -2317,8 +2317,8 @@ final class Runtime
                 }
 
                 if ($pid === 0) {
-                    if ($relay !== null && $tool instanceof RelaysSubAgentActivity) {
-                        $tool = $tool->withSubAgentEmitter($relay->childEmitter());
+                    if ($relay !== null && $tool instanceof StreamsActivity) {
+                        $tool = $tool->withActivitySink($relay->childSink());
                     }
                     $this->runToolInChild($file, $tool, $job['call'], $job['args']);
                 }
@@ -2388,6 +2388,32 @@ final class Runtime
                 $released = false;
                 while ($next < $total && $jobs[$next]['settled']) {
                     if (isset($jobs[$next]['relay'])) {
+                        // A run its member's process ended without closing
+                        // (killed, a fatal error, or a last datagram dropped on
+                        // a full queue) would otherwise stay "running" on the
+                        // dashboard for the rest of the session: its process
+                        // has exited and its relay is drained, so nothing more
+                        // can arrive. Close it here, before ToolFinished, in
+                        // the order the real finished beat would have kept.
+                        $emitter = $jobs[$next]['emitter'] ?? null;
+                        foreach ($jobs[$next]['relay']->unfinished() as $last) {
+                            if ($emitter instanceof \Closure) {
+                                $emitter(new \SugarCraft\Crush\Events\SubAgentActivity(
+                                    \SugarCraft\Crush\Events\SubAgentActivity::OP_FINISHED,
+                                    $last->id,
+                                    $last->name,
+                                    '',
+                                    $last->seq + 1,
+                                    $last->tail,
+                                    $last->tokensUsed,
+                                    $last->costUsd,
+                                    $last->lines,
+                                    $last->model,
+                                    $last->contextTokens,
+                                    $last->calls,
+                                ));
+                            }
+                        }
                         $jobs[$next]['relay']->close();
                         unset($jobs[$next]['relay']);
                     }
@@ -2435,7 +2461,26 @@ final class Runtime
                 }
 
                 if (!$released) {
-                    usleep(self::PARALLEL_TOOL_POLL_MICROSECONDS);
+                    // Wait on the members' relays rather than sleep blind, so
+                    // a beat is replayed the moment it lands; exits are still
+                    // found by the WNOHANG pass, so the wait stays bounded by
+                    // the same poll interval.
+                    $readers = [];
+                    foreach ($jobs as $job) {
+                        $stream = isset($job['relay']) ? $job['relay']->readStream() : null;
+                        if ($stream !== null) {
+                            $readers[] = $stream;
+                        }
+                    }
+                    if ($readers === []) {
+                        usleep(self::PARALLEL_TOOL_POLL_MICROSECONDS);
+                    } else {
+                        $none = null;
+                        $noneToo = null;
+                        if (@stream_select($readers, $none, $noneToo, 0, self::PARALLEL_TOOL_POLL_MICROSECONDS) === false) {
+                            usleep(self::PARALLEL_TOOL_POLL_MICROSECONDS);
+                        }
+                    }
                 }
             }
             // @endregion poll

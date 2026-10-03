@@ -6,6 +6,8 @@ namespace SugarCraft\Crush\Support;
 
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Events\SubAgentActivity;
+use SugarCraft\Crush\Tools\ActivitySink;
+use SugarCraft\Crush\Tools\DatagramActivitySink;
 
 /**
  * The wire one forked member of a concurrent tool group uses to hand its
@@ -14,35 +16,35 @@ use SugarCraft\Crush\Events\SubAgentActivity;
  * WHY IT EXISTS. {@see \SugarCraft\Crush\Runtime::executeConcurrently()} runs
  * every member in its own child, but the emitter a Task call is bound with
  * belongs to the turn process — the only one allowed to write the turn's
- * socket — and drops every beat from anywhere else. So a batch of parallel
- * Task calls ran with no row in the Agents pane at all. A relay is opened per
- * member right before its fork: the child writes beats onto it, the parent
- * drains it on each reap pass and replays them through the real emitter
- * (see {@see \SugarCraft\Crush\Tools\RelaysSubAgentActivity}).
+ * socket — and drops every beat from anywhere else. So a relay is opened per
+ * member right before its fork: the child writes beats onto it through a
+ * {@see DatagramActivitySink}, the parent drains it on each reap pass and
+ * replays them through the real emitter
+ * (see {@see \SugarCraft\Crush\Tools\StreamsActivity}).
+ *
+ * A UNIX DATAGRAM PAIR, one beat per datagram: see
+ * {@see DatagramActivitySink} for why. A datagram that does not decode costs
+ * that one beat and nothing after it.
  *
  * ONE-WAY OBSERVATION, NEVER CONTROL — the {@see SubAgentActivity} channel
- * contract. A write that fails (the parent stopped reading) marks the relay
- * broken and every later beat is skipped; the delegated run carries on. A
- * frame the reader cannot parse drops the rest of the stream the same way. No
- * branch here ever ends a run over a display frame.
+ * contract. No branch here ever ends a run over a display frame.
  *
- * Frames are a 4-byte big-endian length then a serialized plain array —
- * the shape {@see \SugarCraft\Crush\Backend\EngineBackend}'s own wire uses,
- * and decoded with `allowed_classes => false` for the same reason: the bytes
- * crossed a process boundary.
+ * THE READER REMEMBERS WHICH RUNS ARE STILL OPEN. A run that was seen to
+ * start but never seen to finish — its process was killed, it died on a
+ * fatal error, or its last datagram was dropped on a full queue — is listed
+ * by {@see unfinished()}, so the forking parent can close the row itself
+ * before it releases the member's result instead of leaving it "running"
+ * for the rest of the session.
  */
 final class SubAgentActivityRelay
 {
     /**
-     * Ceiling on one frame's body — the engine's, because these beats are
-     * re-emitted onto the engine's own wire, and a frame this relay accepted
-     * but the engine refused would be truncated one process further down.
+     * Each run this reader has seen start and not yet seen finish, keyed by
+     * its id: the latest beat it sent.
+     *
+     * @var array<string, SubAgentActivity>
      */
-    private const MAX_FRAME_BYTES = EngineBackend::MAX_FRAME_BYTES;
-
-    private string $buffer = '';
-
-    private bool $broken = false;
+    private array $open = [];
 
     /**
      * @param resource|null $reader
@@ -55,17 +57,17 @@ final class SubAgentActivityRelay
 
     /**
      * Open a relay — the parent's half, called before the fork. Null when no
-     * socket pair can be made; that member then runs exactly as it did before
-     * this class existed (its beats are dropped), which is a blank row, not a
-     * broken turn.
+     * socket pair can be made; that member then runs exactly as it would
+     * without one (its beats are dropped), which is a blank row, not a broken
+     * turn.
      */
     public static function open(): ?self
     {
-        if (!function_exists('stream_socket_pair')) {
+        if (!function_exists('stream_socket_pair') || !function_exists('stream_socket_recvfrom')) {
             return null;
         }
 
-        $pair = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $pair = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_DGRAM, 0);
         if ($pair === false) {
             return null;
         }
@@ -74,19 +76,15 @@ final class SubAgentActivityRelay
     }
 
     /**
-     * The child's half: drop the read end and return the emitter that writes
+     * The child's half: drop the read end and return the sink that writes
      * each beat onto the relay.
-     *
-     * @return \Closure(SubAgentActivity): void
      */
-    public function childEmitter(): \Closure
+    public function childSink(): ActivitySink
     {
         self::closeStream($this->reader);
         $this->reader = null;
 
-        return function (SubAgentActivity $activity): void {
-            $this->write($activity);
-        };
+        return DatagramActivitySink::over($this->writer);
     }
 
     /**
@@ -104,47 +102,62 @@ final class SubAgentActivityRelay
     }
 
     /**
-     * Every complete beat that has arrived since the last drain, in wire
-     * order. A trailing partial frame stays buffered for the next call.
+     * The read end, for a `stream_select()` that waits on beats instead of
+     * sleeping; null once closed.
+     *
+     * @return resource|null
+     */
+    public function readStream(): mixed
+    {
+        return is_resource($this->reader) ? $this->reader : null;
+    }
+
+    /**
+     * Every beat that has arrived since the last drain, in wire order. A
+     * datagram that does not decode is skipped; the ones around it are kept.
      *
      * @return list<SubAgentActivity>
      */
     public function drain(): array
     {
-        if ($this->broken || !is_resource($this->reader)) {
+        if (!is_resource($this->reader)) {
             return [];
         }
 
-        while (true) {
-            $chunk = @fread($this->reader, 65536);
-            if ($chunk === false || $chunk === '') {
-                break;
-            }
-            $this->buffer .= $chunk;
-        }
-
         $beats = [];
-        while (strlen($this->buffer) >= 4) {
-            $header = unpack('N', substr($this->buffer, 0, 4));
-            $length = is_array($header) ? (int) ($header[1] ?? 0) : 0;
-            if ($length <= 0 || $length > self::MAX_FRAME_BYTES) {
-                return $this->breakStream($beats);
-            }
-            if (strlen($this->buffer) < 4 + $length) {
+        while (true) {
+            $datagram = @stream_socket_recvfrom($this->reader, DatagramActivitySink::MAX_DATAGRAM_BYTES);
+            if (!is_string($datagram) || $datagram === '') {
                 break;
             }
 
-            $body = substr($this->buffer, 4, $length);
-            $this->buffer = substr($this->buffer, 4 + $length);
-
-            $beat = self::decode($body);
+            $beat = self::decode($datagram);
             if ($beat === null) {
-                return $this->breakStream($beats);
+                continue;
+            }
+
+            if ($beat->op === SubAgentActivity::OP_FINISHED) {
+                unset($this->open[$beat->id]);
+            } else {
+                $this->open[$beat->id] = $beat;
             }
             $beats[] = $beat;
         }
 
         return $beats;
+    }
+
+    /**
+     * The latest beat of every run this reader saw start but never saw
+     * finish, in the order they started. Meaningful once the member's
+     * process has exited and a final {@see drain()} has run: then nothing
+     * more can arrive, and each of these runs ended without saying so.
+     *
+     * @return list<SubAgentActivity>
+     */
+    public function unfinished(): array
+    {
+        return array_values($this->open);
     }
 
     public function close(): void
@@ -153,60 +166,11 @@ final class SubAgentActivityRelay
         self::closeStream($this->writer);
         $this->reader = null;
         $this->writer = null;
-        $this->buffer = '';
     }
 
-    private function write(SubAgentActivity $activity): void
+    private static function decode(string $datagram): ?SubAgentActivity
     {
-        if ($this->broken || !is_resource($this->writer)) {
-            return;
-        }
-
-        $body = serialize([
-            'op' => $activity->op,
-            'id' => $activity->id,
-            'name' => $activity->name,
-            'task' => $activity->task,
-            'seq' => $activity->seq,
-            'tail' => $activity->tail,
-            'tokens' => $activity->tokensUsed,
-            'cost' => $activity->costUsd,
-            'lines' => $activity->lines,
-            'model' => $activity->model,
-            'context' => $activity->contextTokens,
-            'calls' => $activity->calls,
-        ]);
-        $out = pack('N', strlen($body)) . $body;
-        $total = strlen($out);
-
-        for ($written = 0; $written < $total;) {
-            $n = @fwrite($this->writer, substr($out, $written));
-            if ($n === false || $n === 0) {
-                // The reader may now hold half a frame, so nothing written
-                // after this could be parsed — stop relaying, keep running.
-                $this->broken = true;
-
-                return;
-            }
-            $written += $n;
-        }
-    }
-
-    /**
-     * @param list<SubAgentActivity> $beats the whole frames decoded before the bad one
-     * @return list<SubAgentActivity>
-     */
-    private function breakStream(array $beats): array
-    {
-        $this->broken = true;
-        $this->buffer = '';
-
-        return $beats;
-    }
-
-    private static function decode(string $body): ?SubAgentActivity
-    {
-        $frame = @unserialize($body, ['allowed_classes' => false]);
+        $frame = @unserialize($datagram, ['allowed_classes' => false]);
         if (!is_array($frame)) {
             return null;
         }

@@ -8,11 +8,13 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Events\SubAgentActivity;
 use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Support\SubAgentActivityRelay;
+use SugarCraft\Crush\Tools\DatagramActivitySink;
 
 /**
  * {@see SubAgentActivityRelay}'s wire, driven in one process: the writer and
- * reader ends are the same socket pair either side of a fork, so the framing,
- * the partial-frame buffer and the fail-quiet arms are all observable here.
+ * reader ends are the same datagram pair either side of a fork, so the
+ * one-beat-per-datagram framing, the open-run bookkeeping and the fail-quiet
+ * arms are all observable here.
  */
 final class SubAgentActivityRelayTest extends TestCase
 {
@@ -38,10 +40,10 @@ final class SubAgentActivityRelayTest extends TestCase
             $this->markTestSkipped('fork(2) failed.');
         }
         if ($pid === 0) {
-            $emit = $relay->childEmitter();
-            $emit(new SubAgentActivity(SubAgentActivity::OP_STARTED, 'id-1', 'reviewer', 'look over candy-core', 1, ''));
-            $emit(new SubAgentActivity(SubAgentActivity::OP_PROGRESS, 'id-1', 'reviewer', '', 2, "-> Read\nthinking: …"));
-            $emit(new SubAgentActivity(SubAgentActivity::OP_FINISHED, 'id-1', 'reviewer', '', 3, 'report'));
+            $sink = $relay->childSink();
+            $sink->emit(new SubAgentActivity(SubAgentActivity::OP_STARTED, 'id-1', 'reviewer', 'look over candy-core', 1, ''));
+            $sink->emit(new SubAgentActivity(SubAgentActivity::OP_PROGRESS, 'id-1', 'reviewer', '', 2, "-> Read\nthinking: …"));
+            $sink->emit(new SubAgentActivity(SubAgentActivity::OP_FINISHED, 'id-1', 'reviewer', '', 3, 'report'));
             ForkedChild::exitNow(0);
         }
 
@@ -74,43 +76,61 @@ final class SubAgentActivityRelayTest extends TestCase
         $relay->close();
     }
 
-    public function testAPartialFrameWaitsForTheRestOfItsBytes(): void
-    {
-        [$reader, $writer] = self::rawPair();
-        $relay = self::wrap($reader, $writer);
-
-        $body = serialize(['op' => 'started', 'id' => 'id-2', 'name' => 'coder', 'task' => 't', 'seq' => 1, 'tail' => '']);
-        $frame = pack('N', strlen($body)) . $body;
-        fwrite($writer, substr($frame, 0, 7));
-
-        $this->assertSame([], $relay->drain(), 'half a frame is not a beat');
-
-        fwrite($writer, substr($frame, 7));
-        $beats = $relay->drain();
-
-        $this->assertCount(1, $beats);
-        $this->assertSame('id-2', $beats[0]->id);
-
-        $relay->close();
-    }
-
-    public function testACorruptFrameKeepsTheWholeBeatsBeforeItAndDropsTheRest(): void
+    public function testACorruptDatagramCostsOnlyItselfNotTheBeatsAfterIt(): void
     {
         [$reader, $writer] = self::rawPair();
         $relay = self::wrap($reader, $writer);
 
         $good = serialize(['op' => 'progress', 'id' => 'id-3', 'name' => 'coder', 'task' => '', 'seq' => 2, 'tail' => 'x']);
         $bad = serialize(['op' => 'exploded', 'id' => 'id-3']);
-        $later = $good;
-        fwrite($writer, pack('N', strlen($good)) . $good . pack('N', strlen($bad)) . $bad . pack('N', strlen($later)) . $later);
+        $later = serialize(['op' => 'progress', 'id' => 'id-3', 'name' => 'coder', 'task' => '', 'seq' => 3, 'tail' => 'y']);
+        stream_socket_sendto($writer, $good);
+        stream_socket_sendto($writer, $bad);
+        stream_socket_sendto($writer, 'not serialized at all');
+        stream_socket_sendto($writer, $later);
 
         $beats = $relay->drain();
 
-        $this->assertCount(1, $beats, 'only the frame before the corruption survives');
-        $this->assertSame('x', $beats[0]->tail);
+        $this->assertSame(['x', 'y'], array_map(static fn (SubAgentActivity $b): string => $b->tail, $beats), 'a datagram is whole or skipped; the stream never breaks');
 
-        fwrite($writer, pack('N', strlen($good)) . $good);
-        $this->assertSame([], $relay->drain(), 'a broken stream stays broken: nothing after it can be trusted');
+        $relay->close();
+    }
+
+    public function testABeatOverTheDatagramCeilingIsDroppedAtTheWriterAndLaterBeatsStillArrive(): void
+    {
+        [$reader, $writer] = self::rawPair();
+        $reading = self::wrap($reader, $writer);
+        $sink = DatagramActivitySink::over($writer);
+
+        $sink->emit(new SubAgentActivity(SubAgentActivity::OP_PROGRESS, 'id-5', 'coder', '', 1, str_repeat('z', DatagramActivitySink::MAX_DATAGRAM_BYTES)));
+        $sink->emit(new SubAgentActivity(SubAgentActivity::OP_PROGRESS, 'id-5', 'coder', '', 2, 'small'));
+
+        $beats = $reading->drain();
+
+        $this->assertCount(1, $beats);
+        $this->assertSame('small', $beats[0]->tail);
+
+        $reading->close();
+    }
+
+    public function testUnfinishedListsEveryRunSeenStartingButNeverFinishing(): void
+    {
+        [$reader, $writer] = self::rawPair();
+        $relay = self::wrap($reader, $writer);
+        $sink = DatagramActivitySink::over($writer);
+
+        $sink->emit(new SubAgentActivity(SubAgentActivity::OP_STARTED, 'done', 'coder', 't', 1, ''));
+        $sink->emit(new SubAgentActivity(SubAgentActivity::OP_STARTED, 'died', 'reviewer', 't', 1, ''));
+        $sink->emit(new SubAgentActivity(SubAgentActivity::OP_PROGRESS, 'died', 'reviewer', '', 2, '-> Read', 120));
+        $sink->emit(new SubAgentActivity(SubAgentActivity::OP_FINISHED, 'done', 'coder', '', 2, 'report'));
+        $relay->drain();
+
+        $open = $relay->unfinished();
+
+        $this->assertCount(1, $open);
+        $this->assertSame('died', $open[0]->id);
+        $this->assertSame(2, $open[0]->seq, 'the LATEST beat is kept, so a synthesised close continues its seq');
+        $this->assertSame(120, $open[0]->tokensUsed);
 
         $relay->close();
     }
@@ -118,10 +138,10 @@ final class SubAgentActivityRelayTest extends TestCase
     public function testAWriteAfterTheReaderIsGoneIsDroppedQuietly(): void
     {
         $relay = self::relay();
-        $emit = $relay->childEmitter();
+        $sink = $relay->childSink();
         $relay->close();
 
-        $emit(new SubAgentActivity(SubAgentActivity::OP_STARTED, 'id-4', 'coder', 't', 1, ''));
+        $sink->emit(new SubAgentActivity(SubAgentActivity::OP_STARTED, 'id-4', 'coder', 't', 1, ''));
 
         $this->assertSame([], $relay->drain(), 'a closed relay never throws on the observation channel');
     }
@@ -141,7 +161,7 @@ final class SubAgentActivityRelayTest extends TestCase
      */
     private static function rawPair(): array
     {
-        $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_DGRAM, 0);
         if ($pair === false) {
             self::markTestSkipped('stream_socket_pair() is unavailable here.');
         }

@@ -14,7 +14,8 @@ use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Tools\ParallelSafe;
-use SugarCraft\Crush\Tools\RelaysSubAgentActivity;
+use SugarCraft\Crush\Tools\ActivitySink;
+use SugarCraft\Crush\Tools\StreamsActivity;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -114,7 +115,7 @@ final class ParallelSubAgentActivityRelayTest extends TestCase
      */
     private static function delegator(string $name, \Closure $emitter): Tool
     {
-        return new class ($name, $emitter) implements Tool, ParallelSafe, RelaysSubAgentActivity {
+        return new class ($name, $emitter) implements Tool, ParallelSafe, StreamsActivity {
             public function __construct(private string $name, private \Closure $emitter)
             {
             }
@@ -156,9 +157,11 @@ final class ParallelSubAgentActivityRelayTest extends TestCase
                 return $this->emitter;
             }
 
-            public function withSubAgentEmitter(\Closure $emitter): Tool
+            public function withActivitySink(ActivitySink $sink): Tool
             {
-                return new self($this->name, $emitter);
+                return new self($this->name, static function (SubAgentActivity $beat) use ($sink): void {
+                    $sink->emit($beat);
+                });
             }
         };
     }

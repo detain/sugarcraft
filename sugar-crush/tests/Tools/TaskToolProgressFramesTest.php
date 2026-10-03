@@ -315,6 +315,41 @@ final class TaskToolProgressFramesTest extends TestCase
     }
 
     /**
+     * The StreamsActivity seam a forked member runs: every beat of the run
+     * goes to the sink, none to the emitter the original was bound with.
+     */
+    public function testWithActivitySinkRoutesEveryBeatToTheSink(): void
+    {
+        $probe = self::probe('probe');
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'probe', [])]),
+            new CompleteResponse(content: 'the report'),
+        ]);
+        $manager = self::manager([$probe], RosterAgent::named('coder', ['probe'], maxTurns: 5));
+        $engine = EngineBackend::new($provider, 'm')->withTools([$probe]);
+        $bound = [];
+        $sink = new class implements \SugarCraft\Crush\Tools\ActivitySink {
+            /** @var list<SubAgentActivity> */
+            public array $beats = [];
+
+            public function emit(SubAgentActivity $activity): void
+            {
+                $this->beats[] = $activity;
+            }
+        };
+
+        $tool = (new TaskTool($manager))->withEngine($engine, null, static function (SubAgentActivity $beat) use (&$bound): void {
+            $bound[] = $beat;
+        });
+        $result = $tool->withActivitySink($sink)->execute(self::call());
+
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertSame([], $bound, 'the turn-pinned emitter is never asked to write');
+        $this->assertSame(SubAgentActivity::OP_STARTED, $sink->beats[0]->op);
+        $this->assertSame(SubAgentActivity::OP_FINISHED, end($sink->beats)->op);
+    }
+
+    /**
      * @param array<string, string> $overrides
      *
      * @return array<string, string>

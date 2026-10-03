@@ -22,11 +22,12 @@ use SugarCraft\Crush\Support\ParentProcessGuard;
 use SugarCraft\Crush\Support\SiblingSpendLedger;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Tools\DelegatesToEngine;
+use SugarCraft\Crush\Tools\ActivitySink;
 use SugarCraft\Crush\Tools\ExemptFromParallelDeadline;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\PromptGuidance;
-use SugarCraft\Crush\Tools\RelaysSubAgentActivity;
 use SugarCraft\Crush\Tools\SharesSiblingSpend;
+use SugarCraft\Crush\Tools\StreamsActivity;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Usage;
@@ -155,7 +156,7 @@ use SugarCraft\Crush\Usage;
  * {@see AgentWorkerPool::executeAll()} for what a dispatched worker actually
  * carries across the fork.
  */
-final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine, PromptGuidance, SharesSiblingSpend, RelaysSubAgentActivity
+final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine, PromptGuidance, SharesSiblingSpend, StreamsActivity
 {
     /**
      * Step cap for a preset that declares no `maxTurns`. 200 since
@@ -242,6 +243,18 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     public function withSubAgentEmitter(\Closure $emitter): self
     {
         return new self($this->agentManager, $this->workerPool, $this->engine, $this->heartbeat, $this->suspended, $emitter, $this->siblingSpend);
+    }
+
+    /**
+     * The copy a forked member of a concurrent group runs: every beat goes to
+     * $sink (the member's datagram relay) instead of the turn-pinned emitter,
+     * which would drop it from this process — see {@see StreamsActivity}.
+     */
+    public function withActivitySink(ActivitySink $sink): self
+    {
+        return $this->withSubAgentEmitter(static function (SubAgentActivity $activity) use ($sink): void {
+            $sink->emit($activity);
+        });
     }
 
     /**

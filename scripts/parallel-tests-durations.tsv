@@ -197,7 +197,7 @@ sugar-crush/tests/Integration/ForeignAgentPresetWiringTest.php	1.273	16
 sugar-crush/tests/Chat/ToolChildReapTest.php	1.253	5
 sugar-crush/tests/Chat/EngineAskModalTest.php	1.250	11
 sugar-crush/tests/Backend/EngineBackendEmptyReplyTest.php	1.235	7
-sugar-crush/tests/Tools/TaskToolProgressFramesTest.php	1.216	10
+sugar-crush/tests/Tools/TaskToolProgressFramesTest.php	1.216	11
 sugar-crush/tests/Backend/StepPressureCheckTest.php	1.200	5
 sugar-crush/tests/Backend/ScaledClockHelperSeamTest.php	1.187	6
 sugar-crush/tests/Support/ProcessReaperEscalationOrderTest.php	1.179	5
@@ -252,6 +252,7 @@ sugar-crush/tests/Cli/BootstrapPermissionGateTest.php	0.740	63
 sugar-crush/tests/Providers/ClaudeCodeProviderStreamReapTest.php	0.729	6
 sugar-crush/tests/Cli/HeadlessPermissionPromptTest.php	0.728	19
 sugar-crush/tests/Cli/BootstrapSpendAndSummaryTest.php	0.712	24
+sugar-crush/tests/Runtime/ParallelTaskActivityRelayTest.php	0.700	2
 sugar-crush/tests/Cli/BootstrapStatusLineWiringTest.php	0.697	4
 sugar-crush/tests/Support/ReadPathCensusTest.php	0.689	17
 sugar-crush/tests/Integration/TeamLifecycleTest.php	0.678	8
@@ -430,7 +431,7 @@ sugar-crush/tests/Tools/BashGitGuidanceSettingTest.php	0.080	9
 sugar-crush/tests/Chat/EditorCommandTest.php	0.080	8
 sugar-crush/tests/Providers/BedrockModelIdTest.php	0.079	30
 sugar-crush/tests/Support/ProjectRootTest.php	0.079	6
-sugar-crush/tests/Support/SubAgentActivityRelayTest.php	0.078	5
+sugar-crush/tests/Support/SubAgentActivityRelayTest.php	0.078	6
 sugar-crush/tests/Cli/NonInteractiveTest.php	0.078	25
 sugar-crush/tests/Hooks/AuditHookConcurrentAppendTest.php	0.078	14
 sugar-crush/tests/Tools/BuiltIn/GrepSecretFileTest.php	0.077	8
