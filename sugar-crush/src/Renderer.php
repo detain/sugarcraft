@@ -714,9 +714,11 @@ final class Renderer
      * WHY PER-ROW AND NEVER MULTI-LINE: the invariant documented on
      * {@see markPaneHeader()} is that no zone may span lines, because
      * `renderView()` drops whole LEADING lines under height clipping and a
-     * zone split across the drop desynchronises the scanner's row bookkeeping
-     * for the ENTIRE frame. One single-cell zone per row clips whole-or-not-
-     * at-all with its line, which is safe by construction.
+     * zone split across the drop loses its open tag: candy-mouse's
+     * `Scan::parse()` skips the surviving orphan close and registers NO zone,
+     * so the rows still on screen go silently unclickable. One single-cell
+     * zone per row clips whole-or-not-at-all with its line, which is safe by
+     * construction.
      */
     public const DIVIDER_ZONE_PREFIX = 'divider:';
 
@@ -1297,13 +1299,15 @@ final class Renderer
      * session tab strip is drawn at all (≥2 sessions on disk), so a
      * single-session run still takes this branch on every frame.
      *
-     * The scan is also non-fatal. `Scan::parse()` throws on malformed markup
-     * (duplicate/unclosed ids), and this runs inside `Chat::view()`, where an
-     * escaping exception kills the whole TUI. Degrading to "no zones this
-     * frame" costs at most an unclickable frame; the alternative is a crash.
-     * Untrusted text is sentinel-stripped on the way in (see
-     * {@see untrusted()}), so a throw here means OUR markup is wrong, not
-     * that a model injected something.
+     * The scan is also non-fatal. Of candy-mouse's malformed-markup matrix
+     * (the {@see \SugarCraft\Mouse\Scan} class docblock) only a DUPLICATE id
+     * throws — an orphan close or an unclosed open is skipped and registers
+     * no zone, and a lone sentinel is measured as text — and this runs inside
+     * `Chat::view()`, where an escaping exception kills the whole TUI.
+     * Degrading to "no zones this frame" costs at most an unclickable frame;
+     * the alternative is a crash. Untrusted text is sentinel-stripped on the
+     * way in (see {@see untrusted()}), so a throw here means OUR markup is
+     * wrong, not that a model injected something.
      *
      * @param string $frame The fully-composited root frame.
      * @param int    $width Viewport width; zone end columns clamp to it.
@@ -1817,7 +1821,10 @@ final class Renderer
     /**
      * The rectangle of the last frame a mouse drag may select text in, as
      * inclusive `[rowFrom, rowTo, colFrom, colTo]` cells of that frame, or
-     * null when nothing on it is selectable.
+     * null when nothing on it is selectable. The cells are 1-based — the
+     * space SGR mouse reports, zones and candy-mouse's
+     * {@see \SugarCraft\Mouse\Selection} use — so frame line R is
+     * `selectableLines()[R - 1]`.
      *
      * It is the transcript shell's TEXT column — inside its rounded border
      * and horizontal padding — over the shell's rows that survived the tail
@@ -1855,8 +1862,10 @@ final class Renderer
         $shellWidth = Width::string(self::stripZoneMarkers(explode("\n", $shell, 2)[0]));
         $inset = intdiv(self::SHELL_CHROME_COLS, 2);
 
-        // Border row excluded at both ends; the padding rows stay in, so a
-        // drag that begins just above the first line still starts there.
+        // Measured as 0-based line/cell offsets into the frame, then shifted
+        // to the 1-based cells the region is published in. Border row
+        // excluded at both ends; the padding rows stay in, so a drag that
+        // begins just above the first line still starts there.
         $rowFrom = max(0, $shellTop + 1 - $sliceStart);
         $rowTo = min($available - 1, $shellTop + $shellRows - 2 - $sliceStart);
         $colFrom = $inset;
@@ -1866,7 +1875,7 @@ final class Renderer
             return null;
         }
 
-        return [$rowFrom, $rowTo, $colFrom, $colTo];
+        return [$rowFrom + 1, $rowTo + 1, $colFrom + 1, $colTo + 1];
     }
 
     /**
@@ -2131,8 +2140,8 @@ final class Renderer
         // "Fitted" means picking a narrower form or dropping it. The assembled
         // string is cut only by fitStatusBar()'s backstop, and only after its
         // sentinels are removed: $bar carries markPane(Pane::Menu)'s sentinel
-        // PAIR, and a cut between them leaves an unmatched open marker, which
-        // makes Scan::parse() throw and costs the WHOLE frame its click zones
+        // PAIR, and a cut between them leaves an unclosed open marker, which
+        // Scan::parse() skips - the menu zone silently stops being clickable
         // (same failure mode markPaneHeader() documents). The sentinels are
         // invisible on screen, so they come off before measuring.
         $room = $cols - Width::of(self::stripZoneMarkers($bar));
@@ -2305,10 +2314,13 @@ final class Renderer
      * which breaks the absolute-cursorTo repaint the tail clip protects.
      *
      * The cut is taken on the bar with its zone sentinels REMOVED, so the
-     * `pane:menu` zone is given up rather than cut in half. A half-cut
-     * sentinel pair makes `Scan::parse()` throw, and {@see scanRoot()}
-     * answers that by clearing every zone in the frame. The bar carries no
-     * SGR, so {@see Width::truncate()} dropping escapes loses nothing.
+     * `pane:menu` zone is given up rather than cut in half: a half-cut
+     * sentinel pair leaves an unclosed open, which `Scan::parse()` skips
+     * without registering a zone, and a cut through the middle of a tag
+     * leaves a lone sentinel whose would-be id bytes the scan then measures
+     * as visible text — so dropping the pair outright is the only cut that
+     * keeps the bar's cell accounting exact. The bar carries no SGR, so {@see Width::truncate()}
+     * dropping escapes loses nothing.
      */
     private static function fitStatusBar(string $bar, int $cols): string
     {
@@ -3082,11 +3094,12 @@ final class Renderer
      * Deliberately not the whole block. {@see render()} clips `$content` to
      * the terminal's height by dropping leading LINES, so a zone spanning
      * several rows can lose its opening sentinel while the closing one
-     * survives. That unmatched close makes {@see \SugarCraft\Mouse\Scan::parse()}
-     * throw, and {@see scanRoot()} answers a throw by clearing the registry
-     * — costing the WHOLE frame its zones, session tabs included. A
-     * single-line zone is clipped whole or not at all, so it can never
-     * desync.
+     * survives. {@see \SugarCraft\Mouse\Scan::parse()} skips that orphan
+     * close and registers NO zone for it (candy-mouse's malformed-markup
+     * matrix: lenient by design, because viewport clipping is exactly how an
+     * orphan arises) — so the pane's surviving rows would silently stop
+     * answering clicks. A single-line zone is clipped whole or not at all,
+     * so it is either fully clickable or absent, never half-registered.
      */
     private static function markPaneHeader(Pane $pane, string $block): string
     {
@@ -3168,8 +3181,8 @@ final class Renderer
      *   `str_contains()` on the recorded label; wrapping would split the label
      *   across two rows (losing the zone) and turn a deliberately single-line
      *   zone into a multi-row one, which {@see markPaneHeader()} documents as
-     *   the way an unmatched sentinel reaches `Scan::parse()` and costs the
-     *   whole frame its zones.
+     *   the way an orphaned sentinel reaches `Scan::parse()` and silently
+     *   costs that zone its clickability.
      *
      * No zone sentinel can be split by this: every {@see \SugarCraft\Mouse\Mark}
      * caller in this class runs LATER than the one call site

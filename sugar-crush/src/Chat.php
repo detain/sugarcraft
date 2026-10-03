@@ -6708,11 +6708,10 @@ final class Chat implements Model
             return null;
         }
 
-        // zoneSpace() keeps the SGR report's 1-based cells (the zone scanner
-        // speaks the same base); the selection indexes the frame's lines and
-        // cells from 0.
+        // zoneSpace() keeps the SGR report's 1-based cells - the base the zone
+        // scanner, candy-mouse's Selection and Renderer::selectableRegion()
+        // all speak - so the pointer is wired straight in, never rebased.
         [$col, $row] = self::zoneSpace($msg->x, $msg->y);
-        [$col, $row] = [$col - 1, $row - 1];
 
         if ($msg instanceof MouseClickMsg) {
             $region = Renderer::selectableRegion();
@@ -16447,8 +16446,9 @@ final class Chat implements Model
      * Fuzzy-filtered (or full, when the query is empty) item labels for the
      * palette's current mode, ranked best-match-first via {@see
      * SmithWatermanMatcher} - the same matcher `phlix-console-client`'s own
-     * Ctrl+P palette already uses for the same purpose. Returns [] when the
-     * palette is closed.
+     * Ctrl+P palette already uses for the same purpose - and holding only
+     * labels that contain EVERY query character in order (see
+     * {@see $paletteMatcher}). Returns [] when the palette is closed.
      *
      * @return list<string>
      */
@@ -16492,7 +16492,64 @@ final class Chat implements Model
             );
         }
 
-        return (new SmithWatermanMatcher())->matchAll($query, $items);
+        return self::paletteFuzzyMatches($query, $items);
+    }
+
+    /**
+     * Most queries {@see paletteFuzzyMatches()} remembers per label set; past
+     * it the oldest is forgotten. Generous for a type-and-backspace session
+     * over one picker, yet bounded however long the palette stays open.
+     */
+    private const PALETTE_MATCH_MEMO_LIMIT = 64;
+
+    /**
+     * The palette's one matcher, built on first use. `requireFullQuery`
+     * (candy-fuzzy #3): the matcher is a LOCAL alignment, so in plain mode
+     * any label sharing a single character with the query matched - "xq"
+     * listed "Exit" on its "x" alone - and the palette widened instead of
+     * narrowing as the user typed. Full-query mode keeps exactly the labels
+     * that contain every typed character in order, initials included ("swm"
+     * still finds "Switch model").
+     */
+    private static ?SmithWatermanMatcher $paletteMatcher = null;
+
+    /**
+     * Ranked results per query for the label set they were computed over
+     * (candy-fuzzy #2). paletteMatchResults() is asked several times per
+     * keystroke - the key arm, the zone mapping, the renderer - and the
+     * labels do not change between keystrokes, so each (query, labels) pair
+     * is aligned once. A different label list (palette mode switch, a
+     * provider or theme appearing) discards the whole memo: results are only
+     * ever served for the exact list they were computed from.
+     *
+     * @var array{labels: list<string>, results: array<string, list<MatchResult>>}|null
+     */
+    private static ?array $paletteMatchMemo = null;
+
+    /**
+     * @param list<string> $labels
+     * @return list<MatchResult>
+     */
+    private static function paletteFuzzyMatches(string $query, array $labels): array
+    {
+        if (self::$paletteMatchMemo === null || self::$paletteMatchMemo['labels'] !== $labels) {
+            self::$paletteMatchMemo = ['labels' => $labels, 'results' => []];
+        }
+
+        // Keyed by the query string; a numeric query ("12") becomes an int
+        // key, which array_key_exists() and the lookup below normalise the
+        // same way, so it still round-trips.
+        if (array_key_exists($query, self::$paletteMatchMemo['results'])) {
+            return self::$paletteMatchMemo['results'][$query];
+        }
+
+        if (count(self::$paletteMatchMemo['results']) >= self::PALETTE_MATCH_MEMO_LIMIT) {
+            unset(self::$paletteMatchMemo['results'][array_key_first(self::$paletteMatchMemo['results'])]);
+        }
+
+        self::$paletteMatcher ??= SmithWatermanMatcher::new(requireFullQuery: true);
+
+        return self::$paletteMatchMemo['results'][$query] = array_values(self::$paletteMatcher->matchAll($query, $labels));
     }
 
     /**

@@ -12,63 +12,67 @@ use SugarCraft\Sprinkles\Style;
 /**
  * Cell geometry of a mouse text selection: anchoring, clamping, reading-order
  * spans, extraction and the reverse-video repaint.
+ *
+ * Coordinates are 1-based terminal cells (frame line R is `$lines[R - 1]`),
+ * the space candy-mouse's Selection/SelectionRange speak since the rewire
+ * onto them dropped the old `[$col - 1, $row - 1]` rebase.
  */
 final class TextSelectionTest extends TestCase
 {
     /** rowFrom, rowTo, colFrom, colTo — a 3-cell gutter each side of a 10-wide text column. */
-    private const REGION = [1, 4, 3, 12];
+    private const REGION = [2, 5, 4, 13];
 
     public function testAPressOutsideTheRegionAnchorsNothing(): void
     {
-        self::assertNull(TextSelection::at(2, 2, self::REGION), 'left gutter');
-        self::assertNull(TextSelection::at(13, 2, self::REGION), 'right gutter');
-        self::assertNull(TextSelection::at(5, 0, self::REGION), 'above');
-        self::assertNull(TextSelection::at(5, 5, self::REGION), 'below');
-        self::assertNull(TextSelection::at(5, 2, [4, 1, 3, 12]), 'an empty region');
+        self::assertNull(TextSelection::at(3, 3, self::REGION), 'left gutter');
+        self::assertNull(TextSelection::at(14, 3, self::REGION), 'right gutter');
+        self::assertNull(TextSelection::at(6, 1, self::REGION), 'above');
+        self::assertNull(TextSelection::at(6, 6, self::REGION), 'below');
+        self::assertNull(TextSelection::at(6, 3, [5, 2, 4, 13]), 'an empty region');
     }
 
     public function testAPressInsideAnchorsAnUndraggedUnsettledSelection(): void
     {
-        $sel = TextSelection::at(5, 2, self::REGION);
+        $sel = TextSelection::at(6, 3, self::REGION);
 
         self::assertNotNull($sel);
-        self::assertSame([5, 2, 5, 2], [$sel->anchorCol, $sel->anchorRow, $sel->headCol, $sel->headRow]);
+        self::assertSame([6, 3, 6, 3], [$sel->anchorCol, $sel->anchorRow, $sel->headCol, $sel->headRow]);
         self::assertFalse($sel->dragging);
         self::assertFalse($sel->settled);
     }
 
     public function testTheHeadIsClampedIntoTheRegion(): void
     {
-        $sel = TextSelection::at(5, 2, self::REGION);
+        $sel = TextSelection::at(6, 3, self::REGION);
         self::assertNotNull($sel);
 
-        $right = $sel->withHead(40, 3);
-        self::assertSame([12, 3], [$right->headCol, $right->headRow], 'past the right edge pins to the last column');
+        $right = $sel->withHead(41, 4);
+        self::assertSame([13, 4], [$right->headCol, $right->headRow], 'past the right edge pins to the last column');
 
-        $above = $sel->withHead(8, -3);
-        self::assertSame([3, 1], [$above->headCol, $above->headRow], 'above the region pins to its first cell');
+        $above = $sel->withHead(9, -2);
+        self::assertSame([4, 2], [$above->headCol, $above->headRow], 'above the region pins to its first cell');
 
-        $below = $sel->withHead(4, 30);
-        self::assertSame([12, 4], [$below->headCol, $below->headRow], 'below the region pins to its last cell');
+        $below = $sel->withHead(5, 31);
+        self::assertSame([13, 5], [$below->headCol, $below->headRow], 'below the region pins to its last cell');
     }
 
     public function testSpansRunInReadingOrderWhicheverWayTheDragWent(): void
     {
-        $forward = TextSelection::at(6, 1, self::REGION)?->withHead(4, 3);
-        $backward = TextSelection::at(4, 3, self::REGION)?->withHead(6, 1);
+        $forward = TextSelection::at(7, 2, self::REGION)?->withHead(5, 4);
+        $backward = TextSelection::at(5, 4, self::REGION)?->withHead(7, 2);
         self::assertNotNull($forward);
         self::assertNotNull($backward);
 
         foreach ([$forward, $backward] as $sel) {
-            self::assertNull($sel->span(0));
-            self::assertSame([6, 12], $sel->span(1), 'first row: anchor to the right edge');
-            self::assertSame([3, 12], $sel->span(2), 'middle row: whole text column');
-            self::assertSame([3, 4], $sel->span(3), 'last row: left edge to the head, inclusive');
-            self::assertNull($sel->span(4));
+            self::assertNull($sel->span(1));
+            self::assertSame([7, 13], $sel->span(2), 'first row: anchor to the right edge');
+            self::assertSame([4, 13], $sel->span(3), 'middle row: whole text column');
+            self::assertSame([4, 5], $sel->span(4), 'last row: left edge to the head, inclusive');
+            self::assertNull($sel->span(5));
         }
 
-        $sameRow = TextSelection::at(9, 2, self::REGION)?->withHead(5, 2);
-        self::assertSame([5, 9], $sameRow?->span(2), 'a leftward drag on one row still spans left to right');
+        $sameRow = TextSelection::at(10, 3, self::REGION)?->withHead(6, 3);
+        self::assertSame([6, 10], $sameRow?->span(3), 'a leftward drag on one row still spans left to right');
     }
 
     public function testExtractCopiesTextNotChromeAndKeepsIndentation(): void
@@ -81,7 +85,7 @@ final class TextSelectionTest extends TestCase
             '│              │',
             '╰──────────────╯',
         ];
-        $sel = TextSelection::at(3, 1, [1, 4, 3, 12])?->withHead(12, 4);
+        $sel = TextSelection::at(4, 2, [2, 5, 4, 13])?->withHead(13, 5);
         self::assertNotNull($sel);
 
         self::assertSame(
@@ -94,7 +98,7 @@ final class TextSelectionTest extends TestCase
     public function testExtractStartsMidRowAtTheAnchor(): void
     {
         $lines = ['', '│  alpha beta  │'];
-        $sel = TextSelection::at(9, 1, [1, 1, 3, 12])?->withHead(12, 1);
+        $sel = TextSelection::at(10, 2, [2, 2, 4, 13])?->withHead(13, 2);
 
         self::assertSame('beta', $sel?->extract($lines));
     }
@@ -102,7 +106,7 @@ final class TextSelectionTest extends TestCase
     public function testHighlightReversesOnlyTheCoveredCellsAndKeepsTheRest(): void
     {
         $lines = ['│  alpha beta  │'];
-        $sel = TextSelection::at(3, 0, [0, 0, 3, 12])?->withHead(7, 0);
+        $sel = TextSelection::at(4, 1, [1, 1, 4, 13])?->withHead(8, 1);
         self::assertNotNull($sel);
 
         $style = Style::new()->reverse();
@@ -115,7 +119,7 @@ final class TextSelectionTest extends TestCase
     public function testHighlightPadsAShortRowSoTheBandIsContinuous(): void
     {
         $lines = ['ab', 'x'];
-        $sel = TextSelection::at(0, 0, [0, 1, 0, 3])?->withHead(3, 1);
+        $sel = TextSelection::at(1, 1, [1, 2, 1, 4])?->withHead(4, 2);
         self::assertNotNull($sel);
 
         $style = Style::new()->reverse();
@@ -127,7 +131,7 @@ final class TextSelectionTest extends TestCase
 
     public function testWithersReturnNewInstances(): void
     {
-        $sel = TextSelection::at(5, 2, self::REGION);
+        $sel = TextSelection::at(6, 3, self::REGION);
         self::assertNotNull($sel);
 
         $dragging = $sel->withDragging();

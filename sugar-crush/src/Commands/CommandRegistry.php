@@ -410,17 +410,17 @@ final class CommandRegistry
 
         $names = array_map(static fn(CommandSpec $spec): string => $spec->name, $commands);
 
-        $length = mb_strlen($prefix);
         $matches = [];
-        foreach ((new SmithWatermanMatcher())->matchAll($prefix, $names) as $result) {
-            // matchAll() is a LOCAL alignment: it happily reports a partial
-            // hit (query "re" scores against "agents" on the "e" alone), which
-            // would leave the popup listing every command. Keep only rows
-            // where every query character landed AND the first one landed on
-            // the command's first character - a slash command is typed from
+        foreach (self::fuzzyMatches($prefix, $names) as $result) {
+            // The matcher runs in requireFullQuery mode, so every survivor
+            // already carries one matched index per query character - the
+            // LOCAL-alignment partial hit (query "re" scoring against
+            // "agents" on the "e" alone) never reaches here. What is left to
+            // check is the anchor: the first query character must land on
+            // the command's first character. A slash command is typed from
             // its start, so anchoring is what makes the popup narrow as the
             // user types instead of widening.
-            if (count($result->matchedIndices) !== $length || ($result->matchedIndices[0] ?? -1) !== 0) {
+            if (($result->matchedIndices[0] ?? -1) !== 0) {
                 continue;
             }
 
@@ -428,5 +428,54 @@ final class CommandRegistry
         }
 
         return $matches;
+    }
+
+    /**
+     * Most prefixes {@see fuzzyMatches()} remembers per name list; past it the
+     * oldest is forgotten, so a long-lived session's memo stays bounded.
+     */
+    private const MATCH_MEMO_LIMIT = 64;
+
+    /**
+     * The "/" popup's one matcher, built on first use with `requireFullQuery`
+     * (candy-fuzzy #3) - the coverage rule this class used to hand-roll by
+     * comparing `count($matchedIndices)` with the prefix length.
+     */
+    private static ?SmithWatermanMatcher $matcher = null;
+
+    /**
+     * Ranked matches per prefix for the name list they were computed over
+     * (candy-fuzzy #2). The popup asks for its rows several times per
+     * keystroke - the key arms, the menu-visibility guard, the renderer -
+     * over a name list that does not change between keystrokes, so each
+     * (prefix, names) pair is aligned once. A different name list (a custom
+     * command file appearing, a caller passing its own rows) discards the
+     * whole memo: results are only served for the exact list they came from.
+     *
+     * @var array{names: list<string>, results: array<string, list<MatchResult>>}|null
+     */
+    private static ?array $matchMemo = null;
+
+    /**
+     * @param list<string> $names
+     * @return list<MatchResult>
+     */
+    private static function fuzzyMatches(string $prefix, array $names): array
+    {
+        if (self::$matchMemo === null || self::$matchMemo['names'] !== $names) {
+            self::$matchMemo = ['names' => $names, 'results' => []];
+        }
+
+        if (array_key_exists($prefix, self::$matchMemo['results'])) {
+            return self::$matchMemo['results'][$prefix];
+        }
+
+        if (count(self::$matchMemo['results']) >= self::MATCH_MEMO_LIMIT) {
+            unset(self::$matchMemo['results'][array_key_first(self::$matchMemo['results'])]);
+        }
+
+        self::$matcher ??= SmithWatermanMatcher::new(requireFullQuery: true);
+
+        return self::$matchMemo['results'][$prefix] = array_values(self::$matcher->matchAll($prefix, $names));
     }
 }
