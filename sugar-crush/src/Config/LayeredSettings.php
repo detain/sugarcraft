@@ -299,6 +299,22 @@ final class LayeredSettings
      *                 outranks it. USER-TIER ONLY on the money axis: switching
      *                 caching off makes every request bill its whole prompt at
      *                 the full input rate, a bill a checkout may not choose.
+     *  - `includeGitInstructions`
+     *                 whether the Bash tool's generic `<git_commits>` guidance
+     *                 rides the system prompt (step 0.3), read by
+     *                 {@see \SugarCraft\Crush\Cli\Bootstrap::tools()} into
+     *                 {@see \SugarCraft\Crush\Tools\BuiltIn\Bash::withGitGuidance()};
+     *                 on unless `false`. A project MAY set it - see
+     *                 {@see PROJECT_TIER_KEYS}.
+     *  - `attribution`
+     *                 `{"commit": "…", "pr": "…"}`, the trailer that guidance
+     *                 tells the model to end every commit message (and the line
+     *                 to end every pull-request description) with; an empty or
+     *                 missing string adds none. Same reader. USER-TIER ONLY:
+     *                 it is text the model is instructed to stamp, verbatim,
+     *                 on every commit it makes under the operator's identity,
+     *                 and a checkout choosing that text would be a repository
+     *                 writing into the operator's own history.
      *
      * `statusLine` IS THE ONLY KEY HERE WHOSE VALUE IS A COMMAND, and that is
      * why it is user-tier only ({@see PROJECT_TIER_KEYS} does not list it).
@@ -429,6 +445,8 @@ final class LayeredSettings
         'extraBody',
         'thinkingBudget',
         'promptCache',
+        'includeGitInstructions',
+        'attribution',
     ];
 
     /**
@@ -451,6 +469,12 @@ final class LayeredSettings
      *    Gated for `disabledSkills`' reason too — removing a capability can
      *    remove a check — and it CANNOT widen anything, because that set is the
      *    ceiling and both tool keys only ever shrink it.
+     *  - `includeGitInstructions` only ever REMOVES prompt text: a repository
+     *    whose AGENTS.md states its own commit process has a real reason to
+     *    drop the generic block beside it, and the worst a hostile value does
+     *    is put back the defaults the user would get anyway or take away
+     *    guidance, never add any. Its sibling `attribution` is the opposite
+     *    case and stays user-tier ({@see LAYERED_KEYS}).
      *
      * `titleModel` / `summaryModel` ARE ABSENT (audit 15d-24), and they used to
      * be here, on the argument that they "name a model WITHIN the provider the
@@ -646,6 +670,7 @@ final class LayeredSettings
         'parallelToolCalls',
         'parallelToolDeadlineSeconds',
         'disabledTools',
+        'includeGitInstructions',
     ];
 
     /**
@@ -657,7 +682,7 @@ final class LayeredSettings
      * `titleModel`, `summaryModel`, `instructions`, `disabledRules`,
      * `maxOutputTokens`, `modelPrices`, `allowedTools`, `statusLine`, `layout`,
      * `maxToolSteps`, `secretEnvAllowlist`, `contextWindow`, `extraBody`,
-     * `thinkingBudget` and `promptCache`, in
+     * `thinkingBudget`, `promptCache` and `attribution`, in
      * {@see LAYERED_KEYS} order — named rather than numbered
      * here, because the
      * ordinals this sentence used to carry went stale the moment a fifth key

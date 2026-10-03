@@ -47,12 +47,38 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      * warning — so the bound applies during capture as well as after it (see
      * {@see CapturesProcessOutput::runCaptured()}). Zero or negative disables
      * the cap for a caller that has arranged its own containment.
+     *
+     * $includeGitInstructions, $commitAttribution and $prAttribution are the
+     * `includeGitInstructions` and `attribution` layered settings (step 0.3),
+     * read by {@see \SugarCraft\Crush\Cli\Bootstrap::tools()} and shaping
+     * {@see promptGuidance()} only: false drops the whole `<git_commits>`
+     * block, and a non-empty attribution string is the trailer a commit
+     * message (or the closing line a pull-request description) ends with.
+     * The defaults are the shipped behaviour: the block on, no trailer.
      */
     public function __construct(
         private ?string $root = null,
         private ?AgentPathJail $worktreeJail = null,
         private int $maxOutputBytes = self::DEFAULT_MAX_OUTPUT_BYTES,
+        private bool $includeGitInstructions = true,
+        private string $commitAttribution = '',
+        private string $prAttribution = '',
     ) {}
+
+    /**
+     * This tool with the git-guidance settings replaced and every other field
+     * kept - the {@see RebindsWorktreeJail} rebuild, for the same reason:
+     * every property is constructor-promoted, so the object's own vars are
+     * the constructor's argument list.
+     */
+    public function withGitGuidance(bool $include, string $commitAttribution = '', string $prAttribution = ''): self
+    {
+        return new self(...array_replace(get_object_vars($this), [
+            'includeGitInstructions' => $include,
+            'commitAttribution' => $commitAttribution,
+            'prAttribution' => $prAttribution,
+        ]));
+    }
 
     public function name(): string
     {
@@ -118,15 +144,27 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
     }
 
     /**
-     * The repo's ship-as-you-go cadence as a playbook beside the tool that runs
-     * it: branch naming, the commit / push / open / merge / resync chain, the
-     * bundle-title-test-plan shape of a request, and each safety rule stated
-     * WITH the reason it exists — a failed pre-commit hook means no commit
-     * landed, so the next `--amend` would land on the PREVIOUS one, which is
-     * exactly why `--amend` is checked against the exit status and `--no-verify`
-     * never used. Spelled as numbered steps and a message template rather than
-     * free prose because the sequence is genuinely fragile and the model
-     * performs it through THIS tool.
+     * Generic git discipline beside the tool that runs it, for ANY repository:
+     * inspect, stage by name, commit, and each safety rule stated WITH the
+     * reason it exists — a failed pre-commit hook means no commit landed, so
+     * the next `--amend` would land on the PREVIOUS one, which is exactly why
+     * `--amend` is checked against the exit status and `--no-verify` never
+     * used. Spelled as numbered steps and a message template rather than free
+     * prose because the sequence is genuinely fragile and the model performs
+     * it through THIS tool.
+     *
+     * NO REPOSITORY'S CADENCE (step 0.3). This block used to carry the
+     * SugarCraft monorepo's ship-as-you-go chain - branch prefixes,
+     * `gh pr create`/`gh pr merge`, `<lib>:` titles, a `composer validate`
+     * exemption - and so sent one project's process into every project the
+     * agent ran in. That cadence lives in the monorepo's own AGENTS.md, which
+     * the instruction loader already puts in front of the model there; here
+     * the block defers to whatever rules the repository ships.
+     *
+     * Shaped by two layered settings ({@see __construct()}):
+     * `includeGitInstructions: false` returns '' (the guidance layer then drops
+     * the fragment entirely), and `attribution.commit` / `attribution.pr` are
+     * rendered into the template when non-empty.
      *
      * It rides the session prompt, not the per-call schema, so the always-on
      * {@see description()} stays terse ({@see PromptGuidance}). The body names
@@ -135,44 +173,56 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      */
     public function promptGuidance(): string
     {
-        $cadence = [
-            'Commit and ship through this tool on the repo\'s fixed cadence, in this order.',
+        if (!$this->includeGitInstructions) {
+            return '';
+        }
+
+        $steps = [
+            'Branch names, message conventions and pull-request steps belong to the repository: follow its own contribution rules (an AGENTS.md, CONTRIBUTING.md or similar) where it has them. What follows holds in every repository.',
             'The steps are serial — each changes state the next depends on — so none of them batch in parallel.',
             '',
-            '1. Stage exactly the paths this change touched, then author the commit as the repo\'s configured git identity.',
-            '2. Push the branch. Name it ai/<slug>-<short>, or feat/ when a person is driving.',
-            '3. Open the pull request with `unset GITHUB_TOKEN && gh pr create`; clearing the token first stops an ambient one shadowing the intended account.',
-            '4. Merge with `gh pr merge <n> --merge --delete-branch`, then resync with `git checkout master && git pull --ff-only`.',
-            '5. Begin the next bundle only after that resync lands.',
-            '',
-            'Bundle two to four related items into one request, title it `<lib>: <summary>`, and end the body with a `## Test plan` heading citing the test count.',
+            '1. Look before staging: `git status` and `git diff` for what changed, `git log` for the message style this repository uses.',
+            '2. Stage exactly the paths this change touched, by name.',
+            '3. Commit as the repository\'s configured git identity, then check the exit status before doing anything else.',
         ];
 
         $safety = [
             'State each safety rule with the reason it exists, because the reason is what generalises to the case not listed.',
-            'A failed pre-commit hook means the commit DID NOT happen, so the next `--amend` lands on the PREVIOUS commit — check the exit status first.',
+            'A failed pre-commit hook means the commit DID NOT happen, so the next `--amend` lands on the PREVIOUS commit — check the exit status first, fix the cause, and make a new commit.',
             'Never pass `--no-verify`: it skips the very hook whose failure you are trying to get past.',
-            'Never force-push to `master`: the rewritten history no longer matches any other clone.',
+            'Never force-push to the default branch: the rewritten history no longer matches any other clone.',
             'Never `git add -A`: it stages files this step never meant to touch.',
-            '',
-            'Skip `composer validate --strict` here — every `sugarcraft/*` `@dev` constraint trips it by design, so drop the flag rather than bending constraints to answer it.',
+            'Never change the git config: the identity and settings are the user\'s, not this session\'s.',
         ];
 
         $template = [
             'The message is one fragile operation, so pass it through a heredoc rather than stacked flags and the blank lines between sections survive:',
             "git commit -F - <<'MSG'",
-            '<lib>: <summary>',
+            '<summary line>',
             '',
             'What changed, and why.',
-            '',
-            '## Test plan',
-            '<n> tests, all green',
-            'MSG',
         ];
+        if (trim($this->commitAttribution) !== '') {
+            $template[] = '';
+            $template[] = trim($this->commitAttribution);
+        }
+        $template[] = 'MSG';
 
-        return "<git_commits>\n"
-            . implode("\n", array_merge($cadence, [''], $safety, [''], $template))
-            . "\n</git_commits>";
+        $closing = [];
+        if (trim($this->commitAttribution) !== '') {
+            $closing[] = 'End every commit message with the trailer shown above, exactly as written.';
+        }
+        if (trim($this->prAttribution) !== '') {
+            $closing[] = 'End every pull-request description you write with this line, exactly as written:';
+            $closing[] = trim($this->prAttribution);
+        }
+
+        $sections = array_merge($steps, [''], $safety, [''], $template);
+        if ($closing !== []) {
+            $sections = array_merge($sections, [''], $closing);
+        }
+
+        return "<git_commits>\n" . implode("\n", $sections) . "\n</git_commits>";
     }
 
     public function inputSchema(): array

@@ -7825,6 +7825,28 @@ final class Bootstrap
             $rulesState,
         ));
 
+        // GIT GUIDANCE SETTINGS (step 0.3), applied HERE for the reason the
+        // filter is: this is the one return all three `withTools()` call
+        // sites share. `includeGitInstructions` must be a bool and
+        // `attribution` an object of strings; anything else is ignored as if
+        // unset (the block on, no trailer), the tolerant direction every
+        // other `readUserConfig()` reader takes for a malformed preference.
+        // `attribution` can only arrive from the user tier
+        // (LayeredSettings::PROJECT_TIER_KEYS does not list it): it is text
+        // the model is told to stamp on every commit.
+        $gitConfig = self::readUserConfig();
+        $includeGit = $gitConfig['includeGitInstructions'] ?? true;
+        $attribution = $gitConfig['attribution'] ?? [];
+        $attribution = is_array($attribution) ? $attribution : [];
+        $commitTrailer = is_string($attribution['commit'] ?? null) ? $attribution['commit'] : '';
+        $prTrailer = is_string($attribution['pr'] ?? null) ? $attribution['pr'] : '';
+        $tools = array_map(
+            static fn (Tool $tool): Tool => $tool instanceof Bash
+                ? $tool->withGitGuidance(is_bool($includeGit) ? $includeGit : true, $commitTrailer, $prTrailer)
+                : $tool,
+            $tools,
+        );
+
         // THE TASK FEED (E675). Appended AFTER the filter, on purpose: the
         // gate on this tool is not a config key but the CALLER holding an
         // AgentManager at all — a feed built without one (a bare unit-test

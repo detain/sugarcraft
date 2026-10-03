@@ -390,6 +390,7 @@ sugar-crush/tests/Tui/MenuDropdownTest.php	0.083	2
 sugar-crush/tests/Providers/ProviderConnectTimeoutTest.php	0.081	102
 sugar-crush/tests/Backend/ReasoningPaintTest.php	0.080	23
 sugar-crush/tests/Skills/CompiledPatternCacheBoundTest.php	0.080	6
+sugar-crush/tests/Tools/BashGitGuidanceSettingTest.php	0.080	9
 sugar-crush/tests/Providers/BedrockModelIdTest.php	0.079	30
 sugar-crush/tests/Support/ProjectRootTest.php	0.079	6
 sugar-crush/tests/Support/SubAgentActivityRelayTest.php	0.078	5

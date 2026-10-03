@@ -191,13 +191,28 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `extraBody` | `ProviderFactory::createCustom()` → `CustomProvider` | **no** |
 | `thinkingBudget` | `ProviderFactory::createVertex()` → `VertexProvider` | **no** |
 | `promptCache` | `ProviderFactory::createVertex()`, `createBedrock()` → `promptCacheEnabled()` | **no** |
+| `includeGitInstructions` | `Bootstrap::tools()` → `Bash::withGitGuidance()` | yes |
+| `attribution` | `Bootstrap::tools()` → `Bash::withGitGuidance()` | **no** |
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these twenty-one, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these twenty-three, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. A key nothing reads is worse than
 a missing one, because it looks configurable.
+
+`includeGitInstructions` and `attribution` shape the Bash tool's generic
+`<git_commits>` guidance in the system prompt (inspect, stage by name, commit,
+and the never-do rules: no `--no-verify`, no force-push to the default branch,
+no `git add -A`). `"includeGitInstructions": false` drops the whole block, for
+a repository whose own `AGENTS.md` states its commit process; a project may set
+it, because it only ever removes prompt text. `attribution` is
+`{"commit": "…", "pr": "…"}`: a non-empty `commit` is the trailer every commit
+message is told to end with, a non-empty `pr` the closing line of every
+pull-request description, and an empty or missing string adds nothing (the
+default). It is user-tier only, because it is text stamped on every commit
+made under your identity. A non-boolean `includeGitInstructions` or a
+non-string entry is ignored as if unset.
 
 `maxOutputTokens` is the exception that has no exception: it is E707's opt-in
 output ceiling, and **unset is not zero** — an absent key sends no `max_tokens`
@@ -848,11 +863,12 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   all four `trustedProject*` grants.
 - [`MEMORY.md`](MEMORY.md) — the rest of the `~/.sugar-crush/` layout.
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
-  this stack. They do not cover it: only six of the twenty-one layered keys have an
+  this stack. They do not cover it: only six of the twenty-three layered keys have an
   env override (`provider`, `titleModel`, `summaryModel`, `parallelToolCalls`,
   `parallelToolDeadlineSeconds`, `promptCache`). `theme`, `instructions`, `disabledSkills`,
   `disabledRules`, `allowedTools`, `disabledTools`, `maxOutputTokens`,
   `modelPrices`, `statusLine`, `layout`, `maxToolSteps`, `secretEnvAllowlist`,
-  `contextWindow`, `extraBody` and `thinkingBudget` have none.
+  `contextWindow`, `extraBody`, `thinkingBudget`, `includeGitInstructions` and
+  `attribution` have none.
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.)

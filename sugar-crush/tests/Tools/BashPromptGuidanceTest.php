@@ -111,23 +111,25 @@ final class BashPromptGuidanceTest extends TestCase
         self::assertSame(1, substr_count($layer, self::CLOSER), 'the fragment must close exactly one tag pair');
     }
 
-    // ─── 4. the cadence chain precedes the never-do block ────────────────
+    // ─── 4. the commit steps precede the never-do block ──────────────────
 
     /**
      * The two content halves have a reason for their order: the model reads the
      * steps it must perform before the prohibitions that bound them. Reversing
-     * the halves is the experiment this assertion exists to catch.
+     * the halves is the experiment this assertion exists to catch. The steps
+     * are the generic ones since step 0.3 removed the SugarCraft PR cadence
+     * (its `gh pr merge` chain now lives only in the monorepo's AGENTS.md).
      */
-    public function testCadenceChainPrecedesNeverDoBlock(): void
+    public function testCommitStepsPrecedeNeverDoBlock(): void
     {
         $fragment = (new Bash())->promptGuidance();
 
-        $merge = strpos($fragment, 'gh pr merge');
+        $stage = strpos($fragment, '2. Stage exactly the paths');
         $neverDo = strpos($fragment, '--no-verify');
 
-        self::assertIsInt($merge);
+        self::assertIsInt($stage);
         self::assertIsInt($neverDo);
-        self::assertLessThan($neverDo, $merge, 'the merge step of the cadence must precede the never-do list');
+        self::assertLessThan($neverDo, $stage, 'the staging step must precede the never-do list');
     }
 
     // ─── 5. name discipline: the fragment names no sibling wired tool ────
