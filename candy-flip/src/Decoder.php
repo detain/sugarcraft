@@ -198,7 +198,7 @@ final class Decoder
 
     /**
      * Rebuild a standalone single-frame GIF for one Image Descriptor:
-     * header slice + GCT + rewritten GCE + optional LCT + descriptor +
+     * header slice + GCT + rewritten GCE + descriptor + optional LCT +
      * LZW sub-blocks + trailer — the payload `imagecreatefromstring()` eats.
      *
      * One assembly line for both decode paths (the per-frame decode that
@@ -236,13 +236,15 @@ final class Decoder
             . chr($delayLo) . chr($delayHi)
             . chr($transparent && $transparentIndex >= 0 ? $transparentIndex : 0)
             . "\x00";
-        // Local color table: the Image Descriptor is always 10 bytes and the
-        // LCT follows it directly.
+        // The Image Descriptor (10 bytes) comes first: its packed byte is what
+        // tells the reader an LCT follows, so writing the LCT ahead of it puts
+        // palette bytes where GD expects a block introducer: depending on
+        // those bytes GD either rejects the frame or decodes it with garbage
+        // colours (GIF89a §20-21: descriptor, then LCT, then data).
+        $gifData .= substr($bytes, $offset, 10);
         if ($hasLct) {
             $gifData .= substr($bytes, $offset + 10, $lctBytes);
         }
-        // The Image Descriptor (10 bytes) must precede the LZW data.
-        $gifData .= substr($bytes, $offset, 10);
         // LZW image data: minimum-code-size byte + sub-blocks + 0x00 terminator.
         $lzwStart = $offset + 10 + ($hasLct ? $lctBytes : 0);
         $imgDataEnd = self::findImageDataEnd($bytes, $lzwStart);
