@@ -11201,6 +11201,13 @@ final class Chat implements Model
         if ($backend instanceof Backend\EngineBackend && $this->maxCostUsd !== null) {
             $backend = $backend->withSpendCap($this->maxCostUsd, $this->spentUsd());
         }
+        // Audit R1: the engine's per-turn App prices its skill budget against
+        // the SAME CompactorConfig this Chat compacts with, so one object is
+        // authoritative. Null keeps the backend's own default
+        // (CompactorConfig::new()), which is what Chat's compactor uses too.
+        if ($backend instanceof Backend\EngineBackend && $this->compactorConfig !== null) {
+            $backend = $backend->withCompactorConfig($this->compactorConfig);
+        }
         // Only the rows the model may see (audit 15b-03): command echoes and
         // their output, notices and error strings live in the same list for
         // the transcript's sake and never go out as turns.

@@ -11,6 +11,7 @@ use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\BackendToolEventsMsg;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Events\SpendCapBreached;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\CompleteRequest;
@@ -295,6 +296,44 @@ final class MidTurnSpendCapTranscriptTest extends TestCase
 
         $launched = $this->digBackend($cmd);
         $this->assertSame($backend, $launched, 'no cap configured means no clone — every session that never uses /budget keeps the exact dispatch path it had before E20');
+    }
+
+    /**
+     * Audit R1's Chat half, riding the same per-dispatch clone seam as the
+     * cap: the engine's per-turn App must price its skill budget against
+     * the SAME CompactorConfig this Chat compacts with, or the two budgets
+     * drift apart the moment a launch path configures one.
+     */
+    public function testAConfiguredCompactorReachesTheDispatchedBackend(): void
+    {
+        $config = new CompactorConfig(skillBudgetPerSkill: 50);
+        $backend = EngineBackend::new($this->neverCalledProvider(), 'wired');
+        $chat = new Chat(
+            history: [Message::user('hello'), Message::assistant('hi')],
+            backend: $backend,
+            compactorConfig: $config,
+        );
+
+        [, $cmd] = $this->typeAndSubmit($chat, 'go');
+
+        $launched = $this->digBackend($cmd);
+        $this->assertInstanceOf(EngineBackend::class, $launched);
+        $this->assertNotSame($backend, $launched, 'the configured compactor rides a per-dispatch clone, never the shared backend');
+        $this->assertSame($config, $launched->compactorConfig(), 'one object is authoritative: the engine turn gets the Chat\'s own CompactorConfig');
+        $this->assertEquals(CompactorConfig::new(), $backend->compactorConfig(), 'the shared backend keeps its default for every non-Chat caller');
+    }
+
+    public function testNoConfiguredCompactorLeavesTheBackendOnItsDefault(): void
+    {
+        $backend = EngineBackend::new($this->neverCalledProvider(), 'wired');
+        $chat = new Chat(
+            history: [Message::user('hello'), Message::assistant('hi')],
+            backend: $backend,
+        );
+
+        [, $cmd] = $this->typeAndSubmit($chat, 'go');
+
+        $this->assertSame($backend, $this->digBackend($cmd), 'no compactor configured means no clone — the backend default already equals Chat\'s CompactorConfig::new()');
     }
 
     // =====================================================================
