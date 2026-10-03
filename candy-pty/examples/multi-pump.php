@@ -35,7 +35,7 @@ while (\count($commands) < 2) {
 }
 
 // ---- PTY setup ----------------------------------------------------
-$system = PtySystemFactory::default();
+$system = PtySystemFactory::new();
 
 $sessions = [];
 $mp = new MultiPump();

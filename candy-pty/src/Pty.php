@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty;
 
-use SugarCraft\Pty\Concerns\LibcAccess;
 use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\Posix\PosixMasterPty;
-use SugarCraft\Pty\TermiosFactory;
+use SugarCraft\Pty\Posix\PosixPtySystem;
+use SugarCraft\Pty\Posix\PosixSlavePty;
 
 /**
  * @deprecated since v0.x, use `SugarCraft\Pty\Posix\PosixPtySystem` instead
@@ -28,8 +28,6 @@ use SugarCraft\Pty\TermiosFactory;
  */
 final class Pty implements MasterPty
 {
-    use LibcAccess;
-
     public const DEFAULT_COLS = 80;
     public const DEFAULT_ROWS = 24;
 
@@ -38,53 +36,64 @@ final class Pty implements MasterPty
         private readonly PosixMasterPty $impl,
     ) {}
 
-    public static function open(): self
+    /**
+     * Open a PTY pair through the canonical {@see PosixPtySystem::open()}.
+     *
+     * This facade used to carry its own `posix_openpt + grantpt + unlockpt
+     * + ptsname_r` quartet, and that copy had drifted from the canonical
+     * one in two ways that matter: it never set `FD_CLOEXEC` on the master
+     * (so every child spawned through it inherited the master fd, the
+     * kernel's master-side refcount never reached 0 on close, and
+     * `tty_hangup()`/SIGHUP never fired — one leaked master per spawn in
+     * a long-lived consumer), and it never applied a winsize at open (so
+     * `size()` reported the kernel's 0×0 until the first spawn). Routing
+     * through the canonical path means the facade cannot diverge again:
+     * cloexec, the Darwin winsize anchor and the open-time resize all
+     * come from the one implementation that documents why they exist.
+     *
+     * @param int $cols initial column count applied at open (default 80)
+     * @param int $rows initial row count applied at open (default 24)
+     * @throws PtyException when any open step fails (the master fd is
+     *         closed before the throw)
+     */
+    public static function open(int $cols = self::DEFAULT_COLS, int $rows = self::DEFAULT_ROWS): self
     {
-        $libc = self::libc();
+        $pair = (new PosixPtySystem())->open($cols, $rows);
+        $impl = $pair->master();
 
-        $masterFd = $libc->posix_openpt(TermiosFactory::O_RDWR | TermiosFactory::oNoCtty());
-        if ($masterFd < 0) {
-            throw new PtyException(Lang::t('open.posix_openpt_failed', [
-                'rc'    => $masterFd,
-                'errno' => Libc::errnoDetail(),
-            ]));
-        }
-
-        if ($libc->grantpt($masterFd) !== 0) {
-            $libc->close($masterFd);
-            throw new PtyException(Lang::t('open.grantpt_failed', ['fd' => $masterFd]));
-        }
-
-        if ($libc->unlockpt($masterFd) !== 0) {
-            $libc->close($masterFd);
-            throw new PtyException(Lang::t('open.unlockpt_failed', ['fd' => $masterFd]));
-        }
-
-        $slavePath = self::readPtsName($libc, $masterFd);
-
-        $impl = new PosixMasterPty($masterFd, $slavePath);
-        $master = new Master($masterFd, $slavePath);
-
-        return new self($master, $impl);
+        return new self(new Master($impl->fd(), $pair->slave()->path()), $impl);
     }
 
-    /** Read the slave PTY path via `ptsname_r` into a 256-byte buffer. */
-    private static function readPtsName(\FFI $libc, int $masterFd): string
-    {
-        $buf = $libc->new('char[256]');
-        $rc = $libc->ptsname_r($masterFd, $buf, 256);
-        if ($rc !== 0) {
-            $libc->close($masterFd);
-            throw new PtyException(Lang::t('open.ptsname_failed', ['fd' => $masterFd]));
-        }
-        return \FFI::string($buf);
-    }
-
-    /** @param list<string> $cmd @param array<string,string>|null $env */
+    /**
+     * Spawn `$cmd` on this PTY's slave with the requested geometry.
+     *
+     * The winsize is applied twice, deliberately. BEFORE the spawn, so a
+     * child that queries its size at startup (Linux keeps the winsize
+     * across slave opens) sees the requested geometry with no race; a
+     * failure here throws before any child exists, so nothing leaks.
+     * AFTER the spawn, mirroring {@see PosixSlavePty::spawn()}, because
+     * macOS xnu zeroes the winsize when `proc_open` opens fresh slave
+     * descriptors — the pre-spawn value alone can be clobbered by the
+     * spawn itself. The post-spawn re-assert is best-effort: the child is
+     * already running, and throwing would orphan it from the caller.
+     *
+     * @param list<string> $cmd
+     * @param array<string,string>|null $env
+     */
     public function spawn(array $cmd, ?array $env = null, int $cols = self::DEFAULT_COLS, int $rows = self::DEFAULT_ROWS, bool $controllingTerminal = false): Child
     {
         $this->impl->resize($cols, $rows);
-        return Spawn::proc($this->master, $cmd, $env, $controllingTerminal);
+        $child = Spawn::proc($this->master, $cmd, $env, $controllingTerminal);
+
+        try {
+            $this->impl->resize($cols, $rows);
+        } catch (PtyException) {
+            // Best-effort post-spawn re-assert; the pre-spawn resize above
+            // already succeeded, so the geometry is right everywhere the
+            // kernel does not reset it on slave open.
+        }
+
+        return $child;
     }
 
     public function resize(int $cols, int $rows): void

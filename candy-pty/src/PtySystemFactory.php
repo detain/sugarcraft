@@ -41,7 +41,7 @@ final class PtySystemFactory
      *     unreleased backend (`sidecar`, `pecl`) is selected.
      * @throws \InvalidArgumentException    on an unrecognised value.
      */
-    public static function default(): PtySystem
+    public static function new(): PtySystem
     {
         $backend = \getenv('SUGARCRAFT_PTY_BACKEND');
 
@@ -62,6 +62,20 @@ final class PtySystemFactory
             \var_export($backend, true),
             \implode(', ', self::VALID_BACKENDS),
         ));
+    }
+
+    /**
+     * Former name of {@see new()}, kept so existing callers (candy-wish's
+     * InProcessTransport among them) keep resolving. The project's root
+     * factory is `::new()`; `::default()` is reserved against.
+     *
+     * @deprecated use {@see new()}
+     * @throws UnsupportedPlatformException
+     * @throws \InvalidArgumentException
+     */
+    public static function default(): PtySystem
+    {
+        return self::new();
     }
 
     /**

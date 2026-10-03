@@ -7,7 +7,7 @@ namespace SugarCraft\Pty\Exception;
 use SugarCraft\Pty\PtyException;
 
 /**
- * Raised when {@see \SugarCraft\Pty\PtySystemFactory::default()} can
+ * Raised when {@see \SugarCraft\Pty\PtySystemFactory::new()} can
  * not return a PTY system for the current host — currently this is
  * Windows, where the v1 candy-pty backend is POSIX-only.
  *

@@ -37,6 +37,71 @@ final class TermiosFactoryTest extends TestCase
         }
     }
 
+    /**
+     * EVERY FFI→stty fallback is logged and counted, not just the first in
+     * the process. The factory used to guard the log with a static boolean,
+     * so a second (mid-session) degradation in a long-running host was
+     * silent.
+     *
+     * The FFI path is forced to fail by pointing SUGARCRAFT_LIBC at a path
+     * that fails validation and dropping the cached handle, so
+     * PosixTermios's constructor throws on `Libc::lib()`.
+     */
+    public function testEveryFallbackIsLoggedWithItsOrdinal(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('candy-pty is POSIX-only.');
+        }
+
+        $log = \tempnam(\sys_get_temp_dir(), 'termios-fallback-');
+        $this->assertIsString($log);
+        $previousLog = \ini_set('error_log', $log);
+        $previousLibc = \getenv('SUGARCRAFT_LIBC');
+        \putenv('SUGARCRAFT_LIBC=/nonexistent/candy-pty-test/libc.so.6');
+        \SugarCraft\Pty\Libc::reset();
+
+        try {
+            $start = TermiosFactory::fallbackCount();
+            $first = TermiosFactory::open(0);
+            $second = TermiosFactory::open(1);
+
+            $this->assertInstanceOf(SttyTermios::class, $first);
+            $this->assertInstanceOf(SttyTermios::class, $second);
+            $this->assertSame($start + 2, TermiosFactory::fallbackCount());
+
+            $logged = (string) \file_get_contents($log);
+            $this->assertStringContainsString('fd=0 (fallback #' . ($start + 1) . ' in this process)', $logged);
+            $this->assertStringContainsString('fd=1 (fallback #' . ($start + 2) . ' in this process)', $logged, 'the second fallback was not logged');
+            $this->assertStringContainsString('SUGARCRAFT_LIBC', $logged, 'the log line must carry the reason the FFI path failed');
+        } finally {
+            if ($previousLibc === false) {
+                \putenv('SUGARCRAFT_LIBC');
+            } else {
+                \putenv('SUGARCRAFT_LIBC=' . $previousLibc);
+            }
+            \SugarCraft\Pty\Libc::reset();
+            \ini_set('error_log', $previousLog === false ? '' : $previousLog);
+            @\unlink($log);
+        }
+    }
+
+    public function testForcedSttySelectionIsNotCountedAsAFallback(): void
+    {
+        $previous = \getenv('SUGARCRAFT_TERMIOS');
+        \putenv('SUGARCRAFT_TERMIOS=stty');
+        try {
+            $start = TermiosFactory::fallbackCount();
+            $this->assertInstanceOf(SttyTermios::class, TermiosFactory::open(0));
+            $this->assertSame($start, TermiosFactory::fallbackCount());
+        } finally {
+            if ($previous === false) {
+                \putenv('SUGARCRAFT_TERMIOS');
+            } else {
+                \putenv('SUGARCRAFT_TERMIOS=' . $previous);
+            }
+        }
+    }
+
     public function testOpenReturnsPosixTermiosByDefault(): void
     {
         $this->requirePtySyscalls();

@@ -308,4 +308,75 @@ final class PosixMasterPtyTest extends TestCase
 
         $this->assertTrue(true, 'idempotent close must not throw');
     }
+
+    /**
+     * A failed `fclose()` of the materialised stream must not skip the libc
+     * close of the original master fd. It used to throw first, and because
+     * `$closed` was already true there was no second chance -- the
+     * posix_openpt descriptor leaked for the life of the process.
+     *
+     * `fclose()` on a php://fd stream never fails in practice (php-src
+     * ignores the close(2) rc), so the failure is forced by swapping the
+     * cached stream for a directory handle: `is_resource()` accepts it and
+     * `fclose()` rejects it -- the one shape that drives the branch.
+     */
+    public function testFailedStreamFcloseStillClosesTheMasterFd(): void
+    {
+        $this->requirePtySyscalls();
+
+        $master = (new PosixPtySystem())->open()->master();
+        $real = $master->stream();
+        $fd = $master->fd();
+
+        $dir = \opendir(\sys_get_temp_dir());
+        $this->assertIsResource($dir);
+        (new \ReflectionProperty(PosixMasterPty::class, 'stream'))->setValue($master, $dir);
+        // Release the real stream (php://fd dup) ourselves; the master no
+        // longer references it.
+        \fclose($real);
+
+        $thrown = null;
+        try {
+            $master->close();
+        } catch (PtyException $e) {
+            $thrown = $e;
+        } finally {
+            \closedir($dir);
+        }
+
+        // F_GETFD = 1: -1 (EBADF) means the descriptor is no longer open.
+        $flags = \SugarCraft\Pty\Libc::lib()->fcntl($fd, 1, 0);
+        $this->assertSame(-1, $flags, "the master fd {$fd} is still open after close() -- the fclose failure skipped the libc close");
+        $this->assertTrue($master->isClosed());
+        $this->assertNotNull($thrown, 'the fclose failure must still be surfaced, not swallowed');
+        $this->assertStringContainsString('fclose()', $thrown->getMessage());
+    }
+
+    /**
+     * A failed libc `close()` of the master fd is surfaced even when a stream
+     * was materialised. The check used to run only on the pure-libc path, so
+     * a master that had been read from or written to could fail to close
+     * while `isClosed()` reported true.
+     *
+     * The failure is forced by closing the master fd underneath the object
+     * (its php://fd stream is a separate dup and stays valid), so the
+     * object's own `close($fd)` gets EBADF.
+     */
+    public function testFailedLibcCloseOnTheStreamPathIsSurfaced(): void
+    {
+        $this->requirePtySyscalls();
+
+        $master = (new PosixPtySystem())->open()->master();
+        $master->write('x'); // materialise the stream: selects the path under test
+        $fd = $master->fd();
+        $this->assertSame(0, \SugarCraft\Pty\Libc::lib()->close($fd), 'setup: could not close the master fd underneath');
+
+        try {
+            $master->close();
+            $this->fail('close() swallowed a failed libc close on the stream path');
+        } catch (PtyException $e) {
+            $this->assertStringContainsString("close(master_fd={$fd}) failed", $e->getMessage());
+        }
+        $this->assertTrue($master->isClosed());
+    }
 }

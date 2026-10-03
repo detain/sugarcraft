@@ -61,7 +61,7 @@ final class NoControllingTerminalTest extends TestCase
 
         $start = \microtime(true);
 
-        $system = PtySystemFactory::default();
+        $system = PtySystemFactory::new();
         $pair = $system->open(80, 24);
         $master = $pair->master();
         $child = null;

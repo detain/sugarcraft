@@ -210,9 +210,15 @@ final class PosixMasterPty implements MasterPty
      * fd from `posix_openpt` remains open and must be closed explicitly
      * or the kernel's master-side refcount never reaches 0 and
      * `tty_hangup()` never fires (no SIGHUP for the session leader).
-     * The fall-through libc `close()` handles the original fd.
+     * The fall-through libc `close()` handles the original fd, and it runs
+     * on every path: a failed `fclose()` is reported only after the
+     * original fd has been released.
      *
      * Idempotent — subsequent calls are no-ops.
+     *
+     * @throws PtyException when the libc `close()` of the master fd fails
+     *         (on either path), or when `fclose()` of the materialised
+     *         stream failed (the master fd was still closed first)
      *
      * @see creack/pty.Close()
      */
@@ -233,16 +239,17 @@ final class PosixMasterPty implements MasterPty
         }
 
         $usedStream = $this->stream !== null;
+        $fcloseFailed = false;
         if ($usedStream) {
             $stream = $this->stream;
             $this->stream = null;
+            // A failed fclose is RECORDED, not thrown here: throwing at this
+            // point skipped the libc close below, and with $this->closed
+            // already true there was no retry path -- the posix_openpt fd
+            // leaked for the life of the process. The failure is still
+            // surfaced, after the original fd is released.
             if (\is_resource($stream) && !@\fclose($stream)) {
-                throw new PtyException(
-                    \SugarCraft\Pty\Lang::t('close.failed', [
-                        'fd' => $this->fd,
-                        'rc' => -1,
-                    ])
-                );
+                $fcloseFailed = true;
             }
             // Fall through to libc close: `fopen('php://fd/N')` dup()s
             // the fd (see php-src plain_wrapper.c), so fclose only
@@ -336,14 +343,27 @@ final class PosixMasterPty implements MasterPty
             $stableFd = self::libc()->dup($this->fd);
         }
         $rc = self::libc()->close($this->fd);
+        // errno is read before the stable-fd release below can overwrite it.
+        $errno = $rc !== 0 ? Libc::errnoDetail() : '';
         if ($stableFd >= 0) {
             self::libc()->close($stableFd);
         }
-        // Surface only failures from the pure-libc path where rc != 0
-        // means the master fd never closed.
-        if ($rc !== 0 && !$usedStream) {
+        // A failed libc close is surfaced on BOTH paths. It used to be
+        // checked only when no stream had been materialised, so a master
+        // that had been read from or written to -- every real consumer's
+        // master -- could fail to close while isClosed() reported true and
+        // the caller proceeded as if the hangup had been delivered. Because
+        // php://fd/N dup()s (see above), $this->fd is still open at this
+        // point on the stream path too, so a non-zero rc is a real failure
+        // there and never the expected echo of the fclose.
+        if ($rc !== 0) {
             throw new PtyException(
-                \SugarCraft\Pty\Lang::t('close.failed', ['fd' => $this->fd, 'rc' => $rc])
+                \SugarCraft\Pty\Lang::t('close.failed', ['fd' => $this->fd, 'rc' => $rc, 'errno' => $errno])
+            );
+        }
+        if ($fcloseFailed) {
+            throw new PtyException(
+                \SugarCraft\Pty\Lang::t('close.stream_fclose_failed', ['fd' => $this->fd])
             );
         }
     }

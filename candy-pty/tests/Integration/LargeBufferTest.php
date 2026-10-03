@@ -76,7 +76,7 @@ final class LargeBufferTest extends TestCase
         $payload = \bin2hex(\random_bytes((int) (self::PAYLOAD_BYTES / 2)));
         $this->assertSame(self::PAYLOAD_BYTES, \strlen($payload));
 
-        $system = PtySystemFactory::default();
+        $system = PtySystemFactory::new();
         $pair = $system->open(80, 24);
         $master = $pair->master();
         $child = null;

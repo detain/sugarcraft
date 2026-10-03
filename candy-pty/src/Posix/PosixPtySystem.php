@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Posix;
 
 use SugarCraft\Pty\Concerns\LibcAccess;
-use SugarCraft\Pty\Contract\PtyPair;
 use SugarCraft\Pty\Contract\PtySystem;
 
 /**
@@ -41,11 +40,14 @@ final class PosixPtySystem implements PtySystem
      *
      * @param int $cols Terminal column count (default 80).
      * @param int $rows Terminal row count (default 24).
-     * @return PtyPair
+     * Narrowed (covariantly) to {@see PosixPtyPair} so in-package callers —
+     * the deprecated {@see \SugarCraft\Pty\Pty} facade delegates here —
+     * get the concrete {@see PosixMasterPty} without a runtime type check.
+     *
      * @see creack/pty.Open()
      * @see portable-pty.PtySystem
      */
-    public function open(int $cols = 80, int $rows = 24): PtyPair
+    public function open(int $cols = 80, int $rows = 24): PosixPtyPair
     {
         $libc = self::libc();
 

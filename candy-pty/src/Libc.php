@@ -153,6 +153,9 @@ int   ptsname_r(int fd, char *buf, unsigned long buflen);
 {$openpty}int   waitpid(int pid, int *status, int options);
 int   dup(int fd);
 int   close(int fd);
+/* kill(2): the ext-posix-less path of Libc::kill(). pid_t is int on
+   every target ABI. */
+int   kill(int pid, int sig);
 int   open(const char *path, int flags);
 /* ioctl is variadic in <sys/ioctl.h>; this fixed-arg form is what every
    call site uses. On arm64 DARWIN a winsize pointer does NOT survive the
@@ -231,6 +234,40 @@ CPROTO;
 
     /** EINTR is the errno value for "interrupted system call". */
     public const EINTR = 4;
+
+    /**
+     * Send `$signal` to `$pid`; true when the signal was delivered.
+     *
+     * Uses `posix_kill()` when ext-posix is loaded and libc `kill(2)` over
+     * FFI otherwise. ext-posix is optional for this package (every other
+     * posix_* call site is `function_exists`-guarded, and sugar-crush runs
+     * without it by design), but the child `kill()` methods called
+     * `posix_kill()` bare -- a fatal "undefined function" at exactly the
+     * moment a caller tries to terminate a wedged child. ext-ffi is a hard
+     * requirement already, so the libc path is always available.
+     *
+     * @throws PtyException if ext-posix is absent and libc cannot be loaded
+     */
+    public static function kill(int $pid, int $signal): bool
+    {
+        if (\function_exists('posix_kill')) {
+            return \posix_kill($pid, $signal);
+        }
+
+        return self::killViaLibc($pid, $signal);
+    }
+
+    /**
+     * The ext-posix-less arm of {@see kill()}: libc `kill(2)` over FFI.
+     *
+     * @internal public only so the arm is testable on hosts that DO load
+     *           ext-posix, where {@see kill()} never reaches it.
+     * @throws PtyException if libc cannot be loaded
+     */
+    public static function killViaLibc(int $pid, int $signal): bool
+    {
+        return self::lib()->kill($pid, $signal) === 0;
+    }
 
     /**
      * Reset the cached FFI handle.

@@ -33,7 +33,7 @@ if (!SignalForwarder::pcntlReady()) {
 $cols = 80;
 $rows = 24;
 
-$pair = PtySystemFactory::default()->open($cols, $rows);
+$pair = PtySystemFactory::new()->open($cols, $rows);
 $master = $pair->master();
 $slave = $pair->slave();
 

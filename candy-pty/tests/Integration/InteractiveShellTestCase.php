@@ -89,7 +89,7 @@ abstract class InteractiveShellTestCase extends TestCase
             'PYTHONDONTWRITEBYTECODE' => '1',
         ];
 
-        $system = PtySystemFactory::default();
+        $system = PtySystemFactory::new();
         $pair = $system->open(80, 24);
         $master = $pair->master();
         $child = null;

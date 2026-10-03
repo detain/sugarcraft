@@ -9,7 +9,7 @@ declare(strict_types=1);
  * The simplest end-to-end slice: open a PTY pair, spawn the child
  * against the slave, drain the master, reap, print.
  *
- *   1. PtySystemFactory::default() → PosixPtySystem on Linux/macOS
+ *   1. PtySystemFactory::new() → PosixPtySystem on Linux/macOS
  *      (UnsupportedPlatformException on Windows; v2 ConPTY work).
  *   2. $system->open($cols, $rows) → PtyPair with master/slave.
  *   3. $pair->slave()->spawn(...) with controllingTerminal:true so
@@ -30,7 +30,7 @@ use SugarCraft\Pty\PtySystemFactory;
 
 $cmd = $argv[1] ?? 'echo "TERM=$TERM"; uname -s';
 
-$system = PtySystemFactory::default();
+$system = PtySystemFactory::new();
 $pair = $system->open(80, 24);
 $master = $pair->master();
 $slave = $pair->slave();

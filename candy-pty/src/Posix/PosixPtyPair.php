@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty\Posix;
 
-use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\Contract\PtyPair;
 use SugarCraft\Pty\Contract\SlavePty;
 
@@ -19,9 +18,11 @@ final class PosixPtyPair implements PtyPair
     ) {}
 
     /**
+     * Narrowed (covariantly) to the concrete {@see PosixMasterPty}.
+     *
      * @see creack/pty.Pty.Master()
      */
-    public function master(): MasterPty
+    public function master(): PosixMasterPty
     {
         return $this->master;
     }

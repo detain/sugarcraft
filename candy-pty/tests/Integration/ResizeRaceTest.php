@@ -60,7 +60,7 @@ final class ResizeRaceTest extends TestCase
             $this->markTestSkipped(\sprintf('tput not installed at %s', self::TPUT_PATH));
         }
 
-        $system = PtySystemFactory::default();
+        $system = PtySystemFactory::new();
         $pair = $system->open(80, 24);
         $master = $pair->master();
         $child = null;

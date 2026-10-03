@@ -36,8 +36,10 @@ final class LibcAccessTest extends TestCase
      */
     private static function ffiUsingClasses(): array
     {
+        // Pty is not listed: since it delegates open() to PosixPtySystem it
+        // no longer touches libc itself (it used to carry its own copy of the
+        // posix_openpt quartet -- the copy that drifted and lost FD_CLOEXEC).
         return [
-            Pty::class,
             SizeIoctl::class,
             ControllingTerminal::class,
             SignalForwarder::class,
@@ -45,6 +47,21 @@ final class LibcAccessTest extends TestCase
             PosixMasterPty::class,
             PosixTermios::class,
         ];
+    }
+
+    /**
+     * The deprecated facade must not grow its own libc open path back: the
+     * copy it used to carry drifted from PosixPtySystem::open() and lost
+     * FD_CLOEXEC and the open-time winsize.
+     */
+    public function testPtyFacadeOpensThroughTheCanonicalSystem(): void
+    {
+        $source = (string) \file_get_contents((string) (new \ReflectionClass(Pty::class))->getFileName());
+
+        $this->assertStringNotContainsString('posix_openpt(', $source);
+        $this->assertStringNotContainsString('Libc::lib(', $source);
+        $this->assertStringNotContainsString('libc()', $source);
+        $this->assertStringContainsString('(new PosixPtySystem())->open(', $source);
     }
 
     public function testFfiUsingClassesUseTheTrait(): void

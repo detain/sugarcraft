@@ -15,9 +15,36 @@ final class PtySystemFactoryTest extends TestCase
     public function testDefaultReturnsPosixSystemOnPosixHost(): void
     {
         if (\PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('default() throws on Windows; covered by testWindowsThrowsUnsupportedPlatformException');
+            $this->markTestSkipped('new() throws on Windows; covered by testWindowsThrowsUnsupportedPlatformException');
         }
-        $this->assertInstanceOf(PosixPtySystem::class, PtySystemFactory::default());
+        $this->assertInstanceOf(PosixPtySystem::class, PtySystemFactory::new());
+    }
+
+    /**
+     * `::new()` is the root factory per the project convention; the old
+     * `::default()` name stays as a deprecated alias that resolves through
+     * it, env handling included, so existing callers keep working.
+     */
+    public function testDeprecatedDefaultAliasDelegatesToNew(): void
+    {
+        $this->assertTrue(
+            \str_contains((string) (new \ReflectionMethod(PtySystemFactory::class, 'default'))->getDocComment(), '@deprecated'),
+            'default() must be marked @deprecated in favour of new()',
+        );
+
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            $this->assertInstanceOf(PosixPtySystem::class, PtySystemFactory::default());
+        }
+
+        \putenv('SUGARCRAFT_PTY_BACKEND=junk-value');
+        try {
+            PtySystemFactory::default();
+            $this->fail('the alias must apply the same SUGARCRAFT_PTY_BACKEND validation as new()');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('SUGARCRAFT_PTY_BACKEND', $e->getMessage());
+        } finally {
+            \putenv('SUGARCRAFT_PTY_BACKEND');
+        }
     }
 
     public function testForLinuxReturnsPosixSystem(): void
@@ -92,7 +119,7 @@ final class PtySystemFactoryTest extends TestCase
 
         // Ensure env var is absent
         \putenv('SUGARCRAFT_PTY_BACKEND');
-        $this->assertInstanceOf(PosixPtySystem::class, PtySystemFactory::default());
+        $this->assertInstanceOf(PosixPtySystem::class, PtySystemFactory::new());
     }
 
     public function testBackendAutoReturnsPosixSystem(): void
@@ -103,7 +130,7 @@ final class PtySystemFactoryTest extends TestCase
 
         \putenv('SUGARCRAFT_PTY_BACKEND=auto');
         try {
-            $this->assertInstanceOf(PosixPtySystem::class, PtySystemFactory::default());
+            $this->assertInstanceOf(PosixPtySystem::class, PtySystemFactory::new());
         } finally {
             \putenv('SUGARCRAFT_PTY_BACKEND');
         }
@@ -117,7 +144,7 @@ final class PtySystemFactoryTest extends TestCase
 
         \putenv('SUGARCRAFT_PTY_BACKEND=posix-ffi');
         try {
-            $this->assertInstanceOf(PosixPtySystem::class, PtySystemFactory::default());
+            $this->assertInstanceOf(PosixPtySystem::class, PtySystemFactory::new());
         } finally {
             \putenv('SUGARCRAFT_PTY_BACKEND');
         }
@@ -127,7 +154,7 @@ final class PtySystemFactoryTest extends TestCase
     {
         \putenv('SUGARCRAFT_PTY_BACKEND=sidecar');
         try {
-            PtySystemFactory::default();
+            PtySystemFactory::new();
             $this->fail('Expected UnsupportedPlatformException not thrown');
         } catch (UnsupportedPlatformException $e) {
             $this->assertStringContainsString('phase 12', $e->getMessage());
@@ -141,7 +168,7 @@ final class PtySystemFactoryTest extends TestCase
     {
         \putenv('SUGARCRAFT_PTY_BACKEND=pecl');
         try {
-            PtySystemFactory::default();
+            PtySystemFactory::new();
             $this->fail('Expected UnsupportedPlatformException not thrown');
         } catch (UnsupportedPlatformException $e) {
             $this->assertStringContainsString('phase 12', $e->getMessage());
@@ -155,7 +182,7 @@ final class PtySystemFactoryTest extends TestCase
     {
         \putenv('SUGARCRAFT_PTY_BACKEND=junk-value');
         try {
-            PtySystemFactory::default();
+            PtySystemFactory::new();
             $this->fail('Expected InvalidArgumentException not thrown');
         } catch (\InvalidArgumentException $e) {
             $this->assertStringContainsString('SUGARCRAFT_PTY_BACKEND', $e->getMessage());

@@ -32,7 +32,7 @@ final class SgrHandler implements Handler
     /** Events logged for inspection in tests. */
     private array $events = [];
 
-    public function __construct(SgrState $initialState = null)
+    public function __construct(?SgrState $initialState = null)
     {
         $this->state = $initialState ?? new SgrState();
     }
@@ -381,14 +381,14 @@ final class SgrHandler implements Handler
      */
     private function mutate(
         SgrState $s,
-        bool $bold = null,
-        bool $dim = null,
-        bool $italic = null,
-        bool $underline = null,
-        bool $blink = null,
-        bool $reverse = null,
-        bool $invisible = null,
-        bool $strike = null,
+        ?bool $bold = null,
+        ?bool $dim = null,
+        ?bool $italic = null,
+        ?bool $underline = null,
+        ?bool $blink = null,
+        ?bool $reverse = null,
+        ?bool $invisible = null,
+        ?bool $strike = null,
     ): SgrState {
         return new SgrState(
             foreground: $s->foreground,

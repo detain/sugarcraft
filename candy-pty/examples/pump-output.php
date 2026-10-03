@@ -26,7 +26,7 @@ if ($count < 1 || $count > 1000) {
     exit(1);
 }
 
-$pair = PtySystemFactory::default()->open(80, 24);
+$pair = PtySystemFactory::new()->open(80, 24);
 $master = $pair->master();
 $slave = $pair->slave();
 

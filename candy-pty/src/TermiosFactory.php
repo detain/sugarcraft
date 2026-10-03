@@ -14,7 +14,8 @@ use SugarCraft\Pty\Posix\SttyTermios;
  * Tries PosixTermios (FFI) first. On Throwable or when
  * SUGARCRAFT_TERMIOS=stty is set, falls back to SttyTermios.
  *
- * Logs once via error_log when falling back.
+ * Every fallback is logged via error_log, numbered with a per-process
+ * count and carrying the reason PosixTermios failed.
  *
  * @see portable-pty.Termios
  */
@@ -23,7 +24,15 @@ final class TermiosFactory
     private const PREFERRED = 'PosixTermios';
     private const FALLBACK = 'SttyTermios';
 
-    private static bool $loggedFallback = false;
+    /**
+     * FFI→stty fallbacks taken in this process. It replaced a log-once
+     * boolean: in a long-running process (an FPM worker, a REPL) only the
+     * FIRST fallback was ever logged, so a mid-session degradation was
+     * silent. Each fallback is now logged with its ordinal, which keeps the
+     * events distinguishable without a per-call flood guard -- the factory
+     * runs once per opened termios, not per byte.
+     */
+    private static int $fallbackCount = 0;
 
     /** `O_RDWR` flag — value is identical on Linux and macOS. */
     public const O_RDWR = 0x0002;
@@ -51,7 +60,9 @@ final class TermiosFactory
      * Tries PosixTermios (FFI) first. On Throwable or when
      * SUGARCRAFT_TERMIOS=stty is set, falls back to SttyTermios.
      *
-     * Logs at info level once when falling back.
+     * Every fallback is logged (see {@see fallbackCount()}); the forced
+     * `SUGARCRAFT_TERMIOS=stty` path is a choice, not a fallback, and is
+     * neither logged nor counted.
      */
     public static function open(int $fd): Termios
     {
@@ -61,13 +72,26 @@ final class TermiosFactory
 
         try {
             return new PosixTermios($fd);
-        } catch (\Throwable) {
-            if (!self::$loggedFallback) {
-                \error_log('[TermiosFactory] ext-ffi unavailable or failed, using stty fallback');
-                self::$loggedFallback = true;
-            }
+        } catch (\Throwable $e) {
+            self::$fallbackCount++;
+            \error_log(\sprintf(
+                '[TermiosFactory] PosixTermios unavailable for fd=%d (fallback #%d in this process): %s; using stty fallback',
+                $fd,
+                self::$fallbackCount,
+                $e->getMessage(),
+            ));
             return new SttyTermios($fd);
         }
+    }
+
+    /**
+     * How many FFI→stty fallbacks {@see open()} has taken in this process.
+     * A diagnostic for long-running hosts: a non-zero, growing value means
+     * termios is degrading mid-session, not merely at startup.
+     */
+    public static function fallbackCount(): int
+    {
+        return self::$fallbackCount;
     }
 
     /**

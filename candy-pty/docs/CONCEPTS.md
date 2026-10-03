@@ -51,7 +51,7 @@ path (`/dev/pts/N` on Linux, `/dev/ttysNNN` on macOS) the parent
 discovers via `ptsname_r(masterFd, buf, size)`.
 
 ```php
-$pair   = PtySystemFactory::default()->open(80, 24);
+$pair   = PtySystemFactory::new()->open(80, 24);
 $master = $pair->master();           // SugarCraft\Pty\Contract\MasterPty
 $slave  = $pair->slave();            // SugarCraft\Pty\Contract\SlavePty
 echo $slave->path();                 // "/dev/pts/14"
@@ -268,11 +268,11 @@ Two reasons:
 1. **Testability.** Tests in `candy-wish`, `candy-shell`, etc. can
    inject a stub `PtySystem` that returns scripted in-memory streams
    without touching libc. Production code resolves the real one via
-   `PtySystemFactory::default()`.
+   `PtySystemFactory::new()`.
 2. **Windows ConPTY v2.** When the Windows sidecar lands (see
    `plans/x-windows.md`), a `WinConPtySystem` will implement the
    same contract. Application code that calls
-   `PtySystemFactory::default()->open()` doesn't change; only the
+   `PtySystemFactory::new()->open()` doesn't change; only the
    factory's `match` on `PHP_OS_FAMILY` grows a new arm.
 
 The contracts are intentionally narrow — read, write, resize, size,
@@ -287,7 +287,7 @@ shape keep working while migrating. They will go away at v2.0.
 
 ## Backend selection via `SUGARCRAFT_PTY_BACKEND`
 
-`PtySystemFactory::default()` reads the `SUGARCRAFT_PTY_BACKEND`
+`PtySystemFactory::new()` reads the `SUGARCRAFT_PTY_BACKEND`
 environment variable before picking a backend. On POSIX this defaults
 to `posix-ffi`. Setting it to `sidecar` or `pecl` causes an immediate
 `UnsupportedPlatformException` noting the backend is deferred to
@@ -296,7 +296,7 @@ the four valid options (`posix-ffi`, `sidecar`, `pecl`, `auto`).
 
 This design keeps the door open for phase-12 backends without any
 call-site changes: application code always calls
-`PtySystemFactory::default()`, and only the factory grows new arms
+`PtySystemFactory::new()`, and only the factory grows new arms
 when those backends are wired in.
 
 ## Further reading

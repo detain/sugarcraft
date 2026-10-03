@@ -25,7 +25,7 @@ require_once __DIR__ . '/../../../vendor/autoload.php';
 
 use SugarCraft\Pty\PtySystemFactory;
 
-$system = PtySystemFactory::default();
+$system = PtySystemFactory::new();
 $pair = $system->open(80, 24);
 
 $child = $pair->slave()->spawn(

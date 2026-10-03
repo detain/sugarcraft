@@ -84,9 +84,12 @@ final class PosixPump implements PumpContract
         $stdinStream,
         $stdoutStream,
         ?Child $child = null,
-        PumpOptions $opts = null,
+        ?PumpOptions $opts = null,
     ): int {
         $opts ??= new PumpOptions();
+        // A remainder parked by a previous run() on this instance belongs to
+        // that run's master, never this one.
+        $this->pendingStdin = '';
 
         \stream_set_blocking($master->stream(), false);
         \stream_set_blocking($stdinStream, false);
@@ -109,7 +112,10 @@ final class PosixPump implements PumpContract
      *  - STDOUT hits EPIPE (peer closed read end),
      *  - STDIN reached EOF AND the post-EOF grace window expired
      *    (child got VEOF + had stdinEofGraceSec to notice;
-     *    if it's still running we force-close the PTY),
+     *    if it's still running we force-close the PTY). While stdin
+     *    bytes or the VEOF are still queued behind a full master, each
+     *    successful partial write restarts the grace window, so the
+     *    window is "grace with no progress", never a cut-off mid-drain,
      *  - the optional caller-bound {@see PumpOptions::$pumpDeadlineUs}
      *    has lapsed (E717 — off by default; the loop itself carries no
      *    internal deadline and would otherwise spin while a silent child
@@ -128,6 +134,10 @@ final class PosixPump implements PumpContract
         $masterStream = $master->stream();
         $stdinClosed = false;
         $stdinClosedDeadline = 0.0;
+        // VEOF bytes owed to the child once the queued stdin remainder
+        // drains. They must follow every data byte, so they are never
+        // written while $this->pendingStdin is non-empty.
+        $veofOwed = '';
 
         // E717 caller-supplied bound: absolute wall-clock deadline computed
         // once, checked at the top of every iteration. Overshoot is bounded
@@ -167,8 +177,15 @@ final class PosixPump implements PumpContract
                 return;
             }
 
-            $r = $stdinClosed ? [$masterStream] : [$stdinStream, $masterStream];
-            $w = null;
+            // Back-pressure: while a write remainder is parked, stop reading
+            // stdin (it would only grow the remainder) and watch the master
+            // for WRITABILITY instead, so the remainder drains on its own.
+            // Without the write set the remainder was retried only when stdin
+            // next became readable -- a caller that wrote all of its input
+            // and closed stdin left the tail undelivered forever.
+            $draining = $this->pendingStdin !== '' || $veofOwed !== '';
+            $r = ($stdinClosed || $draining) ? [$masterStream] : [$stdinStream, $masterStream];
+            $w = $draining ? [$masterStream] : null;
             $e = null;
             $ready = PosixMasterPty::retryOnEintr($r, $w, $e, 0, $opts->selectTimeoutUs);
 
@@ -201,12 +218,28 @@ final class PosixPump implements PumpContract
                 continue;
             }
 
+            if ($w !== null && $w !== []) {
+                if ($this->drainPendingStdin($master, $opts) > 0 && $stdinClosed) {
+                    $stdinClosedDeadline = \microtime(true) + $opts->stdinEofGraceSec;
+                }
+                if ($veofOwed !== '' && $this->pendingStdin === '') {
+                    $before = \strlen($veofOwed);
+                    $veofOwed = $this->writeVeof($masterStream, $veofOwed);
+                    if (\strlen($veofOwed) < $before) {
+                        $stdinClosedDeadline = \microtime(true) + $opts->stdinEofGraceSec;
+                    }
+                }
+            }
+
             foreach ($r as $stream) {
                 if ($stream === $stdinStream && !$stdinClosed) {
                     if (!$this->pumpStdinToMaster($stdinStream, $master, $opts)) {
                         $stdinClosed = true;
                         $stdinClosedDeadline = \microtime(true) + $opts->stdinEofGraceSec;
-                        @\fwrite($masterStream, $opts->veof);
+                        // VEOF goes out only behind the last data byte.
+                        $veofOwed = $this->pendingStdin !== ''
+                            ? $opts->veof
+                            : $this->writeVeof($masterStream, $opts->veof);
                     }
                 } elseif ($stream === $masterStream) {
                     if (!$this->pumpMasterToStdout($master, $stdoutStream, $opts)) {
@@ -215,6 +248,56 @@ final class PosixPump implements PumpContract
                 }
             }
         }
+    }
+
+    /**
+     * Write as much of the parked stdin remainder as the master accepts now.
+     *
+     * Bytes that land are teed into the recorder exactly as the read path
+     * tees them, so the cassette stays consistent with what the child saw.
+     *
+     * @return int bytes delivered by this call (0 when the master is still full)
+     */
+    private function drainPendingStdin(MasterPty $master, PumpOptions $opts): int
+    {
+        $written = 0;
+        $total = \strlen($this->pendingStdin);
+        while ($written < $total) {
+            $n = $master->write(\substr($this->pendingStdin, $written));
+            if ($n <= 0) {
+                break;
+            }
+            $written += $n;
+        }
+        if ($written === 0) {
+            return 0;
+        }
+        if ($opts->recorder !== null) {
+            $opts->recorder->recordInputBytes(\substr($this->pendingStdin, 0, $written));
+        }
+        $this->pendingStdin = (string) \substr($this->pendingStdin, $written);
+        return $written;
+    }
+
+    /**
+     * Deliver (the rest of) the end-of-input sequence. A would-block or short
+     * write leaves the remainder owed for the next writable tick; an outright
+     * write error (false -- the slave side is gone) abandons it, since no
+     * reader remains to receive it.
+     *
+     * @param resource $masterStream
+     * @return string the VEOF bytes still owed ('' once delivered or abandoned)
+     */
+    private function writeVeof($masterStream, string $veof): string
+    {
+        if ($veof === '') {
+            return '';
+        }
+        $n = @\fwrite($masterStream, $veof);
+        if ($n === false) {
+            return '';
+        }
+        return (string) \substr($veof, $n);
     }
 
     /**

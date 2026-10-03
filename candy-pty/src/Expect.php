@@ -40,6 +40,15 @@ final class Expect
     public const DEFAULT_READ_CHUNK = 4096;
 
     /**
+     * How long {@see send()} keeps retrying a non-blocking master that
+     * accepts nothing before it gives up, in seconds. It is a NO-PROGRESS
+     * window: every accepted byte restarts it, so a long send into a child
+     * that is reading slowly never trips it -- only a master that stays
+     * full for this long does.
+     */
+    public const SEND_STALL_BUDGET_SEC = 0.1;
+
+    /**
      * @param string      $buffer    Unconsumed bytes read past the last match.
      * @param string|null $lastMatch The most recent successful needle or matched
      *                               substring (when `expectPattern` matched).
@@ -86,22 +95,40 @@ final class Expect
     /**
      * Write raw bytes to the master without any newline conversion.
      * Returns a new Expect carrying the same buffered state.
+     *
+     * Short and would-block writes are retried until every byte is
+     * accepted. A master that accepts nothing for
+     * {@see SEND_STALL_BUDGET_SEC} -- a child that has stopped reading its
+     * input -- fails the send; ordinary back-pressure from a child that is
+     * still draining its input queue does not, because each accepted byte
+     * restarts that window. (It used to give up after a single 1 ms retry,
+     * so a long scripted send into a busy child threw spuriously.)
+     *
+     * @throws \RuntimeException when the master stays full for the whole
+     *         stall budget
      */
     public function send(string $bytes): self
     {
-        // Flush loop: handle short writes by looping until all bytes are accepted.
         $written = 0;
-        while ($written < \strlen($bytes)) {
+        $total = \strlen($bytes);
+        $stallDeadline = \microtime(true) + self::SEND_STALL_BUDGET_SEC;
+        while ($written < $total) {
             $n = $this->master->write(\substr($bytes, $written));
-            if ($n <= 0) {
-                // Would-block on non-blocking master — brief retry.
-                \usleep(1000);
-                $n = $this->master->write(\substr($bytes, $written));
-                if ($n <= 0) {
-                    throw new \RuntimeException('Failed to write to master PTY');
-                }
+            if ($n > 0) {
+                $written += $n;
+                $stallDeadline = \microtime(true) + self::SEND_STALL_BUDGET_SEC;
+                continue;
             }
-            $written += $n;
+            if (\microtime(true) >= $stallDeadline) {
+                throw new \RuntimeException(\sprintf(
+                    'Failed to write to master PTY: no progress for %d ms with %d of %d bytes delivered',
+                    (int) (self::SEND_STALL_BUDGET_SEC * 1000),
+                    $written,
+                    $total,
+                ));
+            }
+            // Would-block on a non-blocking master: back off briefly.
+            \usleep(1000);
         }
         $this->recorder?->recordInputBytes($bytes);
         return new self(

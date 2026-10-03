@@ -19,9 +19,11 @@ tracked in `plans/x-windows.md`.
 composer require sugarcraft/candy-pty
 ```
 
-Requires PHP 8.1+ with `ext-ffi`. `ext-pcntl` is optional — the lib
+Requires PHP 8.3+ with `ext-ffi`. `ext-pcntl` is optional — the lib
 polls `waitpid()` when pcntl is absent and `SignalForwarder` degrades
-to a no-op.
+to a no-op. `ext-posix` is optional too — `Child::kill()` signals
+through `Libc::kill()`, which uses `posix_kill()` when it is loaded and
+libc `kill(2)` over FFI otherwise.
 
 ## Quickstart
 
@@ -57,7 +59,7 @@ the `PtySystem` through the factory:
 ```php
 use SugarCraft\Pty\PtySystemFactory;
 
-$system = PtySystemFactory::default();   // throws UnsupportedPlatformException on Windows
+$system = PtySystemFactory::new();   // throws UnsupportedPlatformException on Windows
 $pair   = $system->open(100, 30);
 $master = $pair->master();
 $child  = $pair->slave()->spawn(['/bin/bash', '-l'], null, 100, 30, controllingTerminal: true);
@@ -69,15 +71,15 @@ Tests can swap in a stub `PtySystem` without touching libc.
 
 | Call | What it does |
 |---|---|
-| `Pty::open(): Pty` | On Darwin: `openpty()` first (single call), falls back to quartet on -1. On Linux: `posix_openpt + grantpt + unlockpt + ptsname_r`. Returns a Pty exposing `master` (readonly fd + slavePath). |
-| `$pty->spawn(array $cmd, ?array $env, int $cols=80, int $rows=24, bool $controllingTerminal=false): Child` | `proc_open` with slave-path descriptors + initial TIOCSWINSZ. Pass `controllingTerminal: true` to route through `bin/pty-shim.php` so the child claims the slave PTY as its ctty (Ctrl+C → SIGINT, job control); requires ext-pcntl. |
+| `Pty::open(int $cols=80, int $rows=24): Pty` | Delegates to `PosixPtySystem::open()`, so the facade shares the canonical path exactly: on Darwin `openpty()` first (single call), falling back to the quartet on -1; on Linux `posix_openpt + grantpt + unlockpt + ptsname_r`. The master fd is `FD_CLOEXEC` (children never inherit it, so closing it delivers the hangup) and the requested winsize is applied at open. Returns a Pty exposing `master` (readonly fd + slavePath). |
+| `$pty->spawn(array $cmd, ?array $env, int $cols=80, int $rows=24, bool $controllingTerminal=false): Child` | `proc_open` with slave-path descriptors. TIOCSWINSZ is applied before the spawn (throws, no child, on failure) and re-asserted best-effort after it, because macOS zeroes the winsize when the child's slave descriptors open. Pass `controllingTerminal: true` to route through `bin/pty-shim.php` so the child claims the slave PTY as its ctty (Ctrl+C → SIGINT, job control); requires ext-pcntl. |
 | `$pty->read(int $len=8192, ?float $timeout=null): ?string` | `null` on timeout, `''` on EOF, bytes otherwise. EINTR-safe. |
 | `$pty->write(string $bytes): int` | Returns bytes written. |
 | `$pty->setBlocking(bool $blocking): void` | Toggles non-blocking mode on the master fd. |
 | `$pty->resize(int $cols, int $rows): void` | TIOCSWINSZ on the master fd. |
 | `$pty->size(): array{cols,rows,xpix,ypix}` | TIOCGWINSZ readback. |
 | `$pty->stream(): resource` | Cached `php://fd/` wrapper around the master fd for direct PHP-stream use. |
-| `$pty->close(): void` | Idempotent. Routes through `fclose` if `stream()` was materialised, else `close(2)` via FFI. |
+| `$pty->close(): void` | Idempotent. `fclose`s the `stream()` wrapper if one was materialised, then always `close(2)`s the original master fd via FFI. Throws `PtyException` if that `close(2)` fails (on either path) or if the `fclose` failed — in the latter case only after the master fd itself was released. |
 | `$child->pid: int` | OS process id. |
 | `$child->wait(): int` | Waits via `waitpid` FFI (sub-ms) first, falls back to 10ms `proc_get_status` poll. Returns exit code (signal death = 128+signal). Idempotent. |
 | `$child->exited(): bool` | Non-blocking probe. |
@@ -143,9 +145,11 @@ already polls `pcntl_signal_dispatch()` itself.
 ## Recording sessions (Recorder tap)
 
 `PumpOptions` accepts an optional `SugarCraft\Core\Recorder` —
-when set, `PosixPump` tees stdin chunks (`recordInputBytes`) and
-master-read chunks (`recordOutput`) into the recorder on the same
-loop iteration as the read. Null = zero overhead.
+when set, `PosixPump` tees stdin bytes (`recordInputBytes`) as they
+are delivered to the master — bytes parked behind a full master are
+recorded when they land, not when they were read — and master-read
+chunks (`recordOutput`) on the iteration that reads them. Null = zero
+overhead.
 
 ```php
 use SugarCraft\Pty\Posix\PosixPump;
@@ -176,7 +180,7 @@ or tmux-style supervisor use-case:
 use SugarCraft\Pty\PtySystemFactory;
 use SugarCraft\Pty\Posix\MultiPump;
 
-$system = PtySystemFactory::default();
+$system = PtySystemFactory::new();
 $mp     = new MultiPump();
 
 // Register two shells and tee each master to stdout with a prefix.
@@ -231,7 +235,7 @@ use SugarCraft\Pty\Posix\ReactPump;
 use SugarCraft\Pty\PtySystemFactory;
 use SugarCraft\Pty\PumpOptions;
 
-$pair  = PtySystemFactory::default()->open(80, 24);
+$pair  = PtySystemFactory::new()->open(80, 24);
 $child = $pair->slave()->spawn(['/usr/bin/top'], ['TERM' => 'xterm-256color'], 80, 24);
 
 $pump = new ReactPump();                     // Loop::get() by default; injectable
@@ -267,6 +271,17 @@ process-global, so a handler would conflict with user code and with
 The blocking APIs (`PosixPump::run()`, `Child::wait()`,
 `MultiPump::run()`) are unchanged — the async layer is purely
 additive.
+
+## Pump back-pressure
+
+When the master accepts only part of a stdin chunk (the child is not
+reading fast enough), `PosixPump` parks the remainder, stops reading
+stdin, and watches the master for writability until the remainder
+drains — so input is never reordered, never grows without bound, and
+is delivered even after stdin has hit EOF. VEOF is sent only behind
+the last data byte. While a remainder is still draining after stdin
+EOF, every successful write restarts the `stdinEofGraceSec` window: the
+grace is "this long with no progress", not a cut-off mid-delivery.
 
 ## Pump callbacks
 
@@ -312,7 +327,7 @@ $opts = (new PumpOptions())
 
 ## Examples
 
-- [`examples/spawn-bash.php`](examples/spawn-bash.php) — The simplest end-to-end slice: `PtySystemFactory::default()->open()` → `$pair->slave()->spawn(['bash', ...])` → drain master → reap. Start here.
+- [`examples/spawn-bash.php`](examples/spawn-bash.php) — The simplest end-to-end slice: `PtySystemFactory::new()->open()` → `$pair->slave()->spawn(['bash', ...])` → drain master → reap. Start here.
 - [`examples/pump-output.php`](examples/pump-output.php) — Long-running counter; demonstrates non-blocking read with timeout, line-by-line pumping.
 - [`examples/resize-forwarding.php`](examples/resize-forwarding.php) — Wire `SignalForwarder` to deliver host SIGWINCH into the child PTY's TIOCSWINSZ; observe the child's `tput cols / lines` flip mid-stream.
 
@@ -332,7 +347,7 @@ and a row here nothing reads.
 | Variable | Read by | Effect |
 |---|---|---|
 | `SUGARCRAFT_LIBC` | `Libc` | Path to the C library to bind FFI against, instead of the platform default (`libc.so.6` on Linux, `/usr/lib/libSystem.B.dylib` on macOS). For musl, Alpine and custom sysroots. |
-| `SUGARCRAFT_PTY_BACKEND` | `PtySystemFactory::default()` | Which PTY backend to build: unset / `auto`, `posix-ffi`, `sidecar`, `pecl`. Unrecognised values throw `\InvalidArgumentException`. See [Backend selection](#backend-selection). |
+| `SUGARCRAFT_PTY_BACKEND` | `PtySystemFactory::new()` | Which PTY backend to build: unset / `auto`, `posix-ffi`, `sidecar`, `pecl`. Unrecognised values throw `\InvalidArgumentException`. See [Backend selection](#backend-selection). |
 | `SUGARCRAFT_TERMIOS` | `TermiosFactory` | `stty` forces the subprocess termios backend instead of the FFI one. Anything else leaves the platform default in place. |
 | `CANDY_PTY_HANG_BUDGET` | `tests/Support/HangWatchdog` | Seconds a single test may run before the suite's own watchdog turns a wedged test into a named failure plus a forensic bundle. `0` opts the watchdog out entirely; unset uses the built-in budget. **Test suite only** — it configures nothing in `src/`, and it is here because a contributor chasing a hang needs to find it. |
 
@@ -363,7 +378,7 @@ support are flagged as planned-or-missing rather than papered over.
 
 | Feature | candy-pty | creack/pty (Go) | portable-pty (Rust) | node-pty (Node.js) |
 |---|---|---|---|---|
-| Open / close PTY pair | ✅ `PtySystemFactory::default()->open()` | ✅ `pty.Open()` | ✅ `native_pty_system().openpty()` | ✅ `pty.spawn()` |
+| Open / close PTY pair | ✅ `PtySystemFactory::new()->open()` | ✅ `pty.Open()` | ✅ `native_pty_system().openpty()` | ✅ `pty.spawn()` |
 | Master read | ✅ `MasterPty::read($len, $timeout)` | ✅ `Pty.Read([]byte)` | ✅ `MasterPty::try_clone_reader()` | ✅ `pty.onData()` |
 | Master write | ✅ `MasterPty::write($bytes)` | ✅ `Pty.Write([]byte)` | ✅ `MasterPty::take_writer()` | ✅ `pty.write()` |
 | Resize (TIOCSWINSZ) | ✅ `MasterPty::resize($cols, $rows)` | ✅ `pty.Setsize()` | ✅ `MasterPty::resize()` | ✅ `pty.resize()` |
@@ -416,7 +431,7 @@ don't benefit.
 
 ### Backend selection
 
-`PtySystemFactory::default()` respects the `SUGARCRAFT_PTY_BACKEND`
+`PtySystemFactory::new()` respects the `SUGARCRAFT_PTY_BACKEND`
 environment variable to select which PTY backend to use:
 
 | Value | Behaviour |
@@ -472,7 +487,10 @@ FFI into libc for `posix_openpt/grantpt/unlockpt/ptsname_r`, `proc_open`
 for child spawning, `ioctl(TIOCSWINSZ/TIOCGWINSZ)` for resize, and
 `FFI::cdef()` tcgetattr/tcsetattr/cfmakeraw for termios. The factory
 `TermiosFactory` selects `PosixTermios` (FFI) when `ext-ffi` is available
-and falls back to `SttyTermios` (shell-out `stty`) otherwise.
+and falls back to `SttyTermios` (shell-out `stty`) otherwise. Every
+fallback is logged via `error_log` with its ordinal and the FFI failure
+reason (not just the first one per process), and
+`TermiosFactory::fallbackCount()` reports the running total.
 
 ## Shared foundations
 

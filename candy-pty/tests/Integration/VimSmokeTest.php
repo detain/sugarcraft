@@ -71,7 +71,7 @@ final class VimSmokeTest extends TestCase
         // on a "press ENTER" prompt or the swap-file recovery menu.
         @\unlink($scratch);
 
-        $system = PtySystemFactory::default();
+        $system = PtySystemFactory::new();
         $pair = $system->open(80, 24);
         $master = $pair->master();
         $term = Terminal::create(80, 24);

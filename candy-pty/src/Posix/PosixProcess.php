@@ -123,7 +123,8 @@ final class PosixProcess implements Process
      */
     public function kill(int $signal): void
     {
-        \posix_kill($this->pid, $signal);
+        // Libc::kill(), not a bare posix_kill(): ext-posix is optional.
+        \SugarCraft\Pty\Libc::kill($this->pid, $signal);
     }
 
     public function stdoutBytes(): string
