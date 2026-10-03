@@ -280,6 +280,16 @@ final class CommandRegistry
             ),
             CommandSpec::new('workflow', 'Run, pause, resume, or inspect a workflow', 'Workflow'),
             CommandSpec::new('memory', 'Add, list, search, edit, import, or clear memory entries', 'Memory'),
+            // A canned prompt rather than a handler: the agent studies the
+            // checkout and writes the file, gated like any other Write. Filed
+            // under Memory because AGENTS.md is the instruction-file half of
+            // what docs/MEMORY.md documents.
+            CommandSpec::new(
+                'init',
+                'Study this project and write or improve its AGENTS.md',
+                'Memory',
+                argumentHint: '[focus]',
+            ),
             CommandSpec::new('branch', 'Fork the current session into a new branch', 'Session'),
             CommandSpec::new('rename', 'Rename the current session', 'Session', argumentHint: '<name>'),
             CommandSpec::new('rewind', 'Restore chat state from an earlier checkpoint', 'Session', argumentHint: '[n]'),

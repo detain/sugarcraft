@@ -364,6 +364,10 @@ order (`InstructionFileLoader::FILENAMES`):
 - **nested files** — a `CLAUDE.md`/`AGENTS.md` (or alias) in a subdirectory is
   injected when a tool touches a path under it, at most once per session.
 
+`/init` asks the agent to write one: it studies the checkout and writes (or
+improves) `AGENTS.md` at the root, which the loader reads from the next session
+on — see [`COMMANDS.md`](COMMANDS.md#the-built-in-commands).
+
 An alias is only another candidate name: it passes the same containment gate,
 size ceiling, UTF-8 scrub, `@import` expansion and dedup set as `CLAUDE.md`. A
 `.clinerules` *directory* (Cline's folder form) is not read.

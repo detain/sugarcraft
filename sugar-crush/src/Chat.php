@@ -10694,6 +10694,15 @@ final class Chat implements Model
             // text: a provider name is one token, and CommandParser has
             // already unquoted it.
             'model' => $this->handleModelCommand($parsed->args),
+            // Roadmap 5.14e. The one arm that STARTS A TURN: `/init` is a canned
+            // prompt, so it re-enters submit() with that prompt as the draft —
+            // the releaseQueuedPrompts() technique — and the spend cap, the
+            // compaction tiers and the UserPromptSubmit hook judge it exactly as
+            // they judge typed prose. The argument, if any, rides along as a
+            // focus instruction.
+            'init' => $this->withInputBuf(
+                \SugarCraft\Crush\Commands\InitCommand::prompt(self::commandArgument($text)),
+            )->submit(),
             default => null,
         };
     }

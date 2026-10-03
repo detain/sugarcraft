@@ -307,6 +307,7 @@ it does not; the *What the row says* column is its `description`.
 | `/budget` | ✓ | ✓ | `[amount\|off]` | Show this session's reported spend, or cap it |
 | `/workflow` | ✓ | | — | Run, pause, resume, or inspect a workflow |
 | `/memory` | ✓ | | — | Add, list, search, edit, import, or clear memory entries |
+| `/init` | ✓ | | `[focus]` | Study this project and write or improve its AGENTS.md |
 | `/branch` | ✓ | | — | Fork the current session into a new branch |
 | `/rename` | ✓ | | `<name>` | Rename the current session |
 | `/rewind` | ✓ | | `[n]` | Restore chat state from an earlier checkpoint |
@@ -408,6 +409,15 @@ words are `mcp auth` is routed to `Chat::handleMcpAuthCommand()` ahead of the pa
 because that spelling predates the discoverable `/mcp` row and the palette's MCP
 list action still uses it. Both must be whole words — "mcp authentication keeps
 failing" is prose and goes to the model (or is queued mid-turn).
+
+`/init` is the one built-in that starts a turn. It is a canned prompt — study
+the checkout, then write `AGENTS.md` at the root or improve the one that is
+there — sent as if typed, so the spend cap, the compaction tiers and the
+`UserPromptSubmit` hook apply to it, and the file is written through the
+ordinary `Write`/`Edit` tools under this session's permission mode. Anything
+after the name (`/init focus on the test setup`) is appended as a focus
+instruction. The new file reaches the system prompt from the next session on;
+see [`MEMORY.md`](MEMORY.md#instruction-files).
 
 What keeps the table honest is not this page — no guard counts the rows here. It
 is `Commands\SlashDispatchTest::testEverySlashVisibleRegistryRowHasALiveDispatchHandler()`,

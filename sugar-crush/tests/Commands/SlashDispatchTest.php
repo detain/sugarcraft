@@ -33,6 +33,15 @@ final class SlashDispatchTest extends TestCase
     use HomeSandboxTrait;
     use SlicesDeclaredMethodsTrait;
 
+    /**
+     * Commands whose arm answers with a TURN — a canned prompt dispatched as if
+     * typed — rather than a local handler, name => why. Checked back against
+     * behaviour above, so a row cannot outlive the arm it excuses.
+     */
+    private const TURN_STARTING_COMMANDS = [
+        'init' => 'a canned AGENTS.md-writing prompt (roadmap 5.14e)',
+    ];
+
     private string $sandbox = '';
 
     protected function setUp(): void
@@ -104,6 +113,17 @@ final class SlashDispatchTest extends TestCase
 
         foreach ($rows as $spec) {
             $next = $this->submit('/' . $spec->name);
+
+            // A turn-starting command IS dispatched when its arm replaced the
+            // command text with a prompt of its own; what this inventory
+            // guards against is the TYPED text reaching the model unclaimed.
+            if (isset(self::TURN_STARTING_COMMANDS[$spec->name])) {
+                $sent = array_map(static fn(Message $m): string => $m->content, $this->added($next));
+                $this->assertTrue($next->inFlight, "/{$spec->name} is listed as turn-starting but started no turn");
+                $this->assertNotContains('/' . $spec->name, $sent, "/{$spec->name} reached the model as its own text");
+
+                continue;
+            }
 
             $this->assertFalse(
                 $next->inFlight,
