@@ -985,8 +985,18 @@ final class TextInput implements Model
 
     private function insert(string $rune): self
     {
-        if ($this->charLimit > 0 && $this->length() >= $this->charLimit) {
-            return $this;
+        // charLimit is a budget, not a gate: a multi-codepoint payload (a
+        // paste) is clipped to the room left, so one clipboard action can
+        // never carry the buffer past the cap. Checking only "already at the
+        // limit?" let a paste at limit-1 append its whole length.
+        if ($this->charLimit > 0) {
+            $budget = $this->charLimit - $this->length();
+            if ($budget <= 0) {
+                return $this;
+            }
+            if (mb_strlen($rune, 'UTF-8') > $budget) {
+                $rune = mb_substr($rune, 0, $budget, 'UTF-8');
+            }
         }
         // Reject characters that don't match the restrict pattern.
         if ($this->restrict !== '' && preg_match('/' . $this->restrict . '/', $rune) !== 1) {

@@ -96,6 +96,9 @@ final class Viewport implements Model
             return match ($msg->button) {
                 MouseButton::WheelUp   => [$this->lineUp($this->mouseWheelDelta),   null],
                 MouseButton::WheelDown => [$this->lineDown($this->mouseWheelDelta), null],
+                // A wheel message carrying any other button (hand-built by a
+                // host or test) has no vertical meaning here: drop it.
+                default                => [$this, null],
             };
         }
         if (!$msg instanceof KeyMsg) {

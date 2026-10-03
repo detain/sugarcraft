@@ -7,6 +7,7 @@ namespace SugarCraft\Forms\TextArea;
 use SugarCraft\Forms\Cursor\BlinkMsg;
 use SugarCraft\Forms\Cursor\Cursor;
 use SugarCraft\Forms\HasKeyOverrides;
+use SugarCraft\Forms\Util\ViewportPan;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\KeyType;
@@ -353,9 +354,18 @@ final class TextArea implements Model
     {
         $lines = $v === '' ? [''] : explode("\n", $v);
         if ($this->charLimit > 0) {
+            // Same accounting as totalLength() and the insert paths: each
+            // line break costs one unit of budget, so a setValue() buffer
+            // never measures longer than the cap the editor enforces.
             $remaining = $this->charLimit;
             $clamped   = [];
-            foreach ($lines as $line) {
+            foreach ($lines as $i => $line) {
+                if ($i > 0) {
+                    if ($remaining <= 0) {
+                        break;
+                    }
+                    $remaining--;
+                }
                 $len = mb_strlen($line, 'UTF-8');
                 if ($len <= $remaining) {
                     $clamped[]  = $line;
@@ -442,14 +452,40 @@ final class TextArea implements Model
      */
     public function effectiveHeight(): int
     {
-        if (!$this->dynamic) {
-            return $this->height;
+        return self::resolveHeight($this->dynamic, $this->height, $this->maxHeight, count($this->lines));
+    }
+
+    /** Pure form of {@see effectiveHeight()} so mutate() can resolve it for the NEXT snapshot. */
+    private static function resolveHeight(bool $dynamic, int $height, int $maxHeight, int $lineCount): int
+    {
+        if (!$dynamic) {
+            return $height;
         }
-        $contentRows = max(1, count($this->lines));
-        if ($this->maxHeight > 0) {
-            return min($this->maxHeight, $contentRows);
+        $contentRows = max(1, $lineCount);
+        if ($maxHeight > 0) {
+            return min($maxHeight, $contentRows);
         }
         return $contentRows;
+    }
+
+    /**
+     * Scroll offset that keeps the caret row inside the rendered window.
+     *
+     * Resolved on EVERY snapshot (from {@see mutate()}) rather than at
+     * selected call sites: arrows, Enter, Backspace line-merges, paste,
+     * setValue(), page moves and a height change all move the caret or the
+     * window, and missing one strands the cursor off-screen. Same pan math
+     * as ItemList/FilePicker ({@see ViewportPan}), plus a clamp so the window
+     * never scrolls past the last line (deleting lines pulls it back). An
+     * unbounded window (height 0) renders every line, so its offset is 0.
+     */
+    private static function panOffset(int $row, int $offset, int $height, int $lineCount): int
+    {
+        if ($height <= 0) {
+            return 0;
+        }
+        $offset = ViewportPan::offsetFor($row, $offset, $height);
+        return min($offset, max(0, $lineCount - $height));
     }
 
     /** Show 1-based line numbers in a left gutter. Default off. */
@@ -759,7 +795,11 @@ final class TextArea implements Model
     /** Configured visible height in rows (0 = unbounded). */
     public function getHeight(): int { return $this->height; }
 
-    /** Vertical scroll offset (0-based row index of the topmost visible line). */
+    /**
+     * Vertical scroll offset (0-based row index of the topmost visible line).
+     * Follows the caret automatically: every edit/navigation snapshot pans it
+     * so the cursor row stays inside the {@see effectiveHeight()} window.
+     */
     public function getRowOffset(): int { return $this->rowOffset; }
 
     /**
@@ -773,8 +813,17 @@ final class TextArea implements Model
 
     private function insert(string $rune): self
     {
-        if ($this->charLimit > 0 && $this->totalLength() >= $this->charLimit) {
-            return $this;
+        // charLimit is a budget, not a gate: clip a multi-codepoint payload
+        // (paste segment, Tab's four spaces) to the room left so the buffer
+        // can never be carried past the cap by a single insert.
+        if ($this->charLimit > 0) {
+            $budget = $this->charLimit - $this->totalLength();
+            if ($budget <= 0) {
+                return $this;
+            }
+            if (mb_strlen($rune, 'UTF-8') > $budget) {
+                $rune = mb_substr($rune, 0, $budget, 'UTF-8');
+            }
         }
         $line   = $this->lines[$this->row];
         $before = mb_substr($line, 0, $this->col, 'UTF-8');
@@ -1174,26 +1223,36 @@ final class TextArea implements Model
                 $err = $this->err;
             }
         }
+        $newRow     = $row     ?? $this->row;
+        $newHeight  = $height  ?? $this->height;
+        $newDynamic = $dynamic ?? $this->dynamic;
+        $newMaxH    = $maxHeight ?? $this->maxHeight;
+        $newOffset  = self::panOffset(
+            $newRow,
+            $rowOffset ?? $this->rowOffset,
+            self::resolveHeight($newDynamic, $newHeight, $newMaxH, count($newLines)),
+            count($newLines),
+        );
         return new self(
             lines:                 $newLines,
-            row:                   $row                  ?? $this->row,
+            row:                   $newRow,
             col:                   $col                  ?? $this->col,
             placeholder:           $placeholder          ?? $this->placeholder,
             charLimit:             $charLimit            ?? $this->charLimit,
             width:                 $width                ?? $this->width,
-            height:                $height               ?? $this->height,
+            height:                $newHeight,
             focused:               $focused              ?? $this->focused,
             cursor:                $cursor               ?? $this->cursor,
-            rowOffset:             $rowOffset            ?? $this->rowOffset,
+            rowOffset:             $newOffset,
             showLineNumbers:       $showLineNumbers      ?? $this->showLineNumbers,
             maxWidth:              $maxWidth             ?? $this->maxWidth,
-            maxHeight:             $maxHeight            ?? $this->maxHeight,
+            maxHeight:             $newMaxH,
             endOfBufferCharacter:  $endOfBufferCharacter ?? $this->endOfBufferCharacter,
             prompt:                $prompt               ?? $this->prompt,
             validate:              $resolvedValidate,
             err:                   $err,
             promptFunc:            $promptFuncSet        ? $promptFunc : $this->promptFunc,
-            dynamic:               $dynamic              ?? $this->dynamic,
+            dynamic:               $newDynamic,
             editorExtension:       $editorExtension      ?? $this->editorExtension,
             anchorRow:             $anchorSet            ? $anchorRow : $this->anchorRow,
             anchorCol:             $anchorSet           ? $anchorCol : $this->anchorCol,

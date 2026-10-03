@@ -49,7 +49,7 @@ final class Select implements \SugarCraft\Forms\Field
     /** @var int Debounce delay in ms for async suggestions */
     private int $asyncSuggestionsDebounceMs = 150;
 
-    /** @var int Monotonic count of scheduled async fetches. Reserved sequence state with no reader today — CancellationSource drives the cancellation (round-90 audit; Input.php carries the identical note); increment order is load-bearing for the Phase-6 seq-gating seam. */
+    /** @var int Monotonic count of scheduled async fetches along this snapshot chain. Reserved sequence state with no reader today — CancellationSource drives the cancellation (round-90 audit; Input.php carries the identical note). Advanced only on the rebuilt instance by withPendingAsyncCancellation(), never in place on the snapshot update() ran on — the seam Phase-6 seq-gating will read. */
     private int $pendingAsyncSeq = 0;
 
     /** @var CancellationSource|null Cancellation source for the pending async operation */
@@ -244,7 +244,11 @@ final class Select implements \SugarCraft\Forms\Field
     public function enum(string $enumClass): self         { return $this->withEnum($enumClass); }
 
     /**
-     * Attach a pending async cancellation source.
+     * Attach the cancellation source of a NEWLY scheduled async fetch. The
+     * returned instance also carries the advanced schedule sequence — the
+     * increment rides this rebuild instead of writing to the snapshot
+     * update() was called on, so an already-handed-out instance never
+     * changes underneath its holder.
      *
      * @internal
      */
@@ -258,7 +262,7 @@ final class Select implements \SugarCraft\Forms\Field
             fuzzyCandidates:           $this->fuzzyCandidates,
             asyncSuggestionsFetcher:  $this->asyncSuggestionsFetcher,
             asyncSuggestionsDebounceMs: $this->asyncSuggestionsDebounceMs,
-            pendingAsyncSeq:           $this->pendingAsyncSeq,
+            pendingAsyncSeq:           $this->pendingAsyncSeq + 1,
             pendingAsyncCancellation:  $cancellationSource,
             pendingAsyncFilterText:    $this->pendingAsyncFilterText,
             enumClass:                 $this->enumClass, // E741-sibling carry (see withAsyncSuggestions)
@@ -383,7 +387,6 @@ final class Select implements \SugarCraft\Forms\Field
         $fetcher = $this->asyncSuggestionsFetcher;
         $debounceMs = $this->asyncSuggestionsDebounceMs;
         $timeoutSeconds = $this->asyncSuggestionsFetchTimeoutSeconds;
-        ++$this->pendingAsyncSeq;
         $fieldKey = $this->key;
 
         // Store the filter text at time of scheduling for sequence tracking

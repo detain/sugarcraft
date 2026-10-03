@@ -69,7 +69,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     /** @var int Debounce delay in ms for async suggestions */
     private int $asyncSuggestionsDebounceMs = 150;
 
-    /** @var int Monotonic count of scheduled async fetches. Reserved sequence state with no reader today — CancellationSource drives the cancellation (round-90 audit: the old "(for cancellation)" claim was false); increment order is load-bearing for the Phase-6 seq-gating seam. */
+    /** @var int Monotonic count of scheduled async fetches along this snapshot chain. Reserved sequence state with no reader today — CancellationSource drives the cancellation (round-90 audit; the old "(for cancellation)" claim was false). Advanced only on the rebuilt instance by withPendingAsyncCancellation(), never in place on the snapshot update() ran on — the seam Phase-6 seq-gating will read. */
     private int $pendingAsyncSeq = 0;
 
     /** @var CancellationSource|null Cancellation source for the pending async operation */
@@ -171,7 +171,11 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     public function maxlength(int $n): self { return $this->withValidator(new \SugarCraft\Forms\Validator\MaxLength($n)); }
 
     /**
-     * Attach a pending async cancellation source.
+     * Attach the cancellation source of a NEWLY scheduled async fetch. The
+     * returned instance also carries the advanced schedule sequence — the
+     * increment rides this rebuild instead of writing to the snapshot
+     * update() was called on, so an already-handed-out instance never
+     * changes underneath its holder.
      *
      * @internal
      */
@@ -188,7 +192,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
             fuzzyCandidates:           $this->fuzzyCandidates,
             asyncSuggestionsFetcher:  $this->asyncSuggestionsFetcher,
             asyncSuggestionsDebounceMs: $this->asyncSuggestionsDebounceMs,
-            pendingAsyncSeq:           $this->pendingAsyncSeq,
+            pendingAsyncSeq:           $this->pendingAsyncSeq + 1,
             pendingAsyncCancellation:  $cancellationSource,
             workerPool:                $this->workerPool,
             validateOn:                $this->validateOn,
@@ -579,13 +583,12 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
         $fetcher = $this->asyncSuggestionsFetcher;
         $debounceMs = $this->asyncSuggestionsDebounceMs;
         $timeoutSeconds = $this->asyncSuggestionsFetchTimeoutSeconds;
-        ++$this->pendingAsyncSeq;
         $fieldKey = $this->key;
         $workerPool = $this->workerPool;
 
         // (round-90 audit: the captured $currentSeq was never read by either
         // closure — the seq VALUE gating is Phase-6 reserved state; the
-        // monotonic increment itself stays exactly where it was.)
+        // increment now lands on $field via withPendingAsyncCancellation().)
         return function () use ($fetcher, $debounceMs, $timeoutSeconds, $fieldKey, $field, $workerPool, $cancellationSource): \SugarCraft\Core\AsyncCmd {
             $deferred = new Deferred();
             $token = $cancellationSource->token();

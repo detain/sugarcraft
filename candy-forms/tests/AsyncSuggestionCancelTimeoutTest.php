@@ -251,12 +251,13 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
     }
 
     /**
-     * Pin the round-90 #3 cleanup contract: the schedule door lives in the
-     * value diff AND the monotonic increment still runs exactly once per
-     * schedule on the instance it was called from (the Phase-6 seq-gating
-     * seam must find the counter where the pre-cleanup code left it).
+     * The schedule sequence advances on the REBUILT instance update()
+     * returns, never in place on the snapshot update() was called on
+     * (crush_libs candy-forms #5: `++$this->pendingAsyncSeq` used to
+     * mutate the frozen old field). Each schedule still bumps it exactly
+     * once along the snapshot chain; unscheduled messages leave it alone.
      */
-    public function testPendingAsyncSeqIncrementStillFiresOncePerSchedule(): void
+    public function testPendingAsyncSeqAdvancesOnTheReturnedInstanceOnly(): void
     {
         $fetcher = static fn(string $v): PromiseInterface => \React\Promise\resolve([$v]);
 
@@ -266,15 +267,44 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
 
         self::assertSame(0, $read($f));
         [$f2, $cmd] = $f->update(new KeyMsg(KeyType::Char, 'a'));
-        self::assertSame(1, $read($f), 'the discarded schedule-from instance must carry the increment');
         self::assertNotNull($cmd);
-        [$f3, $cmd2] = $f->update(new KeyMsg(KeyType::Char, 'b'));
-        self::assertSame(2, $read($f), 'increments are monotonic per schedule call');
+        self::assertSame(0, $read($f), 'the snapshot update() ran on must stay frozen');
+        self::assertSame(1, $read($f2), 'the returned instance carries the advanced sequence');
+
+        // Re-running update() from the same frozen snapshot is deterministic.
+        [$f2b, ] = $f->update(new KeyMsg(KeyType::Char, 'b'));
+        self::assertSame(1, $read($f2b));
+        self::assertSame(0, $read($f));
+
+        // Chained schedules are monotonic along the chain.
+        [$f3, $cmd2] = $f2->update(new KeyMsg(KeyType::Char, 'b'));
         self::assertNotNull($cmd2);
+        self::assertSame(2, $read($f3));
+        self::assertSame(1, $read($f2));
+
         // Cursor-only key: no schedule, no increment.
-        [$f4, $cmd3] = $f->update(new KeyMsg(KeyType::Left));
-        self::assertSame(2, $read($f), 'unscheduled messages must not tick the counter');
+        [$f4, $cmd3] = $f3->update(new KeyMsg(KeyType::Left));
         self::assertNull($cmd3);
+        self::assertSame(2, $read($f4));
+    }
+
+    /** Select twin of {@see testPendingAsyncSeqAdvancesOnTheReturnedInstanceOnly()}. */
+    public function testSelectPendingAsyncSeqAdvancesOnTheReturnedInstanceOnly(): void
+    {
+        $fetcher = static fn(string $v): PromiseInterface => (new Deferred())->promise();
+
+        $s = Select::new('k')
+            ->withOptions('apple', 'banana', 'cherry')
+            ->withAsyncSuggestions($fetcher, 1);
+        [$s] = $s->focus();
+        $read = static fn(Select $field): int => (new \ReflectionProperty($field, 'pendingAsyncSeq'))->getValue($field);
+
+        [$s, ] = $s->update(new KeyMsg(KeyType::Char, '/'));
+        $before = $read($s);
+        [$s2, $cmd] = $s->update(new KeyMsg(KeyType::Char, 'a'));
+        self::assertNotNull($cmd, 'fixture: filter-text change schedules a fetch');
+        self::assertSame($before, $read($s), 'the snapshot update() ran on must stay frozen');
+        self::assertSame($before + 1, $read($s2), 'the returned instance carries the advanced sequence');
     }
 
     /**

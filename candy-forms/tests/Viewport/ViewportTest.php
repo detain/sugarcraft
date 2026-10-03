@@ -465,4 +465,15 @@ final class ViewportTest extends TestCase
         $this->assertStringContainsString('if ($this->maxXOffsetMemo !== null) {', $src);
         $this->assertStringContainsString('return $this->maxXOffsetMemo =', $src);
     }
+    public function testWheelMsgWithANonWheelButtonIsDroppedNotFatal(): void
+    {
+        // match() had no default arm: a hand-built wheel message carrying
+        // any other button threw UnhandledMatchError out of update().
+        $v = Viewport::new(20, 3)->setContent($this->content(10))->withMouseWheelEnabled(true);
+        foreach ([MouseButton::Left, MouseButton::None, MouseButton::Forward] as $button) {
+            [$next, $cmd] = $v->update(new MouseWheelMsg(0, 0, $button, MouseAction::Press));
+            $this->assertSame($v, $next);
+            $this->assertNull($cmd);
+        }
+    }
 }

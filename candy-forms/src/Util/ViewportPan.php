@@ -12,7 +12,8 @@ namespace SugarCraft\Forms\Util;
  * {@see \SugarCraft\Forms\FilePicker\FilePicker::moveCursor()}: pull the
  * offset back when the cursor leaves the top of the window, push it
  * forward when the cursor falls off the bottom, and never let it go
- * negative.
+ * negative. {@see \SugarCraft\Forms\TextArea\TextArea} reuses the same
+ * math to keep its caret row inside the rendered window.
  *
  * Only the pan TAIL was a literal twin. The cursor-resolution HEADS stay
  * per-class and are deliberately NOT merged: ItemList counts

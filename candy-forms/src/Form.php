@@ -23,6 +23,17 @@ use SugarCraft\Layout\Region;
  * Shift+Tab / Up move the focus; Enter on the last non-skippable field
  * submits; Esc / Ctrl+C aborts.
  *
+ * Fields whose {@see Field::isHidden()} predicate fires are treated as
+ * absent: navigation and the submit gate pass over them, they do not
+ * render, and {@see values()} / {@see errors()} / {@see validateAll()} /
+ * {@see validateAsync()} leave them out. The predicate sees the values of
+ * the visible fields BEFORE it (earlier groups, then earlier fields of the
+ * same group) — the same progressive convention groups use. A group
+ * whose every field is hidden is passed over like a hidden group, and a
+ * page with no interactive field (only notes) moves on / submits on Enter.
+ * When the active group has nothing to focus, {@see $focusedIndex} is -1
+ * and {@see focusedField()} returns null.
+ *
  * After submit (or abort), the form stops absorbing keystrokes and
  * caller code can collect {@see values()} keyed by each field's key.
  */
@@ -87,10 +98,22 @@ final class Form implements Model
         foreach ($list as $i => $group) {
             $fieldsByGroup[$i] = $group->fields;
         }
-        // Find first focusable in first non-hidden group.
-        $startGroup = self::firstVisibleGroup($list, [], 0, +1);
-        $startGroup = $startGroup ?? 0;
-        $startField = self::firstNonSkippable($fieldsByGroup[$startGroup], 0, +1);
+        // Find first focusable in the first navigable group. The probe is an
+        // unfocused snapshot: navigability needs the instance-level hidden
+        // mask (seeded from earlier groups' visible values).
+        $probe = new self(
+            groups:         $list,
+            groupIndex:     0,
+            fieldsByGroup:  $fieldsByGroup,
+            focusedIndex:   0,
+            submitted:      false,
+            aborted:        false,
+            theme:          Theme::ansi(),
+            accessible:     false,
+        );
+        $startGroup = $probe->firstNavigableGroup([], 0, +1) ?? 0;
+        $hidden     = $probe->hiddenFieldsIn($startGroup);
+        $startField = self::firstNonSkippable($fieldsByGroup[$startGroup], 0, +1, $hidden);
         $initCmd = null;
         if ($startField !== null) {
             [$focused, $cmd] = $fieldsByGroup[$startGroup][$startField]->focus();
@@ -101,7 +124,7 @@ final class Form implements Model
             groups:         $list,
             groupIndex:     $startGroup,
             fieldsByGroup:  $fieldsByGroup,
-            focusedIndex:   $startField ?? 0,
+            focusedIndex:   $startField ?? self::restingIndex($fieldsByGroup[$startGroup], $hidden),
             submitted:      false,
             aborted:        false,
             theme:          Theme::ansi(),
@@ -350,13 +373,20 @@ final class Form implements Model
 
             // Submission: any key in the submit binding list, but only
             // when the form is on the last interactive field of the
-            // last visible group. Default keymap binds Enter here.
+            // last navigable group. Default keymap binds Enter here. A
+            // group with no interactive field at all (only notes, or every
+            // field hidden by host focus) has no "last field" to reach, so
+            // Enter there moves on / submits directly instead of dead-ending.
+            // Focus PAST the last interactive field counts as being on it:
+            // withFocus() may park focus on a hidden trailing field, and
+            // advance(+1) from there finds nothing to move to.
             if ($keyMap->isSubmit($msg)) {
-                $last = self::firstNonSkippable($fields, count($fields) - 1, -1);
-                if ($last !== null && $this->focusedIndex === $last) {
-                    $isLastGroup = self::firstVisibleGroup(
-                        $this->groups, $this->collectValues(),
-                        $this->groupIndex + 1, +1,
+                $last = self::firstNonSkippable(
+                    $fields, count($fields) - 1, -1, $this->hiddenFieldsIn($this->groupIndex),
+                );
+                if ($last === null || $this->focusedIndex >= $last) {
+                    $isLastGroup = $this->firstNavigableGroup(
+                        $this->collectValues(), $this->groupIndex + 1, +1,
                     ) === null;
                     if ($isLastGroup) {
                         return $this->submitOrGateLastGroup();
@@ -390,7 +420,15 @@ final class Form implements Model
         // required fields surface their errors, tracking the first that fails.
         $revalidated = [];
         $firstErrorIdx = null;
+        $hidden = $this->hiddenFieldsIn($this->groupIndex);
         foreach ($this->fieldsByGroup[$this->groupIndex] as $i => $f) {
+            // A hidden field does not exist for the submit gate: its
+            // (possibly stale, possibly required-and-empty) value must
+            // neither block submission nor steal focus.
+            if (isset($hidden[$i])) {
+                $revalidated[$i] = $f;
+                continue;
+            }
             $rf = $f->revalidate();
             $revalidated[$i] = $rf;
             if ($firstErrorIdx === null && $rf->getError() !== null && $rf->getError() !== '') {
@@ -435,7 +473,14 @@ final class Form implements Model
         if ($group->description !== '') {
             $blocks[] = $theme->description->render($group->description);
         }
-        foreach ($this->fieldsByGroup[$this->groupIndex] as $f) {
+        $hidden = $this->hiddenFieldsIn($this->groupIndex);
+        foreach ($this->fieldsByGroup[$this->groupIndex] as $i => $f) {
+            // Hidden fields do not render — except a field the host focused
+            // by name via withFocus()/focusField(), so the caret is never
+            // invisible.
+            if (isset($hidden[$i]) && $i !== $this->focusedIndex) {
+                continue;
+            }
             $blocks[] = $f->view();
         }
         if (count($this->groups) > 1 && $this->showHelp && $group->showHelp) {
@@ -464,7 +509,7 @@ final class Form implements Model
             return '';
         }
         $title = $field->getTitle();
-        $value = (string) $field->value();
+        $value = self::coerceString($field->value()) ?? '';
         $err   = $field->getError();
         $line  = $title === '' ? $value : ($title . ': ' . $value);
         return $err !== null ? $line . "\n! " . $err : $line;
@@ -502,8 +547,8 @@ final class Form implements Model
 
     /**
      * Final value map keyed on each field's {@see Field::key()}.
-     * Hidden groups and skippable fields (notes, separators) are
-     * excluded — only fields that participate in the user-driven flow
+     * Hidden groups, hidden fields and skippable fields (notes,
+     * separators) are excluded — only fields that participate in the user-driven flow
      * appear in the result.
      *
      * @return array<string, mixed>
@@ -515,19 +560,19 @@ final class Form implements Model
         }
         // E736-F2/2.9 (round 85): the walk shape is shared with
         // collectValues()/validateAll() through valueWalk().
-        return $this->valuesMemo = $this->valueWalk(stopBeforeGroup: null, respectHiddenGroups: true);
+        return $this->valuesMemo = $this->valueWalk(stopBeforeGroup: null, respectHidden: true);
     }
 
     /**
      * Shared group-walk used by {@see values()} and {@see collectValues()}
      * (E736-F2/2.9). Collects non-skippable field values per group;
      * optionally stops before a group index and optionally skips groups
-     * whose hideFunc fires against the progressively accumulated map —
-     * the progressive convention every consumer shares.
+     * AND fields whose hideFunc fires against the progressively accumulated
+     * map — the progressive convention every consumer shares.
      *
      * @return array<string,mixed>
      */
-    private function valueWalk(?int $stopBeforeGroup, bool $respectHiddenGroups): array
+    private function valueWalk(?int $stopBeforeGroup, bool $respectHidden): array
     {
         $out         = [];
         $accumulated = [];
@@ -535,11 +580,14 @@ final class Form implements Model
             if ($stopBeforeGroup !== null && $i >= $stopBeforeGroup) {
                 break;
             }
-            if ($respectHiddenGroups && $group->isHidden($accumulated)) {
+            if ($respectHidden && $group->isHidden($accumulated)) {
                 continue;
             }
             foreach ($this->fieldsByGroup[$i] as $f) {
                 if ($f->skippable()) {
+                    continue;
+                }
+                if ($respectHidden && $f->isHidden($accumulated)) {
                     continue;
                 }
                 $out[$f->key()]         = $f->value();
@@ -722,9 +770,19 @@ final class Form implements Model
      */
     public function getString(string $key, string $default = ''): string
     {
-        $v = $this->get($key);
+        return self::coerceString($this->get($key)) ?? $default;
+    }
+
+    /**
+     * The string coercion shared by {@see getString()} and the accessible
+     * view: scalars cast, bools spell `true`/`false`, arrays (MultiSelect)
+     * implode with `, ` as huh's `GetString` does. Null when the value has
+     * no sensible string form (null, non-stringable objects).
+     */
+    private static function coerceString(mixed $v): ?string
+    {
         if ($v === null) {
-            return $default;
+            return null;
         }
         if (is_string($v)) {
             return $v;
@@ -741,7 +799,7 @@ final class Form implements Model
         if (is_object($v) && method_exists($v, '__toString')) {
             return (string) $v;
         }
-        return $default;
+        return null;
     }
 
     /**
@@ -841,9 +899,9 @@ final class Form implements Model
      * Early-exit (same instance returned) when the key matches no field,
      * when the match is already focused, or when the target is skippable —
      * notes and separators do not take focus, and honouring the request
-     * would strand an un-focusable cursor. Hidden groups are deliberately
-     * NOT refused: this is the programmatic escape hatch, the host asked
-     * for it by name.
+     * would strand an un-focusable cursor. Hidden groups and hidden fields
+     * are deliberately NOT refused: this is the programmatic escape hatch,
+     * the host asked for it by name (a focused hidden field still renders).
      */
     public function withFocus(string $key): self
     {
@@ -911,8 +969,8 @@ final class Form implements Model
     }
 
     /**
-     * Validation errors keyed by field key. Hidden groups and skippable
-     * fields (Note) are excluded. Empty when every visible field
+     * Validation errors keyed by field key. Hidden groups, hidden fields
+     * and skippable fields (Note) are excluded. Empty when every visible field
      * validates cleanly. Mirrors huh's `Errors()`.
      *
      * @return array<string, string>
@@ -926,7 +984,7 @@ final class Form implements Model
                 continue;
             }
             foreach ($this->fieldsByGroup[$i] as $f) {
-                if ($f->skippable()) {
+                if ($f->skippable() || $f->isHidden($accumulated)) {
                     continue;
                 }
                 $accumulated[$f->key()] = $f->value();
@@ -976,7 +1034,7 @@ final class Form implements Model
                 continue;
             }
             foreach ($this->fieldsByGroup[$i] as $f) {
-                if ($f->skippable()) {
+                if ($f->skippable() || $f->isHidden($accumulated)) {
                     continue;
                 }
                 $accumulated[$f->key()] = $f->value();
@@ -1021,7 +1079,7 @@ final class Form implements Model
                 continue;
             }
             foreach ($this->fieldsByGroup[$i] as $f) {
-                if ($f->skippable()) {
+                if ($f->skippable() || $f->isHidden($accumulated)) {
                     continue;
                 }
                 $accumulated[$f->key()] = $f->value();
@@ -1117,7 +1175,10 @@ final class Form implements Model
     private function advance(int $direction): array
     {
         $fields = $this->fieldsByGroup[$this->groupIndex];
-        $next = self::firstNonSkippable($fields, $this->focusedIndex + $direction, $direction);
+        $next = self::firstNonSkippable(
+            $fields, $this->focusedIndex + $direction, $direction,
+            $this->hiddenFieldsIn($this->groupIndex),
+        );
         if ($next === null) {
             // Off the end of this group — try the next/prev group.
             return $this->advanceGroup($direction);
@@ -1126,7 +1187,9 @@ final class Form implements Model
             return [$this, null];
         }
         $newFields = $fields;
-        $newFields[$this->focusedIndex] = $newFields[$this->focusedIndex]->blur();
+        if (isset($newFields[$this->focusedIndex])) {
+            $newFields[$this->focusedIndex] = $newFields[$this->focusedIndex]->blur();
+        }
         [$focused, $cmd] = $newFields[$next]->focus();
         $newFields[$next] = $focused;
         $newByGroup = $this->fieldsByGroup;
@@ -1139,10 +1202,8 @@ final class Form implements Model
      */
     private function advanceGroup(int $direction): array
     {
-        $values = $this->collectValues();
-        $nextGroup = self::firstVisibleGroup(
-            $this->groups, $values,
-            $this->groupIndex + $direction, $direction,
+        $nextGroup = $this->firstNavigableGroup(
+            $this->collectValues(), $this->groupIndex + $direction, $direction,
         );
         if ($nextGroup === null) {
             return [$this, null];
@@ -1156,7 +1217,9 @@ final class Form implements Model
         }
         // Focus the first non-skippable in the new group.
         $newFields = $fieldsByGroup[$nextGroup];
-        $first = self::firstNonSkippable($newFields, 0, +1) ?? 0;
+        $hidden    = $this->hiddenFieldsIn($nextGroup);
+        $first     = self::firstNonSkippable($newFields, 0, +1, $hidden)
+            ?? self::restingIndex($newFields, $hidden);
         $cmd = null;
         if (isset($newFields[$first])) {
             [$focused, $cmd] = $newFields[$first]->focus();
@@ -1181,38 +1244,111 @@ final class Form implements Model
         // E736-F2/2.9: same walk as values(), stopped at the current group
         // and raw (this map is the INPUT to isHidden(), so it must not
         // pre-filter hidden groups).
-        return $this->valueWalk(stopBeforeGroup: $this->groupIndex, respectHiddenGroups: false);
+        return $this->valueWalk(stopBeforeGroup: $this->groupIndex, respectHidden: false);
     }
 
     /**
-     * @param list<Group>           $groups
-     * @param array<string,mixed>   $values  collected so far for hideFunc
+     * First group from `$start` (stepping `$step`) that navigation may land
+     * on: its own {@see Group::isHidden()} does not fire against `$values`,
+     * and its field-level hiding has not emptied it. A group whose every
+     * field is hidden has nothing to show or focus, so it is passed over
+     * exactly like a hidden group — otherwise Enter would strand on an empty
+     * page (or, as the last group, never submit). A group declared with no
+     * fields at all stays navigable: that is a deliberate title-only page.
+     *
+     * @param array<string,mixed> $values  collected so far for the group hideFunc
      */
-    private static function firstVisibleGroup(array $groups, array $values, int $start, int $step): ?int
+    private function firstNavigableGroup(array $values, int $start, int $step): ?int
     {
-        $n = count($groups);
+        $n = count($this->groups);
         for ($i = $start; $i >= 0 && $i < $n; $i += $step) {
-            if (!$groups[$i]->isHidden($values)) {
-                return $i;
+            if ($this->groups[$i]->isHidden($values)) {
+                continue;
             }
+            $fields = $this->fieldsByGroup[$i] ?? [];
+            if ($fields !== [] && count($this->hiddenFieldsIn($i)) === count($fields)) {
+                continue;
+            }
+            return $i;
         }
         return null;
     }
 
     /**
-     * @param list<Field> $fields
-     * @param int         $start  starting index (may be out of range)
-     * @param int         $step   +1 or -1
+     * Where focus rests in a group that has no focusable field: the first
+     * field that is not hidden (a passive note, which renders), else -1 —
+     * "nothing focused" — so a hidden field never becomes the focused index,
+     * which would render it and route keystrokes into it. A field-less group
+     * keeps index 0, which addresses nothing either.
+     *
+     * @param list<Field>     $fields
+     * @param array<int,true> $hidden
      */
-    private static function firstNonSkippable(array $fields, int $start, int $step): ?int
+    private static function restingIndex(array $fields, array $hidden): int
+    {
+        foreach ($fields as $i => $_) {
+            if (!isset($hidden[$i])) {
+                return $i;
+            }
+        }
+        return $fields === [] ? 0 : -1;
+    }
+
+    /**
+     * @param list<Field>     $fields
+     * @param int             $start   starting index (may be out of range)
+     * @param int             $step    +1 or -1
+     * @param array<int,true> $hidden  indices to pass over (see {@see hiddenFieldMask()})
+     */
+    private static function firstNonSkippable(array $fields, int $start, int $step, array $hidden = []): ?int
     {
         $n = count($fields);
         for ($i = $start; $i >= 0 && $i < $n; $i += $step) {
-            if (!$fields[$i]->skippable()) {
+            if (!$fields[$i]->skippable() && !isset($hidden[$i])) {
                 return $i;
             }
         }
         return null;
+    }
+
+    /**
+     * Indices of the fields in `$fields` whose {@see Field::isHidden()} fires,
+     * walking progressively: each predicate sees `$accumulated` plus the
+     * values of the visible fields before it — never a hidden field's value.
+     *
+     * @param list<Field>         $fields
+     * @param array<string,mixed> $accumulated values of the visible fields preceding this group
+     * @return array<int,true>
+     */
+    private static function hiddenFieldMask(array $fields, array $accumulated): array
+    {
+        $hidden = [];
+        foreach ($fields as $i => $f) {
+            // A skippable field (a passive note) can be hidden too — it must
+            // then not render — but it never contributes a value.
+            if ($f->isHidden($accumulated)) {
+                $hidden[$i] = true;
+                continue;
+            }
+            if (!$f->skippable()) {
+                $accumulated[$f->key()] = $f->value();
+            }
+        }
+        return $hidden;
+    }
+
+    /**
+     * {@see hiddenFieldMask()} for group `$group`, seeded with the visible
+     * values of every earlier group — the same map {@see values()} builds.
+     *
+     * @return array<int,true>
+     */
+    private function hiddenFieldsIn(int $group): array
+    {
+        return self::hiddenFieldMask(
+            $this->fieldsByGroup[$group] ?? [],
+            $this->valueWalk(stopBeforeGroup: $group, respectHidden: true),
+        );
     }
 
     /** @param array<int,list<Field>>|null $fieldsByGroup */
