@@ -8,7 +8,7 @@ namespace SugarCraft\Crush\Config\Settings;
  * Projects {@see SettingsSchema} onto the pages that document it, so the key
  * tables are generated rather than proof-read.
  *
- * THREE KINDS OF TARGET:
+ * FOUR KINDS OF TARGET:
  *  - MARKED BLOCKS — a region between `<!-- settings[:<name>]:begin -->` and the
  *    matching `:end -->` comment is replaced whole. The unnamed block is the
  *    "Every key" table in `docs/SETTINGS.md`.
@@ -21,6 +21,15 @@ namespace SugarCraft\Crush\Config\Settings;
  *    the last cell of each row is rewritten from
  *    {@see SettingDefinition::$envVar}. A column rather than a block because the
  *    rows themselves are hand-written prose; only that cell is derived.
+ *  - THE TIER CONSTANTS in `src/Config/LayeredSettings.php` (DH-KEYS) —
+ *    {@see \SugarCraft\Crush\Config\LayeredSettings::LAYERED_KEYS} and
+ *    {@see \SugarCraft\Crush\Config\LayeredSettings::PROJECT_TIER_KEYS} are
+ *    the lines between `// settings:<name>:begin` and `// settings:<name>:end`
+ *    ({@see listBlocks()}), one quoted key per line in schema order. Generated
+ *    rather than computed at run time so the class the merge runs through stays
+ *    a constant-only filter with no schema load per turn, and so every
+ *    `{@see LAYERED_KEYS}` citation across `src/` keeps naming a real constant;
+ *    the schema is still the only place a key is added.
  *
  * Everything outside those regions is the author's and is never touched. Driven
  * by `tools/gen-settings-doc.php` (`--write` / `--check`), and its `--check`
@@ -33,6 +42,7 @@ final class SettingsDocGenerator
     public const SETTINGS_DOC = 'docs/SETTINGS.md';
     public const ENVIRONMENT_DOC = 'docs/ENVIRONMENT.md';
     public const README = 'README.md';
+    public const LAYERED_SETTINGS = 'src/Config/LayeredSettings.php';
 
     /** The app-variable table's header, as written today (three columns). */
     private const ENV_TABLE_HEADER = '| Variable | Default when unset | Description |';
@@ -57,7 +67,23 @@ final class SettingsDocGenerator
      */
     public function targets(): array
     {
-        return [self::SETTINGS_DOC, self::ENVIRONMENT_DOC, self::README];
+        return [self::SETTINGS_DOC, self::ENVIRONMENT_DOC, self::README, self::LAYERED_SETTINGS];
+    }
+
+    /**
+     * The generated PHP list blocks, by file then block name: each a list of
+     * keys written one `'key',` per line between the block's marker comments.
+     *
+     * @return array<string, array<string, list<string>>>
+     */
+    public function listBlocks(): array
+    {
+        return [
+            self::LAYERED_SETTINGS => [
+                'layered-keys' => SettingsSchema::layeredKeys(),
+                'project-tier-keys' => SettingsSchema::projectTierKeys(),
+            ],
+        ];
     }
 
     /**
@@ -214,6 +240,12 @@ final class SettingsDocGenerator
             }
         }
 
+        foreach ($this->listBlocks() as $file => $blocks) {
+            foreach ($blocks as $name => $items) {
+                $pages[$file] = self::replaceListBlock($pages[$file], $name, $items, $file);
+            }
+        }
+
         foreach ($this->countAnchors() as [$file, $pattern, $count]) {
             $pages[$file] = self::withCount($pages[$file], $pattern, $count, $file);
         }
@@ -328,6 +360,49 @@ final class SettingsDocGenerator
         ));
 
         return substr($text, 0, $start) . "\n" . $body . "\n" . ($cut === $stop ? '' : $indent) . substr($text, $stop);
+    }
+
+    /**
+     * `$text` (PHP source) with the lines between `// settings:<name>:begin` and
+     * `// settings:<name>:end` replaced by one `'item',` line per item, indented
+     * like the begin marker. As with {@see replaceBlock()}, a missing or doubled
+     * marker is an error rather than a guess.
+     *
+     * @param list<string> $items
+     */
+    public static function replaceListBlock(string $text, string $name, array $items, string $file = 'source'): string
+    {
+        $begin = '// settings:' . $name . ':begin';
+        $end = '// settings:' . $name . ':end';
+        $lines = explode("\n", $text);
+        $beginAt = $endAt = [];
+        foreach ($lines as $i => $line) {
+            if (str_contains($line, $begin)) {
+                $beginAt[] = $i;
+            }
+
+            if (str_contains($line, $end)) {
+                $endAt[] = $i;
+            }
+        }
+
+        if (\count($beginAt) !== 1 || \count($endAt) !== 1) {
+            throw new \RuntimeException("{$file} must carry exactly one {$begin} … {$end} pair");
+        }
+
+        if ($endAt[0] < $beginAt[0]) {
+            throw new \RuntimeException("{$file}: {$end} comes before {$begin}");
+        }
+
+        $indent = (string) preg_replace('/\S.*$/', '', $lines[$beginAt[0]]);
+        $body = array_map(
+            static fn (string $item): string => $indent . var_export($item, true) . ',',
+            $items,
+        );
+
+        array_splice($lines, $beginAt[0] + 1, $endAt[0] - $beginAt[0] - 1, $body);
+
+        return implode("\n", $lines);
     }
 
     /**

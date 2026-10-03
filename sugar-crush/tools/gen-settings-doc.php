@@ -8,8 +8,10 @@ declare(strict_types=1);
  *
  * The schema owns the key tables; the pages own everything else. What this
  * rewrites is exactly what SettingsDocGenerator names: the marked
- * `<!-- settings…:begin -->` / `:end -->` blocks and the "Settings key" column
- * of docs/ENVIRONMENT.md's app-variable table. Never hand-edit those regions —
+ * `<!-- settings…:begin -->` / `:end -->` blocks, the "Settings key" column
+ * of docs/ENVIRONMENT.md's app-variable table, and the LAYERED_KEYS /
+ * PROJECT_TIER_KEYS lists in src/Config/LayeredSettings.php (between their
+ * `// settings:…:begin` / `:end` comments). Never hand-edit those regions —
  * add or change a SettingDefinition and re-run this.
  *
  * Usage (from sugar-crush/ or anywhere):

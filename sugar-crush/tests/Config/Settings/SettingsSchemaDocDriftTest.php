@@ -140,6 +140,43 @@ final class SettingsSchemaDocDriftTest extends TestCase
         self::assertEqualsCanonicalizing(LayeredSettings::userTierOnlyKeys(), SettingsDocGenerator::userTierOnlyKeys());
     }
 
+    /**
+     * DH-KEYS, W4 half: the LayeredSettings tier constants are generated from the
+     * schema, in schema order, so the merge filters on exactly the rows the docs
+     * are generated from.
+     */
+    public function testTheTierConstantsAreGeneratedFromTheSchema(): void
+    {
+        self::assertSame(SettingsSchema::layeredKeys(), LayeredSettings::LAYERED_KEYS);
+        self::assertSame(SettingsSchema::projectTierKeys(), LayeredSettings::PROJECT_TIER_KEYS);
+        self::assertArrayHasKey(SettingsDocGenerator::LAYERED_SETTINGS, SettingsDocGenerator::new()->listBlocks());
+    }
+
+    public function testAListBlockIsRewrittenBetweenItsMarkersWithTheBeginIndent(): void
+    {
+        $source = "    const X = [\n        // settings:x:begin — generated\n        'old',\n        // settings:x:end\n    ];";
+
+        self::assertSame(
+            "    const X = [\n        // settings:x:begin — generated\n        'a',\n        'b',\n        // settings:x:end\n    ];",
+            SettingsDocGenerator::replaceListBlock($source, 'x', ['a', 'b']),
+        );
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function badListMarkers(): iterable
+    {
+        yield 'no markers' => ['const X = [];'];
+        yield 'two pairs' => ["// settings:x:begin\n// settings:x:end\n// settings:x:begin\n// settings:x:end"];
+        yield 'end before begin' => ["// settings:x:end\n// settings:x:begin"];
+    }
+
+    #[DataProvider('badListMarkers')]
+    public function testAMissingOrDoubledListMarkerIsRefused(string $text): void
+    {
+        $this->expectException(\RuntimeException::class);
+        SettingsDocGenerator::replaceListBlock($text, 'x', ['a']);
+    }
+
     public function testEveryCountAnchorMatchesExactlyOnceOnItsPage(): void
     {
         $pages = self::pages();

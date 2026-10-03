@@ -9,11 +9,13 @@ namespace SugarCraft\Crush\Config\Settings;
  *
  * ONE SCHEMA, MANY CONSUMERS: the settings editor's form, the generated key
  * table in `docs/SETTINGS.md`, the "Settings key" column of
- * `docs/ENVIRONMENT.md`, and the tier rules. In this first phase the tier
- * constants in {@see \SugarCraft\Crush\Config\LayeredSettings} stay the source
- * the merge filters on and the schema is ASSERTED equal to them
- * ({@see \SugarCraft\Crush\Tests\Config\Settings\SettingsSchemaTest}); deriving
- * the constants from here is a later step, because their doc-blocks are pinned.
+ * `docs/ENVIRONMENT.md`, and the tier rules. The tier constants in
+ * {@see \SugarCraft\Crush\Config\LayeredSettings} are DERIVED from here
+ * (DH-KEYS): `tools/gen-settings-doc.php --write` writes
+ * {@see layeredKeys()} and {@see projectTierKeys()} into them, and
+ * {@see \SugarCraft\Crush\Tests\Config\Settings\SettingsSchemaDocDriftTest}
+ * reds until it has been re-run — so a key is added in exactly one place, its
+ * category's file under `Definitions/`.
  *
  * WHAT IS IN IT: every key that some reader in `src/` actually consults — the
  * layered keys, the two strict permission keys, the four trust lists, the
