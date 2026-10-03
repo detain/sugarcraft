@@ -216,7 +216,7 @@ final class KeyBindingRegistryTest extends TestCase
 
     /**
      * The shape of the table, stated as numbers because prose elsewhere states
-     * them — {@see \SugarCraft\Crush\Chat::handleKeyHelpKey()}'s "66 live rows
+     * them — {@see \SugarCraft\Crush\Chat::handleKeyHelpKey()}'s "81 live rows
      * across 9 contexts", the sweep counts in
      * {@see \SugarCraft\Crush\Tests\Renderer\KeyHelpTest}, and
      * {@see \SugarCraft\Crush\Tests\Commands\KeyBindingDriftTest}'s KEYISH

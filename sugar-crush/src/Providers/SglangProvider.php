@@ -2353,9 +2353,11 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
      * because the template renders the row differently from how the server
      * generated it. Rows without tool calls are left alone: the templates
      * discard reasoning on the final answer of a finished exchange, so
-     * sending it there would only add bytes. Scope is intra-turn by
-     * construction - across turns EngineBackend rebuilds bare assistant rows
-     * with no reasoning (structured replay is step 1.B-2).
+     * sending it there would only add bytes. The same rule covers earlier
+     * turns: since structured replay (step 1.B-2) EngineBackend rebuilds a
+     * recorded turn's tool-call steps with their reasoning, so a past step
+     * replays exactly as it was generated, while its final answer still
+     * goes without.
      *
      * @param array<Message> $messages
      * @param string|null $systemPrompt the request-level assembled prompt; '' counts as unset.

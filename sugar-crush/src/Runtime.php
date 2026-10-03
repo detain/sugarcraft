@@ -3938,9 +3938,12 @@ final class Runtime
                 // (audit R1), so the two cannot disagree on a verdict.
                 $plan = self::planInstructionDocuments($app->instructionLoader);
 
+                // Each framed document is labelled by its own opening fence:
+                // the personal ~/.sugar-crush/AGENTS.md is framed <user-rules>
+                // by the plan, every other document <project-instructions>.
                 foreach ($plan['inline'] as $framed) {
                     $sections[] = $this->section(
-                        '<project-instructions>',
+                        strstr($framed, "\n", true) ?: '<project-instructions>',
                         Stability::PerSession,
                         $framed,
                     );

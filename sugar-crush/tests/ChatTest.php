@@ -5426,7 +5426,19 @@ final class ChatTest extends TestCase
         $this->assertInstanceOf(\Closure::class, $cmd);
         // /branch MOVES the user onto the copy; /fork must not.
         $this->assertSame('sess-fork', $next->currentSessionId());
-        $this->assertCount(2, $store->listSessions());
+        // The copy is background work, so it is recorded as a background
+        // session (the picker badges it `⧗ bg`) rather than as a `/branch`
+        // row — and, like every background run, it stays out of the plain
+        // main/branch listing.
+        $kinds = [];
+        foreach ($store->listSessionsFiltered(\SugarCraft\Crush\Session\SessionQuery::new()->withKinds()) as $row) {
+            $kinds[$row->id] = $row->kind->value;
+        }
+        $this->assertCount(2, $kinds);
+        $this->assertSame('main', $kinds['sess-fork']);
+        unset($kinds['sess-fork']);
+        $this->assertSame(['background'], array_values($kinds));
+        $this->assertCount(1, $store->listSessions());
     }
 
     public function testForkCommandRequiresASessionToClone(): void

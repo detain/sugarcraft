@@ -224,9 +224,11 @@ final class ForkCarriesHistoryTest extends TestCase
             }
 
             $forkId = null;
-            foreach ($store->listSessions() as $row) {
-                if ($row['id'] !== 'sess-src') {
-                    $forkId = (string) $row['id'];
+            // A /fork copy is a background session, so it is found among
+            // every kind, not in the plain main/branch listing.
+            foreach ($store->listSessionsFiltered(\SugarCraft\Crush\Session\SessionQuery::new()->withKinds()) as $row) {
+                if ($row->id !== 'sess-src') {
+                    $forkId = $row->id;
                 }
             }
             $this->assertNotNull($forkId, 'the /fork made a copy');

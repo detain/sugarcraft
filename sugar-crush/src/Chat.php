@@ -3944,7 +3944,7 @@ final class Chat implements Model
      * reason a second Ctrl+P closes the palette rather than reopening it on
      * top of itself. Up/Down and PageUp/PageDown scroll, because the list is
      * taller than a terminal ({@see \SugarCraft\Crush\Commands\KeyBindingRegistry}
-     * declares 66 live rows across 9 contexts — 70 in all, four of them
+     * declares 81 live rows across 9 contexts — 85 in all, four of them
      * dormant and therefore unlisted) and clipping it with no way to reach the
      * rest would hide exactly the bindings this screen exists to disclose.
      *
@@ -15178,6 +15178,11 @@ final class Chat implements Model
      * saves its reply back into that copy (X-30), so the background session
      * continues the transcript rather than starting from the bare prompt.
      *
+     * The copy is recorded as a {@see \SugarCraft\Crush\Session\SessionKind::Background}
+     * session, not a branch: the session picker lists background rows (the
+     * `⧗ bg` badge), so a `/fork` copy shows there as the background work it
+     * is, while a `/branch` copy stays a `⑂` branch row.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleForkCommand(string $inputText): array
@@ -15203,7 +15208,10 @@ final class Chat implements Model
         $this->transcriptWriter->flush();
 
         try {
-            $forkedSessionId = $this->sessionStore->forkSession($this->currentSessionId);
+            $forkedSessionId = $this->sessionStore->forkSession(
+                $this->currentSessionId,
+                \SugarCraft\Crush\Session\SessionKind::Background,
+            );
         } catch (\Throwable $e) {
             return $this->sessionResponse($inputText, "Error: {$e->getMessage()}");
         }

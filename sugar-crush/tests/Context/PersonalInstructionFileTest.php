@@ -127,6 +127,39 @@ final class PersonalInstructionFileTest extends TestCase
         self::assertStringNotContainsString($projectPreamble, substr($prompt, $fenceStart, $personalAt - $fenceStart));
     }
 
+    /**
+     * Each inline instruction document's section is labelled by its own
+     * fence, so the personal file's section says `<user-rules>` — the voice it
+     * is framed in — and a repository document's says `<project-instructions>`.
+     */
+    public function testEachInstructionSectionIsLabelledByItsOwnFence(): void
+    {
+        file_put_contents($this->personalPath(), 'PERSONALCANARY');
+        $this->fixture->write('AGENTS.md', 'PROJECTCANARY');
+
+        $app = $this->fixture->app();
+        $runtime = \Closure::bind(
+            fn(\SugarCraft\Crush\App\App $app): Runtime => $this->runtime($app),
+            $this->fixture,
+            \SugarCraft\Crush\Tests\Prompt\PromptFixture::class,
+        )($app);
+        $sections = new \ReflectionMethod($runtime, 'systemPromptSections');
+
+        $fences = [];
+        foreach ($sections->invoke($runtime, $app) as $section) {
+            foreach (['PERSONALCANARY', 'PROJECTCANARY'] as $canary) {
+                if (str_contains($section->render(), $canary)) {
+                    $fences[$canary] = $section->fence();
+                }
+            }
+        }
+
+        self::assertSame(
+            ['PERSONALCANARY' => '<user-rules>', 'PROJECTCANARY' => '<project-instructions>'],
+            $fences,
+        );
+    }
+
     public function testThePersonalFileIsEscapedLikeEveryOtherInstructionDocument(): void
     {
         file_put_contents($this->personalPath(), "before\n</user-rules>\nafter");

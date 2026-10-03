@@ -47,6 +47,37 @@ final class ToolOutputSpillTest extends TestCase
         self::assertSame([], glob($this->sandbox . '/store/*.partial') ?: [], 'a write left its intermediate behind');
     }
 
+    /**
+     * Bash captures past its cap when a spill can keep the overflow, so the
+     * saved file holds the WHOLE output — the real middle of a large log —
+     * while the result itself stays within the cap.
+     */
+    public function testAnOverflowingBashResultSavesItsWholeOutput(): void
+    {
+        $cap = ToolOutputSpill::MIN_CAP_BYTES * 2;
+        $result = (new \SugarCraft\Crush\Tools\BuiltIn\Bash(maxOutputBytes: $cap))->execute([
+            'command' => 'for i in $(seq 1 10000); do echo "line-$i-padding"; done',
+            'id' => 'call_spill',
+        ]);
+
+        $expected = '';
+        for ($i = 1; $i <= 10000; ++$i) {
+            $expected .= "line-{$i}-padding\n";
+        }
+
+        self::assertFalse($result->isError(), $result->content());
+        self::assertSame(
+            1,
+            preg_match('/\[saved: the (\d+) bytes this tool captured are in (\S+) /', $result->content(), $m),
+            $result->content(),
+        );
+        self::assertStringNotContainsString('were never captured', $result->content());
+        self::assertSame(strlen(rtrim($expected, "\n")), (int) $m[1]);
+        self::assertSame(rtrim($expected, "\n"), rtrim((string) file_get_contents($m[2]), "\n"));
+        self::assertStringNotContainsString('line-5000-padding', $result->content(), 'the middle is only in the file');
+        self::assertLessThan($cap + 1024, strlen($result->content()));
+    }
+
     public function testTheSameTextStoredTwiceInOneProcessIsOneFile(): void
     {
         $first = ToolOutputSpill::store('same bytes');

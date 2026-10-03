@@ -346,10 +346,10 @@ final class FeatWiringReachabilityTest extends TestCase
      * instruction-loading tests below already call, so there is no second,
      * test-shaped writer to drift from the real one; the sandboxed HOME is what
      * makes it land in the fixture rather than in the developer's file.
-     * `rawUserConfig()` is a free-form passthrough, so a key this step
-     * introduces (`enabledSkills`) lands without touching
-     * `LayeredSettings::LAYERED_KEYS` — that roster growth (settings.json
-     * tiering + its doc guards) is deliberately deferred out of P7.S3.
+     * `rawUserConfig()` is a free-form passthrough, so the legacy config
+     * file is still an honest place to put `enabledSkills` here; the key is
+     * also a user-tier `LayeredSettings::LAYERED_KEYS` entry (N-DOC-2), so a
+     * `settings.json` spelling reaches the same skill gate.
      *
      * THEN IT READS THE FILE BACK AND ASSERTS IT. A config write that fails
      * quietly is the worst failure this seam can have: every one of these tests

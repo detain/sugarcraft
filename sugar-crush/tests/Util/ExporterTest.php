@@ -377,4 +377,36 @@ final class ExporterTest extends TestCase
         $this->assertStringContainsString('Tool result', $json);
         $this->assertStringContainsString('Tool result', $text);
     }
+
+    /**
+     * Roadmap 1.B-2: a row the transcript hides (a turn's step record, a
+     * harness nudge — {@see \SugarCraft\Crush\Message::$userVisible} false)
+     * is skipped by every export format and by a share, the same rule the
+     * transcript's own paint applies.
+     */
+    public function testRowsTheTranscriptHidesAreLeftOutOfEveryFormatAndAShare(): void
+    {
+        $messages = [
+            \SugarCraft\Crush\Message::user('VISIBLE-QUESTION'),
+            \SugarCraft\Crush\Message::assistant('HIDDEN-STEP-NARRATION')->withUserVisible(false),
+            \SugarCraft\Crush\Message::user('HIDDEN-NUDGE')->withUserVisible(false),
+            \SugarCraft\Crush\Message::assistant('VISIBLE-ANSWER'),
+        ];
+
+        foreach ([
+            'markdown' => Exporter::toMarkdown($messages),
+            'json' => Exporter::toJson($messages),
+            'text' => Exporter::toText($messages),
+            'html' => Exporter::toHtml($messages),
+        ] as $format => $out) {
+            $this->assertStringContainsString('VISIBLE-QUESTION', $out, $format);
+            $this->assertStringContainsString('VISIBLE-ANSWER', $out, $format);
+            $this->assertStringNotContainsString('HIDDEN-STEP-NARRATION', $out, $format);
+            $this->assertStringNotContainsString('HIDDEN-NUDGE', $out, $format);
+        }
+
+        $share = new \SugarCraft\Crush\Share\ShareSession($messages);
+        $this->assertSame(2, $share->messageCount());
+        $this->assertStringNotContainsString('HIDDEN-STEP-NARRATION', $share->serialize());
+    }
 }

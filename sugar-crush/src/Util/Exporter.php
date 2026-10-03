@@ -19,6 +19,12 @@ use SugarCraft\Crush\ToolResult;
  * results (X-35a): an export of a coding session that dropped what the tools
  * answered would show the model's requests with none of the evidence it acted
  * on.
+ *
+ * And it exports what the TRANSCRIPT shows: a concrete row the user does not
+ * see ({@see CrushMessage::$userVisible} false — a turn's step record, the
+ * assistant row whose tool calls the visible tool rows already answer, or a
+ * harness-written nudge) is skipped in every format, the same rule
+ * {@see \SugarCraft\Crush\Renderer}'s history paint applies (roadmap 1.B-2).
  */
 final class Exporter
 {
@@ -30,6 +36,7 @@ final class Exporter
      */
     public static function toMarkdown(array $messages): string
     {
+        $messages = self::shown($messages);
         $output = [];
 
         foreach ($messages as $msg) {
@@ -85,6 +92,8 @@ final class Exporter
      */
     public static function toJson(array $messages): string
     {
+        $messages = self::shown($messages);
+
         return json_encode(array_map(
             static fn($msg) => match (true) {
                 $msg instanceof CrushMessage => self::crushJsonRow($msg),
@@ -100,6 +109,7 @@ final class Exporter
      */
     public static function toText(array $messages): string
     {
+        $messages = self::shown($messages);
         $output = [];
 
         foreach ($messages as $msg) {
@@ -145,6 +155,7 @@ final class Exporter
      */
     public static function toHtml(array $messages, string $title = self::DEFAULT_HTML_TITLE): string
     {
+        $messages = self::shown($messages);
         $articles = [];
 
         foreach ($messages as $msg) {
@@ -197,6 +208,22 @@ final class Exporter
             . "h2,.label{color:#aaa}}\n"
             . "</style>\n</head>\n<body>\n<main>\n<h1>" . self::html($title) . "</h1>\n"
             . implode("\n", $articles) . "\n</main>\n</body>\n</html>\n";
+    }
+
+    /**
+     * $messages without the concrete rows the transcript does not show
+     * ({@see CrushMessage::$userVisible} false); every other entry, of any
+     * type, passes through in order.
+     *
+     * @param array<mixed> $messages
+     * @return list<mixed>
+     */
+    private static function shown(array $messages): array
+    {
+        return array_values(array_filter(
+            $messages,
+            static fn(mixed $msg): bool => !$msg instanceof CrushMessage || $msg->userVisible,
+        ));
     }
 
     /**

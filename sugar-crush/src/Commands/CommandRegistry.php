@@ -92,10 +92,11 @@ final class CommandRegistry
             ),
             CommandSpec::new(
                 'sessions',
-                'List all sessions',
+                'List, search and manage sessions',
                 'Session',
                 paletteAction: PaletteAction::SwitchSession,
                 paletteLabel: 'Switch session',
+                argumentHint: '[<query>]',
             ),
             CommandSpec::new(
                 'model',

@@ -779,10 +779,10 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('/rename <name> — Rename the current session', $plain);
         $this->assertStringContainsString('/rewind [n] — Restore chat state', $plain);
         // …and a row with no hint gains no stray spacing from the feature.
-        // (`/sessions`: `/rewind` was this example until it gained its `[n]`
-        // hint, audit 15b-25.)
-        $bare = (string) preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($this->chat(buf: '/ses')));
-        $this->assertStringContainsString('/sessions — List all sessions', $bare);
+        // (`/theme`: `/rewind` was this example until it gained its `[n]`
+        // hint, audit 15b-25, and `/sessions` until it gained `[<query>]`.)
+        $bare = (string) preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($this->chat(buf: '/the')));
+        $this->assertStringContainsString('/theme — Switch the color theme', $bare);
     }
 
     /**

@@ -322,7 +322,13 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         // stderr so mergeCapturedOutput() files it as the failure's tail —
         // the part truncateMerged() budgets first, so a megabyte of output
         // before it cannot push the reason off the end.
-        $maxBytes = $this->maxOutputBytes > 0 ? $this->maxOutputBytes : null;
+        //
+        // Captured past the cap when a spill can keep the overflow (roadmap
+        // 2.8): bytes the capture drops are bytes no saved file can hold, so
+        // a capture bounded at the cap would leave the spilled file without
+        // the real middle of a large log. The RESULT is still clipped to
+        // $maxOutputBytes by truncateMerged() below.
+        $maxBytes = $this->captureBound($this->maxOutputBytes);
         $timeout = self::timeoutSeconds($args['timeout'] ?? null);
         $run = ($args['interactive'] ?? false) === true
             ? $this->runCapturedInteractive($cmd, null, $maxBytes, null, (float) $timeout, $heartbeat)

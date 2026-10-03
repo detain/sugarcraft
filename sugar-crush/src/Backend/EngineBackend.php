@@ -757,13 +757,20 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * That is fail-closed and correct, but it also meant an Ask-producing
      * permission mode was indistinguishable from a deny-everything one.
      *
-     * The approver must return literal `true` to grant — see
-     * {@see Runtime::settleAsk()} on why a truthy cast is not enough.
+     * The approver answers with literal `true` (allow once) or an
+     * {@see \SugarCraft\Crush\Permissions\ApprovalVerdict}; anything else is
+     * a feedback-less refusal — see {@see Runtime::settleAsk()} on why a
+     * truthy cast is not enough. A verdict carries the two facts a bool
+     * cannot: whether anybody answered (a question the turn ended underneath
+     * reaches the model as `Permission required:`, not as a refusal) and the
+     * model-visible text about a refusal (a user's note, a grandchild's
+     * reason), which reaches the model through
+     * {@see \SugarCraft\Crush\Hooks\HookManager::resolveAsk()}'s feedback.
      *
      * WHO CALLS THIS — measured, not assumed
      * (`grep -rn withPermissionApprover src/ bin/`):
      *
-     * 1. THE CONSOLE PATHS DO, and this used to say nothing did.
+     * 1. THE CONSOLE PATHS.
      *    {@see \SugarCraft\Crush\Cli\NonInteractive::consoleBackend()} — the
      *    `-p` one-shot's only route to a backend — builds it through
      *    {@see \SugarCraft\Crush\Cli\Bootstrap::backend()} with
@@ -775,28 +782,22 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      *    `/dev/null` from the spawn site — and the ASK becomes an explicit
      *    refusal naming the tool, the mode and the remedies in the session's
      *    log rather than an opaque one.
-     * 2. THE TUI STILL DOES NOT, and that is the limit that remains.
-     *    {@see \SugarCraft\Crush\Chat} owns the blocking prompt UI, but its
-     *    prompt is a `Deferred` settled by a later `Msg`, not a function that
-     *    returns a verdict, and {@see completeAsync()} runs {@see complete()}
-     *    inside a `pcntl_fork()`ed child. The socket is no longer one-way:
-     *    {@see completeInteractive()} (roadmap 1.C-1) puts each ASK to the
-     *    parent as a {@see \SugarCraft\Crush\Events\PermissionAsked} frame
-     *    and carries the answer back through a {@see ChildChannel} approver.
-     *    What is missing is the caller: Chat still starts its turns through
-     *    {@see completeAsync()} (wiring it is 1.C-2), so an ASK raised on the
-     *    engine path from inside a TUI session still settles as
-     *    {@see Runtime::settleAsk()}'s no-approver refusal — which is why the
-     *    shipped default mode is still
-     *    {@see \SugarCraft\Crush\Permissions\PermissionMode::BypassPermissions}.
+     * 2. NOT THE TUI, AND IT DOES NOT NEED TO. {@see \SugarCraft\Crush\Chat}
+     *    starts its engine turns through {@see completeInteractive()} (1.C-1
+     *    built the channel, 1.C-2 wired the caller): the forked child attaches
+     *    a {@see ChildChannel} approver IN PLACE OF whatever approver this
+     *    backend carries, puts each ASK to the parent as a
+     *    {@see \SugarCraft\Crush\Events\PermissionAsked} frame, and settles
+     *    it with the {@see \SugarCraft\Crush\Permissions\ApprovalVerdict} the
+     *    modal's answer comes back as. The parent owns the policy, so an
+     *    approver attached here never sees a TUI turn's asks.
      *
      * An attached approver works on every SYNCHRONOUS {@see complete()} caller
      * (the two above, embedders, {@see completeAsyncBlocking()}'s no-pcntl
-     * fallback, tests) — which is exactly the set of callers that can be
-     * served before the socket work, and is why the parameter was threaded
-     * ahead of it.
+     * fallback, tests) and on a {@see completeAsync()} turn, whose child
+     * inherits it; only {@see completeInteractive()} replaces it.
      *
-     * @param \Closure(\SugarCraft\Crush\Tools\ToolCall, \SugarCraft\Crush\Hooks\HookResult): bool $approver
+     * @param \Closure(\SugarCraft\Crush\Tools\ToolCall, \SugarCraft\Crush\Hooks\HookResult): (bool|\SugarCraft\Crush\Permissions\ApprovalVerdict) $approver
      */
     public function withPermissionApprover(\Closure $approver): self
     {

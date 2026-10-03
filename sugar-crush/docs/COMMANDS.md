@@ -285,7 +285,7 @@ it does not; the *What the row says* column is its `description`.
 | Command | S | CP | Takes | What the row says |
 |---|---|---|---|---|
 | `/new` | | | — | Start a fresh session |
-| `/sessions` | ✓ | | — | List all sessions |
+| `/sessions` | ✓ | | `[<query>]` | List, search and manage sessions |
 | `/model` | ✓ | ✓ | `[provider]` | Switch the active model provider |
 | `/share` | ✓ | | `[md\|html\|json] [path]` | Export the session to a file |
 | `/docs` | | | — | Open the documentation |

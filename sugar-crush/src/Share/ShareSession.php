@@ -20,7 +20,10 @@ use SugarCraft\Crush\Util\Exporter;
  * ({@see Message::agentVisible()}'s rule — not `uiOnly`) plus the tool rows
  * (a message carrying tool results), so a reader sees what the model saw and
  * what its tools answered. App chrome — notices, command echoes, the
- * transient "tool is running" placeholders — is left out.
+ * transient "tool is running" placeholders — is left out, and so is a row
+ * the transcript hides ({@see Message::$userVisible} false: a turn's step
+ * record or a harness-written nudge, roadmap 1.B-2), exactly as the
+ * transcript's own paint skips it.
  *
  * @mirrors charmbracelet/<repo>.ShareSession
  */
@@ -61,6 +64,7 @@ final class ShareSession
             $messages,
             static fn(mixed $m): bool => $m instanceof Message
                 && $m->pendingToolCallId === null
+                && $m->userVisible
                 && (!$m->uiOnly || $m->toolResults !== []),
         ));
     }
