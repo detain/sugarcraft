@@ -22,7 +22,7 @@ namespace SugarCraft\Focus;
  * Mirrors the focus-traversal role of charmbracelet/bubbles' focus handling and
  * sugar-dash's FocusManager, but as a standalone, dependency-free, ordered ring.
  */
-final class FocusRing implements \IteratorAggregate, \JsonSerializable
+final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializable
 {
     /**
      * Positions into $ids of the enabled regions, in ascending order. Cached so
@@ -49,6 +49,12 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
     ) {
         // Invariant: empty ring => index -1; non-empty ring => index in [0, count)
         assert($ids === [] ? $index === -1 : ($index >= 0 && $index < count($ids)), 'FocusRing focus index out of range for ids');
+        // Invariant: only registered ids can carry a disabled flag, otherwise the
+        // counts, enabledIds()/disabledIds() and jsonSerialize() disagree.
+        assert(
+            array_diff_key($disabled, array_fill_keys($ids, true)) === [],
+            'FocusRing disabled set names an unregistered id',
+        );
 
         $this->enabledPositions = $enabledPositions ?? self::computeEnabledPositions($ids, $disabled);
 
@@ -82,6 +88,28 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
         return $positions;
     }
 
+    /**
+     * Drop duplicate ids, first occurrence wins, preserving order. One hash-set
+     * pass rather than an in_array() scan per id, shared by every factory and
+     * {@see reorder()} so they cannot drift on the dedupe contract.
+     *
+     * @param array<array-key, string> $ids
+     * @return list<string>
+     */
+    private static function unique(array $ids): array
+    {
+        $seen = [];
+        $unique = [];
+        foreach ($ids as $id) {
+            if (!isset($seen[$id])) {
+                $seen[$id] = true;
+                $unique[] = $id;
+            }
+        }
+
+        return $unique;
+    }
+
     /** An empty ring with nothing registered or focused. */
     public static function new(): self
     {
@@ -94,12 +122,7 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
      */
     public static function of(string ...$ids): self
     {
-        $unique = [];
-        foreach ($ids as $id) {
-            if (!in_array($id, $unique, true)) {
-                $unique[] = $id;
-            }
-        }
+        $unique = self::unique($ids);
 
         return new self($unique, $unique === [] ? -1 : 0);
     }
@@ -116,18 +139,22 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
      */
     public static function ofStrict(string ...$ids): self
     {
-        $seen = [];
-        foreach ($ids as $id) {
-            if (in_array($id, $seen, true)) {
-                throw new \InvalidArgumentException(sprintf(
-                    'Duplicate region id "%s" passed to FocusRing::ofStrict()',
-                    $id,
-                ));
+        $unique = self::unique($ids);
+        if (count($unique) !== count($ids)) {
+            // Name the first id that repeats, so the caller can find the clash.
+            $seen = [];
+            foreach ($ids as $id) {
+                if (isset($seen[$id])) {
+                    throw new \InvalidArgumentException(sprintf(
+                        'Duplicate region id "%s" passed to FocusRing::ofStrict()',
+                        $id,
+                    ));
+                }
+                $seen[$id] = true;
             }
-            $seen[] = $id;
         }
 
-        return new self($seen, $seen === [] ? -1 : 0);
+        return new self($unique, $unique === [] ? -1 : 0);
     }
 
     /**
@@ -216,8 +243,7 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
             return $this;
         }
 
-        // Only $index moves; $ids and $disabled are untouched, so the cache carries over.
-        return new self($this->ids, $pos, $this->disabled, $this->enabledPositions);
+        return $this->withIndex($pos);
     }
 
     /**
@@ -230,7 +256,11 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
      * 2. Empty result = empty ring.
      * 3. If current() survives, focus stays on it at its new position;
      *    otherwise focus the first element (index 0).
-     * 4. If the deduped list is identical to $this->ids and index unchanged,
+     * 4. Disabled flags carry over for surviving ids only. A dropped id loses
+     *    its flag exactly as {@see unregister()} clears it, and an id added by
+     *    the new list is enabled exactly as {@see register()} enables it — so a
+     *    region dropped while disabled and later re-added comes back enabled.
+     * 5. If the deduped list is identical to $this->ids and index unchanged,
      *    return $this (no-op fast-path).
      *
      * Use-case: dynamic layout where the set of regions changes without
@@ -238,111 +268,116 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
      */
     public function reorder(string ...$ids): self
     {
-        // 1. Dedupe incoming ids (first-wins)
-        $unique = [];
-        foreach ($ids as $id) {
-            if (!in_array($id, $unique, true)) {
-                $unique[] = $id;
-            }
-        }
+        $unique = self::unique($ids);
 
-        // 2. Empty result = empty ring
         if ($unique === []) {
             return new self([], -1);
         }
 
-        // 3. Compute new index: preserve current() if it survives, else 0
-        $currentId = $this->current();
-        $newIndex = array_search($currentId, $unique, true);
+        $newIndex = array_search($this->current(), $unique, true);
         if ($newIndex === false) {
             $newIndex = 0;
         }
 
-        // 4. No-op fast-path
         if ($unique === $this->ids && $newIndex === $this->index) {
             return $this;
         }
 
-        return new self($unique, $newIndex, $this->disabled);
+        $disabled = array_intersect_key($this->disabled, array_fill_keys($unique, true));
+
+        return new self($unique, $newIndex, $disabled);
     }
 
-    /** Move focus to the next enabled region (Tab), wrapping past the end. Disabled regions are skipped. Disabling the focused region does not move focus; it is left in place and the next traversal carries it off. */
+    /**
+     * Move focus to the next enabled region (Tab), wrapping past the end.
+     * Disabled regions are skipped. Disabling the focused region does not move
+     * focus; it is left in place and the next traversal carries it off — onto
+     * the nearest enabled region after it, even when that is the only enabled
+     * region left. A no-op (returns the same ring) when focus already sits on
+     * the only enabled region, or when no region is enabled.
+     */
     public function next(): self
     {
-        if (count($this->ids) < 2) {
-            return $this;
-        }
-
-        // Enabled positions are maintained incrementally — no per-keystroke rebuild.
-        $enabledPositions = $this->enabledPositions;
-
-        // All-disabled: noOp
-        if ($enabledPositions === []) {
-            return $this;
-        }
-
-        // Sole enabled: wrap would land on self — noOp
-        if (count($enabledPositions) === 1) {
-            return $this;
-        }
-
-        // Find current position among enabled; if current is disabled, find next enabled from current
-        $currentEnabledIdx = array_search($this->index, $enabledPositions, true);
-        if ($currentEnabledIdx === false) {
-            // Current region is disabled — find the first enabled after current
-            $total = count($this->ids);
-            for ($offset = 1; $offset <= $total; $offset++) {
-                $candidate = ($this->index + $offset) % $total;
-                if (!isset($this->disabled[$this->ids[$candidate]])) {
-                    return new self($this->ids, $candidate, $this->disabled, $enabledPositions);
-                }
-            }
-            return $this; // Should not reach: we have ≥2 enabled, one must be findable
-        }
-
-        // Wrap-around to next enabled
-        $nextIdx = ($currentEnabledIdx + 1) % count($enabledPositions);
-
-        return new self($this->ids, $enabledPositions[$nextIdx], $this->disabled, $enabledPositions);
+        return $this->step(1);
     }
 
-    /** Move focus to the previous enabled region (Shift-Tab), wrapping. Disabled regions are skipped. Disabling the focused region does not move focus; it is left in place and the next traversal carries it off. */
+    /**
+     * Move focus to the previous enabled region (Shift-Tab), wrapping past the
+     * start. Disabled regions are skipped. Disabling the focused region does not
+     * move focus; it is left in place and the next traversal carries it off —
+     * onto the nearest enabled region before it, even when that is the only
+     * enabled region left. A no-op (returns the same ring) when focus already
+     * sits on the only enabled region, or when no region is enabled.
+     */
     public function previous(): self
     {
-        if (count($this->ids) < 2) {
-            return $this;
-        }
+        return $this->step(-1);
+    }
 
+    /**
+     * The single traversal routine behind {@see next()} (+1) and
+     * {@see previous()} (-1), so the two directions cannot drift apart.
+     */
+    private function step(int $direction): self
+    {
         // Enabled positions are maintained incrementally — no per-keystroke rebuild.
-        $enabledPositions = $this->enabledPositions;
+        $enabled = $this->enabledPositions;
+        $enabledCount = count($enabled);
 
-        // All-disabled: noOp
-        if ($enabledPositions === []) {
+        if ($enabledCount === 0) {
             return $this;
         }
 
-        // Sole enabled: wrap would land on self — noOp
-        if (count($enabledPositions) === 1) {
+        $at = array_search($this->index, $enabled, true);
+
+        if ($at === false) {
+            // Focus is parked on a disabled region. Any enabled region —
+            // including a sole survivor — is a legitimate landing spot, so this
+            // branch must run before the sole-enabled no-op below.
+            return $this->withIndex($this->nearestEnabled($direction));
+        }
+
+        if ($enabledCount === 1) {
+            // Focus already sits on the only enabled region; every other region
+            // is disabled, so there is nowhere else to go.
             return $this;
         }
 
-        $currentEnabledIdx = array_search($this->index, $enabledPositions, true);
-        if ($currentEnabledIdx === false) {
-            // Current region is disabled — find the first enabled before current
-            $total = count($this->ids);
-            for ($offset = 1; $offset <= $total; $offset++) {
-                $candidate = ($this->index - $offset + $total) % $total;
-                if (!isset($this->disabled[$this->ids[$candidate]])) {
-                    return new self($this->ids, $candidate, $this->disabled, $enabledPositions);
+        return $this->withIndex($enabled[($at + $direction + $enabledCount) % $enabledCount]);
+    }
+
+    /**
+     * The first enabled position strictly after (direction +1) or before
+     * (direction -1) the focused one, wrapping. Only called while the focused
+     * region is disabled and at least one region is enabled, so a match exists.
+     */
+    private function nearestEnabled(int $direction): int
+    {
+        $enabled = $this->enabledPositions;
+
+        if ($direction > 0) {
+            foreach ($enabled as $p) {
+                if ($p > $this->index) {
+                    return $p;
                 }
             }
-            return $this;
+
+            return $enabled[0];
         }
 
-        // Wrap-around to previous enabled
-        $prevIdx = ($currentEnabledIdx - 1 + count($enabledPositions)) % count($enabledPositions);
+        for ($i = count($enabled) - 1; $i >= 0; $i--) {
+            if ($enabled[$i] < $this->index) {
+                return $enabled[$i];
+            }
+        }
 
-        return new self($this->ids, $enabledPositions[$prevIdx], $this->disabled, $enabledPositions);
+        return $enabled[count($enabled) - 1];
+    }
+
+    /** A copy focused at $index; $ids and $disabled are untouched, so the cache carries over. */
+    private function withIndex(int $index): self
+    {
+        return new self($this->ids, $index, $this->disabled, $this->enabledPositions);
     }
 
     /** Disable a region so next()/previous() skip over it. Disabling the currently focused region does not move focus — it is a pure metadata change so disable() never causes surprising focus jumps. */
@@ -412,13 +447,13 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
     /** Zero-cost enabled region count (avoids array allocation of enabledIds()). */
     public function enabledCount(): int
     {
-        return count($this->ids) - count($this->disabled);
+        return count($this->enabledPositions);
     }
 
     /** Zero-cost disabled region count. */
     public function disabledCount(): int
     {
-        return count($this->disabled);
+        return count($this->ids) - count($this->enabledPositions);
     }
 
     /** @return \Traversable<int, string> Yields region ids in traversal order */
@@ -427,12 +462,21 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
         yield from $this->ids;
     }
 
+    /**
+     * Snapshot for session persistence: the ids in traversal order, the focused
+     * index, and the disabled ids in traversal order. Disabled ids are read from
+     * $ids rather than from the keys of the disabled set, because PHP coerces a
+     * numeric-string key such as "1" to int(1) — the snapshot must stay a list
+     * of strings so it can be fed straight back into {@see disable()}.
+     *
+     * @return array{ids: list<string>, index: int, disabled: list<string>}
+     */
     public function jsonSerialize(): array
     {
         return [
             'ids' => $this->ids,
             'index' => $this->index,
-            'disabled' => array_keys($this->disabled),
+            'disabled' => $this->disabledIds(),
         ];
     }
 
@@ -464,6 +508,7 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
         return array_values($this->ids);
     }
 
+    /** Number of registered regions (enabled and disabled); backs count($ring). */
     public function count(): int
     {
         return count($this->ids);

@@ -639,6 +639,20 @@ final class FocusRingTest extends TestCase
             $actual,
             'maintained enabledPositions must equal a freshly-computed list',
         );
+
+        // The private disabled set may only name registered ids; a phantom entry
+        // makes the counts disagree with the id lists (crush_libs candy-focus #1).
+        $disabledRef = new \ReflectionProperty(FocusRing::class, 'disabled');
+        /** @var array<string, true> $disabledSet */
+        $disabledSet = $disabledRef->getValue($ring);
+        self::assertSame(
+            [],
+            array_diff(array_map('strval', array_keys($disabledSet)), $ring->ids()),
+            'disabled set must not name an unregistered id',
+        );
+        self::assertSame(count($ring->enabledIds()), $ring->enabledCount());
+        self::assertSame(count($ring->disabledIds()), $ring->disabledCount());
+        self::assertSame($ring->disabledIds(), $ring->jsonSerialize()['disabled']);
     }
 
     // ─── Coverage: next() / previous() wrap-around branches ─────────────────
@@ -655,7 +669,7 @@ final class FocusRingTest extends TestCase
 
     /**
      * previous() on 2-element ring from first (index 0) wraps to index 1 ('b').
-     * Exercises the currentEnabledIdx !== false wrap-around branch (lines 342-345).
+     * Exercises the currentEnabledIdx !== false wrap-around branch.
      */
     public function testPreviousFromFirstOnTwoElementRingWrapsToSecond(): void
     {
@@ -665,7 +679,7 @@ final class FocusRingTest extends TestCase
 
     /**
      * previous() on 3-element ring from first (index 0) wraps to last (index 2).
-     * Exercises the currentEnabledIdx !== false wrap-around branch (lines 342-345).
+     * Exercises the currentEnabledIdx !== false wrap-around branch.
      */
     public function testPreviousFromFirstOnThreeElementRingWrapsToLast(): void
     {
@@ -675,7 +689,7 @@ final class FocusRingTest extends TestCase
 
     /**
      * previous() on 3-element ring from last (index 2) wraps to first (index 0).
-     * Exercises the currentEnabledIdx !== false wrap-around branch (lines 342-345).
+     * Exercises the currentEnabledIdx !== false wrap-around branch.
      */
     public function testPreviousFromLastOnThreeElementRingWrapsToFirst(): void
     {
@@ -686,7 +700,7 @@ final class FocusRingTest extends TestCase
     /**
      * previous() on ring where current is disabled but another enabled exists
      * BEFORE current in traversal order. Exercises the "current is disabled,
-     * find previous enabled" branch (lines 331-339).
+     * find previous enabled" branch.
      */
     public function testPreviousWhenCurrentDisabledFindsEnabledBeforeCurrent(): void
     {
@@ -699,7 +713,7 @@ final class FocusRingTest extends TestCase
     /**
      * next() on ring where current is disabled but another enabled exists
      * AFTER current in traversal order. Exercises the "current is disabled,
-     * find next enabled" branch (lines 291-299).
+     * find next enabled" branch.
      */
     public function testNextWhenCurrentDisabledFindsEnabledAfterCurrent(): void
     {
@@ -710,32 +724,54 @@ final class FocusRingTest extends TestCase
     }
 
     /**
-     * next() when current is disabled and only one OTHER region is enabled
-     * (sole enabled, so wrap would land on self → noOp). This exercises
-     * the "sole enabled" early-return guard (line 285) while current is disabled.
+     * Regression (crush_libs candy-focus #2): focus parked on a disabled region
+     * with exactly one enabled region left must still be carried off by next().
+     * The sole-enabled no-op guard used to fire first and strand the user on a
+     * dimmed panel forever, contradicting the documented contract.
      */
-    public function testNextCurrentDisabledOnlyOneOtherEnabledIsNoOp(): void
+    public function testNextFromDisabledFocusLandsOnSoleEnabledRegion(): void
     {
-        // 'a' focused and enabled, 'b' and 'c' disabled
-        $ring = FocusRing::of('a', 'b', 'c')->focus('a')->disable('b')->disable('c');
-        self::assertSame('a', $ring->next()->current(), 'only one enabled so next is noOp');
+        $ring = FocusRing::of('a', 'b', 'c')->focus('b')->disable('b')->disable('c');
+        self::assertSame('b', $ring->current());
+
+        $moved = $ring->next();
+        self::assertSame('a', $moved->current(), 'next() wraps forward onto the sole enabled region');
+        self::assertSame($moved, $moved->next(), 'once on the sole enabled region, next() is a no-op');
+        self::assertCacheConsistent($moved);
     }
 
-    /**
-     * previous() when current is disabled and only one OTHER region is enabled
-     * (sole enabled, so wrap would land on self → noOp). Exercises line 325-327
-     * while current is disabled.
-     */
-    public function testPreviousCurrentDisabledOnlyOneOtherEnabledIsNoOp(): void
+    /** previous() counterpart of the regression above. */
+    public function testPreviousFromDisabledFocusLandsOnSoleEnabledRegion(): void
     {
-        // 'c' focused and enabled, 'a' and 'b' disabled
-        $ring = FocusRing::of('a', 'b', 'c')->focus('c')->disable('a')->disable('b');
-        self::assertSame('c', $ring->previous()->current(), 'only one enabled so previous is noOp');
+        $ring = FocusRing::of('a', 'b', 'c')->focus('b')->disable('b')->disable('a');
+        self::assertSame('b', $ring->current());
+
+        $moved = $ring->previous();
+        self::assertSame('c', $moved->current(), 'previous() wraps backward onto the sole enabled region');
+        self::assertSame($moved, $moved->previous(), 'once on the sole enabled region, previous() is a no-op');
+    }
+
+    /** Two-region ring: the size guard must not short-circuit the disabled-focus move either. */
+    public function testTraversalFromDisabledFocusOnTwoRegionRing(): void
+    {
+        $ring = FocusRing::of('a', 'b')->disable('a');
+
+        self::assertSame('b', $ring->next()->current());
+        self::assertSame('b', $ring->previous()->current());
+    }
+
+    /** Every region disabled, focus included: traversal has nowhere to go. */
+    public function testTraversalFromDisabledFocusWithNothingEnabledIsNoOp(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->disable('a')->disable('b')->disable('c');
+
+        self::assertSame($ring, $ring->next());
+        self::assertSame($ring, $ring->previous());
     }
 
     /**
      * next() when current is enabled but all OTHER regions are disabled
-     * (sole enabled → noOp at line 285).
+     * (sole enabled → noOp).
      */
     public function testNextAllOtherRegionsDisabledIsNoOp(): void
     {
@@ -746,7 +782,7 @@ final class FocusRingTest extends TestCase
 
     /**
      * previous() when current is enabled but all OTHER regions are disabled
-     * (sole enabled → noOp at line 325).
+     * (sole enabled → noOp).
      */
     public function testPreviousAllOtherRegionsDisabledIsNoOp(): void
     {
@@ -790,7 +826,7 @@ final class FocusRingTest extends TestCase
     /**
      * next() from a disabled first region lands on the first enabled after it
      * (the second region in a 3-element ring). This exercises the "current is
-     * disabled, find next enabled" loop branch (lines 291-299).
+     * disabled, find next enabled" loop branch.
      */
     public function testNextSkipsDisabledFirstToLandOnSecond(): void
     {
@@ -817,5 +853,117 @@ final class FocusRingTest extends TestCase
     {
         $ring = FocusRing::of('a', 'b', 'c')->focus('b')->disable('c');
         self::assertSame('a', $ring->previous()->current());
+    }
+
+    // ─── reorder() × disabled set ──────────────────────────────────────────
+
+    /** Regression (crush_libs candy-focus #1): reorder() must not leak the flag of an id it drops. */
+    public function testReorderDroppingDisabledIdLeavesNoPhantomFlag(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->disable('b')->reorder('a', 'c');
+
+        self::assertSame(['a', 'c'], $ring->ids());
+        self::assertSame([], $ring->disabledIds());
+        self::assertSame(0, $ring->disabledCount());
+        self::assertSame(2, $ring->enabledCount());
+        self::assertSame(count($ring->enabledIds()), $ring->enabledCount());
+        self::assertSame(
+            '{"ids":["a","c"],"index":0,"disabled":[]}',
+            json_encode($ring, JSON_THROW_ON_ERROR),
+        );
+        self::assertCacheConsistent($ring);
+    }
+
+    /** A region dropped while disabled and re-added by reorder() comes back enabled, like register(). */
+    public function testReorderReAddingDroppedDisabledIdReEnablesIt(): void
+    {
+        $viaReorder = FocusRing::of('a', 'b', 'c')->disable('b')->reorder('a', 'c')->reorder('a', 'b', 'c');
+        $viaRegister = FocusRing::of('a', 'b', 'c')->disable('b')->unregister('b')->register('b');
+
+        self::assertTrue($viaReorder->isEnabled('b'));
+        self::assertTrue($viaRegister->isEnabled('b'));
+        self::assertCacheConsistent($viaReorder);
+    }
+
+    /** A disabled id that survives the reorder keeps its flag at its new position. */
+    public function testReorderKeepsDisabledFlagOnSurvivingIds(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->disable('b')->reorder('b', 'c', 'a', 'd');
+
+        self::assertSame(['b'], $ring->disabledIds());
+        self::assertTrue($ring->isEnabled('d'), 'an id new to the ring is enabled');
+        self::assertSame('a', $ring->current());
+        self::assertSame('d', $ring->next()->current());
+        self::assertSame('c', $ring->next()->next()->current(), 'wrapping past the end skips the moved disabled id');
+        self::assertCacheConsistent($ring);
+    }
+
+    public function testReorderChurnKeepsBookkeepingConsistent(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c', 'd')->disable('b')->disable('d');
+        $orders = [['d', 'c', 'b', 'a'], ['a', 'c'], ['c', 'e', 'b', 'a'], ['e'], ['b', 'e']];
+
+        foreach ($orders as $order) {
+            $ring = $ring->reorder(...$order);
+            self::assertSame($order, $ring->ids());
+            self::assertCacheConsistent($ring);
+        }
+    }
+
+    // ─── numeric-string ids ────────────────────────────────────────────────
+
+    /** Regression (crush_libs candy-focus #4): PHP key coercion must not turn "1" into int(1). */
+    public function testJsonSerializeKeepsNumericStringDisabledIdsAsStrings(): void
+    {
+        $ring = FocusRing::of('0', '1', '2')->disable('1');
+
+        self::assertSame(['1'], $ring->jsonSerialize()['disabled']);
+        self::assertSame(
+            '{"ids":["0","1","2"],"index":0,"disabled":["1"]}',
+            json_encode($ring, JSON_THROW_ON_ERROR),
+        );
+    }
+
+    public function testNumericStringIdsDedupeByExactString(): void
+    {
+        self::assertSame(['1', '01', '1.0'], FocusRing::of('1', '01', '1', '1.0')->ids());
+        self::assertSame(['2', '02'], FocusRing::new()->reorder('2', '02', '2')->ids());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Duplicate region id "7"');
+        FocusRing::ofStrict('7', '07', '7');
+    }
+
+    /** A snapshot fed back through the public API rebuilds an equivalent ring. */
+    public function testJsonSnapshotRoundTripsThroughPublicApi(): void
+    {
+        $original = FocusRing::of('10', 'grid', '2', 'side')
+            ->focus('2')
+            ->disable('10')
+            ->disable('side');
+
+        /** @var array{ids: list<string>, index: int, disabled: list<string>} $snapshot */
+        $snapshot = json_decode(json_encode($original, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
+
+        $restored = FocusRing::of(...$snapshot['ids'])->focus($snapshot['ids'][$snapshot['index']]);
+        foreach ($snapshot['disabled'] as $id) {
+            $restored = $restored->disable($id);
+        }
+
+        self::assertSame($original->jsonSerialize(), $restored->jsonSerialize());
+        self::assertSame($original->next()->current(), $restored->next()->current());
+    }
+
+    // ─── Countable ─────────────────────────────────────────────────────────
+
+    /** Regression (crush_libs candy-focus #5): count($ring) must work, not throw a TypeError. */
+    public function testRingIsCountable(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->disable('b');
+
+        self::assertInstanceOf(\Countable::class, $ring);
+        self::assertCount(3, $ring);
+        self::assertSame(3, count($ring));
+        self::assertSame(0, count(FocusRing::new()));
     }
 }

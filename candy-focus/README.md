@@ -60,8 +60,48 @@ $style = $ring->isFocused('sidebar') ? $accentBorder : $plainBorder;
   and emptying the ring clears focus.
 - `next()` / `previous()` wrap around and are no-ops with fewer than two
   regions.
+- `reorder()` replaces the traversal order in one step: ids are deduped
+  (first wins), focus stays on the current region if it survives (otherwise
+  the first region is focused), new ids are added and missing ids dropped.
 - **Immutable** — every mutator returns a new `FocusRing` and leaves the
   receiver untouched, so it slots into the immutable-model (TEA) pattern.
+  No-op calls (registering an existing id, focusing an unknown or already
+  focused id, traversal with nowhere to go…) return the *same* instance, so
+  `$new === $old` cheaply detects "nothing changed".
+
+### Disabled regions
+
+- `disable()` keeps a region registered but makes `next()` / `previous()` skip
+  it; `enable()` puts it back. Both are no-ops for unknown ids or ids already
+  in that state.
+- Disabling the **focused** region does not move focus — `current()` still
+  names it. The next `next()` / `previous()` carries focus off onto the nearest
+  enabled region in that direction, even when that is the only enabled region
+  left.
+- Once focus sits on the only enabled region, `next()` / `previous()` are
+  no-ops; with every region disabled they are no-ops too.
+- `register()` always adds an enabled region. `unregister()` clears the
+  removed id's flag, and `reorder()` keeps flags only for ids that survive —
+  so a region dropped while disabled and later re-added comes back enabled.
+
+### Iteration, counting and persistence
+
+- `FocusRing` implements `IteratorAggregate`, `Countable` and
+  `JsonSerializable`: `foreach ($ring as $id)` walks every registered id
+  (disabled ones included) in traversal order, `count($ring)` is the number of
+  registered regions, and `json_encode($ring)` produces
+  `{"ids":[…],"index":n,"disabled":[…]}`.
+- The snapshot's `disabled` list is in traversal order and always holds
+  strings, numeric ids such as `"1"` included, so it can be fed straight back
+  in to restore a session:
+
+```php
+$s = json_decode($json, true); // a non-empty snapshot
+$ring = FocusRing::of(...$s['ids'])->focus($s['ids'][$s['index']]);
+foreach ($s['disabled'] as $id) {
+    $ring = $ring->disable($id);
+}
+```
 
 ## API
 
@@ -69,16 +109,24 @@ $style = $ring->isFocused('sidebar') ? $accentBorder : $plainBorder;
 |---|---|
 | `FocusRing::new()` | An empty ring. |
 | `FocusRing::of(string ...$ids)` | A ring of regions (duplicates dropped), focusing the first. |
-| `register(string $id): self` | Add a region to the end of the order. |
+| `FocusRing::ofStrict(string ...$ids)` | Like `of()`, but throws `InvalidArgumentException` on a duplicate id. |
+| `register(string $id): self` | Add an enabled region to the end of the order. |
 | `unregister(string $id): self` | Remove a region, preserving focus where possible. |
+| `reorder(string ...$ids): self` | Replace the traversal order, keeping focus on the current id when it survives. |
 | `focus(string $id): self` | Focus a specific registered region. |
-| `next(): self` / `previous(): self` | Tab / Shift-Tab traversal (wrapping). |
+| `next(): self` / `previous(): self` | Tab / Shift-Tab traversal (wrapping, skipping disabled regions). |
+| `disable(string $id): self` / `enable(string $id): self` | Exclude a region from / restore it to traversal. |
+| `isEnabled(string $id): bool` | Whether `$id` is registered and not disabled. |
+| `enabledIds(): list<string>` / `disabledIds(): list<string>` | Enabled / disabled ids in traversal order. |
+| `enabledCount(): int` / `disabledCount(): int` | Enabled / disabled region counts. |
 | `current(): ?string` | The focused region id, or `null`. |
 | `isFocused(string $id): bool` | Whether `$id` is the focused region. |
 | `has(string $id): bool` | Whether `$id` is registered. |
 | `index(): int` | Focused position, or `-1` when empty. |
 | `ids(): list<string>` | Registered region ids in traversal order. |
-| `count(): int` / `isEmpty(): bool` | Size helpers. |
+| `count(): int` / `isEmpty(): bool` | Size helpers; `count($ring)` works too (`Countable`). |
+| `getIterator(): Traversable<int, string>` | `foreach` support — every registered id in traversal order. |
+| `jsonSerialize(): array` | `['ids' => …, 'index' => …, 'disabled' => …]` snapshot for `json_encode()`. |
 
 ## License
 
