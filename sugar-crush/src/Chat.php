@@ -10606,9 +10606,11 @@ final class Chat implements Model
      * test can enumerate: `tests/Commands/SlashDispatchTest.php`'s
      * `testEverySlashVisibleRegistryRowHasALiveDispatchHandler()` submits
      * `/name` for every `slashVisible` row in {@see CommandRegistry} and fails
-     * when the turn reaches the backend, so a registry row with no arm here
-     * reds the suite. The before/after dispatch table for the refactor lives in
-     * that file's other methods rather than in prose here.
+     * when the turn reaches the backend, so a registry row with no handler
+     * reds the suite. Since DH-CMDS the handler is named by the command's own
+     * spec file under `src/Commands/Specs/` ({@see
+     * \SugarCraft\Crush\Commands\Specs\BuiltInCommands}), together with its
+     * aliases and what it is handed, so this method has no per-command arm.
      *
      * Two guards keep the parse from widening what dispatches, because
      * `parse()` is deliberately more forgiving than the chain it replaced:
@@ -10619,8 +10621,10 @@ final class Chat implements Model
      *   draft corpus asserts `/KEYS` is sent to the model as prose. Requiring
      *   the canonical spelling to appear verbatim at the head of the draft
      *   keeps that exact, for every command at once.
-     * - `$text === '/' . $name` is what keeps the four argument-less commands
-     *   argument-less. `/exit now` and `/keys foo` were prompts before this
+     * - `$text === '/' . $name` ({@see
+     *   \SugarCraft\Crush\Commands\Specs\BuiltInCommand::accepts()} for a
+     *   `CommandArguments::None` spec) is what keeps the four argument-less
+     *   commands argument-less. `/exit now` and `/keys foo` were prompts before this
      *   refactor because their arms compared the WHOLE trimmed buffer; a bare
      *   name match would have quietly turned both into commands.
      *
@@ -10655,101 +10659,72 @@ final class Chat implements Model
             return null;
         }
 
-        // Commands that take no arguments at all. `/help me name this variable`
-        // is a prompt, not a request for the command list.
-        if ($text === '/' . $parsed->name) {
-            $bare = match ($parsed->name) {
-                // Same as Ctrl+C / the palette's Exit action, just reachable
-                // without a modifier key.
-                'exit', 'quit' => [$this, Cmd::quit()],
-                'keys' => $this->handleKeysCommand(),
-                'help' => $this->handleHelpCommand(),
-                'clear' => $this->handleClearCommand(),
-                default => null,
-            };
-            if ($bare !== null) {
-                return $bare;
-            }
+        // TABLE-DRIVEN (DH-CMDS): the spelling is looked up in the spec files
+        // under src/Commands/Specs/, which name each command's handler, its
+        // aliases and what it is handed. There is no per-command arm here any
+        // more, so a row and its dispatch cannot be added apart.
+        //
+        // `accepts()` is what keeps the argument-less commands argument-less:
+        // `/exit now` and `/keys foo` were prompts before the parse refactor
+        // because their arms compared the WHOLE trimmed buffer, and a bare name
+        // match would quietly turn both into commands.
+        $command = \SugarCraft\Crush\Commands\Specs\BuiltInCommands::forSpelling($parsed->name);
+        if ($command === null || !$command->accepts($text, $parsed->name)) {
+            return null;
         }
 
-        // Commands that take optional arguments. Each handler is passed the
-        // WHOLE draft rather than $parsed->args: they do their own argument
-        // parsing already, and re-splitting it here would be a second parse to
-        // keep in step with theirs.
-        return match ($parsed->name) {
-            // Down here rather than in the bare-only block above, and this is a
-            // DELIBERATE break with `/keys`, which it otherwise resembles.
-            //
-            // `/help me name this variable` is prose, so `help` is bare-only;
-            // `/keys extra` is the same judgement one notch weaker. Measured,
-            // `permissions` shipped in that block and so `/permissions rules`
-            // went to the MODEL — which is the exact defect this command was
-            // added to fix, surviving in every spelling but one. The cost is
-            // not symmetric here: `/keys` mis-routed is a reference screen a
-            // model answers badly, `/permissions` mis-routed is a question
-            // about the local gate answered by the one participant that cannot
-            // see it, and answered plausibly.
-            //
-            // The argument is then IGNORED, not parsed, because the report is
-            // total: mode, source, every rule in evaluation order, and the
-            // breaker. There is no sub-view for `/permissions rules` to select
-            // — it is already on the screen — so every spelling gets a superset
-            // of what it asked for rather than a "no such subcommand".
-            'permissions' => $this->handlePermissionsCommand($text),
-            // Args-tolerant like `permissions`, for the same stated reason: the
-            // record is total, so every spelling gets a superset rather than
-            // a "no such subcommand".
-            'notices' => $this->handleNoticesCommand($text),
-            // Both forms reach the same arm, and the bare one is why this is NOT in
-            // the bare-only block above: `/rules` lists, `/rules terse` toggles.
-            'rules' => $this->handleRulesCommand($text),
-            'compact' => $this->handleCompactCommand($text),
-            'budget' => $this->handleBudgetCommand($text),
-            'workflow' => $this->handleWorkflowCommand($text),
-            'share' => $this->handleShareCommand($text),
-            // Both spellings: the registry row is `agents`, and `/agent` was
-            // reachable under the old prefix chain, so it stays reachable.
-            'agent', 'agents' => $this->handleAgentsCommand($text),
-            'memory' => $this->handleMemoryCommand($text),
-            'bg', 'background' => $this->handleBackgroundCommand($text),
-            'fork' => $this->handleForkCommand($text),
-            'branch' => $this->handleBranchCommand($text),
-            'rename' => $this->handleRenameCommand($text),
-            'rewind' => $this->handleRewindCommand($text),
-            'sessions' => $this->handleSessionsCommand($text),
-            'theme' => $this->handleThemeCommand($text),
-            'mcp' => $this->handleMcpAuthCommand($text),
-            'websearch' => $this->handleWebSearchCommand($text),
-            // The keyboard twins of the mouse gesture phase: dock state lives
-            // on the shell, so both handlers parse locally and hand the
-            // decision to App as a message over Cmd::send — the one channel
-            // Chat has into the shell's model.
-            'pane' => $this->handlePaneCommand($text),
-            'layout' => $this->handleLayoutCommand($text),
-            // The only arm that wants the parsed arguments rather than the raw
-            // text: a provider name is one token, and CommandParser has
-            // already unquoted it.
-            'model' => $this->handleModelCommand($parsed->args),
-            // Roadmap 5.14e. The one arm that STARTS A TURN: `/init` is a canned
-            // prompt, so it re-enters submit() with that prompt as the draft —
-            // the releaseQueuedPrompts() technique — and the spend cap, the
-            // compaction tiers and the UserPromptSubmit hook judge it exactly as
-            // they judge typed prose. The argument, if any, rides along as a
-            // focus instruction.
-            'init' => $this->withInputBuf(
-                \SugarCraft\Crush\Commands\InitCommand::prompt(self::commandArgument($text)),
-            )->submit(),
-            // Roadmap 5.14h. Hands the terminal to $VISUAL/$EDITOR through
-            // candy-core's Cmd::exec; what the editor saves comes back as one
-            // PasteMsg into the emptied box and is NOT sent. The argument, if
-            // any, is the text the editor opens on. Allowed in a read-only
-            // window: it edits the draft, never the session.
-            'editor' => [
-                $this->withInputBuf(''),
-                \SugarCraft\Crush\Commands\EditorCommand::new()->cmd(self::commandArgument($text)),
-            ],
-            default => null,
+        $handler = (string) $command->handler;
+
+        return match ($command->arguments) {
+            \SugarCraft\Crush\Commands\Specs\CommandArguments::None => $this->{$handler}(),
+            \SugarCraft\Crush\Commands\Specs\CommandArguments::Text => $this->{$handler}($text),
+            \SugarCraft\Crush\Commands\Specs\CommandArguments::Parsed => $this->{$handler}($parsed->args),
         };
+    }
+
+    /**
+     * `/exit` (`/quit`) — the same quit Ctrl+C and the palette's Exit action
+     * send, reachable without a modifier key.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleExitCommand(): array
+    {
+        return [$this, Cmd::quit()];
+    }
+
+    /**
+     * `/init [focus]` (roadmap 5.14e) — the one command that STARTS A TURN.
+     * It is a canned prompt, so it re-enters {@see submit()} with that prompt
+     * as the draft — the releaseQueuedPrompts() technique — and the spend cap,
+     * the compaction tiers and the UserPromptSubmit hook judge it exactly as
+     * they judge typed prose. The argument, if any, rides along as a focus
+     * instruction.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleInitCommand(string $text): array
+    {
+        return $this->withInputBuf(
+            \SugarCraft\Crush\Commands\InitCommand::prompt(self::commandArgument($text)),
+        )->submit();
+    }
+
+    /**
+     * `/editor [text]` (roadmap 5.14h) — hands the terminal to $VISUAL/$EDITOR
+     * through candy-core's Cmd::exec; what the editor saves comes back as one
+     * PasteMsg into the emptied box and is NOT sent. The argument, if any, is
+     * the text the editor opens on. Allowed in a read-only window: it edits the
+     * draft, never the session.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleEditorCommand(string $text): array
+    {
+        return [
+            $this->withInputBuf(''),
+            \SugarCraft\Crush\Commands\EditorCommand::new()->cmd(self::commandArgument($text)),
+        ];
     }
 
     /**

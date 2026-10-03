@@ -289,8 +289,13 @@ the registry defines it and not because anyone counted them — and the two mark
 columns are the same two derivations read off the same source: **S** marks a row
 `CommandRegistry::slashCommands()` advertises, **CP** marks a reserved name.
 *Takes* is the row's own `argumentHint`, verbatim where it has one and `—` where
-it does not; the *What the row says* column is its `description`.
+it does not; the *What the row says* column is its `description`. Each row is one
+spec file under `src/Commands/Specs/` (`NNNN-<name>.php`, listed in file-name
+order), which also names the handler the row dispatches to, and the table is
+generated from those files by `php tools/gen-command-docs.php --write` — never
+edit it by hand.
 
+<!-- commands:table:begin -->
 | Command | S | CP | Takes | What the row says |
 |---|---|---|---|---|
 | `/new` | | | — | Start a fresh session |
@@ -324,11 +329,13 @@ it does not; the *What the row says* column is its `description`.
 | `/bg` | ✓ | | `<task>` | Run a task in a background session |
 | `/fork` | ✓ | | `<prompt>` | Clone this conversation into a background session |
 | `/websearch` | ✓ | | `<query> [--safesearch 0\|1\|2] [--time-range day\|month\|year]` | Search the web via SearXNG |
+<!-- commands:table:end -->
 
 **S** is blank on `new`, `docs`, `pane-dock-left` and `pane-dock-right`
 alone: they are palette-only (`slashVisible: false`), reachable from Ctrl+P and
 from no "/" popup. All four share the typed-name asymmetry —
-`Chat::dispatchCommand()` carries no arm for the pseudo-names, so a typed
+their spec files name no handler, so `Chat::dispatchCommand()` dispatches
+nothing for the pseudo-names and a typed
 `/pane-dock-left` is a prompt to the model; the pair's palette arms instead
 drive the COMPLETE command text (`/pane dock left`) through
 `Chat::handlePaneCommand()`, the handler the real `/pane` row dispatches to.

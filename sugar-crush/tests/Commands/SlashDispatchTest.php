@@ -12,11 +12,11 @@ use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\CommandSpec;
+use SugarCraft\Crush\Commands\Specs\BuiltInCommands;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
-use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 
 /**
  * `Chat::submit()`'s slash-command dispatch (crush_code.md Phase 4 items 1, 2
@@ -31,7 +31,6 @@ use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 final class SlashDispatchTest extends TestCase
 {
     use HomeSandboxTrait;
-    use SlicesDeclaredMethodsTrait;
 
     /**
      * Commands whose arm answers with a TURN — a canned prompt dispatched as if
@@ -128,8 +127,8 @@ final class SlashDispatchTest extends TestCase
             $this->assertFalse(
                 $next->inFlight,
                 "/{$spec->name} is advertised in the \"/\" popup but no dispatch arm claims it, so submitting "
-                . 'it sends the command text to the MODEL as a prompt. Add an arm to Chat::dispatchCommand() '
-                . 'or take the row out of the popup with slashVisible: false',
+                . 'it sends the command text to the MODEL as a prompt. Give its spec file under '
+                . 'src/Commands/Specs/ a withHandler(), or take the row out of the popup with slashVisible: false',
             );
         }
     }
@@ -164,28 +163,27 @@ final class SlashDispatchTest extends TestCase
      * The OTHER direction of the inventory, and the direction nothing closed.
      *
      * {@see testEverySlashVisibleRegistryRowHasALiveDispatchHandler()} closes
-     * registry -> arm: an advertised row with no handler reds. Nothing closed
-     * arm -> registry, and the hole was not theoretical - an arm added to
-     * `Chat::dispatchCommand()` with no registry row ships a command that
-     * dispatches and takes arguments but appears in no "/" popup, no Ctrl+P
-     * palette and no `/help` listing. Measured: adding
-     * `'zzzsecret' => $this->handleClearCommand(),` to the match left the full
-     * suite green.
+     * registry -> handler: an advertised row with no handler reds. The other
+     * direction used to be an arm added to `Chat::dispatchCommand()`'s `match`
+     * with no registry row - a command that dispatched and took arguments but
+     * appeared in no "/" popup, no Ctrl+P palette and no `/help` listing
+     * (measured: adding `'zzzsecret' => $this->handleClearCommand(),` left the
+     * full suite green).
      *
-     * The arm names come out of `dispatchCommand()`'s own source via
-     * {@see dispatchArmNames()}, NOT from a list written down here, because a
-     * hand-written list of arms is the same blindness one level up: it would be
-     * exactly as silent about the 23rd arm as the suite was about the 22nd.
+     * Since DH-CMDS that method has no arms: it dispatches only the spellings
+     * the spec files under `src/Commands/Specs/` declare, so a spelling is
+     * either a row's name or an alias written on that row. What is left to
+     * check is that every dispatching NAME is advertised (a handler on a
+     * palette-only row would be a command no surface names) and that the
+     * aliases are exactly the ones decided on below.
      */
     public function testEveryDispatchArmIsAdvertisedOrDeliberatelyUnadvertised(): void
     {
         // Unadvertised ON PURPOSE, one reason per line, because adding a name
-        // here is a decision to ship a command no surface names. All three are
-        // second spellings of a row that IS advertised, kept because the prefix
-        // chain this dispatch replaced reached them:
+        // here is a decision to ship a command no surface names. All of them
+        // are second spellings of a row that IS advertised:
         //
-        // - `quit`: the second spelling of `/exit`. One arm serves both
-        //   ('exit', 'quit' => Cmd::quit()), and `/exit` is the registry row.
+        // - `quit`: the second spelling of `/exit`, which is the registry row.
         // - `agent`: the singular of the `agents` row. The old chain tested
         //   str_starts_with($text, '/agent'), so both spellings worked - see
         //   testBothAgentSpellingsStillDispatch() for what bare `/agent`
@@ -193,155 +191,29 @@ final class SlashDispatchTest extends TestCase
         // - `background`: the long form of the `bg` row, same story.
         $unadvertisedAliases = ['quit', 'agent', 'background'];
 
-        $arms = self::dispatchArmNames();
         $advertised = array_map(static fn(CommandSpec $spec): string => $spec->name, CommandRegistry::slashCommands());
-
-        // Without these guards a broken extractor makes every assertion below
-        // vacuous: an empty $arms passes the loop trivially. Every advertised
-        // row currently HAS a match arm, so the extractor has to find all of
-        // them - and if a row is ever dispatched by something other than a match
-        // arm (the `mcp auth` prefix branch is dispatched ahead of the parse, for
-        // instance) this instrument cannot see it, which is a fact that belongs
-        // in a failure message rather than in a silent gap.
-        foreach ($advertised as $name) {
-            $this->assertContains(
-                $name,
-                $arms,
-                "fixture: dispatchArmNames() must find the /{$name} arm. If /{$name} is dispatched by something "
-                . 'other than a match arm, this test cannot see it and needs saying so here',
-            );
-        }
-
-        foreach ($arms as $name) {
-            if (in_array($name, $unadvertisedAliases, true)) {
+        $dispatched = [];
+        foreach (BuiltInCommands::all() as $command) {
+            if ($command->handler === null) {
                 continue;
             }
 
+            $dispatched[] = $command->name();
             $this->assertContains(
-                $name,
+                $command->name(),
                 $advertised,
-                "Chat::dispatchCommand() acts on /{$name}, but CommandRegistry::slashCommands() does not advertise "
-                . 'it - so it is in no "/" popup, no Ctrl+P palette and no /help listing. Either add a row to '
-                . "CommandRegistry::all() or add '{$name}' to this test's \$unadvertisedAliases with the reason",
+                "Chat::dispatchCommand() acts on /{$command->name()}, but CommandRegistry::slashCommands() does not "
+                . 'advertise it - so it is in no "/" popup and no /help listing. Make the row slashVisible or drop '
+                . 'its handler',
             );
         }
 
-        // The allowlist stays honest in the other direction too: an alias whose
-        // arm was deleted must not linger here looking like live coverage.
-        foreach ($unadvertisedAliases as $alias) {
-            $this->assertContains(
-                $alias,
-                $arms,
-                "/{$alias} is allowlisted as a deliberately unadvertised alias but has no dispatch arm any more",
-            );
-        }
-    }
-
-    /**
-     * Every name `Chat::dispatchCommand()` will act on, read off the method's
-     * own source.
-     *
-     * Reflection + `token_get_all()` rather than a literal list, for the reason
-     * {@see testEveryDispatchArmIsAdvertisedOrDeliberatelyUnadvertised()}
-     * gives. Only arm keys at the TOP level of a `match` are collected: the walk
-     * enters at `T_MATCH`, tracks curly depth so a nested match's arms belong to
-     * the nested match, and tracks paren/bracket depth so a string inside an arm
-     * VALUE (`$this->handleX(['a' => 1])`) cannot be mistaken for an arm key.
-     * Comments are dropped first, so a name quoted in prose is not an arm
-     * either.
-     *
-     * @return list<string>
-     */
-    private static function dispatchArmNames(): array
-    {
-        $method = new \ReflectionMethod(Chat::class, 'dispatchCommand');
-        $file = (string) $method->getFileName();
-        $source = self::declaredSlice(
-            (array) file($file),
-            'dispatchCommand',
-            $method->getStartLine(),
-            $method->getEndLine(),
+        $this->assertSame($advertised, $dispatched, 'every advertised row dispatches, and nothing else does');
+        $this->assertEqualsCanonicalizing(
+            $unadvertisedAliases,
+            BuiltInCommands::aliases(),
+            'the spec files declare an alias this test has no reason written for - or one was dropped',
         );
-
-        $tokens = [];
-        foreach (token_get_all('<?php ' . $source) as $token) {
-            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT, T_WHITESPACE, T_OPEN_TAG], true)) {
-                continue;
-            }
-            $tokens[] = $token;
-        }
-
-        $names = [];
-        $count = count($tokens);
-        for ($i = 0; $i < $count; $i++) {
-            if (!(is_array($tokens[$i]) && $tokens[$i][0] === T_MATCH)) {
-                continue;
-            }
-
-            while ($i < $count && $tokens[$i] !== '{') {
-                $i++;
-            }
-            $i++;
-
-            $curly = 1;
-            $round = 0;
-            $square = 0;
-            $pending = [];
-            for (; $i < $count && $curly > 0; $i++) {
-                $token = $tokens[$i];
-                if ($token === '{') {
-                    $curly++;
-                    continue;
-                }
-                if ($token === '}') {
-                    $curly--;
-                    continue;
-                }
-                if ($curly !== 1) {
-                    continue;
-                }
-                if ($token === '(') {
-                    $round++;
-                    continue;
-                }
-                if ($token === ')') {
-                    $round--;
-                    continue;
-                }
-                if ($token === '[') {
-                    $square++;
-                    continue;
-                }
-                if ($token === ']') {
-                    $square--;
-                    continue;
-                }
-                if ($round !== 0 || $square !== 0) {
-                    continue;
-                }
-                if (is_array($token) && $token[0] === T_CONSTANT_ENCAPSED_STRING) {
-                    $pending[] = substr($token[1], 1, -1);
-                    continue;
-                }
-                if ($token === ',') {
-                    continue;
-                }
-                if (is_array($token) && $token[0] === T_DOUBLE_ARROW) {
-                    foreach ($pending as $name) {
-                        $names[$name] = true;
-                    }
-                    $pending = [];
-                    continue;
-                }
-
-                // Anything else ends the key list without consuming it - a
-                // `default` arm, a variable, an operator.
-                $pending = [];
-            }
-            $i--;
-        }
-
-        return array_keys($names);
     }
 
     /**

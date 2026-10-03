@@ -5252,7 +5252,7 @@ final class DocFigureProseDriftTest extends TestCase
      * E686 tranche-11 (AL): the whole COMMANDS surface table is the roster —
      * every row, its S (slash) and P (palette) ticks, and the
      * "blank on new and docs alone" sentence are re-derived from
-     * CommandRegistry::all() spec blocks. The page carried zero test
+     * CommandRegistry::all() (the spec files, since DH-CMDS). The page carried zero test
      * citations for its entire existence (even the /notices row shipped
      * self-declaring as unguarded).
      */
@@ -5263,21 +5263,17 @@ final class DocFigureProseDriftTest extends TestCase
         preg_match_all('/^\| `\/([a-z-]+)` \| ?(✓)? ?\| ?(✓)? ?\|/m', $raw, $rows, PREG_SET_ORDER);
         self::assertNotEmpty($rows, 'the surface table shape changed — this arm parses name + S + P cells');
 
-        $registry = self::sourceOf('Commands/CommandRegistry.php');
-        self::assertSame(1, preg_match('/CONTROL_PLANE = \[((?:[^\]]*))\];/', $registry, $plane), 'the CONTROL_PLANE constant no longer carries a literal name list — the CP column derives from it');
-        preg_match_all("/'([a-z-]+)'/", $plane[1], $reserved);
-        $allWindow = self::bodyExcerpt($registry, 'all', 30000);
-        $fragments = explode('CommandSpec::new(', $allWindow);
+        // DH-CMDS: the rows are spec files under src/Commands/Specs/ and the
+        // table is generated from them, so the live registry is read rather
+        // than a literal `CommandSpec::new(` walk over CommandRegistry.php.
         $live = [];
-        foreach (array_slice($fragments, 1) as $fragment) {
-            if (preg_match("/^\s*'([a-z-]+)',/", $fragment, $n) === 1) {
-                $live[$n[1]] = [
-                    'slash' => !str_contains($fragment, 'slashVisible: false'),
-                    'plane' => in_array($n[1], $reserved[1], true),
-                ];
-            }
+        foreach (\SugarCraft\Crush\Commands\CommandRegistry::all() as $spec) {
+            $live[$spec->name] = [
+                'slash' => $spec->slashVisible,
+                'plane' => \SugarCraft\Crush\Commands\CommandRegistry::isControlPlane($spec->name),
+            ];
         }
-        self::assertCount(count($live), $rows, 'the surface table row count no longer equals the parsed CommandSpec::new( block count — either the registry grew untabulated or the spec-block walk is broken');
+        self::assertCount(count($live), $rows, 'the surface table row count no longer equals CommandRegistry::all() — the registry grew untabulated; run php tools/gen-command-docs.php --write');
         self::assertSame(
             array_map(static fn(array $r): string => $r[1], $rows),
             array_keys($live),

@@ -172,14 +172,6 @@ final class InterpolationOpenerTokenTest extends TestCase
      * @var array<string,array{openers:list<string>,reason:string}>
      */
     private const KNOWN_GAPS = [
-        'tests/Commands/SlashDispatchTest.php' => [
-            'openers' => ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'],
-            'reason' =>
-            'dispatchArmNames() has the same bare-string shape over a token_get_all() stream, '
-            . 'walking the `match` arms of Chat::dispatchCommand(). Latent: measured on PHP '
-            . '8.3.6, that method contains zero T_CURLY_OPEN tokens today, so nothing '
-            . 'truncates. The failure mode if one appears is the same as the row above.',
-        ],
         'tests/Config/ReadmeJsonErrorContractDriftTest.php' => [
             // Both, because the SELECTION cannot tell a text-keyed walker from
             // a bare-string one - see the reason. This row is the one place

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Commands;
 
+use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
+use SugarCraft\Crush\Commands\Specs\BuiltInCommands;
 use SugarCraft\Crush\Palette\PaletteAction;
 use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Fuzzy\Matcher\CharFold;
@@ -17,18 +19,19 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  * this, the two surfaces kept independent lists and drifted - a command
  * added to one was silently missing from the other.
  *
- * Adding a row here still does not wire a command up - it only makes an
- * already-dispatched command discoverable/autocompletable. See
- * `Chat::submit()`'s own name-keyed dispatch for the actual behaviour, and
- * note that rows flagged `slashVisible: false` are ones that dispatch has no
- * branch for (they are reachable only through the palette).
+ * The rows come from one spec file per command under `src/Commands/Specs/`
+ * ({@see BuiltInCommands}), and the same file names the private `Chat` handler
+ * the row dispatches to, so a row and its dispatch can no longer be added
+ * apart: `Chat::dispatchCommand()` routes through the spec table rather than
+ * through a `match` of its own. A row with no handler is palette-only and must
+ * be `slashVisible: false`; `Commands\SlashDispatchTest`'s
+ * `testEverySlashVisibleRegistryRowHasALiveDispatchHandler()` still submits
+ * `/name` for every visible row through the real `Chat::update()` and fails
+ * when the turn goes to the MODEL instead of to a handler.
  *
- * That gap is no longer left to a reader to notice: `Commands\SlashDispatchTest`'s
- * `testEverySlashVisibleRegistryRowHasALiveDispatchHandler()` submits `/name`
- * for every visible row through the real `Chat::update()` and fails when the
- * turn goes to the MODEL instead of to a handler, so a row added here with no
- * dispatch branch reds the suite rather than shipping a command that does
- * nothing.
+ * The docs that list these rows — `docs/COMMANDS.md`'s built-in table and
+ * README's slash roster — are generated from them by
+ * `php tools/gen-command-docs.php --write`.
  */
 final class CommandRegistry
 {
@@ -75,242 +78,19 @@ final class CommandRegistry
     }
 
     /**
-     * Every command known to either surface, in display order.
+     * Every command known to either surface, in display order: the rows of the
+     * spec files under `src/Commands/Specs/`, in file order (DH-CMDS). A command
+     * is added by adding its spec file, not by editing this method — see
+     * {@see BuiltInCommands} for the file shape and why it is one file per row.
      *
      * @return list<CommandSpec>
      */
     public static function all(): array
     {
-        return [
-            CommandSpec::new(
-                'new',
-                'Start a fresh session',
-                'Session',
-                paletteAction: PaletteAction::NewSession,
-                paletteLabel: 'New session',
-                slashVisible: false,
-            ),
-            CommandSpec::new(
-                'sessions',
-                'List, search and manage sessions',
-                'Session',
-                paletteAction: PaletteAction::SwitchSession,
-                paletteLabel: 'Switch session',
-                argumentHint: '[<query>]',
-            ),
-            CommandSpec::new(
-                'model',
-                'Switch the active model provider',
-                'Model',
-                paletteAction: PaletteAction::SwitchModel,
-                paletteLabel: 'Switch model',
-                // Optional, and the two forms do different things: bare
-                // `/model` opens the same provider list Ctrl+P's Switch Model
-                // opens, `/model <provider>` switches straight to that one.
-                // See Chat::handleModelCommand().
-                argumentHint: '[provider]',
-            ),
-            CommandSpec::new(
-                'share',
-                'Export the session to a file',
-                'Session',
-                paletteAction: PaletteAction::ShareSession,
-                paletteLabel: 'Share session',
-                // X-35a: a local export, `~/.sugar-crush/exports/` by default
-                // or a path inside the project. See ShareCommand.
-                argumentHint: '[md|html|json] [path]',
-            ),
-            CommandSpec::new(
-                'docs',
-                'Open the documentation',
-                'App',
-                paletteAction: PaletteAction::OpenDocs,
-                paletteLabel: 'Open docs',
-                slashVisible: false,
-            ),
-            CommandSpec::new(
-                'exit',
-                'Quit the app',
-                'App',
-                paletteAction: PaletteAction::Exit,
-                paletteLabel: 'Exit',
-                shortcut: 'Ctrl+C',
-            ),
-            CommandSpec::new(
-                'theme',
-                'Switch the color theme',
-                'Appearance',
-                paletteAction: PaletteAction::SwitchTheme,
-                paletteLabel: 'Switch theme',
-            ),
-            CommandSpec::new(
-                'agents',
-                'List active agents, or inspect one by name',
-                'Agents',
-                paletteAction: PaletteAction::SwitchAgent,
-                paletteLabel: 'Switch agent',
-            ),
-            // The palette row LISTS: its dispatch is `mcp auth list`, and the
-            // interactive trust WRITE that a "toggle" would need was DECLINED
-            // at E689 (src/Tui/McpPanel.php - it would invent a second
-            // persistence seam). E697 corrected the label from "Toggle MCPs",
-            // which promised that declined write. The case name and its
-            // 'toggle_mcp' value stay for name/wire stability: no surface
-            // derives text from them (the palette reads this row's label).
-            CommandSpec::new(
-                'mcp',
-                'Manage MCP server auth (list/add/remove; login prints the CLI command)',
-                'MCP',
-                paletteAction: PaletteAction::ToggleMcp,
-                paletteLabel: 'List MCP servers',
-                argumentHint: '<list|add|remove|login> [server]',
-            ),
-            // The hint rides in the description rather than in $shortcut:
-            // $shortcut is only ever painted by the Ctrl+P palette
-            // ({@see \SugarCraft\Crush\Renderer::renderPalette()}), and this
-            // row carries no paletteAction, so a $shortcut here would be data
-            // no surface shows.
-            CommandSpec::new('keys', 'Show the keyboard shortcut reference (or press ?)', 'App'),
-            // `/help` used to be a second spelling of `/keys` - both arms of
-            // one `Chat::submit()` branch, both opening the keybinding
-            // reference. It now lists the COMMANDS instead, which is what
-            // `/help` means in every other CLI, and leaves the keyboard to
-            // `/keys` and `?`. The row stayed rather than being deleted: it was
-            // already the discoverable spelling, and the two surfaces this
-            // registry feeds are exactly where a rename would have gone
-            // unnoticed.
-            CommandSpec::new('help', 'List every slash command', 'App'),
-            // Category 'App', matching /keys and /budget: the gate is built once
-            // per LAUNCH by Cli\Bootstrap::permissionGate() and carried across
-            // /new, /clear and a provider switch by object identity, so filing
-            // it under Session would advertise a scope it does not have.
-            //
-            // Read-only on purpose, and there is no `<mode>` argumentHint to
-            // suggest otherwise. Changing the mode mid-session would hand a
-            // model that has just been refused a way to ask the user for the
-            // refusal to be lifted, in the same transcript; the mode comes from
-            // the flag, the env or the settings file, and this shows you which.
-            CommandSpec::new(
-                'permissions',
-                'Show this session\'s permission mode, its source, and the rules it decides by',
-                'App',
-            ),
-            // E653's Shape B. `/permissions` reports the GATE; `/notices`
-            // reports the warnings the launch raised about it. The transcript
-            // rows those warnings seed are capped and clipped at the source
-            // (and the grant rows pair-packed into ≤2 aggregates), so this is
-            // the full un-truncated record, gathered from the same stores
-            // stderr printed — never a second shelf. Arguments are IGNORED
-            // for `permissions`' stated reason: the report is already total.
-            CommandSpec::new(
-                'notices',
-                'Show every warning this launch raised, un-capped and un-aggregated',
-                'App',
-            ),
-            // Deliberately NOT near `permissions` in category, though the two read
-            // alike. `/permissions` reports the gate that decides what a tool call
-            // may DO, and is read-only by design - changing that mid-session would
-            // hand a just-refused model a way to ask for the refusal to be lifted.
-            // `/rules` changes what the prompt SAYS and is a toggle on purpose:
-            // switching a rulebook off is exactly the correction a user should be
-            // able to make mid-session, and it reaches no authority, only prose.
-            // The hint is optional because both forms are real and do different
-            // things, as with `model` above.
-            CommandSpec::new(
-                'rules',
-                'List the rule packs, or toggle one for this session',
-                'Rules',
-                argumentHint: '[name]',
-            ),
-            // The phase-3 gesture pair: keyboard twins of the mouse dock
-            // operations. The state they move lives on the shell, so both
-            // dispatch an App message over Chat's Cmd channel (see
-            // {@see \SugarCraft\Crush\Chat::handlePaneCommand()}); `pane`
-            // carries no paletteAction because its dock side-variants share
-            // the one verb and the two pseudo-rows below own the palette
-            // surface — `toggle` has no palette twin, it is a keyboard-only
-            // undock.
-            CommandSpec::new(
-                'pane',
-                'Dock a pane to a side, or toggle its docked state',
-                'Layout',
-                argumentHint: 'dock <left|right>|toggle [name]',
-            ),
-            CommandSpec::new(
-                'layout',
-                'Reset the pane layout to the launch default',
-                'Layout',
-                paletteAction: PaletteAction::LayoutReset,
-                paletteLabel: 'Reset layout',
-                argumentHint: 'reset',
-            ),
-            // Palette-only twins of the two dock sides, mirroring the `docs`
-            // row's pattern: the slash surface stays one command that says
-            // what it takes, the palette gets the two concrete actions.
-            CommandSpec::new(
-                'pane-dock-left',
-                'Dock the focused pane to the left',
-                'Layout',
-                paletteAction: PaletteAction::DockPaneLeft,
-                paletteLabel: 'Dock pane left',
-                slashVisible: false,
-            ),
-            CommandSpec::new(
-                'pane-dock-right',
-                'Dock the focused pane to the right',
-                'Layout',
-                paletteAction: PaletteAction::DockPaneRight,
-                paletteLabel: 'Dock pane right',
-                slashVisible: false,
-            ),
-            // No key binding: Ctrl+G, the usual chord for this, is
-            // `shell.group-input` here, so the command is the one door.
-            CommandSpec::new(
-                'editor',
-                'Compose the prompt in $VISUAL or $EDITOR',
-                'App',
-                argumentHint: '[text]',
-            ),
-            CommandSpec::new('compact', 'Manually compact chat history to save context', 'Session'),
-            // Deliberately NOT `/new`: this wipes the transcript and keeps the
-            // session id, so the session file on disk keeps accumulating the
-            // same conversation's checkpoints. `Chat::handleClearCommand()`
-            // enumerates exactly what it does and does not touch.
-            CommandSpec::new('clear', 'Clear the transcript, keeping this session', 'Session'),
-            // Category 'App', not 'Session': the cap and the tracker behind it are
-            // per-LAUNCH, carried by object identity through Chat::mutate() and
-            // untouched by /new, /clear or a session switch. Filing it under
-            // Session would advertise a scope it does not have.
-            CommandSpec::new(
-                'budget',
-                'Show this session\'s reported spend, or cap it',
-                'App',
-                argumentHint: '[amount|off]',
-            ),
-            CommandSpec::new('workflow', 'Run, pause, resume, or inspect a workflow', 'Workflow'),
-            CommandSpec::new('memory', 'Add, list, search, edit, import, or clear memory entries', 'Memory'),
-            // A canned prompt rather than a handler: the agent studies the
-            // checkout and writes the file, gated like any other Write. Filed
-            // under Memory because AGENTS.md is the instruction-file half of
-            // what docs/MEMORY.md documents.
-            CommandSpec::new(
-                'init',
-                'Study this project and write or improve its AGENTS.md',
-                'Memory',
-                argumentHint: '[focus]',
-            ),
-            CommandSpec::new('branch', 'Fork the current session into a new branch', 'Session'),
-            CommandSpec::new('rename', 'Rename the current session', 'Session', argumentHint: '<name>'),
-            CommandSpec::new('rewind', 'Restore chat state from an earlier checkpoint', 'Session', argumentHint: '[n]'),
-            CommandSpec::new('bg', 'Run a task in a background session', 'Session', argumentHint: '<task>'),
-            CommandSpec::new('fork', 'Clone this conversation into a background session', 'Session', argumentHint: '<prompt>'),
-            CommandSpec::new(
-                'websearch',
-                'Search the web via SearXNG',
-                'Tools',
-                argumentHint: '<query> [--safesearch 0|1|2] [--time-range day|month|year]',
-            ),
-        ];
+        return array_map(
+            static fn(BuiltInCommand $command): CommandSpec => $command->spec,
+            BuiltInCommands::all(),
+        );
     }
 
     /**

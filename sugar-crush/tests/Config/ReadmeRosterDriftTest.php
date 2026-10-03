@@ -255,11 +255,10 @@ final class ReadmeRosterDriftTest extends TestCase
      * the roster — "they dispatch, but they have no `CommandRegistry` row of
      * their own" — which is a checkable claim in both directions.
      *
-     * The alias census comes from `Chat::dispatchCommand()`'s own match arms,
-     * the same source
-     * {@see \SugarCraft\Crush\Tests\Commands\SlashDispatchTest} derives its
-     * inventory from, rather than from a list retyped here — a hand-kept list
-     * would be exactly as blind to a fourth alias as the README is.
+     * The alias census comes from the spec files under `src/Commands/Specs/`,
+     * the one table `Chat::dispatchCommand()` routes through (DH-CMDS) and the
+     * same source {@see \SugarCraft\Crush\Tests\Commands\SlashDispatchTest}
+     * derives its inventory from, rather than from a list retyped here.
      */
     public function testTheParenthesisedSpellingsAreExactlyTheUnadvertisedAliases(): void
     {
@@ -268,12 +267,10 @@ final class ReadmeRosterDriftTest extends TestCase
         $registry = array_map(static fn(CommandSpec $s): string => $s->name, CommandRegistry::slashCommands());
 
         $arms = [];
-        $source = (string) file_get_contents((string) (new \ReflectionClass(\SugarCraft\Crush\Chat::class))->getFileName());
-        if (preg_match('/function dispatchCommand\(.*?\n    \}/s', $source, $m) === 1) {
-            preg_match_all("/'([a-z]+)'\s*(?=,\s*'|=>)/", $m[0], $armMatches);
-            $arms = array_values(array_unique($armMatches[1]));
+        foreach (\SugarCraft\Crush\Commands\Specs\BuiltInCommands::all() as $command) {
+            array_push($arms, ...$command->spellings());
         }
-        $this->assertNotSame([], $arms, 'the dispatch-arm extractor found nothing, so this assertion is vacuous');
+        $this->assertNotSame([], $arms, 'the spec table dispatches nothing, so this assertion is vacuous');
 
         $unadvertised = array_values(array_diff($arms, $registry));
         sort($unadvertised);

@@ -252,6 +252,15 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED — includeFile() reads an `@path` written inside a command file, behind this '
                 . 'file\'s own ContainedPath::within() compare against the checkout',
         ],
+        'Commands/Specs/BuiltInCommands.php|glob' => [
+            'PROCESS_DERIVED — lists `__DIR__/*.php`, the installation\'s own shipped spec files '
+                . '(DH-CMDS); no config, project or $HOME path reaches it',
+        ],
+        'Commands/Specs/BuiltInCommands.php|require' => [
+            'PROCESS_DERIVED — the `NNNN-<name>.php` spec files the glob above listed, in the '
+                . 'installation\'s own src/Commands/Specs/ located from `__DIR__`; each must return a '
+                . 'BuiltInCommand. Nothing outside the shipped source can name one',
+        ],
         'Commands/EditorCommand.php|file_get_contents' => [
             'SELF_LOCATED — the `/editor` temp file: tempnam() created it owner-only in the system temp '
                 . 'directory, it is read back once after the user\'s editor exits, and unlinked',
@@ -767,6 +776,7 @@ final class ReadPathCensusTest extends TestCase
         $this->assertSame(
             [
                 'Agents/ProcessExecutor.php|require',
+                'Commands/Specs/BuiltInCommands.php|require',
                 'Sessions/BackgroundSupervisor.php|require',
                 'Workflows/WorkflowRegistry.php|require',
             ],

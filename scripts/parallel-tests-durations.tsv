@@ -371,6 +371,7 @@ sugar-crush/tests/Session/SessionLockTest.php	0.153	8
 sugar-crush/tests/RepoMap/TagCacheTest.php	0.150	12
 sugar-crush/tests/Chat/InitCommandTest.php	0.150	6
 sugar-crush/tests/Chat/CompactionHidesNotDeletesTest.php	0.150	10
+sugar-crush/tests/Commands/CommandDocsDriftTest.php	0.150	6
 sugar-crush/tests/Integration/RulePathScopingWiringTest.php	0.149	16
 sugar-crush/tests/Cli/NonInteractiveProviderFailureTest.php	0.148	21
 sugar-crush/tests/Tools/ToolDescriptionGuidanceTest.php	0.147	23
@@ -543,6 +544,7 @@ sugar-crush/tests/Hooks/BashEscapeDenyHookTest.php	0.030	55
 sugar-crush/tests/Messages/MessageIdentityTest.php	0.030	14
 sugar-crush/tests/Context/TurnContextBlockTest.php	0.030	9
 sugar-crush/tests/Config/Settings/SettingsResolverTest.php	0.030	14
+sugar-crush/tests/Commands/BuiltInCommandsTest.php	0.030	7
 sugar-crush/tests/Tools/McpToolBridgeTest.php	0.029	54
 sugar-crush/tests/Skills/SkillFileReaderTest.php	0.029	14
 sugar-crush/tests/ThemeTest.php	0.029	8
