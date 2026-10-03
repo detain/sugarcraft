@@ -40,4 +40,15 @@ interface StreamsActivity
      * The same tool, reporting every beat to $sink instead of its emitter.
      */
     public function withActivitySink(ActivitySink $sink): Tool;
+
+    /**
+     * The beat that stands for $call while it waits for a delegation slot
+     * (step 0.16): its row reads "queued" instead of looking like a run that
+     * has started. Null when the call says too little to name a row. The
+     * forking process sends it through {@see subAgentEmitter()}; the run's
+     * own `started` replaces it.
+     *
+     * @param array<string, mixed> $args the gated arguments the call will run with
+     */
+    public function queuedActivity(ToolCall $call, array $args): ?\SugarCraft\Crush\Events\SubAgentActivity;
 }

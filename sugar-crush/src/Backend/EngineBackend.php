@@ -3207,21 +3207,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         }
 
         if ($event instanceof SubAgentActivity) {
-            return [
-                'kind' => 'subagent',
-                'op' => $event->op,
-                'id' => $event->id,
-                'name' => $event->name,
-                'task' => $event->task,
-                'seq' => $event->seq,
-                'tail' => $event->tail,
-                'tokens' => $event->tokensUsed,
-                'cost' => $event->costUsd,
-                'lines' => $event->lines,
-                'model' => $event->model,
-                'context' => $event->contextTokens,
-                'calls' => $event->calls,
-            ];
+            // The v2 shape (P-B1) is the DTO's own: the grandchild relay and
+            // the server's agent.* events share it, so it lives in one place.
+            return ['kind' => 'subagent'] + $event->toArray();
         }
 
         if ($event instanceof ToolStarted) {
@@ -3257,60 +3245,16 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     }
 
     /**
-     * A beat's running totals, each 0 when absent or out of shape: they are
-     * display-only, so a bad figure costs the row its count, never the beat.
+     * A beat's running totals, each 0 when absent or out of shape — kept as
+     * the codec's public entry point; the rules live on
+     * {@see SubAgentActivity::totals()} with the rest of the v2 validator.
      *
      * @param array<string, mixed> $encoded
      * @return array{tokensUsed: int, costUsd: float, lines: int, model: string, contextTokens: int, calls: list<array{id: string, label: string, state: string, at: int}>}
      */
     public static function subAgentTotals(array $encoded): array
     {
-        $tokens = $encoded['tokens'] ?? 0;
-        $cost = $encoded['cost'] ?? 0.0;
-        $lines = $encoded['lines'] ?? 0;
-        $model = $encoded['model'] ?? '';
-        $context = $encoded['context'] ?? 0;
-
-        return [
-            'tokensUsed' => is_int($tokens) && $tokens >= 0 ? $tokens : 0,
-            'costUsd' => (is_float($cost) || is_int($cost)) && $cost >= 0 ? (float) $cost : 0.0,
-            'lines' => is_int($lines) && $lines >= 0 ? $lines : 0,
-            'model' => is_string($model) ? $model : '',
-            'contextTokens' => is_int($context) && $context >= 0 ? $context : 0,
-            'calls' => self::subAgentCalls($encoded['calls'] ?? []),
-        ];
-    }
-
-    /**
-     * A beat's recent-call list, keeping only well-formed entries, at most
-     * {@see SubAgentActivity::MAX_CALLS} of the newest — display-only, so a
-     * bad entry is dropped rather than failing the beat.
-     *
-     * @return list<array{id: string, label: string, state: string, at: int}>
-     */
-    private static function subAgentCalls(mixed $calls): array
-    {
-        if (!is_array($calls)) {
-            return [];
-        }
-
-        $states = [SubAgentActivity::CALL_RUNNING, SubAgentActivity::CALL_OK, SubAgentActivity::CALL_ERROR];
-        $kept = [];
-        foreach ($calls as $call) {
-            if (!is_array($call)) {
-                continue;
-            }
-            $id = $call['id'] ?? null;
-            $label = $call['label'] ?? null;
-            $state = $call['state'] ?? null;
-            $at = $call['at'] ?? null;
-            if (!is_string($id) || !is_string($label) || !in_array($state, $states, true) || !is_int($at)) {
-                continue;
-            }
-            $kept[] = ['id' => $id, 'label' => $label, 'state' => $state, 'at' => $at];
-        }
-
-        return array_slice($kept, -SubAgentActivity::MAX_CALLS);
+        return SubAgentActivity::totals($encoded);
     }
 
     /**
@@ -3347,29 +3291,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             // an out-of-shape beat costs the dashboard one row-update, not
             // the turn. `task` rides only on started but is validated as a
             // string always — encodeEvent writes it on every op (empty after
-            // started), so a frame missing it predates this build.
-            $op = $encoded['op'] ?? null;
-            $id = $encoded['id'] ?? null;
-            $name = $encoded['name'] ?? null;
-            $task = $encoded['task'] ?? null;
-            $seq = $encoded['seq'] ?? null;
-            $tail = $encoded['tail'] ?? null;
-            if (!is_string($op) || !in_array($op, SubAgentActivity::OPS, true)
-                || !is_string($id) || $id === ''
-                || !is_string($name) || $name === ''
-                || !is_string($task) || !is_int($seq) || !is_string($tail)) {
-                return null;
-            }
-
-            return new SubAgentActivity(
-                $op,
-                $id,
-                $name,
-                $task,
-                $seq,
-                $tail,
-                ...self::subAgentTotals($encoded),
-            );
+            // started), so a frame missing it predates this build. A v1 frame
+            // (no `v`) decodes with the v2 fields at their defaults.
+            return SubAgentActivity::fromArray($encoded);
         }
 
         $id = is_string($encoded['id'] ?? null) ? $encoded['id'] : null;

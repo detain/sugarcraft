@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Events;
 
+use SugarCraft\Crush\Agents\Live\ActivityItem;
+
 /**
  * "A sub-agent the Task tool is running has begun, produced activity, or
  * finished" — emitted by {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}
@@ -30,15 +32,57 @@ namespace SugarCraft\Crush\Events;
  * could not tell their frames apart. The child's pid is already inside that
  * id (E329's namespace law), which also makes it collision-free across
  * processes without the protocol carrying a pid of its own.
+ *
+ * VERSION 2 (Appendix P §4.3, step P-B1) adds, all optional so a v1 frame
+ * still decodes ({@see fromArray()} fills the defaults):
+ *  - $parentCallId: the parent's Task tool-call id, so a beat can be hung
+ *    under the right Task row; $parentAgentId for nesting (4.7);
+ *  - $description: the Task call's own `description` argument;
+ *  - $items: what the run did since its previous frame, coalesced child-side
+ *    by {@see \SugarCraft\Crush\Agents\Live\SubAgentActivityBuffer};
+ *  - $stats: step, maxSteps, tools, tokensIn, tokensOut, costUsd, startedAt;
+ *  - on finished: the real $outcome, $error and $resumeId — a failed run
+ *    used to project as complete;
+ *  - the `queued` op: a Task member waiting for a delegation slot (step
+ *    0.16), sent by the forking turn child under {@see queuedId()} until the
+ *    member's own `started` replaces it.
+ * The v1 fields stay: $tail and the running totals still feed the Agents
+ * pane and {@see \SugarCraft\Crush\Agents\AgentManager::liveOutput()}.
+ *
+ * {@see toArray()} is the wire shape the fork frame, the grandchild relay and
+ * (later) the server's `agent.*` events share; {@see fromArray()} is the one
+ * validator for all of them.
  */
 final readonly class SubAgentActivity
 {
     public const OP_STARTED = 'started';
     public const OP_PROGRESS = 'progress';
     public const OP_FINISHED = 'finished';
+    public const OP_QUEUED = 'queued';
 
     /** The ops a frame may carry — decodeEvent() validates against this. */
-    public const OPS = [self::OP_STARTED, self::OP_PROGRESS, self::OP_FINISHED];
+    public const OPS = [self::OP_STARTED, self::OP_PROGRESS, self::OP_FINISHED, self::OP_QUEUED];
+
+    /** The wire version {@see toArray()} writes. */
+    public const VERSION = 2;
+
+    /** How a finished run ended ({@see $outcome}); '' before it finished. */
+    public const OUTCOME_COMPLETE = 'complete';
+    public const OUTCOME_FAILED = 'failed';
+    public const OUTCOME_CANCELLED = 'cancelled';
+    public const OUTCOME_EMPTY = 'empty';
+
+    public const OUTCOMES = [self::OUTCOME_COMPLETE, self::OUTCOME_FAILED, self::OUTCOME_CANCELLED, self::OUTCOME_EMPTY];
+
+    /** Items one frame may carry; a decoder keeps the newest this many. */
+    public const MAX_ITEMS = 32;
+
+    /** Byte ceiling on $error and $description as carried on the wire. */
+    public const MAX_TEXT_BYTES = 512;
+
+    /** The integer keys of {@see $stats}, then the float ones. */
+    public const STAT_INT_KEYS = ['step', 'maxSteps', 'tools', 'tokensIn', 'tokensOut'];
+    public const STAT_FLOAT_KEYS = ['costUsd', 'startedAt'];
 
     /** A tool call's state in {@see $calls}. */
     public const CALL_RUNNING = 'running';
@@ -73,6 +117,15 @@ final readonly class SubAgentActivity
      *                     the run's most recent tool calls, newest last,
      *                     bounded by the emitter — the whole recent list on
      *                     every beat, so the latest beat is the truth.
+     * @param string $parentCallId the parent's Task tool-call id; '' when unknown (v1).
+     * @param string|null $parentAgentId the delegating run's id when nested; null at depth 1.
+     * @param string $description the Task call's `description` argument.
+     * @param list<ActivityItem> $items what the run did since its previous frame.
+     * @param array{step?: int, maxSteps?: int, tools?: int, tokensIn?: int, tokensOut?: int, costUsd?: float, startedAt?: float} $stats
+     *                     the run's figures as of this frame; [] when unknown (v1).
+     * @param string $outcome one of the OUTCOME_* constants on finished; '' otherwise.
+     * @param string|null $error why a run that did not complete ended.
+     * @param string|null $resumeId the id a later Task call resumes this run by.
      */
     public function __construct(
         public string $op,
@@ -87,5 +140,228 @@ final readonly class SubAgentActivity
         public string $model = '',
         public int $contextTokens = 0,
         public array $calls = [],
+        public string $parentCallId = '',
+        public ?string $parentAgentId = null,
+        public string $description = '',
+        public array $items = [],
+        public array $stats = [],
+        public string $outcome = '',
+        public ?string $error = null,
+        public ?string $resumeId = null,
     ) {}
+
+    /**
+     * The id a queued member's placeholder row is keyed by, until its own
+     * `started` (which carries the same $parentCallId) replaces it.
+     */
+    public static function queuedId(string $parentCallId): string
+    {
+        return 'queued_' . $parentCallId;
+    }
+
+    /**
+     * The wire shape, version 2: one fixed set of keys on every op, so a
+     * fixed-shape reader never sees a key vanish between ops. Plain arrays
+     * only — the reader unserializes with `allowed_classes => false`.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return [
+            'v' => self::VERSION,
+            'op' => $this->op,
+            'id' => $this->id,
+            'name' => $this->name,
+            'task' => $this->task,
+            'seq' => $this->seq,
+            'tail' => $this->tail,
+            'tokens' => $this->tokensUsed,
+            'cost' => $this->costUsd,
+            'lines' => $this->lines,
+            'model' => $this->model,
+            'context' => $this->contextTokens,
+            'calls' => $this->calls,
+            'parentCallId' => $this->parentCallId,
+            'parentAgentId' => $this->parentAgentId,
+            'description' => $this->description,
+            'items' => array_map(static fn (ActivityItem $item): array => $item->toArray(), $this->items),
+            'stats' => $this->stats,
+            'outcome' => $this->outcome,
+            'error' => $this->error,
+            'resumeId' => $this->resumeId,
+        ];
+    }
+
+    /**
+     * Rebuild a beat from its wire shape — v2, or a v1 frame, which gets the
+     * v2 defaults — or null when the identity fields are out of shape. The
+     * identity (op, id, name, task, seq, tail) is all-or-nothing: a beat that
+     * lies about it must drop, not materialise a lying row. Everything else
+     * is display data and degrades field by field: a bad figure is 0, a bad
+     * item or call entry is skipped, an unknown outcome is ''.
+     *
+     * @param array<string, mixed> $frame
+     */
+    public static function fromArray(array $frame): ?self
+    {
+        $op = $frame['op'] ?? null;
+        $id = $frame['id'] ?? null;
+        $name = $frame['name'] ?? null;
+        $task = $frame['task'] ?? null;
+        $seq = $frame['seq'] ?? null;
+        $tail = $frame['tail'] ?? null;
+        if (!is_string($op) || !in_array($op, self::OPS, true)
+            || !is_string($id) || $id === ''
+            || !is_string($name) || $name === ''
+            || !is_string($task) || !is_int($seq) || !is_string($tail)) {
+            return null;
+        }
+
+        $outcome = $frame['outcome'] ?? '';
+
+        return new self(
+            $op,
+            $id,
+            $name,
+            $task,
+            $seq,
+            $tail,
+            ...self::totals($frame),
+            parentCallId: self::text($frame['parentCallId'] ?? null, 256),
+            parentAgentId: is_string($frame['parentAgentId'] ?? null) && $frame['parentAgentId'] !== '' ? self::text($frame['parentAgentId'], 256) : null,
+            description: self::text($frame['description'] ?? null, self::MAX_TEXT_BYTES),
+            items: self::items($frame['items'] ?? []),
+            stats: self::stats($frame['stats'] ?? []),
+            outcome: is_string($outcome) && in_array($outcome, self::OUTCOMES, true) ? $outcome : '',
+            error: is_string($frame['error'] ?? null) ? self::text($frame['error'], self::MAX_TEXT_BYTES) : null,
+            resumeId: is_string($frame['resumeId'] ?? null) && $frame['resumeId'] !== '' ? self::text($frame['resumeId'], 64) : null,
+        );
+    }
+
+    /**
+     * A beat's v1 running totals, each 0 when absent or out of shape: they
+     * are display-only, so a bad figure costs the row its count, never the
+     * beat.
+     *
+     * @param array<string, mixed> $frame
+     * @return array{tokensUsed: int, costUsd: float, lines: int, model: string, contextTokens: int, calls: list<array{id: string, label: string, state: string, at: int}>}
+     */
+    public static function totals(array $frame): array
+    {
+        $tokens = $frame['tokens'] ?? 0;
+        $cost = $frame['cost'] ?? 0.0;
+        $lines = $frame['lines'] ?? 0;
+        $model = $frame['model'] ?? '';
+        $context = $frame['context'] ?? 0;
+
+        return [
+            'tokensUsed' => is_int($tokens) && $tokens >= 0 ? $tokens : 0,
+            'costUsd' => (is_float($cost) || is_int($cost)) && $cost >= 0 ? (float) $cost : 0.0,
+            'lines' => is_int($lines) && $lines >= 0 ? $lines : 0,
+            'model' => is_string($model) ? $model : '',
+            'contextTokens' => is_int($context) && $context >= 0 ? $context : 0,
+            'calls' => self::calls($frame['calls'] ?? []),
+        ];
+    }
+
+    /**
+     * A beat's recent-call list, keeping only well-formed entries, at most
+     * {@see MAX_CALLS} of the newest.
+     *
+     * @return list<array{id: string, label: string, state: string, at: int}>
+     */
+    private static function calls(mixed $calls): array
+    {
+        if (!is_array($calls)) {
+            return [];
+        }
+
+        $states = [self::CALL_RUNNING, self::CALL_OK, self::CALL_ERROR];
+        $kept = [];
+        foreach ($calls as $call) {
+            if (!is_array($call)) {
+                continue;
+            }
+            $id = $call['id'] ?? null;
+            $label = $call['label'] ?? null;
+            $state = $call['state'] ?? null;
+            $at = $call['at'] ?? null;
+            if (!is_string($id) || !is_string($label) || !in_array($state, $states, true) || !is_int($at)) {
+                continue;
+            }
+            $kept[] = ['id' => $id, 'label' => $label, 'state' => $state, 'at' => $at];
+        }
+
+        return array_slice($kept, -self::MAX_CALLS);
+    }
+
+    /**
+     * @return list<ActivityItem>
+     */
+    private static function items(mixed $items): array
+    {
+        if (!is_array($items)) {
+            return [];
+        }
+
+        $kept = [];
+        foreach ($items as $item) {
+            $decoded = ActivityItem::fromArray($item);
+            if ($decoded !== null) {
+                $kept[] = $decoded;
+            }
+        }
+
+        return array_slice($kept, -self::MAX_ITEMS);
+    }
+
+    /**
+     * Keep only the known stat keys, each a non-negative number of its type.
+     *
+     * @return array{step?: int, maxSteps?: int, tools?: int, tokensIn?: int, tokensOut?: int, costUsd?: float, startedAt?: float}
+     */
+    private static function stats(mixed $stats): array
+    {
+        if (!is_array($stats)) {
+            return [];
+        }
+
+        $kept = [];
+        foreach (self::STAT_INT_KEYS as $key) {
+            $value = $stats[$key] ?? null;
+            if (is_int($value) && $value >= 0) {
+                $kept[$key] = $value;
+            }
+        }
+        foreach (self::STAT_FLOAT_KEYS as $key) {
+            $value = $stats[$key] ?? null;
+            if ((is_float($value) || is_int($value)) && $value >= 0) {
+                $kept[$key] = (float) $value;
+            }
+        }
+
+        return $kept;
+    }
+
+    /**
+     * A string field bounded to $bytes, never split inside a codepoint;
+     * anything that is not a string is ''.
+     */
+    private static function text(mixed $value, int $bytes): string
+    {
+        if (!is_string($value)) {
+            return '';
+        }
+        if (strlen($value) <= $bytes) {
+            return $value;
+        }
+
+        $cut = substr($value, 0, $bytes);
+        while ($cut !== '' && preg_match('//u', $cut) !== 1) {
+            $cut = substr($cut, 0, -1);
+        }
+
+        return $cut;
+    }
 }

@@ -2338,6 +2338,15 @@ final class Runtime
 
                 if ($job['tool'] instanceof ExemptFromParallelDeadline && $runningDelegations($jobs) >= $delegationSlots) {
                     $jobs[$index]['queued'] = true;
+                    // Its ToolStarted went out at gate time, so without this
+                    // the member reads as a run in progress while it waits
+                    // for a slot. The placeholder beat says "queued" until the
+                    // member's own started beat replaces it.
+                    $emitter = $job['tool'] instanceof StreamsActivity ? $job['tool']->subAgentEmitter() : null;
+                    $queued = $emitter !== null ? $job['tool']->queuedActivity($job['call'], $job['args']) : null;
+                    if ($queued !== null) {
+                        $emitter($queued);
+                    }
 
                     continue;
                 }
@@ -2396,7 +2405,15 @@ final class Runtime
                         // can arrive. Close it here, before ToolFinished, in
                         // the order the real finished beat would have kept.
                         $emitter = $jobs[$next]['emitter'] ?? null;
-                        foreach ($jobs[$next]['relay']->unfinished() as $last) {
+                        $unfinished = $jobs[$next]['relay']->unfinished();
+                        if ($unfinished !== [] && $emitter instanceof \Closure) {
+                            // The result decides how the run ended: a lost
+                            // datagram on a run that completed must not read
+                            // as a failure. release() reuses the collected one.
+                            $jobs[$next]['result'] ??= $this->collectChildResult($jobs[$next]);
+                            $failed = $jobs[$next]['result']->isError();
+                        }
+                        foreach ($unfinished as $last) {
                             if ($emitter instanceof \Closure) {
                                 $emitter(new \SugarCraft\Crush\Events\SubAgentActivity(
                                     \SugarCraft\Crush\Events\SubAgentActivity::OP_FINISHED,
@@ -2411,6 +2428,14 @@ final class Runtime
                                     $last->model,
                                     $last->contextTokens,
                                     $last->calls,
+                                    parentCallId: $last->parentCallId,
+                                    parentAgentId: $last->parentAgentId,
+                                    description: $last->description,
+                                    stats: $last->stats,
+                                    outcome: $failed
+                                        ? \SugarCraft\Crush\Events\SubAgentActivity::OUTCOME_FAILED
+                                        : \SugarCraft\Crush\Events\SubAgentActivity::OUTCOME_COMPLETE,
+                                    error: $failed ? 'the sub-agent\'s process exited before it reported how the run ended' : null,
                                 ));
                             }
                         }

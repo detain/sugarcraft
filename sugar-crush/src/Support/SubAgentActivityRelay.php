@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Support;
 
-use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Events\SubAgentActivity;
 use SugarCraft\Crush\Tools\ActivitySink;
 use SugarCraft\Crush\Tools\DatagramActivitySink;
@@ -171,23 +170,8 @@ final class SubAgentActivityRelay
     private static function decode(string $datagram): ?SubAgentActivity
     {
         $frame = @unserialize($datagram, ['allowed_classes' => false]);
-        if (!is_array($frame)) {
-            return null;
-        }
 
-        $op = $frame['op'] ?? null;
-        $id = $frame['id'] ?? null;
-        $name = $frame['name'] ?? null;
-        $task = $frame['task'] ?? null;
-        $seq = $frame['seq'] ?? null;
-        $tail = $frame['tail'] ?? null;
-        if (!is_string($op) || !in_array($op, SubAgentActivity::OPS, true)
-            || !is_string($id) || $id === '' || !is_string($name) || !is_string($task)
-            || !is_int($seq) || !is_string($tail)) {
-            return null;
-        }
-
-        return new SubAgentActivity($op, $id, $name, $task, $seq, $tail, ...EngineBackend::subAgentTotals($frame));
+        return is_array($frame) ? SubAgentActivity::fromArray($frame) : null;
     }
 
     private static function closeStream(mixed $stream): void

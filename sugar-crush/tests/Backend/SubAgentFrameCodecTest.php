@@ -59,7 +59,7 @@ final class SubAgentFrameCodecTest extends TestCase
         }
     }
 
-    public function testTheWireShapeIsTheDocumentedThirteenKeyFrame(): void
+    public function testTheWireShapeIsTheDocumentedVersionTwoFrame(): void
     {
         $frame = self::encodeFrame(new SubAgentActivity(
             SubAgentActivity::OP_PROGRESS,
@@ -74,10 +74,15 @@ final class SubAgentFrameCodecTest extends TestCase
             'qwen3-coder',
             900,
             [['id' => 'c1', 'label' => 'Read(path: "a")', 'state' => 'ok', 'at' => 1700000000]],
+            parentCallId: 'tc_1',
+            description: 'Check auth',
+            items: [\SugarCraft\Crush\Agents\Live\ActivityItem::thinking()],
+            stats: ['step' => 2, 'tools' => 1],
         ));
 
         $this->assertSame([
             'kind' => 'subagent',
+            'v' => 2,
             'op' => 'progress',
             'id' => 'subagent_1_x',
             'name' => 'reviewer',
@@ -90,6 +95,14 @@ final class SubAgentFrameCodecTest extends TestCase
             'model' => 'qwen3-coder',
             'context' => 900,
             'calls' => [['id' => 'c1', 'label' => 'Read(path: "a")', 'state' => 'ok', 'at' => 1700000000]],
+            'parentCallId' => 'tc_1',
+            'parentAgentId' => null,
+            'description' => 'Check auth',
+            'items' => [['t' => 'thinking']],
+            'stats' => ['step' => 2, 'tools' => 1],
+            'outcome' => '',
+            'error' => null,
+            'resumeId' => null,
         ], $frame, 'the literal wire keys are the protocol — renaming one silently orphans the other side');
     }
 

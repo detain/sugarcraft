@@ -8,9 +8,11 @@ use SugarCraft\Crush\Events\SubAgentActivity;
 
 /**
  * The child's half of a per-member activity relay: each beat is ONE datagram
- * on a unix `SOCK_DGRAM` socket — a `serialize()`d plain array, decoded on
- * the other side with `allowed_classes => false` because the bytes crossed a
- * process boundary.
+ * on a unix `SOCK_DGRAM` socket — the beat's v2 wire array
+ * ({@see SubAgentActivity::toArray()}, the same shape the engine's own
+ * `subagent` frame carries), `serialize()`d and decoded on the other side
+ * with `allowed_classes => false` because the bytes crossed a process
+ * boundary.
  *
  * WHY DATAGRAMS. A datagram is delivered whole or not at all, so the reader
  * needs no length prefix and no reassembly buffer, a child killed mid-write
@@ -60,36 +62,11 @@ final class DatagramActivitySink implements ActivitySink
             return;
         }
 
-        $body = serialize(self::encode($activity));
+        $body = serialize($activity->toArray());
         if (strlen($body) > self::MAX_DATAGRAM_BYTES) {
             return;
         }
 
         @stream_socket_sendto($this->socket, $body);
-    }
-
-    /**
-     * The wire array for one beat — the same field names the engine's own
-     * `subagent` frame uses, so a relayed beat and a turn-child beat decode
-     * through one validator.
-     *
-     * @return array<string, mixed>
-     */
-    public static function encode(SubAgentActivity $activity): array
-    {
-        return [
-            'op' => $activity->op,
-            'id' => $activity->id,
-            'name' => $activity->name,
-            'task' => $activity->task,
-            'seq' => $activity->seq,
-            'tail' => $activity->tail,
-            'tokens' => $activity->tokensUsed,
-            'cost' => $activity->costUsd,
-            'lines' => $activity->lines,
-            'model' => $activity->model,
-            'context' => $activity->contextTokens,
-            'calls' => $activity->calls,
-        ];
     }
 }

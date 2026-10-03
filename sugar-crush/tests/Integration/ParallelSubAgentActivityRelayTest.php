@@ -157,6 +157,11 @@ final class ParallelSubAgentActivityRelayTest extends TestCase
                 return $this->emitter;
             }
 
+            public function queuedActivity(ToolCall $call, array $args): ?SubAgentActivity
+            {
+                return null;
+            }
+
             public function withActivitySink(ActivitySink $sink): Tool
             {
                 return new self($this->name, static function (SubAgentActivity $beat) use ($sink): void {

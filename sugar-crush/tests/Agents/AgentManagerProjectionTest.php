@@ -97,6 +97,63 @@ final class AgentManagerProjectionTest extends TestCase
         $this->assertSame('step one done', $manager->liveOutput('coder'));
     }
 
+    /**
+     * P-B1: a v2 finished beat says how the run ended, and the mirror shows
+     * it — a failed delegation used to settle COMPLETE.
+     */
+    public function testAFinishedBeatsOutcomeDecidesTheRowsStatus(): void
+    {
+        $cases = [
+            SubAgentActivity::OUTCOME_FAILED => [SubAgent::STATUS_FAILED, 'step cap 50 reached'],
+            SubAgentActivity::OUTCOME_CANCELLED => [SubAgent::STATUS_STOPPED, 'cancelled by the user'],
+            SubAgentActivity::OUTCOME_EMPTY => [SubAgent::STATUS_COMPLETE, null],
+            SubAgentActivity::OUTCOME_COMPLETE => [SubAgent::STATUS_COMPLETE, null],
+        ];
+
+        foreach ($cases as $outcome => [$status, $error]) {
+            $manager = $this->manager();
+            $manager->projectRemoteSubAgent(self::beat(SubAgentActivity::OP_STARTED, 'cid-1', 'coder', 'task'));
+            $manager->projectRemoteSubAgent(new SubAgentActivity(
+                SubAgentActivity::OP_FINISHED, 'cid-1', 'coder', '', 2, 'trail',
+                outcome: $outcome,
+                error: $outcome === SubAgentActivity::OUTCOME_COMPLETE ? null : ($error ?? 'ignored for a completed run'),
+            ));
+
+            $row = $manager->getSubAgent('cid-1');
+            $this->assertNotNull($row);
+            $this->assertSame($status, $row->status, "outcome {$outcome}");
+            $this->assertSame($error, $row->error, "outcome {$outcome}");
+            $this->assertNotNull($row->completedAt);
+        }
+    }
+
+    /**
+     * A Task member waiting for a delegation slot shows as PENDING under its
+     * placeholder id, and its own started beat replaces the placeholder.
+     */
+    public function testAQueuedPlaceholderIsReplacedByTheMembersStartedBeat(): void
+    {
+        $manager = $this->manager();
+        $placeholder = SubAgentActivity::queuedId('tc_2');
+
+        $manager->projectRemoteSubAgent(new SubAgentActivity(
+            SubAgentActivity::OP_QUEUED, $placeholder, 'coder', 'task', 1, '', parentCallId: 'tc_2',
+        ));
+
+        $row = $manager->getSubAgent($placeholder);
+        $this->assertNotNull($row);
+        $this->assertSame(SubAgent::STATUS_PENDING, $row->status, 'waiting for a slot is not running');
+        $this->assertNull($row->startedAt);
+
+        $manager->projectRemoteSubAgent(new SubAgentActivity(
+            SubAgentActivity::OP_STARTED, 'cid-2', 'coder', 'task', 1, '', parentCallId: 'tc_2',
+        ));
+
+        $this->assertNull($manager->getSubAgent($placeholder), 'the placeholder gives way to the real run');
+        $this->assertSame(SubAgent::STATUS_RUNNING, $manager->getSubAgent('cid-2')?->status);
+        $this->assertSame(1, $manager->projectedSubAgentCount());
+    }
+
     public function testFinishedSettlesTheRowTerminalAndLateBeatsCannotReviveIt(): void
     {
         $manager = $this->manager();

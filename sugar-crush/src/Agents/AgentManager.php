@@ -416,6 +416,10 @@ final class AgentManager
      *    means the finished frame already landed, and sockets keep no promise
      *    about what a late reader sees.
      *
+     * A `queued` beat (a Task member waiting for a delegation slot) makes a
+     * PENDING row under its placeholder id; the member's `started` beat, which
+     * names the same parent call, replaces it with the real run.
+     *
      * Projection bypasses the {@see createSubAgent()} permission-mode seal on
      * purpose: the seal guards LAUNCHES — a mirror launches nothing, it
      * reports a run the session's own engine child already governed. The row
@@ -423,15 +427,25 @@ final class AgentManager
      */
     public function projectRemoteSubAgent(SubAgentActivity $activity): void
     {
-        if ($activity->op === SubAgentActivity::OP_STARTED) {
+        if ($activity->op === SubAgentActivity::OP_STARTED || $activity->op === SubAgentActivity::OP_QUEUED) {
             $agent = $this->get($activity->name);
             if ($agent === null) {
                 return;
             }
 
+            $queued = $activity->op === SubAgentActivity::OP_QUEUED;
+            if (!$queued && $activity->parentCallId !== '') {
+                $placeholder = SubAgentActivity::queuedId($activity->parentCallId);
+                if (isset($this->projectedSubAgentIds[$placeholder])) {
+                    unset($this->subAgents[$placeholder], $this->projectedSubAgentIds[$placeholder]);
+                }
+            }
+
             $row = new SubAgent(id: $activity->id, agent: $agent, task: $activity->task);
-            $row->status = SubAgent::STATUS_RUNNING;
-            $row->startedAt = new \DateTimeImmutable();
+            if (!$queued) {
+                $row->status = SubAgent::STATUS_RUNNING;
+                $row->startedAt = new \DateTimeImmutable();
+            }
             $row->output = $activity->tail;
             self::applyTotals($row, $activity);
 
@@ -456,12 +470,19 @@ final class AgentManager
         }
 
         // OP_FINISHED. The frame says the run ended; what its tail carries is
-        // the report or, when there was none, the trail the child kept. The
-        // mirror settles COMPLETE for either — the child's internal FAILED
-        // distinction reaches the user through the outer ToolFinished row,
-        // which carries the refusal text verbatim.
+        // the report or, when there was none, the trail the child kept. A v2
+        // frame says HOW it ended (P-B1): failed and cancelled runs settle
+        // FAILED/STOPPED with their reason, where every run used to settle
+        // COMPLETE. A v1 frame carries no outcome and keeps that old reading.
         $row->output = $activity->tail;
-        $row->status = SubAgent::STATUS_COMPLETE;
+        $row->status = match ($activity->outcome) {
+            SubAgentActivity::OUTCOME_FAILED => SubAgent::STATUS_FAILED,
+            SubAgentActivity::OUTCOME_CANCELLED => SubAgent::STATUS_STOPPED,
+            default => SubAgent::STATUS_COMPLETE,
+        };
+        if ($activity->error !== null && $row->status !== SubAgent::STATUS_COMPLETE) {
+            $row->error = $activity->error;
+        }
         $row->completedAt = new \DateTimeImmutable();
     }
 

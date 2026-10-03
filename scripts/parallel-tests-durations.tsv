@@ -197,7 +197,7 @@ sugar-crush/tests/Integration/ForeignAgentPresetWiringTest.php	1.273	16
 sugar-crush/tests/Chat/ToolChildReapTest.php	1.253	5
 sugar-crush/tests/Chat/EngineAskModalTest.php	1.250	11
 sugar-crush/tests/Backend/EngineBackendEmptyReplyTest.php	1.235	7
-sugar-crush/tests/Tools/TaskToolProgressFramesTest.php	1.216	11
+sugar-crush/tests/Tools/TaskToolProgressFramesTest.php	1.216	14
 sugar-crush/tests/Backend/StepPressureCheckTest.php	1.200	5
 sugar-crush/tests/Backend/ScaledClockHelperSeamTest.php	1.187	6
 sugar-crush/tests/Support/ProcessReaperEscalationOrderTest.php	1.179	5
@@ -252,7 +252,7 @@ sugar-crush/tests/Cli/BootstrapPermissionGateTest.php	0.740	63
 sugar-crush/tests/Providers/ClaudeCodeProviderStreamReapTest.php	0.729	6
 sugar-crush/tests/Cli/HeadlessPermissionPromptTest.php	0.728	19
 sugar-crush/tests/Cli/BootstrapSpendAndSummaryTest.php	0.712	24
-sugar-crush/tests/Runtime/ParallelTaskActivityRelayTest.php	0.700	2
+sugar-crush/tests/Runtime/ParallelTaskActivityRelayTest.php	0.700	4
 sugar-crush/tests/Cli/BootstrapStatusLineWiringTest.php	0.697	4
 sugar-crush/tests/Support/ReadPathCensusTest.php	0.689	17
 sugar-crush/tests/Integration/TeamLifecycleTest.php	0.678	8
@@ -585,6 +585,7 @@ sugar-crush/tests/Backend/EngineBackendWitherPreservesStateTest.php	0.020	24
 sugar-crush/tests/Providers/SglangProviderReasoningReplayTest.php	0.020	7
 sugar-crush/tests/RepoMap/PageRankTest.php	0.020	10
 sugar-crush/tests/RepoMap/SymbolGraphTest.php	0.020	9
+sugar-crush/tests/Events/SubAgentActivityV2CodecTest.php	0.020	7
 sugar-crush/tests/Context/PromptSectionTest.php	0.019	23
 sugar-crush/tests/LSP/LspClientBodyDuplicationTest.php	0.019	4
 sugar-crush/tests/Hooks/HookDispatcherTest.php	0.019	55
@@ -677,6 +678,8 @@ sugar-crush/tests/Chat/PositionalCommandColonSpellingTest.php	0.010	15
 sugar-crush/tests/Chat/PromptHistoryRecallTest.php	0.010	9
 sugar-crush/tests/Chat/ChatHookInputEncodingTest.php	0.010	5
 sugar-crush/tests/Messages/HistorySanitizerRepeatedIdsTest.php	0.010	5
+sugar-crush/tests/Agents/Live/SubAgentActivityBufferTest.php	0.010	6
+sugar-crush/tests/Agents/Live/ToolSummaryTest.php	0.010	16
 sugar-crush/tests/Permissions/SafetyClassifierTest.php	0.009	26
 sugar-crush/tests/Providers/StreamPrematureEndTest.php	0.009	15
 sugar-crush/tests/LSP/LspClientTest.php	0.009	20
@@ -794,7 +797,7 @@ sugar-crush/tests/Agents/TeammateStatusTest.php	0.004	18
 sugar-crush/tests/Messages/LoopGuardStoppedFieldTest.php	0.004	14
 sugar-crush/tests/MCP/McpToolTest.php	0.004	14
 sugar-crush/tests/Permissions/PermissionRuleTest.php	0.004	13
-sugar-crush/tests/Agents/AgentManagerProjectionTest.php	0.004	9
+sugar-crush/tests/Agents/AgentManagerProjectionTest.php	0.004	11
 sugar-crush/tests/Messages/LengthStoppedFieldTest.php	0.004	13
 sugar-crush/tests/Chat/InputProjectionInvariantTest.php	0.004	4
 sugar-crush/tests/ToolResultImageTest.php	0.004	13

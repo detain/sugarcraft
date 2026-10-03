@@ -288,6 +288,32 @@ big-endian length plus a `serialize()`d array, decoded with
   cancel; the next Escape, or a second one inside the double-press window, is
   still the hard cancel that kills the whole tree.
 
+**The `subagent` frame (version 2).** `Events\SubAgentActivity::toArray()` is
+the one wire shape for a delegated run's beats; the fork frame, the relay
+below and later the server's `agent.*` events all carry it, and
+`SubAgentActivity::fromArray()` is its one validator. A frame without `v` is
+a version 1 frame and decodes with the version 2 fields at their defaults.
+
+- `op` is `queued`, `started`, `progress` or `finished`. A `Task` member held
+  back by the delegation cap gets a `queued` beat under a placeholder id; its
+  own `started` beat, naming the same `parentCallId`, replaces it.
+- `parentCallId` is the parent's `Task` tool-call id. `description` is that
+  call's `description` argument.
+- `items` holds what the run did since its last frame: `tool_started` (with a
+  one-line `Agents\Live\ToolSummary`), `tool_finished` (`ok`, `ms`),
+  `thinking` (a marker, no text), `text` and `inbox`.
+  `Agents\Live\SubAgentActivityBuffer` coalesces them in the process running
+  the sub-agent: at most 4 frames a second, 32 items and 8 KiB of items per
+  frame. Older text goes first, then older tool events.
+- `stats` holds `step`, `maxSteps`, `tools`, `tokensIn`, `tokensOut`,
+  `costUsd` and `startedAt`.
+- `finished` carries the real `outcome` (`complete`, `failed`, `cancelled` or
+  `empty`), its `error` and the `resumeId` a later `Task` call resumes it by.
+  `AgentManager::projectRemoteSubAgent()` settles a failed run FAILED and a
+  cancelled one STOPPED, where every run used to settle COMPLETE.
+- The version 1 fields stay: `tail` and the running totals still feed the
+  Agents pane.
+
 **Sub-agent activity relay.** A lone `Task` call runs inside the turn child,
 so its `subagent` beats go straight onto the turn socket. Several `Task` calls
 in one step run as a concurrent group: each member is forked again by
@@ -308,7 +334,9 @@ writes. The relay carries those beats instead:
 - A member's relay is drained after its process exits and before its
   `ToolFinished` is released, so the `finished` beat always lands first. If the
   process exited without one (killed, a fatal error, a dropped datagram), the
-  turn child sends a `finished` for it, so the row does not stay "running".
+  turn child sends a `finished` for it, so the row does not stay "running". Its
+  outcome comes from the member's result: `failed` when there is none or it is
+  an error, `complete` otherwise.
 - Every relay is closed in `executeConcurrently()`'s `finally` block. No
   process is added, only file descriptors.
 

@@ -69,7 +69,7 @@ final class TaskToolProgressFramesTest extends TestCase
             $frames[] = $activity;
         };
 
-        $result = (new TaskTool($manager))->withEngine($engine, null, $emitter)->execute(self::call());
+        $result = (new TaskTool($manager))->withEngine($engine, null, $emitter)->withActivityClock(self::eagerClock())->execute(self::call());
 
         $this->assertFalse($result->isError(), $result->content());
         $this->assertSame(
@@ -209,7 +209,7 @@ final class TaskToolProgressFramesTest extends TestCase
             $frames[] = $activity;
         };
 
-        $result = (new TaskTool($manager))->withEngine($engine, null, $emitter)->execute(self::call());
+        $result = (new TaskTool($manager))->withEngine($engine, null, $emitter)->withActivityClock(self::eagerClock())->execute(self::call());
 
         $this->assertFalse($result->isError(), $result->content());
         $tokens = array_map(static fn (SubAgentActivity $f): int => $f->tokensUsed, $frames);
@@ -245,7 +245,7 @@ final class TaskToolProgressFramesTest extends TestCase
         $emitter = static function (SubAgentActivity $activity) use (&$tails): void {
             $tails[] = $activity->tail;
         };
-        (new TaskTool($manager))->withEngine($engine, null, $emitter)->execute(self::call());
+        (new TaskTool($manager))->withEngine($engine, null, $emitter)->withActivityClock(self::eagerClock())->execute(self::call());
 
         $trail = implode("\n", $tails);
         $this->assertStringContainsString('-> probe(path: "src/Foo.php")', $trail);
@@ -285,7 +285,7 @@ final class TaskToolProgressFramesTest extends TestCase
                 $trail = explode("\n", $a->tail);
             }
         };
-        (new TaskTool($manager))->withEngine($engine, null, $emitter)->execute(self::call());
+        (new TaskTool($manager))->withEngine($engine, null, $emitter)->withActivityClock(self::eagerClock())->execute(self::call());
 
         $labelled = array_values(array_filter($trail, static fn (string $l): bool => str_starts_with($l, 'thinking: ')));
         $continued = array_values(array_filter($trail, static fn (string $l): bool => str_starts_with($l, '  ')));
@@ -347,6 +347,114 @@ final class TaskToolProgressFramesTest extends TestCase
         $this->assertSame([], $bound, 'the turn-pinned emitter is never asked to write');
         $this->assertSame(SubAgentActivity::OP_STARTED, $sink->beats[0]->op);
         $this->assertSame(SubAgentActivity::OP_FINISHED, end($sink->beats)->op);
+    }
+
+    /**
+     * P-B1: with the buffer's clock frozen nothing is ever due, so every item
+     * the run produced rides its finished frame — coalesced, with the v2
+     * identity, stats and the real outcome.
+     */
+    public function testAFrozenClockCoalescesTheRunsItemsIntoItsFinishedFrame(): void
+    {
+        $probe = self::probe('probe');
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'Grep', ['pattern' => 'Login', 'path' => 'src/'])], tokensUsed: 300),
+            new CompleteResponse(content: 'the report', tokensUsed: 200),
+        ]);
+        $grep = self::probe('Grep');
+        $manager = self::manager([$probe, $grep], RosterAgent::named('coder', ['probe', 'Grep'], maxTurns: 5));
+        $engine = EngineBackend::new($provider, 'm')->withTools([$probe, $grep]);
+
+        /** @var list<SubAgentActivity> $frames */
+        $frames = [];
+        $result = (new TaskTool($manager, suspended: $this->store))
+            ->withEngine($engine, null, static function (SubAgentActivity $a) use (&$frames): void {
+                $frames[] = $a;
+            })
+            ->withActivityClock(static fn (): float => 100.0)
+            ->execute(self::call(['id' => 'tc_parent']));
+
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertSame(['started', 'finished'], array_map(static fn (SubAgentActivity $f): string => $f->op, $frames));
+        [$started, $finished] = $frames;
+
+        foreach ($frames as $frame) {
+            $this->assertSame('tc_parent', $frame->parentCallId, 'every frame names the Task row it belongs under');
+            $this->assertSame('Audit candy-core', $frame->description);
+        }
+        $this->assertSame([], $started->items);
+        $this->assertSame(
+            [
+                ['t' => 'tool_started', 'callId' => 'call_1', 'tool' => 'Grep', 'summary' => '"Login" src/'],
+                ['t' => 'tool_finished', 'callId' => 'call_1', 'tool' => 'Grep', 'ok' => true, 'ms' => $finished->items[1]->ms],
+            ],
+            array_map(static fn (\SugarCraft\Crush\Agents\Live\ActivityItem $i): array => $i->toArray(), $finished->items),
+        );
+        $this->assertSame(2, $finished->stats['step']);
+        $this->assertSame(5, $finished->stats['maxSteps']);
+        $this->assertSame(1, $finished->stats['tools']);
+        $this->assertGreaterThan(0.0, $finished->stats['startedAt']);
+        $this->assertSame(SubAgentActivity::OUTCOME_COMPLETE, $finished->outcome);
+        $this->assertNull($finished->error);
+        $this->assertNotNull($finished->resumeId, 'the finished frame names the id the run resumes by');
+        $this->assertStringContainsString((string) $finished->resumeId, $result->content());
+    }
+
+    public function testAFailedRunFinishesWithAFailedOutcomeAndItsReason(): void
+    {
+        $probe = self::probe('probe');
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'probe', [])]),
+            new \RuntimeException('boom'),
+        ]);
+        $manager = self::manager([$probe], RosterAgent::named('coder', ['probe'], maxTurns: 5));
+        $engine = EngineBackend::new($provider, 'm')->withTools([$probe]);
+
+        /** @var list<SubAgentActivity> $frames */
+        $frames = [];
+        (new TaskTool($manager, suspended: $this->store))
+            ->withEngine($engine, null, static function (SubAgentActivity $a) use (&$frames): void {
+                $frames[] = $a;
+            })
+            ->execute(self::call());
+
+        $finished = end($frames);
+        $this->assertSame(SubAgentActivity::OP_FINISHED, $finished->op);
+        $this->assertSame(SubAgentActivity::OUTCOME_FAILED, $finished->outcome, 'a failed run no longer reads as complete');
+        $this->assertStringContainsString('boom', (string) $finished->error);
+        $this->assertNotNull($finished->resumeId);
+    }
+
+    public function testAQueuedMembersPlaceholderBeatNamesItsAgentAndParentCall(): void
+    {
+        $manager = self::manager([self::probe('probe')], RosterAgent::named('coder', ['probe'], maxTurns: 5));
+
+        $beat = (new TaskTool($manager))->queuedActivity(new ToolCall('tc_9', 'Task', []), self::call());
+
+        $this->assertNotNull($beat);
+        $this->assertSame(SubAgentActivity::OP_QUEUED, $beat->op);
+        $this->assertSame(SubAgentActivity::queuedId('tc_9'), $beat->id);
+        $this->assertSame('coder', $beat->name);
+        $this->assertSame('tc_9', $beat->parentCallId);
+        $this->assertSame('Audit candy-core', $beat->description);
+        $this->assertSame('Audit candy-core and report the findings', $beat->task);
+        $this->assertNull((new TaskTool($manager))->queuedActivity(new ToolCall('tc_9', 'Task', []), ['prompt' => 'x']), 'no agent, no row');
+    }
+
+    /**
+     * A clock that reads one second later on every call: every item is due
+     * the moment it is added, which is the one-frame-per-boundary pacing the
+     * older assertions in this file were written against.
+     *
+     * @return \Closure(): float
+     */
+    private static function eagerClock(): \Closure
+    {
+        $now = 0.0;
+
+        return static function () use (&$now): float {
+            return $now += 1.0;
+        };
     }
 
     /**
