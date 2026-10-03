@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Assemble crush_report.md = synthesis + every per-agent report as a lettered appendix.
+# Assemble crush_report.md = synthesis + the trimmed per-agent reports as lettered appendices.
+# Audits 15a/15c/15d/15e (no open findings) and impact/ research files are not assembled.
 # Headings inside appendices are demoted one level (outside ``` fences only) so the
 # appendix title stays the top-level heading and quoted prompts are left byte-exact.
 set -euo pipefail
@@ -22,16 +23,12 @@ declare -a MAP=(
   "N|13-settings-pane-and-configurability.md|Design: settings pane and configurability"
   "O|14-server-mode-and-web-ui.md|Design: server mode and sugar-crush-web"
   "P|16-sessions-and-live-agent-view.md|Design: sessions, live agent lines, agent view"
-  "Q|15a-audit-engine-providers.md|Audit: engine, runtime and providers"
-  "R|15b-audit-chat-tui.md|Audit: Chat, TUI and rendering"
-  "S|15c-audit-tools-permissions.md|Audit: tools, permissions and hooks"
-  "T|15d-audit-context-memory-config.md|Audit: context, memory, skills and config"
-  "U|15e-audit-agents-sessions-mcp-cli.md|Audit: agents, sessions, MCP and CLI"
-  "V|17-execution-plan.md|Execution plan: concurrency-aware waves"
+  "Q|15b-audit-chat-tui.md|Audit: the open finding (15b-14, i18n)"
+  "R|17-execution-plan.md|Execution plan: concurrency-aware waves"
 )
 {
   cat "$D/99-synthesis.md"
-  printf '\n\n---\n\n# Appendices\n\nEach appendix reproduces one agent report verbatim (headings demoted one level). Source files live in `prompt_kit/findings/crush-report/`.\n\n'
+  printf '\n\n---\n\n# Appendices\n\nEach appendix holds one source report, trimmed to what the remaining steps need (headings demoted one level). Source files live in `prompt_kit/findings/crush-report/`.\n\n'
   for row in "${MAP[@]}"; do
     IFS='|' read -r L F T <<<"$row"
     printf -- '- [Appendix %s — %s](#appendix-%s) (`%s`)\n' "$L" "$T" "$(echo "$L" | tr 'A-Z' 'a-z')" "$F"

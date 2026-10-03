@@ -1,8 +1,8 @@
 # Execution plan: concurrency-aware waves
 
-This appendix schedules every remaining roadmap step (Part III, Part VIII, Part IX) into **11 fix waves plus one final verification pass**. All work lands straight on `master`, with no PRs and at most 10 groups at a time.
+This appendix schedules every remaining roadmap step (Part III, Part V, Part VI) into **11 fix waves plus one final verification pass**. All work lands straight on `master`, with no PRs and at most 10 groups at a time.
 
-**Step definitions** live in Part III (0.x–5.x), Appendix N (N-*), Appendix O (O-*), Appendix P (B1–B3, P-*) and Appendix U/IX (15b-14).
+**Step definitions** live in Part III (0.x–5.x), Appendix N (N-*), Appendix O (O-*), Appendix P (B1–B3, P-*) and Appendix Q/Part VI (15b-14).
 
 **Per-step file impact** (exact files, method regions, forced docs and drift tests, dependencies) lives in `prompt_kit/findings/crush-report/impact/<batch>.md`. These files are research inputs and are not assembled into this report. The batches are:
 
@@ -22,7 +22,7 @@ This appendix schedules every remaining roadmap step (Part III, Part VIII, Part 
 
 A group's owned files are its row below, plus that step's "new files" and tests from the impact file.
 
-All sugar-crush paths below are relative to `sugar-crush/`. Line anchors in Parts III/VIII are stale (Chat.php is 19,220 lines). Use the method names here and the current anchors in the impact files.
+All sugar-crush paths below are relative to `sugar-crush/`. Parts III and V name methods, not lines; current line anchors are in the impact files (Chat.php is 19,220 lines).
 
 ## 1. Rules
 
@@ -154,7 +154,7 @@ rmwave() {  # usage: rmwave w3 a b c …
    - `php tools/check-one-type-per-file.php`;
    - `candy-core/vendor/bin/phpunit --no-configuration tools/tests/`.
 7. **Report edits:**
-   - delete each landed step's row from §4 and §5 of this file and its item row in Part III / VIII / IX;
+   - delete each landed step's row from §4 and §5 of this file and its item row in Part III / V / VI;
    - delete a design section in N/O/P once every step citing it has landed;
    - re-run `prompt_kit/tools/assemble-crush-report.sh`;
    - never add "fixed" or history notes.
@@ -399,7 +399,7 @@ LIVE-A15v and LIVE-A21b need GCP credentials, and this host has none. If credent
 4. Run `scripts/parallel-tests.sh 8 --durations scripts/parallel-tests-durations.tsv --against-json tests/Config/Support/suite-figure.json`.
 5. Run the tools gates (§1.5) and every doc generator in `--check` mode.
 6. Report cleanup:
-   - delete the emptied sections from Part III/VIII/IX and from N/O/P;
+   - delete the emptied sections from Part III/V/VI and from N/O/P;
    - delete this appendix's wave tables once they are empty;
    - reassemble.
 7. Push.
@@ -634,8 +634,8 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 |---|---|
 | 5.8 "wire the dormant `Message::attachFile()`" | Attachments (`@file`, image paste, drag-drop) are LIVE. Only `@diff`/`@session`/`@url` remain, and the wire uses `<file path>` blocks, not `<context>`. |
 | 13-settings "maxToolSteps default 8", "sub-agent max turns 50" | 1000 and 200 respectively. |
-| VIII.1 / Part II #35 "WebSearch private default host", "no default endpoint" as a defect | No default endpoint by design (audit F-W3(b)); only the settings key remains (N-P4e). |
-| IX.2 / 0.13 "wire the session-affinity header", "show cached %" | Trait and readout exist. The header is unwired, and the readout is unreachable on OpenAI-shaped providers (no cache-write count). |
+| V.1 / Part II #35 "WebSearch private default host", "no default endpoint" as a defect | No default endpoint by design (audit F-W3(b)); only the settings key remains (N-P4e). |
+| VI / 0.13 "wire the session-affinity header", "show cached %" | Trait and readout exist. The header is unwired, and the readout is unreachable on OpenAI-shaped providers (no cache-write count). |
 | 0.4 "SIGTERM→SIGKILL the setsid group" | Built (`runCaptured` timeout, `terminateGroup`). Only the Bash parameter and the sequential heartbeat remain. |
 | 0.3 "move the cadence into AGENTS.md" | It is already there; the work is deleting it from `Bash::promptGuidance`. |
 | 0.8, 0.14 ".env*"/"settings protection" as all-new | `.env*` and `.sugar-crush/{hooks.yaml,config.json,agents/}` are already protected. |

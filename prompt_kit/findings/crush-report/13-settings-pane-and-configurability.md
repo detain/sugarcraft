@@ -1,17 +1,12 @@
 # 13 — A settings pane for sugar-crush, and making its behaviour configurable (design report)
 
+Feeds steps: N-P0-1, N-P0-2, N-DOC-1, N-DOC-2, N-DOC-3, N-P1, N-P2, N-P3a, N-P3b, N-P3, N-P4a, N-P4b, N-P4c, N-P4d, N-P4e, N-P4f, N-P4g, N-P5
+
 **What this is.** A design report, based on reading the source, for an in-TUI settings editor in `sugar-crush`. It covers:
 - making the hard-coded behaviours below into settings;
 - building the editor from existing SugarCraft libraries.
 
-Nothing in the repo was changed. Paths are relative to `sugar-crush/` unless they start with `/` or with a sibling lib's directory (`candy-forms/…`). Line numbers come from the working tree on master @ `05db616f3` (2026-10-01).
-
-**Inputs:**
-- `00-sugar-crush-baseline.md` §1, §9, §10 (read in full);
-- the §13 recommendations of reports 01–12 (scanned for every knob they propose);
-- `src/Config/*`, `src/Cli/Bootstrap.php`, `src/Backend/EngineBackend.php`, `src/Chat.php`, `src/Tui/**`, `src/Palette/*`, `src/Commands/*`;
-- `docs/SETTINGS.md`, `docs/ENVIRONMENT.md`, the five drift tests named in the brief, `README.md`;
-- the source and READMEs of every `candy-*` / `sugar-*` / `honey-*` lib under `/home/sites/sugarcraft`.
+Paths are relative to `sugar-crush/` unless they start with `/` or with a sibling lib's directory (`candy-forms/…`).
 
 **Labels:**
 - **[V]** — verified in source by this author;
@@ -22,22 +17,21 @@ Nothing in the repo was changed. Paths are relative to `sugar-crush/` unless the
 
 ## 0. Summary
 
-1. **No settings editor exists.** There is a *read-only* `Settings` sidebar (`src/Tui/Components/SettingsPane.php`, 137 lines) with eight rows: Provider, Model, Theme, Root, Session, Mouse, Mouse clicks, Streaming. Its footer says `read-only — /theme, /model` [V]. `Ctrl+,` focuses it (`src/Tui/KeyboardHandler.php:850`), and `Enter` on it opens the command palette (`KeyboardHandler::enterOpensPaletteDoor()`, `:297`) [V].
+1. **No settings editor exists.** There is a *read-only* `Settings` sidebar (`src/Tui/Components/SettingsPane.php`, 137 lines) with eight rows: Provider, Model, Theme, Root, Session, Mouse, Mouse clicks, Streaming. Its footer says `read-only — /theme, /model` [V]. `Ctrl+,` focuses it (`src/Tui/KeyboardHandler.php`), and `Enter` on it opens the command palette (`KeyboardHandler::enterOpensPaletteDoor()`) [V].
 2. **Only three keys are ever written by the app** [V]:
-   - `provider` and `theme`, through `Chat`'s `onConfigChange` closure (`src/Chat.php:14140`, `:14151`, `:16037`; wired at `src/Cli/Bootstrap.php:1215`);
-   - `layout`, through `App::$onLayoutChange` (`src/App/App.php:724`).
+   - `provider` and `theme`, through `Chat`'s `onConfigChange` closure (`src/Chat.php`; wired at `src/Cli/Bootstrap.php`);
+   - `layout`, through `App::$onLayoutChange` (`src/App/App.php`).
 
    `ConfigWriteProducerDocumentationDriftTest::testTheConfigChangeCallbackEverReceivesExactlyTwoKeys()` pins this. Any editor must add a **separate, censused write door**, not widen `onConfigChange`.
-3. **There are ~26 config keys today.** That is 16 layered keys, 4 trust keys, 2 permission keys, 3 `claudeMcp*` keys and `enabledSkills`. On top of them come 25 `SUGARCRUSH_*` env vars, 10 CLI flags, and package-level provider definitions in `.sugar-crush/config.dev.json`.
+3. **The config keys today** are the `LAYERED_KEYS`, 4 trust keys, 2 permission keys, 3 `claudeMcp*` keys and `enabledSkills`. On top of them come 25 `SUGARCRUSH_*` env vars, 10 CLI flags, and package-level provider definitions in `.sugar-crush/config.dev.json`.
    - About 60% of the keys are scalar or enum and easy to edit in a UI.
    - The rest are lists of names, which a multi-select over discovered items handles.
    - A few are nested structures — `permissionRules`, `modelPrices`, `statusLine`, `layout`, `claudeMcpEnv`, providers — that need a table editor or should stay read-only.
-4. **The settings files are already re-read every turn, inside the forked turn child** (`EngineBackend::runTurn()`, `src/Backend/EngineBackend.php:782`) [V]. A value written to disk therefore reaches the agent loop on the next turn with no extra plumbing.
-   - Only `parallelToolCalls`, `parallelToolDeadlineSeconds` **and `maxOutputTokens`** are applied there (`:785-790`).
-   - `docs/SETTINGS.md` "When a change takes effect" names only the first two — a small doc drift worth fixing in passing [V].
+4. **The settings files are already re-read every turn, inside the forked turn child** (`EngineBackend::runTurn()`, `src/Backend/EngineBackend.php`) [V]. A value written to disk therefore reaches the agent loop on the next turn with no extra plumbing.
+   - Only `parallelToolCalls`, `parallelToolDeadlineSeconds` **and `maxOutputTokens`** are applied there.
    - Everything else is consumed once at launch, so live apply needs explicit hooks: backend swap, `Chat` mutation, or a `Cmd`.
 5. **At least 45 hard-coded behaviour constants should become settings** (§2). The competitor reports add about 30 knobs that do not exist yet (§2.3).
-   - The most important are `maxToolSteps` (default 8, already a key but user-tier and launch-only), the 120 s no-progress watchdog, the compaction thresholds `70/85/95/10`, the tool output caps, the memory caps `12/4 KiB/512 B`, and the private WebSearch default host.
+   - The most important are `maxToolSteps` (already a key but user-tier and launch-only), the 120 s no-progress watchdog, the compaction thresholds `70/85/95/10`, the tool output caps and the memory caps `12/4 KiB/512 B`.
    - Then the competitor knobs: Bash timeout, auto-commit, lint and test commands, context pruning, doom-loop thresholds, sub-agent model and concurrency, steering mode, notifications.
 6. **Every library the editor needs is already a dependency of sugar-crush** (§3):
    - `candy-forms` for fields, `Form`/`Group`, validators and `hydrate()`;
@@ -69,14 +63,14 @@ Nothing in the repo was changed. Paths are relative to `sugar-crush/` unless the
 |---|---|---|---|---|
 | 1 | `<root>/.sugar-crush/settings.json` | `LayeredSettings::projectLayer()` (`src/Config/LayeredSettings.php`) filtered to `PROJECT_TIER_KEYS` | nobody (hand-authored) | root ∈ `trustedProjectSettings` **and** a root was named via `Bootstrap::useProjectRootForSettings()`; `ContainedPath` checks on dir and file |
 | 2 | `<root>/.sugar-crush/settings.local.json` | same | nobody | same gate |
-| 3 | `~/.sugar-crush/settings.json` | `LayeredSettings::userLayer()` filtered to `LAYERED_KEYS`; also the strict `Bootstrap::permissionSettingsLayer()` (`:5140`) for `permissionMode`/`permissionRules` | nobody — README: "`settings.json` is never written" | `$HOME` ownership checks |
-| 4 | `~/.sugar-crush/config.json` (or `--config <path>`) | `Bootstrap::rawUserConfig()` **unfiltered**, plus the strict `permissionConfig()` (`:4923`) | `Bootstrap::writeUserConfig()` (`:3608`): atomic tempnam + rename, chmod 0600, **shallow** `array_merge` | — |
-| pkg | `<package>/.sugar-crush/config.dev.json` | `ProviderFactory` (`src/Providers/ProviderFactory.php:72,174-298,466-508`), `Bootstrap::availableProviders()` (`:2992`) | nobody | `ContainedPath` |
-| repo | `<root>/.sugar-crush/config.json` (e.g. `/home/sites/sugarcraft/.sugar-crush/config.json`) | **only** the DORMANT `Agents\WorktreeConfig` (`src/Agents/WorktreeConfig.php:53,181-185`) | nobody | — |
+| 3 | `~/.sugar-crush/settings.json` | `LayeredSettings::userLayer()` filtered to `LAYERED_KEYS`; also the strict `Bootstrap::permissionSettingsLayer()` for `permissionMode`/`permissionRules` | nobody — README: "`settings.json` is never written" | `$HOME` ownership checks |
+| 4 | `~/.sugar-crush/config.json` (or `--config <path>`) | `Bootstrap::rawUserConfig()` **unfiltered**, plus the strict `permissionConfig()` | `Bootstrap::writeUserConfig()`: atomic tempnam + rename, chmod 0600, **shallow** `array_merge` | — |
+| pkg | `<package>/.sugar-crush/config.dev.json` | `ProviderFactory` (`src/Providers/ProviderFactory.php`), `Bootstrap::availableProviders()` | nobody | `ContainedPath` |
+| repo | `<root>/.sugar-crush/config.json` (e.g. `/home/sites/sugarcraft/.sugar-crush/config.json`) | **only** the DORMANT `Agents\WorktreeConfig` (`src/Agents/WorktreeConfig.php`) | nobody | — |
 
 **Merge.** `LayeredSettings::merge()` is `array_merge($project, $userSettings, $userConfig)`: later wins, so layer 4 > 3 > 2 > 1. The merge is **key-by-key, not deep**, so a list in a higher layer replaces a lower list entirely.
 
-**Read entry point.** `Bootstrap::readUserConfig()` (`:3376`) → `mergedConfig(true)` (`:3393`). The permission keys travel a separate, strict stack, `permissionConfigLayers()` (`:4972`), which refuses the launch on a malformed or world-writable file.
+**Read entry point.** `Bootstrap::readUserConfig()` → `mergedConfig(true)`. The permission keys travel a separate, strict stack, `permissionConfigLayers()`, which refuses the launch on a malformed or world-writable file.
 
 **Findings while mapping this:**
 - `docs/ENVIRONMENT.md` ("Variables read from any config file") says `${VAR}` placeholders work "from `~/.sugar-crush/config.json`" under `providers{}`. But **nothing reads `providers` from the user config**: `availableProviders()` and `projectProviderConfig()` read only the package's `config.dev.json` [V]. User-defined providers are therefore impossible today, and the settings editor cannot offer them. Either fix this (§2.2, `providers` user tier) or correct the doc.
@@ -86,62 +80,62 @@ Nothing in the repo was changed. Paths are relative to `sugar-crush/` unless the
   - `trustedProjectMcp`, which is **inert in that file**, because trust keys are honoured only from layer 4 [V by grep].
 
   The editor should list this file as "not a settings layer" so users do not try to edit it.
-- `enabledSkills` is **not** in `LAYERED_KEYS`. It is answered by layer 4 only: `config.json` can set it and `~/.sugar-crush/settings.json` cannot (`Bootstrap::promptEnabledSkills()`, `:3837`) [V]. This asymmetry is surprising; the schema should either make the key layered or document the exception.
+- `enabledSkills` is **not** in `LAYERED_KEYS`. It is answered by layer 4 only: `config.json` can set it and `~/.sugar-crush/settings.json` cannot (`Bootstrap::promptEnabledSkills()`) [V]. This asymmetry is surprising; the schema should either make the key layered or document the exception.
 
 ### 1.2 What reads which key, and when it takes effect [V]
 
 | Key | Read at | Effective |
 |---|---|---|
-| `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxOutputTokens` | `EngineBackend::runTurn()` `:782-790`, **in the forked child**, every turn | **next turn**, automatically |
-| `maxToolSteps` | `Bootstrap::withResolvedMaxToolSteps()` (`:2965`) at backend build | launch, and on `/model` provider switch. `EngineBackend::withMaxSteps()` (`:603`) exists, so it *could* be live |
-| `provider` | `Bootstrap::backend()` (`:2755`), `selectedProviderName()` (`:7630`) | live via `/model` → `Chat::selectPaletteProvider()` (`:14106`), which **drops the Task tool and `rulesState`** (baseline §11.1 #8) |
-| `theme` | `Bootstrap::chat()` `:1214` | live via `/theme` → `Chat::selectPaletteTheme()` (`:14149`) → `themeName` |
-| `titleModel`, `summaryModel` | `Bootstrap::toollessBackend()` (`:7713`, `:7747`) at launch | restart. `Chat` holds `titleBackend`/`summaryBackend`, so it could be live if `Chat` gains setters |
-| `instructions` | `Bootstrap::forcedInstructions()` (`:7281`) → `InstructionFileLoader` (`:7230`) at backend build | restart |
-| `disabledSkills` | `Bootstrap::skillRegistry()` (`:3768`) | launch; rebuilt on a Ctrl+P provider switch |
-| `enabledSkills` | `promptEnabledSkills()` (`:3839`) at backend build | restart |
+| `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxOutputTokens` | `EngineBackend::runTurn()`, **in the forked child**, every turn | **next turn**, automatically |
+| `maxToolSteps` | `Bootstrap::withResolvedMaxToolSteps()` at backend build | launch, and on `/model` provider switch. `EngineBackend::withMaxSteps()` exists, so it *could* be live |
+| `provider` | `Bootstrap::backend()`, `selectedProviderName()` | live via `/model` → `Chat::selectPaletteProvider()`, which **drops the Task tool and `rulesState`** (Appendix A) |
+| `theme` | `Bootstrap::chat()` | live via `/theme` → `Chat::selectPaletteTheme()` → `themeName` |
+| `titleModel`, `summaryModel` | `Bootstrap::toollessBackend()` at launch | restart. `Chat` holds `titleBackend`/`summaryBackend`, so it could be live if `Chat` gains setters |
+| `instructions` | `Bootstrap::forcedInstructions()` → `InstructionFileLoader` at backend build | restart |
+| `disabledSkills` | `Bootstrap::skillRegistry()` | launch; rebuilt on a Ctrl+P provider switch |
+| `enabledSkills` | `promptEnabledSkills()` at backend build | restart |
 | `disabledRules` | `Bootstrap::chat()` → `RulesState::new()` | launch seed; `/rules` toggles it live, for the session only |
-| `allowedTools`, `disabledTools` | `Bootstrap::tools()` → `filterToolSet()` (`:6995`) | restart. `EngineBackend::withTools()` (`:377`) exists, so it could be live |
-| `modelPrices` | `ProviderFactory` `:650`, when building the OpenAI provider | when the provider is (re)built |
-| `statusLine` | `StatusLineCommand::configure($userConfig, $root)` in `Bootstrap::chat()` (`:1095`) | launch. `configure()` clears and re-sets, so calling it again would make it live |
-| `layout` | `Bootstrap::app()` `:2478` | live; written by the shell |
-| `permissionMode`, `permissionRules` | `Bootstrap::permissionGate()` (`:4807`) | launch. `EngineBackend::withPermissionGate()` (`:467`) exists, so it could be live |
-| `trustedProject{Hooks,Mcp,Commands,Settings}` | `trustedProjectRoots()` (`:4636`), memoised in static arrays | **frozen for the process, by design** |
-| `claudeMcpBinary/Args/Env` | `Bootstrap::claudeMcpGrant()` (`:6114`) | frozen at the first MCP launch |
+| `allowedTools`, `disabledTools` | `Bootstrap::tools()` → `filterToolSet()` | restart. `EngineBackend::withTools()` exists, so it could be live |
+| `modelPrices` | `ProviderFactory`, when building the OpenAI provider | when the provider is (re)built |
+| `statusLine` | `StatusLineCommand::configure($userConfig, $root)` in `Bootstrap::chat()` | launch. `configure()` clears and re-sets, so calling it again would make it live |
+| `layout` | `Bootstrap::app()` | live; written by the shell |
+| `permissionMode`, `permissionRules` | `Bootstrap::permissionGate()` | launch. `EngineBackend::withPermissionGate()` exists, so it could be live |
+| `trustedProject{Hooks,Mcp,Commands,Settings}` | `trustedProjectRoots()`, memoised in static arrays | **frozen for the process, by design** |
+| `claudeMcpBinary/Args/Env` | `Bootstrap::claudeMcpGrant()` | frozen at the first MCP launch |
 
 ### 1.3 What writes settings today [V]
 
 | Writer | Keys | Doors |
 |---|---|---|
 | `Chat::$onConfigChange` → `Bootstrap::writeUserConfig()` | `provider` | palette "Switch model", `/model <name>` |
-| same | `theme` | palette "Switch theme", `/theme <name>`, and `Chat.php:16037` (the theme command's own path) |
+| same | `theme` | palette "Switch theme", `/theme <name>`, and `Chat.php` (the theme command's own path) |
 | `App::$onLayoutChange` → `writeUserConfig()` | `layout` | pane dock, move, undock, reset |
 | `/rules`, `/budget` | none (**session only**) | `RulesCommandTest::testTogglingAPackLeavesTheConfigFileByteIdentical()` pins `/rules` |
 
 **Census tests that a new writer must respect:**
 - `tests/Config/ConfigWriteProducerDocumentationDriftTest.php`:
-  - `:290` exactly `['provider','theme']` reach `onConfigChange`;
-  - `:315` the callback may not be aliased or `call_user_func`'d;
+  - exactly `['provider','theme']` reach `onConfigChange`;
+  - the callback may not be aliased or `call_user_func`'d;
   - prose rules about `docs/SETTINGS.md` and `README.md` naming every door.
 - `tests/Config/TrustKeyDocumentationDriftTest.php`:
   - exactly four trust keys;
-  - the `docs/SETTINGS.md` table lists every `LAYERED_KEYS` entry, and its "Project may set" column equals `PROJECT_TIER_KEYS` (`:303`, `:321`);
-  - the README roster agrees (`:407`, `:495`).
-- `tests/Config/ReadmeRosterDriftTest.php` — slash-command roster, layer-table order (`:321`), permission modes.
+  - the `docs/SETTINGS.md` table lists every `LAYERED_KEYS` entry, and its "Project may set" column equals `PROJECT_TIER_KEYS`;
+  - the README roster agrees.
+- `tests/Config/ReadmeRosterDriftTest.php` — slash-command roster, layer-table order, permission modes.
 - `tests/Config/EnvRosterDriftTest.php` — every `getenv('SUGARCRUSH_*')` read has a row in `docs/ENVIRONMENT.md`, and vice versa.
-- `tests/Commands/KeyBindingDriftTest.php` — every `KeyBindingRegistry` row has an observation that it does what it says (`:119`).
+- `tests/Commands/KeyBindingDriftTest.php` — every `KeyBindingRegistry` row has an observation that it does what it says.
 - `tests/Config/ThemePersistenceFramingTest.php`, `ReadmeSettingsTierClaimTest.php`, `GlobFigureDriftTest.php`, `DocFigureProseDriftTest.php` — prose pins on the same pages.
 
 ### 1.4 TUI surfaces related to settings [V]
 
-- `Pane::Settings` (`src/Tui/Pane.php`): dock side Right, icon `⚙`, part of the Tab cycle. `src/Tui/Renderer.php:1317` renders it as `SettingsPane::render()`. `SettingsPane::settings(App)` returns label/value pairs, kept separate from `render()` so "a future full-width settings view can reuse the same single source of truth".
-- `Ctrl+,` = `shell.settings` "Focus the settings pane" (`src/Commands/KeyBindingRegistry.php:498`). Many terminals cannot send `Ctrl+,` without the kitty keyboard protocol, which sugar-crush does push.
-- The `Enter` palette door on any dockable pane with an empty draft (`KeyboardHandler.php:297`).
-- The command palette (`src/Palette/PaletteAction.php` enum, 12 cases; `PaletteState`; `Chat::runRootPaletteAction()` `:14038`). Rows are **derived from `CommandRegistry::all()`** (`CommandSpec::paletteAction`), and so is the **F10 menu bar** (`src/Tui/Components/MenuBar.php:77` groups `CommandRegistry` labels by category). Adding one `CommandSpec` therefore adds a slash command, a palette row and a menu row in one place.
+- `Pane::Settings` (`src/Tui/Pane.php`): dock side Right, icon `⚙`, part of the Tab cycle. `src/Tui/Renderer.php` renders it as `SettingsPane::render()`. `SettingsPane::settings(App)` returns label/value pairs, kept separate from `render()` so "a future full-width settings view can reuse the same single source of truth".
+- `Ctrl+,` = `shell.settings` "Focus the settings pane" (`src/Commands/KeyBindingRegistry.php`). Many terminals cannot send `Ctrl+,` without the kitty keyboard protocol, which sugar-crush does push.
+- The `Enter` palette door on any dockable pane with an empty draft (`KeyboardHandler.php`).
+- The command palette (`src/Palette/PaletteAction.php` enum, 12 cases; `PaletteState`; `Chat::runRootPaletteAction()`). Rows are **derived from `CommandRegistry::all()`** (`CommandSpec::paletteAction`), and so is the **F10 menu bar** (`src/Tui/Components/MenuBar.php` groups `CommandRegistry` labels by category). Adding one `CommandSpec` therefore adds a slash command, a palette row and a menu row in one place.
 - Read-only reports: `/permissions` (mode, source, rules), `/notices`, `/mcp list` (`src/Tui/McpPanel.php` text renderer), `/rules` (list plus session toggle), `/budget` (show or set the session cap), `/keys`.
-- Overlay chain in `src/Renderer.php:1440-1530`: key help → permission prompt → palette → session picker, composited with `Veil::new()->withBackdrop(50)->composite(…)` (`:1521`) and click-marked by `markPaletteItems`/`markSessionRows`.
-- **Precedent for a full-band view.** When `Pane::Agents` is focused, `Tui\Renderer::renderAgentDashboard()` (`:498`, `:662`) replaces the band with `AgentDashboardPane`, drops the chat's mouse zones, and keeps the menu bar and status bar.
-- **Mid-turn rule** (`Chat.php:7173-7182`, `:7606`, `:7618-7660`): slash commands are refused mid-turn (except `/exit`), while overlays may *open and browse* mid-turn. A mid-turn refusal closes the overlay it is written under.
+- Overlay chain in `src/Renderer.php`: key help → permission prompt → palette → session picker, composited with `Veil::new()->withBackdrop(50)->composite(…)` and click-marked by `markPaletteItems`/`markSessionRows`.
+- **Precedent for a full-band view.** When `Pane::Agents` is focused, `Tui\Renderer::renderAgentDashboard()` replaces the band with `AgentDashboardPane`, drops the chat's mouse zones, and keeps the menu bar and status bar.
+- **Mid-turn rule** (`Chat.php`): slash commands are refused mid-turn (except `/exit`), while overlays may *open and browse* mid-turn. A mid-turn refusal closes the overlay it is written under.
 
 ### 1.5 Environment variables and CLI flags [V]
 
@@ -181,22 +175,22 @@ Nothing in the repo was changed. Paths are relative to `sugar-crush/` unless the
 | # | Key | Type | Default | Tiers | Env / flag override | Apply | UI |
 |---|---|---|---|---|---|---|---|
 | 1 | `provider` | string ∈ `availableProviders()` (7 types + `config.dev.json` names) | none → env → persisted → `defaultProvider`/echo | U C | `SUGARCRUSH_PROVIDER` | L (backend swap; Task-tool bug) | easy (Select) |
-| 2 | `theme` | enum `dark,light,dracula,tokyoNight,ansi,adaptive` (`src/Theme.php:60`) | `dark` (`Bootstrap.php:1214`) | P U C | — (`SUGARCRUSH_BACKGROUND` affects `adaptive`) | L | easy (Select) |
-| 3 | `titleModel` | string (model id) | provider default | P U C | `SUGARCRUSH_TITLE_MODEL` | R (L*) | easy (Input + suggestions) |
-| 4 | `summaryModel` | string | provider default | P U C | `SUGARCRUSH_SUMMARY_MODEL` | R (L*) | easy |
+| 2 | `theme` | enum `dark,light,dracula,tokyoNight,ansi,adaptive` (`src/Theme.php`) | `dark` (`Bootstrap.php`) | P U C | — (`SUGARCRUSH_BACKGROUND` affects `adaptive`) | L | easy (Select) |
+| 3 | `titleModel` | string (model id) | provider default | U C | `SUGARCRUSH_TITLE_MODEL` | R (L*) | easy (Input + suggestions) |
+| 4 | `summaryModel` | string | provider default | U C | `SUGARCRUSH_SUMMARY_MODEL` | R (L*) | easy |
 | 5 | `instructions` | list<glob> | `[]` | U C | — | R | list (free-text list) |
 | 6 | `disabledSkills` | list<string> | `[]` | P U C | — | R (L* via skill-registry rebuild) | list (MultiSelect of discovered skills) |
 | 7 | `disabledRules` | list<pack path> | `[]` | U C | — | R (`/rules` is live for the session) | list (MultiSelect of `RuleLoader` packs) |
 | 8 | `parallelToolCalls` | bool | `true` | P U C | `SUGARCRUSH_DISABLE_PARALLEL_TOOL_CALLS` | NT | easy (Confirm) |
-| 9 | `parallelToolDeadlineSeconds` | int > 0 | `90` (`Runtime.php:67`) | P U C | `SUGARCRUSH_PARALLEL_TOOL_DEADLINE` | NT | easy |
-| 10 | `maxOutputTokens` | int > 0 \| unset | unset (provider default 4096, `CustomProvider.php:164`) | U C | — | NT (doc says otherwise) | easy (Input + "unset") |
+| 9 | `parallelToolDeadlineSeconds` | int > 0 | `90` (`Runtime.php`) | P U C | `SUGARCRUSH_PARALLEL_TOOL_DEADLINE` | NT | easy |
+| 10 | `maxOutputTokens` | int > 0 \| unset | unset (provider default 4096, `CustomProvider.php`) | U C | — | NT (doc says otherwise) | easy (Input + "unset") |
 | 11 | `modelPrices` | map<model,{input,output}> USD/1M | `{}` | U C | — | on provider build | complex (table editor, P4) |
 | 12 | `allowedTools` | list<glob> \| unset | unset (= all) | U C | — | R (L*) | list (MultiSelect of tool names + free glob) |
 | 13 | `disabledTools` | list<glob> | `[]` | P U C | — | R (L*) | list |
 | 14 | `statusLine` | `{type:"command",command}` | unset | U C | — | R (L* via `StatusLineCommand::configure`) | easy (command Input; exec warning) |
 | 15 | `layout` | `DockLayout` manifest | launch default | U C (shell-written) | — | L | not form-edited ("Reset layout" button) |
-| 16 | `maxToolSteps` | int ≥ 1 | `8` (`EngineBackend.php:262`) | U C | — | R (L* via `withMaxSteps`) | easy (Input/Slider) |
-| 17 | `permissionMode` | enum `default,accept-edits,plan,auto,dont-ask,bypass-permissions` | `bypass-permissions` (`Bootstrap.php:166`) | U C (strict reader) | `SUGARCRUSH_PERMISSION_MODE`, `--permission-mode` | R (L* via `withPermissionGate`) | easy (Select + warning) |
+| 16 | `maxToolSteps` | int ≥ 1 | `EngineBackend` ctor `maxSteps` | U C | — | R (L* via `withMaxSteps`) | easy (Input/Slider) |
+| 17 | `permissionMode` | enum `default,accept-edits,plan,auto,dont-ask,bypass-permissions` | `bypass-permissions` (`Bootstrap.php`) | U C (strict reader) | `SUGARCRUSH_PERMISSION_MODE`, `--permission-mode` | R (L* via `withPermissionGate`) | easy (Select + warning) |
 | 18 | `permissionRules` | list<{pattern, action: allow\|deny\|ask}> | `[]` | U C (strict) | — | R (L*) | complex (row editor, P4) |
 | 19-22 | `trustedProjectHooks`, `…Mcp`, `…Commands`, `…Settings` | list<absolute path> | `[]` | **C only** (the `--config` file) | — | **F** | easy as per-project toggles; full list read-only |
 | 23 | `claudeMcpBinary` | absolute executable path | unset | U C | — | F | easy (Input + existence validator) |
@@ -231,31 +225,30 @@ Leave alone the protocol constants, kill/reap grace periods, poll intervals, fra
 
 | Behaviour | Where (file:line) | Proposed key | Type | Default | Tier | Apply |
 |---|---|---|---|---|---|---|
-| Step cap | `src/Backend/EngineBackend.php:262` (`maxSteps = 8`); `Bootstrap.php:2921` key | `maxToolSteps` (exists) → make NT by reading in `runTurn` | int 1–500 | 8 (reports 01/02/06/10 say raise to 50 together with a doom-loop guard) | U (Spend) | NT |
-| No-progress watchdog | `EngineBackend.php:99` `COMPLETE_TIMEOUT_SECONDS = 120` | `turnIdleTimeoutSeconds` | int ≥ 30 | 120 | U | NT (parent reads it at fork) |
-| Sub-agent turn cap | `src/Tools/BuiltIn/TaskTool.php:135`, `src/Agents/EngineExecutor.php:51` `DEFAULT_MAX_TURNS = 50` | `subagents.maxTurns` | int | 50 | U (Spend) | NT |
-| Sub-agent concurrency | `src/Agents/AgentPoolConfig.php:22` `maxConcurrent = 5` (unused for Task; reports 07/10/11) | `subagents.maxConcurrent` | int 1–16 | 5 | U (Spend) | NT |
-| Retry attempts / backoff | `src/Providers/TransientFailure.php:165` (3), `:174` (500 ms) | `provider.retryAttempts`, `provider.retryBaseBackoffMs` | int | 3 / 500 | P+U (Tuning) | NT |
-| Connect timeout | `src/Providers/Concerns/HttpClientDefaults.php:116` (15 s), env only | `connectTimeoutSeconds` | float ≥ 0.001 | 15 | P+U | NT |
-| Stream read-idle | `HttpClientDefaults.php:144` (3600 s) | `streamIdleTimeoutSeconds` | int | 3600 | U | NT |
-| Default temperature / max_tokens | `src/Providers/CustomProvider.php:163-164,229-230`; `BedrockProvider.php:56-58` | `temperature` (per provider), `maxOutputTokens` (exists) | float 0–2 | 0.7 (SGLang per-family) | U | NT |
+| Step cap | `src/Backend/EngineBackend.php` (`maxSteps`); `Bootstrap.php` key | `maxToolSteps` (exists) → make NT by reading in `runTurn` | int | ctor value | U (Spend) | NT |
+| No-progress watchdog | `EngineBackend.php` `COMPLETE_TIMEOUT_SECONDS = 120` | `turnIdleTimeoutSeconds` | int ≥ 30 | 120 | U | NT (parent reads it at fork) |
+| Sub-agent turn cap | `src/Tools/BuiltIn/TaskTool.php`, `src/Agents/EngineExecutor.php` `DEFAULT_MAX_TURNS` | `subagents.maxTurns` | int | `DEFAULT_MAX_TURNS` | U (Spend) | NT |
+| Sub-agent concurrency | `src/Agents/AgentPoolConfig.php` `maxConcurrent = 5` (unused for Task; reports 07/10/11) | `subagents.maxConcurrent` | int 1–16 | 5 | U (Spend) | NT |
+| Retry attempts / backoff | `src/Providers/TransientFailure.php` (3), (500 ms) | `provider.retryAttempts`, `provider.retryBaseBackoffMs` | int | 3 / 500 | P+U (Tuning) | NT |
+| Connect timeout | `src/Providers/Concerns/HttpClientDefaults.php` (15 s), env only | `connectTimeoutSeconds` | float ≥ 0.001 | 15 | P+U | NT |
+| Stream read-idle | `HttpClientDefaults.php` (3600 s) | `streamIdleTimeoutSeconds` | int | 3600 | U | NT |
+| Default temperature / max_tokens | `src/Providers/CustomProvider.php`; `BedrockProvider.php` | `temperature` (per provider), `maxOutputTokens` (exists) | float 0–2 | 0.7 (SGLang per-family) | U | NT |
 | Conversation model | env `SUGARCRUSH_MODEL` / `--model` only | `models` | map<provider,model> | `{}` | U | L (backend rebuild) |
 | Spend cap | env `SUGARCRUSH_MAX_COST`; `/budget` is session-only | `maxCostUsd` | float > 0 \| unset | unset | U (Spend) | L (`Chat` field, same as `/budget`) |
-| Prompt suggestions | env `SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS`; `Chat.php:390` history 12 | `promptSuggestions` | bool | true | P+U | L |
-| Idle compaction offer | `src/Context/IdleCompactionPolicy.php:43` (3600 s), `:65` refill limit 3 | `compaction.idleOfferSeconds` | int \| 0 = off | 3600 | P+U | L |
+| Prompt suggestions | env `SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS`; `Chat.php` history 12 | `promptSuggestions` | bool | true | P+U | L |
+| Idle compaction offer | `src/Context/IdleCompactionPolicy.php` (3600 s), refill limit 3 | `compaction.idleOfferSeconds` | int \| 0 = off | 3600 | P+U | L |
 
-**Context and compaction** (`src/Context/CompactorConfig.php:68-76`; `Chat` already accepts `?CompactorConfig` at `Chat.php:634` and uses it at `:1375`, but `Bootstrap::chat()` never passes one [V])
+**Context and compaction** (`src/Context/CompactorConfig.php`; `Chat` already accepts `?CompactorConfig` in its ctor and uses it for `ContextCompactor`, but `Bootstrap::chat()` never passes one [V])
 
 | Behaviour | Where | Key | Type | Default | Tier | Apply |
 |---|---|---|---|---|---|---|
-| Reminder threshold | `CompactorConfig.php:68` | `compaction.reminderPercent` | int 1–99 | 70 | P+U | L |
-| Auto-compact threshold | `:69` | `compaction.autoPercent` | int | 85 | P+U | L |
-| Foreground block | `:70` | `compaction.blockPercent` | int | 95 | P+U | L |
-| Keep-recent pairs | `:71` | `compaction.keepRecent` | int ≥ 1 | 10 | P+U | L |
-| Summary clips | `:74-76` | `compaction.summaryUserChars` / `…AssistantChars` / `…toolOutputChars` | int | 80 / 100 / 2000 | P+U | L |
+| Reminder threshold | `CompactorConfig.php` | `compaction.reminderPercent` | int 1–99 | 70 | P+U | L |
+| Auto-compact threshold | `CompactorConfig.php` | `compaction.autoPercent` | int | 85 | P+U | L |
+| Foreground block | `CompactorConfig.php` | `compaction.blockPercent` | int | 95 | P+U | L |
+| Keep-recent pairs | `CompactorConfig.php` | `compaction.keepRecent` | int ≥ 1 | 10 | P+U | L |
+| Summary clips | `CompactorConfig.php` | `compaction.summaryUserChars` / `…AssistantChars` / `…toolOutputChars` | int | 80 / 100 / 2000 | P+U | L |
 | LLM vs heuristic | implicit: `summaryBackend !== null` | `compaction.mode: llm\|heuristic\|off` | enum | llm | P+U | L |
-| Context-window fallback | `src/Context/ContextWindow.php:52` (100 000) | `contextWindowOverride` | int \| unset | unset | U | L |
-| Token-estimate calibration clamp | `Chat.php:422,438` (1.0–3.0) | leave hard-coded | — | — | — | — |
+| Token-estimate calibration clamp | `Chat.php` (1.0–3.0) | leave hard-coded | — | — | — | — |
 
 Validation: `reminderPercent < autoPercent < blockPercent`, as a cross-field validator (§4.5).
 
@@ -263,53 +256,53 @@ Validation: `reminderPercent < autoPercent < blockPercent`, as a cross-field val
 
 | Behaviour | Where | Key | Type | Default | Tier | Apply |
 |---|---|---|---|---|---|---|
-| Bash/Grep/Glob/Lsp output cap | `src/Tools/Concerns/TruncatesOutput.php:123` (64 KiB) | `tools.outputCapBytes` | int 4 KiB–1 MiB | 65 536 | P+U | NT |
-| Instruction-file section cap | `TruncatesOutput.php:295` (16 KiB) | `tools.instructionCapBytes` | int | 16 384 | P+U | NT |
-| Read cap | `src/Tools/BuiltIn/Read.php:23` (1 MiB) | `tools.read.maxBytes` | int | 1 048 576 | P+U | NT |
-| Glob match cap | `src/Tools/BuiltIn/Glob.php:49` (1000) | `tools.glob.maxMatches` | int | 1000 | P+U | NT |
-| WebFetch cap / timeout / redirects | `src/Tools/BuiltIn/WebFetch.php:48-50` | `tools.webFetch.maxBytes`, `.timeoutSeconds` | int | 2 MiB / 30 | P+U | NT |
-| WebSearch endpoint | `src/Tools/BuiltIn/WebSearch.php:52` (**private host `skynet2…`**) | `webSearch.endpoint` | URL \| unset | **unset → tool reports "not configured"** (fixes baseline §11.1 #6) | **U (Egress)** | NT |
-| WebSearch results / timeout | `WebSearch.php:49-50` (30 s, 10) | `webSearch.maxResults`, `.timeoutSeconds` | int | 10 / 30 | P+U | NT |
-| Interactive Bash idle | `src/Tools/Concerns/CapturesProcessOutput.php:227` (8 s) | `tools.bash.interactiveIdleSeconds` | float | 8 | P+U | NT |
+| Bash/Grep/Glob/Lsp output cap | `src/Tools/Concerns/TruncatesOutput.php` (64 KiB) | `tools.outputCapBytes` | int 4 KiB–1 MiB | 65 536 | P+U | NT |
+| Instruction-file section cap | `TruncatesOutput.php` (16 KiB) | `tools.instructionCapBytes` | int | 16 384 | P+U | NT |
+| Read cap | `src/Tools/BuiltIn/Read.php` (1 MiB) | `tools.read.maxBytes` | int | 1 048 576 | P+U | NT |
+| Glob match cap | `src/Tools/BuiltIn/Glob.php` (1000) | `tools.glob.maxMatches` | int | 1000 | P+U | NT |
+| WebFetch cap / timeout / redirects | `src/Tools/BuiltIn/WebFetch.php` | `tools.webFetch.maxBytes`, `.timeoutSeconds` | int | 2 MiB / 30 | P+U | NT |
+| WebSearch endpoint | `src/Tools/BuiltIn/WebSearch.php` ctor (over `SUGARCRUSH_SEARCH_ENDPOINT`) | `webSearch.endpoint` | URL \| unset | unset | **U (Egress)** | NT |
+| WebSearch results / timeout | `WebSearch.php` (30 s, 10) | `webSearch.maxResults`, `.timeoutSeconds` | int | 10 / 30 | P+U | NT |
+| Interactive Bash idle | `src/Tools/Concerns/CapturesProcessOutput.php` (8 s) | `tools.bash.interactiveIdleSeconds` | float | 8 | P+U | NT |
 | Bash timeout | absent (report 08 P1: `bashTimeoutSeconds`, 300) | `tools.bash.timeoutSeconds` | int \| 0 = none | 300 | U | NT |
-| SugarCraft git cadence in Bash guidance | `src/Tools/BuiltIn/Bash.php:124-163` | `tools.bash.includeGitInstructions` (report 01) | bool | **false** (move the cadence to the repo's CLAUDE.md) | P+U | NT |
-| Parallel tool deadline | `src/Runtime.php:67` | `parallelToolDeadlineSeconds` (exists) | — | — | — | — |
-| Chat-native parallel timeout | `Chat.php:317` (30 s) | `tools.commandBackendParallelTimeoutSeconds` | int | 30 | P+U | L |
-| MCP results uncapped | `src/Tools/McpToolBridge.php:587-622` | `mcp.resultCapBytes` | int | 65 536 | P+U | NT |
-| Custom-command shell budget | `src/Commands/CommandSpec.php:138` (10 s), `:150` (16 KiB) | `commands.shellBudgetSeconds` | int | 10 | U (Exec) | L |
-| Hook default timeout | `src/Hooks/ScriptHook.php:142` (60 s; per hook in yaml) | `hooks.defaultTimeoutSeconds` | float | 60 | U | R |
+| SugarCraft git cadence in Bash guidance | `src/Tools/BuiltIn/Bash.php` | `tools.bash.includeGitInstructions` (report 01) | bool | **false** (move the cadence to the repo's CLAUDE.md) | P+U | NT |
+| Parallel tool deadline | `src/Runtime.php` | `parallelToolDeadlineSeconds` (exists) | — | — | — | — |
+| Chat-native parallel timeout | `Chat.php` (30 s) | `tools.commandBackendParallelTimeoutSeconds` | int | 30 | P+U | L |
+| MCP results uncapped | `src/Tools/McpToolBridge.php` | `mcp.resultCapBytes` | int | 65 536 | P+U | NT |
+| Custom-command shell budget | `src/Commands/CommandSpec.php` (10 s), (16 KiB) | `commands.shellBudgetSeconds` | int | 10 | U (Exec) | L |
+| Hook default timeout | `src/Hooks/ScriptHook.php` (60 s; per hook in yaml) | `hooks.defaultTimeoutSeconds` | float | 60 | U | R |
 
 **Prompt, memory and rules**
 
 | Behaviour | Where | Key | Type | Default | Tier | Apply |
 |---|---|---|---|---|---|---|
-| Memory block caps | `src/Context/MemoryBlock.php:118` (12), `:137` (4 KiB), `:162` (512 B) | `memory.promptMaxEntries`, `.promptMaxBytes`, `.entryMaxBytes` | int | 12 / 4096 / 512 | P+U | NT |
-| Memory scopes in prompt | project only (`Runtime::memorySnapshot()` `:3606`) | `memory.promptScopes` | multi `project,user,agent` | `[project]` | U (Prompt) | NT |
-| `/memory add` default scope | `user` (baseline §5) | `memory.defaultScope` | enum | **`project`** (so notes reach the prompt) | U | L |
-| Project-memory note cap | `src/Context/ProjectMemoryWriter.php:58` (8 KiB) | `memory.projectNoteMaxBytes` | int | 8192 | P+U | L |
-| Standing-rule budget | `src/Runtime.php:161` (64 KiB), `:171` (2 pointers) | `rules.standingMaxBytes` | int | 65 536 | U | NT |
-| Repo map caps | `src/Context/RepoMapBlock.php:258` (8 KiB), `:290`, `:315` | `repoMap.enabled`, `.maxBytes` | bool / int | true / 8192 | P+U | NT |
-| `<env>` git sections | `src/Context/EnvironmentBlock.php:223` (8 KiB diff), `:317` (4 KiB) | `env.gitDiffAfterWrites` (bool), `env.diffMaxBytes` | — | true / 8192 | P+U | NT |
-| `@import` depth | `src/Context/ImportResolver.php:19` (4) | leave | — | — | — | — |
-| Skill nudges | `src/Skills/SkillPathNudge.php:155` (8), `:107` (300 B) | `skills.pathNudges` (bool) | bool | true | P+U | NT |
-| Launch notices to model | `src/Cli/Bootstrap.php:194` (24), `:212` (400) | `notices.transcriptLimit` | int | 24 | U | R |
+| Memory block caps | `src/Context/MemoryBlock.php` (12), (4 KiB), (512 B) | `memory.promptMaxEntries`, `.promptMaxBytes`, `.entryMaxBytes` | int | 12 / 4096 / 512 | P+U | NT |
+| Memory scopes in prompt | project only (`Runtime::memorySnapshot()`) | `memory.promptScopes` | multi `project,user,agent` | `[project]` | U (Prompt) | NT |
+| `/memory add` default scope | `user` (Appendix A) | `memory.defaultScope` | enum | **`project`** (so notes reach the prompt) | U | L |
+| Project-memory note cap | `src/Context/ProjectMemoryWriter.php` (8 KiB) | `memory.projectNoteMaxBytes` | int | 8192 | P+U | L |
+| Standing-rule budget | `src/Runtime.php` (64 KiB), (2 pointers) | `rules.standingMaxBytes` | int | 65 536 | U | NT |
+| Repo map caps | `src/Context/RepoMapBlock.php` (8 KiB) | `repoMap.enabled`, `.maxBytes` | bool / int | true / 8192 | P+U | NT |
+| `<env>` git sections | `src/Context/EnvironmentBlock.php` (8 KiB diff), (4 KiB) | `env.gitDiffAfterWrites` (bool), `env.diffMaxBytes` | — | true / 8192 | P+U | NT |
+| `@import` depth | `src/Context/ImportResolver.php` (4) | leave | — | — | — | — |
+| Skill nudges | `src/Skills/SkillPathNudge.php` (8), (300 B) | `skills.pathNudges` (bool) | bool | true | P+U | NT |
+| Launch notices to model | `src/Cli/Bootstrap.php` `LAUNCH_NOTICE_LIMIT`, `LAUNCH_NOTICE_MAX_CHARS` | `notices.transcriptLimit` | int | `LAUNCH_NOTICE_LIMIT` | U | R |
 
 **Sessions, UI and safety**
 
 | Behaviour | Where | Key | Type | Default | Tier | Apply |
 |---|---|---|---|---|---|---|
-| Mouse | env only; `Chat::mouseMode()` `Chat.php:4945`; `programOptions()` `:6185` | `mouse` | enum `on,wheel,off` | on | P+U | **L** via candy-core `Cmd::enableMouseCellMotion()`/`Cmd::disableMouse()` (`candy-core/src/Cmd.php:379,394`) |
-| Wheel lines | `Chat.php:466` (3) | `ui.scrollWheelLines` | int 1–20 | 3 | P+U | L |
-| Double-Esc window | `Chat.php:357` (0.6 s) | `ui.doubleEscSeconds` | float | 0.6 | P+U | L |
-| Collapsed tool-output rows / chars | `src/Renderer.php:478,480` (10, 2000); diff rows `:282` (24) | `ui.toolOutputPreviewLines`, `ui.diffPreviewRows` | int | 10 / 24 | P+U | L |
+| Mouse | env only; `Chat::mouseMode()` `Chat.php`; `programOptions()` | `mouse` | enum `on,wheel,off` | on | P+U | **L** via candy-core `Cmd::enableMouseCellMotion()`/`Cmd::disableMouse()` (`candy-core/src/Cmd.php`) |
+| Wheel lines | `Chat.php` (3) | `ui.scrollWheelLines` | int 1–20 | 3 | P+U | L |
+| Double-Esc window | `Chat.php` (0.6 s) | `ui.doubleEscSeconds` | float | 0.6 | P+U | L |
+| Collapsed tool-output rows / chars | `src/Renderer.php` (10, 2000); diff rows (24) | `ui.toolOutputPreviewLines`, `ui.diffPreviewRows` | int | 10 / 24 | P+U | L |
 | Tool output expanded by default | collapsed, hard-coded | `ui.expandToolOutput` | bool | false | P+U | L |
-| Palette MRU | `Chat.php:459` (8) | `ui.paletteMru` | int | 8 | P+U | L |
+| Palette MRU | `Chat.php` (8) | `ui.paletteMru` | int | 8 | P+U | L |
 | Terminal background | env `SUGARCRUSH_BACKGROUND` | `terminalBackground` | enum `auto,light,dark` | auto | P+U | L |
 | Session retention | env only | `sessionRetentionDays` | int 0–36500 | 0 | U | R (next launch) |
-| Checkpoints per session | `src/Session/EnhancedSessionStore.php:285` (100) | `sessions.maxCheckpoints` | int | 100 | U | L |
+| Checkpoints per session | `src/Session/EnhancedSessionStore.php` (100) | `sessions.maxCheckpoints` | int | 100 | U | L |
 | Auto-titles | always on | `sessions.autoTitle` | bool | true | P+U | L |
-| Auto-mode breaker | `src/Permissions/PermissionGate.php:72-73` (3 / 20) | `permissions.autoStrikeLimit`, `.autoTotalLimit` | int | 3 / 20 | U (Security) | L* |
-| Status line refresh | `src/Config/StatusLineCommand.php:103` (2.0 s; timeout derived) | `statusLine.refreshSeconds` | float ≥ 0.5 | 2.0 | U | L |
+| Auto-mode breaker | `src/Permissions/PermissionGate.php` (3 / 20) | `permissions.autoStrikeLimit`, `.autoTotalLimit` | int | 3 / 20 | U (Security) | L* |
+| Status line refresh | `src/Config/StatusLineCommand.php` (2.0 s; timeout derived) | `statusLine.refreshSeconds` | float ≥ 0.5 | 2.0 | U | L |
 | MCP on/off | env `SUGARCRUSH_MCP_DISABLE` | `mcp.enabled` | bool | true | U | R |
 | Debug flags | env `SUGARCRUSH_DEBUG_*` | `debug.skills`, `.commands`, `.rules`, `.stream` | bool | false | U | R |
 
@@ -321,7 +314,7 @@ The settings design should give each of these a ready slot and category, so a fe
 |---|---|---|---|---|
 | Doom-loop / repeat guard | 04 (`DOOM_LOOP_THRESHOLD=3`), 06 P0-1, 12 P1-3 `repeatToolThresholds` | `loopGuard.repeatThreshold`, `loopGuard.exclude` | int 3; list | P+U |
 | Mid-turn steering | 01 P0-2, 06 P0-3, 07, 08 P0-2, 04 | `steering.mode` | enum `queue\|steer\|steer-at-boundary`, default `steer` once the backchannel exists | P+U |
-| Interactive approval on the engine path → new default mode | 01, 02, 04 P0-3, 07 R? (change `Bootstrap.php:166`) | `permissionMode` (exists) default → `accept-edits` | enum | U |
+| Interactive approval on the engine path → new default mode | 01, 02, 04 P0-3, 07 R? (change `Bootstrap.php`) | `permissionMode` (exists) default → `accept-edits` | enum | U |
 | Read-only Bash profile | 04 P2-5 `readOnlyBash` | `permissions.readOnlyBashProfile` | bool | U |
 | Context pruning (DCP) | 03: `contextPruning{mode,minContextTokens 60000,maxContextTokens 120000,nudgeFrequency 5,iterationNudgeThreshold 10,protectedTools,protectedFilePatterns,strategies.*}`, env `SUGARCRUSH_CONTEXT_PRUNING` | `contextPruning.*` (nested; the editor shows sub-fields) | mixed | U (`mode` P+U) |
 | Mid-turn compaction | 07 (compact before every request at 90%), 10 | `compaction.midTurn` (bool), `compaction.midTurnPercent` | true / 90 | P+U |
@@ -339,7 +332,6 @@ The settings design should give each of these a ready slot and category, so a fe
 | Per-turn note | 08 `SUGARCRUSH_TURN_NOTE[_FILE]` | `turnNote.file` | path | U |
 | Watch-files `AI!` comments | 09 #12 `watchFiles` | `watchFiles` | bool false | U |
 | Edit fuzzy match | 04 `fuzzyThreshold` | `tools.edit.fuzzyThreshold` | float 1.0 | P+U |
-| Prompt-cache breakpoints | 01, 05, 06, 08, 09, 10 (wire `CacheBreakpoints`) | `promptCache.enabled` (replaces inert env) | bool | U |
 | Exclude dynamic sections | 01 `excludeDynamicSections` | `prompt.excludeDynamicSections` | bool | U |
 | Cache keepalive | 09 `cacheKeepalivePings` | `promptCache.keepalivePings` | int 0 | U (Spend) |
 
@@ -353,11 +345,11 @@ From `composer.json`: `candy-core`, `candy-forms`, `candy-sprinkles`, `candy-shi
 
 | Lib | Classes the editor would use | How sugar-crush uses it today |
 |---|---|---|
-| **candy-forms** (`SugarCraft\Forms\`) | `Field` interface (`candy-forms/src/Field.php`: `key/value/focus/blur/update/view/getTitle/getDescription/getError/isHidden/revalidate`) · `Field\Input` (`withValue`, `withPlaceholder`, `withCharLimit`, `withSuggestions`/`withFuzzySuggestions`, `withValidator`, `withValidateOn`) · `Field\Select` (`withOptions`, `withSelected`, `withEnum` — maps PHP enums like `PermissionMode` directly) · `Field\Confirm` (`withLabels`) · `Field\Slider` (min/max/step) · `Field\MultiSelect` (`withMin/withMax/withValue`) · `Field\Note` (read-only explanatory rows) · `Field\Text` (multi-line, for `instructions`) · `Form::groups(Group …)` with `nextGroup/prevGroup/activeGroup`, **`hydrate(array)`**, `values()`, `validateAll()`, `errors()`, `focusField(key)`, `withKeyMap(KeyMap)`, `withWidth/withHeight`, `withTheme(Theme)` · `Group::withTitle/withDescription/withHideFunc` · `HasReadonly::withReadonly()` (env-locked fields) · `HasDynamicLabels::withTitleFunc()` (i18n or source-aware labels) · `HasErrorHelp` · `Validator\{Required,Pattern,MinLength,MaxLength}` · `Theme` (title, description, focusedTitle, error, option, selectedOption, help, prompt styles) · `ItemList`, `Viewport`, `TextInput` | `TextArea` for the chat input; `ItemList` as the selection model of `SessionPicker` (`src/Tui/SessionPicker.php:13,153`) |
+| **candy-forms** (`SugarCraft\Forms\`) | `Field` interface (`candy-forms/src/Field.php`: `key/value/focus/blur/update/view/getTitle/getDescription/getError/isHidden/revalidate`) · `Field\Input` (`withValue`, `withPlaceholder`, `withCharLimit`, `withSuggestions`/`withFuzzySuggestions`, `withValidator`, `withValidateOn`) · `Field\Select` (`withOptions`, `withSelected`, `withEnum` — maps PHP enums like `PermissionMode` directly) · `Field\Confirm` (`withLabels`) · `Field\Slider` (min/max/step) · `Field\MultiSelect` (`withMin/withMax/withValue`) · `Field\Note` (read-only explanatory rows) · `Field\Text` (multi-line, for `instructions`) · `Form::groups(Group …)` with `nextGroup/prevGroup/activeGroup`, **`hydrate(array)`**, `values()`, `validateAll()`, `errors()`, `focusField(key)`, `withKeyMap(KeyMap)`, `withWidth/withHeight`, `withTheme(Theme)` · `Group::withTitle/withDescription/withHideFunc` · `HasReadonly::withReadonly()` (env-locked fields) · `HasDynamicLabels::withTitleFunc()` (i18n or source-aware labels) · `HasErrorHelp` · `Validator\{Required,Pattern,MinLength,MaxLength}` · `Theme` (title, description, focusedTitle, error, option, selectedOption, help, prompt styles) · `ItemList`, `Viewport`, `TextInput` | `TextArea` for the chat input; `ItemList` as the selection model of `SessionPicker` (`src/Tui/SessionPicker.php`) |
 | **candy-fuzzy** | `Matcher\SmithWatermanMatcher`, `MatchResult`, `Highlighter` | palette and slash-popup filtering (`src/Commands/CommandRegistry.php`) |
 | **candy-focus** | `FocusRing::ofStrict()/focus()/next()/previous()/disable()` | Tab cycle in `src/Tui/Pane.php` |
 | **candy-mouse** | `Mark::zone(id, content)`, `Scanner::scan()/hit()/prefixed()`, `ZoneClickTracker` | every clickable row (palette, session rows, menu, pane tabs, dividers) |
-| **sugar-veil** | `Veil::new()->withBackdrop(50)->composite(fg, bg, Position::CENTER, …)` | all overlays (`src/Renderer.php:1521`) |
+| **sugar-veil** | `Veil::new()->withBackdrop(50)->composite(fg, bg, Position::CENTER, …)` | all overlays (`src/Renderer.php`) |
 | **candy-sprinkles** | `Style`, `Border::rounded()->withTitle()`, `Table\Table`, `Layout`, `Bar\StatusBar` + `Segment` | all chrome; `Table` in `src/Commands/TranscriptTable.php` |
 | **candy-layout** | `Dock\DockLayout`, `Dock\Side`, `Region` | pane dock |
 | **candy-core** | `Util\AtomicJsonFile` (flock + rename, `withPermissions(0600)`), `Util\Width::truncate/truncateMiddle`, `Cmd::enableMouseCellMotion/disableMouse`, `I18n\Lang`/`T`, `Subscriptions` | runtime; `AtomicJsonFile` only in the dormant `src/Session.php` |
@@ -369,17 +361,12 @@ From `composer.json`: `candy-core`, `candy-forms`, `candy-sprinkles`, `candy-shi
 
 | Lib | Useful classes | Requires | Verdict |
 |---|---|---|---|
-| `sugar-prompt` | façade: `class_alias` of `candy-forms` (`sugar-prompt/src/Form.php:10`) | candy-forms | **No** — use `candy-forms` directly (AGENTS.md "Façade = alias") |
-| `sugar-bits` | `Tabs\Tabs` (real Model, `withLabels/withActive/withZoneManager`), `Help\Help` + `Key\Binding`/`KeyMap` (short and full help line) | candy-core, candy-forms, candy-sprinkles, **candy-zone**, honey-bounce | Optional. `Tabs` hit-tests through `candy-zone`'s `Manager`, while sugar-crush uses `candy-mouse`, so mouse support needs bridging. The `MenuBar` pane-tab strip (`MenuBar.php:226-229`, `Mark::zone`) already shows the house pattern. **Recommend a local `SettingsTabStrip`** of about 60 lines on `candy-mouse`. |
+| `sugar-bits` | `Tabs\Tabs` (real Model, `withLabels/withActive/withZoneManager`), `Help\Help` + `Key\Binding`/`KeyMap` (short and full help line) | candy-core, candy-forms, candy-sprinkles, **candy-zone**, honey-bounce | Optional. `Tabs` hit-tests through `candy-zone`'s `Manager`, while sugar-crush uses `candy-mouse`, so mouse support needs bridging. The `MenuBar` pane-tab strip (`MenuBar.php`, `Mark::zone`) already shows the house pattern. **Recommend a local `SettingsTabStrip`** of about 60 lines on `candy-mouse`. |
 | `sugar-toast` | `Toast::new()->withPosition()->success()/warning()/info()`, `withDuration`, `pruneExpired`, `nextExpiry` | candy-core, candy-buffer | **Recommended (P3)** for "Saved to ~/.sugar-crush/config.json" and "Restart required for 2 settings". sugar-crush has no toast surface; notices today are transcript rows, which also go to the model. |
-| `sugar-diff` | `Diff::compute(before, after)->unified(path)`, `addedLines/removedLines` | ext-mbstring only | **Recommended (P2)** for the save preview. sugar-crush has its own trait (`src/Tools/Concerns/BuildsUnifiedDiff.php:41`, private static), and `sugar-diff` was "extracted from sugar-crush". Its output renders through the existing `src/Tui/DiffGutter.php::forDiff()` for consistent colouring. Alternatively, lift the trait into a small public `Support\UnifiedDiff`; avoid a third copy. |
+| `sugar-diff` | `Diff::compute(before, after)->unified(path)`, `addedLines/removedLines` | ext-mbstring only | **Recommended (P2)** for the save preview. sugar-crush has its own trait (`src/Tools/Concerns/BuildsUnifiedDiff.php`, private static), and `sugar-diff` was "extracted from sugar-crush". Its output renders through the existing `src/Tui/DiffGutter.php::forDiff()` for consistent colouring. Alternatively, lift the trait into a small public `Support\UnifiedDiff`; avoid a third copy. |
 | `sugar-table` | `Table::fromColumns()->withRows()->withSelectable()->withStyleFunc()` | candy-buffer, candy-core, candy-sprinkles | Possible for the P4 `permissionRules`/`modelPrices` row editors; `candy-sprinkles` `Table` + `ItemList` is enough for v1 |
 | `sugar-crumbs` | `NavStack::push/pop/view(' > ')` | candy-core, candy-mouse | Nice for nested objects (`contextPruning › strategies › staleReads`). P4. |
-| `candy-lister` | tree list with prefixer/suffixer + fuzzy filter | candy-async, candy-buffer, candy-core, candy-fuzzy | Alternative category tree; overkill for ~10 categories |
 | `sugar-dash` | `Components\Tabs\Tabs`, `Form\Toggle`, `Modal\Modal/ConfirmModal/Drawer/Wizard`, `Card\Badge` | **candy-pty in `require`**, sugar-toast, candy-buffer, candy-focus | **No.** It pulls `candy-pty` into sugar-crush's runtime `require` (it is dev-only today), and its components are `SizedItem::render()`, not TEA `Model`s. Its `Badge`/`Toggle` designs are a visual reference only. |
-| `candy-hermit` | fuzzy overlay over a background view | candy-pty, candy-ansi, … | No (candy-pty) |
-| `candy-zone` | bubblezone `Manager` | — | No (duplicates `candy-mouse`) |
-| `sugar-readline`, `sugar-boxer`, `sugar-stickers`, `sugar-skate`, `candy-palette` | — | — | Not relevant. `candy-palette` is terminal colour-*profile* detection, not a command palette. `sugar-skate` is a KV store; settings belong in the existing JSON layers. |
 
 ### 3.3 Recommended composition
 
@@ -443,13 +430,13 @@ final class SettingDefinition
 - `SettingType`, `SettingCategory`, `RiskClass`, `ApplyMode`, `UiEditability`, `OptionsSource` (enums);
 - `SettingValidator` (interface) with `RangeValidator`, `EnumValidator`, `AbsolutePathValidator`, `ExecutableValidator`, `UrlValidator`, `GlobListValidator`, `ThresholdOrderValidator` (cross-field).
 
-`SettingsSchema::all()` holds the 26 existing keys from day one. New keys are added as their features land.
+`SettingsSchema::all()` holds every existing key from day one. New keys are added as their features land.
 
 **Invariant tests** (P0):
 - `LayeredSettings::LAYERED_KEYS === SettingsSchema::layeredKeys()` (for the subset that existed before; afterwards the constant is *derived*).
 - `PROJECT_TIER_KEYS === SettingsSchema::projectTierKeys()`.
 - No `projectSettable` key has a `riskClass` outside {Cosmetic, Narrowing, Tuning}.
-- `titleModel`, `summaryModel` and `parallelToolDeadlineSeconds` are classified as Tuning, which preserves today's `PROJECT_TIER_KEYS` without changing behaviour.
+- `parallelToolDeadlineSeconds` is classified as Tuning, which preserves today's `PROJECT_TIER_KEYS` without changing behaviour.
 - Every `envVar` named in the schema has a row in `docs/ENVIRONMENT.md` (this composes with `EnvRosterDriftTest`).
 - Every `labelKey`/`helpKey` exists in `lang/en.php`.
 - Every `readerSymbol` resolves to a real method, by reflection.
@@ -477,7 +464,7 @@ This is today's order, with the session overlay inserted above the files and bel
 
 ### 4.4 Writing [P]
 
-`SettingsWriter` (in `Config\Settings`) is a **new, separate door**, so the `onConfigChange` census in `ConfigWriteProducerDocumentationDriftTest:290` stays `['provider','theme']`. The editor's theme and provider fields still route through `Chat::selectPaletteTheme()`/`selectPaletteProvider()` in v1, so those two keys keep exactly one writer each.
+`SettingsWriter` (in `Config\Settings`) is a **new, separate door**, so the `onConfigChange` census in `ConfigWriteProducerDocumentationDriftTest` stays `['provider','theme']`. The editor's theme and provider fields still route through `Chat::selectPaletteTheme()`/`selectPaletteProvider()` in v1, so those two keys keep exactly one writer each.
 
 **Target by tier:**
 
@@ -489,8 +476,8 @@ This is today's order, with the session overlay inserted above the files and bel
 | **This session only** | in-memory overlay | every key whose `applyMode ≠ Frozen` | Nothing is written; cleared on exit |
 
 **Write mechanics:**
-- The whole file is read, the patch applied, then written with `AtomicJsonFile::new($path)->withPermissions(0600)->write()` (`candy-core/src/Util/AtomicJsonFile.php:167`; flock + same-dir temp + rename).
-- **Dotted keys** (`compaction.autoPercent`) are stored as nested objects. That is a deliberate change from `writeUserConfig()`'s shallow merge, so the writer merges recursively, but only below keys the schema declares as objects.
+- The whole file is read, the patch applied, then written with `AtomicJsonFile::new($path)->withPermissions(0600)->write()` (`candy-core/src/Util/AtomicJsonFile.php`; flock + same-dir temp + rename).
+- **Dotted keys** (`compaction.autoPercent`) are stored **flat** on disk (`"compaction.autoPercent": 80`), so `LayeredSettings::merge()` (key-wise) and `only()` (exact-key filter) work unchanged (§5.5 #4).
 - **Reset to default** deletes the key from the target file rather than writing the default, so a later change to the default is still picked up.
 - **Strict keys** (`permissionMode`, `permissionRules`) are validated with the same parser `permissionGate()` uses *before* writing. The UI must never be able to write a value that would refuse the next launch.
 - **Trust actions** append or remove `realpath($root)` in `trustedProject*` lists, in the layer-4 file only, after a Veil confirm modal that spells out what the grant enables (hooks run scripts, MCP spawns servers, commands run `` !`cmd` ``, settings let the repo set the project-tier keys). They are badged **"applies next launch"**.
@@ -504,8 +491,7 @@ This is today's order, with the session overlay inserted above the files and bel
 - **Per field:** the schema validators become candy-forms validators (`Input::withValidator(\Closure)`, `withValidateOn(ValidateOn::Change)`). `Select`/`MultiSelect` need no validator, because their options *are* the domain.
 - **Cross-field:** `ThresholdOrderValidator` runs at save (`Form::validateAll()` plus a schema-level pass), e.g. `reminder < auto < block`, and `maxCostUsd > 0`.
 - **Semantic warnings** are not errors and do not block the save:
-  - `permissionMode` ∈ {default, accept-edits, plan, auto} on the TUI warns that "Ask verdicts are currently denied in the TUI (no approver)", until reports 01/04 P0 land;
-  - `maxToolSteps > 30` with no `maxCostUsd` warns that there is no spend backstop (Sglang/Custom report $0);
+  - `permissionMode` ∈ {default, accept-edits, plan, auto} on the TUI warns that "Ask verdicts are currently denied in the TUI (no approver)", until 1.C lands;
   - `statusLine` and `test.command` warn that the command "runs on a timer / after turns".
 - **Number parsing** mirrors `resolvedMaxToolSteps()`: nonsense values are refused in the UI rather than silently falling back to the default.
 
@@ -516,10 +502,10 @@ On save, `SettingsEditor` emits `SettingsSavedMsg{changed: list<key>, tier}`. `C
 | Apply mode | Mechanism | Keys (initial) |
 |---|---|---|
 | **NextTurn** | nothing to do: the child reads the merged config at `runTurn()` start | `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxOutputTokens`, and after P4 plumbing `maxToolSteps`, `tools.*` caps, `memory.*`, `webSearch.*`, … |
-| **Live — Chat state** | `Chat::mutate()` | `theme` (`themeName`), `maxCostUsd` (same field `/budget` sets), `promptSuggestions`, `compaction.*` (rebuild `ContextCompactor` from a new `CompactorConfig`, `Chat.php:1375`), `ui.*` |
+| **Live — Chat state** | `Chat::mutate()` | `theme` (`themeName`), `maxCostUsd` (same field `/budget` sets), `promptSuggestions`, `compaction.*` (rebuild `ContextCompactor` from a new `CompactorConfig`, `Chat.php`), `ui.*` |
 | **Live — Cmd** | returned `Cmd` | `mouse` → `Cmd::enableMouseCellMotion()` / `Cmd::disableMouse()`; `statusLine` → re-run `StatusLineCommand::configure()` |
-| **Live — backend swap** | `EngineBackend::withMaxSteps()` (`:603`), `withPermissionGate()` (`:467`), `withTools()` (`:377`), `withSkillRegistry()` (`:421`); `Chat::withBackend()` (`:6218`) | `maxToolSteps` (until it is NT), `permissionMode/Rules`, `allowedTools/disabledTools`, `disabledSkills`. **Deferred while `inFlight`** (§4.8). |
-| **Live — provider** | the existing `selectPaletteProvider()` | `provider`, `models`. **Fix first:** `backendFor()` must receive `taskManager`/`taskPool`/`rulesState`, or the Task tool disappears (baseline §11.1 #8). The editor should not ship a provider field before that fix. |
+| **Live — backend swap** | `EngineBackend::withMaxSteps()`, `withPermissionGate()`, `withTools()`, `withSkillRegistry()`; `Chat::withBackend()` | `maxToolSteps` (until it is NT), `permissionMode/Rules`, `allowedTools/disabledTools`, `disabledSkills`. **Deferred while `inFlight`** (§4.8). |
+| **Live — provider** | the existing `selectPaletteProvider()` | `provider`, `models`. **Fix first (N-P3a):** `Chat::selectPaletteProvider()` must pass `taskManager`/`taskPool`/`rulesState` to `backendFor()`, or the Task tool disappears. The editor should not ship a provider field before that fix. |
 | **Restart** | badge only | `instructions`, `enabledSkills`, `titleModel`/`summaryModel` (until `Chat` gains setters), `hooks.*`, `mcp.*`, `sessionRetentionDays`, `debug.*` |
 | **Frozen** | badge "applies next launch" | trust keys, `claudeMcp*` |
 
@@ -532,9 +518,9 @@ On save, `SettingsEditor` emits `SettingsSavedMsg{changed: list<key>, tier}`. `C
 | Door | Detail |
 |---|---|
 | `/settings [query]` (alias `/config`) | New `CommandSpec('settings', 'Edit settings', 'App', paletteAction: PaletteAction::OpenSettings, paletteLabel: 'Open settings', argumentHint: '[search]')`. This adds a slash command, a palette row and an F10 **App** menu row in one step. Add `settings` to `CommandRegistry::CONTROL_PLANE`, so a checkout's `.sugar-crush/commands/settings.md` cannot shadow the editor with a look-alike. `/settings compaction` opens with the search pre-filled. |
-| `Ctrl+,` | Today it focuses the sidebar. Proposed: the first press focuses the sidebar (unchanged); **Enter on `Pane::Settings` opens the editor**, replacing the generic palette door for that one pane (`KeyboardHandler::enterOpensPaletteDoor()` `:297` gains an arm). A second `Ctrl+,` while the sidebar is focused also opens it. |
+| `Ctrl+,` | Today it focuses the sidebar. Proposed: the first press focuses the sidebar (unchanged); **Enter on `Pane::Settings` opens the editor**, replacing the generic palette door for that one pane (`KeyboardHandler::enterOpensPaletteDoor()` gains an arm). A second `Ctrl+,` while the sidebar is focused also opens it. |
 | Sidebar click | Click on the sidebar title or "Edit…" footer zone → open |
-| Mid-turn | Allowed: the editor is an overlay-class view that writes no history. The `/settings` *slash* form is refused mid-turn like every slash command (`Chat.php:7178`); `Ctrl+,`, the palette row and the click still open it. |
+| Mid-turn | Allowed: the editor is an overlay-class view that writes no history. The `/settings` *slash* form is refused mid-turn like every slash command (`Chat.php`); `Ctrl+,`, the palette row and the click still open it. |
 
 #### Layout
 
@@ -584,15 +570,12 @@ On terminals narrower than 70 columns or shorter than 18 rows, it falls back to 
 **Env-locked field and a list field (Agent loop tab):**
 
 ```
-│  Max tool steps per turn    8      ▕████░░░░░░░░░░░░▏ 1…100   ● you    ⟳ live (next turn)        │
 │  No-progress watchdog       120 s                             ○ default ⧗ next turn              │
 │  Parallel read-only tools   on                                ⚑ SUGARCRUSH_DISABLE_PARALLEL_…   │
 │                             🔒 locked by environment — unset the variable to edit here            │
 │  Parallel batch deadline    90 s                              ○ default ⧗ next turn              │
 │  Spend cap (USD)            (none)                            ◐ session (/budget 5.00 → 5.00)    │
-│  Sub-agent max turns        50                                ○ default ⧗ next turn              │
 │  Sub-agent concurrency      5                                 ○ default ⧗ next turn              │
-│  ⚠ 30+ steps with no spend cap: Sglang/Custom report $0, so nothing would stop a runaway turn.   │
 ```
 
 **MultiSelect over discovered items (Tools tab):**
@@ -612,14 +595,11 @@ On terminals narrower than 70 columns or shorter than 18 rows, it falls back to 
                 │ ~/.sugar-crush/config.json                                    │
                 │  @@ -4,6 +4,11 @@                                             │
                 │     "theme": "tokyoNight",                                    │
-                │ -   "maxToolSteps": 8,                                        │
-                │ +   "maxToolSteps": 40,                                       │
-                │ +   "compaction": {                                           │
-                │ +       "autoPercent": 80                                     │
-                │ +   },                                                        │
+                │ -   "maxToolSteps": 1000,                                     │
+                │ +   "maxToolSteps": 400,                                      │
+                │ +   "compaction.autoPercent": 80,                             │
                 │                                                               │
                 │ Applies: ⟳ now 1 · ⧗ next turn 1 · ↻ restart 0                │
-                │ ⚠ maxToolSteps 40 with no spend cap                           │
                 │                                                               │
                 │        [Enter] Save     [s] Save for this session only        │
                 │        [Esc] Back to editing                                  │
@@ -662,7 +642,7 @@ On terminals narrower than 70 columns or shorter than 18 rows, it falls back to 
 ╰────────────────────────╯
 ```
 
-The sidebar footer changes from `read-only — /theme, /model`; `tests/Tui/Components/SettingsPaneTest.php` and the README "Pane docking" paragraph (`README.md:790`) must change with it.
+The sidebar footer changes from `read-only — /theme, /model`; `tests/Tui/Components/SettingsPaneTest.php` and the README "Pane docking" paragraph (`README.md`) must change with it.
 
 #### Categories and field types
 
@@ -670,7 +650,7 @@ The sidebar footer changes from `read-only — /theme, /model`; `tests/Tui/Compo
 |---|---|
 | **Model & Provider** | `provider` (Select over `Bootstrap::availableProviders()`) · `models[provider]` (Input + fuzzy suggestions from `sugarcrush models`) · `titleModel`, `summaryModel` (Input + suggestions) · `maxOutputTokens` (Input int, "unset" chip) · `temperature` (Slider 0–2 step 0.05) · `provider.retryAttempts` · `connectTimeoutSeconds` · `streamIdleTimeoutSeconds` · providers list (**read-only** `Note` rows from `config.dev.json`, with "open file") |
 | **Agent loop** | `maxToolSteps` (Slider/Input) · `turnIdleTimeoutSeconds` · `parallelToolCalls` (Confirm) · `parallelToolDeadlineSeconds` · `maxCostUsd` · `steering.mode` (Select) · `loopGuard.repeatThreshold` · `promptSuggestions` (Confirm) |
-| **Context & Compaction** | `compaction.*` (Select mode, Inputs with range validators) · `contextWindowOverride` · `contextPruning.*` (when it lands) · `repoMap.*` · `env.*` · `tools.spillAboveChars` |
+| **Context & Compaction** | `compaction.*` (Select mode, Inputs with range validators) · `contextWindow` · `contextPruning.*` (when it lands) · `repoMap.*` · `env.*` · `tools.spillAboveChars` |
 | **Permissions** | `permissionMode` (`Select::withEnum(PermissionMode::class)`) · `permissionRules` (P4 row editor; v1 read-only table identical to `/permissions`) · `permissions.readOnlyBashProfile` · auto-mode breaker ints · **Project trust** sub-section (four Confirm toggles for the *current root*, plus a read-only list of all trusted roots) |
 | **Tools** | `allowedTools`, `disabledTools` (MultiSelect over `Bootstrap::unfilteredTools()` names + free glob) · output caps (Inputs) · `tools.bash.timeoutSeconds` · `tools.bash.includeGitInstructions` · `webSearch.endpoint` (Input + `UrlValidator`) · `webSearch.maxResults` · `mcp.resultCapBytes` · `mcp.toolTimeoutSeconds` |
 | **Memory & Rules** | `memory.promptScopes` (MultiSelect) · `memory.defaultScope` (Select) · memory caps · `disabledRules` (MultiSelect over `RuleLoader` packs, showing path-relative names) · `rules.standingMaxBytes` · `instructions` (Text, one glob per line) |
@@ -712,16 +692,16 @@ Clicks are suppressed when `Chat::mouseClicksEnabled()` is false, as elsewhere.
 
 - `SettingsEditor` (in `Tui\Settings`) is a TEA model held in `App::$settingsEditor` (nullable, like the skill picker).
 - It holds: the `Form`; the `ResolvedSetting` snapshot it was hydrated from; the target tier; the search query and results; the focus ring; the unsaved-change map; and the modal state (none, preview or confirm).
-- `App::update()` routes keys to it before `delegateToChat()` while it is open (`App.php:1064`, `:2057`), the same way the menu and picker claim keys. `KeyboardHandler::shellOwnsKeyboard()` gains a fourth state.
-- Rendering: `Tui\Renderer` (`:498`) gains `if ($a->settingsEditor !== null) return self::renderSettingsEditor(...)`, which mirrors `renderAgentDashboard()`'s clipping and zone discipline (clear the chat zones, add the `settings:` zones).
+- `App::update()` routes keys to it before `delegateToChat()` while it is open (`App.php`), the same way the menu and picker claim keys. `KeyboardHandler::shellOwnsKeyboard()` gains a fourth state.
+- Rendering: `Tui\Renderer` gains `if ($a->settingsEditor !== null) return self::renderSettingsEditor(...)`, which mirrors `renderAgentDashboard()`'s clipping and zone discipline (clear the chat zones, add the `settings:` zones).
 
 ### 4.8 Coexistence with the forked turn child [P]
 
-- **The running turn is never affected.** The child forked before the save and read its config at `runTurn()` start (`EngineBackend.php:782`). A NextTurn key therefore applies to the *next* turn with no further work. The preview modal states this when `Chat::$inFlight` is set: "A turn is running — changes apply from the next turn."
-- **Backend-swap keys are deferred.** If `inFlight` holds when `applySettings()` runs, the change set is parked in `Chat::$pendingSettingsApply` and applied in the same place queued prompts are released (`Chat::releaseQueuedPrompts()`, `:7778`), *before* the first queued prompt dispatches. This avoids swapping `$backend` under a promise that the in-flight turn's completion handlers still close over [I].
+- **The running turn is never affected.** The child forked before the save and read its config at `runTurn()` start (`EngineBackend.php`). A NextTurn key therefore applies to the *next* turn with no further work. The preview modal states this when `Chat::$inFlight` is set: "A turn is running — changes apply from the next turn."
+- **Backend-swap keys are deferred.** If `inFlight` holds when `applySettings()` runs, the change set is parked in `Chat::$pendingSettingsApply` and applied in the same place queued prompts are released (`Chat::releaseQueuedPrompts()`), *before* the first queued prompt dispatches. This avoids swapping `$backend` under a promise that the in-flight turn's completion handlers still close over [I].
 - **Chat-state live keys apply immediately, even mid-turn**, because they do not touch history: theme, mouse, `ui.*`, compaction thresholds. Compaction thresholds are only consulted in `submit()` anyway.
 - **Session overlay and fork:** see §4.3. Task sub-agents inherit the overlay through the turn child; `/bg` daemons do not.
-- **Mid-turn refusal rule:** the editor's Save writes no history, so it is exempt, the same way overlays "open and browse" mid-turn (`Chat.php:7622-7626`). Exempting it needs a sentence in that doc-block, plus a test.
+- **Mid-turn refusal rule:** the editor's Save writes no history, so it is exempt, the same way overlays "open and browse" mid-turn (`Chat.php`). Exempting it needs a sentence in that doc-block, plus a test.
 
 ### 4.9 i18n [P]
 
@@ -729,7 +709,7 @@ sugar-crush has **no `Lang` class and no `lang/` directory today** [V] (`grep La
 - add `src/Lang.php` (`final class Lang extends \SugarCraft\Core\I18n\Lang { protected const NAMESPACE = 'crush'; protected const DIR = __DIR__ . '/../lang'; }`, the `candy-pty/src/Lang.php` pattern);
 - add `lang/en.php` with every `settings.*.label/help` key, the category names, badges and button labels.
 
-Other locales follow `LOCALES.md`, with a `LangParityTest` like the one `candy-palette/tests/` is adding in the working tree. Labels reach candy-forms through `withTitle(Lang::t($def->labelKey))`. Values with dynamic text (source paths) use `withTitleFunc()`.
+Other locales follow `LOCALES.md`, with a `LangParityTest` like `candy-palette/tests/LangParityTest.php`. Labels reach candy-forms through `withTitle(Lang::t($def->labelKey))`. Values with dynamic text (source paths) use `withTitleFunc()`.
 
 ### 4.10 Docs generated or checked from the schema [P]
 
@@ -740,11 +720,10 @@ Other locales follow `LOCALES.md`, with a `LangParityTest` like the one `candy-p
   - the "Settings files" table row 4 ("who wrote it") must name the editor;
   - the line "`settings.json` is never written" stays true;
   - the "Pane docking" paragraph changes;
-  - the slash-command roster gains `/settings` (`ReadmeRosterDriftTest:237`).
+  - the slash-command roster gains `/settings` (`ReadmeRosterDriftTest`).
 - **`docs/SETTINGS.md` prose that becomes false** and must be rewritten in the same PR:
   - "exactly two keys are ever written through the chat's config-change door … a third, `layout`";
-  - "Only `provider` and `theme` are ever written to `config.json`";
-  - "When a change takes effect … only two keys".
+  - "Only `provider` and `theme` are ever written to `config.json`".
 
   These sentences are pinned by `ConfigWriteProducerDocumentationDriftTest` (paragraph-scoped rules) and `ThemePersistenceFramingTest`. Follow those tests' retraction convention: rewrite in place, retract rather than delete where a test expects the retraction.
 
@@ -785,30 +764,30 @@ Other locales follow `LOCALES.md`, with a `LangParityTest` like the one `candy-p
 
 ### 5.2 Classes to modify
 
-| File:line | Change |
+| File | Change |
 |---|---|
 | `src/Config/LayeredSettings.php` (`LAYERED_KEYS`, `PROJECT_TIER_KEYS`) | P0: assert equal to the schema. P2+: derive them (`SettingsSchema::layeredKeys()`), keeping the public constants for BC as computed `static` accessors. **Trap:** `TrustKeyDocumentationDriftTest` reads the constants, so update it in the same change. |
-| `src/Cli/Bootstrap.php:3393` `mergedConfig()` | add the session overlay (`self::$sessionSettings`) above `rawUserConfig()`; add `useSessionSettings()` |
-| `src/Cli/Bootstrap.php:1215` `chat()` | pass `CompactorConfig` built from the schema (fixes the never-passed `compactorConfig`); pass `onSettingsWrite: SettingsWriter`; build `SettingsResolver` once |
-| `src/Cli/Bootstrap.php:2852` `backendFor()` | **fix**: accept and forward `taskManager`/`taskPool`/`rulesState` from `Chat` (prerequisite for a provider field) |
-| `src/Cli/Bootstrap.php:2945` `resolvedMaxToolSteps()` | P4: make `maxToolSteps` NextTurn by reading it in `runTurn` (below) |
-| `src/Backend/EngineBackend.php:776-790` `runTurn()` | read schema-backed NextTurn keys from `$userConfig` (`maxToolSteps`, caps, memory caps, `turnIdleTimeoutSeconds`). The idle watchdog lives in the **parent** (`:1444-1455`), so read it in `completeAsync()` before the fork. |
-| `src/Backend/EngineBackend.php:99` | `COMPLETE_TIMEOUT_SECONDS` → default for `turnIdleTimeoutSeconds` |
-| `src/Chat.php:634,677` (ctor) | add `?\Closure $onSettingsWrite`, `?CompactorConfig` already there; add `pendingSettingsApply` |
-| `src/Chat.php` (new) `applySettings(array $changed): array` | the §4.6 table; deferral while `inFlight`; release at `:7778` |
-| `src/Chat.php:4945` `mouseMode()`, `:4955` `mouseClicksEnabled()` | consult the resolved `mouse` setting after env |
-| `src/Chat.php:8240` `dispatchCommand()` | `/settings`, `/config` → `OpenSettingsMsg` (App-level) |
-| `src/Chat.php:14038` `runRootPaletteAction()` | `PaletteAction::OpenSettings` arm |
-| `src/Chat.php:7618-7660` doc-block | add the settings editor to the "writes nothing → not refused" overlay rule |
-| `src/Commands/CommandRegistry.php` (`all()`, `CONTROL_PLANE`) | new `settings` spec (+ alias `config`); add `settings` to `CONTROL_PLANE` |
+| `src/Cli/Bootstrap.php` `mergedConfig()` | add the session overlay (`self::$sessionSettings`) above `rawUserConfig()`; add `useSessionSettings()` |
+| `src/Cli/Bootstrap.php` `chat()` | pass `CompactorConfig` built from the schema (fixes the never-passed `compactorConfig`); pass `onSettingsWrite: SettingsWriter`; build `SettingsResolver` once |
+| `src/Chat.php` `selectPaletteProvider()`, `handleModelCommand()` → `Bootstrap::backendFor()` | **fix** (N-P3a): pass `taskManager`/`taskPool`/`rulesState`, which `backendFor()` already accepts (prerequisite for a provider field) |
+| `src/Cli/Bootstrap.php` `resolvedMaxToolSteps()` | P4: make `maxToolSteps` NextTurn by reading it in `runTurn` (below) |
+| `src/Backend/EngineBackend.php` `runTurn()` | read schema-backed NextTurn keys from `$userConfig` (`maxToolSteps`, caps, memory caps, `turnIdleTimeoutSeconds`). The idle watchdog lives in the **parent**, so read it in `completeAsync()` before the fork. |
+| `src/Backend/EngineBackend.php` | `COMPLETE_TIMEOUT_SECONDS` → default for `turnIdleTimeoutSeconds` |
+| `src/Chat.php` (ctor) | add `?\Closure $onSettingsWrite`, `?CompactorConfig` already there; add `pendingSettingsApply` |
+| `src/Chat.php` (new) `applySettings(array $changed): array` | the §4.6 table; deferral while `inFlight`; release in the caller of `releaseQueuedPrompts()` |
+| `src/Chat.php` `mouseMode()`, `mouseClicksEnabled()` | consult the resolved `mouse` setting after env |
+| `src/Chat.php` `dispatchCommand()` | `/settings`, `/config` → `OpenSettingsMsg` (App-level) |
+| `src/Chat.php` `runRootPaletteAction()` | `PaletteAction::OpenSettings` arm |
+| `src/Chat.php` doc-block | add the settings editor to the "writes nothing → not refused" overlay rule |
+| `src/Commands/CommandRegistry.php` (`all()`, `CONTROL_PLANE`) | new `settings` spec (`/config` is dispatched in `Chat::dispatchCommand()`; `CommandSpec` has no alias field); add `settings` to `CONTROL_PLANE` |
 | `src/Palette/PaletteAction.php` | `case OpenSettings = 'open_settings';` |
-| `src/Commands/KeyBindingRegistry.php:55-71,498` | `CONTEXT_SETTINGS` + about 10 rows; reword `shell.settings` ("Focus the settings pane — again, or Enter, to edit") |
-| `src/Tui/KeyboardHandler.php:297,850` | Enter-on-Settings opens the editor; second `Ctrl+,` opens; `shellOwnsKeyboard()` includes the editor |
-| `src/App/App.php:267,1064,2057,2292` | `settingsEditor` field + `withSettingsEditor()`; route keys and mouse to it while open; `mutate()` arm |
-| `src/Tui/Renderer.php:498` | `renderSettingsEditor()` full-band branch (`renderAgentDashboard()` pattern, `:662`) |
+| `src/Commands/KeyBindingRegistry.php` | `CONTEXT_SETTINGS` + about 10 rows; reword `shell.settings` ("Focus the settings pane — again, or Enter, to edit") |
+| `src/Tui/KeyboardHandler.php` | Enter-on-Settings opens the editor; second `Ctrl+,` opens; `shellOwnsKeyboard()` includes the editor |
+| `src/App/App.php` | `settingsEditor` field + `withSettingsEditor()`; route keys and mouse to it while open; `mutate()` arm |
+| `src/Tui/Renderer.php` | `renderSettingsEditor()` full-band branch (`renderAgentDashboard()` pattern) |
 | `src/Tui/Components/SettingsPane.php` | rows from `SettingsResolver` (provider, model, mode, steps, compaction, restart-pending); new footer; "Edit…" zone |
-| `src/Tools/BuiltIn/WebSearch.php:52` | no private default; `webSearch.endpoint` → env → unset ⇒ "not configured" error |
-| `src/Tools/BuiltIn/Bash.php:124-163` | gate the SugarCraft cadence behind `tools.bash.includeGitInstructions` (default false) |
+| `src/Tools/BuiltIn/WebSearch.php` | `webSearch.endpoint` → env → unset ⇒ "not configured" error |
+| `src/Tools/BuiltIn/Bash.php` | gate the SugarCraft cadence behind `tools.bash.includeGitInstructions` (default false) |
 | `composer.json` | `require` `sugarcraft/sugar-diff` (P2), `sugarcraft/sugar-toast` (P3); remove the `candy-kit` deferred-wiring row once `StatusLine` is used (its own text says "Delete this row when the wiring lands") |
 
 ### 5.3 Tests to add
@@ -842,7 +821,7 @@ Updates to existing tests:
 
 **CI obligations** (CLAUDE.md "Gotchas"):
 - Every new test file must get a row in `scripts/parallel-tests-durations.tsv`, as `path<TAB>seconds<TAB>testcount`. Unlisted files run in zero shards.
-- Re-pin `tests/Config/Support/suite-figure.json` via `php tests/Config/Support/refresh-suite-figure.php <junit.xml>` from a full run. Today it reads 12 483 tests and 177 317 assertions.
+- Re-pin `tests/Config/Support/suite-figure.json` via `php tests/Config/Support/refresh-suite-figure.php <junit.xml>` from a full run.
 - Update the README test-count headline from the same run (`ReadmeSuiteFigureDriftTest`).
 - Suites that arm timers keep using `tests/bootstrap.php` (`LoopPin::pinStableClock()`). The editor tests are pure `update()`/`view()` and need no loop.
 
@@ -850,10 +829,10 @@ Updates to existing tests:
 
 | Phase | Scope | Effort | Ships |
 |---|---|---|---|
-| **P0 — Schema & truth** | `SettingDefinition`, `SettingsSchema` with the 26 existing keys; `SettingsResolver`; invariant tests; generated key table in `docs/SETTINGS.md`; fix the doc drift (`maxOutputTokens` is next-turn; `providers` in user config is not read; `enabledSkills` is layer-4-only) | **S** (2–3 days) | no UI; docs and tests |
+| **P0 — Schema & truth** | `SettingDefinition`, `SettingsSchema` with every existing key; `SettingsResolver`; invariant tests; generated key table in `docs/SETTINGS.md`; fix the doc drift (`providers` in user config is not read; `enabledSkills` is layer-4-only) | **S** (2–3 days) | no UI; docs and tests |
 | **P1 — Read-only editor** | `/settings` + palette/menu row + `Ctrl+,`/Enter door; full-band view with tabs, search, provenance and badges; Hooks/MCP/Permissions read-only tabs; i18n scaffold; upgraded sidebar | **M** (4–6 days) | a viewer that answers "what am I running with, and why" |
 | **P2 — Editing & writer** | `SettingsWriter` (You tier + Project-local), validation, reset, diff preview (sugar-diff), census test, SETTINGS.md/README rewrites; edit only NextTurn and existing keys (`parallel*`, `maxOutputTokens`, `titleModel`, `summaryModel`, `disabled*`, `instructions`, `statusLine`, `permissionMode`, `maxToolSteps`), with restart badges where needed | **M** (5–7 days) | editable settings |
-| **P3 — Live apply & session tier** | `Chat::applySettings()`; `backendFor()` Task-tool fix; mouse/theme/compaction/maxSteps/permission/tool-set live; session overlay + fork test; sugar-toast feedback; trust-grant flow | **M** (5–7 days) | changes take effect without restart |
+| **P3 — Live apply & session tier** | `Chat::applySettings()`; Task-tool fix on the provider switch (N-P3a); mouse/theme/compaction/maxSteps/permission/tool-set live; session overlay + fork test; sugar-toast feedback; trust-grant flow | **M** (5–7 days) | changes take effect without restart |
 | **P4 — Promote hard-coded behaviour** | batches from §2.2, each with plumbing + schema rows + tests: (a) loop and timeouts (`turnIdleTimeoutSeconds`, `subagents.*`, retry, connect); (b) compaction; (c) tool caps + WebSearch endpoint + Bash git guidance; (d) memory/rules/env block; (e) UI knobs. Later the competitor knobs (§2.3) as their features land. Complex editors (`permissionRules`, `modelPrices`, `lint.commands`) via `sugar-table`/`ItemList` row editing and `sugar-crumbs` for nesting. | **L** (incremental, 1–2 days per batch) | configurability |
 | **P5 — Polish** | narrow-terminal layout, project-shared tier, "open file in $EDITOR" (once `/edit` exists), import/export of a settings profile, per-provider `models` | **S** | — |
 
@@ -861,7 +840,7 @@ Updates to existing tests:
 
 1. **Prose-pinned docs.** `docs/SETTINGS.md` and `README.md` are dense with paragraph-scoped drift rules: retractions must stay inside retracting paragraphs, and figures are re-derived. Rewriting "only two keys are written" will red several tests in non-obvious ways. Budget time for this and run `tests/Config/` alone after every doc edit.
 2. **Census shape.** The existing census follows `$this->onConfigChange` tokens. If `SettingsWriter` ever routes `provider`/`theme`, the census and its docs must change together. Keeping them on the legacy closure in v1 avoids that.
-3. **The provider switch drops the Task tool** (`Chat.php:14106` → `Bootstrap::backendFor()` without `taskManager`). Exposing provider or model in the editor before the fix would make the bug easier to hit. Fix it in P3 before enabling those fields.
+3. **The provider switch drops the Task tool** (`Chat::selectPaletteProvider()` → `Bootstrap::backendFor()` without `taskManager`). Exposing provider or model in the editor before the fix would make the bug easier to hit. Fix it in P3 before enabling those fields.
 4. **Nested keys vs shallow merge.** `LayeredSettings::merge()` is shallow, so a project file's `compaction:{keepRecent}` would be *replaced* by a user `compaction:{autoPercent}`. Either flatten keys on disk (`"compaction.autoPercent": 80`, simplest, and it works with the existing `only()` filter) or make the merge one level deep for schema-declared objects. **Recommendation: dotted flat keys on disk**, to avoid changing merge semantics that the docs explain at length.
 5. **Trust UX.** Making trust easy to grant from a UI weakens the deliberate friction of hand-editing. Mitigations:
    - a per-capability checkbox modal that spells out each capability;
@@ -871,39 +850,4 @@ Updates to existing tests:
 6. **Strict-reader coupling.** A UI write to `config.json` that produces JSON the strict reader rejects would refuse the next launch. Round-trip each write through `permissionConfigLayers()`'s parser in the writer, and test it.
 7. **Session overlay in a static.** The overlay is global process state, like `projectRootForSettings`. Tests that build several `Chat`s in one process must reset it (add it to whatever resets `StatusLineCommand::configure()` state between launches).
 8. **`Ctrl+,` portability.** Without kitty keyboard reporting, many terminals cannot send `Ctrl+,`. The palette row, `/settings` and the menu row are the dependable doors; the README must not imply `Ctrl+,` is universal.
-9. **Model-visible notices.** Resist emitting "setting changed" transcript rows. They would be sent to the provider every turn (baseline §3.1). Use toasts and the editor footer.
-10. **Open question — model persistence.** `docs/SETTINGS.md` explicitly says no model is persisted. Adding `models{provider: id}` changes that contract, so confirm it with the maintainer. The alternative is to keep the model in the provider's own `config.dev.json` entry and offer only a session-tier model override.
-11. **Open question — `~/.sugar-crush/settings.json` vs `config.json`.** This design writes `config.json` to keep the "settings.json is never written" invariant and the CLI-written-wins ordering. If the maintainer prefers `settings.json` as the editor's file, the precedence of the two must flip, which is a documented, test-pinned decision (`ReadmeRosterDriftTest:321`).
-
----
-
-## Appendix A — Inventory of facts used
-
-- `src/Config/LayeredSettings.php`:
-  - `LAYERED_KEYS` (16): provider, theme, titleModel, summaryModel, instructions, disabledSkills, disabledRules, parallelToolCalls, parallelToolDeadlineSeconds, maxOutputTokens, modelPrices, allowedTools, disabledTools, statusLine, layout, maxToolSteps;
-  - `PROJECT_TIER_KEYS` (7): theme, titleModel, summaryModel, disabledSkills, parallelToolCalls, parallelToolDeadlineSeconds, disabledTools;
-  - `merge()` = `array_merge($project, $userSettings, $userConfig)`.
-- `src/Cli/Bootstrap.php`:
-  - `readUserConfig` `:3376`, `mergedConfig` `:3393`, `rawUserConfig` `:3457`, `writeUserConfig` `:3608`;
-  - `permissionGate` `:4807`, `permissionConfig` `:4923`, `permissionConfigLayers` `:4972`;
-  - `claudeMcpGrant` `:6114`, `filterToolSet` `:6995`, `forcedInstructions` `:7281`;
-  - `titleBackend` `:7711`, `summaryBackend` `:7745`;
-  - `resolvedMaxToolSteps` `:2945`, `withResolvedMaxToolSteps` `:2965`, `availableProviders` `:2992`;
-  - `onConfigChange` wiring `:1215`, theme default `'dark'` `:1214`, `DEFAULT_PERMISSION_MODE` `:166`.
-- `src/Backend/EngineBackend.php`:
-  - `COMPLETE_TIMEOUT_SECONDS` `:99`, `maxSteps = 8` `:262`;
-  - `withTools` `:377`, `withPermissionGate` `:467`, `withMaxSteps` `:603`;
-  - per-turn config read `:782-790`, `userConfig()` `:1135`.
-- `src/Chat.php`:
-  - ctor `compactorConfig` `:634`, `onConfigChange` `:677`, `ContextCompactor` `:1375`;
-  - `mouseMode` `:4945`, `programOptions` `:6185`, `withBackend` `:6218`;
-  - mid-turn slash refusal `:7173-7182`, overlay refusal rule `:7618-7660`, `releaseQueuedPrompts` `:7778`;
-  - `dispatchCommand` `:8240`, `runRootPaletteAction` `:14038`, `selectPaletteProvider` `:14106`, `selectPaletteTheme` `:14149`;
-  - other constants `:317-570`.
-- `src/Tui/Components/SettingsPane.php` (read-only, 8 rows); `src/Tui/Pane.php`; `src/Tui/KeyboardHandler.php:297,850`; `src/Tui/Renderer.php:498,662,1317`; `src/Renderer.php:1440-1530`; `src/Commands/KeyBindingRegistry.php:55-71,498`; `src/Commands/CommandRegistry.php`; `src/Palette/PaletteAction.php`; `src/Tui/Components/MenuBar.php:77`.
-- Libraries:
-  - `candy-forms/src/{Field.php,Form.php,Group.php,Field/*.php,HasReadonly.php,HasDynamicLabels.php,Theme.php,KeyMap.php}`; `candy-forms/README.md` ("Pre-filling fields … handy for 'edit settings' screens");
-  - `candy-core/src/Util/AtomicJsonFile.php`, `candy-core/src/Cmd.php:379-394`, `candy-core/src/I18n/`;
-  - `candy-mouse/src/{Mark,Scanner,ZoneClickTracker}.php`, `candy-focus/src/FocusRing.php`, `sugar-veil`, `candy-kit/src/{StatusLine,Section}.php`;
-  - `sugar-diff/src/Diff.php`, `sugar-toast/src/Toast.php`, `sugar-bits/src/Tabs/Tabs.php` (candy-zone), `sugar-dash/composer.json` (requires candy-pty), `sugar-prompt/src/Form.php:10` (`class_alias`).
-- Competitor knobs: reports 01 §13 (P0-2 steering, `includeGitInstructions`, attribution, `maxSteps`→50), 02 (`maxToolSteps`, doom loop, notifications), 03 (`contextPruning.*`, `SUGARCRUSH_CONTEXT_PRUNING`), 04 (`DOOM_LOOP_THRESHOLD`, `readOnlyBash`, `fuzzyThreshold`), 05 (`planModel`), 06 (doom-loop + raise steps, steering), 07 (`subagentModel`, `maxConcurrent`, mid-turn compaction 90%, checkpoints), 08 (`bashTimeoutSeconds` 300, `SUGARCRUSH_BELL`, `TURN_NOTE`), 09 (`lintCommands`, `autoCommit`, `testCommand`/`autoTest`, `editorModel`, `watchFiles`, notifications), 10 (`maxToolResultChars` 16000, `toolTimeout` 30 s, `fallbackModels`, concurrency cap), 11 (sub-agent caps 8/5), 12 (`repeatToolThresholds`, `maxInlineTokens`).
+9. **Model-visible notices.** Resist emitting "setting changed" transcript rows. They would be sent to the provider every turn (Appendix A). Use toasts and the editor footer.

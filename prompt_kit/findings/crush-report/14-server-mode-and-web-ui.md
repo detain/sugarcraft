@@ -1,19 +1,13 @@
 # 14 — sugar-crush server mode (WebSocket) + `sugar-crush-web` multi-session web UI: design report
 
+Feeds steps: O-0, O-1 (= 1.C), O-2a, O-2b, O-2c, O-2d, O-2e, O-2f, O-2g, O-2h, O-3a, O-3b, O-3c, O-4a, O-4b, O-5a, O-5b, O-6a, O-6b, O-6c, O-7, O-8a, O-8b
+
 **What this is.** A design for two features the user asked for:
 
 1. **Server mode.** `sugarcrush serve` runs in the foreground or as a background daemon and starts a WebSocket server.
 2. **`sugar-crush-web`.** A separate Vite + Vue package in `/home/sites/sugarcraft/sugar-crush-web` that drives that server and controls several sessions at once.
 
-This is read-only research. No repo file was changed except this one. Paths are relative to `/home/sites/sugarcraft/sugar-crush/` unless they start with `/` or with a lib directory name.
-
-**Inputs.**
-- The source-verified baseline `00-sugar-crush-baseline.md`.
-- Competitor reports 01-12.
-- Fresh reads of the competitor clones under `/home/sites/crush-research-repos/` (opencode, kilocode, cline, software-agent-sdk/OpenHands, goose, openclaw, nanobot, zed, deepseek-harness).
-- Direct reads of sugar-crush, candy-core, candy-serve, candy-wish, sugar-mcp and the monorepo tooling, on master @ `05db616f3`.
-
-Line numbers are from that tree.
+Paths are relative to `/home/sites/sugarcraft/sugar-crush/` unless they start with `/` or with a lib directory name.
 
 ---
 
@@ -24,10 +18,10 @@ Line numbers are from that tree.
 | D1 | **Use ReactPHP-native WebSockets (`react/http` + `react/socket` + `ratchet/rfc6455`), not Workerman.** | Every async seam in sugar-crush already runs on `React\EventLoop\Loop::get()`: `EngineBackend::completeAsync()`, candy-core `Program`, `Cmd::promise`, `Subscriptions`, `RuntimeNoticeSink`. Workerman brings its own loop, a master/worker fork model, global `$argv` parsing and nine signal handlers, and all of those collide with sugar-crush's `pcntl_fork` turn children. **No sugarcraft lib uses Workerman today** (§3.1). |
 | D2 | **Use one WebSocket, multiplexed across sessions, carrying JSON-RPC 2.0** (reusing `sugar-mcp`'s `McpMessage` codec), with server→client events as `event` notifications. | Approvals, steering and cancel are bidirectional. A browser can multiplex N sessions over one socket. The repo already has a tested JSON-RPC codec. |
 | D3 | **Durable per-session event log with a monotonic `seq`, stored in `session.db`.** Deltas are ephemeral; full values are durable; subscribing with `afterSeq` replays. | This is the pattern opencode v2, OpenHands `/sockets/session` and cline converged on. It survives reconnects and server restarts. |
-| D4 | **Build one permission back-channel for the TUI and the server:** make the fork socketpair bidirectional (`ask`/`ask_reply`, plus `steer` and `cancel`). | It fixes baseline §11.1 #1 (the TUI cannot answer an Ask) and gives the server approvals for free. It is the prerequisite for leaving the `bypass-permissions` default. |
-| D5 | **Extract a UI-agnostic `SessionHost` from `Chat` (strangler pattern).** `Chat` and the server both become clients of it. | `Chat.php` is a 16,105-line TEA model, and candy-core `Program::run()` owns the loop and the terminal (`candy-core/src/Program.php:335-430`). N headless Chats cannot share one process without that seam. |
-| D6 | **Process model:** a gateway process (WS/HTTP, auth, static UI) hosts `SessionHost`s for **one project root in-process**. Multi-root comes later, through per-root **workspace-host** child processes. | `Cli\Bootstrap` keeps more than 25 `private static` caches and trust sets frozen per process (`Bootstrap.php:550-984`), and `RuntimeNoticeSink` is a process-global queue. Mixing roots or concurrent turns in one process mis-attributes state. |
-| D7 | **Background mode reuses `BackgroundSupervisor`'s double-fork/`setsid`/0600 IPC/token idioms**, plus a pidfile with a `procStartTime` check and `serve status|stop|logs`. | The patterns are already measured and audited (audit M5) in `src/Sessions/BackgroundSupervisor.php:186-470`. |
+| D4 | **Build one permission back-channel for the TUI and the server:** make the fork socketpair bidirectional (`ask`/`ask_reply`, plus `steer` and `cancel`). | It fixes Appendix A (the TUI cannot answer an Ask) and gives the server approvals for free. It is the prerequisite for leaving the `bypass-permissions` default. |
+| D5 | **Extract a UI-agnostic `SessionHost` from `Chat` (strangler pattern).** `Chat` and the server both become clients of it. | `Chat.php` is a very large TEA model, and candy-core `Program::run()` owns the loop and the terminal (`candy-core/src/Program.php`). N headless Chats cannot share one process without that seam. |
+| D6 | **Process model:** a gateway process (WS/HTTP, auth, static UI) hosts `SessionHost`s for **one project root in-process**. Multi-root comes later, through per-root **workspace-host** child processes. | `Cli\Bootstrap` keeps more than 25 `private static` caches and trust sets frozen per process (`Bootstrap.php`), and `RuntimeNoticeSink` is a process-global queue. Mixing roots or concurrent turns in one process mis-attributes state. |
+| D7 | **Background mode reuses `BackgroundSupervisor`'s double-fork/`setsid`/0600 IPC/token idioms**, plus a pidfile with a `procStartTime` check and `serve status|stop|logs`. | The patterns are already measured and audited (audit M5) in `src/Sessions/BackgroundSupervisor.php`. |
 | D8 | **`sugar-crush-web` = Vite + Vue 3 + TypeScript + Pinia + vue-router**, built to a **committed `dist/`** and shipped as a composer package (`sugarcraft/sugar-crush-web`) with a one-class PHP shim (`Assets::distPath()`). `sugarcrush serve` serves it from the same port. | PHP users get the UI with `composer require` and need no node. CI's lib discovery (composer.json + phpunit.xml) and the splitsh sync then work unchanged. A node CI job guards that `dist/` matches source (same "generated, never hand-edit" pattern as `docs/lib/`). |
 | D9 | **Secure defaults:** bind `127.0.0.1`; a mandatory 256-bit token even on loopback; token exchanged for an HttpOnly SameSite=Strict cookie; single-use WS tickets; strict `Origin` + `Host` checks (CSWSH and DNS-rebinding); server sessions default to `default` (ask) mode; `bypass-permissions` refused over the wire unless `--allow-bypass`. | Same lessons as dsh, OpenClaw, goose and nanobot (§2). A server that can answer Asks has no reason to default to bypass. |
 | D10 | **Later phases:** TUI-as-client (`sugarcrush attach`) and an **ACP stdio adapter** (`sugarcrush acp`) for Zed and other editors. Both map onto the same `SessionHost` events. | ACP is small: about 8 methods for a usable agent (§6.12). |
@@ -38,77 +32,63 @@ Line numbers are from that tree.
 
 ## 1. What exists today (the ground we build on)
 
-### 1.1 The live turn pipeline (baseline §1.4, re-verified)
+### 1.1 The live turn pipeline (Appendix A)
 
 ```
-bin/sugarcrush ─► Program(App) ─► Chat::update() ─► Chat::submit() (src/Chat.php:7150)
-   ─► Chat::dispatchTurn() (:7869)  [checkpoint, title, compaction, hooks]
-   ─► Chat::scheduleBackendCompletion() (:9226)  Cmd::promise + ArrayObject inbox
-   ─► EngineBackend::completeAsync() (src/Backend/EngineBackend.php:1324)
+bin/sugarcrush ─► Program(App) ─► Chat::update() ─► Chat::submit()
+   ─► Chat::dispatchTurn()  [checkpoint, title, compaction, hooks]
+   ─► Chat::scheduleBackendCompletion()  Cmd::promise + ArrayObject inbox
+   ─► EngineBackend::completeAsync()
         pcntl_fork + stream_socket_pair(UNIX, STREAM)
-        child: runCompleteInChild() (:1629) → complete() → runTurn() (:776) → Runtime::run() ×maxSteps
+        child: runCompleteInChild() → complete() → runTurn() → Runtime::run() ×maxSteps
         child → parent frames (4-byte BE length + serialize()):  token | reasoning | started | finished
                                                                 | subagent | spend_cap | result
-   ◄─ parent: Loop::addReadStream($parentSocket) (:1467) → drainFrames → $onToken/$onEvent/$onReasoning
-        120 s idle watchdog re-armed per frame (COMPLETE_TIMEOUT_SECONDS :99, :1444-1455)
-        cancel = 0.1 s periodic timer → teardown() SIGKILL (:1396-1465)
+   ◄─ parent: Loop::addReadStream($parentSocket) → drainFrames → $onToken/$onEvent/$onReasoning
+        120 s idle watchdog re-armed per frame (COMPLETE_TIMEOUT_SECONDS)
+        cancel = 0.1 s periodic timer → teardown() SIGKILL
    ◄─ Chat inbox drained by ToolEventPumpMsg subscription; AssistantMsg / BackendToolEventsMsg settle the turn
 ```
 
 Facts this design depends on:
 
-- **The socket is used one way only.** `writeFrame()` (`:1742`) is called only in the child. The parent never writes. The `withPermissionApprover()` doc-comment (`:490-540`) says, in as many words, that the TUI needs "a request/response protocol on the socket", and that this is why the default mode is `bypass-permissions`.
-- **The approver contract is synchronous.** It has the shape `\Closure(ToolCall, HookResult): bool` (`EngineBackend::withPermissionApprover`, `:540`; `Runtime::settleAsk()`, `src/Runtime.php:~2630`). It returns literal `true` to grant. That is ideal for a forked child that can simply block on a socket read.
-- **Asks only come from the turn child.** `Runtime::executeConcurrently()` calls `gate()` **before** forking a tool grandchild (`src/Runtime.php:1853` + `:1894`), so any `ask` frame comes from one process. One exception: a parallel **Task** sub-agent runs its own engine loop inside a grandchild (baseline §2.2), and its Asks have no channel today.
-- **Usage arrives only once per turn**, in the `result` frame (`:1700-1720`). There is no per-step usage.
-- **Events** are plain value objects in `src/Events/`: `TokenDelta{text}`, `ReasoningDelta{text}`, `ToolStarted{toolCallId, toolName, arguments}`, `ToolFinished{toolCallId, toolName, ToolResult}`, `SubAgentActivity{op, id, name, task, seq, tail}`, `SpendCapBreached`. `encodeEvent()` (`:1869-1921`) already flattens them to arrays. Those arrays are the natural seed for the wire schema.
-- **`Message` has no stable id** (`src/Message.php:24-128`: role, content, createdAt, attachments, toolCalls, toolResults, pendingToolCallId, reasoning, image*, usage, lengthStopped, stepsTruncated, pendingToolArguments). The wire protocol needs ids (§6.5).
-- **Sessions.** `EnhancedSessionStore` (`src/Session/EnhancedSessionStore.php`) is SQLite in WAL mode at `~/.sugar-crush/session.db`. API: create/get/rename/fork/delete/list, `saveTranscript`/`loadTranscript` (`:872`, `:902`), checkpoints (`:469`, `:991-1046`), `latestResumableSession` (`:934`). `Chat::persistTranscript()` **rewrites the whole transcript** after every history-changing update (`src/Chat.php:1512`). Two writers on one session would therefore clobber each other (§4.8).
-- **Permissions.** `PermissionReply` enum is `once|always|reject` (`src/Permissions/PermissionReply.php`). `PermissionRequestMsg` and `PermissionReplyMsg` already exist (`src/PermissionRequestMsg.php:31`, `src/PermissionReplyMsg.php:19`). The Veil y/n/a modal exists but serves only Command backends (`Chat::beginToolCalls()`, `:2635`).
+- **The socket is used one way only.** `writeFrame()` is called only in the child. The parent never writes. The `withPermissionApprover()` doc-comment says, in as many words, that the TUI needs "a request/response protocol on the socket", and that this is why the default mode is `bypass-permissions`.
+- **The approver contract is synchronous.** It has the shape `\Closure(ToolCall, HookResult): bool` (`EngineBackend::withPermissionApprover`; `Runtime::settleAsk()`, `src/Runtime.php`). It returns literal `true` to grant. That is ideal for a forked child that can simply block on a socket read.
+- **Asks only come from the turn child.** `Runtime::executeConcurrently()` calls `gate()` **before** forking a tool grandchild (`src/Runtime.php`), so any `ask` frame comes from one process. One exception: a parallel **Task** sub-agent runs its own engine loop inside a grandchild (Appendix A), and its Asks have no channel today.
+- **Usage arrives only once per turn**, in the `result` frame. There is no per-step usage.
+- **Events** are plain value objects in `src/Events/`: `TokenDelta{text}`, `ReasoningDelta{text}`, `ToolStarted{toolCallId, toolName, arguments}`, `ToolFinished{toolCallId, toolName, ToolResult}`, `SubAgentActivity{op, id, name, task, seq, tail}`, `SpendCapBreached`. `encodeEvent()` already flattens them to arrays. Those arrays are the natural seed for the wire schema.
+- **`Message` has no stable id** (`src/Message.php`). The wire protocol needs ids (§6.5).
+- **Sessions.** `EnhancedSessionStore` (`src/Session/EnhancedSessionStore.php`) is SQLite in WAL mode at `~/.sugar-crush/session.db`. API: create/get/rename/fork/delete/list, `saveTranscript`/`loadTranscript`, checkpoints, `latestResumableSession`. `Chat::persistTranscript()` **rewrites the whole transcript** after every history-changing update (`src/Chat.php`). Two writers on one session would therefore clobber each other (§4.8).
+- **Permissions.** `PermissionReply` enum is `once|always|reject` (`src/Permissions/PermissionReply.php`). `PermissionRequestMsg` and `PermissionReplyMsg` already exist (`src/PermissionRequestMsg.php`, `src/PermissionReplyMsg.php`). The Veil y/n/a modal exists but serves only Command backends (`Chat::beginToolCalls()`).
 
 ### 1.2 Headless driving today
 
-- **`-p` / `run`.** `Cli\NonInteractive::run()` drives `EngineBackend::complete()` synchronously, with `HeadlessPermissionPrompt` as the approver and a refusal observer (`src/Cli/NonInteractive.php:200-300`). Sessions are not saved. This is the existence proof that **`EngineBackend` + `Bootstrap::backend()` run without `Chat`/`Program`**.
-- **Background daemons.** `BackgroundSessionRunner::main()` builds a backend with `consolePermissionPrompt: true` and runs one prompt without history (`src/Sessions/BackgroundSessionRunner.php:357-395`, `:580`).
+- **`-p` / `run`.** `Cli\NonInteractive::run()` drives `EngineBackend::complete()` synchronously, with `HeadlessPermissionPrompt` as the approver and a refusal observer (`src/Cli/NonInteractive.php`). Sessions are not saved. This is the existence proof that **`EngineBackend` + `Bootstrap::backend()` run without `Chat`/`Program`**.
+- **Background daemons.** `BackgroundSessionRunner::main()` builds a backend with `consolePermissionPrompt: true` and runs one prompt without history (`src/Sessions/BackgroundSessionRunner.php`).
 - **candy-core.**
-  - `ProgramOptions` has `withoutRenderer`, `input`, `output`, `loop` and `windowSize` (`candy-core/src/ProgramOptions.php:22-89`; "Mirrors `WithoutRenderer`").
-  - **But `Program::run()` installs SIGINT/SIGWINCH handlers (`:1331-1340`), sets up the terminal and calls `$this->loop->run()` itself (`:335-430`).** So you cannot run N headless Programs on one loop without a candy-core change.
-  - The private `dispatch()`/`scheduleCmd()`/`drainPending()`/`reconcileWantedSubscriptions()` (`:600`, `:1017`, `:1027`, `:1386`) are exactly the pieces a headless runtime would need.
+  - `ProgramOptions` has `withoutRenderer`, `input`, `output`, `loop` and `windowSize` (`candy-core/src/ProgramOptions.php`; "Mirrors `WithoutRenderer`").
+  - **But `Program::run()` installs SIGINT/SIGWINCH handlers, sets up the terminal and calls `$this->loop->run()` itself .** So you cannot run N headless Programs on one loop without a candy-core change.
+  - The private `dispatch()`/`scheduleCmd()`/`drainPending()`/`reconcileWantedSubscriptions()` are exactly the pieces a headless runtime would need.
 
 ### 1.3 Daemon and IPC idioms worth reusing (all in `src/Sessions/`)
 
 | Idiom | Where |
 |---|---|
-| Private 0700 per-uid IPC dir, `lstat`-verified, refuses symlinks | `BackgroundSupervisor::ensurePrivateIpcDir()` `:606-645` |
-| 128-bit token written 0600 via `ToolIpcFiles::write`; daemon learns only the **path** (argv is world-readable in `/proc`) | `spawnSession()` `:203-220` |
-| argv-array `proc_open` (no `/bin/sh -c`), stdin `/dev/null`, stdout/stderr → sidecar log | `:226-268` |
-| Bind the listener **after** spawning, so children never inherit it | `:277-289` (measured with `ss -x`) |
-| Double-fork + `posix_setsid()` (or `setpgid` fallback), `umask(0o077)` | `buildSessionDaemonCode()` `:463-470` |
-| Auth handshake `HELLO:<id>:<pid>:<token>` checked with `hash_equals` | `parseHandshake()` `:528-553`; runner `AUTH_PREFIX` `:91`, `authenticate()` `:679-720` |
-| pid-reuse defence via `/proc/<pid>/stat` start time | `procStartTime()` `:567` |
-| Heartbeat (5 s in the daemon, 15 s stall timeout in the supervisor) | Runner `HEARTBEAT_INTERVAL_SECS` `:129`; supervisor `HEARTBEAT_TIMEOUT_SECS` `:55` |
-| Worker supervision loop with `pcntl_waitpid(WNOHANG)`, deadline, `stopWorker` TERM→KILL grace | Runner `supervise()` `:745-800`, `stopWorker()` `:859` |
-| Re-adoption after a TUI restart (**DORMANT** — no caller) | `BackgroundSupervisor::reconnect()` `:851` |
+| Private 0700 per-uid IPC dir, `lstat`-verified, refuses symlinks | `BackgroundSupervisor::ensurePrivateIpcDir()` |
+| 128-bit token written 0600 via `ToolIpcFiles::write`; daemon learns only the **path** (argv is world-readable in `/proc`) | `spawnSession()` |
+| argv-array `proc_open` (no `/bin/sh -c`), stdin `/dev/null`, stdout/stderr → sidecar log | `spawnSession()` |
+| Bind the listener **after** spawning, so children never inherit it | (measured with `ss -x`) |
+| Double-fork + `posix_setsid()` (or `setpgid` fallback), `umask(0o077)` | `buildSessionDaemonCode()` |
+| Auth handshake `HELLO:<id>:<pid>:<token>` checked with `hash_equals` | `parseHandshake()`; runner `AUTH_PREFIX`, `authenticate()` |
+| pid-reuse defence via `/proc/<pid>/stat` start time | `procStartTime()` |
+| Heartbeat (5 s in the daemon, 15 s stall timeout in the supervisor) | Runner `HEARTBEAT_INTERVAL_SECS`; supervisor `HEARTBEAT_TIMEOUT_SECS` |
+| Worker supervision loop with `pcntl_waitpid(WNOHANG)`, deadline, `stopWorker` TERM→KILL grace | Runner `supervise()`, `stopWorker()` |
+| Re-adoption after a TUI restart (**DORMANT** — no caller) | `BackgroundSupervisor::reconnect()` |
 
 Under the project rule "never remove dormant code — wire it instead", **the server is the natural caller for `reconnect()`** (§4.6).
 
 ---
 
 ## 2. What the competitors teach (protocol and architecture)
-
-All of these were extracted from source in this pass, not from memory.
-
-| Project | Transport | Versioning | Replay / seq | Approvals over the wire | Auth | Notable |
-|---|---|---|---|---|---|---|
-| **opencode** (`packages/opencode/src/server`, `packages/protocol`) | REST commands + **SSE** events; WS only for the PTY | v1 and v2 APIs served side by side; `/global/health {version}` | v1: none (re-fetch on `server.connected`). v2: `GET /api/session/:id/event?after=<seq>`; deltas explicitly **not durable** ("Text.Ended is the replayable full-value boundary") | `permission.asked {id, sessionID, permission, patterns, metadata{diff}, always[], tool{messageID, callID}}`; reply `once\|always\|reject` + optional `message` (becomes model feedback). **A reject cascades** to the session's other pending asks; **always auto-approves** other pending asks it now covers. Pending asks live in server memory; reconnecting clients call `GET /permission` | HTTP Basic (`OPENCODE_SERVER_PASSWORD`; **off if unset**); `?auth_token=` for EventSource; short-lived **ticket** for the PTY WS | Bind `127.0.0.1`, port 4096 or free. **The TUI talks to an in-process server through a fetch shim.** One global SSE stream split client-side by directory. The client coalesces at 16 ms frames. 10 s heartbeat; the client watchdog is 15 s. v2 SSE subscriber is a **dropping queue of 256 → stream fails → client re-bootstraps**. Tool part state machine `pending → running → completed\|error`. |
-| **kilocode** (`kilo serve`, VS Code/JetBrains) | same as opencode | — | — | "pending permissions keep the agent of the turn that issued them" | Random 32-byte password via env per spawn | IDE spawns `serve --port 0` and parses the "listening on" stdout line. **`KILO_PARENT_PID` watchdog.** One server per extension host; presence `session.viewed {visible, attached}`. Agent Manager: multi-session cards with an attention state (`question\|permission`) and queued prompts for busy sessions. |
-| **cline 4.x hub** (`sdk/packages/core/src/hub`) | **WebSocket** `ws://127.0.0.1:25463/hub`, own envelope `{version:"v1", command, requestId, sessionId, payload}` / reply `{ok, error{code}}` / event `{event, eventId, sequence, sessionId}` | `version` on every envelope; min/max client protocol in the discovery file; `capabilities[]` incl. `stream.replay` | **Global durable SQLite event log** (7 days / 200k rows / 64 MiB). `stream.subscribe {sinceSequence}` = subscribe, buffer live, page the durable log in 200s, flush with dedupe | `approval.requested {approvalId, sessionId, toolCallId, toolName, inputJson, policy}`; `approval.respond {approvalId, approved, reason}`. **First answer wins**, others get `approval_not_found`; `approval.resolved` broadcast; **pending approvals re-sent on (re)subscribe**; non-interactive session → auto-deny | Token in `Sec-WebSocket-Protocol: cline-hub-auth.<tok>`; `timingSafeEqual`; discovery JSON 0600 with token, written atomically; **an OS-level SQLite exclusive lock is the singleton lock** (no pidfile) | WS ping 30 s plus app-level `run.heartbeat`. Note: it lets a localhost upgrade with a local Origin skip the token (we should **not** copy this). |
-| **OpenHands agent-server** (`software-agent-sdk/.../agent_server`) | REST + **WebSocket** `/sockets/session/{id}?after_seq=N` | "the URL is the version"; ignore unknown fields | Frames `sync{from_seq, through_seq}`, `durable{seq, event}`, `transient{event}`, `item_started{item_id}`, `delta{item_id, kind, content}`, `item_aborted`. **Every `item_started` closes with exactly one durable frame or `item_aborted`.** The client cursor is the **highest gap-free seq** | `WAITING_FOR_CONFIRMATION` is state in the log; `respond_to_confirmation {accept, reason}`; reject writes a `UserRejectObservation` | Preferred: **first frame `{"type":"auth", "session_api_key"}` within 10 s**, close 4001 | **Backpressure = disconnect** (4 MiB frame / 16 MiB pending; `slow_consumer`), never drop a frame. 50 subscribers per conversation. New subscribers get a full-state snapshot. Frontend: React + zustand; backoff 1 s→30 s with 30% jitter. |
-| **goose** (`goose serve`, ACP over HTTP/WS) | **ACP JSON-RPC** at `/acp` (POST/GET/DELETE + WS upgrade) | ACP `initialize` protocolVersion + capabilities | `session/load` replays history as `session/update`, with optional `replayTail`; **re-sends pending `session/request_permission`** | ACP options `allow_once\|allow_always\|reject_once\|reject_always`; outcome `selected{optionId}\|cancelled` | `X-Secret-Key` or `?token=` (constant time); **Origin allowlist** (loopback, `null`, `file://`); optional self-signed TLS with fingerprint pinning | Desktop picks a free port, mints the secret, spawns `goose serve`, polls `/status`. `goosed` (REST+SSE) was **removed** in favour of ACP. |
-| **OpenClaw gateway** (`packages/gateway-protocol`) | **WebSocket**, frames `req{id, method, params}`, `res{id, ok, payload\|error{code, message, retryable, retryAfterMs}}`, `event{event, payload, seq, stateVersion}` | `connect {minProtocol, maxProtocol}` → `hello-ok {protocol, features{methods[], events[]}, policy{maxPayload, maxBufferedBytes, tickIntervalMs}}`. Schemas in TypeBox → generated JSON Schema + Swift models | Per-**connection** `seq`; **on a gap the client closes (4000) and re-syncs**. The first text frame of each run carries the full snapshot, then deltas. `chat.history` delta cursor or `{kind:"reset"}` | `exec.approval.requested` broadcast; `resolve {id, decision: allow-once\|allow-always\|deny}`; first wins → `{applied}`. The approval is **bound to an immutable command plan** (rejected if argv/cwd change) | `connect.challenge{nonce}` + token/password + device signature; **loopback does NOT skip token auth**; non-loopback bind requires auth | `chat.send {sessionKey, message, queueMode: steer\|followup\|collect\|interrupt, idempotencyKey}`; **idempotency dedupe 5 min / 1000**. **Narration mode** for background observers: ≤16 KiB tail every ≤2 s. Control UI is Vite + Lit, **served by the gateway**. App-level `tick` 30 s; close after 2× silence. `permessage-deflate` deliberately off. |
-| **nanobot** (`channels/websocket`) | **WebSocket**; the same server serves `dist/` and `/api/*` | — | Re-`attach` every known chat after reconnect; mutations replayed with the same `request_id` | — | `GET /webui/bootstrap` issues a short-lived token, **localhost-only** unless a secret or trusted proxy is configured | Session key = `channel:chat_id`; `_subs: chat_id → conns` fan-out. **Bounded outbound queue 256 frames / 8 MB + 10 s send timeout → close 1013.** Up to 4 chats side by side. 20 s ping. |
-| **zed / ACP** (`crates/agent_servers`, `acp_thread`) | ACP JSON-RPC 2.0 over stdio | `initialize {protocolVersion: 1, clientCapabilities}` | `session/load` replays | `session/request_permission {sessionId, toolCall, options[{optionId, name, kind}]}` | — | `session/update` variants: `agent_message_chunk`, `agent_thought_chunk`, `tool_call{toolCallId, title, kind, status, content[], locations[], rawInput, rawOutput}`, `tool_call_update`, `plan`, `available_commands_update`, `current_mode_update`, `usage_update`. `stopReason: end_turn\|max_tokens\|max_turn_requests\|refusal\|cancelled`. |
-| **deepseek-harness** (`packages/api/gateway`) | HTTP POST for unary RPC + **one multiplexed WS** `/api/remote.mux` with logical streams `open/item/end/cancel` | — | `RemoteJournalStream`: follow-before-page, gap repair, dedupe; a `$events` stream whose first item is `ready` | — | **Launch token → exchanged on `GET /` for a signed HttpOnly SameSite=Strict cookie, then redirect to a clean URL.** Every request checks `Host` is loopback/trusted, `Origin` matches `Host`, and refuses `sec-fetch-site: cross-site` (DNS rebinding) | Per-stream inbox 256 KiB; overflow fails the stream, not the socket. Host ping every 2 s. Session writer lock (`session/writer-held`). |
 
 **What we adopt.**
 
@@ -128,23 +108,16 @@ All of these were extracted from source in this pass, not from memory.
 
 ## 3. WebSocket server options in this monorepo
 
-### 3.1 Inventory: what the monorepo actually has
+### 3.1 Reusable pieces in the monorepo
 
-I grepped every `*/composer.json` and every `src/`, excluding `vendor/` and `node_modules/`, for `workerman`, `react/socket`, `react/http`, `ratchet`, `rfc6455`, `websocket`, `Sec-WebSocket`, `stream_socket_server` and `HttpServer`:
+No sugarcraft lib uses Workerman or any WebSocket code today.
 
-| Finding | Detail |
+| Lib | Detail |
 |---|---|
-| **Workerman: 0 uses.** | The only hit is a `WorkerManager` row in `docs/repo_map/textualize_textual.md:290`, which is unrelated. Workerman *is* on this host, but outside the monorepo: `/home/my/vendor/workerman/workerman` v5.2.2, `/home/sites/vps_host_server/workerman`, `/home/sites/datacentered.new/workerman-*`. **The "used by some sugarcraft libs" premise does not hold for this tree.** |
-| **WebSocket of any kind: 0 uses.** | No `Sec-WebSocket`, no ratchet, no rfc6455 in any lib. |
-| `react/http` | Only `candy-mosaic` (`^1.11`), as an optional **client** for `ImageSource::fromUrlAsync()`. |
-| `react/socket` | None directly (transitive only). |
-| `react/event-loop ^1.6` | candy-core, candy-async, candy-files, candy-pty, candy-serve, candy-shell, candy-testing, candy-wish. The house loop. |
-| Hand-rolled TCP servers on the React loop | `candy-serve/src/StatsServer.php` (`stream_socket_server` + `$loop->addReadStream`, one-shot JSON over HTTP GET); `candy-serve/src/Git/GitDaemon.php:236-385` (async git daemon on the loop); `sugar-crush/src/MCP/OAuthLoopbackFlow.php:128` (blocking 127.0.0.1:0 OAuth callback). `candy-serve/src/HttpSmartProtocol/Server.php` is a request **handler** (`handleRequest()` returns arrays), not a listener. |
-| `candy-wish` (`SugarCraft\Wish`) | SSH middleware that **runs under the host `sshd`** (`ForceCommand`) and implements no network listener (`candy-wish/README.md`, "OpenSSH sshd fronts the wire"). Useful for a "TUI over SSH" mode, but not as a WS server. |
-| `sugar-mcp` (`SugarCraft\Mcp`) | `McpMessage` is an immutable **JSON-RPC 2.0 envelope**: `request`/`notification`/`success`/`error`, `parse()`, `toJson()`, null-preserving `result` (`sugar-mcp/src/McpMessage.php:29-275`). **Reusable as the wire codec.** `StdioMcpServer` is a client-side stdio transport. |
+| `sugar-mcp` (`SugarCraft\Mcp`) | `McpMessage` is an immutable **JSON-RPC 2.0 envelope**: `request`/`notification`/`success`/`error`, `parse()`, `toJson()`, null-preserving `result` (`sugar-mcp/src/McpMessage.php`). **Reusable as the wire codec.** `StdioMcpServer` is a client-side stdio transport. |
 | `candy-async` | `CancellationToken`, `Subscription`, `AsyncOps` (timeouts, retry, debounce, **throttle**). Useful for delta coalescing and timeouts. |
 
-**Conclusion.** Nothing to reuse for the socket layer itself. The choice is between adding ReactPHP's HTTP/socket stack plus an RFC 6455 codec, or adding Workerman.
+**Conclusion.** Nothing to reuse for the socket layer itself: add ReactPHP's HTTP/socket stack plus an RFC 6455 codec (D1).
 
 ### 3.2 Option A — ReactPHP-native (recommended)
 
@@ -174,30 +147,11 @@ $http->listen(new React\Socket\SocketServer('127.0.0.1:7420'));   // same Loop::
 
 **Why it is right for sugar-crush:**
 
-1. **One loop.** `EngineBackend::completeAsync()` calls `Loop::get()` and `addReadStream($parentSocket, …)` (`:1366`, `:1467`). The WS connections, the turn sockets, the 120 s idle timers and the 0.1 s cancel pollers all live on the same `stream_select`/ext-uv loop with no bridging.
-2. **The fork model stays ours.** react/http forks nothing. Turn children `pcntl_fork` from a single-process server exactly as they do from the TUI today. `EngineBackend::sweepUnreapedChildren()` and the "no SIGCHLD handler anywhere" invariant (`EngineBackend.php:240`; `src/Agents/AgentWorkerPool.php:901`, `:1153`) keep holding.
+1. **One loop.** `EngineBackend::completeAsync()` calls `Loop::get()` and `addReadStream($parentSocket, …)`. The WS connections, the turn sockets, the 120 s idle timers and the 0.1 s cancel pollers all live on the same `stream_select`/ext-uv loop with no bridging.
+2. **The fork model stays ours.** react/http forks nothing. Turn children `pcntl_fork` from a single-process server exactly as they do from the TUI today. `EngineBackend::sweepUnreapedChildren()` and the "no SIGCHLD handler anywhere" invariant (`EngineBackend.php`; `src/Agents/AgentWorkerPool.php`) keep holding.
 3. **The house test infrastructure applies.** `candy-testing`'s `LoopPin::pinStableClock()` and the `sugar-crush/tests/bootstrap.php` loop hygiene already cover React-loop timers.
 4. **Small surface.** About 3 packages, all stable and PHP 8.3 compatible. rfc6455 is a codec, so there is no framework to fight.
 5. **Extraction path.** The WS glue (about 400-600 LOC) can later move into a foundation lib, following the precedent that `sugar-diff` and `sugar-mcp` were extracted from sugar-crush. A candidate name is **`candy-wire`** (`SugarCraft\Wire\`, "wire protocol"; two-word rule compliant), once a second consumer appears (candy-serve stats, a candy-query web console).
-
-**Alternatives within Option A.**
-- Hand-roll RFC 6455 (about 350 LOC; candy-serve already hand-rolls HTTP). Rejected: masking, fragmentation, close handshakes and UTF-8 validation are classic bug farms, and rfc6455 passes the Autobahn suite.
-- `cboden/ratchet` (full server). Rejected: it pins `react/socket ^1.0` with `symfony/routing`, it is a heavier abstraction, and it adds nothing over rfc6455 + react/http.
-
-### 3.3 Option B — Workerman (not recommended here)
-
-Facts from `/home/my/vendor/workerman/workerman/src/Worker.php` (v5.2.2):
-
-| Workerman behaviour | Conflict with sugar-crush |
-|---|---|
-| `Worker::runAll()` (`:588`) runs **Workerman's own event loop** (Select/Event/Ev/Swoole/Swow/Fiber drivers in `src/Events/`) and never returns | sugar-crush's async runs on ReactPHP. Bridging means the Fiber (Revolt) driver plus a Revolt→React adapter (`revolt/event-loop-adapter-react`) and `Loop::set()`. That is two loop abstractions, nothing in the repo tests it, and every `Loop::get()` timer in EngineBackend, candy-core and candy-async would ride the adapter. I have **not** verified that this combination works with ext-uv. |
-| **Master + forked workers** (`forkWorkersForLinux()` `:1545`, `monitorWorkers()` → `pcntl_wait()` `:1858`) | Sessions must live in one process, or state splits across workers. `count=1` still forks a worker from a master. The turn children then become grandchildren of a master that is busy in `pcntl_wait`. |
-| `parseCommand()` reads **global `$argv`** (`:1073`, `:1229`) for `start\|stop\|restart\|reload\|status\|connections [-d]` | It collides with `ArgvParser`, the subcommand roster, and the drift tests that pin `--flag` synopses (`ClaimFamiliesDocumentationDriftTest::testTheFlagSynopsisAndArgvParserAgreeInBothDirections`). |
-| `installSignal()` (`:1333-1343`) takes **SIGINT, SIGTERM, SIGHUP, SIGTSTP, SIGQUIT, SIGUSR1, SIGUSR2, SIGIOT, SIGIO**; `reinstallSignal()` in workers (`:1351`) | Turn children are `pcntl_fork`ed copies, so they inherit these handlers. A SIGTERM to a turn child would run Workerman's `stopAll()` logic inside a fork that is meant to `ForkedChild::exitNow`. It also fights candy-core `Program`'s SIGINT handler (`Program.php:1335`) once the TUI attaches in-process. |
-| Its own `-d` daemonize (`daemonize()` `:1430`) | We already have a measured double-fork in `BackgroundSupervisor`, so this buys nothing. |
-| Strength: very high connection counts, multi-core | Irrelevant. A coding agent server serves 1-20 browser tabs. |
-
-**When Workerman would make sense:** a separate, stateless gateway process that only relays WS frames to a ReactPHP session host over a UNIX socket. That adds a hop and a second runtime for no gain at this scale. **Verdict: use Option A.** Record the decision in `docs/SERVER.md` so the "use Workerman" idea doesn't come back without these facts.
 
 ---
 
@@ -222,28 +176,28 @@ Facts from `/home/my/vendor/workerman/workerman/src/Worker.php` (v5.2.2):
 - **Phase 3-5: one project root per server process.** It defaults to the cwd or `--root`, which is the same root resolution the TUI uses (`bin/sugarcrush`, `Bootstrap::app($args->root)`). There are many sessions, all under that root.
 - **Phase 7: multi-root.** The gateway spawns one **workspace-host** child per root. It uses the `proc_open` argv-array idiom from `BackgroundSupervisor::spawnSession()` and binds the UNIX listener after the spawn, with the same token handshake. The workspace host runs the same `SessionHub` and speaks the same JSON-RPC over a UNIX socket.
   - **Why a process per root instead of in-process:**
-    - `Bootstrap` holds root-sensitive static state: `$projectRootForSettings` `:713`, `$trustedRoots`/`$trustedMcpRoots`/`$trustedCommandRoots`/`$trustedSettingsRoots` `:652-706` (frozen per process by design, baseline §9.6), `$mcpClients` `:944`, `$hookFileEntries` `:721`, and the skill and command skip lists.
-    - MCP servers start once per launch (`Bootstrap::mcpClient()` `:6262`).
+    - `Bootstrap` holds root-sensitive static state: `$projectRootForSettings`, `$trustedRoots`/`$trustedMcpRoots`/`$trustedCommandRoots`/`$trustedSettingsRoots` (frozen per process by design, Appendix A), `$mcpClients`, `$hookFileEntries`, and the skill and command skip lists.
+    - MCP servers start once per launch (`Bootstrap::mcpClient()`).
     - A crashed or leaking root does not take the others down. The gateway can **recycle** an idle workspace host, which bounds long-running PHP memory growth (§9.4).
 
 ### 4.2 Headless operation: what is TUI-coupled and what must be extracted
 
 | Concern | Lives in today | TUI-coupled? | Server needs |
 |---|---|---|---|
-| Submit pipeline: custom-command expansion, `dispatchCommand`, spend-cap refusal, idle and threshold compaction, `UserPromptSubmit`/`SessionStart` hooks | `Chat::submit()` `:7150-7472` | Yes. Reads `TextArea` input, returns `[Chat, Cmd]` | **Extract** → `Host\TurnController::submit(string $text, SubmitOptions)` |
-| Dispatch: 70% reminder, checkpoint, title scheduling | `Chat::dispatchTurn()` `:7869-8002` | Yes (returns Cmds) | **Extract** → `TurnController::dispatch()`, `Host\TitleService` |
-| Backend completion + inbox + generation guard | `Chat::scheduleBackendCompletion()` `:9226-9380` | Partly. The closure logic is pure; `Cmd::promise` is not | **Extract** → `Host\TurnRunner` (promise-returning, emits `SessionEvent`s directly instead of an `ArrayObject` inbox) |
-| Tool-event projection to transcript rows | `Chat.php:3534-4023` (running placeholders → result rows, `toolResultMessage()` `:4017`) | Yes | **Extract** → `Host\TranscriptProjector` (the same rows Chat persists, plus wire events) |
-| Persistence and checkpoints | `Chat::persistTranscript()` `:1512`; `dispatchTurn` checkpoint `:7964-7993` | No (store calls) | **Extract** → `Host\TranscriptStore`, with a session **lease** (§4.8) |
-| Compaction (LLM parked, heuristic, block) | `Chat.php:10409-11550`, `:15270-15994` | Mostly pure logic with a Msg plumbing shell | **Extract** → `Host\CompactionService` |
-| Spend accounting, token estimate calibration | `Chat::spentUsd()`, `turnEstimateObservation()` `:14944` | No | **Extract** → `Host\SpendLedger`, `Host\ContextMeter` |
-| Prompt queueing mid-turn | `enqueuePrompt` `:7533`, `releaseQueuedPrompts` `:7778` | No | **Extract**, and add a `delivery: queue\|steer` field (§6.6) |
-| Slash commands | `Chat::dispatchCommand()` `:8240-8332` + ~25 handlers | Mixed. `/compact`, `/clear`, `/rename`, `/branch`, `/rewind`, `/budget`, `/memory`, `/bg`, `/fork`, `/workflow`, `/websearch`, `/permissions`, `/rules`, `/agents`, `/mcp list` are logic. `/theme`, `/pane`, `/layout`, `/keys`, `/sessions` (picker) and `/exit` are UI | **Extract the logic ones** into `Host\Commands\*` returning `CommandResult{rows[], effects[]}`. UI ones are client-side (the web UI has its own theme and layout) |
-| Background sessions pump | `Chat::pumpBackgroundSessions()` `:14490`, `BackgroundTickMsg` | Msg shell around `BackgroundSupervisor::tick()` | Server owns one `BackgroundSupervisor` and emits `bg.*` events |
-| Workflows | `Chat::handleWorkflowCommand()` `:9454`, Fiber stepped by timer `:9726` | Fiber driving is loop-based | Reuse: `WorkflowEngine` + a loop-timer stepper in `Host\WorkflowRunner`. **Fix `/workflow resume` running synchronously in the update loop** (`:9800`) before exposing it remotely: a server must never block its loop |
-| Runtime notices | `RuntimeNoticeSink` (process-global static queue + turn accounting, `src/Diagnostics/RuntimeNoticeSink.php:291-331`) | Global | **Per-session sink.** Make it an instance (`NoticeSink`) passed into each turn's backend. Keep a static facade for the TUI. Otherwise concurrent turns in two sessions steal each other's notices |
-| Mouse, selection, click tracker statics | `Chat.php:5020-5132` (`static $clickTracker`, `$pressGesture`, `$textSelection`) | Yes | Not needed headless (they stay TUI-only) |
-| Permission modal | `Chat::requestPermission` `:2666` | Yes | Server: `permission.request` events (§6.7). TUI: same `PermissionAsked` event → Veil modal |
+| Submit pipeline: custom-command expansion, `dispatchCommand`, spend-cap refusal, idle and threshold compaction, `UserPromptSubmit`/`SessionStart` hooks | `Chat::submit()` | Yes. Reads `TextArea` input, returns `[Chat, Cmd]` | **Extract** → `Host\TurnController::submit(string $text, SubmitOptions)` |
+| Dispatch: 70% reminder, checkpoint, title scheduling | `Chat::dispatchTurn()` | Yes (returns Cmds) | **Extract** → `TurnController::dispatch()`, `Host\TitleService` |
+| Backend completion + inbox + generation guard | `Chat::scheduleBackendCompletion()` | Partly. The closure logic is pure; `Cmd::promise` is not | **Extract** → `Host\TurnRunner` (promise-returning, emits `SessionEvent`s directly instead of an `ArrayObject` inbox) |
+| Tool-event projection to transcript rows | `Chat.php` (running placeholders → result rows, `toolResultMessage()`) | Yes | **Extract** → `Host\TranscriptProjector` (the same rows Chat persists, plus wire events) |
+| Persistence and checkpoints | `Chat::persistTranscript()`; `dispatchTurn` checkpoint | No (store calls) | **Extract** → `Host\TranscriptStore`, with a session **lease** (§4.8) |
+| Compaction (LLM parked, heuristic, block) | `Chat.php`, | Mostly pure logic with a Msg plumbing shell | **Extract** → `Host\CompactionService` |
+| Spend accounting, token estimate calibration | `Chat::spentUsd()`, `turnEstimateObservation()` | No | **Extract** → `Host\SpendLedger`, `Host\ContextMeter` |
+| Prompt queueing mid-turn | `enqueuePrompt`, `releaseQueuedPrompts` | No | **Extract**, and add a `delivery: queue\|steer` field (§6.6) |
+| Slash commands | `Chat::dispatchCommand()` + ~25 handlers | Mixed. `/compact`, `/clear`, `/rename`, `/branch`, `/rewind`, `/budget`, `/memory`, `/bg`, `/fork`, `/workflow`, `/websearch`, `/permissions`, `/rules`, `/agents`, `/mcp list` are logic. `/theme`, `/pane`, `/layout`, `/keys`, `/sessions` (picker) and `/exit` are UI | **Extract the logic ones** into `Host\Commands\*` returning `CommandResult{rows[], effects[]}`. UI ones are client-side (the web UI has its own theme and layout) |
+| Background sessions pump | `Chat::pumpBackgroundSessions()`, `BackgroundTickMsg` | Msg shell around `BackgroundSupervisor::tick()` | Server owns one `BackgroundSupervisor` and emits `bg.*` events |
+| Workflows | `Chat::handleWorkflowCommand()`, Fiber stepped by timer | Fiber driving is loop-based | Reuse: `WorkflowEngine` + a loop-timer stepper in `Host\WorkflowRunner`. A server must never block its loop |
+| Runtime notices | `RuntimeNoticeSink` (process-global static queue + turn accounting, `src/Diagnostics/RuntimeNoticeSink.php`) | Global | **Per-session sink.** Make it an instance (`NoticeSink`) passed into each turn's backend. Keep a static facade for the TUI. Otherwise concurrent turns in two sessions steal each other's notices |
+| Mouse, selection, click tracker statics | `Chat.php` (`static $clickTracker`, `$pressGesture`, `$textSelection`) | Yes | Not needed headless (they stay TUI-only) |
+| Permission modal | `Chat::requestPermission` | Yes | Server: `permission.request` events (§6.7). TUI: same `PermissionAsked` event → Veil modal |
 
 **Recommended path: strangler extraction, not a headless `Chat`.**
 
@@ -292,7 +246,7 @@ final class SessionHub                         // owns hosts, leases, idle evict
 }
 ```
 
-`WorkspaceContext` is built once per root by a new `Bootstrap::workspace(string $root): WorkspaceContext`. It factors the non-UI half of `Bootstrap::chat()` (`:992-1450`): config, gate, skills, commands, rules, agent manager, MCP, memory and the backend factory. **Note the `/model` bug** in baseline §11.1 #8: `backendFor()` without `taskManager` drops the Task tool. `WorkspaceContext::backendFor()` must thread the AgentManager, so the server cannot inherit that bug.
+`WorkspaceContext` is built once per root by a new `Bootstrap::workspace(string $root): WorkspaceContext`. It factors the non-UI half of `Bootstrap::chat()`: config, gate, skills, commands, rules, agent manager, MCP, memory and the backend factory. **Note the `/model` bug** in Appendix A: `backendFor()` without `taskManager` drops the Task tool. `WorkspaceContext::backendFor()` must thread the AgentManager, so the server cannot inherit that bug.
 
 ### 4.4 Multiple concurrent sessions in one process
 
@@ -303,11 +257,11 @@ final class SessionHub                         // owns hosts, leases, idle evict
   - Parallel tool grandchildren and Task sub-agents multiply this, so the global cap matters. Baseline §2.2: Task batches have **no concurrency cap**. Introduce `AgentPoolConfig::maxConcurrent` for Task while doing this.
 - **Fork hygiene in a long-lived parent.** Forking copies the parent's whole heap. A server holding 32 hosts with big transcripts forks a fat child per turn. Copy-on-write makes that cheap until a write, but `serialize()` of the history in the child touches it.
   - **Mitigation:** the child only needs the session's history plus the workspace. Keep hosts lean (transcript rows, not rendered state). Phase 7 workspace hosts are naturally small.
-  - Ensure the child closes **every inherited WS client fd and the listening socket** immediately after fork. This is the same class of bug as the "listener inherited by the launcher" finding at `BackgroundSupervisor.php:265-289`. Add a `ForkedChild::closeInheritedServerFds()` hook, called first thing in `runCompleteInChild()`, with a registry the server fills.
+  - Ensure the child closes **every inherited WS client fd and the listening socket** immediately after fork. This is the same class of bug as the "listener inherited by the launcher" finding at `BackgroundSupervisor.php`. Add a `ForkedChild::closeInheritedServerFds()` hook, called first thing in `runCompleteInChild()`, with a registry the server fills.
   - Without it a turn child holds browser sockets open, and the kernel keeps half-dead connections alive after the gateway closes them.
 - **Process-global state to fix before concurrency:**
   - `RuntimeNoticeSink` (per-session instance, §4.2);
-  - `EngineBackend::$unreapedChildren` (`:250`, process-global but keyed by pid, so safe);
+  - `EngineBackend::$unreapedChildren` (process-global but keyed by pid, so safe);
   - `Bootstrap` statics (the single-root assumption holds in-process; multi-root goes to Phase 7).
   - Re-check `ProviderFactory` and any provider-level static caches when implementing (*not audited here*).
 
@@ -337,13 +291,13 @@ sugarcrush serve logs [-f]       # tails ~/.sugar-crush/server/server.log
 sugarcrush serve url             # prints the login URL (with a fresh one-time login code, §8.2)
 ```
 
-- **Daemonize.** Reuse the exact sequence from `BackgroundSupervisor::buildSessionDaemonCode()` (`:463-470`): `umask(0o077)` → fork → parent exits → `posix_setsid() >= 0 || posix_setpgid(0,0)` → fork → parent exits. Then close stdio onto `/dev/null` plus the log file (the spawn-site redirection at `:256-260`).
+- **Daemonize.** Reuse the exact sequence from `BackgroundSupervisor::buildSessionDaemonCode()`: `umask(0o077)` → fork → parent exits → `posix_setsid() >= 0 || posix_setpgid(0,0)` → fork → parent exits. Then close stdio onto `/dev/null` plus the log file (the spawn-site redirection).
   - Factor it into `Support\Daemonize::detach(string $logPath): void` so `BackgroundSupervisor` and the server share one implementation. **This is a move, not a removal.**
-- **State directory.** `~/.sugar-crush/server/` with mode 0700, verified with the `ensurePrivateIpcDir()` `lstat` rules (`:606-645`). It holds:
+- **State directory.** `~/.sugar-crush/server/` with mode 0700, verified with the `ensurePrivateIpcDir()` `lstat` rules. It holds:
   - `server.json`: `{pid, procStartTime, version, protocol:{min,max}, url, host, port, root, startedAt}`, written atomically (`Support\AtomicFileWriter`) with 0600. This doubles as the **discovery file** for `sugarcrush attach` and editor plugins (cline's discovery-record pattern).
   - `server.lock`: the singleton lock.
     - Prefer an **OS lock** (`flock` on an fd held for the process lifetime) over a pidfile alone. The kernel releases it on death, which is cline's insight.
-    - Keep `procStartTime()` (`BackgroundSupervisor.php:567`) for `status` and `stop`, to defeat pid reuse.
+    - Keep `procStartTime()` (`BackgroundSupervisor.php`) for `status` and `stop`, to defeat pid reuse.
     - `Support\TimedFileLock` exists, but it is a *timed* lock for short critical sections. Use plain `flock(LOCK_EX|LOCK_NB)` held open for the singleton.
   - `token`: 0600, the server's long-lived bearer token (§8.1).
   - `server.log`: rotated at 10 MiB × 3.
@@ -354,8 +308,8 @@ sugarcrush serve url             # prints the login URL (with a fresh one-time l
   4. Persist all hosts, close MCP clients, release the lock.
   - **Important:** `Loop::addSignal()` (React) uses pcntl and is compatible with the "no SIGCHLD handler" invariant, as long as SIGCHLD is never registered.
 - **Parent-PID watchdog.** `--parent-pid <pid>` / `SUGARCRUSH_SERVER_PARENT_PID` makes the server exit when its spawner dies (kilo `KILO_PARENT_PID`). It is needed when the TUI or an editor spawns a private server (Phase 8).
-- **Background agents (`/bg`).** The server owns a `BackgroundSupervisor`. At boot it calls **`reconnect()`** (`:851`, DORMANT today) to re-adopt daemons that outlived a previous server or TUI, which wires a dormant subsystem. Its notifications (`SessionNotificationInterface` `src/Sessions/SessionNotificationInterface.php`) become `bg.*` events.
-  - Fix while there: **`/bg` results never land back in chat** and **`/fork` ignores the forked history** (baseline §2.4). The server's `bg.completed` event plus a `bg.inject {bgId, sessionId}` method can close the first gap.
+- **Background agents (`/bg`).** The server owns a `BackgroundSupervisor`. At boot it calls **`reconnect()`** (DORMANT today) to re-adopt daemons that outlived a previous server or TUI, which wires a dormant subsystem. Its notifications (`SessionNotificationInterface` `src/Sessions/SessionNotificationInterface.php`) become `bg.*` events.
+  - Fix while there: **`/bg` results never land back in chat** and **`/fork` ignores the forked history** (Appendix A). The server's `bg.completed` event plus a `bg.inject {bgId, sessionId}` method can close the first gap.
 - **systemd user unit.** Ship `docs/examples/sugarcrush.service` with `Type=simple`, `ExecStart=sugarcrush serve`, `Restart=on-failure`. Foreground mode under systemd needs no daemonize.
 
 ### 4.7 Configuration: flags, env vars, settings keys and their doc obligations
@@ -379,15 +333,15 @@ sugarcrush serve url             # prints the login URL (with a fresh one-time l
 **Env vars** (each must be added to `docs/ENVIRONMENT.md` **tables**: `tests/Config/EnvRosterDriftTest.php` scans every `getenv()` shape in `src/` and fails in both directions):
 `SUGARCRUSH_SERVER_HOST`, `SUGARCRUSH_SERVER_PORT`, `SUGARCRUSH_SERVER_TOKEN` (overrides the token file; for containers), `SUGARCRUSH_SERVER_ALLOWED_ORIGINS`, `SUGARCRUSH_SERVER_WEB_ROOT`, `SUGARCRUSH_SERVER_PARENT_PID`, `SUGARCRUSH_SERVER_DIR` (state dir override; tests need it).
 
-**Settings keys** (user tier only; extend `LayeredSettings::LAYERED_KEYS` `src/Config/LayeredSettings.php:365`, and keep them **out of** `PROJECT_TIER_KEYS` `:584`, because a cloned repo must not open a port or widen origins):
+**Settings keys** (user tier only; extend `LayeredSettings::LAYERED_KEYS` `src/Config/LayeredSettings.php`, and keep them **out of** `PROJECT_TIER_KEYS`, because a cloned repo must not open a port or widen origins):
 `server.host`, `server.port`, `server.allowedOrigins`, `server.maxConcurrentTurns`, `server.maxOpenSessions`, `server.askTimeoutSeconds` (0 = never), `server.drainSeconds`, `server.allowBypass`.
 - `ConfigWriteProducerDocumentationDriftTest` pins which keys the app *writes*. If the web settings form writes keys, every new producer must be documented in `docs/SETTINGS.md` (§6.10).
 
 **Other doc obligations (drift-pinned):**
-- `ParsedArgs::SUBCOMMANDS` + `Subcommands::SUBCOMMAND_DESCRIPTIONS` (`src/Cli/Subcommands.php:1059-1066`) + completion operands. Then the README subcommand fence: `ReadmeRosterDriftTest::testTheSubcommandFenceNamesEveryVerbTheParserAccepts` (`tests/Config/ReadmeRosterDriftTest.php:291`).
-- New global flags (`--detach` only if global; prefer subcommand-scoped flags) must agree with `Subcommands::OPTIONS` (`:1038-1049`): `ClaimFamiliesDocumentationDriftTest::testTheFlagSynopsisAndArgvParserAgreeInBothDirections` (`:223`).
-- New exit codes (e.g. "port in use" = 3?) go through `NonInteractive`'s constants: `testBothExitCodeTablesAreTheNonInteractiveConstants` (`:176`).
-- If the server adds slash commands (e.g. `/serve status` inside the TUI), `CommandRegistry` + `docs/COMMANDS.md` (`ReadmeRosterDriftTest:237`). Key bindings (e.g. a TUI "attach to server" chord) go in `KeyBindingRegistry` + README (`tests/Commands/KeyBindingDriftTest.php`).
+- `ParsedArgs::SUBCOMMANDS` + `Subcommands::SUBCOMMAND_DESCRIPTIONS` (`src/Cli/Subcommands.php`) + completion operands. Then the README subcommand fence: `ReadmeRosterDriftTest::testTheSubcommandFenceNamesEveryVerbTheParserAccepts` (`tests/Config/ReadmeRosterDriftTest.php`).
+- New global flags (`--detach` only if global; prefer subcommand-scoped flags) must agree with `Subcommands::OPTIONS`: `ClaimFamiliesDocumentationDriftTest::testTheFlagSynopsisAndArgvParserAgreeInBothDirections`.
+- New exit codes (e.g. "port in use" = 3?) go through `NonInteractive`'s constants: `testBothExitCodeTablesAreTheNonInteractiveConstants`.
+- If the server adds slash commands (e.g. `/serve status` inside the TUI), `CommandRegistry` + `docs/COMMANDS.md` (`ReadmeRosterDriftTest`). Key bindings (e.g. a TUI "attach to server" chord) go in `KeyBindingRegistry` + README (`tests/Commands/KeyBindingDriftTest.php`).
 - **New:** `docs/SERVER.md` with the method and event roster **generated from `Protocol\Dispatcher::methods()` and `Protocol\EventType::cases()`**, plus a `ServerProtocolDocumentationDriftTest` in the house style. That is the cheapest way to keep the web client and the docs honest.
 - Every new test file goes into `scripts/parallel-tests-durations.tsv`, and the suite figure is refreshed in `sugar-crush/tests/Config/Support/suite-figure.json` (CLAUDE.md gotcha: unlisted files run in zero shards).
 
@@ -396,13 +350,11 @@ sugarcrush serve url             # prints the login URL (with a fresh one-time l
 - **Persistence.**
   - `SessionHost` writes through `TranscriptStore` → `EnhancedSessionStore::saveTranscript()`, unchanged shape, so the TUI can still open server sessions with `--resume`.
   - Checkpoints as today.
-  - **New table** `session_events(session_id TEXT, seq INTEGER, ts INTEGER, type TEXT, payload TEXT, PRIMARY KEY(session_id, seq))`, added through the store's existing schema bootstrap (`EnhancedSessionStore.php:140-210`).
-  - Retention: a per-session cap (default 20,000 events, or 64 MiB per DB) plus `pruneSessions` cascade. Mind the WAL notes already in the store (`:479`, `:1000`, `:1123`): never hold a read cursor across an INSERT.
+  - **New table** `session_events(session_id TEXT, seq INTEGER, ts INTEGER, type TEXT, payload TEXT, PRIMARY KEY(session_id, seq))`, added through the store's existing schema bootstrap (`EnhancedSessionStore.php`).
+  - Retention: a per-session cap (default 20,000 events, or 64 MiB per DB) plus `pruneSessions` cascade. Mind the WAL notes already in the store: never hold a read cursor across an INSERT.
 - **Lease** (prevents two writers clobbering a whole-transcript rewrite).
-  - New table `session_leases(session_id PK, holder TEXT, pid INT, proc_start INT, heartbeat_at INT)`. Holder is `tui:<pid>` or `server:<pid>`.
-  - Take it on open; heartbeat every 10 s; it is stale when the pid is gone or has a different start time, or the heartbeat is older than 60 s.
+  - Reuse the existing single-writer lock: `src/Session/SessionLock.php` (flock on `<config>/sessions/<id>.lock`), `EnhancedSessionStore::lockSession()`/`sessionLockHolder()`, and Chat's read-only fallback (`Chat::relockedForCurrentSession()`, `SessionLockRetryMsg`). `SessionHost` takes it on open.
   - The TUI opening a server-held session gets a choice: **attach via the server** (Phase 8), or **open read-only**.
-  - The Chat side needs only `Bootstrap::openSession()` (`:3188-3228`) to check the lease.
 - **Message ids.** Add `public readonly ?string $id` to `Message` (minted on construction, e.g. 16-hex random or a ULID), persisted in transcript JSON. Old rows without ids get deterministic ids on load (`sha1(sessionId . index . createdAt)`). Wire ids must be stable across compaction rewrites; index-based ids are not.
 
 ### 4.9 The TUI as a client (Phase 8)
@@ -413,17 +365,17 @@ sugarcrush serve url             # prints the login URL (with a fresh one-time l
   - the TUI and browser see the same live session;
   - turns survive closing the terminal;
   - the TUI gains approvals parity automatically.
-- **Optional cheap remote-TUI channel:** because candy-core `Program` accepts `input`/`output` streams and `windowSize` (`ProgramOptions.php:22-80`), a `/pty` WS endpoint could stream the real TUI into xterm.js (ttyd-style). candy-wish already does "TUI over SSH via sshd". This is low-effort but **not** multi-session-friendly. Keep it as a footnote, not the plan.
+- **Optional cheap remote-TUI channel:** because candy-core `Program` accepts `input`/`output` streams and `windowSize` (`ProgramOptions.php`), a `/pty` WS endpoint could stream the real TUI into xterm.js (ttyd-style). candy-wish already does "TUI over SSH via sshd". This is low-effort but **not** multi-session-friendly. Keep it as a footnote, not the plan.
 
 ---
 
 ## 5. The unified permission back-channel (the keystone)
 
-This one mechanism serves the TUI (fixes baseline §11.1 #1), the server, and later ACP.
+This one mechanism serves the TUI (fixes Appendix A), the server, and later ACP.
 
 ### 5.1 Child ↔ parent frames (extends `EngineBackend`'s existing framing)
 
-The frames keep the existing 4-byte BE length + `serialize()` encoding (`writeFrame` `:1742`, `drainFrames` `:1769`), and keep unserializing with `allowed_classes => false` (see `encodeEvent()` notes).
+The frames keep the existing 4-byte BE length + `serialize()` encoding (`writeFrame`, `drainFrames`), and keep unserializing with `allowed_classes => false` (see `encodeEvent()` notes).
 
 | Direction | `kind` | Fields | Meaning |
 |---|---|---|---|
@@ -439,19 +391,19 @@ The frames keep the existing 4-byte BE length + `serialize()` encoding (`writeFr
 - `runCompleteInChild()` attaches an approver: `withPermissionApprover(fn(ToolCall $c, HookResult $ask) => $channel->ask($c, $ask))`.
 - `ChildChannel::ask()` writes the `ask` frame, then blocks in a `stream_select` loop on the child socket until it gets the matching `ask_reply`, buffering any `steer` frames that arrive meanwhile.
 - **No deadline in the child.** The parent owns policy. The parent's death shows as EOF, which is a refusal (`DenialKind::Unanswered`).
-- **`always` scope.** The child records a per-turn allow memo, keyed like `Runtime::taskGrantMemoKey()` (`:2231`). The **parent** records a per-session rule (`SessionPermissionMemo`) that is passed into the next turn's `PermissionGate` as a prepended in-memory `permissionRules` entry. It is never written to settings files by default. "Remember across sessions" is a separate explicit action (§6.7).
+- **`always` scope.** The child records a per-turn allow memo, keyed like `Runtime::taskGrantMemoKey()`. The **parent** records a per-session rule (`SessionPermissionMemo`) that is passed into the next turn's `PermissionGate` as a prepended in-memory `permissionRules` entry. It is never written to settings files by default. "Remember across sessions" is a separate explicit action (§6.7).
 
 **Parent side** (`completeAsync()`):
-1. The read callback (`:1467`) decodes `ask` → `PermissionAsked` event → `$onEvent`.
-2. **Suspend the 120 s idle watchdog while any ask is pending** (`$resetTimeout` at `:1444` currently re-arms on every frame). Otherwise a human taking two minutes to read a diff kills the turn. Re-arm on `ask_reply` write.
+1. The read callback decodes `ask` → `PermissionAsked` event → `$onEvent`.
+2. **Suspend the 120 s idle watchdog while any ask is pending** (`$resetTimeout` at currently re-arms on every frame). Otherwise a human taking two minutes to read a diff kills the turn. Re-arm on `ask_reply` write.
 3. Expose a reply handle: `PendingAsk { string $askId; ToolCall $call; …; reply(PermissionReply $r, ?string $note): void }`, which writes the frame to `$parentSocket` (now `stream_set_blocking(false)` + a small write buffer drained with `addWriteStream`).
 4. On cancel or teardown, pending asks resolve as `cancelled`. Emit `PermissionResolved{cancelled:true}`.
 
-**Parallel Task sub-agents (grandchildren).** Their gate runs in the grandchild, which has no socket of its own. Writing to the inherited turn-child socket from two processes would interleave frames, which is exactly why `subAgentEmitter` is pid-bound (`EngineBackend.php:1068-1077`).
+**Parallel Task sub-agents (grandchildren).** Their gate runs in the grandchild, which has no socket of its own. Writing to the inherited turn-child socket from two processes would interleave frames, which is exactly why `subAgentEmitter` is pid-bound (`EngineBackend.php`).
 
 *Phase 6 fix:* before forking each concurrent job, `Runtime::executeConcurrently()` creates a socketpair per job. The turn child multiplexes it: it relays `ask`/`subagent` frames upward tagged with `origin: <toolCallId>`, and relays `ask_reply` downward.
 
-This also fixes baseline §2.2 "parallel batches show no live dashboard rows". **Until then, grandchild Asks keep failing closed** with a clear reason ("approval from a parallel sub-agent is not yet supported; run it alone or allow it by rule").
+This also fixes Appendix A "parallel batches show no live dashboard rows". **Until then, grandchild Asks keep failing closed** with a clear reason ("approval from a parallel sub-agent is not yet supported; run it alone or allow it by rule").
 
 ### 5.2 TUI consumption
 
@@ -459,7 +411,7 @@ This also fixes baseline §2.2 "parallel batches show no live dashboard rows". *
 - `ToolEventPumpMsg` drains it → `PermissionRequestMsg` (exists) → the Veil y/n/a modal (exists; `a` double-confirm).
 - `PermissionReplyMsg` → `PendingAsk::reply()`.
 
-Once this ships, the TUI default can move from `bypass-permissions` to `default` or `accept-edits` in a later, deliberate change. Touch `docs/PERMISSIONS.md:199-223` and README "Limitations", and note that `TrustKeyDocumentationDriftTest` reads `docs/PERMISSIONS.md`.
+Once this ships, the TUI default can move from `bypass-permissions` to `default` or `accept-edits` in a later, deliberate change. Touch `docs/PERMISSIONS.md` and README "Limitations", and note that `TrustKeyDocumentationDriftTest` reads `docs/PERMISSIONS.md`.
 
 ### 5.3 Server consumption
 
@@ -475,14 +427,14 @@ Once this ships, the TUI default can move from `bypass-permissions` to `default`
   - The subprotocol **must** be `sugarcrush.v1`. Echo it in the 101, and refuse the upgrade without it (close 1002).
   - Text frames, UTF-8 JSON.
   - `permessage-deflate` **off** by default: latency, CPU, and the BREACH-style concern with secrets plus attacker-influenced text. Revisit later.
-- **Envelope = JSON-RPC 2.0** (codec: `SugarCraft\Mcp\McpMessage`; add `sugarcraft/sugar-mcp` (already a dep) or, better, lift a protocol-neutral `JsonRpcMessage` into sugar-mcp later):
+- **Envelope = JSON-RPC 2.0** (codec: `SugarCraft\Mcp\McpMessage`, not sugar-crush's own `SugarCraft\Crush\McpMessage` copy; later, lift a protocol-neutral `JsonRpcMessage` into sugar-mcp):
   - request `{"jsonrpc":"2.0","id":"c1-42","method":"session.send","params":{…}}`
   - response `{"jsonrpc":"2.0","id":"c1-42","result":{…}}` | `{"jsonrpc":"2.0","id":"c1-42","error":{"code":-32010,"message":"…","data":{"kind":"busy","retryable":true,"retryAfterMs":500}}}`
   - server→client events = notifications `{"jsonrpc":"2.0","method":"event","params":<EventEnvelope>}`
   - server→client *requests* are **not** used. Approvals are events plus a client request, so any number of clients can see them and one answers. (ACP uses server→client requests; the ACP adapter maps them, §6.12.)
 - **Limits.**
   - Client→server frame ≤ 1 MiB (prompts; large attachments come later via HTTP upload).
-  - Server→client frame ≤ 4 MiB. Bigger tool outputs are truncated in the event with `truncated:true`, and the full text comes from `tool.output {toolCallId, offset, limit}`. Tool output is already capped at 64 KiB–2 MiB per tool except MCP (uncapped; baseline §3.4). Cap MCP at the event layer.
+  - Server→client frame ≤ 4 MiB. Bigger tool outputs are truncated in the event with `truncated:true`, and the full text comes from `tool.output {toolCallId, offset, limit}`. Tool output is already capped at 64 KiB–2 MiB per tool except MCP (uncapped; Appendix A). Cap MCP at the event layer.
   - ≤ 64 in-flight requests per connection.
 
 ### 6.2 Handshake and versioning
@@ -545,13 +497,13 @@ Every side-effecting method takes an optional `idempotencyKey` (≤64 chars). Th
 | | `session.get` | `{sessionId}` → `SessionSnapshot` (rows, status, usage, pendingAsks, queue, seq) | `SessionHost::snapshot` |
 | | `session.subscribe` | `{sessionId, afterSeq?, mode?: "full"\|"narration"}` → `{fromSeq, throughSeq}` or `{reset:true, snapshot}` | §6.8 |
 | | `session.unsubscribe` | `{sessionId}` | |
-| | `session.rename` | `{sessionId, name}` | `renameSession` (`EnhancedSessionStore.php:69`) |
-| | `session.fork` | `{sessionId, atCheckpoint?}` → `SessionSummary` | `forkSession` (`:74`) / `/branch` |
-| | `session.rewind` | `{sessionId, n}` | `/rewind` logic (`Chat.php:12317`) |
-| | `session.clear` | `{sessionId}` | `/clear` (`:8924`) |
-| | `session.delete` | `{sessionId}` | `deleteSession` (`:84`) |
-| | `session.close` | `{sessionId, force?}` | release lease |
-| | `session.export` | `{sessionId, format:"markdown"\|"json"\|"text"}` → `{content}` | `Util\Exporter` (the `/share` builder). Gives `/share` a working **local** fallback (baseline §11.1 #12) |
+| | `session.rename` | `{sessionId, name}` | `renameSession` (`EnhancedSessionStore.php`) |
+| | `session.fork` | `{sessionId, atCheckpoint?}` → `SessionSummary` | `forkSession` / `/branch` |
+| | `session.rewind` | `{sessionId, n}` | `/rewind` logic (`Chat.php`) |
+| | `session.clear` | `{sessionId}` | `/clear` |
+| | `session.delete` | `{sessionId}` | `deleteSession` |
+| | `session.close` | `{sessionId, force?}` | release the session lock |
+| | `session.export` | `{sessionId, format:"markdown"\|"json"\|"text"}` → `{content}` | `Util\Exporter` (the `/share` builder). Gives `/share` a working **local** fallback (Appendix A) |
 | | `session.setMode` | `{sessionId, permissionMode}` | §8.4 |
 | | `session.setModel` | `{sessionId, provider?, model?}` | Fixes `/model` semantics (provider **and** model, with Task preserved, §4.3) |
 | turn | `session.send` | `{sessionId, text, delivery?: "queue"\|"steer"\|"interrupt", attachments?[], idempotencyKey}` → `{turnId, admitted:"started"\|"queued"\|"steered", queuePosition?}` | `TurnController::submit` |
@@ -562,8 +514,8 @@ Every side-effecting method takes an optional `idempotencyKey` (≤64 chars). Th
 | | `permission.rules` | → effective rules + source (read-only) | `/permissions` report |
 | command | `command.list` | `{sessionId}` → `[{name, description, argumentHint, source, runsIn:"server"\|"client"}]` | `CommandRegistry` + `CommandLoader` |
 | | `command.exec` | `{sessionId, name, args, idempotencyKey}` → `CommandResult{rows[], effects[]}` | `Host\Commands\*`; UI-only commands → `-32030` |
-| settings | `settings.schema` | → JSON-Schema-ish registry (§6.10) | new `Config\SettingsRegistry` |
-| | `settings.get` | `{scope?: "effective"\|"user"\|"project"}` → values + per-key source (`LayeredSettings::projectKeySource()` `:798`) | |
+| settings | `settings.schema` | → JSON-Schema-ish registry (§6.10) | `Config\Settings\SettingsSchema` (Appendix N) |
+| | `settings.get` | `{scope?: "effective"\|"user"\|"project"}` → values + per-key source (`LayeredSettings::projectKeySource()`) | |
 | | `settings.set` | `{key, value, scope:"user"\|"project"}` (scope admin; allowlisted keys only, §8.5) | |
 | memory | `memory.list/search/add/edit/delete` | mirror `/memory` | `MemoryStore`, `ProjectMemoryWriter` |
 | agents | `agents.list` | roster with sources | `AgentManager` |
@@ -572,7 +524,7 @@ Every side-effecting method takes an optional `idempotencyKey` (≤64 chars). Th
 | workflow | `workflow.list`, `workflow.run {name, vars}`, `workflow.pause/resume/status` | | `WorkflowEngine` |
 | files | `files.diff {sessionId}` → `git diff` + per-turn edits; `files.read {path}` (root-jailed, read-only, size-capped); `files.changed {sessionId}` | | `EnvironmentBlock` git helpers, `Tools\PathJail` |
 | tool | `tool.output {sessionId, toolCallId, offset, limit}` | full output beyond event truncation | transcript rows |
-| todo | `todo.get {sessionId}` | **Absent tool today** (baseline §6.2). Reserve the name; implement with the TodoWrite tool when it lands | — |
+| todo | `todo.get {sessionId}` | **Absent tool today** (Appendix A). Reserve the name; implement with the TodoWrite tool when it lands | — |
 
 ### 6.4 Event envelope
 
@@ -604,9 +556,9 @@ Durable (D) events are written to `session_events` before they are broadcast. Ep
 | `assistant.delta` | **E** | `{turnId, partId, offset, text}` | `token` frames. `offset` = byte offset into the part, so duplicates and gaps are detectable |
 | `reasoning.delta` | **E** | `{turnId, partId, offset, text}` | `reasoning` frames (empty heartbeats are **not** forwarded) |
 | `assistant.completed` | D | `{turnId, partId, messageId, content, reasoning?, lengthStopped, stepsTruncated}` | `result` frame. Closes the delta stream |
-| `tool.started` | D | `{turnId, toolCallId, name, description?, arguments}` | `started` frame (`encodeEvent` `:1906`) |
+| `tool.started` | D | `{turnId, toolCallId, name, description?, arguments}` | `started` frame (`encodeEvent`) |
 | `tool.progress` | E | `{toolCallId, tail}` | future (Bash streaming) |
-| `tool.finished` | D | `{turnId, toolCallId, name, isError, durationMs, content (≤256 KiB, `truncated`), diff? (unified), image? {protocol, mime, bytesB64 ≤ 2 MiB}\|{path}, denial? {kind: DenialKind, reason}}` | `finished` frame (`:1910-1920`), `DenialKind` |
+| `tool.finished` | D | `{turnId, toolCallId, name, isError, durationMs, content (≤256 KiB, `truncated`), diff? (unified), image? {protocol, mime, bytesB64 ≤ 2 MiB}\|{path}, denial? {kind: DenialKind, reason}}` | `finished` frame, `DenialKind` |
 | `permission.requested` | D | `{askId, turnId, toolCallId, tool, arguments, reason, source, mode, options:["once","always","reject"], alwaysScope}` | §5 |
 | `permission.resolved` | D | `{askId, reply, note?, by:{clientId, principal}, cancelled?:bool, cascaded?:bool}` | §6.7 |
 | `subagent.started` / `subagent.progress` (E, throttled 1/s) / `subagent.finished` | D/E/D | `{id, parentToolCallId, name, task, tail?, usage?, result?}` | `subagent` frames, `SubAgentActivity` |
@@ -616,10 +568,10 @@ Durable (D) events are written to `session_events` before they are broadcast. Ep
 | `turn.steered` | D | `{turnId, steerId, step, messageId}` | `steer_ack` |
 | `turn.completed` | D | `{turnId, stopReason: "end_turn"\|"max_steps"\|"length"\|"cancelled"\|"spend_cap"\|"error", error?}` | settle |
 | `turn.queued` / `turn.dequeued` | D | `{queueId, text, position}` | queue |
-| `compaction.started` / `compaction.completed` | D | `{kind:"llm"\|"heuristic"\|"truncate", before, after, savedPct, summaryMessageIds[]}` | `Chat.php:10975-11550` |
+| `compaction.started` / `compaction.completed` | D | `{kind:"llm"\|"heuristic"\|"truncate", before, after, savedPct, summaryMessageIds[]}` | `Chat.php` |
 | `notice` | D | `{level:"info"\|"warn"\|"error", text, code?}` | `RuntimeNoticeSink` (per session), launch notices |
 | `session.titled` | D | `{name}` | `SessionTitledMsg` |
-| `prompt.suggestion` | E | `{text}` | `schedulePromptSuggestion` (`:9144`) |
+| `prompt.suggestion` | E | `{text}` | `schedulePromptSuggestion` |
 | `bg.started` / `bg.output` (E) / `bg.status` / `bg.completed` | D/E/D/D (server scope) | `BackgroundSession::toArray()` | supervisor listener |
 | `workflow.*` | D | stage events | `WorkflowEngine` |
 | `server.tick` | E (server scope) | `{now, turnsRunning}` | every `tickIntervalMs` |
@@ -636,9 +588,9 @@ See §8.6.
 ### 6.6 Send, queue, steer and interrupt
 
 - `delivery: "queue"` (the default when busy) is today's behaviour (`enqueuePrompt`).
-- **`delivery: "steer"`** (new; baseline §1.4 "mid-turn steering ABSENT"):
+- **`delivery: "steer"`** (new; Appendix A "mid-turn steering ABSENT"):
   1. The parent writes a `steer` frame.
-  2. The child's `runTurn()` loop (`EngineBackend.php:776-1024`) checks `ChildChannel::takeSteers()` at the **top of each step**, appends `UserMessage("[steering] …")` to the in-turn messages, and acknowledges with `steer_ack`.
+  2. The child's `runTurn()` loop (`EngineBackend.php`) checks `ChildChannel::takeSteers()` at the **top of each step**, appends `UserMessage("[steering] …")` to the in-turn messages, and acknowledges with `steer_ack`.
   3. If the turn finishes before the next step, the steer converts to a queued prompt (`turn.steered` is not emitted; `turn.queued` is).
   - This is the OpenClaw `queueMode: steer` / opencode `delivery: steer` semantics.
 - `delivery: "interrupt"` = `cancel_soft`, then send as a new turn.
@@ -666,7 +618,7 @@ See §8.6.
 - **Scopes.** Answering needs `approve`. For a future read-only viewer token (share a live session read-only), mint tokens with `["read"]` only.
 - **Remember.**
   - `remember: "session"` = an in-memory session rule.
-  - `"project"`/`"user"` writes a `permissionRules` entry. Permission keys are **user-tier only** today (baseline §9.6), so `"project"` should be refused until a project-tier permission design exists. `"user"` requires `admin` scope and writes through the same `ConfigWriteProducer` path, which is drift-pinned.
+  - `"project"`/`"user"` writes a `permissionRules` entry. Permission keys are **user-tier only** today (Appendix A), so `"project"` should be refused until a project-tier permission design exists. `"user"` requires `admin` scope and writes through the same `ConfigWriteProducer` path, which is drift-pinned.
 
 ### 6.8 Subscribe, replay and resync
 
@@ -696,24 +648,15 @@ See §8.6.
 
 ### 6.10 Settings over the wire: a schema-driven registry
 
-There is no settings schema today. `LayeredSettings` has key lists (`LAYERED_KEYS`, `PROJECT_TIER_KEYS`, `userTierOnlyKeys()`) and the Settings pane is a read-only readout (baseline §10).
+There is no settings schema today. `LayeredSettings` has key lists (`LAYERED_KEYS`, `PROJECT_TIER_KEYS`, `userTierOnlyKeys()`) and the Settings pane is a read-only readout (Appendix A).
 
-Introduce **`Config\SettingsRegistry`**, the single source for the TUI Settings pane (see the settings-pane design in this report series if present), `settings.schema`, `docs/SETTINGS.md` generation, and validation:
-
-```php
-SettingDef::new('maxToolSteps')
-    ->type('integer')->min(1)->max(200)->default(8)
-    ->tiers(Tier::User)                    // derived from LayeredSettings lists, not re-declared
-    ->group('Agent loop')->label('Max tool steps per turn')
-    ->help('…')->writableRemotely(true)
-    ->sensitive(false)->requiresRestart(false);
-```
+Use Appendix N's **`SettingsSchema`** / `SettingDefinition` (`SugarCraft\Crush\Config\Settings\`) as the single source for the TUI settings editor, `settings.schema`, `docs/SETTINGS.md` generation, and validation. The server needs two extra per-row flags on `SettingDefinition`: `writableRemotely` and `sensitive`.
 
 - `settings.schema` returns JSON-Schema-compatible descriptors plus UI hints `{group, label, help, enum, sensitive, writableRemotely, requiresRestart, tiers, source}`. The web UI renders its settings form purely from this.
 - **Remote writes are allowlisted** (`writableRemotely`):
   - **never** `statusLine` (executes a command), `instructions` (globs that pull files into prompts), `trustedProject*`, `permissionMode`/`permissionRules` (except through `permission.respond remember:user` with `admin`), hooks, or MCP config;
   - **yes** for theme, titleModel, summaryModel, maxOutputTokens, maxToolSteps, parallelToolCalls, disabledSkills, disabledRules.
-- A drift test asserts that `SettingsRegistry` covers exactly `LAYERED_KEYS` + trust keys (consistent with `TrustKeyDocumentationDriftTest` and `ConfigWriteProducerDocumentationDriftTest`).
+- A drift test asserts that `SettingsSchema` covers exactly `LAYERED_KEYS` + trust keys (consistent with `TrustKeyDocumentationDriftTest` and `ConfigWriteProducerDocumentationDriftTest`).
 
 ### 6.11 Versioning policy
 
@@ -750,10 +693,6 @@ SettingDef::new('maxToolSteps')
 
 - **Rulebook check.** `PROJECT_NAMES.md` §"The naming rule" requires **two words** (sweet word + functional word). `sugar-crush-web` is three. It is still the most legible choice: it declares itself the web face of `sugar-crush` and sorts next to it.
 - **Recommendation:** keep `sugar-crush-web/`, package `sugarcraft/sugar-crush-web`, PHP namespace `SugarCraft\CrushWeb\`. Record an explicit **"app satellite: `<app>-<surface>`"** exception in `PROJECT_NAMES.md`, and add the decision-history row the file already keeps for renames.
-- **Rule-compliant alternatives** if the exception is unwanted:
-  - `sugar-console` (`SugarConsole`: "the browser console for SugarCrush"; clear, two words);
-  - `frosting-crush` (weak functional word);
-  - `glaze-deck`.
 - Avoid the `Candy-` prefix: this is an app, not a foundation (prefix law: Sugar = components/data/apps).
 - **MATCHUPS row:** `| — (first-party) | **SugarCrushWeb** | sugar-crush-web/ | sugarcraft/sugar-crush-web | SugarCraft\CrushWeb | 🟡 | Browser UI for sugar-crush's WebSocket server mode — multi-session dashboard, approvals, settings; Vite + Vue 3; inspired by opencode web / OpenClaw Control UI. |`
 
@@ -820,7 +759,7 @@ sugar-crush-web/
   - hashed assets get `Cache-Control: public, max-age=31536000, immutable`; `index.html` gets `no-store`;
   - correct MIME types and a strict CSP: `default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'`;
   - also `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`.
-- **Development:** `npm run dev` (Vite on :5173) proxies `/ws` (with `ws: true`) and `/api` to `127.0.0.1:7420`. The server's Origin allowlist gains `http://localhost:5173` only with `--dev-origin` (or `server.allowedOrigins`); there is no wildcard.
+- **Development:** `npm run dev` (Vite on) proxies `/ws` (with `ws: true`) and `/api` to `127.0.0.1:7420`. The server's Origin allowlist gains `http://localhost:5173` only with `--dev-origin` (or `server.allowedOrigins`); there is no wildcard.
 
 ### 7.4 Multi-session UX
 
@@ -875,7 +814,7 @@ sugar-crush-web/
   - Enter = send; Shift+Enter = newline.
   - The `[Send ▾]` split button picks queue/steer/interrupt. While a turn runs, the default is **queue**, mirroring the TUI.
   - `/` opens command completion from `command.list` (only server-runnable commands).
-  - `@` file mention is a future feature (it needs a `files.search`; the TUI also lacks it, baseline §10).
+  - `@` file mention is a future feature (it needs a `files.search`; the TUI also lacks it, Appendix A).
   - `Esc Esc` = stop.
 - **Tool cards:**
   - collapsed by default when successful, mirroring the TUI;
@@ -934,7 +873,7 @@ version:    hello.server.version ≠ build version → banner "server updated �
   - components (ToolCard states, PermissionCard first-wins UI, DiffView).
   - Use `mock-socket` for WS.
 - **Type safety:** `vue-tsc --noEmit`. Protocol types are **generated** from the PHP-side schema, so a server change that breaks the client fails typecheck (`npm run gen:protocol && git diff --exit-code src-web/protocol/generated.ts` in CI).
-- **E2E (playwright):** boot a real `sugarcrush serve --port 0 --root <tmp git repo> --provider echo`. The offline `EchoProvider` is deterministic and has the full tool set (baseline §1.2). Scenarios:
+- **E2E (playwright):** boot a real `sugarcrush serve --port 0 --root <tmp git repo> --provider echo`. The offline `EchoProvider` is deterministic and has the full tool set (Appendix A). Scenarios:
   - login;
   - create session, send, see the echo;
   - two tabs on one session (both stream; first approval wins; the other's card closes);
@@ -949,7 +888,7 @@ version:    hello.server.version ≠ build version → banner "server updated �
   - backpressure (stalled reader → coalesce → overflow → 1013);
   - auth (no token, bad Origin, bad Host, expired ticket, replayed ticket);
   - fork-fd hygiene (turn child does not hold client fds; `/proc/<pid>/fd` assertion);
-  - lease contention;
+  - session-lock contention;
   - restart replay.
   - Everything under `LoopPin::pinStableClock()` via `sugar-crush/tests/bootstrap.php`.
 
@@ -957,7 +896,7 @@ version:    hello.server.version ≠ build version → banner "server updated �
 
 | Concern | Plan |
 |---|---|
-| Lib discovery | `scripts/affected-libs.php::discover_libs()` picks dirs that have **both** `composer.json` and `phpunit.xml` (`:83-90`). The PHP shim + `tests/AssetsTest.php` make `sugar-crush-web` a first-class lib, so it appears in the matrix, coverage, and the **splitsh sync**. `sync-sugarcraft.yml` derives its list from the same script (`:118-138`) |
+| Lib discovery | `scripts/affected-libs.php::discover_libs()` picks dirs that have **both** `composer.json` and `phpunit.xml`. The PHP shim + `tests/AssetsTest.php` make `sugar-crush-web` a first-class lib, so it appears in the matrix, coverage, and the **splitsh sync**. `sync-sugarcraft.yml` derives its list from the same script |
 | Node CI | New workflow `.github/workflows/web.yml` (paths: `sugar-crush-web/**`, `sugar-crush/docs/protocol/**`): `setup-node@v4` (node 22, npm cache) → `npm ci` → `lint` → `typecheck` → `test` → `build` → **`git diff --exit-code dist/`** (dist matches source) → `gen:protocol` diff check → playwright e2e (needs PHP 8.3 + `php tools/check-path-repos.php --fix --strict-closure` + `composer install` in `sugar-crush`, as ci.yml does). Add the workflow to `FORCE_ALL_FILES`? No: it is path-scoped and needs no force-all |
 | Reproducible dist | Pin node and npm versions in `package.json` `engines` + `.nvmrc`. Vite builds are deterministic with content hashes. If the dist diff flakes across platforms, build in CI and have a bot commit, as `vhs: regenerate demo GIFs` commits do (`git log` shows that pattern) |
 | `.gitignore` | Add `sugar-crush-web/node_modules/`, `sugar-crush-web/playwright-report/`, `sugar-crush-web/test-results/`. Do **not** ignore `dist/` |
@@ -1001,22 +940,22 @@ version:    hello.server.version ≠ build version → banner "server updated �
 
 ### 8.4 Permission modes over the wire
 
-- **Server default mode is `default`.** The CLI flag and env override still apply. The TUI's `bypass-permissions` default exists only because the TUI could not answer Asks (baseline §9.5), and the server can.
+- **Server default mode is `default`.** The CLI flag and env override still apply. The TUI's `bypass-permissions` default exists only because the TUI could not answer Asks (Appendix A), and the server can.
 - **`bypass-permissions` and `dont-ask` cannot be set by a client** (`session.setMode`, `session.create {permissionMode}`) unless the server was started with `--allow-bypass` or `server.allowBypass: true` (user tier). Even then it requires the `admin` scope, and it emits a durable `notice` + `session.updated` audit record (`by: clientId`).
 - `auto` (`SafetyClassifier`, a regex heuristic) is allowed but labelled "heuristic" in the UI.
-- The `rm -rf /` circuit breaker, `ProtectFilesHook` and `ConfirmRemoveHook` keep running in every mode (they sit in the hook chain ahead of the gate; baseline §9.3).
+- The `rm -rf /` circuit breaker, `ProtectFilesHook` and `ConfirmRemoveHook` keep running in every mode (they sit in the hook chain ahead of the gate; Appendix A).
 - `trustedProject*` keys remain user-tier and frozen per process. **No method can modify them.** A project the server's user has not trusted gets no hooks, MCP, commands or settings, exactly as in the TUI.
 
 ### 8.5 Settings and command surface
 
 - Remote `settings.set` is allowlisted (§6.10). `statusLine`, `instructions`, hooks, MCP config and trust keys are never writable remotely.
-- `command.exec` runs custom commands, which may contain `` !`cmd` `` shell forms. Project-tier shell forms still require `trustedProjectCommands` (baseline §9.2), unchanged.
+- `command.exec` runs custom commands, which may contain `` !`cmd` `` shell forms. Project-tier shell forms still require `trustedProjectCommands` (Appendix A), unchanged.
 - `files.read` is root-jailed (`Tools\PathJail`), size-capped (1 MiB), and passes through `ProtectFilesHook`'s secret-file list (refuse `.env`, keys and the like).
 - `bg.spawn` and `workflow.run` are equivalent to `session.send` (code execution): scope `write`.
 
 ### 8.6 Secrets in events
 
-- **`settings.get` masks** any key marked `sensitive` in `SettingsRegistry` (provider `apiKey`, `headers.*Authorization*`) as `"••••last4"`.
+- **`settings.get` masks** any key marked `sensitive` in `SettingsSchema` (provider `apiKey`, `headers.*Authorization*`) as `"••••last4"`.
 - **Provider configs** in `server.info` include names, types and models only, never URLs with credentials. Strip userinfo from `baseUrl`.
 - **Tool output** is the model's view of the world and is shown as is (the user owns the box). Add an **optional** outbound `SecretRedactor` for well-known token shapes (`sk-…`, `AKIA…`, `ghp_…`, `xox[bp]-…`, PEM private-key blocks), off by default for the local owner and **on** for any token with only the `read` scope (a shared live view).
 - **Logs** (`server.log`) record method names, session ids, sizes and timing, never params, prompts or tool output (opt-in debug flag aside).
@@ -1041,12 +980,12 @@ version:    hello.server.version ≠ build version → banner "server updated �
 | Phase | Scope | Effort | Ships value alone? |
 |---|---|---|---|
 | **0 — Spikes** (2-3 d) | (a) react/http + rfc6455 echo server on `Loop::get()` running alongside a live `EngineBackend::completeAsync()` turn; (b) measure fork cost with 30 hosts loaded; (c) prove a turn child can close inherited fds; (d) optional `ModelRuntime` spike for headless Chat event vocabulary | S | — |
-| **1 — Bidirectional fork channel + TUI approvals** | `ask`/`ask_reply`/`steer`/`cancel_soft`/`usage`/`step` frames; `ChildChannel`, `PendingAsk`; idle-watchdog suspension; Chat inbox → `PermissionRequestMsg`; session-scoped `always` memo; per-step usage; steering in `runTurn` | **L** (1.5-2 wk) | **Yes.** Fixes baseline §11.1 #1 and #14 |
-| **2 — Host extraction** | `Bootstrap::workspace()` → `WorkspaceContext`; `Host\{SessionHub, SessionHost, TurnController, TurnRunner, TranscriptProjector, TranscriptStore, SpendLedger, ContextMeter, CompactionService, TitleService}`; per-session `NoticeSink`; `Message::$id`; `session_events` table + `EventLog`; `session_leases`; logic slash commands → `Host\Commands\*`; Chat delegates to all of it | **L** (2-3 wk) | Partially (cleaner Chat; leases) |
+| **1 — Bidirectional fork channel + TUI approvals** | `ask`/`ask_reply`/`steer`/`cancel_soft`/`usage`/`step` frames; `ChildChannel`, `PendingAsk`; idle-watchdog suspension; Chat inbox → `PermissionRequestMsg`; session-scoped `always` memo; per-step usage; steering in `runTurn` | **L** (1.5-2 wk) | **Yes.** Fixes Appendix A and #14 |
+| **2 — Host extraction** | `Bootstrap::workspace()` → `WorkspaceContext`; `Host\{SessionHub, SessionHost, TurnController, TurnRunner, TranscriptProjector, TranscriptStore, SpendLedger, ContextMeter, CompactionService, TitleService}`; per-session `NoticeSink`; `Message::$id`; `session_events` table + `EventLog`; `SessionLock` reuse; logic slash commands → `Host\Commands\*`; Chat delegates to all of it | **L** (2-3 wk) | Partially (cleaner Chat) |
 | **3 — Server + protocol** | `Server\{Server, Http\Router, Http\HostAndOriginGuard, Http\AuthMiddleware, Http\StaticFiles, Http\ApiController, Ws\Upgrade, Ws\Connection, Ws\Outbox, Auth\TokenStore, Auth\LoginCodes, Auth\Tickets}`; `Protocol\{Dispatcher, EventEnvelope, EventType, Methods\*, Schema\*, IdempotencyCache}`; `Cli\Subcommands::serve()` (foreground); env/settings/docs; `docs/SERVER.md` + generated schema + drift test | **L** (2 wk) | Yes (scriptable server) |
 | **4 — Daemon + background agents** | `Support\Daemonize` (moved from `BackgroundSupervisor`), `server.json`/lock/log, `serve status\|stop\|logs\|url\|token`, graceful drain, parent-pid watchdog, `BackgroundSupervisor::reconnect()` wired at boot, `bg.*` methods/events, `bg.inject` | M (4-6 d) | Yes |
 | **5 — Web MVP** | `sugar-crush-web` scaffold, composer shim, client/reconnect/cursor, sessions sidebar, single-pane chat, markdown/code, tool cards + diffs, approvals, composer (queue/steer/stop), status bar, login, served by `serve`; CI `web.yml`; monorepo checklist | **L** (2 wk) | **Yes (the user's ask)** |
-| **6 — Multi-session polish** | tabs + tiled grid + narration mode, cross-session approvals drawer + notifications, sub-agent tree (incl. the grandchild relay from §5.1), background tasks panel, workflows panel, `SettingsRegistry` + schema-driven settings form, memory panel, command palette, export, mobile layout | L (2 wk) | Yes |
+| **6 — Multi-session polish** | tabs + tiled grid + narration mode, cross-session approvals drawer + notifications, sub-agent tree (incl. the grandchild relay from §5.1), background tasks panel, workflows panel, `SettingsSchema`-driven settings form, memory panel, command palette, export, mobile layout | L (2 wk) | Yes |
 | **7 — Multi-root workspace hosts** | gateway ↔ `serve --workspace-host` over UNIX sockets; root picker in UI; idle recycle | M-L (1 wk) | Yes |
 | **8 — TUI-as-client + ACP** | `sugarcrush attach`, `Backend\RemoteBackend`, remote host proxy, lease handoff; `sugarcrush acp` stdio adapter (+ `ToolResult` old/new text for ACP diffs) | M-L (1-1.5 wk) | Yes |
 
@@ -1061,9 +1000,9 @@ version:    hello.server.version ≠ build version → banner "server updated �
   - Keep `completeAsyncBlocking()` (no pcntl) working: approvals there call the approver synchronously, so the server must refuse to start without pcntl (`serve` requires `ext-pcntl` + `ext-posix`; check in `doctor`).
 - `src/Runtime.php`: nothing structural (approver contract unchanged). Optional: emit `step`.
 - `src/Chat.php`: delegate to `Host\*` (phase 2); handle `PermissionAsked` in the pump (phase 1). Remove nothing: dormant `registerTool`/`onToolCall`/`executeAgents` stay (the house rule).
-- `src/Cli/Bootstrap.php`: `workspace()`; `openSession()` lease check; `backendFor()` threads AgentManager in every path.
+- `src/Cli/Bootstrap.php`: `workspace()`; `openSession()` session-lock check; `backendFor()` threads AgentManager in every path.
 - `src/Cli/{ArgvParser,ParsedArgs,Subcommands,Help}.php`: the `serve`, `attach` and `acp` verbs, completion, help.
-- `src/Session/EnhancedSessionStore.php`: `session_events`, `session_leases` tables + API.
+- `src/Session/EnhancedSessionStore.php`: `session_events` table + API.
 - `src/Message.php`: `?string $id`.
 - `src/Diagnostics/RuntimeNoticeSink.php`: instance-capable `NoticeSink` + static facade.
 - `src/Sessions/BackgroundSupervisor.php`: move the daemonize code to `Support\Daemonize`; a listener → host events.
@@ -1078,7 +1017,6 @@ version:    hello.server.version ≠ build version → banner "server updated �
 - `src/Protocol/**` (≈10 + one per method group)
 - `src/Backend/{ChildChannel,PendingAsk,RemoteBackend}.php`
 - `src/Events/{PermissionAsked,PermissionResolved,StepStarted,UsageUpdated,Steered}.php`
-- `src/Config/{SettingsRegistry,SettingDef}.php`
 - `src/Support/Daemonize.php`
 - `src/Cli/{Serve,Attach,Acp}.php`
 - `src/Acp/*` (phase 8)
@@ -1091,7 +1029,7 @@ All one-type-per-file (`tools/check-one-type-per-file.php`).
 - `tests/Host/*`: TurnController parity with Chat behaviours. Port the existing Chat tests' assertions, not the tests themselves.
 - `tests/Server/*`: conformance, auth, origin, host, backpressure, fd hygiene, replay.
 - `tests/Protocol/*`: golden JSON, schema check.
-- Drift tests: `ServerProtocolDocumentationDriftTest`, `SettingsRegistryCoverageDriftTest`.
+- Drift tests: `ServerProtocolDocumentationDriftTest`, a `SettingsSchema` remote-coverage drift test.
 - **Every new test file → `scripts/parallel-tests-durations.tsv`** and a refreshed `suite-figure.json`.
 - Under `candy-pty`-style hang risk (forks + sockets), use the `HangWatchdog` pattern for the server tests that fork, and the memory-noted backgrounded pkill watchdog for local runs (`timeout` doesn't stop PTY/FFI hangs).
 
@@ -1113,7 +1051,7 @@ Calendar estimate for one engineer: **≈ 7-9 weeks** to Phase 6, **≈ 9-11 wee
 | **Long-running PHP memory** | Hosts accumulate transcripts; Guzzle and provider objects; event-log caches; closures holding `Chat` graphs; static arrays (`Bootstrap::$launchNotices` etc.) | Bounded caches (LRU hosts, capped notice queues); idle-host eviction; `memory_get_usage()` in `server.health`; workspace-host recycling (phase 7) after N turns or M MiB; a soak test (100 turns, assert RSS slope) |
 | **Fork cost with a fat parent** | COW pages touched by `serialize()` in the child | Keep hosts lean. The child gets the history only. Measure in Phase 0; if needed, spawn turn children from a slim "turn zygote" process (fork from a small helper rather than the gateway) |
 | **Concurrency on shared state** | Process-global statics (`RuntimeNoticeSink`, `Bootstrap`) | Per-session sinks (phase 2), single root per process (D6) |
-| **Two writers on one session** | TUI + server, or two servers | Leases (§4.8); the singleton lock per state dir |
+| **Two writers on one session** | TUI + server, or two servers | `SessionLock` (§4.8); the singleton lock per state dir |
 | **Ask waits forever** | A turn child parked indefinitely holds a process and memory | `server.askTimeoutSeconds` option; a dashboard "waiting since"; `server.health` lists parked turns; `session.cancel` |
 | **Slow or malicious clients** | Memory blow-up in outboxes | Watermarks + 1013 close (§6.9); frame and request limits |
 | **Protocol drift web↔server** | Two languages | Generated schema + generated TS types + CI diff checks + version-locked UI |
@@ -1126,7 +1064,7 @@ Calendar estimate for one engineer: **≈ 7-9 weeks** to Phase 6, **≈ 9-11 wee
 
 1. `sugar-crush: bidirectional fork channel (ask/ask_reply) + idle-timer suspension + per-step usage frames`
 2. `sugar-crush: TUI engine-path approvals via Veil modal + session always-memo + steering`
-3. `sugar-crush: Message ids + session_events/session_leases tables + per-session NoticeSink`
+3. `sugar-crush: Message ids + session_events table + per-session NoticeSink`
 4. `sugar-crush: Host\SessionHost/TurnController extraction (Chat delegates)` (may need 2 PRs)
 5. `sugar-crush: serve (foreground) — HTTP/WS transport, auth, protocol v1 core methods + docs/SERVER.md + drift test`
 6. `sugar-crush: serve --detach/status/stop + BackgroundSupervisor::reconnect wiring + bg.* events`
@@ -1136,105 +1074,13 @@ Calendar estimate for one engineer: **≈ 7-9 weeks** to Phase 6, **≈ 9-11 wee
 
 ---
 
-## 10. Open questions for the user
+## 10. Open question and checks owed
 
-1. **Name:** keep `sugar-crush-web` (a recorded exception) or adopt a two-word name such as `sugar-console`?
-2. **Default port:** `7420` is proposed. Any preference? opencode uses 4096, OpenClaw 18789, cline 25463, nanobot 8765, dsh 3080.
-3. **Server permission default:** `default` (ask) is proposed. Should the TUI's default also move off `bypass-permissions` once Phase 1 lands?
-4. **Committed `dist/`:** acceptable, given that GIFs are already committed? The alternative (build during sync/split) is much more complex with splitsh.
-5. **Remote access:** is non-loopback via a reverse proxy enough for v1, or is built-in TLS wanted?
-6. **Workerman:** the user believed some sugarcraft libs use it. None in this tree do (§3.1). If another project (e.g. `/home/sites/vps_host_server`) is the intended reference, is there a requirement to share infrastructure with it? That would change D1.
+**Still open (Part V decision 7):** is non-loopback via a reverse proxy enough for v1, or is built-in TLS wanted?
 
----
-
-## RESUME NOTES
-
-**Status: every section (§0-§10) is complete. Nothing is marked INCOMPLETE.** The report was finished before the checkpoint request, and no new research was done after it. The notes below record what was examined and the optional follow-ups that could tighten it.
-
-### Section status
-
-| Section | Status |
-|---|---|
-| §0 TL;DR decisions D1-D10 | DONE |
-| §1 Current state (pipeline, headless driving, daemon idioms) | DONE (source-verified) |
-| §2 Competitor lessons table + "what we adopt" | DONE (from 3 source-reading sub-agents: opencode/kilo; cline/OpenHands/goose; OpenClaw/nanobot/zed/dsh) |
-| §3 WS options inventory + ReactPHP vs Workerman | DONE |
-| §4 Server mode (process model, extraction table, SessionHost API, concurrency, attach/detach, daemon, config/docs obligations, leases, TUI-as-client) | DONE |
-| §5 Unified permission back-channel | DONE |
-| §6 Wire protocol (framing, hello, methods, events, steer, approvals, replay, backpressure, settings registry, versioning, ACP) | DONE |
-| §7 sugar-crush-web (naming, layout, build/serve, UX wireframes, state, client, auth, tests, monorepo fit) | DONE |
-| §8 Security | DONE |
-| §9 Plan, files, tests, effort, risks, PR bundling | DONE |
-| §10 Open questions | DONE |
-
-### Already examined (no need to re-read)
-
-**sugar-crush:**
-- `src/Backend/EngineBackend.php`:
-  - `completeAsync` `:1324-1554`; `runCompleteInChild` `:1629-1740`;
-  - `writeFrame` `:1742`; `drainFrames` `:1769`; `encodeEvent` `:1869-1921`;
-  - `withPermissionApprover` doc `:490-540` (states that the TUI needs a request/response protocol on the socket);
-  - `COMPLETE_TIMEOUT_SECONDS` `:99`; `$unreapedChildren` `:250`.
-- `src/Runtime.php`: `settleAsk` `~:2630` (no approver → deny); `executeConcurrently` `:1853`, with `gate()` at `:1894` (before the fork).
-- `src/Chat.php`:
-  - `init` `:1435`, `update` `:1484`, `persistTranscript` `:1512`;
-  - `submit` `:7150`, `dispatchTurn` `:7869`, `dispatchCommand` `:8240`;
-  - `scheduleBackendCompletion` `:9226-9380` (ArrayObject inbox, `Cmd::promise`);
-  - `subscriptions` `:14368`;
-  - statics `:5020-5132`.
-- `src/Sessions/BackgroundSupervisor.php`:
-  - `spawnSession` `:186-420`, `buildSessionDaemonCode` (double-fork `:463-470`);
-  - `ensurePrivateIpcDir` `:606-645`, `procStartTime` `:567`;
-  - `reconnect` `:851` (DORMANT); `HEARTBEAT_TIMEOUT_SECS=15`.
-- `src/Sessions/BackgroundSessionRunner.php`: `HANDSHAKE_PREFIX`/`AUTH_PREFIX`, `supervise` `:745`, `serveClient` `:629`, `authenticate` `:679`.
-- `src/Session/EnhancedSessionStore.php` (API list, WAL notes); `src/Message.php` (no id field).
-- `src/Events/*`: field shapes. `src/Permissions/PermissionReply.php` (once/always/reject); `PermissionRequestMsg`/`PermissionReplyMsg`.
-- `src/Cli/Bootstrap.php`: statics `:550-984`. `src/Cli/Subcommands.php`: `OPTIONS` `:1038`, `SUBCOMMAND_DESCRIPTIONS` `:1059`.
-- `src/Cli/NonInteractive.php` (headless `complete()`); `src/Diagnostics/RuntimeNoticeSink.php` (static global queue `:291-331`).
-- `src/Config/LayeredSettings.php` (`LAYERED_KEYS` `:365`, `PROJECT_TIER_KEYS` `:584`); `composer.json` requires.
-- Drift tests: `EnvRosterDriftTest`, `ReadmeRosterDriftTest` (`:291` subcommand fence), `ClaimFamiliesDocumentationDriftTest` (`:176` exit codes, `:223` flags), `ConfigWriteProducerDocumentationDriftTest`, `TrustKeyDocumentationDriftTest`, `KeyBindingDriftTest`.
-
-**candy-core:**
-- `src/Program.php`: `run()` owns loop + terminal `:335-430`; signal handlers `:1331-1340`; private dispatch/scheduleCmd/drainPending/reconcile `:600/:1017/:1027/:1386`.
-- `src/ProgramOptions.php` (`withoutRenderer`, input/output/loop/windowSize).
-
-**Monorepo:**
-- grep of all `*/composer.json` + src: **0 workerman, 0 websocket**. `react/http` only in candy-mosaic (client).
-- `candy-serve` `StatsServer.php`/`GitDaemon.php` are hand-rolled `stream_socket_server` on the React loop. `HttpSmartProtocol/Server.php` is a handler only.
-- `candy-wish` relies on host sshd and has no listener.
-- `sugar-mcp/src/McpMessage.php` is a reusable JSON-RPC 2.0 codec.
-- `scripts/affected-libs.php` `discover_libs` `:83-90` (composer.json + phpunit.xml marker).
-- `.github/workflows/sync-sugarcraft.yml` (splitsh lib list from affected-libs). No node in any workflow.
-- `PROJECT_NAMES.md` two-word rule; `docs/MATCHUPS.md` rows; `.gitignore`.
-
-**External:**
-- `/home/my/vendor/workerman/workerman/src/Worker.php` v5.2.2: `runAll` `:588`, `parseCommand`/global `$argv` `:1073`/`:1229`, `installSignal` `:1333-1343`, `daemonize` `:1430`, `forkWorkersForLinux` `:1545`, `monitorWorkers`/`pcntl_wait` `:1858`; Events drivers incl. Fiber/Revolt.
-- `/home/sites/mystage/vendor/ratchet/rfc6455` (Handshake/ServerNegotiator, Messaging/MessageBuffer; requires `psr/http-factory-implementation`).
-
-**Competitor sources (via sub-agents; key facts are already in §2):**
-- opencode `packages/opencode/src/server`, `packages/protocol`, `packages/schema`, `packages/app`, `packages/sdk`
-- kilocode `kilo-vscode/src/services/cli-backend`, `kilo-jetbrains`
-- cline `sdk/packages/core/src/hub/*`, `shared/src/hub.ts`
-- software-agent-sdk `agent_server/{conversation_router, event_router, sockets, session_socket, session_protocol}.py`
-- OpenHands frontend `src/hooks/use-websocket.ts`, `utils/session-seq-cursor.ts`
-- goose `crates/goose/src/acp/transport`, `ui/desktop/src/gooseServe.ts`
-- openclaw `docs/gateway/protocol/*`, `packages/gateway-protocol/src/schema/*`
-- nanobot `channels/websocket/runtime.py`, `webui/*`
-- zed `crates/agent_servers/src/acp.rs`, `crates/acp_thread`
-- dsh `packages/api/gateway`, `packages/client/connection`
-
-### Optional follow-ups (not required; would tighten claims)
+**Checks owed before implementation (O-0 spikes):**
 
 1. **Pin dependency versions.** Verify `ratchet/rfc6455` latest (claimed `^0.4`) and `react/http`/`react/socket` versions with `composer show -a ratchet/rfc6455 react/http react/socket` in a scratch dir. Confirm react/http's 101-upgrade-with-duplex-body pattern against current `react/http` source: grep `101` / `Upgrade` in `vendor/react/http/src/Io/StreamingServer.php`.
 2. **Audit provider static caches** (§4.4 says "not audited"): `grep -rn 'static \$' sugar-crush/src/Providers`.
 3. **Check headless setup.** Confirm whether candy-core `Program::setupTerminal()` honours `withoutRenderer`/`openTty=false` cleanly (relevant only to the Phase 0 `ModelRuntime` spike): `candy-core/src/Program.php` `setupTerminal`.
-4. **Check sequential Task.** Verify that a single (non-batched) Task call runs in the turn child rather than a grandchild (affects §5.1's "single Task can use the back-channel"): `Runtime::executeToolCalls` `:1650-1745`, segment-of-one handling.
-5. **Settings-pane design.** If a companion settings-pane report is written later in this series, cross-link §6.10's `SettingsRegistry` to it.
-
-### Open questions
-
-These are the same as §10: name exception vs `sugar-console`; port 7420; server default mode `default`; committed `dist/`; built-in TLS; whether Workerman is required for compatibility with another non-sugarcraft project.
-
-### Next steps to "finish"
-
-None required. The deliverable is complete at `/home/sites/sugarcraft/prompt_kit/findings/crush-report/14-server-mode-and-web-ui.md` (about 1,250 lines). The optional follow-ups 1-4 above can be run in about 15 minutes if extra verification is wanted.
+4. **Check sequential Task.** Verify that a single (non-batched) Task call runs in the turn child rather than a grandchild (affects §5.1's "single Task can use the back-channel"): `Runtime::executeToolCalls`, segment-of-one handling.

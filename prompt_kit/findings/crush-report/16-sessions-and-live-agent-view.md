@@ -1,14 +1,13 @@
 # 16 — Session management, live agent activity lines, and the Agent View with direct chat
 
-**Type:** design report (read-only research; nothing in `sugar-crush/` was modified).
+Feeds steps: B1, B2, B3, P-A1, P-A2, P-A3, P-A4, P-B1, P-B2, P-B3, P-C1, P-C2, P-D1, P-D2, P-D3, P-E1, P-E2, P-E3
+
 **Scope:** three features the user asked for:
 1. "You should also be able to rename sessions or list them, if not already."
 2. "While a parent is running agents it should have something like an updating line showing the most recent thing they did, similar to opencode/Claude Code."
 3. "You should be able to click on the agents to go to them to view what they're doing, and send chat messages to the subagents/agents directly as well."
 
-**Inputs:** the baseline `00-sugar-crush-baseline.md` (§2, §8, §10, §11), the roadmap in `99-synthesis.md` (Wave 1.C two-way frame channel; Wave 4 items 4.3 background Task, 4.4 SendMessage on Mailbox, 4.6 teams, 4.7 resume any sub-agent, 4.8 sub-agents as child sessions), sugar-crush source at master `05db616f3`, and competitor source under `/home/sites/crush-research-repos/` (opencode, openclaw, goose, cline), plus Claude Code's docs (`code.claude.com/docs/en/sub-agents`, fetched 2026-10-01).
-
-**Path convention.** Paths are relative to `sugar-crush/` unless they start with `/`. Line numbers are from the working tree on master `05db616f3`.
+**Path convention.** Paths are relative to `sugar-crush/` unless they start with `/`.
 
 ---
 
@@ -28,7 +27,7 @@
     1. the frame has **no parent tool-call id**, so it cannot be attached to the Task row;
     2. it carries a 4 KB text tail, not structured items;
     3. it has no stats or failure status;
-    4. it is **dropped entirely for parallel Task batches**, because the emitter is pid-bound and parallel Tasks run in grandchildren (`EngineBackend.php:1068-1077`).
+    4. it is **dropped entirely for parallel Task batches**, because the emitter is pid-bound and parallel Tasks run in grandchildren (`EngineBackend.php`).
   - The Task row itself renders a static `⠴ running: …`.
   - Design:
     - a v2 `subagent` frame with structured, coalesced activity items and stats;
@@ -54,93 +53,85 @@
 
 | Capability | Status | Evidence |
 |---|---|---|
-| Store | LIVE | `EnhancedSessionStore` wraps `SessionStore` (SQLite, `~/.sugar-crush/session.db`). The `sessions` table holds `id, created_at, updated_at, provider, model, system_prompt, name, metadata` (`src/Session/SessionStore.php:97-106`). **`metadata` is never read or written** (grep finds only the DDL). |
-| List API | LIVE | `listSessions(int $limit=20)` (`SessionStore.php:301`) is memoised per write stamp because the tab strip calls it on every render. `listSessionsWithMeta()` joins `session_meta` (`EnhancedSessionStore.php:261`) and has no caller in the TUI. |
-| Rename API | LIVE | `renameSession()` runs `UPDATE sessions SET name=?, updated_at=CURRENT_TIMESTAMP` (`SessionStore.php:197-202`). A rename therefore also moves the session to the top of the recency order. |
-| Fork API | LIVE | `forkSession()` (`:210`) copies provider, model, system_prompt and **name** (so the fork has the same title) plus messages and tool calls. **No parent link is recorded.** |
-| Delete API | LIVE | `deleteSession()` (`:290`) deletes tool_calls, messages and the session; FK cascade covers the enhanced tables. |
-| `/sessions` | LIVE | `Chat::handleSessionsCommand()` (`src/Chat.php:11726`) opens `SessionPicker` and **ignores any argument**. |
-| Ctrl+R | LIVE | Same picker (`KeyBindingRegistry.php:433`, `chat.session-picker`). |
-| Picker widget | LIVE | `src/Tui/SessionPicker.php` (629 lines) wraps candy-forms `ItemList` with filter, status bar and help all **off**, pages of 20 rows with load-more, keys `↑↓/k j`, Enter resume, Space "preview" (it only stays on the row), Esc, Ctrl+B branch filter (`handleKey()` `:532-541`). Row = `▶ name(≤20 chars, byte-truncated) @branch · summary` (`renderSessionLine`). |
-| **Bug B1: branch filter** | BROKEN | `Chat::sanitizeSessionRows()` hard-codes `'gitBranch' => null` (`Chat.php:11844`), but `SessionPicker::filterRows()` keeps only rows whose `gitBranch` equals the current branch (`SessionPicker.php:137-138`). Ctrl+B always shows "(no sessions)". |
-| **Bug B3: summary column** | WRONG | `'summary' => sanitizeSessionField($row['system_prompt'])` (`Chat.php:11843`). The footer and row show the start of the system prompt, which is near-identical for every session. |
-| `/rename <name>` | LIVE | `Chat::handleRenameCommand()` (`Chat.php:12274`). With no argument it prints `Usage: /rename <newName>`; it renames only the **current** session. |
-| **Bug B2: auto-title race** | BROKEN | `scheduleTitleGeneration()` (`Chat.php:9011-9065`) checks `currentSessionName === null` only when it *schedules*. The promise later calls `$store->renameSession()` unconditionally, and the `SessionTitledMsg` arm (`Chat.php:1835-1846`) sets `currentSessionName` unconditionally. A `/rename` typed while the first reply's title request is still in flight is overwritten in both the store and the UI. |
-| Tab strip | LIVE | `Renderer::renderSessionTabStrip()` (`src/Renderer.php:2388-2411`) shows the 20 most recent sessions, each wrapped in a `tab:<id>` mouse zone (`:2428-2442`). Clicks go to `Chat::selectSessionTab()` (`Chat.php:5334-5337`). |
-| `Tui/SessionTabs.php`, `SessionTab.php` | DORMANT | Referenced only in comments (`Renderer.php:237-241`, `Chat.php:2477,2555`). |
-| Palette | LIVE | "Switch session" opens `/sessions`; "New session" (`Chat.php:14063-14065`). There is no rename/delete action. |
+| Store | LIVE | `EnhancedSessionStore` wraps `SessionStore` (SQLite, `~/.sugar-crush/session.db`). The `sessions` table holds `id, created_at, updated_at, provider, model, system_prompt, name, metadata` (`src/Session/SessionStore.php`). **`metadata` is never read or written** (grep finds only the DDL). |
+| List API | LIVE | `listSessions(int $limit=20)` (`SessionStore.php`) is memoised per write stamp because the tab strip calls it on every render. `listSessionsWithMeta()` joins `session_meta` (`EnhancedSessionStore.php`) and has no caller in the TUI. |
+| Rename API | LIVE | `renameSession()` runs `UPDATE sessions SET name=?, updated_at=CURRENT_TIMESTAMP` (`SessionStore.php`). A rename therefore also moves the session to the top of the recency order. |
+| Fork API | LIVE | `forkSession()` copies provider, model, system_prompt, messages and tool calls. **No parent link is recorded.** |
+| Delete API | LIVE | `deleteSession()` deletes tool_calls, messages and the session; FK cascade covers the enhanced tables. |
+| `/sessions` | LIVE | `Chat::handleSessionsCommand()` (`src/Chat.php`) opens `SessionPicker` and **ignores any argument**. |
+| Ctrl+R | LIVE | Same picker (`KeyBindingRegistry.php`, `chat.session-picker`). |
+| Picker widget | LIVE | `src/Tui/SessionPicker.php` (629 lines) wraps candy-forms `ItemList` with filter, status bar and help all **off**, pages of 20 rows with load-more, keys `↑↓/k j`, Enter resume, Space "preview" (it only stays on the row), Esc, Ctrl+B branch filter (`handleKey()`). Row = `▶ name(≤20 chars, byte-truncated) @branch · summary` (`renderSessionLine`). |
+| **Bug B1: branch filter** | BROKEN | `Chat::sanitizeSessionRows()` hard-codes `'gitBranch' => null` (`Chat.php`), but `SessionPicker::filterRows()` keeps only rows whose `gitBranch` equals the current branch (`SessionPicker.php`). Ctrl+B always shows "(no sessions)". |
+| **Bug B3: summary column** | WRONG | `'summary' => sanitizeSessionField($row['system_prompt'])` (`Chat.php`). The footer and row show the start of the system prompt, which is near-identical for every session. |
+| `/rename <name>` | LIVE | `Chat::handleRenameCommand()` (`Chat.php`). With no argument it prints `Usage: /rename <newName>`; it renames only the **current** session. |
+| **Bug B2: auto-title race** | BROKEN | `scheduleTitleGeneration()` (`Chat.php`) checks `currentSessionName === null` only when it *schedules*. The promise later calls `$store->renameSession()` unconditionally, and the `SessionTitledMsg` arm (`Chat.php`) sets `currentSessionName` unconditionally. A `/rename` typed while the first reply's title request is still in flight is overwritten in both the store and the UI. |
+| Tab strip | LIVE | `Renderer::renderSessionTabStrip()` (`src/Renderer.php`) shows the 20 most recent sessions, each wrapped in a `tab:<id>` mouse zone. Clicks go to `Chat::selectSessionTab()` (`Chat.php`). |
+| `Tui/SessionTabs.php`, `SessionTab.php` | DORMANT | Referenced only in comments (`Renderer.php`, `Chat.php`). |
+| Palette | LIVE | "Switch session" opens `/sessions`; "New session" (`Chat.php`). There is no rename/delete action. |
 | Launch flags | LIVE | `-c/--continue`; `--resume <id\|prefix\|name>`; bare `--resume` opens the picker (`Bootstrap::openSession()`). |
-| CLI | LIVE (partial) | `sugarcrush session list` prints `id  updated_at  provider/model  name`, or JSON (`src/Cli/Subcommands.php:497-524`), plus `session delete <id>`. There is **no `rename`/`show`**. The completion roster is `'session' => ['list','delete']` (`:1074`). |
+| CLI | LIVE (partial) | `sugarcrush session list` prints `id updated_at provider/model name`, or JSON (`src/Cli/Subcommands.php`), plus `session delete <id>`. There is **no `rename`/`show`**. The completion roster is `'session' => ['list','delete']`. |
 | Search | ABSENT | No filter in the picker, no `/sessions <query>`. |
 | Pin, archive, child sessions | ABSENT | — |
 
 ### 1.2 What the TUI shows while Task sub-agents run
 
 **The Task row.**
-- `ToolStarted` → `Chat::appendToolRunningPlaceholder()` (`Chat.php:3893`) → `Message::toolRunning()` (`src/Message.php:156-165`, which keeps `pendingToolCallId` and `pendingToolArguments`).
-- `Renderer::renderPendingToolCall()` (`Renderer.php:3773-3786`) draws a **static** `⠴ running: <description>`. There is no per-agent detail.
+- `ToolStarted` → `Chat::appendToolRunningPlaceholder()` (`Chat.php`) → `Message::toolRunning()` (`src/Message.php`, which keeps `pendingToolCallId` and `pendingToolArguments`).
+- `Renderer::renderPendingToolCall()` (`Renderer.php`) draws a **static** `⠴ running: <description>`. There is no per-agent detail.
 
 **The child already streams `SubAgentActivity`** (`src/Events/SubAgentActivity.php`):
 - fields: `op ∈ {started, progress, finished}`, `id`, `name`, `task` (200-byte snippet), `seq`, `tail` (≤4 KB);
 - emitted by `TaskTool::runOnEngine()`:
-  - `record` closure `:488-510`: progress at most once a second, except that tool boundaries are sent immediately;
-  - started `:521-530`; finished `:540-555`;
+  - `record` closure: progress at most once a second, except that tool boundaries are sent immediately;
+  - started; finished;
 - the progress lines are `-> Tool`, `<- Tool (error)` and `thinking: …`. **Tool arguments are not included**, though `ToolStarted::$arguments` has them (`src/Events/ToolStarted.php`).
 
-**The frame codec** (`EngineBackend::encodeEvent()` `:1869`, `decodeEvent()` `:1923`) has a `kind:'subagent'` frame with exactly those six fields.
+**The frame codec** (`EngineBackend::encodeEvent()`, `decodeEvent()`) has a `kind:'subagent'` frame with exactly those six fields.
 
 **Gaps in the payload:**
-- No `parentCallId`, so the parent cannot tell which Task row an activity belongs to (TaskTool has `$toolCallId` in scope at `:430`).
-- No token, cost or step stats until the end; `SubAgent::$tokensUsed` is only updated after the run (`TaskTool.php:~600`).
-- No outcome: finished is always mapped to `STATUS_COMPLETE`, even on failure (`AgentManager::projectRemoteSubAgent()` `:412-414`).
-- `completeTranscript()` accepts `$onToken` (`EngineBackend.php:755`), but TaskTool does not pass one, so a sub-agent's prose is not streamed.
+- No `parentCallId`, so the parent cannot tell which Task row an activity belongs to (TaskTool has `$toolCallId` in scope).
+- No token, cost or step stats until the end; `SubAgent::$tokensUsed` is only updated after the run (`TaskTool.php`).
+- No outcome: finished is always mapped to `STATUS_COMPLETE`, even on failure (`AgentManager::projectRemoteSubAgent()`).
+- `completeTranscript()` accepts `$onToken` (`EngineBackend.php`), but TaskTool does not pass one, so a sub-agent's prose is not streamed.
 
 **The parallel-batch cut-off.**
-- `EngineBackend::turnTools()` binds the emitter with `if (getmypid() !== $pid) return;` (`EngineBackend.php:1071-1076`).
-- Parallel Task calls run in grandchildren forked by `Runtime::executeConcurrently()` (`src/Runtime.php:1853`). Each grandchild returns only a serialised result file (`runToolInChild()` `:2393-2407`), polled every 2 ms (`PARALLEL_TOOL_POLL_MICROSECONDS`, `:75`).
+- `EngineBackend::turnTools()` binds the emitter with `if (getmypid() !== $pid) return;` (`EngineBackend.php`).
+- Parallel Task calls run in grandchildren forked by `Runtime::executeConcurrently()` (`src/Runtime.php`). Each grandchild returns only a serialised result file (`runToolInChild()`), polled every 2 ms (`PARALLEL_TOOL_POLL_MICROSECONDS`).
 - So for the common case — a batch of 2-5 Tasks — **zero** activity reaches the parent.
 
 **The parent projection.**
-- `Chat` (`:3569-3577`) → `AgentManager::projectRemoteSubAgent()` (`:376-415`) mirrors rows into `AgentManager::$subAgents`.
+- `Chat` → `AgentManager::projectRemoteSubAgent()` mirrors rows into `AgentManager::$subAgents`.
 
 **The dashboard.**
-- `AgentDashboardPane::entries()` (`src/Tui/Components/AgentDashboardPane.php:117-156`) builds **one row per agent *definition*** (`manager->active()` → `agentEntry(Agent…)` `:393-407`, aggregated by name with `liveOutput($agent->name)`).
+- `AgentDashboardPane::entries()` (`src/Tui/Components/AgentDashboardPane.php`) builds **one row per agent *definition*** (`manager->active()` → `agentEntry(Agent…)`, aggregated by name with `liveOutput($agent->name)`).
 - Two parallel `explore` sub-agents therefore collapse into one row. Background sessions are appended as extra rows.
 
-**Agent-view keys** (`src/Tui/KeyboardHandler.php:629-776`):
-- In the Agents dock pane: List (↑↓, Enter/Space → Peek), Peek overlay (`AgentDashboardPane::peekOverlay()` `:238-262`), Enter → `AgentViewMode::Attach`.
-- Attach mode swallows every key except Esc (`handleAgentAttachKey()` `:761-776`). The docblock says outright that there is no Cmd to forward input.
-- **Nothing renders Attach.** `AgentOutputPane::renderAttach()` (`src/Tui/AgentOutputPane.php:130`) is reachable only when someone passes `Mode::Attach`, and nobody does.
-- `c`/`r`/`s` emit `CancelAgentCmd`/`ResumeAgentCmd`/`StopAllAgentsCmd`; Ctrl+G emits `GroupInputCmd` (`:845`). `App::consumeShellCmd()` maps all of them to `[$this, null]` (`src/App/App.php:1716-1729`).
-- `KeyBindingRegistry` marks `agents.cancel/resume/stop-all` and `shell.group-input` with a `dormantReason` (`src/Commands/KeyBindingRegistry.php:498-506, 576-600`), and `KeyBindingDriftTest` enforces that those rows are not observed as live.
+**Agent-view keys** (`src/Tui/KeyboardHandler.php`):
+- In the Agents dock pane: List (↑↓, Enter/Space → Peek), Peek overlay (`AgentDashboardPane::peekOverlay()`), Enter → `AgentViewMode::Attach`.
+- Attach mode swallows every key except Esc (`handleAgentAttachKey()`). The docblock says outright that there is no Cmd to forward input.
+- **Nothing renders Attach.** `AgentOutputPane::renderAttach()` (`src/Tui/AgentOutputPane.php`) is reachable only when someone passes `Mode::Attach`, and nobody does.
+- `c`/`r`/`s` emit `CancelAgentCmd`/`ResumeAgentCmd`/`StopAllAgentsCmd`; Ctrl+G emits `GroupInputCmd`. `App::consumeShellCmd()` maps all of them to `[$this, null]` (`src/App/App.php`).
+- `KeyBindingRegistry` marks `agents.cancel/resume/stop-all` and `shell.group-input` with a `dormantReason` (`src/Commands/KeyBindingRegistry.php`), and `KeyBindingDriftTest` enforces that those rows are not observed as live.
 
 **Other relevant pieces:**
-- `AgentManager::stopSubAgent()` (`:1875-1884`) only flips a status flag; nothing kills a process.
+- `AgentManager::stopSubAgent()` only flips a status flag; nothing kills a process.
 - `Mailbox` (`src/Agents/Mailbox.php`: JSONL `send/receive/peek/markRead/getUnreadCount/waitForMessage`) is used only by `Team` (DORMANT).
-- `SuspendedDelegations` saves a transcript only on failure or an empty report (`TaskTool.php:591-614`), under `sys_get_temp_dir()`, with 7-day expiry.
+- `SuspendedDelegations` saves a transcript only on failure or an empty report (`TaskTool.php`), under `sys_get_temp_dir()`, with 7-day expiry.
 
 ### 1.3 Mouse
 
-- On by default. candy-mouse `Mark::zone()` / `Scanner` (`Renderer.php:18-20`).
-- Zone prefixes are `tab:`, `pane:`, `picker-item:`, `session-row:`, `toolcall:`, `divider:`, `stackdiv:` (`Renderer.php:543-604`). The id charset is `/\A[A-Za-z0-9._:-]+\z/` (`:696`); `Mark::MAX_ID_BYTES = 256`.
-- Clicks are dispatched by prefix in `Chat` (`:5334-5372`). `refuseMouseDispatch()` (`:5530-5555`) blocks clicks under modals. While a turn is in flight it hands tab clicks and the Agents-pane header to their handlers' own refusal (`midTurnRefusalOfItsOwn()` `:5560`).
+- On by default. candy-mouse `Mark::zone()` / `Scanner` (`Renderer.php`).
+- Zone prefixes are `tab:`, `pane:`, `picker-item:`, `session-row:`, `toolcall:`, `divider:`, `stackdiv:` (`Renderer.php`). The id charset is `/\A[A-Za-z0-9._:-]+\z/`; `Mark::MAX_ID_BYTES = 256`.
+- Clicks are dispatched by prefix in `Chat`. `refuseMouseDispatch()` blocks clicks under modals. While a turn is in flight it hands tab clicks and the Agents-pane header to their handlers' own refusal (`midTurnRefusalOfItsOwn()`).
 - **Implication:** any new agent-originated text (tool arguments, prose, agent names) must go through the same `Sanitize::untrustedForMarkedFrames()` plus PUA strip before it reaches a frame, or a hostile `\u{E000}…` in a Grep pattern can break every zone after it.
 
 ### 1.4 Server and web UI
 
-Part VIII of `99-synthesis.md` is still a placeholder ("filled in from Appendices N and O"), and no server-mode report exists in this directory yet. §4.7 below therefore defines event shapes that the server design should adopt.
+Server mode is designed in Appendix O (`14-server-mode-and-web-ui.md`). §4.7 below defines the agent event shapes it adopts.
 
 ---
 
-## 2. What competitors do (evidence)
-
-| Product | Live sub-agent line | Navigate to an agent | Talk to the agent | Session list |
-|---|---|---|---|---|
-| **opencode** (`packages/tui/src`) | `Task` inline tool (`routes/session/index.tsx:2215-2311`): line 1 `"<Agent> Task — <description>"`; while running, line 2 `↳ <Tool> <title>` of the **latest** child tool part (`findLast` of running/completed parts with a title), or `↳ N toolcalls`; when done, `↳ N toolcalls · <duration>`; retry status in red. Spinner while running, `✓` when done. Under any message with a task: `"<leader>↓ view subagents · ctrl+b background"` (`:1509-1535`). | Click on the Task row navigates to the child session (`onClick` `:2300-2306`). Keys: `<leader>down` first child, `right`/`left` next/previous sibling, `up` parent (`config/keybind.ts:103-106`). The child view shows `SubagentFooter` "Explore (2 of 3) · 41k (32%) · $0.03" with clickable Parent/Prev/Next (`routes/session/subagent-footer.tsx`). | **In the current clone the prompt is hidden in child sessions**: `visible = !session.parentID && …` (`index.tsx:240`); the child view is read-only. Child permission and question prompts surface in the **parent** (`:232-239`). Steering goes model→child by re-calling `task` with `task_id` (`background.extend`; see `02-opencode.md:243`). Note: `02-opencode.md:254` says the user can type into a child; that is not true of this clone. | `DialogSessionList` (`component/dialog-session-list.tsx`): debounced server-side search, Pinned / Today / date groups, spinner gutter for busy sessions, quick-switch slot numbers, actions `ctrl+d` delete (press twice), `ctrl+r` rename (`DialogSessionRename` prompt prefilled with the title), `ctrl+f` pin; child sessions hidden (`parentID === undefined`). |
-| **Claude Code** (docs) | "Panel below the prompt": one row for the main session and one per running fork or background subagent, each with name or description, "a progress line showing the agent's work", token usage and elapsed time; nested rows marked `(+N)` for running descendants. | `↑/↓` move rows; `Enter` opens the transcript; `x` stops a running row or dismisses a finished one; `Esc` returns to the prompt. Finished rows vanish, but `/tasks` keeps them for 30 s; failed or stopped rows stay 30 s. | From an open transcript, "send follow-up messages"; `Ctrl+Enter` / `Ctrl+X Ctrl+S` makes the agent "read your message before finishing its current work"; a finished subagent "receives the message within its own context and can continue". Agent messages carry no approval authority (`01-claude-code.md` §3.4). | `/resume` picker scoped to the worktree, `/rename`, `/branch`, `--fork-session`. |
-| **OpenClaw** (`src/tui`) | — (gateway TUI; children announced by `subagents list`) | `/session <key>` or `/sessions` picker | `sessions_send` (steer/follow-up/note/resume) | `tui-session-picker.ts:45-71`: label `title (key)`, description `"<relative time> · <last message preview>"`, search over derivedTitle, displayName, label, subject, id, key and preview; `resolveResumeSession` exact → unique substring → fuzzy. |
-| **goose CLI** (`crates/goose-cli/src/session`) | Each child tool call prints a dim `[subagent:<short-id>] <tool> \| <args>` line (`output.rs:1023-1060`). Batch dashboard `📊 Progress: N total \| ⏳ pending \| 🏃 running \| ✅ completed \| ❌ failed`, plus per task icon, name, `⏱️ secs`, `💬 current output` (`task_execution_display/mod.rs:79-165`). | no | no (orchestrator `send_message` is model-side) | `goose session list\|remove\|export\|import\|rename` |
-| **cline CLI** (`apps/cli/src/tui/components/chat-entry.tsx`) | `spawn_agent` shows the task text truncated to 60 chars (`:182-187`); team events are grey `* <text>` rows (`:779-785`); the done row shows `Ns · N tokens · $x · N iterations`. | no | team mailbox (model-side) | — |
+## 2. What competitors do (takeaways)
 
 **Takeaways adopted in this design:**
 - opencode's two-line Task card (title, then `↳ latest tool + title`) and its click-to-navigate.
@@ -155,7 +146,7 @@ Part VIII of `99-synthesis.md` is still a placeholder ("filled in from Appendice
 
 ### 3.1 Data model (schema migration, parent process only)
 
-Add real columns to `sessions`, using the existing `PRAGMA table_info` migration idiom (`SessionStore.php:109-116`). The unused `metadata` column stays as an extension bag:
+Add real columns to `sessions`, using the existing `PRAGMA table_info` migration idiom (`SessionStore.php`). The unused `metadata` column stays as an extension bag:
 
 | Column | Type | Meaning |
 |---|---|---|
@@ -168,14 +159,14 @@ Add real columns to `sessions`, using the existing `PRAGMA table_info` migration
 | `pinned` | INTEGER NOT NULL DEFAULT 0 | |
 | `archived_at` | DATETIME NULL | soft-hide; excluded from the default list, the tab strip and `--continue` |
 | `cwd`, `git_branch` | TEXT NULL | set at create time by `Bootstrap::openSession()`; fixes B1 |
-| `turns` | INTEGER NOT NULL DEFAULT 0 | incremented in `Chat::dispatchTurn()` next to `saveCheckpoint` (`Chat.php:7964-7993`) |
+| `turns` | INTEGER NOT NULL DEFAULT 0 | incremented in `Chat::dispatchTurn()` next to `saveCheckpoint` (`Chat.php`) |
 | `last_preview` | TEXT NULL | the last user prompt, sanitised and clipped to 160 bytes; fixes B3 |
 
 Indexes:
 - `(parent_id)`
 - `(kind, archived_at, updated_at)`
 
-The existing reverse-scan `(updated_at)` index (`SessionStore.php:133-150`) stays for the default list.
+The existing reverse-scan `(updated_at)` index (`SessionStore.php`) stays for the default list.
 
 New store API on `EnhancedSessionStore`, delegating to `SessionStore`:
 - `listSessionsFiltered(SessionQuery $q): list<SessionRow>`. `SessionQuery` is an immutable value object with `with*()`: `kinds`, `includeArchived`, `parentId`, `pinnedFirst`, `limit`, `offset`, `search`. `search` does a SQL `LIKE` prefilter on `name`, `last_preview` and `id`; candy-fuzzy ranks in PHP.
@@ -183,11 +174,11 @@ New store API on `EnhancedSessionStore`, delegating to `SessionStore`:
 - `renameSession(string $id, string $name, TitleSource $source = TitleSource::User)`. When the source is `Auto`, the UPDATE adds `AND (title_source IS NULL OR title_source = 'auto') AND name IS NULL`. **This is the B2 fix at the storage layer.**
 - `setPinned()`, `archive()`, `unarchive()`, `markSubAgentStatus()`.
 - `createChildSession(parentId, kind, agent, parentCallId, provider, model, name)`.
-- `forkSession()` also sets `parent_id` and `kind='branch'`, and names the fork `"<name> (branch)"` instead of copying the name verbatim.
+- `forkSession()` also sets `parent_id` and `kind='branch'`.
 
 Defaults that must change in the same PR, because child rows would otherwise flood them:
 - `SessionStore::LIST_SESSIONS_SQL`, which serves the tab strip, gets `WHERE kind IN ('main','branch') AND archived_at IS NULL`.
-- `latestResumableSession()` (`EnhancedSessionStore.php:934`) and `pruneEmptySessions()` (`:963`) must ignore `kind='subagent'`.
+- `latestResumableSession()` (`EnhancedSessionStore.php`) and `pruneEmptySessions()` must ignore `kind='subagent'`.
 - `deleteSession()` deletes children first. SQLite cannot add a foreign key through `ALTER TABLE`, so this is done in code inside one transaction.
 - `pruneSessions()` keeps pinned sessions, just as it already keeps named ones.
 
@@ -230,8 +221,8 @@ The footer shows the selection's `cwd · git_branch · "last_preview"`, replacin
 **Filtering:**
 - `/` enters filter mode, and the query renders in the title bar. While filtering, printable keys go to the query, Esc clears it (a second Esc closes), and ↑↓ still move.
 - `/` was chosen over type-to-filter so the documented `k / j` movement (`picker.move`) survives unchanged.
-- `/sessions <query>` opens the dialog already filtered. Today the argument is ignored at `Chat.php:11726`.
-- Ranking: `SmithWatermanMatcher` (already imported by `Chat`, `Chat.php:67`) over `name`, `last_preview`, `agent`, `id` and `git_branch`, with highlights via `SugarCraft\Fuzzy\Highlighter` (already used by `Renderer`). Store paging is suspended while a query is active: `search` is pushed into `SessionQuery` with a limit of 100, as opencode does (`limit: search ? 30 : 100`).
+- `/sessions <query>` opens the dialog already filtered. Today the argument is ignored.
+- Ranking: `SmithWatermanMatcher` (already imported by `Chat`) over `name`, `last_preview`, `agent`, `id` and `git_branch`, with highlights via `SugarCraft\Fuzzy\Highlighter` (already used by `Renderer`). Store paging is suspended while a query is active: `search` is pushed into `SessionQuery` with a limit of 100, as opencode does (`limit: search ? 30: 100`).
 
 **Row actions** (outside filter mode; `Ctrl+` aliases work inside it):
 
@@ -249,7 +240,7 @@ The footer shows the selection's `cwd · git_branch · "last_preview"`, replacin
 | ⇥ | toggle child rows | |
 | Esc | close (or clear the filter) | |
 
-**Mouse:** rows already carry `session-row:` zones (`Renderer.php:4311`). Add `session-act:<id>:<verb>` zones for a right-aligned `✎ ★ ✕` cluster that appears on the selected row only, so unselected rows stay uncluttered. Wheel scroll is unchanged.
+**Mouse:** rows already carry `session-row:` zones (`Renderer.php`). Add `session-act:<id>:<verb>` zones for a right-aligned `✎ ★ ✕` cluster that appears on the selected row only, so unselected rows stay uncluttered. Wheel scroll is unchanged.
 
 ### 3.3 Rename everywhere
 
@@ -258,12 +249,12 @@ The footer shows the selection's `cwd · git_branch · "last_preview"`, replacin
 - **B2 fix**, in two layers:
   - the store layer, with the conditional `UPDATE` described in §3.1;
   - the UI layer: the `SessionTitledMsg` arm ignores the message when `currentSessionTitleSource === User`, and `handleRenameCommand()` sets that field.
-- **Palette:** add `PaletteAction::RenameSession` ("Rename session…"), `DeleteSession` ("Delete session…", which opens the list with delete armed on the current row), `PinSession`, and `BranchSession`, wired in `Chat::runRootPaletteAction()` (`Chat.php:14038`).
-- **Tab strip:** double-click a tab to rename it inline, using candy-mouse click-count if available or else a 400 ms second click on the same zone. Right-click or middle-click closes (archives) the tab, refused for the current session. Pinned tabs sort first and show `★`.
+- **Palette:** add `PaletteAction::RenameSession` ("Rename session…"), `DeleteSession` ("Delete session…", which opens the list with delete armed on the current row), `PinSession`, and `BranchSession`, wired in `Chat::runRootPaletteAction()` (`Chat.php`).
+- **Tab strip:** double-click a tab to rename it inline, using a 400 ms second click on the same zone (candy-mouse `ClickResult` has no click count). Right-click or middle-click closes (archives) the tab, refused for the current session. Pinned tabs sort first and show `★`.
 
 ### 3.4 CLI
 
-Extend `Subcommands::session()` (`src/Cli/Subcommands.php:477-495`):
+Extend `Subcommands::session()` (`src/Cli/Subcommands.php`):
 
 ```
 sugarcrush session list [--all] [--archived] [--children] [--limit N] [--json]
@@ -275,14 +266,14 @@ sugarcrush session pin|unpin|archive|unarchive <id|prefix|name>
 
 - The text format of `list` gains `turns`, `kind` and `★`; JSON gains the new columns.
 - Id resolution reuses `Bootstrap::openSession()`'s `id|prefix|name` resolver. An ambiguous prefix exits 2 and lists the candidates.
-- Update the completion roster (`:1074`), the `Help` text, and the bash/zsh/fish completion generators.
+- Update the completion roster, the `Help` text, and the bash/zsh/fish completion generators.
 
 ### 3.5 Docs and drift obligations (sessions)
 
 - `CommandRegistry`: re-describe `rename` (`argumentHint: '[<name>|--auto]'`) and `sessions` (`'[<query>]'`). `docs/COMMANDS.md` is generated from `CommandRegistry::all()`, so regenerate it.
-- `KeyBindingRegistry::picker()` (`:536-545`) gains rows `picker.filter` (`/`), `picker.rename` (`r`), `picker.delete` (`d`), `picker.pin` (`p`), `picker.fork` (`f`), `picker.archive` (`x`), `picker.archived` (`a`), `picker.children` (`Tab`). Each must be **observed** by `tests/Commands/KeyBindingDriftTest.php`; README "Using the TUI" is checked against the registry.
-- The `KeyboardHandlerTest` rune sweep counts quoted in the `KeyBindingRegistry` docblock (`:300-340`, "3420 … 1520") are re-measured by `testTheHotPathNeverDerivesMoreThanTwoRuneSets()`. A new `Ctrl+<rune>` row moves those figures, so the prose must be updated with them.
-- README "Sessions" bullet (`README.md:1184`): mention pin, archive, children, and that pinned sessions are exempt from retention.
+- `KeyBindingRegistry::picker()` gains rows `picker.filter` (`/`), `picker.rename` (`r`), `picker.delete` (`d`), `picker.pin` (`p`), `picker.fork` (`f`), `picker.archive` (`x`), `picker.archived` (`a`), `picker.children` (`Tab`). Each must be **observed** by `tests/Commands/KeyBindingDriftTest.php`; README "Using the TUI" is checked against the registry.
+- The `KeyboardHandlerTest` rune sweep counts quoted in the `KeyBindingRegistry` docblock ("3420 … 1520") are re-measured by `testTheHotPathNeverDerivesMoreThanTwoRuneSets()`. A new `Ctrl+<rune>` row moves those figures, so the prose must be updated with them.
+- README "Sessions" bullet (`README.md`): mention pin, archive, children, and that pinned sessions are exempt from retention.
 - `docs/ENVIRONMENT.md` needs no new environment variables.
 
 ---
@@ -322,7 +313,7 @@ sugarcrush session pin|unpin|archive|unarchive <id|prefix|name>
   - else a per-tool primary argument: `Read/Edit/Write` → `path`; `Grep` → `"pattern" [path]`; `Glob` → `pattern`; `Bash` → the first line of `command`; `WebFetch` → host + path; `mcp__s__t` → `s/t`;
   - this lives in one `ToolSummary` class, reused by goose-style transcript lines in the Agent View.
 - **Nesting** (when 4.7 allows depth 2–3): an agent with running descendants shows `(+N)` after its name (Claude Code). Descendants are collapsed by default; clicking `(+N)` or pressing `→` on a focused line expands them one level, indented with `│ └`.
-- **Batch hint row:** once per assistant message that contains a Task, after its last Task row, show `alt+↓ agents · click a task to open it` (opencode `:1509-1535`). It is faint and is hidden once every Task in the message has finished and been viewed.
+- **Batch hint row:** once per assistant message that contains a Task, after its last Task row, show `alt+↓ agents · click a task to open it` (opencode). It is faint and is hidden once every Task in the message has finished and been viewed.
 - **Lingering:** finished lines stay in the transcript permanently; they are part of the Task row and are persisted as a structured `subAgentSummary` on the tool result row. In the separate **live agents strip** (§4.5), finished agents linger for 30 s, matching Claude Code.
 
 **Width safety.** The diff renderer is one line per row; a line wider than the pane corrupts the frame (memory: "no over-wide lines").
@@ -380,40 +371,40 @@ Keep `kind:'subagent'` and add `v:2`. `decodeEvent()` accepts both versions; v1 
 - The existing 4 KB `tail` stays in v2 as `tail` for `AgentManager::liveOutput()` and the dashboard, until the dashboard is ported to items. That keeps the change additive.
 
 **Stats source.**
-- `EngineBackend::runTurn()` already sums `stepUsages` (`:886-918`).
+- `EngineBackend::runTurn()` already sums `stepUsages`.
 - Add an optional `onStep(int $step, ?Usage $usage)` callback to `completeTranscript()`/`runTurn()`. TaskTool uses it to fill `stats.step` and the token and cost totals per step.
 - Tool counts come from `onEvent`.
-- **Prose:** pass `onToken` to `completeTranscript()` (`EngineBackend.php:755`); TaskTool feeds the `text` items.
+- **Prose:** pass `onToken` to `completeTranscript()` (`EngineBackend.php`); TaskTool feeds the `text` items.
 
-**Outcome.** `finish()` (`TaskTool.php:540-555`) passes the real status. `AgentManager::projectRemoteSubAgent()` maps `failed`/`cancelled` to `STATUS_FAILED`/`STATUS_STOPPED` instead of always `STATUS_COMPLETE` (`:412-414`).
+**Outcome.** `finish()` (`TaskTool.php`) passes the real status. `AgentManager::projectRemoteSubAgent()` maps `failed`/`cancelled` to `STATUS_FAILED`/`STATUS_STOPPED` instead of always `STATUS_COMPLETE`.
 
 ### 4.4 Relaying from parallel grandchildren (the pid-bound cut-off)
 
-**Mechanism: a per-job activity socketpair in `Runtime::executeConcurrently()`** (`src/Runtime.php:1853`).
+**Mechanism: a per-job activity socketpair in `Runtime::executeConcurrently()`** (`src/Runtime.php`).
 
 1. A new marker interface `src/Tools/StreamsActivity.php`, implemented by `TaskTool`. Before forking a job whose tool `instanceof StreamsActivity`, the turn child creates `stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_DGRAM, 0)`. **DGRAM**, so each frame is one atomic datagram with no length-prefix reassembly; Linux unix datagrams preserve boundaries up to `net.core.wmem_default` (~200 KB), well above the 8 KB cap.
 2. In the grandchild (`if ($pid === 0)`), the tool is rebound with `$tool->withActivitySink(DatagramActivitySink::over($childEnd))` before `runToolInChild()`. The grandchild closes its copy of the turn child's parent socket, so it can never write onto the parent channel by accident. **That accidental write is the hazard the pid check guards against today.**
-3. The poll loop (`:~1990-2060`) does a non-blocking `fread` on every job's parent end on each 2 ms iteration (or after `stream_select` with a 2 ms timeout, which can replace the `usleep` and stop the busy-wait). Each datagram is `unserialize`d with `allowed_classes => false`, validated by the v2 decoder, and passed to `$onEvent(SubAgentActivity::fromArray(...))`. That travels the turn child's normal frame path to the parent.
-4. On job settle, the remaining datagrams are drained before `release()`, so the `finished` op always precedes the Task's `ToolFinished`. Ordering matters to `Chat`'s ordered event chain (`Chat.php:3550-3586`).
+3. The poll loop does a non-blocking `fread` on every job's parent end on each 2 ms iteration (or after `stream_select` with a 2 ms timeout, which can replace the `usleep` and stop the busy-wait). Each datagram is `unserialize`d with `allowed_classes => false`, validated by the v2 decoder, and passed to `$onEvent(SubAgentActivity::fromArray(...))`. That travels the turn child's normal frame path to the parent.
+4. On job settle, the remaining datagrams are drained before `release()`, so the `finished` op always precedes the Task's `ToolFinished`. Ordering matters to `Chat`'s ordered event chain (`Chat.php`).
 5. `EngineBackend::turnTools()` keeps its pid check for the **turn-child-direct** emitter. In grandchildren the rebind overrides it, so the check never has to be removed (and never silently starts writing from the wrong process).
 
 The **heartbeat** problem is solved the same way: each `activity` datagram counts as a beat for the turn child's no-progress watchdog, because the turn child calls `$heartbeat()` when it relays. Today a long parallel sub-agent batch is protected only by `ExemptFromParallelDeadline`.
 
-**Without pcntl** (`completeAsyncBlocking`, `EngineBackend.php:1998`): the whole turn runs on the UI thread, so no frames render until it returns. Degrade honestly: the Task row shows `running…` without a spinner; on completion the activity line is filled from the final v2 `finished` payload, which `TaskTool` attaches to its `ToolResult` metadata; and the batch hint row says `live agent updates need ext-pcntl`. Parallel Tasks already run sequentially without pcntl.
+**Without pcntl** (`completeAsyncBlocking`, `EngineBackend.php`): the whole turn runs on the UI thread, so no frames render until it returns. Degrade honestly: the Task row shows `running…` without a spinner; on completion the activity line is filled from the final v2 `finished` payload, which `TaskTool` attaches to its `ToolResult` metadata; and the batch hint row says `live agent updates need ext-pcntl`. Parallel Tasks already run sequentially without pcntl.
 
 ### 4.5 Parent-side state and rendering
 
 **`src/Agents/Live/AgentLiveRegistry.php`** (new). It is owned by `Chat`, like `AgentManager`: a deliberately mutable service seam, documented the same way as the `liveToolEvents` inbox.
 - It maps `agentId → AgentLiveState` and `parentCallId → list<agentId>`.
 - `AgentLiveState` is a `final readonly` value object with `with*()`/`mutate()`: `id, parentCallId, parentAgentId, name, description, status, latest (ActivityItem|null), toolCount, tokensIn, tokensOut, costUsd, step, maxSteps, startedAt, finishedAt, outcome, error, resumeId, childSessionId, transcriptLog, unreadReplies, queuedMessages`.
-- The Chat arm at `Chat.php:3569` calls `$this->agentLive->apply($event)` in addition to `projectRemoteSubAgent()`.
+- The Chat `SubAgentActivity` event arm calls `$this->agentLive->apply($event)` in addition to `projectRemoteSubAgent()`.
 
 **Renderer:**
-- `renderPendingToolCall()` (`Renderer.php:3773`) and the finished-row renderer look up `Chat::agentLive()->forCall($msg->pendingToolCallId)` (or the tool result's call id) and append `"\n" . AgentActivityLine::render(...)` for each agent attached to that call.
+- `renderPendingToolCall()` (`Renderer.php`) and the finished-row renderer look up `Chat::agentLive()->forCall($msg->pendingToolCallId)` (or the tool result's call id) and append `"\n". AgentActivityLine::render(...)` for each agent attached to that call.
 - Row 1 becomes zone `agent:<agentId>` (a new prefix `Renderer::AGENT_ZONE_PREFIX = 'agent:'`). The existing `toolcall:` zone moves to the expand chevron, so a click on the description opens the agent while the chevron still expands output.
 
 **Spinner.**
-- Add `Chat::$spinnerFrame` (int), advanced in the existing `ToolEventPumpMsg` arm. That tick already runs every 0.1 s while `inFlight` (`Chat.php:534`, `14380-14386`).
+- Add `Chat::$spinnerFrame` (int), advanced in the existing `ToolEventPumpMsg` arm. That tick already runs every 0.1 s while `inFlight`.
 - Advance it only when `intdiv(hrtime(true), 80_000_000)` changes, giving roughly 12 fps at most.
 - `view()` stays a pure function of state, so golden tests pin `spinnerFrame`.
 
@@ -429,7 +420,7 @@ The **heartbeat** problem is solved the same way: each `activity` datagram count
 ### 4.6 Throttling budget (worked numbers)
 
 - Child: at most 4 frames/s per agent, ≤8 KB each. Five parallel agents → ≤20 frames/s, ≤160 KB/s worst case; typical frames are about 600 B.
-- The parent pumps `liveToolEvents` every 100 ms, and each pump collapses all `subagent` events for the same agent into one `apply()`. A new `AgentLiveRegistry::applyBatch()` does this in `pumpLiveToolEvents()` (`Chat.php:3788`).
+- The parent pumps `liveToolEvents` every 100 ms, and each pump collapses all `subagent` events for the same agent into one `apply()`. A new `AgentLiveRegistry::applyBatch()` does this in `pumpLiveToolEvents()` (`Chat.php`).
 - The renderer repaints at most 10 times a second, and only the changed rows are diffed.
 - No transcript text travels in frames beyond `text` deltas of ≤512 B. The full transcript goes through the log file (§5.2).
 
@@ -460,14 +451,14 @@ The web client therefore needs no TUI-specific knowledge. `agent.message` with `
 ### 5.1 Opening it
 
 **Entry points**, all of which produce `OpenAgentViewMsg(agentId)`:
-- a click on an `agent:<id>` zone: Task row 1, the agents strip, or a dashboard row (a dashboard click needs a new `agent:` zone in `AgentDashboardPane::row()` `:300`);
+- a click on an `agent:<id>` zone: Task row 1, the agents strip, or a dashboard row (a dashboard click needs a new `agent:` zone in `AgentDashboardPane::row()`);
 - `Enter` on a focused strip item;
-- `Enter` in the dock pane's Peek mode. That is the existing `AgentViewMode::Attach` transition (`KeyboardHandler.php:741`), now with a meaning: **Attach = the main area shows the agent**;
-- `/agent <name|id>`. Today it is inspect-only (`AgentsCommand.php:83-162`); with a live or recent instance matching, it opens the view;
+- `Enter` in the dock pane's Peek mode. That is the existing `AgentViewMode::Attach` transition (`KeyboardHandler.php`), now with a meaning: **Attach = the main area shows the agent**;
+- `/agent <name|id>`. Today it is inspect-only (`AgentsCommand.php`); with a live or recent instance matching, it opens the view;
 - the session list, on a sub-agent child row;
 - the palette: "Open agent…" lists live and recent agents.
 
-**Mouse-dispatch rules.** `agent:` zones are allowed while a turn is in flight; that is the point of the feature. So `agent:` must *not* be added to `midTurnRefusalOfItsOwn()`. They are refused under a permission modal or key help, exactly like other zones (`refuseMouseDispatch()` `:5530`).
+**Mouse-dispatch rules.** `agent:` zones are allowed while a turn is in flight; that is the point of the feature. So `agent:` must *not* be added to `midTurnRefusalOfItsOwn()`. They are refused under a permission modal or key help, exactly like other zones (`refuseMouseDispatch()`).
 
 ### 5.2 What it shows (the transcript source)
 
@@ -510,7 +501,7 @@ The parent tails it **only while that Agent View is open**:
 - **Header** (one row, width-fitted, every segment an `agent-nav:` zone): the breadcrumb `main ▸ <name>` (clicking `main` returns), `(i of N)` siblings (opencode footer), the status glyph, step, elapsed, tokens and cost.
 - **Task line:** the full task prompt, clipped to one row; click expands it to six rows.
 - **Body:** projected transcript rows. User-sent messages render as `you → <agent> · <text>` with a delivery badge: `⧗ queued` → `✓ delivered (step 5)` → `↩ replied`.
-- **Composer:** the same `TextArea` instance as the chat input (`Chat.php:66`). The draft is stored per target (`Chat::$drafts[agentId]`), so switching views keeps both drafts.
+- **Composer:** the same `TextArea` instance as the chat input (`Chat.php`). The draft is stored per target (`Chat::$drafts[agentId]`), so switching views keeps both drafts.
 - **Footer hint row:** a faint, width-fitted list of keys.
 
 ### 5.3 Sending a message to an agent: routing
@@ -529,13 +520,13 @@ The parent tails it **only while that Agent View is open**:
 
 Why not relay through the turn child's socket?
 - That needs Wave 1.C's two-way socket and then a **second** hop into the grandchild, at which point the turn child must route by agent id, and the turn child is busy in `executeConcurrently()`.
-- The Mailbox (`src/Agents/Mailbox.php:37-222`) is already built, DORMANT, durable, and works identically for a lone in-process Task, a parallel grandchild, a future background sub-agent (4.3, a `BackgroundSessionRunner` daemon), and a cold resume.
+- The Mailbox (`src/Agents/Mailbox.php`) is already built, DORMANT, durable, and works identically for a lone in-process Task, a parallel grandchild, a future background sub-agent (4.3, a `BackgroundSessionRunner` daemon), and a cold resume.
 - Messages are human-rate (a few per minute), so polling a file at step boundaries is free: one `clearstatcache`+`filesize` per step.
 - **This is not a contradiction of 1.C:** the *drain seam* is the same. 1.C adds `steer{text}` for the **main** turn over the socket. Here the same `TurnInbox` interface gets two implementations, `SocketSteerInbox` (1.C, main turn) and `MailboxInbox` (sub-agents). 4.4's `SendMessage` tool writes to the same `MailboxInbox`, so model→child and user→child share one queue.
 
 **Engine seam.**
 - Add `?TurnInbox $inbox` to `EngineBackend` (as a `with*()`).
-- In `runTurn()`, before each `Runtime::run()` call (step loop `EngineBackend.php:862-866`), call `$inbox?->drain()`.
+- In `runTurn()`, before each `Runtime::run()` call (step loop `EngineBackend.php`), call `$inbox?->drain()`.
 - Each `AgentMessage` is appended to `$transcript` as a `UserMessage`:
   - **from the user:** `<user-message via="agent-view">…text…</user-message>` (it is genuinely the user);
   - **from the parent agent:** `<parent-message from="main">…</parent-message>`, plus the authority disclaimer (§5.4).
@@ -569,7 +560,7 @@ This trailer is added in `TaskTool::runOnEngine()` beside the 0.15 output harden
   - The key is a per-launch random key held by the parent process and passed to the turn child through the fork, which needs no IPC. That stops another local process or a prompt-injected Bash from forging `from:'user'`.
   - Lines that fail validation are dropped, with a `status` line in the transcript log.
 - **Mailbox content is untrusted:** `PromptFence::escape()` plus the Unicode-tag strip (0.14).
-- **Permission asks** raised by a sub-agent: until 1.C lands, an Ask on the engine path is refused (baseline §0.2). Once 1.C relays asks, a sub-agent's `permission_request` shows in **both** places: the parent modal, as today's Veil (opencode surfaces child asks in the parent), and inline in that agent's view. The answer goes back through 1.C's `permission_reply`, which the turn child relays into the grandchild over the §4.4 socketpair. Those DGRAM pairs are already bidirectional, so this needs no new plumbing.
+- **Permission asks** raised by a sub-agent: until 1.C lands, an Ask on the engine path is refused (Appendix A). Once 1.C relays asks, a sub-agent's `permission_request` shows in **both** places: the parent modal, as today's Veil (opencode surfaces child asks in the parent), and inline in that agent's view. The answer goes back through 1.C's `permission_reply`, which the turn child relays into the grandchild over the §4.4 socketpair. Those DGRAM pairs are already bidirectional, so this needs no new plumbing.
 
 ### 5.5 Actions, and making the inert commands real
 
@@ -586,12 +577,12 @@ This trailer is added in `TaskTool::runOnEngine()` beside the 0.15 output harden
 | Open as session | `Ctrl+X o` | switches the main area to the child session (§5.6) as a normal, typeable session: a "fork the agent into a full session" escape hatch |
 | Group input | `Ctrl+G` (shell) | `GroupInputCmd` becomes **broadcast compose**: the composer targets every running agent of the current batch (header `→ all 3 agents`); `AgentInbox::send` fans out. This gives the empty class a concrete meaning that fits its name. |
 
-`App::consumeShellCmd()` (`App.php:1716-1729`) gains arms that translate each command into a `Chat` message (`AgentControlMsg(agentId, verb)`), following its existing "translation, not pass-through" rule. `KeyBindingRegistry::agents()` drops the `dormantReason` on `agents.cancel/resume/stop-all` and `shell.group-input`, and `KeyBindingDriftTest` must now **observe** each one, which its existing contract requires (`KeyBindingDriftTest.php:630`).
+`App::consumeShellCmd()` (`App.php`) gains arms that translate each command into a `Chat` message (`AgentControlMsg(agentId, verb)`), following its existing "translation, not pass-through" rule. `KeyBindingRegistry::agents()` drops the `dormantReason` on `agents.cancel/resume/stop-all` and `shell.group-input`, and `KeyBindingDriftTest` must now **observe** each one, which its existing contract requires (`KeyBindingDriftTest.php`).
 
 ### 5.6 Finished agents stay viewable: child sessions
 
 On `finished` (any outcome), the **parent** creates a child session row:
-- `createChildSession(parentId=currentSessionId, kind='subagent', agent, parentCallId, provider, model, name="<description> (@<agent>)")`. This is opencode's title format (`02-opencode.md:212`).
+- `createChildSession(parentId=currentSessionId, kind='subagent', agent, parentCallId, provider, model, name="<description> (@<agent>)")`. This is opencode's title format (`02-opencode.md`).
 - `saveTranscript(childId, projected messages)` from the JSONL log.
 - `markSubAgentStatus()`.
 
@@ -644,29 +635,29 @@ The `childSessionId` is stored on the Task tool result, so the view can be reope
 | `src/Tui/AgentViewHeader.php` | renderer | breadcrumb and stats row |
 | `src/Msg/OpenAgentViewMsg.php`, `CloseAgentViewMsg.php`, `AgentControlMsg.php`, `AgentMessageSentMsg.php` | Msgs | (follow `Chat`'s existing Msg namespace) |
 
-### 6.2 Modified code (file:line anchors)
+### 6.2 Modified code
 
 **Sessions:**
-- `SessionStore.php:97-116`: migration columns and indexes. `:197` rename with a source; `:210` fork records the parent; `:290` deletes children; `:301` / `LIST_SESSIONS_SQL` gets the default filter.
-- `EnhancedSessionStore.php`: new API; `:934` and `:963` exclude sub-agents.
-- `Chat.php:11726-11998`: picker build, actions, `/sessions <query>`. `:11833-11846`: rows from `SessionRow` (B1, B3). `:12274`: `/rename` inline and `--auto`. `:9011-9065` and `:1835-1846`: B2. `:14038`: palette actions.
+- `SessionStore.php`: migration columns and indexes (the `PRAGMA table_info` idiom); `renameSession()` takes a source; `forkSession()` records the parent; `deleteSession()` deletes children; `listSessions()` / `LIST_SESSIONS_SQL` gets the default filter.
+- `EnhancedSessionStore.php`: new API; `latestResumableSession()` and `pruneEmptySessions()` exclude sub-agents.
+- `Chat.php`: picker build and actions in `handleSessionsCommand()` (`/sessions <query>`); `sanitizeSessionRows()` builds rows from `SessionRow` (B1, B3); `handleRenameCommand()` inline and `--auto`; `scheduleTitleGeneration()` and the `SessionTitledMsg` arm (B2); `runRootPaletteAction()` palette actions.
 - `Tui/SessionPicker.php`: filter mode, columns, groups, inline rename, delete confirm, children.
-- `Cli/Subcommands.php:477-560, 1074`: new verbs and completion.
+- `Cli/Subcommands.php` `session()`: new verbs and completion.
 - `Bootstrap::openSession()`: set `cwd` and `git_branch` on create.
 
 **Live lines:**
 - `Events/SubAgentActivity.php`: v2 fields, all optional with defaults; `toArray/fromArray`.
-- `EngineBackend.php:1869-1960`: codec v1/v2. `:755`/`:776`: `onStep` callback and `TurnInbox` drain at `:862`. `:1049-1087`: unchanged pid guard, plus pass-through of an activity sink.
-- `TaskTool.php:430-630`: buffer, `onToken`, `onStep`, outcome, transcript log, inbox control check in `$onProgress`, result trailer; implements `StreamsActivity`.
-- `Runtime.php:1853-2075`: DGRAM pair per `StreamsActivity` job, relay in the poll loop (`stream_select` replacing `usleep`), drain before release, close the inherited parent socket in the grandchild.
-- `AgentManager.php:376-415`: outcome-aware projection.
-- `Chat.php:3569`, `:3788`: registry apply and batch. `:534`/`:14380`: spinner frame.
-- `Renderer.php:3773`: activity lines and the `agent:` zone. `:543-604`: new prefixes `agent:`, `agent-nav:`, `session-act:`.
-- `AgentDashboardPane.php:117-156, 393`: per-instance entries.
+- `EngineBackend.php`: codec v1/v2 in `encodeEvent()`/`decodeEvent()`; `completeTranscript()`/`runTurn()`: `onStep` callback and `TurnInbox` drain in the step loop; `turnTools()`: unchanged pid guard, plus pass-through of an activity sink.
+- `TaskTool.php` `runOnEngine()`: buffer, `onToken`, `onStep`, outcome, transcript log, inbox control check in `$onProgress`, result trailer; implements `StreamsActivity`.
+- `Runtime.php` `executeConcurrently()`: DGRAM pair per `StreamsActivity` job, relay in the poll loop (`stream_select` replacing `usleep`), drain before release, close the inherited parent socket in the grandchild.
+- `AgentManager::projectRemoteSubAgent()`: outcome-aware projection.
+- `Chat.php`: the `SubAgentActivity` event arm and `pumpLiveToolEvents()`: registry apply and batch; the `ToolEventPumpMsg` arm: spinner frame.
+- `Renderer.php`: `renderPendingToolCall()`: activity lines and the `agent:` zone; the zone-prefix constants: new prefixes `agent:`, `agent-nav:`, `session-act:`.
+- `AgentDashboardPane.php` `entries()`, `row()`: per-instance entries.
 
 **Agent View:**
-- `Chat`: `$viewTarget` (null or an agent id), `$drafts`, the transcript-region swap in `view()`, input routing in the submit path (Enter → `AgentInbox::send` when `viewTarget` is set), and the `agent:` arm in click dispatch (`:5334-5372`).
-- `KeyboardHandler.php:629-776, 845`; `App.php:1716-1729`; `KeyBindingRegistry.php` `agents()` / `chat()` / `shell()`.
+- `Chat`: `$viewTarget` (null or an agent id), `$drafts`, the transcript-region swap in `view()`, input routing in the submit path (Enter → `AgentInbox::send` when `viewTarget` is set), and the `agent:` arm in click dispatch (`handlePointer()`).
+- `KeyboardHandler.php` (`handleAgentAttachKey()`, the Agents-pane keys); `App.php` `consumeShellCmd()`; `KeyBindingRegistry.php` `agents()` / `chat()` / `shell()`.
 
 ### 6.3 Tests (PHPUnit 10, candy-testing)
 
@@ -696,7 +687,7 @@ Each new test file goes into `scripts/parallel-tests-durations.tsv`, with `sugar
 ### 6.4 Docs and drift
 
 - README "Using the TUI" key list (regenerated from `KeyBindingRegistry`).
-- README "Limitations", **pinned by `AppModelTest`/`KeyBindingRegistryTest`**: rewrite the "Five shell commands are still inert" bullet (`README.md:1221`).
+- README "Limitations", **pinned by `AppModelTest`/`KeyBindingRegistryTest`**: rewrite the "Five shell commands are still inert" bullet (`README.md`).
 - `docs/ARCHITECTURE.md`: the activity relay and transcript log.
 - `docs/AGENTS_AUTHORING.md`: direct messages and authority.
 - `docs/COMMANDS.md` (generated): `/rename [--auto]`, `/sessions [<query>]`, `/agent <name|id>` opening the view.
@@ -729,7 +720,7 @@ Phase A is independent and ships first. Phases B and C together answer the secon
    - Zone ids are built only from `SubAgent::$id` (`subagent_<pid>_<uniqid>`, charset-safe; `Mark::MAX_ID_BYTES=256`), never from names.
    - `maskImageMarkers()` remains the defense in depth.
 4. **SQLite from forks.** Only the parent writes the store; children write JSONL. A grandchild must not run `__destruct` on the inherited PDO. `ForkedChild::exitNow()` already skips destructors, and that must stay true on every new exit path.
-5. **Blocking parent Task with a paused child.** Pause is capped (10 min) and sends heartbeats, so the 120 s no-progress watchdog (`COMPLETE_TIMEOUT_SECONDS`, `EngineBackend.php:99`) and the parallel deadline are not tripped. The Task row shows `⏸ paused 3:12 (auto-resume in 6:48)`.
+5. **Blocking parent Task with a paused child.** Pause is capped (10 min) and sends heartbeats, so the 120 s no-progress watchdog (`COMPLETE_TIMEOUT_SECONDS`, `EngineBackend.php`) and the parallel deadline are not tripped. The Task row shows `⏸ paused 3:12 (auto-resume in 6:48)`.
 6. **Key collisions.**
    - `Alt+↓/↑/N/P` and `Ctrl+X <letter>` must be checked against the Kitty keyboard protocol decoding, which is on.
    - Alt+←/→ is already word motion, so it is deliberately not used.
@@ -739,62 +730,10 @@ Phase A is independent and ships first. Phases B and C together answer the secon
 8. **Tab-strip and list pollution.** Without the default `kind IN (main,branch)` filter, every sub-agent would become a tab. The list SQL and the `--continue`/prune exclusions must land in the **same** PR as child-session creation (Phase C), or before it.
 9. **Prompt-injection through the mailbox.** Handled by HMAC'd `from:'user'`, untrusted framing, and parent-message authority limits (§5.4).
 10. **No pcntl.** Live lines degrade to a final summary and the view becomes post-hoc (log-backed). This must be stated in the UI hint and in TROUBLESHOOTING; never fake liveness.
-11. **Workflow agents.** `/workflow` stage agents run through `AgentWorkerPool`/`EngineExecutor` with their own progress files (README `:1226`). They appear in the dashboard but not under a Task row. Phase B should let `EngineExecutor` emit v2 activity too, so the strip and Agent View cover workflow stages uniformly. That is optional and S–M on top.
+11. **Workflow agents.** `/workflow` stage agents run through `AgentWorkerPool`/`EngineExecutor` with their own progress files (README). They appear in the dashboard but not under a Task row. Phase B should let `EngineExecutor` emit v2 activity too, so the strip and Agent View cover workflow stages uniformly. That is optional and S–M on top.
 
 ---
 
-## 8. Answers to the user, in one place
+## 8. Open question
 
-- **Rename and list sessions:** both already exist (`/sessions`, Ctrl+R, `/rename <name>`, auto-titles, `sugarcrush session list`), but listing has no search and no useful columns, renaming is current-session-only, and three bugs were found (branch filter empty, summary shows the system prompt, manual rename lost to auto-title). Phase A adds a searchable, grouped list with inline rename, delete, pin, archive and fork, `/rename` editing, palette actions and CLI `session rename|show|pin|archive`.
-- **Updating line while agents run:** not present today. The data is emitted for a lone Task but dropped for parallel batches, and nothing renders it under the Task row. Phase B adds `└ Grep "LoginController" routes/ · 7 tools · 4.1k tok` under each Task, live for parallel batches through a grandchild relay, with an animated spinner and ✓/✗/⏹/⏸ outcomes.
-- **Click an agent, watch it, and talk to it:** today only a peek overlay exists, and attach, cancel, resume and group-input are inert. Phases C and D open a main-area Agent View (click or Enter) streaming the agent's transcript, with a composer whose messages reach that agent at its next step, plus cancel, pause, resume, broadcast and "open as session". Finished agents become child sessions, so they stay viewable and can be continued.
-
-**Output path:** `/home/sites/sugarcraft/prompt_kit/findings/crush-report/16-sessions-and-live-agent-view.md`
-
----
-
-## RESUME NOTES
-
-**Status: every section is DONE.** §0–§8 are written in full. No section is INCOMPLETE. These notes exist only so a follow-up pass can deepen the report without re-reading source.
-
-**Sections**
-- §0 summary, §1 current state, §2 competitors, §3 sessions design, §4 live lines, §5 Agent View and direct chat, §6 implementation plan and tests, §7 risks, §8 answers: all done.
-
-**Source already examined** (key findings are recorded in §1 with file:line; no need to re-read):
-- `sugar-crush/src/Session/{SessionStore,EnhancedSessionStore}.php`: schema; `metadata` is unused; rename, fork and delete behaviour.
-- `src/Chat.php`: `:1835` SessionTitledMsg; `:3569` SubAgentActivity arm; `:3893` placeholder; `:5334-5372` click dispatch; `:5530-5560` mouse refusal; `:9011-9065` title race (B2); `:11726-11998` picker (B1 `:11844`, B3 `:11843`); `:12274` `/rename`; `:14038` palette; `:14368` subscriptions.
-- `src/Tui/SessionPicker.php` (handleKey `:532`); `src/Renderer.php` (zones `:543-604`, `:696`; mask `:1187`; tab strip `:2388-2442`; pending tool row `:3773`).
-- `src/Tools/BuiltIn/TaskTool.php:430-630`; `src/Events/{SubAgentActivity,ToolStarted}.php`.
-- `src/Backend/EngineBackend.php`: `:755` completeTranscript; `:862` step loop; `:1049-1087` pid-bound emitter; `:1324-1343` fork and socketpair; `:1742` writeFrame; `:1869/:1923` codec.
-- `src/Runtime.php`: `:1853` executeConcurrently; `:2393` runToolInChild; `:75` poll interval.
-- `src/Agents/AgentManager.php`: `:376-415` projection; `:1875` stopSubAgent; ids are `subagent_<pid>_<uniqid>`.
-- `src/Tui/KeyboardHandler.php:629-845`; `src/App/App.php:1716-1729`; `src/Commands/KeyBindingRegistry.php` (picker `:536`, agents `:576-600`, group-input `:498`); `src/Tui/Components/AgentDashboardPane.php` (per-definition rows `:117`, `:393`); `src/Tui/AgentOutputPane.php:130` (`renderAttach` unreachable); `src/Cli/Subcommands.php:477-560,1074`.
-- `src/Agents/Mailbox.php` API.
-- The sugar-crush README Limitations section (`:1221`), which states the inert commands.
-- sugar-crush has **no** `Lang::t` wrapper, so strings are literals.
-
-**Competitors examined**
-- opencode `packages/tui/src`:
-  - `component/dialog-session-list.tsx`, `dialog-session-rename.tsx`, `config/keybind.ts:90-116`;
-  - `routes/session/index.tsx` (Task `:2215-2311`, hint `:1509-1535`, children nav `:206-460`);
-  - `routes/session/subagent-footer.tsx`;
-  - finding: **the prompt is hidden in child sessions** (`:240`), which contradicts `02-opencode.md:254`.
-- openclaw `src/tui/tui-session-picker.ts:45-85`, `commands.ts:116-127`.
-- goose `crates/goose-cli/src/session/output.rs:1023-1072`, `task_execution_display/mod.rs`.
-- cline `apps/cli/src/tui/components/chat-entry.tsx:182,779`.
-- Claude Code docs: `code.claude.com/docs/en/sub-agents` (fetched): panel rows, ↑↓/Enter/x/Esc, `(+N)`, Ctrl+Enter, 30 s linger, `/tasks`.
-
-**Not done (optional deepening)**
-- kilocode Agent Manager UI (`/home/sites/crush-research-repos/kilocode`, grep `agent-manager`) was not examined. It is VS Code only and low relevance to a TUI.
-- No server-mode or Part VIII report exists yet. The §4.7 event shapes are a proposal to reconcile once that report lands.
-- Unverified assumptions:
-  - whether candy-mouse exposes click-count for double-click tab rename (check `/home/sites/sugarcraft/candy-mouse/src`);
-  - whether candy-core decodes `Alt+↓`/`Alt+N` under the Kitty protocol (check `candy-core` key decoder);
-  - that `ForkedChild::exitNow()` skips destructors (check `src/Support/ForkedChild.php` or its location).
-
-**Open questions**
-- Type-to-filter versus `/`-to-filter in the picker. `/` was chosen to keep the documented k/j movement.
-- Should cold-resume replies auto-inject into the main agent? The design says no: "Send result to main" puts a draft in the input instead.
 - The HMAC scheme for `from:'user'` mailbox lines may be more than needed if mailbox dirs stay 0700.
-
-**Next steps if resumed:** verify the three unverified assumptions above, then optionally add a kilocode Agent Manager row to the §2 table.
