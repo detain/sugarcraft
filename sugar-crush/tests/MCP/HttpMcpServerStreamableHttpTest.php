@@ -319,6 +319,75 @@ final class HttpMcpServerStreamableHttpTest extends TestCase
         self::assertSame([], $server->listTools());
     }
 
+    /**
+     * The start-time `tools/list` is gated like `initialize`: an error reply
+     * (session- or capability-gated servers answer -32601 here) is not "up,
+     * 0 tools" — that shape looks connected, exposes nothing, and throws the
+     * server's own diagnosis away. Same gate as sugar-mcp StdioMcpServer::start().
+     */
+    public function testAToolsListErrorReplyFailsStartWithTheServersMessage(): void
+    {
+        $server = $this->server([
+            self::initReply(),
+            new Response(202),
+            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+                'jsonrpc' => '2.0',
+                'id' => 1,
+                'error' => ['code' => -32601, 'message' => 'tools are session-gated'],
+            ])),
+        ]);
+
+        $caught = null;
+        try {
+            $server->start();
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        self::assertNotNull($caught, 'a tools/list error reply started the server as "up, 0 tools"');
+        self::assertStringContainsString('Failed to start MCP server streamable', $caught->getMessage());
+        self::assertStringContainsString('tools/list refused (-32601)', $caught->getMessage());
+        self::assertStringContainsString('tools are session-gated', $caught->getMessage());
+        self::assertFalse($server->isUp());
+        self::assertSame([], $server->listTools());
+    }
+
+    /**
+     * An error member with no usable message is described by encoding it — and
+     * a decoded error may carry INF (`1e999` on the wire), which json_encode()
+     * refuses. The diagnosis must still say something rather than go blank.
+     */
+    public function testAnUnencodableErrorIsStillDescribed(): void
+    {
+        $server = $this->server([
+            new Response(200, ['Content-Type' => 'application/json'], '{"jsonrpc":"2.0","id":0,"error":{"code":-32000,"message":"","data":1e999}}'),
+        ]);
+
+        $caught = null;
+        try {
+            $server->start();
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        self::assertNotNull($caught);
+        self::assertStringContainsString('"message":""', $caught->getMessage(), 'the refusal lost its diagnosis to an encode failure');
+    }
+
+    public function testAToolsListReplyWithoutResultFailsStart(): void
+    {
+        $server = $this->server([
+            self::initReply(),
+            new Response(202),
+            new Response(200, ['Content-Type' => 'application/json'], '{"jsonrpc":"2.0","id":1}'),
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('tools/list returned no result');
+
+        $server->start();
+    }
+
     public function testAnInitializeReplyWithoutResultFailsStart(): void
     {
         $server = $this->server([new Response(200, [], '{"jsonrpc":"2.0","id":0}')]);

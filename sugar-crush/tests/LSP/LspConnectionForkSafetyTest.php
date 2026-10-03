@@ -192,6 +192,14 @@ final class LspConnectionForkSafetyTest extends TestCase
 
         $this->connection?->disconnect();
         $this->connection = null;
+        self::$failStore = null;
+        if ($this->faultyDir !== null) {
+            foreach (glob($this->faultyDir . '/*') ?: [] as $file) {
+                @unlink($file);
+            }
+            @rmdir($this->faultyDir);
+            $this->faultyDir = null;
+        }
         if ($this->script !== '' && is_file($this->script)) {
             unlink($this->script);
         }
@@ -340,9 +348,336 @@ final class LspConnectionForkSafetyTest extends TestCase
         self::assertSame('still', self::n($connection->sendRequest('test/echo', ['n' => 'still'])));
     }
 
+    /**
+     * LspExchangeLock::store()/storeFrame() report a write that did not land
+     * (a full or read-only temp filesystem). An exchange whose phase or frame
+     * record never landed runs unprotected — killed part-way, it would leave
+     * the next holder trusting a stale state — so it is refused before a byte
+     * goes out, the rule sugar-mcp StdioMcpServer::exchange() applies to its
+     * phase marker.
+     */
+    public function testAnExchangeWhoseStateCannotBeRecordedIsRefused(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root writes through a read-only directory');
+        }
+
+        $connection = $this->connection();
+        $property = new \ReflectionProperty(LspConnection::class, 'lock');
+        $original = $property->getValue($connection);
+        self::assertInstanceOf(LspExchangeLock::class, $original);
+
+        // The same connection, its lock set moved into a directory this test
+        // can make read-only: the temp-then-rename every store needs fails.
+        $dir = sys_get_temp_dir() . '/lsp-unrecordable-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        mkdir($dir, 0700);
+        $property->setValue($connection, LspExchangeLock::new('unrecordable', $dir));
+        $original->destroy();
+
+        try {
+            chmod($dir, 0500);
+            try {
+                $connection->sendNotification('test/big', ['blob' => 'unrecorded']);
+                $refused = $connection->sendRequest('test/fast', null);
+            } finally {
+                chmod($dir, 0700);
+            }
+
+            self::assertTrue($refused->isError, 'an exchange ran with a state it could not record: ' . json_encode($refused->result));
+            self::assertFalse($refused->isTimeout(), 'the refusal must be immediate, not a wait');
+
+            $stats = $connection->sendRequest('test/stats', null);
+            self::assertFalse($stats->isError, (string) $stats->errorMessage);
+            self::assertSame(['big' => 0, 'bad' => 0], $stats->result, 'the notification went out unprotected');
+            self::assertTrue($connection->isConnected(), 'a refused exchange must not cost the session');
+        } finally {
+            $connection->disconnect();
+            foreach (glob($dir . '/*') ?: [] as $file) {
+                @unlink($file);
+            }
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * A dead holder's untouched frame is owed, and the next holder's in-flight
+     * mark for it does not land (a transient ENOSPC/EDQUOT). Nothing of it is
+     * written, so it must stay owed with NO write in flight — the record the
+     * exchange's closing store puts on disk. Leaving the unrecorded in-flight
+     * mark in memory let that closing store record a write that never
+     * happened, and the next holder latched the session broken for good.
+     */
+    public function testAnOwedFrameWhoseInflightMarkFailsStaysOwedWithNoWriteInFlight(): void
+    {
+        $connection = $this->connection();
+        $lock = $this->faultyLock($connection);
+
+        $owed = self::framed(['jsonrpc' => '2.0', 'method' => 'test/big', 'params' => ['blob' => 'owed']]);
+        self::assertTrue($lock->storeFrame($owed));
+        self::assertTrue($lock->store($lock->load()->withFrame(strlen($owed), 0, false)));
+
+        self::$failStore = self::failOnce(static fn (LspExchangeState $s): bool => $s->frameInflight);
+        $refused = $connection->sendRequest('test/fast', null);
+        self::$failStore = null;
+
+        self::assertTrue($refused->isError, 'the owed frame went out without its in-flight mark');
+        $left = $this->sharedState();
+        self::assertFalse($left->frameInflight, 'a write that never happened is recorded as in flight');
+        self::assertFalse($left->broken);
+        self::assertTrue($left->owesFrame(), 'the untouched frame must stay owed');
+
+        self::assertSame('fast', self::n($connection->sendRequest('test/fast', null)));
+        self::assertTrue($connection->isConnected(), 'the next holder latched the session broken');
+        $stats = $connection->sendRequest('test/stats', null);
+        self::assertSame(['big' => 1, 'bad' => 0], $stats->result, 'the owed frame was not finished exactly once');
+    }
+
+    /** Our own frame whose in-flight mark does not land is not sent, and nothing stays owed. */
+    public function testAnOwnFrameWhoseInflightMarkFailsIsNotSent(): void
+    {
+        $connection = $this->connection();
+        $this->faultyLock($connection);
+
+        self::$failStore = self::failOnce(static fn (LspExchangeState $s): bool => $s->frameInflight);
+        $connection->sendNotification('test/big', ['blob' => 'unmarked']);
+        self::$failStore = null;
+
+        $left = $this->sharedState();
+        self::assertSame(0, $left->frameLength, 'an abandoned message of our own stays owed');
+        self::assertFalse($left->broken);
+
+        self::assertSame('fast', self::n($connection->sendRequest('test/fast', null)));
+        $stats = $connection->sendRequest('test/stats', null);
+        self::assertSame(['big' => 0, 'bad' => 0], $stats->result, 'the frame went out without its in-flight mark');
+        self::assertTrue($connection->isConnected());
+    }
+
+    /** Our own frame whose start record does not land is not sent, and nothing stays owed. */
+    public function testAnOwnFrameWhoseStartRecordFailsIsNotSent(): void
+    {
+        $connection = $this->connection();
+        $this->faultyLock($connection);
+
+        self::$failStore = self::failOnce(static fn (LspExchangeState $s): bool => $s->frameLength > 0);
+        $connection->sendNotification('test/big', ['blob' => 'unrecorded']);
+        self::$failStore = null;
+
+        $left = $this->sharedState();
+        self::assertSame(0, $left->frameLength);
+        self::assertFalse($left->broken);
+
+        self::assertSame('fast', self::n($connection->sendRequest('test/fast', null)));
+        $stats = $connection->sendRequest('test/stats', null);
+        self::assertSame(['big' => 0, 'bad' => 0], $stats->result, 'the frame went out without its start record');
+        self::assertTrue($connection->isConnected());
+    }
+
+    /**
+     * The READING mark does not land: the reply is not read (a holder killed
+     * mid-frame would otherwise leave a CLEAN record over a stdout that no
+     * longer starts at a boundary), and the session survives — the unread
+     * reply carries an id nobody waits for and the next reader drops it.
+     */
+    public function testARequestWhoseReadingMarkFailsIsAnErrorAndTheSessionSurvives(): void
+    {
+        $connection = $this->connection();
+        $this->faultyLock($connection);
+
+        self::$failStore = self::failOnce(
+            static fn (LspExchangeState $s): bool => $s->phase === LspExchangeState::PHASE_READING
+        );
+        $unread = $connection->sendRequest('test/echo', ['n' => 'unread']);
+        self::$failStore = null;
+
+        self::assertTrue($unread->isError, 'the reply was read without the READING mark: ' . json_encode($unread->result));
+        self::assertFalse($unread->isTimeout(), 'the refusal must be immediate, not a wait');
+        self::assertFalse($this->sharedState()->broken);
+
+        self::assertSame('after', self::n($connection->sendRequest('test/echo', ['n' => 'after'])));
+        self::assertTrue($connection->isConnected());
+    }
+
     // =========================================================================
     // Fixtures
     // =========================================================================
+
+    private const FAULTY_SCHEME = 'lspfaultystore';
+
+    /** What the wrapper strips to reach the real path. */
+    public const FAULTY_URL_PREFIX = self::FAULTY_SCHEME . '://';
+
+    /**
+     * Decides, per state store the connection makes, whether it fails. Read
+     * by the stream wrapper {@see faultyLock()} installs.
+     *
+     * @var (\Closure(LspExchangeState): bool)|null
+     */
+    public static ?\Closure $failStore = null;
+
+    private ?string $faultyDir = null;
+
+    /**
+     * Move the connection's lock set behind a stream wrapper that passes every
+     * operation through to a private directory, except a state store
+     * {@see $failStore} rejects: its rename fails, as one on a full or
+     * read-only temp filesystem would. A read-only directory cannot do this —
+     * it fails EVERY store, so the branches after the first never run.
+     */
+    private function faultyLock(LspConnection $connection): LspExchangeLock
+    {
+        if (!in_array(self::FAULTY_SCHEME, stream_get_wrappers(), true)) {
+            stream_wrapper_register(self::FAULTY_SCHEME, self::faultyWrapperClass());
+        }
+
+        $this->faultyDir = sys_get_temp_dir() . '/lsp-faulty-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        mkdir($this->faultyDir, 0700);
+
+        $property = new \ReflectionProperty(LspConnection::class, 'lock');
+        $original = $property->getValue($connection);
+        self::assertInstanceOf(LspExchangeLock::class, $original);
+        $lock = LspExchangeLock::new('faulty', self::FAULTY_SCHEME . '://' . $this->faultyDir);
+        $property->setValue($connection, $lock);
+        $original->destroy();
+
+        return $lock;
+    }
+
+    /**
+     * @param \Closure(LspExchangeState): bool $matches
+     *
+     * @return \Closure(LspExchangeState): bool true for the first state that matches, never after
+     */
+    private static function failOnce(\Closure $matches): \Closure
+    {
+        $spent = false;
+
+        return static function (LspExchangeState $state) use ($matches, &$spent): bool {
+            if ($spent || !$matches($state)) {
+                return false;
+            }
+
+            return $spent = true;
+        };
+    }
+
+    /** @param array<string, mixed> $message */
+    private static function framed(array $message): string
+    {
+        $json = (string) json_encode($message);
+
+        return 'Content-Length: ' . strlen($json) . "\r\n\r\n" . $json;
+    }
+
+    /** @return class-string */
+    private static function faultyWrapperClass(): string
+    {
+        $wrapper = new class () {
+            /** @var resource|null */
+            public $context;
+
+            /** @var resource|null */
+            private $handle;
+
+            private static function real(string $url): string
+            {
+                return substr($url, strlen(LspConnectionForkSafetyTest::FAULTY_URL_PREFIX));
+            }
+
+            public function stream_open(string $url, string $mode, int $options, ?string &$opened): bool
+            {
+                $handle = @fopen(self::real($url), $mode);
+                $this->handle = $handle === false ? null : $handle;
+
+                return $this->handle !== null;
+            }
+
+            public function stream_read(int $count): string|false
+            {
+                return fread($this->handle, $count);
+            }
+
+            public function stream_write(string $data): int
+            {
+                return (int) fwrite($this->handle, $data);
+            }
+
+            public function stream_eof(): bool
+            {
+                return feof($this->handle);
+            }
+
+            public function stream_flush(): bool
+            {
+                return fflush($this->handle);
+            }
+
+            public function stream_close(): void
+            {
+                fclose($this->handle);
+            }
+
+            public function stream_seek(int $offset, int $whence): bool
+            {
+                return fseek($this->handle, $offset, $whence) === 0;
+            }
+
+            public function stream_tell(): int
+            {
+                return (int) ftell($this->handle);
+            }
+
+            public function stream_truncate(int $size): bool
+            {
+                return ftruncate($this->handle, $size);
+            }
+
+            public function stream_lock(int $operation): bool
+            {
+                return flock($this->handle, $operation);
+            }
+
+            /** @return array<int|string, int>|false */
+            public function stream_stat(): array|false
+            {
+                return fstat($this->handle);
+            }
+
+            public function stream_set_option(int $option, int $arg1, ?int $arg2): bool
+            {
+                return false;
+            }
+
+            public function stream_metadata(string $url, int $option, mixed $value): bool
+            {
+                return $option === STREAM_META_ACCESS ? chmod(self::real($url), (int) $value) : false;
+            }
+
+            /** @return array<int|string, int>|false */
+            public function url_stat(string $url, int $flags): array|false
+            {
+                return @stat(self::real($url));
+            }
+
+            public function unlink(string $url): bool
+            {
+                return @unlink(self::real($url));
+            }
+
+            public function rename(string $from, string $to): bool
+            {
+                $source = self::real($from);
+                $rule = LspConnectionForkSafetyTest::$failStore;
+                if ($rule !== null && str_ends_with($to, '.state')
+                    && $rule(LspExchangeState::decode((string) file_get_contents($source)))) {
+                    return false;
+                }
+
+                return rename($source, self::real($to));
+            }
+        };
+
+        return $wrapper::class;
+    }
 
     private function connection(): LspConnection
     {

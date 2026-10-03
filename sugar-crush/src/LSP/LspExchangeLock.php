@@ -49,8 +49,16 @@ namespace SugarCraft\Crush\LSP;
  * SIGKILLed, OOM-killed or loses its terminal leaves the lock and its three
  * sidecars per server in the temp dir, forever. The lock's name therefore
  * records who owns it — `sugar-crush-lsp-lock-<pid-namespace>-<owner-pid>-<random>`
- * — and every {@see create()} first sweeps the sets whose owner is gone
+ * — and every {@see new()} first sweeps the sets whose owner is gone
  * ({@see sweepStale()}).
+ *
+ * A STATE WRITE THAT FAILS (a full or read-only temp filesystem) is reported,
+ * never assumed: {@see store()} and {@see storeFrame()} return false. The
+ * rename keeps the old contents whole, so the failure cannot tear a file — but
+ * the old contents are then STALE, and a caller that acted as if its phase or
+ * frame record had landed would leave the next holder trusting a stream this
+ * one may die half-way into. A state file that is missing outright loads as
+ * dirty for the same reason (see {@see load()}).
  */
 final class LspExchangeLock
 {
@@ -96,7 +104,7 @@ final class LspExchangeLock
      *         connection without exclusion is the defect this class closes, so
      *         it is refused rather than silently run unlocked
      */
-    public static function create(string $label, ?string $dir = null): self
+    public static function new(string $label, ?string $dir = null): self
     {
         $dir = rtrim($dir ?? sys_get_temp_dir(), '/');
         $pid = (int) getmypid();
@@ -136,6 +144,18 @@ final class LspExchangeLock
         }
 
         return $lock;
+    }
+
+    /**
+     * Former name of {@see new()}, kept so callers that still use it keep
+     * working; the repo's factory rule names the default root `::new()`, as
+     * the sugar-mcp twin {@see \SugarCraft\Mcp\ExchangeLock::new()} now does.
+     *
+     * @deprecated use {@see new()}
+     */
+    public static function create(string $label, ?string $dir = null): self
+    {
+        return self::new($label, $dir);
     }
 
     /**
@@ -348,27 +368,49 @@ final class LspExchangeLock
     }
 
     /**
-     * The state the previous holder left. A missing file reads as a fresh
-     * connection. Also safe WITHOUT the lock (a predicate reading only the
-     * {@see LspExchangeState::$broken} latch), because stores are atomic
-     * renames: an unlocked reader sees one whole state or another.
+     * The state the previous holder left. Also safe WITHOUT the lock (a
+     * predicate reading only the {@see LspExchangeState::$broken} latch),
+     * because stores are atomic renames: an unlocked reader sees one whole
+     * state or another.
+     *
+     * A MISSING or unreadable state file reads as a holder that died
+     * mid-read ({@see LspExchangeState::PHASE_READING}), not as a fresh
+     * connection: {@see new()} always writes one before it returns, and stores
+     * replace it by rename, so a missing file is one removed under the
+     * connection (a temp-dir cleaner, a hand) and the stream position it
+     * recorded is unknown. Dirty costs the next reader a resynchronisation;
+     * fresh could hand it a stdout that starts mid-frame — the same choice
+     * {@see LspExchangeState::decode()} makes for a file it cannot read.
      */
     public function load(): LspExchangeState
     {
         $raw = @file_get_contents($this->statePath());
 
-        return $raw === false ? LspExchangeState::new() : LspExchangeState::decode($raw);
+        return $raw === false
+            ? LspExchangeState::new()->withPhase(LspExchangeState::PHASE_READING)
+            : LspExchangeState::decode($raw);
     }
 
-    public function store(LspExchangeState $state): void
+    /**
+     * Replace the shared state.
+     *
+     * @return bool false when it did not land — the file then still holds the
+     *         previous state, whole but stale, and callers must not act as if
+     *         this one were recorded
+     */
+    public function store(LspExchangeState $state): bool
     {
-        $this->replace($this->statePath(), $state->encode());
+        return $this->replace($this->statePath(), $state->encode());
     }
 
-    /** Record the bytes of the frame about to be written (see {@see LspExchangeState}). */
-    public function storeFrame(string $frame): void
+    /**
+     * Record the bytes of the frame about to be written (see {@see LspExchangeState}).
+     *
+     * @return bool false when the record did not land (see {@see store()})
+     */
+    public function storeFrame(string $frame): bool
     {
-        $this->replace($this->framePath(), $frame);
+        return $this->replace($this->framePath(), $frame);
     }
 
     public function loadFrame(): string

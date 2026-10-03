@@ -193,6 +193,37 @@ final class ClaudeCodeMcpServer implements McpServer
             throw $failure;
         }
 
+        // The same gate as `initialize`: an ERROR answer (session- or
+        // capability-gated servers answer -32601 here) or an answer with no
+        // result is not "up, 0 tools" — that shape looks connected, exposes
+        // nothing, and throws the server's own diagnosis away. The stdio
+        // sibling's library start() refuses it the same way.
+        if ($response->error !== null || !$response->resultSet) {
+            $this->client->disconnect();
+
+            // Read off the envelope directly: the server is third-party, and
+            // McpMessage::errorMessage() is typed ?string over a member a
+            // server may send as a number.
+            $code = $response->error['code'] ?? null;
+            $code = is_int($code) || is_string($code) ? $code : null;
+            $message = $response->error['message'] ?? null;
+            $message = is_string($message) ? $message : null;
+
+            throw new \RuntimeException(sprintf(
+                'Failed to start MCP server: %s — tools/list refused%s: %s',
+                $this->name,
+                $code === null ? '' : " ({$code})",
+                $message !== null && $message !== ''
+                    ? $message
+                    : ($response->error !== null
+                        // Partial output: a decoded error may carry INF (a
+                        // `1e999` on the wire), and the diagnosis must still
+                        // say something.
+                        ? (string) json_encode($response->error, JSON_PARTIAL_OUTPUT_ON_ERROR)
+                        : 'the answer carried no result'),
+            ));
+        }
+
         $toolDefs = $response->result['tools'] ?? [];
         if (!is_array($toolDefs)) {
             $toolDefs = [];

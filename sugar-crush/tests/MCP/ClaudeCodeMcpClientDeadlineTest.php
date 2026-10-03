@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\MCP;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\ClaudeCodeMcpClient;
 use SugarCraft\Crush\MCP\ClaudeCodeMcpServer;
+use SugarCraft\Mcp\ExchangeLock;
 
 /**
  * Audit MCP-3: {@see ClaudeCodeMcpClient} waited for every response with a
@@ -125,6 +126,10 @@ final class ClaudeCodeMcpClientDeadlineTest extends TestCase
                 continue;
             }
             if ($method === 'tools/list') {
+                if ($mode === 'listrefuse') {
+                    $send(['jsonrpc' => '2.0', 'id' => $msg['id'], 'error' => ['code' => -32601, 'message' => 'tools are session-gated']]);
+                    continue;
+                }
                 $lists++;
                 if ($lists === 1) {
                     usleep((int) $listMs * 1000);
@@ -135,6 +140,25 @@ final class ClaudeCodeMcpClientDeadlineTest extends TestCase
             } elseif ($method === 'tools/call') {
                 $name = (string) ($msg['params']['name'] ?? '');
                 if ($name === 'exit') {
+                    exit(0);
+                }
+                if ($name === 'orphan-chatty' || $name === 'orphan-deaf') {
+                    // The direct child dies while a helper it forked keeps the
+                    // inherited pipes open: stdout never reaches EOF, stdin is
+                    // never read, and the chatty one logs to stderr faster than
+                    // any read poll.
+                    $helper = pcntl_fork();
+                    if ($helper === 0) {
+                        $until = microtime(true) + 20.0;
+                        while (microtime(true) < $until) {
+                            if ($name === 'orphan-chatty') {
+                                fwrite(STDERR, "helper still logging\n");
+                            }
+                            usleep(20000);
+                        }
+                        exit(0);
+                    }
+                    $note('helper ' . $helper);
                     exit(0);
                 }
                 if ($name === 'slow') {
@@ -160,6 +184,14 @@ final class ClaudeCodeMcpClientDeadlineTest extends TestCase
 
     protected function tearDown(): void
     {
+        // A helper the fixture forked outlives its parent by design and is in
+        // no process group disconnect() still signals once the leader is gone.
+        if (\function_exists('posix_kill')) {
+            foreach (preg_grep('/^helper \d+$/', $this->log()) ?: [] as $line) {
+                posix_kill((int) substr($line, 7), 9);
+            }
+        }
+
         foreach (['server.php', 'wire.log'] as $file) {
             @unlink($this->workDir . '/' . $file);
         }
@@ -371,6 +403,205 @@ final class ClaudeCodeMcpClientDeadlineTest extends TestCase
             self::assertNotNull($caught, 'a call whose server exited must fail');
             self::assertStringContainsString('closed its stdout', $caught->getMessage());
             self::assertLessThan(3.0, $elapsed, 'the dead server was waited on rather than noticed');
+        } finally {
+            $client->disconnect();
+        }
+    }
+
+    /**
+     * The start-time `tools/list` is gated like `initialize`: an ERROR answer
+     * (a session- or capability-gated server answers -32601 here) is not "up,
+     * 0 tools" — that shape looks connected, exposes nothing, and throws the
+     * server's own diagnosis away. Same gate as sugar-mcp StdioMcpServer::start().
+     */
+    public function testAToolsListErrorIsAStartFailureAndReapsTheChild(): void
+    {
+        $server = $this->grantedServer(0, 0, 'listrefuse');
+
+        $caught = null;
+        try {
+            $server->start();
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        } finally {
+            $up = $server->isUp();
+            $server->stop();
+        }
+
+        self::assertNotNull($caught, 'a server that refused tools/list started as "up, 0 tools"');
+        self::assertStringContainsString('tools/list refused (-32601)', $caught->getMessage());
+        self::assertStringContainsString('tools are session-gated', $caught->getMessage());
+        self::assertFalse($up, 'the refused server was left running');
+        $this->assertTheFixtureIsGone();
+    }
+
+    /**
+     * A tool call has no deadline, so liveness is its only bound — and pipe EOF
+     * is not liveness: a helper the server forked keeps stdout open after the
+     * server is gone. With that helper logging to stderr more often than one
+     * read poll, the select never went idle, the idle-only liveness check never
+     * ran, and the call waited out the helper (20s here, forever in general).
+     */
+    public function testADeadServerIsNoticedWhileAForkedHelperKeepsStderrBusy(): void
+    {
+        if (!\function_exists('pcntl_fork')) {
+            self::markTestSkipped('the fixture forks its helper with ext-pcntl');
+        }
+
+        $client = $this->client('');
+
+        try {
+            $client->connect();
+
+            $caught = null;
+            $started = hrtime(true);
+            try {
+                $client->callTool('orphan-chatty');
+            } catch (\RuntimeException $e) {
+                $caught = $e;
+            }
+            $elapsed = (hrtime(true) - $started) / 1e9;
+
+            self::assertNotNull($caught, 'a call whose server died must fail');
+            self::assertStringContainsString('the server exited', $caught->getMessage());
+            self::assertLessThan(5.0, $elapsed, 'the dead server was waited on behind its chatty helper');
+            self::assertStringContainsString('helper still logging', $client->stderrTail(), 'the helper never logged, so this row did not measure a busy stderr');
+        } finally {
+            $client->disconnect();
+        }
+    }
+
+    /**
+     * The write side of the same law: a request larger than the pipe buffer to
+     * a server that is gone, while a helper holds its stdin without reading,
+     * fails on the server's death rather than on the 15s write-idle bound.
+     */
+    public function testAWriteToADeadServerFailsOnLivenessNotOnTheIdleBound(): void
+    {
+        if (!\function_exists('pcntl_fork')) {
+            self::markTestSkipped('the fixture forks its helper with ext-pcntl');
+        }
+
+        $client = $this->client('');
+
+        try {
+            $client->connect();
+
+            $died = null;
+            try {
+                $client->callTool('orphan-deaf');
+            } catch (\RuntimeException $e) {
+                $died = $e;
+            }
+            self::assertNotNull($died, 'a call whose server died must fail');
+            self::assertStringContainsString('the server exited', $died->getMessage());
+
+            $caught = null;
+            $started = hrtime(true);
+            try {
+                $client->callTool('big', ['blob' => str_repeat('x', 200000)]);
+            } catch (\RuntimeException $e) {
+                $caught = $e;
+            }
+            $elapsed = (hrtime(true) - $started) / 1e9;
+
+            self::assertNotNull($caught, 'a write the dead server never read must fail');
+            self::assertStringContainsString('Failed to write to MCP process stdin', $caught->getMessage());
+            self::assertLessThan(5.0, $elapsed, 'the write waited out its idle bound instead of noticing the dead server');
+        } finally {
+            $client->disconnect();
+        }
+    }
+
+    /**
+     * A FORKED caller cannot ask proc_get_status() (the server is not its
+     * child), and signal 0 answers "alive" for an unreaped ZOMBIE — which is
+     * what a server that died while the owner is busy elsewhere stays. The
+     * probe therefore reads /proc: Z/X is dead, and a start time that no
+     * longer matches the one recorded at connect() is a reused pid.
+     */
+    public function testAForkedCallerSeesAZombieOrAReusedPidAsDead(): void
+    {
+        if (!\function_exists('posix_kill') || !is_dir('/proc/self')) {
+            self::markTestSkipped('needs ext-posix and procfs');
+        }
+
+        $client = $this->client('');
+        $owner = new \ReflectionProperty(ClaudeCodeMcpClient::class, 'ownerPid');
+        $realOwner = 0;
+
+        try {
+            $client->connect();
+            $realOwner = $owner->getValue($client);
+            $serverPid = (new \ReflectionProperty(ClaudeCodeMcpClient::class, 'serverPid'))->getValue($client);
+            $ticks = new \ReflectionProperty(ClaudeCodeMcpClient::class, 'serverStartTicks');
+            $realTicks = $ticks->getValue($client);
+            self::assertGreaterThan(0, $realTicks, 'connect() did not record the server\'s start time');
+
+            // An owner pid that is not ours is exactly what a pcntl_fork()ed caller sees.
+            $owner->setValue($client, $realOwner + 1);
+            self::assertTrue($client->isUp(), 'a live server read as dead from a forked caller');
+
+            $ticks->setValue($client, $realTicks + 1);
+            self::assertFalse($client->isUp(), 'a pid now held by a process started at another time read as the server');
+            $ticks->setValue($client, $realTicks);
+
+            posix_kill($serverPid, 9);
+            $until = microtime(true) + 5.0;
+            while (microtime(true) < $until && !str_contains((string) @file_get_contents("/proc/{$serverPid}/stat"), ') Z ')) {
+                usleep(5000);
+            }
+            self::assertStringContainsString(') Z ', (string) @file_get_contents("/proc/{$serverPid}/stat"), 'the killed server never became a zombie');
+
+            self::assertFalse($client->isUp(), 'an unreaped dead server read as alive from a forked caller');
+        } finally {
+            if ($realOwner !== 0) {
+                $owner->setValue($client, $realOwner);
+            }
+            $client->disconnect();
+        }
+    }
+
+    /**
+     * ExchangeLock::markPhase() now reports a write that did not land (a full
+     * or read-only temp filesystem). An exchange that cannot record its W
+     * marker runs unprotected — a holder killed mid-line would leave the next
+     * one trusting a stream it half-wrote — so it is a FAILED exchange, the
+     * same rule sugar-mcp StdioMcpServer::exchange() applies, and nothing goes
+     * on the wire.
+     */
+    public function testAPhaseMarkerThatCannotBeRecordedFailsTheExchange(): void
+    {
+        $client = $this->client('');
+
+        try {
+            $client->connect();
+
+            $lock = (new \ReflectionProperty(ClaudeCodeMcpClient::class, 'lock'))->getValue($client);
+            self::assertInstanceOf(ExchangeLock::class, $lock);
+
+            // A read-only handle on the real lock file: flock still works,
+            // every state write fails.
+            $readOnly = fopen($lock->path, 'r');
+            self::assertIsResource($readOnly);
+            (new \ReflectionProperty(ExchangeLock::class, 'handle'))->setValue($lock, $readOnly);
+            (new \ReflectionProperty(ExchangeLock::class, 'handlePid'))->setValue($lock, (int) getmypid());
+
+            $caught = null;
+            try {
+                $client->callTool('unrecorded');
+            } catch (\RuntimeException $e) {
+                $caught = $e;
+            }
+
+            self::assertNotNull($caught, 'an exchange ran with a W marker it could not record');
+            self::assertStringContainsString('could not be recorded', $caught->getMessage());
+            self::assertStringNotContainsString('unrecorded', implode("\n", $this->log()), 'the request went out unprotected');
+
+            // A writable handle again: the refused exchange cost nothing else.
+            $lock->close();
+            $reply = $client->callTool('fast');
+            self::assertSame('done:fast', $reply->result['content'][0]['text'] ?? null);
         } finally {
             $client->disconnect();
         }

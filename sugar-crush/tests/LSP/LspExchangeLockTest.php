@@ -32,7 +32,7 @@ final class LspExchangeLockTest extends TestCase
             self::markTestSkipped('cross-process exclusion needs ext-pcntl to fork a second process');
         }
 
-        $this->lock = LspExchangeLock::create('test');
+        $this->lock = LspExchangeLock::new('test');
     }
 
     protected function tearDown(): void
@@ -70,6 +70,62 @@ final class LspExchangeLockTest extends TestCase
         self::assertSame(LspExchangeState::PHASE_READING, $lock->load()->phase);
         self::assertSame(3, $lock->load()->noteSeq);
         self::assertSame("Content-Length: 2\r\n\r\n{}", $lock->loadFrame());
+    }
+
+    public function testTheDeprecatedCreateNameStillBuildsAWorkingLock(): void
+    {
+        $lock = LspExchangeLock::create('probe', $this->privateDir());
+
+        try {
+            self::assertStringStartsWith(LspExchangeLock::FILE_PREFIX, basename($lock->path));
+            self::assertSame(LspExchangeState::PHASE_CLEAN, $lock->load()->phase);
+        } finally {
+            $lock->destroy();
+        }
+    }
+
+    public function testStateWritesReportWhetherTheyLanded(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root writes through a read-only directory');
+        }
+
+        $dir = $this->privateDir();
+        $lock = LspExchangeLock::new('probe', $dir);
+
+        try {
+            self::assertTrue($lock->store(LspExchangeState::new()->withNoteSeq(1)));
+            self::assertTrue($lock->storeFrame('kept'));
+
+            // The temp-then-rename needs a writable directory: a read-only one
+            // fails every store the way a full or read-only temp filesystem does.
+            chmod($dir, 0500);
+            try {
+                self::assertFalse($lock->store(LspExchangeState::new()->withNoteSeq(2)), 'a store that did not land was reported as stored');
+                self::assertFalse($lock->storeFrame('lost'), 'a frame record that did not land was reported as stored');
+            } finally {
+                chmod($dir, 0700);
+            }
+
+            // The rename keeps the old contents whole: stale, never torn.
+            self::assertSame(1, $lock->load()->noteSeq);
+            self::assertSame('kept', $lock->loadFrame());
+        } finally {
+            $lock->destroy();
+        }
+    }
+
+    public function testAMissingStateFileLoadsAsDirtyNotAsAFreshConnection(): void
+    {
+        // new() always writes the state before it returns, and stores replace
+        // it by rename, so a missing file was removed under the connection and
+        // the stream position it recorded is unknown: only a dirty reading
+        // makes the next holder resynchronise instead of trusting stdout.
+        $lock = $this->lock();
+        self::assertTrue(unlink($lock->path . '.state'));
+
+        self::assertSame(LspExchangeState::PHASE_READING, $lock->load()->phase);
+        self::assertSame('', $lock->load()->buffer);
     }
 
     public function testAnotherProcessHoldingTheLockBoundsTheWaitByTheDeadline(): void
@@ -157,7 +213,7 @@ final class LspExchangeLockTest extends TestCase
 
     public function testTheLockNameRecordsTheOwnerAndTheFileIsPrivate(): void
     {
-        $lock = LspExchangeLock::create('probe', $this->privateDir());
+        $lock = LspExchangeLock::new('probe', $this->privateDir());
 
         try {
             [, $owner] = $this->nameParts($lock->path);
@@ -179,7 +235,7 @@ final class LspExchangeLockTest extends TestCase
         $pid = $this->forkTracked();
         self::assertNotSame(-1, $pid, 'fork failed');
         if ($pid === 0) {
-            $orphan = LspExchangeLock::create('dying', $dir);
+            $orphan = LspExchangeLock::new('dying', $dir);
             $orphan->appendNote('window/logMessage', ['message' => 'hi']);
             $orphan->storeFrame("Content-Length: 2\r\n\r\n{}");
             file_put_contents($orphan->path . '.state.' . getmypid() . '.0a0b0c0d', 'torn');
@@ -193,7 +249,7 @@ final class LspExchangeLockTest extends TestCase
         unlink($made);
         self::assertCount(5, glob($orphanPath . '*') ?: [], 'the killed owner left its lock, three sidecars and a temp');
 
-        $lock = LspExchangeLock::create('next', $dir);
+        $lock = LspExchangeLock::new('next', $dir);
 
         try {
             self::assertSame([], glob($orphanPath . '*') ?: [], 'the dead owner\'s whole set is reclaimed at the next connection start');
@@ -322,10 +378,10 @@ final class LspExchangeLockTest extends TestCase
         return $this->dir;
     }
 
-    /** This process' pid-namespace tag, read off the name create() gives a lock. */
+    /** This process' pid-namespace tag, read off the name new() gives a lock. */
     private function namespace(string $dir): string
     {
-        $probe = LspExchangeLock::create('ns-probe', $dir);
+        $probe = LspExchangeLock::new('ns-probe', $dir);
         [$namespace] = $this->nameParts($probe->path);
         $probe->destroy();
 

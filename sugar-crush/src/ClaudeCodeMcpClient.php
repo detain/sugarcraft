@@ -324,6 +324,16 @@ final class ClaudeCodeMcpClient
      */
     private const READ_POLL_MICROS = 250000;
 
+    /**
+     * The longest a read or write may go without asking whether the server
+     * still runs, on passes the idle check never sees: stderr chatter wakes
+     * {@see readFrame()}'s select every time, and a full stdin keeps
+     * {@see writeAll()} spinning on its short write poll. Rate-limited rather
+     * than per-pass so a chatty LIVE server costs no proc_get_status() per
+     * log line. One read poll's worth, as in sugar-mcp's StdioMcpServer.
+     */
+    private const LIVENESS_CHECK_SECONDS = self::READ_POLL_MICROS / 1_000_000;
+
     /** Protocol version the `initialize` request advertises — the stdio sibling's. */
     private const PROTOCOL_VERSION = \SugarCraft\Mcp\StdioMcpServer::PROTOCOL_VERSION;
 
@@ -403,6 +413,13 @@ final class ClaudeCodeMcpClient
     /** The child's pid, for liveness probes from processes that are not its parent. */
     private int $serverPid = 0;
 
+    /**
+     * The child's /proc start time captured at {@see connect()} (0 where
+     * procfs is absent), so a forked caller can tell the server from a later
+     * process that reused its pid after the owner reaped it.
+     */
+    private int $serverStartTicks = 0;
+
     /** Seconds {@see connect()} and {@see listTools()} may each wait; see {@see HANDSHAKE_TIMEOUT_SECONDS}. */
     private readonly float $handshakeTimeoutSeconds;
 
@@ -478,7 +495,7 @@ final class ClaudeCodeMcpClient
         // StdioMcpServer::start() gives it: an unresolvable program under
         // the wrapper would put a PHP warning over the TUI on a path that
         // already reports itself properly below.
-        $lock = ExchangeLock::create('claude-mcp');
+        $lock = ExchangeLock::new('claude-mcp');
 
         /** @var array{0: resource, 1: resource, 2: resource} */
         $processHandles = @proc_open(
@@ -498,6 +515,7 @@ final class ClaudeCodeMcpClient
         $this->lock = $lock;
         $this->ownerPid = (int) getmypid();
         $this->serverPid = (int) proc_get_status($processHandles)['pid'];
+        $this->serverStartTicks = self::procStat($this->serverPid)['startTicks'] ?? 0;
         $this->ids->claim();
         $this->process = $processHandles;
         $this->pipes = $pipes;
@@ -668,7 +686,14 @@ final class ClaudeCodeMcpClient
 
         return $this->underLock($deadline, true, function () use ($request, $id, $deadline, $failureMessage): McpMessage {
             $this->sendMessage($request);
-            $this->lock?->markPhase(ExchangeLock::PHASE_READING);
+
+            // Same law as the W mark in underLock(): an unrecorded R would let
+            // the next holder trust a stdout this one may die half-way into.
+            if (!($this->lock?->markPhase(ExchangeLock::PHASE_READING) ?? true)) {
+                throw new RuntimeException(
+                    "{$failureMessage}: the exchange state could not be recorded in the lock file",
+                );
+            }
 
             while (true) {
                 try {
@@ -742,7 +767,17 @@ final class ClaudeCodeMcpClient
                 $dirty = $phase !== ExchangeLock::PHASE_CLEAN;
                 $this->readBuffer = $dirty ? '' : $buffer;
                 $this->stdinFragmentPending = $phase === ExchangeLock::PHASE_WRITING;
-                $lock->markPhase(ExchangeLock::PHASE_WRITING);
+
+                // Unrecorded, a W marker cannot tell the next holder that this
+                // one died mid-line — running unprotected is the defect the
+                // marker exists to close, so a failed mark (a full or
+                // read-only temp filesystem) fails the exchange before a byte
+                // goes out. Same rule as sugar-mcp StdioMcpServer::exchange().
+                if (!$lock->markPhase(ExchangeLock::PHASE_WRITING)) {
+                    throw new RuntimeException(
+                        'MCP server exchange state could not be recorded in the lock file; nothing was sent',
+                    );
+                }
             }
 
             $result = $body();
@@ -794,6 +829,7 @@ final class ClaudeCodeMcpClient
     {
         $scannedFrom = 0;
         $consecutiveSelectFailures = 0;
+        $livenessCheckedAt = self::nowSeconds();
 
         while (($newline = strpos($this->readBuffer, "\n", $scannedFrom)) === false) {
             // Bytes already searched for "\n" are not searched again, so a huge
@@ -843,6 +879,7 @@ final class ClaudeCodeMcpClient
             }
             $consecutiveSelectFailures = 0;
 
+            $held = strlen($this->readBuffer);
             $atEof = $this->fillReadBuffer();
             if (strpos($this->readBuffer, "\n", $scannedFrom) !== false) {
                 continue;
@@ -852,10 +889,28 @@ final class ClaudeCodeMcpClient
                 throw new RuntimeException('the server closed its stdout');
             }
 
-            // A timed-out select with the child gone: one last read for anything
-            // it wrote on the way out, then give up rather than wait for an EOF
-            // a surviving grandchild holding the pipe would never deliver.
-            if ($ready === 0 && !$this->serverIsRunning()) {
+            if (strlen($this->readBuffer) > $held) {
+                // stdout made progress: the server (or what speaks for it) is
+                // talking, so this pass is no reason to probe.
+                $livenessCheckedAt = self::nowSeconds();
+
+                continue;
+            }
+
+            // stdout gave nothing this pass. A timed-out select is checked at
+            // once; a pass woken only by STDERR is checked too, at most once per
+            // LIVENESS_CHECK_SECONDS — a helper the server forked inherits
+            // stderr as well as stdout, and one that logs more often than a
+            // poll never lets the select time out, so an idle-only check would
+            // never run and a deadline-less tool call would wait out the helper.
+            if ($ready !== 0 && self::nowSeconds() - $livenessCheckedAt < self::LIVENESS_CHECK_SECONDS) {
+                continue;
+            }
+
+            // The child gone: one last read for anything it wrote on the way
+            // out, then give up rather than wait for an EOF a surviving
+            // grandchild holding the pipe would never deliver.
+            if (!$this->serverIsRunning()) {
                 $this->fillReadBuffer();
                 if (strpos($this->readBuffer, "\n", $scannedFrom) !== false) {
                     continue;
@@ -863,6 +918,8 @@ final class ClaudeCodeMcpClient
 
                 throw new RuntimeException('the server exited');
             }
+
+            $livenessCheckedAt = self::nowSeconds();
         }
 
         $line = substr($this->readBuffer, 0, $newline);
@@ -904,6 +961,15 @@ final class ClaudeCodeMcpClient
      * child cannot (waitpid() fails with ECHILD and PHP reports "not running"),
      * so it probes the pid captured at connect with signal 0, or assumes up
      * without ext-posix and lets the pipes report a dead server.
+     *
+     * Signal 0 alone is not enough there: a server that died while the owner
+     * is busy elsewhere (the TUI parent blocks in waitpid() on the turn, never
+     * in proc_get_status()) stays an unreaped ZOMBIE, and kill(zombie, 0)
+     * succeeds — so a forked turn would wait out a helper still holding the
+     * pipes. Where /proc exists the probe therefore also reads the pid's state
+     * and treats Z/X as dead, and a start time that no longer matches the one
+     * recorded at connect() as a reused pid, i.e. dead too. Without /proc the
+     * signal-0 answer stands. The same probe as sugar-mcp's StdioMcpServer.
      */
     private function serverIsRunning(): bool
     {
@@ -919,7 +985,57 @@ final class ClaudeCodeMcpClient
             return true;
         }
 
-        return posix_kill($this->serverPid, 0);
+        if (!posix_kill($this->serverPid, 0)) {
+            return false;
+        }
+
+        $stat = self::procStat($this->serverPid);
+        if ($stat === null) {
+            // No procfs here, or the entry went between the signal and the
+            // read: signal 0 said "exists", and a pid that is truly gone fails
+            // that probe on the next poll.
+            return true;
+        }
+
+        if ($stat['state'] === 'Z' || $stat['state'] === 'X' || $stat['state'] === 'x') {
+            return false;
+        }
+
+        return $this->serverStartTicks === 0 || $stat['startTicks'] === $this->serverStartTicks;
+    }
+
+    /**
+     * The state letter and start time (clock ticks since boot) of $pid from
+     * /proc/<pid>/stat, or null where procfs is absent or unreadable. The
+     * process name (field 2) may itself contain spaces and parentheses, so the
+     * fields are split after its LAST ')'.
+     *
+     * @return array{state: string, startTicks: int}|null
+     */
+    private static function procStat(int $pid): ?array
+    {
+        if ($pid <= 0) {
+            return null;
+        }
+
+        $path = "/proc/{$pid}/stat";
+        if (!is_readable($path)) {
+            return null;
+        }
+
+        $raw = @file_get_contents($path);
+        $close = is_string($raw) ? strrpos($raw, ')') : false;
+        if (!is_string($raw) || $close === false) {
+            return null;
+        }
+
+        // Field 3 (state) onwards; starttime is field 22, index 19 here.
+        $fields = preg_split('/\s+/', trim(substr($raw, $close + 1)));
+        if (!is_array($fields) || count($fields) < 20 || $fields[0] === '' || !ctype_digit($fields[19])) {
+            return null;
+        }
+
+        return ['state' => $fields[0], 'startTicks' => (int) $fields[19]];
     }
 
     /**
@@ -1063,6 +1179,7 @@ final class ClaudeCodeMcpClient
         $total = strlen($payload);
         $lastProgress = microtime(true);
         $consecutiveSelectFailures = 0;
+        $livenessCheckedAt = self::nowSeconds();
 
         while ($payload !== '') {
             if (microtime(true) - $lastProgress >= $idleSeconds) {
@@ -1099,6 +1216,17 @@ final class ClaudeCodeMcpClient
             $consecutiveSelectFailures = 0;
 
             if ($ready === 0 || $write === []) {
+                // stdin stayed unwritable for this pass. A helper the server
+                // forked inherits stdin, so the pipe never breaks when the
+                // server dies; without this the write waits out the whole
+                // idle bound against nobody. Rate-limited like readFrame()'s.
+                if (self::nowSeconds() - $livenessCheckedAt >= self::LIVENESS_CHECK_SECONDS) {
+                    if (!$this->serverIsRunning()) {
+                        return $total - strlen($payload);
+                    }
+                    $livenessCheckedAt = self::nowSeconds();
+                }
+
                 continue;
             }
 
@@ -1301,6 +1429,8 @@ final class ClaudeCodeMcpClient
             $this->lock?->close();
             $this->lock = null;
             $this->process = null;
+            $this->serverPid = 0;
+            $this->serverStartTicks = 0;
             $this->pipes = null;
             $this->connected = false;
             $this->readBuffer = '';
@@ -1333,6 +1463,8 @@ final class ClaudeCodeMcpClient
         $this->lock = null;
 
         $this->process = null;
+        $this->serverPid = 0;
+        $this->serverStartTicks = 0;
         $this->pipes = null;
         $this->connected = false;
         // The half-line and the unterminated fragment both belong to a session

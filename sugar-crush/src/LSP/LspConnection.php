@@ -310,7 +310,7 @@ final class LspConnection implements LspConnectionInterface
         if ($this->lock !== null && $this->isOwnerProcess()) {
             $this->lock->destroy();
         }
-        $this->lock = LspExchangeLock::create($command);
+        $this->lock = LspExchangeLock::new($command);
         $this->ownerPid = (int) getmypid();
         $this->notesSeen = 0;
 
@@ -491,7 +491,12 @@ final class LspConnection implements LspConnectionInterface
                     return LspResponse::ioError('Failed to write message');
                 }
 
-                $this->beginReading();
+                if (!$this->beginReading()) {
+                    // Nothing was read, so stdout is still at the boundary the
+                    // state records; the reply left in the pipe carries an id
+                    // nobody waits for and the next reader drops it.
+                    return LspResponse::ioError('LSP exchange state could not be recorded; the reply was not read');
+                }
 
                 return $this->readResponse($id, $deadline);
             },
@@ -934,7 +939,11 @@ final class LspConnection implements LspConnectionInterface
 
         $total = strlen($message);
         $consecutiveSelectFailures = 0;
-        $this->recordFrameStart($message);
+        if (!$this->recordFrameStart($message)) {
+            // Nothing went out: a message of our own is simply lost, a dead
+            // holder's remainder stays owed.
+            return $this->abandonWrite($total, $total, $owed);
+        }
 
         while ($message !== '') {
             if ($deadline !== null && microtime(true) >= $deadline) {
@@ -978,7 +987,9 @@ final class LspConnection implements LspConnectionInterface
             // diagnostic.
             // The in-flight mark brackets the syscall: a process killed between
             // the two records cannot say how much of this chunk the server got.
-            $this->recordFrameProgress($total - strlen($message), true);
+            if (!$this->recordFrameProgress($total - strlen($message), true)) {
+                return $this->abandonWrite($total, strlen($message), $owed);
+            }
             $written = @fwrite($this->pipes[0], $message);
             $this->recordFrameProgress($total - strlen($message) + (is_int($written) ? $written : 0), false);
 
@@ -1047,6 +1058,14 @@ final class LspConnection implements LspConnectionInterface
         // still owed to the server, and its record stays for the next holder.
         if ($remaining !== $total || !$owed) {
             $this->recordFrameDone();
+        } elseif ($this->exchangeState !== null) {
+            // ...with NO write in flight: every caller gives up outside the
+            // syscall. The in-memory record may still carry an in-flight mark
+            // whose store did not land, and endExchange() writes this record
+            // back — left set, a later store that lands would tell the next
+            // holder a write was cut short, and it would latch the stream
+            // broken over bytes that never went out.
+            $this->recordFrameProgress($this->exchangeState->frameWritten, false);
         }
 
         return false;
@@ -1786,7 +1805,12 @@ final class LspConnection implements LspConnectionInterface
     /**
      * Pick the stream up where the previous holder — maybe dead, maybe in
      * another process — left it. False when a frame it owed could not be
-     * finished before $deadline (it stays owed; this exchange sends nothing).
+     * finished before $deadline (it stays owed; this exchange sends nothing),
+     * or when this exchange's phase could not be recorded: an exchange whose
+     * W/R marker never landed runs unprotected — killed part-way, it would
+     * leave the next holder trusting a stale state — so a failed store (a
+     * full or read-only temp filesystem) refuses it before a byte goes out,
+     * the rule sugar-mcp's StdioMcpServer::exchange() applies to its marker.
      */
     private function beginExchange(LspExchangeLock $lock, ?float $deadline): bool
     {
@@ -1804,9 +1828,11 @@ final class LspConnection implements LspConnectionInterface
 
         // The buffer stays in the state while this exchange only writes: if
         // this process dies before it reads, nothing on stdout was disturbed.
-        $this->storeExchangeState($state->withPhase(
+        if (!$this->storeExchangeState($state->withPhase(
             $this->resyncing ? LspExchangeState::PHASE_READING : LspExchangeState::PHASE_WRITING
-        ));
+        ))) {
+            return false;
+        }
 
         // STDIN. A record left in flight cannot say how much of its chunk the
         // server received; any other record says exactly what is still owed.
@@ -1832,14 +1858,21 @@ final class LspConnection implements LspConnectionInterface
         return true;
     }
 
-    /** About to consume stdout: from here on, the buffer lives in this process only. */
-    private function beginReading(): void
+    /**
+     * About to consume stdout: from here on, the buffer lives in this process
+     * only. False when that could not be recorded — reading anyway would let
+     * a holder killed mid-frame leave a CLEAN record over a stdout that no
+     * longer starts at a frame boundary.
+     */
+    private function beginReading(): bool
     {
         if ($this->exchangeState !== null && !$this->resyncing) {
-            $this->storeExchangeState($this->exchangeState
+            return $this->storeExchangeState($this->exchangeState
                 ->withPhase(LspExchangeState::PHASE_READING)
                 ->withBuffer(''));
         }
+
+        return true;
     }
 
     /**
@@ -1883,34 +1916,65 @@ final class LspConnection implements LspConnectionInterface
         return $this->exchangeState ?? LspExchangeState::new();
     }
 
-    private function storeExchangeState(LspExchangeState $state): void
+    /**
+     * Adopt $state in this process and write it to the shared file.
+     *
+     * Adopted EVEN WHEN the store fails, on purpose: the in-memory record is
+     * what this process means the stream's state to be, and endExchange()
+     * writes it back, so a store that failed transiently is re-asserted by a
+     * later one. Adopting only on success would let that closing store bring
+     * back a stale record instead — a message this exchange abandoned left
+     * owed, to be sent by the next holder after the caller was told it
+     * failed. The cost is that every path which gives something up must put
+     * its decision in memory too (see {@see abandonWrite()}).
+     *
+     * @return bool false when the shared file did not take it (see
+     *         {@see LspExchangeLock::store()}); true outside an exchange, where
+     *         there is nothing to record
+     */
+    private function storeExchangeState(LspExchangeState $state): bool
     {
         if ($this->lock === null || $this->exchangeState === null) {
-            return;
+            return true;
         }
 
         $this->exchangeState = $state;
-        $this->lock->store($state);
+
+        return $this->lock->store($state);
     }
 
-    /** Record the frame about to be written, before its first byte goes out. */
-    private function recordFrameStart(string $frame): void
+    /**
+     * Record the frame about to be written, before its first byte goes out.
+     * False when either record did not land: the frame must then not be
+     * started, since a holder killed part-way would leave nobody able to
+     * finish it.
+     */
+    private function recordFrameStart(string $frame): bool
     {
         if ($this->lock === null || $this->exchangeState === null) {
-            return;
+            return true;
         }
 
-        $this->lock->storeFrame($frame);
-        $this->storeExchangeState($this->exchangeState->withFrame(strlen($frame), 0, false));
+        return $this->lock->storeFrame($frame)
+            && $this->storeExchangeState($this->exchangeState->withFrame(strlen($frame), 0, false));
     }
 
-    private function recordFrameProgress(int $written, bool $inflight): void
+    /**
+     * Record how much of the frame is out. False when it did not land — for
+     * the in-flight mark that precedes a write, the write must not happen:
+     * the record on disk would claim no syscall was in flight, and a holder
+     * killed inside it would have the next one resend bytes the server
+     * already took. A failed after-write record is harmless by comparison:
+     * the in-flight mark before it stays on disk and fails closed (the next
+     * holder latches the stream broken rather than guess).
+     */
+    private function recordFrameProgress(int $written, bool $inflight): bool
     {
         if ($this->exchangeState === null || $this->exchangeState->frameLength === 0) {
-            return;
+            return true;
         }
 
-        $this->storeExchangeState($this->exchangeState->withFrame($this->exchangeState->frameLength, $written, $inflight));
+        return $this->storeExchangeState($this->exchangeState->withFrame($this->exchangeState->frameLength, $written, $inflight));
     }
 
     private function recordFrameDone(): void

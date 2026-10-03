@@ -122,6 +122,20 @@ final class HttpMcpServer implements McpServer
             if ($data === null) {
                 throw new \RuntimeException('tools/list returned an invalid response');
             }
+
+            // The same gate as initialize: an ERROR reply (session- or
+            // capability-gated servers answer -32601 here) or a reply with no
+            // result is not "up, 0 tools" — that shape looks connected,
+            // exposes nothing, and throws the server's own diagnosis away.
+            // sugar-mcp's StdioMcpServer::start() refuses it the same way.
+            if (isset($data['error'])) {
+                throw new \RuntimeException('tools/list refused' . self::describeError($data['error']));
+            }
+
+            if (!array_key_exists('result', $data)) {
+                throw new \RuntimeException('tools/list returned no result');
+            }
+
             $this->tools = $this->parseTools($data);
         } catch (\Exception $e) {
             $this->sessionId = null;
@@ -608,11 +622,17 @@ final class HttpMcpServer implements McpServer
         throw new \RuntimeException(trim("HTTP {$status} {$response->getReasonPhrase()}") . $detail);
     }
 
-    /** `" (code): message"` for a JSON-RPC error member, whatever its shape. */
+    /**
+     * `" (code): message"` for a JSON-RPC error member, whatever its shape.
+     *
+     * Encoded with JSON_PARTIAL_OUTPUT_ON_ERROR: a decoded error may carry INF
+     * (a `1e999` on the wire), and plain json_encode() would answer false —
+     * a blank diagnosis for exactly the reply that most needs one.
+     */
     private static function describeError(mixed $error): string
     {
         if (!is_array($error)) {
-            return ': ' . (is_string($error) ? $error : (string) json_encode($error));
+            return ': ' . (is_string($error) ? $error : (string) json_encode($error, JSON_PARTIAL_OUTPUT_ON_ERROR));
         }
 
         $code = $error['code'] ?? null;
@@ -621,7 +641,7 @@ final class HttpMcpServer implements McpServer
         return sprintf(
             '%s: %s',
             is_int($code) || is_string($code) ? " ({$code})" : '',
-            is_string($message) && $message !== '' ? $message : (string) json_encode($error),
+            is_string($message) && $message !== '' ? $message : (string) json_encode($error, JSON_PARTIAL_OUTPUT_ON_ERROR),
         );
     }
 
