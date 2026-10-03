@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Events\PermissionResolved;
 use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookResult;
+use SugarCraft\Crush\Permissions\ApprovalVerdict;
 use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\Tools\ToolCall;
 
@@ -46,7 +47,8 @@ use SugarCraft\Crush\Tools\ToolCall;
  * {@see ask()} blocks on the socket for as long as it takes. The parent owns
  * the policy — it pauses its idle ceiling while a question is open, and tears
  * the turn down on cancel — and the parent going away shows up here as EOF,
- * which settles the question as unanswered (a refusal), never as a grant.
+ * which settles the question as unanswered (`Permission required:`), never as
+ * a grant.
  *
  * ## Owned by one process
  *
@@ -151,11 +153,18 @@ final class ChildChannel
      * The approver {@see EngineBackend::withPermissionApprover()} takes: put
      * the question to the parent and grant only on an actual `once`/`always`.
      *
-     * @return \Closure(ToolCall, HookResult): bool
+     * It answers an {@see ApprovalVerdict} rather than a `bool` (roadmap
+     * 1.C-2), because the settlement carries two things a bit drops: a
+     * question nobody answered (the parent gone, the stream corrupt) reaches
+     * the model as `Permission required:` rather than as a refusal, and a
+     * reply's note — the user's feedback, or {@see GRANDCHILD_REFUSAL} —
+     * reaches it beside the question.
+     *
+     * @return \Closure(ToolCall, HookResult): ApprovalVerdict
      */
     public function approver(): \Closure
     {
-        return fn (ToolCall $call, HookResult $ask): bool => $this->ask($call, $ask)->permits();
+        return fn (ToolCall $call, HookResult $ask): ApprovalVerdict => ApprovalVerdict::fromResolution($this->ask($call, $ask));
     }
 
     /**

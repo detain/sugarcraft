@@ -303,6 +303,7 @@ sugar-crush/tests/Cli/BootstrapTrustGateSelfGrantTest.php	0.312	8
 sugar-crush/tests/Context/ContextCompactorTest.php	0.311	88
 sugar-crush/tests/Context/SortedWalkCapTest.php	0.303	9
 sugar-crush/tests/Chat/InterimNarrationKeptTest.php	0.300	4
+sugar-crush/tests/Backend/ChildChannelVerdictTest.php	0.300	2
 sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.299	46
 sugar-crush/tests/Tui/PaneDragIntegrationTest.php	0.295	21
 sugar-crush/tests/Workflows/WorkflowRetriesTest.php	0.294	10

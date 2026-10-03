@@ -23,10 +23,9 @@ use SugarCraft\Crush\Tools\ToolCall;
  * the turn's parent tears down or dies.
  *
  * The resolution is `cancelled` — the {@see \SugarCraft\Crush\Permissions\DenialKind::Unanswered}
- * half, distinct from a reject. The approver contract is still `bool` until
- * 1.C-2 widens it, so through {@see ChildChannel::approver()} it reaches the
- * engine as a plain refusal; the distinction is carried by the resolution for
- * that step to read.
+ * half, distinct from a reject — and since roadmap 1.C-2 widened the approver
+ * contract to {@see \SugarCraft\Crush\Permissions\ApprovalVerdict}, it
+ * reaches the engine through {@see ChildChannel::approver()} as exactly that.
  */
 final class ForkChannelEofIsUnansweredTest extends TestCase
 {
@@ -75,7 +74,7 @@ final class ForkChannelEofIsUnansweredTest extends TestCase
         self::assertSame(1, $writes);
     }
 
-    public function testThroughTheApproverAnUnansweredQuestionIsARefusal(): void
+    public function testThroughTheApproverAnUnansweredQuestionIsUnansweredNotRefused(): void
     {
         [$parent, $child] = $this->pair();
         $channel = ChildChannel::new(
@@ -86,7 +85,15 @@ final class ForkChannelEofIsUnansweredTest extends TestCase
             self::drain(),
         );
 
-        self::assertFalse(($channel->approver())(new ToolCall('call_1', 'Edit', []), self::gateAsk()));
+        $verdict = ($channel->approver())(new ToolCall('call_1', 'Edit', []), self::gateAsk());
+
+        // Roadmap 1.C-2: the approver answers a verdict, and this one neither
+        // grants nor claims anybody refused.
+        self::assertInstanceOf(\SugarCraft\Crush\Permissions\ApprovalVerdict::class, $verdict);
+        self::assertFalse($verdict->permits());
+        self::assertTrue($verdict->isUnanswered());
+        self::assertSame(\SugarCraft\Crush\Permissions\DenialKind::Unanswered, $verdict->denialKind());
+        self::assertSame(ChildChannel::PARENT_GONE, $verdict->feedback);
     }
 
     public function testACorruptReplyStreamIsAlsoUnanswered(): void
