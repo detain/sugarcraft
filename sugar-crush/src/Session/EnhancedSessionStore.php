@@ -104,6 +104,12 @@ final class EnhancedSessionStore
         $this->sessionStore->renameSession($id, $name);
     }
 
+    /** @see SessionStore::renameSessionIfUnnamed() */
+    public function renameSessionIfUnnamed(string $id, string $name): bool
+    {
+        return $this->sessionStore->renameSessionIfUnnamed($id, $name);
+    }
+
     /**
      * Fork $id into a new session that carries its whole conversation:
      * transcript, checkpoints, the blobs both reference, and its meta.

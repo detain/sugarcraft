@@ -216,6 +216,25 @@ final class SessionStore
     }
 
     /**
+     * Name $id only if it is still unnamed; true when the row was renamed.
+     *
+     * The auto-titler's write. Its request is fire-and-forget and lands
+     * after the first reply, so a `/rename` typed while it was in flight
+     * used to be overwritten by the generated title (audit B2). The guard
+     * lives in the UPDATE itself rather than a read-then-write so a rename
+     * from a second process in between is honoured too.
+     */
+    public function renameSessionIfUnnamed(string $id, string $name): bool
+    {
+        $stmt = $this->pdo->prepare("UPDATE sessions SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND (name IS NULL OR name = '')");
+        $stmt->execute([$name, $id]);
+        $renamed = $stmt->rowCount() > 0;
+        $this->sessionWriteSeq++;
+
+        return $renamed;
+    }
+
+    /**
      * Fork a session by copying it with a new ID.
      *
      * The new session gets fresh timestamps and keeps provider, model and

@@ -2335,6 +2335,13 @@ final class Chat implements Model
             if ($msg->sessionId !== $this->currentSessionId) {
                 return [$this, null];
             }
+            // A name latched since the request went out — `/rename` typed
+            // while it was in flight — is the user's and stays (audit B2).
+            // The store refuses the write on the same rule; this guard keeps
+            // the UI from showing a title the store never took.
+            if ($this->currentSessionName !== null) {
+                return [$this, null];
+            }
             $title = self::sanitizeSessionTitle($msg->title);
             if ($title === '') {
                 return [$this, null];
@@ -11172,7 +11179,13 @@ final class Chat implements Model
                         return new SessionTitledMsg($sessionId, '', $msg->usage);
                     }
                     try {
-                        $store->renameSession($sessionId, $title);
+                        // Conditional (audit B2): a `/rename` typed while this
+                        // request was in flight already named the row, and the
+                        // user's name wins. A refused write is reported like an
+                        // unusable title — usage only, nothing to latch.
+                        if (!$store->renameSessionIfUnnamed($sessionId, $title)) {
+                            return new SessionTitledMsg($sessionId, '', $msg->usage);
+                        }
                     } catch (\Throwable) {
                         // AN HONEST GAP: this exit is the same construction as the
                         // empty-title one above, which IS pinned
