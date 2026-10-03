@@ -197,6 +197,14 @@ A resolved reference is still containment-checked against the checkout
 (`ContainedPath::within()`) for **both** tiers, because an included file becomes
 prompt text. It is capped at the same `CommandSpec::MAX_SUBSTITUTION_BYTES`.
 
+This is a command **body's** include form, and it is not the `@file` mention you
+type into the chat (see [Attachments](../README.md#attachments)). The two never
+mix: a prompt you type is read for mentions — absolute and `~/` paths included,
+because you typed them — while a command's *expansion* is never read for them at
+all (`Chat::submit()`). A body is repository-authored, and a reference the rules
+above refuse can leave its path standing in the text; reading mentions out of the
+expansion would attach the very file the tier just refused to include.
+
 ### Fenced code blocks are NOT exempt
 
 Unlike `@`-imports in instruction files, a `` !` `` or `@file` form inside a

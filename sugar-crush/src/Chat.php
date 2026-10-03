@@ -35,6 +35,8 @@ use SugarCraft\Crush\Tui\SessionPicker;
 use SugarCraft\Crush\Tui\TextSelection;
 use SugarCraft\Crush\Tui\Components\PaneLabel;
 use SugarCraft\Crush\Support\SystemClipboard;
+use SugarCraft\Crush\Attachments\FileMentions;
+use SugarCraft\Crush\Support\ClipboardImage;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Backend\ObservesReasoning;
 use SugarCraft\Crush\Agents\AgentManager;
@@ -2192,6 +2194,13 @@ final class Chat implements Model
                     ...($message->loopGuardStoppedBy !== null
                         ? [$this->loopGuardStoppedNotice($message->loopGuardStoppedBy)]
                         : []),
+                    // Audit 15b-15, same append shape: an attachment the
+                    // provider could not carry (an image to a model without
+                    // vision) went as a text placeholder, and the user hears
+                    // it here rather than wondering why the model is blind.
+                    ...($message->attachmentNotice !== null
+                        ? [Message::notice($message->attachmentNotice)]
+                        : []),
                     // Billing fix, same append shape as the E707 line above:
                     // a turn the app could NOT price gets exactly one
                     // transcript-visible notice naming the model, so a $0.00
@@ -2400,6 +2409,16 @@ final class Chat implements Model
             // A dropped/unfocused editor answers its paste with the SAME
             // instance, and the fallback below keeps this box's pre-E744
             // contract for that state verbatim: paste lands regardless.
+            //
+            // Audit 15b-15: a paste that is nothing but the path of an image
+            // file - what dropping a screenshot onto most terminals types -
+            // becomes an `@` mention of it instead, so the image is attached
+            // when the prompt is sent rather than its path sent as prose.
+            $imagePath = self::pastedImagePath($msg->content);
+            if ($imagePath !== null) {
+                return [$this->withInput($this->input->insertString($this->mentionFor($imagePath) . ' ')), null];
+            }
+
             [$pasted] = $this->input->update($msg);
             \assert($pasted instanceof TextArea);
             if ($pasted === $this->input) {
@@ -2407,6 +2426,17 @@ final class Chat implements Model
             }
 
             return [$this->withInput($pasted), null];
+        }
+        if ($msg instanceof ClipboardImagePastedMsg) {
+            // Ctrl+V's answer (audit 15b-15): the saved image goes into the
+            // draft as an `@` mention at the caret, exactly as a typed or
+            // dropped one would, so it is attached on send and visible - and
+            // removable - until then.
+            if ($msg->path === null) {
+                return [$this->mutate(['history' => [...$this->history, Message::notice(self::NO_CLIPBOARD_IMAGE_NOTICE)]]), null];
+            }
+
+            return [$this->withInput($this->input->insertString($this->mentionFor($msg->path) . ' ')), null];
         }
 
         // E744 WS5: the session picker's load-more edge. The ONLY production
@@ -2771,6 +2801,14 @@ final class Chat implements Model
                 && !$msg->ctrl && !$msg->alt && !$msg->shift
                 && $this->slashMenuOwnsTab()
                 => $this->completeSlashMenuSelection(),
+            // Audit 15b-15: Tab completes an `@file` mention the caret ends,
+            // like a shell completes a path. Same reachability contract as
+            // the arm above - the shell yields Tab on mentionOwnsTab(), the
+            // one predicate both sides read.
+            $msg->type === KeyType::Tab
+                && !$msg->ctrl && !$msg->alt && !$msg->shift
+                && $this->mentionOwnsTab()
+                => $this->completeMention(),
             // Shell-history-style recall: Up on an empty input box (and no
             // "/" popup showing - the arm above already claimed that case)
             // fills inputBuf with the last prompt the user sent - from this
@@ -2799,6 +2837,15 @@ final class Chat implements Model
             // into the input buffer instead - same reasoning as Ctrl+P above.
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'o'
                 => $this->toggleLatestToolOutput(),
+            // Ctrl+V attaches the clipboard's IMAGE (audit 15b-15). A terminal
+            // pastes text only - Ctrl+Shift+V / Cmd+V already arrive as one
+            // bracketed PasteMsg - so the one thing this chord can add is the
+            // pixels a screenshot tool left on the clipboard, read through the
+            // platform tool off the update path ({@see ClipboardImage}) and
+            // answered by {@see ClipboardImagePastedMsg}. Checked before the
+            // generic Char arm for the same reason as Ctrl+P above.
+            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'v'
+                => [$this, static fn (): Msg => new ClipboardImagePastedMsg(ClipboardImage::save())],
             // Ctrl+R opens the live session picker (crush_feat.md section 5
             // E8). NOT the Ctrl+O that section suggests: §1 E5 already bound
             // Ctrl+O to tool-output expansion above, and that is the only
@@ -8792,6 +8839,14 @@ final class Chat implements Model
         }
 
         $expanded = $this->expandCustomCommand($text);
+        // Audit 15b-15: `@file` mentions are resolved in what the USER typed,
+        // never in a file-based command's expansion. A command body is
+        // repository-authored text with its own `@` include form, which
+        // {@see Commands\CommandSpec::expandTemplate()} already resolves or
+        // REFUSES by trust tier - and a refusal can leave the path standing in
+        // the text, so reading mentions out of the expansion would attach the
+        // very file the tier just refused to include.
+        $mentionsAreTheUsers = $expanded === null;
         if ($expanded !== null) {
             // AN EXPANSION THAT PRODUCED NOTHING IS REFUSED, not sent. The
             // empty-draft guard at the top of this method runs against the
@@ -8908,7 +8963,7 @@ final class Chat implements Model
             // its refusal when the hook blocked): parking submits the prompt, so
             // the hook fires there, and this early return skips the tail call below
             // so it never fires twice (audit 15b-01).
-            $parked = $this->scheduleParkedCompaction($text, $tokenCount, $tokenLimit, $capNotice);
+            $parked = $this->scheduleParkedCompaction($text, $tokenCount, $tokenLimit, $capNotice, $mentionsAreTheUsers);
             if ($parked !== null) {
                 return $parked;
             }
@@ -9078,7 +9133,13 @@ final class Chat implements Model
             $newTurnMessages[] = $note;
         }
 
-        $newTurnMessages[] = Message::user($text);
+        // Audit 15b-15: `@file` mentions become attachments on the user's line,
+        // and anything a mention could not attach is said just ahead of it.
+        [$userTurn, $attachmentNotes] = $this->userTurnMessage($text, $mentionsAreTheUsers);
+        foreach ($attachmentNotes as $note) {
+            $newTurnMessages[] = $note;
+        }
+        $newTurnMessages[] = $userTurn;
 
         return $turnCarrier->dispatchTurn(
             $baseHistory,
@@ -9088,6 +9149,40 @@ final class Chat implements Model
             $this->inputBuf,
             $this->inputCursorOffset(),
         );
+    }
+
+    /**
+     * The user row a submitted prompt becomes, with its `@file` mentions
+     * attached, plus one notice per mention that could not be (audit 15b-15).
+     *
+     * The ONE constructor of a dispatched user turn, used by both routes that
+     * commit one - {@see submit()}'s and the parked compaction's - so a prompt
+     * that happens to cross the 85% tier does not lose its attachments. The
+     * files are read HERE, once, and the snapshot rides on the message (see
+     * {@see Attachment} for why not at send time); {@see FileMentions} bounds
+     * that read. The notices are UI-only: they report on the user's own input
+     * and the model already sees the mention text itself.
+     *
+     * `$resolveMentions` is false for a file-based command's expansion; see
+     * {@see submit()} for why its `@` forms are never read here.
+     *
+     * @return array{0: Message, 1: list<Message>}
+     */
+    private function userTurnMessage(string $text, bool $resolveMentions = true): array
+    {
+        $message = Message::user($text);
+        if (!$resolveMentions || !str_contains($text, '@')) {
+            return [$message, []];
+        }
+
+        $resolved = FileMentions::resolve($text, $this->projectRoot());
+        foreach ($resolved['attachments'] as $attachment) {
+            $message = $attachment->type === AttachmentType::Image
+                ? $message->attachImage($attachment->path, $attachment->data, $attachment->mimeType)
+                : $message->attachFile($attachment->path, $attachment->data);
+        }
+
+        return [$message, array_map(static fn (string $notice): Message => Message::notice($notice), $resolved['notices'])];
     }
 
     /**
@@ -13140,7 +13235,7 @@ final class Chat implements Model
      *                          do — now with something to say about it.
      * @return array{0:Chat,1:?\Closure}|null
      */
-    private function scheduleParkedCompaction(string $inputText, int $tokenCount, int $tokenLimit, ?string &$capNotice = null): ?array
+    private function scheduleParkedCompaction(string $inputText, int $tokenCount, int $tokenLimit, ?string &$capNotice = null, bool $resolveMentions = true): ?array
     {
         // OFFLINE BEATS CAPPED, in that order and for the reason
         // {@see scheduleModelCompaction()} states: with no provider at all there
@@ -13278,6 +13373,10 @@ final class Chat implements Model
             ) ?? $request;
         }
 
+        // Audit 15b-15: the committed prompt carries its `@file` attachments
+        // here exactly as on the unparked route (see userTurnMessage()).
+        [$parkedUserTurn, $parkedAttachmentNotes] = $this->userTurnMessage($inputText, $resolveMentions);
+
         $next = $this->mutate([
             // Kept short on purpose: {@see view()} paints a transcript message as
             // one unwrapped row (backlog §E22), so every character past the frame
@@ -13292,7 +13391,7 @@ final class Chat implements Model
                 $tokenLimit,
                 $request['count'],
                 $request['count'] === 1 ? 'exchange' : 'exchanges',
-            )), ...$hookNotes, Message::user($inputText)],
+            )), ...$hookNotes, ...$parkedAttachmentNotes, $parkedUserTurn],
             'inputBuf' => '',
             'inFlight' => true,
             'inFlightCancellation' => $cancellation,
@@ -16121,6 +16220,145 @@ final class Chat implements Model
             && $this->slashMenuMatches() !== [];
     }
 
+    /** What Ctrl+V says when the clipboard held no image a tool could read. */
+    private const NO_CLIPBOARD_IMAGE_NOTICE = 'No image on the clipboard to attach. Ctrl+V reads an image through '
+        . 'pngpaste (macOS), wl-paste (Wayland) or xclip (X11); paste text with your terminal\'s own paste key, '
+        . 'or attach a file with @path.';
+
+    /**
+     * The `@` mention that names $path in a draft: relative to the project
+     * root when it is inside it (what a user would have typed), quoted when it
+     * holds whitespace (the mention grammar's quoted form,
+     * {@see FileMentions}).
+     */
+    private function mentionFor(string $path): string
+    {
+        $root = rtrim($this->projectRoot(), '/');
+        if ($root !== '' && str_starts_with($path, $root . '/')) {
+            $path = substr($path, strlen($root) + 1);
+        }
+
+        return preg_match('/\s/u', $path) === 1 ? '@"' . $path . '"' : '@' . $path;
+    }
+
+    /**
+     * The image file a paste names, when the WHOLE paste is one path to an
+     * existing PNG/JPEG/GIF/WebP file - or null, and the paste is text.
+     *
+     * Dropping a file onto a terminal types its path in whichever spelling
+     * that terminal uses: bare, single- or double-quoted (GNOME, Konsole),
+     * backslash-escaped (macOS Terminal, iTerm2), or as a `file://` URI. Each
+     * is undone here. The test is on the file's magic bytes, not its name, so
+     * a `.png` that is not an image stays text. A path containing `"` is left
+     * as text too: the mention grammar has no way to quote it.
+     */
+    private static function pastedImagePath(string $content): ?string
+    {
+        $text = trim($content);
+        if ($text === '' || strlen($text) > 4096 || preg_match('/[\r\n]/', $text) === 1) {
+            return null;
+        }
+
+        if (str_starts_with($text, 'file://')) {
+            $text = rawurldecode((string) preg_replace('~^file://(?:localhost)?~', '', $text));
+        }
+        if (strlen($text) >= 2 && ($text[0] === "'" || $text[0] === '"') && $text[-1] === $text[0]) {
+            $text = substr($text, 1, -1);
+        }
+
+        $candidates = [$text];
+        if (str_contains($text, '\\')) {
+            $candidates[] = (string) preg_replace('/\\\\(.)/s', '$1', $text);
+        }
+
+        foreach ($candidates as $path) {
+            if ($path === '' || str_contains($path, '"')) {
+                continue;
+            }
+            if (str_starts_with($path, '~/')) {
+                $home = (string) (getenv('HOME') ?: '');
+                $path = $home === '' ? $path : rtrim($home, '/') . substr($path, 1);
+            }
+            if (!str_starts_with($path, '/') || !is_file($path)) {
+                continue;
+            }
+            $head = (string) @file_get_contents($path, false, null, 0, 16);
+            if (FileMentions::sniffImage($head) !== null) {
+                return $path;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Whether a bare Tab completes an `@file` mention rather than cycling
+     * panes (audit 15b-15): the caret ends an `@` token in the draft and no
+     * modal is up. The modal guards are {@see slashMenuOwnsTab()}'s four, for
+     * the reason its docblock gives - a shell that yields Tab on a condition
+     * update() does not answer turns Tab into a dead key.
+     *
+     * No filesystem here: it is read by the shell on every key, so it only
+     * asks whether the caret is IN a mention. A mention that completes to
+     * nothing leaves the draft as it is - Tab inside a half-typed path is a
+     * completion attempt, never a pane switch out from under the typing.
+     */
+    public function mentionOwnsTab(): bool
+    {
+        return $this->keyHelp === null
+            && $this->pendingPermission === null
+            && $this->palette === null
+            && $this->sessionPicker === null
+            && $this->mentionTokenAtCaret() !== null;
+    }
+
+    /**
+     * The `@` token the caret ends, in CHARACTER offsets (the widget's unit).
+     *
+     * @return array{start: int, partial: string}|null
+     */
+    private function mentionTokenAtCaret(): ?array
+    {
+        if (!str_contains($this->inputBuf, '@')) {
+            return null;
+        }
+
+        $caret = strlen(mb_substr($this->inputBuf, 0, $this->inputCursorOffset(), 'UTF-8'));
+        $token = FileMentions::tokenAt($this->inputBuf, $caret);
+        if ($token === null) {
+            return null;
+        }
+
+        return ['start' => mb_strlen(substr($this->inputBuf, 0, $token['start']), 'UTF-8'), 'partial' => $token['partial']];
+    }
+
+    /**
+     * Tab on an `@file` mention: replace the typed path with its completion
+     * from the project root ({@see FileMentions::complete()}), closing a
+     * unique file with a space so the next word can follow.
+     *
+     * @return array{0: self, 1: null}
+     */
+    private function completeMention(): array
+    {
+        $token = $this->mentionTokenAtCaret();
+        if ($token === null) {
+            return [$this, null];
+        }
+
+        $completion = FileMentions::complete($token['partial'], $this->projectRoot());
+        if ($completion === null) {
+            return [$this, null];
+        }
+
+        $replacement = '@' . $completion['path'] . ($completion['unique'] ? ' ' : '');
+        $from = $token['start'];
+        $to = $from + 1 + mb_strlen($token['partial'], 'UTF-8');
+        $buffer = mb_substr($this->inputBuf, 0, $from, 'UTF-8') . $replacement . mb_substr($this->inputBuf, $to, null, 'UTF-8');
+
+        return [$this->withInputBuf($buffer)->withInputCursor($from + mb_strlen($replacement, 'UTF-8')), null];
+    }
+
     /**
      * The active color theme, resolved from the stored name on every call -
      * cheap (a handful of Color/Theme factory calls, no I/O) and keeps
@@ -17306,6 +17544,17 @@ final class Chat implements Model
     }
 
     /**
+     * Audit 15b-15: what one attached image is counted as by
+     * {@see rawTokenProxy()}. Anthropic bills an image at roughly
+     * width×height/750 tokens and downscales anything past ~1.15 megapixels,
+     * which caps one image near 1,600; OpenAI's high-detail tiling lands in the
+     * same range for a typical screenshot. The cap is the honest flat figure:
+     * an estimate that errs high fires a tier a little early, one that errs
+     * low lets a session of screenshots overrun the window.
+     */
+    private const IMAGE_ATTACHMENT_TOKEN_ESTIMATE = 1600;
+
+    /**
      * The PRE-calibration proxy — {@see TokenEstimate::ofText()} (chars/4
      * for ASCII/Latin, heavier per character for CJK, other scripts and
      * emoji) + 10 per message — the raw half of
@@ -17334,6 +17583,18 @@ final class Chat implements Model
             // 3-6x under, past what the [1.0, 3.0] calibration can correct.
             $total += TokenEstimate::ofText($msg->content);
             $total += 10; // role overhead
+            // Audit 15b-15: an attached file is inlined into the request and
+            // an image billed as image tokens, so both occupy the window - a
+            // 256 KiB `@file` must reach the tiers, not hide behind a short
+            // prompt.
+            foreach ($msg->attachments as $attachment) {
+                if (!$attachment instanceof Attachment || $attachment->data === null) {
+                    continue;
+                }
+                $total += $attachment->type === AttachmentType::Image
+                    ? self::IMAGE_ATTACHMENT_TOKEN_ESTIMATE
+                    : TokenEstimate::ofText($attachment->data);
+            }
         }
 
         return $total;
@@ -18626,6 +18887,7 @@ final class Chat implements Model
             pendingToolArguments: $message->pendingToolArguments,
             uiOnly: $message->uiOnly,
             loopGuardStoppedBy: $message->loopGuardStoppedBy,
+            attachmentNotice: $message->attachmentNotice,
         );
     }
 

@@ -302,15 +302,15 @@ final class KeyBindingRegistry
      * {@see chatCtrlRunesYieldedToShell()} only when it is TRUE. The two reads
      * are mutually exclusive. Swept exhaustively over 2 menu states × 9 panes ×
      * 95 printable runes × Ctrl on/off = 3420 keypresses: 1710 derive nothing,
-     * 938 derive one set, 772 derive two, none derive three.
+     * 936 derive one set, 774 derive two, none derive three.
      *
      * That sweep visits the panes at their DEFAULT sub-state, and a sub-state is
      * not neutral here: opening the skill picker in `Pane::Skills` flips
      * `KeyboardHandler::shellOwnsKeyboard()`, which is the very predicate
      * choosing which set derives (`ctrl+r` there goes `{Chat}` → `{Chat,
      * YIELDED}`). So the same rune × Ctrl sweep is run again over a CORPUS of 8
-     * keyboard-owning sub-states = 1520 more keypresses: 760 derive nothing, 712
-     * derive one, 48 derive two, none derive three. A corpus, not an
+     * keyboard-owning sub-states = 1520 more keypresses: 760 derive nothing, 704
+     * derive one, 56 derive two, none derive three. A corpus, not an
      * enumeration: it covers `AgentViewMode` exhaustively but the agent view's
      * selection index only at -1 and 0, two skill options, and the menu strip's
      * first menu — `KeyboardHandlerTest::keyboardOwningSubStates()` states that
@@ -396,6 +396,9 @@ final class KeyBindingRegistry
             // "focuses the next pane" full stop, and the completion the user
             // asked for was invisible to the only in-app key list there is.
             KeyBinding::new('chat.slash-complete', 'Tab', 'Complete the highlighted "/" command', $c),
+            // Audit 15b-15: the second thing a bare Tab completes, on the same
+            // shell-yield contract (Chat::mentionOwnsTab()).
+            KeyBinding::new('chat.mention-complete', 'Tab', 'Complete the @file path at the cursor', $c),
             KeyBinding::new('chat.recall', '↑', 'Walk back through past prompts (empty box)', $c),
             KeyBinding::new('chat.recall-next', '↓', 'Walk forward again, then back to your draft', $c),
             KeyBinding::new('chat.accept-suggestion', '→', 'Take the grayed suggestion (empty input box)', $c),
@@ -429,6 +432,9 @@ final class KeyBindingRegistry
             KeyBinding::new('chat.page', 'PgUp / PgDn', 'Scroll the transcript by a screenful', $c),
             KeyBinding::new('chat.palette', 'Ctrl+P', 'Open the command palette', $c),
             KeyBinding::new('chat.tool-output', 'Ctrl+O', 'Expand or collapse newest tool output/thought', $c),
+            // Audit 15b-15: a terminal pastes text only, so the clipboard's
+            // IMAGE is read through the platform tool (Support\ClipboardImage).
+            KeyBinding::new('chat.paste-image', 'Ctrl+V', 'Attach the clipboard image as an @ mention', $c),
             KeyBinding::new(
                 'chat.session-picker',
                 'Ctrl+R',

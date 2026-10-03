@@ -1429,7 +1429,7 @@ final class KeyboardHandlerTest extends TestCase
         $this->resetMenuBarState();
         $this->assertSame(3420, $presses, '2 menu states x 9 panes x 95 runes x ctrl on/off');
         $this->assertSame(
-            [0 => 1710, 1 => 938, 2 => 772],
+            [0 => 1710, 1 => 936, 2 => 774],
             $histogram,
             'the distribution the memo docblock states, over the sweep it names',
         );
@@ -1473,7 +1473,7 @@ final class KeyboardHandlerTest extends TestCase
         $this->resetMenuBarState();
         $this->assertSame(1520, $subPresses, '8 keyboard-owning sub-states x 95 runes x ctrl on/off');
         $this->assertSame(
-            [0 => 760, 1 => 712, 2 => 48],
+            [0 => 760, 1 => 704, 2 => 56],
             $subHistogram,
             'the sub-state distribution: nothing for ordinary typing, one set for a Ctrl chord this '
             . 'registry does not give Chat, two when it does and the yielded set has to be consulted',
@@ -1491,15 +1491,17 @@ final class KeyboardHandlerTest extends TestCase
      *
      * `shellOwnsKeyboard()` being true is NOT "the shell claims every key":
      * `claims()` consults `chatOwns()` FIRST, so Chat's own chords still escape.
-     * A first draft of the renderer comment said three did; swept, it is six. And
+     * A first draft of the renderer comment said three did; swept, it was six,
+     * and seven once `Ctrl+V` (audit 15b-15) joined Chat's own chords. And
      * `KeyboardHandler::shellOwnsKeyboard()`'s own docblock said "every key" for a
      * round after this test contradicted it — the same claim in two places, only
      * one of them corrected — which is why the last loop below asserts the LINK
      * that docblock's argument needs rather than leaving it to prose.
      *
      * Domain: 95 printable runes x Ctrl on/off, plus the nine named keys this
-     * app binds x Ctrl on/off. What the six do — dispatch `/agents`, quit,
-     * toggle a tool's output, open the palette, delete a word, cycle sessions —
+     * app binds x Ctrl on/off. What the seven do — dispatch `/agents`, quit,
+     * toggle a tool's output, open the palette, attach the clipboard image,
+     * delete a word, cycle sessions —
      * is why none of them can consume a stale ceiling; the two routes that COULD
      * (`?`, and `Enter` reaching `submit()`'s `/keys` arm) are both claimed here.
      */
@@ -1536,9 +1538,9 @@ final class KeyboardHandlerTest extends TestCase
         }
 
         $this->assertSame(
-            ['Ctrl+a', 'Ctrl+c', 'Ctrl+o', 'Ctrl+p', 'Ctrl+w', 'Ctrl+Tab'],
+            ['Ctrl+a', 'Ctrl+c', 'Ctrl+o', 'Ctrl+p', 'Ctrl+v', 'Ctrl+w', 'Ctrl+Tab'],
             $escaped,
-            'these six reach Chat in Pane::Agents and no others — none of them calls withKeyHelp(), '
+            'these seven reach Chat in Pane::Agents and no others — none of them calls withKeyHelp(), '
             . 'which is what keeps that pane from consuming a stale overflow ceiling',
         );
 

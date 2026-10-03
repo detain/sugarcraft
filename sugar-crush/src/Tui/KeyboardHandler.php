@@ -266,7 +266,10 @@ final class KeyboardHandler
      */
     private static function chatIsCompletingSlashCommand(App $app): bool
     {
-        return $app->chat !== null && $app->chat->slashMenuOwnsTab();
+        // Audit 15b-15: an `@file` mention under the caret is the second
+        // thing a bare Tab completes, on the same one-predicate contract.
+        return $app->chat !== null
+            && ($app->chat->slashMenuOwnsTab() || $app->chat->mentionOwnsTab());
     }
 
     /**

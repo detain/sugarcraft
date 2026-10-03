@@ -757,6 +757,7 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `Ctrl+C` | Quit — unless the draft has a selection: then the first press copies it (OSC 52, clipped to 64 KiB with a notice) and the next press quits |
 | `Ctrl+P` | Command palette (fuzzy, grouped by category, biased by most-recently-used) |
 | `Ctrl+O` | Expand/collapse the most recent tool call's output and thought |
+| `Ctrl+V` | Attach the **image** on the system clipboard (a screenshot): it is read through `pngpaste` (macOS), `wl-paste` (Wayland) or `xclip` (X11), saved to a private temp directory and inserted into the draft as an `@` mention, so it is attached when you send. Text pastes with your terminal's own paste key as before. No image (or no tool) leaves a notice and the draft untouched. See [Attachments](#attachments) |
 | `Ctrl+R` | Session picker (persisted across turns) — with the picker up the wheel browses, a click selects, and `Enter` resumes; browsing onto the last loaded row fetches the next page |
 | `Ctrl+A` | Same dispatch as typing `/agents` |
 | `Ctrl+W` / `Alt+Backspace` | Delete the previous word |
@@ -764,13 +765,13 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `Down` (while recalling) | Step forward through recalled prompts; past the newest one, the draft you were typing comes back |
 | `Right` (empty input) | Take the grayed suggestion — after each turn the empty box shows a guess at your next message (`SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS=1` turns it off) |
 | `Page Up` / `Page Down` | Scroll the transcript a screenful |
-| `Tab` | Cycle focus over the **docked** panes — left column first top-to-bottom, then the right column, chat always first. While chat itself holds focus with the `/` popup open, `Tab` completes the highlighted command instead: completion answers to chat's focus, so a `Tab` from a docked pane cycles even with the popup open |
+| `Tab` | Cycle focus over the **docked** panes — left column first top-to-bottom, then the right column, chat always first. While chat itself holds focus with the `/` popup open, `Tab` completes the highlighted command instead, and with the cursor at the end of an `@path` mention it completes the path the way a shell does (a unique file gets a trailing space, a directory its `/`, several matches their common prefix; no match leaves the draft as it is): completion answers to chat's focus, so a `Tab` from a docked pane cycles even with the popup open |
 | `Shift+Tab` | Cycle pane focus backwards (same docked list) |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle sessions |
 | `F10` | Open the menu bar |
 | `y` / `n` / `a` | Answer a permission prompt: once / refuse / ask to allow for the session. **While a prompt is up it owns the keyboard** — nothing reaches the input box — but it only answers to a letter while it is *armed*, and the first key you press that is not an answer disarms it. So typing a slash command at a live prompt now does nothing at all: measured, `/keys`, `/init`, `/agents`, `/branch main`, `/compact` and `/new` are all swallowed whole. `Enter` re-arms (and answers nothing), `Esc` refuses in any state, and the modal says which state it is in. The one thing that still answers on the first keystroke is a message that *begins* with `y` or `n` — those are the answers. And `a` no longer grants on its own: it asks "allow every later call this session?", which one `y` confirms and any other key cancels, so the session-wide grant costs two deliberate keystrokes |
 
-`Ctrl+P`, `Ctrl+O`, `Ctrl+A`, `Ctrl+W` and `Ctrl+C` always belong to the chat
+`Ctrl+P`, `Ctrl+O`, `Ctrl+V`, `Ctrl+A`, `Ctrl+W` and `Ctrl+C` always belong to the chat
 content model — the shell never claims them, in any pane, so hosting chat
 inside the shell cannot silently steal a binding. `Ctrl+R` belongs to the chat
 too, with one declared exception: while a shell view is itself driving the
@@ -852,6 +853,41 @@ are read-only listings — their focus buys you the divider-resized view, the
 by design — its own footer says the settings change through `/theme`, `/model`
 and the palette, which is exactly what the `Enter` door from that pane hands
 you.
+
+### Attachments
+
+Mention a file with `@` and it is attached to that prompt: `explain @src/Chat.php`
+or, for a path with spaces, `@"design notes.md"`. A mention is `@` at the start of
+the draft or after whitespace (so `me@example.com` stays text); relative paths
+resolve against the project root, `~/` against your home, and an absolute path is
+taken as written. `Tab` completes the path under the cursor.
+
+- **Files** are read once, when you press `Enter`, and that snapshot rides on the
+  message — so a later edit does not change what an earlier turn showed the model,
+  and the request's cached prefix stays stable. The model receives the text inline
+  as a `<file path="…">` block after your prompt, on every provider. Text over
+  256 KiB is truncated (and the transcript says so); a binary file that is not an
+  image is refused with a notice.
+- **Images** (PNG, JPEG, GIF, WebP, by their magic bytes, up to 5 MiB) are sent as
+  the provider's own image part — `image_url` on OpenAI, SGLang, Custom and the
+  `anthropic` type; `image` blocks on Claude-on-Vertex and Bedrock; `inlineData` on
+  Gemini. Attach one with `@shot.png`, by dropping the file onto the terminal (a
+  paste that is nothing but an image's path becomes a mention), or with `Ctrl+V`,
+  which reads the clipboard's image.
+- **A model without vision never drops an image silently.** Whether a provider may
+  be sent one is its `supportsVision()`: OpenAI, `anthropic`, Claude and Gemini on
+  Vertex, and Claude 3+/Nova Lite/Pro/Premier on Bedrock answer yes; SGLang asks
+  the server (`/model_info`'s `has_image_understanding`); `custom`, `claude-code`
+  and the offline echo provider answer no. For a no, the image goes to the model
+  as a one-line text placeholder naming it, and a notice after the reply tells you
+  it was not seen. The `sglang` and `custom` provider blocks accept
+  `"supportsVision": true|false` to override that answer.
+- Under each prompt the transcript shows a `📎` row naming what it attached; a
+  mention that looks like a path but matches nothing, a directory, or the
+  21st file of one prompt gets a notice instead of an attachment.
+- `@` forms inside a [file-based command](#your-own-slash-commands) are that
+  command's own include syntax, resolved (or refused) by its trust tier — they are
+  never read as attachments.
 
 ### Slash commands
 

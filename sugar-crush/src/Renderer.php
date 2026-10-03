@@ -1173,11 +1173,11 @@ final class Renderer
      * second guarantee rather than on this one — nothing in that pane can reach a
      * `withKeyHelp()` call at all. Swept, rather than argued: over the 95
      * printable runes x Ctrl on/off plus the nine named keys x Ctrl on/off,
-     * `KeyboardHandler::claims()` in `Pane::Agents` lets exactly SIX chords
-     * through to `Chat` — `Ctrl+A`, `Ctrl+C`, `Ctrl+O`, `Ctrl+P`, `Ctrl+W`,
-     * `Ctrl+Tab` — and none of the six is a `withKeyHelp()` caller: they dispatch
-     * `/agents`, quit, toggle a tool's output, open the palette, delete a word
-     * and cycle sessions. Both routes to the reference are claimed by the shell
+     * `KeyboardHandler::claims()` in `Pane::Agents` lets exactly SEVEN chords
+     * through to `Chat` — `Ctrl+A`, `Ctrl+C`, `Ctrl+O`, `Ctrl+P`, `Ctrl+V`,
+     * `Ctrl+W`, `Ctrl+Tab` — and none of the seven is a `withKeyHelp()` caller:
+     * they dispatch `/agents`, quit, toggle a tool's output, open the palette,
+     * attach the clipboard image, delete a word and cycle sessions. Both routes to the reference are claimed by the shell
      * there: `?` (unmodified, so rule 2 takes it) and `Enter`, without which
      * `submit()`'s `/keys` arm is unreachable too. And {@see renderKeyHelp()}
      * re-clamps `$start` against a freshly measured ceiling regardless.
@@ -3615,7 +3615,8 @@ final class Renderer
                 continue;
             }
             $blocks[] = match ($msg->role) {
-                Role::User      => $userLabel . " " . self::untrusted($msg->content),
+                Role::User      => $userLabel . " " . self::untrusted($msg->content)
+                    . self::attachmentChip($msg, $theme, $width),
                 Role::Assistant => self::renderAssistantTurn($msg, $theme, $md, $width, $assistantLabel, $expanded),
                 Role::System    => $msg->uiOnly
                     ? self::notice($theme)->render(self::NOTICE_ROW_LABEL . self::untrusted($msg->content))
@@ -3623,6 +3624,43 @@ final class Renderer
             };
         }
         return implode("\n\n", $blocks);
+    }
+
+    /**
+     * The row under a user turn naming what it attached (audit 15b-15):
+     * `📎 Chat.php · 🖼 shot.png`, or '' when it attached nothing.
+     *
+     * ONE ROW, CLIPPED, never wrapped: names come from user-typed paths and a
+     * screenshot dir can make them long, and a chip that wrapped would push
+     * the transcript by rows it does not own. Clipped to the pane width with
+     * the same `max(1, …)` floor every modal and table row takes (audit R4),
+     * so a 1-column pane still gets a one-cell chip rather than an over-wide
+     * row. Each name is folded to one sanitised line first ({@see oneLine()}):
+     * a path is user input and may carry anything a filename can.
+     */
+    private static function attachmentChip(Message $msg, Theme $theme, int $width): string
+    {
+        if ($msg->attachments === []) {
+            return '';
+        }
+
+        $names = [];
+        foreach ($msg->attachments as $attachment) {
+            if (!$attachment instanceof \SugarCraft\Crush\Attachment) {
+                continue;
+            }
+            $names[] = ($attachment->type === \SugarCraft\Crush\AttachmentType::Image ? '🖼 ' : '')
+                . self::oneLine($attachment->name());
+        }
+        if ($names === []) {
+            return '';
+        }
+
+        // The paperclip is two cells, so a one-cell pane cannot hold even it;
+        // that pane still gets a mark rather than a blank row it cannot read.
+        $chip = Width::truncate('📎 ' . implode(' · ', $names), max(1, $width));
+
+        return "\n" . self::dim($theme)->render($chip === '' ? '…' : $chip);
     }
 
     /**

@@ -110,7 +110,7 @@ final class KeyBindingRegistryTest extends TestCase
         $runes = KeyBindingRegistry::chatCtrlRunes();
         sort($runes);
 
-        $this->assertSame(['a', 'c', 'o', 'p', 'r', 'w'], $runes);
+        $this->assertSame(['a', 'c', 'o', 'p', 'r', 'v', 'w'], $runes);
     }
 
     /**
@@ -153,12 +153,12 @@ final class KeyBindingRegistryTest extends TestCase
         // In DECLARED row order, which is the order the accessors build in —
         // the sorted spellings live in the two tests above.
         $this->assertSame(['r'], KeyBindingRegistry::chatCtrlRunesYieldedToShell(), 'cold call');
-        $this->assertSame(['w', 'p', 'o', 'r', 'a', 'c'], KeyBindingRegistry::chatCtrlRunes(), 'cold call');
+        $this->assertSame(['w', 'p', 'o', 'v', 'r', 'a', 'c'], KeyBindingRegistry::chatCtrlRunes(), 'cold call');
         $this->assertSame(['n', 'k', 's', ',', 'g'], KeyBindingRegistry::shellCtrlRunes(), 'cold call');
 
         // Warm: the same answer, and now out of the memo rather than rebuilt.
         $this->assertSame(['r'], KeyBindingRegistry::chatCtrlRunesYieldedToShell(), 'warm call');
-        $this->assertSame(['w', 'p', 'o', 'r', 'a', 'c'], KeyBindingRegistry::chatCtrlRunes(), 'warm call');
+        $this->assertSame(['w', 'p', 'o', 'v', 'r', 'a', 'c'], KeyBindingRegistry::chatCtrlRunes(), 'warm call');
         $this->assertSame(['n', 'k', 's', ',', 'g'], KeyBindingRegistry::shellCtrlRunes(), 'warm call');
 
         $byContext = (new \ReflectionProperty(KeyBindingRegistry::class, 'ctrlRuneMemo'))->getValue();
@@ -251,11 +251,15 @@ final class KeyBindingRegistryTest extends TestCase
      * 66 -> 67 live (70 -> 71 all) when `chat.recall-next` was declared: ↓
      * steps forward through recalled prompts and then gives the draft back,
      * once ↑ recall became a walk over the cross-session prompt history.
+     *
+     * 67 -> 69 live (71 -> 73 all) with attachments (audit 15b-15):
+     * `chat.mention-complete` (Tab completes an `@file` path) and
+     * `chat.paste-image` (Ctrl+V attaches the clipboard's image).
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(71, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(67, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(73, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(69, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(4, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(9, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

@@ -107,6 +107,12 @@ final class ReadPathCensusTest extends TestCase
         'NOT_A_FILESYSTEM_PATH' => 'a URL; the sink function is shared, the domain is not',
         'NAMES_ONLY' => 'enumerates names and reads no content; the gate is on the later read',
         'CALLER_SUPPLIED' => 'an in-process caller chose the path and holds the boundary',
+        // Audit 15b-15. Not a boundary and not pretending to be one: an `@`
+        // mention is the person at the terminal choosing what to show the
+        // model, exactly as pasting the file's text would be. What makes it
+        // USER typed is enforced where the text comes from - Chat::submit()
+        // never reads a file-based command's (repository-authored) expansion.
+        'USER_TYPED' => 'a path the person at the terminal typed, dropped or pasted into their own prompt',
     ];
 
     /**
@@ -199,8 +205,18 @@ final class ReadPathCensusTest extends TestCase
         'Agents/WorktreeManager.php|new RecursiveDirectoryIterator' => [
             'NAMES_ONLY — recursive pattern expansion, gated at the copy like the glob above',
         ],
+        'Attachments/FileMentions.php|fopen' => [
+            'USER_TYPED — resolve() snapshots an `@path` mention from the prompt the user submitted '
+                . '(bounded: 20 files, 256 KiB of text, 5 MiB per image)',
+        ],
+        'Attachments/FileMentions.php|opendir' => [
+            'NAMES_ONLY — complete() lists one directory\'s names for Tab completion of a mention; '
+                . 'the read is resolve()\'s, on submit',
+        ],
         'Chat.php|file_get_contents' => [
             'SELF_LOCATED — a forked child\'s result file, named by Support\ToolIpcFiles',
+            'USER_TYPED — pastedImagePath() sniffs 16 bytes of a path the user pasted or dropped, to '
+                . 'tell an image from text',
         ],
         'Cli/Bootstrap.php|file_get_contents' => [
             'CONTAINED_UPSTREAM:Providers/ProviderFactory.php — the dev provider config, whose '
@@ -495,6 +511,10 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — sweepOrphanTemps() lists `.<target>.tmp.<16 hex>` beside a target '
                 . 'it has just published (audit R8); no content is read, the pattern is the '
                 . 'target\'s own escaped name, and only an old regular file this uid owns is unlinked',
+        ],
+        'Support/ClipboardImage.php|file_get_contents' => [
+            'SELF_LOCATED — save() sniffs the paste file it just had the clipboard tool write, under '
+                . 'its own 0700 directory with a random name',
         ],
         'Support/SiblingSpendLedger.php|fopen' => [
             'SELF_LOCATED — create()\'s exclusive (`x`, 0600) open of the name ToolIpcFiles::reserve() '

@@ -1050,9 +1050,9 @@ final class KeyHelpTest extends TestCase
     public function testTheFooterSaysThatTheSecondQuestionMarkTypesOne(): void
     {
         // Two sizes, because the hint is a different string in each: 100x30
-        // overflows the box (66 live rows plus 9 headers and 8 separators = 83
+        // overflows the box (69 live rows plus 9 headers and 8 separators = 86
         // content lines, against a 25-line body) so the footer carries the
-        // scroll clause as well, while 100x90 fits the whole list and drops it.
+        // scroll clause as well, while 100x95 fits the whole list and drops it.
         //
         // The live-row count moved 53 -> 54 when `permission.rearm` was
         // declared: a permission prompt disarmed by a stray keystroke can only
@@ -1067,13 +1067,15 @@ final class KeyHelpTest extends TestCase
         // Shift+Tab half of the focus cycle) and `shell.pane-palette` (the
         // Enter door from a docked pane) — the +2 the 55 -> 57 below is — and
         // 65 -> 66 with `chat.accept-suggestion` (→ takes the grayed next-message
-        // suggestion), the 57 -> 58.
+        // suggestion), the 57 -> 58. Attachments (audit 15b-15) declared
+        // `chat.mention-complete` and `chat.paste-image`: 67 -> 69 live, and
+        // the 100x30 overflow 59 -> 61.
         //
         // The 25 derives from renderKeyHelp() rather than being counted off a
         // screenshot: at 100x30, keyHelpGeometry() gives boxRows = rows - 2 = 28,
         // the border takes two more so viewport = 26, and the footer itself
         // takes one, so body = 25. Which is why the measured
-        // Renderer::keyHelpMaxOffset() here is 83 - 25 = 58; an earlier version
+        // Renderer::keyHelpMaxOffset() here is 86 - 25 = 61; an earlier version
         // of this comment said 27, a body that would have made it 43. Both
         // overflow figures are asserted below rather than left in the prose,
         // since a body height stated and not read back is what went wrong.
@@ -1081,9 +1083,11 @@ final class KeyHelpTest extends TestCase
         // The second size was 100x80 and had to GROW to 100x90 when those eight
         // rows landed, which is the same arithmetic read the other way: a body
         // of 80 - 2 - 2 - 1 = 75 no longer holds 80 lines, while 90 gives 85 and
-        // does. The 0 below is what measures that, so the "fits" half of this
-        // test cannot quietly become a second overflow case.
-        foreach ([[100, 30, 59], [100, 90, 0]] as [$cols, $rows, $expectedOverflow]) {
+        // does. It grew again to 100x95 with the attachment rows: 90 rows gave
+        // a body of 85 against 86 lines. The 0 below is what measures that, so
+        // the "fits" half of this test cannot quietly become a second overflow
+        // case.
+        foreach ([[100, 30, 61], [100, 95, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1147,7 +1151,7 @@ final class KeyHelpTest extends TestCase
                 "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
                 . 'column of margin, and it is this test that keeps it real',
             );
-            // 90 rows, not 80: the list is 83 content lines now (66 live rows,
+            // 95 rows, not 80: the list is 86 content lines now (69 live rows,
             // 9 headers, 8 separators), and an 80-row terminal gives a body of
             // 80 - 2 - 2 - 1 = 75, so it would paint the SCROLLING form and this
             // assertion would be measuring the same string twice. See
@@ -1155,7 +1159,7 @@ final class KeyHelpTest extends TestCase
             // arithmetic spelled out.
             $this->assertSame(
                 35,
-                Width::of($this->footer($this->chat('', $cols, 90))),
+                Width::of($this->footer($this->chat('', $cols, 95))),
                 'and the non-scrolling form, which is what a box tall enough for the whole list paints',
             );
         }

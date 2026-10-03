@@ -697,6 +697,22 @@ final class KeyBindingDriftTest extends TestCase
 
                 $this->assertSame('/compact ', $next->inputBuf);
             },
+            // Audit 15b-15: the second thing a bare Tab completes. A unique
+            // FILE comes back whole with the closing space; the App-level
+            // half (the shell yielding Tab) reads the same predicate,
+            // Chat::mentionOwnsTab(), asserted here too.
+            'chat.mention-complete' => function (array $k): void {
+                $root = $this->sandbox . '/mention-root';
+                @mkdir($root . '/src', 0777, true);
+                file_put_contents($root . '/src/Uniquely.php', "<?php\n");
+                $chat = (new Chat(inputBuf: 'read @src/Uni', backend: new EchoBackend(), projectRoot: $root))
+                    ->withSize(100, 30);
+                $this->assertTrue($chat->mentionOwnsTab(), 'fixture: the caret ends an @ mention');
+
+                [$next] = $chat->update($k[0]);
+
+                $this->assertSame('read @src/Uniquely.php ', $next->inputBuf);
+            },
             'chat.recall' => function (array $k): void {
                 [$next] = $this->chat([Message::user('earlier')])->update($k[0]);
                 $this->assertSame('earlier', $next->inputBuf);
@@ -845,6 +861,31 @@ final class KeyBindingDriftTest extends TestCase
                 [$collapsed] = $expanded->update($k[0]);
                 $this->assertArrayNotHasKey('call-1', $collapsed->expanded(), 'the same key must collapse it again');
                 $this->assertArrayNotHasKey($thought, $collapsed->expanded(), 'and the thought with it');
+            },
+            // Audit 15b-15: the chord reads the clipboard's image off the
+            // update path (a Cmd), and its answer lands in the draft as an @
+            // mention. Both halves are driven, through the tool seams.
+            'chat.paste-image' => function (array $k): void {
+                $pastes = $this->sandbox . '/pastes';
+                \SugarCraft\Crush\Support\ClipboardImage::useDirectoryForTesting($pastes);
+                \SugarCraft\Crush\Support\ClipboardImage::useCandidatesForTesting([['clipboard-tool']]);
+                \SugarCraft\Crush\Support\ClipboardImage::useRunnerForTesting(
+                    static fn (array $argv, string $dest): bool => file_put_contents($dest, "\x89PNG\r\n\x1a\n" . 'pixels') !== false,
+                );
+                try {
+                    [$next, $cmd] = $this->chat([], 'look at ')->update($k[0]);
+                    $this->assertNotNull($cmd, 'the chord must read the clipboard');
+                    $answer = $cmd();
+                    $this->assertInstanceOf(\SugarCraft\Crush\ClipboardImagePastedMsg::class, $answer);
+                    [$pasted] = $next->update($answer);
+
+                    $this->assertMatchesRegularExpression('~^look at @/\S+\.png $~', $pasted->inputBuf);
+                    $this->assertFileExists(substr(trim($pasted->inputBuf), strlen('look at @')));
+                } finally {
+                    \SugarCraft\Crush\Support\ClipboardImage::useRunnerForTesting(null);
+                    \SugarCraft\Crush\Support\ClipboardImage::useCandidatesForTesting(null);
+                    \SugarCraft\Crush\Support\ClipboardImage::useDirectoryForTesting(null);
+                }
             },
             'chat.session-picker' => function (array $k): void {
                 [$next] = $this->chatWithSessions(2)->update($k[0]);
