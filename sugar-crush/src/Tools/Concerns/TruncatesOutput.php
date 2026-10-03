@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tools\Concerns;
 
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Support\PrivateRetainedDir;
 use SugarCraft\Crush\Support\ToolOutputSpill;
 use SugarCraft\Crush\Tools\Tool;
 
@@ -160,12 +161,16 @@ trait TruncatesOutput
      *
      * A non-positive $maxBytes disables the cap, which keeps the trait usable
      * from a tool whose caller has deliberately opted out.
+     *
+     * $saveSpill false is a PROBE: the same text, byte for byte in length, but
+     * nothing is written — see {@see truncateMerged()}.
      */
     private function truncateOutput(
         string $output,
         int $maxBytes,
         int $alreadyDropped = 0,
         bool $endsMidLine = false,
+        bool $saveSpill = true,
     ): string {
         return $this->truncateMerged([
             'head' => $output,
@@ -173,7 +178,7 @@ trait TruncatesOutput
             'dropped' => $alreadyDropped,
             'headMidLine' => $endsMidLine,
             'tailMidLine' => false,
-        ], $maxBytes);
+        ], $maxBytes, $saveSpill);
     }
 
     /**
@@ -192,9 +197,16 @@ trait TruncatesOutput
      * failure cannot happen either: a chatty stderr must not starve the stdout
      * the question was actually about.
      *
+     * $saveSpill false clips exactly as a saving call would — same windows,
+     * same marker, a pointer of the same length — but writes no file. Grep and
+     * Glob clip once at a floor only to learn which paths the result will
+     * show, and then clip for real at a cap that may differ; a probe that
+     * SAVED left a file no result named whenever the output's size fell
+     * between the two cuts (spilled at the floor, untouched at the cap).
+     *
      * @param array{head: string, tail: string, dropped: int, headMidLine: bool, tailMidLine: bool} $merged
      */
-    private function truncateMerged(array $merged, int $maxBytes): string
+    private function truncateMerged(array $merged, int $maxBytes, bool $saveSpill = true): string
     {
         $head = $merged['head'];
         $tail = $merged['tail'];
@@ -221,15 +233,17 @@ trait TruncatesOutput
         // captured byte is still in hand, and the result then names the file.
         // Null whenever spilling does not apply (see spillOverflow()), which
         // leaves every byte below exactly as it was before the store existed.
-        $spill = $this->spillOverflow($joined, $maxBytes);
+        $spill = $this->spillOverflow($joined, $maxBytes, $saveSpill);
         $pointer = $spill === null ? '' : "\n" . ToolOutputSpill::pointer($spill, strlen($joined), $merged['dropped']);
 
         // The marker is part of what the model receives, so a cap that
         // excludes it is not the bound it is documented to be. Sizing the
         // reserve with $total in BOTH slots is a true upper bound on the
         // marker finally emitted, since the dropped count can never exceed
-        // the total. The pointer, when there is one, is paid for the same way.
-        $budget = max(0, $maxBytes - (strlen($this->truncationMarker($total, $total)) + 1) - strlen($pointer));
+        // the total. The pointer, when there is one, is paid for the same way
+        // — at the length it will have AFTER the runtime moves the file into
+        // the session's directory (see spillPointerReserve()).
+        $budget = max(0, $maxBytes - (strlen($this->truncationMarker($total, $total)) + 1) - self::spillPointerReserve($pointer));
 
         $tailClip = $tail === ''
             ? ['kept' => '', 'dropped' => 0]
@@ -296,13 +310,73 @@ trait TruncatesOutput
      * short only because the CAPTURE dropped bytes has nothing more to save than
      * the model already sees.
      */
-    private function spillOverflow(string $joined, int $maxBytes): ?string
+    private function spillOverflow(string $joined, int $maxBytes, bool $save = true): ?string
     {
         if (!$this instanceof Tool || $maxBytes < ToolOutputSpill::MIN_CAP_BYTES || strlen($joined) <= $maxBytes) {
             return null;
         }
 
-        return ToolOutputSpill::store($joined);
+        return $save ? ToolOutputSpill::store($joined) : self::spillProbePath();
+    }
+
+    /**
+     * A stand-in for the path {@see ToolOutputSpill::store()} would return, of
+     * the SAME length (the store names every file `out-<32 hex>.txt` directly in
+     * its directory), so a probe's clip lands where the saving clip will; or
+     * null when the store's directory is refused, which is the case where the
+     * saving call gets null too. A write that then fails on its own (a full
+     * disk) is the one way the two can still differ.
+     */
+    private static function spillProbePath(): ?string
+    {
+        $dir = ToolOutputSpill::directory();
+        try {
+            PrivateRetainedDir::verified($dir, 'tool output spill');
+        } catch (\RuntimeException) {
+            return null;
+        }
+
+        return $dir . '/out-' . str_repeat('0', 32) . '.txt';
+    }
+
+    /**
+     * What a spill $pointer costs the cap: its own length PLUS the most the
+     * runtime can lengthen it by. {@see ToolOutputSpill::forModel()} moves every
+     * top-level spill file into `s-<session>/` and rewrites the path in the
+     * result, AFTER the tool has measured it — so a pointer charged at its
+     * emitted length let a saturated result come back over its cap by the
+     * length of that directory name. MEASURED on SpillToFileTest's Grep: 65,553
+     * bytes against a 65,536 cap whenever the line clip left fewer than
+     * `strlen("/s-sess_spill_grep")` = 18 spare bytes, which moved with the
+     * temp dir's path length. Charged at the LONGEST directory name the store
+     * mints (a 100-character id; anything else is a 32-character hash), since
+     * the tool does not know the session.
+     */
+    private static function spillPointerReserve(string $pointer): int
+    {
+        if ($pointer === '') {
+            return 0;
+        }
+
+        $longest = max(
+            strlen(ToolOutputSpill::sessionDirName(str_repeat('a', 100))),
+            strlen(ToolOutputSpill::sessionDirName('')),
+        );
+
+        return strlen($pointer) + 1 + $longest;
+    }
+
+    /**
+     * Save $text — a result the caller is about to cut at its OWN position
+     * rather than through {@see truncateMerged()} — and return the pointer line
+     * (leading newline included) to append, or '' when no spill applies. The
+     * caller charges {@see spillPointerReserve()} of it against its budget.
+     */
+    private function spillPointerFor(string $text, int $maxBytes, int $neverCaptured): string
+    {
+        $path = $this->spillOverflow($text, $maxBytes);
+
+        return $path === null ? '' : "\n" . ToolOutputSpill::pointer($path, strlen($text), $neverCaptured);
     }
 
     /**

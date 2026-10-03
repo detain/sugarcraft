@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Support\ForkedChild;
+use SugarCraft\Crush\Support\ToolOutputSpill;
 use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 use SugarCraft\Crush\Tools\BuiltIn\Bash;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
@@ -26,10 +27,15 @@ final class ToolSecurityTest extends TestCase
 
     private string $previousSslCertFile = '';
 
+    /** Where an over-cap WebFetch saves its page (roadmap 2.8): never the user's real store. */
+    private string $spillDir;
+
     protected function setUp(): void
     {
         $this->tmpDir = sys_get_temp_dir() . '/sugarcrush_security_' . uniqid((string) getmypid(), true);
         mkdir($this->tmpDir, 0777, true);
+        $this->spillDir = $this->tmpDir . '-spill';
+        ToolOutputSpill::useDirectoryForTesting($this->spillDir);
         $this->markerFile = $this->tmpDir . '/injection_marker_' . uniqid((string) getmypid(), true);
         $this->previousSslCertFile = (string) getenv('SSL_CERT_FILE');
     }
@@ -40,6 +46,18 @@ final class ToolSecurityTest extends TestCase
         // socket and may still be writing request logs into $tmpDir — the
         // trait's ledger SIGKILLs+reaps survivors before any cleanup below.
         $this->reapTrackedForkedChildren();
+
+        ToolOutputSpill::useDirectoryForTesting(null);
+        // One level of `s-<session>/` directories is all the store ever makes.
+        foreach (glob($this->spillDir . '/*') ?: [] as $saved) {
+            if (is_dir($saved) && !is_link($saved)) {
+                array_map('unlink', glob($saved . '/*') ?: []);
+                @rmdir($saved);
+            } else {
+                @unlink($saved);
+            }
+        }
+        @rmdir($this->spillDir);
 
         // T7 points OpenSSL at a throwaway self-signed anchor; the next test
         // in the process must not inherit it.
@@ -399,10 +417,11 @@ final class ToolSecurityTest extends TestCase
     public function testWebFetchCapsBytesReadFromASingleHop(): void
     {
         // Two bounds, two jobs (audit F-T3). The wire read stops one chunk
-        // past 2 MiB — the MEMORY bound — and the result is then cut to the
+        // past the MEMORY bound — 4 MiB, the spill capture, since roadmap 2.8
+        // saves what the cut leaves out — and the result is then cut to the
         // shared 64 KiB output cap. Content-Length is what lets the marker
         // name the real total even though the read stopped well short of it.
-        $size = 2 * 1024 * 1024 + 200 * 1024;
+        $size = 4 * 1024 * 1024 + 200 * 1024;
         $port = $this->startLoopbackHttpFixture([
             $this->httpResponse(str_repeat('x', $size)),
         ]);
@@ -428,7 +447,7 @@ final class ToolSecurityTest extends TestCase
         // dynamic pages): once the wire bound stops the read, nobody knows
         // the real size, so the marker's figures must be announced as lower
         // bounds rather than passed off as the total.
-        $size = 2 * 1024 * 1024 + 200 * 1024;
+        $size = ToolOutputSpill::CAPTURE_BYTES + 200 * 1024;
         $port = $this->startLoopbackHttpFixture([
             "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n" . str_repeat('y', $size),
         ]);
@@ -443,7 +462,7 @@ final class ToolSecurityTest extends TestCase
         $this->assertFalse($result->isError());
         $this->assertLessThanOrEqual(65536, strlen($result->content()));
         [, , $total] = $this->truncationFigures($result->content());
-        $this->assertGreaterThan(2 * 1024 * 1024, $total);
+        $this->assertGreaterThan(ToolOutputSpill::CAPTURE_BYTES, $total);
         $this->assertLessThan($size, $total, 'the read must stop at the wire bound, not buffer the whole body');
         $this->assertStringContainsString('lower bound', $result->content());
     }
@@ -501,6 +520,38 @@ final class ToolSecurityTest extends TestCase
         [$kept, , $total] = $this->truncationFigures($content);
         $this->assertSame(strlen($body), $total);
         $this->assertGreaterThan(60000, $kept);
+    }
+
+    public function testWebFetchSavesThePageItCutAndNamesTheFile(): void
+    {
+        // The spill gap Bash had: the body was pre-cut to the budget BEFORE the
+        // trait saw it, so the overflow it would have saved was already gone and
+        // a 200 KiB page came back as 64 KiB with no way to the rest. Every
+        // received byte is saved now, the pointer is paid for inside the cap,
+        // and the runtime's move into the session directory cannot push the
+        // result over it either.
+        $body = "<!doctype html>\n" . str_repeat('z', 200 * 1024) . 'THE-END';
+        $port = $this->startLoopbackHttpFixture([$this->httpResponse($body)]);
+
+        $webFetch = new WebFetch(
+            resolveAddresses: $this->fakeDns(['pin.test' => ['127.0.0.2']]),
+            isBlockedAddress: $this->fixtureOnlyBlocklist(),
+        );
+
+        $result = $webFetch->execute(['id' => 'wf', 'url' => "http://pin.test:$port/long"]);
+
+        $content = $result->content();
+        $this->assertLessThanOrEqual(65536, strlen($content));
+        $this->assertSame(1, preg_match('/\.\.\. \[saved: the (\d+) bytes this tool captured are in (\S+) — Read it/', $content, $m));
+        $this->assertSame(strlen($body), (int) $m[1]);
+        $this->assertSame($body, file_get_contents($m[2]), 'the saved file holds the whole page');
+        $this->assertStringNotContainsString('never captured', $content, 'the read finished, so nothing is missing from the file');
+        [, , $total] = $this->truncationFigures($content);
+        $this->assertSame(strlen($body), $total);
+
+        $adopted = ToolOutputSpill::forModel($result, 'WebFetch', [], str_repeat('s', 100), static fn (): int => 0);
+        $this->assertNotSame($content, $adopted->content(), 'the pointer moved into the session directory');
+        $this->assertLessThanOrEqual(65536, strlen($adopted->content()), 'the longest session directory name still fits the cap');
     }
 
     public function testWebFetchOutputCapIsAConstructorParameter(): void

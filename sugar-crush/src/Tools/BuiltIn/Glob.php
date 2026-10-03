@@ -579,7 +579,8 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         $floor = $this->maxOutputBytes > 0
             ? max(1, $bodyCap - $ceiling - 1)
             : 0;
-        $probe = $this->truncateOutput($output, $floor);
+        // Saves nothing — see the same probe in {@see Grep::execute()}.
+        $probe = $this->truncateOutput($output, $floor, saveSpill: false);
         $shown = self::pathsIn($probe, $files);
 
         // Bounded in COUNT as well as in bytes, and the count is decided
@@ -612,9 +613,7 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         // promises. Under announce-once that is the first touch of a
         // directory; every call after it has no section and takes the whole
         // cap, byte-identical to the same tool built with no loader at all.
-        $output = $section === ''
-            ? $this->truncateOutput($output, $bodyCap)
-            : $probe;
+        $output = $this->truncateOutput($output, $section === '' ? $bodyCap : $floor);
 
         // The pruning has to announce itself for the same reason the byte cap
         // and the match cap do: a silently shortened list reads as a complete

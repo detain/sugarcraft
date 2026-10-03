@@ -59,6 +59,9 @@ use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
  *     the {@see TruncatesOutput} budget Bash/Grep/Glob share, with the shared
  *     marker naming the byte counts. The wire bound alone used to be the
  *     result bound — 2 MiB, ~0.5M tokens, replayed on every later step.
+ *     What the cut leaves out is SAVED (roadmap 2.8,
+ *     {@see \SugarCraft\Crush\Support\ToolOutputSpill}) and the result
+ *     names the file, so the rest of a long page is one Read away.
  *
  * The two closure seams exist so tests can simulate rebinding-shaped DNS
  * answers and dial a loopback fixture without a nameserver or a public IP;
@@ -394,11 +397,13 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
 
     /**
      * Never less than the result cap, so a caller-raised cap is not silently
-     * undercut by the memory bound.
+     * undercut by the memory bound; and never less than the spill capture
+     * ({@see TruncatesOutput::captureBound()}) when the overflow can be saved,
+     * so the saved file holds as much of the page as Bash's would of a log.
      */
     private function wireBound(): int
     {
-        return max(self::MAX_WIRE_BYTES, $this->resultCap());
+        return max(self::MAX_WIRE_BYTES, $this->captureBound($this->resultCap()) ?? 0);
     }
 
     /**
@@ -445,10 +450,20 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
         // Never 0: the trait reads a non-positive cap as "uncapped" and would
         // drop the marker, which is the one thing a tiny cap must still carry.
         $budget = max(1, $cap - strlen($note));
+
+        // Every received byte is saved BEFORE the byte pre-cut throws the rest
+        // away. The trait cannot do it here: it only ever sees $kept, which is
+        // already inside the budget, so the overflow it would save is gone.
+        // That was this tool's spill gap — the same one Bash had while its
+        // capture stopped at the cap. Bytes the wire bound never read are not
+        // in the file, and the pointer says so when their count is known.
+        $pointer = $this->spillPointerFor($body, $budget, $lowerBound ? 0 : $total - $received);
+        $budget = max(1, $budget - self::spillPointerReserve($pointer));
+
         $reserve = strlen($this->truncationMarker($total, $total)) + 1;
         $kept = mb_strcut($body, 0, max(0, $budget - $reserve), 'UTF-8');
 
-        return $this->truncateOutput($kept, $budget, $total - strlen($kept)) . $note;
+        return $this->truncateOutput($kept, $budget, $total - strlen($kept)) . $pointer . $note;
     }
 
     /**

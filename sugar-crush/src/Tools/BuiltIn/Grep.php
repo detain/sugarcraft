@@ -500,7 +500,10 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         $floor = $this->maxOutputBytes > 0
             ? max(1, $bodyCap - $ceiling - 1)
             : 0;
-        $probe = $this->truncateMerged($merged, $floor);
+        // A probe SAVES nothing (saveSpill: false): the final clip below may be
+        // a different cut, and a probe that saved left an orphaned spill file
+        // whenever the output fell between the floor and $bodyCap.
+        $probe = $this->truncateMerged($merged, $floor, saveSpill: false);
 
         $section = '';
         if ($this->instructionLoader !== null) {
@@ -544,9 +547,7 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         // promises. Under announce-once that is the first touch of a
         // directory; every call after it has no section and takes the whole
         // cap, byte-identical to the same tool built with no loader at all.
-        $content = $section === ''
-            ? $this->truncateMerged($merged, $bodyCap)
-            : $probe;
+        $content = $this->truncateMerged($merged, $section === '' ? $bodyCap : $floor);
 
         $skipped = self::presentExcludedDirs($path, $rules);
         if ($skipped !== []) {

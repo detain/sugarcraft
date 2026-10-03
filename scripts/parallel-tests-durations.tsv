@@ -142,6 +142,7 @@ sugar-crush/tests/Context/EnvironmentBlockSubdirectoryTest.php	2.193	5
 sugar-crush/tests/Cli/BootstrapSkillSkipsTest.php	2.177	32
 sugar-crush/tests/Tools/ToolSecurityTest.php	2.134	83
 sugar-crush/tests/Tui/AgentViewPaneGeometryTest.php	2.132	14
+sugar-crush/tests/Tools/SpillCapAccountingTest.php	2.130	4
 sugar-crush/tests/Providers/ClaudeCodeStreamJsonTest.php	2.127	15
 sugar-crush/tests/Cli/NonInteractiveRefusalDocumentTest.php	2.123	15
 sugar-crush/tests/Providers/PromptStabilityTest.php	2.117	16
