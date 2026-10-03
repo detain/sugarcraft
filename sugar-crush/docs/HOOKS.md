@@ -882,6 +882,13 @@ denied; the committed templates `.env.example`, `.env.sample`, `.env.dist`,
 name where `.env` is glued to more name (`process.env.KEY`, `foo.env.example`,
 `.environment`) or a `.env/` virtualenv directory is not a `.env` at all.
 
+Key material is read-denied the same way: `*.pem` and `*.key` (any case, with a
+stem or a glob stem, so `server.key` and `Glob **/*.key` are refused but `jq
+.key` is not) and the SSH identities `id_rsa`, `id_dsa`, `id_ecdsa`,
+`id_ed25519` with any suffix (`id_rsa_work`, `id_ed25519_sk`) — except the
+`.pub` half, which exists to be shared. A public `.pem` certificate is refused
+too: the extension cannot tell a chain from a key.
+
 A hook cannot screen a *directory* search — `Grep path="."` contains `.env` —
 so `Grep` itself never opens one: it always passes `--exclude=.env
 --exclude=.envrc --exclude=.env.*` and `--exclude-dir=.git` (plus

@@ -420,6 +420,16 @@ final class ProtectFilesHookTest extends TestCase
             'MCP nested list' => ['mcp__fs__read_multiple', ['paths' => ['src/a.php', '.git/config']]],
             'MCP shell line' => ['mcp__shell__run', ['command' => 'cat ".env";true']],
             'MCP write to policy' => ['mcp__fs__write_file', ['path' => '.sugar-crush/hooks.yaml', 'content' => 'x']],
+            // Step 0.14-c: key material is read-denied like `.env`.
+            'Read a TLS key' => ['Read', ['file_path' => 'certs/server.key']],
+            'cat a pem, any case' => ['Bash', ['command' => 'cat deploy/signing.PEM']],
+            'Grep include *.pem' => ['Grep', ['pattern' => 'BEGIN', 'path' => '.', 'include' => '*.pem']],
+            'Glob for every key' => ['Glob', ['pattern' => '**/*.key', 'path' => '.']],
+            'Read an ssh identity' => ['Read', ['file_path' => '/home/u/.ssh/id_ed25519']],
+            'cat id_rsa quoted' => ['Bash', ['command' => 'cat "$HOME/.ssh/id_rsa"']],
+            'a suffixed identity' => ['Bash', ['command' => 'cat ~/.ssh/id_rsa_work']],
+            'a security-key identity' => ['Read', ['file_path' => '.ssh/id_ecdsa_sk']],
+            'MCP read of a key' => ['mcp__fs__read_file', ['path' => 'tls/private.key']],
         ];
     }
 
@@ -451,6 +461,13 @@ final class ProtectFilesHookTest extends TestCase
             'MCP read of source' => ['mcp__fs__read_file', ['path' => 'src/a.php']],
             'Grep may read a policy file' => ['Grep', ['pattern' => 'tools', 'path' => '.sugar-crush/agents']],
             'WebFetch is not judged' => ['WebFetch', ['url' => 'https://example.com/docs/.env']],
+            // Step 0.14-c's boundaries: the public half and the lookalikes.
+            'the public ssh key' => ['Read', ['file_path' => '/home/u/.ssh/id_ed25519.pub']],
+            'cat id_rsa.pub' => ['Bash', ['command' => 'cat ~/.ssh/id_rsa.pub']],
+            'jq property .key' => ['Bash', ['command' => "jq '.key' data.json"]],
+            'a .keys file is another name' => ['Read', ['file_path' => 'config/server.keys']],
+            'keyboard source' => ['Read', ['file_path' => 'src/keyboard.php']],
+            'Grep for the TEXT .pem' => ['Grep', ['pattern' => 'cert.pem', 'path' => 'src']],
         ];
     }
 

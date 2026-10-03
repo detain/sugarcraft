@@ -76,9 +76,30 @@ final readonly class ProtectFilesHook implements HookInterface
      *    a virtualenv, and `.env/bin/python` holds no secret. `prod.env` is
      *    deliberately out of scope for the same reason `process.env` is: the
      *    name shape cannot tell them apart.
+     *
+     * KEY MATERIAL (step 0.14-c), read- and write-denied like `.env`:
+     *
+     *  - `*.pem` and `*.key`, any case: a TLS or signing private key is the
+     *    credential itself. The name must have a stem (`server.key`,
+     *    `deploy.PEM`), because a BARE `.key` is far more often jq's or a
+     *    template's property path (`jq .key`) than a dotfile; a glob stem
+     *    (`*.pem`, `?.key`) counts, so `Glob **\/*.key` and `Grep
+     *    include=*.pem` are refused as statements of intent. Public
+     *    certificates are `.pem` too (`ca.pem`) and are refused all the same:
+     *    the extension cannot tell a chain from a key, and the fail-closed
+     *    reading costs a `Read` of a public file. In `Bash` a dotted property
+     *    spelled like a file (`grep -rn item.key src`) is refused as well —
+     *    the text-match cost the `.env` family already pays for
+     *    `process.env`-free spellings; the `Grep` tool's `pattern` is not
+     *    judged, so the same search through it still works.
+     *  - SSH identities `id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519` (and
+     *    their `_sk`/suffixed variants such as `id_rsa_work`), EXCEPT the
+     *    `.pub` half, which exists to be shared.
      */
     public const DEFAULT_PROTECTED_PATTERNS = [
         '/(?<![\w.-])\.env(?:rc)?(?![\w\/-])(?!(?:\.[\w-]+)*\.(?:example|sample|dist|template|tpl)(?![\w.-]))/',
+        '/[\w*?-]\.(?:pem|key)(?![\w.-])/i',
+        '/(?<![\w.-])id_(?:rsa|dsa|ecdsa|ed25519)[\w.-]*(?<!\.pub)(?![\w.-])/',
         '/\.git\/config\b/',
         '/(^|\/)config\/[^\s]*\.php\b/',
         ...self::WRITE_ONLY_PATTERNS,

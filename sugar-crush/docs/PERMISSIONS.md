@@ -493,6 +493,7 @@ The gate is not a replacement for them. Even under `bypass-permissions`,
 | Pattern | Applies to |
 |---|---|
 | `.env`, `.env.*`, `.envrc` (not the `.env.example`/`.sample`/`.dist`/`.template`/`.tpl` templates) | `Read`, `Edit`, `Write`, `Bash`, `Grep`, `Glob`, `Lsp`, `mcp__*` — reading it *is* the leak; `Grep` also never opens these files itself, even with `include_ignored: true` |
+| `*.pem`, `*.key` (with a stem, any case), SSH identities `id_rsa*`, `id_dsa*`, `id_ecdsa*`, `id_ed25519*` (not the `.pub` half) | all of the above — key material is the credential itself; public `.pem` certificates are refused too, since the extension cannot tell a chain from a key |
 | `.git/config`, `config/*.php` | all of the above |
 | `.sugar-crush/hooks.yaml`, `.sugar-crush/config.json`, `.sugar-crush/agents/` | **writes only** (`Edit`, `Write`, `Bash`, `mcp__*`) |
 | `.git/hooks/`, `.git/info/` | **writes only** (`Edit`, `Write`, `Bash`, `mcp__*`) — a hook runs on your next `git commit`, outside any session (audit F-J4) |
