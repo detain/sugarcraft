@@ -750,6 +750,12 @@ final class Runtime
      *                                Null — the default — takes
      *                                {@see \SugarCraft\Crush\Agents\AgentPoolConfig::$maxConcurrent}'s
      *                                default (5); values below 1 clamp to 1.
+     * @param ?\SugarCraft\Crush\Support\ToolCallIdAllocator $toolCallIds step 0.2:
+     *                                the per-turn id ledger every step's tool
+     *                                calls are rewritten through before they
+     *                                are yielded or run. Null — the default —
+     *                                mints one with a random nonce on first
+     *                                use; a test passes a fixed nonce.
      */
     public function __construct(
         private ProviderInterface $provider,
@@ -759,6 +765,7 @@ final class Runtime
         private int $parallelToolDeadlineSeconds = self::PARALLEL_TOOL_DEADLINE_SECONDS,
         private ?int $maxOutputTokens = null,
         private ?int $maxConcurrentDelegations = null,
+        private ?\SugarCraft\Crush\Support\ToolCallIdAllocator $toolCallIds = null,
     ) {}
 
     /**
@@ -1294,6 +1301,20 @@ final class Runtime
     {
         $messages = $this->buildMessages($app);
 
+        // Step 0.2: one id ledger per Runtime — per turn — seeded with every
+        // call the conversation already carries (a resumed delegation's
+        // transcript included), so no call this turn mints can reuse one.
+        $this->toolCallIds ??= \SugarCraft\Crush\Support\ToolCallIdAllocator::new();
+        foreach ($app->messages as $priorMessage) {
+            if ($priorMessage instanceof AssistantMessage) {
+                foreach ($priorMessage->toolCalls() ?? [] as $priorCall) {
+                    if ($priorCall instanceof ToolCall) {
+                        $this->toolCallIds->observe([$priorCall->id()]);
+                    }
+                }
+            }
+        }
+
         // P10.S1: ONE fold of the section list yields both wire forms — the
         // flat string every provider reads and the structured block list an
         // Anthropic-shaped one can express — so they are the same bytes cut
@@ -1581,6 +1602,11 @@ final class Runtime
         // the two Vertex arms also carry their side's buckets on the carrier
         // (each priced to its own projection, never the whole document twice),
         // so sum() merges the split across the pair as well as the totals.
+        //
+        // Step 0.2: ids are made unique HERE, before the message is yielded
+        // and before a call runs, so the history, the ToolStarted/ToolFinished
+        // events and every ToolResultMessage all carry the same id.
+        $toolCalls = ($this->toolCallIds ??= \SugarCraft\Crush\Support\ToolCallIdAllocator::new())->assign($toolCalls);
         yield new AssistantMessage($buffer, $toolCalls ?: null, $reasoning, Usage::sum($usages), $lengthStopped);
 
         if ($toolCalls !== []) {
@@ -1682,9 +1708,15 @@ final class Runtime
             $onProgress($response->reasoning);
         }
 
+        // Step 0.2: unique ids before the yield and before any call runs — see
+        // the matching line in runStreaming().
+        $toolCalls = $response->toolCalls === null
+            ? null
+            : ($this->toolCallIds ??= \SugarCraft\Crush\Support\ToolCallIdAllocator::new())->assign($response->toolCalls);
+
         yield new AssistantMessage(
             $response->content,
-            $response->toolCalls,
+            $toolCalls,
             $response->reasoning,
             // The provider-counted figures this response already carried and
             // that were dropped here until crush_code.md Phase 5 item 7. Null
@@ -1699,8 +1731,8 @@ final class Runtime
             $response->truncated,
         );
 
-        if ($response->toolCalls !== null && $response->toolCalls !== []) {
-            foreach ($this->executeToolCalls($response->toolCalls, $app, $onEvent, $onPermissionRequest, self::toolWaitHeartbeat($request, $onProgress)) as $msg) {
+        if ($toolCalls !== null && $toolCalls !== []) {
+            foreach ($this->executeToolCalls($toolCalls, $app, $onEvent, $onPermissionRequest, self::toolWaitHeartbeat($request, $onProgress)) as $msg) {
                 yield $msg;
             }
         }

@@ -84,6 +84,17 @@ final readonly class ToolCall
     }
 
     /**
+     * The same call under another id — every other field, the faithful wire
+     * arguments included, carried unchanged. Used by
+     * {@see \SugarCraft\Crush\Support\ToolCallIdAllocator} (step 0.2) to give a
+     * turn's calls unique ids before anything sees them.
+     */
+    public function withId(string $id): self
+    {
+        return new self($id, $this->name, $this->arguments, $this->argumentsError(), $this->rawArguments());
+    }
+
+    /**
      * The arguments exactly as the model sent them on the wire, or null when
      * there is no faithful wire form to replay (a recovered textual call, a
      * pre-decoded payload, a blank or broken one).
