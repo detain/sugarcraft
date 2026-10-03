@@ -10054,6 +10054,27 @@ final class Chat implements Model
             }
         }
 
+        // The row's turn count and last-prompt preview, which the session
+        // picker shows instead of the system prompt every session shares
+        // (Appendix P §3.1, audit B3). The prompt is the user row this turn
+        // added, so the parked-compaction route records the prompt it sent,
+        // not whatever the box holds now.
+        if ($this->sessionStore !== null && $this->currentSessionId !== null) {
+            $turnPrompt = null;
+            foreach ($newTurnMessages as $message) {
+                if ($message instanceof Message && $message->role === Role::User) {
+                    $turnPrompt = $message->content;
+                }
+            }
+            if ($turnPrompt !== null) {
+                try {
+                    $this->sessionStore->recordTurn($this->currentSessionId, $turnPrompt);
+                } catch (\Throwable) {
+                    // Picker bookkeeping only; never blocks the prompt.
+                }
+            }
+        }
+
         $completion = $this->scheduleBackendCompletion($next, $cancellation, $generation);
         $titleCmd = $this->scheduleTitleGeneration($next);
 

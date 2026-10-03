@@ -81,7 +81,10 @@ final class SessionIndexAndRetentionTest extends TestCase
     {
         $this->createOldSchemaDatabase(50);
 
-        $before = $this->queryPlan($this->dbPath);
+        // The old schema has no `kind`/`archived_at` columns for the current
+        // statement's WHERE to name, so the BEFORE plan explains the statement
+        // the pre-index build ran; the AFTER plan is the real one again.
+        $before = $this->queryPlan($this->dbPath, 'SELECT * FROM sessions ORDER BY updated_at DESC, rowid DESC LIMIT ?');
         $this->assertStringContainsString('SCAN sessions', $before);
         $this->assertStringContainsStringIgnoringCase('TEMP B-TREE', $before);
 
@@ -433,11 +436,11 @@ final class SessionIndexAndRetentionTest extends TestCase
      * The statement text now comes from the class under test, so that
      * mutation fails here.
      */
-    private function queryPlan(string $dbPath): string
+    private function queryPlan(string $dbPath, string $sql = SessionStore::LIST_SESSIONS_SQL): string
     {
         $pdo = new PDO('sqlite:' . $dbPath);
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $stmt = $pdo->prepare('EXPLAIN QUERY PLAN ' . SessionStore::LIST_SESSIONS_SQL);
+        $stmt = $pdo->prepare('EXPLAIN QUERY PLAN ' . $sql);
         $stmt->execute([20]);
 
         $details = [];

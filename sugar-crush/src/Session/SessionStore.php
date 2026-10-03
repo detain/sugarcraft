@@ -22,7 +22,49 @@ final class SessionStore
      * degraded the actual plan to `SCAN sessions` + `USE TEMP B-TREE`. A test
      * that explains a copy proves nothing about the query that runs.
      */
-    public const LIST_SESSIONS_SQL = 'SELECT * FROM sessions ORDER BY updated_at DESC, rowid DESC LIMIT ?';
+    public const LIST_SESSIONS_SQL = "SELECT * FROM sessions WHERE kind IN ('main', 'branch') AND archived_at IS NULL ORDER BY updated_at DESC, rowid DESC LIMIT ?";
+
+    /**
+     * Columns added to `sessions` after its first release, with the DDL
+     * {@see initSchema()} uses to add each one to an older database
+     * (Appendix P §3.1). They are also in the CREATE TABLE, so a fresh
+     * database never takes the ALTER path.
+     *
+     *  - `kind`: a {@see SessionKind}; only `main`/`branch` rows reach the
+     *    default list, the tab strip and `--continue`.
+     *  - `parent_id`, `parent_call_id`, `agent`, `status`: the link a branch,
+     *    sub-agent or background row keeps to the session it came from.
+     *  - `title_source`: a {@see TitleSource}; who set `name`.
+     *  - `pinned`, `archived_at`: user curation. Pinned rows survive
+     *    retention; archived rows leave the default list.
+     *  - `cwd`, `git_branch`: where the session was opened.
+     *  - `turns`, `last_preview`: what the picker shows in place of the
+     *    system prompt every session shares.
+     */
+    private const MIGRATED_COLUMNS = [
+        'name' => 'TEXT',
+        'kind' => "TEXT NOT NULL DEFAULT 'main'",
+        'parent_id' => 'TEXT',
+        'parent_call_id' => 'TEXT',
+        'agent' => 'TEXT',
+        'status' => 'TEXT',
+        'title_source' => 'TEXT',
+        'pinned' => 'INTEGER NOT NULL DEFAULT 0',
+        'archived_at' => 'DATETIME',
+        'cwd' => 'TEXT',
+        'git_branch' => 'TEXT',
+        'turns' => 'INTEGER NOT NULL DEFAULT 0',
+        'last_preview' => 'TEXT',
+    ];
+
+    /**
+     * The values {@see markSubAgentStatus()} accepts for a child row's
+     * `status` column.
+     */
+    public const CHILD_STATUSES = ['running', 'complete', 'failed', 'cancelled', 'interrupted'];
+
+    /** Byte cap on `last_preview`; cut on a UTF-8 boundary. */
+    public const PREVIEW_MAX_BYTES = 160;
 
     /**
      * Upper bound on `pruneSessions()`'s `$daysOld`, ~100 years.
@@ -102,18 +144,44 @@ final class SessionStore
                 model TEXT NOT NULL,
                 system_prompt TEXT,
                 name TEXT,
-                metadata TEXT
+                metadata TEXT,
+                kind TEXT NOT NULL DEFAULT \'main\',
+                parent_id TEXT,
+                parent_call_id TEXT,
+                agent TEXT,
+                status TEXT,
+                title_source TEXT,
+                pinned INTEGER NOT NULL DEFAULT 0,
+                archived_at DATETIME,
+                cwd TEXT,
+                git_branch TEXT,
+                turns INTEGER NOT NULL DEFAULT 0,
+                last_preview TEXT
             )
         ');
 
-        // Migrate existing tables that lack the name column (added in P6.S11).
-        // Only add the column if it doesn't already exist, since new databases
-        // already have it in the CREATE TABLE above.
+        // Migrate existing tables that lack a later column (`name` arrived in
+        // P6.S11, the rest with Appendix P's session model). Only missing
+        // columns are added, since new databases already have them all from
+        // the CREATE TABLE above, so this is idempotent on every open.
         $existingColumns = $this->pdo->query("PRAGMA table_info(sessions)")->fetchAll(\PDO::FETCH_ASSOC);
         $columnNames = array_column($existingColumns, 'name');
-        if (!in_array('name', $columnNames, true)) {
-            $this->pdo->exec('ALTER TABLE sessions ADD COLUMN name TEXT');
+        foreach (self::MIGRATED_COLUMNS as $column => $definition) {
+            if (!in_array($column, $columnNames, true)) {
+                $this->pdo->exec("ALTER TABLE sessions ADD COLUMN {$column} {$definition}");
+            }
         }
+
+        // childrenOf()/childCount() and deleteSession()'s descendant walk all
+        // look rows up by parent. There is deliberately NO index over
+        // (kind, archived_at, ...): LIST_SESSIONS_SQL must stay served by the
+        // reverse idx_sessions_updated_at scan below, and an index the
+        // planner could prefer for its WHERE would bring the temp B-tree sort
+        // back (SessionIndexAndRetentionTest EXPLAINs exactly that).
+        $this->pdo->exec('
+            CREATE INDEX IF NOT EXISTS idx_sessions_parent_id
+            ON sessions(parent_id)
+        ');
 
         $this->pdo->exec('
             CREATE TABLE IF NOT EXISTS messages (
@@ -170,14 +238,79 @@ final class SessionStore
         ');
     }
 
-    public function createSession(string $id, string $provider, string $model, ?string $systemPrompt = null, ?string $name = null): void
-    {
+    /**
+     * @param ?string $cwd       the working directory the session was opened in
+     * @param ?string $gitBranch the git branch checked out there, if any
+     */
+    public function createSession(
+        string $id,
+        string $provider,
+        string $model,
+        ?string $systemPrompt = null,
+        ?string $name = null,
+        ?string $cwd = null,
+        ?string $gitBranch = null,
+    ): void {
         $stmt = $this->pdo->prepare('
-            INSERT INTO sessions (id, provider, model, system_prompt, name)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO sessions (id, provider, model, system_prompt, name, cwd, git_branch)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         ');
-        $stmt->execute([$id, $provider, $model, $systemPrompt, $name]);
+        $stmt->execute([$id, $provider, $model, $systemPrompt, $name, self::blankToNull($cwd), self::blankToNull($gitBranch)]);
         $this->sessionWriteSeq++;
+    }
+
+    /**
+     * Open a session under $parentId — a Task sub-agent's transcript or a
+     * background run — and return its id.
+     *
+     * The child inherits the parent's `cwd` and `git_branch`, and starts
+     * `running`. SQLite cannot add a foreign key with `ALTER TABLE`, so the
+     * parent is checked here, and {@see deleteSession()} walks the link in
+     * code.
+     *
+     * @throws \InvalidArgumentException for a `main`/`branch` kind or a
+     *                                   parent that does not exist
+     */
+    public function createChildSession(
+        string $parentId,
+        SessionKind $kind,
+        ?string $agent,
+        ?string $parentCallId,
+        string $provider,
+        string $model,
+        ?string $name = null,
+    ): string {
+        if ($kind !== SessionKind::Subagent && $kind !== SessionKind::Background) {
+            throw new \InvalidArgumentException("A child session is a subagent or background row, not '{$kind->value}'");
+        }
+
+        return $this->immediateTransaction(function () use ($parentId, $kind, $agent, $parentCallId, $provider, $model, $name): string {
+            $parent = $this->getSession($parentId);
+            if ($parent === null) {
+                throw new \InvalidArgumentException("Session not found: {$parentId}");
+            }
+
+            $id = bin2hex(random_bytes(16));
+            $this->pdo->prepare('
+                INSERT INTO sessions (id, provider, model, name, kind, parent_id, parent_call_id, agent, status, cwd, git_branch)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ')->execute([
+                $id,
+                $provider,
+                $model,
+                self::blankToNull($name),
+                $kind->value,
+                $parentId,
+                self::blankToNull($parentCallId),
+                self::blankToNull($agent),
+                'running',
+                $parent['cwd'] ?? null,
+                $parent['git_branch'] ?? null,
+            ]);
+            $this->sessionWriteSeq++;
+
+            return $id;
+        });
     }
 
     public function getSession(string $id): ?array
@@ -208,30 +341,228 @@ final class SessionStore
         return $row ?: null;
     }
 
-    public function renameSession(string $id, string $name): void
-    {
-        $stmt = $this->pdo->prepare('UPDATE sessions SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-        $stmt->execute([$name, $id]);
-        $this->sessionWriteSeq++;
-    }
-
     /**
-     * Name $id only if it is still unnamed; true when the row was renamed.
+     * Name $id and record who named it; true when the row was renamed.
      *
-     * The auto-titler's write. Its request is fire-and-forget and lands
-     * after the first reply, so a `/rename` typed while it was in flight
-     * used to be overwritten by the generated title (audit B2). The guard
-     * lives in the UPDATE itself rather than a read-then-write so a rename
-     * from a second process in between is honoured too.
+     * A {@see TitleSource::User} rename always lands. A
+     * {@see TitleSource::Auto} one — the auto-titler's — lands only on a row
+     * that is still unnamed and was never named by the user: its request is
+     * fire-and-forget and arrives after the first reply, so a `/rename`
+     * typed while it was in flight used to be overwritten by the generated
+     * title (audit B2). The guard lives in the UPDATE itself rather than a
+     * read-then-write so a rename from a second process in between is
+     * honoured too.
      */
-    public function renameSessionIfUnnamed(string $id, string $name): bool
+    public function renameSession(string $id, string $name, TitleSource $source = TitleSource::User): bool
     {
-        $stmt = $this->pdo->prepare("UPDATE sessions SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND (name IS NULL OR name = '')");
-        $stmt->execute([$name, $id]);
+        $sql = 'UPDATE sessions SET name = ?, title_source = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
+        if ($source === TitleSource::Auto) {
+            $sql .= " AND (name IS NULL OR name = '') AND (title_source IS NULL OR title_source = 'auto')";
+        }
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([$name, $source->value, $id]);
         $renamed = $stmt->rowCount() > 0;
         $this->sessionWriteSeq++;
 
         return $renamed;
+    }
+
+    /**
+     * The auto-titler's write: {@see renameSession()} with
+     * {@see TitleSource::Auto}.
+     */
+    public function renameSessionIfUnnamed(string $id, string $name): bool
+    {
+        return $this->renameSession($id, $name, TitleSource::Auto);
+    }
+
+    /**
+     * Pin or unpin $id; true when the row exists. Pinned rows list first when
+     * a {@see SessionQuery} asks for it and are exempt from
+     * {@see pruneSessions()}. Recency (`updated_at`) is left alone: pinning
+     * is not using the session.
+     */
+    public function setPinned(string $id, bool $pinned): bool
+    {
+        return $this->updateFlag('UPDATE sessions SET pinned = ? WHERE id = ?', [$pinned ? 1 : 0, $id]);
+    }
+
+    /**
+     * Soft-hide $id from the default list, the tab strip and `--continue`;
+     * true when a live row was archived. Nothing is deleted.
+     */
+    public function archive(string $id): bool
+    {
+        return $this->updateFlag('UPDATE sessions SET archived_at = CURRENT_TIMESTAMP WHERE id = ? AND archived_at IS NULL', [$id]);
+    }
+
+    /** Undo {@see archive()}; true when an archived row came back. */
+    public function unarchive(string $id): bool
+    {
+        return $this->updateFlag('UPDATE sessions SET archived_at = NULL WHERE id = ? AND archived_at IS NOT NULL', [$id]);
+    }
+
+    /**
+     * Record a sub-agent or background child's outcome; true when such a row
+     * was updated. A `main`/`branch` row has no status and is left alone.
+     *
+     * @param string $status one of {@see CHILD_STATUSES}
+     *
+     * @throws \InvalidArgumentException for any other status
+     */
+    public function markSubAgentStatus(string $id, string $status): bool
+    {
+        if (!in_array($status, self::CHILD_STATUSES, true)) {
+            throw new \InvalidArgumentException("Unknown session status '{$status}'; expected one of " . implode(', ', self::CHILD_STATUSES));
+        }
+
+        return $this->updateFlag(
+            "UPDATE sessions SET status = ? WHERE id = ? AND kind IN ('subagent', 'background')",
+            [$status, $id],
+        );
+    }
+
+    /**
+     * Count one user turn on $id and keep its prompt as the row's preview;
+     * true when the row exists.
+     *
+     * The preview is what the session picker shows instead of the system
+     * prompt every session shares (audit B3). Whitespace runs collapse to one
+     * space and the text is cut to {@see PREVIEW_MAX_BYTES} on a UTF-8
+     * boundary. It is stored unsanitized otherwise — it is the user's own
+     * text — so it must be scrubbed before it is painted. `updated_at` is
+     * left to the transcript save, which owns recency.
+     */
+    public function recordTurn(string $id, string $prompt): bool
+    {
+        $preview = trim(preg_replace('/\s+/u', ' ', $prompt) ?? $prompt);
+        if (strlen($preview) > self::PREVIEW_MAX_BYTES) {
+            $preview = mb_strcut($preview, 0, self::PREVIEW_MAX_BYTES, 'UTF-8');
+        }
+
+        return $this->updateFlag(
+            'UPDATE sessions SET turns = turns + 1, last_preview = ? WHERE id = ?',
+            [$preview === '' ? null : $preview, $id],
+        );
+    }
+
+    /**
+     * Rows matching $query, newest first (pinned first when asked).
+     *
+     * Unlike {@see listSessions()} this is not memoised: the tab strip's
+     * per-frame read stays on that method, and this one serves the picker,
+     * the CLI and child lookups, which run on a user action.
+     *
+     * @return list<SessionRow>
+     */
+    public function listSessionsFiltered(SessionQuery $query): array
+    {
+        [$where, $params] = self::queryConditions($query);
+        $sql = 'SELECT * FROM sessions' . ($where === [] ? '' : ' WHERE ' . implode(' AND ', $where))
+            . ' ORDER BY ' . ($query->pinnedFirst ? 'pinned DESC, ' : '') . 'updated_at DESC, rowid DESC'
+            . ' LIMIT ? OFFSET ?';
+        $params[] = $query->limit;
+        $params[] = $query->offset;
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt->closeCursor();
+
+        return array_map(SessionRow::fromArray(...), $rows);
+    }
+
+    /**
+     * Every direct child of $id — branches, sub-agents and background runs,
+     * archived or not — newest first.
+     *
+     * @return list<SessionRow>
+     */
+    public function childrenOf(string $id): array
+    {
+        $stmt = $this->pdo->prepare('SELECT * FROM sessions WHERE parent_id = ? ORDER BY updated_at DESC, rowid DESC');
+        $stmt->execute([$id]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt->closeCursor();
+
+        return array_map(SessionRow::fromArray(...), $rows);
+    }
+
+    /**
+     * Direct-child counts for $ids, one query for a whole picker page; an id
+     * with no children maps to 0.
+     *
+     * @param list<string> $ids
+     *
+     * @return array<string, int>
+     */
+    public function childCount(array $ids): array
+    {
+        $counts = array_fill_keys(array_map('strval', $ids), 0);
+        foreach (array_chunk(array_keys($counts), 400) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $stmt = $this->pdo->prepare("SELECT parent_id, COUNT(*) FROM sessions WHERE parent_id IN ({$placeholders}) GROUP BY parent_id");
+            $stmt->execute(array_map('strval', $chunk));
+            foreach ($stmt->fetchAll(PDO::FETCH_NUM) as [$parent, $count]) {
+                $counts[(string) $parent] = (int) $count;
+            }
+            $stmt->closeCursor();
+        }
+
+        return $counts;
+    }
+
+    /**
+     * The WHERE terms and bound values for $query.
+     *
+     * @return array{0: list<string>, 1: list<mixed>}
+     */
+    private static function queryConditions(SessionQuery $query): array
+    {
+        $where = [];
+        $params = [];
+        if ($query->kinds !== []) {
+            $where[] = 'kind IN (' . implode(',', array_fill(0, count($query->kinds), '?')) . ')';
+            foreach ($query->kinds as $kind) {
+                $params[] = $kind->value;
+            }
+        }
+        if ($query->archivedOnly) {
+            $where[] = 'archived_at IS NOT NULL';
+        } elseif (!$query->includeArchived) {
+            $where[] = 'archived_at IS NULL';
+        }
+        if ($query->parentId !== null) {
+            $where[] = 'parent_id = ?';
+            $params[] = $query->parentId;
+        }
+        if ($query->search !== null) {
+            $like = '%' . addcslashes($query->search, '%_\\') . '%';
+            $where[] = "(name LIKE ? ESCAPE '\\' OR last_preview LIKE ? ESCAPE '\\' OR id LIKE ? ESCAPE '\\')";
+            array_push($params, $like, $like, $like);
+        }
+
+        return [$where, $params];
+    }
+
+    /**
+     * Run a one-row UPDATE that every caller reports as "did it apply", and
+     * invalidate the list memo.
+     *
+     * @param list<mixed> $params
+     */
+    private function updateFlag(string $sql, array $params): bool
+    {
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        $this->sessionWriteSeq++;
+
+        return $stmt->rowCount() > 0;
+    }
+
+    private static function blankToNull(?string $value): ?string
+    {
+        return $value === null || $value === '' ? null : $value;
     }
 
     /**
@@ -248,14 +579,28 @@ final class SessionStore
      * {@see EnhancedSessionStore}'s transcript/checkpoint tables, which that
      * class's forkSession() copies inside the same transaction as this call.
      *
+     * The fork records where it came from: `parent_id` names $id and `kind`
+     * is $kind (`branch` for `/branch`), so the picker can group it under its
+     * source. It carries the source's working directory, git branch, turn
+     * count and last prompt, since it carries the conversation they describe.
+     *
+     * @param SessionKind $kind `Branch`, or `Background` for a copy sent off to
+     *                          run as a background session
+     *
      * @return string The new session ID
+     *
+     * @throws \InvalidArgumentException for a missing session or another kind
      */
-    public function forkSession(string $id): string
+    public function forkSession(string $id, SessionKind $kind = SessionKind::Branch): string
     {
-        return $this->immediateTransaction(fn (): string => $this->forkSessionRows($id));
+        if ($kind !== SessionKind::Branch && $kind !== SessionKind::Background) {
+            throw new \InvalidArgumentException("A fork is a branch or background session, not '{$kind->value}'");
+        }
+
+        return $this->immediateTransaction(fn (): string => $this->forkSessionRows($id, $kind));
     }
 
-    private function forkSessionRows(string $id): string
+    private function forkSessionRows(string $id, SessionKind $kind): string
     {
         $session = $this->getSession($id);
         if ($session === null) {
@@ -263,18 +608,29 @@ final class SessionStore
         }
 
         $newId = bin2hex(random_bytes(16));
+        $name = $this->branchName($session['name'] === null ? null : (string) $session['name']);
 
         // Insert new session with forked data (but new id and fresh timestamps)
         $stmt = $this->pdo->prepare('
-            INSERT INTO sessions (id, provider, model, system_prompt, name)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO sessions (id, provider, model, system_prompt, name, kind, parent_id, title_source, cwd, git_branch, turns, last_preview)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ');
         $stmt->execute([
             $newId,
             $session['provider'],
             $session['model'],
             $session['system_prompt'],
-            $this->branchName($session['name'] === null ? null : (string) $session['name']),
+            $name,
+            $kind->value,
+            $id,
+            // The "(branch)" name is derived from the parent's, so it keeps
+            // the parent's provenance: an auto-titled parent's branch is still
+            // fair game for nothing but a user rename, like any named row.
+            $name === null ? null : ($session['title_source'] ?? null),
+            $session['cwd'] ?? null,
+            $session['git_branch'] ?? null,
+            (int) ($session['turns'] ?? 0),
+            $session['last_preview'] ?? null,
         ]);
         $this->sessionWriteSeq++;
 
@@ -406,12 +762,86 @@ final class SessionStore
         $this->sessionWriteSeq++;
     }
 
-    public function deleteSession(string $id): void
+    /**
+     * Delete $id with its messages and tool calls, and return every session
+     * id that went (the enhanced tables follow by FK cascade).
+     *
+     * Children are handled in code inside the same transaction, because
+     * SQLite cannot add a foreign key with `ALTER TABLE`:
+     *  - `subagent` children always go with their parent, recursively: they
+     *    are hidden from every default list and would otherwise be orphans no
+     *    one can reach.
+     *  - branch and background children are the user's own conversations, so
+     *    they are DETACHED (`parent_id` cleared) and kept — unless
+     *    $withChildren, which deletes every descendant.
+     *
+     * @return list<string> the deleted ids, $id first
+     */
+    public function deleteSession(string $id, bool $withChildren = false): array
     {
-        $this->pdo->prepare('DELETE FROM tool_calls WHERE session_id = ?')->execute([$id]);
-        $this->pdo->prepare('DELETE FROM messages WHERE session_id = ?')->execute([$id]);
-        $this->pdo->prepare('DELETE FROM sessions WHERE id = ?')->execute([$id]);
+        return $this->immediateTransaction(fn (): array => $this->deleteSessionTrees([$id], $withChildren));
+    }
+
+    /**
+     * Delete each root in $ids and its descendants as {@see deleteSession()}
+     * describes; the caller holds the transaction.
+     *
+     * @param list<string> $ids
+     *
+     * @return list<string> the deleted ids, roots first
+     */
+    private function deleteSessionTrees(array $ids, bool $withChildren): array
+    {
+        $delete = [];
+        $detach = [];
+        $queue = [];
+        foreach ($ids as $id) {
+            $delete[$id] = true;
+            $queue[] = $id;
+        }
+
+        $children = $this->pdo->prepare('SELECT id, kind FROM sessions WHERE parent_id = ?');
+        while ($queue !== []) {
+            $parent = array_shift($queue);
+            $children->execute([$parent]);
+            foreach ($children->fetchAll(PDO::FETCH_NUM) as [$childId, $kind]) {
+                $childId = (string) $childId;
+                if (isset($delete[$childId]) || isset($detach[$childId])) {
+                    continue; // a cycle, or a root reached again
+                }
+                if ($withChildren || $kind === SessionKind::Subagent->value) {
+                    $delete[$childId] = true;
+                    $queue[] = $childId;
+                } else {
+                    $detach[$childId] = true;
+                }
+            }
+        }
+        $children->closeCursor();
+
+        $deleted = array_map('strval', array_keys($delete));
+        // Chunked because SQLite caps bound parameters per statement and an
+        // install that has never pruned can expire hundreds of rows at once.
+        foreach (array_chunk($deleted, 400) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            foreach (['tool_calls', 'messages'] as $table) {
+                $this->pdo
+                    ->prepare("DELETE FROM {$table} WHERE session_id IN ({$placeholders})")
+                    ->execute($chunk);
+            }
+            $this->pdo
+                ->prepare("DELETE FROM sessions WHERE id IN ({$placeholders})")
+                ->execute($chunk);
+        }
+        foreach (array_chunk(array_map('strval', array_keys($detach)), 400) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $this->pdo
+                ->prepare("UPDATE sessions SET parent_id = NULL WHERE id IN ({$placeholders})")
+                ->execute($chunk);
+        }
         $this->sessionWriteSeq++;
+
+        return $deleted;
     }
 
     /**
@@ -572,6 +1002,12 @@ final class SessionStore
      * caller names the row it is about to resume and this will not touch it,
      * however old it is.
      *
+     * **Pinned sessions are never pruned either**, named or not: pinning is
+     * the explicit form of the keep signal. Sub-agent rows are never victims
+     * in their own right — they go with their parent — and a pruned parent's
+     * branch and background children are detached rather than deleted (see
+     * {@see deleteSession()}).
+     *
      * The cutoff is `gmdate()`, not `date()`: `updated_at` is written by
      * SQLite's `CURRENT_TIMESTAMP`, which is UTC. A local-time cutoff east of
      * UTC deletes sessions up to 14 hours early.
@@ -611,6 +1047,7 @@ final class SessionStore
                    (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id) AS messages
             FROM sessions s
             WHERE s.updated_at < ? AND (s.name IS NULL OR s.name = '')
+              AND s.pinned = 0 AND s.kind <> 'subagent'
         ";
         $params = [$cutoff];
         if ($exemptSessionId !== null) {
@@ -638,21 +1075,7 @@ final class SessionStore
             ];
         }
 
-        // Chunked because SQLite caps bound parameters per statement and an
-        // install that has never pruned can expire hundreds of rows at once.
-        foreach (array_chunk($ids, 400) as $chunk) {
-            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
-            foreach (['tool_calls', 'messages'] as $table) {
-                $this->pdo
-                    ->prepare("DELETE FROM {$table} WHERE session_id IN ({$placeholders})")
-                    ->execute($chunk);
-            }
-            $this->pdo
-                ->prepare("DELETE FROM sessions WHERE id IN ({$placeholders})")
-                ->execute($chunk);
-        }
-
-        $this->sessionWriteSeq++;
+        $this->immediateTransaction(fn (): array => $this->deleteSessionTrees($ids, false));
 
         return count($ids);
     }

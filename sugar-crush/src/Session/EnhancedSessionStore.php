@@ -84,9 +84,29 @@ final class EnhancedSessionStore
     // Delegation to SessionStore (base session operations)
     // =======================================================================
 
-    public function createSession(string $id, string $provider, string $model, ?string $systemPrompt = null, ?string $name = null): void
-    {
-        $this->sessionStore->createSession($id, $provider, $model, $systemPrompt, $name);
+    public function createSession(
+        string $id,
+        string $provider,
+        string $model,
+        ?string $systemPrompt = null,
+        ?string $name = null,
+        ?string $cwd = null,
+        ?string $gitBranch = null,
+    ): void {
+        $this->sessionStore->createSession($id, $provider, $model, $systemPrompt, $name, $cwd, $gitBranch);
+    }
+
+    /** @see SessionStore::createChildSession() */
+    public function createChildSession(
+        string $parentId,
+        SessionKind $kind,
+        ?string $agent,
+        ?string $parentCallId,
+        string $provider,
+        string $model,
+        ?string $name = null,
+    ): string {
+        return $this->sessionStore->createChildSession($parentId, $kind, $agent, $parentCallId, $provider, $model, $name);
     }
 
     public function getSession(string $id): ?array
@@ -99,15 +119,46 @@ final class EnhancedSessionStore
         return $this->sessionStore->getSessionByName($name);
     }
 
-    public function renameSession(string $id, string $name): void
+    /** @see SessionStore::renameSession() */
+    public function renameSession(string $id, string $name, TitleSource $source = TitleSource::User): bool
     {
-        $this->sessionStore->renameSession($id, $name);
+        return $this->sessionStore->renameSession($id, $name, $source);
     }
 
     /** @see SessionStore::renameSessionIfUnnamed() */
     public function renameSessionIfUnnamed(string $id, string $name): bool
     {
         return $this->sessionStore->renameSessionIfUnnamed($id, $name);
+    }
+
+    /** @see SessionStore::setPinned() */
+    public function setPinned(string $id, bool $pinned): bool
+    {
+        return $this->sessionStore->setPinned($id, $pinned);
+    }
+
+    /** @see SessionStore::archive() */
+    public function archive(string $id): bool
+    {
+        return $this->sessionStore->archive($id);
+    }
+
+    /** @see SessionStore::unarchive() */
+    public function unarchive(string $id): bool
+    {
+        return $this->sessionStore->unarchive($id);
+    }
+
+    /** @see SessionStore::markSubAgentStatus() */
+    public function markSubAgentStatus(string $id, string $status): bool
+    {
+        return $this->sessionStore->markSubAgentStatus($id, $status);
+    }
+
+    /** @see SessionStore::recordTurn() */
+    public function recordTurn(string $id, string $prompt): bool
+    {
+        return $this->sessionStore->recordTurn($id, $prompt);
     }
 
     /**
@@ -124,11 +175,13 @@ final class EnhancedSessionStore
      * here that save finds every message already on disk.
      *
      * One transaction for the lot, so a fork is never visible half-copied.
+     *
+     * @see SessionStore::forkSession() for the parent link and $kind
      */
-    public function forkSession(string $id): string
+    public function forkSession(string $id, SessionKind $kind = SessionKind::Branch): string
     {
-        return $this->writeTransaction(function () use ($id): string {
-            $newId = $this->sessionStore->forkSession($id);
+        return $this->writeTransaction(function () use ($id, $kind): string {
+            $newId = $this->sessionStore->forkSession($id, $kind);
             $this->copySessionState($id, $newId);
 
             return $newId;
@@ -257,14 +310,23 @@ final class EnhancedSessionStore
         $this->sessionStore->updateSession($id);
     }
 
-    public function deleteSession(string $id): void
+    /**
+     * @see SessionStore::deleteSession() for what happens to children
+     *
+     * @return list<string> the deleted ids, $id first
+     */
+    public function deleteSession(string $id, bool $withChildren = false): array
     {
-        $this->sessionStore->deleteSession($id);
-        // The FK cascade took this session's checkpoint_blobs rows with it, so
-        // every id this instance had interned for it is now dangling. See
-        // internMessages(): ANY blob deletion has to invalidate the cache, not
-        // just the GC's own.
-        $this->forgetInternedBlobs($id);
+        $deleted = $this->sessionStore->deleteSession($id, $withChildren);
+        // The FK cascade took these sessions' checkpoint_blobs rows with them,
+        // so every id this instance had interned for them is now dangling.
+        // See internMessages(): ANY blob deletion has to invalidate the cache,
+        // not just the GC's own.
+        foreach ($deleted as $deletedId) {
+            $this->forgetInternedBlobs($deletedId);
+        }
+
+        return $deleted;
     }
 
     /**
@@ -499,6 +561,38 @@ final class EnhancedSessionStore
             json_encode($meta->agentStates),
             $meta->lastActivity->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
         ]);
+    }
+
+    /**
+     * @see SessionStore::listSessionsFiltered()
+     *
+     * @return list<SessionRow>
+     */
+    public function listSessionsFiltered(SessionQuery $query): array
+    {
+        return $this->sessionStore->listSessionsFiltered($query);
+    }
+
+    /**
+     * @see SessionStore::childrenOf()
+     *
+     * @return list<SessionRow>
+     */
+    public function childrenOf(string $id): array
+    {
+        return $this->sessionStore->childrenOf($id);
+    }
+
+    /**
+     * @see SessionStore::childCount()
+     *
+     * @param list<string> $ids
+     *
+     * @return array<string, int>
+     */
+    public function childCount(array $ids): array
+    {
+        return $this->sessionStore->childCount($ids);
     }
 
     /**
@@ -1383,14 +1477,19 @@ final class EnhancedSessionStore
      * is newer than the conversation the user wants back, and continuing it
      * would open an empty chat.
      *
+     * Only the user's own conversations count: a sub-agent's transcript is
+     * newer than the session that delegated to it, and an archived session
+     * was put away on purpose, so neither is what `--continue` means.
+     *
      * @return array<string, mixed>|null
      */
     public function latestResumableSession(): ?array
     {
         $stmt = $this->pdo->query('
             SELECT s.* FROM sessions s
-            WHERE EXISTS (SELECT 1 FROM session_transcripts t WHERE t.session_id = s.id)
-               OR EXISTS (SELECT 1 FROM checkpoints c WHERE c.session_id = s.id)
+            WHERE s.kind <> \'subagent\' AND s.archived_at IS NULL
+              AND (EXISTS (SELECT 1 FROM session_transcripts t WHERE t.session_id = s.id)
+                OR EXISTS (SELECT 1 FROM checkpoints c WHERE c.session_id = s.id))
             ORDER BY s.updated_at DESC, s.rowid DESC
             LIMIT 1
         ');
@@ -1412,13 +1511,16 @@ final class EnhancedSessionStore
      * and the age floor keeps it from taking the fresh row a client in
      * another terminal opened moments ago. Rows go through
      * {@see deleteSession()} so the session-list memo and the blob cache see
-     * the delete.
+     * the delete. Sub-agent rows are left to their parent's lifecycle, and a
+     * pinned row is kept however empty it is.
      */
     public function pruneEmptySessions(?string $exemptSessionId = null, int $minAgeSeconds = 3600): int
     {
         $stmt = $this->pdo->prepare('
             SELECT s.id FROM sessions s
             WHERE (s.name IS NULL OR s.name = \'\')
+              AND s.kind <> \'subagent\'
+              AND s.pinned = 0
               AND s.updated_at < ?
               AND s.id != ?
               AND NOT EXISTS (SELECT 1 FROM session_transcripts t WHERE t.session_id = s.id)

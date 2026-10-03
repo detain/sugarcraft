@@ -97,6 +97,7 @@ sugar-crush/tests/Renderer/RenderMemoTest.php	3.638	28
 sugar-crush/tests/Integration/BinSugarcrushAutoloadGuardTest.php	3.629	35
 sugar-crush/tests/Chat/CustomCommandShellAsyncTest.php	3.562	10
 sugar-crush/tests/MCP/StdioMcpServerTest.php	3.502	19
+sugar-crush/tests/Session/SessionQueryTest.php	3.500	14
 sugar-crush/tests/Backend/EngineBackendStepBudgetTest.php	3.498	7
 sugar-crush/tests/Renderer/FrameWidthClipTest.php	3.498	328
 sugar-crush/tests/Chat/ReadOnlySessionTest.php	3.472	19
@@ -149,6 +150,7 @@ sugar-crush/tests/Chat/WorkflowControlMidRunTest.php	1.927	8
 sugar-crush/tests/Support/OneSidedHomeSandboxTest.php	1.923	5
 sugar-crush/tests/Sessions/BackgroundSupervisorTest.php	1.904	25
 sugar-crush/tests/Backend/EngineBackendCacheHealthTest.php	1.900	7
+sugar-crush/tests/Session/SessionSchemaMigrationTest.php	1.900	12
 sugar-crush/tests/Agents/AgentManagerProjectRootTest.php	1.821	9
 sugar-crush/tests/Chat/SessionCommandTest.php	1.819	14
 sugar-crush/tests/MCP/McpMessageResultTypeTest.php	1.807	34

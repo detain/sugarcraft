@@ -523,6 +523,19 @@ persists those refs. `Message` also carries `stepId`, the engine step a row came
 from, and `userVisible`, which hides a row from the transcript without hiding it
 from the model (the twin of `uiOnly`). Legacy rows have no `stepId`.
 
+Each `sessions` row carries a `Session\SessionKind` (`main`, `branch`,
+`subagent`, `background`) and an optional `parent_id`: `/branch` records the
+session it forked from, and child rows record the session that spawned them.
+Only `main` and `branch` rows reach the tab strip, the default list and
+`--continue`; archived rows (`archived_at`) are hidden too. The rest are
+reached through their parent (`childrenOf()`) or a `Session\SessionQuery`
+passed to `listSessionsFiltered()`, which returns typed `Session\SessionRow`
+values. Deleting a session takes its sub-agent children with it and detaches
+its branches. Retention spares named and pinned rows. `title_source`
+(`Session\TitleSource`) records whether a name came from the user or the
+auto-titler, and the titler never overwrites a user's name. The columns are
+added to an older database the next time it is opened.
+
 `Sessions\Background*` runs a task in a detached session (`/bg`, `/fork`) with
 its own runner and supervisor. `Context\ContextCompactor` +
 `IdleCompactionPolicy` drive `/compact` and automatic compaction against
