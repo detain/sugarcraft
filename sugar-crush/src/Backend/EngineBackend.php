@@ -36,6 +36,7 @@ use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Usage;
 use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Permissions\PermissionGate;
+use SugarCraft\Crush\Providers\MarksPromptCache;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Providers\ReportsServedModel;
 use SugarCraft\Crush\Runtime;
@@ -486,6 +487,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
          * arrives through {@see withCompactorConfig()}.
          */
         private readonly ?CompactorConfig $compactorConfig = null,
+        /**
+         * The prompt-cache health diagnostic's state (P10.S3): the streak of
+         * zero-cache step reports and whether its one-time notice has gone
+         * out. One instance per session, SHARED by every clone — mutate()
+         * carries the reference forward — because the streak spans turns and
+         * a notice one clone raised must not be raised by the next. Fed only
+         * while the provider marks the model's requests
+         * ({@see observeCacheHealth()}); carried across the fork on the
+         * result frame.
+         */
+        private readonly CacheHealthWatch $cacheHealth = new CacheHealthWatch(),
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -1135,6 +1147,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                     // sibling's next cap check sees it — and so it survives
                     // this process dying before the run reports (B4-rem).
                     $this->siblingSpend?->record($assistant->usage());
+                    // Per PROVIDER RESPONSE, not per turn: the cache buckets
+                    // describe one request's prefix, and a turn's sum would
+                    // hide a zero step behind a cached one.
+                    $this->observeCacheHealth($assistant->usage());
                 } elseif ($message instanceof ToolResultMessage) {
                     $toolResults[] = $message;
                     // Folded AS IT SETTLES, not after the step: a sequential
@@ -1390,6 +1406,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 $assistant = $message;
                 $stepUsages[] = $assistant->usage();
                 $this->siblingSpend?->record($assistant->usage());
+                // A request like any other step's, carrying the same marks.
+                $this->observeCacheHealth($assistant->usage());
             } elseif ($message instanceof ToolResultMessage) {
                 $toolResults[] = $message;
             }
@@ -1403,6 +1421,26 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         ];
 
         return $assistant;
+    }
+
+    /**
+     * Hand one provider response's usage to the prompt-cache health
+     * diagnostic ({@see \SugarCraft\Crush\Providers\CacheBreakpoints::observeCacheHealth()}, P10.S3) —
+     * but only while the provider marks this model's requests
+     * ({@see MarksPromptCache}). "Nothing is being cached" is only a fault for
+     * a request that asked to be cached: `openai` and `sglang` cache without
+     * marks, Gemini on `vertex` caches on its own, and the `promptCache`
+     * setting or `SUGARCRUSH_DISABLE_PROMPT_CACHE` may have turned the marks
+     * off, so none of those is ever warned. The notice itself is raised once,
+     * by the watch.
+     */
+    private function observeCacheHealth(?Usage $usage): void
+    {
+        if (!$this->provider instanceof MarksPromptCache || !$this->provider->marksPromptCache($this->model)) {
+            return;
+        }
+
+        $this->cacheHealth->observe($usage);
     }
 
     /**
@@ -2342,6 +2380,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // the parent hands it to its own provider, whose copy of the memo
         // never saw this child's discovery.
         $payload['servedModel'] = $this->servedModel();
+        // P10.S3: the cache-health streak and its one-time bit, on success
+        // AND failure (a step that reported before the turn failed still
+        // counted). Plain array on the frame rule; without it the parent's
+        // streak would never advance on this path and the notice would be
+        // raised again by every later turn's child.
+        $payload['cacheHealth'] = $this->cacheHealth->state();
 
         self::writeFrame($childSocket, $payload);
         fclose($childSocket);
@@ -2487,6 +2531,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         if (is_string($servedModel) && $this->provider instanceof ReportsServedModel) {
             $this->provider->noteServedModel($servedModel);
         }
+
+        // P10.S3: the child's cache-health streak, before the verdict for the
+        // same reason. The watch is shared by every clone of this backend.
+        $this->cacheHealth->adopt($data['cacheHealth'] ?? null);
 
         if (($data['ok'] ?? false) !== true) {
             $deferred->reject(new \RuntimeException((string) ($data['error'] ?? 'Provider worker process failed')));

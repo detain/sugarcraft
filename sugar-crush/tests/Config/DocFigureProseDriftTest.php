@@ -5418,7 +5418,11 @@ final class DocFigureProseDriftTest extends TestCase
             }
         }
         sort($consumers);
-        self::assertSame(['src/Providers/ProviderFactory.php', 'src/Providers/VertexProvider.php'], $consumers, 'the armed-on-one-wire paragraph names VertexProvider as the one caller and ProviderFactory as the switch reader — the src/ census moved');
+        // P10.S3: the turn loop's cache-health watch is the third consumer -
+        // it holds an instance for observeCacheHealth() alone, and the page's
+        // observeCacheHealth bullet names it.
+        self::assertSame(['src/Backend/CacheHealthWatch.php', 'src/Providers/ProviderFactory.php', 'src/Providers/VertexProvider.php'], $consumers, 'the armed-on-one-wire paragraph names VertexProvider as the one caller and ProviderFactory as the switch reader, and the observeCacheHealth bullet names Backend\\CacheHealthWatch — the src/ census moved');
+        self::assertStringContainsString('`Backend\\CacheHealthWatch`', $flat, 'the observeCacheHealth bullet no longer names the watch the census above counts');
         self::assertStringContainsString('It is armed on one wire: Claude on `vertex`', $flat, 'the armed paragraph was reworded away from the census pinned above');
         $bin = (string) file_get_contents($root . '/bin/sugarcrush');
         self::assertStringNotContainsString('CacheBreakpoints', (string) preg_replace('~(/\*.*?\*/|//[^\n]*|^\s*\#[^\n]*)~s', '', $bin), 'bin/sugarcrush now consults CacheBreakpoints — the page names only the provider wiring');

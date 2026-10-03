@@ -357,8 +357,12 @@ same money reason as `maxOutputTokens`.
   either way. `SUGARCRUSH_DISABLE_PROMPT_CACHE` turns the marks off whatever
   this key says. A project may not set it, because caching off makes every
   request bill its whole prompt at the full input rate. Reads and writes are
-  priced at the cache rates described under `modelPrices` above. None of this
-  has been checked against a live Vertex or Bedrock endpoint.
+  priced at the cache rates described under `modelPrices` above. While the
+  marks are on, three responses in a row that report reading and writing no
+  cache at all raise one notice for the session: the prompt is probably below
+  the model's minimum cacheable length, or the marks are not reaching the
+  wire. None of this has been checked against a live Vertex or Bedrock
+  endpoint.
 
 Where a row names two methods, the first is the public entry point and the
 second is the method that does the read — cited because that is the one to

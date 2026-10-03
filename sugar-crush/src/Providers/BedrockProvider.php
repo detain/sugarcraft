@@ -36,7 +36,7 @@ use SugarCraft\Crush\Usage;
  * and out of the provider unwrapped. Every Bedrock completion failed, always,
  * before a single byte reached AWS.
  */
-final readonly class BedrockProvider implements ProviderInterface
+final readonly class BedrockProvider implements ProviderInterface, MarksPromptCache
 {
     use HttpClientDefaults;
 
@@ -330,7 +330,9 @@ final readonly class BedrockProvider implements ProviderInterface
      * must be on and the model's family must support prompt caching: an
      * unsupported model answers a cache point with a ValidationException, so
      * an id this class cannot place (an application-inference-profile ARN, a
-     * model newer than {@see PROMPT_CACHE_NOVA}) is sent without one.
+     * model newer than {@see PROMPT_CACHE_NOVA}) is sent without one. An
+     * empty id is the configured default, as on the wire
+     * ({@see MarksPromptCache}).
      */
     public function marksPromptCache(string $model): bool
     {
@@ -338,7 +340,7 @@ final readonly class BedrockProvider implements ProviderInterface
             return false;
         }
 
-        $family = self::family($model);
+        $family = self::family($model !== '' ? $model : $this->defaultModel);
 
         if (in_array($family, self::PROMPT_CACHE_NOVA, true)) {
             return true;

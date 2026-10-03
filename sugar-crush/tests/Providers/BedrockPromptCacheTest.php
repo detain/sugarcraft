@@ -13,6 +13,7 @@ use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Providers\BedrockProvider;
+use SugarCraft\Crush\Providers\MarksPromptCache;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CompleteResponse;
 
@@ -102,6 +103,17 @@ final class BedrockPromptCacheTest extends TestCase
 
         $sent = $this->sentParams(false, $model, [new UserMessage('hi')], 'be brief');
         self::assertSame($marked, str_contains((string) json_encode($sent), 'cachePoint'));
+    }
+
+    /**
+     * The backend asks with ITS model id, which may be empty: an empty id is
+     * the configured default, exactly as on the wire.
+     */
+    public function testAnEmptyModelIdAnswersForTheConfiguredDefault(): void
+    {
+        self::assertInstanceOf(MarksPromptCache::class, $this->provider(new MockHandler()));
+        self::assertTrue($this->provider(new MockHandler())->marksPromptCache(''));
+        self::assertFalse($this->provider(new MockHandler(), 'anthropic.claude-3-sonnet-20240229-v1:0')->marksPromptCache(''));
     }
 
     public function testThePromptCacheAccessorReportsTheConstructedSwitch(): void

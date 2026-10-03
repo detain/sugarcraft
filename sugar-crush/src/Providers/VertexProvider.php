@@ -84,7 +84,7 @@ use SugarCraft\Crush\Usage;
  * what selects between the two bodies. A `gemini-*` id used to be handed the
  * PaLM 2 envelope; it now gets its own.
  */
-final readonly class VertexProvider implements ProviderInterface
+final readonly class VertexProvider implements ProviderInterface, MarksPromptCache
 {
     use ToolSchema;
 
@@ -581,10 +581,13 @@ final readonly class VertexProvider implements ProviderInterface
      * Does a request for `$model` carry prompt-cache breakpoints? Only on the
      * Anthropic arm (the one wire here that spells `cache_control`), only
      * with the `promptCache` setting on, and never for a family in
-     * {@see NO_PROMPT_CACHE_FAMILIES}.
+     * {@see NO_PROMPT_CACHE_FAMILIES}. An empty id is the configured default,
+     * as on the wire ({@see MarksPromptCache}).
      */
     public function marksPromptCache(string $model): bool
     {
+        $model = $model !== '' ? $model : $this->defaultModel;
+
         return $this->promptCache
             && $this->isAnthropicModel($model)
             && !in_array(self::pricingFamily($model), self::NO_PROMPT_CACHE_FAMILIES, true);

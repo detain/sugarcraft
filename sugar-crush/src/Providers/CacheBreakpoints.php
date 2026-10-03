@@ -141,13 +141,21 @@ use SugarCraft\Crush\Usage;
  * not own), so "disabled" honestly means "no NEW breakpoints", not "caching
  * off for every mechanism in the request".
  *
- * LIVE CHANNEL, NOT YET LIVE (P10.S3). {@see CacheBreakpoints::observeCacheHealth()}
- * has no production feeder at this tree. The cache buckets it reads do reach
- * {@see Usage} on every provider response now (`CompleteResponse::$usage`,
- * E17), but the consumer that would hand each one in belongs in the turn
- * loop, which the A15 wiring did not touch. Until then the method's contract
- * is exercised by tests and by any consumer that already holds a Usage
- * carrying buckets of its own. No channel is invented here.
+ * THE LIVE CHANNEL (P10.S3). {@see CacheBreakpoints::observeCacheHealth()} is
+ * fed by the turn loop: {@see \SugarCraft\Crush\Backend\EngineBackend}
+ * hands it every step's {@see Usage} through
+ * {@see \SugarCraft\Crush\Backend\CacheHealthWatch}, a backend-owned
+ * instance of this class used for the diagnostic alone. The providers do not
+ * expose theirs because there is none to expose: the Vertex arm builds a fresh
+ * instance per request body (apply() is stateless by design, see DETERMINISM),
+ * and Bedrock places its own `cachePoint`s without one. The watch observes only
+ * while the provider says the model's requests carry marks
+ * ({@see MarksPromptCache}), so a provider that caches without them, or not at
+ * all, is never told its cache is broken; and it raises the sentence once per
+ * session through {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink}. On
+ * the forked TUI path the streak and the "already said" bit ride home on the
+ * turn's result frame, so three zero steps spread over three one-step turns
+ * still add up, and the notice is not repeated on every later turn.
  */
 final class CacheBreakpoints
 {
@@ -337,8 +345,8 @@ final class CacheBreakpoints
      * so a null Usage or any null bucket resets the count without firing, and
      * a reported non-zero in either bucket resets it too. Pure state: no I/O,
      * no clock, no suppression beyond the counter itself — the consumer decides
-     * whether to surface what it gets. There is no production feeder at this
-     * tree yet; see LIVE CHANNEL, NOT YET LIVE in the class docblock.
+     * whether to surface what it gets. Its production feeder is the turn
+     * loop; see THE LIVE CHANNEL in the class docblock.
      */
     public function observeCacheHealth(?Usage $usage): ?string
     {
@@ -364,6 +372,28 @@ final class CacheBreakpoints
             . " consecutive responses reported cache_read_input_tokens = 0 and cache_creation_input_tokens = 0;"
             . ' no prompt cache entry is being read or written. The minimum cacheable prefix is model-dependent'
             . ' (512 to 4096 tokens, §4.15) — below it the breakpoints are silently ignored upstream.';
+    }
+
+    /**
+     * How many consecutive both-buckets-zero reports
+     * {@see observeCacheHealth()} has counted. Read so the streak can cross a
+     * process boundary: the turn that saw a report may run in a forked child
+     * whose copy of this object dies with it.
+     */
+    public function zeroReportStreak(): int
+    {
+        return $this->consecutiveZeroReports;
+    }
+
+    /**
+     * Continue a streak counted by another copy of this object — the forked
+     * turn child's, carried home on its result frame. A negative count is
+     * clamped to zero, so a corrupt frame can only under-count, never invent
+     * a warning.
+     */
+    public function resumeZeroReportStreak(int $reports): void
+    {
+        $this->consecutiveZeroReports = max(0, $reports);
     }
 
     // -------------------------------------------------------------------------

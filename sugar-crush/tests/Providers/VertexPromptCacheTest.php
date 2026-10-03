@@ -11,6 +11,7 @@ use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Providers\CacheBreakpoints;
+use SugarCraft\Crush\Providers\MarksPromptCache;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\VertexProvider;
@@ -131,6 +132,19 @@ final class VertexPromptCacheTest extends TestCase
         ), false);
 
         self::assertStringNotContainsString('cache_control', (string) json_encode($body));
+    }
+
+    /**
+     * The backend asks with ITS model id, which may be empty: an empty id is
+     * the configured default, exactly as on the wire, so a Claude default is
+     * watched for cache health and a Gemini one is not.
+     */
+    public function testAnEmptyModelIdAnswersForTheConfiguredDefault(): void
+    {
+        self::assertInstanceOf(MarksPromptCache::class, $this->provider());
+        self::assertTrue($this->provider()->marksPromptCache(''));
+        self::assertFalse($this->provider(model: 'gemini-2.5-pro')->marksPromptCache(''));
+        self::assertFalse($this->provider(model: 'claude-3-sonnet@20240229')->marksPromptCache(''));
     }
 
     public function testThePromptCacheAccessorReportsTheConstructedSwitch(): void

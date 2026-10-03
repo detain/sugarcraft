@@ -221,9 +221,15 @@ No other provider marks anything: `openai` and `sglang` cache server-side withou
   an unmarked one. `CacheBreakpoints::disabledFromEnvironment()` stays the only reader of the
   variable, static so `apply()` itself stays environment-free.
 - Models that never offered caching (Claude 3 Sonnet on Vertex) are not marked.
-- `CacheBreakpoints::observeCacheHealth()` is still a channel nothing feeds: its consumer would
-  sit in the turn loop, which this wiring did not touch. The cache buckets it would read do reach
-  `Usage` on both arms, and are priced (see `modelPrices` in `SETTINGS.md`).
+- `CacheBreakpoints::observeCacheHealth()` is fed by the turn loop: `EngineBackend` hands it
+  every provider response's `Usage` (each step, and a stopped turn's summary request) through a
+  backend-owned `Backend\CacheHealthWatch`, but only while the provider says the model's requests
+  carry marks (`Providers\MarksPromptCache`, implemented by `vertex` and `bedrock`). The third
+  consecutive response reporting both cache buckets at zero raises one `RuntimeNoticeSink`
+  notice for the session; `openai`, `sglang`, Gemini and a provider with the marks switched off
+  are never warned. On the forked TUI path the streak and the "already said" bit ride home on the
+  turn's result frame, so the count spans turns. The buckets are also priced (see `modelPrices`
+  in `SETTINGS.md`).
 
 ## Session affinity — dormant-id state
 
