@@ -1092,16 +1092,20 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * contract {@see complete()}'s has — which is what lets a delegated run be
      * shown live ({@see \SugarCraft\Crush\Agents\EngineExecutor::executeStream()}).
      *
+     * `$onStep` receives the turn's {@see \SugarCraft\Crush\Events\StepStarted}
+     * at every step boundary (see {@see runTurn()}), which is how a delegated
+     * run can report its step and context pressure while it works.
+     *
      * @param list<TypedMessage> $messages
      *
      * @throws TurnInterrupted
      */
-    public function completeTranscript(array $messages, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onHeartbeat = null, ?callable $onToken = null): TranscriptTurn
+    public function completeTranscript(array $messages, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onHeartbeat = null, ?callable $onToken = null, ?callable $onStep = null): TranscriptTurn
     {
         $transcript = $messages;
 
         try {
-            $reply = $this->runTurn($messages, $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript);
+            $reply = $this->runTurn($messages, $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript, $onStep);
         } catch (\Throwable $failure) {
             throw new TurnInterrupted($transcript, $failure);
         }
@@ -1114,10 +1118,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * {@see completeTranscript()}. `$transcript` is kept current after every
      * completed step, so it is meaningful even when this throws.
      *
+     * `$onStep`, signature `function(StepStarted $event): void`, is called
+     * once per step, just before that step's provider call (roadmap 1.C-4 /
+     * P-B1). The event carries the step's {@see \SugarCraft\Crush\Context\ContextPressure}
+     * (roadmap 2.1): this loop is where a turn's requests grow, step by step,
+     * so it is the only place pressure can be seen before the request that
+     * overflows is sent.
+     *
      * @param list<TypedMessage> $messages
      * @param list<TypedMessage> $transcript
      */
-    private function runTurn(array $messages, ?callable $onToken, ?callable $onEvent, ?callable $onReasoning, ?callable $onHeartbeat, array &$transcript): Message
+    private function runTurn(array $messages, ?callable $onToken, ?callable $onEvent, ?callable $onReasoning, ?callable $onHeartbeat, array &$transcript, ?callable $onStep = null): Message
     {
         $transcript = $messages;
 
@@ -1255,9 +1266,39 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             $assistant = null;
             $toolResults = [];
 
-            foreach ($runtime->run($app, $onEvent, $this->permissionApprover, $tokenSink, $progressSink, $onHeartbeat) as $message) {
+            // Roadmap 2.1: the step-level pressure check. Chat judges the
+            // conversation once, at submit, and its estimate leaves out the
+            // system prompt and the tool schemas; a turn then grows by every
+            // tool result it reads, so the request that overflows is one no
+            // tier ever saw. Each step's request is measured HERE, built and
+            // not yet sent (Runtime::run()'s $onRequest), against
+            // min(80% of the window, window - maxOutputTokens - reserve) —
+            // anchored on the provider's own count for the previous step plus
+            // an estimate of the rows added since. Sub-agents get it too:
+            // TaskTool and EngineExecutor run through completeTranscript().
+            // This step DETECTS and reports, on $onStep's StepStarted; the
+            // actions (in-turn pruning, step summaries) arrive with 2.2/2.4.
+            if ($onStep !== null) {
+                $contextBudget ??= \SugarCraft\Crush\Context\ContextBudget::new($this->contextWindow(), self::maxOutputTokens($userConfig));
+            }
+            $pressureAnchor ??= [null, 0];
+            $requestRows = $app->messages;
+            $maxSteps = $this->maxSteps;
+            $observeRequest = $onStep === null ? null : static function (\SugarCraft\Crush\Providers\CompleteRequest $request) use ($contextBudget, $requestRows, $pressureAnchor, $onStep, $step, $maxSteps): void {
+                $onStep(new \SugarCraft\Crush\Events\StepStarted(
+                    $step + 1,
+                    $maxSteps,
+                    \SugarCraft\Crush\Context\ContextPressure::measure($contextBudget, $request, $requestRows, $pressureAnchor[0], $pressureAnchor[1]),
+                ));
+            };
+
+            foreach ($runtime->run($app, $onEvent, $this->permissionApprover, $tokenSink, $progressSink, $onHeartbeat, $observeRequest) as $message) {
                 if ($message instanceof AssistantMessage) {
                     $assistant = $message;
+                    // 2.1: the next step's anchor — this request as the
+                    // provider counted it, and how many rows it was built
+                    // from, so the delta is only what this step adds.
+                    $pressureAnchor = [\SugarCraft\Crush\Context\ContextPressure::promptTokensOf($assistant->usage()), count($requestRows)];
                     // Counted ON ARRIVAL, before this step's tools run: a Task
                     // call among them reads $spentSoFarUsd as its sub-agent's
                     // cap baseline, and the step that asked for it is paid.

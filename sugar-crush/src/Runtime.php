@@ -1295,9 +1295,22 @@ final class Runtime
      *                           and bounds nothing; a consumer that receives
      *                           beats is observing liveness, not granting it.
      *
+     * @param ?callable $onRequest Optional observer of the request this step
+     *                           is about to send, signature
+     *                           `function(CompleteRequest $request): void`,
+     *                           called once, after the system prompt, tool
+     *                           list and messages are assembled and before
+     *                           the provider is called (roadmap 2.1). It is
+     *                           the one place the whole request footprint —
+     *                           system prompt and tool schemas included —
+     *                           exists before it is spent, which is what
+     *                           {@see \SugarCraft\Crush\Backend\EngineBackend}'s
+     *                           step-level pressure check measures. Observation
+     *                           only: the request is sent as built.
+     *
      * @return \Generator yields CompleteResponse chunks
      */
-    public function run(App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null, ?callable $onProgress = null, ?callable $onHeartbeat = null): \Generator
+    public function run(App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null, ?callable $onProgress = null, ?callable $onHeartbeat = null, ?callable $onRequest = null): \Generator
     {
         $messages = $this->buildMessages($app);
 
@@ -1355,6 +1368,10 @@ final class Runtime
             // provider hashes into its routing header per request.
             sessionId: $app->sessionId,
         );
+
+        if ($onRequest !== null) {
+            $onRequest($request);
+        }
 
         // foreach-reyield instead of `yield from`: `yield from` preserves
         // each inner generator's 0-based keys, so the assistant message

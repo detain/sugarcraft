@@ -312,6 +312,23 @@ a final report".
 (E686 tranche-8: every line-number anchor this paragraph carried had rotted
 within rounds — the page's own rule is to cite symbols by name, never by line.)
 
+**Every step measures its own request before sending it.** Chat's context
+tiers judge the conversation once, at submit, and a turn then grows by every
+tool result it reads, so the request that would overflow is one no tier ever
+saw. `Runtime::run()` takes an `$onRequest` observer that sees the assembled
+`CompleteRequest` (system prompt, tool list, messages) just before the provider
+call, and `runTurn()` measures it there as a `Context\ContextPressure`: on the
+first step a script-weighted estimate of the whole request, system prompt and
+tool schemas included (`TokenEstimate::ofToolSchemas()`); on every later step
+the previous response's prompt as the provider counted it, plus an estimate of
+only the rows the step added. The budget is `Context\ContextBudget`: the smaller
+of 80% of the window and the window less `maxOutputTokens` less a reserve for
+tool output (64k, capped at a fifth of the window). The figure and its verdict
+ride the step's `Events\StepStarted` to `runTurn()`'s `$onStep` observer
+(`completeTranscript()` takes one too, so a `Task` sub-agent is measured the
+same way). Detecting is all this does: pruning and step summaries are the
+actions later roadmap steps hang on the verdict.
+
 The two type worlds meet at the `EngineBackend` seam: the chassis works in the
 root `Message`/`ToolCall` value objects, the engine in the typed
 `Messages\*`/`Tools\*` hierarchy, and lossless adapters live on the chassis side

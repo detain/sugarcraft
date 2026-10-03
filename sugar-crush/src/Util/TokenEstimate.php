@@ -107,4 +107,30 @@ final class TokenEstimate
 
         return (int) ceil($quarters / 4);
     }
+
+    /**
+     * Estimated tokens the tool definitions add to a request (roadmap 2.1).
+     *
+     * Every provider sends each tool as its name, description and JSON
+     * Schema, and the model's window pays for all of them on every step —
+     * twenty-odd built-ins plus MCP bridges is thousands of tokens that a
+     * history-only estimate never saw. Estimated over the JSON the schema
+     * travels as, which is what the provider's tokenizer reads; the exact
+     * wrapper differs per provider by a handful of tokens per tool.
+     *
+     * @param iterable<\SugarCraft\Crush\Tools\Tool> $tools
+     */
+    public static function ofToolSchemas(iterable $tools): int
+    {
+        $tokens = 0;
+        foreach ($tools as $tool) {
+            $json = json_encode(
+                ['name' => $tool->name(), 'description' => $tool->description(), 'parameters' => $tool->inputSchema()],
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
+            );
+            $tokens += self::ofText($json === false ? $tool->name() . ' ' . $tool->description() : $json);
+        }
+
+        return $tokens;
+    }
 }
