@@ -1604,7 +1604,7 @@ final class RendererTest extends TestCase
         $out = Renderer::render($this->chatAwaitingPermission());
 
         $this->assertStringContainsString('allow once', $out);
-        $this->assertStringContainsString('allow always', $out);
+        $this->assertStringContainsString('allow calls like this one', $out);
         $this->assertStringContainsString('asks first', $out);
         $this->assertStringContainsString('reject', $out);
         $this->assertStringContainsString('n / Esc', $out);
