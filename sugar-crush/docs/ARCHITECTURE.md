@@ -511,9 +511,25 @@ real run. If you add a tool class, the thing that tells you to wire it is a red
 test.
 
 `Grep`, `Glob`, `Read`, `Edit` and `Write` resolve through `Tools\PathJail` and
-refuse a path outside the root. **`Bash` is deliberately not jailed** — which is
+refuse a path outside the root — with one read-only exception, the saved tool
+output described below ([PERMISSIONS](PERMISSIONS.md#the-workspace-jails-one-exception-saved-tool-output)).
+**`Bash` is deliberately not jailed** — which is
 why `BashEscapeDenyHook` exists as an opt-in heuristic, and why it says in its
 own source that it is not a security boundary.
+
+**Over-budget output is saved, not discarded.** A capped tool (`Tools\Concerns\TruncatesOutput`)
+whose result is cut saves everything it captured to `Support\ToolOutputSpill`
+first, keeps a head and a tail of a single-stream result, and ends with a
+pointer: the path, and "Read it with offset/limit, or Grep that path". The
+store is a per-user `0700` directory under the system temp dir with `0600`
+files (`Support\PrivateRetainedDir`, the same discipline as the hook overflow
+store), seven-day retention swept lazily by the first spill of a process.
+`Runtime::settle()` then moves the file into the session's `s-<session>/`
+directory and applies a second, **window-scaled** cap: a result still larger
+than 30% of the model's context window is saved and replaced by a head+tail
+preview — the net for tools with no cap of their own (`WebSearch`, `doctor`)
+and for caps chosen for a far larger window than
+the current model's. `Task` and `Skill` results are exempt: they are the answer.
 
 ---
 

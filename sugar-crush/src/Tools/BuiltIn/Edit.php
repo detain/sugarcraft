@@ -9,6 +9,7 @@ use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\RulePathNudge;
 use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Support\AtomicFileWriter;
+use SugarCraft\Crush\Support\ToolOutputSpill;
 use SugarCraft\Crush\Tools\Concerns\BuildsUnifiedDiff;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\Edit\EditFailureHints;
@@ -160,6 +161,17 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail
                 );
             }
             $path = $resolved;
+        }
+
+        // The jail lets a SAVED TOOL OUTPUT file through for reading (roadmap
+        // 2.8); it is the record of what a call printed, not a source file, so
+        // the one writer that resolves through the same method turns it away.
+        if (ToolOutputSpill::readablePath($path) !== null) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: "Error: $path is saved tool output and is read-only; Read or Grep it instead",
+                isError: true,
+            );
         }
 
         if (!file_exists($path)) {

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tools\Concerns;
 
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Support\ToolOutputSpill;
+use SugarCraft\Crush\Tools\Tool;
 
 /**
  * Bounds the size of a tool result before it reaches the model.
@@ -72,6 +74,17 @@ use SugarCraft\Crush\Context\InstructionFileLoader;
  */
 trait TruncatesOutput
 {
+    // ROADMAP 2.8 — A CUT IS NO LONGER A LOSS. When the clip runs inside a TOOL
+    // under a cap of at least ToolOutputSpill::MIN_CAP_BYTES, truncateMerged()
+    // first saves everything the call captured to a private, session-scoped
+    // file (Support\ToolOutputSpill), keeps a head AND a tail of a single-stream
+    // result, and ends with a pointer telling the model to Read the file with
+    // offset/limit or Grep it. Under a smaller cap, and wherever the trait bounds
+    // something that is not a tool result (EnvironmentBlock's prompt sections),
+    // every byte is exactly what it was before the store existed. captureBound()
+    // lets a process-capturing tool capture past its cap so the file holds the
+    // overflow rather than only the bytes the cap would have kept.
+
     /**
      * 64 KiB — roughly 16k tokens, i.e. a large-but-survivable slice of any
      * current context window, and enough to hold ~1000 file paths or a few
@@ -114,7 +127,9 @@ trait TruncatesOutput
      *
      * NOT EVERY USER OF THIS CONSTANT IS IN THAT RELATIONSHIP:
      * {@see \SugarCraft\Crush\Tools\BuiltIn\Bash},
-     * {@see \SugarCraft\Crush\Tools\BuiltIn\LspTool} and
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\LspTool},
+     * {@see \SugarCraft\Crush\Tools\McpToolBridge} (one per MCP tool, since
+     * audit 0.5) and
      * {@see \SugarCraft\Crush\Tools\BuiltIn\WebFetch} take the same default
      * and spend no nudge budget, so the margin says nothing about them. (The
      * last of those also holds a far larger read bound of its own; that one
@@ -202,31 +217,127 @@ trait TruncatesOutput
 
         $total = strlen($joined) + $merged['dropped'];
 
+        // Roadmap 2.8: what is about to be cut is SAVED first, while every
+        // captured byte is still in hand, and the result then names the file.
+        // Null whenever spilling does not apply (see spillOverflow()), which
+        // leaves every byte below exactly as it was before the store existed.
+        $spill = $this->spillOverflow($joined, $maxBytes);
+        $pointer = $spill === null ? '' : "\n" . ToolOutputSpill::pointer($spill, strlen($joined), $merged['dropped']);
+
         // The marker is part of what the model receives, so a cap that
         // excludes it is not the bound it is documented to be. Sizing the
         // reserve with $total in BOTH slots is a true upper bound on the
         // marker finally emitted, since the dropped count can never exceed
-        // the total.
-        $budget = max(0, $maxBytes - (strlen($this->truncationMarker($total, $total)) + 1));
+        // the total. The pointer, when there is one, is paid for the same way.
+        $budget = max(0, $maxBytes - (strlen($this->truncationMarker($total, $total)) + 1) - strlen($pointer));
 
         $tailClip = $tail === ''
             ? ['kept' => '', 'dropped' => 0]
             : self::clipToLine($tail, intdiv($budget, 2), $merged['tailMidLine']);
 
         $headBudget = $budget - strlen($tailClip['kept']) - strlen($separator);
+
+        // HEAD AND TAIL once the whole is saved. A single-stream result (a
+        // build log, a long listing) keeps its LAST quarter too, because the
+        // end of a log is where the verdict is, and the middle the model does
+        // not see is now one Read away rather than gone. A two-part result
+        // already keeps its tail — the stderr reserved above.
+        $headEnd = ['kept' => '', 'dropped' => 0];
+        $gap = '';
+        if ($spill !== null && $tail === '') {
+            $gap = "\n" . self::SPILL_GAP_LINE;
+            // A capture that was cut mid-line ends on a FRAGMENT, and the end
+            // of $head is exactly what this window shows, so the fragment is
+            // dropped first — the same repair clipToLine() gives the front.
+            $lastNewline = strrpos($head, "\n");
+            $whole = !$merged['headMidLine'] ? $head : ($lastNewline === false ? '' : substr($head, 0, $lastNewline + 1));
+            $headEnd = self::clipTailToLine($whole, intdiv(max(0, $headBudget), 4) - strlen($gap) - 1);
+            $headBudget -= strlen($headEnd['kept']) + ($headEnd['kept'] === '' ? 0 : strlen($gap) + 1);
+        }
+
         $headClip = self::clipToLine($head, max(0, $headBudget), $merged['headMidLine']);
 
         $kept = $headClip['kept'];
+        if ($headEnd['kept'] !== '') {
+            // The two head windows never meet: $head is longer than the whole
+            // budget, and the two windows together are inside it.
+            $kept .= $gap . "\n" . $headEnd['kept'];
+        }
         if ($tailClip['kept'] !== '') {
             $kept = $kept === '' ? $tailClip['kept'] : $kept . "\n" . $tailClip['kept'];
         }
 
-        $dropped = $merged['dropped'] + $headClip['dropped'] + $tailClip['dropped'];
+        $headDropped = $headEnd['kept'] === ''
+            ? $headClip['dropped']
+            : strlen($head) - strlen($headClip['kept']) - strlen($headEnd['kept']);
+        $dropped = $merged['dropped'] + $headDropped + $tailClip['dropped'];
         if ($dropped <= 0) {
             return $kept;
         }
 
-        return $kept . "\n" . $this->truncationMarker($dropped, $total);
+        return $kept . "\n" . $this->truncationMarker($dropped, $total) . $pointer;
+    }
+
+    /**
+     * The line that stands where the middle of a spilled single-stream result
+     * was, so the jump from head to tail is not read as adjacent lines.
+     */
+    private const SPILL_GAP_LINE = '... [middle omitted; it is in the saved file named below]';
+
+    /**
+     * Save $joined to the spill store when this clip qualifies, returning the
+     * saved path, or null.
+     *
+     * Qualifies means: the trait is running inside a TOOL (it also bounds parts
+     * of the system prompt, {@see \SugarCraft\Crush\Context\EnvironmentBlock},
+     * where a file pointer would be noise in every request); the cap is at least
+     * {@see ToolOutputSpill::MIN_CAP_BYTES}, so the pointer costs a small share
+     * of it; and the clip really cuts bytes this call holds. A result that is
+     * short only because the CAPTURE dropped bytes has nothing more to save than
+     * the model already sees.
+     */
+    private function spillOverflow(string $joined, int $maxBytes): ?string
+    {
+        if (!$this instanceof Tool || $maxBytes < ToolOutputSpill::MIN_CAP_BYTES || strlen($joined) <= $maxBytes) {
+            return null;
+        }
+
+        return ToolOutputSpill::store($joined);
+    }
+
+    /**
+     * How much of a process's output to CAPTURE for a result capped at
+     * $maxOutputBytes: the cap itself when no spill can apply (unchanged
+     * behaviour), and {@see ToolOutputSpill::CAPTURE_BYTES} when one can, so
+     * the saved file holds the overflow rather than only the bytes the cap
+     * would have kept anyway. Null means unbounded, matching a disabled cap.
+     */
+    private function captureBound(int $maxOutputBytes): ?int
+    {
+        if ($maxOutputBytes <= 0) {
+            return null;
+        }
+
+        return $this instanceof Tool && $maxOutputBytes >= ToolOutputSpill::MIN_CAP_BYTES
+            ? max($maxOutputBytes, ToolOutputSpill::CAPTURE_BYTES)
+            : $maxOutputBytes;
+    }
+
+    /**
+     * At most $budget bytes from the END of $text, starting on a complete line
+     * (the mirror of {@see clipToLine()}), or nothing when no whole line fits.
+     *
+     * @return array{kept: string, dropped: int}
+     */
+    private static function clipTailToLine(string $text, int $budget): array
+    {
+        $kept = ToolOutputSpill::tailOf($text, max(0, $budget));
+        $length = strlen($text);
+        if ($kept !== '' && strlen($kept) < $length && $text[$length - strlen($kept) - 1] !== "\n") {
+            $kept = '';
+        }
+
+        return ['kept' => $kept, 'dropped' => $length - strlen($kept)];
     }
 
     /**

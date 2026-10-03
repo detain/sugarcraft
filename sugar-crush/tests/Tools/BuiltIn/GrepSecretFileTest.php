@@ -97,4 +97,34 @@ final class GrepSecretFileTest extends TestCase
         $this->assertStringContainsString('src/a.php', $php);
         $this->assertStringNotContainsString('src/b.txt', $php);
     }
+
+    /**
+     * W1-g handoff (0.14-c follow-up): key material is kept out of a directory
+     * walk the same way `.env` is. `Grep pattern="PRIVATE KEY" path="."` used to
+     * print every key line in the tree, because ProtectFilesHook refuses only a
+     * search that NAMES the key. The `.pub` halves stay searchable, matching the
+     * hook, which lets them be read.
+     */
+    public function testKeyMaterialIsNeverSearchedButPublicKeysAre(): void
+    {
+        mkdir($this->root . '/keys');
+        $private = ['server.key', 'DEPLOY.PEM', 'tls.pem', 'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519', 'id_rsa_work', 'id_ed25519_sk', 'id_ecdsa.bak'];
+        foreach ($private as $name) {
+            file_put_contents($this->root . '/keys/' . $name, "-----BEGIN PRIVATE KEY----- {$name}\n");
+        }
+        foreach (['id_rsa.pub', 'id_ed25519_sk.pub', 'notes.md'] as $name) {
+            file_put_contents($this->root . '/keys/' . $name, "-----BEGIN PRIVATE KEY----- {$name}\n");
+        }
+
+        foreach ([['path' => '.'], ['path' => 'keys', 'include_ignored' => true], ['path' => 'keys', 'include' => '*']] as $args) {
+            $content = (new Grep($this->root))->execute($args + ['pattern' => 'PRIVATE KEY', 'description' => 'x'])->content();
+
+            foreach ($private as $name) {
+                $this->assertStringNotContainsString("PRIVATE KEY----- {$name}\n", $content, json_encode($args) . " searched {$name}");
+            }
+            $this->assertStringContainsString('keys/id_rsa.pub:1:', $content, 'a public key is meant to be shared');
+            $this->assertStringContainsString('keys/id_ed25519_sk.pub:1:', $content);
+            $this->assertStringContainsString('keys/notes.md:1:', $content, 'an ordinary file still matches');
+        }
+    }
 }

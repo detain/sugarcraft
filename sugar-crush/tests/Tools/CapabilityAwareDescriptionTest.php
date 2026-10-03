@@ -47,7 +47,7 @@ use SugarCraft\Crush\Tools\Tool;
 final class CapabilityAwareDescriptionTest extends TestCase
 {
     private const GREP_ABSENT = <<<'GREP'
-        Search for a pattern in files, recursively. The pattern is a GNU basic regular expression — this runs `grep -rn`, not PCRE — so `|`, `+`, `?`, `(`, `)`, `{` and `}` match themselves unless backslash-escaped. Use include to scope by filename glob (e.g. "*.php"). Finding nothing is a normal result, not an error; only grep itself failing is reported as one. Skips .git, vendor, node_modules, .phpunit.cache and anything the project's .gitignore excludes; pass include_ignored: true to search those too, except that a walk never enters .git and never opens .env, .env.* or .envrc files (the .env.example-style templates included; Read those directly).
+        Search for a pattern in files, recursively. The pattern is a GNU basic regular expression — this runs `grep -rn`, not PCRE — so `|`, `+`, `?`, `(`, `)`, `{` and `}` match themselves unless backslash-escaped. Use include to scope by filename glob (e.g. "*.php"). Finding nothing is a normal result, not an error; only grep itself failing is reported as one. Skips .git, vendor, node_modules, .phpunit.cache and anything the project's .gitignore excludes; pass include_ignored: true to search those too, except that a walk never enters .git and never opens .env, .env.* or .envrc files (the .env.example-style templates included; Read those directly) or private-key files (*.pem, *.key, id_rsa-style SSH keys; the .pub halves are searched). path may also name a saved tool-output file a truncated result pointed you to.
         GREP;
 
     private const GLOB_ABSENT = <<<'GLOB'

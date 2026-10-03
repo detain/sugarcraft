@@ -106,11 +106,10 @@ final class HookContextFiles
     public const DIR_NAME = 'sc-hook-ctx';
 
     /**
-     * Written first, `rename`-d into place — the same atomicity reason as
-     * {@see ToolIpcFiles::PARTIAL_SUFFIX}: a consumer must never observe a
-     * partially written overflow.
+     * The name every {@see PrivateRetainedDir} message gives this store, so a
+     * refusal reads "hook overflow directory … is a symbolic link".
      */
-    private const PARTIAL_SUFFIX = '.partial';
+    private const LABEL = 'hook overflow';
 
     /**
      * Bytes of the cap reserved for the spillover marker itself, so the string
@@ -119,24 +118,6 @@ final class HookContextFiles
      * the "N bytes retained" sentence) with room to spare.
      */
     private const MARKER_RESERVE_BYTES = 512;
-
-    /**
-     * Mode of the retained-overflow directory: this uid in, nobody else out.
-     *
-     * Checked on the ACCEPT path as well as set on the CREATE path — the create
-     * runs once per machine, the accept runs on every overflowing hook of every
-     * run after it, so an existing directory that arrived loose (a hand
-     * `mkdir -p` under a permissive umask, a restored backup, a container image)
-     * is refused rather than trusted.
-     */
-    private const DIRECTORY_MODE = 0o700;
-
-    /**
-     * The bits whose presence means somebody OTHER than this user can reach the
-     * path: group and world, read, write or execute. Used both as the umask
-     * around each create and as the mask of the accept-path refusal above.
-     */
-    private const FOREIGN_ACCESS_BITS = 0o077;
 
     /**
      * The code on the one {@see \RuntimeException} family that names a SECURITY
@@ -149,7 +130,7 @@ final class HookContextFiles
      * Exception codes are the only channel this class has for the distinction
      * without a new file for a second exception type.
      */
-    public const REFUSAL_UNSAFE_DIRECTORY = 7;
+    public const REFUSAL_UNSAFE_DIRECTORY = PrivateRetainedDir::REFUSAL_UNSAFE_DIRECTORY;
 
     /**
      * The three reasons the marker gives for retaining nothing.
@@ -194,12 +175,14 @@ final class HookContextFiles
      * log directory, and a seam for the same reason: every build the suite runs
      * on has the posix lookup, so with it inline the `null` arm would be
      * reachable from no test. That arm is a shared `-noposix` scope, where
-     * {@see refusalReason()} skips the uid comparison and only the type and mode
-     * checks hold.
+     * {@see PrivateRetainedDir::verified()} skips the uid comparison and only the
+     * type and mode checks hold. The mode (`0700`), the foreign-access mask
+     * (`077`) and the `.partial` intermediate are {@see PrivateRetainedDir}'s
+     * constants, shared with every retained store.
      */
     private static function directoryFor(?int $uid): string
     {
-        return sys_get_temp_dir() . '/' . self::DIR_NAME . '-' . ($uid === null ? 'noposix' : (string) $uid);
+        return PrivateRetainedDir::pathFor(self::DIR_NAME, $uid);
     }
 
     /**
@@ -236,96 +219,10 @@ final class HookContextFiles
      */
     public static function verifiedDirectory(string $dir): string
     {
-        // RE-INSPECTED, NOT REMEMBERED. PHP caches `stat()` answers per path for
-        // the life of the process, so a verdict computed here would survive an
-        // operator's `chmod 700` — and the point of the mode arm is to be able to
-        // watch that fix land. The cost is one syscall on a path that runs once
-        // per overflowing hook.
-        clearstatcache(true, $dir);
-        $stat = @lstat($dir);
-
-        if ($stat === false) {
-            $previous = umask(self::FOREIGN_ACCESS_BITS);
-
-            try {
-                @mkdir($dir, self::DIRECTORY_MODE, true);
-            } finally {
-                umask($previous);
-            }
-
-            clearstatcache(true, $dir);
-            $stat = @lstat($dir);
-        }
-
-        if ($stat === false) {
-            // Nothing at the path and no way to make one — a read-only or full
-            // temp filesystem. Distinct from a refusal below: the shape of the
-            // disk is not a statement about who controls this path.
-            throw new \RuntimeException('unable to create hook overflow directory: ' . $dir);
-        }
-
-        $reason = self::refusalReason($dir, $stat);
-
-        if ($reason !== null) {
-            throw new \RuntimeException($reason, self::REFUSAL_UNSAFE_DIRECTORY);
-        }
-
-        return $dir;
-    }
-
-    /**
-     * Why $dir (observed as $stat, from a single `lstat()`) may not be written
-     * through, or null when it may.
-     *
-     * THE ARMS ARE ORDERED BY WHAT A READER CAN ACT ON, not by cheapness. The
-     * ownership comparison runs BEFORE the mode comparison on purpose: an arm
-     * only a tailored input can refuse is an arm a mutation survives, and the
-     * tight-but-foreign candidate the tests use (`/root` on a normal box) would
-     * otherwise be refused by whichever check came first and so would prove
-     * nothing about this one.
-     *
-     * THE UID COMPARISON IS SKIPPED — not failed — on a build with no
-     * `posix_geteuid()`, for the same reason {@see \SugarCraft\Crush\Hooks\BuiltIn\AuditHook}
-     * skips it: the type, symlink and mode arms still hold on every build, and a
-     * Windows runner has no shared-`/tmp` squatter to refuse.
-     */
-    private static function refusalReason(string $dir, array $stat): ?string
-    {
-        $mode = (int) $stat['mode'];
-        $type = $mode & 0o170000;
-
-        if ($type === 0o120000) {
-            return 'hook overflow directory ' . $dir . ' is a symbolic link rather than a directory, '
-                . 'so this store will not write through it';
-        }
-
-        if ($type !== 0o040000) {
-            return 'hook overflow path ' . $dir . ' exists and is not a directory';
-        }
-
-        $uid = \function_exists('posix_geteuid') ? \posix_geteuid() : null;
-
-        if ($uid !== null && (int) $stat['uid'] !== $uid) {
-            return sprintf(
-                'hook overflow directory %s is owned by uid %d and this process is uid %d, so it is not '
-                    . 'a directory this user can be sure of',
-                $dir,
-                (int) $stat['uid'],
-                $uid,
-            );
-        }
-
-        if (($mode & self::FOREIGN_ACCESS_BITS) !== 0) {
-            return sprintf(
-                'hook overflow directory %s is mode %04o, which lets other users on this box reach the hook '
-                    . 'output retained in it. Fix it with: chmod 700 %s',
-                $dir,
-                $mode & 0o7777,
-                $dir,
-            );
-        }
-
-        return null;
+        // The arms themselves live in {@see PrivateRetainedDir} since roadmap
+        // 2.8 gave them a second writer (the tool-output spill); the label is
+        // what keeps every refusal naming THIS store.
+        return PrivateRetainedDir::verified($dir, self::LABEL);
     }
 
     /**
@@ -480,7 +377,9 @@ final class HookContextFiles
     /**
      * Write the full overflow text, privately (0600) and atomically, and return
      * its absolute path. The file is RETAINED — nothing here unlinks it; that is
-     * the whole point of R-2 (see the class docblock).
+     * the whole point of R-2 (see the class docblock). The mechanics below are
+     * {@see PrivateRetainedDir::write()}'s, shared with the tool-output spill
+     * since roadmap 2.8; what this store adds is the directory and the name.
      *
      * THE INTERMEDIATE IS NEVER TRUSTED TO AN EXISTING NAME. An `lstat` on the
      * `.partial` before a single byte is addressed to it is this store's
@@ -509,39 +408,6 @@ final class HookContextFiles
      */
     public static function write(string $text): string
     {
-        $dir = self::dir();
-        $file = $dir . '/ctx-' . bin2hex(random_bytes(8)) . '.txt';
-        $partial = $file . self::PARTIAL_SUFFIX;
-
-        if (@lstat($partial) !== false) {
-            // Deliberately BEFORE the umask block and outside the try below: this
-            // name is not ours, so the failure path must not unlink it.
-            throw new \RuntimeException('refusing to overwrite a pre-existing hook overflow partial: ' . $partial);
-        }
-
-        $previous = umask(self::FOREIGN_ACCESS_BITS);
-
-        try {
-            if (@file_put_contents($partial, $text) !== strlen($text)) {
-                throw new \RuntimeException('unable to write hook overflow partial: ' . $partial);
-            }
-        } catch (\RuntimeException $failure) {
-            // The `.partial` is the one artifact this class must never leave
-            // behind on its own failure: it holds the same bytes, nothing names
-            // it, and the R-2 store has no sweeper to change its mind later.
-            @unlink($partial);
-
-            throw $failure;
-        } finally {
-            umask($previous);
-        }
-
-        if (!@rename($partial, $file)) {
-            @unlink($partial);
-
-            throw new \RuntimeException('unable to finalise hook overflow file: ' . $file);
-        }
-
-        return $file;
+        return PrivateRetainedDir::write(self::dir(), 'ctx-' . bin2hex(random_bytes(8)) . '.txt', $text, self::LABEL);
     }
 }

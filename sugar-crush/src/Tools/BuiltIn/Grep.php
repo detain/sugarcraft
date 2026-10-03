@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\RulePathNudge;
 use SugarCraft\Crush\Skills\SkillPathNudge;
+use SugarCraft\Crush\Support\ToolOutputSpill;
 use SugarCraft\Crush\Tools\AcceptsHeartbeat;
 use SugarCraft\Crush\Tools\CarriesSessionState;
 use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
@@ -205,7 +206,9 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
             . implode(', ', IgnoreRules::DEFAULT_EXCLUDED_DIRS)
             . ' and anything the project\'s .gitignore excludes; pass include_ignored: true to search those too, '
             . 'except that a walk never enters .git and never opens .env, .env.* or .envrc files (the '
-            . '.env.example-style templates included; Read those directly).';
+            . '.env.example-style templates included; Read those directly) or private-key files '
+            . '(*.pem, *.key, id_rsa-style SSH keys; the .pub halves are searched). path may also name a '
+            . 'saved tool-output file a truncated result pointed you to.';
 
         if ($this->rgAvailable) {
             $description .= ' `rg` is on PATH on this host, so when BRE escaping is the obstacle '
@@ -238,7 +241,7 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
             ],
             'include_ignored' => [
                 'type' => 'boolean',
-                'description' => 'Search files the project\'s .gitignore excludes, plus vendor/node_modules-style directories. Off by default; the result says when something was hidden. Even when true, .git and .env/.env.*/.envrc files are never searched.',
+                'description' => 'Search files the project\'s .gitignore excludes, plus vendor/node_modules-style directories. Off by default; the result says when something was hidden. Even when true, .git, .env/.env.*/.envrc files and private-key files (*.pem, *.key, id_rsa-style SSH keys) are never searched.',
             ],
         ],
         'required' => ['pattern', 'path', 'description'],
@@ -305,7 +308,12 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
 
         $jailRoot = $this->jailRoot();
         if ($jailRoot !== null) {
-            $resolved = PathJail::resolveDir($jailRoot, $path);
+            // A tool result that was over its budget names a saved file outside
+            // the root (roadmap 2.8); searching THAT file is the other half of
+            // how the model gets at what the preview left out, so it is the one
+            // path outside the jail this tool accepts — see
+            // {@see ToolOutputSpill::readablePath()} for exactly which.
+            $resolved = PathJail::resolveDir($jailRoot, $path) ?? ToolOutputSpill::readablePath($path);
             if ($resolved === null) {
                 return new ToolResult(
                     toolCallId: $args['id'] ?? '',
@@ -361,7 +369,9 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         // See Bash::execute() -- exec() leaks the child's stderr onto the
         // terminal underneath the TUI. grep exits 1 for "no matches", which
         // is a normal outcome rather than an error.
-        $run = $this->runCaptured($cmd, null, $this->maxOutputBytes > 0 ? $this->maxOutputBytes : null, null, [], $heartbeat);
+        // Captured past the cap when a spill can keep the overflow (roadmap
+        // 2.8): bytes the capture drops are bytes no saved file can hold.
+        $run = $this->runCaptured($cmd, null, $this->captureBound($this->maxOutputBytes), null, [], $heartbeat);
 
         $filtered = self::withoutIgnoredHits($run, $rules, $path);
 
@@ -761,13 +771,48 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
      *    below the directory `--exclude-dir` matches, and every file named
      *    `config` under a git dir is a git config.
      *
+     *  - KEY MATERIAL, the files {@see \SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook}
+     *    refuses by name — see {@see KEY_MATERIAL_EXCLUDES}. The hook stops a
+     *    Grep that NAMES `server.key`; it cannot stop `pattern: "PRIVATE KEY",
+     *    path: "."`, which used to print every key line in the tree.
+     *
      * Hits in the CONTENT of other files that merely mention a secret are not
      * this method's business; only the files themselves are kept closed.
      */
+    /**
+     * The `--exclude` globs that keep private-key files out of a walk, matching
+     * ProtectFilesHook's key-material deny: `*.pem` and `*.key` with a stem, in
+     * any case, and the SSH identities `id_rsa`/`id_dsa`/`id_ecdsa`/`id_ed25519`
+     * plus their suffixed variants (`id_rsa_work`, `id_ed25519_sk`) — but NOT the
+     * `.pub` half, which exists to be shared.
+     *
+     * "Not ending in `.pub`" is spelled as four positive globs (last byte not
+     * `b`, or the one before it not `u`, …) because a glob cannot negate a
+     * suffix, and the one tool that could — a re-including `--include=*.pub`
+     * — is a whitelist on BSD grep (see `.env.example` above). MEASURED on GNU
+     * grep 3.11: `id_rsa`, `id_rsa_work`, `id_ed25519_sk`, `id_ecdsa.bak`,
+     * `server.key` and `DEPLOY.PEM` are skipped; `id_rsa.pub` and
+     * `id_rsa_work.pub` are still searched.
+     *
+     * @var list<string>
+     */
+    private const KEY_MATERIAL_EXCLUDES = [
+        '?*.[pP][eE][mM]',
+        '?*.[kK][eE][yY]',
+        'id_rsa', 'id_rsa[_.-]*[!b]', 'id_rsa[_.-]*[!u]b', 'id_rsa[_.-]*[!p]ub', 'id_rsa[_.-]*[!.]pub',
+        'id_dsa', 'id_dsa[_.-]*[!b]', 'id_dsa[_.-]*[!u]b', 'id_dsa[_.-]*[!p]ub', 'id_dsa[_.-]*[!.]pub',
+        'id_ecdsa', 'id_ecdsa[_.-]*[!b]', 'id_ecdsa[_.-]*[!u]b', 'id_ecdsa[_.-]*[!p]ub', 'id_ecdsa[_.-]*[!.]pub',
+        'id_ed25519', 'id_ed25519[_.-]*[!b]', 'id_ed25519[_.-]*[!u]b', 'id_ed25519[_.-]*[!p]ub', 'id_ed25519[_.-]*[!.]pub',
+    ];
+
     private static function secretExcludeFlags(string $searchRoot): string
     {
         $flags = ' --exclude=.env --exclude=.envrc --exclude=' . escapeshellarg('.env.*')
             . ' --exclude-dir=.git';
+
+        foreach (self::KEY_MATERIAL_EXCLUDES as $glob) {
+            $flags .= ' --exclude=' . escapeshellarg($glob);
+        }
 
         $real = realpath($searchRoot);
         $segments = explode('/', $real === false ? $searchRoot : $real);

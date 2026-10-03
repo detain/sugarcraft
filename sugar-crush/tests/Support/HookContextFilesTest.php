@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Support\HookContextFiles;
+use SugarCraft\Crush\Support\PrivateRetainedDir;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 
 /**
@@ -433,8 +434,8 @@ final class HookContextFilesTest extends TestCase
 
         // THE CHILD LOADS THE ONE FILE, NOT THE autoloader. Two reasons, and the
         // second is a constraint worth naming where it is met. `HookContextFiles`
-        // is final, imports nothing and extends nothing (MEASURED: zero `use` lines
-        // in its source), so requiring the file the parent already ran is the whole
+        // is final and extends nothing, and its one `use`-free sibling is loaded
+        // beside it, so requiring the file the parent already ran is the whole
         // program the child needs — and it is provably the SAME file the parent
         // used, which a `vendor/` resolution could only assert. The other reason is
         // that the usual spelling of that path is a two-level climb out of this
@@ -444,10 +445,11 @@ final class HookContextFilesTest extends TestCase
         // test's domain, where every `glob`/`scandir` in it must then be classified
         // in a roster this step does not own. Reaching the source through reflection
         // on the class under test is both the stronger claim and the narrower
-        // footprint. IF this class ever
-        // gains a sibling dependency the child will fatal on an undefined class and
-        // the `$status === 0` assertion below fails loudly — the switch back to the
-        // autoloader is then due, along with the roster rows it would owe.
+        // footprint. The class has since gained exactly one sibling dependency,
+        // `PrivateRetainedDir` (roadmap 2.8), which is itself import-free, so
+        // {@see runInSandboxedChild()} requires that file too, the same way. A
+        // SECOND dependency is the point at which the switch back to the
+        // autoloader is due, along with the roster rows it would owe.
         // THE REPORT TRAVELS AS HEX ON PURPOSE. The tail slice this test needs is
         // `substr($bounded, -180)` — BYTES — and a bounded string whose marker is
         // longer than the slice starts INSIDE the three-byte U+2026 the marker
@@ -674,13 +676,15 @@ final class HookContextFilesTest extends TestCase
      */
     public function testTheIntermediateNameIsInspectedBeforeItIsOpenedAndNeverUnlinkedOnThatRefusal(): void
     {
-        $file = (new \ReflectionMethod(HookContextFiles::class, 'write'))->getFileName();
+        // The write mechanics moved into PrivateRetainedDir (roadmap 2.8) so the
+        // tool-output spill shares them; the census follows the body there.
+        $file = (new \ReflectionMethod(PrivateRetainedDir::class, 'write'))->getFileName();
         self::assertIsString($file, 'the write() under test has no source file to inspect');
 
         $whole = file_get_contents($file);
         self::assertIsString($whole, 'the source of write() could not be read');
 
-        $start = strpos($whole, 'public static function write');
+        $start = strpos($whole, 'public static function write(');
         self::assertIsInt($start, 'write() is no longer spelled the way this census reads it');
         $body = substr($whole, $start);
 
@@ -753,8 +757,18 @@ final class HookContextFilesTest extends TestCase
         $source = (new \ReflectionClass(HookContextFiles::class))->getFileName();
         self::assertIsString($source, 'the class under test has no source file to hand the child');
 
+        // HookContextFiles delegates its directory and write discipline to
+        // PrivateRetainedDir (roadmap 2.8), so the child loads that file first —
+        // still by reflection, still the same files the parent ran.
+        $dependency = (new \ReflectionClass(PrivateRetainedDir::class))->getFileName();
+        self::assertIsString($dependency, 'the shared retained-directory class has no source file to hand the child');
+
         $script = $this->sandboxFile($root, 'probe');
-        file_put_contents($script, sprintf($program, $source));
+        file_put_contents($script, str_replace(
+            "require '" . $source . "';",
+            "require '" . $dependency . "';\nrequire '" . $source . "';",
+            sprintf($program, $source),
+        ));
 
         $process = proc_open(
             [PHP_BINARY, $script],

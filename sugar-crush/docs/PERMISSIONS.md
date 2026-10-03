@@ -521,7 +521,7 @@ The gate is not a replacement for them. Even under `bypass-permissions`,
 | Pattern | Applies to |
 |---|---|
 | `.env`, `.env.*`, `.envrc` (not the `.env.example`/`.sample`/`.dist`/`.template`/`.tpl` templates) | `Read`, `Edit`, `Write`, `Bash`, `Grep`, `Glob`, `Lsp`, `mcp__*` — reading it *is* the leak; `Grep` also never opens these files itself, even with `include_ignored: true` |
-| `*.pem`, `*.key` (with a stem, any case), SSH identities `id_rsa*`, `id_dsa*`, `id_ecdsa*`, `id_ed25519*` (not the `.pub` half) | all of the above — key material is the credential itself; public `.pem` certificates are refused too, since the extension cannot tell a chain from a key |
+| `*.pem`, `*.key` (with a stem, any case), SSH identities `id_rsa*`, `id_dsa*`, `id_ecdsa*`, `id_ed25519*` (not the `.pub` half) | all of the above — key material is the credential itself; public `.pem` certificates are refused too, since the extension cannot tell a chain from a key; `Grep` also never opens these files in a directory search, so `pattern: "PRIVATE KEY", path: "."` cannot print one |
 | `.git/config`, `config/*.php` | all of the above |
 | `.sugar-crush/hooks.yaml`, `.sugar-crush/config.json`, `.sugar-crush/agents/` | **writes only** (`Edit`, `Write`, `Bash`, `mcp__*`) |
 | `.git/hooks/`, `.git/info/` | **writes only** (`Edit`, `Write`, `Bash`, `mcp__*`) — a hook runs on your next `git commit`, outside any session (audit F-J4) |
@@ -554,6 +554,29 @@ the model granting itself the trust the gate exists to withhold.
 rewrite**, so a hook that turns `Bash{command:"ls"}` into
 `Bash{command:"rm -rf /"}` is re-evaluated rather than slipping past the gate
 registered behind it.
+
+### The workspace jail's one exception: saved tool output
+
+`Read`, `Edit`, `Write`, `Glob` and `Grep` refuse a path outside the workspace
+root (`Tools\PathJail`). One kind of path outside it is let through, for
+**reading only**: a tool result over its budget is shown as a head-and-tail
+preview plus the path of a file holding everything the tool captured
+(`Support\ToolOutputSpill`), and the model reads that file back with `Read`
+(`offset`/`limit`) or searches it with `Grep`. The exception is as narrow as it
+can be made:
+
+- the file must already exist, be a regular file and carry a saved-output name
+  (`out-<128-bit hex>.txt`), directly inside this user's store
+  (`$TMPDIR/sc-tool-out-<euid>/`) or one session directory of it (`s-<session>/`);
+- the store must pass the same owner-only check that guards writing into it — a
+  real directory, owned by this uid, mode `0700` — or nothing in it resolves;
+- only `PathJail::resolve()` consults the allow-list. `resolveForCreate()` and
+  `resolveDir()` do not, so `Write` cannot create or replace a file there and
+  `Glob` cannot list the store; `Edit`, the one writer that resolves through the
+  same method, refuses a saved-output path by name.
+
+Files are written `0600`, are kept for seven days, and are swept by the first
+spill of a later process.
 
 ---
 

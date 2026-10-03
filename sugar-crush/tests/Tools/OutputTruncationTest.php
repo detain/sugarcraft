@@ -189,8 +189,15 @@ final class OutputTruncationTest extends TestCase
         $this->assertTrue($result->isError());
         $this->assertStringContainsString('THE ACTUAL REASON', $result->content());
         $this->assertStringContainsString('truncated:', $result->content(), 'and it is still honest about the loss');
-        // The reason belongs at the END, next to the marker, not buried.
-        $this->assertStringContainsString('THE ACTUAL REASON', substr($result->content(), -400));
+        // The reason belongs at the END, next to the marker, not buried. Measured
+        // up to the marker rather than from the end of the string: since roadmap
+        // 2.8 the marker is followed by the pointer to the saved output, which is
+        // longer than this window on its own.
+        $content = $result->content();
+        $marker = strpos($content, '... [truncated:');
+        $this->assertIsInt($marker);
+        $this->assertStringContainsString('THE ACTUAL REASON', substr(substr($content, 0, $marker), -400));
+        $this->assertStringContainsString('... [saved: ', substr($content, $marker), 'and the whole capture was saved for the model to page through');
     }
 
     /** …at a cap far too small to hold the stdout at all. */

@@ -528,6 +528,11 @@ final class ReadPathCensusTest extends TestCase
                 . 'no content is read, and only an old regular file this uid owns whose name has '
                 . 'save()\'s exact shape is unlinked',
         ],
+        'Support/PrivateRetainedDir.php|scandir' => [
+            'NAMES_ONLY — sweep() lists a retained store\'s own owner-only directory (and its one level of '
+                . 'session sub-directories) after re-verifying it; no content is read, and only a regular '
+                . 'file older than the retention window is unlinked, typed by lstat() so no link is followed',
+        ],
         'Support/SiblingSpendLedger.php|fopen' => [
             'SELF_LOCATED — create()\'s exclusive (`x`, 0600) open of the name ToolIpcFiles::reserve() '
                 . 'just chose in the temp dir; never caller-supplied',

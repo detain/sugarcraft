@@ -2844,6 +2844,26 @@ final class Runtime
             }
         }
 
+        // Roadmap 2.8, the central half of spill-to-file. A tool that clips its
+        // own output has already saved the overflow and named the file; here
+        // that file moves into this session's directory (the tool ran without
+        // knowing the session) and a result still over a WINDOW-SCALED share
+        // of the context is saved and replaced by a head+tail preview — the
+        // net for tools with no cap of their own, and for a cap chosen for a
+        // window far larger than this model's. After the PostToolUse chain, so
+        // hooks still observe the raw output; before the notes, so a hook's
+        // note is never what the preview cuts. A withheld result is a sentence,
+        // not output, and is left alone.
+        if ($withheldReason === null) {
+            $result = \SugarCraft\Crush\Support\ToolOutputSpill::forModel(
+                $result,
+                $toolCall->name(),
+                $toolCall->arguments(),
+                $context->sessionId,
+                fn (): int => ContextWindow::resolve($this->provider->contextWindow()),
+            );
+        }
+
         // KEPT ON THE WITHHELD ARM TOO: the pre-note was produced by PreToolUse
         // hooks BEFORE the call ran, from its arguments alone, so it cannot
         // carry the output that was refused — and it was already a permitted,
@@ -2860,6 +2880,21 @@ final class Runtime
         // either) and BEFORE the emit, so the UI renders exactly what the model
         // will read. PostToolUse above still observed the RAW output.
         $result = self::utf8Safe($result);
+
+        // Invisible Unicode tag characters (U+E0000-U+E007F) are an instruction
+        // channel no reviewer can see: a fetched page, an MCP reply or a file
+        // can carry one. The prompt's fences already drop them
+        // ({@see \SugarCraft\Crush\Context\PromptFence::escape()}); a tool
+        // result reaches the model with no fence, so they are dropped here, on
+        // valid UTF-8 (after the scrub), and the removal is ANNOUNCED — the
+        // model should know the output tried to say something it cannot see.
+        $untagged = \SugarCraft\Crush\Context\PromptFence::stripUnicodeTags($result->content(), $tagsRemoved);
+        if ($tagsRemoved > 0) {
+            $result = $result->withContent(
+                $untagged . "\n\n[unicode: {$tagsRemoved} invisible Unicode tag character(s) (U+E0000-U+E007F) "
+                . 'were removed from this tool result.]',
+            );
+        }
 
         // A listener that throws is a UI bug. It must not take the turn's
         // other tool results down with it, and the model still needs this
@@ -2885,7 +2920,7 @@ final class Runtime
     /**
      * The ONE place this class builds a {@see ToolResultMessage} — {@see settle()}
      * and {@see failure()} both end here — so no tool result reaches a provider
-     * without passing {@see utf8Safe()}. The scrub is idempotent (a valid
+     * without passing {@see utf8Safe()} and the Unicode-tag strip. The scrub is idempotent (a valid
      * string returns untouched), so re-running it over a result settle()
      * already repaired costs one `mb_check_encoding()` and catches the one note
      * appended after that repair: a throwing ToolFinished listener's message.
@@ -2893,6 +2928,15 @@ final class Runtime
     private static function resultMessage(ToolCall $toolCall, ToolResult $result): ToolResultMessage
     {
         $result = self::utf8Safe($result);
+
+        // The tag-character strip settle() applies, repeated for failure()'s
+        // results (a refusal can quote model- or hook-supplied text). Silent
+        // here: settle() has already announced any removal on its own path,
+        // so a second pass over its output removes nothing.
+        $untagged = \SugarCraft\Crush\Context\PromptFence::stripUnicodeTags($result->content(), $tagsRemoved);
+        if ($tagsRemoved > 0) {
+            $result = $result->withContent($untagged);
+        }
 
         return new ToolResultMessage(
             $toolCall->id(),

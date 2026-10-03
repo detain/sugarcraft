@@ -309,6 +309,7 @@ sugar-crush/tests/Context/ContextCompactorTest.php	0.311	88
 sugar-crush/tests/Context/SortedWalkCapTest.php	0.303	9
 sugar-crush/tests/Chat/InterimNarrationKeptTest.php	0.300	4
 sugar-crush/tests/Backend/ChildChannelVerdictTest.php	0.300	2
+sugar-crush/tests/Runtime/SpillToFileTest.php	0.300	4
 sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.299	46
 sugar-crush/tests/Tui/PaneDragIntegrationTest.php	0.295	21
 sugar-crush/tests/Workflows/WorkflowRetriesTest.php	0.294	10
@@ -446,6 +447,8 @@ sugar-crush/tests/Providers/OpenAIProviderStreamedToolCallsTest.php	0.060	7
 sugar-crush/tests/Skills/SkillRequiresGatingTest.php	0.060	19
 sugar-crush/tests/Config/Settings/SettingsSchemaTest.php	0.060	46
 sugar-crush/tests/Config/Settings/SettingsSchemaDocDriftTest.php	0.060	14
+sugar-crush/tests/Support/ToolOutputSpillTest.php	0.060	14
+sugar-crush/tests/Tools/PathJailSpillAllowTest.php	0.060	8
 sugar-crush/tests/Permissions/PermissionGateTest.php	0.059	165
 sugar-crush/tests/SessionTest.php	0.059	18
 sugar-crush/tests/Context/ProjectMemoryWriterTest.php	0.058	10

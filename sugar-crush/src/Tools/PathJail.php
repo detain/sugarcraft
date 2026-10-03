@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools;
 
+use SugarCraft\Crush\Support\ToolOutputSpill;
+
 /**
  * The path-containment ALGORITHM — the one place that decides whether a path
  * is inside a given root.
@@ -22,6 +24,19 @@ namespace SugarCraft\Crush\Tools;
  * Every method here is fail-closed and returns an absolute path proven to be
  * inside `$root`, or `null` for "rejected". `null` is never "unknown" — a
  * caller may treat it as a hard denial.
+ *
+ * ## The spill allow-list (the one path outside `$root`)
+ *
+ * {@see resolve()} — and only it — also accepts a SAVED TOOL OUTPUT file
+ * (roadmap 2.8, {@see ToolOutputSpill}): a result over its budget is shown as a
+ * preview plus the path of a file holding the rest, and that file lives in a
+ * per-user temp store, not in the workspace. The exception is deliberately
+ * narrow: the file must already exist, be a regular file, carry a spill file's
+ * name, and sit directly in the store (or one session directory of it) while
+ * the store passes the same owner-only `lstat()` verdict that guards writing
+ * into it. `resolveForCreate()` and `resolveDir()` do not consult it, so
+ * nothing can be created there and no directory there can be walked; `Edit`,
+ * the one writer that goes through `resolve()`, refuses a spill path by name.
  *
  * ## On PHP's realpath cache (deliberately NOT flushed here)
  *
@@ -106,7 +121,17 @@ final class PathJail
         // as well as any descendant. Requiring only the `$rootReal . '/'` prefix
         // rejected the root, which is an off-by-one against the jail boundary.
         if ($resolved !== $rootReal && !str_starts_with($resolved, $rootReal . '/')) {
-            return null;
+            // THE ONE EXCEPTION (roadmap 2.8): a tool result over its budget
+            // names the file its overflow was saved to, outside every root, and
+            // the model reads it back through this method. See
+            // {@see \SugarCraft\Crush\Support\ToolOutputSpill::readablePath()}
+            // for exactly which paths qualify — an EXISTING regular file named
+            // like a spill file, directly in this user's verified owner-only
+            // store or one of its session directories — and the class doc
+            // above for why only reads may reach it: resolveForCreate() and
+            // resolveDir() do not consult it, so Write and Glob never can, and
+            // Edit refuses the path itself.
+            return ToolOutputSpill::readablePath($resolved);
         }
 
         return $resolved;

@@ -226,6 +226,39 @@ final class PromptFence
     }
 
     /**
+     * $payload with every Unicode tag character (U+E0000-U+E007F) deleted, and
+     * the number deleted in $removed.
+     *
+     * The first half of {@see escape()}, exposed on its own for the bytes that
+     * reach the model WITHOUT a fence: a tool result is the model's input as
+     * surely as the system prompt is, and an invisible instruction smuggled in
+     * a fetched page or an MCP server's reply is the same attack there.
+     * {@see \SugarCraft\Crush\Runtime} strips it at its one tool-result seam.
+     * Only this block — fence-tag escaping would rewrite legitimate `<env>`
+     * text a tool printed.
+     */
+    public static function stripUnicodeTags(string $payload, ?int &$removed = null): string
+    {
+        $removed = 0;
+
+        // The str_contains() pre-check (the block's shared lead bytes) keeps
+        // the common clean payload off the regex engine entirely.
+        if (!str_contains($payload, "\xF3\xA0")) {
+            return $payload;
+        }
+
+        $stripped = preg_replace(self::UNICODE_TAG_BYTES, '', $payload, -1, $count);
+        if ($stripped === null) {
+            throw new \RuntimeException(
+                'PromptFence::escape(): PCRE failure (' . preg_last_error_msg() . ') while stripping Unicode tag characters',
+            );
+        }
+        $removed = $count;
+
+        return $stripped;
+    }
+
+    /**
      * Neutralise every fence tag and chat-template control-token opener inside
      * $payload by rewriting its leading `<` to `&lt;`.
      *
@@ -262,17 +295,7 @@ final class PromptFence
             . implode('|', array_map(static fn(string $pipe): string => preg_quote($pipe, '~'), self::CONTROL_TOKEN_PIPES))
             . '))~i';
 
-        // The str_contains() pre-check (the block's shared lead bytes) keeps
-        // the common clean payload off the regex engine entirely.
-        if (str_contains($payload, "\xF3\xA0")) {
-            $stripped = preg_replace(self::UNICODE_TAG_BYTES, '', $payload);
-            if ($stripped === null) {
-                throw new \RuntimeException(
-                    'PromptFence::escape(): PCRE failure (' . preg_last_error_msg() . ') while stripping Unicode tag characters',
-                );
-            }
-            $payload = $stripped;
-        }
+        $payload = self::stripUnicodeTags($payload);
 
         // Only the `<` itself is consumed (the rest is lookahead), so the
         // rewrite cannot reach past it and adjacent tags each match on their own.
