@@ -40,7 +40,6 @@
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-focus": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
-        "sugarcraft/candy-pty": "@dev",
         "sugarcraft/sugar-toast": "dev-master"
     },
     "require-dev": {
