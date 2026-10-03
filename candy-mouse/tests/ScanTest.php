@@ -115,19 +115,17 @@ final class ScanTest extends TestCase
 
     public function testParseZoneEndingAtColumnOneOfNewRow(): void
     {
-        // When zone ends at col=1 of a new row (e.g. content is just a newline
-        // followed by nothing visible), the close sentinel is processed
-        // when col=1, triggering the $endRow > $startRow && $col === 1 branch.
-        // The zone collapses back to the start row.
+        // A zone whose content is just a newline closes at col 1 of the next
+        // row having painted no cell of its own.  It used to collapse back
+        // to a phantom 1-cell zone at (1,1) — claiming the cell of whatever
+        // painted there next.  With no cell to hit it is not emitted at all.
         $mark = new Mark();
-        $rendered = $mark->wrap('nlonly', "\n");
+        $rendered = $mark->wrap('nlonly', "\n") . 'B';
 
-        $scan = new Scan();
-        $zones = $scan->parse($rendered);
+        $zones = (new Scan())->parse($rendered);
 
-        // Zone is at row 1, col 1 (start).
-        self::assertSame(1, $zones['nlonly']->startRow);
-        self::assertSame(1, $zones['nlonly']->startCol);
+        self::assertArrayNotHasKey('nlonly', $zones);
+        self::assertSame([], $zones);
     }
 
     public function testParseUnknownPayloadIsIgnored(): void

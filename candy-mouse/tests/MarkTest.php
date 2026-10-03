@@ -278,4 +278,51 @@ final class MarkTest extends TestCase
         // Default constructor enables sentinels.
         self::assertStringContainsString("\u{E000}", $wrapped);
     }
+
+    public function testNewFactoryIsEnabled(): void
+    {
+        $mark = Mark::new();
+
+        self::assertSame(
+            Sentinel::OPEN . 'btn' . Sentinel::CLOSE . 'hi' . Sentinel::OPEN . '/btn' . Sentinel::CLOSE,
+            $mark->wrap('btn', 'hi')
+        );
+        self::assertNotSame(Mark::new(), $mark);
+    }
+
+    /**
+     * @return array<string, array{string, bool}>
+     */
+    public static function idValidityProvider(): array
+    {
+        return [
+            'plain'          => ['btn', true],
+            'punctuation'    => ['cell:5:3.a_b-c', true],
+            'max length'     => [str_repeat('a', Mark::MAX_ID_BYTES), true],
+            'empty'          => ['', false],
+            'over max'       => [str_repeat('a', Mark::MAX_ID_BYTES + 1), false],
+            'space'          => ['a b', false],
+            'slash'          => ['a/b', false],
+            'trailing nl'    => ["ab\n", false],
+            'escape'         => ["a\x1bb", false],
+            'open sentinel'  => ['a' . Sentinel::OPEN, false],
+            'non-ascii'      => ['caf\u{e9}', false],
+        ];
+    }
+
+    /**
+     * @dataProvider idValidityProvider
+     */
+    public function testIsValidIdAgreesWithWrap(string $id, bool $valid): void
+    {
+        self::assertSame($valid, Mark::isValidId($id));
+
+        $threw = false;
+        try {
+            Mark::zone($id, 'x');
+        } catch (\InvalidArgumentException) {
+            $threw = true;
+        }
+        self::assertSame(!$valid, $threw, 'isValidId() must be the exact predicate wrap() enforces');
+    }
 }

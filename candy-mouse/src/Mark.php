@@ -61,6 +61,17 @@ final class Mark
     ) {}
 
     /**
+     * Factory — the default root: a Mark instance with marking enabled.
+     *
+     * Equivalent to `new Mark()`; the public constructor is kept for the
+     * existing `new Mark()` call sites across the monorepo.
+     */
+    public static function new(): self
+    {
+        return new self(true);
+    }
+
+    /**
      * Factory — creates a Mark instance with marking disabled.
      */
     public static function disabled(): self
@@ -102,12 +113,10 @@ final class Mark
         // is a caller bug regardless of whether sentinels are emitted, and the
         // same id feeds both the marked render and any measurement pass.
         if (preg_match(self::ID_PATTERN, $id) !== 1) {
-            throw new \InvalidArgumentException(
-                'Mark id must match ' . self::ID_PATTERN
-                . ' (ASCII letters, digits, and ._:- only); '
-                . 'got ' . var_export($id, true)
-                . ' — an id with sentinel/control/whitespace bytes would desync zone scanning.'
-            );
+            throw new \InvalidArgumentException(Lang::t('mark.id_invalid', [
+                'pattern' => self::ID_PATTERN,
+                'id'      => var_export($id, true),
+            ]));
         }
 
         // Length guards — also unconditional so a disabled measurement pass and
@@ -115,16 +124,17 @@ final class Mark
         // search and the total buffer Scan::parse() must walk.
         $idLen = strlen($id);
         if ($idLen > self::MAX_ID_BYTES) {
-            throw new \InvalidArgumentException(
-                'Mark id exceeds ' . self::MAX_ID_BYTES . ' bytes (got ' . $idLen . ').'
-            );
+            throw new \InvalidArgumentException(Lang::t('mark.id_too_long', [
+                'max' => self::MAX_ID_BYTES,
+                'len' => $idLen,
+            ]));
         }
         $contentLen = strlen($content);
         if ($contentLen > self::MAX_CONTENT_BYTES) {
-            throw new \InvalidArgumentException(
-                'Mark content exceeds ' . self::MAX_CONTENT_BYTES . ' bytes (got ' . $contentLen . ') '
-                . '— cap oversized/reflected input to bound zone scanning.'
-            );
+            throw new \InvalidArgumentException(Lang::t('mark.content_too_long', [
+                'max' => self::MAX_CONTENT_BYTES,
+                'len' => $contentLen,
+            ]));
         }
 
         if ($this->enabled === false) {
@@ -139,6 +149,20 @@ final class Mark
             . '/'
             . $id
             . Sentinel::CLOSE;
+    }
+
+    /**
+     * Whether $id is a zone id {@see wrap()} would accept: non-empty, within
+     * {@see self::MAX_ID_BYTES}, and every byte inside {@see self::ID_PATTERN}.
+     *
+     * The single source of truth for both sides of the markup:
+     * {@see wrap()} enforces it when encoding and {@see Scan::parse()} uses it
+     * when decoding, so a U+E000 … U+E001 span that Mark could never have
+     * emitted is treated as stray sentinels, not as a zone tag.
+     */
+    public static function isValidId(string $id): bool
+    {
+        return strlen($id) <= self::MAX_ID_BYTES && preg_match(self::ID_PATTERN, $id) === 1;
     }
 
     /**

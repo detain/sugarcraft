@@ -174,8 +174,7 @@ final class SelectionRange
         foreach ($cells as $cell) {
             if ($cell !== null && $cell < 1) {
                 throw new \InvalidArgumentException(
-                    'candy-mouse: selection coordinates are 1-based terminal cells, got '
-                    . $cell . ' — clamp or rebase the pointer before building a range.'
+                    Lang::t('selection.off_terminal', ['cell' => $cell])
                 );
             }
         }

@@ -46,16 +46,44 @@ if ($click !== null) {
 
 | Class | Role |
 |---|---|
-| `Mark` | Wrap content with invisible Unicode sentinel markers |
+| `Mark` | Wrap content with invisible Unicode sentinel markers (`Mark::new()`, `Mark::zone()`, `Mark::disabled()`; `Mark::isValidId()` is the id predicate both encoder and decoder share) |
+| `Scan` | Stateless, reentrant decoder behind `Scanner` — `parse($rendered, ?$width)` returns `id => Zone` |
 | `Scanner` | Parse sentinels; `get(id)` and `hit(col, row)` lookups |
 | `Zone` | Readonly bounding box (start/end col/row) |
 | `ZoneClickTracker` | Press+Release dedup per button |
 | `MouseEvent` | Immutable event (x, y, button, action enum) |
 | `MouseAction` | `Press` / `Release` / `Drag` / `Scroll` enum |
+| `Selection` | Press → drag → release text-selection state machine over a selectable region |
+| `SelectionRange` | Normalised, inclusive stream range a selection covers; `extract()` copies its text out of a frame |
+
+`Selection` / `SelectionRange` were ported upstream from sugar-crush's
+`Tui\TextSelection`; sugar-crush itself has not been rewired onto them yet,
+so for now they have no in-monorepo consumer beyond their own tests.
 
 ## Sentinel design
 
 Sentinels use private-use codepoints U+E000 (open) and U+E001 (close) — they never collide with ANSI SGR sequences or regular text, and terminal emulators render them invisibly. Scanning *reads* them from the rendered string to compute zone bounding boxes; it does not modify the string. Stripping the sentinels from the bytes actually written to the terminal is the consumer's job (e.g. sugar-crush's renderer scans, then strips).
+
+## Scan rules
+
+`Scan::parse()` decodes exactly the grammar `Mark` encodes: a tag is
+`U+E000 [/] <id> U+E001` with an id `Mark::isValidId()` accepts, and every
+byte of a tag is zero-width. Anything else is measured as text, so a stray
+sentinel can never shift the zones after it:
+
+| Input | Result |
+|---|---|
+| Duplicate id in one render | throws `InvalidArgumentException` |
+| Orphan close / unclosed open | tag skipped, no zone (a frame clipped to the viewport legitimately cuts one end off a zone) |
+| Zone whose content paints no cell (`''`, `"\n"`, SGR only) | no zone — there is no cell to hit, so it cannot steal a neighbour's clicks |
+| Empty-id tag (`U+E000 U+E001`) | zero-width, inert |
+| Lone sentinel, or an id with spaces/escapes/non-ASCII/over `Mark::MAX_ID_BYTES` | only the 3 sentinel bytes are skipped; the following bytes count as visible text |
+
+Line endings: `\n` and `\r\n` both start a new row. A lone `\r` returns to
+column 1 on the same row, as a terminal does; a zone that paints again after
+it widens its bounding box to start at column 1, and a zone that opened
+mid-row but painted nothing before the `\r` (a progress-bar redraw) covers only
+the cells it painted after it.
 
 ## Multi-row zones
 
