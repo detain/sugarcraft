@@ -875,13 +875,16 @@ taken as written. `Tab` completes the path under the cursor.
   paste that is nothing but an image's path becomes a mention), or with `Ctrl+V`,
   which reads the clipboard's image.
 - **A model without vision never drops an image silently.** Whether a provider may
-  be sent one is its `supportsVision()`: OpenAI, `anthropic`, Claude and Gemini on
+  be sent one is its `supportsVision()`: OpenAI's vision families (`gpt-4o`,
+  `gpt-4.1`, `gpt-4-turbo`, `gpt-4.5`, `gpt-5`, `o1`, `o3`, `o4-mini` — not
+  `gpt-4`, `gpt-3.5-turbo` or `o1-mini`/`o3-mini`), `anthropic`, Claude and Gemini on
   Vertex, and Claude 3+/Nova Lite/Pro/Premier on Bedrock answer yes; SGLang asks
-  the server (`/model_info`'s `has_image_understanding`); `custom`, `claude-code`
-  and the offline echo provider answer no. For a no, the image goes to the model
-  as a one-line text placeholder naming it, and a notice after the reply tells you
-  it was not seen. The `sglang` and `custom` provider blocks accept
-  `"supportsVision": true|false` to override that answer.
+  the server (`/model_info`'s `has_image_understanding`); `custom`, `claude-code`,
+  an OpenAI model outside that list and the offline echo provider answer no. For a
+  no, the image goes to the model as a one-line text placeholder naming it, and a
+  notice after the reply tells you it was not seen. The `openai`, `sglang` and
+  `custom` provider blocks accept `"supportsVision": true|false` to override that
+  answer.
 - Under each prompt the transcript shows a `📎` row naming what it attached; a
   mention that looks like a path but matches nothing, a directory, or the
   21st file of one prompt gets a notice instead of an attachment.

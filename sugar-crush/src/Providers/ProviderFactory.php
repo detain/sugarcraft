@@ -75,7 +75,7 @@ final readonly class ProviderFactory
     private const TYPE_SCHEMAS = [
         'openai' => [
             'required' => ['apiKey'],
-            'optional' => ['organization', 'model', 'modelPrices', 'contextWindow'],
+            'optional' => ['organization', 'model', 'modelPrices', 'contextWindow', 'supportsVision'],
         ],
         'anthropic' => [
             'required' => ['apiKey'],
@@ -87,7 +87,7 @@ final readonly class ProviderFactory
         ],
         'sglang' => [
             'required' => ['baseUrl', 'model'],
-            'optional' => ['apiKey', 'toolCallParser', 'reasoningEffort', 'templateKwargs', 'discoverServerInfo'],
+            'optional' => ['apiKey', 'toolCallParser', 'reasoningEffort', 'templateKwargs', 'discoverServerInfo', 'supportsVision'],
         ],
         'bedrock' => [
             'required' => ['region'],
@@ -99,7 +99,7 @@ final readonly class ProviderFactory
         ],
         'custom' => [
             'required' => ['name', 'baseUrl', 'model'],
-            'optional' => ['apiKey', 'supportsStreaming', 'supportsFunctionCalling', 'extraBody'],
+            'optional' => ['apiKey', 'supportsStreaming', 'supportsFunctionCalling', 'extraBody', 'supportsVision'],
         ],
     ];
 
@@ -645,6 +645,9 @@ final readonly class ProviderFactory
                 $config['contextWindow'] ?? self::userTierSetting('contextWindow'),
                 $model,
             ),
+            // Audit 15b-15 residual: null leaves vision to the model table;
+            // the block's key overrides it.
+            self::configuredSupportsVision($config['supportsVision'] ?? null),
         );
     }
 

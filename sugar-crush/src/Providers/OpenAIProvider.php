@@ -84,6 +84,49 @@ final readonly class OpenAIProvider implements ProviderInterface
     ];
 
     /**
+     * Audit 15b-15 residual: the model families whose chat-completions
+     * endpoint reads `image_url` parts, matched as the exact id or the id
+     * followed by `-` (so dated snapshots like `gpt-4o-2024-08-06` and the
+     * `-mini`/`-nano` siblings ride along). Anything not listed - `gpt-4`,
+     * `gpt-3.5-turbo`, a model released after this table - answers no
+     * vision, so an attached image goes out as the named text placeholder
+     * with its "not seen" notice instead of failing the turn on a 400. The
+     * provider block's `supportsVision` key overrides the table either way.
+     *
+     * @var list<string>
+     */
+    private const VISION_MODEL_FAMILIES = [
+        'gpt-4o',
+        'chatgpt-4o',
+        'gpt-4-turbo',
+        'gpt-4.1',
+        'gpt-4.5',
+        'gpt-5',
+        'o1',
+        'o3',
+        'o4-mini',
+    ];
+
+    /**
+     * Text-only members of a {@see VISION_MODEL_FAMILIES} family, matched the
+     * same way and checked first: the `o1-mini`/`o1-preview`/`o3-mini`
+     * reasoning models, the pre-vision `gpt-4-turbo-preview` aliases, and
+     * gpt-4o's audio/realtime variants.
+     *
+     * @var list<string>
+     */
+    private const TEXT_ONLY_MODELS = [
+        'o1-mini',
+        'o1-preview',
+        'o3-mini',
+        'gpt-4-turbo-preview',
+        'gpt-4o-audio-preview',
+        'gpt-4o-realtime-preview',
+        'gpt-4o-mini-audio-preview',
+        'gpt-4o-mini-realtime-preview',
+    ];
+
+    /**
      * @param array<string, array{input?: float|int, output?: float|int, cached?: float|int}> $modelPrices
      *        Operator-declared USD-per-1M rates from the user-tier
      *        `modelPrices` config key, overriding/extending {@see PRICE_TABLE}
@@ -100,6 +143,11 @@ final readonly class OpenAIProvider implements ProviderInterface
      *        unknown model could only fall to ContextWindow's generic
      *        fallback. Null keeps the table.
      *
+     * @param bool|null $supportsVision Audit 15b-15 residual: the `openai`
+     *        provider block's `supportsVision` key. Null leaves the answer to
+     *        {@see VISION_MODEL_FAMILIES}; a bool overrides it, for a model
+     *        the table does not know.
+     *
      * @throws \InvalidArgumentException when the override is not positive
      */
     public function __construct(
@@ -107,6 +155,7 @@ final readonly class OpenAIProvider implements ProviderInterface
         private string $defaultModel = 'gpt-4o',
         private array $modelPrices = [],
         private ?int $contextWindowOverride = null,
+        private ?bool $supportsVision = null,
     ) {
         if ($contextWindowOverride !== null && $contextWindowOverride < 1) {
             throw new \InvalidArgumentException(sprintf(
@@ -131,9 +180,36 @@ final readonly class OpenAIProvider implements ProviderInterface
         return true;
     }
 
+    /**
+     * Whether the configured model reads image parts: the provider block's
+     * override when set, else {@see VISION_MODEL_FAMILIES} minus
+     * {@see TEXT_ONLY_MODELS}. Before this every model answered yes, so an
+     * image sent to a text-only model failed the turn with the API's error.
+     */
     public function supportsVision(): bool
     {
-        return true;
+        if ($this->supportsVision !== null) {
+            return $this->supportsVision;
+        }
+
+        $model = strtolower($this->defaultModel);
+        $inFamily = static function (string $family) use ($model): bool {
+            return $model === $family || str_starts_with($model, $family . '-');
+        };
+
+        foreach (self::TEXT_ONLY_MODELS as $textOnly) {
+            if ($inFamily($textOnly)) {
+                return false;
+            }
+        }
+
+        foreach (self::VISION_MODEL_FAMILIES as $family) {
+            if ($inFamily($family)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function supportsJsonSchema(): bool

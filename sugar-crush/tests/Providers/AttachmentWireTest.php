@@ -12,6 +12,8 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
+use OpenAI\Contracts\ClientContract;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Attachment;
 use SugarCraft\Crush\AttachmentType;
@@ -22,6 +24,7 @@ use SugarCraft\Crush\Providers\BedrockProvider;
 use SugarCraft\Crush\Providers\ClaudeCodeProvider;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CustomProvider;
+use SugarCraft\Crush\Providers\OpenAIProvider;
 use SugarCraft\Crush\Providers\ProviderFactory;
 use SugarCraft\Crush\Providers\SglangProvider;
 use SugarCraft\Crush\Providers\SglangServerInfo;
@@ -269,6 +272,59 @@ final class AttachmentWireTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('supportsVision must be true or false');
         $factory->create(['type' => 'custom', 'name' => 'c', 'baseUrl' => 'https://x', 'model' => 'm', 'supportsVision' => 'sometimes']);
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: bool}>
+     */
+    public static function openAiModels(): array
+    {
+        return [
+            'gpt-4o' => ['gpt-4o', true],
+            'gpt-4o snapshot' => ['gpt-4o-2024-08-06', true],
+            'gpt-4o-mini' => ['gpt-4o-mini', true],
+            'gpt-4.1-nano' => ['gpt-4.1-nano', true],
+            'gpt-4-turbo' => ['gpt-4-turbo', true],
+            'gpt-5-mini' => ['gpt-5-mini', true],
+            'o1' => ['o1', true],
+            'o4-mini' => ['o4-mini', true],
+            'gpt-4 (text only)' => ['gpt-4', false],
+            'gpt-4-0613 (text only)' => ['gpt-4-0613', false],
+            'gpt-3.5-turbo' => ['gpt-3.5-turbo', false],
+            'gpt-4-turbo-preview' => ['gpt-4-turbo-preview', false],
+            'o1-mini' => ['o1-mini', false],
+            'o3-mini snapshot' => ['o3-mini-2025-01-31', false],
+            'gpt-4o-audio-preview' => ['gpt-4o-audio-preview', false],
+            'unknown future model' => ['some-future-model', false],
+            'family prefix without dash' => ['gpt-4oo', false],
+        ];
+    }
+
+    /**
+     * Audit 15b-15 residual: OpenAI used to answer "vision" for every model,
+     * so an image sent to a text-only one failed the turn on the API's 400.
+     * Only the known vision families say yes now; the rest get the named
+     * placeholder upstream in EngineBackend.
+     */
+    #[DataProvider('openAiModels')]
+    public function testOpenAiVisionFollowsTheModel(string $model, bool $vision): void
+    {
+        $provider = new OpenAIProvider($this->createMock(ClientContract::class), $model);
+
+        $this->assertSame($vision, $provider->supportsVision());
+    }
+
+    public function testTheOpenAiBlockOverridesTheModelTable(): void
+    {
+        $client = $this->createMock(ClientContract::class);
+        $this->assertTrue((new OpenAIProvider($client, 'my-finetune', supportsVision: true))->supportsVision());
+        $this->assertFalse((new OpenAIProvider($client, 'gpt-4o', supportsVision: false))->supportsVision());
+
+        $factory = new ProviderFactory();
+        $this->assertFalse($factory->create(['type' => 'openai', 'apiKey' => 'k', 'model' => 'gpt-3.5-turbo'])->supportsVision());
+        $this->assertTrue($factory->create(['type' => 'openai', 'apiKey' => 'k', 'model' => 'gpt-3.5-turbo', 'supportsVision' => 'yes'])->supportsVision());
+        $this->assertFalse($factory->create(['type' => 'openai', 'apiKey' => 'k', 'model' => 'gpt-4o', 'supportsVision' => false])->supportsVision());
+        $this->assertTrue($factory->create(['type' => 'openai', 'apiKey' => 'k'])->supportsVision(), 'the default gpt-4o sees');
     }
 
     private function sglang(): SglangProvider
