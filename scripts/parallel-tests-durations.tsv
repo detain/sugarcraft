@@ -524,6 +524,7 @@ sugar-crush/tests/Diagnostics/RuntimeNoticeSinkTest.php	0.020	29
 sugar-crush/tests/Memory/ForeignMemoryImporterContainmentTest.php	0.020	10
 sugar-crush/tests/Providers/SessionAffinityHeaderTest.php	0.020	20
 sugar-crush/tests/Backend/EngineBackendWitherPreservesStateTest.php	0.020	21
+sugar-crush/tests/Providers/SglangProviderReasoningReplayTest.php	0.020	7
 sugar-crush/tests/Context/PromptSectionTest.php	0.019	23
 sugar-crush/tests/LSP/LspClientBodyDuplicationTest.php	0.019	4
 sugar-crush/tests/Hooks/HookDispatcherTest.php	0.019	55

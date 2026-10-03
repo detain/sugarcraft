@@ -1685,7 +1685,11 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
             // history SystemMessages — see its docblock for why the merge
             // lives there (Q5/E-10) and why '' counts as unset here, the same
             // convention as the optional-knob filter below.
-            'messages' => $this->formatMessages($request->messages, $request->systemPrompt),
+            //
+            // $request->model rides along so the AssistantMessage arm can
+            // replay `reasoning_content` on tool-call rows for the families
+            // whose templates read it back (step 0.1, see formatMessages()).
+            'messages' => $this->formatMessages($request->messages, $request->systemPrompt, $request->model),
             // Model-aware since DeepSeek-V4 became the default: this used to
             // be a flat `?? 0.7`, which is DeepSeek-V4-Flash's card-prescribed
             // 1.0 minus 0.3. Keyed on $request->model, the id this body is
@@ -2058,6 +2062,21 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
     }
 
     /**
+     * True when $model's chat template reads `reasoning_content` back on an
+     * assistant tool-call row, so {@see formatMessages()} must replay it.
+     *
+     * Composed from the two family predicates rather than a third substring,
+     * for the reason {@see isDeepSeekV4()} is public: one family test per
+     * family. MiniMax-M2.x stays OUT until its template's handling of the
+     * field is measured: an id outside both families gets the pre-0.1 wire,
+     * byte for byte.
+     */
+    private static function replaysReasoning(string $model): bool
+    {
+        return self::isDeepSeekV4($model) || self::isQwen3Next($model);
+    }
+
+    /**
      * The `temperature` to send when the caller named none.
      *
      * TWO domains, and that is the whole reason this is a method rather than a
@@ -2309,23 +2328,45 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
      * prompt silently dropped every turn, prompt_expand.md §1.1. It must stay
      * read; the merge may reorder, never omit.)
      *
+     * REASONING REPLAY (step 0.1): an assistant row that carries tool calls
+     * also carries its `reasoning_content` when $model names a family whose
+     * chat template renders that field back ({@see replaysReasoning()}).
+     * Both deployed families (DeepSeek-V4, Qwen3.8) interleave thinking with
+     * tool calls inside one turn and expect the thinking of the in-flight
+     * tool-call steps to be re-sent; dropping it both degrades the next
+     * step's reasoning and breaks the RadixAttention prefix at that row,
+     * because the template renders the row differently from how the server
+     * generated it. Rows without tool calls are left alone: the templates
+     * discard reasoning on the final answer of a finished exchange, so
+     * sending it there would only add bytes. Scope is intra-turn by
+     * construction - across turns EngineBackend rebuilds bare assistant rows
+     * with no reasoning (structured replay is step 1.B-2).
+     *
      * @param array<Message> $messages
      * @param string|null $systemPrompt the request-level assembled prompt; '' counts as unset.
+     * @param string|null $model the id the body is addressed to; null disables the reasoning replay.
      * @return array<array{role: string, content: string}|array{role: string, content: string, tool_calls: array}|array{role: string, tool_call_id: string, content: string}>
      */
-    private function formatMessages(array $messages, ?string $systemPrompt = null): array
+    private function formatMessages(array $messages, ?string $systemPrompt = null, ?string $model = null): array
     {
+        $replayReasoning = $model !== null && self::replaysReasoning($model);
+
         // The typed callback stays: raw-array histories (the WorkflowEngine
         // gap named at defaultTopP()'s docblock) must keep TypeErroring here
         // exactly as before.
-        $rows = array_map(function (Message $msg) {
+        $rows = array_map(function (Message $msg) use ($replayReasoning) {
             return match (true) {
                 // Audit 15b-15: inlined files, plus image_url parts when an
                 // image was attached (only ever handed to a vision provider).
                 $msg instanceof UserMessage => ['role' => 'user', 'content' => AttachmentEncoding::openAiContent($msg)],
+                // array_filter drops a null/'' reasoning_content exactly as
+                // it drops an empty content or tool_calls.
                 $msg instanceof AssistantMessage => array_filter([
                     'role' => 'assistant',
                     'content' => $msg->content(),
+                    'reasoning_content' => $replayReasoning && ($msg->toolCalls() ?? []) !== []
+                        ? $msg->reasoning()
+                        : null,
                     'tool_calls' => $this->formatToolCalls($msg->toolCalls() ?? []),
                 ]),
                 $msg instanceof SystemMessage => ['role' => 'system', 'content' => $msg->content()],
