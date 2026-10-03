@@ -14257,9 +14257,14 @@ final class Chat implements Model
     /**
      * Map raw store rows onto the picker's sanitized row shape.
      *
+     * `summary` is the session's last prompt (`last_preview`), not its
+     * system prompt: every session shares nearly the same system prompt, so
+     * the row and footer used to read identically for all of them (audit B3).
+     * `cwd` is where the session was opened, for the footer.
+     *
      * @param list<array<string, mixed>> $rows
      *
-     * @return list<array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string}>
+     * @return list<array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string, cwd: string|null}>
      */
     private static function sanitizeSessionRows(array $rows): array
     {
@@ -14271,11 +14276,12 @@ final class Chat implements Model
                 return [
                     'sessionId' => $id,
                     'sessionName' => $name !== '' ? $name : $id,
-                    'summary' => self::sanitizeSessionField((string) ($row['system_prompt'] ?? '')),
+                    'summary' => self::sanitizeSessionField((string) ($row['last_preview'] ?? '')),
                     // The branch the row was opened on (audit B1); null when
                     // none was recorded, which Ctrl+B's filter leaves out.
                     'gitBranch' => self::sanitizeSessionField((string) ($row['git_branch'] ?? '')) ?: null,
                     'lastActivity' => (string) ($row['updated_at'] ?? ''),
+                    'cwd' => self::sanitizeSessionField((string) ($row['cwd'] ?? '')) ?: null,
                 ];
             },
             $rows,

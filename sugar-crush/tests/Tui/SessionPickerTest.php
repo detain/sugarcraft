@@ -409,6 +409,86 @@ final class SessionPickerTest extends TestCase
         $this->assertNull(SessionStore::gitBranchAt($this->tempDir()));
     }
 
+    // ---------------------------------------------------------------
+    // B3: the summary column showed the shared system prompt
+    // ---------------------------------------------------------------
+
+    /**
+     * Regression (audit B3): the row and footer summary came from
+     * `system_prompt`, which is near-identical for every session. They now
+     * show the last prompt sent, which dispatchTurn() records.
+     */
+    public function testThePickerShowsTheLastPromptNotTheSystemPrompt(): void
+    {
+        $store = new SessionStore(':memory:');
+        $store->createSession('s1', 'p', 'm', 'You are a helpful assistant.', 'First', '/work/app', 'main');
+        $store->recordTurn('s1', 'make the login controller use the new guard');
+
+        $chat = new Chat(history: [Message::user('hi')], sessionStore: $store, currentSessionId: 's1');
+        [$opened] = $chat->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        $picker = $opened->sessionPicker();
+
+        $row = $picker->filteredSessions()[0];
+        $this->assertSame('make the login controller use the new guard', $row['summary']);
+        $this->assertSame('/work/app', $row['cwd']);
+
+        $plain = $this->plain($picker->render(100, 24, Theme::byName('dark')));
+        $this->assertStringContainsString('/work/app · main · "make the login controller use the new guard"', $plain);
+        $this->assertStringNotContainsString('helpful assistant', $plain);
+    }
+
+    public function testASubmittedTurnRecordsThePreviewTheFooterShows(): void
+    {
+        $store = new SessionStore(':memory:');
+        $store->createSession('s1', 'p', 'm', 'system text');
+        $chat = new Chat(
+            inputBuf: 'why is the PTY test flaky?',
+            backend: new \SugarCraft\Crush\Backend\EchoBackend(),
+            sessionStore: $store,
+            currentSessionId: 's1',
+            currentSessionName: 'named',
+        );
+
+        $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $row = $store->getSession('s1');
+        $this->assertSame(1, (int) $row['turns']);
+        $this->assertSame('why is the PTY test flaky?', $row['last_preview']);
+    }
+
+    public function testTheFooterSaysSoWhenNoPromptWasSentAndNeverOutgrowsTheBox(): void
+    {
+        $picker = SessionPicker::new([[
+            'sessionId' => 's',
+            'sessionName' => 'n',
+            'summary' => '',
+            'gitBranch' => null,
+            'lastActivity' => '',
+        ]]);
+        $this->assertStringContainsString('(no prompt yet)', $this->plain($picker->render(80, 24, Theme::byName('dark'))));
+
+        $wide = SessionPicker::new([[
+            'sessionId' => 's',
+            'sessionName' => 'n',
+            'summary' => str_repeat('漢字', 80),
+            'gitBranch' => 'feature/very-long-branch-name',
+            'lastActivity' => '',
+            'cwd' => '/home/someone/projects/deeply/nested/checkout/of/the/app',
+        ]]);
+        foreach ([40, 60, 80] as $width) {
+            $lines = explode("\n", $this->plain($wide->render($width, 24, Theme::byName('dark'))));
+            $footer = $lines[count($lines) - 1];
+            $this->assertLessThanOrEqual($width, \SugarCraft\Core\Util\Width::string($footer), "footer at {$width}");
+            $this->assertTrue(mb_check_encoding($footer, 'UTF-8'));
+            $this->assertStringEndsWith('…', $footer);
+        }
+    }
+
+    private function plain(string $rendered): string
+    {
+        return (string) preg_replace('/\x1b\[[0-9;:]*[A-Za-z]/', '', $rendered);
+    }
+
     /**
      * @param array<string, mixed> $map
      *

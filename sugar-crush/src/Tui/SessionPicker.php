@@ -10,6 +10,7 @@ use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\MouseAction;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\ItemList\ItemList;
 use SugarCraft\Forms\ItemList\LoadMoreMsg;
 use SugarCraft\Sprinkles\Border;
@@ -471,9 +472,17 @@ final class SessionPicker
     }
 
     /**
-     * Render the footer with selected session details.
+     * Render the footer with selected session details: where the session was
+     * opened, its branch, and the last prompt sent in it —
+     * `~/work/app · main · "make the login controller…"` (Appendix P §3.2).
      *
-     * @param array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string}|null $session
+     * It used to print the start of the system prompt, which is nearly the
+     * same for every session, so the footer told sessions apart by nothing
+     * (audit B3). Every field arrives sanitized from Chat; the line is fitted
+     * by display width, not bytes, so a multi-byte prompt is never cut
+     * mid-character and the line never outgrows the box.
+     *
+     * @param array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string, cwd?: string|null}|null $session
      */
     private function renderFooter(int $width, array|null $session, Theme $theme): string
     {
@@ -481,11 +490,31 @@ final class SessionPicker
             return '';
         }
 
-        $summary = $session['summary'] ?? '(no summary)';
         $maxWidth = max(1, $width - 10);
+        $parts = [];
 
-        if (strlen($summary) > $maxWidth) {
-            $summary = substr($summary, 0, $maxWidth - 3) . '…';
+        $cwd = $session['cwd'] ?? null;
+        if (\is_string($cwd) && $cwd !== '') {
+            $home = getenv('HOME');
+            if (\is_string($home) && $home !== '' && $home !== '/' && ($cwd === $home || str_starts_with($cwd, rtrim($home, '/') . '/'))) {
+                $cwd = '~' . substr($cwd, \strlen(rtrim($home, '/')));
+            }
+            // Both ends of a path carry meaning; elide the middle, and never
+            // let the path take more than a third of the line.
+            $parts[] = Width::truncateMiddle($cwd, max(8, intdiv($maxWidth, 3)));
+        }
+
+        $branch = $session['gitBranch'] ?? null;
+        if (\is_string($branch) && $branch !== '') {
+            $parts[] = $branch;
+        }
+
+        $preview = $session['summary'] ?? '';
+        $parts[] = $preview !== '' ? '"' . $preview . '"' : '(no prompt yet)';
+
+        $line = implode(' · ', $parts);
+        if (Width::string($line) > $maxWidth) {
+            $line = Width::truncate($line, $maxWidth - 1) . '…';
         }
 
         $footer = "\n" . Style::new()
@@ -493,7 +522,7 @@ final class SessionPicker
             ->render('─'.str_repeat('─', $width - 2));
         $footer .= "\n" . Style::new()
             ->foreground($theme->shellForeground)
-            ->render('  ' . $summary);
+            ->render('  ' . $line);
 
         return $footer;
     }
