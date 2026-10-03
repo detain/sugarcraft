@@ -2526,8 +2526,15 @@ final class Renderer
      *  - `promptTokens()` null: an unreported bucket is not a zero —
      *    {@see Usage}'s "Zero is not the same as unknown" — so the entry
      *    carries no honest rate and the walk moves to the next older one.
-     *    Every pre-split provider answer arrives this way, which is why the
-     *    segment is absent, not zero, on today's live paths.
+     *    Every pre-split provider answer arrives this way.
+     *  - THE ONE EXCEPTION (step 0.13-b): creation unreported while read and
+     *    input are both reported is the OpenAI-shaped wire (sglang, custom),
+     *    whose protocol has no cache-write field to report. Its input is
+     *    already the uncached remainder, so the share is
+     *    `cacheReadTokens / (cacheReadTokens + inputTokens)` — still two
+     *    MEASURED buckets, nothing invented. An SGLang server started without
+     *    `--enable-cache-report` reports no `cached_tokens`, so read stays
+     *    null and the segment stays absent, which is correct.
      *  - `promptTokens() === 0`: a prompt of exactly zero measured tokens has
      *    no cache share; displaying 0% would assert a miss the provider never
      *    counted. Skip, as for unreported.
@@ -2565,12 +2572,27 @@ final class Renderer
             }
 
             $prompt = $usage->promptTokens();
+            // Step 0.13-b: an OpenAI-shaped provider (sglang, custom) has no
+            // cache-WRITE field at all, so creation is unreported on every
+            // answer and promptTokens() refuses forever. Read and input are
+            // still both MEASURED there — its input is prompt minus the
+            // cached share — so the share is read / (read + input). Only
+            // when creation is unreported; a reported creation keeps the
+            // three-bucket identity above, and promptTokens() itself is left
+            // alone because calibration reads it.
+            if ($prompt === null
+                && $usage->cacheCreationTokens === null
+                && $usage->cacheReadTokens !== null
+                && $usage->inputTokens !== null
+            ) {
+                $prompt = $usage->cacheReadTokens + $usage->inputTokens;
+            }
             if ($prompt === null || $prompt <= 0) {
                 continue;
             }
 
-            // promptTokens() being non-null is exactly the guard that says all
-            // three buckets — cacheReadTokens included — were reported.
+            // A non-null $prompt is exactly the guard that says cacheReadTokens
+            // was reported (by both branches above).
             $read = (int) round($usage->cacheReadTokens / $prompt * 100);
             $age = max(0, (int) floor(($now ?? microtime(true)) - $message->createdAt));
 

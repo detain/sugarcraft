@@ -798,6 +798,37 @@ final class StatusLineSegmentTest extends TestCase
     }
 
     /**
+     * Step 0.13-b: the OpenAI-shaped wire (sglang, custom) has no cache-write
+     * field, so creation is unreported on every answer. With read and input
+     * both reported the share is read / (read + input); with read unreported
+     * (an SGLang server without `--enable-cache-report`) nothing renders; and
+     * a reported creation keeps the three-bucket formula.
+     */
+    public function testAProviderWithNoCacheWriteFieldStillShowsItsMeasuredShare(): void
+    {
+        $now = (float) self::ANCHOR;
+
+        // input 200 (already the uncached remainder) + read 7800: 7800/8000 = 97.5 → 98.
+        $openAiShaped = $this->cacheChat(usage: Usage::new(8100, 0.0, 200, 100, 7800, null));
+        self::assertSame('98% cache · 42s', $this->cacheSegment($openAiShaped, 60, $now));
+
+        // A measured miss on that wire renders too: 0 of (0 + 500).
+        $openAiMiss = $this->cacheChat(usage: Usage::new(600, 0.0, 500, 100, 0, null));
+        self::assertSame('0% cache · 42s', $this->cacheSegment($openAiMiss, 60, $now));
+
+        // No cached_tokens reported: no honest rate, no segment.
+        $noReport = $this->cacheChat(usage: Usage::new(600, 0.0, 500, 100, null, null));
+        self::assertSame('', $this->cacheSegment($noReport, 60, $now));
+
+        // Input unreported: the fallback needs both measured buckets.
+        $noInput = $this->cacheChat(usage: Usage::new(600, 0.0, null, 100, 300, null));
+        self::assertSame('', $this->cacheSegment($noInput, 60, $now));
+
+        // The fallback never displaces a full report's formula.
+        self::assertNull(Usage::new(8100, 0.0, 200, 100, 7800, null)->promptTokens(), 'promptTokens() itself is unchanged');
+    }
+
+    /**
      * The readout walks back to the NEWEST report that can carry one, and
      * BOTH numbers then belong to that same report — the age is the age of
      * the report shown, not of the newest message on the row. When a newer
