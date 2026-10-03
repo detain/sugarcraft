@@ -15,7 +15,7 @@ Line anchors drift: **re-locate by method/symbol and verify the step is still op
 ## Where you work
 - Worktree: `/home/sites/sugarcraft-wt/<wave>-<group>` on branch `fix/<wave>-<group>` (already created from `origin/master`, vendor trees copied, linked mode). Work ONLY there; anchor every command with absolute paths or `cd <worktree>/sugar-crush && …` (Bash CWD does not persist).
 - Scratch (notes, logs, HANDOFF.md): `/home/sites/sugarcraft-wt/.scratch/<wave>-<group>`.
-- TMPDIR: use the SHORT dir `/tmp/cr-<wave><group>` (e.g. `/tmp/cr-w2a`; `mkdir -p` it) in every test command — long TMPDIR paths overflow the 108-byte unix-socket path limit and make ~10 /bg, IPC, launch-notice and HOME tests go falsely red.
+- TMPDIR: use the SHORT dir `/tmp/cr-<wave><group>` (e.g. `/tmp/cr-w2a`; `mkdir -p` it and `chmod 1777` it — HomeDirectoryTest expects a world-writable TMPDIR) in every test command — long TMPDIR paths overflow the 108-byte unix-socket path limit and make ~10 /bg, IPC, launch-notice and HOME tests go falsely red.
 - Never touch `/home/sites/sugarcraft` (the main checkout) except to read the briefs/plan.
 
 ## Hard rules
