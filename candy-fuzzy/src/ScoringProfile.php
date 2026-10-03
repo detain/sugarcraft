@@ -11,7 +11,7 @@ namespace SugarCraft\Fuzzy;
  * single matcher class can serve strict, default, and lenient matching modes
  * without duplicating the algorithm.
  *
- * The {@see self::default()} values are the canonical SugarCraft scores and are
+ * The {@see self::canonical()} values are the canonical SugarCraft scores and are
  * bit-equivalent to the historical hard-coded constants in
  * `SugarCraft\Forms\Fuzzy\FuzzyMatcher` and `SugarCraft\Lister\FuzzyMatch`,
  * so passing the default profile (or none) preserves existing matcher output
@@ -54,11 +54,25 @@ final class ScoringProfile
 
     /**
      * Canonical SugarCraft scores. Bit-equivalent to the pre-SSOT hard-coded
-     * constants — the SmithWatermanMatcher default profile.
+     * constants — the SmithWatermanMatcher default profile. A named preset
+     * alongside {@see self::strict()} / {@see self::lenient()}.
+     */
+    public static function canonical(): self
+    {
+        return new self();
+    }
+
+    /**
+     * Former spelling of {@see self::canonical()}, kept so existing callers
+     * (`SugarCraft\Lister\FuzzyMatch`, which reaches this class through its
+     * `class_alias`) keep resolving. `::default()` is a banned root-factory
+     * spelling under the repo naming rule.
+     *
+     * @deprecated Use {@see self::canonical()}.
      */
     public static function default(): self
     {
-        return new self();
+        return self::canonical();
     }
 
     /** Tighter matching — higher rewards, harsher penalties. */

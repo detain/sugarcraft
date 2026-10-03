@@ -9,6 +9,7 @@ use PHPUnit\Framework\Attributes\Test;
 use SugarCraft\Fuzzy\Matcher\FuzzyMatcherFactory;
 use SugarCraft\Fuzzy\Matcher\SahilmMatcher;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
+use SugarCraft\Fuzzy\SahilmScoring;
 use SugarCraft\Fuzzy\ScoringProfile;
 use PHPUnit\Framework\TestCase;
 
@@ -20,13 +21,13 @@ final class FuzzyMatcherFactoryTest extends TestCase
     #[Test]
     public function testCreateSmithWaterman(): void
     {
-        $this->assertInstanceOf(SmithWatermanMatcher::class, FuzzyMatcherFactory::create('smith-waterman'));
+        $this->assertInstanceOf(SmithWatermanMatcher::class, FuzzyMatcherFactory::named('smith-waterman'));
     }
 
     #[Test]
     public function testCreateSahilm(): void
     {
-        $this->assertInstanceOf(SahilmMatcher::class, FuzzyMatcherFactory::create('sahilm'));
+        $this->assertInstanceOf(SahilmMatcher::class, FuzzyMatcherFactory::named('sahilm'));
     }
 
     #[Test]
@@ -34,13 +35,13 @@ final class FuzzyMatcherFactoryTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Unknown matcher: bogus');
-        FuzzyMatcherFactory::create('bogus');
+        FuzzyMatcherFactory::named('bogus');
     }
 
     #[Test]
     public function testSmithWatermanWithoutProfileIsBitEquivalentDefault(): void
     {
-        $factory = FuzzyMatcherFactory::create('smith-waterman');
+        $factory = FuzzyMatcherFactory::named('smith-waterman');
         $this->assertEquals(
             (new SmithWatermanMatcher())->match('foo', 'foobar'),
             $factory->match('foo', 'foobar'),
@@ -51,7 +52,7 @@ final class FuzzyMatcherFactoryTest extends TestCase
     public function testSmithWatermanProfileIsApplied(): void
     {
         /** @var SmithWatermanMatcher $matcher */
-        $matcher = FuzzyMatcherFactory::create('smith-waterman', ScoringProfile::strict());
+        $matcher = FuzzyMatcherFactory::named('smith-waterman', ScoringProfile::strict());
 
         $this->assertInstanceOf(SmithWatermanMatcher::class, $matcher);
         $this->assertEquals(ScoringProfile::strict(), $matcher->profile());
@@ -62,12 +63,56 @@ final class FuzzyMatcherFactoryTest extends TestCase
         );
     }
 
+    /**
+     * Regression: a ScoringProfile passed with 'sahilm' used to be dropped
+     * silently, handing the caller an un-tuned matcher.
+     */
     #[Test]
-    public function testProfileIgnoredForSahilm(): void
+    public function testScoringProfileWithSahilmThrows(): void
     {
-        // Sahilm has no profile; passing one must not error and yields a plain matcher.
-        $matcher = FuzzyMatcherFactory::create('sahilm', ScoringProfile::strict());
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("ScoringProfile applies to 'smith-waterman' only");
+        FuzzyMatcherFactory::named('sahilm', ScoringProfile::strict());
+    }
+
+    #[Test]
+    public function testSahilmScoringWithSmithWatermanThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("SahilmScoring applies to 'sahilm' only");
+        FuzzyMatcherFactory::named('smith-waterman', SahilmScoring::canonical());
+    }
+
+    #[Test]
+    public function testSahilmScoringIsApplied(): void
+    {
+        $scoring = SahilmScoring::canonical()->withFirstCharBonus(100);
+        /** @var SahilmMatcher $matcher */
+        $matcher = FuzzyMatcherFactory::named('sahilm', $scoring);
+
         $this->assertInstanceOf(SahilmMatcher::class, $matcher);
+        $this->assertSame($scoring, $matcher->scoring());
+        $this->assertEquals(
+            (new SahilmMatcher(false, $scoring))->match('foo', 'foobar'),
+            $matcher->match('foo', 'foobar'),
+        );
+    }
+
+    #[Test]
+    public function testSahilmWithoutScoringIsCanonical(): void
+    {
+        $matcher = FuzzyMatcherFactory::named('sahilm');
         $this->assertEquals((new SahilmMatcher())->match('foo', 'foobar'), $matcher->match('foo', 'foobar'));
+    }
+
+    #[Test]
+    public function testDeprecatedCreateForwardsToNamed(): void
+    {
+        $this->assertEquals(
+            FuzzyMatcherFactory::named('smith-waterman', ScoringProfile::strict()),
+            FuzzyMatcherFactory::create('smith-waterman', ScoringProfile::strict()),
+        );
+        $this->expectException(\InvalidArgumentException::class);
+        FuzzyMatcherFactory::create('sahilm', ScoringProfile::strict());
     }
 }

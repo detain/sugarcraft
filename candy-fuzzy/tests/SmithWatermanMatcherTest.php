@@ -355,27 +355,33 @@ final class SmithWatermanMatcherTest extends TestCase
     }
 
     #[Test]
-    public function testScoreOverLengthQueryUsesFallback(): void
+    public function testScoreOverLengthQueryAlignsOnlyThePrefix(): void
     {
-        // Create matcher with maxQueryLength=2
+        // Over-cap input is truncated to the cap, never handed to another
+        // algorithm: "hello" with maxQueryLength=2 aligns exactly like "he".
         $matcher = new SmithWatermanMatcher(null, 2, 1000);
-        // Query "hello" (5 chars) exceeds maxQueryLength of 2
+
         $score = $matcher->score('hello', 'hello');
 
-        // Should use SahilmMatcher fallback and still return a valid score
-        $this->assertGreaterThan(0, $score);
+        $this->assertSame($matcher->score('he', 'hello'), $score);
+        $this->assertSame(11, $score);
+        $this->assertSame($matcher->match('hello', 'hello')?->score, $score);
+        $this->assertSame([0, 1], $matcher->match('hello', 'hello')?->matchedIndices);
     }
 
     #[Test]
-    public function testScoreOverLengthCandidateUsesFallback(): void
+    public function testScoreOverLengthCandidateAlignsOnlyThePrefix(): void
     {
-        // Create matcher with maxCandidateLength=2
+        // Only the first maxCandidateLength=2 candidate chars are searched.
         $matcher = new SmithWatermanMatcher(null, 1000, 2);
-        // Candidate "hello" (5 chars) exceeds maxCandidateLength of 2
+
         $score = $matcher->score('hello', 'hello');
 
-        // Should use SahilmMatcher fallback and still return a valid score
-        $this->assertGreaterThan(0, $score);
+        $this->assertSame($matcher->score('hello', 'he'), $score);
+        $this->assertSame(11, $score);
+        $this->assertSame($matcher->match('hello', 'hello')?->score, $score);
+        // Indices stay valid in the ORIGINAL haystack.
+        $this->assertSame([0, 1], $matcher->match('hello', 'hello')?->matchedIndices);
     }
 
     #[Test]

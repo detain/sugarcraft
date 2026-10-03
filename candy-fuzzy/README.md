@@ -50,8 +50,8 @@ $styled = $highlighter->highlight($result, fn($matched) => "\033[1m$matched\033[
 
 The Smith-Waterman scoring weights are injectable via an immutable `ScoringProfile`.
 The **default** profile is bit-equivalent to the historical hard-coded constants,
-so passing no profile (or `ScoringProfile::default()`) preserves existing output
-byte-for-byte:
+so passing no profile (or `ScoringProfile::canonical()`; `default()` is a deprecated
+alias) preserves existing output byte-for-byte:
 
 ```php
 use SugarCraft\Fuzzy\ScoringProfile;
@@ -60,7 +60,7 @@ $default = new SmithWatermanMatcher();                          // canonical sco
 $strict  = new SmithWatermanMatcher(ScoringProfile::strict());  // higher rewards, harsher penalties
 $lenient = new SmithWatermanMatcher(ScoringProfile::lenient()); // lower rewards, gentler penalties
 $custom  = new SmithWatermanMatcher(
-    ScoringProfile::default()->withAdjacentBonus(8)
+    ScoringProfile::canonical()->withAdjacentBonus(8)
 );
 ```
 
@@ -72,19 +72,82 @@ $custom  = new SmithWatermanMatcher(
 | `gapExtend`       |      −1 |     −2 |      −1 |
 | `adjacentBonus`   |       5 |      6 |       3 |
 
-## DoS length caps
+## Full-query mode
 
-The full-traceback path allocates an O(queryLen × candidateLen) matrix. To bound
-worst-case memory/time, queries or candidates longer than the caps (default 1000
-characters each) are delegated to the O(1)-memory `SahilmMatcher` instead of
-building the quadratic matrix:
+Smith-Waterman is a LOCAL alignment: by default a candidate matches as soon as
+any run of the query aligns with it, so `match('bxz', 'abcdef')` scores 3 on the
+`b` alone. A type-to-filter picker usually wants every typed character to land —
+opt in and a candidate survives exactly when it contains the query as an
+in-order subsequence (case-folded), with one matched index per query character:
 
 ```php
-$matcher = new SmithWatermanMatcher(maxQueryLength: 200, maxCandidateLength: 4000);
+$picker = SmithWatermanMatcher::new()->withRequireFullQuery();
+$picker->match('bxz', 'abcdef');     // null — "x" and "z" never land
+$picker->match('app', 'apple');      // indices [0, 1, 2], score as in plain mode
+$picker->match('gst', 'git status'); // indices [0, 4, 5] — plain mode only finds "st"
 ```
 
-Fallback scores are on the Sahilm scale, so this is a safety valve for pathological
-input, not a source of scores comparable with the sub-cap path.
+When plain mode's best alignment already covers the whole query, the result is
+identical to plain mode. Otherwise (initials-style queries such as `gst`, where
+a short adjacent run outscores the spread-out path) the matcher scores the best
+alignment forced to cover every query character: the highest-scoring in-order
+placement, with the same weights and no restart inside the path. It runs from
+the first matched character to the last, and every candidate character skipped
+between two matches costs `gapExtend` (what plain mode charges any skip inside
+an alignment; `gapOpen` only applies when an alignment starts from nothing).
+That score is floored at 1, so a gap-heavy in-order match ranks last rather
+than disappearing.
+
+## DoS length caps
+
+An alignment costs O(queryLen × candidateLen) time. To bound worst-case cost,
+only the first `maxQueryLength` query characters (default 128) and the first
+`maxCandidateLength` candidate characters (default 1000) take part in it:
+
+```php
+$matcher = SmithWatermanMatcher::new(maxQueryLength: 64, maxCandidateLength: 4000);
+```
+
+Over-cap input is **truncated**, never handed to a different algorithm, so the
+match contract and score scale are the same on both sides of the cap and the
+reported indices stay valid in the original haystack. The trade-off: text past
+the candidate cap is not searched — a candidate whose only match lies beyond it
+does not match. Under full-query mode, a query longer than the query cap never
+matches. The traceback costs one byte per cell (≈1 MB at 1000×1000).
+
+## Sahilm weights
+
+`SahilmMatcher`'s bonuses are injectable via the immutable `SahilmScoring`; the
+canonical weights (the default) are the historical sahilm/fuzzy constants:
+
+```php
+use SugarCraft\Fuzzy\Matcher\SahilmMatcher;
+use SugarCraft\Fuzzy\SahilmScoring;
+
+$gum   = new SahilmMatcher();                                                   // canonical
+$tuned = SahilmMatcher::new(scoring: SahilmScoring::canonical()->withFirstCharBonus(0));
+```
+
+| Weight             | canonical |
+|--------------------|----------:|
+| `matchScore`       |         1 |
+| `consecutiveBonus` |         5 |
+| `separatorBonus`   |        10 |
+| `camelBonus`       |        10 |
+| `firstCharBonus`   |        15 |
+| `lowerCaseBonus`   |         1 |
+
+## Selecting a matcher by name
+
+```php
+use SugarCraft\Fuzzy\Matcher\FuzzyMatcherFactory;
+
+FuzzyMatcherFactory::named('smith-waterman', ScoringProfile::strict());
+FuzzyMatcherFactory::named('sahilm', SahilmScoring::canonical());
+```
+
+Each matcher takes its own weight type; passing the other one (or an unknown
+name) throws `InvalidArgumentException`. `create()` is a deprecated alias.
 
 ## MatchResult
 

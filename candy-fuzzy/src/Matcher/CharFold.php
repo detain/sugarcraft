@@ -45,6 +45,16 @@ final class CharFold
      */
     public static function foldSplit(string $string): array
     {
+        // ASCII fast path: byte lowercasing is 1:1 there, so the per-code-point
+        // contract holds without a fold() call per char (hot on every keystroke
+        // of a filter over many labels).
+        if ($string === '') {
+            return [];
+        }
+        if (!preg_match('/[\x80-\xFF]/', $string)) {
+            return str_split(strtolower($string));
+        }
+
         $folded = [];
         foreach (mb_str_split($string, 1, 'UTF-8') as $char) {
             $folded[] = self::fold($char);

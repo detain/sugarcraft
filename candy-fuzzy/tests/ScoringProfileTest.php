@@ -19,7 +19,7 @@ final class ScoringProfileTest extends TestCase
         // (MATCH_SCORE=3, MISMATCH_PENALTY=-3, GAP_OPEN=-5, GAP_EXTEND=-1,
         // ADJACENT_BONUS=5) or matcher output would change — the bit-equivalence
         // guarantee for the whole ecosystem rides on this.
-        $p = ScoringProfile::default();
+        $p = ScoringProfile::canonical();
 
         $this->assertSame(3, $p->matchScore);
         $this->assertSame(-3, $p->mismatchPenalty);
@@ -31,7 +31,7 @@ final class ScoringProfileTest extends TestCase
     #[Test]
     public function testConstructorDefaultsEqualDefaultFactory(): void
     {
-        $this->assertEquals(new ScoringProfile(), ScoringProfile::default());
+        $this->assertEquals(new ScoringProfile(), ScoringProfile::canonical());
     }
 
     #[Test]
@@ -86,15 +86,15 @@ final class ScoringProfileTest extends TestCase
     #[Test]
     public function testProfilesAreDistinct(): void
     {
-        $this->assertNotEquals(ScoringProfile::default(), ScoringProfile::strict());
-        $this->assertNotEquals(ScoringProfile::default(), ScoringProfile::lenient());
+        $this->assertNotEquals(ScoringProfile::canonical(), ScoringProfile::strict());
+        $this->assertNotEquals(ScoringProfile::canonical(), ScoringProfile::lenient());
         $this->assertNotEquals(ScoringProfile::strict(), ScoringProfile::lenient());
     }
 
     #[Test]
     public function testWithMatchScoreIsImmutable(): void
     {
-        $base = ScoringProfile::default();
+        $base = ScoringProfile::canonical();
         $mutated = $base->withMatchScore(9);
 
         $this->assertSame(3, $base->matchScore, 'original must be unchanged');
@@ -106,7 +106,7 @@ final class ScoringProfileTest extends TestCase
     #[Test]
     public function testAllWithersReturnNewInstances(): void
     {
-        $base = ScoringProfile::default();
+        $base = ScoringProfile::canonical();
 
         $this->assertSame(-9, $base->withMismatchPenalty(-9)->mismatchPenalty);
         $this->assertSame(-9, $base->withGapOpen(-9)->gapOpen);
@@ -114,6 +114,14 @@ final class ScoringProfileTest extends TestCase
         $this->assertSame(9, $base->withAdjacentBonus(9)->adjacentBonus);
 
         // base untouched
-        $this->assertEquals(ScoringProfile::default(), $base);
+        $this->assertEquals(ScoringProfile::canonical(), $base);
+    }
+
+    #[Test]
+    public function testDeprecatedDefaultForwardsToCanonical(): void
+    {
+        // Kept for candy-lister's FuzzyMatch (reached via its class_alias).
+        $this->assertEquals(ScoringProfile::canonical(), ScoringProfile::default());
+        $this->assertEquals(new ScoringProfile(), ScoringProfile::default());
     }
 }

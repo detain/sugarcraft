@@ -7,6 +7,7 @@ namespace SugarCraft\Fuzzy\Tests;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
+use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Fuzzy\Matcher\SahilmMatcher;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Fuzzy\ScoringProfile;
@@ -64,7 +65,7 @@ final class SsotBehaviorTest extends TestCase
     public function testNoProfileEqualsExplicitDefaultProfile(string $q, string $c): void
     {
         $implicit = (new SmithWatermanMatcher())->match($q, $c);
-        $explicit = (new SmithWatermanMatcher(ScoringProfile::default()))->match($q, $c);
+        $explicit = (new SmithWatermanMatcher(ScoringProfile::canonical()))->match($q, $c);
 
         $this->assertEquals($implicit, $explicit);
     }
@@ -81,7 +82,7 @@ final class SsotBehaviorTest extends TestCase
     #[Test]
     public function testProfileAccessor(): void
     {
-        $this->assertEquals(ScoringProfile::default(), (new SmithWatermanMatcher())->profile());
+        $this->assertEquals(ScoringProfile::canonical(), (new SmithWatermanMatcher())->profile());
         $this->assertEquals(ScoringProfile::strict(), (new SmithWatermanMatcher(ScoringProfile::strict()))->profile());
     }
 
@@ -157,26 +158,33 @@ final class SsotBehaviorTest extends TestCase
         $this->assertSame(0, $m->score('abc', ''));
     }
 
-    // ---- DoS length caps delegate to SahilmMatcher ----
+    // ---- DoS length caps truncate within the Smith-Waterman contract ----
 
     #[Test]
-    public function testOverCandidateCapDelegatesToSahilm(): void
+    public function testOverCandidateCapSearchesOnlyThePrefix(): void
     {
         $capped = new SmithWatermanMatcher(maxCandidateLength: 3);
-        $sahilm = new SahilmMatcher();
+        $prefix = (new SmithWatermanMatcher())->match('ab', 'abc');
 
-        // candidate 'abcdef' is 6 chars > cap 3 → delegate.
-        $this->assertEquals($sahilm->match('ab', 'abcdef'), $capped->match('ab', 'abcdef'));
+        // candidate 'abcdef' is 6 chars > cap 3 → aligned as its prefix 'abc',
+        // same score scale, indices valid in the ORIGINAL haystack.
+        $this->assertEquals(
+            new MatchResult('ab', 'abcdef', $prefix->score, $prefix->matchedIndices),
+            $capped->match('ab', 'abcdef'),
+        );
     }
 
     #[Test]
-    public function testOverQueryCapDelegatesToSahilm(): void
+    public function testOverQueryCapAlignsOnlyTheQueryPrefix(): void
     {
         $capped = new SmithWatermanMatcher(maxQueryLength: 2);
-        $sahilm = new SahilmMatcher();
+        $prefix = (new SmithWatermanMatcher())->match('ab', 'abcdef');
 
-        // query 'abc' is 3 chars > cap 2 → delegate.
-        $this->assertEquals($sahilm->match('abc', 'abcdef'), $capped->match('abc', 'abcdef'));
+        // query 'abc' is 3 chars > cap 2 → 'ab' aligns; needle stays the caller's.
+        $this->assertEquals(
+            new MatchResult('abc', 'abcdef', $prefix->score, $prefix->matchedIndices),
+            $capped->match('abc', 'abcdef'),
+        );
     }
 
     #[Test]
@@ -191,13 +199,63 @@ final class SsotBehaviorTest extends TestCase
     }
 
     #[Test]
-    public function testScoreRespectsCapDelegation(): void
+    public function testScoreRespectsCapTruncation(): void
     {
         $capped = new SmithWatermanMatcher(maxCandidateLength: 3);
-        $sahilm = new SahilmMatcher();
 
-        $expected = $sahilm->match('ab', 'abcdef')?->score ?? 0;
-        $this->assertSame($expected, $capped->score('ab', 'abcdef'));
+        $this->assertSame($capped->match('ab', 'abcdef')?->score, $capped->score('ab', 'abcdef'));
+        $this->assertSame((new SmithWatermanMatcher())->score('ab', 'abc'), $capped->score('ab', 'abcdef'));
+    }
+
+    /**
+     * Regression: at the default 1000-char cap the over-cap path used to swap
+     * in SahilmMatcher (full in-order subsequence), so a LOCAL alignment that
+     * scored just under the cap became null one character later.
+     */
+    #[Test]
+    public function testCapBoundaryDoesNotFlipLocalAlignmentToNull(): void
+    {
+        $m = new SmithWatermanMatcher();
+        $cap = SmithWatermanMatcher::DEFAULT_MAX_CANDIDATE_LENGTH;
+
+        // 'q' never occurs: only the local 'b' alignment can match.
+        foreach ([$cap - 10, $cap - 1, $cap, $cap + 1, $cap + 10, $cap * 3] as $tail) {
+            $candidate = 'b' . str_repeat('x', $tail);
+            $result = $m->match('bq', $candidate);
+            $this->assertNotNull($result, "match flipped to null at length " . ($tail + 1));
+            $this->assertSame(3, $result->score);
+            $this->assertSame([0], $result->matchedIndices);
+            $this->assertSame(3, $m->score('bq', $candidate));
+        }
+
+        // The report's probe: a match that sits inside the searched prefix.
+        $this->assertSame(3, $m->match('bq', str_repeat('x', $cap - 10) . 'b')?->score);
+    }
+
+    #[Test]
+    public function testOverCapScoresShareTheSubCapScale(): void
+    {
+        $m = new SmithWatermanMatcher();
+        $short = $m->match('foo', 'foobar');
+        $long = $m->match('foo', 'foobar' . str_repeat('z', 2000));
+
+        $this->assertNotNull($long);
+        $this->assertSame($short->score, $long->score);
+        $this->assertSame($short->matchedIndices, $long->matchedIndices);
+
+        // Mixed sub-cap / over-cap candidates rank on one scale.
+        $ranked = $m->matchAll('foo', ['xfxoxo', 'foobar' . str_repeat('z', 2000)]);
+        $this->assertSame('foobar' . str_repeat('z', 2000), $ranked[0]->haystack);
+    }
+
+    #[Test]
+    public function testContentPastTheCandidateCapIsNotSearched(): void
+    {
+        $capped = new SmithWatermanMatcher(maxCandidateLength: 5);
+
+        // The documented trade-off: 'z' exists only beyond the 5-char prefix.
+        $this->assertNull($capped->match('z', 'aaaaaz'));
+        $this->assertSame(0, $capped->score('z', 'aaaaaz'));
     }
 
     #[Test]

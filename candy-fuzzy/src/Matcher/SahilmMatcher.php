@@ -7,6 +7,7 @@ namespace SugarCraft\Fuzzy\Matcher;
 use SugarCraft\Fuzzy\FuzzyMatcher;
 use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Fuzzy\MatchResultSorter;
+use SugarCraft\Fuzzy\SahilmScoring;
 
 /**
  * Sahilm/fuzzy-style fuzzy matcher.
@@ -18,22 +19,19 @@ use SugarCraft\Fuzzy\MatchResultSorter;
  * query char and never backtracks; a scattered early alignment is preferred
  * over a later contiguous run (mirrors sahilm/fuzzy).
  *
+ * The bonus weights are tunable through an injected {@see SahilmScoring}; the
+ * canonical weights (the default) reproduce the historical fixed constants.
+ *
  * @see https://github.com/sahilm/fuzzy
  * @implements FuzzyMatcher
  */
 final class SahilmMatcher implements FuzzyMatcher
 {
-    // Scoring constants from sahilm/fuzzy
-    private const MATCH_SCORE = 1;
-    private const CONSECUTIVE_BONUS = 5;
-    private const SEPARATOR_BONUS = 10;
-    private const CAMEL_BONUS = 10;
-    private const FIRST_CHAR_BONUS = 15;
-    private const LOWER_CASE_BONUS = 1;
-
     private const SEPARATOR_CHARS = ['_', '-', ' ', '.', '/', '\\', ':'];
 
     private readonly bool $caseSensitive;
+
+    private readonly SahilmScoring $scoring;
 
     /**
      * @param bool $caseSensitive When false (default), matching is case-insensitive but
@@ -41,10 +39,32 @@ final class SahilmMatcher implements FuzzyMatcher
      *                            still computed from the ORIGINAL character case in the candidate.
      *                            This matches the behavior of sahilm/fuzzy: bonuses reflect what
      *                            the user actually typed, not the lowercased comparison text.
+     * @param SahilmScoring|null $scoring Bonus weights (default: {@see SahilmScoring::canonical()})
      */
-    public function __construct(bool $caseSensitive = false)
+    public function __construct(bool $caseSensitive = false, ?SahilmScoring $scoring = null)
     {
         $this->caseSensitive = $caseSensitive;
+        $this->scoring = $scoring ?? SahilmScoring::canonical();
+    }
+
+    /**
+     * Named constructor (repo convention); same options as the constructor.
+     */
+    public static function new(bool $caseSensitive = false, ?SahilmScoring $scoring = null): self
+    {
+        return new self($caseSensitive, $scoring);
+    }
+
+    /** Whether matching compares the original case. */
+    public function caseSensitive(): bool
+    {
+        return $this->caseSensitive;
+    }
+
+    /** The bonus weights in effect. */
+    public function scoring(): SahilmScoring
+    {
+        return $this->scoring;
     }
 
     /**
@@ -147,34 +167,34 @@ final class SahilmMatcher implements FuzzyMatcher
             $candidateChar = $cLow[$candidateIdx];
 
             if ($queryChar === $candidateChar) {
-                $charScore = self::MATCH_SCORE;
+                $charScore = $this->scoring->matchScore;
 
                 // First character match bonus
                 if ($candidateIdx === 0) {
-                    $charScore += self::FIRST_CHAR_BONUS;
+                    $charScore += $this->scoring->firstCharBonus;
                 }
 
                 // Consecutive match bonus
                 if ($prevMatch === true) {
-                    $charScore += self::CONSECUTIVE_BONUS;
+                    $charScore += $this->scoring->consecutiveBonus;
                 }
 
                 // Check for separator bonus (match after separator char)
                 if ($prevCharLower !== '') {
                     if (in_array($prevCharLower, self::SEPARATOR_CHARS, true)) {
-                        $charScore += self::SEPARATOR_BONUS;
+                        $charScore += $this->scoring->separatorBonus;
                     }
                     // CamelCase bonus - current is lowercase but prev was uppercase
                     $candidateCharOrig = $cOrig[$candidateIdx];
                     $prevCandidateCharOrig = $cOrig[$candidateIdx - 1];
                     if ($this->isLowerCase($candidateCharOrig) && $this->isUpperCase($prevCandidateCharOrig)) {
-                        $charScore += self::CAMEL_BONUS;
+                        $charScore += $this->scoring->camelBonus;
                     }
                 }
 
                 // Lower case bonus
                 if ($this->isLowerCase($cOrig[$candidateIdx])) {
-                    $charScore += self::LOWER_CASE_BONUS;
+                    $charScore += $this->scoring->lowerCaseBonus;
                 }
 
                 $score += $charScore;

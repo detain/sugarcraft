@@ -28,8 +28,8 @@ final class PerformanceTest extends TestCase
     {
         // ~2000 char candidate; O(n²) matrix becomes ~4M cells.
         // mb_str_split pre-split (Step 2) eliminates the O(n³) mb_substr scan.
-        // Raise the DoS cap above the input length so this stays on the SW path
-        // (the default 1000-char cap would delegate to SahilmMatcher).
+        // Raise the DoS cap above the input length so the whole candidate is
+        // aligned (the default 1000-char cap would search only its prefix).
         $matcher = new SmithWatermanMatcher(maxCandidateLength: 5000);
         $longCandidate = str_repeat('abcdefghij', 200);
         $query = 'app';
