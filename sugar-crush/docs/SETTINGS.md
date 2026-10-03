@@ -168,38 +168,42 @@ Only those two spellings count as empty, and the narrowness is the point:
 and `"permissionRules": []` is a well-formed empty list that still outranks
 `settings.json` under the later-wins rule above.
 
+<!-- settings:layered:begin -->
 | Key | Read by | Project may set |
 |---|---|---|
 | `provider` | `Bootstrap::selectedProviderName()`, `backend()` | **no** |
-| `instructions` | `Bootstrap::forcedInstructions()` | **no** |
-| `allowedTools` | `Bootstrap::tools()` → `filterToolSet()` | **no** |
-| `theme` | `Bootstrap::chat()` | yes |
 | `titleModel` | `Bootstrap::titleBackend()` | **no** |
 | `summaryModel` | `Bootstrap::summaryBackend()` | **no** |
-| `disabledSkills` | `Bootstrap::chat()` → `skillRegistry()` | yes |
-| `enabledSkills` | `Bootstrap::backend()`, `backendFor()` → `promptEnabledSkills()` | **no** |
-| `disabledRules` | `Bootstrap::chat()` → `RulesState::new()` | **no** |
-| `disabledTools` | `Bootstrap::tools()` → `filterToolSet()` | yes |
-| `parallelToolCalls` | `EngineBackend::complete()` | yes |
-| `parallelToolDeadlineSeconds` | `EngineBackend::complete()` | yes |
 | `maxOutputTokens` | `EngineBackend::complete()` | **no** |
 | `modelPrices` | `ProviderFactory::createOpenAI()`, `createVertex()`, `createBedrock()` → `userTierModelPrices()` | **no** |
-| `statusLine` | `Bootstrap::chat()` → `StatusLineCommand::fromSettings()` | **no** |
-| `layout` | `Bootstrap::app()` → `App::$dock` via `DockLayout::fromArray()` | **no** |
-| `maxToolSteps` | `Bootstrap::backend()` → `resolvedMaxToolSteps()` | **no** |
-| `secretEnvAllowlist` | `Bootstrap::tools()` → `installSecretEnvAllowlist()` | **no** |
-| `contextWindow` | `ProviderFactory::createOpenAI()` → `OpenAIProvider::contextWindow()` | **no** |
 | `extraBody` | `ProviderFactory::createCustom()` → `CustomProvider` | **no** |
 | `thinkingBudget` | `ProviderFactory::createVertex()` → `VertexProvider` | **no** |
 | `promptCache` | `ProviderFactory::createVertex()`, `createBedrock()` → `promptCacheEnabled()` | **no** |
+| `parallelToolCalls` | `EngineBackend::complete()` | yes |
+| `parallelToolDeadlineSeconds` | `EngineBackend::complete()` | yes |
+| `maxToolSteps` | `Bootstrap::backend()` → `resolvedMaxToolSteps()` | **no** |
+| `contextWindow` | `ProviderFactory::createOpenAI()` → `OpenAIProvider::contextWindow()` | **no** |
+| `secretEnvAllowlist` | `Bootstrap::tools()` → `installSecretEnvAllowlist()` | **no** |
+| `allowedTools` | `Bootstrap::tools()` → `filterToolSet()` | **no** |
+| `disabledTools` | `Bootstrap::tools()` → `filterToolSet()` | yes |
+| `instructions` | `Bootstrap::forcedInstructions()` | **no** |
+| `disabledRules` | `Bootstrap::chat()` → `RulesState::new()` | **no** |
+| `disabledSkills` | `Bootstrap::chat()` → `skillRegistry()` | yes |
+| `enabledSkills` | `Bootstrap::backend()`, `backendFor()` → `promptEnabledSkills()` | **no** |
 | `includeGitInstructions` | `Bootstrap::tools()` → `Bash::withGitGuidance()` | yes |
 | `attribution` | `Bootstrap::tools()` → `Bash::withGitGuidance()` | **no** |
+| `theme` | `Bootstrap::chat()` | yes |
+| `statusLine` | `Bootstrap::chat()` → `StatusLineCommand::fromSettings()` | **no** |
+| `layout` | `Bootstrap::app()` → `App::$dock` via `DockLayout::fromArray()` | **no** |
+<!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
 COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these twenty-four, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
-without a row here reds rather than drifting. A key nothing reads is worse than
+without a row here reds rather than drifting. The table and that count are
+generated from `SettingsSchema` (`php tools/gen-settings-doc.php --write`);
+edit the schema, never the rows. A key nothing reads is worse than
 a missing one, because it looks configurable.
 
 `includeGitInstructions` and `attribution` shape the Bash tool's generic
@@ -926,12 +930,17 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   all four `trustedProject*` grants.
 - [`MEMORY.md`](MEMORY.md) — the rest of the `~/.sugar-crush/` layout.
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
-  this stack. They do not cover it: only six of the twenty-four layered keys have an
-  env override (`provider`, `titleModel`, `summaryModel`, `parallelToolCalls`,
-  `parallelToolDeadlineSeconds`, `promptCache`). `theme`, `instructions`, `disabledSkills`,
-  `disabledRules`, `allowedTools`, `disabledTools`, `maxOutputTokens`,
-  `modelPrices`, `statusLine`, `layout`, `maxToolSteps`, `secretEnvAllowlist`,
-  `contextWindow`, `extraBody`, `thinkingBudget`, `includeGitInstructions`,
-  `attribution` and `enabledSkills` have none.
+  this stack.
+  <!-- settings:env-split:begin -->
+  They do not cover it: only six of the twenty-four layered keys have an
+  env override (`provider`, `titleModel`, `summaryModel`, `promptCache`,
+  `parallelToolCalls`, `parallelToolDeadlineSeconds`). `maxOutputTokens`,
+  `modelPrices`, `extraBody`, `thinkingBudget`, `maxToolSteps`, `contextWindow`,
+  `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `instructions`,
+  `disabledRules`, `disabledSkills`, `enabledSkills`, `includeGitInstructions`,
+  `attribution`, `theme`, `statusLine` and `layout` have none.
+  <!-- settings:env-split:end -->
   (`statusLine` was missing from this list when it joined the stack — P6.S4
-  counted the keys rather than copying the sentence, which is what found it.)
+  counted the keys rather than copying the sentence, which is what found it.
+  The sentence is now generated from `SettingsSchema`, so a key can no longer
+  join the stack without landing in it.)

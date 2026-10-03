@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Config\Settings;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Config\LayeredSettings;
 use SugarCraft\Crush\Config\Settings\SettingsDocGenerator;
 use SugarCraft\Crush\Config\Settings\SettingsSchema;
 
@@ -114,5 +115,62 @@ final class SettingsSchemaDocDriftTest extends TestCase
         self::assertSame('P U C', $tiers('theme'));
         self::assertSame('U C', $tiers('permissionMode'));
         self::assertSame('C', $tiers('trustedProjectHooks'));
+    }
+    /**
+     * DH-KEYS: the SETTINGS.md layered table, the README layered roster and the
+     * env-split sentence are generated blocks, and the hand-written counts
+     * beside them are generated anchors — each derived from the schema, which
+     * in turn is asserted equal to the LayeredSettings constants.
+     */
+    public function testTheLayeredBlocksDeriveFromTheSchema(): void
+    {
+        $generator = SettingsDocGenerator::new();
+
+        preg_match_all('/^\| `([A-Za-z]+)` \| .+ \| (yes|\*\*no\*\*) \|$/m', $generator->layeredTable(), $rows);
+        self::assertEqualsCanonicalizing(LayeredSettings::LAYERED_KEYS, $rows[1]);
+        foreach ($rows[1] as $i => $key) {
+            self::assertSame(\in_array($key, LayeredSettings::PROJECT_TIER_KEYS, true), $rows[2][$i] === 'yes', $key);
+        }
+
+        $roster = $generator->readmeLayeredRoster();
+        self::assertStringStartsWith('Only these ' . SettingsDocGenerator::spell(\count(LayeredSettings::LAYERED_KEYS)) . ' keys are layered', $roster);
+        preg_match_all('/`([a-zA-Z]+)`/', $roster, $named);
+        self::assertEqualsCanonicalizing(LayeredSettings::LAYERED_KEYS, $named[1]);
+
+        self::assertEqualsCanonicalizing(LayeredSettings::userTierOnlyKeys(), SettingsDocGenerator::userTierOnlyKeys());
+    }
+
+    public function testEveryCountAnchorMatchesExactlyOnceOnItsPage(): void
+    {
+        $pages = self::pages();
+        foreach (SettingsDocGenerator::new()->countAnchors() as [$file, $pattern, $count]) {
+            self::assertSame(1, preg_match_all($pattern, $pages[$file], $m), "{$file}: {$pattern}");
+            self::assertSame(SettingsDocGenerator::spell($count), $m[1][0]);
+        }
+    }
+
+    public function testACountAnchorThatNoLongerMatchesIsRefused(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        SettingsDocGenerator::withCount('no anchor here', '/exactly these ([a-z]+)/', 3);
+    }
+
+    public function testSpell(): void
+    {
+        self::assertSame('six', SettingsDocGenerator::spell(6));
+        self::assertSame('twenty', SettingsDocGenerator::spell(20));
+        self::assertSame('twenty-four', SettingsDocGenerator::spell(24));
+        self::assertSame('ninety-nine', SettingsDocGenerator::spell(99));
+    }
+
+    /** A block inside a list item keeps the item's indentation, so the item does not end early. */
+    public function testAnIndentedBlockStaysIndented(): void
+    {
+        $text = "- item\n  <!-- settings:x:begin -->\n  old\n  <!-- settings:x:end -->\n";
+
+        self::assertSame(
+            "- item\n  <!-- settings:x:begin -->\n  new one\n  new two\n  <!-- settings:x:end -->\n",
+            SettingsDocGenerator::replaceBlock($text, 'x', "new one\nnew two"),
+        );
     }
 }

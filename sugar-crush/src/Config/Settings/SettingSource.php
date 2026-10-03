@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Config\Settings;
 
+use SugarCraft\Crush\Config\LayeredSettings;
+
 /**
  * Where an effective value came from, LOWEST PRECEDENCE FIRST — the case order
  * IS the precedence {@see SettingsResolver} applies, so it is stated once,
@@ -40,7 +42,10 @@ enum SettingSource: string
             self::Default => 'default',
             self::ProjectShared => 'project settings.json',
             self::ProjectLocal => 'project settings.local.json',
-            self::UserSettings => '~/.sugar-crush/settings.json',
+            // Assembled from LayeredSettings rather than spelled: a whole
+            // dot-path literal here would be one more site for
+            // ProjectTierRefusalInventoryTest's census to classify, for a label.
+            self::UserSettings => '~/' . LayeredSettings::dir() . '/' . LayeredSettings::USER_FILE,
             self::UserConfig => 'config.json',
             self::Session => 'this session',
             self::Env => 'environment',

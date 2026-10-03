@@ -12,6 +12,7 @@ use SugarCraft\Crush\Config\Settings\ApplyMode;
 use SugarCraft\Crush\Config\Settings\RiskClass;
 use SugarCraft\Crush\Config\Settings\SettingCategory;
 use SugarCraft\Crush\Config\Settings\SettingDefinition;
+use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingSource;
 use SugarCraft\Crush\Config\Settings\SettingsSchema;
 use SugarCraft\Crush\Config\Settings\SettingType;
@@ -211,6 +212,34 @@ final class SettingsSchemaTest extends TestCase
         self::assertSame('parallelToolCalls', SettingsSchema::envMap()['SUGARCRUSH_DISABLE_PARALLEL_TOOL_CALLS'] ?? null);
         self::assertSame('permissionMode', SettingsSchema::envMap()['SUGARCRUSH_PERMISSION_MODE'] ?? null);
         self::assertSame('--permission-mode', SettingsSchema::byKey('permissionMode')?->cliFlag);
+    }
+
+    /**
+     * DH-KEYS: one definitions file per category under `Definitions/`, every
+     * file listed on {@see SettingsSchema::DEFINITION_SETS}, no category split
+     * across two files and no set empty.
+     */
+    public function testEveryDefinitionsFileIsListedOnceAndOwnsOneCategory(): void
+    {
+        $dir = \dirname(__DIR__, 3) . '/src/Config/Settings/Definitions';
+        $files = array_map(
+            static fn (string $path): string => 'SugarCraft\\Crush\\Config\\Settings\\Definitions\\' . basename($path, '.php'),
+            glob($dir . '/*.php') ?: [],
+        );
+
+        self::assertEqualsCanonicalizing($files, SettingsSchema::DEFINITION_SETS);
+
+        $categories = [];
+        foreach (SettingsSchema::DEFINITION_SETS as $set) {
+            self::assertTrue(is_subclass_of($set, SettingDefinitionSet::class), "{$set} is not a SettingDefinitionSet");
+            self::assertNotEmpty($set::definitions(), "{$set} defines no keys");
+            $categories[] = $set::category()->value;
+            foreach ($set::definitions() as $definition) {
+                self::assertSame($set::category(), $definition->category, "{$definition->key} is filed in {$set}");
+            }
+        }
+
+        self::assertSame($categories, array_values(array_unique($categories)), 'a category is split across two files');
     }
 
     // -------------------------------------------------------------------------

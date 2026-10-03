@@ -219,15 +219,20 @@ cannot tell whether the sentence is about them.)
 > was wrong. `config.json` keeps working indefinitely, and there is nothing to
 > migrate *to*: `settings.json` is never written.
 
-Only these twenty-four keys are layered — `provider`, `theme`, `titleModel`,
-`summaryModel`, `instructions`, `disabledSkills`, `disabledRules`,
-`parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxOutputTokens`,
-`modelPrices`, `allowedTools`,
-`disabledTools`, `statusLine`, `layout`, `maxToolSteps`, `secretEnvAllowlist`,
-`contextWindow`, `extraBody`, `thinkingBudget`, `promptCache`,
-`includeGitInstructions`, `attribution`, `enabledSkills`. The
-`trustedProject*` lists are read from `~/.sugar-crush/config.json` **alone**, so
-no lower layer can grant itself trust.
+<!-- settings:layered:begin -->
+Only these twenty-four keys are layered — `provider`, `titleModel`,
+`summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
+`promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
+`maxToolSteps`, `contextWindow`, `secretEnvAllowlist`, `allowedTools`,
+`disabledTools`, `instructions`, `disabledRules`, `disabledSkills`,
+`enabledSkills`, `includeGitInstructions`, `attribution`, `theme`, `statusLine`,
+`layout`.
+<!-- settings:layered:end -->
+
+That roster (and its count) is generated from `SettingsSchema` by
+`php tools/gen-settings-doc.php --write`. The `trustedProject*` lists are read
+from `~/.sugar-crush/config.json` **alone**, so no lower layer can grant itself
+trust.
 
 `permissionMode` and `permissionRules` are the one pair that is neither: they
 are read from `~/.sugar-crush/settings.json` **and** `config.json` (the latter
