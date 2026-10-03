@@ -523,6 +523,14 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         ));
         $maxTurns = max(1, $subAgent->agent->maxTurns ?? self::DEFAULT_MAX_TURNS);
 
+        // The roster above is narrowed by tool NAME only, so `Bash(git *)`
+        // put all of Bash on the wire. Every call the run makes is held to the
+        // preset's whole declaration — argument halves and argument-scoped
+        // denials included — by this hook, ahead of the session gate (4.2).
+        $engine = $engine->withSubAgentGrant(
+            new \SugarCraft\Crush\Hooks\BuiltIn\SubAgentGrantHook($manager, $subAgent),
+        );
+
         if ($suspension !== null) {
             // The saved transcript already opens with the preset's system turn.
             $messages = [...$suspension['transcript'], new UserMessage($subAgent->task)];

@@ -531,6 +531,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
          * empty, as before. @see withSessionId()
          */
         private readonly ?string $sessionId = null,
+        /**
+         * Step 4.2: set ONLY on the copy {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}
+         * runs a delegated sub-agent on — the hook that holds each of that
+         * run's calls to the preset's own declaration, argument halves
+         * included. {@see resolveHookManager()} registers it ahead of the
+         * permission gate, on a `withoutHooks()` turn too. Null — every
+         * top-level turn — adds nothing. @see withSubAgentGrant()
+         */
+        private readonly ?\SugarCraft\Crush\Hooks\BuiltIn\SubAgentGrantHook $subAgentGrant = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -721,6 +730,20 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     public function permissionGate(): ?PermissionGate
     {
         return $this->permissionGate;
+    }
+
+    /**
+     * Hold every call the turns of this copy make to a delegated sub-agent's
+     * own tool declaration (step 4.2) — see {@see \SugarCraft\Crush\Hooks\BuiltIn\SubAgentGrantHook} for why
+     * the name-narrowed roster alone left `Bash(git *)` meaning "any Bash".
+     *
+     * A SECOND GATE, NEVER A REPLACEMENT: the session's {@see PermissionGate}
+     * still judges every call the grant admits, and a call either refuses is
+     * denied. Like the gate it survives {@see withoutHooks()}. Null removes it.
+     */
+    public function withSubAgentGrant(?\SugarCraft\Crush\Hooks\BuiltIn\SubAgentGrantHook $grant): self
+    {
+        return $this->mutate(['subAgentGrant' => $grant]);
     }
 
     /**
@@ -3337,6 +3360,22 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             if (!$this->hooksDisabled) {
                 $manager->registerBuiltIns();
             }
+        }
+
+        // The sub-agent's own grant (step 4.2), AHEAD of the session gate and
+        // outside the `hooksDisabled` guard like it: a preset's declaration
+        // is not something the hooks opt-out may widen. On a per-turn COPY of
+        // a shared manager, never on the shared one itself — it binds ONE
+        // delegated run, and left on the launch's manager it would hold the
+        // caller's next turn to that run's grant. Ahead of the gate so a call
+        // outside the grant is refused for that reason, never first put to
+        // the user as a question: the chain lets a deny outrank an ask in
+        // either order, but the reason the model reads is the first refusal.
+        if ($this->subAgentGrant !== null) {
+            if ($manager === $this->hookManager) {
+                $manager = clone $manager;
+            }
+            $manager->register($this->subAgentGrant);
         }
 
         if ($this->permissionGate !== null) {

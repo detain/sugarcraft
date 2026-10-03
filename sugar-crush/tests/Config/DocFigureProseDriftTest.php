@@ -2126,7 +2126,7 @@ final class DocFigureProseDriftTest extends TestCase
             ];
         }
         ksort($live);
-        self::assertCount(7, $live, 'the BuiltIn hook roster changed — the name table, the built-ins table, and BOTH bullet halves of the registration claim move together');
+        self::assertCount(8, $live, 'the BuiltIn hook roster changed — the name table, the built-ins table, and BOTH bullet halves of the registration claim move together');
 
         self::assertSame(
             1,
@@ -2142,7 +2142,7 @@ final class DocFigureProseDriftTest extends TestCase
         // Built-ins table: the three rows, their event cells, and whichever
         // matchers they spell out.
         $tableStart = strpos($hooksRaw, '## The built-in hooks');
-        $tableEnd = strpos($hooksRaw, 'Four more exist');
+        $tableEnd = strpos($hooksRaw, 'Five more exist');
         self::assertIsInt($tableStart);
         self::assertIsInt($tableEnd);
         $table = substr($hooksRaw, $tableStart, $tableEnd - $tableStart);
@@ -2196,13 +2196,16 @@ final class DocFigureProseDriftTest extends TestCase
         // The two bullets = the roster minus the registered three, set-equal.
         self::assertSame(1, preg_match('/(\w+) more exist and are/', $hooks, $two), 'the not-registered sentence lost its spelled count');
         self::assertSame(count(array_diff(array_keys($live), $registered[1])), $words[strtolower($two[1])] ?? -1, 'the unregistered half of the roster no longer matches BuiltIn-minus-registered');
-        $bulletStart = strpos($hooksRaw, 'Four more exist');
+        $bulletStart = strpos($hooksRaw, 'Five more exist');
         self::assertIsInt($bulletStart);
         $bullets = substr($hooksRaw, $bulletStart);
         self::assertSame(1, preg_match('/`(\w+)` — registered by `Bootstrap::(\w+)\(\)` when a gate exists,\s*which is every CLI launch\. It is what makes the (\w+)-mode gate/', $bullets, $gateRow), 'the gate bullet no longer names its class, its Bootstrap seam, and the gate mode count together');
         self::assertSame(1, preg_match('/`(\w+)` — opt-in, constructed with a jail root/', $bullets, $jailRow), 'the opt-in bullet moved');
         self::assertSame(1, preg_match('/`(\w+)` and `(\w+)` — the repeat-call loop guard,\s*registered per turn by `EngineBackend::(\w+)\(\)`/', $bullets, $guardRow), 'the loop-guard bullet no longer names its pair and the EngineBackend seam that registers them');
-        self::assertEqualsCanonicalizing(array_keys(array_diff_key($live, array_flip($registered[1]))), [$gateRow[1], $jailRow[1], $guardRow[1], $guardRow[2]], 'the bullets no longer name exactly the unregistered BuiltIn classes');
+        self::assertSame(1, preg_match('/`(\w+)` — the delegated run\'s own tool declaration, registered\s*by `EngineBackend::(\w+)\(\)`/', $bullets, $grantRow), 'the sub-agent grant bullet no longer names its class and the EngineBackend seam that registers it (step 4.2)');
+        self::assertEqualsCanonicalizing(array_keys(array_diff_key($live, array_flip($registered[1]))), [$gateRow[1], $jailRow[1], $guardRow[1], $guardRow[2], $grantRow[1]], 'the bullets no longer name exactly the unregistered BuiltIn classes');
+        self::assertStringContainsString('register($this->subAgentGrant)', self::bodyExcerpt(self::sourceOf('Backend/EngineBackend.php'), $grantRow[2], 3000), "EngineBackend::{$grantRow[2]}() no longer registers the sub-agent grant — the bullet names the wrong seam");
+        self::assertStringContainsString('new \\SugarCraft\\Crush\\Hooks\\BuiltIn\\' . $grantRow[1] . '(', self::sourceOf('Tools/BuiltIn/TaskTool.php'), 'TaskTool no longer binds the sub-agent grant hook — the bullet\'s "TaskTool binds it" lost its referent');
         $guardSeam = self::bodyExcerpt(self::sourceOf('Backend/EngineBackend.php'), $guardRow[3], 3000);
         foreach ([$guardRow[1], $guardRow[2]] as $guardClass) {
             self::assertStringContainsString('register(new ' . $guardClass . '(', $guardSeam, "EngineBackend::{$guardRow[3]}() no longer registers {$guardClass} — the bullet names the wrong seam");

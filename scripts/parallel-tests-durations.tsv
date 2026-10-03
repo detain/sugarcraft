@@ -170,6 +170,7 @@ sugar-crush/tests/Cli/BootstrapConfigPathOverrideTest.php	1.560	17
 sugar-crush/tests/Backend/AwaitPromiseDiagnosticArmTest.php	1.536	11
 sugar-crush/tests/MCP/McpWriteBudgetShapeTest.php	1.529	2
 sugar-crush/tests/Backend/ForkChannelIdleTimerSuspendedTest.php	1.505	2
+sugar-crush/tests/Tools/TaskToolArgumentScopedGrantTest.php	1.500	6
 sugar-crush/tests/Cli/BootstrapLaunchFormatConstantsTest.php	1.495	18
 sugar-crush/tests/BaseSystemPromptTest.php	1.486	28
 sugar-crush/tests/Session/TranscriptResumeTest.php	1.472	11

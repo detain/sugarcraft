@@ -1550,13 +1550,17 @@ final class AgentManager
     /**
      * Refuse a call the agent's own declaration does not cover.
      *
-     * THE ARGUMENT HALF OF A GRANT IS ENFORCED HERE AND NOWHERE ELSE. The
-     * roster {@see resolveGrantedTools()} builds can only carry tool NAMES —
+     * THE ARGUMENT HALF OF A GRANT IS ENFORCED PER CALL, NEVER ON THE ROSTER.
+     * The roster {@see resolveGrantedTools()} builds can only carry tool NAMES —
      * `Bash(git *)` puts the whole `Bash` tool on the wire, because a tool
      * schema has no field that says "git commands only". Handing a reviewer
      * preset the unconstrained `Bash` it never asked for would be a widening
      * committed inside the fix for a lie, so the constraint is applied to the
-     * CALL, where the arguments finally exist.
+     * CALL, where the arguments finally exist. The judgement itself is
+     * {@see grantRefusalFor()}, shared by the two paths that run a sub-agent:
+     * this method stops {@see executeSubAgent()}'s run on a refusal, and the
+     * live Task path's {@see \SugarCraft\Crush\Hooks\BuiltIn\SubAgentGrantHook}
+     * denies the one call and lets the run continue (step 4.2).
      *
      * {@see PermissionRule} with {@see PermissionAction::Allow} is the matcher,
      * not a second one, and its `Allow` arm is the reason this is worth doing:
@@ -1587,12 +1591,47 @@ final class AgentManager
      */
     private function refuseCallOutsideGrant(ToolCall $toolCall, SubAgent $subAgent): void
     {
+        $why = $this->grantRefusalFor($toolCall, $subAgent);
+        if ($why !== null) {
+            $this->refuseToolCall($toolCall, $subAgent, $why);
+        }
+    }
+
+    /**
+     * Why $subAgent's own declaration refuses $toolCall, or null when it
+     * admits it — the judgement {@see refuseCallOutsideGrant()} acts on, as a
+     * value rather than a thrown stop.
+     *
+     * PUBLIC BECAUSE THE LIVE TASK PATH NEEDS IT AS A VERDICT, NOT AN ABORT
+     * (step 4.2). The engine path
+     * ({@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}) narrows the
+     * sub-agent's roster by tool NAME only, so before this the argument half of
+     * a grant — `Bash(git *)` — and every argument-scoped denial —
+     * `disallowedTools: ['Bash(git push*)']` — were enforced only by
+     * {@see executeSubAgent()}, which nothing in `src/` calls: a `reviewer`
+     * delegated through Task ran ANY Bash command the session gate allowed.
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\SubAgentGrantHook} now asks this
+     * on every PreToolUse of the delegated run and DENIES the call with the
+     * returned reason, so the model is told why and the run continues — a
+     * refused call is a tool result, not the end of the sub-agent.
+     *
+     * $root overrides the manager's own {@see $projectRoot} for the path
+     * halves: the hook hands in the root the delegated run's tools actually
+     * resolve against, which is the one a path grant has to be judged at.
+     *
+     * @throws \RuntimeException when either list holds a malformed or
+     *         non-string entry — never read as "no rule matched", because a
+     *         malformed rule fails INERT ({@see namePatterns()})
+     */
+    public function grantRefusalFor(ToolCall $toolCall, SubAgent $subAgent, ?string $root = null): ?string
+    {
         $agent = $subAgent->agent;
         $declarations = $agent->tools;
         $denied = $agent->disallowedTools;
+        $root ??= $this->projectRoot;
 
         if ($declarations === [] && $denied === []) {
-            return;
+            return null;
         }
 
         // Parsed for its side effect as well as its result: a malformed or
@@ -1616,39 +1655,31 @@ final class AgentManager
         // union/intersection split covers paths: a denial fires on ANY
         // spelling, a grant needs the written AND the resolved one.
         foreach ($denied as $denial) {
-            if ((new PermissionRule((string) $denial, PermissionAction::Deny))->matches($toolCall, true, $this->projectRoot)) {
-                $this->refuseToolCall(
-                    $toolCall,
-                    $subAgent,
-                    sprintf(
-                        'is refused by the denylist agent "%s" declares [%s]',
-                        $agent->name,
-                        implode(', ', array_map(static fn($d): string => (string) $d, $denied)),
-                    ),
+            if ((new PermissionRule((string) $denial, PermissionAction::Deny))->matches($toolCall, true, $root)) {
+                return sprintf(
+                    'is refused by the denylist agent "%s" declares [%s]',
+                    $agent->name,
+                    implode(', ', array_map(static fn($d): string => (string) $d, $denied)),
                 );
             }
         }
 
         if ($declarations === []) {
             // A denylist WITHOUT a grant narrows nothing else: silence about
-            // `tools` is still silence. See the doc-block.
-            return;
+            // `tools` is still silence. See refuseCallOutsideGrant()'s doc-block.
+            return null;
         }
 
         foreach ($declarations as $declaration) {
-            if ((new PermissionRule((string) $declaration, PermissionAction::Allow))->matches($toolCall, true, $this->projectRoot)) {
-                return;
+            if ((new PermissionRule((string) $declaration, PermissionAction::Allow))->matches($toolCall, true, $root)) {
+                return null;
             }
         }
 
-        $this->refuseToolCall(
-            $toolCall,
-            $subAgent,
-            sprintf(
-                'is outside the tool grant agent "%s" declares [%s]',
-                $agent->name,
-                implode(', ', array_map(static fn($d): string => (string) $d, $declarations)),
-            ),
+        return sprintf(
+            'is outside the tool grant agent "%s" declares [%s]',
+            $agent->name,
+            implode(', ', array_map(static fn($d): string => (string) $d, $declarations)),
         );
     }
 

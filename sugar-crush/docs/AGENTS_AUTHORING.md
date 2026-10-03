@@ -186,6 +186,32 @@ two cannot drift apart. The launch's own permission mode is still decided by
 whether any surface renders it differently is a `/agents` question, not a
 wiring one.
 
+### How a grant is enforced
+
+`tools` and `disallowedTools` use the permission-rule dialect
+([`PERMISSIONS.md`](PERMISSIONS.md)), and a `Task` delegation applies each in
+two halves:
+
+- **The roster narrows by tool name.** The sub-agent is offered only the tools
+  its `tools` list names and none that `disallowedTools` names outright. An
+  argument-scoped entry such as `Bash(git *)` still puts the whole `Bash`
+  tool on the wire, because a tool schema has nowhere to say "git commands
+  only".
+- **Every call is checked against the whole declaration.**
+  `SubAgentGrantHook`, registered on the delegated run's `PreToolUse` chain
+  ahead of the session's permission gate, denies a call outside the grant
+  or matched by a denial. The built-in `reviewer`'s `Bash(git *)` admits
+  `git status` and refuses `rm x`, and also `git log && rm x`: every segment of a
+  shell chain must match a grant, while any one segment matching a denial
+  refuses it. `disallowedTools: [Bash(git push*)]` refuses `git push` while
+  the rest of `Bash(git *)` keeps working.
+
+A refused call comes back to the sub-agent as that call's error, naming the
+declaration, and the run continues. The hook runs even when hooks are switched
+off for the turn, and it is a second gate, never a replacement: the session's
+permission mode still judges every call the grant admits. A preset with neither
+list is not narrowed at all.
+
 ---
 
 ## What you can actually do with a preset today

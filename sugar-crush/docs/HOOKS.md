@@ -758,7 +758,7 @@ it runs only once the rest of the chain has permitted that output — see
 | `ConfirmRemoveHook` | `PreToolUse` | denies obvious destructive shell (`rm -rf`, `find … -delete`, …) |
 | `AuditHook` | `PostToolUse`, matcher `.*` | appends every call — and every refused or withheld one, see [below](#what-the-audit-log-records) — to whatever `AuditHook::defaultLogFile()` answers — a fixed leaf inside a per-user directory the hook creates `0700` and refuses to use if it is not its own |
 
-Four more exist and are **not** registered by default:
+Five more exist and are **not** registered by default:
 
 - `PermissionGateHook` — registered by `Bootstrap::hooks()` when a gate exists,
   which is every CLI launch. It is what makes the six-mode gate reachable from
@@ -775,6 +775,13 @@ Four more exist and are **not** registered by default:
   the turn on the 8th. A changed result resets the count. They are not in
   `registerBuiltIns()` because their ledger lives one turn and a hook manager
   lives for the launch.
+- `SubAgentGrantHook` — the delegated run's own tool declaration, registered
+  by `EngineBackend::resolveHookManager()` only on the copy of the chain a
+  `Task` sub-agent runs on (`TaskTool` binds it), ahead of the permission gate
+  and on a `withoutHooks()` turn too. It denies a call outside the preset's
+  `tools` grant or matched by its `disallowedTools`, argument halves included,
+  so `Bash(git *)` refuses `rm x`. See
+  [`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#how-a-grant-is-enforced).
 
 `ConfirmRemoveHook` and `BashEscapeDenyHook` are both documented in their own
 source as **heuristics, not security boundaries**. Neither can see through

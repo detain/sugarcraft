@@ -82,10 +82,15 @@ final readonly class AgentDefinition
             // match, and refuses command/process substitution, `${…}` expansion
             // and non-inert redirection outright (audit F-P5), so this admits
             // `git status` and refuses `git log && rm -rf /`. That
-            // is enforced per call by {@see AgentManager::refuseCallOutsideGrant()};
-            // the roster {@see AgentManager::resolveGrantedTools()} sends can
-            // only carry the NAME half, because a tool schema has no field for
-            // "git commands only".
+            // is enforced per call by {@see AgentManager::grantRefusalFor()} —
+            // on the live `Task` path through the delegated run's
+            // {@see \SugarCraft\Crush\Hooks\BuiltIn\SubAgentGrantHook}, which
+            // denies the call (step 4.2; before it, only the uncalled
+            // `executeSubAgent()` path checked, so a delegated reviewer ran
+            // any Bash the session allowed). The roster
+            // {@see AgentManager::resolveGrantedTools()} sends can only carry
+            // the NAME half, because a tool schema has no field for "git
+            // commands only".
             defaultTools: ['Read', 'Grep', 'Bash(git *)'],
             defaultSkills: ['php-best-practices', 'security-audit'],
         );
