@@ -177,10 +177,16 @@ final class BootstrapContextWindowTest extends TestCase
         $at = new Chat(history: self::pairedHistory(85_000), inputBuf: 'hello', backend: $backend);
         $this->assertSame(85_000, $at->contextTokens());
         [$compacted] = $at->update(new KeyMsg(KeyType::Enter, ''));
-        $this->assertCount(25, $compacted->history, '3 summaries + 20 preserved + the notice + the user turn');
-        $this->assertSame(Role::System, $compacted->history[23]->role, 'the notice, BEFORE the user turn');
-        $this->assertSame(Role::User, $compacted->history[24]->role);
-        $this->assertSame('hello', $compacted->history[24]->content);
+        // Roadmap 1.B-3: the six condensed rows stay in the transcript, hidden
+        // from the model, followed by the boundary row compaction leaves.
+        $this->assertCount(
+            32,
+            $compacted->history,
+            '6 condensed (hidden) + 3 summaries + the boundary + 20 preserved + the notice + the user turn',
+        );
+        $this->assertSame(Role::System, $compacted->history[30]->role, 'the notice, BEFORE the user turn');
+        $this->assertSame(Role::User, $compacted->history[31]->role);
+        $this->assertSame('hello', $compacted->history[31]->content);
     }
 
     /**
@@ -201,10 +207,14 @@ final class BootstrapContextWindowTest extends TestCase
 
         $this->assertNull($cmd, 'nothing was scheduled');
         $this->assertFalse($next->inFlight);
-        $this->assertCount(26, $next->history, '3 summaries + 20 preserved + notice + user turn + refusal');
-        $this->assertSame(Role::User, $next->history[24]->role);
-        $this->assertSame('hello', $next->history[24]->content);
-        $this->assertSame(Role::Assistant, $next->history[25]->role);
+        $this->assertCount(
+            33,
+            $next->history,
+            '6 condensed (hidden, roadmap 1.B-3) + 3 summaries + the boundary + 20 preserved + notice + user turn + refusal',
+        );
+        $this->assertSame(Role::User, $next->history[31]->role);
+        $this->assertSame('hello', $next->history[31]->content);
+        $this->assertSame(Role::Assistant, $next->history[32]->role);
     }
 
     /**

@@ -3690,8 +3690,36 @@ final class Renderer
         // of a long transcript (audit 15b-10).
         $userLabel = Style::new()->foreground($theme->userLabel)->bold()->render('user>');
         $assistantLabel = Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant');
+        // Roadmap 1.B-3: compaction hides the rows it condensed from the model
+        // and leaves them here, with a boundary row where they end
+        // ({@see Chat::COMPACTION_BOUNDARY}). The boundary is painted as a rule
+        // across the pane, and every turn above the NEWEST one wears dim
+        // labels: the model reads only a summary of it. Only the labels, not the
+        // body - the body is Markdown carrying its own SGR, which an outer
+        // faint wrapper would not survive past its first reset.
+        $lastBoundary = null;
+        foreach ($history as $key => $msg) {
+            if (Chat::isCompactionBoundary($msg)) {
+                $lastBoundary = $key;
+            }
+        }
+        $condensedUserLabel = self::dim($theme)->render('user>');
+        $condensedAssistantLabel = self::dim($theme)->render('assistant');
+        // The rule is one row clipped to the pane, never wrapped: it marks a
+        // place, and a second row would be a row it does not own.
+        $boundaryRule = self::dim($theme)->render(Width::truncate(
+            '── context compacted · the model reads a summary of the turns above '
+                . str_repeat('─', max(0, $width)),
+            max(1, $width),
+        ));
         $blocks = [];
-        foreach ($history as $msg) {
+        foreach ($history as $key => $msg) {
+            if (Chat::isCompactionBoundary($msg)) {
+                $blocks[] = $boundaryRule;
+
+                continue;
+            }
+            $condensed = $lastBoundary !== null && $key < $lastBoundary;
             // Defense-in-depth (candy-buffer #1362): User and System content is
             // untrusted and reaches the terminal wire verbatim. A raw ESC would
             // desync the frame-diff line model or forge SGR that escapes the
@@ -3711,9 +3739,9 @@ final class Renderer
                 continue;
             }
             $blocks[] = match ($msg->role) {
-                Role::User      => $userLabel . " " . self::untrusted($msg->content)
+                Role::User      => ($condensed ? $condensedUserLabel : $userLabel) . " " . self::untrusted($msg->content)
                     . self::attachmentChip($msg, $theme, $width),
-                Role::Assistant => self::renderAssistantTurn($msg, $theme, $md, $width, $assistantLabel, $expanded),
+                Role::Assistant => self::renderAssistantTurn($msg, $theme, $md, $width, $condensed ? $condensedAssistantLabel : $assistantLabel, $expanded),
                 Role::System    => $msg->uiOnly
                     ? self::notice($theme)->render(self::NOTICE_ROW_LABEL . self::untrusted($msg->content))
                     : self::dim($theme)->render("system: " . self::untrusted($msg->content)),

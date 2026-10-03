@@ -744,6 +744,21 @@ its own runner and supervisor. `Context\ContextCompactor` +
 `IdleCompactionPolicy` drive `/compact` and automatic compaction against
 `ContextWindow`.
 
+**Compaction hides rows, it does not delete them.** Every compaction route
+(`/compact` on the heuristic, `/compact` landing a model's summaries, the
+automatic 85% tier) lays its result out through
+`Chat::withCompactedRowsHidden()`. The rows it condensed stay in the history
+where they were, flagged `uiOnly` so the model no longer reads them. What the
+model reads in their place (`[summary]` lines, file stubs) goes in with
+`userVisible` false. One `Chat::COMPACTION_BOUNDARY` notice sits between them
+and the preserved rows. So the scrollback and the saved transcript keep the
+conversation as it happened, with its ids and step ids. `Renderer` paints the
+boundary as a rule and dims the labels of the turns above the newest one.
+The compaction reports count agent-visible rows, because the history as a
+whole never shrinks. The 95% intra-exchange rescue is the exception: it still
+shortens the oversized row in place (`Chat::messageWithContent()`, every other
+field kept).
+
 ---
 
 ## The TUI layer

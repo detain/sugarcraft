@@ -132,10 +132,37 @@ final class UiOnlyCompactionInputTest extends TestCase
         }
     }
 
-    /** @param list<Message> $history */
+    /**
+     * Every row the compaction was handed is still in the transcript, in its
+     * order (roadmap 1.B-3: compaction hides, it does not delete), and every
+     * UI-only one is still flagged. The rows it condensed are flagged too now -
+     * hidden from the model - so the UI-only rows are told apart by content.
+     *
+     * @param list<Message> $history
+     */
     private function assertUiRowsSurviveInOrder(array $history): void
     {
-        $ui = array_values(array_filter($history, static fn(Message $m): bool => $m->uiOnly));
+        $handed = self::history();
+        $at = 0;
+        foreach ($history as $message) {
+            $expected = $handed[$at] ?? null;
+            if ($expected !== null && $message->role === $expected->role && $message->content === $expected->content) {
+                if ($expected->uiOnly) {
+                    $this->assertTrue($message->uiOnly, "the UI-only row `{$expected->content}` is still flagged");
+                }
+                $at++;
+            }
+        }
+        $this->assertSame(count($handed), $at, 'every row the compaction was handed is still in the transcript, in order');
+
+        $uiText = array_map(
+            static fn(Message $m): string => $m->content,
+            array_values(array_filter($handed, static fn(Message $m): bool => $m->uiOnly)),
+        );
+        $ui = array_values(array_filter(
+            $history,
+            static fn(Message $m): bool => $m->uiOnly && in_array($m->content, $uiText, true),
+        ));
         $contents = array_map(static fn(Message $m): string => $m->content, $ui);
 
         $this->assertSame(

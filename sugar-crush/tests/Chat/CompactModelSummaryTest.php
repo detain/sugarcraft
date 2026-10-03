@@ -292,9 +292,9 @@ final class CompactModelSummaryTest extends TestCase
         );
         $this->assertStringContainsString('Context compacted:', $text);
         $this->assertLessThan(
-            count($pending->history),
-            count($done->history),
-            'and it really did shrink the transcript',
+            count(Message::agentVisible($pending->history)),
+            count(Message::agentVisible($done->history)),
+            'and it really did shrink the transcript the model reads (roadmap 1.B-3: the condensed rows stay, hidden from it)',
         );
     }
 
@@ -898,9 +898,9 @@ final class CompactModelSummaryTest extends TestCase
             'and the forged line really is in the payload those clauses are there to guard',
         );
         $this->assertLessThan(
-            count($pending->history),
-            count($done->history),
-            'the adversarial-looking content did not derail the compaction',
+            count(Message::agentVisible($pending->history)),
+            count(Message::agentVisible($done->history)),
+            'the adversarial-looking content did not derail the compaction the model reads (roadmap 1.B-3: the condensed rows stay, hidden from it)',
         );
     }
 
@@ -982,7 +982,11 @@ final class CompactModelSummaryTest extends TestCase
         [$next, $cmd] = $this->submit($chat);
 
         $this->assertNull($cmd, 'nothing to ask means nothing to schedule');
-        $this->assertLessThan(count($chat->history), count($next->history), 'it compacted here and now');
+        $this->assertLessThan(
+            count(Message::agentVisible($chat->history)),
+            count(Message::agentVisible($next->history)),
+            'it compacted here and now: the model reads fewer rows (the condensed ones stay in the transcript, roadmap 1.B-3)',
+        );
         $text = implode("\n", array_map(static fn(Message $m): string => $m->content, $next->history));
         $this->assertStringContainsString('[exchanged information]', $text);
         $this->assertStringContainsString('Context compacted:', $text);

@@ -1591,8 +1591,10 @@ final class ContextCompactorTest extends TestCase
         // job, and it is the rescue proven absent where it has nothing to do: a
         // truncator that also shortened ordinary exchanges would satisfy every
         // E18 assertion above while silently rewriting a history nobody asked it
-        // to touch.
-        $preserved = array_slice($next->history, 3, 20);
+        // to touch. Read off the rows the model reads: since roadmap 1.B-3 the
+        // six condensed originals stay in the transcript ahead of them, hidden
+        // from it.
+        $preserved = array_slice(Message::agentVisible($next->history), 3, 20);
         $this->assertSame(
             array_slice($history, 6, 20),
             $preserved,

@@ -365,6 +365,7 @@ sugar-crush/tests/Commands/CustomCommandDispatchTest.php	0.153	33
 sugar-crush/tests/Session/SessionLockTest.php	0.153	8
 sugar-crush/tests/RepoMap/TagCacheTest.php	0.150	12
 sugar-crush/tests/Chat/InitCommandTest.php	0.150	6
+sugar-crush/tests/Chat/CompactionHidesNotDeletesTest.php	0.150	10
 sugar-crush/tests/Integration/RulePathScopingWiringTest.php	0.149	16
 sugar-crush/tests/Cli/NonInteractiveProviderFailureTest.php	0.148	21
 sugar-crush/tests/Tools/ToolDescriptionGuidanceTest.php	0.147	23

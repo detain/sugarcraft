@@ -2325,9 +2325,10 @@ final class ChatTest extends TestCase
      * The claim the original test existed for still holds and is still pinned:
      * this is the BLOCKING tier, not the idle prompt. The distinguisher is
      * structural, not wording — the idle path leaves history untouched, so a
-     * shrunken history[0] is reachable only through the compaction tier, and
-     * the message count (23 compacted + 2) could not come from the idle path
-     * either (26 + 2).
+     * shrunken first agent-visible row is reachable only through the compaction
+     * tier, and the message count could not come from the idle path either
+     * (26 + 2). Since roadmap 1.B-3 the rows the tier condensed stay in the
+     * transcript, hidden from the model, so the count includes them.
      */
     public function testSubmitRefusesTheTurnAtTheBlockingTierWhenActiveAndPastTheWindow(): void
     {
@@ -2340,24 +2341,28 @@ final class ChatTest extends TestCase
         $this->assertNull($cmd);
         $this->assertFalse($next->inFlight);
 
-        // 3 summaries + the 10 preserved pairs (20 messages) + the notice for
-        // the rewrite + the user turn + the refusal. The notice is the part
-        // that arrived after the reviewer's B3: refusing the turn does not mean
-        // leaving history alone, and this path used to adopt the rewrite in
-        // silence while the DISPATCHING path announced it.
-        $this->assertCount(26, $next->history);
-        $this->assertSame(Role::System, $next->history[23]->role);
-        $this->assertSame('hello', $next->history[24]->content);
-        $this->assertSame(Role::Assistant, $next->history[25]->role);
+        // The 6 condensed rows (kept, hidden from the model) + 3 summaries +
+        // the compaction boundary + the 10 preserved pairs (20 messages) + the
+        // notice for the rewrite + the user turn + the refusal. The notice is
+        // the part that arrived after the reviewer's B3: refusing the turn does
+        // not mean leaving history alone, and this path used to adopt the
+        // rewrite in silence while the DISPATCHING path announced it.
+        $this->assertCount(33, $next->history);
+        $this->assertSame(Role::System, $next->history[30]->role);
+        $this->assertSame('hello', $next->history[31]->content);
+        $this->assertSame(Role::Assistant, $next->history[32]->role);
 
         // Compaction ran before the refusal — only reachable via the tier
         // under test, never via the idle prompt — and the notice reports the
-        // real before/after counts rather than a literal.
-        $this->assertLessThan(500, mb_strlen($next->history[0]->content));
+        // real before/after counts (of what the model reads) rather than a
+        // literal.
+        $this->assertLessThan(500, mb_strlen(Message::agentVisible($next->history)[0]->content));
         $this->assertSame(50_003, mb_strlen($chat->history[0]->content), 'fixture: originals are large');
+        $this->assertSame($chat->history[0]->content, $next->history[0]->content, 'the condensed original is still in the transcript');
+        $this->assertTrue($next->history[0]->uiOnly, 'hidden from the model, not deleted');
         $this->assertStringContainsString(
             count($chat->history) . ' messages -> 23 messages',
-            $next->history[23]->content,
+            $next->history[30]->content,
         );
     }
 
@@ -2385,15 +2390,18 @@ final class ChatTest extends TestCase
 
         $notice = $next->history[count($next->history) - 3];
         $this->assertSame(Role::System, $notice->role);
+        // Counted over what the model reads: the rewrite hides the condensed
+        // rows instead of removing them (roadmap 1.B-3).
         $this->assertStringContainsString(
-            count($history) . ' messages -> ' . (count($next->history) - 3) . ' messages',
+            count($history) . ' messages -> '
+                . count(Message::agentVisible(array_slice($next->history, 0, -3))) . ' messages',
             $notice->content,
         );
         $this->assertSame(Role::User, $next->history[count($next->history) - 2]->role);
         $this->assertSame(Role::Assistant, $next->history[count($next->history) - 1]->role);
 
         // And the rewrite really happened underneath it.
-        $this->assertLessThan(500, mb_strlen($next->history[0]->content));
+        $this->assertLessThan(500, mb_strlen(Message::agentVisible($next->history)[0]->content));
         $this->assertGreaterThan(50_000, mb_strlen($history[0]->content));
     }
 
@@ -2437,10 +2445,11 @@ final class ChatTest extends TestCase
         [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
 
         $this->assertInstanceOf(\Closure::class, $cmd, 'fixture: the turn must still go out');
-        $this->assertLessThan(500, mb_strlen($next->history[0]->content), 'fixture: compaction must have run');
+        $visible = Message::agentVisible($next->history);
+        $this->assertLessThan(500, mb_strlen($visible[0]->content), 'fixture: compaction must have run');
 
         // 3 summaries + 20 preserved: the rich turn is the last preserved one.
-        $kept = $next->history[22];
+        $kept = $visible[22];
         $this->assertSame('done', $kept->content);
         $this->assertSame(1_234_567_890, $kept->createdAt, 'the original timestamp, not a fresh time()');
         $this->assertCount(1, $kept->toolCalls);
@@ -2497,7 +2506,7 @@ final class ChatTest extends TestCase
         $this->assertFalse($next->inFlight);
         $this->assertLessThan(
             mb_strlen($history[0]->content),
-            mb_strlen($next->history[0]->content),
+            mb_strlen(Message::agentVisible($next->history)[0]->content),
             'and history was rewritten underneath it, which "anyway" also denies',
         );
     }
@@ -2551,25 +2560,29 @@ final class ChatTest extends TestCase
         $this->assertInstanceOf(\Closure::class, $cmd);
         $this->assertTrue($next->inFlight);
 
-        // 3 summaries + 20 preserved + the notice + the user turn. No reminder
-        // rides along: the compacted history is ~337 estimated tokens, nowhere
-        // near the 70,000-token reminder tier.
-        $this->assertCount(25, $next->history);
-        $this->assertSame(Role::System, $next->history[23]->role);
-        $this->assertSame(Role::User, $next->history[24]->role);
-        $this->assertSame('hello', $next->history[24]->content);
+        // 6 condensed rows (kept, hidden from the model) + 3 summaries + the
+        // compaction boundary + 20 preserved + the notice + the user turn. No
+        // reminder rides along: the compacted history is ~337 estimated
+        // tokens, nowhere near the 70,000-token reminder tier.
+        $this->assertCount(32, $next->history);
+        $this->assertSame(Role::System, $next->history[30]->role);
+        $this->assertSame(Role::User, $next->history[31]->role);
+        $this->assertSame('hello', $next->history[31]->content);
 
-        // The notice's figures are the real before/after counts, read back
-        // from the fixture and the result rather than written as literals.
-        $notice = $next->history[23]->content;
+        // The notice's figures are the real before/after counts of what the
+        // model reads, read back from the fixture and the result rather than
+        // written as literals.
+        $notice = $next->history[30]->content;
         $this->assertStringContainsString(
-            count($history) . ' messages -> ' . (count($next->history) - 2) . ' messages',
+            count($history) . ' messages -> '
+                . count(Message::agentVisible(array_slice($next->history, 0, -2))) . ' messages',
             $notice,
         );
 
-        // History really was rewritten: the enormous first exchange is a
-        // one-line summary now.
-        $this->assertLessThan(500, mb_strlen($next->history[0]->content));
+        // History really was rewritten for the model: the enormous first
+        // exchange is a one-line summary now - and still in the transcript.
+        $this->assertLessThan(500, mb_strlen(Message::agentVisible($next->history)[0]->content));
+        $this->assertSame($history[0]->content, $next->history[0]->content);
     }
 
     /**

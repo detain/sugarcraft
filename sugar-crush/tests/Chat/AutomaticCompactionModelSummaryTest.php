@@ -796,8 +796,8 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
         $this->assertNull($this->latchOf($next), 'nothing was asked of anyone, so nothing is outstanding');
         $this->assertLessThan(
             count(self::compactablePairs()),
-            count($next->history),
-            'the heuristic compaction ran in-line',
+            count(Message::agentVisible($next->history)),
+            'the heuristic compaction ran in-line (the model reads fewer rows; the condensed ones stay in the transcript, roadmap 1.B-3)',
         );
 
         $last = $next->history[count($next->history) - 1];
@@ -1043,7 +1043,9 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
         $chat = $this->chat(self::compactablePairs(), $this->generousSummarizer(), $main);
 
         [$parked, $cmd] = $this->submit($chat);
-        $before = count($parked->history);
+        // What the model reads: compaction hides the rows it condenses rather
+        // than deleting them (roadmap 1.B-3), so both figures count those.
+        $before = count(Message::agentVisible($parked->history));
         [$dispatched] = $parked->update($this->resolve($cmd));
 
         $report = null;

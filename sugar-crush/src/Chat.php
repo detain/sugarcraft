@@ -9277,9 +9277,11 @@ final class Chat implements Model
                 $compactedHistory = $this->messagesFromWire($compactedWire, $this->history);
                 $baseHistory = $compactedHistory;
                 $tokenCount = $this->estimateTokenCount($compactedHistory);
+                // Agent-visible counts: the rewrite hides rows, it does not
+                // remove them (roadmap 1.B-3).
                 $compactionNotice = $this->contextCompactedMessage(
-                    count($this->history),
-                    count($compactedHistory),
+                    count(Message::agentVisible($this->history)),
+                    count(Message::agentVisible($compactedHistory)),
                     $savedPercentage,
                     $tokenCount,
                     $tokenLimit,
@@ -13106,6 +13108,11 @@ final class Chat implements Model
      * as a `mutate()` change set: the compacted history plus the answer line,
      * and the summarization latch released.
      *
+     * "Compacted" means condensed FOR THE MODEL (roadmap 1.B-3): the rows it
+     * condenses stay in the history, hidden from the model, beside what it reads
+     * instead and a boundary row - see {@see withCompactedRowsHidden()}. So the
+     * report's "was N, now M" counts agent-visible rows; the list itself grows.
+     *
      * $summaries cover the exchanges the model wrote lines for; the heuristic
      * covers the rest. One shared definition of what `/compact` did, reached
      * directly by {@see compactNow()} when there was no model to ask and by
@@ -13165,7 +13172,10 @@ final class Chat implements Model
         string $prefix = '',
         bool $tierNotice = false,
     ): array {
-        $originalCount = count($baseHistory);
+        // Counted over what the model reads: compaction no longer removes rows
+        // from the transcript (roadmap 1.B-3), it hides them from the model, so
+        // the whole list never shrinks and "was N, now M" is about the wire.
+        $originalCount = count(Message::agentVisible($baseHistory));
 
         // The agent-visible rows only, like every compactor input (audit
         // 15b-03): see compactionWire().
@@ -13189,10 +13199,10 @@ final class Chat implements Model
 
         $compactedHistory = $this->messagesFromWire($compactedWire, $baseHistory);
 
-        $newCount = count($compactedHistory);
+        $newCount = count(Message::agentVisible($compactedHistory));
 
         // Build response message
-        if ($originalCount === 0) {
+        if ($baseHistory === []) {
             $report = Message::assistant($prefix . 'Nothing to compact: chat history is empty.')->withUiOnly();
         } elseif ($tierNotice) {
             // The automatic tier reports through the very notice its synchronous
@@ -19100,11 +19110,21 @@ final class Chat implements Model
      * $wire IS A COMPACTION OF $original'S AGENT-VISIBLE ROWS ONLY
      * ({@see compactionWire()}, audit 15b-03-rem(a)), so the suffix is matched
      * against those rows and $original's UI-only rows are put back afterwards by
-     * {@see withUiOnlyRowsRestored()}. That replaces the old guess, which matched
+     * {@see withCompactedRowsHidden()}. That replaces the old guess, which matched
      * each rebuilt row's role and content against the UI-only rows to re-flag a
      * row the compactor had passed through: a row the compactor never sees needs
      * no guess, and the condensed lines it used to make OUT of UI-only rows came
      * back agent-visible whatever the guess said.
+     *
+     * NOTHING IS DELETED (roadmap 1.B-3). The rows the new text replaced stay
+     * in the result, hidden from the model instead ({@see Message::$uiOnly}),
+     * and the new text goes in hidden from the transcript
+     * ({@see Message::$userVisible} false) - so the user keeps scrolling the
+     * conversation as it happened, the saved transcript keeps every row, and
+     * the model reads the condensed version. See {@see withCompactedRowsHidden()}
+     * for the layout. The result is therefore never shorter than $original:
+     * count its {@see Message::agentVisible()} rows to measure what compaction
+     * saved.
      *
      * @param array<array{role:string,content:string}> $wire
      * @param list<Message> $original The history `$wire` was compacted from,
@@ -19139,14 +19159,17 @@ final class Chat implements Model
             $entry = $wire[$index];
             $role = Role::from($entry['role'] ?? 'assistant');
             $content = $entry['content'] ?? '';
-            $rewritten[] = match ($role) {
+            $line = match ($role) {
                 Role::User => Message::user($content),
                 Role::Assistant => Message::assistant($content),
                 default => new Message($role, $content, time()),
             };
+            // What the model reads in place of the rows it replaces; the user
+            // goes on reading those rows themselves (roadmap 1.B-3).
+            $rewritten[] = $line->withUserVisible(false);
         }
 
-        return self::withUiOnlyRowsRestored($original, $rewritten, $visibleCount - $preserved);
+        return self::withCompactedRowsHidden($original, $rewritten, $visibleCount - $preserved);
     }
 
     /**
@@ -19172,7 +19195,7 @@ final class Chat implements Model
      *
      * The UI-only rows are not lost: {@see messagesFromWire()} and
      * {@see intraExchangeTruncation()} put them back around whatever the
-     * compactor returned ({@see withUiOnlyRowsRestored()}).
+     * compactor returned ({@see withCompactedRowsHidden()}).
      *
      * A TOOL ROW CARRIES A `tool` KEY here and nowhere else (audit 0.7):
      * `{name, arguments, error}` from the row's first {@see ToolResult}. The
@@ -19264,34 +19287,79 @@ final class Chat implements Model
     }
 
     /**
-     * $original's UI-only rows put back around a compaction of its
-     * agent-visible rows.
+     * The row a compaction leaves between the rows it condensed and the rows it
+     * preserved (roadmap 1.B-3): everything above it is still in the
+     * transcript, and the model reads a summary of it instead.
+     * {@see Renderer} paints it as a rule across the pane and dims the labels
+     * of the turns above the newest one ({@see isCompactionBoundary()}).
+     *
+     * A UI-only notice, so it costs the model nothing and no later compaction
+     * ever condenses it; it is written by {@see withCompactedRowsHidden()},
+     * the one layout every compaction route goes through, and only when that
+     * compaction actually condensed a row.
+     */
+    public const COMPACTION_BOUNDARY = 'Context compacted: the model now reads a summary of the messages above '
+        . 'this line. They stay here and in the saved session.';
+
+    /**
+     * Whether $message is the boundary row a compaction wrote
+     * ({@see COMPACTION_BOUNDARY}). Matched on the whole row - a UI-only
+     * {@see Role::System} notice with exactly that text - so a user or model
+     * row quoting the sentence is never taken for one.
+     */
+    public static function isCompactionBoundary(Message $message): bool
+    {
+        return $message->role === Role::System
+            && $message->uiOnly
+            && $message->content === self::COMPACTION_BOUNDARY;
+    }
+
+    /**
+     * A compaction of $original's agent-visible rows, laid out so that nothing
+     * is deleted (roadmap 1.B-3).
      *
      * $rewritten is the new text that replaced the first $rewrittenCount
      * agent-visible rows of $original (summary lines, file stubs, `[3x]`
      * groups); the agent-visible rows after them were preserved verbatim.
+     * The result, in order:
      *
-     *  - FROM THE FIRST PRESERVED ROW ON, $original is kept exactly as it was,
-     *    UI-only rows in their own places: nothing there was rewritten, so a
-     *    notice between a prompt and its answer stays between them.
-     *  - THE UI-ONLY ROWS OF THE REWRITTEN REGION are kept verbatim too, in
-     *    their order, ahead of the lines that replaced that region. They cost
-     *    the model nothing, so condensing them would save nothing, and the old
-     *    route that did condense them is the one that turned them into
-     *    agent-visible summary lines. They cannot keep their exact places,
-     *    because the region they sat in no longer exists row for row; ahead of
-     *    it is where a launch notice already was, and keeps every one of them
-     *    before the preserved tail they preceded.
+     *  1. THE REWRITTEN REGION, every row in its own place - the rows the model
+     *     read, flagged {@see Message::$uiOnly} so it reads them no more, and
+     *     the UI-only rows that were already among them, untouched. The user
+     *     keeps scrolling the conversation as it happened, and the saved
+     *     transcript keeps every row (with its id and step id) instead of
+     *     losing them to a summary. Before 1.B-3 this region was DROPPED,
+     *     except for its UI-only rows, so compaction overwrote the displayed
+     *     and persisted history.
+     *  2. $rewritten - what the model reads in place of region 1. It arrives
+     *     hidden from the transcript ({@see Message::$userVisible} false; see
+     *     {@see messagesFromWire()}), because the user is reading the rows it
+     *     stands for.
+     *  3. One {@see COMPACTION_BOUNDARY} notice, so the transcript shows where
+     *     the condensed part ends.
+     *  4. FROM THE FIRST PRESERVED ROW ON, $original exactly as it was, UI-only
+     *     rows in their own places: nothing there was rewritten, so a notice
+     *     between a prompt and its answer stays between them.
+     *
+     * The agent-visible rows of the result are therefore exactly $rewritten
+     * followed by the preserved rows - the compacted wire, index for index,
+     * which {@see intraExchangeTruncation()}'s alignment contract relies on.
      *
      * With nothing preserved, the boundary is just after the last agent-visible
-     * row, so trailing notices stay trailing.
+     * row, so trailing notices stay trailing. With no row condensed, no
+     * boundary is written (and with nothing new either, $original comes back
+     * as it was).
      *
      * @param list<Message> $original
      * @param list<Message> $rewritten
      * @return list<Message>
      */
-    private static function withUiOnlyRowsRestored(array $original, array $rewritten, int $rewrittenCount): array
+    private static function withCompactedRowsHidden(array $original, array $rewritten, int $rewrittenCount): array
     {
+        if ($rewrittenCount === 0 && $rewritten === []) {
+            return $original;
+        }
+
         $boundary = 0;
         $seen = 0;
         foreach ($original as $position => $message) {
@@ -19308,12 +19376,15 @@ final class Chat implements Model
 
         $head = [];
         foreach (array_slice($original, 0, $boundary) as $message) {
-            if ($message->uiOnly) {
-                $head[] = $message;
-            }
+            $head[] = $message->uiOnly ? $message : $message->withUiOnly();
         }
 
-        return [...$head, ...$rewritten, ...array_slice($original, $boundary)];
+        return [
+            ...$head,
+            ...$rewritten,
+            ...($rewrittenCount > 0 ? [Message::notice(self::COMPACTION_BOUNDARY)] : []),
+            ...array_slice($original, $boundary),
+        ];
     }
 
     /**
@@ -19649,7 +19720,15 @@ final class Chat implements Model
      * CONTRACT: if Message ever gains a field, this method must gain it in the
      * same change, or the rescue silently drops that field — the exact class of
      * metadata loss (review cycle 4, finding 2) this helper exists to prevent,
-     * just one field at a time.
+     * just one field at a time. It happened once: 1.B-1 added id, ref, stepId
+     * and userVisible and 1.B-2 turnTranscript, and the copy dropped all five
+     * until 1.B-3; `CompactionHidesNotDeletesTest` now compares this list with
+     * Message's constructor, so the next field cannot slip by.
+     *
+     * The rescue still rewrites IN PLACE rather than hiding the original the way
+     * whole-exchange compaction does: the giant it trims is often the prompt of
+     * the turn about to go out, and {@see Message::settleTurnTranscript()} finds
+     * a turn's window by a prompt row that is both agent- and user-visible.
      */
     private static function messageWithContent(Message $message, string $content): Message
     {
@@ -19673,6 +19752,16 @@ final class Chat implements Model
             uiOnly: $message->uiOnly,
             loopGuardStoppedBy: $message->loopGuardStoppedBy,
             attachmentNotice: $message->attachmentNotice,
+            // Roadmap 1.B-1/1.B-2: the row is the same row with shorter
+            // content, so it keeps its storage identity, the engine step that
+            // produced it (without which the next request replays a truncated
+            // tool result as prose, unpaired from its call) and whether the
+            // transcript paints it.
+            id: $message->id,
+            ref: $message->ref,
+            stepId: $message->stepId,
+            userVisible: $message->userVisible,
+            turnTranscript: $message->turnTranscript,
         );
     }
 
