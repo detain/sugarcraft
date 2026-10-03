@@ -150,11 +150,46 @@ final readonly class ProtectFilesHook implements HookInterface
      * Nor is `.git/config` itself in this list: it sits in
      * {@see self::DEFAULT_PROTECTED_PATTERNS} proper and is refused read-side
      * too.
+     *
+     * THE REST OF THE POLICY SURFACE (step 0.8). `hooks.yaml`, `config.json`
+     * and `agents/` were never the whole of what decides a session's powers,
+     * so the agent could still grant itself the rest by writing it:
+     *
+     *  - `.sugar-crush/settings.json` and `settings.local.json` — the layered
+     *    settings tiers (`allowedTools`, `instructions`, `statusLine`, which
+     *    is a COMMAND run on a timer), user and project scope alike, since the
+     *    pattern is unanchored the way the `config.json` one is.
+     *  - `.mcp.json` — the server list a trusted project launches, i.e. which
+     *    programs start next session. Bounded on both sides by the
+     *    "different name" class, so `foo.mcp.json` and `.mcp.json.example`
+     *    are other files. An `mcp__*` call whose free text names `.mcp.json`
+     *    is refused too — the fail-closed cost {@see inputsFor()} already
+     *    names for `.env`.
+     *  - `.sugar-crush/skills`, `commands`, `rules` and `workflows` — prompt
+     *    text the next session treats as the operator's own instructions,
+     *    slash commands that run shell, and PHP workflow files that execute
+     *    when invoked: written once, they outlive the session that planted
+     *    them, the `.git/hooks/` argument above. The directory name itself is
+     *    matched (`(?![\w.-])`, not a trailing `/`), so `mv x
+     *    .sugar-crush/skills` is refused as well as a write inside it.
+     *
+     * The cost is real and accepted: `cat .mcp.json` and `ls
+     * .sugar-crush/skills` in Bash are refused like `cat .git/hooks/x` is,
+     * and editing a project skill now needs the human (or a gated mode's
+     * prompt once step 0.8b moves these to always-Ask). `Read`, `Grep` and
+     * `Glob` of all of them stay allowed — reading a policy grants nothing.
+     * The `.claude/` and `.opencode/` trees sugar-crush also imports skills
+     * and agents from are NOT listed: they are other tools' configuration,
+     * which other agents edit legitimately, and widening onto them is a
+     * decision for 0.8b's Ask path rather than a silent deny here.
      */
     public const WRITE_ONLY_PATTERNS = [
         '#(^|/)\.sugar-crush/(hooks\.yaml|config\.json)(?![\w.-])#',
         '#(^|/)\.sugar-crush/agents/#',
         '#(?<![\w-])\.git/+(?:\./+)*(?:hooks|info)(?![\w.-])#i',
+        '#(^|/)\.sugar-crush/settings(?:\.local)?\.json(?![\w.-])#',
+        '#(?<![\w.-])\.mcp\.json(?![\w.-])#',
+        '#(^|/)\.sugar-crush/(?:skills|commands|rules|workflows)(?![\w.-])#',
     ];
 
     /**

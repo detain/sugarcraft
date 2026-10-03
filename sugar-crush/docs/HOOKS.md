@@ -860,8 +860,10 @@ include_ignored=true` all read the secret under the default
 | `mcp__*` | every string leaf of the decoded arguments, at any depth (not the raw JSON text) — so an MCP call whose free text merely mentions `.env` is refused too |
 
 `Read`, `Grep`, `Glob` and `Lsp` cannot write, so they skip the write-only
-policy patterns (`.sugar-crush/hooks.yaml` and friends, plus `.git/hooks/` and
-`.git/info/`); `Bash` and MCP tools get the full list — so `cat
+policy patterns (`.sugar-crush/hooks.yaml` and friends — `config.json`,
+`settings.json`, `settings.local.json`, and the `agents/`, `skills/`,
+`commands/`, `rules/` and `workflows/` directories — plus `.mcp.json`,
+`.git/hooks/` and `.git/info/`); `Bash` and MCP tools get the full list — so `cat
 .git/hooks/pre-commit` in `Bash` is refused where `Read` of the same file is
 not.
 

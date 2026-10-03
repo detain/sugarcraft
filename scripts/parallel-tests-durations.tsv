@@ -443,6 +443,7 @@ sugar-crush/tests/Commands/CommandTableRenderingTest.php	0.046	18
 sugar-crush/tests/Hooks/ProtectFilesHookTest.php	0.045	115
 sugar-crush/tests/ToolCallClickTest.php	0.045	16
 sugar-crush/tests/Hooks/HookConfigTest.php	0.045	60
+sugar-crush/tests/Hooks/ProtectFilesPolicySurfacesTest.php	0.045	15
 sugar-crush/tests/Providers/OpenAIProviderTest.php	0.044	47
 sugar-crush/tests/ChatInputCursorTest.php	0.043	31
 sugar-crush/tests/Providers/BedrockRoleAlternationTest.php	0.042	12
