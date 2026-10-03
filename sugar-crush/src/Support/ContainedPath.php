@@ -94,7 +94,7 @@ namespace SugarCraft\Crush\Support;
  * way that made the file read as audited while its two PRIMARY read paths had no
  * compare at all (see below). Per-file, executable lines only:
  *
- *   - FORTY-ONE call sites in EIGHTEEN files ask this class. THIS SENTENCE
+ *   - FORTY-TWO call sites in EIGHTEEN files ask this class. THIS SENTENCE
  *     WAS FIVE SITES AND THREE FILES STALE when a reviewer measured it — it
  *     read "TWENTY-SEVEN in ELEVEN" while
  *     {@see \SugarCraft\Crush\Tests\Support\ContainedPathInventoryTest}'s
@@ -132,7 +132,7 @@ namespace SugarCraft\Crush\Support;
  *     anchor, skill asset), {@see \SugarCraft\Crush\Agents\AgentPresetRegistry}
  *     (3 — the same pair, plus `load()`'s single-file arm),
  *     {@see \SugarCraft\Crush\Commands\CommandLoader} (2),
- *     {@see \SugarCraft\Crush\Context\InstructionFileLoader} (6 — one per read
+ *     {@see \SugarCraft\Crush\Context\InstructionFileLoader} (7 — one per read
  *     decision it makes),
  *     {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry} (2 — entry,
  *     directory anchor), {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter}

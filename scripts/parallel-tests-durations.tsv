@@ -453,6 +453,7 @@ sugar-crush/tests/Config/Settings/SettingsSchemaTest.php	0.060	46
 sugar-crush/tests/Config/Settings/SettingsSchemaDocDriftTest.php	0.060	14
 sugar-crush/tests/Support/ToolOutputSpillTest.php	0.060	14
 sugar-crush/tests/Tools/PathJailSpillAllowTest.php	0.060	8
+sugar-crush/tests/Context/PersonalInstructionFileTest.php	0.060	10
 sugar-crush/tests/Permissions/PermissionGateTest.php	0.059	165
 sugar-crush/tests/SessionTest.php	0.059	18
 sugar-crush/tests/Context/ProjectMemoryWriterTest.php	0.058	10
@@ -490,6 +491,7 @@ sugar-crush/tests/Providers/BedrockRoleAlternationTest.php	0.042	12
 sugar-crush/tests/Renderer/InputWrapTest.php	0.041	6
 sugar-crush/tests/Providers/CustomProviderTest.php	0.040	41
 sugar-crush/tests/Tools/Edit/EditMatcherChainTest.php	0.040	15
+sugar-crush/tests/Context/InstructionAliasTest.php	0.040	9
 sugar-crush/tests/Hooks/AuditHookDenialAndEscapingTest.php	0.038	10
 sugar-crush/tests/Context/InstructionFileLoaderContainmentTest.php	0.037	29
 sugar-crush/tests/Agents/AgentPresetHomeRootTest.php	0.037	16

@@ -6,7 +6,7 @@ often confused, so they are documented side by side:
 | | **Memory store** | **Instruction files** |
 |---|---|---|
 | Written by | `/memory add`, as UUID-named markdown files | you, by hand |
-| Lives in | `~/.sugar-crush/memory/<scope>/<uuid>.md` (`project/<key>/` per project) | `CLAUDE.md` / `AGENTS.md` in the repo |
+| Lives in | `~/.sugar-crush/memory/<scope>/<uuid>.md` (`project/<key>/` per project) | `CLAUDE.md` / `AGENTS.md` (or an alias) in the repo; `~/.sugar-crush/AGENTS.md` |
 | Reaches the prompt as | a `<project-memory>` block | full documents |
 | Scope that reaches the prompt | **`project` only** | root files always; nested ones on touch |
 
@@ -350,12 +350,23 @@ home, and the refusal is named in the reply.
 ## Instruction files
 
 `InstructionFileLoader` (`src/Context/InstructionFileLoader.php`) loads
-`CLAUDE.md` and `AGENTS.md`:
+`CLAUDE.md` and `AGENTS.md`, plus three other agents' spellings of the same
+convention — `GEMINI.md`, `.cursorrules` and `.clinerules` — in that precedence
+order (`InstructionFileLoader::FILENAMES`):
 
+- **your personal file** — `~/.sugar-crush/AGENTS.md`, always, at session start,
+  in every project. It is priced first under the same instruction budget and
+  framed in your own voice (the `<user-rules>` fence and preamble your
+  `~/.sugar-crush/rules` use), ahead of anything a repository ships. Only an
+  owned home is consulted (`HomeDirectory::owned()`);
 - **root files** — always, at session start;
 - **forced patterns** from config — glob-resolved, loaded every session;
-- **nested files** — a `CLAUDE.md`/`AGENTS.md` in a subdirectory is injected when
-  a tool touches a path under it, at most once per session.
+- **nested files** — a `CLAUDE.md`/`AGENTS.md` (or alias) in a subdirectory is
+  injected when a tool touches a path under it, at most once per session.
+
+An alias is only another candidate name: it passes the same containment gate,
+size ceiling, UTF-8 scrub, `@import` expansion and dedup set as `CLAUDE.md`. A
+`.clinerules` *directory* (Cline's folder form) is not read.
 
 `Bootstrap::tools()` threads **one** loader into `Read`, `Edit`, `Glob`, `Grep`
 and `Write` so the engine's root reads and the tools' on-touch reads share one
@@ -399,8 +410,9 @@ protection — a file that imports itself is marked before its own expansion run
 
 ### Containment
 
-Every read is bounded by the repo root through `ContainedPath` — six call
-sites, one per read decision: `loadRoot()`'s root entry,
+Every read is bounded by its own root through `ContainedPath` — seven call
+sites, one per read decision: `loadPersonal()`'s personal entry (bounded by
+`~/.sugar-crush`), `loadRoot()`'s root entry,
 `loadAncestorRoots()`'s ancestor entry, `loadForced()`'s glob match,
 `loadForPath()`'s starting directory and its per-level candidate, and
 `expandImports()`'s gate closure. The gate closure is threaded through **every**
@@ -420,6 +432,7 @@ transcript notice the first time it happens.
 ```
 ~/.sugar-crush/
 ├── config.json        settings, permissions, the four trustedProject* keys
+├── AGENTS.md          your personal instruction file (every project)
 ├── settings.json      hand-authored settings   → SETTINGS.md
 ├── session.db         SQLite session store
 ├── memory/<scope>/    the memory store (project/<key>/ per project)

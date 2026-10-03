@@ -4242,7 +4242,21 @@ final class Runtime
         $docDeferred = [];
         $docOverflow = 0;
 
+        // Roadmap 5.14j: the operator's personal ~/.sugar-crush/AGENTS.md is
+        // priced FIRST, under this same budget, and framed in the operator's
+        // user-tier voice rather than the repository's — the same fence and
+        // preamble ~/.sugar-crush/rules speaks with, because the same person
+        // wrote it in the same directory. First is the authority ladder: the
+        // operator outranks the repository, so their bytes win a tight budget.
+        $documents = [];
+        foreach ($loader->loadPersonal() as $document) {
+            $documents[] = [$document, 'user-rules', self::USER_RULES_AUTHORITY_PREAMBLE];
+        }
         foreach ($loader->loadDocuments() as $document) {
+            $documents[] = [$document, 'project-instructions', self::INSTRUCTIONS_AUTHORITY_PREAMBLE];
+        }
+
+        foreach ($documents as [$document, $tag, $preamble]) {
             $doc = $document['body'];
 
             if ($doc !== null && trim($doc) === '') {
@@ -4261,8 +4275,8 @@ final class Runtime
             // the same header-over-entries shape MemoryBlock gives its own
             // notes, so the bytes that tell the model who authored the layer
             // stay put whatever the document then tries to sound like.
-            $framed = $doc === null ? null : "<project-instructions>\n" . self::INSTRUCTIONS_AUTHORITY_PREAMBLE . "\n\n"
-                . PromptFence::escape($doc) . "\n</project-instructions>";
+            $framed = $doc === null ? null : "<$tag>\n" . $preamble . "\n\n"
+                . PromptFence::escape($doc) . "\n</$tag>";
 
             // A null body is a document the loader would not read at all — it
             // has already recorded why. Otherwise the decision is made here, on

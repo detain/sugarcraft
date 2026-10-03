@@ -9,8 +9,10 @@ use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
 
 /**
- * Loads instruction files (CLAUDE.md, AGENTS.md) from the repo root and
- * resolves forced-instruction glob patterns from config.
+ * Loads instruction files (CLAUDE.md, AGENTS.md and the other agents' aliases
+ * in {@see FILENAMES}) from the repo root, the operator's personal
+ * `~/.sugar-crush/AGENTS.md`, and resolves forced-instruction glob patterns
+ * from config.
  *
  * This class handles the nested instruction file discovery mechanism:
  * - Root-level files (CLAUDE.md, AGENTS.md) are always loaded at session start
@@ -23,17 +25,19 @@ use SugarCraft\Crush\Support\HomeDirectory;
  * (this repo's own root CLAUDE.md already uses `@./AGENTS.md`).
  *
  * EVERY read here is bounded through {@see ContainedPath}, and the count is
- * deliberate rather than incidental: SIX call sites, one per read decision this
- * class makes — `loadRoot()`'s root entry, `loadAncestorRoots()`'s ancestor
- * entry, `loadForced()`'s glob match, `loadForPath()`'s starting directory and
- * its per-level candidate, and `expandImports()`'s gate closure. Pinned as a
- * count in {@see \SugarCraft\Crush\Tests\Support\ContainedPathInventoryTest}::ROUTED_CALL_SITES.
+ * deliberate rather than incidental: SEVEN call sites, one per read decision this
+ * class makes — `loadPersonal()`'s personal entry, `loadRoot()`'s root entry,
+ * `loadAncestorRoots()`'s ancestor entry, `loadForced()`'s glob match,
+ * `loadForPath()`'s starting directory and its per-level candidate, and
+ * `expandImports()`'s gate closure. Pinned as a count in
+ * {@see \SugarCraft\Crush\Tests\Support\ContainedPathInventoryTest}::ROUTED_CALL_SITES.
  *
  * BOUNDED BY WHICH ROOT IS NOW A REAL QUESTION, and the answer is per-tier
- * rather than "repoRoot" — five of the six pass `$repoRoot`, while
+ * rather than "repoRoot" — five of the seven pass `$repoRoot`,
  * `loadAncestorRoots()` and the `expandImports()` gate it calls pass
  * {@see ancestorRoot()}, because an ancestor file is by construction outside
- * `$repoRoot` and judging it against `$repoRoot` would refuse all of them.
+ * `$repoRoot` and judging it against `$repoRoot` would refuse all of them, and
+ * `loadPersonal()` passes the operator's own `~/.sugar-crush` ({@see personalDir()}).
  * `$repoRoot`'s own entries are NOT relaxed by that: the gate the measured
  * escapes closed still compares against `$repoRoot` exactly as before. There is
  * no local prefix compare left, and
@@ -106,6 +110,28 @@ final class InstructionFileLoader
     private const POINTER_TAIL = ' bytes; not in this prompt). Read ';
 
     private const POINTER_CLIP = ' [clipped]';
+
+    /**
+     * The instruction file names read at every level — repo root, each monorepo
+     * ancestor, and each directory {@see loadForPath()} walks — in precedence
+     * order: earlier names win a level's single on-touch slot and come first in
+     * the session documents.
+     *
+     * The three after the first two are OTHER AGENTS' spellings of the same
+     * convention (roadmap 5.14j): Gemini CLI's `GEMINI.md`, Cursor's legacy
+     * `.cursorrules`, and Cline's `.clinerules`. A repository that ships only
+     * one of those has written its conventions down already; reading them is
+     * cheaper than asking every team to keep a second copy as AGENTS.md. Every
+     * alias goes through exactly the gates CLAUDE.md does — the same
+     * containment compare, size ceiling, UTF-8 scrub, `@import` expansion and
+     * shared dedup set — so an alias adds candidates, never a new read path.
+     * A `.clinerules` DIRECTORY (Cline's newer folder form) is not a file and is
+     * skipped by the same `is_file()` that skips a missing CLAUDE.md.
+     */
+    public const FILENAMES = ['CLAUDE.md', 'AGENTS.md', 'GEMINI.md', '.cursorrules', '.clinerules'];
+
+    /** The one personal instruction file, relative to {@see personalDir()}. */
+    public const PERSONAL_FILENAME = 'AGENTS.md';
 
     /**
      * The instruction files this session deferred to a pointer instead of
@@ -200,6 +226,9 @@ final class InstructionFileLoader
     /** @var list<array{path: string, body: ?string, bytes: int}>|null */
     private ?array $forcedCache = null;
 
+    /** @var list<array{path: string, body: ?string, bytes: int}>|null */
+    private ?array $personalCache = null;
+
     /**
      * Memoized answer to {@see ancestorRoot()}, with its own resolved flag
      * because `null` is a real answer ("no monorepo parent is in scope") and
@@ -213,17 +242,22 @@ final class InstructionFileLoader
      * @param string $repoRoot Absolute path to the repository root
      * @param string[] $forcedInstructions Glob patterns from config, force-loaded every session
      * @param ImportResolver|null $importResolver Expander for `@path` references; defaults to ImportResolver::new()
+     * @param string|null $personalDir The operator's own config directory holding the personal
+     *        {@see PERSONAL_FILENAME}; null resolves `~/.sugar-crush` under the OWNED home at first
+     *        read ({@see personalDir()})
      */
     public function __construct(
         private readonly string $repoRoot,
         private readonly array $forcedInstructions = [],
         ?ImportResolver $importResolver = null,
+        private readonly ?string $personalDir = null,
     ) {
         $this->importResolver = $importResolver ?? ImportResolver::new();
     }
 
     /**
-     * Load CLAUDE.md and AGENTS.md from the repo root.
+     * Load CLAUDE.md, AGENTS.md and their aliases ({@see FILENAMES}) from the
+     * repo root.
      *
      * These root-level instruction files are always loaded at session start,
      * providing cross-cutting conventions that apply everywhere.
@@ -288,10 +322,10 @@ final class InstructionFileLoader
         // is deliberately NOT widened here.
         $contents = $this->loadAncestorRoots();
 
-        $rootFiles = [
-            $this->repoRoot . '/CLAUDE.md',
-            $this->repoRoot . '/AGENTS.md',
-        ];
+        $rootFiles = array_map(
+            fn(string $filename): string => $this->repoRoot . '/' . $filename,
+            self::FILENAMES,
+        );
 
         foreach ($rootFiles as $path) {
             if (!is_file($path)) {
@@ -380,6 +414,96 @@ final class InstructionFileLoader
     public function loadDocuments(): array
     {
         return [...$this->rootDocuments(), ...$this->forcedDocuments()];
+    }
+
+    /**
+     * The operator's personal instruction document, `~/.sugar-crush/AGENTS.md`
+     * (roadmap 5.14j) — the one instruction file that follows the PERSON across
+     * every checkout rather than arriving with one. Zero or one entry, in the
+     * path-keyed shape {@see loadDocuments()} returns.
+     *
+     * KEPT OUT OF {@see loadDocuments()} ON PURPOSE, because provenance picks the
+     * framing: every document that list returns is repository-shipped and is
+     * spliced behind the "written by this repository's maintainers" preamble,
+     * which these bytes do not have. {@see \SugarCraft\Crush\Runtime::planInstructionDocuments()}
+     * prices this one FIRST, under the same combined budget, and frames it with
+     * the operator's own user-tier voice — the voice `~/.sugar-crush/rules`
+     * already speaks with, since both are bytes the operator wrote in their own
+     * home directory.
+     *
+     * BOUNDED BY THE PERSONAL DIRECTORY, not by `$repoRoot`: the file is by
+     * construction outside every checkout. The entry is gated with
+     * {@see ContainedPath::within()} against {@see personalDir()}, the same
+     * anchor RuleLoader holds `~/.sugar-crush/rules/*.md` inside, so a personal
+     * AGENTS.md symlinked out of `~/.sugar-crush` is refused AND RECORDED exactly
+     * as a user-tier rule would be; its `@import`s are bounded by the same
+     * directory. Size ceiling, UTF-8 scrub and the shared dedup set are the
+     * root documents' own.
+     *
+     * Memoized like the other whole-session loaders.
+     *
+     * @return list<array{path: string, body: ?string, bytes: int}>
+     */
+    public function loadPersonal(): array
+    {
+        if ($this->personalCache !== null) {
+            return $this->personalCache;
+        }
+
+        $this->personalCache = [];
+        $dir = $this->personalDir();
+        if ($dir === null) {
+            return [];
+        }
+
+        $path = $dir . '/' . self::PERSONAL_FILENAME;
+        if (!is_file($path)) {
+            return [];
+        }
+
+        if (!ContainedPath::within($path, $dir)) {
+            $this->refusedPaths[$path] = 'the personal instruction file resolves outside ' . $dir;
+
+            return [];
+        }
+
+        $realPath = realpath($path) ?: $path;
+        if (isset($this->emittedPaths[$realPath])) {
+            return [];
+        }
+
+        $this->emittedPaths[$realPath] = true;
+
+        $raw = $this->readBounded($realPath, $path, $bytes);
+        if ($raw === null) {
+            $this->personalCache = [['path' => $path, 'body' => null, 'bytes' => (int) $bytes]];
+        } elseif ($raw !== false) {
+            [$doc, $note] = $this->utf8Document($raw, $path);
+            $body = $this->expandImports($doc, \dirname($path), $dir) . $note;
+            $this->personalCache = [['path' => $path, 'body' => $body, 'bytes' => strlen($body)]];
+        }
+
+        return $this->personalCache;
+    }
+
+    /**
+     * Where the personal instruction file lives: the directory handed to the
+     * constructor, or `~/.sugar-crush` under {@see HomeDirectory::owned()}.
+     *
+     * OWNED, not resolved and not `path()`: this answer decides what reaches
+     * the system prompt, and a home this process cannot establish is the
+     * user's own (unset, relative, world-writable) is no anchor for that — the
+     * same reason RuleLoader's user tier gives. Null then, and nothing is read.
+     */
+    public function personalDir(): ?string
+    {
+        if ($this->personalDir !== null) {
+            return rtrim($this->personalDir, '/');
+        }
+
+        $home = HomeDirectory::owned();
+
+        return $home === null ? null : rtrim($home, '/') . '/.sugar-crush';
     }
 
     /**
@@ -666,7 +790,7 @@ final class InstructionFileLoader
 
         $contents = [];
         foreach (array_reverse($dirs) as $dir) {
-            foreach (['CLAUDE.md', 'AGENTS.md'] as $filename) {
+            foreach (self::FILENAMES as $filename) {
                 $path = $dir . '/' . $filename;
                 if (!is_file($path)) {
                     continue;
@@ -833,8 +957,9 @@ final class InstructionFileLoader
      * Load nested instruction file for a touched path.
      *
      * Walks up from the touched file's directory toward repoRoot, checking
-     * each level for CLAUDE.md or AGENTS.md. CLAUDE.md is preferred over
-     * AGENTS.md at the same level. Each nested file is injected at most once
+     * each level for CLAUDE.md, AGENTS.md or an alias ({@see FILENAMES}).
+     * CLAUDE.md is preferred over AGENTS.md, and both over the aliases, at the
+     * same level. Each nested file is injected at most once
      * per session — subsequent calls for the same path return null if already
      * injected, and a file the root documents already carried (directly or via
      * an `@import`) counts as injected too.
@@ -939,8 +1064,9 @@ final class InstructionFileLoader
 
             // Walk up the directory tree toward repoRoot
             while ($dir !== $repoRoot) {
-                // Check for CLAUDE.md first (preferred), then AGENTS.md
-                foreach (['CLAUDE.md', 'AGENTS.md'] as $filename) {
+                // CLAUDE.md first (preferred), then AGENTS.md, then the
+                // other agents' aliases — FILENAMES' precedence order.
+                foreach (self::FILENAMES as $filename) {
                     $fullPath = $dir . '/' . $filename;
                     if (!is_file($fullPath)) {
                         continue;
