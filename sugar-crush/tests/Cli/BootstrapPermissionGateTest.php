@@ -105,20 +105,60 @@ final class BootstrapPermissionGateTest extends TestCase
     }
 
     /**
-     * The upgrade-safety guarantee: the main loop had no gate at all before
-     * this, and every Ask-producing mode failed closed on the engine path
-     * because nothing anywhere attached an approver, so anything stricter than
-     * BypassPermissions by default would turn "no permission system" into
-     * "every write refused".
-     *
-     * {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt} closes that for the
-     * one-shot `-p` path and NOT for the TUI — see
-     * {@see ConsolePermissionApproverWiringTest} — so the default stands until
-     * an ASK can reach the interactive path too.
+     * The CONSOLE default (decision D5): `-p` and the background daemon build
+     * their gate through the no-argument {@see Bootstrap::permissionGate()},
+     * and stay on BypassPermissions. Their approver,
+     * {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt}, refuses whenever
+     * no terminal is attached, so an asking default would turn an unattended
+     * CI run's first write into a refusal.
      */
     public function testDefaultsToBypassPermissionsWhenNothingIsConfigured(): void
     {
         $this->assertSame(PermissionMode::BypassPermissions, Bootstrap::permissionGate()->mode());
+    }
+
+    /**
+     * DEF-MODE: the TUI starts in `default`. Every Ask there reaches the y/n/a
+     * modal — Chat's own path, and since 1.C-2 the engine path's forked turn
+     * over its frame channel — so the interactive default no longer has to be
+     * the one that never asks. Pinned on the gate `chat()` actually installs,
+     * not only on the factory argument, and with the source a `/permissions`
+     * reader sees.
+     */
+    public function testTheTuiDefaultsToTheAskingModeWhenNothingIsConfigured(): void
+    {
+        $this->assertSame(PermissionMode::Default, Bootstrap::permissionGate(interactive: true)->mode());
+
+        $chat = Bootstrap::chat($this->tempDir . '/project');
+        $backend = $chat->backend();
+        $this->assertInstanceOf(EngineBackend::class, $backend);
+        $gate = $this->gateOf($backend);
+        $this->assertInstanceOf(PermissionGate::class, $gate);
+        $this->assertSame(PermissionMode::Default, $gate->mode());
+        $this->assertSame('the built-in default', $gate->modeSource());
+
+        // An ordinary edit now ASKS on Chat's own hook chain instead of running.
+        $result = $this->hooksOf($chat)->preToolUse($this->context('Edit', [
+            'path' => $this->tempDir . '/project/notes.txt',
+            'content' => 'hello',
+        ]));
+        $this->assertTrue($result->isAsk(), 'the TUI default must ask before a write');
+    }
+
+    /**
+     * Only the FALLBACK differs by path: a mode anybody configured wins on the
+     * TUI exactly as on `-p`, including a configured `bypass-permissions` —
+     * the TUI default must not out-rank a user who chose not to be asked.
+     */
+    public function testAConfiguredModeWinsOnEveryPathAlike(): void
+    {
+        Bootstrap::writeUserConfig(['permissionMode' => 'bypass-permissions']);
+        $this->assertSame(PermissionMode::BypassPermissions, Bootstrap::permissionGate(interactive: true)->mode());
+        $this->assertSame(PermissionMode::BypassPermissions, $this->gateOf($this->engineOf(Bootstrap::chat($this->tempDir . '/project')))?->mode());
+
+        putenv('SUGARCRUSH_PERMISSION_MODE=accept-edits');
+        $this->assertSame(PermissionMode::AcceptEdits, Bootstrap::permissionGate(interactive: true)->mode());
+        $this->assertSame(PermissionMode::AcceptEdits, Bootstrap::permissionGate()->mode());
     }
 
     /**
@@ -946,6 +986,14 @@ final class BootstrapPermissionGateTest extends TestCase
             $subAgent->permissionGate->evaluate(new ToolCall('Bash', ['command' => 'ls'])),
             'the rule read at launch must still apply after the config on disk broke',
         );
+    }
+
+    private function engineOf(Chat $chat): EngineBackend
+    {
+        $backend = $chat->backend();
+        $this->assertInstanceOf(EngineBackend::class, $backend);
+
+        return $backend;
     }
 
     private function gateOf(EngineBackend $backend): ?PermissionGate

@@ -316,16 +316,18 @@ final class ConsolePermissionApproverWiringTest extends TestCase
         $this->assertSame(HeadlessPermissionPrompt::class, $function->getClosureScopeClass()?->getName());
     }
 
-    // ------------------------------------------------ the default stands --
+    // ------------------------------------------- the console default stands --
 
     /**
-     * Attaching the approver is a PREREQUISITE for a stricter default, not the
-     * flip. The TUI path still fails closed, and that is the path an
-     * interactive session runs on.
+     * The console paths this approver serves keep BypassPermissions as their
+     * default (decision D5): at no terminal the approver REFUSES, so an asking
+     * default would refuse an unattended run's first write. Only the TUI —
+     * whose asks reach a modal — moved to `default` (DEF-MODE).
      */
     public function testAttachingTheApproverDidNotMoveTheDefaultMode(): void
     {
         $this->assertSame(PermissionMode::BypassPermissions, Bootstrap::permissionGate()->mode());
+        $this->assertSame(PermissionMode::Default, Bootstrap::permissionGate(interactive: true)->mode());
     }
 
     // ----------------------------------------------------------- helpers --

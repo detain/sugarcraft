@@ -804,7 +804,9 @@ pattern runs against the raw command *and* its quote-removed words (the same
 `Permissions\ShellWords` tokeniser the permission gate's step-0 breaker uses),
 so `rm '-rf' x`, `rm "-rf" x`, `find . '-delete'` and `dd 'of=/dev/sda'` are
 denied like their unquoted spellings. Before audit F-P1 the first three passed
-the whole built-in chain under the default `bypass-permissions` mode.
+the whole built-in chain under `bypass-permissions`, then the default mode on
+every path (it still is for `-p` and background sessions; the TUI now starts in
+`default`).
 
 ### What the audit log records
 
@@ -854,8 +856,8 @@ it wrote into a log that is never rotated.
 Before audit F-J2 the matcher was `^(Bash|Edit|Write|Read)$` and the `.env`
 pattern wanted whitespace on both sides of the name, so `cat .env;true`,
 `cat ".env"`, `.env.local` and — the easiest route — `Grep pattern="=" path="."
-include_ignored=true` all read the secret under the default
-`bypass-permissions` mode. Now:
+include_ignored=true` all read the secret under `bypass-permissions`, then
+the default on every path. Now:
 
 | Tool | Arguments judged |
 |---|---|

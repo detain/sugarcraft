@@ -332,11 +332,18 @@ final class Subcommands
                 // policy instead of a class name.
                 try {
                     $gate = Bootstrap::permissionGate();
+                    $tui = Bootstrap::permissionGate(interactive: true);
                 } catch (PermissionConfigException $e) {
                     return ['status' => 'FAIL', 'detail' => $e->getMessage()];
                 }
 
-                return ['status' => 'OK', 'detail' => 'mode ' . $gate->mode()->value];
+                // With nothing configured the two paths start in different
+                // modes (decision D5), and a one-word answer would describe
+                // only one of them.
+                return ['status' => 'OK', 'detail' => $tui->mode() === $gate->mode()
+                    ? 'mode ' . $gate->mode()->value
+                    : 'mode ' . $tui->mode()->value . ' in the TUI, ' . $gate->mode()->value
+                        . ' for -p and background sessions (built-in defaults)'];
             },
 
             'provider' => static function (): array {

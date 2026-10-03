@@ -170,7 +170,15 @@ final class Bootstrap
      */
     private const TRUSTED_PROJECT_COMMANDS_CONFIG_KEY = 'trustedProjectCommands';
 
+    /**
+     * The mode `-p` and the background daemon start in when nothing names
+     * one; the TUI starts in {@see INTERACTIVE_DEFAULT_PERMISSION_MODE}. See
+     * {@see permissionGate()} for why the two differ.
+     */
     private const DEFAULT_PERMISSION_MODE = PermissionMode::BypassPermissions;
+
+    /** The TUI's default mode (decision D5) — see {@see permissionGate()}. */
+    private const INTERACTIVE_DEFAULT_PERMISSION_MODE = PermissionMode::Default;
 
     /**
      * The most launch notices one launch may seed a transcript with.
@@ -1597,7 +1605,7 @@ final class Bootstrap
         // "one counter for the session" needs the gate's state to cross the
         // fork boundary, which is a separate queued step. See
         // PermissionGateHook::NAME.
-        $permissionGate = self::permissionGate();
+        $permissionGate = self::permissionGate(interactive: true);
 
         // Built here rather than inside the constructor call so its refusals
         // survive the statement — see the `commandLoader:` argument below.
@@ -5823,45 +5831,38 @@ final class Bootstrap
      * theme, so this makes an existing quiet breakage loud rather than
      * inventing a new failure.
      *
-     * DEFAULT IS BypassPermissions, deliberately, and TEMPORARILY. The main
-     * loop had no gate at all before this, and a stricter default would have
-     * been a breaking change on upgrade rather than a safer one: modes that
-     * answer Ask (Default/AcceptEdits/Auto, for writes) failed CLOSED on the
-     * engine path, because no caller anywhere attached an approver — so
-     * Default mode would have turned "no permission system" into "every Edit
-     * refused".
+     * THE DEFAULT DEPENDS ON THE PATH (decision D5), because what an ASK can
+     * reach depends on it:
      *
-     * HALF OF THAT IS NOW FIXED, and the default has NOT moved with it, on
-     * purpose. {@see HeadlessPermissionPrompt} is attached on the console
-     * paths — the `-p` one-shot ({@see NonInteractive}) and the
-     * background-session daemon
-     * ({@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner::backend()})
-     * — so an ASK there is prompted for at a terminal, and refused with a
-     * reason naming the tool and the remedies without one. The TUI path still
-     * fails closed: {@see backend()}/{@see backendFor()} leave the approver
-     * off for it (see the `$consolePermissionPrompt` parameter), because
-     * {@see \SugarCraft\Crush\Chat}'s prompt is a `Deferred` settled by a
-     * later `Msg` and {@see EngineBackend::completeAsync()} runs the turn in a
-     * forked child with a one-way channel home — neither of which a blocking
-     * closure can serve. Flipping the default is what happens when THAT
-     * lands, not before: it is the path a real interactive session runs on.
+     * - THE TUI starts in {@see PermissionMode::Default}
+     *   ({@see INTERACTIVE_DEFAULT_PERMISSION_MODE}, `$interactive = true`,
+     *   passed only by {@see chat()}). Every ASK there is put up as the y/n/a
+     *   modal: Chat's own tool path always could, and since roadmap 1.C-2 an
+     *   engine turn's forked child asks over its two-way frame channel too
+     *   ({@see EngineBackend}'s `completeInteractive()`), with workspace
+     *   checkpoints (3.A) behind `/rewind` for what was allowed. Those two
+     *   were the conditions crush_report Part V set for moving the
+     *   interactive default off `bypass-permissions`, and both have landed.
+     *   One gap is left and stated where it bites: a `Task` run in a PARALLEL
+     *   batch has no channel of its own yet, so its question is refused with
+     *   a reason the model reads (`ChildChannel::GRANDCHILD_REFUSAL`).
+     * - `-p` AND THE BACKGROUND DAEMON keep {@see DEFAULT_PERMISSION_MODE},
+     *   `bypass-permissions`. Their approver is
+     *   {@see HeadlessPermissionPrompt}, which asks on stderr at a terminal
+     *   and REFUSES without one — so an asking default would turn every
+     *   unattended CI run's first `Edit` into a refusal on upgrade. They opt
+     *   in to asking with `--permission-mode` or the config key, like before.
      *
-     * Be honest about what the default costs: with the shipped
-     * empty rule set, BypassPermissions is not "more guarded than before", it
-     * is EXACTLY EQUAL to having no gate. Every destructive `rm` the gate's
-     * circuit breaker refuses is already refused, earlier and more broadly, by
-     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ConfirmRemoveHook}, and "explicit
-     * deny rules still apply" says nothing when no rules are configured. What
-     * the default buys is a gate that is REACHABLE and configurable: set
-     * `permissionMode`/`permissionRules` and it starts deciding things. The
-     * permissive default is a stopgap for the fail-closed ASK path, not the
-     * settled design — it goes away once an ASK on the engine path can
-     * actually be ANSWERED FROM A TUI SESSION. That takes the two pieces named
-     * above and exactly ONE of them is now done: an approver IS attached, on
-     * the console paths. The other is untouched — the channel it would have to
-     * ask over from inside {@see EngineBackend::completeAsync()}'s forked
-     * child is still a one-way frame stream, and no closure can put a question
-     * on screen through it.
+     * Be honest about what the console default costs: with the shipped empty
+     * rule set, BypassPermissions is EXACTLY EQUAL to having no gate. Every
+     * destructive `rm` the gate's circuit breaker refuses is already refused,
+     * earlier and more broadly, by
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ConfirmRemoveHook}. What it buys
+     * is a gate that is REACHABLE and configurable: set
+     * `permissionMode`/`permissionRules` and it starts deciding things.
+     *
+     * Either default is reported with the source `the built-in default`; a
+     * configured mode (flag, env var, config key) wins on every path alike.
      *
      * Rules come from a `permissionRules` array of
      * `{"pattern": "Bash*", "action": "deny"}` objects. Unlike the mode, a
@@ -5872,9 +5873,13 @@ final class Bootstrap
      * rule widens permission — and an entry whose `action` is not a real
      * {@see PermissionAction} is DROPPED, never coerced to allow.
      *
+     * @param bool $interactive true for the TUI launch, whose default mode is
+     *   {@see INTERACTIVE_DEFAULT_PERMISSION_MODE}; every console path leaves it
+     *   false
+     *
      * @throws PermissionConfigException when a present permission input cannot be used
      */
-    public static function permissionGate(): PermissionGate
+    public static function permissionGate(bool $interactive = false): PermissionGate
     {
         // The LAYERS rather than the merge, so the refusal below can name the
         // file the bad value actually came from — see
@@ -5932,7 +5937,7 @@ final class Bootstrap
                 break;
             }
         }
-        $mode ??= self::DEFAULT_PERMISSION_MODE;
+        $mode ??= $interactive ? self::INTERACTIVE_DEFAULT_PERMISSION_MODE : self::DEFAULT_PERMISSION_MODE;
 
         // The classifier is what Auto mode gates on, and PermissionGate fails
         // CLOSED (everything Asks) without one — so it is always supplied

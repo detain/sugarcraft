@@ -167,9 +167,9 @@ final class LaunchFlagsTest extends TestCase
             //
             // What the defect IS, stated precisely because the obvious reading
             // is wrong: the flag SILENTLY DID NOTHING. It is not a privilege
-            // escalation — the mode it fell back to is
-            // Bootstrap::DEFAULT_PERMISSION_MODE, which is deliberately
-            // permissive and documented as a stopgap in three places. The harm
+            // escalation — the mode it fell back to is the path's documented
+            // default (`default` in the TUI, the deliberately permissive
+            // `bypass-permissions` for -p and the daemon; DEF-MODE). The harm
             // is an operator writing `--permission-mode="$MODE"` with `$MODE`
             // unset, believing a mode is in force, and being told nothing.
             //

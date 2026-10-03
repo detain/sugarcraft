@@ -18,23 +18,37 @@ matching stops, is in
 
 ## Setting the mode
 
-Three places, highest first:
+Four places, highest first:
 
-1. `SUGARCRUSH_PERMISSION_MODE` — see [`ENVIRONMENT.md`](ENVIRONMENT.md).
-2. `permissionMode` in `~/.sugar-crush/config.json` (or the file named by
-   `--config`).
-3. The shipped default, `bypass-permissions`.
+1. `--permission-mode <mode>` on the command line.
+2. `SUGARCRUSH_PERMISSION_MODE` — see [`ENVIRONMENT.md`](ENVIRONMENT.md).
+3. `permissionMode` in `~/.sugar-crush/config.json` (or the file named by
+   `--config`), or in `~/.sugar-crush/settings.json`, which `config.json`
+   outranks.
+4. The shipped default, which depends on the path: **`default` in the TUI**,
+   **`bypass-permissions` for `-p` and background sessions**.
 
 An **unrecognised** value stops the launch with exit 2 rather than being
-ignored: every fallback in the chain ends somewhere more permissive, so
-silently discarding a mode you set on purpose is a fail-open. An empty value
-counts as unset.
+ignored: silently discarding a mode you set on purpose would run the session
+under one you did not choose. An empty value counts as unset.
 
-The permissive default is a stopgap. The main loop had no gate at all before
-`PermissionGateHook` existed, and with no `permissionRules` configured
-`bypass-permissions` is *identical* to having no gate — the `rm -rf /` circuit
-breaker refuses nothing `ConfirmRemoveHook` does not already refuse earlier and
-more broadly. What it buys is a gate that is reachable and configurable.
+The TUI asks because it can: every `Ask` — on `Chat`'s own tool path and on
+the engine path, whose forked turn puts the question up its two-way frame
+channel — becomes the y/n/a modal, and `/rewind`'s workspace checkpoints sit
+behind whatever you allowed. Until both of those landed the TUI started in
+`bypass-permissions` too, because an asking mode refused engine-path writes
+instead of prompting. One gap is left: a `Task` sub-agent run in a parallel
+batch cannot ask yet and is refused with a reason (see
+[`Ask` needs somewhere to ask](#ask-needs-somewhere-to-ask)).
+
+The console paths keep the permissive default on purpose. Their approver asks
+on stderr at a terminal and **refuses** without one, so an asking default would
+make an unattended `-p` run in CI refuse its first edit. With no
+`permissionRules` configured `bypass-permissions` is *identical* to having no
+gate — the `rm -rf /` circuit breaker refuses nothing `ConfirmRemoveHook` does
+not already refuse earlier and more broadly. What it buys is a gate that is
+reachable and configurable. `sugarcrush doctor` names both defaults when
+nothing is configured.
 
 ---
 
@@ -546,7 +560,8 @@ is edited by you rather than by the agent; once interactive approvals land
 these rows move from deny to always-Ask (step 0.8b). The `.claude/` and
 `.opencode/` trees sugar-crush also imports skills and agents from are not on
 the list: they are other tools' configuration. That is not
-theoretical: in the shipped `bypass-permissions` default, an unprompted write to
+theoretical: under `bypass-permissions` (then the TUI's default, still the
+console paths'), an unprompted write to
 `trustedProjectHooks` followed by a provider switch was measured end-to-end as
 the model granting itself the trust the gate exists to withhold.
 

@@ -215,10 +215,21 @@ coerced`. A `permissionRules` that is not a list loads zero rules and says so.
 Both go to stderr **and** to the session transcript as a system row, so an
 interactive session shows them after the alt screen has opened.
 
-**Everything I do is allowed.** The shipped default mode is
-`bypass-permissions`. With no rules configured, that is identical to having no
-gate at all except for `ProtectFilesHook`, `ConfirmRemoveHook` and the
-`rm -rf /` breaker. Set `permissionMode` in `config.json`.
+**Everything I do is allowed.** In the TUI the shipped default mode is
+`default`, which asks before every write and shell command — so either a mode
+was configured (`sugarcrush doctor` names it on its `permission policy` line,
+and `/permissions` shows which source set it) or this is a `-p` or background
+run, whose default is `bypass-permissions`. With no rules configured, that is
+identical to having no gate at all except for `ProtectFilesHook`,
+`ConfirmRemoveHook` and the `rm -rf /` breaker. Set `permissionMode` in
+`config.json`, or pass `--permission-mode default`.
+
+**Every edit asks.** That is the TUI's default mode, `default`. `a` then `y`
+on the prompt remembers a pattern for the rest of the session; for a
+standing choice set `permissionMode` to `accept-edits` (edits inside the
+project run unprompted, shell commands still ask) or add `permissionRules`
+allow entries. A `Task` sub-agent run in a parallel batch cannot ask yet and
+is refused with a reason — run it alone or allow it by rule.
 
 ---
 

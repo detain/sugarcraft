@@ -949,8 +949,9 @@ final class ArgvParser
      * `$SUGARCRUSH_PERMISSION_MODE` said.
      *
      * That is a flag that SILENTLY DOES NOTHING, not a privilege escalation:
-     * the default this fell back to is {@see \SugarCraft\Crush\Cli\Bootstrap::DEFAULT_PERMISSION_MODE},
-     * which is deliberately permissive and documented as such. The defect is
+     * the default this fell back to is the documented one for the path
+     * ({@see \SugarCraft\Crush\Cli\Bootstrap::permissionGate()} — `default`
+     * in the TUI, the permissive `bypass-permissions` for `-p`). The defect is
      * the silence, not the destination.
      */
     private const EMPTY_PERMISSION_MODE_ERROR = 'sugarcrush: --permission-mode expects a mode, but the value is empty';

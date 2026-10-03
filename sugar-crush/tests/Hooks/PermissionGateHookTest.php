@@ -98,8 +98,10 @@ final class PermissionGateHookTest extends TestCase
      * and runs first, so with the shipped empty rule set the default gate
      * changes no verdict at all. That composed behaviour is pinned by
      * {@see \SugarCraft\Crush\Tests\Cli\BootstrapPermissionGateTest::testTheDefaultGateAddsNothingTheBuiltInChainDidNotAlreadyRefuse()};
-     * the permissive default is a stopgap while an ASK cannot reach the TUI
-     * from the engine path, not a claim that it guards anything extra.
+     * bypass-permissions stays the default only on the console paths (-p,
+     * the daemon; the TUI starts in `default` since DEF-MODE) because their
+     * approver refuses without a terminal — not because it guards anything
+     * extra.
      */
     public function testTheCircuitBreakerStillRefusesUnderBypassPermissions(): void
     {

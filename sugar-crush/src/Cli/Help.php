@@ -131,6 +131,9 @@ Options:
                          precedence: it beats $SUGARCRUSH_PERMISSION_MODE and
                          the permissionMode config key. One of: default,
                          accept-edits, plan, auto, dont-ask,
+                         bypass-permissions. With none set, the TUI starts
+                         in default (it asks before writes and shell
+                         commands); -p and background sessions start in
                          bypass-permissions.
   -c, --continue         Reopen the most recently used session, transcript
                          and all, instead of starting a new one. Without it
