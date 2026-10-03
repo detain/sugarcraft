@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Context;
 
+use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
 
@@ -161,6 +162,16 @@ final class InstructionFileLoader
      * @var array<string, string>
      */
     private array $refusedPaths = [];
+
+    /**
+     * The {@see refusedPaths()} entries already put on the user's screen
+     * mid-session ({@see announceMidSessionRefusals()}), so each is said
+     * once. Carried across a forked tool child like {@see $emittedPaths}
+     * ({@see announcedRefusals()}, {@see markRefusalsAnnounced()}).
+     *
+     * @var array<string, true>
+     */
+    private array $announcedRefusals = [];
 
     private readonly ImportResolver $importResolver;
 
@@ -830,11 +841,12 @@ final class InstructionFileLoader
      *
      * CONTAINED, and it was not: both the walk's starting directory and every
      * candidate file are checked against repoRoot through
-     * {@see ContainedPath::within()}. A refused candidate is SKIPPED silently
-     * and the walk continues, matching {@see loadForced()} — this class has no
-     * channel to the user (its callers are tool results), so a nested
-     * instruction file that inexplicably never appears is most likely a link
-     * out of the checkout.
+     * {@see ContainedPath::within()}. A refused candidate is SKIPPED and the
+     * walk continues, matching {@see loadForced()}. The model is not told
+     * (its callers are tool results); the user is, since audit R1's last
+     * residual — one transcript notice per refused or deferred instruction
+     * file, raised through the mid-session notice seam
+     * ({@see announceMidSessionRefusals()}).
      *
      * @param string $touchedPath Absolute path to the file that was touched
      * @return string|null The nested instruction file content, or null if none
@@ -843,138 +855,229 @@ final class InstructionFileLoader
      */
     public function loadForPath(string $touchedPath): ?string
     {
-        $repoRoot = realpath($this->repoRoot);
-        if ($repoRoot === false) {
-            // A boundary that will not resolve is not a boundary. The old code
-            // fell back to the configured string and walked anyway.
-            return null;
-        }
+        // Every exit below tells the user about the instruction files THIS
+        // call refused (audit R1); see announceMidSessionRefusals(). A finally
+        // rather than a wrapper method, so the walk's contained reads stay in
+        // the method docs/MEMORY.md credits them to.
+        $before = $this->refusedPaths;
 
-        // TWO gates, because gating only the candidate FILES would be enough
-        // for containment but would leave a walk with no business running.
-        //
-        // GATE 1 — the walk must not START outside the checkout. The loop below
-        // climbs by `dirname()` and used to terminate on the STRING equality
-        // `$dir !== $repoRoot`, which a directory outside the checkout never
-        // satisfies, so it climbed to `/` reading every `CLAUDE.md`/`AGENTS.md`
-        // it passed. MEASURED before this gate, repoRoot=<sb>/repo and
-        // touchedPath=<sb>/outside/anything.php returned `"ANCESTOR-BBB\n"` —
-        // the body of <sb>/CLAUDE.md, an ANCESTOR of the checkout, no symlink
-        // involved. The same string compare also missed when the checkout was
-        // merely SPELLED through a symlink ($repoRoot is resolved, $dir was
-        // not), which climbed above the root with nothing committed at all.
-        //
-        // AN ANCESTOR `CLAUDE.md` IS NOW READ — BY A DIFFERENT ROUTE, AND THIS
-        // GATE IS STILL THE RIGHT ANSWER HERE. {@see loadAncestorRoots()} reads
-        // files above $repoRoot deliberately, which reads at first glance like
-        // the escape above being reopened. It is not the same mechanism: that
-        // pass climbs from $repoRoot to a POSITIVE VCS MARKER, decides once at
-        // session start, and cannot be steered; this walk starts wherever the
-        // agent's last tool call happened to point, so relaxing it would hand
-        // the choice of what lands in the system prompt to an arbitrary touched
-        // path. Pinned by
-        // `InstructionFileLoaderTest::testLoadForPathStillRefusesAWalkStartingOutsideTheCheckoutDespiteTheGitAncestor()`.
-        //
-        // within() rather than below() records the question, and NOT a
-        // behavioural choice — an earlier revision argued it as one. `$dir ===
-        // $repoRoot` returns null under EITHER predicate, because `while ($dir
-        // !== $repoRoot)` never runs, so the two are indistinguishable here.
-        // Measured: swapping this to below() leaves the whole containment suite
-        // green. The distinction IS observable, but at the DIRECTORY anchors of
-        // the other tiers — {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::readableProjectDir()},
-        // {@see \SugarCraft\Crush\Skills\SkillLoader::skillFilesIn()},
-        // {@see \SugarCraft\Crush\Agents\AgentPresetRegistry::readableSearchPaths()}
-        // and {@see \SugarCraft\Crush\Commands\CommandLoader::loadFromDirectory()},
-        // each of which has a test that fails under the wrong predicate.
-        //
-        // $dir is RESOLVED here so that the loop's remaining `$dir !==
-        // $repoRoot` is a compare between two canonical paths, which is what
-        // makes it a real bound: every `dirname()` step of a resolved path
-        // inside a resolved boundary lands on that boundary exactly. Every live
-        // caller hands a path whose directory exists — Read/Edit/Glob read the
-        // file first, and Write `mkdir -p`s the parent BEFORE calling here
-        // ({@see \SugarCraft\Crush\Tools\BuiltIn\Write}) — so resolving costs
-        // no reachable case. A path in a directory that does not exist yet
-        // returns null rather than walking, which is what it already did for
-        // the fully-nonexistent path this class is tested on.
-        // THE PREVIOUS ANSWER FOR THIS PATH IS DROPPED BEFORE A NEW ONE IS
-        // COMPUTED. The map ACCUMULATES across calls (see {@see refusedPaths()}
-        // for why), and an accumulated entry that is never revisited can outlive
-        // the condition that caused it: `loadForPath('<repo>/notyet/x.php')`
-        // recorded "the directory holding it does not resolve", the session then
-        // created `notyet/CLAUDE.md`, and the very next identical call returned
-        // that file's contents while the refusal still said it had been refused.
-        // Re-deciding a path is what makes the map's entry for THAT path
-        // current; entries for paths this session never touches again are the
-        // residue {@see refusedPaths()} states.
-        unset($this->refusedPaths[$touchedPath]);
-
-        $dir = realpath(dirname($touchedPath));
-        if ($dir === false || !ContainedPath::within($dir, $repoRoot)) {
-            $this->refusedPaths[$touchedPath] = $dir === false
-                ? 'the directory holding it does not resolve, so no walk was started'
-                : 'the directory holding it (' . $dir . ') is outside the checkout (' . $repoRoot . ')';
-
-            return null;
-        }
-
-        // Walk up the directory tree toward repoRoot
-        while ($dir !== $repoRoot) {
-            // Check for CLAUDE.md first (preferred), then AGENTS.md
-            foreach (['CLAUDE.md', 'AGENTS.md'] as $filename) {
-                $fullPath = $dir . '/' . $filename;
-                if (!is_file($fullPath)) {
-                    continue;
-                }
-
-                // GATE 2 — $dir is contained, but the ENTRY inside it need not
-                // be: `<root>/src/CLAUDE.md -> <outside>/secret.md` is one
-                // committed line and `is_file()` follows it. within() records
-                // the entry question, as in loadRoot(); a file cannot resolve
-                // onto a directory boundary, so the predicate choice is not
-                // observable here either.
-                if (!ContainedPath::within($fullPath, $repoRoot)) {
-                    $this->refusedPaths[$fullPath] = 'resolves outside the checkout (' . $repoRoot . ')';
-
-                    continue;
-                }
-
-                $realPath = realpath($fullPath) ?: $fullPath;
-                if (!isset($this->emittedPaths[$realPath])) {
-                    // A file that was refused earlier and passes both gates now
-                    // is no longer refused — same reason as the `unset()` above,
-                    // for the entry rather than the touched path.
-                    unset($this->refusedPaths[$fullPath]);
-
-                    $this->emittedPaths[$realPath] = true;
-                    // Resolved, for the reason loadRoot() reads resolved; the
-                    // import base stays spelled, for the reason it stays spelled.
-                    // Bounded like the session documents: a nested file this
-                    // size would otherwise ride whole into a tool result.
-                    $raw = $this->readBounded($realPath, $fullPath, $bytes);
-                    if ($raw === null) {
-                        return self::pointer($fullPath, (int) $bytes);
-                    }
-                    if ($raw === false) {
-                        return null;
-                    }
-
-                    [$doc, $note] = $this->utf8Document($raw, $fullPath);
-
-                    return $this->expandImports($doc, dirname($fullPath), $repoRoot) . $note;
-                }
+        try {
+            $repoRoot = realpath($this->repoRoot);
+            if ($repoRoot === false) {
+                // A boundary that will not resolve is not a boundary. The old code
+                // fell back to the configured string and walked anyway.
+                return null;
             }
 
-            // Move to parent directory
-            $parent = dirname($dir);
-            if ($parent === $dir) {
-                break;
-            }
-            $dir = $parent;
-        }
+            // TWO gates, because gating only the candidate FILES would be enough
+            // for containment but would leave a walk with no business running.
+            //
+            // GATE 1 — the walk must not START outside the checkout. The loop below
+            // climbs by `dirname()` and used to terminate on the STRING equality
+            // `$dir !== $repoRoot`, which a directory outside the checkout never
+            // satisfies, so it climbed to `/` reading every `CLAUDE.md`/`AGENTS.md`
+            // it passed. MEASURED before this gate, repoRoot=<sb>/repo and
+            // touchedPath=<sb>/outside/anything.php returned `"ANCESTOR-BBB\n"` —
+            // the body of <sb>/CLAUDE.md, an ANCESTOR of the checkout, no symlink
+            // involved. The same string compare also missed when the checkout was
+            // merely SPELLED through a symlink ($repoRoot is resolved, $dir was
+            // not), which climbed above the root with nothing committed at all.
+            //
+            // AN ANCESTOR `CLAUDE.md` IS NOW READ — BY A DIFFERENT ROUTE, AND THIS
+            // GATE IS STILL THE RIGHT ANSWER HERE. {@see loadAncestorRoots()} reads
+            // files above $repoRoot deliberately, which reads at first glance like
+            // the escape above being reopened. It is not the same mechanism: that
+            // pass climbs from $repoRoot to a POSITIVE VCS MARKER, decides once at
+            // session start, and cannot be steered; this walk starts wherever the
+            // agent's last tool call happened to point, so relaxing it would hand
+            // the choice of what lands in the system prompt to an arbitrary touched
+            // path. Pinned by
+            // `InstructionFileLoaderTest::testLoadForPathStillRefusesAWalkStartingOutsideTheCheckoutDespiteTheGitAncestor()`.
+            //
+            // within() rather than below() records the question, and NOT a
+            // behavioural choice — an earlier revision argued it as one. `$dir ===
+            // $repoRoot` returns null under EITHER predicate, because `while ($dir
+            // !== $repoRoot)` never runs, so the two are indistinguishable here.
+            // Measured: swapping this to below() leaves the whole containment suite
+            // green. The distinction IS observable, but at the DIRECTORY anchors of
+            // the other tiers — {@see \SugarCraft\Crush\Workflows\WorkflowRegistry::readableProjectDir()},
+            // {@see \SugarCraft\Crush\Skills\SkillLoader::skillFilesIn()},
+            // {@see \SugarCraft\Crush\Agents\AgentPresetRegistry::readableSearchPaths()}
+            // and {@see \SugarCraft\Crush\Commands\CommandLoader::loadFromDirectory()},
+            // each of which has a test that fails under the wrong predicate.
+            //
+            // $dir is RESOLVED here so that the loop's remaining `$dir !==
+            // $repoRoot` is a compare between two canonical paths, which is what
+            // makes it a real bound: every `dirname()` step of a resolved path
+            // inside a resolved boundary lands on that boundary exactly. Every live
+            // caller hands a path whose directory exists — Read/Edit/Glob read the
+            // file first, and Write `mkdir -p`s the parent BEFORE calling here
+            // ({@see \SugarCraft\Crush\Tools\BuiltIn\Write}) — so resolving costs
+            // no reachable case. A path in a directory that does not exist yet
+            // returns null rather than walking, which is what it already did for
+            // the fully-nonexistent path this class is tested on.
+            // THE PREVIOUS ANSWER FOR THIS PATH IS DROPPED BEFORE A NEW ONE IS
+            // COMPUTED. The map ACCUMULATES across calls (see {@see refusedPaths()}
+            // for why), and an accumulated entry that is never revisited can outlive
+            // the condition that caused it: `loadForPath('<repo>/notyet/x.php')`
+            // recorded "the directory holding it does not resolve", the session then
+            // created `notyet/CLAUDE.md`, and the very next identical call returned
+            // that file's contents while the refusal still said it had been refused.
+            // Re-deciding a path is what makes the map's entry for THAT path
+            // current; entries for paths this session never touches again are the
+            // residue {@see refusedPaths()} states.
+            unset($this->refusedPaths[$touchedPath]);
 
-        return null;
+            $dir = realpath(dirname($touchedPath));
+            if ($dir === false || !ContainedPath::within($dir, $repoRoot)) {
+                $this->refusedPaths[$touchedPath] = $dir === false
+                    ? 'the directory holding it does not resolve, so no walk was started'
+                    : 'the directory holding it (' . $dir . ') is outside the checkout (' . $repoRoot . ')';
+
+                return null;
+            }
+
+            // Walk up the directory tree toward repoRoot
+            while ($dir !== $repoRoot) {
+                // Check for CLAUDE.md first (preferred), then AGENTS.md
+                foreach (['CLAUDE.md', 'AGENTS.md'] as $filename) {
+                    $fullPath = $dir . '/' . $filename;
+                    if (!is_file($fullPath)) {
+                        continue;
+                    }
+
+                    // GATE 2 — $dir is contained, but the ENTRY inside it need not
+                    // be: `<root>/src/CLAUDE.md -> <outside>/secret.md` is one
+                    // committed line and `is_file()` follows it. within() records
+                    // the entry question, as in loadRoot(); a file cannot resolve
+                    // onto a directory boundary, so the predicate choice is not
+                    // observable here either.
+                    if (!ContainedPath::within($fullPath, $repoRoot)) {
+                        $this->refusedPaths[$fullPath] = 'resolves outside the checkout (' . $repoRoot . ')';
+
+                        continue;
+                    }
+
+                    $realPath = realpath($fullPath) ?: $fullPath;
+                    if (!isset($this->emittedPaths[$realPath])) {
+                        // A file that was refused earlier and passes both gates now
+                        // is no longer refused — same reason as the `unset()` above,
+                        // for the entry rather than the touched path.
+                        unset($this->refusedPaths[$fullPath]);
+
+                        $this->emittedPaths[$realPath] = true;
+                        // Resolved, for the reason loadRoot() reads resolved; the
+                        // import base stays spelled, for the reason it stays spelled.
+                        // Bounded like the session documents: a nested file this
+                        // size would otherwise ride whole into a tool result.
+                        $raw = $this->readBounded($realPath, $fullPath, $bytes);
+                        if ($raw === null) {
+                            return self::pointer($fullPath, (int) $bytes);
+                        }
+                        if ($raw === false) {
+                            return null;
+                        }
+
+                        [$doc, $note] = $this->utf8Document($raw, $fullPath);
+
+                        return $this->expandImports($doc, dirname($fullPath), $repoRoot) . $note;
+                    }
+                }
+
+                // Move to parent directory
+                $parent = dirname($dir);
+                if ($parent === $dir) {
+                    break;
+                }
+                $dir = $parent;
+            }
+
+            return null;
+        } finally {
+            $this->announceMidSessionRefusals($before, $touchedPath);
+        }
     }
+
+    /**
+     * The row {@see announceMidSessionRefusals()} puts in the transcript:
+     * `%s` the instruction file, `%s` the path whose touch reached it, `%s`
+     * why it was left out (a {@see refusedPaths()} reason).
+     */
+    public const MID_SESSION_REFUSAL_NOTICE_FORMAT =
+        'Instruction file %s was left out of the model\'s context when a tool touched %s (%s).';
+
+    /**
+     * Tell the USER about each instruction file this {@see loadForPath()}
+     * call refused or deferred (audit R1, the residual after the launch
+     * notice).
+     *
+     * The launch drains {@see refusedPaths()} once
+     * ({@see \SugarCraft\Crush\Cli\Bootstrap::reportPromptBudgetDeferrals()}),
+     * and that covers the root, ancestor, forced and imported documents. A
+     * NESTED `CLAUDE.md`/`AGENTS.md` arrives only when a tool touches a path
+     * under it, after the terminal is taken, so its refusal — a link out of
+     * the checkout, a file over {@see MAX_DOCUMENT_BYTES}, an `@import` that
+     * does not fit — reached the model as a pointer line or as nothing, and
+     * the user who wrote the file and expects it obeyed was told nothing.
+     *
+     * Through {@see RuntimeNoticeSink}, the mid-session transcript seam:
+     * this runs in whichever process the tool does — the TUI, the forked turn
+     * child, a forked tool child — and the sink's cross-fork transport is
+     * what carries the row to the parent's transcript, as a UI-only notice.
+     *
+     * ONLY ENTRIES THIS CALL ADDED, and never the touched path's own: that
+     * one says no walk was started (a path outside the checkout, a directory
+     * that does not resolve), which is about the file the agent opened, not
+     * about any instruction file, and reading `/etc/hosts` is not news. An
+     * entry already in the map before the call was decided earlier — by the
+     * launch, which has its own notice, or by an earlier touch, which
+     * announced it then. And ONCE per entry for the session
+     * ({@see $announcedRefusals}): a forked turn starts from the parent's
+     * loader, so a file refused in one turn is announced again in a later
+     * one only because the parent never learns of the first.
+     *
+     * @param array<string, string> $before {@see $refusedPaths} as it stood when the call began
+     */
+    private function announceMidSessionRefusals(array $before, string $touchedPath): void
+    {
+        foreach ($this->refusedPaths as $path => $why) {
+            $path = (string) $path;
+            if ($path === $touchedPath
+                || isset($this->announcedRefusals[$path])
+                || (isset($before[$path]) && $before[$path] === $why)
+            ) {
+                continue;
+            }
+
+            $this->announcedRefusals[$path] = true;
+            RuntimeNoticeSink::warn(sprintf(
+                self::MID_SESSION_REFUSAL_NOTICE_FORMAT,
+                $this->underRoot($path),
+                $this->underRoot($touchedPath),
+                rtrim($why, '.'),
+            ));
+        }
+    }
+
+    /**
+     * $path relative to the checkout when it is under it — `src/CLAUDE.md`,
+     * not the checkout's absolute path — so a clipped notice row spends its
+     * characters on the verdict, as the launch notice does. A path outside
+     * the checkout keeps its full spelling, because there it IS the
+     * information.
+     */
+    private function underRoot(string $path): string
+    {
+        $roots = array_unique([rtrim($this->repoRoot, '/') . '/', rtrim((string) realpath($this->repoRoot), '/') . '/']);
+        foreach ($roots as $root) {
+            if ($root !== '/' && str_starts_with($path, $root)) {
+                return substr($path, \strlen($root));
+            }
+        }
+
+        return $path;
+    }
+
 
     /**
      * The real paths whose bodies have already been emitted into the model's
@@ -1040,14 +1143,41 @@ final class InstructionFileLoader
      * splice's budget verdicts are in the map too. Not through
      * `Bootstrap`'s directory collector, which is fed by the tiers whose
      * refusals are DIRECTORY-shaped; these are file-shaped. Entries
-     * {@see loadForPath()} adds mid-session are not surfaced to the user — they
-     * reach the model as pointers at the moment the path is touched.
+     * {@see loadForPath()} adds mid-session are surfaced as they are made,
+     * one transcript notice each ({@see announceMidSessionRefusals()}).
      *
      * @return array<string, string> path as spelled => why it was not read
      */
     public function refusedPaths(): array
     {
         return $this->refusedPaths;
+    }
+
+    /**
+     * The {@see refusedPaths()} entries already announced to the user
+     * mid-session — the export half of {@see $announcedRefusals}, for
+     * {@see \SugarCraft\Crush\Tools\CarriesSessionState}.
+     *
+     * @return list<string>
+     */
+    public function announcedRefusals(): array
+    {
+        return array_map(strval(...), array_keys($this->announcedRefusals));
+    }
+
+    /**
+     * Union $paths into {@see $announcedRefusals} — a union for the reason
+     * {@see markEmitted()} is one, and cast for the same reason.
+     *
+     * @param list<string|int> $paths
+     */
+    public function markRefusalsAnnounced(array $paths): void
+    {
+        foreach ($paths as $path) {
+            if (\is_string($path) || \is_int($path)) {
+                $this->announcedRefusals[(string) $path] = true;
+            }
+        }
     }
 
     /**

@@ -4626,9 +4626,10 @@ final class Bootstrap
      * because no launch path configures a {@see \SugarCraft\Crush\App\App::$compactorConfig}.
      *
      * Files touched mid-session ({@see InstructionFileLoader::loadForPath()})
-     * are not covered: they arrive as the model reads paths, after the
-     * terminal is taken, and reach the model as pointers at the moment they
-     * matter. ONE ROW PER KIND whatever the count, for
+     * are not covered HERE: they arrive as the model reads paths, after the
+     * terminal is taken, so the loader announces each one itself, through the
+     * mid-session notice seam, as it is refused (audit R1's last residual).
+     * ONE ROW PER KIND whatever the count, for
      * {@see LAUNCH_NOTICE_LIMIT}'s reason. Construction time, beside
      * {@see reportSkillSkips()} and for its reason; public for the `-p` path
      * for {@see reportMemorySkips()}'s.

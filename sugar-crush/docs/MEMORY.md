@@ -397,9 +397,13 @@ sites, one per read decision: `loadRoot()`'s root entry,
 recursion level, so an allowed file that imports something that imports
 something disallowed is still refused.
 
-A refusal is skipped rather than raised — this class's callers are tool results
-and it has no channel to the user — but it is **recorded**, and
-`refusedPaths()` is the pull-based seam for reading them back.
+A refusal is skipped rather than raised — this class's callers are tool results —
+but it is **recorded**, and `refusedPaths()` is the pull-based seam for reading
+them back. The user hears about them twice over: the launch names the root,
+ancestor, forced and imported files the prompt leaves out, and a nested
+`CLAUDE.md`/`AGENTS.md` refused or deferred when a tool touches a path under it
+(a link out of the checkout, a file over the 60 KiB ceiling) gets one
+transcript notice the first time it happens.
 
 ## On-disk layout summary
 

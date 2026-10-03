@@ -120,6 +120,7 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
     {
         return [
             'emittedInstructionPaths' => $this->instructionLoader?->emittedPaths() ?? [],
+            'announcedInstructionRefusals' => $this->instructionLoader?->announcedRefusals() ?? [],
             'announcedSkills' => $this->skillNudge?->announced() ?? [],
             'announcedRules' => $this->ruleNudge?->announcedPaths() ?? [],
         ];
@@ -133,6 +134,11 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         $paths = $state['emittedInstructionPaths'] ?? null;
         if (is_array($paths)) {
             $this->instructionLoader?->markEmitted(array_values($paths));
+        }
+
+        $refusals = $state['announcedInstructionRefusals'] ?? null;
+        if (is_array($refusals)) {
+            $this->instructionLoader?->markRefusalsAnnounced(array_values($refusals));
         }
 
         $skills = $state['announcedSkills'] ?? null;
