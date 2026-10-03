@@ -113,7 +113,7 @@ final class ArchitectureAssemblyOrderTest extends TestCase
     private const BASE_CANARY = 'an AI coding assistant working inside a terminal';
 
     /** First words of Read's promptGuidance() fragment — verified against the class. */
-    private const READ_GUIDANCE_CANARY = 'The Read tool returns file contents up to its configured byte cap';
+    private const READ_GUIDANCE_CANARY = 'The Read tool returns file contents one page at a time';
 
     /** SkillMatcher::listForPrompt()'s header — verified against the method body. */
     private const LISTING_HEADER = 'Available skills (invoke via Skill tool):';

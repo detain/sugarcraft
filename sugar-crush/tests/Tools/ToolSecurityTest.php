@@ -1200,7 +1200,9 @@ final class ToolSecurityTest extends TestCase
         ]);
 
         $this->assertFalse($result->isError());
-        $this->assertStringContainsString('[truncated]', $result->content());
+        // One 2,048-byte line cannot be paged by line, so it is cut at the page
+        // and says so (audit 0.12).
+        $this->assertStringContainsString('[line 1 truncated:', $result->content());
         $this->assertLessThanOrEqual(1024 + 50, strlen($result->content()));
     }
 

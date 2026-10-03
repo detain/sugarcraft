@@ -75,7 +75,7 @@ final class SkillPathScopingTest extends TestCase
 
         $content = $tool->execute(['id' => 'c1', 'file_path' => $path])->content();
 
-        self::assertStringStartsWith("<?php\necho 1;\n", $content);
+        self::assertStringStartsWith("1: <?php\n2: echo 1;\n", $content);
         self::assertStringEndsWith(
             "<system-reminder>\n"
             . "These skills are scoped to paths you just touched. Invoke one with the Skill tool if it applies:\n"
@@ -90,14 +90,14 @@ final class SkillPathScopingTest extends TestCase
         $path = $this->write('notes.txt', "plain\n");
         $tool = new Read(skillNudge: $this->nudge());
 
-        self::assertSame("plain\n", $tool->execute(['id' => 'c1', 'file_path' => $path])->content());
+        self::assertSame("1: plain", $tool->execute(['id' => 'c1', 'file_path' => $path])->content());
     }
 
     public function testReadWithoutANudgeStaysByteIdentical(): void
     {
         $path = $this->write('App.php', "<?php\n");
 
-        self::assertSame("<?php\n", (new Read())->execute(['id' => 'c1', 'file_path' => $path])->content());
+        self::assertSame("1: <?php", (new Read())->execute(['id' => 'c1', 'file_path' => $path])->content());
     }
 
     public function testEditAppendsTheReminderAfterASuccessfulWrite(): void

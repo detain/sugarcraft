@@ -372,30 +372,38 @@ final class ToolDescriptionGuidanceTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // Read — the cap comes back SHORT, not as an error.
+    // Read — a long file comes back PAGED, not as an error (audit 0.12).
     // -------------------------------------------------------------------------
 
     /**
-     * A truncated read is the failure mode a terse description guarantees: the
+     * A partial read is the failure mode a terse description guarantees: the
      * model receives the head of a file, is told nothing, and reasons about it
-     * as the whole thing. The marker is in the content; the warning that a
-     * short result may be partial belongs in the description.
+     * as the whole thing. The footer is in the content; the warning that a
+     * result may be one page of several, and how to get the next one, belongs
+     * in the description.
      */
-    public function testReadDescriptionWarnsThatAnOversizeFileComesBackTruncatedNotFailed(): void
+    public function testReadDescriptionWarnsThatALongFileComesBackPagedNotFailed(): void
     {
         $description = (new Read())->description();
 
-        $this->assertStringContainsString('... [truncated]', $description);
-        $this->assertStringContainsString('rather than erroring', $description);
-        $this->assertStringContainsString('head of a longer file', $description);
+        $this->assertStringContainsString('call Read with offset=', $description);
+        $this->assertStringContainsString('`offset`', $description);
+        $this->assertStringContainsString('`limit`', $description);
+        $this->assertStringContainsString('without that footer reached the end of the file', $description);
+        $this->assertStringContainsString('`N: `', $description);
+        $this->assertStringContainsString('NOT part of the file', $description);
     }
 
-    /** Same domain rule as Bash's cap: the figure is $maxBytes, not a literal. */
-    public function testReadDescriptionReportsItsOwnByteCapNotTheDefault(): void
+    /**
+     * Same domain rule as Bash's cap: the figure is the instance's page, not a
+     * literal — the default page, or $maxBytes when that is smaller.
+     */
+    public function testReadDescriptionReportsItsOwnPageNotTheDefault(): void
     {
         $this->assertStringContainsString('4,096 bytes', (new Read(maxBytes: 4096))->description());
-        $this->assertStringContainsString('1,048,576 bytes', (new Read())->description());
-        $this->assertStringNotContainsString('1,048,576', (new Read(maxBytes: 4096))->description());
+        $this->assertStringContainsString('51,200 bytes', (new Read())->description());
+        $this->assertStringContainsString('2,000 lines', (new Read())->description());
+        $this->assertStringNotContainsString('51,200', (new Read(maxBytes: 4096))->description());
     }
 
     /**
@@ -419,21 +427,24 @@ final class ToolDescriptionGuidanceTest extends TestCase
         $this->assertStringContainsString('CLAUDE.md', $full);
     }
 
-    /** The cap the description names is the cap execute() actually applies. */
-    public function testReadReallyTruncatesAtTheCapItsDescriptionNames(): void
+    /** The page the description names is the page execute() actually applies. */
+    public function testReadReallyPagesAtTheBudgetItsDescriptionNames(): void
     {
         $dir = $this->scratchDir();
         $path = $dir . '/big.txt';
-        file_put_contents($path, str_repeat('x', 200));
+        file_put_contents($path, str_repeat("xxxxxxxx\n", 40));
 
         $result = (new Read($dir, maxBytes: 64))->execute(['file_path' => $path, 'description' => 'probe']);
 
         $this->assertFalse($result->isError(), 'an oversize file must not be an error');
-        $this->assertStringEndsWith('... [truncated]', $result->content());
+        $page = $result->content();
+        $this->assertStringEndsWith('to continue]', $page);
+        [$body] = explode("\n\n[", $page, 2);
+        $this->assertLessThanOrEqual(64, strlen($body), 'the lines themselves stay inside the page budget');
         $this->assertStringContainsString(
             '64 bytes',
             (new Read($dir, maxBytes: 64))->description(),
-            'the description has to name the same cap execute() enforced',
+            'the description has to name the same budget execute() enforced',
         );
     }
 

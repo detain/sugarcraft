@@ -161,7 +161,7 @@ final class WorktreeJailRoutingTest extends TestCase
         ]);
 
         $this->assertFalse($result->isError());
-        $this->assertSame('readable content', $result->content());
+        $this->assertSame('1: readable content', $result->content());
     }
 
     public function testReadWithWorktreeJailAcceptsAbsolutePathInWorktree(): void
@@ -177,7 +177,7 @@ final class WorktreeJailRoutingTest extends TestCase
         ]);
 
         $this->assertFalse($result->isError());
-        $this->assertSame('absolute readable', $result->content());
+        $this->assertSame('1: absolute readable', $result->content());
     }
 
     public function testReadWithWorktreeJailRejectsPathOutsideWorktree(): void
@@ -243,7 +243,7 @@ final class WorktreeJailRoutingTest extends TestCase
         ]);
 
         $this->assertFalse($result->isError());
-        $this->assertSame('canonical bytes', $result->content());
+        $this->assertSame('1: canonical bytes', $result->content());
     }
 
     public function testReadRejectsSymlinkInsideWorktreePointingOutside(): void
@@ -418,7 +418,7 @@ final class WorktreeJailRoutingTest extends TestCase
         ]);
 
         $this->assertFalse($result->isError(), $result->content());
-        $this->assertSame('canonical bytes', $result->content());
+        $this->assertSame('1: canonical bytes', $result->content());
     }
 
     public function testEditAcceptsAnInJailFileThroughASymlinkedWorktreeRoot(): void
@@ -611,7 +611,7 @@ final class WorktreeJailRoutingTest extends TestCase
             ]);
 
             $this->assertFalse($result->isError());
-            $this->assertSame('fallback read', $result->content());
+            $this->assertSame('1: fallback read', $result->content());
         } finally {
             $this->rrmdir($rootDir);
         }

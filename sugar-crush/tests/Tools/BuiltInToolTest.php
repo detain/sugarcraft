@@ -85,7 +85,7 @@ final class BuiltInToolTest extends TestCase
         $tool = new Read();
 
         $this->assertSame('Read', $tool->name());
-        $this->assertStringStartsWith('Read contents of a file', $tool->description());
+        $this->assertStringStartsWith('Read a file from the local filesystem', $tool->description());
     }
 
     public function testBashToolHasCorrectNameAndDescription(): void
@@ -367,7 +367,7 @@ final class BuiltInToolTest extends TestCase
         $result = $tool->execute(['id' => 'call_1', 'file_path' => $tempFile]);
 
         $this->assertSame('call_1', $result->toolCallId());
-        $this->assertSame('Hello World', $result->content());
+        $this->assertSame('1: Hello World', $result->content());
         $this->assertFalse($result->isError());
 
         unlink($tempFile);

@@ -23,7 +23,36 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
     use RebindsWorktreeJail;
     use TruncatesOutput;
 
+    /**
+     * The hard ceiling on one call's page, and the base the instruction and
+     * nudge reserves below are figured from. A page never exceeds it, but the
+     * default page ({@see PAGE_BYTES}) is far smaller, so at the shipped
+     * default this is the bound a caller-supplied `maxBytes` lowers rather
+     * than the size a read comes back at.
+     */
     private const DEFAULT_MAX_BYTES = 1024 * 1024;
+
+    /**
+     * Lines one call returns when the caller names no `limit` (audit 0.12).
+     * Paging by line rather than by byte is what lets a model ask for "the next
+     * window" and know exactly where it starts.
+     */
+    private const PAGE_LINES = 2000;
+
+    /**
+     * Bytes one page may hold, line prefixes included, whatever `limit` asks
+     * for: 50 KiB, so a call costs a bounded slice of context instead of the
+     * whole 1 MiB ceiling. The effective page is the smaller of this and
+     * $maxBytes.
+     */
+    private const PAGE_BYTES = 50 * 1024;
+
+    /**
+     * The largest single fread(). A file is scanned in blocks this size (or
+     * $maxBytes, when that is smaller), so neither counting the lines of a huge
+     * file nor skipping to a late offset ever holds more than one block.
+     */
+    private const SCAN_CHUNK = 64 * 1024;
 
     /**
      * $skillNudge turns a skill's `paths:` frontmatter into a live signal
@@ -106,17 +135,17 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         return 'Read';
     }
     /**
-     * The cap is the behaviour worth stating: an oversize file comes back
-     * SHORT rather than as an error (see {@see execute()}), and a model told
-     * only "read a file" has no reason to suspect the content it got was the
-     * head of a larger one.
+     * Paging is the behaviour worth stating (audit 0.12): every line comes back
+     * numbered, a file longer than one page comes back as a window that SAYS so
+     * and names the call that continues it, and a model told only "read a file"
+     * has no reason to suspect the content it got was the head of a larger one.
      *
-     * The byte figure is read off $maxBytes rather than written out — a caller
-     * that passed its own cap would otherwise advertise the default's number
-     * instead of its own. The prefer-this-over-`cat` clauses are conditional
-     * for the same reason: containment and instruction-file surfacing come
-     * from two DIFFERENT injected collaborators, and an instance holding
-     * neither must not claim either.
+     * The byte figure is read off the instance ({@see pageBytes()}) rather
+     * than written out — a caller that passed its own cap would otherwise
+     * advertise the default's number instead of its own. The prefer-this-over-
+     * `cat` clauses are conditional for the same reason: containment and
+     * instruction-file surfacing come from two DIFFERENT injected
+     * collaborators, and an instance holding neither must not claim either.
      */
     public function description(): string
     {
@@ -134,29 +163,37 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         }
         $advantages[] = 'a read failure comes back as a tool error rather than as a crash';
 
-        return 'Read contents of a file from the local filesystem. Content comes back up to '
-            . number_format($this->maxBytes) . ' bytes; a larger file is truncated to that '
-            . 'much and marked "... [truncated]" rather than erroring, so a short result may '
-            . 'be the head of a longer file. Prefer this over `cat`/`head` through Bash: '
+        return 'Read a file from the local filesystem, one page at a time. Every line comes back '
+            . 'as `N: text`; the `N: ` prefix is the 1-based line number and is NOT part of the '
+            . 'file, so leave it out of an Edit\'s old_string. A page is at most '
+            . number_format(self::PAGE_LINES) . ' lines and ' . number_format($this->pageBytes())
+            . ' bytes; pass `offset` (the first line to return) and `limit` (how many lines) to '
+            . 'read another window. When more of the file remains, the result ends with '
+            . '"[lines a-b of N — call Read with offset=b+1 to continue]", so a result without '
+            . 'that footer reached the end of the file. A single line longer than a page comes back '
+            . 'cut short and marked. Prefer this over `cat`/`head` through Bash: '
             . implode('; ', $advantages) . '.';
     }
 
     /**
-     * The three facts a model needs at session scale rather than per call: a
-     * short result may be a truncated view, a rejected path is an error it can
-     * correct, and directory-level project rules arrive with the first read
-     * there. Kept free of sibling-tool names so the fragment stays true when
-     * this tool is wired alone ({@see PromptGuidance}).
+     * The facts a model needs at session scale rather than per call: lines
+     * are numbered and the numbers are not file content, a long file arrives a
+     * page at a time with a footer naming the next call, a rejected path is an
+     * error it can correct, and directory-level project rules arrive with the
+     * first read there. Kept free of sibling-tool names so the fragment stays
+     * true when this tool is wired alone ({@see PromptGuidance}).
      */
     public function promptGuidance(): string
     {
-        return 'The Read tool returns file contents up to its configured byte cap, and a file '
-            . 'larger than that cap comes back as the head of the file followed by an explicit '
-            . 'truncation marker, so a short result may be a partial view rather than the whole '
-            . 'file. A path that resolves outside the allowed workspace root, or that cannot be '
-            . 'opened, comes back as a readable tool error rather than a crash. When a directory '
-            . 'carries project instruction files, the first read inside it surfaces those rules '
-            . 'alongside the content.';
+        return 'The Read tool returns file contents one page at a time, every line prefixed with '
+            . 'its 1-based line number as `N: `. That prefix is not part of the file: never copy it '
+            . 'into text you write back. A file longer than one page ends with a footer naming the '
+            . 'offset to continue from, so a result without that footer is the rest of the file; '
+            . 'read a specific region with `offset` and `limit` instead of the whole file. A path '
+            . 'that resolves outside the allowed workspace root, or that cannot be opened, comes '
+            . 'back as a readable tool error rather than a crash. When a directory carries project '
+            . 'instruction files, the first read inside it surfaces those rules alongside the '
+            . 'content.';
     }
 
     public function inputSchema(): array
@@ -165,6 +202,18 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         'type' => 'object',
         'properties' => [
             'file_path' => ['type' => 'string', 'description' => 'Path to file to read'],
+            'offset' => [
+                'type' => 'integer',
+                'minimum' => 1,
+                'description' => 'The 1-based line number to start reading from. Omit to start at line 1; '
+                    . 'to continue a paged read, pass the offset its footer names.',
+            ],
+            'limit' => [
+                'type' => 'integer',
+                'minimum' => 1,
+                'description' => 'The most lines to return (default ' . number_format(self::PAGE_LINES)
+                    . '). A page is also bounded in bytes, so it may stop earlier.',
+            ],
             'description' => [
                 'type' => 'string',
                 'description' => 'Clear, concise 5-10 word description in active voice of why this file is being read (e.g. "Inspect the chat model constructor", not "reads a file").',
@@ -203,6 +252,16 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
                 content: 'Error: file_path contains a NUL byte',
+                isError: true,
+            );
+        }
+
+        $offset = self::lineArgument($args, 'offset');
+        $limit = self::lineArgument($args, 'limit');
+        if (is_string($offset) || is_string($limit)) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: is_string($offset) ? $offset : (string) $limit,
                 isError: true,
             );
         }
@@ -261,21 +320,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         });
         try {
             clearstatcache(true, $path);
-            $size = @filesize($path);
-            if ($size !== false && $size > $this->maxBytes) {
-                $handle = fopen($path, 'rb');
-                if ($handle === false) {
-                    throw new \RuntimeException("Error reading file {$path}");
-                }
-                $content = fread($handle, $this->maxBytes);
-                fclose($handle);
-                if ($content === false) {
-                    throw new \RuntimeException("Error reading file {$path}");
-                }
-                $content .= "\n... [truncated]";
-            } else {
-                $content = file_get_contents($path);
-            }
+            $content = $this->readPage($path, $offset ?? 1, $limit ?? self::PAGE_LINES);
             restore_error_handler();
 
             // Prepended, unlike Grep and Glob, and that difference is the
@@ -293,6 +338,12 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
             // cap, returned 9,651 bytes — 48.3x, of which 39 were the file.
             // The body now gets its own quarter of $maxBytes with its own
             // marker; the same call now returns 141 bytes.
+            //
+            // Since audit 0.12 the file's share is a PAGE (at most $maxBytes,
+            // and 50 KiB by default) rather than $maxBytes itself, while both
+            // reserves are still figured from $maxBytes. Every multiple stated
+            // here is therefore a ceiling against $maxBytes: the page can only
+            // make the total smaller.
             //
             // The FILE's share is deliberately NOT reduced to pay for it. A
             // read that returns less of the file because a sibling CLAUDE.md
@@ -402,6 +453,191 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
                 content: $e->getMessage(),
                 isError: true,
             );
+        }
+    }
+
+    /**
+     * The bytes one page may hold: {@see PAGE_BYTES}, or $maxBytes when the
+     * instance was built with a smaller ceiling.
+     */
+    private function pageBytes(): int
+    {
+        return min(self::PAGE_BYTES, $this->maxBytes);
+    }
+
+    /**
+     * `offset`/`limit` as a positive int, null when absent, or the error text to
+     * return. A numeric string is accepted: tool-call JSON from a weaker model
+     * routinely quotes numbers, and refusing `"40"` would cost a turn for nothing.
+     *
+     * @param array<string, mixed> $args
+     */
+    private static function lineArgument(array $args, string $name): int|string|null
+    {
+        $value = $args[$name] ?? null;
+        if ($value === null) {
+            return null;
+        }
+        if (is_string($value) && preg_match('/^\s*\d+\s*$/', $value) === 1) {
+            $value = (int) trim($value);
+        }
+        if (!is_int($value) || $value < 1) {
+            return "Error: {$name} must be a positive integer (line numbers start at 1)";
+        }
+
+        return $value;
+    }
+
+    /**
+     * One page of $path: lines $offset onward, each as `N: text`, stopping at
+     * $limit lines or {@see pageBytes()} bytes (prefixes and newlines counted),
+     * whichever comes first, with a continuation footer when lines remain.
+     *
+     * Two passes over the file, each a block at a time: the first counts the
+     * lines, so the footer can say "of N" and an `offset` past the end can be
+     * refused with the real count; the second skips to $offset and builds the
+     * page. Neither holds more than one block plus one page in memory, however
+     * large the file or long its lines.
+     *
+     * A line that cannot fit even on an otherwise empty page is the one case
+     * that cannot be paged by line: it comes back cut at the page size and
+     * marked with how much of it was shown, and the footer moves on to the next
+     * line, so repeated calls always make progress.
+     *
+     * Every fread() asks for min({@see SCAN_CHUNK}, $maxBytes) bytes, so a
+     * non-positive $maxBytes still throws on the first one, as it always has.
+     */
+    private function readPage(string $path, int $offset, int $limit): string
+    {
+        $handle = fopen($path, 'rb');
+        if ($handle === false) {
+            throw new \RuntimeException("Error reading file {$path}");
+        }
+
+        try {
+            $chunkLength = min(self::SCAN_CHUNK, $this->maxBytes);
+            $read = static function () use ($handle, $chunkLength, $path): string {
+                $chunk = fread($handle, $chunkLength);
+                if ($chunk === false) {
+                    throw new \RuntimeException("Error reading file {$path}");
+                }
+
+                return $chunk;
+            };
+
+            // Pass 1: how many lines. A final line without a newline counts.
+            $total = 0;
+            $lastByte = '';
+            while (($chunk = $read()) !== '') {
+                $total += substr_count($chunk, "\n");
+                $lastByte = $chunk[-1];
+            }
+            if ($lastByte !== '' && $lastByte !== "\n") {
+                $total++;
+            }
+
+            if ($total === 0) {
+                // An empty file is a complete, empty read, not an offset error.
+                if ($offset === 1) {
+                    return '';
+                }
+            }
+            if ($offset > $total) {
+                throw new \RuntimeException(
+                    "Error: offset {$offset} is past the end of {$path}, which has {$total} "
+                    . ($total === 1 ? 'line' : 'lines'),
+                );
+            }
+
+            // Pass 2: skip to $offset, then build the page.
+            rewind($handle);
+            $buffer = '';
+            $skip = $offset - 1;
+            while ($skip > 0) {
+                $chunk = $read();
+                if ($chunk === '') {
+                    break;
+                }
+                $newlines = substr_count($chunk, "\n");
+                if ($newlines < $skip) {
+                    $skip -= $newlines;
+                    continue;
+                }
+                $at = -1;
+                for ($i = 0; $i < $skip; $i++) {
+                    $at = (int) strpos($chunk, "\n", $at + 1);
+                }
+                $buffer = substr($chunk, $at + 1);
+                $skip = 0;
+            }
+
+            $pageBytes = $this->pageBytes();
+            $lines = [];
+            $used = 0;
+            $lineNumber = $offset;
+            $cutNote = null;
+            $line = '';
+            $lineLength = 0;
+            $eof = false;
+
+            while (count($lines) < $limit) {
+                $newline = strpos($buffer, "\n");
+                if ($newline === false) {
+                    // Keep at most one page of the current line; count the rest.
+                    $lineLength += strlen($buffer);
+                    if (strlen($line) <= $pageBytes) {
+                        $line .= substr($buffer, 0, $pageBytes + 1 - strlen($line));
+                    }
+                    $buffer = $read();
+                    if ($buffer !== '') {
+                        continue;
+                    }
+                    $eof = true;
+                    if ($lineLength === 0) {
+                        break;
+                    }
+                } else {
+                    $piece = substr($buffer, 0, $newline);
+                    $lineLength += strlen($piece);
+                    if (strlen($line) <= $pageBytes) {
+                        $line .= substr($piece, 0, $pageBytes + 1 - strlen($line));
+                    }
+                    $buffer = substr($buffer, $newline + 1);
+                }
+
+                $prefix = $lineNumber . ': ';
+                $cost = strlen($prefix) + $lineLength + ($lines === [] ? 0 : 1);
+                if ($used + $cost <= $pageBytes) {
+                    $lines[] = $prefix . $line;
+                    $used += $cost;
+                } elseif ($lines === []) {
+                    $marker = ' … [line ' . $lineNumber . ' truncated: %s of ' . number_format($lineLength)
+                        . ' bytes shown]';
+                    $room = max(0, $pageBytes - strlen($prefix) - strlen(sprintf($marker, number_format($pageBytes))));
+                    $head = mb_strcut($line, 0, $room, 'UTF-8');
+                    $lines[] = $prefix . $head . sprintf($marker, number_format(strlen($head)));
+                    $cutNote = $lineNumber;
+                } else {
+                    break;
+                }
+                $lineNumber++;
+                $line = '';
+                $lineLength = 0;
+                if ($eof || $cutNote !== null) {
+                    break;
+                }
+            }
+
+            $last = $lineNumber - 1;
+            $page = implode("\n", $lines);
+            if ($last < $total) {
+                $span = $last === $offset ? "line {$offset}" : "lines {$offset}-{$last}";
+                $page .= "\n\n[{$span} of {$total} — call Read with offset=" . ($last + 1) . ' to continue]';
+            }
+
+            return $page;
+        } finally {
+            fclose($handle);
         }
     }
 }

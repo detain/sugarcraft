@@ -275,10 +275,10 @@ final class RulePathScopingWiringTest extends TestCase
             substr($first, -strlen((string) $expected)),
             'the whole rule trails the file, byte for byte, with nothing cut from either end',
         );
-        self::assertStringStartsWith("<?php\n// widget\n\n\n", $first, 'the file the model asked for stays the head of the result');
+        self::assertStringStartsWith("1: <?php\n2: // widget\n\n", $first, 'the file the model asked for stays the head of the result');
 
         $second = $read->execute(['id' => 'c2', 'file_path' => $path])->content();
-        self::assertSame("<?php\n// widget\n", $second, 'announce once: the next Read of the same path is silent in both channels');
+        self::assertSame("1: <?php\n2: // widget", $second, 'announce once: the next Read of the same path is silent in both channels');
 
         $other = $read->execute(['id' => 'c3', 'file_path' => $this->repo . '/README.md'])->content();
         self::assertStringNotContainsString('READ TIME CANARY', $other, 'and a path the rule does not claim never buys it');
@@ -381,7 +381,7 @@ final class RulePathScopingWiringTest extends TestCase
             self::ruleTrackerOf($silencedRead)->announcedPaths(),
             'and no mark was spent, so switching the pack back on can still deliver it',
         );
-        self::assertStringStartsWith("<?php\n// widget\n", $silenced, 'the file itself is untouched — the only tail on this result belongs to the skills channel, which this step does not own');
+        self::assertStringStartsWith("1: <?php\n2: // widget", $silenced, 'the file itself is untouched — the only tail on this result belongs to the skills channel, which this step does not own');
 
         $openRead = $this->bootedReadWith(RulesState::new([]));
         $open = $openRead->execute(['id' => 'c2', 'file_path' => $path])->content();

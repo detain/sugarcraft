@@ -97,19 +97,22 @@ use SugarCraft\Crush\Tools\BuiltIn\Write;
 final class ToolOutputBudgetTest extends TestCase
 {
     /**
-     * `"\n... [truncated]"` — the marker {@see Read} appends to a file that came
-     * in over its cap. Named because every bound in this file that quotes a
-     * multiple of Read's cap is that multiple PLUS this, and a reader who cannot
-     * see the addend cannot tell a tight bound from a slack one.
+     * The most a {@see Read} page's continuation footer can cost —
+     * `"\n\n[lines a-b of N — call Read with offset=c to continue]"` is 82 bytes
+     * with every number at seven digits — rounded up. It replaced the 16-byte
+     * `"\n... [truncated]"` marker when Read started paging (audit 0.12). Named
+     * because every bound in this file that quotes a multiple of Read's cap is
+     * that multiple PLUS this, and a reader who cannot see the addend cannot
+     * tell a tight bound from a slack one.
      */
-    private const READ_TRUNCATION_MARKER_BYTES = 16;
+    private const READ_PAGE_FOOTER_MAX_BYTES = 96;
 
     /**
-     * The fixed chrome a fully-populated Read carries: the 16-byte truncation
-     * marker, the one newline in front of the instruction body, and two in front
-     * of each transient channel.
+     * The fixed chrome a fully-populated Read carries: the page footer, the one
+     * newline in front of the instruction body, and two in front of each
+     * transient channel.
      */
-    private const READ_BOTH_CHANNEL_CHROME_BYTES = 21;
+    private const READ_BOTH_CHANNEL_CHROME_BYTES = self::READ_PAGE_FOOTER_MAX_BYTES + 5;
 
     private string $dir;
 
@@ -1142,8 +1145,19 @@ final class ToolOutputBudgetTest extends TestCase
                 ? $this->fatRuleNudge(4, 2000)->forPath($path, intdiv($maxBytes, RulePathNudge::CALLER_BUDGET_DIVISOR))
                 : null;
 
+            // The file's share is whatever a bare Read pages out at this cap —
+            // derived rather than rebuilt, so this pins the COMPOSITION; the
+            // page's own bound is asserted right below it.
+            $page = (new Read($this->dir, $maxBytes))->execute(['file_path' => $path])->content();
+            self::assertLessThanOrEqual(
+                min($maxBytes, 51200) + self::READ_PAGE_FOOTER_MAX_BYTES,
+                strlen($page),
+                "the bare page at maxBytes $maxBytes overran its byte budget plus footer",
+            );
+            self::assertStringContainsString('call Read with offset=', $page, 'the file is far larger than one page');
+
             self::assertSame(
-                substr($file, 0, $maxBytes) . "\n... [truncated]"
+                $page
                     . ($skillText === null ? '' : "\n\n" . $skillText)
                     . ($ruleText === null ? '' : "\n\n" . $ruleText),
                 $content,
@@ -1151,9 +1165,9 @@ final class ToolOutputBudgetTest extends TestCase
             );
 
             // The stated ceiling for this state, built from the same constants the
-            // tool reads: the cap for the file, 16 bytes for its truncation marker,
-            // and per live channel a two-byte separator plus an eighth.
-            $ceiling = $maxBytes + self::READ_TRUNCATION_MARKER_BYTES
+            // tool reads: the cap for the file's page, its footer, and per live
+            // channel a two-byte separator plus an eighth.
+            $ceiling = $maxBytes + self::READ_PAGE_FOOTER_MAX_BYTES
                 + ($skillText === null ? 0 : 2 + intdiv($maxBytes, SkillPathNudge::CALLER_BUDGET_DIVISOR))
                 + ($ruleText === null ? 0 : 2 + intdiv($maxBytes, RulePathNudge::CALLER_BUDGET_DIVISOR));
             self::assertLessThanOrEqual(
@@ -1175,9 +1189,9 @@ final class ToolOutputBudgetTest extends TestCase
                             . 'or the ceiling above is vacuous',
                     );
                     self::assertGreaterThan(
-                        $maxBytes,
+                        strlen($page),
                         strlen($content),
-                        "the headroom beside the cap must actually be used for the $channel channel",
+                        "the headroom beside the page must actually be used for the $channel channel",
                     );
                     continue;
                 }
@@ -1252,11 +1266,17 @@ final class ToolOutputBudgetTest extends TestCase
             $this->fatRuleNudge(4, 2000),
         ))->execute(['file_path' => $path])->content();
 
-        $tail = substr($file, 0, $maxBytes) . "\n... [truncated]" . "\n\n" . $skillText . "\n\n" . $ruleText;
+        $page = (new Read($this->dir, $maxBytes))->execute(['file_path' => $path])->content();
+        self::assertGreaterThan(
+            $maxBytes - 64,
+            strlen($page),
+            'the bare page fills its whole byte budget, to within one numbered line of this fixture',
+        );
+        $tail = $page . "\n\n" . $skillText . "\n\n" . $ruleText;
         self::assertSame(
             $tail,
             substr($content, -strlen($tail)),
-            'the file at its FULL cap, then its marker, then the skill channel, then the rule '
+            'the page at its FULL cap, then its footer, then the skill channel, then the rule '
                 . 'channel, byte for byte, with nothing cut from the file to pay for either',
         );
         self::assertStringStartsWith("# BIG-RULE\n", $content, 'the instruction body leads, as on every other disposition');
