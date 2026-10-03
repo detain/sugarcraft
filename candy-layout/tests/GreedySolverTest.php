@@ -74,7 +74,8 @@ final class GreedySolverTest extends TestCase
     public function testPureMinHorizontal(): void
     {
         // [min(20), min(30), min(25)] = 75 reserved, slack=25 in 100.
-        // Proportional distribution: 20→26, 30→40, 25→33 = 99 + 1 rounding.
+        // Proportional distribution: 20→26, 30→40, 25→33 = 99; the 1-cell
+        // floor loss goes to the first Min so the sizes tile the area.
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
             [Constraint::min(20), Constraint::min(30), Constraint::min(25)],
@@ -82,7 +83,7 @@ final class GreedySolverTest extends TestCase
         );
 
         $this->assertCount(3, $rects);
-        $this->assertSame(26, $rects[0]->width);
+        $this->assertSame(27, $rects[0]->width);
         $this->assertSame(40, $rects[1]->width);
         $this->assertSame(33, $rects[2]->width);
     }

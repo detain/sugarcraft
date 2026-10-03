@@ -55,8 +55,13 @@ Source: ai/candy-layout-solver-deprecate
   array") — maps keyed by Side iterate `[[Side::Left,$l],[Side::Right,$r]]`
   pairs or key by a string `self::key($side)` instead.
 - Stack split: rows = height − (count−1) gap rows; non-last slots floor at
-  their float weight share, LAST slot takes the residual — deterministic, and
-  absurd frames yield zero-height Regions (allowed by Region).
+  their EXACT rational weight share (weights scaled to their LCM denominator,
+  overflow-free mulDiv), LAST slot takes the residual — deterministic, and
+  absurd frames yield zero-height Regions (allowed by Region). The original
+  float split (`floor(rows * (w/total))`) mis-placed the boundary row on
+  thousands of (height, weight) pairs — e.g. 3/5 + 1/1 at height 9 gave 2/6,
+  not 3/5. Weight sets whose scaled sum overflows PHP_INT_MAX are refused in
+  the constructor, so resolve() stays throw-free.
 - **Unique home (review round-2 M1):** a slot id equal to `centerPaneId` was
   silently accepted, and resolve() culled one region via key collision. Fixed
   in depth: named early-exit guard in withSlotAdded(), key-path-named refusal

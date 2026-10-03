@@ -60,9 +60,20 @@ $rects = $solver->solve($region, Direction::Horizontal, [
 - `Constraint::percentage(int 0-100)` — % of total
 - `Constraint::ratio(int $num, int $denom)` — num/denom of the total span, reserved like a fixed
 
+**Rounding and overflow.** Sizes are whole cells, so `floor()` loses fractions;
+the solver hands them back so the regions tile the span: the Fill/Max remainder
+rides the first Fill (else Max), Min-only slack residue rides the first Min,
+and a Percentage/Ratio shortfall of at most N−1 cells (N = their count — the
+most N floored shares can lose) is reclaimed earliest-first; a larger gap is
+slack the constraints never asked for and stays open. When fixed demand exceeds
+the span, regions shrink proportionally and the floor loss is returned one cell
+per shrunk region — silently, because a terminal resized below its fixed panes
+is a normal runtime state, not an error. `withoutOverflowTruncation()` keeps
+full base sizes instead (the layout runs off-grid).
+
 ## Shared foundations
 
-`candy-layout` is a **foundation package** consumed by `candy-sprinkles` (step-10) and `sugar-bits`/`candy-forms` (step-14/15). The `LayoutSolver` interface is the only public contract. Use `GreedySolver`; `CassowarySolver` is a deprecated shim that delegates to it.
+`candy-layout` is a **foundation package** consumed by `candy-sprinkles` (step-10) and `sugar-bits`/`candy-forms` (step-14/15). The `LayoutSolver` interface — `solve()` alone; construction lives on the concrete classes — is the only public contract (`Expression`, a leftover of the retired simplex, is `@internal`). Use `GreedySolver`; `CassowarySolver` is a deprecated shim that delegates to it.
 
 `Region` here is deliberately distinct from `SugarCraft\Buffer\Region` in candy-buffer (a leaf-package name collision that keeps candy-layout dependency-free); candy-sprinkles' `RegionBridge` converts between them.
 
@@ -89,7 +100,7 @@ $geometry->dividerColumns();                    // [['x' => 32, 'side' => Side::
 
 **Degradation ladder.** `resolve()` never throws on small frames: a side column is raised to `sideMinCols` only while the center keeps `centerMinCols`; if no plan satisfies both floors, the side with fewer slots drops (ties drop Left), then the remaining side, and finally the center takes the whole frame. Degenerate (zero-width/height) frames resolve to empty geometry — the host decides the fallback. The center region rides inside `$geometry->regions` under its pane id. A side whose share floors to 0 columns (raise refused while the center still meets its floor) intentionally keeps its divider and a width-0 region — the frame stays exactly tiled; hide a side by removing all of its slots.
 
-**Shares.** Column shares are rational `[num, denom]` pairs (like sugar-crush's `Tui/SplitLayout`, referenced but not depended on). `withColumnShare()` *clamps* — never throws — so left+right stay ≤ 1/2 of usable width; chat is the primary surface. The ceiling is a mutator policy: `fromArray()` restores persisted shares verbatim so round-trips are lossless.
+**Shares.** Column shares are rational `[num, denom]` pairs (like sugar-crush's `Tui/SplitLayout`, referenced but not depended on). `withColumnShare()` *clamps* — never throws — so left+right stay ≤ 1/2 of usable width; chat is the primary surface. The ceiling is a mutator policy: `fromArray()` restores persisted shares verbatim so round-trips are lossless. Stack heights are split in exact integer arithmetic over the weights' common denominator (no float ever decides a boundary row), so a stack weight set whose scaled sum would exceed `PHP_INT_MAX` is refused with `InvalidArgumentException` at the mutator or manifest that introduces it — `resolve()` itself never throws.
 
 **Persistence.** `toArray()`/`fromArray()` ship an exact versioned shape: `['version' => 1, 'center' => 'chat', 'sides' => ['left' => [['id' => …, 'weight' => [n, d]], …], 'right' => […]], 'columnShare' => ['left' => [1, 3], 'right' => [1, 3]], 'minimums' => [24, 20]]`. Malformed manifests throw `InvalidArgumentException` naming the failed key — including a slot id that collides with the center pane's (a pane has exactly one home; `withSlotAdded()` refuses the same collision). `dividerCols` has no public mutator and is not persisted.
 

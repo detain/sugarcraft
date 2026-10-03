@@ -20,8 +20,11 @@ use SugarCraft\Layout\Constraint\Constraint;
  * long-standing Ratio-returns-0 bug.
  *
  * The only in-repo caller is candy-sprinkles' `SolverFactory`, gated behind
- * `SUGARCRAFT_LAYOUT_SOLVER=cassowary`; it constructs this class but does not
- * call `solve()`.
+ * `SUGARCRAFT_LAYOUT_SOLVER=cassowary`; with that env var set, sprinkles'
+ * `Layout\Solver` routes every split through this class's `solve()`, so the
+ * deprecation fires there on each solve. The notice is NOT `@`-suppressed:
+ * whether it is shown or logged is the host's `error_reporting` /
+ * error-handler decision, never this library's.
  *
  * @deprecated Use {@see GreedySolver} directly. Kept only so existing
  *             `new CassowarySolver()` call-sites keep working.
@@ -64,7 +67,7 @@ final class CassowarySolver implements LayoutSolver
      */
     public function solve(Region $region, Direction $dir, array $constraints): array
     {
-        @trigger_error(
+        trigger_error(
             'CassowarySolver never converges and is deprecated; delegating to GreedySolver. Use GreedySolver directly.',
             E_USER_DEPRECATED,
         );
@@ -73,9 +76,9 @@ final class CassowarySolver implements LayoutSolver
     }
 }
 
-// ─── Supporting helper class ────────────────────────────────────────────────
-// Expression is a standalone linear-expression helper still covered by
-// ExpressionTest; it is retained even though the simplex that consumed it is
-// gone. The other former simplex helpers (Variable, Relation, ConstraintDef,
-// EditInfo, Tableau) were internal to the removed pivot loop and have been
-// deleted along with it.
+// ─── Former simplex helpers ─────────────────────────────────────────────────
+// Expression (src/Expression.php) is retained as an @internal standalone
+// linear-expression value object — no solver consumes it any more; see its
+// class docblock. The other former simplex helpers (Variable, Relation,
+// ConstraintDef, EditInfo, Tableau) were internal to the removed pivot loop
+// and were deleted along with it.

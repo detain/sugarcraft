@@ -20,6 +20,16 @@ namespace SugarCraft\Layout;
  * state, so this residual mutability is disclosed rather than frozen (the
  * round-86 keep-as-is ruling on the class, findings/plan_candy-layout.md row
  * 3.2, stood until a cheap freeze became available — for $terms, it did).
+ *
+ * No solver in this package consumes it any more: the Big-M simplex that built
+ * its tableau rows from these expressions was retired (see
+ * {@see CassowarySolver}), and {@see GreedySolver} works in integer cells, not
+ * linear terms. It is kept as a self-contained, fully tested value object
+ * rather than deleted, but it is NOT part of candy-layout's supported surface —
+ * {@see LayoutSolver} is the only public contract — so no downstream lib should
+ * start depending on it.
+ *
+ * @internal
  */
 final class Expression
 {

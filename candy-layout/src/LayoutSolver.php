@@ -12,6 +12,11 @@ namespace SugarCraft\Layout;
  * region's total dimension.
  *
  * Mirrors ratatui's layout constraint solving.
+ *
+ * The contract is `solve()` alone. Construction lives on the concrete classes
+ * (`GreedySolver::new()`/`::greedy()`/`::compat()`, the deprecated
+ * `CassowarySolver::new()`), so an implementer never has to know — or build —
+ * any other solver.
  */
 interface LayoutSolver
 {
@@ -24,14 +29,4 @@ interface LayoutSolver
      * @return list<Region>      Sub-regions in order.
      */
     public function solve(Region $region, Direction $dir, array $constraints): array;
-
-    /**
-     * Create a new GreedySolver instance.
-     */
-    public static function greedy(): GreedySolver;
-
-    /**
-     * Create a new CassowarySolver instance.
-     */
-    public static function cassowary(): CassowarySolver;
 }

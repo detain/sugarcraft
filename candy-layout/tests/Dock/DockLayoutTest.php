@@ -620,6 +620,103 @@ final class DockLayoutTest extends TestCase
         $this->assertEquals(new Region(0, 10, 33, 20), $geometry->regionFor('b'));
     }
 
+    public function testStackSplitUsesExactRationalFloorNotFloat(): void
+    {
+        // rows = 9 - 1 gap = 8 over weights [3/5, 1/1] → exact share of 'a' is
+        // floor(8 * (3/5) / (8/5)) = floor(3) = 3. Float math computed
+        // 8 * (0.6 / 1.6) = 2.9999… → 2 and migrated the boundary row to 'b'.
+        $layout = DockLayout::new()
+            ->withSlotAdded(Side::Left, 'a')
+            ->withSlotAdded(Side::Left, 'b')
+            ->withStackWeight(Side::Left, 0, 3, 5);
+        $geometry = $layout->resolve(Region::fromSize(120, 9));
+
+        $this->assertSame(3, $geometry->regionFor('a')?->height);
+        $this->assertSame(5, $geometry->regionFor('b')?->height);
+    }
+
+    public function testStackSplitMatchesExactRationalFloorAcrossResizes(): void
+    {
+        // Resize sweep: for two slots a/b and c/d the exact first-slot share is
+        // floor(rows * (a/b) / (a/b + c/d)) = intdiv(rows*a*d, a*d + c*b).
+        $mismatches = [];
+        foreach ([[3, 5], [1, 3], [2, 7], [5, 6], [1, 1], [7, 3]] as [$a, $b]) {
+            foreach ([[1, 1], [1, 3], [4, 7], [2, 1]] as [$c, $d]) {
+                $layout = DockLayout::new()
+                    ->withSlotAdded(Side::Right, 'x')
+                    ->withSlotAdded(Side::Right, 'y')
+                    ->withStackWeight(Side::Right, 0, $a, $b)
+                    ->withStackWeight(Side::Right, 1, $c, $d);
+                for ($height = 1; $height <= 400; $height++) {
+                    $rows = $height - 1;
+                    $expected = $rows <= 0 ? 0 : intdiv($rows * $a * $d, $a * $d + $c * $b);
+                    $geometry = $layout->resolve(Region::fromSize(120, $height));
+                    if ($geometry->regionFor('x')?->height !== $expected
+                        || $geometry->regionFor('y')?->height !== max(0, $rows) - $expected) {
+                        $mismatches[] = "{$a}/{$b}+{$c}/{$d}@{$height}";
+                    }
+                }
+            }
+        }
+
+        $this->assertSame([], $mismatches);
+    }
+
+    public function testHugeRepresentableStackWeightsSplitExactlyWithoutOverflow(): void
+    {
+        // Each weight is floor(MAX/2); their sum (MAX-1) still fits, but
+        // rows * weight does not — the overflow-free mulDiv path must still
+        // produce the exact half split.
+        $half = intdiv(PHP_INT_MAX, 2);
+        $layout = DockLayout::new()
+            ->withSlotAdded(Side::Left, 'a')
+            ->withSlotAdded(Side::Left, 'b')
+            ->withStackWeight(Side::Left, 0, $half, 1)
+            ->withStackWeight(Side::Left, 1, $half, 1);
+        $geometry = $layout->resolve(Region::fromSize(120, 22));
+
+        // rows = 21 → floor(21 / 2) = 10, residual 11 to the last slot.
+        $this->assertSame(10, $geometry->regionFor('a')?->height);
+        $this->assertSame(11, $geometry->regionFor('b')?->height);
+    }
+
+    public function testStackWeightsWhoseExactSumOverflowAreRefused(): void
+    {
+        $layout = DockLayout::new()
+            ->withSlotAdded(Side::Left, 'a')
+            ->withSlotAdded(Side::Left, 'b')
+            ->withStackWeight(Side::Left, 0, PHP_INT_MAX - 1, 1); // + 1/1 = MAX, still exact
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('DockLayout Left stack weights overflow exact integer arithmetic');
+        $layout->withStackWeight(Side::Left, 1, 2, 1);
+    }
+
+    public function testManifestWithOverflowingStackWeightsIsRefused(): void
+    {
+        $manifest = DockLayout::new()->toArray();
+        $manifest['sides']['right'] = [
+            ['id' => 'x', 'weight' => [1, PHP_INT_MAX]],
+            ['id' => 'y', 'weight' => [1, PHP_INT_MAX - 1]],
+        ];
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('DockLayout Right stack weights overflow exact integer arithmetic');
+        DockLayout::fromArray($manifest);
+    }
+
+    public function testRestoredColumnShareOfOneDegradesInsteadOfStarvingCenter(): void
+    {
+        // withColumnShare() clamps, but a manifest may carry a whole share;
+        // the side would claim every usable column, so the ladder drops it.
+        $manifest = DockLayout::new()->withSlotAdded(Side::Left, 'files')->toArray();
+        $manifest['columnShare']['left'] = [1, 1];
+        $geometry = DockLayout::fromArray($manifest)->resolve(Region::fromSize(100, 30));
+
+        $this->assertNull($geometry->regionFor('files'));
+        $this->assertEquals(new Region(0, 0, 100, 30), $geometry->regionFor('chat'));
+    }
+
     public function testThreeEqualSlotsSplitResidualToLastToo(): void
     {
         $layout = DockLayout::new()

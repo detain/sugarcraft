@@ -44,17 +44,21 @@ final class SolverEdgeCaseTest extends TestCase
     {
         $solver = GreedySolver::new();
         $this->assertInstanceOf(LayoutSolver::class, $solver);
-        // Interface statics are declarations only (calling them fatals) — both
-        // concrete solvers must supply the factories the contract names.
+        // The interface contract is solve() alone (Interface Segregation): an
+        // implementer must not be forced to know or build the other concrete
+        // solvers. The factories stay on the concrete classes, so existing
+        // GreedySolver::greedy()/::cassowary() call-sites keep working.
         $contract = new \ReflectionClass(LayoutSolver::class);
-        foreach (['solve', 'greedy', 'cassowary'] as $method) {
-            $this->assertTrue($contract->hasMethod($method), "LayoutSolver must declare {$method}()");
-        }
+        $this->assertSame(
+            ['solve'],
+            array_map(static fn(\ReflectionMethod $m): string => $m->getName(), $contract->getMethods()),
+            'LayoutSolver must declare only solve()'
+        );
         foreach ([GreedySolver::class, CassowarySolver::class] as $implementor) {
             foreach (['solve', 'greedy', 'cassowary'] as $method) {
                 $this->assertTrue(
                     (new \ReflectionClass($implementor))->hasMethod($method),
-                    "{$implementor} must fulfil the {$method}() contract"
+                    "{$implementor} must keep providing {$method}()"
                 );
             }
         }
@@ -180,7 +184,8 @@ final class SolverEdgeCaseTest extends TestCase
     public function testLengthOnlyLayoutLeavesTrailingGap(): void
     {
         // Step 3 guards: Min/Length are exact values and rounding reclamation
-        // only corrects diff <= MAX_FLOOR_RECLAIM. A 90-cell shortfall is
+        // only corrects a diff within the N-1 floor-loss bound of the
+        // Percentage/Ratio count (0 here). A 90-cell shortfall is
         // intentional slack — nothing may inflate the Length.
         $rects = GreedySolver::solveStatic(
             Region::fromSize(100, 3),
@@ -206,5 +211,151 @@ final class SolverEdgeCaseTest extends TestCase
         $this->assertSame([30, 30], array_map(static fn(Region $r): int => $r->width, $rects));
         $this->assertSame([0, 18], array_map(static fn(Region $r): int => $r->y, $rects));
         $this->assertSame(60, array_sum(array_map(static fn(Region $r): int => $r->height, $rects)));
+    }
+
+    // ── sum-to-total contract (LayoutSolver: sizes tile the region) ─────────
+
+    /**
+     * @param list<Region> $rects
+     * @return list<int>
+     */
+    private static function widthsOf(array $rects): array
+    {
+        return array_map(static fn(Region $r): int => $r->width, $rects);
+    }
+
+    public function testQuartilePercentageSplitInOddWidthReclaimsEveryFloorCell(): void
+    {
+        // 4 x floor(24.75) = 96: the 3-cell floor loss is within the N-1 bound
+        // for four segments, so it is reclaimed earliest-first. The old fixed
+        // 2-cell cap skipped reclamation entirely and left a 3-column hole.
+        $rects = GreedySolver::new()->solve(
+            Region::fromSize(99, 1),
+            Direction::Horizontal,
+            array_fill(0, 4, Constraint::percentage(25)),
+        );
+
+        $this->assertSame([25, 25, 25, 24], self::widthsOf($rects));
+        $this->assertSame([0, 25, 50, 75], array_map(static fn(Region $r): int => $r->x, $rects));
+    }
+
+    public function testLonePercentageBesideLengthKeepsItsSlack(): void
+    {
+        // A single Percentage cannot lose a whole cell to floor() (10.5 → 10),
+        // so the 1-cell shortfall is slack the Length+Percentage pair never
+        // claimed — the reclaim must not inflate the Percentage past its share.
+        $rects = GreedySolver::new()->solve(
+            Region::fromSize(21, 1),
+            Direction::Horizontal,
+            [Constraint::length(10), Constraint::percentage(50)],
+        );
+
+        $this->assertSame([10, 10], self::widthsOf($rects));
+    }
+
+    /**
+     * @return array<string, array{int, list<int>, list<int>}>
+     */
+    public static function minOnlyProvider(): array
+    {
+        return [
+            'two mins, 99 + 1 floor loss' => [100, [30, 40], [43, 57]],
+            'three equal mins'           => [100, [10, 10, 10], [34, 33, 33]],
+            'three unequal mins'         => [100, [20, 30, 25], [27, 40, 33]],
+        ];
+    }
+
+    /**
+     * @dataProvider minOnlyProvider
+     * @param list<int> $mins
+     * @param list<int> $expected
+     */
+    public function testMinOnlyProportionalSlackTilesTheArea(int $width, array $mins, array $expected): void
+    {
+        $rects = GreedySolver::new()->solve(
+            Region::fromSize($width, 1),
+            Direction::Horizontal,
+            array_map(static fn(int $n) => Constraint::min($n), $mins),
+        );
+
+        $this->assertSame($expected, self::widthsOf($rects));
+        $this->assertSame($width, array_sum(self::widthsOf($rects)));
+    }
+
+    public function testCompatMinOnlyRemainderStillGoesToLastRegion(): void
+    {
+        // boxer-compat keeps its own remainder-to-last policy for Min slack.
+        $rects = GreedySolver::compat()->solve(
+            Region::fromSize(100, 1),
+            Direction::Horizontal,
+            [Constraint::min(30), Constraint::min(40)],
+        );
+
+        $this->assertSame([42, 58], self::widthsOf($rects));
+    }
+
+    public function testOverflowTruncationTilesTheAreaWithoutRaisingAnError(): void
+    {
+        // Demand 12 > width 10: each Length(3) scales to floor(2.5) = 2 (sum 8);
+        // the 2-cell floor loss is handed back earliest-first. No PHP error is
+        // raised — an over-constrained split is the normal state of a TUI
+        // resized below its fixed panes (see the GreedySolver docblock).
+        $errors = [];
+        set_error_handler(static function (int $errno, string $errstr) use (&$errors): bool {
+            $errors[] = $errstr;
+            return true;
+        });
+        try {
+            $rects = GreedySolver::new()->solve(
+                Region::fromSize(10, 1),
+                Direction::Horizontal,
+                array_fill(0, 4, Constraint::length(3)),
+            );
+        } finally {
+            restore_error_handler();
+        }
+
+        $this->assertSame([], $errors);
+        $this->assertSame([3, 3, 2, 2], self::widthsOf($rects));
+        $this->assertSame([0, 3, 6, 8], array_map(static fn(Region $r): int => $r->x, $rects));
+    }
+
+    public function testOverflowTruncationResidualGoesLastFirstUnderRemainderToLast(): void
+    {
+        $rects = GreedySolver::new()->withRemainderToLast()->solve(
+            Region::fromSize(10, 1),
+            Direction::Horizontal,
+            array_fill(0, 4, Constraint::length(3)),
+        );
+
+        $this->assertSame([2, 2, 3, 3], self::widthsOf($rects));
+    }
+
+    public function testOverflowTruncationSkipsZeroBaseRegions(): void
+    {
+        // Fill has no base size in the overflow branch; the residual goes to
+        // the truncated fixed regions only, and the sizes still sum to 10.
+        $rects = GreedySolver::new()->solve(
+            Region::fromSize(10, 1),
+            Direction::Horizontal,
+            [Constraint::length(7), Constraint::fill(), Constraint::min(7)],
+        );
+
+        $this->assertSame([5, 0, 5], self::widthsOf($rects));
+    }
+
+    public function testOverflowTruncationSurvivesDemandPastPhpIntMax(): void
+    {
+        // Length(PHP_INT_MAX) + Length(5) sums past PHP_INT_MAX (a float), so
+        // the exact integer path must step aside for the float scale instead
+        // of handing intdiv() a float.
+        $rects = GreedySolver::new()->solve(
+            Region::fromSize(10, 1),
+            Direction::Horizontal,
+            [Constraint::length(PHP_INT_MAX), Constraint::length(5)],
+        );
+
+        $this->assertSame(10, array_sum(self::widthsOf($rects)));
+        $this->assertSame([10, 0], self::widthsOf($rects));
     }
 }

@@ -92,6 +92,18 @@ final class DockLayout
         if ($dividerCols < 0) {
             throw new \InvalidArgumentException("DockLayout dividerCols must be >= 0; got {$dividerCols}");
         }
+        // resolve() splits each stack in exact integer arithmetic over the
+        // stack's common denominator; a weight set whose scaled sum cannot be
+        // held in a native int would force a lossy fallback inside resolve(),
+        // which never throws — so refuse it here, at every entry point.
+        foreach ([['Left', $leftSlots], ['Right', $rightSlots]] as [$sideName, $slots]) {
+            if ($slots !== [] && self::scaledStackWeights($slots) === null) {
+                throw new \InvalidArgumentException(
+                    "DockLayout {$sideName} stack weights overflow exact integer arithmetic "
+                    . '(their common-denominator sum exceeds PHP_INT_MAX); use smaller rationals'
+                );
+            }
+        }
     }
 
     /**
@@ -346,7 +358,8 @@ final class DockLayout
      * Deterministic rules (pinned by DockLayoutTest):
      *  - Degenerate frames (width or height <= 0) resolve to an EMPTY geometry;
      *    resolve never throws.
-     *  - Each active side gets floor((width - dividersTotal) * share) columns,
+     *  - Each active side gets floor((width - dividersTotal) * share) columns
+     *    (exact integer floor; a restored share >= 1 is infeasible outright),
      *    then min-protection raises a side to `sideMinCols` (Left first, then
      *    Right) ONLY while the center keeps `centerMinCols`.
      *  - An active side stays emitted even when planned at 0 columns (raise
@@ -356,7 +369,8 @@ final class DockLayout
      *    with FEWER slots (ties drop Left first), retry; drop the remaining
      *    side; finally center-only across the whole frame.
      *  - Stack rows = frame height minus one gap row between consecutive slots;
-     *    heights are the floor of each rational weight share, residual to the
+     *    heights are the exact integer floor of each rational weight share
+     *    (no float math), residual to the
      *    LAST slot; absurd frames may yield zero-height slots — allowed. When
      *    the frame cannot even pay the gap total, the gaps are dropped too, so
      *    no slot region ever starts below the frame bottom.
@@ -435,7 +449,14 @@ final class DockLayout
         $cols = [];
         foreach ($active as $side) {
             $share = $this->columnShare($side);
-            $cols[self::key($side)] = (int) floor($usable * $share['num'] / $share['denom']);
+            if ($share['num'] >= $share['denom']) {
+                // A share >= 1 (reachable only through the constructor or a
+                // restored manifest; withColumnShare() clamps) claims every
+                // usable column, so the center falls below its >= 1 minimum
+                // whatever min-protection does: infeasible, degrade.
+                return null;
+            }
+            $cols[self::key($side)] = self::mulDivFloor($usable, $share['num'], $share['denom']);
         }
 
         // Min-protection pass, Left first then Right: a side short of
@@ -511,9 +532,12 @@ final class DockLayout
     }
 
     /**
-     * Deterministic proportional split of stack rows: float weight math,
-     * floor() per slot, whole residual to the LAST slot. Never negative —
-     * absurd frames collapse slots toward zero height instead of throwing.
+     * Deterministic proportional split of stack rows in EXACT integer
+     * arithmetic: every non-last slot gets floor(rows * w_i / sum(w)) over the
+     * rational weights (scaled to their common denominator, so no float ever
+     * touches the boundary), and the whole residual goes to the LAST slot.
+     * Never negative — absurd frames collapse slots toward zero height instead
+     * of throwing.
      *
      * @param list<DockSlot> $slots
      * @return list<int>
@@ -526,27 +550,117 @@ final class DockLayout
         }
 
         $rows = $height - self::STACK_GAP_ROWS * ($count - 1);
-        $weights = array_map(
-            static fn(DockSlot $slot): float => $slot->weightNum / $slot->weightDenom,
-            $slots,
-        );
-        $totalWeight = array_sum($weights);
+        if ($rows <= 0) {
+            return array_fill(0, $count, 0);
+        }
+
+        // Non-null: the constructor refuses weight sets that would overflow.
+        $scaled = self::scaledStackWeights($slots);
+        assert($scaled !== null);
 
         $heights = [];
         $assigned = 0;
-        foreach ($slots as $index => $slot) {
-            if ($index === $count - 1) {
-                continue;
-            }
-            $share = $rows <= 0 || $totalWeight <= 0.0
-                ? 0
-                : (int) floor($rows * ($weights[$index] / $totalWeight));
-            $heights[$index] = max(0, $share);
+        for ($index = 0; $index < $count - 1; $index++) {
+            $heights[$index] = self::mulDivFloor($rows, $scaled['weights'][$index], $scaled['total']);
             $assigned += $heights[$index];
         }
-        $heights[] = max(0, $rows - $assigned);
+        $heights[] = $rows - $assigned;
 
         return $heights;
+    }
+
+    /**
+     * Stack weights rescaled to integers over their least common denominator
+     * (each rational reduced first), plus their sum: w_i / sum(w) equals
+     * weights[i] / total exactly. Null when any intermediate would exceed
+     * PHP_INT_MAX.
+     *
+     * @param list<DockSlot> $slots
+     * @return ?array{weights:list<int>,total:int}
+     */
+    private static function scaledStackWeights(array $slots): ?array
+    {
+        $reduced = [];
+        $lcm = 1;
+        foreach ($slots as $slot) {
+            $g = self::gcd($slot->weightNum, $slot->weightDenom);
+            $num = intdiv($slot->weightNum, $g);
+            $denom = intdiv($slot->weightDenom, $g);
+            $reduced[] = [$num, $denom];
+            $lcm = self::checkedMul(intdiv($lcm, self::gcd($lcm, $denom)), $denom);
+            if ($lcm === null) {
+                return null;
+            }
+        }
+
+        $weights = [];
+        $total = 0;
+        foreach ($reduced as [$num, $denom]) {
+            $weight = self::checkedMul($num, intdiv($lcm, $denom));
+            if ($weight === null || $total > PHP_INT_MAX - $weight) {
+                return null;
+            }
+            $weights[] = $weight;
+            $total += $weight;
+        }
+
+        return ['weights' => $weights, 'total' => $total];
+    }
+
+    /**
+     * Exact floor($a * $b / $c) for 0 <= $a, 0 <= $b <= $c, $c >= 1, without
+     * ever overflowing: the result is <= $a, and when $a * $b itself would
+     * exceed PHP_INT_MAX the product is rebuilt bit by bit as quotient +
+     * remainder modulo $c (every intermediate stays below $c).
+     */
+    private static function mulDivFloor(int $a, int $b, int $c): int
+    {
+        if ($b === $c) {
+            return $a;
+        }
+        if ($b === 0 || $a <= intdiv(PHP_INT_MAX, $b)) {
+            return intdiv($a * $b, $c);
+        }
+
+        $quotient = 0;
+        $remainder = 0; // invariant: running product = quotient * $c + remainder, 0 <= remainder < $c
+        for ($bit = PHP_INT_SIZE * 8 - 2; $bit >= 0; $bit--) {
+            // double
+            $quotient *= 2;
+            if ($remainder >= $c - $remainder) {
+                $remainder -= $c - $remainder;
+                $quotient++;
+            } else {
+                $remainder += $remainder;
+            }
+            // add $b when this bit of $a is set
+            if ((($a >> $bit) & 1) === 1) {
+                if ($remainder >= $c - $b) {
+                    $remainder -= $c - $b;
+                    $quotient++;
+                } else {
+                    $remainder += $b;
+                }
+            }
+        }
+
+        return $quotient;
+    }
+
+    private static function gcd(int $a, int $b): int
+    {
+        while ($b !== 0) {
+            [$a, $b] = [$b, $a % $b];
+        }
+        return $a;
+    }
+
+    private static function checkedMul(int $a, int $b): ?int
+    {
+        if ($a !== 0 && $b > intdiv(PHP_INT_MAX, $a)) {
+            return null;
+        }
+        return $a * $b;
     }
 
     // ── Persistence ──

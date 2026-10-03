@@ -26,7 +26,16 @@ use SugarCraft\Layout\Region;
  *     proportionally (Max is greedy here; clamp pass reduces it).
  *  5. If no Fill/Max, slack goes to Min constraints proportionally.
  *  6. Apply Max clamp pass; reclaimed space redistributed to Min > Fill > others.
- *  7. If total reserved > area, truncate proportionally and warn.
+ *  7. If total reserved > area, truncate proportionally; the scale pass's
+ *     floor loss is handed back one cell per truncated region (earliest
+ *     first, latest first under {@see withRemainderToLast()}) so the sizes
+ *     still tile the area.
+ *     No PHP warning is raised: an over-constrained split is the ordinary
+ *     state of a TUI resized below its fixed panes, it recurs every frame,
+ *     and a warning on the default handler would print into the terminal the
+ *     layout is drawing. Hosts that need to know compare the constraint
+ *     demand against the area themselves; {@see withoutOverflowTruncation()}
+ *     keeps every region at its full base size instead.
  *
  * ── boxer-compat mode ──────────────────────────────────────────────────────
  * The default behaviour (floor split, rounding remainder handed to the FIRST
@@ -63,15 +72,6 @@ use SugarCraft\Layout\Region;
  */
 final class GreedySolver implements LayoutSolver
 {
-    /**
-     * Upper bound on the slack a floor-rounding reclamation may distribute
-     * (E736/5.2). `floor()` over a Percentage/Ratio chain loses at most one
-     * cell per segment beyond two before a genuine shortfall is more likely,
-     * so only a leftover of 0..2 cells is treated as rounding noise; anything
-     * larger is intentional slack and stays undistributed.
-     */
-    private const MAX_FLOOR_RECLAIM = 2;
-
     /**
      * @param bool $roundSplit        round() (not floor()) Percentage/Ratio sizes — sugar-boxer distribute().
      * @param bool $remainderToLast   hand the rounding remainder to the LAST region/Fill/Max, not the first.
@@ -276,15 +276,52 @@ final class GreedySolver implements LayoutSolver
         }
 
         $totalCount = count($constraints);
+        $proportionalCount = 0;
+        foreach ($constraints as $c) {
+            if ($c instanceof Percentage || $c instanceof Ratio) {
+                $proportionalCount++;
+            }
+        }
         $totalReserved = $reservedFixed + $reservedMinSum;
 
         // Step 2: handle overflow — total exceeds area
         if ($totalReserved > $totalWidth) {
             if ($this->truncateOverflow === true) {
-                // Truncate proportionally
+                // Truncate proportionally (exact integer floor where the
+                // demand and product fit an int; float scale only past
+                // PHP_INT_MAX, where the demand sum itself has become a float).
                 $scale = $totalWidth / $totalReserved;
+                $exact = is_int($totalReserved);
+                $truncated = [];
                 foreach ($rawSizes as $i => $size) {
-                    $rawSizes[$i] = (int) floor($size * $scale);
+                    $rawSizes[$i] = $exact && ($totalWidth === 0 || $size <= intdiv(PHP_INT_MAX, $totalWidth))
+                        ? intdiv($size * $totalWidth, $totalReserved)
+                        : (int) floor($size * $scale);
+                    if ($size > 0) {
+                        $truncated[] = $i;
+                    }
+                }
+                // The per-region floor() loses under one cell each, so the
+                // residual is < count($truncated): hand it back one cell per
+                // truncated region, earliest first (latest first under
+                // remainderToLast), so the sizes tile the area exactly.
+                $residual = $totalWidth - array_sum($rawSizes);
+                if ($truncated !== []) {
+                    if ($this->remainderToLast === true) {
+                        $truncated = array_reverse($truncated);
+                    }
+                    for ($k = 0; $residual > 0; $k = ($k + 1) % count($truncated)) {
+                        $rawSizes[$truncated[$k]]++;
+                        $residual--;
+                    }
+                    // Only the float fallback (products past PHP_INT_MAX) can
+                    // over-allocate; take the excess back from the far end.
+                    for ($k = count($truncated) - 1; $residual < 0; $k = ($k + count($truncated) - 1) % count($truncated)) {
+                        if ($rawSizes[$truncated[$k]] > 0) {
+                            $rawSizes[$truncated[$k]]--;
+                            $residual++;
+                        }
+                    }
                 }
             }
             // boxer-compat (truncateOverflow=false): leave every region at its
@@ -336,10 +373,25 @@ final class GreedySolver implements LayoutSolver
                             }
                         }
                     } else {
+                        $firstMin = null;
+                        $remainder = $slack;
                         foreach ($constraints as $i => $c) {
                             if ($c instanceof Min) {
-                                $rawSizes[$i] = (int) floor(($c->n / $reservedMinSum) * $slack) + $c->n;
+                                $share = $c->n <= intdiv(PHP_INT_MAX, $slack)
+                                    ? intdiv($c->n * $slack, $reservedMinSum)
+                                    : (int) floor(($c->n / $reservedMinSum) * $slack);
+                                $rawSizes[$i] = $share + $c->n;
+                                $remainder -= $share;
+                                $firstMin ??= $i;
                             }
+                        }
+                        // The proportional floor() loses up to one cell per Min;
+                        // like the equal-shares branch above, the first Min
+                        // recipient absorbs it so the sizes tile the area.
+                        // boxer-compat leaves it for the remainder-to-last pass
+                        // below, which already hands any diff to the last region.
+                        if ($remainder > 0 && $firstMin !== null && $this->remainderToLast === false) {
+                            $rawSizes[$firstMin] += $remainder;
                         }
                     }
 
@@ -355,14 +407,16 @@ final class GreedySolver implements LayoutSolver
                             $lastIdx = $totalCount - 1;
                             $rawSizes[$lastIdx] = max(0, $rawSizes[$lastIdx] + $diff);
                         }
-                    } elseif ($diff > 0 && $diff <= self::MAX_FLOOR_RECLAIM) {
+                    } elseif ($diff > 0 && $diff <= max(0, $proportionalCount - 1)) {
                         // Rounding reclamation: pure Percentage/Ratio layouts lose
                         // pixels to floor(). Distribute leftover round-robin to
                         // Percentage/Ratio entries only (ratatui "give remainder to
                         // earlier segments first"). Min/Length are exact values and
-                        // must not be inflated. Guard: only correct genuine floor
-                        // rounding (small diff <= 2), not large shortfalls that
-                        // represent intentional slack.
+                        // must not be inflated. Guard: N floored shares whose exact
+                        // values tile the area fall short by at most N-1 cells, so
+                        // only a diff within that bound is rounding noise; anything
+                        // larger (or any diff beside a lone Percentage/Ratio, which
+                        // cannot lose a whole cell) is intentional slack.
                         for ($i = 0; $i < $totalCount && $diff > 0; $i++) {
                             $c = $constraints[$i];
                             if ($c instanceof Percentage || $c instanceof Ratio) {

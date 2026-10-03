@@ -82,6 +82,34 @@ final class CassowarySolverTest extends TestCase
         $this->assertStringContainsString('GreedySolver', $captured[0][1]);
     }
 
+    /**
+     * The deprecation must not be `@`-suppressed: under `@`, PHP masks
+     * error_reporting() for the duration of the call, so the default handler
+     * never shows the notice and a host handler that honours
+     * error_reporting() (the documented idiom) drops it too.
+     */
+    public function testDeprecationIsNotSilencedByTheErrorControlOperator(): void
+    {
+        $reportable = [];
+        $previousLevel = error_reporting(E_ALL);
+        set_error_handler(static function (int $errno) use (&$reportable): bool {
+            $reportable[] = (error_reporting() & $errno) !== 0;
+            return true;
+        }, E_USER_DEPRECATED);
+        try {
+            (CassowarySolver::new())->solve(
+                new Region(0, 0, 100, 24),
+                Direction::Horizontal,
+                [Constraint::length(50)]
+            );
+        } finally {
+            restore_error_handler();
+            error_reporting($previousLevel);
+        }
+
+        $this->assertSame([true], $reportable);
+    }
+
     // ── Delegation is bit-equivalent to GreedySolver ────────────────────────
 
     /**
