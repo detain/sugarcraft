@@ -25,10 +25,13 @@ use SugarCraft\Mouse\Sentinel;
  * ruling, follow-up 2 of 2), so live markers are disjoint from the sentinel
  * pair by construction. What this guard now pins is the other half of that
  * story: a forged sentinel byte (or any stray Private-Use codepoint) reaching
- * a frame from model/tool text still must not break the scan — the Renderer
- * masks the block out of the copy the SCANNER reads (never the copy sent to
- * the terminal, which still needs its real markers for Program to resolve
- * into paints).
+ * a frame from model/tool text still must not break the scan. candy-mouse's
+ * parser no longer lets a lone sentinel swallow later zones (15a7f0c9f), but
+ * it measures one as zero cells while the terminal paints it as one, so the
+ * Renderer still masks the block out of the copy the SCANNER reads (never
+ * the copy sent to the terminal, which still needs its real markers for
+ * Program to resolve into paints) to keep every later hit box on the column
+ * the user sees.
  */
 final class ImageMarkerZoneCollisionTest extends TestCase
 {
@@ -52,13 +55,22 @@ final class ImageMarkerZoneCollisionTest extends TestCase
     }
 
     /**
-     * A real image marker between two zones is inert text to the scanner —
-     * both zones survive an unmasked scan (this is what the arena move bought;
-     * pre-move, exactly this frame dropped tab2). A forged OPEN sentinel in
-     * the same slot still swallows every later zone — this is what the mask
-     * still defends.
+     * A real image marker between two zones is inert text to the scanner:
+     * both zones survive an unmasked scan, and its cell is measured as the one
+     * column the terminal paints (this is what the arena move bought; pre-move,
+     * exactly this frame dropped tab2).
+     *
+     * A forged OPEN sentinel in the same slot no longer swallows the zones
+     * after it either — candy-mouse's `Scan::parse()` (15a7f0c9f) treats a
+     * sentinel that does not begin a valid tag as a lone 3-byte skip. But it
+     * measures that skip as ZERO cells, while {@see \SugarCraft\Crush\Renderer}
+     * strips only well-formed `Mark` tags from the frame it sends, so the
+     * terminal still paints the forged codepoint as a one-cell glyph. Scanned
+     * unmasked, every later zone's hit box sits one column left of what is on
+     * screen — which is the drift the Renderer's mask still defends against
+     * (see the next test).
      */
-    public function testAForgedOpeningSentinelSwallowsEveryLaterZoneWhileARealMarkerDoesNot(): void
+    public function testAForgedOpeningSentinelKeepsEveryLaterZoneButUnmaskedScanDropsItsCell(): void
     {
         $mark = new Mark();
 
@@ -66,16 +78,22 @@ final class ImageMarkerZoneCollisionTest extends TestCase
         $scanner = Scanner::new();
         $scanner->scan($marked, 80);
         $this->assertSame(['tab1', 'tab2'], array_keys($scanner->all()));
+        $this->assertSame(3, $scanner->get('tab2')?->startCol, 'A real marker cell is one painted column.');
 
         $forged = $mark->wrap('tab1', 'A') . "\u{E000}" . $mark->wrap('tab2', 'B');
         $scanner = Scanner::new();
         $scanner->scan($forged, 80);
-        $this->assertSame(['tab1'], array_keys($scanner->all()));
+        $this->assertSame(['tab1', 'tab2'], array_keys($scanner->all()));
+        $this->assertSame(2, $scanner->get('tab2')?->startCol, 'Scan measures a lone sentinel as zero cells.');
     }
 
     /**
-     * Renderer's root scan must survive forged Private-Use bytes and keep
-     * painting real markers. Driven through the real
+     * Renderer's root scan must survive forged Private-Use bytes, keep
+     * painting real markers, and place every later zone on the column the
+     * terminal actually paints it. The frame below reaches the terminal as
+     * `A`, the forged U+E000 glyph, the marker cell, `B` — so tab2 is column 4.
+     * Without the mask the scanner counts the forged sentinel as zero cells
+     * and reports column 3. Driven through the real
      * {@see \SugarCraft\Crush\Renderer} entry point rather than the private
      * mask, so this fails if the mask is ever dropped OR merely moved off the
      * scan path.
@@ -92,7 +110,10 @@ final class ImageMarkerZoneCollisionTest extends TestCase
         $scanner = new \ReflectionMethod(\SugarCraft\Crush\Renderer::class, 'scanner');
         $scanner->setAccessible(true);
 
-        $this->assertSame(['tab1', 'tab2'], array_keys($scanner->invoke(null)->all()));
+        $registry = $scanner->invoke(null);
+        $this->assertSame(['tab1', 'tab2'], array_keys($registry->all()));
+        $this->assertSame(1, $registry->get('tab1')?->startCol);
+        $this->assertSame(4, $registry->get('tab2')?->startCol);
     }
 
     /**

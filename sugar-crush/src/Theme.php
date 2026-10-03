@@ -184,11 +184,15 @@ final class Theme
      * under the name `adaptive` so the choice re-resolves on every read (and on
      * every launch) instead of being frozen at pick time.
      *
-     * {@see SprinklesTheme::adaptive()} is deliberately NOT used: it resolves
-     * only the chrome half, leaving the markdown half to be detected a second
-     * time by a second rule, and its `COLORFGBG >= 8` heuristic disagrees with
-     * {@see TerminalBackground::detect()} on the two indices that matter (see
-     * that method). One detector, both halves.
+     * {@see SprinklesTheme::adaptive()} is deliberately NOT used. Its
+     * `COLORFGBG` rule is no longer the objection — since candy-sprinkles
+     * 1845eebf9 it reads the last field through the same luminance test and
+     * agrees with {@see TerminalBackground::detect()} on every value with a
+     * `;` (see that method). What it cannot do is see the two sources that
+     * outrank `COLORFGBG` here — the `SUGARCRUSH_BACKGROUND` override and the
+     * terminal's own OSC 11 reply — and it resolves only the chrome half,
+     * which would leave the markdown half to be decided a second time. One
+     * detector, both halves.
      *
      * Note the two-stage answer this can give within one session, by design.
      * With `SUGARCRUSH_BACKGROUND` set there are no stages at all: the override

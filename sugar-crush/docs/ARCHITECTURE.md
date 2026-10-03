@@ -534,11 +534,12 @@ believes it owns.
 
 PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `aws/aws-sdk-php`, `google/cloud-ai-platform`, `symfony/yaml`,
-`react/promise`), twelve SugarCraft siblings: `candy-core` (TEA runtime,
+`react/promise`), thirteen SugarCraft siblings: `candy-core` (TEA runtime,
 `Program`, `Model`, `Cmd`), `candy-forms`, `candy-sprinkles` (styles),
 `candy-shine`, `candy-fuzzy`, `sugar-veil`, `sugar-mcp` (stdio MCP transport),
 `candy-mosaic`, `candy-mouse`,
-`candy-layout` (dock geometry), `candy-focus`, `candy-kit`.
+`candy-layout` (dock geometry), `candy-focus`, `candy-kit`, `candy-pty`
+(the pseudo-terminal interactive tool output is captured through).
 
 `ext-sqlite3` is declared, and `src/` constructs it in exactly one place:
 `Agents\TaskList`'s task database. The session store reaches SQLite through

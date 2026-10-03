@@ -2616,12 +2616,23 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
-     * E686 tranche-8 (AJ): the dependencies page counts "ten SugarCraft
-     * siblings" and names each one. The count and the name set are re-derived
-     * from composer.json's require block; candy-pty's exclusion is not an
-     * oversight but the runtime/dev split, so both sides are pinned.
+     * E686 tranche-8 (AJ): the dependencies page counts its SugarCraft
+     * siblings in a spelled word and names each one. The count and the name
+     * set are re-derived from composer.json's require block.
+     *
+     * The second half used to pin a runtime/dev split - "candy-pty's exclusion
+     * is not an oversight" - and asserted the dev side was non-empty. It WAS
+     * the oversight (crush_libs.md candy-pty #5): `CapturesProcessOutput`
+     * opens `\SugarCraft\Pty\Pty` from `src/`, so a `--no-dev` install
+     * leaned on candy-core's transitive pin to keep interactive capture
+     * working. The property that actually matters is the one that split was
+     * standing in for, so that is what is pinned now: every sibling namespace
+     * `src/` names in code (not comments, not strings) belongs to a package in
+     * `require`. Measured: with candy-pty back in require-dev this arm goes red
+     * on `sugarcraft/candy-pty`. Any sibling still in require-dev stays
+     * barred from the page's runtime list.
      */
-    public function testArchitectureSiblingRosterDividesRuntimeFromDevRequires(): void
+    public function testArchitectureSiblingRosterMatchesRuntimeRequiresAndSrcReach(): void
     {
         $arch = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ARCHITECTURE.md'));
         self::assertSame(
@@ -2629,7 +2640,7 @@ final class DocFigureProseDriftTest extends TestCase
             preg_match('/(\w+) SugarCraft siblings: (.*?)\. `ext-sqlite3` is declared/s', $arch, $m),
             'the siblings sentence no longer runs from a spelled count through the named list into the ext-sqlite3 paragraph that follows',
         );
-        $words = ['nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12];
+        $words = ['nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15];
         self::assertArrayHasKey($m[1], $words, "the spelled count '{$m[1]}' is outside the pinned word map — extend it deliberately");
 
         preg_match_all('/`(candy-[a-z]+|sugar-veil|sugar-[a-z-]+)`/', $m[2], $named);
@@ -2647,10 +2658,89 @@ final class DocFigureProseDriftTest extends TestCase
             static fn (string $package): string => substr($package, \strlen('sugarcraft/')),
             array_keys(array_filter($composer['require-dev'] ?? [], static fn (string $key): bool => str_starts_with($key, 'sugarcraft/'), \ARRAY_FILTER_USE_KEY)),
         );
-        self::assertNotEmpty($devPackages, 'the page\'s runtime/dev split has no dev side — this pin presumes sugarcraft siblings live in require-dev too');
         foreach ($devPackages as $package) {
             self::assertNotContains($package, $named[1], "a require-dev sibling is now listed among the runtime siblings — either the page moved it or composer did");
         }
+
+        // Namespace prefix => package, from every installed sibling's own
+        // manifest — the same psr-4 map Composer's autoloader resolves by.
+        $owners = [];
+        foreach (glob(\dirname(__DIR__, 2) . '/vendor/sugarcraft/*/composer.json') ?: [] as $manifestPath) {
+            $manifest = json_decode((string) file_get_contents($manifestPath), true, 512, \JSON_THROW_ON_ERROR);
+            foreach (array_keys($manifest['autoload']['psr-4'] ?? []) as $prefix) {
+                $owners[rtrim((string) $prefix, '\\')] = (string) $manifest['name'];
+            }
+        }
+        self::assertArrayHasKey('SugarCraft\\Core', $owners, 'no installed sibling manifest declares SugarCraft\\Core — the namespace→package map came back empty, so the reach arm below would be vacuous');
+
+        $reached = [];
+        $unowned = [];
+        foreach (self::srcTexts() as $relative => $text) {
+            foreach (\PhpToken::tokenize($text) as $token) {
+                if (!$token->is([T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED])) {
+                    continue;
+                }
+                if (preg_match('/^SugarCraft\\\\([A-Za-z0-9]+)\\\\/', ltrim($token->text, '\\'), $ns) !== 1 || $ns[1] === 'Crush') {
+                    continue;
+                }
+                $prefix = 'SugarCraft\\' . $ns[1];
+                if (!isset($owners[$prefix])) {
+                    $unowned[$prefix][$relative] = true;
+
+                    continue;
+                }
+                $reached[$owners[$prefix]][$relative] = true;
+            }
+        }
+        self::assertSame([], array_map(static fn (array $files): array => array_keys($files), $unowned), 'src/ names a SugarCraft namespace no installed sugarcraft/* package declares');
+        self::assertArrayHasKey('sugarcraft/candy-core', $reached, 'src/ no longer names SugarCraft\\Core in code — the token walk is broken, not the dependency');
+
+        foreach ($reached as $package => $files) {
+            self::assertArrayHasKey(
+                $package,
+                $composer['require'],
+                "src/ (" . implode(', ', array_keys($files)) . ") uses {$package} but composer.json does not `require` it — a --no-dev or split-repo install would lose it",
+            );
+        }
+    }
+
+    /**
+     * crush_libs.md candy-kit #5: the manifest's E453 `deferred-wiring` row
+     * said `check-path-repos.php --unused` "reports it as
+     * PRUNE_REQUIRE_AND_REPO" — but the row's own existence reclassifies the
+     * dependency, and the tool reports DEFERRED_WIRING. It also named, as the
+     * restyle's blocker, that candy-kit's primitives "emit ANSI
+     * unconditionally" and so needed a `posix_isatty()` guard at the call
+     * site — which candy-kit bffd7e9a8 retired by making every presenter fall
+     * back to `Theme::detect()`. Each claim the corrected row makes is pinned
+     * to the code it describes, so the record cannot go stale silently again.
+     */
+    public function testCandyKitDeferredWiringRowMatchesWhatItRecords(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $composer = json_decode((string) file_get_contents($root . '/composer.json'), true, 512, \JSON_THROW_ON_ERROR);
+        $row = $composer['extra']['sugarcraft']['deferred-wiring']['sugarcraft/candy-kit'] ?? null;
+        self::assertIsString($row, 'the E453 candy-kit row is gone — fine if the wiring landed, but then retire this pin with it');
+
+        self::assertStringNotContainsString('reports it as PRUNE_REQUIRE_AND_REPO', $row, 'the stale report claim is back — with this row present the tool reports DEFERRED_WIRING');
+        self::assertStringContainsString('would report it as PRUNE_REQUIRE_AND_REPO without this row and reports DEFERRED_WIRING with it', $row);
+        self::assertStringNotContainsString('emit ANSI unconditionally', $row, 'the retired colour blocker is back in the record');
+        self::assertStringNotContainsString('posix_isatty', $row, 'the record asks for a call-site tty guard candy-kit already owns');
+
+        // The colour claim: presenters fall back to Theme::detect(), which
+        // downgrades through candy-core's ColorProfile::detect().
+        self::assertTrue(method_exists(\SugarCraft\Kit\Theme::class, 'detect'), 'candy-kit lost Theme::detect() — the row says presenters fall back to it');
+        $helpText = (string) file_get_contents((string) (new \ReflectionClass(\SugarCraft\Kit\HelpText::class))->getFileName());
+        self::assertStringContainsString('Theme::detect()', $helpText, 'HelpText no longer falls back to Theme::detect() — the row\'s "no colour bytes when piped" claim is unbacked');
+        $theme = (string) file_get_contents((string) (new \ReflectionClass(\SugarCraft\Kit\Theme::class))->getFileName());
+        self::assertStringContainsString('ColorProfile::detect(', self::bodyExcerpt($theme, 'detect'), 'Theme::detect() stopped delegating to candy-core ColorProfile::detect()');
+
+        // The remaining blocker: the help screen is still one nowdoc.
+        self::assertStringContainsString("<<<'HELP'", self::bodyExcerpt(self::sourceOf('Cli/Help.php'), 'screen', 200), 'Help::screen() is no longer the single heredoc the row names as the blocker — revisit the row');
+
+        // And the dependency really is unreached, which is what a row is for.
+        $reaching = array_keys(array_filter(self::srcTexts(), static fn (string $text): bool => str_contains($text, 'SugarCraft\\Kit\\')));
+        self::assertSame([], $reaching, 'src/ now reaches candy-kit — the wiring landed, so delete the row (and this pin)');
     }
 
     /**

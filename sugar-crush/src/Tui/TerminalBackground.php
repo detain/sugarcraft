@@ -257,14 +257,17 @@ final class TerminalBackground
      * light (7 is #e5e5e5, 15 is #ffffff) and bright-black still comes out dark
      * (8 is #7f7f7f, luminance 0.21), so no previously-correct answer moves.
      *
-     * That last pair is also why this deliberately differs from
-     * {@see \SugarCraft\Sprinkles\Theme::adaptive()}, which calls any index
-     * `>= 8` light: that misreads plain white (7) as dark and bright-black (8)
-     * — a dark grey — as light, which are exactly the two cases the flag exists
-     * to get right. It is unusable here for a second reason too: it
-     * `return self::dark()` whenever the value does not split into exactly two
-     * fields, so it cannot read rxvt's three-field form at all. Nothing here
-     * calls `SprinklesTheme::adaptive()`, so the two rules never have to agree.
+     * {@see \SugarCraft\Sprinkles\Theme::adaptive()} applies the same rule
+     * since candy-sprinkles 1845eebf9 (last field, xterm-256 index, luminance
+     * test; it used to call any index `>= 8` light and gave up on rxvt's
+     * three-field form), so the two agree on every value carrying a `;`. They
+     * part on one shape only: a lone index with no `;` (`COLORFGBG=15`) is
+     * read here as the background, while sprinkles follows termenv in calling
+     * it no background at all, hence dark. This method is not rebuilt on top
+     * of that API anyway: it returns a Theme rather than an answer, reads
+     * getenv() itself rather than an injectable environment, and would move
+     * the lone-index case. TerminalBackgroundSprinklesAgreementTest pins both
+     * the agreement and that one difference.
      *
      * @param array<string,string>|null $env Defaults to a snapshot of getenv().
      */
