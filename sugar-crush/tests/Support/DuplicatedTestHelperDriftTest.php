@@ -2586,6 +2586,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'INTO_SHELL' => 'Both permission-gate suites feed the same command string to the classifier.',
         'LIB_SCOPE' => 'The census suites scope their walks to the same vendor path.',
         'MARKER' => 'The two image suites use the same private-use-area sentinel; the unrelated MARKER strings are the drift polity.',
+        'MAX_COLS' => 'The two status-bar suites (spend segment, and the served-model segment with the read-only marker) sweep the same bar over the same 1..200 widths; the widest width is one statement about the bar, so the copies must move together.',
         'MODEL' => 'The SGLang suites exercising MiniMax behaviour (Q5 system-row merge, A9 schema-aware XML recovery) send the same deployed model id; it is a request label the provider forwards, not a fixture either suite asserts on. The DeepSeek id is the drift polity.',
         'OVERSIZED_BYTES' => 'The oversized-write bound several stdio families test is shared verbatim.',
         'QUIET_STDERR_BYTES' => 'The quiet-side byte count the two shutdown suites assert.',

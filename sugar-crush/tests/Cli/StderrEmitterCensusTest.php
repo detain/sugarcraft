@@ -124,8 +124,8 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — TWENTY-FOUR
- *     of them, in SEVEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — TWENTY-FIVE
+ *     of them, in EIGHT files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -459,10 +459,12 @@ final class StderrEmitterCensusTest extends TestCase
      * a user should hear about something.
      *
      * WHAT A MOVE HERE MEANS, AND IT IS NOT WHAT A MOVE IN CHANNEL 3 MEANS.
-     * Every site here writes stderr AND appends a `Role::System` row to the
-     * transcript, which is sent to the model on every subsequent turn. A new
-     * row is therefore a token cost on every later request, not just a line on
-     * a terminal. The question to answer before bumping this is the routing
+     * Every site here writes stderr AND appends a row to the transcript. That
+     * row used to be sent to the model on every subsequent turn; since audit
+     * 15b-03 it is a UI-only notice (`Message::$uiOnly`, filtered at every
+     * wire encoder), so a new row costs the user's attention in the
+     * transcript rather than tokens on every later request - still more than
+     * a line on a terminal. The question to answer before bumping this is the routing
      * rule the two parsers' class doc-blocks state: did the parser fail to
      * produce the call the model asked for? If it recovered, the notice belongs
      * on `error_log()` and in channel 3.
@@ -477,6 +479,12 @@ final class StderrEmitterCensusTest extends TestCase
         // `git worktree remove` leaves the path registered and `prunable`, so
         // the NEXT createWorktree() for that agent id is refused.
         'src/Agents/WorktreeManager.php' => 5,
+        // P10.S3 (wave 11): the one-time prompt-cache health notice - three
+        // consecutive replies that reported no cache buckets while marks
+        // were sent. The routing decision: the session is paying full price
+        // for a cache it believes it has, which the user cannot see from
+        // anywhere else. One site behind a once-per-process-tree latch.
+        'src/Backend/CacheHealthWatch.php' => 1,
         // Audit R1's last residual (wave 11): a nested CLAUDE.md/AGENTS.md
         // that loadForPath() refused or deferred mid-session. The routing
         // decision: a file the user wrote and expects obeyed is NOT being
