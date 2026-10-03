@@ -124,8 +124,8 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — TWENTY-THREE
- *     of them, in SIX files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — TWENTY-FOUR
+ *     of them, in SEVEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -477,6 +477,13 @@ final class StderrEmitterCensusTest extends TestCase
         // `git worktree remove` leaves the path registered and `prunable`, so
         // the NEXT createWorktree() for that agent id is refused.
         'src/Agents/WorktreeManager.php' => 5,
+        // Audit R1's last residual (wave 11): a nested CLAUDE.md/AGENTS.md
+        // that loadForPath() refused or deferred mid-session. The routing
+        // decision: a file the user wrote and expects obeyed is NOT being
+        // obeyed in full, which is something the session can no longer do —
+        // the seam, not stderr alone. One site, once per refused file per
+        // session (the loader's announced set), so it cannot grow per turn.
+        'src/Context/InstructionFileLoader.php' => 1,
         // Round 49, lane b (E345): the once-per-process notice for a refused audit
         // write. One call site behind a latch, so it is one row and stays one.
         'src/Hooks/BuiltIn/AuditHook.php' => 1,
