@@ -310,6 +310,47 @@ final class StyleParserTest extends TestCase
         }
     }
 
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function hexLetterNameProvider(): array
+    {
+        return [
+            'beige'       => ['beige'],
+            'coffee'      => ['coffee'],
+            'dead-salmon' => ['dead-salmon'],
+            'cabaret'     => ['cabaret'],
+            'fuchsia'     => ['fuchsia'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('hexLetterNameProvider')]
+    public function testUnknownNameStartingWithHexLetterIsIgnored(string $name): void
+    {
+        // Names whose first letter is a-f used to be routed to Color::hex()
+        // and threw instead of being ignored like any other unknown name.
+        $cells = StyleParser::parse("[hi](fg:{$name},bg:red)", $this->defaultStyle);
+
+        $this->assertCount(2, $cells);
+        $this->assertNull($cells[0]->style->getForeground());
+        $this->assertSame(205, $cells[0]->style->getBackground()?->r);
+    }
+
+    public function testBareHexWithoutHashIsStillParsed(): void
+    {
+        $six = StyleParser::parse('[x](fg:00ff00)', $this->defaultStyle);
+        $this->assertSame('#00ff00', $six[0]->style->getForeground()?->toHex());
+
+        $three = StyleParser::parse('[x](fg:f00)', $this->defaultStyle);
+        $this->assertSame('#ff0000', $three[0]->style->getForeground()?->toHex());
+    }
+
+    public function testMalformedHashHexThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        StyleParser::parse('[x](fg:#zz)', $this->defaultStyle);
+    }
+
     public function testUnknownModifierIgnored(): void
     {
         // Should not crash, unknown modifier should be ignored

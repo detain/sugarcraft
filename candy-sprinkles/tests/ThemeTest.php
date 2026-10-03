@@ -243,20 +243,34 @@ final class ThemeTest extends TestCase
 
     // ─── Factory: adaptive() ─────────────────────────────────────────────
 
-    public function testAdaptiveDarkWhenBgIndexLt8(): void
+    protected function tearDown(): void
     {
-        // COLORFGBG=0;7 → bg=7 (< 8 → dark)
-        putenv('COLORFGBG=0;7');
-        $t = Theme::adaptive();
-        $this->assertTrue($t->background->isDark());
+        putenv('COLORFGBG');
     }
 
-    public function testAdaptiveLightWhenBgIndexGte8(): void
+    /**
+     * @return array<string, array{string, bool}>
+     */
+    public static function colorFgBgProvider(): array
     {
-        // COLORFGBG=0;15 → bg=15 (>= 8 → light)
-        putenv('COLORFGBG=0;15');
-        $t = Theme::adaptive();
-        $this->assertFalse($t->background->isDark());
+        return [
+            'white bg (7) is light'                => ['0;7', false],
+            'bright white bg (15) is light'        => ['0;15', false],
+            'black bg (0) is dark'                 => ['15;0', true],
+            'bright-black bg (8, dark grey) is dark' => ['7;8', true],
+            '256-colour pale grey (255) is light'  => ['0;255', false],
+            '256-colour near-black (232) is dark'  => ['15;232', true],
+            'rxvt three-field form, light'         => ['0;default;15', false],
+            'rxvt three-field form, dark'          => ['15;default;0', true],
+            'surrounding whitespace tolerated'     => [' 0 ; 7 ', false],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('colorFgBgProvider')]
+    public function testAdaptiveReadsBackgroundLuminance(string $value, bool $expectDark): void
+    {
+        putenv('COLORFGBG=' . $value);
+        $this->assertSame($expectDark, Theme::adaptive()->background->isDark());
     }
 
     public function testAdaptiveFallsBackToDarkWhenEnvNotSet(): void
@@ -274,6 +288,12 @@ final class ThemeTest extends TestCase
         putenv('COLORFGBG=7'); // only one part
         $t = Theme::adaptive();
         $this->assertTrue($t->background->isDark());
+        putenv('COLORFGBG=0;default'); // non-numeric background
+        $this->assertTrue(Theme::adaptive()->background->isDark());
+        putenv('COLORFGBG=0;300'); // out of the 256-colour range
+        $this->assertTrue(Theme::adaptive()->background->isDark());
+        putenv('COLORFGBG=0;'); // empty background field
+        $this->assertTrue(Theme::adaptive()->background->isDark());
     }
 
     // ─── Fluent withers ───────────────────────────────────────────────────

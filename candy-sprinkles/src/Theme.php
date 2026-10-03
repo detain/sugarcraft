@@ -242,26 +242,42 @@ final class Theme
      * Auto-detect theme from the `COLORFGBG` environment variable.
      * Falls back to dark when the variable is absent or unparseable.
      *
-     * Format: `COLORFGBG=foreground;background` (e.g. `15;0` or `0;15`).
-     * If the background index is >= 8 the terminal uses a dark palette.
+     * Format: `COLORFGBG=foreground;background` (e.g. `15;0` or `0;15`),
+     * or rxvt's three-field `foreground;xpm;background` — the background
+     * is always the LAST field. It is an xterm-256 palette index; the
+     * theme is light when that slot's default RGB is light (luminance
+     * >= 0.5 via {@see Color::isDark()}), so white (7, 15) and pale
+     * 256-colour slots (e.g. 255) read light, while black (0) and
+     * bright-black (8, a dark grey) read dark. An empty, non-numeric
+     * (e.g. `default`) or out-of-range (> 255) background falls back
+     * to dark, as does a value with no `;` at all.
      *
-     * Mirrors charmbracelet/lipgloss.Theme.adaptive().
+     * Mirrors muesli/termenv's COLORFGBG read (last field) and its
+     * `HasDarkBackground()` luminance test, which lipgloss uses.
      */
     public static function adaptive(): self
     {
         $raw = getenv('COLORFGBG');
-        if ($raw === false || $raw === '') {
+        if ($raw === false || trim($raw) === '') {
             return self::dark();
         }
 
-        $parts = explode(';', $raw);
-        if (count($parts) !== 2) {
+        $fields = explode(';', trim($raw));
+        if (count($fields) < 2) {
+            // A lone number names no background — termenv requires the `;`.
+            return self::dark();
+        }
+        $background = trim((string) end($fields));
+        if (!ctype_digit($background)) {
             return self::dark();
         }
 
-        $bg = (int) ($parts[1] ?? 0);
+        $index = (int) $background;
+        if ($index > 255) {
+            return self::dark();
+        }
 
-        return $bg >= 8 ? self::light() : self::dark();
+        return Color::ansi256($index)->isDark() ? self::dark() : self::light();
     }
 
     /**

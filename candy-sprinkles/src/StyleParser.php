@@ -169,6 +169,14 @@ final class StyleParser
 
     /**
      * Parse a color value string to a Color, or null if unknown.
+     *
+     * Accepts the 16 named ANSI colours (case-insensitive), `#`-prefixed
+     * hex, and bare 3- or 6-digit hex (`ff0000`). Any other bare word —
+     * including unknown names that merely START with a hex letter, such
+     * as `beige` or `coffee` — is unknown and returns null, so the
+     * attribute is ignored like every other unrecognised name. A
+     * `#`-prefixed value is explicitly hex, so a malformed one (`#zz`)
+     * throws {@see \InvalidArgumentException} from {@see Color::hex()}.
      */
     private static function parseColor(?string $value): ?Color
     {
@@ -203,8 +211,9 @@ final class StyleParser
             return Color::rgb($r, $g, $b);
         }
 
-        // Hex color
-        if (str_starts_with($value, '#') || ctype_xdigit(substr($value, 0, 1))) {
+        // Hex colour: explicit `#…`, or a bare value that is entirely a
+        // 3- or 6-digit hex string (not merely one starting with a-f).
+        if (str_starts_with($value, '#') || preg_match('/^(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/', $value) === 1) {
             return Color::hex($value);
         }
 

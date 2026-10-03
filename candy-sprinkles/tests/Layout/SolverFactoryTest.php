@@ -17,10 +17,10 @@ final class SolverFactoryTest extends TestCase
         parent::tearDown();
     }
 
-    public function testDefaultReturnsGreedySolver(): void
+    public function testFromEnvironmentReturnsGreedySolverByDefault(): void
     {
         putenv('SUGARCRAFT_LAYOUT_SOLVER');
-        $solver = SolverFactory::default();
+        $solver = SolverFactory::fromEnvironment();
         $this->assertInstanceOf(GreedySolver::class, $solver);
     }
 
@@ -42,7 +42,7 @@ final class SolverFactoryTest extends TestCase
             return true;
         }, E_USER_WARNING);
         try {
-            $solver = SolverFactory::default();
+            $solver = SolverFactory::fromEnvironment();
         } finally {
             restore_error_handler();
         }
@@ -50,26 +50,37 @@ final class SolverFactoryTest extends TestCase
         $this->assertInstanceOf(CassowarySolver::class, $solver);
         $this->assertIsString($warning);
         $this->assertStringContainsString('cassowary', strtolower($warning));
+        // The warning names the deprecation/delegation, not the long-fixed
+        // Ratio-returns-0 bug it used to cite.
+        $this->assertStringContainsString('delegates every solve to GreedySolver', $warning);
+        $this->assertStringNotContainsString('Ratio', $warning);
     }
 
     public function testEnvGreedyReturnsGreedySolver(): void
     {
         putenv('SUGARCRAFT_LAYOUT_SOLVER=greedy');
-        $solver = SolverFactory::default();
+        $solver = SolverFactory::fromEnvironment();
         $this->assertInstanceOf(GreedySolver::class, $solver);
     }
 
     public function testEnvGarbageDefaultsToGreedySolver(): void
     {
         putenv('SUGARCRAFT_LAYOUT_SOLVER=garbage');
-        $solver = SolverFactory::default();
+        $solver = SolverFactory::fromEnvironment();
         $this->assertInstanceOf(GreedySolver::class, $solver);
     }
 
     public function testEnvEmptyDefaultsToGreedySolver(): void
     {
         putenv('SUGARCRAFT_LAYOUT_SOLVER=""');
-        $solver = SolverFactory::default();
+        $solver = SolverFactory::fromEnvironment();
         $this->assertInstanceOf(GreedySolver::class, $solver);
+    }
+
+    public function testDefaultFactoryNameIsGone(): void
+    {
+        // Playbook: never `::default()`; the env-sniffing factory says what it does.
+        $this->assertFalse(method_exists(SolverFactory::class, 'default'));
+        $this->assertTrue(method_exists(SolverFactory::class, 'fromEnvironment'));
     }
 }

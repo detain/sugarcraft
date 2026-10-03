@@ -199,4 +199,76 @@ final class TableTest extends TestCase
         // Cell truncated to 8 chars (full widthCap for single-column no-border).
         $this->assertSame('this is ', $out);
     }
+
+    public function testWidthCapOnAllEmptyCellsDoesNotDivideByZero(): void
+    {
+        // Every cell measures 0 and the border overhead alone exceeds the
+        // cap: the shrink loop used to divide by the zero content total.
+        $bordered = Table::new()->row('', '')->width(3)->border(Border::normal())->render();
+        $this->assertSame("┌──┬──┐\n│  │  │\n└──┴──┘", $bordered);
+
+        $plain = Table::new()->row('', '')->width(0)->render();
+        $this->assertSame('  ', $plain);
+    }
+
+    public function testWrapCallbackReceivesColumnWidth(): void
+    {
+        $seen = [];
+        Table::new()
+            ->row('abcdefghij', 'xy')
+            ->width(9)
+            ->wrap(function (string $cell, int $w) use (&$seen): array {
+                $seen[] = [$cell, $w];
+                return [$cell];
+            })
+            ->render();
+        // 9-cell cap, no border: 2-space gap leaves 7 content cells,
+        // scaled 10:2 → floor(5.83)=5, floor(1.16)=1.
+        $this->assertSame([['abcdefghij', 5], ['xy', 1]], $seen);
+    }
+
+    public function testWrapCallbackRendersEveryReturnedLine(): void
+    {
+        $out = Table::new()
+            ->row('Al', str_repeat('x', 12))
+            ->border(Border::normal())
+            ->width(14)
+            ->wrap(fn(string $cell, int $w): array => str_split($cell, max(1, $w)))
+            ->render();
+        // Cap 14: overhead 4 (cell padding) + 3 (border runes) leaves 7,
+        // scaled 2:12 → 1 and 6. "Al" wraps to two lines, the x's to two.
+        $this->assertSame(
+            "┌───┬────────┐\n"
+            . "│ A │ xxxxxx │\n"
+            . "│ l │ xxxxxx │\n"
+            . "└───┴────────┘",
+            $out,
+        );
+
+        // A cell with fewer lines than its row-mates pads with blank lines.
+        $ragged = Table::new()
+            ->row('A', str_repeat('x', 12))
+            ->border(Border::normal())
+            ->width(14)
+            ->wrap(fn(string $cell, int $w): array => str_split($cell, max(1, $w)))
+            ->render();
+        $this->assertSame(
+            "┌───┬────────┐\n"
+            . "│ A │ xxxxxx │\n"
+            . "│   │ xxxxxx │\n"
+            . "└───┴────────┘",
+            $ragged,
+        );
+    }
+
+    public function testWrapCallbackOverWideLinesAreTruncatedAndEmptyListIsBlank(): void
+    {
+        $out = Table::new()
+            ->row('abcdef', 'z')
+            ->width(5)
+            ->wrap(fn(string $cell): array => $cell === 'z' ? [] : [$cell])
+            ->render();
+        // Cap 5, 2-space gap → 3 content cells, scaled 6:1 → 2 and 1 (floor).
+        $this->assertSame('ab   ', $out);
+    }
 }

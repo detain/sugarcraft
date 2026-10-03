@@ -23,6 +23,11 @@ final class Enumerator
         public readonly string $lastIndent,
     ) {}
 
+    /**
+     * The standard box-drawing connector set. Named `default()` — an
+     * accepted exception to the repo's no-`::default()` rule — because it
+     * mirrors charmbracelet/lipgloss/tree.DefaultEnumerator one-to-one.
+     */
     public static function default(): self
     {
         return new self('├── ', '└── ', '│   ', '    ');

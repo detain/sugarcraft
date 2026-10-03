@@ -33,7 +33,7 @@ final class Solver
             return [];
         }
 
-        $solver = SolverFactory::default();
+        $solver = SolverFactory::fromEnvironment();
         $region = new Region($area->x, $area->y, $area->width, $area->height);
         $layoutConstraints = self::toLayoutConstraints($constraints);
         $layoutDir = $dir === Direction::Horizontal

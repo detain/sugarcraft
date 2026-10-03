@@ -159,7 +159,8 @@ echo Tree::new()
   maxWidth/maxHeight, align (Align/VAlign), inline, transform, tabWidth,
   marginBackground, colorWhitespace. Plus 21 getters, 15 `unset*()`,
   `copy()` (shallow clone), `inherit($parent)` (unset-only merge), and
-  `patch($other)` (incremental merge — only props set in $other are applied).
+  `patch($other)` (incremental merge — only props set in $other are applied;
+  a null colour/width/border in $other is skipped, not a clear).
 - **`Border`** — `normal()`, `rounded()`, `thick()`, `double()`, `block()`,
   `ascii()`, `hidden()`, `markdownBorder()`. `Border::catalog()` enumerates the
   factory names as a `list<string>` for programmatic discovery. Per-side toggles
@@ -190,7 +191,9 @@ echo Tree::new()
   connector sets; per-section style overrides; custom indenter.
 - **`Table\Table`** — `headers` / `row(s)` / `border` / `align` /
   `headerAlign` / `rowAlign` / `styleFunc` / per-side border toggles /
-  `width` / `offset` / `clearRows` / `data(Data)`.
+  `width` / `offset` / `clearRows` / `data(Data)` / `wrap(\Closure(string $cell,
+  int $colWidth): list<string>)` (every returned line renders; a wrapped row
+  spans several physical lines).
 - **`Table\Data`** — row-reader interface (`rows` / `columns` /
   `at($r, $c)`). Default impl `Table\StringData::fromMatrix(iterable)`.
 - **`Output`** — top-level `print` / `println` / `sprint` / `printf` /
@@ -327,7 +330,8 @@ $dark = Theme::dark();
 $tokyo = Theme::tokyoNight();
 $dracula = Theme::dracula();
 
-// Auto-detect from $COLORFGBG (falls back to dark)
+// Auto-detect from $COLORFGBG: the last field's palette slot decides light vs
+// dark by luminance (7/15 light, 0/8 dark); unset or unparseable → dark
 $theme = Theme::adaptive();
 
 // Enumerate every built-in theme name programmatically

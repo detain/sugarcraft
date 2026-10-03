@@ -1480,4 +1480,97 @@ final class StyleTest extends TestCase
             'the documented tab-reclustering UNDER-run residue is now zero (this is not an over-run; see the comment at this assertion)',
         );
     }
+
+    // ─── colorWhitespace(false) ────────────────────────────────────────
+
+    public function testColorWhitespaceFalseLeavesAlignmentFillUnstyled(): void
+    {
+        $blue = "\x1b[48;2;0;0;255m";
+        $base = Style::new()->bg('#0000ff')->width(8)->colorWhitespace(false);
+
+        $this->assertSame($blue . "x\x1b[0m       ", $base->render('x'));
+        $this->assertSame("       " . $blue . "x\x1b[0m", $base->align(Align::Right)->render('x'));
+        $this->assertSame("   " . $blue . "x\x1b[0m    ", $base->align(Align::Center)->render('x'));
+        // Padding stays unstyled too, around the unstyled fill.
+        $this->assertSame(" " . $blue . "x\x1b[0m        ", $base->padding(0, 1)->render('x'));
+    }
+
+    public function testColorWhitespaceFalseEmptyLineEmitsNoSgr(): void
+    {
+        $out = Style::new()->bg('#0000ff')->width(3)->colorWhitespace(false)->render("a\n\nb");
+        $this->assertSame(
+            "\x1b[48;2;0;0;255ma\x1b[0m  \n   \n\x1b[48;2;0;0;255mb\x1b[0m  ",
+            $out,
+        );
+    }
+
+    public function testColorWhitespaceDefaultStillStylesAlignmentFill(): void
+    {
+        $this->assertSame(
+            "\x1b[48;2;0;0;255mx       \x1b[0m",
+            Style::new()->bg('#0000ff')->width(8)->render('x'),
+        );
+    }
+
+    // ─── patch() sentinel hygiene ──────────────────────────────────────
+
+    public function testPatchSkippedNullDoesNotLeakSentinel(): void
+    {
+        $red = Color::hex('#ff0000');
+        $base = Style::new()->foreground($red);
+        $merged = Style::new()->patch(Style::new()->foreground(null));
+        $this->assertFalse($merged->isSet('fg'));
+
+        // Receiver's own sentinel survives a skipped null.
+        $kept = $base->patch(Style::new()->foreground(null));
+        $this->assertSame('#ff0000', $kept->getForeground()?->toHex());
+        $this->assertTrue($kept->isSet('fg'));
+    }
+
+    public function testPatchSkippedNullStillLetsInheritSupplyParentValue(): void
+    {
+        $parentFg = Color::hex('#00ff00');
+        $patched = Style::new()->patch(Style::new()->foreground(null)->width(null)->border(null));
+        $this->assertFalse($patched->isSet('width'));
+        $this->assertFalse($patched->isSet('border'));
+
+        $inherited = $patched->inherit(Style::new()->foreground($parentFg)->width(5));
+        $this->assertSame('#00ff00', $inherited->getForeground()?->toHex());
+        $this->assertSame(5, $inherited->getWidth());
+    }
+
+    public function testPatchAppliesZeroValuesAndRecordsThem(): void
+    {
+        $merged = Style::new()->height(3)->patch(Style::new()->height(0));
+        $this->assertSame(0, $merged->getHeight());
+        $this->assertTrue($merged->isSet('height'));
+    }
+
+    // ─── unsetBorder() ─────────────────────────────────────────────────
+
+    public function testUnsetBorderAlsoClearsBorderSides(): void
+    {
+        $s = Style::new()->border(Border::normal(), true, true, false, false)->unsetBorder();
+        $this->assertNull($s->getBorder());
+        $this->assertFalse($s->isSet('border'));
+        $this->assertFalse($s->isSet('borderSides'));
+        $this->assertSame([true, true, true, true], $s->getBorderSides());
+
+        // The next inherit() re-inherits the parent's side flags.
+        $parent = Style::new()->border(Border::rounded(), false, true, false, true);
+        $child = $s->inherit($parent);
+        $this->assertSame([false, true, false, true], $child->getBorderSides());
+    }
+
+    // ─── docblock example (fg/bg/on accept hex, not names) ─────────────
+
+    public function testOnAcceptsHexAndRejectsColourNames(): void
+    {
+        $this->assertSame(
+            "\x1b[48;2;0;0;128mx\x1b[0m",
+            Style::new()->on('#000080')->render('x'),
+        );
+        $this->expectException(\InvalidArgumentException::class);
+        Style::new()->on('navy');
+    }
 }

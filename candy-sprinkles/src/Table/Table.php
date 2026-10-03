@@ -11,13 +11,6 @@ use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 
 /**
- * Sentinel returned by a column-header `StyleFunc` to mark a row as
- * the header row. `$row === Table::HEADER_ROW` inside the callback
- * means "this is the header"; any other int is a 0-based body-row
- * index.
- */
-
-/**
  * Tabular data renderer. Builds a string with column-aligned cells,
  * an optional header row, and an optional border (using the middle-*
  * runes from {@see Border}).
@@ -36,7 +29,11 @@ use SugarCraft\Sprinkles\Style;
  */
 final class Table
 {
-    /** Row index passed to a {@see styleFunc()} callback for the header row. */
+    /**
+     * Row index passed to a {@see styleFunc()} callback for the header
+     * row. `$row === Table::HEADER_ROW` inside the callback means "this is
+     * the header"; any other int is a 0-based body-row index.
+     */
     public const HEADER_ROW = -1;
 
     /** @var list<string> */
@@ -54,7 +51,7 @@ final class Table
     /** @var ?\Closure(int, int): Style */
     private ?\Closure $styleFunc = null;
     private ?int $widthCap = null;
-    /** @var ?\Closure(string $cell): list<string> */
+    /** @var ?\Closure(string $cell, int $colWidth): list<string> */
     private ?\Closure $wrap = null;
     private int $offset = 0;
 
@@ -190,7 +187,11 @@ final class Table
      * are shrunk proportionally (lipgloss-style) to fit within the cap, with
      * a minimum of 1 cell content per column. Cell content that still exceeds
      * the shrunken column width is truncated via {@see Width::truncateAnsi}
-     * (unless a `wrap` callback is set, which is called per-cell instead).
+     * (unless a {@see wrap()} callback is set, which then receives the
+     * shrunken width and may spread the cell over several lines).
+     * The cap is best-effort: border runes, the one-space cell padding and
+     * the 1-cell column floor are never shrunk, so a cap smaller than that
+     * fixed overhead (e.g. on all-empty rows) renders wider than requested.
      * Pass null to remove the cap.
      */
     public function width(?int $cells): self
@@ -215,14 +216,22 @@ final class Table
     }
 
     /**
-     * Cell-overflow wrap callback. Receives the raw cell value and
-     * returns a list of lines. When set, the callback is invoked per-cell
-     * in place of the default {@see Width::truncateAnsi} truncation;
-     * the first line of the returned list is used for single-line rendering.
-     * Supply a closure that calls `Width::wrap($cell, $col_width)` for
-     * lipgloss-equivalent behaviour, or your own wrapping algorithm.
+     * Cell-overflow wrap callback. Receives the raw cell value and the
+     * column's content width (after any {@see width()} cap shrink) and
+     * returns the cell's lines. When set, the callback is invoked per-cell
+     * in place of the default {@see Width::truncateAnsi} truncation, and
+     * EVERY returned line is rendered: a row whose cells wrap to N lines
+     * occupies N physical lines, shorter cells padded with blank lines.
+     * A returned line still wider than the column is truncated with
+     * {@see Width::truncateAnsi} so the grid never misaligns; an empty
+     * list renders as one blank line.
      *
-     * @param ?\Closure(string $cell): list<string> $fn
+     * For lipgloss-equivalent behaviour:
+     * `->wrap(fn(string $cell, int $w) => explode("\n", Width::wrapAnsi($cell, $w)))`.
+     * A one-parameter closure is accepted too (PHP ignores the extra
+     * width argument).
+     *
+     * @param ?\Closure(string $cell, int $colWidth): list<string> $fn
      */
     public function wrap(?\Closure $fn): self
     {
@@ -274,9 +283,16 @@ final class Table
                 if ($available < $colCount) {
                     $available = $colCount; // minimum 1 per column
                 }
-                $scale = $available / array_sum($widths);
-                foreach ($widths as $i => $w) {
-                    $widths[$i] = max(1, (int) floor($w * $scale));
+                // All-empty cells measure 0, so there is no content width to
+                // scale down — the overflow is pure border/padding overhead,
+                // which shrinking columns cannot reclaim. Leave the widths be
+                // rather than divide by the zero total.
+                $contentTotal = array_sum($widths);
+                if ($contentTotal > 0) {
+                    $scale = $available / $contentTotal;
+                    foreach ($widths as $i => $w) {
+                        $widths[$i] = max(1, (int) floor($w * $scale));
+                    }
                 }
             }
         }
@@ -382,27 +398,52 @@ final class Table
             ? ($this->borderColumn ? $this->border->left : '')
             : '  ';
 
-        $cells = [];
+        // Each cell becomes a column of physical lines: one line by default
+        // (truncated to the column), or every line the wrap callback returns.
+        $cellLines = [];
+        $height = 1;
         foreach ($row as $i => $cell) {
-            // Truncate cell to column width if it's too wide and no wrap callback.
             $colWidth = $widths[$i];
             if ($this->wrap !== null) {
-                $lines = ($this->wrap)($cell);
-                $cell = $lines[0] ?? ''; // Use first line for single-line rendering
-            } elseif (Width::string($cell) > $colWidth) {
-                $cell = Width::truncateAnsi($cell, $colWidth);
+                $lines = array_values(($this->wrap)($cell, $colWidth));
+                if ($lines === []) {
+                    $lines = [''];
+                }
+            } else {
+                $lines = [$cell];
             }
-            $aligned = $this->align($cell, $colWidth, $align);
-            // Apply per-cell style.
-            if ($this->styleFunc !== null) {
-                $style = ($this->styleFunc)($rowIdx, $i);
-                $aligned = $style->render($aligned);
+            foreach ($lines as $k => $line) {
+                if (Width::string($line) > $colWidth) {
+                    $lines[$k] = Width::truncateAnsi($line, $colWidth);
+                }
             }
-            $cells[] = $hasBorder
-                ? ' ' . $aligned . ' '
-                : $aligned;
+            $cellLines[$i] = $lines;
+            $height = max($height, count($lines));
         }
-        return $left . implode($colSep, $cells) . $right;
+
+        // Per-cell style, resolved once per cell (not once per physical line).
+        $styles = [];
+        if ($this->styleFunc !== null) {
+            foreach (array_keys($cellLines) as $i) {
+                $styles[$i] = ($this->styleFunc)($rowIdx, $i);
+            }
+        }
+
+        $physical = [];
+        for ($ln = 0; $ln < $height; $ln++) {
+            $cells = [];
+            foreach ($cellLines as $i => $lines) {
+                $aligned = $this->align($lines[$ln] ?? '', $widths[$i], $align);
+                if (isset($styles[$i])) {
+                    $aligned = $styles[$i]->render($aligned);
+                }
+                $cells[] = $hasBorder
+                    ? ' ' . $aligned . ' '
+                    : $aligned;
+            }
+            $physical[] = $left . implode($colSep, $cells) . $right;
+        }
+        return implode("\n", $physical);
     }
 
     /** @param list<string> $row @return list<string> */

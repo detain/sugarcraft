@@ -12,7 +12,7 @@ use SugarCraft\Layout\LayoutSolver;
  * Factory for creating a {@see LayoutSolver} instance.
  *
  * Respects the SUGARCRAFT_LAYOUT_SOLVER env var:
- *  - "cassowary" → CassowarySolver
+ *  - "cassowary" → CassowarySolver (deprecated; delegates to GreedySolver)
  *  - otherwise   → GreedySolver (default)
  *
  * Mirrors ratatui's pluggable solver architecture.
@@ -23,29 +23,29 @@ final class SolverFactory
     private static bool $cassowaryWarningEmitted = false;
 
     /**
-     * Create the default layout solver based on environment.
+     * Pick the layout solver the environment asks for.
      *
      * Respects SUGARCRAFT_LAYOUT_SOLVER env var:
-     *  - "cassowary" → CassowarySolver (linear-arithmetic constraint solver)
-     *  - otherwise   → GreedySolver (original ratatui-inspired algorithm, default)
+     *  - "cassowary" → CassowarySolver
+     *  - otherwise   → GreedySolver (default)
      *
-     * GreedySolver is the default because CassowarySolver has a pre-existing bug
-     * where Ratio constraints (and others) return 0 instead of the expected value.
-     * This causes 14 test failures when using CassowarySolver.
-     * CassowarySolver is available via env var for comparison/testing purposes.
-     * When SUGARCRAFT_LAYOUT_SOLVER=cassowary is set, a one-time E_USER_WARNING
-     * is emitted to alert callers of the known bug.
+     * candy-layout's CassowarySolver is deprecated: its simplex never
+     * converged, so its `solve()` now delegates wholly to GreedySolver
+     * (results are identical) and raises E_USER_DEPRECATED on every call.
+     * Selecting it is therefore pointless, so the opt-in raises a one-time
+     * E_USER_WARNING saying so; whether that is shown is the host's
+     * `error_reporting` / error-handler decision.
      */
-    public static function default(): LayoutSolver
+    public static function fromEnvironment(): LayoutSolver
     {
         $env = getenv('SUGARCRAFT_LAYOUT_SOLVER');
         if ($env === 'cassowary') {
             if (!self::$cassowaryWarningEmitted) {
                 trigger_error(
-                    'SUGARCRAFT_LAYOUT_SOLVER=cassowary is set: note that CassowarySolver '
-                    . 'has a known Ratio-constraint bug that returns 0 instead of the '
-                    . 'expected value (see CALIBER_LEARNINGS bug:cassowary-solver-ratio). '
-                    . 'GreedySolver is recommended. This warning fires once per process.',
+                    'SUGARCRAFT_LAYOUT_SOLVER=cassowary selects the deprecated CassowarySolver, '
+                    . 'which now delegates every solve to GreedySolver (identical results) and '
+                    . 'raises E_USER_DEPRECATED on each call. Unset the variable or use "greedy". '
+                    . 'This warning fires once per process.',
                     E_USER_WARNING,
                 );
                 self::$cassowaryWarningEmitted = true;

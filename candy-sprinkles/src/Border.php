@@ -206,10 +206,24 @@ final class Border
     }
 
     /**
+     * Attached titles, keyed by {@see TitleAnchor} case name, each anchor's
+     * list in insertion order.
+     *
+     * @return array<string, list<BorderTitle>>
+     */
+    public function titles(): array
+    {
+        return $this->titles;
+    }
+
+    /**
+     * Alias of {@see titles()}, kept so existing callers keep compiling.
+     *
+     * @deprecated Use the bare accessor {@see titles()}.
      * @return array<string, list<BorderTitle>>
      */
     public function getTitles(): array
     {
-        return $this->titles;
+        return $this->titles();
     }
 }

@@ -156,7 +156,9 @@ final class LayoutSolverTest extends TestCase
     {
         // When no Fill constraints exist, Min absorbs remaining slack proportionally.
         // [min(20), min(30), min(25)] = 75 reserved, slack=25 in 100.
-        // Proportional distribution: 20→26, 30→40, 25→33 = 99 + 1 rounding.
+        // Proportional distribution: 20→26, 30→40, 25→33 = 99; candy-layout's
+        // GreedySolver hands the 1-cell floor loss to the first Min so the
+        // sizes tile the area (LayoutSolver's sum-to-total contract).
         $rects = Layout::horizontal([
             Constraint::min(20),
             Constraint::min(30),
@@ -164,7 +166,7 @@ final class LayoutSolverTest extends TestCase
         ])->split(new Rect(0, 0, 100, 24));
 
         $this->assertCount(3, $rects);
-        $this->assertSame(26, $rects[0]->width);
+        $this->assertSame(27, $rects[0]->width);
         $this->assertSame(40, $rects[1]->width);
         $this->assertSame(33, $rects[2]->width);
     }

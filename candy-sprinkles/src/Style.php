@@ -30,12 +30,6 @@ final class Style
      * @param array{int,int,int,int}     $padding     top, right, bottom, left
      * @param array{int,int,int,int}     $margin      top, right, bottom, left
      * @param array{bool,bool,bool,bool} $borderSides top, right, bottom, left
-     * @param array<string,bool>         $propsSet
-     */
-    /**
-     * @param array{int,int,int,int}     $padding     top, right, bottom, left
-     * @param array{int,int,int,int}     $margin      top, right, bottom, left
-     * @param array{bool,bool,bool,bool} $borderSides top, right, bottom, left
      * @param array{?Color,?Color,?Color,?Color} $borderSideFg per-side fg overrides
      * @param array{?Color,?Color,?Color,?Color} $borderSideBg per-side bg overrides
      * @param array<string,bool>         $propsSet
@@ -126,8 +120,7 @@ final class Style
         return $this->with(boundString: $content, boundStringSet: true, propsAdded: ['boundString']);
     }
 
-    /** Currently-bound string from {@see setString()}, or null. */
-    /** Bound default content (set via {@see setString()} / {@see of()}). */
+    /** Bound default content (set via {@see setString()} / {@see of()}), or null. */
     public function value(): ?string { return $this->boundString; }
 
     /**
@@ -190,13 +183,18 @@ final class Style
     // ---------------------------------------------------------------------
     // Short-form ergonomic aliases (DX sugar — same semantics as the long
     // upstream-mirroring names above, but accept hex strings directly so
-    // you can write $s->fg('#ff5')->on('navy') without wrapping in Color::hex().
-    // Pass null to clear.
+    // you can write $s->fg('#ff5')->on('#000080') without wrapping in
+    // Color::hex(). Only hex strings are accepted: a colour NAME such as
+    // 'navy' throws InvalidArgumentException — pass a Color (e.g.
+    // Color::ansi(4)) for palette colours. Pass null to clear.
     // ---------------------------------------------------------------------
 
     /**
      * Short alias for {@see foreground()}. Accepts a {@see Color}, hex
      * string (e.g. `'#ff5'`), or null to clear.
+     *
+     * @throws \InvalidArgumentException when a string is not a 3- or
+     *         6-digit hex colour (colour names are not accepted).
      */
     public function fg(Color|string|null $c): self { return $this->foreground(self::asColor($c)); }
 
@@ -204,8 +202,8 @@ final class Style
     public function bg(Color|string|null $c): self { return $this->background(self::asColor($c)); }
 
     /**
-     * Reads naturally in chains: `$s->fg('white')->on('blue')`. Same as
-     * {@see background()} but English-shaped.
+     * Reads naturally in chains: `$s->fg('#ffffff')->on('#0000ff')`. Same
+     * as {@see bg()} (hex string, {@see Color} or null) but English-shaped.
      */
     public function on(Color|string|null $c): self { return $this->background(self::asColor($c)); }
 
@@ -431,8 +429,11 @@ final class Style
     }
 
     /**
-     * Toggle whether the background colour fills padding/whitespace
-     * cells. Mirrors lipgloss's `ColorWhitespace`. Defaults to true.
+     * Toggle whether the style's SGR (background, reverse, underline, …)
+     * extends over whitespace the style itself adds — padding cells, the
+     * alignment fill of a {@see width()}/{@see align()} box, and
+     * {@see height()} filler rows. With `false` only the content is
+     * styled. Mirrors lipgloss's `ColorWhitespace`. Defaults to true.
      */
     public function colorWhitespace(bool $on = true): self
     {
@@ -615,6 +616,13 @@ final class Style
     public function colorProfile(ColorProfile $p): self { return $this->with(profile: $p, propsAdded: ['profile']); }
 
     // ─── Getters ───────────────────────────────────────────────────────
+    //
+    // These keep the `get`/`is` prefix on purpose, an exception to the
+    // repo's bare-accessor rule: every bare name (`foreground()`,
+    // `width()`, `padding()`, `border()`, …) is already the fluent setter,
+    // and PHP cannot overload a method by arity. Mirrors lipgloss's
+    // `Style.GetForeground()` / `GetWidth()` / `GetPadding()` family, which
+    // prefixes for the same reason.
 
     public function getForeground(): ?Color   { return $this->fg; }
     public function getBackground(): ?Color   { return $this->bg; }
@@ -670,7 +678,17 @@ final class Style
     public function unsetHeight(): self        { return $this->withUnset('height', height: null); }
     public function unsetMaxWidth(): self      { return $this->withUnset('maxWidth', maxWidth: null); }
     public function unsetMaxHeight(): self     { return $this->withUnset('maxHeight', maxHeight: null); }
-    public function unsetBorder(): self        { return $this->withUnset('border', border: null); }
+    /**
+     * Drop the border AND its side toggles: the side flags revert to the
+     * all-sides default and leave propsSet, so a later {@see inherit()}
+     * re-inherits the parent's border sides along with its border.
+     */
+    public function unsetBorder(): self
+    {
+        return $this->withUnset('border', border: null)
+            ->with(borderSides: [true, true, true, true])
+            ->withUnsetProp('borderSides');
+    }
     public function unsetTransform(): self     { return $this->withUnset('transform', transform: null); }
 
     /**
@@ -835,11 +853,21 @@ final class Style
     }
 
     /**
-     * Incrementally merge {@see $other} into this style. Only properties
-     * that are explicitly set in {@see $other} (recorded in its propsSet)
-     * or have non-null / non-zero values are merged — null and zero values
-     * in {@see $other} are skipped, leaving the current style's values
-     * intact.
+     * Incrementally merge {@see $other} into this style.
+     *
+     * - Nullable slots — fg/bg (and their adaptive/complete variants),
+     *   width, height, maxWidth, maxHeight, border, borderFg, borderBg,
+     *   marginBg, transform — apply only when $other holds a non-null
+     *   value. `$other->foreground(null)` therefore does NOT clear the
+     *   receiver's colour; use {@see unsetForeground()} for that. A zero
+     *   (e.g. `height(0)`) is a value and IS applied.
+     * - Every other prop (booleans, alignment, padding/margin arrays,
+     *   border sides, profile, hyperlink, …) applies whenever $other
+     *   explicitly set it, whatever the value — `bold(false)` un-bolds.
+     *
+     * The result records a prop in its propsSet only when the merge
+     * actually applied it, so a skipped null never leaves a sentinel that
+     * would make a later {@see inherit()} refuse the parent's value.
      *
      * This differs from {@see inherit()} in that inherit() always takes the
      * parent's value when the child hasn't explicitly set a property,
@@ -905,9 +933,31 @@ final class Style
         $mergedPaddingChar = $other->isSet('paddingChar')   ? $other->paddingChar : null;
         $mergedMarginChar  = $other->isSet('marginChar')    ? $other->marginChar  : null;
 
+        // A value-probed prop that was skipped (null in $other) must not
+        // carry $other's sentinel over: the receiver's value survived, so
+        // the receiver's own sentinel (or its absence) is the truth.
+        $skipped = array_keys(array_filter([
+            'fg'         => $mergedFg === null,
+            'bg'         => $mergedBg === null,
+            'fgAdaptive' => $mergedFgAdaptive === null,
+            'bgAdaptive' => $mergedBgAdaptive === null,
+            'fgComplete' => $mergedFgComplete === null,
+            'bgComplete' => $mergedBgComplete === null,
+            'width'      => $mergedWidth === null,
+            'height'     => $mergedHeight === null,
+            'maxWidth'   => $mergedMaxWidth === null,
+            'maxHeight'  => $mergedMaxHeight === null,
+            'border'     => $mergedBorder === null,
+            'borderFg'   => $mergedBorderFg === null,
+            'borderBg'   => $mergedBorderBg === null,
+            'marginBg'   => $mergedMarginBg === null,
+            'transform'  => $mergedTransform === null,
+        ]));
         $newProps = $this->propsSet;
         foreach ($other->propsSet as $p => $v) {
-            $newProps[$p] = $v;
+            if (!in_array($p, $skipped, true)) {
+                $newProps[$p] = $v;
+            }
         }
 
         return new self(
@@ -1024,39 +1074,38 @@ final class Style
             $lineWidths = null; // lines re-truncated → cached widths are stale
         }
 
-        // 3. Horizontal alignment within innerWidth.
+        // 3. Horizontal alignment within innerWidth — kept as
+        //    [leftFill, line, rightFill] so step 4 can leave the fill
+        //    unstyled when colorWhitespace is off.
         if ($lineWidths !== null) {
-            $lines = array_map(
+            $aligned = array_map(
                 fn(string $l, int $w) => $this->halign($l, $innerWidth, $w),
                 $lines,
                 $lineWidths,
             );
         } else {
-            $lines = array_map(fn(string $l) => $this->halign($l, $innerWidth), $lines);
+            $aligned = array_map(fn(string $l) => $this->halign($l, $innerWidth), $lines);
         }
 
-        // 4. Padding (styled — only if colorWhitespace).
+        // 4. Padding. With colorWhitespace (the default) the style's SGR
+        //    spans padding + alignment fill + content; without it only the
+        //    content itself is styled.
         $padCh = $this->paddingChar !== '' ? $this->paddingChar : ' ';
         $contentWidth = $pL + $innerWidth + $pR;
-        if ($this->colorWhitespace) {
-            $padBlank = $sgr . str_repeat($padCh, $contentWidth) . $reset;
-            $linePrefix = $sgr;
-            $lineSuffix = $reset;
-        } else {
-            $padBlank = str_repeat($padCh, $contentWidth);
-            $linePrefix = $sgr;
-            $lineSuffix = $reset;
-        }
+        $padBlank = $this->colorWhitespace
+            ? $sgr . str_repeat($padCh, $contentWidth) . $reset
+            : str_repeat($padCh, $contentWidth);
 
         $body = [];
         for ($i = 0; $i < $pT; $i++) {
             $body[] = $padBlank;
         }
-        foreach ($lines as $l) {
+        foreach ($aligned as [$fillL, $l, $fillR]) {
             if ($this->colorWhitespace) {
-                $body[] = $sgr . str_repeat($padCh, $pL) . $l . str_repeat($padCh, $pR) . $reset;
+                $body[] = $sgr . str_repeat($padCh, $pL) . $fillL . $l . $fillR . str_repeat($padCh, $pR) . $reset;
             } else {
-                $body[] = str_repeat($padCh, $pL) . $linePrefix . $l . $lineSuffix . str_repeat($padCh, $pR);
+                $styled = $l === '' ? '' : $sgr . $l . $reset;
+                $body[] = str_repeat($padCh, $pL) . $fillL . $styled . $fillR . str_repeat($padCh, $pR);
             }
         }
         for ($i = 0; $i < $pB; $i++) {
@@ -1173,7 +1222,13 @@ final class Style
         fwrite($stream, $this->sprint(...$content));
     }
 
-    private function halign(string $line, int $innerWidth, ?int $width = null): string
+    /**
+     * Split the fill needed to align `$line` within `$innerWidth` into its
+     * left and right runs of spaces.
+     *
+     * @return array{string,string,string} [leftFill, line, rightFill]
+     */
+    private function halign(string $line, int $innerWidth, ?int $width = null): array
     {
         // $width, when supplied by the caller, is this exact line's display
         // width already measured during the inner-width scan — reuse it to
@@ -1181,12 +1236,12 @@ final class Style
         $w = $width ?? Width::string($line);
         $extra = $innerWidth - $w;
         if ($extra <= 0) {
-            return $line;
+            return ['', $line, ''];
         }
         return match ($this->alignH) {
-            Align::Left   => $line . str_repeat(' ', $extra),
-            Align::Right  => str_repeat(' ', $extra) . $line,
-            Align::Center => str_repeat(' ', intdiv($extra, 2)) . $line . str_repeat(' ', $extra - intdiv($extra, 2)),
+            Align::Left   => ['', $line, str_repeat(' ', $extra)],
+            Align::Right  => [str_repeat(' ', $extra), $line, ''],
+            Align::Center => [str_repeat(' ', intdiv($extra, 2)), $line, str_repeat(' ', $extra - intdiv($extra, 2))],
         };
     }
 
@@ -1248,11 +1303,14 @@ final class Style
             $titleSgr,  $titleReset,
         ] = $this->borderSgr();
 
-        $titles = $b->getTitles();
+        $titles = $b->titles();
 
+        // A title closes with a full SGR reset (its own, or one embedded in
+        // pre-styled title text), which would also cancel the edge's colour
+        // for the runes after it — so each title re-opens its edge's SGR.
         $out = [];
         if ($top) {
-            $line = $this->buildTopBorderLine($b, $contentWidth, $left, $right, $titles, $titleSgr, $titleReset);
+            $line = $this->buildTopBorderLine($b, $contentWidth, $left, $right, $titles, $titleSgr, $titleReset . $topSgr);
             $out[] = $topSgr . $line . $topReset;
         }
         $leftRune  = $left  ? ($leftSgr  . $b->left  . $leftReset)  : '';
@@ -1261,7 +1319,7 @@ final class Style
             $out[] = $leftRune . $row . $rightRune;
         }
         if ($bottom) {
-            $line = $this->buildBottomBorderLine($b, $contentWidth, $left, $right, $titles, $titleSgr, $titleReset);
+            $line = $this->buildBottomBorderLine($b, $contentWidth, $left, $right, $titles, $titleSgr, $titleReset . $bottomSgr);
             $out[] = $bottomSgr . $line . $bottomReset;
         }
         return $out;
@@ -1269,6 +1327,8 @@ final class Style
 
     /**
      * Build a top border line with optional titles at three anchor positions.
+     *
+     * @param array<string, list<BorderTitle>> $titles
      */
     private function buildTopBorderLine(
         Border $b,
@@ -1279,69 +1339,21 @@ final class Style
         string $titleSgr,
         string $titleReset,
     ): string {
-        $leftAnchor  = $titles[TitleAnchor::TopLeft->name]  ?? [];
-        $centerAnchor = $titles[TitleAnchor::TopCenter->name] ?? [];
-        $rightAnchor = $titles[TitleAnchor::TopRight->name]  ?? [];
-
-        $leftTitle  = $this->renderTitlesAtAnchor($leftAnchor,  TitleSgr::Left,  $titleSgr, $titleReset);
-        $centerTitle = $this->renderTitlesAtAnchor($centerAnchor, TitleSgr::Center, $titleSgr, $titleReset);
-        $rightTitle = $this->renderTitlesAtAnchor($rightAnchor, TitleSgr::Right, $titleSgr, $titleReset);
-
-        $hasLeftTitle  = $leftTitle !== '';
-        $hasRightTitle = $rightTitle !== '';
-
-        if (!$hasLeftTitle && !$hasRightTitle && $centerTitle === '') {
-            // No titles — fast path
-            return ($left  ? $b->topLeft  : '')
-                 . str_repeat($b->top, $contentWidth)
-                 . ($right ? $b->topRight : '');
-        }
-
-        // Build the line by splitting at each title position
-        $available = $contentWidth;
-
-        // Left section: corner + left title
-        $leftSection = $left ? $b->topLeft : '';
-        $titleWidth  = Width::string($leftTitle);
-        if ($titleWidth > $available) {
-            $leftTitle = Width::truncate($leftTitle, $available);
-            $titleWidth = $available;
-        }
-        $available -= $titleWidth;
-
-        // Right section: right title + corner
-        $rightSection = $right ? $b->topRight : '';
-        $titleWidth2  = Width::string($rightTitle);
-        if ($titleWidth2 > $available) {
-            $rightTitle = Width::truncate($rightTitle, $available);
-            $titleWidth2 = $available;
-        }
-        $available -= $titleWidth2;
-
-        // Center section: center title, centered in remaining space
-        $centerTitle2 = $centerTitle;
-        if ($available > 0 && $centerTitle2 !== '') {
-            $cw = Width::string($centerTitle2);
-            if ($cw > $available) {
-                $centerTitle2 = Width::truncate($centerTitle2, $available);
-                $cw = $available;
-            }
-            $leftPad  = (int) floor(($available - $cw) / 2);
-            $rightPad = $available - $cw - $leftPad;
-            $centerTitle2 = str_repeat(' ', $leftPad) . $centerTitle2 . str_repeat(' ', $rightPad);
-        } elseif ($available > 0) {
-            // No center title: fill with the border TOP character.
-            // The available width already accounts for contentWidth which includes
-            // padding but NOT the corner characters. The right corner (if enabled)
-            // is added separately via $rightSection, so we do NOT subtract 1 here.
-            $centerTitle2 = str_repeat($b->top, $available);
-        }
-
-        return $leftSection . $leftTitle . $centerTitle2 . $rightTitle . $rightSection;
+        return $this->buildTitledBorderLine(
+            $left ? $b->topLeft : '',
+            $b->top,
+            $right ? $b->topRight : '',
+            $contentWidth,
+            $this->renderTitlesAtAnchor($titles[TitleAnchor::TopLeft->name] ?? [], TitleSgr::Left, $titleSgr, $titleReset),
+            $this->renderTitlesAtAnchor($titles[TitleAnchor::TopCenter->name] ?? [], TitleSgr::Center, $titleSgr, $titleReset),
+            $this->renderTitlesAtAnchor($titles[TitleAnchor::TopRight->name] ?? [], TitleSgr::Right, $titleSgr, $titleReset),
+        );
     }
 
     /**
      * Build a bottom border line with optional titles at three anchor positions.
+     *
+     * @param array<string, list<BorderTitle>> $titles
      */
     private function buildBottomBorderLine(
         Border $b,
@@ -1352,65 +1364,72 @@ final class Style
         string $titleSgr,
         string $titleReset,
     ): string {
-        $leftAnchor   = $titles[TitleAnchor::BottomLeft->name]   ?? [];
-        $centerAnchor = $titles[TitleAnchor::BottomCenter->name] ?? [];
-        $rightAnchor  = $titles[TitleAnchor::BottomRight->name]  ?? [];
+        return $this->buildTitledBorderLine(
+            $left ? $b->bottomLeft : '',
+            $b->bottom,
+            $right ? $b->bottomRight : '',
+            $contentWidth,
+            $this->renderTitlesAtAnchor($titles[TitleAnchor::BottomLeft->name] ?? [], TitleSgr::Left, $titleSgr, $titleReset),
+            $this->renderTitlesAtAnchor($titles[TitleAnchor::BottomCenter->name] ?? [], TitleSgr::Center, $titleSgr, $titleReset),
+            $this->renderTitlesAtAnchor($titles[TitleAnchor::BottomRight->name] ?? [], TitleSgr::Right, $titleSgr, $titleReset),
+        );
+    }
 
-        $leftTitle   = $this->renderTitlesAtAnchor($leftAnchor,  TitleSgr::Left,  $titleSgr, $titleReset);
-        $centerTitle = $this->renderTitlesAtAnchor($centerAnchor, TitleSgr::Center, $titleSgr, $titleReset);
-        $rightTitle  = $this->renderTitlesAtAnchor($rightAnchor, TitleSgr::Right, $titleSgr, $titleReset);
-
-        $hasLeftTitle  = $leftTitle !== '';
-        $hasRightTitle = $rightTitle !== '';
-
-        if (!$hasLeftTitle && !$hasRightTitle && $centerTitle === '') {
-            // No titles — fast path
-            return ($left  ? $b->bottomLeft  : '')
-                 . str_repeat($b->bottom, $contentWidth)
-                 . ($right ? $b->bottomRight : '');
+    /**
+     * Lay a horizontal border edge out to exactly `$contentWidth` cells
+     * between its corners. Left and right titles claim space first (in that
+     * order); the center title is centred in what remains, and any space no
+     * title uses is filled with `$fill`. Every title is truncated with
+     * {@see Width::truncateAnsi} so its SGR survives, and a title that gets
+     * no space at all is dropped rather than overflowing the corner.
+     */
+    private function buildTitledBorderLine(
+        string $cornerLeft,
+        string $fill,
+        string $cornerRight,
+        int $contentWidth,
+        string $leftTitle,
+        string $centerTitle,
+        string $rightTitle,
+    ): string {
+        if ($leftTitle === '' && $centerTitle === '' && $rightTitle === '') {
+            return $cornerLeft . str_repeat($fill, $contentWidth) . $cornerRight;
         }
 
         $available = $contentWidth;
-        $line = '';
 
-        // Left section: corner + left title
-        $leftSection = $left ? $b->bottomLeft : '';
-        $titleWidth  = Width::string($leftTitle);
-        if ($titleWidth > $available) {
-            $leftTitle = Width::truncate($leftTitle, $available);
-            $titleWidth = $available;
+        $leftWidth = Width::string($leftTitle);
+        if ($leftWidth > $available) {
+            $leftTitle = Width::truncateAnsi($leftTitle, $available);
+            $leftWidth = $available;
         }
-        $available -= $titleWidth;
+        $available -= $leftWidth;
 
-        // Right section: right title + corner
-        $rightSection = $right ? $b->bottomRight : '';
-        $titleWidth2  = Width::string($rightTitle);
-        if ($titleWidth2 > $available) {
-            $rightTitle = Width::truncate($rightTitle, $available);
-            $titleWidth2 = $available;
+        $rightWidth = Width::string($rightTitle);
+        if ($rightWidth > $available) {
+            $rightTitle = Width::truncateAnsi($rightTitle, $available);
+            $rightWidth = $available;
         }
-        $available -= $titleWidth2;
+        $available -= $rightWidth;
 
-        // Center section: center title, centered in remaining space
-        $centerTitle2 = $centerTitle;
-        if ($available > 0 && $centerTitle2 !== '') {
-            $cw = Width::string($centerTitle2);
+        if ($available <= 0) {
+            // Left + right titles exhausted the edge: no room for a center
+            // title, and appending it anyway would push the right corner out.
+            $middle = '';
+        } elseif ($centerTitle !== '') {
+            $cw = Width::string($centerTitle);
             if ($cw > $available) {
-                $centerTitle2 = Width::truncate($centerTitle2, $available);
+                $centerTitle = Width::truncateAnsi($centerTitle, $available);
                 $cw = $available;
             }
-            $leftPad  = (int) floor(($available - $cw) / 2);
+            $leftPad  = intdiv($available - $cw, 2);
             $rightPad = $available - $cw - $leftPad;
-            $centerTitle2 = str_repeat(' ', $leftPad) . $centerTitle2 . str_repeat(' ', $rightPad);
-        } elseif ($available > 0) {
-            // No center title: fill with the border BOTTOM character.
-            // The available width already accounts for contentWidth which includes
-            // padding but NOT the corner characters. The right corner (if enabled)
-            // is added separately via $rightSection, so we do NOT subtract 1 here.
-            $centerTitle2 = str_repeat($b->bottom, $available);
+            $middle = str_repeat(' ', $leftPad) . $centerTitle . str_repeat(' ', $rightPad);
+        } else {
+            $middle = str_repeat($fill, $available);
         }
 
-        return $leftSection . $leftTitle . $centerTitle2 . $rightTitle . $rightSection;
+        return $cornerLeft . $leftTitle . $middle . $rightTitle . $cornerRight;
     }
 
     /**

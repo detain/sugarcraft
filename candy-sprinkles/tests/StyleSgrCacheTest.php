@@ -88,7 +88,9 @@ final class StyleSgrCacheTest extends TestCase
             'borderTitle' => [
                 Style::new()->border(Border::rounded()->withTitle('App', TitleAnchor::TopLeft))->borderForeground($red)->width(12),
                 'body',
-                "\x1b[38;2;255;0;0m╭\x1b[38;2;255;0;0mApp\x1b[0m─────────╮\x1b[0m\n\x1b[38;2;255;0;0m│\x1b[0mbody        \x1b[38;2;255;0;0m│\x1b[0m\n\x1b[38;2;255;0;0m╰────────────╯\x1b[0m",
+                // The title's reset re-opens the edge SGR so the runes after
+                // the title stay coloured (pre-cache bytes left them default).
+                "\x1b[38;2;255;0;0m╭\x1b[38;2;255;0;0mApp\x1b[0m\x1b[38;2;255;0;0m─────────╮\x1b[0m\n\x1b[38;2;255;0;0m│\x1b[0mbody        \x1b[38;2;255;0;0m│\x1b[0m\n\x1b[38;2;255;0;0m╰────────────╯\x1b[0m",
             ],
             'multiline' => [
                 Style::new()->fg($red)->padding(0, 1),

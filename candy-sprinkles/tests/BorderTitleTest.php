@@ -201,4 +201,62 @@ final class BorderTitleTest extends TestCase
         // Title should be truncated (ellipsis or cut)
         $this->assertGreaterThan(0, count($lines));
     }
+
+    public function testBorderTitlesAccessorAndDeprecatedAlias(): void
+    {
+        $b = Border::normal()->withTitle('T', TitleAnchor::BottomRight);
+        $this->assertSame($b->titles(), $b->getTitles());
+        $this->assertSame('T', $b->titles()['BottomRight'][0]->text);
+    }
+
+    public function testCenterTitleDroppedWhenSideTitlesExhaustTopEdge(): void
+    {
+        $style = Style::new()
+            ->border(Border::normal()->withTitles(['TopLeft' => 'ABCD', 'TopRight' => 'XY', 'TopCenter' => 'CENTERED']))
+            ->width(4);
+        // Edge is 4 cells: "ABCD" takes all of it, the right title and the
+        // center title get nothing — the box stays 6 cells wide.
+        $this->assertSame("┌ABCD┐\n│a   │\n└────┘", $style->render('a'));
+    }
+
+    public function testCenterTitleDroppedWhenSideTitlesExhaustBottomEdge(): void
+    {
+        $style = Style::new()
+            ->border(Border::normal()->withTitles(['BottomLeft' => 'AB', 'BottomRight' => 'XY', 'BottomCenter' => 'MID']))
+            ->width(4);
+        $this->assertSame("┌────┐\n│a   │\n└ABXY┘", $style->render('a'));
+    }
+
+    public function testTruncatedTitleKeepsItsStyling(): void
+    {
+        $red = \SugarCraft\Core\Util\Color::hex('#ff0000');
+        $styled = Style::new()->foreground($red)->render('LongTitle');
+        $style = Style::new()
+            ->border(Border::normal()->withTitle($styled, TitleAnchor::TopLeft))
+            ->width(4);
+        $top = explode("\n", $style->render('a'))[0];
+        // Truncated to the 4-cell edge, but the title's own SGR survives.
+        $this->assertStringContainsString("\x1b[38;2;255;0;0mLong", $top);
+        $this->assertSame(6, \SugarCraft\Core\Util\Width::string($top));
+
+        $bottom = Style::new()
+            ->border(Border::normal()->withTitle($styled, TitleAnchor::BottomCenter))
+            ->width(4);
+        $last = explode("\n", $bottom->render('a'))[2];
+        $this->assertStringContainsString("\x1b[38;2;255;0;0mLong", $last);
+    }
+
+    public function testEdgeColourResumesAfterTitle(): void
+    {
+        $red = \SugarCraft\Core\Util\Color::hex('#ff0000');
+        $top = explode("\n", Style::new()
+            ->border(Border::normal()->withTitle('T'))
+            ->borderForeground($red)
+            ->width(4)
+            ->render('a'))[0];
+        $this->assertSame(
+            "\x1b[38;2;255;0;0m┌\x1b[38;2;255;0;0mT\x1b[0m\x1b[38;2;255;0;0m───┐\x1b[0m",
+            $top,
+        );
+    }
 }
