@@ -93,8 +93,12 @@ final class Group
     /**
      * Predicate evaluated on page transitions; receives the values
      * collected so far (keyed by field key) and returns true to hide
-     * the group. Hidden groups are skipped — both their fields and
-     * their values are excluded from the final form result.
+     * the group. "So far" is the same view navigation, rendering and
+     * {@see Form::values()} share: the visible fields of every visible
+     * group before this one — a field hidden by its own hide func, and
+     * any field of this or a later group, is never in the map. Hidden
+     * groups are skipped — both their fields and their values are
+     * excluded from the final form result.
      *
      * @param ?\Closure(array<string,mixed>): bool $fn
      */

@@ -111,7 +111,7 @@ final class Form implements Model
             theme:          Theme::ansi(),
             accessible:     false,
         );
-        $startGroup = $probe->firstNavigableGroup([], 0, +1) ?? 0;
+        $startGroup = $probe->firstNavigableGroup(0, +1) ?? 0;
         $hidden     = $probe->hiddenFieldsIn($startGroup);
         $startField = self::firstNonSkippable($fieldsByGroup[$startGroup], 0, +1, $hidden);
         $initCmd = null;
@@ -385,9 +385,7 @@ final class Form implements Model
                     $fields, count($fields) - 1, -1, $this->hiddenFieldsIn($this->groupIndex),
                 );
                 if ($last === null || $this->focusedIndex >= $last) {
-                    $isLastGroup = $this->firstNavigableGroup(
-                        $this->collectValues(), $this->groupIndex + 1, +1,
-                    ) === null;
+                    $isLastGroup = $this->firstNavigableGroup($this->groupIndex + 1, +1) === null;
                     if ($isLastGroup) {
                         return $this->submitOrGateLastGroup();
                     }
@@ -559,20 +557,21 @@ final class Form implements Model
             return $this->valuesMemo;
         }
         // E736-F2/2.9 (round 85): the walk shape is shared with
-        // collectValues()/validateAll() through valueWalk().
-        return $this->valuesMemo = $this->valueWalk(stopBeforeGroup: null, respectHidden: true);
+        // collectValues() (navigation's hide-predicate input) via valueWalk().
+        return $this->valuesMemo = $this->valueWalk(stopBeforeGroup: null);
     }
 
     /**
      * Shared group-walk used by {@see values()} and {@see collectValues()}
-     * (E736-F2/2.9). Collects non-skippable field values per group;
-     * optionally stops before a group index and optionally skips groups
-     * AND fields whose hideFunc fires against the progressively accumulated
-     * map — the progressive convention every consumer shares.
+     * (E736-F2/2.9). Collects non-skippable field values per group,
+     * optionally stopping before a group index, and skips groups AND fields
+     * whose hideFunc fires against the progressively accumulated map — the
+     * progressive convention every consumer shares. Hidden fields are never
+     * part of the map, so no later predicate (group or field) can see them.
      *
      * @return array<string,mixed>
      */
-    private function valueWalk(?int $stopBeforeGroup, bool $respectHidden): array
+    private function valueWalk(?int $stopBeforeGroup): array
     {
         $out         = [];
         $accumulated = [];
@@ -580,14 +579,14 @@ final class Form implements Model
             if ($stopBeforeGroup !== null && $i >= $stopBeforeGroup) {
                 break;
             }
-            if ($respectHidden && $group->isHidden($accumulated)) {
+            if ($group->isHidden($accumulated)) {
                 continue;
             }
             foreach ($this->fieldsByGroup[$i] as $f) {
                 if ($f->skippable()) {
                     continue;
                 }
-                if ($respectHidden && $f->isHidden($accumulated)) {
+                if ($f->isHidden($accumulated)) {
                     continue;
                 }
                 $out[$f->key()]         = $f->value();
@@ -1202,9 +1201,7 @@ final class Form implements Model
      */
     private function advanceGroup(int $direction): array
     {
-        $nextGroup = $this->firstNavigableGroup(
-            $this->collectValues(), $this->groupIndex + $direction, $direction,
-        );
+        $nextGroup = $this->firstNavigableGroup($this->groupIndex + $direction, $direction);
         if ($nextGroup === null) {
             return [$this, null];
         }
@@ -1234,35 +1231,54 @@ final class Form implements Model
     }
 
     /**
-     * Snapshot of all values collected up to (but not including) the
-     * current group. Used as input for `Group::isHidden()` checks.
+     * The values view every hide predicate for group `$group` — the group's
+     * own {@see Group::isHidden()} and its fields' {@see Field::isHidden()}
+     * seeds — is evaluated against: the visible fields of every visible
+     * group BEFORE `$group`, exactly the prefix {@see values()} accumulates
+     * when it reaches that group.
+     *
+     * It is deliberately per-candidate rather than "everything before the
+     * current group": navigation used to hand every candidate the raw map up
+     * to the page being left, so a field hidden by its own hide func still
+     * leaked into a later group's predicate, the page being left was
+     * invisible to the very next group's predicate, and stepping backwards a
+     * candidate saw values from its own future — each time disagreeing with
+     * values() about which page exists. Upstream huh has one shared state
+     * that navigation and rendering both evaluate a group's hide func
+     * against; this is that single view.
      *
      * @return array<string,mixed>
      */
-    private function collectValues(): array
+    private function collectValues(int $beforeGroup): array
     {
-        // E736-F2/2.9: same walk as values(), stopped at the current group
-        // and raw (this map is the INPUT to isHidden(), so it must not
-        // pre-filter hidden groups).
-        return $this->valueWalk(stopBeforeGroup: $this->groupIndex, respectHidden: false);
+        return $this->valueWalk(stopBeforeGroup: $beforeGroup);
+    }
+
+    /**
+     * Whether group `$group`'s own hide predicate fires against its
+     * {@see collectValues()} view — the same verdict {@see values()},
+     * {@see errors()} and the validators reach for that group.
+     */
+    private function isGroupHidden(int $group): bool
+    {
+        return $this->groups[$group]->isHidden($this->collectValues($group));
     }
 
     /**
      * First group from `$start` (stepping `$step`) that navigation may land
-     * on: its own {@see Group::isHidden()} does not fire against `$values`,
-     * and its field-level hiding has not emptied it. A group whose every
-     * field is hidden has nothing to show or focus, so it is passed over
-     * exactly like a hidden group — otherwise Enter would strand on an empty
-     * page (or, as the last group, never submit). A group declared with no
-     * fields at all stays navigable: that is a deliberate title-only page.
-     *
-     * @param array<string,mixed> $values  collected so far for the group hideFunc
+     * on: its own {@see Group::isHidden()} does not fire (see
+     * {@see isGroupHidden()}), and its field-level hiding has not emptied
+     * it. A group whose every field is hidden has nothing to show or focus,
+     * so it is passed over exactly like a hidden group — otherwise Enter
+     * would strand on an empty page (or, as the last group, never submit).
+     * A group declared with no fields at all stays navigable: that is a
+     * deliberate title-only page.
      */
-    private function firstNavigableGroup(array $values, int $start, int $step): ?int
+    private function firstNavigableGroup(int $start, int $step): ?int
     {
         $n = count($this->groups);
         for ($i = $start; $i >= 0 && $i < $n; $i += $step) {
-            if ($this->groups[$i]->isHidden($values)) {
+            if ($this->isGroupHidden($i)) {
                 continue;
             }
             $fields = $this->fieldsByGroup[$i] ?? [];
@@ -1347,7 +1363,7 @@ final class Form implements Model
     {
         return self::hiddenFieldMask(
             $this->fieldsByGroup[$group] ?? [],
-            $this->valueWalk(stopBeforeGroup: $group, respectHidden: true),
+            $this->collectValues($group),
         );
     }
 
