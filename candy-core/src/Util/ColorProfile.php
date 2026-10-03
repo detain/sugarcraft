@@ -18,18 +18,23 @@ enum ColorProfile: int
     /**
      * Detect the active terminal's color profile.
      *
-     * Decision order (matches charmbracelet/colorprofile):
-     *   1. `NO_COLOR` set → `Ascii` (overrides everything per no-color.org)
-     *   2. stdout is not a TTY → `NoTty` (unless `CLICOLOR_FORCE`/`FORCE_COLOR`
-     *      tells us to keep going)
-     *   3. `CLICOLOR_FORCE`/`FORCE_COLOR` truthy → `TrueColor`
-     *   4. `COLORTERM` ∈ {truecolor, 24bit} → `TrueColor`
-     *   5. Known `TERM_PROGRAM` values → matched tier
-     *   6. `WT_SESSION` (Windows Terminal) set → `TrueColor`
-     *   7. `TERM` substring match: `*direct*`/`*truecolor*` → `TrueColor`,
+     * Mirrors charmbracelet/colorprofile.Detect / colorProfile. Decision order:
+     *   1. Output is not a TTY → `NoTty` — checked FIRST, so `NO_COLOR` on a
+     *      pipe is `NoTty` (no escape bytes at all), not `Ascii`. A truthy
+     *      `CLICOLOR_FORCE`/`FORCE_COLOR` says "emit escapes anyway" and so
+     *      counts as a terminal here.
+     *   2. `TERM=dumb` → `NoTty` unless forced (upstream: "TERM=dumb is always
+     *      treated as NoTTY unless CLICOLOR_FORCE=1 is set").
+     *   3. `NO_COLOR` set → `Ascii`: colour off, text decoration (bold, faint,
+     *      italic …) kept, per no-color.org. It outranks the force variables.
+     *   4. `CLICOLOR_FORCE`/`FORCE_COLOR` truthy → `TrueColor`
+     *   5. `COLORTERM` ∈ {truecolor, 24bit} → `TrueColor`
+     *   6. Known `TERM_PROGRAM` values → matched tier
+     *   7. `WT_SESSION` (Windows Terminal) set → `TrueColor`
+     *   8. `TERM` substring match: `*direct*`/`*truecolor*` → `TrueColor`,
      *      `*256*` → `Ansi256`, `*color*`/xterm/screen/tmux → `Ansi`
-     *   8. CI environment → `Ansi` (most CI logs render 16-color OK)
-     *   9. fallback → `Ascii`
+     *   9. CI environment → `Ansi` (most CI logs render 16-color OK)
+     *  10. fallback → `Ascii`
      *
      * @param array<string,string>|null $env  defaults to a snapshot of getenv()
      * @param resource|null             $stdout used to query `stream_isatty`;
@@ -41,10 +46,6 @@ enum ColorProfile: int
     {
         $env ??= self::defaultEnv();
 
-        if (self::truthy($env['NO_COLOR'] ?? '')) {
-            return self::Ascii;
-        }
-
         $force = self::truthy($env['CLICOLOR_FORCE'] ?? '')
               || self::truthy($env['FORCE_COLOR']    ?? '');
 
@@ -54,16 +55,20 @@ enum ColorProfile: int
             }
         }
 
-        if ($force) {
-            return self::TrueColor;
-        }
-
         $term      = strtolower($env['TERM']         ?? '');
         $colorTerm = strtolower($env['COLORTERM']    ?? '');
         $program   = strtolower($env['TERM_PROGRAM'] ?? '');
 
-        if ($term === 'dumb') {
+        if ($term === 'dumb' && !$force) {
+            return self::NoTty;
+        }
+
+        if (self::truthy($env['NO_COLOR'] ?? '')) {
             return self::Ascii;
+        }
+
+        if ($force) {
+            return self::TrueColor;
         }
 
         if ($colorTerm === 'truecolor' || $colorTerm === '24bit') {

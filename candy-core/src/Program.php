@@ -112,6 +112,15 @@ final class Program
      * @var array<int, TimerInterface>
      */
     private array $oneShotTimers = [];
+    /**
+     * Bumped by {@see releaseRuntime()}. A `futureTick()` callback cannot be
+     * cancelled the way a timer can, so every one this Program queues
+     * captures the generation it was queued under and goes inert once that
+     * generation has been released — on a shared loop that spins again after
+     * run() returns, a queued Cmd, sequence step or send() never dispatches
+     * into the finished Program (nor into a later run() of the same one).
+     */
+    private int $runtimeGeneration = 0;
     /** @var \Closure(\Throwable): void */
     private \Closure $exceptionHandler;
     private float $lastFrameDuration = 0.0;
@@ -462,7 +471,7 @@ final class Program
             $this->pending[] = $msg;
             return;
         }
-        $this->loop->futureTick(function () use ($msg): void {
+        $this->deferTick(function () use ($msg): void {
             $this->dispatch($msg);
         });
     }
@@ -780,9 +789,9 @@ final class Program
             }
             // Schedule the next one on a future tick so any update()
             // triggered by $msg has a chance to run first.
-            $this->loop->futureTick($runNext);
+            $this->deferTick($runNext);
         };
-        $this->loop->futureTick($runNext);
+        $this->deferTick($runNext);
     }
 
     /**
@@ -1157,6 +1166,7 @@ final class Program
      */
     private function releaseRuntime(): void
     {
+        $this->runtimeGeneration++;
         $this->cancelAllSubscriptions();
         foreach ($this->oneShotTimers as $timer) {
             $this->loop->cancelTimer($timer);
@@ -1169,11 +1179,27 @@ final class Program
 
     private function scheduleCmd(\Closure $cmd): void
     {
-        $this->loop->futureTick(function () use ($cmd): void {
+        $this->deferTick(function () use ($cmd): void {
             $msg = $cmd();
             if ($msg !== null) {
                 $this->dispatch($msg);
             }
+        });
+    }
+
+    /**
+     * Queue `$callback` on the loop's next tick, bound to the current run:
+     * if {@see releaseRuntime()} has run by the time the tick comes round,
+     * the callback is dropped instead of reaching a torn-down Program.
+     */
+    private function deferTick(\Closure $callback): void
+    {
+        $generation = $this->runtimeGeneration;
+        $this->loop->futureTick(function () use ($generation, $callback): void {
+            if ($generation !== $this->runtimeGeneration) {
+                return;
+            }
+            $callback();
         });
     }
 

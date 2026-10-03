@@ -9,9 +9,53 @@ use PHPUnit\Framework\TestCase;
 
 final class ColorProfileTest extends TestCase
 {
-    public function testDumbTermIsAscii(): void
+    /** Upstream colorprofile: "TERM=dumb is always treated as NoTTY unless CLICOLOR_FORCE=1 is set". */
+    public function testDumbTermIsNoTty(): void
     {
-        $this->assertSame(ColorProfile::Ascii, ColorProfile::detect(['TERM' => 'dumb']));
+        $this->assertSame(ColorProfile::NoTty, ColorProfile::detect(['TERM' => 'dumb']));
+    }
+
+    public function testDumbTermOutranksColorHints(): void
+    {
+        $this->assertSame(
+            ColorProfile::NoTty,
+            ColorProfile::detect(['TERM' => 'dumb', 'COLORTERM' => 'truecolor', 'TERM_PROGRAM' => 'iTerm.app']),
+        );
+        $this->assertSame(ColorProfile::NoTty, ColorProfile::detect(['TERM' => 'dumb', 'NO_COLOR' => '1']));
+    }
+
+    public function testForcedColorLiftsDumbTerm(): void
+    {
+        $this->assertSame(ColorProfile::TrueColor, ColorProfile::detect(['TERM' => 'dumb', 'CLICOLOR_FORCE' => '1']));
+        $this->assertSame(ColorProfile::Ascii, ColorProfile::detect(['TERM' => 'dumb', 'FORCE_COLOR' => '1', 'NO_COLOR' => '1']));
+    }
+
+    /** Upstream checks tty-ness before NO_COLOR: a pipe gets no escape bytes at all. */
+    public function testNoColorOnNonTtyStreamIsNoTty(): void
+    {
+        $tmp = fopen('php://memory', 'r+');
+        try {
+            $this->assertSame(
+                ColorProfile::NoTty,
+                ColorProfile::detect(['NO_COLOR' => '1', 'TERM' => 'xterm-256color'], $tmp),
+            );
+        } finally {
+            fclose($tmp);
+        }
+    }
+
+    /** NO_COLOR outranks a force variable: forced output keeps decoration but loses colour. */
+    public function testNoColorBeatsForceOnNonTtyStream(): void
+    {
+        $tmp = fopen('php://memory', 'r+');
+        try {
+            $this->assertSame(
+                ColorProfile::Ascii,
+                ColorProfile::detect(['NO_COLOR' => '1', 'FORCE_COLOR' => '1', 'TERM' => 'xterm'], $tmp),
+            );
+        } finally {
+            fclose($tmp);
+        }
     }
 
     public function testEmptyTermIsAscii(): void

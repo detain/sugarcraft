@@ -128,6 +128,117 @@ final class ProgramRuntimeTeardownTest extends TestCase
         fclose($out);
     }
 
+    /**
+     * futureTick callbacks cannot be cancelled, so an init Cmd queued before
+     * an early quit (a QuitMsg send() buffered before run()) used to run on
+     * the next spin of a shared loop and dispatch into the finished Program.
+     */
+    public function testInitCmdQueuedBeforeEarlyQuitStaysInertAfterRun(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $ran = false;
+        $model = new LoggingModel(initCmd: static function () use (&$ran): Msg {
+            $ran = true;
+            return new KeyMsg(KeyType::Char, 'x');
+        });
+        $program = new Program($model, $this->options($in, $out, $loop));
+        $program->send(new \SugarCraft\Core\Msg\QuitMsg());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+
+        $before = count($program->model()->log);
+        $this->spin($loop, 0.05);
+
+        $this->assertFalse($ran, 'the init Cmd ran on the shared loop after run() returned');
+        $this->assertCount($before, $program->model()->log);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /** The rest of a Cmd::sequence() re-queues itself tick by tick; it must stop at teardown. */
+    public function testSequenceTailStaysInertAfterRun(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $ran = false;
+        $model = new LoggingModel(initCmd: Cmd::sequence(
+            Cmd::quit(),
+            static function () use (&$ran): Msg {
+                $ran = true;
+                return new KeyMsg(KeyType::Char, 'x');
+            },
+        ));
+        $program = new Program($model, $this->options($in, $out, $loop));
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+
+        $before = count($program->model()->log);
+        $this->spin($loop, 0.05);
+
+        $this->assertFalse($ran, 'a sequence step ran on the shared loop after run() returned');
+        $this->assertCount($before, $program->model()->log);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /** A send() made while running is delivered on a later tick, which may come after teardown. */
+    public function testSendQueuedBeforeQuitIsNotDispatchedAfterRun(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $program = null;
+        $late = new KeyMsg(KeyType::Char, 'z');
+        $model = new LoggingModel(initCmd: static function () use (&$program, $late): Msg {
+            $program->send($late);
+            return new \SugarCraft\Core\Msg\QuitMsg();
+        });
+        $program = new Program($model, $this->options($in, $out, $loop));
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+
+        $this->assertNotContains($late, $program->model()->log, 'precondition: the send() was still queued at quit');
+        $this->spin($loop, 0.05);
+
+        $this->assertNotContains($late, $program->model()->log, 'send() dispatched into the finished Program');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /** The guard is per run: a second run() of the same Program still executes its Cmds. */
+    public function testCmdsRunNormallyOnASecondRun(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $runs = 0;
+        $model = new LoggingModel(initCmd: static function () use (&$runs): Msg {
+            $runs++;
+            return new \SugarCraft\Core\Msg\QuitMsg();
+        });
+        $program = new Program($model, $this->options($in, $out, $loop));
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+        $this->assertSame(1, $runs);
+
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+        $this->assertSame(2, $runs);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
     public function testRunRestoresTheSignalHandlersAndAsyncModeItReplaced(): void
     {
         if (!function_exists('pcntl_signal')
