@@ -1,10 +1,10 @@
 <p class="lede" style="margin-top: 28px;">Non-blocking floating notifications at 9 screen positions. Info, Success, Warning, Error types. Auto-dismiss, ESC-to-close, and stacked multi-toast support.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-toast</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-toast</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Toast\{Toast, ToastType, Position};
+    <pre class="code"><code class="language-php">use SugarCraft\Toast\{Toast, ToastType, Position};
 
 $toast = Toast::new(50)  // max width 50
     -&gt;withPosition(Position::MiddleRight)

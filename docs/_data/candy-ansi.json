@@ -6,6 +6,6 @@
     "emoji": "🍬",
     "displayName": "CandyAnsi",
     "tagline": "ANSI escape-sequence parser and state machine",
-    "phpVersion": "8.1+",
+    "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/x/tree/main/ansi\" style=\"color: inherit;\">x/ansi</a></span>\n          <span class=\"tag-chip\">csi-handler</span>\n          <span class=\"tag-chip\">sgr</span>\n          <span class=\"tag-chip\">dec-modes</span>\n          <span class=\"tag-chip\">leaf-package</span>"
 }

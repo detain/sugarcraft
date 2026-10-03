@@ -52,10 +52,10 @@
     <p class="lede" style="margin-top: 28px;">Form library built on SugarCraft + SugarBits. Multi-page Group wizards, six themes, per-field validators, conditional skip predicates. The form is itself a Model — drop it into a Program.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-prompt</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-prompt</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Prompt\Form;
+    <pre class="code"><code class="language-php">use SugarCraft\Prompt\Form;
 use SugarCraft\Prompt\Field\{Input, Confirm, Select, Note};
 use SugarCraft\Prompt\Validator\{Required, Email, MinLength};
 use SugarCraft\Prompt\Fuzzy\FuzzyMatcher;
@@ -88,10 +88,10 @@ $form = Form::new(
         -&gt;withAsyncSuggestions(fn($q) =&gt; fetchRepos($q), 150),
 );
 
-// FuzzyMatcher API:
+// FuzzyMatcher (a deprecated alias of candy-fuzzy's SmithWatermanMatcher):
 $matcher = new FuzzyMatcher();
-$score = $matcher-&gt;score('js', 'JavaScript'); // 9
-$matches = $matcher-&gt;match('py', ['Python', 'PHP', 'Ruby']); // [['Python', 8], ...]</code></pre>
+$score = $matcher-&gt;score('js', 'JavaScript');                   // 3
+$best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResult: Python, score 11</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -137,7 +137,7 @@ $matches = $matcher-&gt;match('py', ['Python', 'PHP', 'Ruby']); // [['Python', 8
 <tr><td>Note</td><td>new(content)</td><td>Create note field</td></tr>
 <tr><td>Group</td><td>new(...forms)</td><td>Create wizard group</td></tr>
 <tr><td>FuzzyMatcher</td><td>score(query, candidate)</td><td>Smith-Waterman alignment score (int)</td></tr>
-<tr><td>FuzzyMatcher</td><td>match(query, candidates)</td><td>Ranked matches list&lt;[string,int]&gt;</td></tr>
+<tr><td>FuzzyMatcher</td><td>match(query, candidate): ?MatchResult / matchAll(query, candidates): list&lt;MatchResult&gt;</td><td>One match, or ranked matches (score desc)</td></tr>
 <tr><td>Theme</td><td>errorSummary</td><td>Renderable slot for custom error summary display</td></tr>
 </table>
   </div>

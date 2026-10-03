@@ -6,6 +6,6 @@
     "emoji": "",
     "displayName": "SugarToast",
     "tagline": "Floating notification overlays",
-    "phpVersion": "8.1+",
+    "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/DaltonSW/bubbleup\" style=\"color: inherit;\">DaltonSW/bubbleup</a></span>\n          <span class=\"tag-chip\">notification</span><span class=\"tag-chip\">toast</span><span class=\"tag-chip\">alert</span><span class=\"tag-chip\">overlay</span>"
 }

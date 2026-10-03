@@ -53,10 +53,10 @@
     <p class="lede" style="margin-top: 28px;">Feed an ANSI byte stream in, query a cell grid + cursor + mode state out — without ever spawning a real terminal. Built on a Paul-Williams VT500 state machine that mirrors charmbracelet/x/ansi/parser.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-vt</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-vt</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Vt\Terminal\Terminal;
+    <pre class="code"><code class="language-php">use SugarCraft\Vt\Terminal\Terminal;
 
 $term = Terminal::create(cols: 80, rows: 24);
 $term-&gt;feed("\x1b[1;31mHello\x1b[0m world");
@@ -137,7 +137,7 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/candy-vt">Packagist</a> ·

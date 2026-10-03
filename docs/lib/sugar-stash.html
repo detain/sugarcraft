@@ -53,13 +53,12 @@
     <p class="lede" style="margin-top: 28px;">Three-pane git TUI on the SugarCraft stack — status / branches / log laid out side-by-side, single-key stage / unstage, refresh. Shells out to <code>git</code> for every mutation so users keep their existing aliases, hooks, and signing config.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-stash</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-stash</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>// Run from any git working tree:
-sugar-stash
-
-// Or wire your own driver in PHP:
+    <pre class="code"><code class="language-shell"># Run from any git working tree:
+sugar-stash</code></pre>
+    <pre class="code"><code class="language-php">// Or wire your own driver in PHP:
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Stash\App;
@@ -139,7 +138,7 @@ $git = new Git(getcwd());
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/sugar-stash">Packagist</a> ·

@@ -53,12 +53,12 @@
     <p class="lede" style="margin-top: 28px;">TextInput, TextArea, ItemList, Table, Tree, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Stopwatch, Timer. Everything you'd hand-roll on day one of a TUI project, ready to drop into your Model.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-bits</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-bits</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Bits\TextInput\TextInput;
+    <pre class="code"><code class="language-php">use SugarCraft\Bits\TextInput\TextInput;
 use SugarCraft\Bits\Spinner\Spinner;
-use SugarCraft\Core\{Cmd, Model, Msg, Program};
+use SugarCraft\Core\{Cmd, Model, Msg, Program, Subscriptions};
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\KeyType;
 
@@ -69,6 +69,7 @@ final class Search implements Model {
     ) {}
 
     public function init(): ?\Closure { return $this-&gt;sp-&gt;tick(); }
+    public function subscriptions(): ?Subscriptions { return null; }
 
     public function update(Msg $msg): array {
         if ($msg instanceof KeyMsg &amp;&amp; $msg-&gt;type === KeyType::Enter) {
@@ -82,7 +83,10 @@ final class Search implements Model {
     public function view(): string {
         return $this-&gt;sp-&gt;view().' '.$this-&gt;ti-&gt;view();
     }
-}</code></pre>
+}
+
+[$input] = TextInput::new()-&gt;focus();   // focus() returns [TextInput, ?Cmd]
+(new Program(new Search($input, Spinner::new())))-&gt;run();</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -231,7 +235,7 @@ final class Search implements Model {
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/sugar-bits">Packagist</a> ·

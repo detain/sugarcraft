@@ -1,22 +1,30 @@
 <p class="lede" style="margin-top: 28px;">A ratatui-style constraint layout solver behind a one-method <code>LayoutSolver</code> interface: <code>GreedySolver</code> (deterministic 5-phase solver ported from candy-sprinkles) implements every constraint type, and the deprecated <code>CassowarySolver</code> shim delegates to it. Plus <code>DockLayout</code>, a center-plus-side-stacks pane geometry. Foundation for candy-sprinkles, sugar-bits, and candy-forms layout.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-layout</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-layout</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Layout\Constraint\Constraint;
+    <pre class="code"><code class="language-php">use SugarCraft\Layout\Constraint\Constraint;
 use SugarCraft\Layout\{Direction, GreedySolver, Region};
 
 $solver = GreedySolver::new();
 $region = Region::fromSize(100, 24);
 
-$rects = $solver->solve($region, Direction::Horizontal, [
-    Constraint::length(20),      // exactly 20 cells
-    Constraint::min(10),          // at least 10, takes more if available
-    Constraint::fill(1),         // fills remaining space (weight 1)
-    Constraint::percentage(30),     // 30% of total
-    Constraint::ratio(1, 3),     // 1/3 of the total span
-    Constraint::max(50),          // ceiling — greedy but clamped
+// The widths in the comments are what this 100-cell split returns.
+$rects = $solver-&gt;solve($region, Direction::Horizontal, [
+    Constraint::length(20),       // 20: exactly 20 cells
+    Constraint::min(10),          // 10: a floor; the Fills below take the slack
+    Constraint::percentage(25),   // 25: 25% of 100
+    Constraint::ratio(1, 10),     // 10: 1/10 of 100
+    Constraint::fill(1),          // 12: a third of the 35 cells left (+1 rounding cell, first Fill)
+    Constraint::fill(2),          // 23: two thirds of them
+]);
+
+// Max is a greedy ceiling: it grows into free space up to its cap.
+$capped = $solver-&gt;solve($region, Direction::Horizontal, [
+    Constraint::length(20),       // 20
+    Constraint::max(15),          // 15: clamped at its ceiling
+    Constraint::fill(1),          // 65: everything Max did not take
 ]);</code></pre>
 
     <h3 style="margin-top: 32px;">Solvers</h3>
@@ -29,7 +37,7 @@ $rects = $solver->solve($region, Direction::Horizontal, [
     <h3 style="margin-top: 32px;">Constraint types</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Length</strong><span>Fixed cell count — takes exactly n cells.</span></div>
-      <div class="feature"><strong>Min</strong><span>Floor — at least n cells, grows if slack available.</span></div>
+      <div class="feature"><strong>Min</strong><span>Floor — at least n cells. Grows only when no Fill or Max takes the slack, or when a Max hands cells back.</span></div>
       <div class="feature"><strong>Max</strong><span>Ceiling — greedy, clamped to n cells.</span></div>
       <div class="feature"><strong>Fill</strong><span>Proportional remainder — weight controls distribution across multiple Fill constraints.</span></div>
       <div class="feature"><strong>Percentage</strong><span>Fraction of total — n% of the available dimension.</span></div>

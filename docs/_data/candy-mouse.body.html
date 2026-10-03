@@ -1,10 +1,10 @@
 <p class="lede" style="margin-top: 28px;">Own your own <code>Scanner</code> instance — no global Manager wiring required. Wrap rendered chunks with invisible Unicode-sentinel markers, scan to discover bounding boxes, then hit-test mouse events. <code>ZoneClickTracker</code> deduplicates Press/Release pairs so each logical click emits once.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-mouse</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-mouse</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Mouse\Mark;
+    <pre class="code"><code class="language-php">use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Mouse\ZoneClickTracker;
 use SugarCraft\Mouse\MouseEvent;

@@ -6,6 +6,6 @@
     "emoji": "",
     "displayName": "CandyLog",
     "tagline": "Colorful leveled logger",
-    "phpVersion": "8.1+",
+    "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/log\" style=\"color: inherit;\">charmbracelet/log</a></span>\n          <span class=\"tag-chip\">logging</span><span class=\"tag-chip\">cli</span><span class=\"tag-chip\">output</span>"
 }

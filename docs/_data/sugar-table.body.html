@@ -1,13 +1,12 @@
 <p class="lede" style="margin-top: 28px;">Column-definition table with sortable columns, frozen rows/cols, per-cell styling, pagination, and selectable rows. StyledCell supports full ANSI formatting.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-table</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-table</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Table\{Table, Column, Row, RowData, StyledCell, ColumnWidth, WrapMode};
+    <pre class="code"><code class="language-php">use SugarCraft\Table\{Table, Column, Row, RowData, ColumnWidth, WrapMode};
 
-$table = (new Table())
-    -&gt;withColumns([
+$table = Table::fromColumns([
         Column::new('name', 'Name', 20)-&gt;withAlignLeft()
             -&gt;withColumnWidth(ColumnWidth::Dynamic, 0),
         Column::new('role', 'Role', 15)-&gt;withColumnWidth(ColumnWidth::Percent, 25.0),
@@ -49,7 +48,7 @@ echo $table-&gt;view();</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Table</td><td>withColumns(columns)</td><td>Set table columns</td></tr>
+<tr><td>Table</td><td>static fromColumns(columns) / withColumns(columns)</td><td>Create a table from its columns / replace them</td></tr>
 <tr><td>Table</td><td>withRows(rows)</td><td>Set table rows</td></tr>
 <tr><td>Table</td><td>withPageSize(size)</td><td>Set rows per page for pagination</td></tr>
 <tr><td>Table</td><td>withPage(n)</td><td>Jump to page n</td></tr>

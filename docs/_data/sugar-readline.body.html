@@ -1,28 +1,33 @@
 <p class="lede" style="margin-top: 28px;">Text, Confirm, Selection, MultiSelect, and Textarea prompts with full keyboard handling, filter-as-you-type, and pagination. State-machine model — no external readline dependency.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-readline</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-readline</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Readline\{TextPrompt, SelectionPrompt, MultiSelectPrompt};
+    <pre class="code"><code class="language-php">use SugarCraft\Readline\{Key, MultiSelectPrompt, SelectionPrompt, TextPrompt};
 
-// Text prompt
-$name = TextPrompt::new('Your name:')-&gt;HandleChar('A')-&gt;Confirm()-&gt;Value();
+// Prompts are immutable state machines: feed input, read the result.
+$name = TextPrompt::new('Your name:')
+    -&gt;handleChar('A')-&gt;handleChar('d')-&gt;handleChar('a')
+    -&gt;submit();
+$name-&gt;value();                                 // 'Ada'
 
-// Selection prompt
 $lang = SelectionPrompt::new('Pick a language:', ['PHP', 'Go', 'Rust', 'Python'])
-    -&gt;HandleKey('enter');
+    -&gt;handleKey(Key::Down)
+    -&gt;handleKey(Key::Enter);
+$lang-&gt;selectedValue();                         // 'Go'
 
-// Multi-select with constraints
+// Multi-select with constraints: Space toggles, Enter submits only when allowed
 $tools = MultiSelectPrompt::new('Pick tools:', ['vim', 'git', 'docker', 'php'])
-    -&gt;WithMinSelections(1)
-    -&gt;WithMaxSelections(3)
-    -&gt;HandleKey('space')
-    -&gt;HandleKey('enter');</code></pre>
+    -&gt;withMinSelections(1)
+    -&gt;withMaxSelections(3)
+    -&gt;handleKey(Key::Space)-&gt;handleKey(Key::Down)-&gt;handleKey(Key::Space)
+    -&gt;handleKey(Key::Enter);
+$tools-&gt;selectedValues();                       // ['vim', 'git']</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>TextPrompt</strong><span>Single-line input with placeholder, default value, password masking support.</span></div>
+      <div class="feature"><strong>TextPrompt</strong><span>Single-line input with default value, password masking, completions, validation, history and reverse search.</span></div>
             <div class="feature"><strong>ConfirmationPrompt</strong><span>Yes / No with customizable labels and default.</span></div>
             <div class="feature"><strong>SelectionPrompt</strong><span>Arrow-key selection with filter-as-you-type and pagination.</span></div>
             <div class="feature"><strong>MultiSelectPrompt</strong><span>Multi-item selection with min/max enforcement, marker (◉/○), pagination.</span></div>
@@ -43,14 +48,13 @@ $tools = MultiSelectPrompt::new('Pick tools:', ['vim', 'git', 'docker', 'php'])
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>TextPrompt</td><td>new(question)</td><td>Create text prompt</td></tr>
-<tr><td>TextPrompt</td><td>confirm()</td><td>Confirm input</td></tr>
-<tr><td>ConfirmationPrompt</td><td>new(question)</td><td>Create yes/no prompt</td></tr>
-<tr><td>SelectionPrompt</td><td>new(question, options)</td><td>Create selection prompt</td></tr>
-<tr><td>MultiSelectPrompt</td><td>new(question, options)</td><td>Create multi-select prompt</td></tr>
-<tr><td>MultiSelectPrompt</td><td>withMinSelections(n)</td><td>Set minimum selections</td></tr>
-<tr><td>MultiSelectPrompt</td><td>withMaxSelections(n)</td><td>Set maximum selections</td></tr>
-<tr><td>TextareaPrompt</td><td>new(question)</td><td>Create textarea prompt</td></tr>
+<tr><td>TextPrompt</td><td>static new(label) / withDefault() / withHidden() / withCompletions() / withValidator() / withCharLimit() / withHistory()</td><td>Single-line input</td></tr>
+<tr><td>TextPrompt</td><td>handleChar(char) / handleKey(key) / submit() / abort() / value() / isSubmitted()</td><td>Drive the prompt and read the result</td></tr>
+<tr><td>ConfirmationPrompt</td><td>static new(label, defaultValue = false) / withConfirmLabel() / withCancelLabel()</td><td>Yes / no prompt</td></tr>
+<tr><td>SelectionPrompt</td><td>static new(label, choices) / withPageSize() / withFilter() / handleKey() / selectedValue()</td><td>Single choice with filter and pagination</td></tr>
+<tr><td>MultiSelectPrompt</td><td>static new(label, choices) / withMinSelections(n) / withMaxSelections(n) / handleKey() / selectedValues() / canSubmit()</td><td>Several choices with min/max enforcement</td></tr>
+<tr><td>TextareaPrompt</td><td>static new(label) / withDefault() / withMaxLines() / handleChar() / handleKey() / value()</td><td>Multi-line editor</td></tr>
+<tr><td>Key</td><td>Up, Down, Enter, Space, Escape, CtrlC, …</td><td>Key-name constants for handleKey()</td></tr>
 </table>
   </div>
 </section>

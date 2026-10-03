@@ -6,6 +6,6 @@
     "emoji": "📂",
     "displayName": "CandyFiles",
     "tagline": "Dual-pane terminal file manager",
-    "phpVersion": "8.1+",
+    "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/yorukot/superfile\" style=\"color: inherit;\">superfile</a></span>\n          <span class=\"tag-chip\">file-manager</span>\n          <span class=\"tag-chip\">midnight-commander</span>\n          <span class=\"tag-chip\">dual-pane</span>"
 }

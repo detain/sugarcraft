@@ -1,28 +1,33 @@
 <p class="lede" style="margin-top: 28px;">In-memory key/value store with a plugin architecture. Ships with Memory, SQLite, Badger (BadgerDB), and InMemory backends. Supports glob + prefix listing.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-skate</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-skate</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Skate\{Database, Store};
+    <pre class="code"><code class="language-php">use SugarCraft\Skate\Store;
 
-$db = new Database(new \SugarCraft\Skate\Backend\MemoryStore());
-$store = $db-&gt;store('my-app');
+$skate = new Store();                       // SQLite files under ~/.config/skate
 
-$store-&gt;set('user:1', 'Alice', ['role' =&gt; 'admin']);
-echo $store-&gt;get('user:1'); // 'Alice'
+$skate-&gt;set('user:1', 'Alice');
+$skate-&gt;set('user:2', 'Bob');
+echo $skate-&gt;get('user:1');                 // 'Alice'
+echo $skate-&gt;get('missing', 'n/a');         // fallback: 'n/a'
 
-foreach ($store-&gt;list('user:*') as $key =&gt; $value) {
-    echo "$key =&gt; $value\n";
-}</code></pre>
+// A key@db suffix routes to a named database
+$skate-&gt;set('token@passwords', 'ghp_xxxx');
+$skate-&gt;setWithTtl('session', 'abc', 60);   // expires after 60 s
+
+foreach ($skate-&gt;list('user:*') as $entry) {  // glob patterns; yields Entry
+    echo "{$entry-&gt;key} =&gt; {$entry-&gt;value}\n";
+}
+$skate-&gt;listDatabases();                    // ['default', 'passwords']</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Multiple backends</strong><span>Memory, SQLite, Badger (BadgerDB via exec), InMemory.</span></div>
-            <div class="feature"><strong>Glob listing</strong><span>Pattern-based key listing with prefix support.</span></div>
-            <div class="feature"><strong>TTL support</strong><span>Expire keys after a set time.</span></div>
-            <div class="feature"><strong>Batch ops</strong><span>Put many keys at once for efficiency.</span></div>
-            
+      <div class="feature"><strong>SQLite storage</strong><span>One SQLite file per named database under the data directory (<code>~/.config/skate</code> by default); <code>key@db</code> picks the database.</span></div>
+      <div class="feature"><strong>Glob and fuzzy listing</strong><span><code>*</code> / <code>?</code> glob patterns, reverse order, keys-only or values-only modes, and <code>fuzzyFilter()</code>.</span></div>
+      <div class="feature"><strong>TTL support</strong><span>Expire keys after a set time; expired entries are never returned.</span></div>
+      <div class="feature"><strong>Binary values and transactions</strong><span>Store files as binary entries and group writes in a transaction.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -38,14 +43,14 @@ foreach ($store-&gt;list('user:*') as $key =&gt; $value) {
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Database</td><td>new(backend)</td><td>Create database with backend</td></tr>
-<tr><td>Database</td><td>store(name)</td><td>Get named store</td></tr>
-<tr><td>Store</td><td>set(key, value, meta)</td><td>Set a key-value pair</td></tr>
-<tr><td>Store</td><td>get(key)</td><td>Get value by key</td></tr>
-<tr><td>Store</td><td>delete(key)</td><td>Delete a key</td></tr>
-<tr><td>Store</td><td>list(pattern)</td><td>List keys matching pattern</td></tr>
-<tr><td>MemoryStore</td><td>new()</td><td>In-memory backend</td></tr>
-<tr><td>SqliteStore</td><td>new(path)</td><td>SQLite backend</td></tr>
+<tr><td>Store</td><td>__construct(?string $dataDir = null, string $defaultDb = 'default')</td><td>Key-value store over per-database SQLite files</td></tr>
+<tr><td>Store</td><td>set(key, value, bool $binary = false, ?int $ttlSeconds = null) / setWithTtl(key, value, ttl)</td><td>Write a key; <code>key@db</code> routes to a named database</td></tr>
+<tr><td>Store</td><td>get(key, fallback = '') / entry(key)</td><td>Read a value, or the full Entry</td></tr>
+<tr><td>Store</td><td>list(?pattern, ?dbName, reverse, mode, delimiter) / fuzzyFilter(query)</td><td>Glob or fuzzy listing</td></tr>
+<tr><td>Store</td><td>delete(key) / setFile(key, path) / getFile(key, path)</td><td>Delete; binary values from and to files</td></tr>
+<tr><td>Store</td><td>listDatabases() / deleteDatabase(name) / transaction(dbName, callable)</td><td>Database management</td></tr>
+<tr><td>Database</td><td>__construct(path, name) / get / set / delete / list / count / deleteMany / transaction</td><td>One SQLite database</td></tr>
+<tr><td>Entry</td><td>key, value, binary, createdAt, modifiedAt, expiresAt / isExpired()</td><td>A stored value</td></tr>
 </table>
   </div>
 </section>

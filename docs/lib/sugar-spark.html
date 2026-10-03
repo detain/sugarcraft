@@ -52,10 +52,10 @@
     <p class="lede" style="margin-top: 28px;">Pipe styled output through SugarSpark and each escape becomes a labelled line. Decodes SGR / CSI / OSC / DCS / APC / SS3, DEC private modes, kitty keyboard protocol, synchronized output, unicode grapheme mode.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-spark</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-spark</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>$ printf '\e[31mhello\e[0m world\n' | sugarspark
+    <pre class="code"><code class="language-text">$ printf '\e[31mhello\e[0m world\n' | sugarspark
 ESC[31m  SGR foreground red
 hello
 ESC[0m   SGR reset
@@ -114,7 +114,7 @@ ESC[?2026h  enable synchronized output</code></pre>
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/sugar-spark">Packagist</a> ·

@@ -1,13 +1,12 @@
 <p class="lede" style="margin-top: 28px;">Customisable board (width / height / mine count), recursive zero-flood-fill, win / lose detection. Pure-state Board class so every reveal is unit-testable without touching the runtime.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-mines</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-mines</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>./bin/candy-mines              # 10×10, 12 mines (defaults)
-./bin/candy-mines 16 16 40     # custom board
-
-// Programmatic:
+    <pre class="code"><code class="language-shell">./bin/candy-mines              # 10×10, 12 mines (defaults)
+./bin/candy-mines 16 16 40     # custom board</code></pre>
+    <pre class="code"><code class="language-php">// Programmatic:
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Mines\Game;

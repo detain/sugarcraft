@@ -1,10 +1,10 @@
 <p class="lede" style="margin-top: 28px;">Browse-row widgets for media terminal UIs: a 2-D virtualized <strong>PosterGrid</strong> for large libraries, a horizontal <strong>Rail</strong> carousel for browse rows, and a single <strong>PosterCard</strong> tile. The grid is <em>sparse</em> — it knows the total item count up front but holds only the cards that have been fetched, keyed by their <strong>absolute index</strong>, so a 50,000-item library renders as cheaply as a 50-item one; missing indices draw as skeletons and only the rows inside the viewport are ever rendered. Paging is owner-driven: after every cursor move the owner reads <code>visibleRange()</code> (the absolute-index window now on screen — the terminal analogue of the web grid's <code>need-range</code> event) and splices the covering page back in with <code>withItems()</code>. The widgets are <strong>renderer-agnostic</strong>: a card holds <em>already-rendered</em> poster bytes (produce them however you like, e.g. <a href="candy-mosaic.html">candy-mosaic</a>), so this lib pulls in no image decoder. Original SugarCraft component — no 1:1 upstream; inspired by charmbracelet/bubbles' list/viewport and the phlix web media grid.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-gallery</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-gallery</code></pre>
 
     <h3 style="margin-top: 32px;">PosterGrid — virtualized, sparse, owner-paged</h3>
-    <pre class="code"><code>use SugarCraft\Gallery\PosterGrid;
+    <pre class="code"><code class="language-php">use SugarCraft\Gallery\PosterGrid;
 use SugarCraft\Gallery\PosterCard;
 
 $grid = PosterGrid::new(cardWidth: 16, posterHeight: 9)
@@ -19,7 +19,7 @@ $grid = $grid->home()->end();      // Home / End
 $grid = $grid->moveTo(2600);       // jump (e.g. an A–Z letter offset)</code></pre>
 
     <p>After each move, read the visible window and fetch the page(s) covering it, then splice the results back in at their absolute index — the <code>need-range</code> pattern:</p>
-    <pre class="code"><code>[$start, $end] = $grid->visibleRange(overscanRows: 1);
+    <pre class="code"><code class="language-php">[$start, $end] = $grid->visibleRange(overscanRows: 1);
 if ($start &lt;= $end &amp;&amp; $start !== $lastFetchedStart) {
     // fetch items [$start, $end] from your API, build cards keyed by index…
     $grid = $grid->withItems([$start =&gt; $card0, $start + 1 =&gt; $card1, /* … */]);
@@ -29,21 +29,21 @@ if ($start &lt;= $end &amp;&amp; $start !== $lastFetchedStart) {
 $grid = $grid->withItem($index, $card->withPoster($ansi));</code></pre>
 
     <p>Render the visible rows (the cursor shows only when the grid is focused). Pass a <a href="candy-zone.html">candy-zone</a> <code>Manager</code> to make each cell mouse-clickable — wrapped as zone id <code>cell:&lt;index&gt;</code>:</p>
-    <pre class="code"><code>echo $grid->render(focused: true);
+    <pre class="code"><code class="language-php">echo $grid->render(focused: true);
 
 $frame = $grid->render(true, $zones);
 $clean = $zones->scan($frame);                 // strip markers, record bounds
 $zone  = $zones->anyInBounds($mouseMsg);       // → "cell:42"</code></pre>
 
     <h3 style="margin-top: 32px;">Rail — horizontal carousel</h3>
-    <pre class="code"><code>use SugarCraft\Gallery\Rail;
+    <pre class="code"><code class="language-php">use SugarCraft\Gallery\Rail;
 
 $rail = new Rail('Continue Watching', $cards);
 $rail = $rail->moveCursor(+1, Rail::perRow($railWidth, $cardWidth));
 echo $rail->render($railWidth, focused: true, cardWidth: 16, posterHeight: 9);</code></pre>
 
     <h3 style="margin-top: 32px;">PosterCard — one tile</h3>
-    <pre class="code"><code>use SugarCraft\Gallery\PosterCard;
+    <pre class="code"><code class="language-php">use SugarCraft\Gallery\PosterCard;
 
 $card = new PosterCard(id: '42', title: 'The Matrix', posterUrl: $url);
 $card = $card->withPoster($renderedAnsi);   // attach when the async render lands

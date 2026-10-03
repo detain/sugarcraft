@@ -1,17 +1,17 @@
 <p class="lede" style="margin-top: 28px;">Minimal, colorful leveled logging. Debug / Info / Warn / Error / Fatal with structured key/value context, Text / JSON / Logfmt formatters, and sub-loggers with persistent fields.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-log</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-log</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Log\Logger;
+    <pre class="code"><code class="language-php">use SugarCraft\Log\Logger;
 
 $log = Logger::new();
 $log-&gt;info('Starting oven', ['degree' =&gt; 375]);
 $log-&gt;warn('Almost ready', ['batch' =&gt; 2]);
 $log-&gt;error('Temperature too low', ['err' =&gt; 'underheated']);
 
-$child = $log-&gt;with('service', 'bakery');
+$child = $log-&gt;with(['service' =&gt; 'bakery']);   // every line from $child carries service=bakery
 $child-&gt;info('Batch complete');</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
@@ -19,7 +19,7 @@ $child-&gt;info('Batch complete');</code></pre>
       <div class="feature"><strong>Leveled logging</strong><span>Debug, Info, Warn, Error, Fatal. TTY detection enables color automatically.</span></div>
             <div class="feature"><strong>Three formatters</strong><span>TextFormatter (default), JSONFormatter, LogfmtFormatter — swap via `withFormatter()`.</span></div>
             <div class="feature"><strong>Structured context</strong><span>Arbitrary key/value pairs attached to every log call.</span></div>
-            <div class="feature"><strong>Sub-loggers</strong><span>`with(...)` creates a child logger that inherits all context.</span></div>
+            <div class="feature"><strong>Sub-loggers</strong><span><code>with(array $fields)</code> creates a child logger that inherits all context.</span></div>
             <div class="feature"><strong>StandardLogAdapter</strong><span>Wrap any PSR-3 logger for `*log.Logger` compatibility.</span></div>
             <div class="feature"><strong>PSR-3 bridge</strong><span>`PsrBridge` wraps a Logger and exposes the full PSR-3 LoggerInterface API.</span></div>
             <div class="feature"><strong>Hook system</strong><span>Register per-level callbacks via `HookRegistry::onLevel()` for middleware-style interceptors.</span></div>

@@ -6,6 +6,6 @@
     "emoji": "🎮",
     "displayName": "CandyTetris",
     "tagline": "Tetris on the SugarCraft stack",
-    "phpVersion": "8.1+",
+    "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/Broderick-Westrope/tetrigo\" style=\"color: inherit;\">tetrigo</a></span>\n          <span class=\"tag-chip\">game</span>\n          <span class=\"tag-chip\">tetris</span>\n          <span class=\"tag-chip\">srs</span>\n          <span class=\"tag-chip\">deterministic</span>"
 }

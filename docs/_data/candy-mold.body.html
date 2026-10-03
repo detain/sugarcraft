@@ -1,18 +1,18 @@
 <p class="lede" style="margin-top: 28px;"><code>composer create-project sugarcraft/candy-mold my-app</code> — pour your model into the mold and you've got a working app. Demo Counter Model, PHPUnit wired up, <code>bin/start</code> entry point.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-mold</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-mold</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>composer create-project sugarcraft/candy-mold my-app
+    <pre class="code"><code class="language-shell">composer create-project sugarcraft/candy-mold my-app
 cd my-app
 ./bin/start
 
-# Replace src/Counter.php with your own Model and keep editing.
-my-app/
+# Replace src/Counter.php with your own Model and keep editing.</code></pre>
+    <pre class="code"><code class="language-text">my-app/
 ├── composer.json     # requires candy-core + candy-sprinkles
 ├── phpunit.xml
-├── bin/start         # entry point — runs Program(new Counter())
+├── bin/start         # entry point — runs the Counter model
 ├── src/
 │   └── Counter.php   # demo Model with up/down/quit, styled border
 └── tests/

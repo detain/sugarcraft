@@ -6,6 +6,6 @@
     "emoji": "🔍",
     "displayName": "SugarSpark",
     "tagline": "ANSI escape-sequence inspector",
-    "phpVersion": "8.1+",
+    "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/sequin\" style=\"color: inherit;\">sequin</a></span>\n          <span class=\"tag-chip\">ansi</span>\n          <span class=\"tag-chip\">debugging</span>\n          <span class=\"tag-chip\">inspector</span>"
 }

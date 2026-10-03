@@ -50,10 +50,10 @@
     <p class="lede" style="margin-top: 28px;">Tree and flat list views with customizable box-drawing prefixes, cursor navigation, and word-wrap. Composeable with any bubbletea model.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-lister</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-lister</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Lister\{Model, StringItem, DefaultPrefixer};
+    <pre class="code"><code class="language-php">use SugarCraft\Lister\{Model, StringItem, DefaultPrefixer};
 
 // Fluent setters return NEW Models - rebind; instances are immutable.
 $model = Model::new()->setWidth(80)->setHeight(24);

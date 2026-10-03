@@ -6,6 +6,6 @@
     "emoji": "🍬",
     "displayName": "CandyAsync",
     "tagline": "Shared async vocabulary for ReactPHP",
-    "phpVersion": "8.1+",
+    "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">pioneering (no upstream)</span>\n          <span class=\"tag-chip\">async</span>\n          <span class=\"tag-chip\">cancellation</span>\n          <span class=\"tag-chip\">reactphp</span>\n          <span class=\"tag-chip\">foundation</span>"
 }

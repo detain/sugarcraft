@@ -52,10 +52,10 @@
     <p class="lede" style="margin-top: 28px;">A tiny, dependency-free <strong>focus ring</strong> for full-window terminal UIs: an ordered set of focusable regions with a single focused member and wrap-around Tab/Shift-Tab traversal. It is the app-wide "which panel has focus" state for a TUI layout — register each focusable region (sidebar, content grid, filter bar…), map <strong>Tab</strong> to <code>next()</code> and <strong>Shift-Tab</strong> to <code>previous()</code>, and give the region <code>current()</code> returns an accent border when you render. The ring carries no rendering or key decoding of its own, so it composes with any candy-core model without pulling in dependencies. Original SugarCraft component — no 1:1 upstream; inspired by focus-traversal in charmbracelet/bubbles and sugar-dash's FocusManager.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-focus</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-focus</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Focus\FocusRing;
+    <pre class="code"><code class="language-php">use SugarCraft\Focus\FocusRing;
 
 $ring = FocusRing::of('sidebar', 'grid', 'filter'); // 'sidebar' is focused
 
@@ -69,7 +69,11 @@ $ring->current();             // 'grid'
 $ring->isFocused('grid');     // true</code></pre>
 
     <p>Wire it into a candy-core model's <code>update()</code>, then let each region style itself in <code>view()</code>:</p>
-    <pre class="code"><code>if ($msg instanceof KeyMsg &amp;&amp; $msg->type === KeyType::Tab) {
+    <pre class="code"><code class="language-php">use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+
+// …in update():
+if ($msg instanceof KeyMsg &amp;&amp; $msg->type === KeyType::Tab) {
     $ring = $msg->shift ? $this->ring->previous() : $this->ring->next();
     return [$this->withRing($ring), null];
 }

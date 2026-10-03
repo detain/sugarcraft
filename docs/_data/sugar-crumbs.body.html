@@ -1,22 +1,26 @@
 <p class="lede" style="margin-top: 28px;">Push / pop navigation items to build breadcrumbs. Track a stack of visited locations — useful for file explorers, menu trees, and shell history.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-crumbs</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-crumbs</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Crumbs\{NavStack, NavigationItem};
+    <pre class="code"><code class="language-php">use SugarCraft\Crumbs\NavStack;
 
-$nav = new NavStack();
-$nav = $nav-&gt;push(new NavigationItem('Home', '/'));
-$nav = $nav-&gt;push(new NavigationItem('Settings', '/settings'));
-$nav = $nav-&gt;push(new NavigationItem('Display', '/settings/display'));
+// NavStack is a mutable stack: push() returns the same stack for chaining.
+$nav = NavStack::new()
+    -&gt;push('Home', '/')                    // title, then any payload
+    -&gt;push('Settings', '/settings')
+    -&gt;push('Display', '/settings/display');
 
-echo $nav-&gt;view(); // Home / Settings / Display
-$nav = $nav-&gt;pop(); // back to Settings</code></pre>
+echo $nav-&gt;view();          // Home &gt; Settings &gt; Display
+echo $nav-&gt;view(' / ');     // Home / Settings / Display
+
+$top = $nav-&gt;pop();         // NavigationItem: title 'Display', data '/settings/display'
+$nav-&gt;depth();              // 2</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>NavStack</strong><span>Immutable push / pop navigation stack.</span></div>
+      <div class="feature"><strong>NavStack</strong><span>Push / pop navigation stack (mutable, chainable push) with depth, parent and truncation helpers.</span></div>
             <div class="feature"><strong>Shell integration</strong><span>Detect directory changes and auto-push.</span></div>
             <div class="feature"><strong>Filter</strong><span>Type-ahead filtering within the breadcrumb bar.</span></div>
             
@@ -36,11 +40,11 @@ $nav = $nav-&gt;pop(); // back to Settings</code></pre>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>NavStack</td><td>new()</td><td>Create navigation stack</td></tr>
-<tr><td>NavStack</td><td>push(item)</td><td>Push navigation item</td></tr>
-<tr><td>NavStack</td><td>pop()</td><td>Pop navigation item</td></tr>
-<tr><td>NavStack</td><td>view()</td><td>Render breadcrumbs</td></tr>
+<tr><td>NavStack</td><td>push(string $title, mixed $data = null): self</td><td>Push a navigation item (mutates; returns the stack)</td></tr>
+<tr><td>NavStack</td><td>pop(): ?NavigationItem / popTo(int) / current() / parent() / depth()</td><td>Pop and inspect the stack</td></tr>
+<tr><td>NavStack</td><td>view(string $separator = ' &gt; ') / viewHtml()</td><td>Render breadcrumbs</td></tr>
 <tr><td>NavStack</td><td>filter(query)</td><td>Filter breadcrumbs</td></tr>
-<tr><td>NavigationItem</td><td>new(label, path)</td><td>Create navigation item</td></tr>
+<tr><td>NavigationItem</td><td>__construct(string $title, mixed $data = null) / title()</td><td>One stack entry</td></tr>
 <tr><td>Breadcrumb</td><td>withZoneManager(?Manager)</td><td>Attach Manager for mouse-click zone tracking (candy-zone integration)</td></tr>
 <tr><td>Breadcrumb</td><td>setSeparator(string)</td><td>Set separator between crumbs</td></tr>
 <tr><td>Breadcrumb</td><td>setMaxWidth(int)</td><td>Truncate if total width exceeds limit</td></tr>

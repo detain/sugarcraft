@@ -166,7 +166,9 @@ Uses `SugarCraft\Core\Util\Width::wrapAnsi()` — a custom ANSI-aware word wrapp
 
 - Breaks on word boundaries with fallback to mid-grapheme cuts for oversize words
 
-- Handles both soft breaks (`\n` in source) and hard wraps (computed)
+- Treats `\n` in the input as a hard break, and `\r\n` as one hard break that emits a bare `\n` (the same rule as `Width::wrap()`)
+
+- Fit-checks every word before committing it — at a space, at a hard break, before an over-wide cluster and at end of input — so a word that ends right before `\n` can no longer leave a line wider than the wrap width (candy-core 3ec7bd421)
 
 **Applied to**: paragraphs (full width), blockquotes (width - 2 for `▎ ` prefix), list item bodies (via indent calculation), table cells (when `tableWrap` enabled)
 

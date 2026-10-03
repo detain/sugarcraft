@@ -57,15 +57,14 @@
     <p class="lede" style="margin-top: 28px;">Terminal video player — plays <code>mp4</code>, <code>gif</code>, <code>avi</code>, <code>webm</code> on the fly, rendering each frame as ASCII, ANSI 256-color, truecolor half-blocks, or via modern graphics protocols (sixel / kitty / iTerm2). PHP port of <code>tplay</code>, <code>glyph</code>, and <code>video-to-ascii</code>.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-reel</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-reel</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>php examples/play.php video.mp4           # play a video
-php examples/play.php                    # synthetic test pattern (no file needed)
-
-# Programmatic:
+    <pre class="code"><code class="language-shell">php examples/play.php video.mp4           # play a video
+php examples/play.php                    # synthetic test pattern (no file needed)</code></pre>
+    <pre class="code"><code class="language-php">// Programmatic:
 use SugarCraft\Reel\Player;
-$player = Player::open('clip.mp4', cols: 80, rows: 24);
+$player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // decodes video through ffmpeg
 (new \SugarCraft\Core\Program($player))-&gt;run();</code></pre>
 
     <h3 style="margin-top: 32px;">Rendering modes</h3>
@@ -126,8 +125,9 @@ $player = Player::open('clip.mp4', cols: 80, rows: 24);
 <tr><td>Reel</td><td>withFps(?float)</td><td>FPS override (null = auto-detect)</td></tr>
 <tr><td>Reel</td><td>withLoop(bool)</td><td>Enable/disable loop</td></tr>
 <tr><td>Reel</td><td>play()</td><td>Run the player</td></tr>
-<tr><td>Player</td><td>::open(path, cols, rows, fps, mode, loop)</td><td>Open a video source</td></tr>
-<tr><td>Player</td><td>::openForTest(decoder, cols, rows, fps, mode, loop)</td><td>Open with injected decoder for testing</td></tr>
+<tr><td>Player</td><td>::open(videoPath, cellsW, cellsH, ?fpsOverride, Mode, loop, ramp, …)</td><td>Open a video source</td></tr>
+<tr><td>Player</td><td>::openForTest(decoder, fps, totalFrames, cellsW, cellsH, …)</td><td>Open with injected decoder for testing</td></tr>
+<tr><td>Synthetic</td><td>::generate(path, w = 120, h = 60, frames = 16, delayCs = 8)</td><td>Write a looping rainbow-gradient test animation as one valid GIF89a stream (one header and global palette, NETSCAPE2.0 loop, a GCE on every frame and a local palette on each frame after the first, one trailer), so decoders read every frame; a 1×1 GIF without ext-gd</td></tr>
 <tr><td>LumaRamp</td><td>::char(luma, ramp)</td><td>Map 0-255 luminance to character</td></tr>
 <tr><td>LumaRamp</td><td>::compute(r, g, b)</td><td>Compute BT.601 luma from RGB</td></tr>
 </table>

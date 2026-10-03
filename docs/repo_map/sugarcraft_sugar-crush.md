@@ -482,6 +482,14 @@ Properly handles emoji and multi-byte characters — backspacing an emoji remove
 
 - `McpMessage::parse()` returns `null` for malformed JSON — callers handle gracefully
 
+- `McpMessage::errorCode()` returns `null` for any non-integer wire `code` (string, float, bool, object) instead of int-casting it, so a fabricated code never reads as the server's diagnosis
+
+- `LspExchangeLock::appendNote()` returns `null` when the journal write fails, so no sequence number is spent on an entry that never landed
+
+- `HttpMcpServer::start()` ends the session with a best-effort `DELETE` when the start fails after the server issued a session id, the same cleanup `stop()` performs
+
+- `Support\ProcessTree::stat()` / `parseStat()` expose `startTicks` (`/proc/<pid>/stat` field 22), the single starttime reader `ClaudeCodeMcpClient` now uses for PID-reuse checks
+
 - `StreamingDirectoryLister` uses `opendir`/`readdir` with `finally` cleanup
 
 ### 3.5 Generator-Based Directory Listing

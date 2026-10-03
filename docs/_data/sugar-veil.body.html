@@ -1,10 +1,10 @@
 <p class="lede" style="margin-top: 28px;">Composite overlay views (modals, tooltips, toasts) on top of a base TUI frame. Render your models first, then let the compositor handle positioning, backdrop dimming, z-ordering, animated transitions and click-outside hit-testing.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-veil</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-veil</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Veil\{Position, Veil, VeilStack};
+    <pre class="code"><code class="language-php">use SugarCraft\Veil\{Position, Veil, VeilStack};
 
 $veil = Veil::new()-&gt;withBackdrop(40);   // dim the background to 40%
 
@@ -25,7 +25,7 @@ echo $stack-&gt;compositeAll($baseView);</code></pre>
       <div class="feature"><strong>Animated transitions</strong><span><code>withAnimation()</code> + <code>animate(…, $progress)</code>: SLIDE enters from the anchored edge, SCALE reveals lines from the center outward, and FADE brightens the overlay in from black through a truecolor gray pen (terminals cannot alpha-blend), returning the original bytes at full opacity.</span></div>
       <div class="feature"><strong>VeilStack</strong><span>Ordered collection of veils rendered by ascending z-index; <code>maxZIndex()</code> / <code>minZIndex()</code> return <code>null</code> for an empty stack, since 0 is a real z-index.</span></div>
       <div class="feature"><strong>Click-outside dismiss</strong><span><code>withClickOutsideDismiss()</code> + <code>scan()</code> / <code>isClickOutside()</code> via candy-mouse zones. The scanned zones travel with the veil across later <code>with*()</code> calls, so a click is judged against the frame that was on screen.</span></div>
-      <div class="feature"><strong>Buffer diffing</strong><span><code>composite()</code> diffs against the previous frame and emits only changed cells. An empty background returns the overlay itself as the frame (upstream's <code>bg == ""</code> early return), and truecolor SGR components are clamped to 0–255 when the diff pen is built.</span></div>
+      <div class="feature"><strong>Buffer diffing</strong><span><code>composite()</code> diffs against the previous frame and emits only changed cells. An empty background returns the overlay itself as the frame (upstream's <code>bg == ""</code> early return), and colours are clamped when the diff pen is built: truecolor SGR components to 0–255, and 256-colour indices to 0–255, so <code>38;5;300</code> cannot widen a cell and a negative index no longer falls back to white.</span></div>
       <div class="feature"><strong>Border chrome &amp; auto-size</strong><span><code>withBorder()</code> wraps veil content in a terminal border; <code>withAutoSize()</code> sizes the veil from its content.</span></div>
     </div>
 

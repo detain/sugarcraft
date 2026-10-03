@@ -57,15 +57,16 @@
     <p class="lede" style="margin-top: 28px;">Model / Msg / Cmd / Program. The runtime everything else builds on. Includes the cursed cell-diff renderer ported from Bubble Tea v2 — meaningful SSH bandwidth savings for slow-changing UIs.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-core</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-core</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program};
+    <pre class="code"><code class="language-php">use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program, Subscriptions};
 use SugarCraft\Core\Msg\KeyMsg;
 
 final class Counter implements Model {
     public function __construct(public readonly int $count = 0) {}
     public function init(): ?\Closure { return null; }
+    public function subscriptions(): ?Subscriptions { return null; }
 
     public function update(Msg $msg): array {
         if ($msg instanceof KeyMsg) {

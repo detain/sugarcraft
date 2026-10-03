@@ -52,10 +52,10 @@
     <p class="lede" style="margin-top: 28px;">13 subcommands — choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write. Drop into a shell script and instantly get a Charm-quality interactive UX.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-shell</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-shell</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code># Apply styling.
+    <pre class="code"><code class="language-shell"># Apply styling.
 candyshell style --foreground "#ff5f87" --bold "Hello, candy!"
 
 # Pick one item.
@@ -90,38 +90,33 @@ git branch | candyshell filter</code></pre>
     </div>
 
     <h3 style="margin-top: 32px;">Auto-discovery</h3>
-    <p>CandyShell uses PHP attributes to auto-discover commands at runtime. Mark any class extending <code>Symfony\Component\Console\Command\Command</code> with <code>#[Command]</code> and it will be picked up by <code>Application::scan()</code>:</p>
-    <pre class="code"><code>use SugarCraft\Shell\Attribute\Command;
-use SugarCraft\Shell\Attribute\Flag;
-use Symfony\Component\Console\Command\Command;
+    <p>CandyShell uses PHP attributes to auto-discover commands at runtime. Mark any class extending <code>Symfony\Component\Console\Command\Command</code> with <code>#[Command]</code> (plus a class-level <code>#[Flag]</code> per option) and <code>Application::scan()</code> registers it once the class is loaded:</p>
+    <pre class="code"><code class="language-php">namespace My\Commands;
+
+use SugarCraft\Shell\Attribute\{Command, Flag};
+use Symfony\Component\Console\Command\Command as SymfonyCommand;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
 #[Command(name: 'mycmd', description: 'Does something useful.', descriptionSection: 'Longer help text.')]
-final class MyCommand extends Command
+#[Flag(name: 'format', short: 'f', description: 'Output format.', default: 'json')]
+final class MyCommand extends SymfonyCommand
 {
-    #[Flag(name: 'format', short: 'f', description: 'Output format.', enum: FormatType::class)]
-    protected function configure(): void
-    {
-    }
-
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $format = $input->getOption('format');
-        // ...
+        $output-&gt;writeln('format=' . $input-&gt;getOption('format'));
         return self::SUCCESS;
     }
-}
-
-enum FormatType: string
-{
-    case Json = 'json';
-    case Yaml = 'yaml';
 }</code></pre>
-    <p>Register the namespace in your bootstrap:</p>
-    <pre class="code"><code>$app = new \SugarCraft\Shell\Application();
-$app->scan('My\\Namespace\\');  // discovers all #[Command] classes
-$app->run();</code></pre>
+    <pre class="code"><code class="language-php">use SugarCraft\Shell\Application;
+
+// scan() registers the #[Command] classes that are already loaded under the
+// namespace (no trailing backslash), so load them first.
+class_exists(\My\Commands\MyCommand::class);
+
+$app = new Application();
+$app-&gt;scan('My\Commands');
+$app-&gt;run();                 // mycmd --format yaml  →  format=yaml</code></pre>
 
     <h3 style="margin-top: 40px;">New attribute types (step 06.05)</h3>
     <table class="api-table">
@@ -260,7 +255,7 @@ $app->run();</code></pre>
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/candy-shell">Packagist</a> ·

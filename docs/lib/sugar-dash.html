@@ -50,20 +50,18 @@
     <p class="lede" style="margin-top: 28px;">Build dashboard-style terminal UIs with column grid layouts, framed panels, status bars, tabs, and more. Compose complex layouts from reusable components.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-dash</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-dash</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Dash\Layout\StackedGrid;
-use SugarCraft\Dash\Layout\Frame;
-use SugarCraft\Dash\Layout\ItemOptions;
-use SugarCraft\Dash\Layout\Options;
+    <pre class="code"><code class="language-php">use SugarCraft\Dash\Layout\Grid\{StackedGrid, Options, ItemOptions};
+use SugarCraft\Dash\Components\Card\{Card, Text};
 
 $grid = new StackedGrid(new Options(fitScreen: true));
-$grid->addItem(new SomePanel(), new ItemOptions(column: 0));
-$grid->addItem(new AnotherPanel(), new ItemOptions(column: 1));
+$grid-&gt;addItem(Card::titled(Text::new('CPU 42%'), 'Load'), new ItemOptions(column: 0));
+$grid-&gt;addItem(Card::titled(Text::new('3 alerts'), 'Alerts'), new ItemOptions(column: 1, expandVertical: true));
 
-$grid->setSize(80, 24);
-echo $grid->render();</code></pre>
+$grid-&gt;setSize(100, 24);
+echo $grid-&gt;render();   // two bordered cards side by side; below 90 columns they stack</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -117,14 +115,12 @@ echo $grid->render();</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>StackedGrid</td><td>new(Options)</td><td>Create a stacked grid layout</td></tr>
-<tr><td>StackedGrid</td><td>addItem(item, ItemOptions)</td><td>Add item to a column</td></tr>
-<tr><td>StackedGrid</td><td>setSize(width, height)</td><td>Set grid dimensions</td></tr>
-<tr><td>StackedGrid</td><td>render()</td><td>Render the grid to ANSI string</td></tr>
-<tr><td>Frame</td><td>new(content, title)</td><td>Create a framed panel</td></tr>
-<tr><td>Frame</td><td>withBorder(style)</td><td>Apply border styling</td></tr>
-<tr><td>StatusBar</td><td>new(items)</td><td>Create a status bar</td></tr>
-<tr><td>Tabs</td><td>new(pages)</td><td>Create a tabbed interface</td></tr>
+<tr><td>Layout\Grid\StackedGrid</td><td>__construct(Options = new Options())</td><td>Column grid; columns stack vertically below the narrow breakpoint (90 cells)</td></tr>
+<tr><td>Layout\Grid\StackedGrid</td><td>addItem(Item, ItemOptions = new ItemOptions())</td><td>Add an item to a column</td></tr>
+<tr><td>Layout\Grid\StackedGrid</td><td>setSize(width, height) / render() / withTheme(Theme)</td><td>Size, render to an ANSI string, theme</td></tr>
+<tr><td>Layout\Grid\Options / ItemOptions</td><td>new Options(fitScreen: bool) / new ItemOptions(column: int, expandVertical: bool)</td><td>Grid and per-item options</td></tr>
+<tr><td>Components\Card\Card</td><td>static titled(Item, string $title)</td><td>Bordered card with a title</td></tr>
+<tr><td>Layout\Frame</td><td>static new(Item) / withTitle() / withBorder() / withPadding()</td><td>Framed panel</td></tr>
 </table>
   </div>
 </section>
@@ -883,7 +879,7 @@ echo $grid->render();</code></pre>
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/sugar-dash">Packagist</a> ·

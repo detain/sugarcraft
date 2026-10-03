@@ -53,10 +53,10 @@
     <p class="lede" style="margin-top: 28px;">Counters, gauges, histograms, UpDownCounters, AsyncCounters, AsyncGauges with pluggable backends — drop-in middleware for SSH session metrics. Six instrument kinds + four backends: InMemory, JsonStream, StatsD, Prometheus textfile, plus a Multi fan-out. Built-in cardinality tracking with FIFO eviction.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-metrics</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-metrics</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Metrics\Registry;
+    <pre class="code"><code class="language-php">use SugarCraft\Metrics\Registry;
 use SugarCraft\Metrics\Backend\StatsdBackend;
 
 $reg = new Registry(new StatsdBackend('127.0.0.1', 8125));
@@ -146,7 +146,7 @@ $req-&gt;counter('events');</code></pre>
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/candy-metrics">Packagist</a> ·

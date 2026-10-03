@@ -53,10 +53,10 @@
     <p class="lede" style="margin-top: 28px;">Turn code or terminal output into an SVG screenshot. No ext-gd / Imagick — output is plain text suitable for git diffs and CI artifacts. ANSI SGR (16 / 256 / 24-bit truecolor + bold / italic / underline) becomes <code>&lt;tspan&gt;</code> in the SVG.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-freeze</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-freeze</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Freeze\SvgRenderer;
+    <pre class="code"><code class="language-php">use SugarCraft\Freeze\SvgRenderer;
 
 $svg = SvgRenderer::dracula()
     -&gt;withLineNumbers(true)
@@ -131,7 +131,7 @@ $svg = SvgRenderer::dark()
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/candy-freeze">Packagist</a> ·

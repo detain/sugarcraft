@@ -50,21 +50,22 @@
     <p class="lede" style="margin-top: 28px;">Email builder and sender. SMTP transport, Resend API transport, attachment support, HTML + plain-text multipart, and a fluent interface.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-post</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-post</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Post\{Email, SmtpTransport, Attachment};
+    <pre class="code"><code class="language-php">use SugarCraft\Post\{Email, ResendTransport, SmtpTransport};
 
-$email = (new Email())
-    -&gt;from('noreply@example.com')
-    -&gt;to('user@example.com')
-    -&gt;subject('Deployment complete')
-    -&gt;text('Your app was deployed successfully.')
-    -&gt;html('&lt;p&gt;Your app was deployed &lt;strong&gt;successfully&lt;/strong&gt;.&lt;/p&gt;')
-    -&gt;attach(Attachment::fromPath('/tmp/build.zip', 'build.zip'));
+// Immutable: every with*() returns a new Email
+$email = Email::new('noreply@example.com', 'user@example.com', 'Deployment complete', 'Your app was deployed successfully.')
+    -&gt;withHtmlBody('&lt;p&gt;Your app was deployed &lt;strong&gt;successfully&lt;/strong&gt;.&lt;/p&gt;')
+    -&gt;withCc('ops@example.com')
+    -&gt;withAttachment('build.zip', '/tmp/build.zip');   // display name, then the file on disk
 
-$transport = new SmtpTransport('smtp.example.com', 587);
-$transport-&gt;send($email);</code></pre>
+$transport = new SmtpTransport('smtp.example.com', 587, 'user', 'secret');
+$transport-&gt;send($email);
+
+// Or over the Resend HTTP API (key from the argument or RESEND_API_KEY)
+(new ResendTransport())-&gt;send($email);</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -80,7 +81,7 @@ $transport-&gt;send($email);</code></pre>
       <li><a href="https://github.com/sugarcraft/sugar-post">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-post/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-post/tree/master/examples">Runnable examples</a></li>
-      <li>Port of <a href="https://github.com/charmbracelet/skate">charmbracelet/skate</a> (Go upstream)</li>
+      <li>Port of <a href="https://github.com/charmbracelet/pop">charmbracelet/pop</a> (Go upstream)</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
@@ -88,13 +89,13 @@ $transport-&gt;send($email);</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Email</td><td>new()</td><td>Create email</td></tr>
-<tr><td>Email</td><td>from(addr), to(addr), subject(text)</td><td>Set email fields</td></tr>
-<tr><td>Email</td><td>text(body), html(body)</td><td>Set body content</td></tr>
-<tr><td>Email</td><td>attach(attachment)</td><td>Add attachment</td></tr>
-<tr><td>SmtpTransport</td><td>new(host, port)</td><td>Create SMTP transport</td></tr>
-<tr><td>SmtpTransport</td><td>send(email)</td><td>Send email</td></tr>
-<tr><td>Attachment</td><td>fromPath(path, name)</td><td>Create from file</td></tr>
+<tr><td>Email</td><td>static new(from, to, ?subject, ?body)</td><td>Create an email</td></tr>
+<tr><td>Email</td><td>withFrom() / withTo(...$to) / withCc(...) / withBcc(...) / withReplyTo() / withSubject()</td><td>Immutable header builders</td></tr>
+<tr><td>Email</td><td>withBody() / withHtmlBody() / withSignature()</td><td>Plain-text and HTML bodies</td></tr>
+<tr><td>Email</td><td>withAttachment(filename, path) / withInlineAttachment(path, cid, filename)</td><td>Attach a file, or embed one for a cid: reference</td></tr>
+<tr><td>SmtpTransport</td><td>__construct(host, port = 587, username = '', password = '', timeout = 30, heloHost = '') / send(Email)</td><td>SMTP delivery</td></tr>
+<tr><td>ResendTransport</td><td>__construct(apiKey = '') / send(Email)</td><td>Resend API delivery; falls back to RESEND_API_KEY</td></tr>
+<tr><td>Attachment</td><td>static fromPath(path, filename) / static inline(path, cid, filename)</td><td>Attachment value objects</td></tr>
 </table>
   </div>
 </section>
@@ -116,7 +117,7 @@ $transport-&gt;send($email);</code></pre>
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/sugar-post">Packagist</a> ·

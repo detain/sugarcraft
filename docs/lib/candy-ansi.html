@@ -53,35 +53,43 @@
     <p class="lede" style="margin-top: 28px;">Parse ANSI escape sequences into structured state transitions — SGR attributes, cursor movement, erase operations, and DEC private modes — without coupling to terminal-cell-grid concerns. Used by CandyVt to drive the VT500 state machine.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-ansi</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-ansi</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Ansi\Parser\Parser;
-use SugarCraft\Ansi\Parser\CsiHandler;
-use SugarCraft\Ansi\Parser\AnsiState;
+    <pre class="code"><code class="language-php">use SugarCraft\Ansi\Parser\{DebugHandler, Parser};
 
-$state = new AnsiState();
-$handler = new MyCsiHandler(); // implements CsiHandler
-$parser = new Parser($state, $handler);
+$handler = new DebugHandler();          // records every parse action
+$parser  = new Parser($handler);
 
-$parser->feed("\x1b[1;31m"); // CSI 1;31m → bold + red foreground
-$parser->feed("Hello");
-$parser->feed("\x1b[0m");   // reset</code></pre>
+// Chunks may split anywhere; in-flight sequences carry across feed() calls.
+$parser-&gt;feed("\x1b[1;");
+$parser-&gt;feed("31mHi\x1b[0m");
+$parser-&gt;flush();                        // end of stream: dispatch anything pending
+
+$handler-&gt;filter('csi');   // two csi entries: params [1, 31] then [0], final 'm' (109)
+$handler-&gt;filter('print'); // 'H', 'i'</code></pre>
+
+    <p>To drive a cell grid, implement <code>CsiHandler</code> (cursor, erase, scroll, SGR, DEC modes) and <code>OscHandler</code> (title, hyperlink), then bridge them to the parser:</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Ansi\Parser\{HandlerAdapter, Parser};
+
+$parser = new Parser(new HandlerAdapter($myCsiHandler, $myOscHandler));
+$parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>CSI handler interface</strong><span>Complete set of CSI dispatch methods: CUu/CUD/CUF/CUB/CUP, CHA/VPA, DECSC/DECRC, EL/ED/ECH, SU/SD, IND/RI/NEL, DECSET/DECRST, DECSTBM, TBC, CHT/CBT, and SGR.</span></div>
-      <div class="feature"><strong>Structured state</strong><span><code>AnsiState</code> holds current SGR parameters, cursor position, erase mode, DEC mode flags, and scroll region bounds — parseable independently of terminal-cell-grid coupling.</span></div>
-      <div class="feature"><strong>Partial-input safe</strong><span>Feed any byte chunk size; the parser maintains internal state and only dispatches when a complete sequence is recognized.</span></div>
-      <div class="feature"><strong>DEC mode support</strong><span>Private marker (0x3C–0x3F) handling for DECSET/DECRST; covers 1049 alt screen, 25 cursor visibility, 1000/1002/1003/1006 mouse, 2004 bracketed paste, 2026 sync output, 7 auto-wrap.</span></div>
-      <div class="feature"><strong>SGR full set</strong><span>16-color, bright, 256-color, truecolor for fg+bg; bold / italic / underline / strikethrough / blink / reverse / dim / hidden toggles; underline styles 4:0–4:5; BCE-aware.</span></div>
+      <div class="feature"><strong>VT500 state machine</strong><span><code>Parser</code> implements the Paul Williams DEC parser and dispatches abstract <code>Handler</code> events: printChar, execute, csiDispatch, escDispatch, oscDispatch, dcsDispatch, sosPmApcDispatch.</span></div>
+      <div class="feature"><strong>Partial-input safe</strong><span>Feed any chunk size. Incomplete sequences and UTF-8 runes wait for the next <code>feed()</code>; <code>flush()</code> (or <code>parseComplete()</code>) settles the end of the stream.</span></div>
+      <div class="feature"><strong>CSI handler interface</strong><span><code>CsiHandler</code> covers the emulator CSI set: CUU/CUD/CUF/CUB/CUP/HVP, ED/EL, SU/SD, IL/DL, ICH/DCH, REP, SCO save/restore, CR/LF, DECSET/DECRST, DECSTBM, TBC/CHT/CBT and SGR. <code>HandlerAdapter</code> translates parser events into these calls.</span></div>
+      <div class="feature"><strong>Sub-parameters</strong><span><code>subparams()</code> and <code>Parser::groupSubparameters()</code> keep ECMA-48 colon groups apart, so <code>CSI 4:3 m</code> (curly underline) is not confused with <code>CSI 4;3 m</code>. Handlers can opt in through <code>SubparamsAwareHandler</code>.</span></div>
+      <div class="feature"><strong>Bounded payloads</strong><span>DCS/OSC/SOS/PM/APC payloads are capped (64 KiB by default; the third constructor argument raises it), so a hostile stream cannot grow memory without limit.</span></div>
+      <div class="feature"><strong>DebugHandler</strong><span>Records every action as <code>['type' =&gt; …, 'detail' =&gt; …]</code> in <code>$log</code>; <code>filter($type)</code> selects one kind. Useful in tests and for stream inspection.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>ANSI stream inspection</strong> — parse escape sequences into structured events without spawning a terminal.</li>
       <li><strong>Feeding CandyVt</strong> — drive the VT500 state machine by passing parsed events to the terminal emulator.</li>
-      <li><strong>SGR attribute tracking</strong> — maintain current text attributes across a byte stream.</li>
+      <li><strong>SGR decoding</strong> — receive every SGR parameter list, colon sub-parameters included, as the stream arrives.</li>
     </ul>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -97,18 +105,15 @@ $parser->feed("\x1b[0m");   // reset</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Parser</td><td>feed(bytes)</td><td>Feed raw ANSI bytes to parser</td></tr>
-<tr><td>AnsiState</td><td>sgr, cursor, eraseMode, decModes</td><td>Current parsed state</td></tr>
-<tr><td>AnsiState</td><td>withSgr(array)</td><td>New state with updated SGR params</td></tr>
-<tr><td>AnsiState</td><td>withCursor(int, int)</td><td>New state with cursor position</td></tr>
-<tr><td>CsiHandler</td><td>printable(string)</td><td>Handle printable ASCII character</td></tr>
-<tr><td>CsiHandler</td><td>cuu/cud/cuf/cub(int)</td><td>Cursor movement</td></tr>
-<tr><td>CsiHandler</td><td>cup(int, int)</td><td>Cursor position (1-indexed)</td></tr>
-<tr><td>CsiHandler</td><td>sgr(array)</td><td>Select Graphic Rendition</td></tr>
-<tr><td>CsiHandler</td><td>ed/el(int)</td><td>Erase Display / Line</td></tr>
-<tr><td>CsiHandler</td><td>decset/decrst(int, int)</td><td>DEC private mode set/reset</td></tr>
-<tr><td>CsiHandler</td><td>decstbm(int, int)</td><td>Set top/bottom scroll margins</td></tr>
-<tr><td>CsiHandler</td><td>tbc/cht/cbt(int)</td><td>Tab control</td></tr>
+<tr><td>Parser</td><td>__construct(Handler, bool $replaceMalformed = false, int $maxStringBuffer = 65536)</td><td>Parser bound to one handler</td></tr>
+<tr><td>Parser</td><td>feed(bytes) / flush() / parseComplete(bytes) / reset()</td><td>Stream bytes, settle end of stream, one-shot parse, return to Ground</td></tr>
+<tr><td>Parser</td><td>currentState(): State / subparams(): list&lt;bool&gt;</td><td>Current state-machine state; colon flags for the last parameter list</td></tr>
+<tr><td>Parser</td><td>static groupSubparameters(params, flags)</td><td>Regroup a flat parameter list by its colon flags</td></tr>
+<tr><td>Handler</td><td>printChar / execute / csiDispatch / escDispatch / oscDispatch / dcsDispatch / sosPmApcDispatch</td><td>Parse events a handler receives</td></tr>
+<tr><td>HandlerAdapter</td><td>__construct(CsiHandler, OscHandler)</td><td>Bridges parser events to the CSI and OSC handler interfaces</td></tr>
+<tr><td>CsiHandler</td><td>printable / cuu/cud/cuf/cub / cup / sgr / ed / el / decset / decrst / decstbm / tbc / cht / cbt / …</td><td>Emulator-facing CSI actions</td></tr>
+<tr><td>OscHandler</td><td>title(string) / hyperlink(uri, id)</td><td>Emulator-facing OSC actions</td></tr>
+<tr><td>DebugHandler</td><td>$log / filter(type)</td><td>Records every action for inspection</td></tr>
 </table>
   </div>
 </section>
@@ -121,7 +126,7 @@ $parser->feed("\x1b[0m");   // reset</code></pre>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-ansi/.vhs/demo.gif" alt="ANSI parse and state">
                 <h3>ANSI parse and state</h3>
-                <span class="demo-caption">Feed raw ANSI bytes into the parser; observe structured SGR and cursor state transitions via a CsiHandler.</span>
+                <span class="demo-caption">Feed raw ANSI bytes into the parser and print the action log a DebugHandler records.</span>
             </div>
         </div>
     </div>
@@ -129,7 +134,7 @@ $parser->feed("\x1b[0m");   // reset</code></pre>
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/candy-ansi">Packagist</a> ·

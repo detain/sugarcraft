@@ -24,7 +24,7 @@
 | Multi-overlay stack | No | Yes (`VeilStack`) | Yes — new |
 | Z-index ordering | No | Yes (int z-index per Veil) | Yes — new |
 | Animation | No | Yes (Slide/Fade/Scale + CubicBezier) | Yes — new |
-| Backdrop dimming | No | Yes (ANSI SGR dim 0–100) | Yes — new |
+| Backdrop dimming | No | Yes (truecolor opacity blend 0–100) | Yes — new |
 | Auto-size | No | Yes (compute from bordered content) | Yes — new |
 | Border chrome | No | Yes (candy-sprinkles Border) | Yes — new |
 | Click-outside dismiss | No | Yes (candy-zone Manager hit testing) | Yes — new |
@@ -86,7 +86,7 @@ The compositing follows this sequence:
 
 3. **Measure dimensions** — `maxLineWidth()` finds the widest line for each
 
-4. **Apply backdrop dimming** — if `backdropOpacity > 0`, `applyBackdrop()` wraps each background line with ANSI SGR dim codes (`\x1b[2m`); 0–100 maps to 0–3 passes via `\max(0, \min(3, \round($opacity / 33)))`
+4. **Apply backdrop dimming** — if `backdropOpacity > 0`, each plain background line is wrapped by `dimLine()` in a truecolor foreground blended from white toward black by the opacity (see Backdrop Dimming Algorithm below); escape-led lines are left alone
 
 5. **Resolve position offset** — `Position::xOffset()` and `Position::yOffset()` compute base coordinates
 
@@ -428,15 +428,20 @@ return $veil->composite($fg, $bg, Position::CENTER, Position::CENTER);
 
 ## Key Implementation Details
 
-### Backdrop Dimming Algorithm (`Veil::applyBackdrop()` at lines 391–418)
+### Backdrop Dimming Algorithm (`Veil::dimLine()`)
 
-Converts 0–100 opacity to ANSI SGR dim passes:
+Each plain background line is wrapped in a truecolor foreground blended from white toward black by the opacity percentage:
 ```php
-$dimPasses = (int) \round($this->backdropOpacity / 33); // 0-100 → 0-3 passes
-$dimPasses = \max(0, \min(3, $dimPasses));
+$factor = 1.0 - ($opacity / 100.0);          // 0–100 → 1.0–0.0
+$r = $g = $b = (int) \round(255 * $factor);
+return "\e[38;2;{$r};{$g};{$b}m{$line}\e[39m";
 ```
 
-Each pass wraps a line: `$dimCode . $line . $resetCode`. Multiple passes nest cleanly for stronger dimming. Uses `Ansi::FAINT` (SGR code 2) which is "reduced intensity."
+This replaced the old nested `Ansi::FAINT` passes, which only produced about two visible states. A line that starts with an escape introducer (CSI styling or an OSC payload such as a hyperlink) is returned unchanged, because wrapping it in colour SGR would corrupt the payload it carries.
+
+### Diff Pen Colour Clamping (`Veil::penFromSgr()` / `Veil::xterm256ToHex()`)
+
+`composite()` re-encodes the pen into every delta it emits, so the pen must mean what the full frame meant. Out-of-range colour operands are clamped into 0–255, never bit-masked: truecolor components and `38;5` / `48;5` palette indices alike, the same rule candy-buffer's `styleFromSgr()` applies. Before the index clamp, `38;5;300` ran the grey-ramp formula to 688 per channel and produced `0x2b2b2b0`, a value wider than `0xRRGGBB`, and a negative index fell back to white.
 
 ### UTF-8 Character Replacement (`Veil::replaceCharAt()` at lines 461–521)
 
@@ -656,7 +661,7 @@ The `Manager` is injected via `withManager()`, not created internally. This:
 
 5. **No Z-index collision handling** — when two veils share the same z-index, insertion order determines stacking. There is no explicit tie-breaking.
 
-6. **Backdrop dim uses SGR code 2** — "faint" is not universally supported across terminal emulators. Some may interpret it as dimmer text color rather than reduced intensity.
+6. **Backdrop dim recolours plain lines only** — the truecolor blend needs a truecolor terminal, and a background line that starts with its own escape sequence keeps its styling undimmed.
 
 7. **Animation progress must be driven externally** — `animate()` accepts a `float $progress` but does not perform the animation timing itself. Consumers implement the tick loop.
 

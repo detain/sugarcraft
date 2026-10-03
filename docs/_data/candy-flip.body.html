@@ -1,13 +1,12 @@
 <p class="lede" style="margin-top: 28px;">Decodes a <code>.gif</code> on disk via <code>ext-gd</code>, downsamples each frame to a configurable cell grid, and renders the animation as ANSI-coloured Unicode block-glyphs. Two presets: solid 24-bit blocks or a luminance-ramp ASCII rendering.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-flip</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-flip</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>candy-flip my-animation.gif         # solid blocks (default)
-candy-flip my-animation.gif density # luminance ramp
-
-// Programmatic:
+    <pre class="code"><code class="language-shell">candy-flip my-animation.gif         # solid blocks (default)
+candy-flip my-animation.gif density # luminance ramp</code></pre>
+    <pre class="code"><code class="language-php">// Programmatic:
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Flip\Decoder;

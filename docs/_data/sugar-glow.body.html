@@ -1,10 +1,10 @@
 <p class="lede" style="margin-top: 28px;">Composes CandyShine (rendering) and SugarBits Viewport (scrolling). Render to stdout or open in a fullscreen pager. Eleven built-in themes (ansi, plain, dark, light, notty, dracula, tokyo-night, pink, solarized, monokai, github) plus custom JSON.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-glow</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-glow</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>sugarglow README.md                   # render to stdout (default)
+    <pre class="code"><code class="language-shell">sugarglow README.md                   # render to stdout (default)
 sugarglow -p README.md                # open in a fullscreen pager
 git log -1 --pretty=%B | sugarglow -p # pipe stdin
 sugarglow --theme dracula README.md

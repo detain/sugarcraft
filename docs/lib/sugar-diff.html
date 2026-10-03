@@ -51,10 +51,10 @@
     <p class="lede" style="margin-top: 28px;">A unified-diff engine the whole ecosystem can share: <strong>LCS line diffing, numbered context hunks, a GNU <code>diff -u</code> writer, and a scanner that numbers the rows of any patch</strong>. Extracted from sugar-crush's <code>BuildsUnifiedDiff</code> trait and the <code>DiffGutter</code> region model, so every surface that produces or displays patches reads the same line numbers out of the same engine. First-party — there is no 1:1 upstream Go library.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-diff:@dev</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-diff:@dev</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Diff\Diff;
+    <pre class="code"><code class="language-php">use SugarCraft\Diff\Diff;
 use SugarCraft\Diff\DiffOptions;
 use SugarCraft\Diff\Reader\UnifiedScan;
 

@@ -1,10 +1,10 @@
 <p class="lede" style="margin-top: 28px;">A Model Context Protocol client core the whole ecosystem can share: <strong>JSON-RPC 2.0 envelopes, a newline-framed stdio transport with a bounded, orphan-proof child lifecycle, the initialize/tools handshake, and deny-before-allow tool narrowing</strong>. Extracted from sugar-crush's <code>src/MCP</code> stack and <code>McpMessage</code> codec, so every surface that talks to an MCP server rides the same framing, the same timeouts, and the same error shapes. First-party — MCP is a spec, not a Go port.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-mcp:@dev</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-mcp:@dev</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Mcp\StdioMcpServer;
+    <pre class="code"><code class="language-php">use SugarCraft\Mcp\StdioMcpServer;
 
 $server = new StdioMcpServer(
     name: 'docs',

@@ -51,10 +51,10 @@
     <p class="lede" style="margin-top: 28px;">Fuzzy string matching that returns <strong>which characters matched and their score</strong>. Two algorithms: Smith-Waterman (local alignment) and Sahilm (gum-style scoring with separator/camel-case bonuses). The matched indices enable filter-highlighting UIs that were impossible with score-only matchers. Extracted from candy-forms; back-compat shims left in candy-forms and candy-lister for migration.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-fuzzy:@dev</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-fuzzy:@dev</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Fuzzy\FuzzyMatcher;
+    <pre class="code"><code class="language-php">use SugarCraft\Fuzzy\FuzzyMatcher;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Fuzzy\Highlighter;
@@ -137,7 +137,7 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
 <tr><td>ScoringProfile</td><td>withMatchScore() / withMismatchPenalty() / withGapOpen() / withGapExtend() / withAdjacentBonus()</td><td>Immutable weight setters</td></tr>
 <tr><td>SahilmMatcher</td><td>new(bool $caseSensitive = false, ?SahilmScoring $scoring = null)</td><td>Separator/camelCase bonus algorithm; scoring() / caseSensitive() accessors</td></tr>
 <tr><td>SahilmScoring</td><td>canonical() / withMatchScore() / withConsecutiveBonus() / withSeparatorBonus() / withCamelBonus() / withFirstCharBonus() / withLowerCaseBonus()</td><td>Immutable Sahilm weights (canonical 1 / 5 / 10 / 10 / 15 / 1)</td></tr>
-<tr><td>FuzzyMatcherFactory</td><td>named(string $type, ScoringProfile|SahilmScoring|null $scoring = null): FuzzyMatcher</td><td>'smith-waterman' or 'sahilm'; a mismatched weight type or unknown name throws. create() is a deprecated alias</td></tr>
+<tr><td>FuzzyMatcherFactory</td><td>named(string $type, ScoringProfile|SahilmScoring|null $scoring = null): FuzzyMatcher</td><td>'smith-waterman' or 'sahilm'; a mismatched weight type or unknown name throws. create(string $type, $profile = null) is a deprecated alias that forwards to named() and keeps its <code>$profile</code> parameter name for named-argument callers</td></tr>
 <tr><td>Highlighter</td><td>highlight(MatchResult, \Closure(string): string): string</td><td>Apply styler to matched runs</td></tr>
 </table>
   </div>

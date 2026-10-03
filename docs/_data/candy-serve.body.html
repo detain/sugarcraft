@@ -1,31 +1,41 @@
 <p class="lede" style="margin-top: 28px;">Self-hostable Git server with SSH (authorized keys), Git (git://), and HTTP endpoints. Users, repos, access control, and optional LFS — all driven by a config file.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-serve</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-serve</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Serve\{Config, Repo, SSH\SSHServer};
+    <pre class="code"><code class="language-php">use SugarCraft\Serve\{AccessControl, Config, Repo, User};
+use SugarCraft\Serve\Git\GitDaemon;
 
-// Load config
-$config = Config::fromDefaults();
+$config = Config::fromDefaults();        // CANDY_SERVE_* env vars, else defaults
+                                         // (Config::load($yamlPath) reads a config file)
 
-// Create a repo
-$repo = Repo::create($config, 'my-project');
-echo "Repo path: {$repo-&gt;path()}\n";
+// Describe a repository and create it as a bare git repo on disk
+$repo = Repo::new('my-project', $config-&gt;reposPath() . '/my-project.git')
+    -&gt;withDescription('Greeting service')
+    -&gt;withPublic(true)
+    -&gt;addCollaborator('alice')
+    -&gt;init();
 
-// Spawn the SSH server
-$server = new SSHServer($config);
-$server-&gt;listen();</code></pre>
+// Ask the permission matrix
+$acl = AccessControl::getInstance();
+$acl-&gt;canWrite(User::new('alice'), $repo);   // true  (collaborator)
+$acl-&gt;canWrite(User::new('bob'), $repo);     // false
+$acl-&gt;canRead(null, $repo);                  // true  (public repo, anonymous read)
+
+// Serve it over git:// (blocks; serveAsync() runs on a ReactPHP loop instead)
+$daemon = new GitDaemon($config);
+$daemon-&gt;registerRepo($repo);
+$daemon-&gt;serve();</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>SSH endpoint</strong><span>Authorized-key authentication, git upload-pack / receive-pack.</span></div>
-            <div class="feature"><strong>Git daemon</strong><span>Unauthenticated git:// protocol endpoint.</span></div>
-            <div class="feature"><strong>HTTP endpoint</strong><span>Dumb HTTP gateway for behind-firewall access.</span></div>
-            <div class="feature"><strong>Access control</strong><span>Per-repo read/write/user grants and denials.</span></div>
-            <div class="feature"><strong>LFS support</strong><span>Optional LFS handler for large file storage.</span></div>
-            <div class="feature"><strong>Config file</strong><span>YAML-based server configuration.</span></div>
-            
+      <div class="feature"><strong>SSH front end</strong><span><code>SSHServer</code> authenticates users by public key and dispatches git upload-pack / receive-pack and the browse commands for each connection it is handed.</span></div>
+      <div class="feature"><strong>Git daemon</strong><span><code>GitDaemon</code> serves the git:// protocol, blocking with <code>serve()</code> or on a ReactPHP loop with <code>serveAsync()</code>.</span></div>
+      <div class="feature"><strong>HTTP smart protocol</strong><span><code>HttpSmartProtocol\Server</code> handles smart-HTTP clone/fetch/push, with Basic auth when required.</span></div>
+      <div class="feature"><strong>Access control</strong><span><code>AccessControl</code> answers read / write / admin for a user (or anonymous) against a repo's visibility and collaborators.</span></div>
+      <div class="feature"><strong>LFS support</strong><span>Git LFS over HTTP through <code>LFSHandler</code> and a pluggable storage backend.</span></div>
+      <div class="feature"><strong>Config file</strong><span>YAML server configuration via <code>Config::load()</code>, or env + defaults via <code>Config::fromDefaults()</code>.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -41,14 +51,15 @@ $server-&gt;listen();</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Config</td><td>fromDefaults()</td><td>Create default configuration</td></tr>
-<tr><td>Config</td><td>fromYaml(path)</td><td>Load configuration from YAML</td></tr>
-<tr><td>Repo</td><td>create(config, name)</td><td>Create a new repository</td></tr>
-<tr><td>Repo</td><td>path()</td><td>Get repository path</td></tr>
-<tr><td>SSHServer</td><td>new(config)</td><td>Create SSH server</td></tr>
-<tr><td>SSHServer</td><td>listen()</td><td>Start listening for connections</td></tr>
-<tr><td>GitDaemon</td><td>new(config)</td><td>Create Git daemon</td></tr>
-<tr><td>HttpServer</td><td>new(config)</td><td>Create HTTP server</td></tr>
+<tr><td>Config</td><td>static fromDefaults() / static load(path)</td><td>Configuration from env + defaults, or from a YAML file</td></tr>
+<tr><td>Config</td><td>reposPath() / sshPath() / dbPath() / lfsPath()</td><td>Data directories</td></tr>
+<tr><td>Repo</td><td>static new(name, path) / withDescription() / withPublic() / withPrivate() / withVisibility() / withAllowPush() / addCollaborator()</td><td>Immutable repository description</td></tr>
+<tr><td>Repo</td><td>init() / path() / branches()</td><td>Create the bare repository; inspect it</td></tr>
+<tr><td>User</td><td>static new(username) / withAdmin() / withAuthorizedKeys() / addAuthorizedKey()</td><td>Immutable user account with SSH keys</td></tr>
+<tr><td>AccessControl</td><td>static getInstance() / canRead() / canWrite() / canAdmin()</td><td>Permission checks</td></tr>
+<tr><td>SSHServer</td><td>__construct(Config) / registerUser() / registerRepo() / handleConnection(stream, username, command, publicKey)</td><td>SSH command dispatcher</td></tr>
+<tr><td>GitDaemon</td><td>__construct(Config) / registerRepo() / serve(pidFile) / serveAsync(loop, pidFile) / shutdown()</td><td>git:// protocol daemon</td></tr>
+<tr><td>HttpSmartProtocol\Server</td><td>__construct(Config) / registerRepo() / registerUser() / handleRequest(…)</td><td>Smart-HTTP endpoint</td></tr>
 </table>
   </div>
 </section>

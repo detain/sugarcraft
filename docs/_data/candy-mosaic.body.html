@@ -1,10 +1,10 @@
 <p class="lede" style="margin-top: 28px;">Image-to-cell renderer for the terminal. PNG/JPEG/static GIF decoded via ext-gd and rendered via the best available protocol: Sixel, Kitty graphics, iTerm2 inline images, Unicode half-block, or quarter-block fallback.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-mosaic</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-mosaic</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Mosaic\Mosaic;
+    <pre class="code"><code class="language-php">use SugarCraft\Mosaic\Mosaic;
 use SugarCraft\Mosaic\ImageSource;
 
 $mosaic = Mosaic::halfBlock();
@@ -13,7 +13,7 @@ $ansi   = $mosaic->render($image, width: 40, height: 20);
 echo $ansi;</code></pre>
 
     <h3 style="margin-top: 32px;">API</h3>
-    <pre class="code"><code>use SugarCraft\Mosaic\Renderer\QuarterBlockRenderer;
+    <pre class="code"><code class="language-php">use SugarCraft\Mosaic\Renderer\QuarterBlockRenderer;
 
 // Probe terminal once, pick best protocol
 $mosaic = Mosaic::probe();

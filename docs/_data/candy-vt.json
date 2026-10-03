@@ -6,6 +6,6 @@
     "emoji": "🍬",
     "displayName": "CandyVt",
     "tagline": "In-memory virtual terminal emulator",
-    "phpVersion": "8.1+",
+    "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/x/tree/main/vt\" style=\"color: inherit;\">x/vt</a></span>\n          <span class=\"tag-chip\">vt500-parser</span>\n          <span class=\"tag-chip\">cell-grid</span>\n          <span class=\"tag-chip\">snapshot-tests</span>\n          <span class=\"tag-chip\">no-pty</span>"
 }

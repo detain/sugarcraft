@@ -1,16 +1,16 @@
 <p class="lede" style="margin-top: 28px;">Tracks edit-time per project / language to a local JSONL file (no cloud, no MongoDB) and renders a SugarCharts-driven dashboard. Editor plug-ins push heartbeats via the <code>tick push</code> CLI subcommand; the dashboard reads them.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-tick</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-tick</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>// Editor plug-in / cron / git hook pushes a heartbeat:
+    <pre class="code"><code class="language-shell"># Editor plug-in / cron / git hook pushes a heartbeat:
 sugar-tick push sugarcraft php src/App.php 60
 
-// Open the dashboard:
+# Open the dashboard:
 sugar-tick
 
-// Override the data dir:
+# Override the data dir:
 SUGARTICK_DIR=/var/data/tick sugar-tick</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>

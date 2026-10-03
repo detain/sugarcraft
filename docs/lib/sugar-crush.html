@@ -54,10 +54,10 @@
     <p class="lede" style="margin-top: 28px;">Terminal AI coding agent. Seven LLM providers (OpenAI, Anthropic, Claude Code, SGLang, Bedrock, Vertex, custom), model-driven tool calling gated by hooks, prompt-injecting skills, sub-agents, an MCP client/server, and SQLite session history — over a candy-core render loop with Markdown replies. Runs offline out of the box.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-crush</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-crush</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>composer install
+    <pre class="code"><code class="language-shell">composer install
 ./bin/sugarcrush
 
 # With no configuration it runs the offline EchoProvider through the full
@@ -84,7 +84,7 @@ sugarcrush -p "audit this" --output-format json | jq -r .result</code></pre>
       <div class="feature"><strong>Workflows</strong><span><code>WorkflowEngine</code> runs multi-stage agent pipelines — sequential, fan-out parallel, chained pipeline, and task-then-verifier — from a PHP DSL or YAML, with SIGINT-safe pause and stage-granularity resume.</span></div>
       <div class="feature"><strong>MCP client &amp; server</strong><span>Multi-server client over stdio + HTTP reading <code>.mcp.json</code> with <code>${VAR}</code> interpolation, plus stdio/HTTP servers to host your own tools. Per-preset <code>mcpServers</code> allowlists are enforced, not decorative.</span></div>
       <div class="feature"><strong>SQLite sessions</strong><span>WAL-mode persistence of sessions, messages and tool calls with FK-enforced cascade, fork/rename/resume, and opt-in retention pruning that never drops a session you named.</span></div>
-      <div class="feature"><strong>Real TEA render loop</strong><span>A candy-core <code>Model</code>/<code>Program</code> tree with buffer-diffed output: Markdown-rendered replies via CandyShine, live tool-call lifecycle, unified diffs for <code>Edit</code> results, inline images via candy-mosaic, mouse zones and text selection via candy-mouse, and a command palette whose fuzzy filter requires every typed character to match.</span></div>
+      <div class="feature"><strong>Real TEA render loop</strong><span>A candy-core <code>Model</code>/<code>Program</code> tree with buffer-diffed output: Markdown-rendered replies via CandyShine, live tool-call lifecycle, unified diffs for <code>Edit</code> results, inline images via candy-mosaic, mouse zones and text selection via candy-mouse, and a command palette whose fuzzy filter requires every typed character to match. A slash command is offered when any such alignment starts on its first character, so <code>/ab</code> still finds <code>a__ab</code>.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>

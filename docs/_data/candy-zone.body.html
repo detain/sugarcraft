@@ -1,10 +1,10 @@
 <p class="lede" style="margin-top: 28px;">Wrap rendered chunks with named markers, let CandyZone discover their bounding boxes, then ask zones whether a MouseMsg fell inside them. Markers are candy-mouse's invisible private-use sentinels (U+E000 / U+E001), and <code>scan()</code> strips them before the frame is printed, so they never affect layout.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-zone</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-zone</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Zone\Manager;
+    <pre class="code"><code class="language-php">use SugarCraft\Zone\Manager;
 use SugarCraft\Sprinkles\Style;
 
 $z = Manager::newGlobal();

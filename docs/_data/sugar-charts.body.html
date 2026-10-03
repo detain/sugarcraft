@@ -1,15 +1,15 @@
 <p class="lede" style="margin-top: 28px;">Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, plus inline image rendering via Sixel / Kitty / iTerm2 protocols. Auto-detects terminal capability.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-charts</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-charts</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Charts\Sparkline\Sparkline;
+    <pre class="code"><code class="language-php">use SugarCraft\Charts\Sparkline\Sparkline;
 use SugarCraft\Charts\BarChart\BarChart;
 use SugarCraft\Charts\LineChart\LineChart;
 
 echo Sparkline::new([1, 3, 2, 8, 5, 4, 7, 6], 8)-&gt;view() . PHP_EOL;
-// ▁▃▂█▅▄▇▆
+// " ▂▁█▅▃▇▆" (scaled to the window's min..max; the minimum is a blank cell)
 
 echo BarChart::new(
     [['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5

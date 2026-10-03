@@ -1,10 +1,10 @@
 <p class="lede" style="margin-top: 28px;">Pure-math animation engine. Damped harmonic oscillators (Ryan-Juckett) for smooth scroll / overshoot, Newtonian projectile sim for arcs and particle effects. No terminal dependency.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/honey-bounce</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/honey-bounce</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Bounce\{Spring, Projectile, Point, Vector};
+    <pre class="code"><code class="language-php">use SugarCraft\Bounce\{Spring, Projectile, Point, Vector};
 
 $spring = new Spring(
     deltaTime:        Spring::fps(60),

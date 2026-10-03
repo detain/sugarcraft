@@ -52,29 +52,44 @@
     <p class="lede" style="margin-top: 28px;">The test harness SugarCraft pioneers that bubble-tea issue #1654 never shipped: <code>ProgramSimulator</code> for driving TEA programs with scripted input, <code>Assertions</code> for golden-file and cell-grid snapshots, and <code>TapeRecorder</code> for VHS demo capture.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-testing:@dev</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-testing:@dev</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Testing\ProgramSimulator;
+    <pre class="code"><code class="language-php">use SugarCraft\Testing\ProgramSimulator;
 use SugarCraft\Testing\Input\ScriptedInput;
 use SugarCraft\Testing\Snapshot\Assertions;
-use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Core\KeyType;
 
-$sim = ProgramSimulator::for($program)
-    ->send(new KeyMsg(KeyType::Character, '+'))
-    ->send(new KeyMsg(KeyType::Enter))
-    ->run();
+// Script terminal input: keys, plus a bracketed paste decoded by candy-core's
+// real InputReader (sanitised by default, as at runtime).
+$script = ScriptedInput::new()
+    -&gt;key('+')
+    -&gt;key('+')
+    -&gt;paste("hello\n")
+    -&gt;enter();
 
-Assertions::assertGoldenAnsi(__DIR__ . '/fixtures/counter.golden', $sim->view);
-echo "Final count: " . $sim->model->count();</code></pre>
+$sim = ProgramSimulator::for(new Counter());   // a Model or a Program
+foreach ($script-&gt;build() as $msg) {
+    $sim-&gt;send($msg);
+}
+$result = $sim-&gt;run();                         // TestResult: model, view, cmds, output
+
+Assertions::assertGoldenAnsi(__DIR__ . '/fixtures/counter.golden', $result-&gt;view);
+echo "Final count: " . $result-&gt;model-&gt;count;</code></pre>
 
     <h3 style="margin-top: 32px;">ProgramSimulator</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>for(Program)</strong><span>Factory: wrap a Program for deterministic testing.</span></div>
+      <div class="feature"><strong>for(Model|Program)</strong><span>Factory: wrap a Program, or a bare Model in a default Program, for deterministic testing.</span></div>
       <div class="feature"><strong>send(Msg)</strong><span>Fluent message enqueue — chain multiple sends.</span></div>
       <div class="feature"><strong>withFakeCmdRunner()</strong><span>Intercept commands instead of executing them.</span></div>
-      <div class="feature"><strong>run()</strong><span>Drain the queue, return TestResult with model/view/cmds/output.</span></div>
+      <div class="feature"><strong>run()</strong><span>Drain the queue, return TestResult with model/view/cmds/output. Subscription output is delivered right after the message that triggered it, none is dropped, and run() can be called again.</span></div>
+    </div>
+
+    <h3 style="margin-top: 32px;">ScriptedInput</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>key() / namedKey() / enter() / arrow() / mouse() / resize() / ticks()</strong><span>Fluent builders for the messages a session produces; <code>build()</code> returns the list.</span></div>
+      <div class="feature"><strong>bytes(...$reads)</strong><span>Raw terminal input parsed by candy-core's real <code>InputReader</code>, one argument per read (split into 4096-byte reads like the runtime), with the runtime's idle recovery afterwards: a lone ESC becomes an Escape key and an unterminated paste is closed.</span></div>
+      <div class="feature"><strong>paste(content)</strong><span>A bracketed paste sent through <code>bytes()</code>, so the model sees the same PasteStartMsg, PasteEndMsg, PasteMsg sequence as at runtime (longer pastes arrive in several PasteMsg chunks).</span></div>
+      <div class="feature"><strong>withSanitizePaste(bool)</strong><span>Pasted payloads are sanitised by default, as at runtime; pass <code>false</code> to deliver them verbatim. Call it before <code>bytes()</code>.</span></div>
     </div>
 
     <h3 style="margin-top: 32px;">Assertions</h3>
@@ -113,10 +128,11 @@ echo "Final count: " . $sim->model->count();</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>ProgramSimulator</td><td>for(Program): self</td><td>Factory: wrap a Program</td></tr>
+<tr><td>ProgramSimulator</td><td>for(Model|Program): self</td><td>Factory: wrap a Program or a bare Model</td></tr>
 <tr><td>ProgramSimulator</td><td>send(Msg): self</td><td>Fluent message enqueue</td></tr>
 <tr><td>ProgramSimulator</td><td>withFakeCmdRunner(callable): self</td><td>Intercept commands</td></tr>
 <tr><td>ProgramSimulator</td><td>run(): TestResult</td><td>Drain queue, return result</td></tr>
+<tr><td>ScriptedInput</td><td>new() / key() / namedKey() / enter() / paste(string) / bytes(string ...$reads) / withSanitizePaste(bool) / build()</td><td>Scripted terminal input</td></tr>
 <tr><td>TestResult</td><td>model: object</td><td>Final model after all messages</td></tr>
 <tr><td>TestResult</td><td>view: string</td><td>Last view() output</td></tr>
 <tr><td>TestResult</td><td>cmds: list&lt;Closure&gt;</td><td>Captured commands</td></tr>

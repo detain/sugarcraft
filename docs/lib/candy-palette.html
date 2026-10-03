@@ -47,27 +47,37 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-palette"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-palette" alt="CandyPalette code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Detect the terminal's color capability (ANSI / ANSI256 / TrueColor), convert between formats, and write StandardColors compatible with the Charm ecosystem.</p>
+    <p class="lede" style="margin-top: 28px;">Detect the terminal's colour capability (NoTTY / Ascii / ANSI / ANSI256 / TrueColor) and degrade colours, strings and whole output streams to match it.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-palette</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-palette</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Palette\Palette;
+    <pre class="code"><code class="language-php">use SugarCraft\Palette\{Color, Palette, Profile, ProfileWriter};
 
-$profile = Palette::detect();
-echo $profile-&gt;type();   // "truecolor" | "256" | "ansi"
+$profile = Palette::detect(STDOUT);      // Profile::TrueColor | ANSI256 | ANSI | Ascii | NoTTY
+echo $profile-&gt;label();                  // e.g. "No TTY" when piped
 
-$hex = Palette::fromHex('#ff6b6b')-&gt;toProfile($profile)-&gt;ansi();
-$rgb = Palette::fromHex('#ff6b6b')-&gt;rgb();  // [255, 107, 107]</code></pre>
+// Downsample one colour to an explicit profile
+$coral = Color::parse('#ff6b6b');        // r 255, g 107, b 107
+$c256  = Palette::toProfile($coral, Profile::ANSI256);
+echo $c256-&gt;toAnsi256Index();            // 203
+echo $c256-&gt;toAnsi256Foreground();       // "\x1b[38;5;203m"
+
+// Rewrite every colour in a string for a given profile
+$ansi = (new Palette())-&gt;withProfile(Profile::ANSI256)
+    -&gt;degrade("\x1b[38;2;255;107;107mhi\x1b[0m"); // "\x1b[38;5;203mhi\x1b[0m"
+
+// Or wrap a stream and let it degrade (or strip, under NoTTY) on write
+ProfileWriter::wrap(STDOUT)-&gt;write("\x1b[38;2;107;80;255mFancy\x1b[0m\n");</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Profile detection</strong><span>Auto-detect TrueColor / ANSI256 / ANSI via environment + terminfo.</span></div>
-            <div class="feature"><strong>Format conversion</strong><span>Hex ↔ RGB ↔ ANSI ↔ ANSI256. Convert any color to the terminal's capability.</span></div>
-            <div class="feature"><strong>StandardColors</strong><span>16 ANSI standard colors with hex equivalents.</span></div>
-            <div class="feature"><strong>ProfileWriter</strong><span>Output ANSI escape sequences to set the terminal profile.</span></div>
-            
+      <div class="feature"><strong>Profile detection</strong><span>Reads <code>NO_COLOR</code>, <code>FORCE_COLOR</code>, <code>COLORTERM</code>, <code>TERM</code>, <code>TERM_PROGRAM</code>, tmux/screen and whether the stream is a TTY, in upstream's precedence order. The result is a <code>Profile</code>: TrueColor, ANSI256, ANSI, Ascii or NoTTY.</span></div>
+      <div class="feature"><strong>Colour degradation</strong><span><code>Palette::toProfile()</code> / <code>Color::convert()</code> downsample a colour to the 256-colour cube and grey ramp or to the 16 ANSI slots.</span></div>
+      <div class="feature"><strong>String rewriting</strong><span><code>degrade()</code> rewrites the SGR colours in a string for the current profile and strips every escape under NoTTY. <code>ProfileWriter</code> does the same to everything written to a stream.</span></div>
+      <div class="feature"><strong>StandardColors</strong><span>The 16 ANSI colours as <code>Color</code> values (<code>StandardColors::$red</code>, <code>$brightBlack</code>, …).</span></div>
+      <div class="feature"><strong>Perceptual distance</strong><span>CIELAB conversion with ΔE*76 / ΔE*94 / CIEDE2000 (<code>DeltaE</code>) and an opt-in nearest-palette matcher (<code>NearestColor</code>).</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -83,13 +93,15 @@ $rgb = Palette::fromHex('#ff6b6b')-&gt;rgb();  // [255, 107, 107]</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Palette</td><td>detect()</td><td>Detect terminal color profile</td></tr>
-<tr><td>Palette</td><td>fromHex(hex)</td><td>Create color from hex</td></tr>
-<tr><td>Palette</td><td>fromRgb(r, g, b)</td><td>Create color from RGB</td></tr>
-<tr><td>Palette</td><td>toProfile(profile)</td><td>Convert to profile</td></tr>
-<tr><td>Palette</td><td>ansi(), ansi256(), truecolor()</td><td>Output as ANSI format</td></tr>
-<tr><td>StandardColors</td><td>black(), red(), green()...</td><td>16 ANSI standard colors</td></tr>
-<tr><td>ProfileWriter</td><td>write(profile)</td><td>Output terminal profile</td></tr>
+<tr><td>Palette</td><td>static detect($stream = null, array $env = []): Profile</td><td>Detect the colour profile for a stream</td></tr>
+<tr><td>Palette</td><td>__construct($stream = null, array $env = []) / profile() / withProfile(Profile)</td><td>Detected profile, or an explicit one</td></tr>
+<tr><td>Palette</td><td>convert(Color) / static toProfile(Color, Profile)</td><td>Downsample a colour</td></tr>
+<tr><td>Palette</td><td>degrade(string) / static stripAnsi(string)</td><td>Rewrite or strip the escapes in a string</td></tr>
+<tr><td>Color</td><td>static parse('#rrggbb') / static fromHex(0xrrggbb) / new Color(r, g, b, a)</td><td>Construct a colour</td></tr>
+<tr><td>Color</td><td>toHex() / toAnsi256Index() / toAnsi16Index() / toAnsiForeground() / toAnsi256Foreground() / toAnsi16Foreground()</td><td>Encode a colour</td></tr>
+<tr><td>Profile</td><td>TrueColor, ANSI256, ANSI, Ascii, NoTTY / label() / maxColors() / degradedTo()</td><td>Enum of colour profiles</td></tr>
+<tr><td>ProfileWriter</td><td>static wrap($stream, array $env = []) / write(string) / printf(format, ...)</td><td>Stream that degrades colour on write</td></tr>
+<tr><td>StandardColors</td><td>static $black, $red, … $brightWhite</td><td>The 16 ANSI colours</td></tr>
 </table>
   </div>
 </section>
@@ -126,7 +138,7 @@ $rgb = Palette::fromHex('#ff6b6b')-&gt;rgb();  // [255, 107, 107]</code></pre>
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/candy-palette">Packagist</a> ·

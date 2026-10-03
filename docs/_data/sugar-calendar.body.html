@@ -1,24 +1,34 @@
 <p class="lede" style="margin-top: 28px;">Month-grid date picker with keyboard navigation, min/max date constraints, locale-aware day names, and a fully-rendered ANSI view.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/sugar-calendar</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-calendar</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Calendar\DatePicker;
+    <pre class="code"><code class="language-php">use SugarCraft\Calendar\DatePicker;
 
-$picker = DatePicker::new(new \DateTimeImmutable('2026-01-01'));
-$picker = $picker-&gt;withMinDate(new \DateTimeImmutable('2025-01-01'));
-$picker = $picker-&gt;withMaxDate(new \DateTimeImmutable('2027-12-31'));
+// Opens on January 2026. The cursor starts on the first cell of the 6×7 grid
+// (a blank before Thursday the 1st); every step returns a new picker.
+$picker = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
+    -&gt;handleKey(DatePicker::KEY_DOWN)   // one week down: Sunday the 4th
+    -&gt;SelectDate();
 
-echo $picker-&gt;view();  // renders month grid</code></pre>
+$picker-&gt;SelectedDate()-&gt;format('Y-m-d');   // '2026-01-04'
+echo $picker-&gt;View();                       // month grid, today and cursor highlighted
+
+// Range mode: Enter sets the start, a second Enter the end
+$range = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
+    -&gt;withRangeMode(true)
+    -&gt;handleKey(DatePicker::KEY_DOWN)-&gt;handleKey(DatePicker::KEY_ENTER)
+    -&gt;handleKey(DatePicker::KEY_RIGHT)-&gt;handleKey(DatePicker::KEY_RIGHT)
+    -&gt;handleKey(DatePicker::KEY_ENTER);
+[$range-&gt;rangeStart()-&gt;format('j'), $range-&gt;rangeEnd()-&gt;format('j')];   // ['4', '6']</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Month grid</strong><span>Full month view with day letters, today highlight, cursor.</span></div>
-            <div class="feature"><strong>Keyboard nav</strong><span>Arrow keys, Enter to select, Esc to cancel.</span></div>
-            <div class="feature"><strong>Min / Max constraints</strong><span>Restrict selectable date range.</span></div>
-            <div class="feature"><strong>Locale support</strong><span>Custom day/month names via configuration.</span></div>
-            
+      <div class="feature"><strong>Month grid</strong><span>A 6×7 month view with localised day and month names, today and the cursor highlighted, and optional ISO week numbers.</span></div>
+      <div class="feature"><strong>Keyboard nav</strong><span><code>handleKey()</code> takes the <code>KEY_*</code> constants: arrows move the cursor, Home/End jump to the first/last cell, Enter and Esc drive range mode.</span></div>
+      <div class="feature"><strong>Range selection</strong><span><code>withRangeMode(true)</code>: the first Enter sets the start, the second the end (swapped if needed), a third starts over; Esc clears.</span></div>
+      <div class="feature"><strong>TEA model</strong><span><code>Model</code> wraps the picker as a candy-core Model with an optional event store.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -34,11 +44,14 @@ echo $picker-&gt;view();  // renders month grid</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>DatePicker</td><td>new(date)</td><td>Create date picker</td></tr>
-<tr><td>DatePicker</td><td>withMinDate(date)</td><td>Set minimum selectable date</td></tr>
-<tr><td>DatePicker</td><td>withMaxDate(date)</td><td>Set maximum selectable date</td></tr>
-<tr><td>DatePicker</td><td>view()</td><td>Render calendar view</td></tr>
-<tr><td>DatePicker</td><td>selected()</td><td>Get selected date</td></tr>
+<tr><td>DatePicker</td><td>static new(?DateTimeImmutable) / withToday(DateTimeImmutable) / SetTime(DateTimeImmutable)</td><td>Create a picker on a month; pin "today"; jump to a date</td></tr>
+<tr><td>DatePicker</td><td>GoToPreviousMonth() / GoToNextMonth() / GoToPreviousYear() / GoToNextYear() / GoToToday()</td><td>Navigate the viewed month</td></tr>
+<tr><td>DatePicker</td><td>MoveCursorLeft/Right/Up/Down() / handleKey(string $key)</td><td>Move the cursor</td></tr>
+<tr><td>DatePicker</td><td>SelectDate() / ClearDate() / ToggleSelection() / SelectedDate() / IsSelecting()</td><td>Single-date selection</td></tr>
+<tr><td>DatePicker</td><td>withRangeMode(bool) / rangeStart() / rangeEnd() / isRangeMode()</td><td>Range selection</td></tr>
+<tr><td>DatePicker</td><td>View(int $width = 21, bool $showWeekNumbers = false)</td><td>Render the month grid</td></tr>
+<tr><td>DatePicker</td><td>WithHeaderStyle() / WithTodayStyle() / WithSelectedStyle() / WithCursorStyle() / WithRangeStyle()</td><td>Styling (SGR strings)</td></tr>
+<tr><td>Model</td><td>static new(?DateTimeImmutable, ?EventStoreInterface) / picker()</td><td>candy-core Model wrapping the picker</td></tr>
 </table>
   </div>
 </section>

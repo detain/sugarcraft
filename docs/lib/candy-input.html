@@ -51,10 +51,10 @@
     <p class="lede" style="margin-top: 28px;">The missing input layer for PHP TUI. <code>EscapeDecoder</code> consumes raw TTY bytes and emits typed <code>Event</code> objects — plain keys, Kitty keyboard protocol, SGR 1006 mouse, focus events, and bracketed paste. Reentrant and fuzz-friendly. Unblocks sugar-readline migration to real-TTY input (step-21).</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-input:@dev</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-input:@dev</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Input\EscapeDecoder;
+    <pre class="code"><code class="language-php">use SugarCraft\Input\EscapeDecoder;
 use SugarCraft\Input\Driver\StreamInputDriver;
 use SugarCraft\Input\Event\KeyEvent;
 use SugarCraft\Input\Event\MouseEvent;

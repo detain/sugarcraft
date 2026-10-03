@@ -54,11 +54,11 @@
     <p class="lede" style="margin-top: 28px;">Open a master/slave PTY pair, spawn a child process with its stdin/stdout/stderr wired to the slave, and pump bytes / forward resizes between the host terminal and the child. Wraps the libc PTY syscalls (<code>posix_openpt</code>, <code>grantpt</code>, <code>unlockpt</code>, <code>ptsname_r</code>, <code>ioctl(TIOCSWINSZ)</code>) via ext-ffi — no shelling out to <code>/usr/bin/script</code>, no C extension to compile.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-pty</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-pty</code></pre>
     <p style="color: var(--ink-2);">Requires PHP 8.3+ with <code>ext-ffi</code>. <code>ext-pcntl</code> is optional — the lib polls <code>waitpid()</code> when pcntl is absent and SignalForwarder degrades to a no-op. <code>ext-posix</code> is optional too — <code>kill()</code> signals through <code>Libc::kill()</code>, which uses <code>posix_kill()</code> when it is loaded and libc <code>kill(2)</code> over FFI otherwise.</p>
 
     <h3 style="margin-top: 32px;">Open + spawn + drain</h3>
-    <pre class="code"><code>use SugarCraft\Pty\Pty;
+    <pre class="code"><code class="language-php">use SugarCraft\Pty\Pty;
 
 $pty   = Pty::open();
 $child = $pty-&gt;spawn(
@@ -78,12 +78,13 @@ $exit = $child-&gt;wait();
 $pty-&gt;close();</code></pre>
 
     <h3 style="margin-top: 32px;">Resize forwarding</h3>
-    <pre class="code"><code>use SugarCraft\Pty\SignalForwarder;
+    <pre class="code"><code class="language-php">use SugarCraft\Pty\SignalForwarder;
 use SugarCraft\Core\Util\Tty;
 
+$tty = new Tty(STDIN);                   // the host terminal
 SignalForwarder::attachSigwinch(
     $pty,
-    fn () =&gt; Tty::size(),                // [cols =&gt; N, rows =&gt; N]
+    fn () =&gt; $tty-&gt;size(),               // ['cols' =&gt; N, 'rows' =&gt; N]
 );
 // Now every host SIGWINCH triggers $pty-&gt;resize($cols, $rows).
 
@@ -91,7 +92,7 @@ SignalForwarder::attachSigwinch(
 $ttyFd = \SugarCraft\Pty\Libc::lib()-&gt;open('/dev/tty', 0x0002); // O_RDWR
 SignalForwarder::attachSigwinchToFd(
     $ttyFd,
-    fn () =&gt; Tty::size(),
+    fn () =&gt; $tty-&gt;size(),
     fn (int $cols, int $rows) =&gt; null,  // optional post-resize callback
 );</code></pre>
 
@@ -120,9 +121,9 @@ SignalForwarder::attachSigwinchToFd(
 
     <h3 style="margin-top: 40px;">Controlling terminal (Ctrl+C, job control)</h3>
     <p>Pass <code>controllingTerminal: true</code> to <code>spawn()</code> when you need <code>Ctrl+C</code> typed at the master to deliver <code>SIGINT</code> to the child — required for interactive shells (<code>bash -i</code>), editors (<code>vim</code>, <code>less</code>), and anything else that uses tty-driven job control.</p>
-    <pre class="code"><code>$child = $pty-&gt;spawn(
+    <pre class="code"><code class="language-php">$child = $pty-&gt;spawn(
     ['/bin/bash', '-i'],
-    env: [...],
+    env: ['TERM' =&gt; 'xterm-256color'],
     controllingTerminal: true,    // claim slave as the child's ctty
 );
 $pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></pre>

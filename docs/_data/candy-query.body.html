@@ -1,23 +1,24 @@
 <p class="lede" style="margin-top: 28px;">Composer-installable multi-driver SQL TUI: connect to SQLite, MySQL, or PostgreSQL, browse tables, peek at row data, run ad-hoc queries, and explore a full MySQL-Workbench-style admin dashboard — all on the SugarCraft stack. SQLite-first; MySQL and PostgreSQL drivers plus a Performance Dashboard, Server Status, Variables, Connections, Reports, and Performance Schema Setup ship as of v1.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-query</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-query</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code># SQLite via bare path (inferred as Flavor::Sqlite)
+    <pre class="code"><code class="language-shell"># SQLite via bare path (inferred as Flavor::Sqlite)
 bin/candy-query app.sqlite
 
 # Any DSN — MySQL, PostgreSQL, SQLite, SQLSRV
-bin/candy-query --dsn mysql://user:pass@localhost:3306/dbname
-
-// Or wire it up programmatically:
+bin/candy-query --dsn mysql://user:pass@localhost:3306/dbname</code></pre>
+    <pre class="code"><code class="language-php">// Or wire it up programmatically:
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Query\App;
 use SugarCraft\Query\Db\ConnectionFactory;
+use SugarCraft\Query\Db\Flavor;
 
-$pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
-(new Program(App::start($pdo), new ProgramOptions(useAltScreen: true)))-&gt;run();</code></pre>
+// fromDsn() only parses the DSN into a ConnectionConfig; fromConfig() connects.
+$db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname'));
+(new Program(App::start($db, Flavor::MySQL), new ProgramOptions(useAltScreen: true)))-&gt;run();</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -33,7 +34,7 @@ $pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
       <div class="feature"><strong>SnippetStore</strong><span>File-backed JSON store for named SQL snippets. <code>load()</code>/<code>add()</code>/<code>flush()</code>/<code>find()</code>/<code>search()</code>/<code>delete()</code> — immutable + fluent, persists to <code>/tmp/candy-query-snippets.json</code>.</span></div>
       <div class="feature"><strong>Exporters (CsvExporter, SqlExporter)</strong><span>Driver-agnostic export to CSV and SQL INSERT. CsvExporter produces RFC-4180 CSV via <code>fputcsv()</code> with formula-injection guard (<code>=+-@\t\r</code> prefixed with <code>'</code>) on headers and cells. SqlExporter emits INSERT statements only (no CREATE TABLE — not driver-neutral). Both use <code>SELECT * LIMIT 0/1</code> for column detection; exporting an empty table produces a blank file.</span></div>
       <div class="feature"><strong>ConnectionConfig</strong><span>Readonly value object: driver, host, port, user, pass, dbname, sslMode, dsn. Password never echoed.</span></div>
-      <div class="feature"><strong>ConnectionFactory</strong><span>Static factory: <code>fromDsn()</code>, <code>fromConfig()</code>, <code>fromArgv()</code>. Builds configured PDO connections.</span></div>
+      <div class="feature"><strong>ConnectionFactory</strong><span>Static factory: <code>fromDsn()</code> parses a DSN into a <code>ConnectionConfig</code> without connecting; <code>fromConfig()</code> and <code>fromArgv()</code> connect and return a PDO-backed <code>DatabaseInterface</code> (<code>SqliteDatabase</code>, <code>MysqlDatabase</code> or <code>PostgresDatabase</code>).</span></div>
       <div class="feature"><strong>Flavor</strong><span>Enum: <code>MySQL</code>, <code>MariaDB</code>, <code>Percona</code>, <code>Postgres</code>, <code>Sqlite</code>. Identifies the database server flavor. <code>Flavor::detectFromDriver()</code> detects flavor from a PDO driver name + optional version string; <code>Flavor::detectFromVersionString()</code> refines MySQL to MariaDB/Percona using the version comment.</span></div>
       <div class="feature"><strong>Version</strong><span>Parser for server version strings. Handles MariaDB's <code>5.5.5-</code> prefix. <code>isAtLeast(Version)</code> compares versions safely.</span></div>
       <div class="feature"><strong>ExplainView</strong><span>Strategy pattern for <code>EXPLAIN</code> output — delegates to driver-specific <code>ExplainProviderInterface</code> (<code>SqliteExplainProvider</code>, <code>MysqlExplainProvider</code>, <code>PostgresExplainProvider</code>) based on <code>Flavor</code>. <code>run()</code> executes against a Database; <code>render()</code> produces ANSI coloured tree; <code>toArray()</code> returns JSON-serialisable structure.</span></div>
@@ -187,7 +188,7 @@ $pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
 <tr><td>ConnectionDetailTabs</td><td>getExplain(processId)</td><td>Runs EXPLAIN on the selected thread's current query. Accepts single SELECT statements only — rejects multi-statement queries (containing ;) and any non-SELECT statement (INSERT/UPDATE/DELETE/DROP/etc.) before running. Returns null if no query, explain fails, or query is not a single SELECT.</td></tr>
 <tr><td>ConnectionConfig</td><td>—</td><td>Readonly value object: driver, host, port, user, pass, dbname, sslMode, dsn</td></tr>
 <tr><td>ConnectionFactory</td><td>fromDsn(dsn)</td><td>Parse DSN string via <code>parse_url()</code> (mysql/pgsql) or regex (sqlite) and build a <code>ConnectionConfig</code>. Handles URL-encoded passwords, passwordless users, and IPv6 hosts. The <code>?ssl-mode=</code> query param is parsed and stored in <code>ConnectionConfig.sslMode</code>; SSL is applied as PDO driver options in <code>MysqlDatabase::connect()</code>, not embedded in the DSN string. Examples: <code>mysql://u:p%40ss@[::1]:3306/db</code>, <code>mysql://root@localhost/db</code>.</td></tr>
-<tr><td>ConnectionFactory</td><td>fromConfig(config)</td><td>Build PDO from ConnectionConfig value object</td></tr>
+<tr><td>ConnectionFactory</td><td>fromConfig(config)</td><td>Connect using a ConnectionConfig and return the driver's <code>DatabaseInterface</code> (<code>sqlite</code>, <code>mysql</code> or <code>pgsql</code>; any other driver throws <code>InvalidArgumentException</code>)</td></tr>
 <tr><td>ConnectionFactory</td><td>fromArgv()</td><td>Build PDO from CLI args (--db-driver, --db-host, --db-port, --db-user, --db-pass, --db-name, --db-ssl-mode)</td></tr>
 <tr><td>Flavor</td><td>detectFromDriver(driver, version?, versionComment?)</td><td>Detect flavor from PDO driver name ('mysql', 'pgsql', 'sqlite') + optional version string. Uses <code>detectFromVersionString()</code> for MySQL refinement. Ensures mysql/pgsql never falls back to SQLite for an unparseable version.</td></tr>
 <tr><td>Version</td><td>isAtLeast(Version)</td><td>Compare version strings (handles MariaDB 5.5.5- prefix)</td></tr>

@@ -6,6 +6,6 @@
     "emoji": "🐚",
     "displayName": "CandyShell",
     "tagline": "Composer-installable CLI of TUI primitives",
-    "phpVersion": "8.1+",
+    "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/gum\" style=\"color: inherit;\">gum</a></span>\n          <span class=\"tag-chip\">cli</span>\n          <span class=\"tag-chip\">shell-script</span>\n          <span class=\"tag-chip\">one-shot</span>"
 }

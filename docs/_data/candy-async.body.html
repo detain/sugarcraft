@@ -1,15 +1,15 @@
 <p class="lede" style="margin-top: 28px;">Shared async vocabulary unifying ReactPHP usage across the SugarCraft monorepo. CancellationToken (owner/source pattern), Subscription interface, Subscriptions::compose() for atomic disposal, and AsyncOps static helpers for common async patterns.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code>composer require sugarcraft/candy-async</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-async</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Async\{AsyncOps, CancellationSource};
+    <pre class="code"><code class="language-php">use SugarCraft\Async\{AsyncOps, CancellationSource};
 
 $source = CancellationSource::new();
 
 // Attach a cancellation callback
-$source->token()->onCancel(fn() => echo "Cancelled!\n");
+$source->token()->onCancel(function (): void { echo "Cancelled!\n"; });
 
 $source->cancel(); // prints "Cancelled!"
 

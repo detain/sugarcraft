@@ -6,6 +6,6 @@
     "emoji": "🐝",
     "displayName": "HoneyFlap",
     "tagline": "Flappy-Bird in your terminal",
-    "phpVersion": "8.1+",
+    "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/kbrgl/flapioca\" style=\"color: inherit;\">flapioca</a></span>\n          <span class=\"tag-chip\">game</span>\n          <span class=\"tag-chip\">flappy</span>\n          <span class=\"tag-chip\">honeybounce</span>\n          <span class=\"tag-chip\">physics</span>"
 }
