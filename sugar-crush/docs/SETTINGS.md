@@ -777,6 +777,57 @@ allow-list admits it AND the deny-list does not name it, in one expression, so
 there is no later stage at which a project's `disabledTools` could re-admit
 what your `allowedTools` excluded.
 
+## Every key
+
+Every key any settings file can carry, layered or not, generated from
+`SettingsSchema` by `php tools/gen-settings-doc.php --write` — do not edit the
+table by hand; `SettingsSchemaDocDriftTest` reds when it is stale. **Tiers**:
+`P` the two project files (a trusted project only), `U`
+`~/.sugar-crush/settings.json`, `C` `~/.sugar-crush/config.json` (or the
+`--config` file). **Env / flag** outranks every file. **Applies** is when a
+saved change takes effect: `live`, `next turn`, `restart`, or `next launch` for
+the keys frozen for the life of the process. **Risk** is what a hostile value
+could cost; only `cosmetic`, `narrowing` and `tuning` keys may ever be
+project-settable.
+
+<!-- settings:begin -->
+| Key | Category | Type | Default | Tiers | Env / flag | Applies | Risk |
+|---|---|---|---|---|---|---|---|
+| `provider` | Model & Provider | string | unset | U C | `SUGARCRUSH_PROVIDER` | live | egress |
+| `titleModel` | Model & Provider | string | unset | U C | `SUGARCRUSH_TITLE_MODEL` | restart | spend |
+| `summaryModel` | Model & Provider | string | unset | U C | `SUGARCRUSH_SUMMARY_MODEL` | restart | spend |
+| `maxOutputTokens` | Model & Provider | int | unset | U C | — | next turn | spend |
+| `modelPrices` | Model & Provider | object | `{}` | U C | — | restart | spend |
+| `extraBody` | Model & Provider | object | unset | U C | — | restart | egress |
+| `thinkingBudget` | Model & Provider | int | unset | U C | — | restart | spend |
+| `promptCache` | Model & Provider | bool | `true` | U C | `SUGARCRUSH_DISABLE_PROMPT_CACHE` | restart | spend |
+| `parallelToolCalls` | Agent loop | bool | `true` | P U C | `SUGARCRUSH_DISABLE_PARALLEL_TOOL_CALLS` | next turn | tuning |
+| `parallelToolDeadlineSeconds` | Agent loop | int | `90` | P U C | `SUGARCRUSH_PARALLEL_TOOL_DEADLINE` | next turn | tuning |
+| `maxToolSteps` | Agent loop | int | unset | U C | — | restart | spend |
+| `contextWindow` | Context & Compaction | JSON | unset | U C | — | restart | tuning |
+| `permissionMode` | Permissions | enum | `bypass-permissions` | U C | `SUGARCRUSH_PERMISSION_MODE`, `--permission-mode` | restart | security |
+| `permissionRules` | Permissions | JSON | `[]` | U C | — | restart | security |
+| `secretEnvAllowlist` | Permissions | list | `[]` | U C | — | restart | security |
+| `trustedProjectHooks` | Permissions | list | `[]` | C | — | next launch | security |
+| `trustedProjectMcp` | Permissions | list | `[]` | C | — | next launch | security |
+| `trustedProjectCommands` | Permissions | list | `[]` | C | — | next launch | security |
+| `trustedProjectSettings` | Permissions | list | `[]` | C | — | next launch | security |
+| `allowedTools` | Tools | list | unset | U C | — | restart | security |
+| `disabledTools` | Tools | list | `[]` | P U C | — | restart | narrowing |
+| `instructions` | Memory & Rules | list | `[]` | U C | — | restart | prompt |
+| `disabledRules` | Memory & Rules | list | `[]` | U C | — | restart | prompt |
+| `disabledSkills` | Skills | list | `[]` | P U C | — | restart | narrowing |
+| `enabledSkills` | Skills | list | `[]` | C | — | restart | prompt |
+| `includeGitInstructions` | Git & Automation | bool | `true` | P U C | — | restart | narrowing |
+| `attribution` | Git & Automation | object | unset | U C | — | restart | prompt |
+| `theme` | Interface | enum | `dark` | P U C | — | live | cosmetic |
+| `statusLine` | Interface | object | unset | U C | — | restart | exec |
+| `layout` | Interface | JSON | unset | U C | — | live | cosmetic |
+| `claudeMcpBinary` | Hooks & MCP | path | unset | C | — | next launch | exec |
+| `claudeMcpArgs` | Hooks & MCP | list | unset | C | — | next launch | exec |
+| `claudeMcpEnv` | Hooks & MCP | object | unset | C | — | next launch | security |
+<!-- settings:end -->
+
 ## When a change takes effect
 
 The settings files are **re-read every turn** — `EngineBackend::runTurn()`, the

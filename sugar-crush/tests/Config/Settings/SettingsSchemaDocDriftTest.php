@@ -1,0 +1,118 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Crush\Tests\Config\Settings;
+
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Config\Settings\SettingsDocGenerator;
+use SugarCraft\Crush\Config\Settings\SettingsSchema;
+
+/**
+ * The generated settings docs are byte-equal to what the schema produces —
+ * `php tools/gen-settings-doc.php --check`, as a test (the `ansi/README.md`
+ * pattern). A key added to {@see SettingsSchema} without re-running
+ * `--write` reds here, naming the stale page.
+ */
+final class SettingsSchemaDocDriftTest extends TestCase
+{
+    private static function package(): string
+    {
+        return \dirname(__DIR__, 3);
+    }
+
+    /** @return array<string, string> the generator's target pages as they are on disk */
+    private static function pages(): array
+    {
+        $pages = [];
+        foreach (SettingsDocGenerator::new()->targets() as $file) {
+            $text = file_get_contents(self::package() . '/' . $file);
+            self::assertIsString($text, "{$file} is unreadable");
+            $pages[$file] = $text;
+        }
+
+        return $pages;
+    }
+
+    public function testTheGeneratedDocsAreUpToDate(): void
+    {
+        self::assertSame(
+            [],
+            SettingsDocGenerator::new()->drift(self::pages()),
+            'settings docs are stale — run `php tools/gen-settings-doc.php --write` from sugar-crush/',
+        );
+    }
+
+    public function testTheEveryKeyTableNamesEverySchemaKeyOnce(): void
+    {
+        $doc = (string) file_get_contents(self::package() . '/' . SettingsDocGenerator::SETTINGS_DOC);
+        self::assertSame(1, preg_match('/<!-- settings:begin -->(.*?)<!-- settings:end -->/s', $doc, $block));
+
+        preg_match_all('/^\| `([A-Za-z.]+)` \|/m', $block[1], $rows);
+        self::assertSame(SettingsSchema::keys(), $rows[1]);
+    }
+
+    /** The ENVIRONMENT.md "Settings key" column is exactly {@see SettingsSchema::envMap()}. */
+    public function testTheEnvironmentSettingsKeyColumnMatchesTheSchema(): void
+    {
+        $doc = (string) file_get_contents(self::package() . '/' . SettingsDocGenerator::ENVIRONMENT_DOC);
+        self::assertStringContainsString('| Variable | Default when unset | Description | Settings key |', $doc);
+
+        preg_match_all('/^\| `(SUGARCRUSH_[A-Z0-9_]+)` \|.*\| (`([A-Za-z.]+)`|—) \|$/m', $doc, $rows, \PREG_SET_ORDER);
+        $named = [];
+        foreach ($rows as $row) {
+            if (($row[3] ?? '') !== '') {
+                $named[$row[1]] = $row[3];
+            }
+        }
+
+        ksort($named);
+        self::assertSame(SettingsSchema::envMap(), $named);
+    }
+
+    public function testAMissingPageIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        SettingsDocGenerator::new()->rendered([SettingsDocGenerator::SETTINGS_DOC => '']);
+    }
+
+    public function testRegeneratingIsIdempotent(): void
+    {
+        $generator = SettingsDocGenerator::new();
+        $rendered = $generator->rendered(self::pages());
+        $once = $rendered[SettingsDocGenerator::ENVIRONMENT_DOC];
+
+        self::assertSame($once, SettingsDocGenerator::withEnvColumn($once));
+
+        $settings = $rendered[SettingsDocGenerator::SETTINGS_DOC];
+        self::assertSame($settings, SettingsDocGenerator::replaceBlock($settings, '', $generator->everyKeyTable()));
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function badMarkerPages(): iterable
+    {
+        yield 'no markers' => ['no markers here'];
+        yield 'two pairs' => ["<!-- settings:begin -->\n<!-- settings:end -->\n<!-- settings:begin -->\n<!-- settings:end -->"];
+        yield 'end before begin' => ["<!-- settings:end -->\n<!-- settings:begin -->"];
+    }
+
+    /** A lost or doubled marker is an error, never a guess about where the table goes. */
+    #[DataProvider('badMarkerPages')]
+    public function testAMissingOrDoubledMarkerPairIsRefused(string $text): void
+    {
+        $this->expectException(\RuntimeException::class);
+        SettingsDocGenerator::replaceBlock($text, '', 'x');
+    }
+
+    public function testTheTiersCellReadsTheDefinitionSources(): void
+    {
+        $tiers = static fn (string $key): string => SettingsDocGenerator::tiers(
+            SettingsSchema::byKey($key) ?? throw new \LogicException($key),
+        );
+
+        self::assertSame('P U C', $tiers('theme'));
+        self::assertSame('U C', $tiers('permissionMode'));
+        self::assertSame('C', $tiers('trustedProjectHooks'));
+    }
+}
