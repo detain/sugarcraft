@@ -1,0 +1,18 @@
+ session picker · 7 shown
+──────────────────────────────────────────────────────────
+ ↑↓ browse · ↵ open · esc close · / filter · r rename · d d…
+╭ sessions ────────────────────────────────────────────────────╮
+│ Pinned                                                       │
+│ ▶ ★ Auth refactor                  2m  41 turns ⠋ live ✎ ★ ✕ │
+│ Today                                                        │
+│     Fix flaky PTY test             1h  12 turns +1 ag        │
+│     └ explore · Map the login…     1h   0 turns              │
+│     漢字のセッション名前がと…      3h    1 turn              │
+│ Yesterday                                                    │
+│     (untitled d4000000…)           1d    1 turn ⧗ bg         │
+│     Auth refactor (branch)         1d  38 turns ⑂            │
+│ 1 Dec 2025                                                   │
+│     Old thing                  Dec'25   2 turns              │
+╰──────────────────────────────────────────────────────────────╯
+───────────────────────────────────────────────────────────
+  /work/app · main · "make the login controller use…

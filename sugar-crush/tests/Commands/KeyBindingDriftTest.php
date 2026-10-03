@@ -254,8 +254,8 @@ final class KeyBindingDriftTest extends TestCase
      * missed" claim was true and unasserted, so the tightening could be reverted
      * to its loose pre-fix form without a single test going red.
      *
-     * Zero false positives across all 70 declared rows — and THAT is the domain
-     * of the zero. It says nothing about prose not yet written; it says those 69
+     * Zero false positives across all 85 declared rows — and THAT is the domain
+     * of the zero. It says nothing about prose not yet written; it says those 85
      * rows are clean under this pattern.
      *
      * The eight rows the draft's editing keyboard added are what it cost to keep
@@ -1106,7 +1106,12 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertSame(
                     0,
                     $previewed->sessionPicker()?->selectedIndex(),
-                    'and must leave the highlight where it was — that is the whole promise',
+                    'and must leave the highlight where it was',
+                );
+                $this->assertSame(
+                    $open->sessionPicker()?->selectedSession()['sessionId'] ?? null,
+                    $previewed->sessionPicker()?->preview()['id'] ?? null,
+                    'and must load the preview of THAT session — the promise the row makes',
                 );
             },
             // Both halves of "to the current git branch, OR ALL", and neither
@@ -1114,11 +1119,11 @@ final class KeyBindingDriftTest extends TestCase
             // satisfied the old form too.
             //
             // Driven from inside a throwaway repo on a KNOWN branch, because
-            // SessionPicker::getCurrentGitBranch() shells out to git against
-            // the process CWD: run from this checkout the answer is whatever
-            // branch happens to be out, and in a detached-HEAD PR build it is
-            // null — which would make BOTH directions assert null against null
-            // and observe nothing at all.
+            // the picker filters by the branch SessionStore::gitBranchAt()
+            // reads from the process CWD when the picker opens: run from this
+            // checkout the answer is whatever branch happens to be out, and in
+            // a detached-HEAD PR build it is null — which would make BOTH
+            // directions assert null against null and observe nothing at all.
             'picker.branch' => function (array $k): void {
                 $this->inGitRepoOnBranch('drift-branch', function () use ($k): void {
                     $open = $this->chatWithPicker(3);
@@ -1148,9 +1153,147 @@ final class KeyBindingDriftTest extends TestCase
                     );
                 });
             },
+            // Both halves: with no filter Esc closes; with a filter typed the
+            // first Esc clears it and leaves the list up, the second closes.
             'picker.close' => function (array $k): void {
                 [$closed] = $this->chatWithPicker()->update($k[0]);
                 $this->assertNull($closed->sessionPicker());
+
+                $filtered = $this->pressAll($this->chatWithPicker(), [new KeyMsg(KeyType::Char, '/'), new KeyMsg(KeyType::Char, '2')]);
+                $this->assertSame('2', $filtered->sessionPicker()?->query(), 'fixture: a filter is typed');
+                [$cleared] = $filtered->update($k[0]);
+                $this->assertNotNull($cleared->sessionPicker(), 'the first press clears the filter, it does not close');
+                $this->assertSame('', $cleared->sessionPicker()?->query());
+                [$closedToo] = $cleared->update($k[0]);
+                $this->assertNull($closedToo->sessionPicker(), 'and the next one closes');
+            },
+            // The key opens the filter, and what is typed after it is a query
+            // rather than a row key: `2` narrows to the one session it names.
+            'picker.filter' => function (array $k): void {
+                $open = $this->chatWithPicker(3);
+                [$filtering] = $open->update($k[0]);
+                $this->assertTrue($filtering->sessionPicker()?->isFiltering(), 'the key must open the filter');
+
+                [$typed] = $filtering->update(new KeyMsg(KeyType::Char, '2'));
+                $this->assertSame(
+                    ['session-2'],
+                    array_column($typed->sessionPicker()?->filteredSessions() ?? [], 'sessionId'),
+                    'typed text must filter the list',
+                );
+            },
+            'picker.rename' => function (array $k): void {
+                $open = $this->chatWithPicker(3);
+                $id = $this->highlightedOther($open);
+                $before = (string) $open->sessionStore()?->getSession($id)['name'];
+
+                [$renaming] = $open->update($k[0]);
+                $this->assertTrue($renaming->sessionPicker()?->isRenaming(), 'the key must open the inline rename');
+                $saved = $this->pressAll($renaming, [new KeyMsg(KeyType::Char, '!'), new KeyMsg(KeyType::Enter)]);
+
+                $row = $saved->sessionStore()?->getSession($id);
+                $this->assertSame($before . '!', $row['name'] ?? null, 'Enter must save the edited title');
+                $this->assertSame('user', $row['title_source'] ?? null, 'as a user title the auto-titler leaves alone');
+                $this->assertNotNull($saved->sessionPicker(), 'and leave the list up');
+            },
+            // "Pressed twice": the first press only arms, the second deletes.
+            'picker.delete' => function (array $k): void {
+                $open = $this->chatWithPicker(3);
+                $id = $this->highlightedOther($open);
+
+                [$armed] = $open->update($k[0]);
+                $this->assertSame($id, $armed->sessionPicker()?->armedDeleteId(), 'the first press arms');
+                $this->assertNotNull($armed->sessionStore()?->getSession($id), 'and deletes nothing yet');
+
+                [$deleted] = $armed->update($k[0]);
+                $this->assertNull($deleted->sessionStore()?->getSession($id), 'the second press deletes');
+            },
+            // Confirms an armed delete AND takes the branch under it, which a
+            // plain second `d` detaches and keeps.
+            'picker.delete-children' => function (array $k): void {
+                $chat = $this->chatWithSessions(3);
+                $branch = $chat->sessionStore()?->forkSession('session-3');
+                $this->assertIsString($branch);
+                [$open] = $chat->update($this->pressLabelled('chat.session-picker'));
+                $open = $this->highlight($open, 'session-3');
+
+                $deleted = $this->pressAll($open, [new KeyMsg(KeyType::Char, 'd'), $k[0]]);
+                $this->assertNull($deleted->sessionStore()?->getSession('session-3'), 'the armed row is deleted');
+                $this->assertNull($deleted->sessionStore()?->getSession($branch), 'and so is its branch');
+            },
+            'picker.pin' => function (array $k): void {
+                $open = $this->chatWithPicker(3);
+                $id = $this->highlightedOther($open);
+
+                [$pinned] = $open->update($k[0]);
+                $this->assertSame(1, (int) $pinned->sessionStore()?->getSession($id)['pinned'], 'the first press pins');
+                $this->assertTrue($pinned->sessionPicker()?->selectedSession()['pinned'] ?? false, 'the highlight follows the row');
+
+                [$unpinned] = $pinned->update($k[0]);
+                $this->assertSame(0, (int) $unpinned->sessionStore()?->getSession($id)['pinned'], 'and the second unpins');
+            },
+            'picker.fork' => function (array $k): void {
+                $open = $this->chatWithPicker(3);
+                $id = $this->highlightedOther($open);
+
+                [$forked] = $open->update($k[0]);
+                $this->assertNull($forked->sessionPicker(), 'forking switches away from the list');
+                $now = $forked->currentSessionId();
+                $this->assertNotNull($now);
+                $this->assertNotContains($now, ['session-1', 'session-2', 'session-3'], 'onto a NEW session');
+                $this->assertSame($id, $forked->sessionStore()?->getSession($now)['parent_id'] ?? null, 'copied from the highlighted one');
+            },
+            'picker.archive' => function (array $k): void {
+                $open = $this->chatWithPicker(3);
+                $id = $this->highlightedOther($open);
+
+                [$archived] = $open->update($k[0]);
+                $this->assertNotNull($archived->sessionStore()?->getSession($id)['archived_at'] ?? null, 'the row is archived');
+                $this->assertNotContains($id, array_column($archived->sessionPicker()?->filteredSessions() ?? [], 'sessionId'), 'and leaves the list');
+            },
+            'picker.unarchive' => function (array $k): void {
+                $chat = $this->chatWithSessions(3);
+                $chat->sessionStore()?->archive('session-3');
+                [$open] = $chat->update($this->pressLabelled('chat.session-picker'));
+                $open = $this->highlight($this->pressAll($open, [new KeyMsg(KeyType::Char, 'a')]), 'session-3');
+
+                [$back] = $open->update($k[0]);
+                $row = $back->sessionStore()?->getSession('session-3');
+                $this->assertIsArray($row);
+                $this->assertNull($row['archived_at'], 'the row is back');
+            },
+            // Both halves of "Show or hide".
+            'picker.archived' => function (array $k): void {
+                $chat = $this->chatWithSessions(3);
+                $chat->sessionStore()?->archive('session-3');
+                [$open] = $chat->update($this->pressLabelled('chat.session-picker'));
+                $ids = fn(Chat $c): array => array_column($c->sessionPicker()?->filteredSessions() ?? [], 'sessionId');
+                $this->assertNotContains('session-3', $ids($open), 'fixture: archived rows start hidden');
+
+                [$shown] = $open->update($k[0]);
+                $this->assertContains('session-3', $ids($shown), 'the first press shows them');
+                [$hidden] = $shown->update($k[0]);
+                $this->assertNotContains('session-3', $ids($hidden), 'the second hides them again');
+            },
+            'picker.children' => function (array $k): void {
+                $chat = $this->chatWithSessions(3);
+                $child = $chat->sessionStore()?->createChildSession(
+                    'session-3',
+                    \SugarCraft\Crush\Session\SessionKind::Subagent,
+                    'explore',
+                    'call-1',
+                    'openai',
+                    'gpt-4',
+                    'Map the login flow',
+                );
+                $this->assertIsString($child);
+                [$open] = $chat->update($this->pressLabelled('chat.session-picker'));
+                $ids = fn(Chat $c): array => array_column($c->sessionPicker()?->filteredSessions() ?? [], 'sessionId');
+                $this->assertNotContains($child, $ids($open), 'fixture: sub-agent rows start hidden');
+
+                [$shown] = $open->update($k[0]);
+                $this->assertContains($child, $ids($shown), 'the first press shows them');
+                [$hidden] = $shown->update($k[0]);
+                $this->assertNotContains($child, $ids($hidden), 'the second hides them again');
             },
 
             // ── Permission prompt ────────────────────────────────────────
@@ -1413,6 +1556,18 @@ final class KeyBindingDriftTest extends TestCase
             // clicked is the one with an in-model effect, at whatever index the
             // current match order puts it — so this also pins that the zone
             // suffix and the match list are indexed the same way.
+            // `★` pins and `✎` opens the rename — two of the three glyphs, on
+            // the highlighted row's own zones.
+            'mouse.session-action' => function (): void {
+                $open = $this->chatWithPicker(3);
+                $id = $this->highlightedOther($open);
+
+                $pinned = $this->clickZone($open, Renderer::SESSION_ACT_ZONE_PREFIX . '0:pin');
+                $this->assertSame(1, (int) $pinned->sessionStore()?->getSession($id)['pinned'], 'clicking the star pins');
+
+                $renaming = $this->clickZone($pinned, Renderer::SESSION_ACT_ZONE_PREFIX . $pinned->sessionPicker()?->selectedIndex() . ':rename');
+                $this->assertTrue($renaming->sessionPicker()?->isRenaming(), 'clicking the pencil opens the rename');
+            },
             'mouse.palette-row' => function (): void {
                 $chat = $this->chatWithPalette();
                 $at = array_search(self::PALETTE_ROW_WITH_AN_EFFECT, $chat->paletteMatches(), true);
@@ -1485,6 +1640,41 @@ final class KeyBindingDriftTest extends TestCase
         $this->assertNotNull($open->sessionPicker(), 'fixture: Ctrl+R must open the picker');
 
         return $open;
+    }
+
+    /**
+     * The highlighted picker row's id, asserted NOT to be the session on
+     * screen — delete and archive refuse that one, so an observation on it
+     * would see a refusal rather than the binding.
+     */
+    private function highlightedOther(Chat $open): string
+    {
+        $id = $open->sessionPicker()?->selectedSession()['sessionId'] ?? null;
+        $this->assertIsString($id, 'fixture: a row must be highlighted');
+        $this->assertNotSame($open->currentSessionId(), $id, 'fixture: the highlighted row must not be the current session');
+
+        return $id;
+    }
+
+    /** Walk the picker's highlight down onto session $id. */
+    private function highlight(Chat $open, string $id): Chat
+    {
+        for ($i = 0; $i < 10 && ($open->sessionPicker()?->selectedSession()['sessionId'] ?? null) !== $id; $i++) {
+            [$open] = $open->update(new KeyMsg(KeyType::Down));
+        }
+        $this->assertSame($id, $open->sessionPicker()?->selectedSession()['sessionId'] ?? null, "fixture: {$id} must be reachable");
+
+        return $open;
+    }
+
+    /** @param list<KeyMsg> $keys */
+    private function pressAll(Chat $chat, array $keys): Chat
+    {
+        foreach ($keys as $key) {
+            [$chat] = $chat->update($key);
+        }
+
+        return $chat;
     }
 
     /**
@@ -1894,6 +2084,7 @@ final class KeyBindingDriftTest extends TestCase
         'mouse.tool-call',
         'mouse.side-row',
         'mouse.palette-row',
+        'mouse.session-action',
     ];
 
     /**

@@ -1052,7 +1052,7 @@ final class KeyHelpTest extends TestCase
         // Two sizes, because the hint is a different string in each: 100x30
         // overflows the box (69 live rows plus 9 headers and 8 separators = 86
         // content lines, against a 25-line body) so the footer carries the
-        // scroll clause as well, while 100x95 fits the whole list and drops it.
+        // scroll clause as well, while 100x106 fits the whole list and drops it.
         //
         // The live-row count moved 53 -> 54 when `permission.rearm` was
         // declared: a permission prompt disarmed by a stray keystroke can only
@@ -1087,7 +1087,11 @@ final class KeyHelpTest extends TestCase
         // a body of 85 against 86 lines. The 0 below is what measures that, so
         // the "fits" half of this test cannot quietly become a second overflow
         // case. The side-row click binding added one more row (61 -> 62).
-        foreach ([[100, 30, 62], [100, 95, 0]] as [$cols, $rows, $expectedOverflow]) {
+        // The revamped session picker (Appendix P-A2) declared eleven more —
+        // ten picker rows and `mouse.session-action` — so the list is 98
+        // content lines: 62 -> 73 at 100x30, and the fitting size grew to
+        // 100x106 (a body of 101 against 98 lines).
+        foreach ([[100, 30, 73], [100, 106, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1151,15 +1155,16 @@ final class KeyHelpTest extends TestCase
                 "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
                 . 'column of margin, and it is this test that keeps it real',
             );
-            // 95 rows, not 80: the list is 86 content lines now (69 live rows,
-            // 9 headers, 8 separators), and an 80-row terminal gives a body of
-            // 80 - 2 - 2 - 1 = 75, so it would paint the SCROLLING form and this
-            // assertion would be measuring the same string twice. See
+            // 106 rows, not 80: the list is 98 content lines now (81 live rows,
+            // 9 headers, 8 separators; it was 86 before the eleven session
+            // picker rows of Appendix P-A2), and an 80-row terminal gives a
+            // body of 80 - 2 - 2 - 1 = 75, so it would paint the SCROLLING form
+            // and this assertion would be measuring the same string twice. See
             // testTheFooterSaysThatTheSecondQuestionMarkTypesOne() for the same
             // arithmetic spelled out.
             $this->assertSame(
                 35,
-                Width::of($this->footer($this->chat('', $cols, 95))),
+                Width::of($this->footer($this->chat('', $cols, 106))),
                 'and the non-scrolling form, which is what a box tall enough for the whole list paints',
             );
         }

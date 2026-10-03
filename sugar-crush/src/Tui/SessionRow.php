@@ -19,17 +19,17 @@ use SugarCraft\Forms\ItemList\ItemList;
  *
  * The picker paints its own chrome ({@see SessionPicker::render()}) so this
  * row object never reaches the screen — it exists to give the widget a stable
- * item identity per session id and to carry the one field the model needs for
- * its (disabled) filter path. The row text stays sanitized by
- * {@see \SugarCraft\Crush\Chat::sanitizeSessionField()} upstream, which is
- * also why {@see filterValue()} deliberately composes nothing: there is no
- * second copy of the label to keep scrubbed.
+ * item identity per session id. Filtering is the picker's own (`/`, ranked by
+ * candy-fuzzy over title, last prompt, agent, id and branch); the widget's
+ * filter path stays disabled, so {@see filterValue()} composes nothing. The
+ * row text arrives sanitized by
+ * {@see \SugarCraft\Crush\Chat::sanitizeSessionField()} upstream.
+ *
+ * Not to be confused with {@see \SugarCraft\Crush\Session\SessionRow}, the
+ * typed store row the host builds the picker's row arrays from.
  */
 final class SessionRow implements Item
 {
-    /**
-     * @param array{sessionId: string, sessionName: string} $session
-     */
     public function __construct(
         private readonly string $sessionId,
         private readonly string $title,
@@ -37,7 +37,7 @@ final class SessionRow implements Item
     }
 
     /**
-     * @param array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string} $session
+     * @param array{sessionId: string, sessionName: string} $session a picker row; see {@see SessionPicker}'s `Row` shape
      */
     public static function fromSession(array $session): self
     {

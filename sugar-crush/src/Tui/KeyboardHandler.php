@@ -211,8 +211,14 @@ final class KeyboardHandler
         // is the whole point of docking a pane you cannot type into. The
         // sidebar-era rule that yielded Tab from Files/Tools too pinned away
         // — see SlashMenuTabCompletionTest::testTabFromADockPaneCyclesFocusEvenWithThePopupOpen().
+        //
+        // The session picker is the second Chat surface that answers Tab: it
+        // shows or hides sub-agent rows (`picker.children`), and Chat routes
+        // every key to the open picker before anything else, so yielding
+        // there lands on a live arm rather than a dead keystroke.
         if ($msg->type === KeyType::Tab && !$msg->ctrl && !$msg->alt && !$msg->shift) {
-            return $app->pane !== Pane::Chat || !self::chatIsCompletingSlashCommand($app);
+            return $app->pane !== Pane::Chat
+                || !(self::chatIsCompletingSlashCommand($app) || $app->chat?->sessionPicker() !== null);
         }
 
         // Shift+Tab cycles panes BACKWARD, and is claimed UNCONDITIONALLY --

@@ -303,13 +303,9 @@ final class SlashMenuTabCompletionTest extends TestCase
         );
         $this->assertNotNull($palette->chat->palette(), 'fixture: the palette must be open');
 
-        $picker = $this->shell()->withChat(new Chat(
-            inputBuf: '/comp',
-            sessionPicker: SessionPicker::new([]),
-        ));
         $reference = $this->shell()->withChat(new Chat(inputBuf: '/comp', keyHelp: 0));
 
-        foreach (['palette' => $palette, 'sessionPicker' => $picker, 'keyHelp' => $reference] as $label => $app) {
+        foreach (['palette' => $palette, 'keyHelp' => $reference] as $label => $app) {
             $this->assertNotSame([], $app->chat->slashMenuMatches(), "{$label}: fixture, the popup's data is there");
             $this->assertFalse($app->chat->slashMenuOwnsTab(), "{$label}: but Chat will not act on the Tab");
 
@@ -322,6 +318,26 @@ final class SlashMenuTabCompletionTest extends TestCase
         // The modal itself survived the Tab in the one case that is reachable
         // from real input -- Tab is a pane cycle here, not a dismiss.
         $this->assertNotNull($this->press($palette, [self::tab()])->chat->palette());
+    }
+
+    /**
+     * The session picker is the modal that DOES bind Tab — it shows or hides
+     * sub-agent rows (`picker.children`) — so the shell yields it there, and
+     * the keystroke lands on the picker instead of cycling the pane.
+     */
+    public function testTabReachesAnOpenSessionPicker(): void
+    {
+        $picker = $this->shell()->withChat(new Chat(
+            inputBuf: '/comp',
+            sessionPicker: SessionPicker::new([]),
+        ));
+        $this->assertFalse($picker->chat->sessionPicker()?->showsChildren(), 'fixture: children start hidden');
+
+        $next = $this->press($picker, [self::tab()]);
+
+        $this->assertSame(Pane::Chat, $next->pane, 'Tab must not cycle the pane while the picker is up');
+        $this->assertTrue($next->chat->sessionPicker()?->showsChildren(), 'the picker took the Tab');
+        $this->assertSame('/comp', $next->chat->inputBuf, 'and it must not have completed');
     }
 
     /**

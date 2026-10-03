@@ -7043,6 +7043,14 @@ final class Chat implements Model
             return $this->selectPaletteItem(substr($zoneId, strlen($pickerPrefix)));
         }
 
+        // Appendix P §3.2. One glyph of the highlighted picker row's `✎ ★ ✕`
+        // cluster. Checked before the row prefix: the glyph zones sit inside
+        // the row's zone and name a narrower intent.
+        $actPrefix = Renderer::SESSION_ACT_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $actPrefix)) {
+            return $this->runSessionRowAct($zoneId);
+        }
+
         // E744 WS4. A picker row, keyed by the ABSOLUTE filtered row index it
         // is painted at (see {@see sessionRowIndex()} for the validation that
         // put the zone on the whitelist in the first place).
@@ -7384,6 +7392,25 @@ final class Chat implements Model
             return null;
         }
 
+        // An action glyph (`session-act:<row>:<verb>`) passes only for the
+        // HIGHLIGHTED row and a verb its painted cluster actually shows —
+        // the cluster is drawn on that row alone, so any other pairing is a
+        // zone nothing painted.
+        $actPrefix = Renderer::SESSION_ACT_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $actPrefix)) {
+            if (preg_match('/\A(\d+):([a-z]+)\z/', substr($zoneId, strlen($actPrefix)), $m) !== 1) {
+                return null;
+            }
+            [$width, $height] = SessionPicker::overlayGeometry($this->cols(), $this->rows(), Renderer::SHELL_CHROME_COLS);
+            $row = (int) $m[1];
+
+            return $row === $this->sessionPicker->selectedIndex()
+                && array_key_exists($m[2], $this->sessionPicker->actionSegments($width, $this->theme()))
+                && array_key_exists($row, $this->sessionPicker->rowZoneLines($width, $height, $this->theme()))
+                ? $row
+                : null;
+        }
+
         $prefix = Renderer::SESSION_ROW_ZONE_PREFIX;
         if (!str_starts_with($zoneId, $prefix)) {
             return null;
@@ -7436,6 +7463,36 @@ final class Chat implements Model
         }
 
         return [$this->mutate(['sessionPicker' => $next]), $cmd === null ? null : $this->relayWidgetCmd($cmd)];
+    }
+
+    /**
+     * A click on one glyph of the highlighted picker row's cluster: `✎`
+     * renames, `★` pins, `✕` arms the delete (and a second `✕` confirms it).
+     * Each is the SAME keystroke path the keyboard takes — the Ctrl alias,
+     * which means the same thing in and out of the filter — so the mouse
+     * cannot do anything the keys cannot, and every refusal applies to both.
+     *
+     * The zone was whitelisted by {@see sessionRowIndex()}; it is re-checked
+     * here because the picker can have changed between press and release.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function runSessionRowAct(string $zoneId): array
+    {
+        if ($this->sessionRowIndex($zoneId) === null) {
+            return [$this, null];
+        }
+
+        $rune = match (substr($zoneId, (int) strrpos($zoneId, ':') + 1)) {
+            'rename' => 'e',
+            'pin' => 'f',
+            'delete' => 'd',
+            default => null,
+        };
+
+        return $rune === null
+            ? [$this, null]
+            : $this->handleSessionPickerKey(new KeyMsg(KeyType::Char, $rune, ctrl: true));
     }
 
     /**
@@ -14368,12 +14425,13 @@ final class Chat implements Model
     }
 
     /**
-     * Handle /sessions command — OPEN the live {@see SessionPicker} overlay
-     * (crush_feat.md section 5 E8).
+     * Handle /sessions — OPEN the live {@see SessionPicker} overlay
+     * (crush_feat.md section 5 E8), filtered when an argument is given:
+     * `/sessions auth` opens it with `auth` already in the `/` filter
+     * (Appendix P §3.2).
      *
      * Until E8 this folded the picker's first frame into an assistant turn,
-     * so the widget's ↑/↓/Enter/Space/Ctrl+B keyboard surface was rendered
-     * but unreachable — a screenshot of a picker, not a picker. It now
+     * so the widget's keyboard surface was rendered but unreachable. It now
      * latches a real instance on {@see $sessionPicker}; {@see update()}
      * routes every subsequent keystroke into it via
      * {@see handleSessionPickerKey()} and {@see Renderer::render()}
@@ -14393,14 +14451,16 @@ final class Chat implements Model
             return $this->sessionResponse($inputText, 'Session store not configured. Set a SessionStore to use /sessions.');
         }
 
-        $picker = $this->buildSessionPicker();
+        $query = self::commandArgument($inputText);
+        $picker = $this->buildSessionPicker($query);
         if ($picker === null) {
             return $this->sessionResponse($inputText, 'No sessions recorded yet.');
         }
 
         $next = $this->mutate([
             'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant(
-                'Session picker open — ↑/↓ or wheel browse, click selects, ↵ resume, space preview, esc close.',
+                'Session picker open — ↑/↓ or wheel browse, click selects, ↵ resume, / filter, '
+                . 'r rename, d delete, p pin, f fork, esc close.',
             )->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
@@ -14411,57 +14471,109 @@ final class Chat implements Model
     }
 
     /**
-     * Build a {@see SessionPicker} over every row
-     * {@see SessionStore::listSessions()} currently returns, or null when
+     * Build a {@see SessionPicker} over the store's sessions, or null when
      * there is no store or no session to pick.
      *
      * Null (rather than an empty picker) is what keeps Ctrl+R from opening
-     * a modal the user cannot do anything with; both call sites treat it as
+     * a modal the user cannot do anything with; every call site treats it as
      * "don't open".
      *
-     * The row text is scrubbed here, at the boundary, because the picker's
-     * own output reaches the screen verbatim: {@see Renderer} composites the
-     * widget's already-styled frame and cannot re-sanitize it without
-     * destroying SessionPicker's legitimate SGR. Session names are model
-     * output on the live path ({@see scheduleTitleGeneration()} auto-titles
-     * via the backend), so they must not be trusted — see
-     * {@see sanitizeSessionField()}.
+     * The work tree's git branch is read HERE, once, for Ctrl+B to filter by
+     * ({@see SessionStore::gitBranchAt()} reads `HEAD` and runs nothing): the
+     * picker used to `exec` git on every Ctrl+B, a blocking child process on
+     * the key path.
+     *
+     * A $query opens the filter with it and loads
+     * {@see SessionPicker::SEARCH_LIMIT} rows to rank over, the same load the
+     * `/` key triggers.
      */
-    private function buildSessionPicker(): ?SessionPicker
+    private function buildSessionPicker(string $query = ''): ?SessionPicker
     {
         if ($this->sessionStore === null) {
             return null;
         }
 
-        $rows = $this->sessionStore->listSessions(SessionPicker::PAGE_SIZE);
+        $limit = $query === '' ? SessionPicker::PAGE_SIZE : SessionPicker::SEARCH_LIMIT;
+        [$rows, $more] = $this->sessionPickerRows($limit, false);
         if ($rows === []) {
             return null;
         }
 
-        // A fetch that FILLS its limit may mean more rows live upstream — the
-        // only thing that arms the WS5 load-more edge (E744: the store API
-        // pages by widening the top-N limit, there is no OFFSET to walk).
-        return SessionPicker::new(
-            self::sanitizeSessionRows($rows),
-            SessionPicker::PAGE_SIZE,
-            count($rows) >= SessionPicker::PAGE_SIZE,
+        $picker = SessionPicker::new(
+            $rows,
+            $limit,
+            $more,
+            SessionStore::gitBranchAt($this->projectRoot()),
+            $this->currentSessionId,
         );
+
+        return $query === '' ? $picker : $picker->withQuery($query);
+    }
+
+    /**
+     * Read one picker page from the store: the user's own sessions (main,
+     * branch and background, pinned first, newest first, archived ones only
+     * when $archived), the sub-agent sessions under them, and how many
+     * children each has — three queries, run when the picker opens or an
+     * action changes the store, never per keystroke.
+     *
+     * The second element says whether the page FILLED its limit, the only
+     * thing that arms the load-more edge (E744 WS5): the page is grown by
+     * widening the limit, not by an offset walk.
+     *
+     * @return array{0: list<array<string, mixed>>, 1: bool}
+     */
+    private function sessionPickerRows(int $limit, bool $archived): array
+    {
+        $store = $this->sessionStore;
+        if ($store === null) {
+            return [[], false];
+        }
+
+        $kinds = \SugarCraft\Crush\Session\SessionKind::class;
+        $query = \SugarCraft\Crush\Session\SessionQuery::new();
+        $top = $store->listSessionsFiltered(
+            $query->withKinds($kinds::Main, $kinds::Branch, $kinds::Background)
+                ->withIncludeArchived($archived)
+                ->withPinnedFirst()
+                ->withLimit($limit),
+        );
+        if ($top === []) {
+            return [[], false];
+        }
+
+        $ids = array_map(static fn(\SugarCraft\Crush\Session\SessionRow $row): string => $row->id, $top);
+        $parents = array_flip($ids);
+        $children = $store->childCount($ids);
+        // Newest sub-agent rows first; 500 bounds the read on a store that
+        // has run a great many Task calls. Only children of a loaded row are
+        // kept — the rest have nothing to be shown under.
+        $subagents = array_values(array_filter(
+            $store->listSessionsFiltered($query->withKinds($kinds::Subagent)->withIncludeArchived()->withLimit(500)),
+            static fn(\SugarCraft\Crush\Session\SessionRow $row): bool => $row->parentId !== null && isset($parents[$row->parentId]),
+        ));
+        $subagentCount = [];
+        foreach ($subagents as $row) {
+            $subagentCount[$row->parentId] = ($subagentCount[$row->parentId] ?? 0) + 1;
+        }
+
+        $live = $this->inFlight ? $this->currentSessionId : null;
+
+        return [self::sanitizeSessionRows([...$top, ...$subagents], $children, $subagentCount, $live), count($top) >= $limit];
     }
 
     /**
      * Consume the picker's load-more edge (E744 WS5) — the one crush consumer
      * of the r88 ItemList `LoadMoreMsg`.
      *
-     * SOURCE-OF-NEXT-PAGE, as E744 demands it be decided rather than implied:
-     * {@see SessionStore::listSessions()} takes a LIMIT and no OFFSET, so the
-     * page is grown by WIDENING the top-N fetch (`limit + PAGE_SIZE`), not by
-     * a cursor walk. The order is deterministic (`updated_at DESC, id DESC`),
-     * so a widened prefix is stable for the lifetime of one opened picker; a
-     * session SAVED mid-browse can shift the tail of the page, which a re-open
-     * corrects — accepted, and cheaper than teaching the store an offset it
-     * has never needed. A fetch that comes back SHORT closes the edge
-     * (`moreInStore = false`), so the last row stops asking forever and the
-     * browse never refetches the same exhausted page.
+     * The page is grown by WIDENING the top-N fetch (`limit + PAGE_SIZE`),
+     * not by a cursor walk. The order is deterministic (pinned, then
+     * `updated_at DESC, rowid DESC`), so a widened prefix is stable for the
+     * lifetime of one opened picker; a session SAVED mid-browse can shift the
+     * tail of the page, which a re-open corrects. A fetch that comes back
+     * SHORT closes the edge, so the last row stops asking. A search has
+     * already loaded its rows and pages nothing
+     * ({@see SessionPicker::needsStoreFetch()}).
      *
      * The relayed Cmd that carried the Msg here has already been spent — this
      * method returns no Cmd of its own; growth is pure state.
@@ -14476,45 +14588,70 @@ final class Chat implements Model
         }
 
         $limit = $picker->nextFetchLimit();
-        $rows = $this->sessionStore->listSessions($limit);
+        [$rows, $more] = $this->sessionPickerRows($limit, $picker->showsArchived());
 
-        return [$this->mutate([
-            'sessionPicker' => $picker->withFetchedRows(
-                self::sanitizeSessionRows($rows),
-                $limit,
-                count($rows) >= $limit,
-            ),
-        ]), null];
+        return [$this->mutate(['sessionPicker' => $picker->withFetchedRows($rows, $limit, $more)]), null];
     }
 
     /**
-     * Map raw store rows onto the picker's sanitized row shape.
+     * Re-read the store into $picker after an action changed it, at the
+     * page size it already shows, keeping the highlight on $keepId (or on
+     * the row it was on) when that row is still listed.
+     */
+    private function reloadSessionPicker(SessionPicker $picker, ?string $keepId = null): SessionPicker
+    {
+        $limit = max($picker->fetchLimit(), $picker->query() !== '' || $picker->isFiltering() ? SessionPicker::SEARCH_LIMIT : 0);
+        [$rows, $more] = $this->sessionPickerRows($limit, $picker->showsArchived());
+
+        return $picker->withReloadedRows($rows, $limit, $more, $keepId);
+    }
+
+    /**
+     * Map typed store rows onto the picker's sanitized row shape.
      *
      * `summary` is the session's last prompt (`last_preview`), not its
      * system prompt: every session shares nearly the same system prompt, so
      * the row and footer used to read identically for all of them (audit B3).
-     * `cwd` is where the session was opened, for the footer.
+     * `gitBranch` is the branch the session was opened on (audit B1). An
+     * unnamed session shows as `(untitled <id8>…)`; `title` keeps the real
+     * name (null when there is none), which is what an inline rename starts
+     * from.
      *
-     * @param list<array<string, mixed>> $rows
+     * @param list<\SugarCraft\Crush\Session\SessionRow> $rows
+     * @param array<string, int>                          $children  direct children per id, every kind
+     * @param array<string, int>                          $subagents sub-agent children per id
+     * @param ?string                                     $liveId    the session a turn is running in
      *
-     * @return list<array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string, cwd: string|null}>
+     * @return list<array<string, mixed>>
      */
-    private static function sanitizeSessionRows(array $rows): array
+    private static function sanitizeSessionRows(array $rows, array $children = [], array $subagents = [], ?string $liveId = null): array
     {
+        $field = static fn(?string $text): ?string => ($clean = self::sanitizeSessionField((string) $text)) !== '' ? $clean : null;
+
         return array_map(
-            static function (array $row): array {
-                $id = (string) ($row['id'] ?? '');
-                $name = self::sanitizeSessionField((string) ($row['name'] ?? ''));
+            static function (\SugarCraft\Crush\Session\SessionRow $row) use ($field, $children, $subagents, $liveId): array {
+                $name = $field($row->name);
 
                 return [
-                    'sessionId' => $id,
-                    'sessionName' => $name !== '' ? $name : $id,
-                    'summary' => self::sanitizeSessionField((string) ($row['last_preview'] ?? '')),
-                    // The branch the row was opened on (audit B1); null when
-                    // none was recorded, which Ctrl+B's filter leaves out.
-                    'gitBranch' => self::sanitizeSessionField((string) ($row['git_branch'] ?? '')) ?: null,
-                    'lastActivity' => (string) ($row['updated_at'] ?? ''),
-                    'cwd' => self::sanitizeSessionField((string) ($row['cwd'] ?? '')) ?: null,
+                    'sessionId' => $row->id,
+                    'sessionName' => $name ?? '(untitled ' . substr(self::sanitizeSessionField($row->id), 0, 8) . '…)',
+                    'title' => $name,
+                    'summary' => $field($row->lastPreview) ?? '',
+                    'gitBranch' => $field($row->gitBranch),
+                    'lastActivity' => $row->updatedAt,
+                    'cwd' => $field($row->cwd),
+                    'pinned' => $row->pinned,
+                    'archived' => $row->archived(),
+                    'kind' => $row->kind->value,
+                    'turns' => $row->turns,
+                    'provider' => $field($row->provider) ?? '',
+                    'model' => $field($row->model) ?? '',
+                    'status' => $field($row->status),
+                    'parentId' => $row->parentId,
+                    'agent' => $field($row->agent),
+                    'children' => $children[$row->id] ?? 0,
+                    'subagents' => $subagents[$row->id] ?? 0,
+                    'live' => $liveId !== null && $row->id === $liveId,
                 ];
             },
             $rows,
@@ -14552,21 +14689,18 @@ final class Chat implements Model
 
     /**
      * Route one keystroke into the open session picker (crush_feat.md
-     * section 5 E8).
+     * section 5 E8, Appendix P §3.2) and act on what it reports:
      *
-     * Translates the {@see KeyMsg} into the key names
-     * {@see SessionPicker::handleKey()} already understands and acts on the
-     * action it reports back:
-     *
-     * - `browse` — keep the navigated picker.
-     * - `resume` — switch {@see currentSessionId()} to the highlighted row
-     *   and close the overlay.
-     * - `preview` — no state change: the picker's own footer already shows
-     *   the selected session's summary, so Space is a deliberate no-op that
-     *   simply leaves the overlay up.
-     * - `close` / `null` — Escape closes; anything the widget does not bind
-     *   is swallowed rather than falling through to `inputBuf`, so a stray
-     *   letter cannot type into a chat box the user cannot see.
+     * - `browse` / `edit` — keep the navigated or edited picker.
+     * - `resume` — switch to the highlighted session and close the overlay.
+     * - `preview` — load the highlighted session's last messages into the
+     *   footer ({@see previewSessionInPicker()}).
+     * - `close` — Escape.
+     * - a {@see SessionListAction} — a store change or session switch, run by
+     *   {@see runSessionListAction()}.
+     * - null — a key the picker does not bind is swallowed rather than
+     *   falling through to `inputBuf`, so a stray letter cannot type into a
+     *   chat box the user cannot see.
      *
      * @return array{0:Chat,1:?\Closure}
      */
@@ -14577,7 +14711,7 @@ final class Chat implements Model
             return [$this, null];
         }
 
-        [$next, $action, $cmd] = $picker->handleKey(self::sessionPickerKeyName($msg));
+        [$next, $action, $cmd] = $picker->handleKey($msg);
         // E744 WS5: a navigation that ARRIVED on the last loaded row while the
         // store signalled more pages raises the widget's load-more Cmd. It
         // rides the same WS1 relay as the draft editor's clipboard writes —
@@ -14585,8 +14719,12 @@ final class Chat implements Model
         // untouched and the Program re-dispatches LoadMoreMsg into update().
         $relay = $cmd === null ? null : $this->relayWidgetCmd($cmd);
 
+        if ($action instanceof \SugarCraft\Crush\Tui\SessionListAction) {
+            return $this->runSessionListAction($next, $action);
+        }
+
         return match ($action) {
-            'browse' => [$this->mutate(['sessionPicker' => $next]), $relay],
+            'browse', 'edit' => [$this->mutate(['sessionPicker' => $next]), $relay],
             // Ctrl+R opens the picker mid-turn and ↑/↓/space browse it, but
             // resuming adopts another session's history and id wholesale — the
             // running turn's transcript replaced under it — so mid-turn that one
@@ -14595,32 +14733,167 @@ final class Chat implements Model
             'resume' => $this->inFlight
                 ? $this->refuseInFlightAction('Resume session')
                 : $this->resumeSelectedSession($next),
-            'preview' => [$this->mutate(['sessionPicker' => $next]), null],
+            'preview' => [$this->mutate(['sessionPicker' => $this->previewSessionInPicker($next)]), null],
             'close' => [$this->mutate(['sessionPicker' => null]), null],
             default => [$this, null],
         };
     }
 
     /**
-     * Map a {@see KeyMsg} onto the key name
-     * {@see SessionPicker::handleKey()} matches against.
+     * Carry out a row action the picker reported (Appendix P §3.2). Each
+     * writes the store, then re-reads it into the picker, so what the list
+     * shows is always what is stored.
      *
-     * Only the widget's own bindings are translated; everything else
-     * becomes a name it does not bind, which it answers with a null action.
+     * Refusals the picker cannot know about are made here and shown in its
+     * footer: fork switches sessions, so it waits out a running turn, and
+     * delete re-checks the session on screen in case the picker is stale.
+     * Delete removes the row's sub-agent children with it and DETACHES its
+     * branch and background children, which are conversations of their own;
+     * `D` ({@see SessionListAction::DeleteWithChildren}) takes those too.
+     *
+     * @return array{0:Chat,1:?\Closure}
      */
-    private static function sessionPickerKeyName(KeyMsg $msg): string
+    private function runSessionListAction(SessionPicker $picker, \SugarCraft\Crush\Tui\SessionListAction $action): array
     {
-        return match (true) {
-            $msg->type === KeyType::Up => 'up',
-            $msg->type === KeyType::Down => 'down',
-            $msg->type === KeyType::Enter => 'enter',
-            $msg->type === KeyType::Space => ' ',
-            $msg->type === KeyType::Escape => 'escape',
-            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'b' => 'ctrl+b',
-            // j/k only when unmodified - Ctrl+K is a shell chord.
-            $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt => $msg->rune,
-            default => '',
-        };
+        $store = $this->sessionStore;
+        if ($store === null) {
+            return [$this->mutate(['sessionPicker' => $picker]), null];
+        }
+
+        $Action = \SugarCraft\Crush\Tui\SessionListAction::class;
+        $selected = $picker->selectedSession();
+        $id = $selected['sessionId'] ?? null;
+        $keep = fn(SessionPicker $next): array => [$this->mutate(['sessionPicker' => $next]), null];
+
+        try {
+            switch ($action) {
+                case $Action::Filter:
+                    // One read when the filter opens; the ranking then runs over
+                    // these rows, so typing a query never touches the store.
+                    if ($picker->fetchLimit() >= SessionPicker::SEARCH_LIMIT) {
+                        return $keep($picker);
+                    }
+                    [$rows, $more] = $this->sessionPickerRows(SessionPicker::SEARCH_LIMIT, $picker->showsArchived());
+
+                    return $keep($picker->withFetchedRows($rows, SessionPicker::SEARCH_LIMIT, $more));
+
+                case $Action::ToggleChildren:
+                    // Sub-agent rows are loaded with every page; showing them is display state.
+                    return $keep($picker);
+
+                case $Action::ToggleArchived:
+                    return $keep($this->reloadSessionPicker($picker));
+
+                case $Action::Pin:
+                    if ($id === null) {
+                        return $keep($picker);
+                    }
+                    $store->setPinned($id, !($selected['pinned'] ?? false));
+
+                    return $keep($this->reloadSessionPicker($picker, $id));
+
+                case $Action::Archive:
+                    if ($id === null || $id === $this->currentSessionId) {
+                        return $keep($picker);
+                    }
+                    $store->archive($id);
+
+                    return $keep($this->reloadSessionPicker($picker)->withNotice('Archived. Press a to show archived sessions, u to bring one back.'));
+
+                case $Action::Unarchive:
+                    if ($id === null) {
+                        return $keep($picker);
+                    }
+                    $store->unarchive($id);
+
+                    return $keep($this->reloadSessionPicker($picker, $id));
+
+                case $Action::Delete:
+                case $Action::DeleteWithChildren:
+                    $target = $picker->armedDeleteId();
+                    if ($target === null || $target === $this->currentSessionId) {
+                        return $keep($picker->withNotice('This is the session on screen; switch to another before deleting it.'));
+                    }
+                    $deleted = $store->deleteSession($target, $action === $Action::DeleteWithChildren);
+                    $count = count($deleted);
+
+                    return $keep($this->reloadSessionPicker($picker)->withNotice(
+                        $count > 1 ? "Deleted the session and {$this->pluralSessions($count - 1)} under it." : 'Deleted the session.',
+                    ));
+
+                case $Action::Rename:
+                    $rename = $picker->renameTarget();
+                    if ($rename === null) {
+                        return $keep($picker);
+                    }
+                    $title = self::sanitizeSessionTitle(self::sanitizeSessionField($rename['title']));
+                    if ($title === '') {
+                        // The store has no "unnamed again" write: a blank title
+                        // would be a user title of '' that blocks auto-titling
+                        // for good, so it is refused instead.
+                        return $keep($picker->withNotice('A session name cannot be blank; Esc leaves it unchanged.'));
+                    }
+                    $store->renameSession($rename['id'], $title, \SugarCraft\Crush\Session\TitleSource::User);
+                    $next = $rename['id'] === $this->currentSessionId ? $this->mutate(['currentSessionName' => $title]) : $this;
+
+                    return [$next->mutate(['sessionPicker' => $this->reloadSessionPicker($picker, $rename['id'])]), null];
+
+                case $Action::Fork:
+                    if ($id === null) {
+                        return $keep($picker);
+                    }
+                    if ($this->inFlight) {
+                        return $this->refuseInFlightAction('Fork session');
+                    }
+                    // forkSession() copies the STORED transcript: write any
+                    // debounced change first, or the fork starts behind the
+                    // screen (audit R2) — the same flush /branch does.
+                    $this->transcriptWriter->flush();
+                    $forkId = $store->forkSession($id);
+
+                    return [$this->mutate(['sessionPicker' => null])->switchToSession($forkId, $this->storedSessionName($forkId)), null];
+            }
+        } catch (\Throwable $e) {
+            return $keep($picker->withNotice('Error: ' . self::sanitizeSessionField($e->getMessage())));
+        }
+
+        return $keep($picker);
+    }
+
+    /** "1 session" / "N sessions". */
+    private function pluralSessions(int $count): string
+    {
+        return $count . ($count === 1 ? ' session' : ' sessions');
+    }
+
+    /**
+     * Space: the highlighted session's last few messages, shown in the
+     * picker's footer. Read from the saved transcript on this one key (never
+     * per frame), each message cut to its first line and sanitized like
+     * every other stored string the picker paints.
+     */
+    private function previewSessionInPicker(SessionPicker $picker): SessionPicker
+    {
+        $selected = $picker->selectedSession();
+        if ($selected === null) {
+            return $picker;
+        }
+
+        $lines = [];
+        foreach (self::loadTranscript($this->sessionStore, $selected['sessionId']) as $message) {
+            if ($message->uiOnly || ($message->role !== Role::User && $message->role !== Role::Assistant)) {
+                continue;
+            }
+            $text = trim((string) preg_replace('/\s+/u', ' ', self::sanitizeSessionField($message->content)));
+            if ($text !== '') {
+                $lines[] = ($message->role === Role::User ? 'you: ' : 'ai:  ') . $text;
+            }
+        }
+
+        return $picker->withPreview(
+            $selected['sessionId'],
+            $lines === [] ? ['(no saved messages to preview)'] : array_slice($lines, -SessionPicker::PREVIEW_LINES),
+        );
     }
 
     /**
@@ -14628,11 +14901,15 @@ final class Chat implements Model
      * the overlay.
      *
      * `currentSessionName` is re-read from the store rather than taken from
-     * the picker row, whose `sessionName` falls back to the raw id for
-     * display: latching that id would look like a user-set title and
-     * suppress the auto-titling pass in
+     * the picker row, whose `sessionName` is a display label (an unnamed
+     * row reads `(untitled …)`): latching that would look like a user-set
+     * title and suppress the auto-titling pass in
      * {@see scheduleTitleGeneration()}, which skips any Chat that already
      * has a `currentSessionName`.
+     *
+     * A sub-agent row is not switched to: it is a record of a delegated run,
+     * not a conversation to continue, so Enter shows its last messages in
+     * the footer instead.
      *
      * @return array{0:Chat,1:?\Closure}
      */
@@ -14643,22 +14920,14 @@ final class Chat implements Model
             return [$this->mutate(['sessionPicker' => null]), null];
         }
 
-        $sessionId = $selected['sessionId'];
-        $name = null;
-        // Read the store back at the SAME limit the picker's page was fetched
-        // from (E744 WS5): after a load-more the selected row can live past
-        // the default page, and a missed lookup would silently drop the real
-        // name to null — suppressing nothing visible but mis-naming the
-        // resume notice.
-        foreach ($this->sessionStore->listSessions($picker->fetchLimit()) as $row) {
-            if ((string) ($row['id'] ?? '') === $sessionId) {
-                $stored = (string) ($row['name'] ?? '');
-                $name = $stored !== '' ? $stored : null;
-                break;
-            }
+        if (($selected['kind'] ?? 'main') === 'subagent') {
+            return [$this->mutate(['sessionPicker' => $this->previewSessionInPicker($picker)
+                ->withNotice('Sub-agent sessions are read-only; showing its last messages.')]), null];
         }
 
-        return [$this->mutate(['sessionPicker' => null])->switchToSession($sessionId, $name), null];
+        $sessionId = $selected['sessionId'];
+
+        return [$this->mutate(['sessionPicker' => null])->switchToSession($sessionId, $this->storedSessionName($sessionId)), null];
     }
 
     /**

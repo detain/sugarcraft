@@ -696,6 +696,18 @@ final class Renderer
     public const SESSION_ROW_ZONE_PREFIX = 'session-row:';
 
     /**
+     * The session picker's mouse actions on the highlighted row (Appendix P
+     * §3.2): `session-act:<row>:<verb>`, one zone per glyph of the `✎ ★ ✕`
+     * cluster ({@see \SugarCraft\Crush\Tui\SessionPicker::actionSegments()}),
+     * nested inside that row's `session-row:` zone. candy-mouse registers
+     * zones in close order and the first registered wins a hit, so the inner
+     * glyph outranks the row around it. `<row>` is the same absolute row index
+     * as the row zone's, so {@see Chat::sessionRowIndex()} validates both
+     * families against one painted window; the verb is one of the cluster's.
+     */
+    public const SESSION_ACT_ZONE_PREFIX = 'session-act:';
+
+    /**
      * Zone-id prefix every clickable tool-call row carries (crush_feat.md §8
      * E5). The suffix is the SAME key {@see Chat::expanded()} is keyed by
      * (`ToolResult::$id`, falling back to its name), so a click can be handed
@@ -1040,7 +1052,10 @@ final class Renderer
      * identical reason: Veil measures the overlay it is centring, and marking
      * before the composite would move it.
      *
-     * @var list<array{id: string, line: string}> in row order
+     * `acts` carries the highlighted row's action glyphs (verb => styled
+     * glyph), wrapped as `session-act:` zones inside the row's own.
+     *
+     * @var list<array{id: string, line: string, acts: array<string, string>}> in row order
      */
     private static array $sessionRowZones = [];
 
@@ -5013,7 +5028,12 @@ final class Renderer
         [$width, $height] = SessionPicker::overlayGeometry($chat->cols(), $chat->rows(), self::SHELL_CHROME_COLS);
 
         $overlay = $picker->render($width, $height, $theme);
-        self::recordSessionRowZones($overlay, $picker->rowZoneLines($width, $height, $theme));
+        self::recordSessionRowZones(
+            $overlay,
+            $picker->rowZoneLines($width, $height, $theme),
+            $picker->selectedIndex(),
+            $picker->actionSegments($width, $theme),
+        );
 
         return $overlay;
     }
@@ -5220,9 +5240,10 @@ final class Renderer
      * own cells, never the dimmed backdrop beside the box. The gated flag is
      * the same `SUGARCRUSH_DISABLE_MOUSE_CLICKS` law as everywhere else.
      *
-     * @param array<int, string> $rows row index => the content line it produced
+     * @param array<int, string>    $rows     row index => the content line it produced
+     * @param array<string, string> $acts     the highlighted row's action glyphs, verb => styled glyph
      */
-    private static function recordSessionRowZones(string $overlay, array $rows): void
+    private static function recordSessionRowZones(string $overlay, array $rows, int $selected = -1, array $acts = []): void
     {
         if ($rows === [] || !Chat::mouseClicksEnabled()) {
             return;
@@ -5233,7 +5254,11 @@ final class Renderer
         foreach ($rows as $id => $row) {
             for ($i = $from, $n = count($lines); $i < $n; $i++) {
                 if (str_contains($lines[$i], $row)) {
-                    self::$sessionRowZones[] = ['id' => (string) $id, 'line' => $lines[$i]];
+                    self::$sessionRowZones[] = [
+                        'id' => (string) $id,
+                        'line' => $lines[$i],
+                        'acts' => $id === $selected ? $acts : [],
+                    ];
                     $from                    = $i + 1;
 
                     break;
@@ -5266,7 +5291,7 @@ final class Renderer
 
                 $lines[$i] = substr_replace(
                     $lines[$i],
-                    Mark::zone(self::SESSION_ROW_ZONE_PREFIX . $zone['id'], $zone['line']),
+                    Mark::zone(self::SESSION_ROW_ZONE_PREFIX . $zone['id'], self::markSessionActs($zone['id'], $zone['line'], $zone['acts'])),
                     $at,
                     strlen($zone['line']),
                 );
@@ -5277,6 +5302,30 @@ final class Renderer
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Wrap each action glyph of the highlighted picker row in its
+     * `session-act:<row>:<verb>` zone. The cluster is right-aligned, so each
+     * glyph is found by its LAST occurrence, right to left (delete, pin,
+     * rename): the pin glyph also opens a pinned row's title, and the search
+     * for each glyph stops short of the one wrapped before it.
+     *
+     * @param array<string, string> $acts verb => the styled glyph as painted
+     */
+    private static function markSessionActs(string $row, string $line, array $acts): string
+    {
+        $end = strlen($line);
+        foreach (array_reverse($acts, true) as $verb => $glyph) {
+            $at = strrpos(substr($line, 0, $end), $glyph);
+            if ($at === false) {
+                continue;
+            }
+            $line = substr_replace($line, Mark::zone(self::SESSION_ACT_ZONE_PREFIX . $row . ':' . $verb, $glyph), $at, strlen($glyph));
+            $end = $at;
+        }
+
+        return $line;
     }
 
     /**

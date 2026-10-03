@@ -1,0 +1,18 @@
+ session picker · 7 shown
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ↑↓ browse · ↵ open · esc close · / filter · r rename · d delete · p pin · f fork · x archive · a archived · ⇥ children…
+╭ sessions ────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Pinned                                                                                                                   │
+│ ▶ ★ Auth refactor                                                             2m  41 turns sglang/…v4-flash ⠋ live ✎ ★ ✕ │
+│ Today                                                                                                                    │
+│     Fix flaky PTY test                                                        1h  12 turns sglang/…v4-flash +1 ag        │
+│     └ explore · Map the login flow ✓                                          1h   0 turns sglang/…v4-flash              │
+│     漢字のセッション名前がとても長いタイトル                                  3h    1 turn claude-code                   │
+│ Yesterday                                                                                                                │
+│     (untitled d4000000…)                                                      1d    1 turn sglang/…v4-flash ⧗ bg         │
+│     Auth refactor (branch)                                                    1d  38 turns sglang/…v4-flash ⑂            │
+│ 1 Dec 2025                                                                                                               │
+│     Old thing                                                             Dec'25   2 turns sglang/…v4-flash              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  /work/app · main · "make the login controller use the new guard"

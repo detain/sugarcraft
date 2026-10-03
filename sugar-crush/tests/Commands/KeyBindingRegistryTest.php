@@ -220,7 +220,7 @@ final class KeyBindingRegistryTest extends TestCase
      * across 9 contexts", the sweep counts in
      * {@see \SugarCraft\Crush\Tests\Renderer\KeyHelpTest}, and
      * {@see \SugarCraft\Crush\Tests\Commands\KeyBindingDriftTest}'s KEYISH
-     * docblock ("all 70 declared rows"). A prose number nobody measures is how
+     * docblock ("all 85 declared rows"). A prose number nobody measures is how
      * a reference goes stale; this is the measurement. Those three files are
      * the domain of that list: it is where `grep -rn` for the figures found
      * them, not a claim that no other file could grow one.
@@ -258,11 +258,16 @@ final class KeyBindingRegistryTest extends TestCase
      *
      * 69 -> 70 live (73 -> 74 all) when `mouse.side-row` was declared: a
      * click on a docked Tools or Agents pane row expands it in place.
+     *
+     * 70 -> 81 live (74 -> 85 all) with the revamped session picker (Appendix
+     * P-A2): ten picker rows (`picker.filter`, `.rename`, `.delete`,
+     * `.delete-children`, `.pin`, `.fork`, `.archive`, `.unarchive`,
+     * `.archived`, `.children`) and `mouse.session-action`.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(74, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(70, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(85, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(81, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(4, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(9, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

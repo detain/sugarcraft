@@ -1,0 +1,18 @@
+ session picker · 7 shown
+──────────────────────────────────────
+ ↑↓ browse · ↵ open · esc close · / fil…
+╭ sessions ────────────────────────────────╮
+│ Pinned                                   │
+│ ▶ ★ Auth refactor                        │
+│ Today                                    │
+│     Fix flaky PTY test                   │
+│     └ explore · Map the login flow ✓     │
+│     漢字のセッション名前がとても長いタ…  │
+│ Yesterday                                │
+│     (untitled d4000000…)                 │
+│     Auth refactor (branch)               │
+│ 1 Dec 2025                               │
+│     Old thing                            │
+╰──────────────────────────────────────────╯
+───────────────────────────────────────
+  /work/app · main · "make the …

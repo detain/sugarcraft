@@ -535,6 +535,16 @@ final class KeyBindingRegistry
     }
 
     /**
+     * The session list's keys (Appendix P §3.2).
+     *
+     * The row actions are bare letters, so `/` opens the filter rather than
+     * typing filtering: that is what keeps `k`/`j` moving the highlight. Inside
+     * the filter the letters are text, so rename, delete and pin also answer
+     * to a `Ctrl+` alias there — the `(or …)` asides below, which the drift
+     * test presses too. Those aliases live in this context only:
+     * {@see chatCtrlRunes()} and {@see shellCtrlRunes()} never read it, so the
+     * rune-sweep figures documented on {@see $ctrlRuneMemo} do not move.
+     *
      * @return list<KeyBinding>
      */
     private static function picker(): array
@@ -544,9 +554,19 @@ final class KeyBindingRegistry
         return [
             KeyBinding::new('picker.move', '↑ / ↓', 'Move the highlighted session (or k / j)', $c),
             KeyBinding::new('picker.resume', 'Enter', 'Resume the highlighted session', $c),
-            KeyBinding::new('picker.preview', 'Space', 'Stay on the highlighted session', $c),
+            KeyBinding::new('picker.preview', 'Space', 'Preview the last messages of the session', $c),
+            KeyBinding::new('picker.filter', '/', 'Filter the sessions as you type', $c),
+            KeyBinding::new('picker.rename', 'r', 'Rename the session in place (or Ctrl+E)', $c),
+            KeyBinding::new('picker.delete', 'd', 'Delete the session, pressed twice (or Ctrl+D)', $c),
+            KeyBinding::new('picker.delete-children', 'D', 'Confirm a delete, its branch sessions too', $c),
+            KeyBinding::new('picker.pin', 'p', 'Pin or unpin the session (or Ctrl+F)', $c),
+            KeyBinding::new('picker.fork', 'f', 'Fork the session and switch to the copy', $c),
+            KeyBinding::new('picker.archive', 'x', 'Archive the session', $c),
+            KeyBinding::new('picker.unarchive', 'u', 'Bring an archived session back', $c),
+            KeyBinding::new('picker.archived', 'a', 'Show or hide archived sessions', $c),
+            KeyBinding::new('picker.children', 'Tab', 'Show or hide sub-agent sessions', $c),
             KeyBinding::new('picker.branch', 'Ctrl+B', 'Filter to the current git branch, or all', $c),
-            KeyBinding::new('picker.close', 'Esc', 'Close the picker', $c),
+            KeyBinding::new('picker.close', 'Esc', 'Close the picker, or clear the filter first', $c),
         ];
     }
 
@@ -648,6 +668,7 @@ final class KeyBindingRegistry
             KeyBinding::new('mouse.tool-call', 'Click tool', 'Expand or collapse that call\'s output', $c),
             KeyBinding::new('mouse.side-row', 'Click side row', 'Expand or collapse that Tools or Agents pane row', $c),
             KeyBinding::new('mouse.palette-row', 'Click row', 'Run that palette row', $c),
+            KeyBinding::new('mouse.session-action', 'Click ✎ ★ ✕', 'Rename, pin or delete the picker session', $c),
         ];
     }
 }
