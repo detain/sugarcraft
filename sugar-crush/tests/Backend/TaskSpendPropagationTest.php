@@ -387,7 +387,7 @@ final class TaskSpendPropagationTest extends TestCase
         $results = self::taskResults($events);
         $this->assertCount(2, $results);
         $this->assertStringContainsString('produced no result', $results[0], 'the first Task\'s child really died');
-        $this->assertSame('the report', $results[1]);
+        $this->assertSame(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('the report'), $results[1]);
         $this->assertEqualsWithDelta(1.70, $reply->usage?->costUsd ?? 0.0, 1e-9, 'the dead run\'s $1 is billed with everything else');
         $this->assertSame(170, $reply->usage?->totalTokens);
     }
@@ -417,7 +417,7 @@ final class TaskSpendPropagationTest extends TestCase
 
         $result = $task->execute(self::taskArgs());
 
-        $this->assertSame('pooled report', $result->content());
+        $this->assertSame(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('pooled report'), $result->content());
         $this->assertSame(77, $result->usage()?->totalTokens);
         $this->assertEqualsWithDelta(0.33, $result->usage()?->costUsd ?? 0.0, 1e-9);
     }

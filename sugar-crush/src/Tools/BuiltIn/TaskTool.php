@@ -294,6 +294,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         return $doctrine . "\n\n" . 'Current agent roster: ' . $this->rosterNames() . '.';
     }
 
+    // @region schema
     /**
      * @return array<string, mixed>
      */
@@ -336,7 +337,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             'required' => ['description', 'prompt', 'agent'],
         ];
     }
+    // @endregion schema
 
+    // @region execute
     public function execute(array $args): ToolResult
     {
         $startedAt = microtime(true);
@@ -462,8 +465,10 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $agentName,
                 $result->status->value,
                 $result->error !== null ? ': ' . $result->error->getMessage() : '',
+                // The partial output is the sub-agent's text inside a
+                // harness sentence: neutralised, no header (step 0.15).
                 $result->output !== null && trim($result->output) !== ''
-                    ? ' — partial output: ' . trim($result->output)
+                    ? ' — partial output: ' . \SugarCraft\Crush\Context\DelegatedOutputFence::neutralise(trim($result->output))
                     : '',
             ), $durationMs, $spent);
         }
@@ -477,12 +482,13 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
 
         return new ToolResult(
             toolCallId: $toolCallId,
-            content: trim($result->output),
+            content: \SugarCraft\Crush\Context\DelegatedOutputFence::wrap(trim($result->output)),
             isError: false,
             durationMs: $durationMs,
             usage: $spent,
         );
     }
+    // @endregion execute
 
     /**
      * Run $subAgent to completion through the bound engine's tool loop — see
@@ -499,6 +505,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         float $startedAt,
         ?array $suspension = null,
     ): ToolResult {
+        // @region setup
         $agentName = $subAgent->agent->name;
 
         try {
@@ -664,6 +671,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             ));
         };
 
+        // @endregion setup
+
+        // @region run
         // Set when the engine's mid-turn spend cap stops the run: the loop
         // then RETURNS normally with whatever its last step said, which must
         // not be handed back as the sub-agent's report.
@@ -742,7 +752,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $spent,
             );
         }
+        // @endregion run
 
+        // @region finish
         $reply = $turn->reply;
         $spent = $reply->usage;
         self::bill($subAgent, $spent, $baseTokens, $baseCost);
@@ -788,6 +800,13 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // the run is still unfinished, so it keeps its resume id rather than
         // forgetting it: dropping resumability is the regression the summary
         // would otherwise have introduced.
+        //
+        // The report re-enters the parent's conversation as foreign bytes,
+        // so it is fenced (step 0.15) - before the harness's own step-cap
+        // note is appended, which stays outside the fence. The dashboard row
+        // ($finish above) keeps the raw report: it is read by a human, not
+        // replayed to a model.
+        $content = \SugarCraft\Crush\Context\DelegatedOutputFence::wrap($content);
         if ($reply->stepsTruncated) {
             $content .= sprintf(
                 "\n\n[sub-agent \"%s\" stopped at its step cap (%d); the above is its own summary of where it stopped. %s.]",
@@ -806,6 +825,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             durationMs: self::elapsedMs($startedAt),
             usage: $spent,
         );
+        // @endregion finish
     }
 
     /**

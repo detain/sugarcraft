@@ -206,7 +206,7 @@ final class TaskToolWiringTest extends TestCase
         $results = $this->toolResults($messages);
         $this->assertCount(1, $results);
         $this->assertFalse($results[0]->isError(), $results[0]->content());
-        $this->assertSame('sub-agent report: Audit the auth middleware', $results[0]->content());
+        $this->assertSame(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('sub-agent report: Audit the auth middleware'), $results[0]->content());
 
         $this->assertCount(1, $executor->seen, 'the batch must have reached the pool through the manager');
         $this->assertSame('Audit the auth middleware', $executor->seen[0]['task']);

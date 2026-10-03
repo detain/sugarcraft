@@ -207,7 +207,7 @@ final class TaskToolTest extends TestCase
         $result = $tool->execute(self::call());
 
         $this->assertFalse($result->isError(), $result->content());
-        $this->assertSame('the report', $result->content());
+        $this->assertSame(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('the report'), $result->content());
 
         $this->assertCount(1, $executor->seen);
         $this->assertSame('coder', $executor->seen[0]['agent']);

@@ -67,7 +67,7 @@ final class TaskToolEngineTest extends TestCase
         $result = (new TaskTool($manager))->withEngine($engine)->execute(self::call());
 
         $this->assertFalse($result->isError(), $result->content());
-        $this->assertSame('the audit report', $result->content());
+        $this->assertSame(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('the audit report'), $result->content());
         $this->assertSame([['path' => 'candy-core']], $probe->calls, 'the sub-agent\'s tool call was executed');
         $this->assertCount(2, $provider->requests, 'one step for the tool call, one for the report');
 
@@ -124,7 +124,7 @@ final class TaskToolEngineTest extends TestCase
         $result = (new TaskTool($manager, suspended: $this->store))->withEngine($engine)->execute(self::call());
 
         $this->assertFalse($result->isError(), $result->content());
-        $this->assertStringStartsWith('done: probed once; remaining: everything else', $result->content());
+        $this->assertStringStartsWith(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('done: probed once; remaining: everything else'), $result->content());
         $this->assertStringContainsString('stopped at its step cap (1)', $result->content());
         $this->assertNull($provider->requests[1]->tools, 'the summary request offered no tools');
         $this->assertNotNull($this->store->load(self::resumeId($result->content())), 'the capped run was saved for a resume');
@@ -143,7 +143,7 @@ final class TaskToolEngineTest extends TestCase
 
         $result = (new TaskTool($manager))->withEngine($engine)->execute(self::call());
 
-        $this->assertSame('could not read it', $result->content());
+        $this->assertSame(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('could not read it'), $result->content());
         $this->assertSame([], $read->calls, 'ProtectFilesHook denied .env inside the sub-agent too');
         $toolTurns = array_values(array_filter(
             self::turns($provider->requests[1]),
@@ -183,7 +183,7 @@ final class TaskToolEngineTest extends TestCase
             self::turns($provider->requests[2]),
             static fn (array $turn): bool => $turn[0] === 'tool',
         ));
-        $this->assertSame('sub-agent report', $toolTurns[0][1] ?? null, 'the caller received the sub-agent\'s report');
+        $this->assertSame(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('sub-agent report'), $toolTurns[0][1] ?? null, 'the caller received the sub-agent\'s report');
     }
 
     public function testTheEngineExposesItsToolsUnbound(): void
@@ -218,7 +218,7 @@ final class TaskToolEngineTest extends TestCase
         $resumed = $task->execute(self::call(['resume' => $id, 'prompt' => 'carry on and report']));
 
         $this->assertFalse($resumed->isError(), $resumed->content());
-        $this->assertSame('the report, finished', $resumed->content());
+        $this->assertSame(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('the report, finished'), $resumed->content());
         $this->assertCount(1, $probe->calls, 'the resumed run did not redo the finished step');
 
         $turns = self::turns($provider->requests[2]);
@@ -256,7 +256,7 @@ final class TaskToolEngineTest extends TestCase
         $provider->then(new CompleteResponse(content: 'recovered report'));
         $resumed = $task->execute(self::call(['resume' => $id]));
 
-        $this->assertSame('recovered report', $resumed->content());
+        $this->assertSame(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('recovered report'), $resumed->content());
         $this->assertSame(
             ['system', 'user', 'assistant', 'tool', 'user'],
             array_column(self::turns($provider->requests[2]), 0),
