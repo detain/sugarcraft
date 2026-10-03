@@ -156,6 +156,22 @@ final class Theme
      */
     public function withColorProfile(ColorProfile $profile): self
     {
+        // Why the NoTty branch still unsets every attribute by hand, now that
+        // candy-sprinkles strips every escape under NoTty itself (3a463ad16):
+        // for a direct `render()` the two are byte-identical at every profile
+        // (pinned by DefaultThemeTest), but sprinkles' stripping keys off the
+        // style's *current* profile, while these unsets change the style's
+        // *state*. Only the state survives what callers do with a detected
+        // theme's style afterwards:
+        //   - re-profiling it (`->colorProfile(TrueColor)`, or this method
+        //     again with a richer profile) would bring bold/faint/OSC 8 back,
+        //     breaking the one-way contract documented above;
+        //   - `inherit()`-ing it into a child that pins its own profile copies
+        //     the attribute flags but not the NoTty profile, so a pipe would
+        //     get `\e[1m` again.
+        // Colours need no such treatment: they are re-quantised from the
+        // profile at render time on every path, and a child that pins a
+        // profile has opted into that tier's colour.
         $fit = $profile === ColorProfile::NoTty
             ? static fn (Style $s): Style => $s->colorProfile($profile)
                 ->unsetBold()->unsetItalic()->unsetUnderline()->unsetStrikethrough()

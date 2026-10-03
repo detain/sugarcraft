@@ -259,6 +259,95 @@ final class DefaultThemeTest extends TestCase
         }
     }
 
+    /**
+     * For a direct render, Theme::withColorProfile() is byte-identical to
+     * candy-sprinkles' own Style::colorProfile() at every tier — NoTty
+     * included, where sprinkles now strips every escape itself — across every
+     * preset slot, a style carrying every attribute plus OSC 8 and a border,
+     * and pre-styled content. Theme adds nothing to what a render emits; its
+     * NoTty attribute unsets exist only for the state-carrying paths pinned
+     * by the two tests below.
+     *
+     * @return iterable<string, array{ColorProfile}>
+     */
+    public static function renderProfiles(): iterable
+    {
+        yield 'NoTty'     => [ColorProfile::NoTty];
+        yield 'Ascii'     => [ColorProfile::Ascii];
+        yield 'Ansi'      => [ColorProfile::Ansi];
+        yield 'TrueColor' => [ColorProfile::TrueColor];
+    }
+
+    #[DataProvider('renderProfiles')]
+    public function testWithColorProfileRendersExactlyAsSprinklesProfile(ColorProfile $profile): void
+    {
+        $kitchenSink = Style::new()->bold()->italic()->underline()->strikethrough()->faint()
+            ->blink()->rapidBlink()->reverse()->overline()->invisible()
+            ->hyperlink('https://example.com')
+            ->foreground(\SugarCraft\Core\Util\Color::hex('#ff0000'))
+            ->background(\SugarCraft\Core\Util\Color::ansi(4))
+            ->padding(0, 1)->border(\SugarCraft\Sprinkles\Border::rounded())->width(14);
+        $themes = [
+            'ansi'       => Theme::ansi(),
+            'charm'      => Theme::charm(),
+            'dracula'    => Theme::dracula(),
+            'nord'       => Theme::nord(),
+            'catppuccin' => Theme::catppuccin(),
+            'kitchen'    => new Theme($kitchenSink, $kitchenSink, $kitchenSink, $kitchenSink, $kitchenSink, $kitchenSink, $kitchenSink),
+        ];
+        $contents = ['x', 'hello world', "two\nlines", "\x1b[31mpre\x1b[0m-styled"];
+
+        foreach ($themes as $name => $theme) {
+            $fitted = $theme->withColorProfile($profile);
+            foreach (['success', 'error', 'warn', 'info', 'prompt', 'accent', 'muted'] as $slot) {
+                foreach ($contents as $content) {
+                    self::assertSame(
+                        $theme->{$slot}->colorProfile($profile)->render($content),
+                        $fitted->{$slot}->render($content),
+                        "{$name}.{$slot} at {$profile->name} for " . json_encode($content),
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * The NoTty downgrade is one-way for text attributes and hyperlinks: a
+     * detected-for-a-pipe theme re-profiled to a richer tier gets its colour
+     * back but not bold/OSC 8. Sprinkles' NoTty strip alone cannot hold this
+     * — it keys off the current profile — which is why Theme still unsets
+     * the attributes itself.
+     */
+    public function testNoTtyDowngradeIsOneWayForTextAttributes(): void
+    {
+        $linked = Style::new()->bold()->hyperlink('https://example.com');
+        $pipe = (new Theme($linked, $linked, $linked, $linked, $linked, $linked, $linked))
+            ->withColorProfile(ColorProfile::NoTty);
+
+        foreach ([ColorProfile::Ascii, ColorProfile::Ansi, ColorProfile::TrueColor] as $richer) {
+            self::assertSame('x', $pipe->withColorProfile($richer)->success->render('x'), $richer->name);
+            self::assertSame('x', $pipe->success->colorProfile($richer)->render('x'), $richer->name);
+        }
+
+        $colourBack = Theme::ansi()->withColorProfile(ColorProfile::NoTty)
+            ->withColorProfile(ColorProfile::Ansi)->success->render('x');
+        self::assertSame("\x1b[92mx\x1b[0m", $colourBack);
+    }
+
+    /**
+     * inherit() copies attribute flags but not the parent's NoTty profile when
+     * the child pins its own, so a NoTty theme style composed into such a
+     * child must not hand it bold.
+     */
+    public function testNoTtyStyleInheritedIntoProfilePinnedChildCarriesNoAttributes(): void
+    {
+        $pipe = Theme::ansi()->withColorProfile(ColorProfile::NoTty);
+
+        $child = Style::new()->colorProfile(ColorProfile::Ascii)->inherit($pipe->success);
+
+        self::assertSame('x', $child->render('x'));
+    }
+
     /** Ansi profile re-quantises truecolor presets to the 16-colour tier. */
     public function testWithColorProfileAnsiDownsamplesTruecolor(): void
     {
