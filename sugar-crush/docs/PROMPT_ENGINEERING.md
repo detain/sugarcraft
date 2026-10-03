@@ -16,7 +16,12 @@ prompt, in assembly order"); this page is the *why* beside that *what*.
 static `<env>` block last. Counted from the live method, there are eleven slots:
 
 1. **Base identity** (`Runtime::basePrompt()`) — the Static heredoc that opens every prompt.
-   Unfenced, because it is harness voice with no untrusted input.
+   Unfenced, because it is harness voice with no untrusted input. For the DeepSeek-V4, Qwen3.8
+   and MiniMax families (`ModelFamily::of()`, read off the served model when the provider reports
+   one) its "Acting vs. asking" section closes with a per-family paragraph (`FamilyPrompt::of()`):
+   a family lead plus Aider's `lazy` and `overeager` reminders, restated without emphasis. Every
+   other model gets the heredoc unchanged. The family is resolved once per session and model, so
+   the paragraph never moves inside a cached prefix.
 2. **Maxims** (`MaximsSection`) — the `core.maxims` voice layer, directly behind the base identity
    and ahead of every derived layer. Static and unfenced: its bytes are class constants.
 3. **Tool guidance** (`Runtime::toolGuidanceSection()`) — appended only when at least one wired
@@ -345,7 +350,9 @@ The plan's §18 register lists what was considered and left out; the prompt-rele
 reason each stays out:
 
 - **Per-provider prompt variants.** One strong prompt plus the operator's own layers, not ten
-  prompts to keep in sync with measured contradictions between them.
+  prompts to keep in sync with measured contradictions between them. The per-family paragraph in
+  slot 1 is the deliberate exception, and it stays small for this reason: three short paragraphs
+  appended to one shared base, not a second base prompt per family.
 - **Widening context-file discovery to other vendors' files.** There is no specification to model
   precedence on; the rules tier gives the same benefit without inheriting the ambiguity.
 - **Moving the base prompt to XML-tagged sections.** An open empirical question, pinned expensive

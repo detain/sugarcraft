@@ -19,8 +19,10 @@ use SugarCraft\Crush\Tools\BuiltIn\Grep;
 use SugarCraft\Crush\Tools\Tool;
 
 /**
- * The core.maxims layer (prompt_expand.md §9.13): seven reasoned statements of
- * how this harness wants results reported, shipped as a prompt section.
+ * The core.maxims layer (prompt_expand.md §9.13): nine reasoned statements of
+ * how this harness wants results reported and work carried out, shipped as a
+ * prompt section. The last two (roadmap 5.10) are OpenClaw's "Execution Bias"
+ * and "Promised Work" sections restated in this register.
  *
  * PLACEMENT DECISION RECORD — written before the prose was authored, because
  * every clause below is a decision the prompt prose then has to live inside.
@@ -90,7 +92,7 @@ use SugarCraft\Crush\Tools\Tool;
 final class MaximsSectionTest extends TestCase
 {
     /**
-     * The section bytes exactly as shipped: H2, blank line, seven bullets,
+     * The section bytes exactly as shipped: H2, blank line, nine bullets,
      * no trailing newline (the assembler owns separators). Restated
      * independently of the class so the two copies can only agree by the
      * bytes actually being these.
@@ -115,7 +117,18 @@ final class MaximsSectionTest extends TestCase
         . "  reviewable.\n"
         . "- When someone's pronouns have not been stated, use they/them. A name\n"
         . "  does not tell you them, and a wrong guess is paid by the person it\n"
-        . "  was wrong about.";
+        . "  was wrong about.\n"
+        . "- Act on a request a tool can carry out rather than describing how it\n"
+        . "  could be done: approvals and permission rules already decide what is\n"
+        . "  risky, so stopping to ask for a go-ahead they do not require only\n"
+        . "  stalls the work. Keep going until the task is done or a real blocker\n"
+        . "  stops it, and name the blocker; when a search comes back empty, vary\n"
+        . "  the query or the path before concluding there is nothing.\n"
+        . "- Saying you are checking or fixing something is a progress note, not an\n"
+        . "  answer: take that action in the same turn and end with its result or a\n"
+        . "  concrete blocker. A correction from the user updates the task in hand,\n"
+        . "  so apply it and carry on rather than stopping at the acknowledgement,\n"
+        . "  and promise later work only when something you started will deliver it.";
 
     private function maximsSection(): MaximsSection
     {
@@ -239,7 +252,7 @@ final class MaximsSectionTest extends TestCase
 
         $ordinaryProse = [
             'Maxims', 'Lead', 'Cite', 'Report', 'Tool', 'Prefer', 'Write', 'When', 'A',
-            'The', 'An', 'Is',
+            'The', 'An', 'Is', 'Act', 'Keep', 'Saying',
         ];
 
         preg_match_all('/\b[A-Z][A-Za-z]+\b/', $body, $matches);

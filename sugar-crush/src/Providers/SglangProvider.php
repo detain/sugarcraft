@@ -810,23 +810,24 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
 
     /**
      * The family a model id belongs to, for {@see warnAboutServerMismatch()}:
-     * the same two substring predicates every family default here uses, so
-     * "same family" cannot mean something different in the notice than in
-     * the behaviour it warns about.
+     * {@see ModelFamily::of()}, which is built on the same two substring
+     * predicates every family default here uses, so "same family" cannot
+     * mean something different in the notice than in the behaviour it warns
+     * about.
+     *
+     * Every unclaimed id is ONE bucket: two unknown-family ids carry the same
+     * (legacy) behaviour, so a mere spelling difference between them - an
+     * org prefix, a quantisation suffix - is not worth a notice. An alias
+     * like `default` configured against a served DeepSeek-V4 still differs,
+     * which is the under-match the DEEPSEEK_V4_FAMILY_TOKEN docblock said
+     * nothing could detect. MiniMax is its own bucket since roadmap 5.10:
+     * the base prompt's per-family paragraph follows the configured id too,
+     * so a served MiniMax behind an unrelated configured id is now a real
+     * difference rather than a spelling one.
      */
     private static function modelFamily(string $model): string
     {
-        return match (true) {
-            self::isDeepSeekV4($model) => self::DEEPSEEK_V4_FAMILY_TOKEN,
-            self::isQwen3Next($model) => self::QWEN3_NEXT_FAMILY_TOKEN,
-            // Every other id is ONE bucket: two unknown-family ids carry the
-            // same (legacy) behaviour, so a mere spelling difference between
-            // them - an org prefix, a quantisation suffix - is not worth a
-            // notice. An alias like `default` configured against a served
-            // DeepSeek-V4 still differs, which is the under-match the
-            // DEEPSEEK_V4_FAMILY_TOKEN docblock said nothing could detect.
-            default => 'other',
-        };
+        return ModelFamily::of($model)->value;
     }
 
     /**

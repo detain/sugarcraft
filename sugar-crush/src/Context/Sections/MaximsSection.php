@@ -69,13 +69,22 @@ use SugarCraft\Crush\Context\Stability;
  * states for itself: line numbers drift as files change, so the pointer is
  * worth re-finding, not trusting.
  *
+ * THE LAST TWO BULLETS (roadmap 5.10) are OpenClaw's "Execution Bias" and
+ * "Promised Work" sections, restated in this register. Their claim about the
+ * harness — that approvals and permission rules decide what is risky — is
+ * {@see \SugarCraft\Crush\Permissions\PermissionGate}'s job and the y/n/a
+ * approval modal's, and it stops being the whole story exactly where the
+ * base prompt's "# Acting vs. asking" says to announce a destructive step
+ * first; the bullet asks the model not to seek a go-ahead the gate does not
+ * require, which leaves that announcement intact.
+ *
  * @see \SugarCraft\Crush\Tests\Context\Sections\MaximsSectionTest
  */
 final readonly class MaximsSection implements PromptSection
 {
     /**
      * The section, verbatim: an H2 opener (never a fifth `# ` heading — the
-     * base heredoc owns that level), seven bullets, no leading or trailing
+     * base heredoc owns that level), nine bullets, no leading or trailing
      * separator (the assembler's one-`\n\n` rule owns those; see
      * {@see \SugarCraft\Crush\Runtime::assemblePrompt()}).
      */
@@ -101,6 +110,17 @@ final readonly class MaximsSection implements PromptSection
         - When someone's pronouns have not been stated, use they/them. A name
           does not tell you them, and a wrong guess is paid by the person it
           was wrong about.
+        - Act on a request a tool can carry out rather than describing how it
+          could be done: approvals and permission rules already decide what is
+          risky, so stopping to ask for a go-ahead they do not require only
+          stalls the work. Keep going until the task is done or a real blocker
+          stops it, and name the blocker; when a search comes back empty, vary
+          the query or the path before concluding there is nothing.
+        - Saying you are checking or fixing something is a progress note, not an
+          answer: take that action in the same turn and end with its result or a
+          concrete blocker. A correction from the user updates the task in hand,
+          so apply it and carry on rather than stopping at the acknowledgement,
+          and promise later work only when something you started will deliver it.
         MARKDOWN;
 
     public function fence(): string
