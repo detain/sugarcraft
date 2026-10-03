@@ -397,7 +397,7 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * "EIGHT spellings remain by hand, in FOUR files" — plus the six the
+     * "EIGHT spellings remain by hand, in FOUR files" — plus the seven the
      * inventory deliberately EXCLUDES, named here so the exclusion is a recorded
      * decision rather than a hole. `WorktreeManager`'s pair matches relative paths
      * against a glob directory; it is not a boundary compare. `SkillLoader`'s one
@@ -411,6 +411,9 @@ final class ContainedPathInventoryTest extends TestCase
      * 15b-15) only shortens a pasted or dropped image's path to project-relative
      * for the draft's `@` mention; the mention attaches whatever it names, inside
      * the root or not, so nothing is admitted or refused on its answer.
+     * `SessionPicker`'s one (`renderFooter()`, audit B1/B3) abbreviates a
+     * session's recorded cwd to `~` for display, like `TuiErrorLog`'s; nothing
+     * is admitted or refused on its answer.
      */
     public function testTheHandSpelledInventoryIncludingItsStatedExclusion(): void
     {
@@ -427,11 +430,12 @@ final class ContainedPathInventoryTest extends TestCase
                 'Tools/BuiltIn/Glob.php' => 1,
                 'Tools/IgnoreRules.php' => 1,
                 'Tools/PathJail.php' => 5,
+                'Tui/SessionPicker.php' => 1,
             ],
             $counts,
         );
 
-        unset($counts['Agents/WorktreeManager.php'], $counts['Chat.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Skills/SkillLoader.php']);
+        unset($counts['Agents/WorktreeManager.php'], $counts['Chat.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Skills/SkillLoader.php'], $counts['Tui/SessionPicker.php']);
         $this->assertSame(8, array_sum($counts), 'containment spellings still by hand');
         $this->assertCount(4, $counts, 'files still holding one');
     }

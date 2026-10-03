@@ -12,6 +12,7 @@ use SugarCraft\Crush\MCP\McpClient;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
+use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 use SugarCraft\Crush\Tools\AcceptsHeartbeat;
 use SugarCraft\Crush\Tools\BuiltIn\Bash;
 use SugarCraft\Crush\Tools\McpToolBridge;
@@ -36,10 +37,13 @@ use SugarCraft\Crush\Tools\ToolResult;
  */
 final class SequentialToolHeartbeatTest extends TestCase
 {
+    use ReapsForkedChildrenTrait;
+
     private ?string $workDir = null;
 
     protected function tearDown(): void
     {
+        $this->reapTrackedForkedChildren();
         if ($this->workDir !== null) {
             foreach (glob($this->workDir . '/{,.}*', GLOB_BRACE) ?: [] as $file) {
                 if (is_file($file)) {
@@ -102,7 +106,7 @@ final class SequentialToolHeartbeatTest extends TestCase
         mkdir($this->workDir, 0o700, true);
         $log = $this->workDir . '/beats';
 
-        $this->dispatch([new ToolCall('call_1', 'forking', [])], [self::forkingTool()], static function () use ($log): void {
+        $this->dispatch([new ToolCall('call_1', 'forking', [])], [self::forkingTool(fn (): int => $this->forkTracked())], static function () use ($log): void {
             file_put_contents($log, getmypid() . "\n", FILE_APPEND);
         });
 
@@ -273,11 +277,18 @@ final class SequentialToolHeartbeatTest extends TestCase
 
     /**
      * Beats once in the dispatching process, waits out the throttle, then
-     * forks a child that beats too — which must be a no-op there.
+     * forks a child that beats too — which must be a no-op there. The fork
+     * goes through the test's tracked fork so tearDown() can reap it.
+     *
+     * @param \Closure(): int $fork
      */
-    private static function forkingTool(): Tool
+    private static function forkingTool(\Closure $fork): Tool
     {
-        return new class implements Tool, AcceptsHeartbeat {
+        return new class ($fork) implements Tool, AcceptsHeartbeat {
+            public function __construct(private readonly \Closure $fork)
+            {
+            }
+
             public function name(): string
             {
                 return 'forking';
@@ -302,7 +313,7 @@ final class SequentialToolHeartbeatTest extends TestCase
             {
                 $heartbeat();
                 usleep(1_100_000);
-                $pid = pcntl_fork();
+                $pid = ($this->fork)();
                 if ($pid === 0) {
                     $heartbeat();
                     \SugarCraft\Crush\Support\ForkedChild::exitNow(0);

@@ -1805,7 +1805,7 @@ final class Bootstrap
      * FIFTEEN repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
      * qualifier is the number's domain rather than decoration. What the
      * derivation counts is a string literal of the shape `.<dir>/<segment>`:
-     * TWENTY-EIGHT distinct ones on this tree, fifteen of them classified
+     * THIRTY distinct ones on this tree, fifteen of them classified
      * repository-chosen. This list said FOUR, then FIVE, both hand-written; it is
      * now DERIVED from `src/` by
      * {@see \SugarCraft\Crush\Tests\Cli\ProjectTierRefusalInventoryTest}, which
@@ -7595,9 +7595,8 @@ final class Bootstrap
         // D3 (0.14-b): a stdio server started without an inherited credential
         // is named here, or a server that needed one fails with nothing saying
         // why. Same seam call and the same one-row-per-path bound as above.
-        $scrub = $client->strippedSecretEnvNotice();
-        if ($scrub !== '') {
-            $notices[] = $scrub;
+        if ($client->strippedSecretEnv() !== []) {
+            $notices[] = $client->strippedSecretEnvNotice();
         }
 
         foreach ($notices as $notice) {

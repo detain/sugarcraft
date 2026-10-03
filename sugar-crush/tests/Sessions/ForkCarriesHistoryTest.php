@@ -18,6 +18,7 @@ use SugarCraft\Crush\Role;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Sessions\BackgroundSessionRunner;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * `/fork` runs its prompt ON TOP OF the conversation it copied (Part II #30).
@@ -31,6 +32,8 @@ use SugarCraft\Crush\Sessions\BackgroundSupervisor;
  */
 final class ForkCarriesHistoryTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private string $dir;
 
     protected function setUp(): void
@@ -41,6 +44,7 @@ final class ForkCarriesHistoryTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->restoreHomeSandbox();
         $this->removeTree($this->dir);
     }
 
@@ -190,10 +194,10 @@ final class ForkCarriesHistoryTest extends TestCase
 
         $stdinCopy = $this->dir . '/backend-stdin.json';
         $saved = [];
-        foreach (['HOME', 'SUGARCRUSH_BACKEND_CMD', 'SUGARCRUSH_PROVIDER'] as $name) {
+        foreach (['SUGARCRUSH_BACKEND_CMD', 'SUGARCRUSH_PROVIDER'] as $name) {
             $saved[$name] = getenv($name);
         }
-        putenv('HOME=' . $this->dir);
+        $this->useHomeSandbox($this->dir);
         putenv('SUGARCRUSH_BACKEND_CMD=cat > ' . escapeshellarg($stdinCopy) . '; printf FORKDONE');
         putenv('SUGARCRUSH_PROVIDER=');
 

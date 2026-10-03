@@ -9,6 +9,7 @@ use SugarCraft\Crush\Agents\Task;
 use SugarCraft\Crush\Agents\TaskList;
 use SugarCraft\Crush\Agents\TaskStatus;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
+use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 
 /**
  * Roadmap 4.6-1: the team task list is safe to share before teams are wired.
@@ -21,6 +22,8 @@ use SugarCraft\Crush\Sessions\BackgroundSupervisor;
  */
 final class TaskListCasAndCycleTest extends TestCase
 {
+    use ReapsForkedChildrenTrait;
+
     private string $dbPath;
 
     protected function setUp(): void
@@ -30,6 +33,7 @@ final class TaskListCasAndCycleTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->reapTrackedForkedChildren();
         foreach ([$this->dbPath, $this->dbPath . '-wal', $this->dbPath . '-shm'] as $path) {
             if (is_file($path)) {
                 unlink($path);
@@ -255,12 +259,13 @@ final class TaskListCasAndCycleTest extends TestCase
         if (!function_exists('pcntl_fork')) {
             $this->markTestSkipped('needs pcntl to mint a dead pid');
         }
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         if ($pid === 0) {
             \SugarCraft\Crush\Support\ForkedChild::exitNow(0);
         }
         $this->assertGreaterThan(0, $pid);
         pcntl_waitpid($pid, $status);
+        $this->forgetForkedChild($pid);
 
         return $pid;
     }
