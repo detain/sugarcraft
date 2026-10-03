@@ -29,9 +29,9 @@ use SugarCraft\Core\Util\Width;
  * Coordinates are 1-based terminal cells — the same space {@see Zone}
  * bounding boxes and {@see MouseEvent::$x} use, which is the space SGR mouse
  * reports arrive in, so an app wires its pointer straight in with no
- * rebasing. (Downstream sugar-crush indexed frame cells from 0; the rewire
- * drops its `[$col - 1, $row - 1]` step.) In {@see extract()} the frame line
- * for row R is `$lines[R - 1]`.
+ * rebasing. (Downstream sugar-crush once indexed frame cells from 0; its
+ * `Tui\TextSelection` now runs on this class with 1-based cells end to end.)
+ * In {@see extract()} the frame line for row R is `$lines[R - 1]`.
  */
 final class SelectionRange
 {

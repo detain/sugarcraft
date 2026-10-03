@@ -57,8 +57,12 @@ if ($click !== null) {
 | `SelectionRange` | Normalised, inclusive stream range a selection covers; `extract()` copies its text out of a frame |
 
 `Selection` / `SelectionRange` were ported upstream from sugar-crush's
-`Tui\TextSelection`; sugar-crush itself has not been rewired onto them yet,
-so for now they have no in-monorepo consumer beyond their own tests.
+`Tui\TextSelection`, and sugar-crush now runs on them: `Tui\TextSelection` is
+an immutable adapter over a cloned `Selection` machine, reads its geometry and
+copied text through `SelectionRange`, and speaks the same 1-based cells end to
+end. What it keeps locally is what this lib leaves to the app — a
+drift-latched dragging flag, the release/copy record, and the highlight
+repaint.
 
 ## Sentinel design
 

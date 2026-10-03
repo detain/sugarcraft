@@ -13,7 +13,8 @@ namespace SugarCraft\Mouse;
  * the application instead of running its own copy-on-select, so an app that
  * wants the gesture every terminal user expects has to own it — the way tmux
  * copy-mode, crush and opencode do. sugar-crush grew this as an immutable
- * value object rebuilt per event; upstreamed, it is one small mutable
+ * value object rebuilt per event (its `Tui\TextSelection` is now an immutable
+ * adapter that clones this machine per step); upstreamed, it is one small mutable
  * machine — the same deliberate exception to the fluent convention
  * {@see ZoneClickTracker} already makes in this lib: a gesture IS live
  * sequential state. Every read ({@see range()}) still returns a fresh
@@ -210,8 +211,9 @@ final class Selection
      * Geometric: a drag that returns to its own anchor cell un-dragges, so a
      * there-and-back sweep releases as a click and copies nothing. The
      * downstream original latched the flag past a drift tolerance instead;
-     * an app that wants latching tracks its own max-drift (sugar-crush
-     * already records press drift separately from the selection) — the model
+     * an app that wants latching tracks its own max-drift (sugar-crush's
+     * `Tui\TextSelection` adapter latches its own flag past its click
+     * tolerance on top of this machine) — the model
      * tells the truth about where the pointer is right now.
      */
     public function dragging(): bool
