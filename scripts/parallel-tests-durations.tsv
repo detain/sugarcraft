@@ -436,6 +436,7 @@ sugar-crush/tests/Chat/MouseTextSelectionTest.php	0.072	9
 sugar-crush/tests/Commands/CommandFailureTranscriptTest.php	0.070	7
 sugar-crush/tests/Backend/ChildChannelTest.php	0.070	11
 sugar-crush/tests/Chat/MemoryAddDefaultScopeTest.php	0.070	5
+sugar-crush/tests/RepoMap/RepoMapRendererBudgetTest.php	0.070	9
 sugar-crush/tests/Hooks/RuntimeHookInputEncodingTest.php	0.069	6
 sugar-crush/tests/Backend/PendingAskTest.php	0.069	13
 sugar-crush/tests/Providers/ProviderFactoryTest.php	0.067	100
@@ -573,6 +574,8 @@ sugar-crush/tests/Memory/ForeignMemoryImporterContainmentTest.php	0.020	10
 sugar-crush/tests/Providers/SessionAffinityHeaderTest.php	0.020	20
 sugar-crush/tests/Backend/EngineBackendWitherPreservesStateTest.php	0.020	21
 sugar-crush/tests/Providers/SglangProviderReasoningReplayTest.php	0.020	7
+sugar-crush/tests/RepoMap/PageRankTest.php	0.020	10
+sugar-crush/tests/RepoMap/SymbolGraphTest.php	0.020	9
 sugar-crush/tests/Context/PromptSectionTest.php	0.019	23
 sugar-crush/tests/LSP/LspClientBodyDuplicationTest.php	0.019	4
 sugar-crush/tests/Hooks/HookDispatcherTest.php	0.019	55
