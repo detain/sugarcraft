@@ -245,6 +245,78 @@ final class SpawnProcTest extends TestCase
     }
 
     // ─────────────────────────────────────────────────────────────
+    // Slave-fd inheritance
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Regression: the parent's slave handle was opened without
+     * close-on-exec, so beside the dup2'd stdio copies the child also
+     * inherited the parent's own slave descriptor (seen as a stray
+     * /dev/pts/N at fd 5/6 in the child's fd census). That extra copy
+     * outlives the child's stdio: anything holding it keeps the slave
+     * open, so the master never sees EOF while a grandchild holds it.
+     * The slave must reach the child at 0-2 and nowhere else, with and
+     * without the controlling-terminal shim.
+     *
+     * @return iterable<string, array{bool}>
+     */
+    public static function controllingTerminalModes(): iterable
+    {
+        yield 'plain spawn' => [false];
+        yield 'controlling-terminal shim' => [true];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('controllingTerminalModes')]
+    public function testChildHoldsTheSlaveOnlyAtItsStdioDescriptors(bool $controllingTerminal): void
+    {
+        $this->requirePtySyscalls();
+        if (!\is_dir('/proc/self/fd') || !\is_executable('/bin/sh')) {
+            $this->markTestSkipped('Needs /proc/<pid>/fd and /bin/sh to take the child fd census.');
+        }
+        if ($controllingTerminal && !\extension_loaded('pcntl')) {
+            $this->markTestSkipped('The controlling-terminal shim needs ext-pcntl.');
+        }
+
+        $pty = Pty::open();
+        try {
+            $census = 'cd /proc/$$/fd && for f in *; do printf "FD %s=%s\n" "$f" "$(readlink "$f")"; done; printf CENSUS_DONE';
+            $child = Spawn::proc($pty->master, ['/bin/sh', '-c', $census], null, $controllingTerminal);
+
+            $seen = '';
+            $deadline = \microtime(true) + 5.0;
+            while (\microtime(true) < $deadline && !\str_contains($seen, 'CENSUS_DONE')) {
+                $chunk = $pty->read(8192, 0.2);
+                if ($chunk === null) {
+                    continue;
+                }
+                if ($chunk === '') {
+                    break;
+                }
+                $seen .= $chunk;
+            }
+            $child->wait();
+
+            $this->assertStringContainsString('CENSUS_DONE', $seen, 'the fd census never completed: ' . $seen);
+            \preg_match_all('/^FD (\d+)=(.*?)\r?$/m', $seen, $m, PREG_SET_ORDER);
+            $slaveFds = [];
+            foreach ($m as [, $fd, $target]) {
+                if ($target === $pty->master->slavePath) {
+                    $slaveFds[] = (int) $fd;
+                }
+            }
+            \sort($slaveFds);
+
+            $this->assertSame(
+                [0, 1, 2],
+                $slaveFds,
+                'the child must hold the slave only at stdin/stdout/stderr; census: ' . $seen,
+            );
+        } finally {
+            $pty->close();
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // Private constructor
     // ─────────────────────────────────────────────────────────────
 

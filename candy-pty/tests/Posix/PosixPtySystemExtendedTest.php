@@ -195,13 +195,165 @@ final class PosixPtySystemExtendedTest extends TestCase
             $child = $pair->slave()->spawn(['/bin/true']);
             $child->wait();
 
-            // Non-controlling spawn performs no resize of its own; the
-            // size written at open must still stand.
+            // No geometry was requested, so the spawn must leave the pty's
+            // size alone — creack/pty.Start() and portable-pty's
+            // spawn_command() never touch the winsize. The size written at
+            // open must still stand. (This pin is about OMITTED geometry,
+            // not about the controlling-terminal flag: an explicit size is
+            // applied on every spawn, see the tests below.)
             $size = $pair->master()->size();
             $this->assertSame(132, $size['cols']);
             $this->assertSame(43, $size['rows']);
         } finally {
             $pair->master()->close();
         }
+    }
+
+    /**
+     * Regression: an explicit geometry was silently dropped whenever
+     * `controllingTerminal` was false — the child of a spawn asked for
+     * 132x50 read `24 80` from `stty size`. Window size is a property of
+     * the pty (TIOCSWINSZ on the master), not of the session relationship,
+     * so creack/pty.StartWithSize() applies it unconditionally.
+     *
+     * @return iterable<string, array{bool}>
+     */
+    public static function controllingTerminalModes(): iterable
+    {
+        yield 'plain spawn' => [false];
+        yield 'controlling-terminal shim' => [true];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('controllingTerminalModes')]
+    public function testExplicitSpawnGeometryReachesTheChild(bool $controllingTerminal): void
+    {
+        $this->requirePtySyscalls();
+        if (!\is_executable('/bin/sh')) {
+            $this->markTestSkipped('/bin/sh is required for spawn tests.');
+        }
+        if ($controllingTerminal && !\extension_loaded('pcntl')) {
+            $this->markTestSkipped('The controlling-terminal shim needs ext-pcntl.');
+        }
+
+        $pair = (new PosixPtySystem())->open(80, 24);
+
+        try {
+            $child = $pair->slave()->spawn(
+                ['/bin/sh', '-c', 'printf "SIZE=%s\\n" "$(stty size)"'],
+                null,
+                132,
+                50,
+                $controllingTerminal,
+            );
+
+            $seen = $this->drainUntil($pair->master(), '/SIZE=(\d+ \d+)/');
+            $child->wait();
+
+            $this->assertMatchesRegularExpression('/SIZE=50 132\b/', $seen, 'the child must see the requested 132x50: ' . $seen);
+            $size = $pair->master()->size();
+            $this->assertSame([132, 50], [$size['cols'], $size['rows']]);
+        } finally {
+            $pair->master()->close();
+        }
+    }
+
+    public function testPartialSpawnGeometryKeepsTheOtherHalfOfTheCurrentSize(): void
+    {
+        $this->requirePtySyscalls();
+        if (!\is_executable('/bin/true')) {
+            $this->markTestSkipped('/bin/true is required for spawn tests.');
+        }
+
+        $pair = (new PosixPtySystem())->open(100, 30);
+
+        try {
+            $child = $pair->slave()->spawn(['/bin/true'], null, cols: 132);
+            $child->wait();
+            $size = $pair->master()->size();
+            $this->assertSame([132, 30], [$size['cols'], $size['rows']], 'cols-only request keeps the open rows');
+
+            $child = $pair->slave()->spawn(['/bin/true'], null, rows: 45);
+            $child->wait();
+            $size = $pair->master()->size();
+            $this->assertSame([132, 45], [$size['cols'], $size['rows']], 'rows-only request keeps the current cols');
+        } finally {
+            $pair->master()->close();
+        }
+    }
+
+    public function testSpawnOnAClosedMasterFailsInThePreSpawnResizeWhenGeometryIsRequested(): void
+    {
+        $this->requirePtySyscalls();
+
+        $pair = (new PosixPtySystem())->open(80, 24);
+        $slave = $pair->slave();
+        $pair->master()->close();
+
+        // The message pins WHERE it failed. Without the pre-spawn resize the
+        // call still throws a PtyException -- Spawn::proc() cannot fopen the
+        // freed slave path ('spawn.slave_open_failed') -- so a bare
+        // expectException() was green with or without the resize. Only the
+        // master's assertOpen() (reached via size()/resize()) says this.
+        $this->expectException(PtyException::class);
+        $this->expectExceptionMessage('cannot operate on a closed PosixMasterPty');
+        $slave->spawn(['/bin/true'], null, 132, 50);
+    }
+
+    public function testRejectedSpawnGeometryThrowsBeforeAnyChildIsStarted(): void
+    {
+        $this->requirePtySyscalls();
+        if (!\is_executable('/bin/sh')) {
+            $this->markTestSkipped('/bin/sh is required for spawn tests.');
+        }
+
+        // An OPEN master whose resize fails: SizeIoctl::pack() refuses a
+        // negative winsize field. The child would drop a marker file, so its
+        // absence proves the failure surfaced BEFORE proc_open. The pre-fix
+        // spawn() ignored geometry without controllingTerminal and started
+        // the child unsized; a post-spawn-only resize would throw too, but
+        // only after the child (and its marker) already existed.
+        $marker = \sys_get_temp_dir() . '/candy-pty-geom-' . \bin2hex(\random_bytes(6));
+        $pair = (new PosixPtySystem())->open(80, 24);
+
+        try {
+            $thrown = null;
+            try {
+                $pair->slave()->spawn(['/bin/sh', '-c', 'touch ' . \escapeshellarg($marker)], null, cols: -1);
+            } catch (\InvalidArgumentException $e) {
+                $thrown = $e;
+            }
+
+            // Give a wrongly-started child ample time to leave its marker.
+            $deadline = \microtime(true) + 1.0;
+            while (\microtime(true) < $deadline && !\file_exists($marker)) {
+                \usleep(20_000);
+            }
+
+            $this->assertInstanceOf(\InvalidArgumentException::class, $thrown, 'a negative column count must be refused');
+            $this->assertFileDoesNotExist($marker, 'no child may run when the requested geometry cannot be applied');
+            $size = $pair->master()->size();
+            $this->assertSame([80, 24], [$size['cols'], $size['rows']], 'the refused geometry must not half-apply');
+        } finally {
+            @\unlink($marker);
+            $pair->master()->close();
+        }
+    }
+
+    private function drainUntil(\SugarCraft\Pty\Contract\MasterPty $master, string $pattern): string
+    {
+        $seen = '';
+        $deadline = \microtime(true) + 5.0;
+        while (\microtime(true) < $deadline && \preg_match($pattern, $seen) !== 1) {
+            $chunk = $master->read(8192, 0.2);
+            if ($chunk === null) {
+                continue;
+            }
+            if ($chunk === '') {
+                break;
+            }
+            $seen .= $chunk;
+        }
+
+        return $seen;
     }
 }

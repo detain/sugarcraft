@@ -73,7 +73,14 @@ final class Spawn
         // writable for stdout/stderr slots 1-2) and reuse the single
         // resource for all three stdio slots. fd 0 is still the slave tty,
         // so the shim's ioctl(0, TIOCSCTTY) keeps working.
-        $slave = @\fopen($master->slavePath, 'r+');
+        //
+        // The `e` mode flag sets O_CLOEXEC on the parent's handle. Without
+        // it the child inherited this descriptor too — a stray slave copy
+        // beyond 0-2 that it (and any grandchild) kept open for its whole
+        // life. dup2() clears close-on-exec on the copies proc_open lands
+        // at 0-2, so the child's stdio is unaffected; only the extra copy
+        // dies at exec.
+        $slave = @\fopen($master->slavePath, 'r+e');
         if ($slave === false) {
             throw new PtyException(Lang::t('spawn.slave_open_failed', [
                 'path' => $master->slavePath,

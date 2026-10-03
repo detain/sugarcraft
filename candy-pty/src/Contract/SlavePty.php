@@ -26,9 +26,20 @@ interface SlavePty
     /**
      * Spawn a child process with its stdio wired to the slave PTY.
      *
+     * Window size belongs to the pty (TIOCSWINSZ on the master), not to the
+     * session relationship, so an explicit geometry must reach the child on
+     * every spawn (creack/pty.StartWithSize()). An implementation MAY widen
+     * $cols/$rows to `?int = null` so that omitting them keeps the pair's
+     * current size, as {@see \SugarCraft\Pty\Posix\PosixSlavePty::spawn()}
+     * does (creack/pty.Start(), portable-pty spawn_command()).
+     *
      * @param list<string>              $cmd
      * @param array<string,string>|null $env                null inherits parent env
+     * @param int                       $cols               requested window width; applied to the pty itself
+     *                                                      whether or not $controllingTerminal is set
+     * @param int                       $rows               requested window height; same rule as $cols
      * @param bool                      $controllingTerminal claim slave as child's ctty (Ctrl+C → SIGINT)
+     *
      * @see creack/pty.Start()
      * @see portable-pty.SlavePty.Start()
      */
