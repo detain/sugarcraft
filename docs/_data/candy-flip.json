@@ -6,6 +6,6 @@
     "emoji": "🎞",
     "displayName": "CandyFlip",
     "tagline": "ASCII GIF viewer",
-    "phpVersion": "8.1+",
+    "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/namzug16/gifterm\" style=\"color: inherit;\">gifterm</a></span>\n          <span class=\"tag-chip\">gif</span>\n          <span class=\"tag-chip\">ascii-art</span>\n          <span class=\"tag-chip\">ext-gd</span>\n          <span class=\"tag-chip\">truecolor</span>"
 }

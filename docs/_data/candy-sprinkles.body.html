@@ -27,11 +27,12 @@ echo Layout::joinVertical(Position::LEFT, $banner, $table);</code></pre>
     <div class="feature-grid">
       <div class="feature"><strong>Style</strong><span>Foreground / background, bold / italic / underline, padding, margin, width, alignment. Immutable <code>with*()</code> chain.</span></div>
       <div class="feature"><strong>Border</strong><span>Six built-in styles + custom. <code>Border::rounded()</code>, <code>thick()</code>, <code>double()</code>, <code>hidden()</code>, <code>normal()</code>, <code>ascii()</code>.</span></div>
-      <div class="feature"><strong>Table</strong><span>Headers, rows, per-cell styleFunc. ANSI-aware width calc with grapheme cluster support.</span></div>
+      <div class="feature"><strong>Table</strong><span>Headers, rows, per-cell styleFunc. ANSI-aware width calc with grapheme cluster support. Optional <code>wrap()</code> callback: every line it returns renders, so a wrapped row spans several physical lines.</span></div>
       <div class="feature"><strong>List + Tree</strong><span>Bulleted lists and ASCII trees with custom enumerators.</span></div>
       <div class="feature"><strong>Layout</strong><span><code>joinHorizontal</code>, <code>joinVertical</code>, <code>place</code>, <code>placeOverlay</code> for popovers.</span></div>
       <div class="feature"><strong>Canvas</strong><span>Multi-layer compositor. Z-ordered overlays, alpha-aware merge, ideal for modals + tooltips.</span></div>
-      <div class="feature"><strong>Theme</strong><span>SSOT colour palette. 10 named factories (dark/light/dracula/tokyoNight/oneDark/githubDark/solarized*/ansi/adaptive). 13 colour slots (foreground/background/primary/secondary/accent/muted/error/warning/success/info/border/separator/cursor). All <code>with*()</code> setters return a new Theme.</span></div>
+      <div class="feature"><strong>Theme</strong><span>SSOT colour palette. 10 named factories (dark/light/dracula/tokyoNight/oneDark/githubDark/solarized*/ansi/adaptive). 13 colour slots (foreground/background/primary/secondary/accent/muted/error/warning/success/info/border/separator/cursor). All <code>with*()</code> setters return a new Theme. <code>adaptive()</code> reads <code>$COLORFGBG</code>: the last field's palette slot decides light vs dark by luminance (7/15 light, 0/8 dark); unset or unparseable falls back to dark.</span></div>
+      <div class="feature"><strong>Colour degradation</strong><span>A Style carries a <code>ColorProfile</code> and <code>render()</code> downsamples to it, as charmbracelet/colorprofile's Writer does: TrueColor → 38;2, Ansi256 → 38;5, Ansi → 30..37/90..97, <code>Ascii</code> (what <code>NO_COLOR</code> selects) drops colour but keeps bold/italic/underline and OSC 8 links, and <code>NoTty</code> strips every escape — including ones carried in by pre-styled content, a <code>transform()</code> or a border title — while padding, borders and alignment stay.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -53,13 +54,16 @@ echo Layout::joinVertical(Position::LEFT, $banner, $table);</code></pre>
 <tr><td>Style</td><td>foreground(color)</td><td>Set foreground color</td></tr>
 <tr><td>Style</td><td>background(color)</td><td>Set background color</td></tr>
 <tr><td>Style</td><td>bold(), italic(), underline(), blink(), rapidBlink()</td><td>Text effects (blink = SGR 5, rapidBlink = SGR 6)</td></tr>
-<tr><td>Style</td><td>patch($other)</td><td>Incremental merge — only props set in $other are applied</td></tr>
+<tr><td>Style</td><td>patch($other)</td><td>Incremental merge — only props set in $other are applied; a null colour/width/border in $other is skipped, not a clear</td></tr>
+<tr><td>Style</td><td>colorProfile(ColorProfile $p)</td><td>Force the colour tier render() downsamples to (TrueColor / Ansi256 / Ansi / Ascii / NoTty)</td></tr>
 <tr><td>BorderGradientBlend</td><td>fromColors(Color ...$colors)</td><td>1-5 colors → 4 interpolated border-side colors</td></tr>
 <tr><td>Style</td><td>padding(top, right, bottom, left)</td><td>Add padding</td></tr>
 <tr><td>Style</td><td>render(content)</td><td>Render styled content</td></tr>
 <tr><td>Border</td><td>rounded(), thick(), double(), hidden()</td><td>Border style presets</td></tr>
+<tr><td>Border</td><td>titles(): array</td><td>Configured border titles (getTitles() remains as a deprecated alias); over-long titles are truncated to the edge</td></tr>
 <tr><td>Table</td><td>new()</td><td>Create a table</td></tr>
 <tr><td>Table</td><td>headers(...), row(...)</td><td>Add table content</td></tr>
+<tr><td>Table</td><td>wrap(?\Closure(string $cell, int $colWidth): list&lt;string&gt; $fn)</td><td>Per-cell wrapping; a wrapped row spans several physical lines</td></tr>
 <tr><td>Layout</td><td>joinVertical(), joinHorizontal()</td><td>Join layouts</td></tr>
 <tr><td>Canvas</td><td>new()</td><td>Create multi-layer canvas</td></tr>
 </table>

@@ -6,6 +6,6 @@
     "emoji": "🎁",
     "displayName": "CandyKit",
     "tagline": "CLI presentation helpers",
-    "phpVersion": "8.1+",
+    "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/fang\" style=\"color: inherit;\">fang</a></span>\n          <span class=\"tag-chip\">cli</span>\n          <span class=\"tag-chip\">presentation</span>\n          <span class=\"tag-chip\">library-only</span>"
 }

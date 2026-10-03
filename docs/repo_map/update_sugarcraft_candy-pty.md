@@ -561,14 +561,14 @@ $pump = PosixPump::withResizeForwarding(
 
 ## 3. Better IDE Autocomplete for Contract Returns
 
-**Current:** `PtySystemFactory::default()` returns `PtySystem` interface — IDE doesn't know which concrete class.
+**Current:** `PtySystemFactory::new()` (`default()` is its deprecated alias) returns the `PtySystem` interface — IDE doesn't know which concrete class. (`PosixPtySystem::open()` and `PosixPtyPair::master()` already narrow their return types to `PosixPtyPair` / `PosixMasterPty`.)
 
 **Proposed:** Add `@return` annotations with concrete types:
 ```php
 /**
  * @return PosixPtySystem|WindowsConPTYSystem|SidecarPtySystem
  */
-public static function default(): PtySystem
+public static function new(): PtySystem
 ```
 
 **Benefit:** Better IDE support for method chaining on returned instances.

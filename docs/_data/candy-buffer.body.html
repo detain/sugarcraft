@@ -6,6 +6,8 @@
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code>use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Position;
+use SugarCraft\Buffer\Region;
 use SugarCraft\Buffer\Style;
 
 // Create a 20x3 buffer filled with blank cells.
@@ -14,9 +16,9 @@ $buf = Buffer::new(20, 3);
 // Set a cell at (col=5, row=1).
 $buf = $buf->withCellAt(5, 1, Cell::new('H'));
 
-// Blit a 2x2 sub-buffer at origin.
+// Blit a 2x2 sub-buffer at the origin.
 $sub = Buffer::new(2, 2)->withCellAt(0, 0, Cell::new('A'));
-$buf = $buf->withRegion($sub, Buffer::new(2, 2));
+$buf = $buf->withRegion(Region::new(Position::new(0, 0), 2, 2), $sub);
 
 // Read a cell back.
 $cell = $buf->cellAt(5, 1);
@@ -40,7 +42,7 @@ echo $buf->height(); // 3</code></pre>
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Shared cell-grid foundation</strong> — all rendering components (sugar-bits, candy-forms, sugar-prompt, sugar-charts, sugar-table) depend on this.</li>
-      <li><strong>Per-cell dirty tracking</strong> — Buffer::diff() (step-26) enables SGR-transition optimisation without re-rendering unchanged cells.</li>
+      <li><strong>Per-cell dirty tracking</strong> — <code>Buffer::diff()</code> emits move / set-cell / repeat-run / erase-run ops for only the changed cells, and <code>applyDiff()</code> is its round-trip inverse.</li>
       <li><strong>Terminal rendering</strong> — the data model that drives the VT state machine output path.</li>
     </ul>
 
@@ -52,9 +54,6 @@ echo $buf->height(); // 3</code></pre>
       <li>Port of <a href="https://github.com/charmbracelet/vte">charmbracelet/vte</a> (Go upstream)</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">TODO: Buffer::diff()</h3>
-    <p>The Buffer::diff() method is declared but not yet implemented. Step-26 (step-14/15/16/17/18 consumer migration unblocked first) implements the delta-ANSI emitter supporting ECH/REP/ICH/DCH sequences for bandwidth-efficient SSH rendering.</p>
-
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
     <h3 style="margin-top: 32px;">API</h3>
@@ -65,7 +64,9 @@ echo $buf->height(); // 3</code></pre>
 <tr><td>Buffer</td><td>withCellAt(int, int, Cell)</td><td>Immutable cell setter; returns new Buffer</td></tr>
 <tr><td>Buffer</td><td>withRegion(Region, Buffer)</td><td>Blit source Buffer into this Buffer's region; returns new Buffer</td></tr>
 <tr><td>Buffer</td><td>width(), height(), region()</td><td>Dimension accessors</td></tr>
-<tr><td>Buffer</td><td>diff(Buffer)</td><td>Stub — returns []; step-26 implements delta-ANSI emitter</td></tr>
+<tr><td>Buffer</td><td>diff(Buffer $previous): list&lt;DiffOp&gt; / applyDiff(array $ops)</td><td>Delta ops that turn $previous into this buffer (dimensions must match) / apply them</td></tr>
+<tr><td>Buffer</td><td>fill(Region, Cell) / copy(Region)</td><td>Fill a region / extract it as a new Buffer</td></tr>
+<tr><td>Buffer</td><td>toAnsi() / fromString(?string $ansi, int, int)</td><td>Render to SGR + OSC 8 bytes / lossy test-support parse back. 38;2/48;2 components are clamped to 0–255, 38;5/48;5 indices map through the xterm-256 palette, and a truncated extended colour ends the parse</td></tr>
 <tr><td>Cell</td><td>new(string, ?Style, ?Hyperlink, int)</td><td>Factory with rune, style, link, width (1 or 2)</td></tr>
 <tr><td>Cell</td><td>rune(), style(), link(), width()</td><td>Property accessors</td></tr>
 <tr><td>Cell</td><td>continuation()</td><td>Factory: empty rune, null style/link, width=0</td></tr>

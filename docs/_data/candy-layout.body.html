@@ -1,10 +1,11 @@
-<p class="lede" style="margin-top: 28px;">Two solvers behind a <code>LayoutSolver</code> interface: <code>CassowarySolver</code> (simplex-based, optimal, handles stay/edit constraints) and <code>GreedySolver</code> (deterministic 5-phase fallback ported from candy-sprinkles). Swap solvers without touching call-sites. Foundation for candy-sprinkles, sugar-bits, and candy-forms layout.</p>
+<p class="lede" style="margin-top: 28px;">A ratatui-style constraint layout solver behind a one-method <code>LayoutSolver</code> interface: <code>GreedySolver</code> (deterministic 5-phase solver ported from candy-sprinkles) implements every constraint type, and the deprecated <code>CassowarySolver</code> shim delegates to it. Plus <code>DockLayout</code>, a center-plus-side-stacks pane geometry. Foundation for candy-sprinkles, sugar-bits, and candy-forms layout.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require sugarcraft/candy-layout</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Layout\{Constraint, Direction, GreedySolver, Region};
+    <pre class="code"><code>use SugarCraft\Layout\Constraint\Constraint;
+use SugarCraft\Layout\{Direction, GreedySolver, Region};
 
 $solver = GreedySolver::new();
 $region = Region::fromSize(100, 24);
@@ -14,14 +15,15 @@ $rects = $solver->solve($region, Direction::Horizontal, [
     Constraint::min(10),          // at least 10, takes more if available
     Constraint::fill(1),         // fills remaining space (weight 1)
     Constraint::percentage(30),     // 30% of total
-    Constraint::ratio(1, 3),     // 1/3 of remaining after fixed
+    Constraint::ratio(1, 3),     // 1/3 of the total span
     Constraint::max(50),          // ceiling — greedy but clamped
 ]);</code></pre>
 
     <h3 style="margin-top: 32px;">Solvers</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>GreedySolver</strong><span>Deterministic 5-phase fallback. Bit-identical output to the existing candy-sprinkles Solver. No deps, no edit variables. Fast and predictable.</span></div>
-      <div class="feature"><strong>CassowarySolver</strong><span>Full simplex with Big-M method. Handles stay constraints and edit variables. Simplification of Badros & Borning 2001 for 1D integer outputs.</span></div>
+      <div class="feature"><strong>GreedySolver</strong><span>Deterministic 5-phase solver. Bit-identical output to the existing candy-sprinkles Solver. No deps, no edit variables. Fast and predictable. Lossless rounding: floored fractions are handed back so the regions tile the span (Fill/Max remainder to the first Fill, Min slack residue to the first Min, a Percentage/Ratio shortfall of at most N−1 cells reclaimed earliest-first). When fixed demand exceeds the span, regions shrink proportionally and still sum to it — <code>withoutOverflowTruncation()</code> keeps full base sizes instead.</span></div>
+      <div class="feature"><strong>CassowarySolver (deprecated)</strong><span>The original Big-M simplex prototype never converged, so <code>solve()</code> raises <code>E_USER_DEPRECATED</code> and delegates wholly to <code>GreedySolver</code> — results are identical. Kept only so existing call-sites keep working.</span></div>
+      <div class="feature"><strong>DockLayout</strong><span>Center pane plus left/right weighted slot stacks. Stack heights are split in exact integer arithmetic (no float decides a boundary row); a weight set whose scaled sum would overflow is refused with <code>InvalidArgumentException</code> where it is introduced, and <code>resolve()</code> itself never throws, degrading side by side on small frames.</span></div>
     </div>
 
     <h3 style="margin-top: 32px;">Constraint types</h3>
@@ -31,14 +33,14 @@ $rects = $solver->solve($region, Direction::Horizontal, [
       <div class="feature"><strong>Max</strong><span>Ceiling — greedy, clamped to n cells.</span></div>
       <div class="feature"><strong>Fill</strong><span>Proportional remainder — weight controls distribution across multiple Fill constraints.</span></div>
       <div class="feature"><strong>Percentage</strong><span>Fraction of total — n% of the available dimension.</span></div>
-      <div class="feature"><strong>Ratio</strong><span>Fractional proportion — num/denom of remaining space after fixed constraints.</span></div>
+      <div class="feature"><strong>Ratio</strong><span>Fractional proportion — num/denom of the total span, reserved like a fixed size.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Foundation for candy-sprinkles</strong> — step-10 wires candy-sprinkles' existing Solver to consume candy-layout.</li>
       <li><strong>Foundation for sugar-bits / candy-forms</strong> — step-14/15 layout extraction.</li>
-      <li><strong>Swap solver without breaking call-sites</strong> — LayoutSolver is the only public contract.</li>
+      <li><strong>Swap solver without breaking call-sites</strong> — <code>LayoutSolver</code> (<code>solve()</code> alone; construction lives on the concrete classes) is the only public contract.</li>
     </ul>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -56,10 +58,10 @@ $rects = $solver->solve($region, Direction::Horizontal, [
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>LayoutSolver</td><td>solve(Region, Direction, list&lt;Constraint&gt;)</td><td>Solve constraints against a region in the given direction; returns list of sub-regions</td></tr>
-<tr><td>LayoutSolver</td><td>greedy(): self</td><td>Factory: create a GreedySolver</td></tr>
-<tr><td>LayoutSolver</td><td>cassowary(): self</td><td>Factory: create a CassowarySolver</td></tr>
-<tr><td>GreedySolver</td><td>new(): self</td><td>Default factory</td></tr>
-<tr><td>CassowarySolver</td><td>new(): self</td><td>Default factory</td></tr>
+<tr><td>GreedySolver</td><td>new(): self / compat(): self</td><td>Default factory / sugar-boxer parity mode (round-split, remainder-to-last, non-truncating overflow)</td></tr>
+<tr><td>GreedySolver</td><td>withRoundSplit() / withRemainderToLast() / withoutOverflowTruncation() / withMinShare(cells, reserveGap, reserveLead)</td><td>Immutable rounding and overflow options</td></tr>
+<tr><td>GreedySolver / CassowarySolver</td><td>static greedy() / static cassowary()</td><td>Concrete-class factories (no longer declared on the LayoutSolver interface)</td></tr>
+<tr><td>CassowarySolver</td><td>new(): self</td><td>Deprecated shim; solve() raises E_USER_DEPRECATED and delegates to GreedySolver</td></tr>
 <tr><td>Direction</td><td>Horizontal, Vertical</td><td>Enum: split direction</td></tr>
 <tr><td>Region</td><td>fromSize(int, int)</td><td>Factory: width, height</td></tr>
 <tr><td>Constraint</td><td>length(int)</td><td>Fixed cell count</td></tr>
@@ -67,7 +69,7 @@ $rects = $solver->solve($region, Direction::Horizontal, [
 <tr><td>Constraint</td><td>max(int)</td><td>Ceiling — at most n cells</td></tr>
 <tr><td>Constraint</td><td>fill(int $weight)</td><td>Proportional remainder with weight</td></tr>
 <tr><td>Constraint</td><td>percentage(int 0-100)</td><td>Percentage of total</td></tr>
-<tr><td>Constraint</td><td>ratio(int $num, int $denom)</td><td>Fractional proportion</td></tr>
+<tr><td>Constraint</td><td>ratio(int $num, int $denom)</td><td>Fractional proportion of the total span</td></tr>
 </table>
   </div>
 </section>

@@ -195,9 +195,10 @@ final class HelpText
         array $sections,
         string $description = '',
         ?Theme $theme = null,
+        ?int $width = 80,
     ): string;
 
-    public static function renderRows(array $rows, ?Theme $theme = null): string;
+    public static function renderRows(array $rows, ?Theme $theme = null, ?int $width = 80): string;
 }
 ```
 
@@ -217,7 +218,7 @@ COMMANDS
     serve             start the dev server
 ```
 
-The `renderRows` method calculates the maximum key width across all rows and left-pads shorter keys so all descriptions align at the same column. Uses `mb_strlen()` with `'UTF-8'` encoding for proper Unicode support.
+The `renderRows` method calculates the maximum key width across all rows (in terminal cells, via `Width::string()`) and pads shorter keys so all descriptions align at the same column. With a non-null `$width` (default 80; `null` = never wrap) long descriptions wrap and continue at the description column; when that leaves fewer than `MIN_DESCRIPTION_WIDTH` (16) cells, rows switch to a stacked layout (key on its own line, description indented `STACKED_INDENT` = 6 beneath it). A `$width` below 1 throws `InvalidArgumentException`.
 
 ### Logo (`Logo.php`)
 
@@ -368,22 +369,19 @@ The use of `Width::string()` (which calls `mb_strwidth()` after stripping ANSI) 
 `HelpText::renderRows()` calculates the maximum key width:
 
 ```php
-$maxKey = 0;
-foreach (array_keys($rows) as $k) {
-    if (mb_strlen($k, 'UTF-8') > $maxKey) {
-        $maxKey = mb_strlen($k, 'UTF-8');
-    }
-}
+$maxKey = array_reduce($keys, static fn (int $max, string $k): int
+    => max($max, Width::string($k)), 0);
 ```
 
-Then pads each key with spaces so descriptions align:
+Then pads each key to that cell width so descriptions align, wrapping each description to the room right of the description column:
 
 ```php
-$padded = $key . str_repeat(' ', max(0, $maxKey - mb_strlen($key, 'UTF-8')));
-$lines[] = '  ' . $theme->prompt->render($padded) . '  ' . $desc;
+$descColumn = 2 + $maxKey + 2;   // margin + key column + gutter
+$lines = self::wrap($desc, self::shrink($width, $descColumn));
+$out[] = '  ' . $theme->prompt->render(Width::padRight($key, $maxKey)) . '  ' . array_shift($lines);
 ```
 
-**Limitation:** Uses `mb_strlen()` for Unicode-aware length calculation but does not account for double-width characters (CJK, emoji) in the alignment. This is a known gap — `Width::string()` handles visual width but is not used in `renderRows()`.
+Keys and descriptions pass through `SafeText::line()` first, and widths are cell widths, so double-width characters (CJK, emoji) align correctly.
 
 ### Section Ordering
 
@@ -442,13 +440,11 @@ Sections are rendered in the order supplied in the `$sections` associative array
 
 3. **No manpage generation** — Fang integrates with `mango-cobra` for roff generation. Not implemented.
 
-4. **HelpText alignment doesn't account for wide characters** — `renderRows()` uses `mb_strlen()` which counts code points, not visual cell width. Double-width characters (emoji, CJK) would cause misaligned descriptions.
+4. **No built-in version flag wiring** — Fang automatically wires `--version` to build info. Candy-kit has no mechanism for this since it has no CLI framework integration.
 
-5. **No built-in version flag wiring** — Fang automatically wires `--version` to build info. Candy-kit has no mechanism for this since it has no CLI framework integration.
+5. **Logo is not a proper rendering primitive** — The `Logo` class stores styled content in its private field after `withColor()` applies the style. This means the Logo's internal state is a rendered string, not a renderable structure. This is a simplification that works for static logos but wouldn't support re-theming without re-rendering.
 
-6. **Logo is not a proper rendering primitive** — The `Logo` class stores styled content in its private field after `withColor()` applies the style. This means the Logo's internal state is a rendered string, not a renderable structure. This is a simplification that works for static logos but wouldn't support re-theming without re-rendering.
-
-7. **No Banner title anchor positioning** — Uses fixed `Border::rounded()` + `padding(0, 2)`. No support for title positioning (top-left, top-center, top-right, etc.) which lipgloss/borders support.
+6. **No Banner title anchor positioning** — Uses fixed `Border::rounded()` + `padding(0, 2)`. No support for title positioning (top-left, top-center, top-right, etc.) which lipgloss/borders support.
 
 ---
 
@@ -507,15 +503,13 @@ Sections are rendered in the order supplied in the `$sections` associative array
 
 1. **Light/dark auto-detection** — `Theme` factories don't accept a `isDark` parameter or closure; they produce fixed-palette themes. Users who want terminal-aware themes must implement their own theme selection.
 
-2. **HelpText wide-character alignment** — `renderRows()` uses `mb_strlen()` for key width calculation, not visual cell width. Double-width characters cause misalignment.
+2. **Banner title anchor positioning** — No support for placing the title at different border positions (top-left, top-center, top-right, etc.) like `BorderTitle` supports in candy-sprinkles.
 
-3. **Banner title anchor positioning** — No support for placing the title at different border positions (top-left, top-center, top-right, etc.) like `BorderTitle` supports in candy-sprinkles.
+3. **Logo re-theming** — Once `withColor()` is applied, the Logo stores a rendered string. There is no way to change the color of an already-colored Logo without re-creating it from the original ASCII art.
 
-4. **Logo re-theming** — Once `withColor()` is applied, the Logo stores a rendered string. There is no way to change the color of an already-colored Logo without re-creating it from the original ASCII art.
+4. **Section right-side label** — The `header()` method only supports left-padded labels. No equivalent to a right-side label (e.g., `── LEFT LABEL ──── RIGHT ──`).
 
-5. **Section right-side label** — The `header()` method only supports left-padded labels. No equivalent to a right-side label (e.g., `── LEFT LABEL ──── RIGHT ──`).
-
-6. **Theme mutation helpers** — No `withSuccess()` / `withError()` etc. methods to derive a new theme from an existing one with a single color changed.
+5. **Theme mutation helpers** — No `withSuccess()` / `withError()` etc. methods to derive a new theme from an existing one with a single color changed.
 
 ---
 
@@ -557,23 +551,21 @@ Gum generates shell completions via a hidden `completion` command. While candy-k
 
 1. **Add `Theme::adaptive(?Closure)`** — Theme factory that accepts a closure returning whether to use a dark or light palette. Default closure uses `ColorProfile::detect()`.
 
-2. **Fix HelpText wide-character alignment** — Replace `mb_strlen()` with `Width::string()` for key width calculation in `renderRows()`.
-
-3. **Add `Logo::withColorOverride()`** — Allow re-theming an already-colored Logo without storing raw ASCII art separately.
+2. **Add `Logo::withColorOverride()`** — Allow re-theming an already-colored Logo without storing raw ASCII art separately.
 
 ### Medium-term (new capabilities)
 
-4. **Add `Banner::withTitleAnchor()`** — Support title positioning on the border using `BorderTitle` with anchor positions.
+3. **Add `Banner::withTitleAnchor()`** — Support title positioning on the border using `BorderTitle` with anchor positions.
 
-5. **Add `Section::headerWithRightLabel()`** — Support right-side labels for cases like `── SETUP ──────────────────── 3/5 ──`.
+4. **Add `Section::headerWithRightLabel()`** — Support right-side labels for cases like `── SETUP ──────────────────── 3/5 ──`.
 
-6. **Add `Theme::with*()` derivation methods** — `withSuccess()`, `withError()` etc. for deriving themed variants without redefining all 7 levels.
+5. **Add `Theme::with*()` derivation methods** — `withSuccess()`, `withError()` etc. for deriving themed variants without redefining all 7 levels.
 
 ### Long-term (new subsystems)
 
-7. **Add shell completion generator** — Extract completion generation from any CLI framework as a standalone utility in a new `candy-complete` or `sugar-complete` library.
+6. **Add shell completion generator** — Extract completion generation from any CLI framework as a standalone utility in a new `candy-complete` or `sugar-complete` library.
 
-8. **Add `HelpText::renderMarkdown()`** — Integrate `candy-shine` for rendering markdown-formatted descriptions in help output (currently only plain text description is supported).
+7. **Add `HelpText::renderMarkdown()`** — Integrate `candy-shine` for rendering markdown-formatted descriptions in help output (currently only plain text description is supported).
 
 ---
 
@@ -587,16 +579,14 @@ Gum generates shell completions via a hidden `completion` command. While candy-k
    }
    ```
 
-2. **HelpText wide-char fix** — Replace `mb_strlen($key, 'UTF-8')` with `Width::string($key)` in `renderRows()`.
-
-3. **`Theme::withSuccess(Color)` derivation** — Add to `Theme`:
+2. **`Theme::withSuccess(Color)` derivation** — Add to `Theme`:
    ```php
    public function withSuccess(Style $success): self {
        return new self($success, $this->error, $this->warn, $this->info, $this->prompt, $this->accent, $this->muted);
    }
    ```
 
-4. **`Banner::withBorder(Border)` support** — Already implemented but not documented in the README.
+3. **`Banner::withBorder(Border)` support** — Already implemented but not documented in the README.
 
 ---
 

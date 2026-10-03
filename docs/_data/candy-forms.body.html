@@ -19,7 +19,9 @@ echo $form->view();</code></pre>
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Input primitives</strong><span>TextInput, TextArea, ItemList, Viewport, FilePicker, Cursor, Scrollbar, Spinner.</span></div>
-      <div class="feature"><strong>Form engine</strong><span>Field interface + Field{Input, Text, Confirm, Select, MultiSelect, Note, FilePicker}, Form, Group, KeyMap, Theme.</span></div>
+      <div class="feature"><strong>Form engine</strong><span>Field interface + Field{Input, Text, Confirm, Select, MultiSelect, Note, FilePicker, Date, Slider, Color}, Form, Group, KeyMap, Theme.</span></div>
+      <div class="feature"><strong>Hidden fields &amp; groups</strong><span><code>Form</code> honours <code>Field::isHidden()</code> in values, errors, validation, navigation, submit and view; focus never rests on a hidden field and fully hidden groups are skipped. A <code>Group::withHideFunc()</code> predicate sees the same view <code>values()</code> returns — the visible fields of every visible earlier group.</span></div>
+      <div class="feature"><strong>Bounded editing</strong><span>TextInput / TextArea clip a paste or insert to the remaining <code>charLimit</code> budget (newlines count), and TextArea pans to keep the cursor row visible.</span></div>
       <div class="feature"><strong>Validators</strong><span>Required, Email, MinLength, MaxLength, Pattern — pluggable validator interface.</span></div>
       <div class="feature"><strong>Fuzzy matching</strong><span>Fuzzy\FuzzyMatcher with Smith-Waterman algorithm for filter-as-you-type in Select/MultiSelect.</span></div>
     </div>
@@ -43,13 +45,16 @@ echo $form->view();</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Form</td><td>new(Field[])</td><td>Create a new form with fields</td></tr>
+<tr><td>Form</td><td>new(Field ...$fields)</td><td>Create a single-group form with fields</td></tr>
+<tr><td>Form</td><td>groups(Group ...$groups)</td><td>Create a multi-page form</td></tr>
+<tr><td>Form</td><td>values() / getString() / getInt() / getBool() / getArray()</td><td>Submitted values of visible fields; hidden fields and hidden groups are excluded</td></tr>
+<tr><td>Group</td><td>new(Field ...$fields) / withHideFunc(?\Closure(array): bool)</td><td>A page of fields; the predicate receives the visible values collected before this group</td></tr>
 <tr><td>Field\Input</td><td>new(string)</td><td>Create a text input field</td></tr>
 <tr><td>Field\Confirm</td><td>new(string)</td><td>Create a confirmation field</td></tr>
-<tr><td>Field\Select</td><td>new(string, Options)</td><td>Create a select field</td></tr>
+<tr><td>Field\Select</td><td>new(string)-&gt;withOptions(string ...)</td><td>Create a select field</td></tr>
 <tr><td>Validator\Required</td><td>validate(mixed)</td><td>Check value is not empty</td></tr>
 <tr><td>Validator\Email</td><td>validate(mixed)</td><td>Check valid email format</td></tr>
-<tr><td>Spinner\Spinner</td><td>new(Style)</td><td>Create a spinner with style</td></tr>
+<tr><td>Spinner\Spinner</td><td>new(?Style)</td><td>Create a spinner with style</td></tr>
 </table>
   </div>
 </section>

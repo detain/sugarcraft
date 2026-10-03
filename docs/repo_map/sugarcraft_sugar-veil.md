@@ -125,8 +125,8 @@ final class VeilStack implements \Countable
     // Query
     public function sorted(): array        // z-index ascending
     public function all(): array         // insertion order
-    public function maxZIndex(): int
-    public function minZIndex(): int
+    public function maxZIndex(): ?int    // null when empty — 0 is a real z-index
+    public function minZIndex(): ?int    // null when empty
     public function isEmpty(): bool
     public function count(): int
 }
@@ -163,7 +163,7 @@ This chaining pattern ensures each subsequent veil layers on top of the previous
 
 - Stable sort — equal z-indexes maintain insertion order
 
-- `maxZIndex()` / `minZIndex()` iterate all veils, tracking extrema
+- `maxZIndex()` / `minZIndex()` iterate all veils, tracking extrema, and return `null` for an empty stack
 
 ### Render Order = Composite Order
 

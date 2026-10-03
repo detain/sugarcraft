@@ -50,7 +50,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-shine"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-shine" alt="CandyShine code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Built on league/commonmark + CandySprinkles. Word-wrap, OSC 8 hyperlinks, syntax highlighting, eight built-in themes plus custom JSON themes.</p>
+    <p class="lede" style="margin-top: 28px;">Built on league/commonmark + CandySprinkles. Word-wrap, OSC 8 hyperlinks, syntax highlighting, nine built-in themes plus custom JSON themes.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require sugarcraft/candy-shine</code></pre>
@@ -80,10 +80,11 @@ echo (new Renderer($theme))-&gt;render($markdown);</code></pre>
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>CommonMark parser</strong><span>Headings, paragraphs, lists, blockquotes, code blocks, tables, rules, links, images, HTML inline + block.</span></div>
-      <div class="feature"><strong>Eight themes</strong><span>ansi, plain, notty, dark, light, dracula, tokyo-night, pink.</span></div>
-      <div class="feature"><strong>Custom JSON</strong><span><code>Theme::fromJson('./my-theme.json')</code> — element-keyed style overrides.</span></div>
-      <div class="feature"><strong>Word-wrap</strong><span>Configurable column width; honours SGR + grapheme cluster widths.</span></div>
-      <div class="feature"><strong>OSC 8 hyperlinks</strong><span>Optional <code>--no-hyperlinks</code> toggle for terminals that don't support them.</span></div>
+      <div class="feature"><strong>Nine themes</strong><span>ansi, plain, notty, ascii, dark, light, dracula, tokyo-night, pink.</span></div>
+      <div class="feature"><strong>Custom JSON</strong><span><code>Theme::fromJson('./my-theme.json')</code> — element-keyed style overrides. An unreadable file throws <code>RuntimeException</code> carrying the read error, rather than leaking a PHP warning; <code>Theme::fromJsonString()</code> takes the JSON directly.</span></div>
+      <div class="feature"><strong>Word-wrap</strong><span>Configurable column width; honours SGR + grapheme cluster widths. List items and blockquotes charge only their own indent or 2-cell bar, so nested lines fit the wrap width as in glamour.</span></div>
+      <div class="feature"><strong>OSC 8 hyperlinks</strong><span>Optional <code>--no-hyperlinks</code> toggle for terminals that don't support them. Email autolinks render the address hyperlinked to <code>mailto:</code> with no href suffix.</span></div>
+      <div class="feature"><strong>Streaming</strong><span><code>stream(iterable $chunks)</code> yields rendered sections as markdown arrives, byte-identical to <code>render()</code>. Link reference definitions carry across sections; a section with an unresolved <code>[..]</code> is held back until a later definition resolves it or the document ends.</span></div>
       <div class="feature"><strong>Syntax highlighting</strong><span>Code blocks tokenised + coloured per language.</span></div>
     </div>
 
@@ -106,10 +107,12 @@ echo (new Renderer($theme))-&gt;render($markdown);</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Renderer</td><td>new(?Theme)</td><td>Create renderer with optional theme</td></tr>
-<tr><td>Renderer</td><td>render(markdown)</td><td>Render markdown to ANSI string</td></tr>
-<tr><td>Theme</td><td>fromJson(path)</td><td>Load theme from JSON file</td></tr>
-<tr><td>Theme</td><td>ansi(), dark(), light(), dracula()</td><td>Built-in theme presets</td></tr>
+<tr><td>Renderer</td><td>new Renderer(?Theme $theme = null, …)</td><td>Create renderer with optional theme (also Renderer::ansi() / plain() / ascii() / fromEnvironment())</td></tr>
+<tr><td>Renderer</td><td>render(markdown)</td><td>Render markdown to ANSI string; a reused Renderer starts every render from a clean block stack</td></tr>
+<tr><td>Renderer</td><td>stream(iterable $chunks): Generator / writer(StreamSink)</td><td>Incremental section-by-section rendering</td></tr>
+<tr><td>Renderer</td><td>withWordWrap(?int) / withHyperlinks() / withBaseURL() / withTableWrap() / withPreservedNewLines() / withEmoji() / withSanitize()</td><td>Immutable option setters; withPreservedNewLines() keeps the source's blank-line runs between blocks</td></tr>
+<tr><td>Theme</td><td>fromJson(path) / fromJsonString(json)</td><td>Load theme from a JSON file (RuntimeException with the read error on failure) or string</td></tr>
+<tr><td>Theme</td><td>ansi(), plain(), notty(), ascii(), dark(), light(), dracula(), tokyoNight(), pink()</td><td>Built-in theme presets; byName() looks one up by name</td></tr>
 </table>
   </div>
 </section>
@@ -127,7 +130,7 @@ echo (new Renderer($theme))-&gt;render($markdown);</code></pre>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-shine/.vhs/themes.gif" alt="Themes">
                 <h3>Themes</h3>
-                <span class="demo-caption">Same document rendered through all eight themes.</span>
+                <span class="demo-caption">Same document rendered through the six colour themes (ansi, dark, light, dracula, tokyo-night, pink).</span>
             </div>
         </div>
     </div>
@@ -135,7 +138,7 @@ echo (new Renderer($theme))-&gt;render($markdown);</code></pre>
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/candy-shine">Packagist</a> ·

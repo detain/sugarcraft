@@ -25,9 +25,10 @@ $server->stop();               // close pipes first, then TERM→KILL→reap. Ne
 
     <h3 style="margin-top: 32px;">The model</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>McpMessage</strong><span>JSON-RPC 2.0 envelope: parse() / request() / notification() / success() / error(); a resultSet sentinel keeps explicit "result": null representable; toJson() is the wire, toArray() is inspection.</span></div>
+      <div class="feature"><strong>McpMessage</strong><span>JSON-RPC 2.0 envelope: parse() / request() / notification() / success() / error(); a resultSet sentinel keeps explicit "result": null representable; toJson() is the wire and fails closed on unencodable payloads, toArray() is inspection.</span></div>
       <div class="feature"><strong>McpTool / McpServer</strong><span>One tool definition value object with a well-typedness gate that refuses malformed server output, plus the start/stop/listTools/callTool interface.</span></div>
       <div class="feature"><strong>StdioMcpServer</strong><span>argv-array proc_open child, newline-delimited framing, 64 KiB rolling stderr tail absorbed on every wait set, one wall clock across the whole handshake.</span></div>
+      <div class="feature"><strong>ExchangeLock</strong><span>Serialises whole request/response exchanges when forked processes share one stdio connection; records a W/R phase so the next holder resynchronises after a killed one, and reports failed state writes.</span></div>
       <div class="feature"><strong>McpRouter</strong><span>Deny-patterns-then-allowlist narrowing over any set of McpServer instances; fnmatch globs; empty allowlist means allow-all; malformed entries fail loud.</span></div>
     </div>
 
@@ -53,13 +54,15 @@ $server->stop();               // close pipes first, then TERM→KILL→reap. Ne
 <tr><td>McpMessage</td><td>parse(string $json): ?self</td><td>Decode a wire frame; null for anything that is not a valid JSON-RPC 2.0 message</td></tr>
 <tr><td>McpMessage</td><td>request(string $id, string $method, ?array $params) / notification(string $method, ?array $params): self</td><td>Outbound request and notification envelopes</td></tr>
 <tr><td>McpMessage</td><td>success(string $id, mixed $result) / error(string $id, int $code, string $message, mixed $data = null): self</td><td>Outbound response envelopes; result is mixed by law</td></tr>
-<tr><td>McpMessage</td><td>toJson(): string / isRequest() / isResponse() / isNotification() / isError(): bool</td><td>Wire serialization + role predicates</td></tr>
-<tr><td>StdioMcpServer</td><td>start(): void / stop(): void / isUp(): bool</td><td>Handshake under one deadline; close-pipes-first teardown with TERM→KILL→reap via candy-core BoundedShutdown</td></tr>
-<tr><td>StdioMcpServer</td><td>listTools(): list&lt;McpTool&gt; / callTool(string $name, array $arguments): array</td><td>tools/list result; tools/call with scalar-result wrapping at the boundary</td></tr>
-<tr><td>StdioMcpServer</td><td>request(string $method, ?array $params): ?McpMessage / notify(string $method, ?array $params): bool</td><td>Escapeway to any other protocol method (resources, prompts) without subclasses</td></tr>
+<tr><td>McpMessage</td><td>toJson(): string / isRequest() / isResponse() / isNotification() / isError(): bool</td><td>Wire serialization + role predicates; toJson() throws InvalidArgumentException for an envelope JSON cannot carry (INF/NAN, invalid UTF-8) instead of emitting a blank frame</td></tr>
+<tr><td>StdioMcpServer</td><td>start(): void / stop(): void / isUp(): bool</td><td>Handshake under one deadline; every leg must succeed — an initialize or tools/list error or missing reply, or an undelivered notifications/initialized, reaps the child and throws RuntimeException. Close-pipes-first teardown with TERM→KILL→reap via candy-core BoundedShutdown</td></tr>
+<tr><td>StdioMcpServer</td><td>listTools(): list&lt;McpTool&gt; / callTool(string $name, array $arguments): array</td><td>tools/list result; tools/call with scalar-result wrapping at the boundary, no wall-clock deadline but a liveness probe on idle polls (a dead server ends the call within about a second, even when a forked helper holds its pipes); an unencodable argument becomes an {"error": …} payload</td></tr>
+<tr><td>StdioMcpServer</td><td>request(string $method, ?array $params = null, ?float $deadline = null): ?McpMessage / notify(string $method, ?array $params = null, ?float $deadline = null): bool</td><td>Escapeway to any other protocol method (resources, prompts) without subclasses; notify() reports whether the whole line went out</td></tr>
 <tr><td>McpTool</td><td>fromArray(array $def, string $serverName): self / tryFromArray(?array $def, string $serverName): ?self</td><td>Parse a tool definition; tryFromArray gates well-typedness before construction</td></tr>
 <tr><td>McpRouter</td><td>resolveAllowedTools(array $allowList): array / resolveAllowedServers(array $allowList): list&lt;string&gt;</td><td>Deny-first narrowing; empty allowlist = allow-all</td></tr>
 <tr><td>McpRouter</td><td>static serverAllowed(string $name, array $allowList): bool</td><td>Exact or fnmatch-glob membership; malformed entries throw</td></tr>
+<tr><td>ExchangeLock</td><td>static new(string $label, ?string $dir = null): self / static sweepStale(?string $dir = null): int</td><td>Cross-process flock for one stdio connection shared across pcntl_fork(); new() sweeps lock files whose owner died, then creates this owner's file. create() remains as a deprecated alias of new()</td></tr>
+<tr><td>ExchangeLock</td><td>acquire(?float $deadline, \Closure $serverAlive): bool / load(): array / store(string $phase, string $buffer): bool / markPhase(string $phase): bool</td><td>Phase byte + carried read buffer under the lock; store()/markPhase() return false when the write did not land, and an empty file loads as dirty</td></tr>
 </table>
   </div>
 </section>

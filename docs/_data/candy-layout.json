@@ -1,8 +1,8 @@
 {
     "title": "SugarCraft — CandyLayout",
-    "description": "CandyLayout: Constraint-based layout solver — Cassowary simplex + greedy 5-phase fallback for terminal grid layouts.",
+    "description": "CandyLayout: Constraint-based layout solver — deterministic greedy 5-phase solver with lossless rounding, plus DockLayout pane geometry for terminal grid layouts.",
     "ogTitle": "SugarCraft — CandyLayout",
-    "ogDescription": "Two solvers behind a LayoutSolver interface: CassowarySolver (simplex-based, optimal) and GreedySolver (deterministic 5-phase fallback). Swap without touching call-sites.",
+    "ogDescription": "A ratatui-style constraint solver behind a one-method LayoutSolver interface: GreedySolver handles every constraint type (the deprecated CassowarySolver delegates to it), plus DockLayout pane geometry.",
     "emoji": "🍬",
     "displayName": "CandyLayout",
     "tagline": "Constraint-based layout solver for terminal grids",

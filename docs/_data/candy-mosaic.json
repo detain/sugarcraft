@@ -6,6 +6,6 @@
     "emoji": "🍬",
     "displayName": "CandyMosaic",
     "tagline": "Image-to-cell renderer",
-    "phpVersion": "8.1+",
+    "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/x/tree/main/mosaic\" style=\"color: inherit;\">x/mosaic</a></span>\n          <span class=\"tag-chip\">image</span>\n          <span class=\"tag-chip\">sixel</span>\n          <span class=\"tag-chip\">kitty</span>\n          <span class=\"tag-chip\">iterm2</span>\n          <span class=\"tag-chip\">ext-gd</span>"
 }

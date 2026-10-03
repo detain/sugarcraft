@@ -171,11 +171,11 @@ Two concrete implementations ship:
 
 ### `InProcessTransport` (default)
 
-The default transport since PR5. Allocates a `candy-pty` master/slave pair via `PtySystemFactory::default()`, spawns the user's cmd as a subprocess with `controllingTerminal: true`, and pumps bytes between the supervisor's STDIN/STDOUT and the PTY master via `PosixPump`.
+The default transport since PR5. Allocates a `candy-pty` master/slave pair via `PtySystemFactory::new()`, spawns the user's cmd as a subprocess with `controllingTerminal: true`, and pumps bytes between the supervisor's STDIN/STDOUT and the PTY master via `PosixPump`.
 
 **Key integration points with candy-pty:**
 
-- `PtySystemFactory::default()` resolves `PosixPtySystem` on Linux/macOS
+- `PtySystemFactory::new()` resolves `PosixPtySystem` on Linux/macOS
 
 - `PosixPump::run($master, $stdin, $stdout, $child, $opts)` drives the byte pump
 
@@ -353,7 +353,7 @@ The `RateLimit` middleware uses a token-bucket algorithm with file-persisted sta
 
 | candy-pty component | candy-wish usage |
 |---|---|
-| `PtySystemFactory::default()` | Resolves platform-appropriate PTY backend |
+| `PtySystemFactory::new()` | Resolves platform-appropriate PTY backend |
 | `PosixPtySystem::open($cols, $rows)` | Opens master/slave pair in `InProcessTransport` |
 | `PosixPump::run()` | Pumps bytes stdin ↔ PTY master in `InProcessTransport` |
 | `SignalForwarder::attachSigwinch()` | Forwards SIGWINCH → `WindowChangeMsg` → `master->resize()` |

@@ -32,7 +32,10 @@ $style = $ring->isFocused('sidebar') ? $accentBorder : $plainBorder;</code></pre
       <div class="feature"><strong>register() appends</strong><span>Adds to the traversal order and focuses the region only when the ring was empty; re-registering an existing id is a no-op.</span></div>
       <div class="feature"><strong>unregister() preserves focus</strong><span>Keeps focus on the same region where possible; removing the focused region shifts focus to whatever takes its slot (clamped to the end), and emptying the ring clears focus.</span></div>
       <div class="feature"><strong>Wrap-around traversal</strong><span><code>next()</code> / <code>previous()</code> wrap past the ends and are no-ops with fewer than two regions.</span></div>
-      <div class="feature"><strong>Immutable</strong><span>Every mutator returns a new <code>FocusRing</code> and leaves the receiver untouched, so it slots into the immutable-model (TEA) pattern.</span></div>
+      <div class="feature"><strong>reorder() in one step</strong><span>Replaces the traversal order: ids are deduped (first wins), focus stays on the current region if it survives (otherwise the first region is focused), new ids are added and missing ids dropped.</span></div>
+      <div class="feature"><strong>Disabled regions</strong><span><code>disable()</code> keeps a region registered but makes traversal skip it; <code>enable()</code> puts it back. Disabling the focused region does not move focus — the next <code>next()</code> / <code>previous()</code> carries it to the nearest enabled region. <code>register()</code> always adds an enabled region, and a region dropped while disabled comes back enabled.</span></div>
+      <div class="feature"><strong>Iterable, countable, serialisable</strong><span>Implements <code>IteratorAggregate</code>, <code>Countable</code> and <code>JsonSerializable</code>: <code>foreach</code> walks every registered id, <code>count($ring)</code> counts them, and <code>json_encode($ring)</code> gives <code>{"ids":[…],"index":n,"disabled":[…]}</code> with string ids you can feed back in to restore a session.</span></div>
+      <div class="feature"><strong>Immutable</strong><span>Every mutator returns a new <code>FocusRing</code> and leaves the receiver untouched, so it slots into the immutable-model (TEA) pattern. No-op calls return the <em>same</em> instance, so <code>$new === $old</code> cheaply detects "nothing changed".</span></div>
       <div class="feature"><strong>Dependency-free</strong><span>No rendering or key decoding of its own — the owning model wires keys to it and reads <code>isFocused()</code> when drawing. Composes with any candy-core model.</span></div>
     </div>
 
@@ -58,18 +61,26 @@ $style = $ring->isFocused('sidebar') ? $accentBorder : $plainBorder;</code></pre
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>FocusRing</td><td>new(): self</td><td>An empty ring with nothing registered or focused</td></tr>
 <tr><td>FocusRing</td><td>of(string ...$ids): self</td><td>A ring of regions (duplicates dropped), focusing the first</td></tr>
-<tr><td>FocusRing</td><td>register(string $id): self</td><td>Add a region to the end of the traversal order</td></tr>
+<tr><td>FocusRing</td><td>ofStrict(string ...$ids): self</td><td>Like of(), but throws InvalidArgumentException on a duplicate id</td></tr>
+<tr><td>FocusRing</td><td>register(string $id): self</td><td>Add an enabled region to the end of the traversal order</td></tr>
 <tr><td>FocusRing</td><td>unregister(string $id): self</td><td>Remove a region, preserving focus where possible</td></tr>
+<tr><td>FocusRing</td><td>reorder(string ...$ids): self</td><td>Replace the traversal order, keeping focus on the current id when it survives</td></tr>
 <tr><td>FocusRing</td><td>focus(string $id): self</td><td>Focus a specific registered region</td></tr>
-<tr><td>FocusRing</td><td>next(): self</td><td>Tab traversal — move to the next region (wrapping)</td></tr>
-<tr><td>FocusRing</td><td>previous(): self</td><td>Shift-Tab traversal — move to the previous region (wrapping)</td></tr>
+<tr><td>FocusRing</td><td>next(): self</td><td>Tab traversal — move to the next enabled region (wrapping)</td></tr>
+<tr><td>FocusRing</td><td>previous(): self</td><td>Shift-Tab traversal — move to the previous enabled region (wrapping)</td></tr>
+<tr><td>FocusRing</td><td>disable(string $id): self / enable(string $id): self</td><td>Exclude a region from / restore it to traversal; no-ops for unknown ids or ids already in that state</td></tr>
+<tr><td>FocusRing</td><td>isEnabled(string $id): bool</td><td>Whether $id is registered and not disabled</td></tr>
+<tr><td>FocusRing</td><td>enabledIds(): list&lt;string&gt; / disabledIds(): list&lt;string&gt;</td><td>Enabled / disabled ids in traversal order</td></tr>
+<tr><td>FocusRing</td><td>enabledCount(): int / disabledCount(): int</td><td>Enabled / disabled region counts</td></tr>
 <tr><td>FocusRing</td><td>current(): ?string</td><td>The focused region id, or null when empty</td></tr>
 <tr><td>FocusRing</td><td>isFocused(string $id): bool</td><td>Whether $id is the focused region</td></tr>
 <tr><td>FocusRing</td><td>has(string $id): bool</td><td>Whether $id is registered</td></tr>
 <tr><td>FocusRing</td><td>index(): int</td><td>Focused position, or -1 when empty</td></tr>
 <tr><td>FocusRing</td><td>ids(): list&lt;string&gt;</td><td>Registered region ids in traversal order</td></tr>
-<tr><td>FocusRing</td><td>count(): int</td><td>Number of registered regions</td></tr>
+<tr><td>FocusRing</td><td>count(): int</td><td>Number of registered regions (Countable, so count($ring) works too)</td></tr>
 <tr><td>FocusRing</td><td>isEmpty(): bool</td><td>Whether the ring has no regions</td></tr>
+<tr><td>FocusRing</td><td>getIterator(): Traversable&lt;int, string&gt;</td><td>foreach support — every registered id (disabled ones included) in traversal order</td></tr>
+<tr><td>FocusRing</td><td>jsonSerialize(): array</td><td>['ids' =&gt; …, 'index' =&gt; …, 'disabled' =&gt; …] snapshot for json_encode()</td></tr>
 </table>
   </div>
 </section>

@@ -8,6 +8,7 @@
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Mouse\ZoneClickTracker;
 use SugarCraft\Mouse\MouseEvent;
+use SugarCraft\Mouse\MouseAction;
 
 // 1. Wrap interactive content with invisible zone markers.
 $rendered = Mark::zone('btn-ok', '  OK  ')
@@ -28,7 +29,10 @@ if ($result !== null) {
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Mark sentinel wrap</strong><span><code>Mark::zone($id, $content)</code> wraps content in invisible U+E000/U+E001 codepoints safe from ANSI SGR clobbering.</span></div>
+      <div class="feature"><strong>Mark sentinel wrap</strong><span><code>Mark::zone($id, $content)</code> wraps content in invisible U+E000/U+E001 codepoints safe from ANSI SGR clobbering. <code>Mark::new()</code> / <code>Mark::disabled()</code> build an instance for <code>wrap()</code>; <code>Mark::isValidId()</code> is the id predicate encoder and decoder share.</span></div>
+      <div class="feature"><strong>Strict scan grammar</strong><span><code>Scan::parse()</code> decodes exactly what <code>Mark</code> encodes and every tag byte is zero-width; a lone sentinel or malformed id skips only its 3 sentinel bytes, so a stray marker can never shift the zones after it. Orphan closes/unclosed opens are dropped, a zone that paints no cell yields no zone, and a duplicate id throws.</span></div>
+      <div class="feature"><strong>Row accounting</strong><span><code>\n</code> and <code>\r\n</code> start a new row; a lone <code>\r</code> returns to column 1 like a terminal. A zone that painted nothing before a leading newline or <code>\r</code> starts where it first paints, instead of upstream bubblezone's inverted or over-wide boxes.</span></div>
+      <div class="feature"><strong>Selection / SelectionRange</strong><span>Press → drag → release text-selection state machine over a selectable region, plus a normalised inclusive stream range whose <code>extract()</code> copies the selected text out of a frame.</span></div>
       <div class="feature"><strong>Scanner hit-testing</strong><span><code>Scanner::new()->scan($rendered)</code> parses sentinels; <code>hit(col, row)</code> reverse-lookup by coordinates; <code>get(id)</code> lookup by zone id.</span></div>
       <div class="feature"><strong>Zone bounding box</strong><span><code>Zone</code> readonly value object with 1-based start/end col/row coordinates matching terminal cell space.</span></div>
       <div class="feature"><strong>ZoneClickTracker dedup</strong><span><code>ZoneClickTracker</code> state machine per button — suppresses drag spurious presses and mismatched Press+Release on different zones.</span></div>
@@ -53,18 +57,25 @@ if ($result !== null) {
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Mark</td><td>::zone(id, content)</td><td>Wrap content with invisible sentinel markers</td></tr>
+<tr><td>Mark</td><td>::new() / ::disabled() / ->withEnabled(bool) / ->wrap(id, content)</td><td>Instance form; a disabled Mark returns content unwrapped</td></tr>
+<tr><td>Mark</td><td>::isValidId(id)</td><td>Whether an id is one Mark encodes and Scan decodes (≤ MAX_ID_BYTES, no spaces/escapes/non-ASCII)</td></tr>
+<tr><td>Scan</td><td>->parse(rendered, ?width)</td><td>Stateless, reentrant decoder behind Scanner; returns id =&gt; Zone</td></tr>
 <tr><td>Scanner</td><td>::new()</td><td>Create empty scanner</td></tr>
 <tr><td>Scanner</td><td>->scan(rendered)</td><td>Parse sentinels, build zone registry</td></tr>
 <tr><td>Scanner</td><td>->get(id)</td><td>Get Zone by id</td></tr>
 <tr><td>Scanner</td><td>->hit(col, row)</td><td>Reverse-lookup Zone at coordinates</td></tr>
+<tr><td>Scanner</td><td>->all() / ->prefixed(prefix) / ->clear()</td><td>Every zone, zones whose id starts with a prefix, reset</td></tr>
 <tr><td>Zone</td><td>$id</td><td>Zone identifier</td></tr>
 <tr><td>Zone</td><td>$startCol / $startRow / $endCol / $endRow</td><td>1-based bounding box</td></tr>
 <tr><td>MouseEvent</td><td>::press(x, y, button)</td><td>Factory for press event</td></tr>
 <tr><td>MouseEvent</td><td>::release(x, y, button)</td><td>Factory for release event</td></tr>
+<tr><td>MouseEvent</td><td>::drag(x, y, button) / ::scroll(x, y, button)</td><td>Factories for drag and scroll events</td></tr>
 <tr><td>MouseAction</td><td>Press / Release / Drag / Scroll</td><td>Mouse action enum</td></tr>
 <tr><td>ZoneClickTracker</td><td>->track(MouseEvent)</td><td>Feed event, receive ClickResult or null</td></tr>
 <tr><td>ZoneClickTracker</td><td>->setPressZone(Zone)</td><td>Set zone for pending press (call after track(Press))</td></tr>
 <tr><td>ClickResult</td><td>$zone / $button</td><td>Completed click result</td></tr>
+<tr><td>Selection</td><td>::new(rowFrom, rowTo, colFrom, colTo) / ->begin(row, col) / ->dragTo(row, col) / ->range() / ->clear()</td><td>Text-selection state machine bounded to a selectable region</td></tr>
+<tr><td>SelectionRange</td><td>::new(rowA, colA, rowB, colB) / ->spanOnRow(row) / ->cellContains(row, col) / ->cells() / ->extract(lines)</td><td>Normalised, inclusive selected range and its text</td></tr>
 </table>
   </div>
 </section>

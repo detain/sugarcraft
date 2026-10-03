@@ -63,40 +63,46 @@ $matcher = new SmithWatermanMatcher();
 
 // Single match — returns null when no match
 $result = $matcher->match('foo', 'foobar');
-// $result->score     === 3
-// $result->indices    === [0, 1, 2]  (0-based character positions)
-// $result->candidate === 'foobar'
+// $result->score     === 19   (3 × matchScore + adjacency bonuses)
+// $result->indices() === [0, 1, 2]  (0-based character positions)
+// $result->haystack  === 'foobar'
 
 // Match all candidates, sorted by score desc then candidate asc
-$results = $matcher->matchAll('ab', ['apple', 'banana', 'cabbage', 'cabbage']);
-// Results sorted: cabbage (score 2) before banana (score 1) before apple (score 0)
+$results = $matcher->matchAll('ab', ['apple', 'banana', 'cabbage']);
+// cabbage (11, the adjacent "ab") before apple (3) and banana (3)
+
+// Opt in to full-query mode for type-to-filter pickers: every query
+// character must land, in order
+$picker = SmithWatermanMatcher::new()->withRequireFullQuery();
+$picker->match('bxz', 'abcdef');               // null — "x" and "z" never land
+$picker->match('gst', 'git status')->indices(); // [0, 4, 5]
 
 // Use Highlighter to mark matched runs with ANSI codes
 $highlighter = new Highlighter();
 echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
-// Output: 'foober' with positions [0,1,2] highlighted in bold red</code></pre>
+// Output: 'foobar' with positions [0,1,2] highlighted in bold red</code></pre>
 
     <h3 style="margin-top: 32px;">FuzzyMatcher interface</h3>
     <div class="feature-grid">
       <div class="feature"><strong>match(string $query, string $candidate): ?MatchResult</strong><span>Returns null when no match, MatchResult with score + indices otherwise.</span></div>
-      <div class="feature"><strong>matchAll(string $query, iterable $candidates): list&lt;MatchResult&gt;</strong><span>Returns all matches sorted by score desc, then candidate asc as tiebreak.</span></div>
+      <div class="feature"><strong>matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): list&lt;MatchResult&gt;</strong><span>Returns all matches sorted by score desc, then candidate asc as tiebreak; <code>matchAllGenerator()</code> streams the same results lazily.</span></div>
     </div>
 
     <h3 style="margin-top: 32px;">MatchResult</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>score(): int</strong><span>Match quality score — higher is better; 0 means no match.</span></div>
-      <div class="feature"><strong>indices(): list&lt;int&gt;</strong><span>0-based character offsets of matched characters (UTF-8 safe — indices are at character boundaries, not bytes).</span></div>
-      <div class="feature"><strong>candidate(): string</strong><span>The candidate string that was matched.</span></div>
+      <div class="feature"><strong>$score: int</strong><span>Readonly match quality score — higher is better; <code>isMatched()</code> is <code>score &gt; 0</code>.</span></div>
+      <div class="feature"><strong>indices(): list&lt;int&gt;</strong><span>0-based code-point offsets into the original haystack (UTF-8 safe — indices are at character boundaries, not bytes).</span></div>
+      <div class="feature"><strong>$needle / $haystack: string</strong><span>Readonly query and candidate the result was computed for.</span></div>
     </div>
 
     <h3 style="margin-top: 32px;">Algorithms</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>SmithWatermanMatcher</strong><span>Local sequence alignment — optimal for finding best subsequence match within a candidate. Bit-equivalent in score and ranking to the original candy-forms FuzzyMatcher.</span></div>
-      <div class="feature"><strong>SahilmMatcher</strong><span>Ports the sahilm/fuzzy Go algorithm — separator bonus (/, _, -, space, .), camel-case bonus, exact-prefix bonus. Good for file/path matching.</span></div>
+      <div class="feature"><strong>SmithWatermanMatcher</strong><span>Local sequence alignment — optimal for finding best subsequence match within a candidate. Weights come from an immutable <code>ScoringProfile</code>; <code>ScoringProfile::canonical()</code> (the default — <code>default()</code> is a deprecated alias) is bit-equivalent to the original candy-forms FuzzyMatcher, with <code>strict()</code> / <code>lenient()</code> presets. <code>withRequireFullQuery()</code> keeps only candidates that contain the whole query as an in-order subsequence, scoring the best alignment forced to cover every query character (floored at 1). Over-cap input is truncated, never handed to another algorithm: only the first <code>maxQueryLength</code> (128) query and <code>maxCandidateLength</code> (1000) candidate characters take part.</span></div>
+      <div class="feature"><strong>SahilmMatcher</strong><span>Ports the sahilm/fuzzy Go algorithm — separator bonus (/, _, -, space, .), camel-case bonus, exact-prefix bonus. Good for file/path matching. Weights are injectable via the immutable <code>SahilmScoring</code>; <code>SahilmScoring::canonical()</code> is the historical sahilm/fuzzy constant set.</span></div>
     </div>
 
     <h3 style="margin-top: 32px;">Highlighter</h3>
-    <p>Takes a <code>MatchResult</code> and a styler <code>callable(string): string</code>, returns the candidate string with matched runs passed through the styler. Non-matched runs are returned unchanged.</p>
+    <p>Takes a <code>MatchResult</code> and a styler <code>\Closure(string): string</code>, returns the candidate string with matched runs passed through the styler. Non-matched runs are returned unchanged.</p>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
@@ -119,13 +125,20 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>FuzzyMatcher</td><td>match(string $query, string $candidate): ?MatchResult</td><td>Single match or null</td></tr>
-<tr><td>FuzzyMatcher</td><td>matchAll(string $query, iterable $candidates): list&lt;MatchResult&gt;</td><td>All matches sorted by score desc</td></tr>
-<tr><td>MatchResult</td><td>score(): int</td><td>Match quality score (higher = better)</td></tr>
-<tr><td>MatchResult</td><td>indices(): list&lt;int&gt;</td><td>0-based matched character offsets</td></tr>
-<tr><td>MatchResult</td><td>candidate(): string</td><td>The matched candidate string</td></tr>
-<tr><td>SmithWatermanMatcher</td><td>implements FuzzyMatcher</td><td>Local sequence alignment algorithm</td></tr>
-<tr><td>SahilmMatcher</td><td>implements FuzzyMatcher</td><td>Separator/camelCase bonus algorithm</td></tr>
-<tr><td>Highlighter</td><td>highlight(MatchResult, callable(string): string): string</td><td>Apply styler to matched runs</td></tr>
+<tr><td>FuzzyMatcher</td><td>matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): list&lt;MatchResult&gt;</td><td>All matches sorted by score desc</td></tr>
+<tr><td>FuzzyMatcher</td><td>matchAllGenerator(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): Generator</td><td>Lazy variant of matchAll()</td></tr>
+<tr><td>MatchResult</td><td>$score / $needle / $haystack (readonly)</td><td>Match quality score (higher = better), the query and the candidate</td></tr>
+<tr><td>MatchResult</td><td>indices(): list&lt;int&gt;</td><td>0-based matched code-point offsets into the original haystack</td></tr>
+<tr><td>MatchResult</td><td>isMatched(): bool / isEmpty(): bool</td><td>score &gt; 0 / no matched indices</td></tr>
+<tr><td>SmithWatermanMatcher</td><td>new(?ScoringProfile $profile = null, int $maxQueryLength = 128, int $maxCandidateLength = 1000, bool $requireFullQuery = false)</td><td>Local sequence alignment; over-cap input is truncated</td></tr>
+<tr><td>SmithWatermanMatcher</td><td>withRequireFullQuery(bool $require = true): self / requiresFullQuery(): bool</td><td>Full-query mode: every query character must land, in order</td></tr>
+<tr><td>SmithWatermanMatcher</td><td>profile() / maxQueryLength() / maxCandidateLength()</td><td>Configured weights and length caps</td></tr>
+<tr><td>ScoringProfile</td><td>canonical() / strict() / lenient()</td><td>Smith-Waterman weight presets; default() is a deprecated alias of canonical()</td></tr>
+<tr><td>ScoringProfile</td><td>withMatchScore() / withMismatchPenalty() / withGapOpen() / withGapExtend() / withAdjacentBonus()</td><td>Immutable weight setters</td></tr>
+<tr><td>SahilmMatcher</td><td>new(bool $caseSensitive = false, ?SahilmScoring $scoring = null)</td><td>Separator/camelCase bonus algorithm; scoring() / caseSensitive() accessors</td></tr>
+<tr><td>SahilmScoring</td><td>canonical() / withMatchScore() / withConsecutiveBonus() / withSeparatorBonus() / withCamelBonus() / withFirstCharBonus() / withLowerCaseBonus()</td><td>Immutable Sahilm weights (canonical 1 / 5 / 10 / 10 / 15 / 1)</td></tr>
+<tr><td>FuzzyMatcherFactory</td><td>named(string $type, ScoringProfile|SahilmScoring|null $scoring = null): FuzzyMatcher</td><td>'smith-waterman' or 'sahilm'; a mismatched weight type or unknown name throws. create() is a deprecated alias</td></tr>
+<tr><td>Highlighter</td><td>highlight(MatchResult, \Closure(string): string): string</td><td>Apply styler to matched runs</td></tr>
 </table>
   </div>
 </section>

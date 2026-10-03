@@ -6,6 +6,6 @@
     "emoji": "🖥️",
     "displayName": "CandyPty",
     "tagline": "Pseudo-terminal primitive — open / spawn / read / write / resize",
-    "phpVersion": "8.1+",
+    "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/x/tree/main/xpty\" style=\"color: inherit;\">x/xpty</a></span>\n          <span class=\"tag-chip\">linux + macos</span>\n          <span class=\"tag-chip\">ext-ffi</span>\n          <span class=\"tag-chip\">posix_openpt</span>\n          <span class=\"tag-chip\">tiocswinsz</span>\n          <span class=\"tag-chip\">sigwinch</span>"
 }

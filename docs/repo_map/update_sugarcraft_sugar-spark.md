@@ -724,7 +724,7 @@ use SugarCraft\Spark\Inspector;
 
 final class SparkPty {
     public function execute(string $command): list<Segment> {
-        $pty = PtySystemFactory::default()->open();
+        $pty = PtySystemFactory::new()->open();
         $pump = new PosixPump();
         
         $pty->slave()->spawn($command);

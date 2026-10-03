@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">Wrap rendered chunks with named markers, let CandyZone discover their bounding boxes, then ask zones whether a MouseMsg fell inside them. Markers are APC escape sequences — terminals ignore them, so they don't affect layout.</p>
+<p class="lede" style="margin-top: 28px;">Wrap rendered chunks with named markers, let CandyZone discover their bounding boxes, then ask zones whether a MouseMsg fell inside them. Markers are candy-mouse's invisible private-use sentinels (U+E000 / U+E001), and <code>scan()</code> strips them before the frame is printed, so they never affect layout.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require sugarcraft/candy-zone</code></pre>
@@ -24,8 +24,8 @@ if ($z-&gt;get('btn:ok')?-&gt;inBounds($mouseMsg)) {
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Marker injection</strong><span><code>$z->mark('btn:ok', $rendered)</code> wraps the chunk in invisible APC delimiters.</span></div>
-      <div class="feature"><strong>Single-pass scan</strong><span><code>$z->scan($frame)</code> records every marker's 1-based cell bounding box and strips them in one pass.</span></div>
+      <div class="feature"><strong>Marker injection</strong><span><code>$z->mark('btn:ok', $rendered)</code> wraps the chunk in invisible sentinel tags via candy-mouse <code>Mark::zone()</code>.</span></div>
+      <div class="feature"><strong>Single-pass scan</strong><span><code>$z->scan($frame)</code> records every marker's 1-based cell bounding box and strips them in one pass. It strips exactly the tags candy-mouse's <code>Scan::parse()</code> decodes (ids that pass <code>Mark::isValidId()</code>); any other stray sentinel loses only its own 3 bytes and the text after it is kept, so the printed frame matches the measured one.</span></div>
       <div class="feature"><strong>Bounds query</strong><span><code>$z->get('btn:ok')?->inBounds($mouseMsg)</code> — clean predicate, no coordinate math.</span></div>
       <div class="feature"><strong>ANSI-aware</strong><span>Width calculation honours SGR + Unicode grapheme widths; emojis, CJK, combining marks all account correctly.</span></div>
       <div class="feature"><strong>Manager isolation</strong><span>Manager::newGlobal() for app-wide; or per-component managers for nested mouse handling.</span></div>
@@ -51,8 +51,9 @@ if ($z-&gt;get('btn:ok')?-&gt;inBounds($mouseMsg)) {
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Manager</td><td>newGlobal()</td><td>Create global manager</td></tr>
 <tr><td>Manager</td><td>newPrefix(?prefix)</td><td>Create prefixed manager for isolation</td></tr>
-<tr><td>Manager</td><td>mark(name, rendered)</td><td>Wrap output with zone marker</td></tr>
-<tr><td>Manager</td><td>scan(output)</td><td>Record positions, strip markers</td></tr>
+<tr><td>Manager</td><td>mark(id, content)</td><td>Wrap output with zone marker</td></tr>
+<tr><td>Manager</td><td>scan(rendered)</td><td>Record positions, strip markers (same tag rule as candy-mouse Scan)</td></tr>
+<tr><td>Manager</td><td>all() / clear(?id) / close() / setEnabled(bool)</td><td>Every zone, reset one or all, disable</td></tr>
 <tr><td>Manager</td><td>anyInBounds(mouseMsg)</td><td>Return first zone under the mouse</td></tr>
 <tr><td>Manager</td><td>get(name)</td><td>Get zone by name</td></tr>
 <tr><td>Zone</td><td>inBounds(mouseMsg)</td><td>Test if mouse is inside zone</td></tr>

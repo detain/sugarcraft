@@ -105,7 +105,7 @@ The crown jewel. Key capabilities:
 
 - `background()` + `backgroundAdaptive()` + `backgroundComplete()` — same triad
 
-- `colorProfile(ColorProfile)` — downsample tier (TrueColor/Ansi256/Ansi/NoTty)
+- `colorProfile(ColorProfile)` — downsample tier (TrueColor/Ansi256/Ansi/Ascii/NoTty); Ascii keeps attributes and OSC 8 links but no colour, NoTty strips every escape from the whole render
 
 - `resolveAdaptive(bool $isDark)` + `resolveProfile()` — collapse adaptive/complete slots
 
@@ -157,7 +157,7 @@ The crown jewel. Key capabilities:
 
 - `inherit(self $parent)` — unset-only merge (explicit child wins)
 
-- `patch(self $other)` — incremental merge (only $other's explicit props apply)
+- `patch(self $other)` — incremental merge (only $other's explicit props apply; a null colour/width/border in $other is skipped, not a clear)
 
 ### Layout System
 

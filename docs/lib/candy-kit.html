@@ -65,12 +65,12 @@ echo StatusLine::error  ('connection refused'), "\n";</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>StatusLine</strong><span><code>success</code> / <code>error</code> / <code>warn</code> / <code>info</code> static helpers — glyph + message styled per the active theme.</span></div>
-      <div class="feature"><strong>Banner</strong><span>Bordered title block with optional subtitle, rounded by default. Useful for app intros / <code>--version</code> output.</span></div>
-      <div class="feature"><strong>Theme</strong><span>Palette of <code>Sprinkles\Style</code> objects keyed by status level. <code>Theme::ansi()</code> ships a sensible default.</span></div>
-      <div class="feature"><strong>Section</strong><span>Heading + body separator that sits naturally between log streams.</span></div>
-      <div class="feature"><strong>Stage</strong><span>Sequence of named steps with progress indicators.</span></div>
-      <div class="feature"><strong>HelpText</strong><span>Two-column key/description listing matched to the rest of the stack.</span></div>
+      <div class="feature"><strong>StatusLine</strong><span><code>success</code> / <code>error</code> / <code>warn</code> / <code>info</code> / <code>prompt</code> static helpers — glyph + message styled per the active theme.</span></div>
+      <div class="feature"><strong>Banner</strong><span>Bordered title block with optional subtitle, rounded by default. Useful for app intros / <code>--version</code> output. Title and subtitle are single display lines — embedded escapes, newlines and control bytes are stripped.</span></div>
+      <div class="feature"><strong>Theme</strong><span>Palette of <code>Sprinkles\Style</code> objects keyed by status level. <code>Theme::ansi()</code> ships the colourful palette; <code>Theme::detect()</code> downgrades it to what the output can show via candy-core's <code>ColorProfile::detect()</code> — no escape bytes when STDOUT is not a tty, colour dropped but bold kept under <code>NO_COLOR</code> on a terminal, full colour under <code>CLICOLOR_FORCE</code> / <code>FORCE_COLOR</code>. Every presenter called without a theme uses <code>Theme::detect()</code>; apply the same downgrade to a preset with <code>withColorProfile()</code>.</span></div>
+      <div class="feature"><strong>Section</strong><span>One-line themed dividers — <code>header()</code> label + fill rule, bare <code>rule()</code>, indented <code>subHeader()</code>. An explicit width is a hard cap: an over-long label is cut with <code>…</code> rather than overflowing.</span></div>
+      <div class="feature"><strong>Stage</strong><span>Per-line step renderers — numbered <code>step()</code>, <code>subStep()</code>, and <code>subStepWithProgress()</code> (bar or spinner).</span></div>
+      <div class="feature"><strong>HelpText</strong><span>fang-style <code>--help</code> page: <code>USAGE</code>, an optional description, and titled two-column key/description sections. Wraps to <code>width</code> (default 80, <code>null</code> = never wrap): long descriptions continue at the description column, and switch to a stacked layout when the key column leaves fewer than 16 cells.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -86,14 +86,19 @@ echo StatusLine::error  ('connection refused'), "\n";</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>StatusLine</td><td>success(msg)</td><td>Print success message</td></tr>
-<tr><td>StatusLine</td><td>error(msg)</td><td>Print error message</td></tr>
-<tr><td>StatusLine</td><td>warn(msg)</td><td>Print warning message</td></tr>
-<tr><td>StatusLine</td><td>info(msg)</td><td>Print info message</td></tr>
-<tr><td>Banner</td><td>title(text, subtitle)</td><td>Create title banner</td></tr>
-<tr><td>Section</td><td>new(heading, body)</td><td>Create section block</td></tr>
-<tr><td>Stage</td><td>new()</td><td>Create step sequence</td></tr>
-<tr><td>HelpText</td><td>new()</td><td>Create help text</td></tr>
+<tr><td>StatusLine</td><td>success(msg, ?theme)</td><td>Render a success line</td></tr>
+<tr><td>StatusLine</td><td>error(msg, ?theme)</td><td>Render an error line</td></tr>
+<tr><td>StatusLine</td><td>warn(msg, ?theme)</td><td>Render a warning line</td></tr>
+<tr><td>StatusLine</td><td>info(msg, ?theme)</td><td>Render an info line</td></tr>
+<tr><td>StatusLine</td><td>prompt(msg, ?theme)</td><td>Render a prompt line</td></tr>
+<tr><td>Banner</td><td>title(title, subtitle = '', ?theme, ?border)</td><td>Bordered title banner (control bytes stripped from caller text)</td></tr>
+<tr><td>Section</td><td>header(label, ?theme, leftPad = 2, ?width = 80, rune = '─')</td><td>Label + fill rule; a non-null width is a hard cap (long labels end in …)</td></tr>
+<tr><td>Section</td><td>rule(?theme, ?width = 80, rune = '─') / subHeader(label, ?theme, indent = 4, ?width = 80, rune = '·')</td><td>Bare divider / indented nested heading</td></tr>
+<tr><td>Stage</td><td>step() / subStep() / subStepWithProgress()</td><td>Numbered step, sub-step, and sub-step with a bar or spinner</td></tr>
+<tr><td>HelpText</td><td>render(usage, sections, description = '', ?theme, ?width = 80)</td><td>Full --help page; wraps to width, null = never wrap, width &lt; 1 throws</td></tr>
+<tr><td>HelpText</td><td>renderRows(rows, ?theme, ?width = 80)</td><td>One two-column block; stacked layout below MIN_DESCRIPTION_WIDTH (16) cells</td></tr>
+<tr><td>Theme</td><td>ansi() / detect(?env, ?stream) / plain()</td><td>Colourful palette / palette downgraded to the stream's ColorProfile / no styling</td></tr>
+<tr><td>Theme</td><td>withColorProfile(ColorProfile $profile)</td><td>Downgrade any theme to a colour profile</td></tr>
 </table>
   </div>
 </section>
@@ -129,7 +134,7 @@ echo StatusLine::error  ('connection refused'), "\n";</code></pre>
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/candy-kit">Packagist</a> ·

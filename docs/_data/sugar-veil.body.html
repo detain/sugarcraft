@@ -1,24 +1,32 @@
-<p class="lede" style="margin-top: 28px;">Stack overlay views on top of a base TUI. Each overlay renders independently and the compositor handles z-ordering, positioning, and teardown.</p>
+<p class="lede" style="margin-top: 28px;">Composite overlay views (modals, tooltips, toasts) on top of a base TUI frame. Render your models first, then let the compositor handle positioning, backdrop dimming, z-ordering, animated transitions and click-outside hit-testing.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require sugarcraft/sugar-veil</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Veil\Veil;
-use SugarCraft\Sprinkles\Style;
+    <pre class="code"><code>use SugarCraft\Veil\{Position, Veil, VeilStack};
 
-$veil = new Veil();
-$veil = $veil-&gt;push($modalView, Position::Center);
-$veil = $veil-&gt;push($tooltip, Position::TopRight);
+$veil = Veil::new()-&gt;withBackdrop(40);   // dim the background to 40%
 
-echo $veil-&gt;render($baseView);</code></pre>
+// Composite a foreground string centered over a background string
+echo $veil-&gt;composite($modalView, $baseView, Position::CENTER, Position::CENTER);
+
+// Layer several overlays by z-index
+$stack = VeilStack::new()
+    -&gt;add(Veil::new()-&gt;withContent($modalView)-&gt;withZIndex(1))
+    -&gt;add(Veil::new()-&gt;withContent($tooltip)-&gt;withZIndex(2)
+        -&gt;withPosition(Position::TOP, Position::RIGHT));
+echo $stack-&gt;compositeAll($baseView);</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Stack management</strong><span>Push / pop overlays. Z-order handled automatically.</span></div>
-            <div class="feature"><strong>Positioning</strong><span>Center, Top, Bottom, Left, Right, or absolute coordinates.</span></div>
-            <div class="feature"><strong>Teardown</strong><span>Per-overlay completion callbacks on removal.</span></div>
-            
+      <div class="feature"><strong>Positioning</strong><span>Nine anchors — Top, Right, Bottom, Left, Center and the four corners — plus X/Y offsets in cells (columns/rows).</span></div>
+      <div class="feature"><strong>Backdrop dimming</strong><span>Truecolor opacity blend (0–100) applied to plain background lines during assembly.</span></div>
+      <div class="feature"><strong>Animated transitions</strong><span><code>withAnimation()</code> + <code>animate(…, $progress)</code>: SLIDE enters from the anchored edge, SCALE reveals lines from the center outward, and FADE brightens the overlay in from black through a truecolor gray pen (terminals cannot alpha-blend), returning the original bytes at full opacity.</span></div>
+      <div class="feature"><strong>VeilStack</strong><span>Ordered collection of veils rendered by ascending z-index; <code>maxZIndex()</code> / <code>minZIndex()</code> return <code>null</code> for an empty stack, since 0 is a real z-index.</span></div>
+      <div class="feature"><strong>Click-outside dismiss</strong><span><code>withClickOutsideDismiss()</code> + <code>scan()</code> / <code>isClickOutside()</code> via candy-mouse zones. The scanned zones travel with the veil across later <code>with*()</code> calls, so a click is judged against the frame that was on screen.</span></div>
+      <div class="feature"><strong>Buffer diffing</strong><span><code>composite()</code> diffs against the previous frame and emits only changed cells. An empty background returns the overlay itself as the frame (upstream's <code>bg == ""</code> early return), and truecolor SGR components are clamped to 0–255 when the diff pen is built.</span></div>
+      <div class="feature"><strong>Border chrome &amp; auto-size</strong><span><code>withBorder()</code> wraps veil content in a terminal border; <code>withAutoSize()</code> sizes the veil from its content.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -35,9 +43,14 @@ echo $veil-&gt;render($baseView);</code></pre>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Veil</td><td>new()</td><td>Create a new veil</td></tr>
-<tr><td>Veil</td><td>push(view, position)</td><td>Push overlay onto stack</td></tr>
-<tr><td>Veil</td><td>pop()</td><td>Pop top overlay</td></tr>
-<tr><td>Veil</td><td>render(baseView)</td><td>Composite all overlays</td></tr>
+<tr><td>Veil</td><td>composite(foreground, background, Position $vertical, Position $horizontal, int $xOffset = 0, int $yOffset = 0)</td><td>Composite one string over another; offsets are cells</td></tr>
+<tr><td>Veil</td><td>animate(foreground, background, $vertical, $horizontal, float $progress, $xOffset = 0, $yOffset = 0)</td><td>Composite with the configured animation applied at progress 0..1</td></tr>
+<tr><td>Veil</td><td>withBackdrop(int) / withAnimation(?AnimationKind) / withZIndex(int) / withPosition(?Position, ?Position, x, y) / withContent(string) / withBorder(?Border) / withAutoSize() / withClickOutsideDismiss()</td><td>Immutable configuration; scanned zones survive every with*()</td></tr>
+<tr><td>Veil</td><td>scan(rendered) / hit(col, row) / isClickOutside(MouseMsg)</td><td>Zone hit-testing; isClickOutside() throws when dismissal is on but scan() has not run</td></tr>
+<tr><td>VeilStack</td><td>new() / add(Veil) / removeWhere(\Closure) / filter(\Closure) / clear()</td><td>Immutable stack of veils</td></tr>
+<tr><td>VeilStack</td><td>composite(background, $vertical, $horizontal, $xOffset = 0, $yOffset = 0) / compositeAll(background)</td><td>Render every veil by ascending z-index, at a shared position or each at its own</td></tr>
+<tr><td>VeilStack</td><td>maxZIndex(): ?int / minZIndex(): ?int</td><td>Highest / lowest z-index, null for an empty stack</td></tr>
+<tr><td>VeilStack</td><td>sorted() / all() / isEmpty() / count()</td><td>Queries (count() via Countable)</td></tr>
 </table>
   </div>
 </section>
