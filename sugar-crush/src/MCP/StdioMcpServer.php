@@ -162,12 +162,14 @@ final class StdioMcpServer implements McpServer
 
     /**
      * DELIBERATELY UNBOUNDED, unlike {@see start()}'s handshake — see the
-     * library's callTool().
+     * library's callTool(). $onWait is the library's wait beat (item 0.4-b):
+     * an unbounded call is kept visibly alive rather than given a deadline.
      *
+     * @param (\Closure(): void)|null $onWait
      * @return array<mixed>
      */
-    public function callTool(string $toolName, array $args): array
+    public function callTool(string $toolName, array $args, ?\Closure $onWait = null): array
     {
-        return $this->transport->callTool($toolName, $args);
+        return $this->transport->callTool($toolName, $args, $onWait);
     }
 }

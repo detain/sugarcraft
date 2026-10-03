@@ -514,8 +514,10 @@ final class McpClient
      * cannot bypass listTools() filtering by naming a denied server directly.
      * With no preset attached, rejected unconditionally unless $unrestricted
      * was explicitly set at construction time.
+     *
+     * @param (\Closure(): void)|null $onWait the caller's wait beat (item 0.4-b)
      */
-    public function callTool(string $serverName, string $toolName, array $args): array
+    public function callTool(string $serverName, string $toolName, array $args, ?\Closure $onWait = null): array
     {
         $server = $this->servers[$serverName] ?? null;
 
@@ -532,7 +534,13 @@ final class McpClient
         // this server's own between-turns bytes are already absorbed.
         $this->pumpStderr();
 
-        return $server->callTool($toolName, $args);
+        // The wait beat (item 0.4-b) reaches the stdio transport only: it is
+        // the one whose call is unbounded. `http` carries Guzzle's 30 s total
+        // timeout, under the turn's 120 s idle ceiling, and `claude-mcp`
+        // speaks through its own client.
+        return $server instanceof StdioMcpServer && $onWait !== null
+            ? $server->callTool($toolName, $args, $onWait)
+            : $server->callTool($toolName, $args);
     }
 
     /**

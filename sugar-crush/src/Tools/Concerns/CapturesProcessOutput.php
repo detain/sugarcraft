@@ -138,7 +138,14 @@ trait CapturesProcessOutput
      * minus credentials (audit F-E1). EnvironmentBlock passes `GIT_OPTIONAL_LOCKS=0` this way
      * (audit 15d-12) so the lock rule stays scoped to its own git reads.
      *
+     * $onWait is called once per select slice (at most every 200 ms) for as
+     * long as the drain waits — the hook a sequential tool's heartbeat rides
+     * (item 0.4-b, {@see \SugarCraft\Crush\Tools\AcceptsHeartbeat}), so a
+     * long-running command reads as alive to the turn's idle watchdog. It
+     * is only ever called from this process; the caller throttles.
+     *
      * @param array<string, string> $envOverrides
+     * @param (\Closure(): void)|null $onWait
      * @return array{
      *     stdout: string,
      *     stderr: string,
@@ -151,7 +158,7 @@ trait CapturesProcessOutput
      *     timedOut: bool,
      * }
      */
-    private function runCaptured(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $timeoutSeconds = null, array $envOverrides = []): array
+    private function runCaptured(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $timeoutSeconds = null, array $envOverrides = [], ?\Closure $onWait = null): array
     {
         $descriptors = [
             0 => ['pipe', 'r'],
@@ -206,6 +213,9 @@ trait CapturesProcessOutput
         $deadline = $timeoutSeconds === null ? null : microtime(true) + max(0.0, $timeoutSeconds);
         $timedOut = false;
         while (!feof($pipes[1]) || !feof($pipes[2])) {
+            if ($onWait !== null) {
+                $onWait();
+            }
             $read = array_filter([$pipes[1], $pipes[2]], static fn($p) => !feof($p));
             if ($read === []) {
                 break;
@@ -245,7 +255,7 @@ trait CapturesProcessOutput
         // exit code once proc_get_status() has seen the exit.
         $observedExit = null;
         if ($deadline !== null && !$timedOut) {
-            $observedExit = self::awaitExitUntil($process, $deadline);
+            $observedExit = self::awaitExitUntil($process, $deadline, $onWait);
             $timedOut = $observedExit === null;
         }
 
@@ -291,13 +301,19 @@ trait CapturesProcessOutput
     /**
      * Poll until the child exits or $deadline passes; the exit code on exit,
      * null on expiry. The status is read BEFORE the clock so a child that
-     * exited right at the bound still counts as exited.
+     * exited right at the bound still counts as exited. $onWait beats here
+     * too: `cmd >/dev/null 2>&1` closes both pipes at once and then spends
+     * its whole run in this loop.
      *
      * @param resource $process
+     * @param (\Closure(): void)|null $onWait
      */
-    private static function awaitExitUntil($process, float $deadline): ?int
+    private static function awaitExitUntil($process, float $deadline, ?\Closure $onWait = null): ?int
     {
         while (true) {
+            if ($onWait !== null) {
+                $onWait();
+            }
             $status = proc_get_status($process);
             if (($status['running'] ?? false) !== true) {
                 return (int) ($status['exitcode'] ?? -1);
@@ -379,7 +395,9 @@ trait CapturesProcessOutput
      * long may this run at all?"; a program that keeps repainting a progress
      * bar never trips the first. Null keeps the historical 3x-idle bound.
      * `timedOut` is true whichever bound fired, matching runCaptured().
+     * $onWait is runCaptured()'s wait beat, called on every 50 ms read pass.
      *
+     * @param (\Closure(): void)|null $onWait
      * @return array{
      *     stdout: string,
      *     stderr: string,
@@ -392,7 +410,7 @@ trait CapturesProcessOutput
      *     timedOut: bool,
      * }
      */
-    private function runCapturedInteractive(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $idleCeilingSec = null, ?float $timeoutSeconds = null): array
+    private function runCapturedInteractive(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $idleCeilingSec = null, ?float $timeoutSeconds = null, ?\Closure $onWait = null): array
     {
         $idle = $idleCeilingSec ?? self::INTERACTIVE_IDLE_CEILING_SECONDS;
 
@@ -429,6 +447,9 @@ trait CapturesProcessOutput
 
         try {
             while (true) {
+                if ($onWait !== null) {
+                    $onWait();
+                }
                 $chunk = $pty->read(8192, 0.05);
                 if ($chunk !== null && $chunk !== '') {
                     $transcript = self::appendBounded($transcript, $chunk, $maxBytes, $dropped);

@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Support\ProcessContainment;
+use SugarCraft\Crush\Tools\AcceptsHeartbeat;
 use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\PromptGuidance;
@@ -33,7 +34,7 @@ use SugarCraft\Crush\Tools\ToolResult;
  * {@see \SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook}, a heuristic
  * PreToolUse hook that denies commands referencing paths outside `$root`.
  */
-final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance
+final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, AcceptsHeartbeat
 {
     use CapturesProcessOutput;
     use RebindsWorktreeJail;
@@ -209,6 +210,24 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance
 
     public function execute(array $args): ToolResult
     {
+        return $this->runCommand($args, null);
+    }
+
+    /**
+     * {@see execute()} with the turn's liveness beat fired from the capture's
+     * wait loop (item 0.4-b), so a command allowed to run for its full
+     * `timeout` is not killed first by the turn's 120 s idle watchdog.
+     */
+    public function executeWithHeartbeat(array $args, \Closure $heartbeat): ToolResult
+    {
+        return $this->runCommand($args, $heartbeat);
+    }
+
+    /**
+     * @param array<string, mixed> $args
+     */
+    private function runCommand(array $args, ?\Closure $heartbeat): ToolResult
+    {
         $command = $args['command'] ?? '';
         $output = [];
         $exitCode = 0;
@@ -256,8 +275,8 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance
         $maxBytes = $this->maxOutputBytes > 0 ? $this->maxOutputBytes : null;
         $timeout = self::timeoutSeconds($args['timeout'] ?? null);
         $run = ($args['interactive'] ?? false) === true
-            ? $this->runCapturedInteractive($cmd, null, $maxBytes, null, (float) $timeout)
-            : $this->runCaptured($cmd, null, $maxBytes, (float) $timeout);
+            ? $this->runCapturedInteractive($cmd, null, $maxBytes, null, (float) $timeout, $heartbeat)
+            : $this->runCaptured($cmd, null, $maxBytes, (float) $timeout, [], $heartbeat);
         if (($run['timedOut'] ?? false) === true) {
             $run['stderr'] = ltrim($run['stderr'] . "\n" . sprintf(
                 '[timed out after %d s: the command and its process group were killed; pass a larger `timeout` (max %d) if it needs longer]',

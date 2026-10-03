@@ -32,6 +32,7 @@ sugar-crush/tests/Support/InterpolationOpenerTokenTest.php	9.266	6
 sugar-crush/tests/Session/SessionStoreTest.php	9.192	45
 sugar-crush/tests/Session/CheckpointIntegrityTest.php	9.006	9
 sugar-crush/tests/Diagnostics/RuntimeNoticeSinkDeliveryTest.php	8.494	25
+sugar-crush/tests/Runtime/SequentialToolHeartbeatTest.php	8.481	6
 sugar-crush/tests/Cli/BootstrapLaunchNoticeRoutingTest.php	8.421	21
 sugar-crush/tests/MCP/ClaudeCodeMcpClientDeadlineTest.php	8.356	12
 sugar-crush/tests/Tools/BuiltInToolCorpusTest.php	8.322	52

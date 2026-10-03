@@ -1814,6 +1814,11 @@ final class Runtime
      *                                 {@see ToolFinished}, including the
      *                                 unknown-tool and hook-denied branches.
      * @param ?callable       $onPermissionRequest see {@see run()}.
+     * @param ?\Closure       $heartbeat the turn's liveness sink (see
+     *                                 {@see toolWaitHeartbeat()}): a parallel
+     *                                 group beats while it polls its children,
+     *                                 and a call executed alone hands it to a
+     *                                 tool that can wait loudly (item 0.4-b).
      */
     private function executeToolCalls(
         array $toolCalls,
@@ -1824,7 +1829,7 @@ final class Runtime
     ): \Generator {
         foreach ($this->segments($toolCalls, $app) as $segment) {
             if (count($segment) === 1) {
-                yield $this->executeSequentially($segment[0], $app, $onEvent, $onPermissionRequest);
+                yield $this->executeSequentially($segment[0], $app, $onEvent, $onPermissionRequest, $heartbeat);
 
                 continue;
             }
@@ -1912,12 +1917,19 @@ final class Runtime
      * One tool call, start to finish, in this process — the dispatch this
      * class did for every call before concurrency existed, and still the only
      * dispatch a barrier call ever sees.
+     *
+     * $heartbeat (item 0.4-b) is what keeps a long call from reading as a hung
+     * turn: a tool that {@see \SugarCraft\Crush\Tools\AcceptsHeartbeat}
+     * gets it, throttled to one beat a second — the parallel group's own
+     * cadence — and pid-guarded so a beat can never be written from a process
+     * the tool forked. A tool that does not opt in runs exactly as before.
      */
     private function executeSequentially(
         ToolCall $toolCall,
         App $app,
         ?callable $onEvent,
         ?callable $onPermissionRequest,
+        ?\Closure $heartbeat = null,
     ): ToolResultMessage {
         // E16: emitted BEFORE the gate, so the frame carries the model's RAW
         // arguments — deliberately. id and name are invariant across any
@@ -1968,7 +1980,20 @@ final class Runtime
         // consumer ending the turn). This is strictly wider than
         // Chat::invokeTool(), which guards only the tool body.
         try {
-            $result = $tool->execute($args ?? []);
+            if ($heartbeat !== null && $tool instanceof \SugarCraft\Crush\Tools\AcceptsHeartbeat) {
+                $pid = getmypid();
+                $lastBeat = 0.0;
+                $result = $tool->executeWithHeartbeat($args ?? [], static function () use ($heartbeat, $pid, &$lastBeat): void {
+                    $now = microtime(true);
+                    if ($now - $lastBeat < 1.0 || getmypid() !== $pid) {
+                        return;
+                    }
+                    $lastBeat = $now;
+                    $heartbeat();
+                });
+            } else {
+                $result = $tool->execute($args ?? []);
+            }
         } catch (\Throwable $e) {
             $result = self::executionFailure($tool, $toolCall, $e);
         }

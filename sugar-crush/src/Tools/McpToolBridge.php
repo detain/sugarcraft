@@ -75,7 +75,7 @@ use SugarCraft\Crush\MCP\McpTool;
  * {@see \SugarCraft\Crush\Permissions\PermissionGate::isWriteTool()} applies to
  * the `mcp__*` name.
  */
-final class McpToolBridge implements Tool
+final class McpToolBridge implements Tool, AcceptsHeartbeat
 {
     /**
      * The model-facing name prefix. `mcp__<server>__<tool>` is the convention
@@ -401,6 +401,26 @@ final class McpToolBridge implements Tool
      */
     public function execute(array $args): ToolResult
     {
+        return $this->call($args, null);
+    }
+
+    /**
+     * {@see execute()} with the turn's liveness beat handed to the transport
+     * (item 0.4-b). A stdio `tools/call` is unbounded by design (E646), and an
+     * MCP tool always runs alone — it is a barrier, never {@see ParallelSafe}
+     * — so without the beat any call longer than the turn's 120 s idle
+     * ceiling cost the whole turn rather than just the wait.
+     */
+    public function executeWithHeartbeat(array $args, \Closure $heartbeat): ToolResult
+    {
+        return $this->call($args, $heartbeat);
+    }
+
+    /**
+     * @param array<string, mixed> $args
+     */
+    private function call(array $args, ?\Closure $heartbeat): ToolResult
+    {
         $id = is_string($args['id'] ?? null) ? $args['id'] : '';
         $start = hrtime(true);
 
@@ -409,6 +429,7 @@ final class McpToolBridge implements Tool
                 $this->descriptor->serverName,
                 $this->descriptor->name,
                 $args,
+                $heartbeat,
             );
         } catch (\Throwable $e) {
             return new ToolResult(

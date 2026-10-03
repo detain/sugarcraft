@@ -199,7 +199,11 @@ socket, which is what keeps the TUI's event loop free. Details that matter:
 - The idle ceiling is **per frame**, not per turn: every frame the child streams
   resets it, so a turn making visible progress stays alive indefinitely while a
   genuinely hung provider still dies. A single wall-clock timer for the whole
-  fork used to SIGKILL legitimate multi-step tool work mid-flight.
+  fork used to SIGKILL legitimate multi-step tool work mid-flight. Tool waits
+  beat too, at most once a second: a parallel group while it polls its
+  children, and a call run alone when its tool implements `AcceptsHeartbeat`
+  (`Bash`, `Grep` and every `mcp__*` bridge), so a long build or MCP call is
+  measured by its own `timeout`, not killed as a hung turn at the ceiling.
 - A frame is capped at 64 MiB, because a frame legitimately carries raw image
   bytes but a corrupt header must not make the parent buffer an arbitrary length.
 - Child reaping is a bounded 100 ms `WNOHANG` poll, with escaped PIDs tracked and

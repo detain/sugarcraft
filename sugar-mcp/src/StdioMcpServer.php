@@ -189,6 +189,14 @@ final class StdioMcpServer implements McpServer
     private float $startTimeoutSeconds;
 
     /**
+     * The caller's "still waiting" beat for the call in flight, or null.
+     * Set by callTool() for the length of one call and cleared after it, so
+     * it is never a standing property of the connection (and never crosses a
+     * fork as live state — each process sets its own).
+     */
+    private ?\Closure $onWait = null;
+
+    /**
      * @param string $name    server identity, tagged onto every McpTool
      * @param string $command program to exec (argv[0])
      * @param list<string> $args argv after the program
@@ -609,10 +617,36 @@ final class StdioMcpServer implements McpServer
     /**
      * Invoke a tool. No deadline by design (E646): see the class docblock.
      *
+     * $onWait is the caller's liveness beat: it is called at least once per
+     * READ_POLL_SECONDS for as long as this call waits — for the exchange
+     * lock, for stdin to drain, for the reply — so an embedder whose own
+     * watchdog measures SILENCE (sugar-crush kills a turn after 120 s with no
+     * frame) can tell "a tool is working" from "the turn is hung" without
+     * this library guessing a deadline for somebody else's work. It may be
+     * called far more often than that; throttling is the caller's business.
+     * An exception it throws propagates out of callTool().
+     *
+     * @param array<string,mixed> $args
+     * @param (\Closure(): void)|null $onWait
+     * @return array<string,mixed>
+     */
+    public function callTool(string $toolName, array $args, ?\Closure $onWait = null): array
+    {
+        $previous = $this->onWait;
+        $this->onWait = $onWait;
+
+        try {
+            return $this->callToolWaiting($toolName, $args);
+        } finally {
+            $this->onWait = $previous;
+        }
+    }
+
+    /**
      * @param array<string,mixed> $args
      * @return array<string,mixed>
      */
-    public function callTool(string $toolName, array $args): array
+    private function callToolWaiting(string $toolName, array $args): array
     {
         try {
             $response = $this->request('tools/call', [
@@ -742,7 +776,14 @@ final class StdioMcpServer implements McpServer
             return null;
         }
 
-        if (!$lock->acquire($deadline, fn (): bool => $this->serverIsRunning())) {
+        // The liveness probe doubles as the wait beat: acquire() polls it
+        // while another process holds the exchange, which for a shared
+        // server is time this caller spends waiting on somebody else's call.
+        if (!$lock->acquire($deadline, function (): bool {
+            $this->beat();
+
+            return $this->serverIsRunning();
+        })) {
             return null;
         }
 
@@ -845,6 +886,7 @@ final class StdioMcpServer implements McpServer
         $livenessCheckedAt = self::nowSeconds();
 
         while ($payload !== '') {
+            $this->beat();
             $remaining = $deadline === null ? null : $deadline - self::nowSeconds();
             if ($remaining !== null && $remaining <= 0.0) {
                 return false;
@@ -853,8 +895,7 @@ final class StdioMcpServer implements McpServer
             $write = [$this->pipes[0]];
             $read = $this->stderrOpen && is_resource($this->pipes[2]) ? [$this->pipes[2]] : [];
             $except = [];
-            $seconds = $remaining === null ? self::READ_POLL_SECONDS : (int) $remaining;
-            $micros = $remaining === null ? 0 : (int) (($remaining - $seconds) * 1_000_000);
+            [$seconds, $micros] = $this->pollSlice($remaining);
 
             $ready = @stream_select($read, $write, $except, $seconds, $micros);
 
@@ -1027,6 +1068,7 @@ final class StdioMcpServer implements McpServer
         $livenessCheckedAt = self::nowSeconds();
 
         while (($newline = strpos($this->readBuffer, "\n", $scannedFrom)) === false) {
+            $this->beat();
             if ($this->pipes === null) {
                 return $this->readBuffer === '' ? null : $this->drainBuffer();
             }
@@ -1049,8 +1091,7 @@ final class StdioMcpServer implements McpServer
             }
             $write = [];
             $except = [];
-            $seconds = $remaining === null ? self::READ_POLL_SECONDS : (int) $remaining;
-            $micros = $remaining === null ? 0 : (int) (($remaining - $seconds) * 1_000_000);
+            [$seconds, $micros] = $this->pollSlice($remaining);
 
             $ready = @stream_select($read, $write, $except, $seconds, $micros);
             if ($ready === false) {
@@ -1120,6 +1161,38 @@ final class StdioMcpServer implements McpServer
         $this->readBuffer = substr($this->readBuffer, $newline + 1);
 
         return trim($line);
+    }
+
+    /**
+     * The select timeout for one wait pass, as [seconds, microseconds]: the
+     * whole remaining budget when nothing else needs the clock, never more
+     * than READ_POLL_SECONDS while a caller is listening for wait beats (a
+     * deadline far away must not turn one select into a minute of silence),
+     * and the plain poll slice when there is no deadline at all.
+     *
+     * @return array{0: int, 1: int}
+     */
+    private function pollSlice(?float $remaining): array
+    {
+        if ($remaining === null) {
+            return [self::READ_POLL_SECONDS, 0];
+        }
+
+        if ($this->onWait !== null) {
+            $remaining = min($remaining, (float) self::READ_POLL_SECONDS);
+        }
+
+        $seconds = (int) $remaining;
+
+        return [$seconds, (int) (($remaining - $seconds) * 1_000_000)];
+    }
+
+    /** Fire the in-flight call's wait beat, if it has one. */
+    private function beat(): void
+    {
+        if ($this->onWait !== null) {
+            ($this->onWait)();
+        }
     }
 
     /**

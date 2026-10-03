@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\RulePathNudge;
 use SugarCraft\Crush\Skills\SkillPathNudge;
+use SugarCraft\Crush\Tools\AcceptsHeartbeat;
 use SugarCraft\Crush\Tools\CarriesSessionState;
 use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
@@ -19,7 +20,7 @@ use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Tools\PathJail;
 
-final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, CarriesSessionState
+final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, CarriesSessionState, AcceptsHeartbeat
 {
     use CapturesProcessOutput;
     use RebindsWorktreeJail;
@@ -246,6 +247,24 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
 
     public function execute(array $args): ToolResult
     {
+        return $this->search($args, null);
+    }
+
+    /**
+     * {@see execute()} with the turn's liveness beat fired while grep runs
+     * (item 0.4-b): a lone Grep executes sequentially, and a walk over a
+     * large tree must not read as a hung turn to the 120 s idle watchdog.
+     */
+    public function executeWithHeartbeat(array $args, \Closure $heartbeat): ToolResult
+    {
+        return $this->search($args, $heartbeat);
+    }
+
+    /**
+     * @param array<string, mixed> $args
+     */
+    private function search(array $args, ?\Closure $heartbeat): ToolResult
+    {
         $pattern = $args['pattern'] ?? '';
         $path = $args['path'] ?? '';
         $include = $args['include'] ?? '*';
@@ -342,7 +361,7 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         // See Bash::execute() -- exec() leaks the child's stderr onto the
         // terminal underneath the TUI. grep exits 1 for "no matches", which
         // is a normal outcome rather than an error.
-        $run = $this->runCaptured($cmd, null, $this->maxOutputBytes > 0 ? $this->maxOutputBytes : null);
+        $run = $this->runCaptured($cmd, null, $this->maxOutputBytes > 0 ? $this->maxOutputBytes : null, null, [], $heartbeat);
 
         $filtered = self::withoutIgnoredHits($run, $rules, $path);
 
